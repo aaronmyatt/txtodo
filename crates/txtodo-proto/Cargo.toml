@@ -7,5 +7,22 @@ rust-version.workspace = true
 publish.workspace = true
 description = "Protobuf definitions and generated gRPC types."
 
+[features]
+# `cargo build -p txtodo-proto --features regen` rewrites src/generated/ from proto/ (needs protoc).
+# Off by default so ordinary builds and CI need neither protoc nor prost-build.
+regen = ["dep:tonic-prost-build"]
+
+[dependencies]
+# https://docs.rs/prost — message types
+prost = "0.14"
+# https://docs.rs/tonic — gRPC service traits and transport
+tonic = "0.14"
+# https://docs.rs/tonic-prost — the prost codec tonic 0.14 split out
+tonic-prost = "0.14"
+
+[build-dependencies]
+# https://docs.rs/tonic-prost-build — codegen, only with `--features regen`
+tonic-prost-build = { version = "0.14", optional = true }
+
 [lints]
 workspace = true
