@@ -69,9 +69,6 @@ state, templates, and tests. Independence beats reuse.
   depends on the shared kernel or on nothing. Enforced by the boundary
   check named in `stack.md`, run by feedback and CI.
 - A slice is reached only through its public surface. No deep imports.
-- The shared kernel (`crates/txtodo-core/`) is tiny, frozen, and versioned
-  like a third-party library. Every write to it is individually
-  confirmed by the fence.
 - **Duplication between slices is a design choice, not a defect.** If two
   slices need similar logic, copy it. Nothing "moves to shared" as a
   reflex.

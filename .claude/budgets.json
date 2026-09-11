@@ -69,8 +69,8 @@
         "txtodo-query"
       ]
     },
+    "unfrozen-until-m1-done": "crates/txtodo-core/**",
     "frozenPaths": [
-      "crates/txtodo-core/**",
       "Cargo.toml",
       "Cargo.lock",
       "rust-toolchain.toml",
