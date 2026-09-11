@@ -66,24 +66,37 @@ pub fn prefix(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-fn print_items(items: &[Item], width: usize) {
+/// Plain: `NN raw` per item. `--json`: one object per item, footers omitted.
+fn print_items(ctx: &Ctx, items: &[Item], width: usize) {
     for it in items {
-        println!("{:0width$} {}", it.number, it.raw);
+        if ctx.json {
+            println!("{}", crate::json::item(it));
+        } else {
+            println!("{:0width$} {}", it.number, it.raw);
+        }
     }
 }
 
+fn separator(ctx: &Ctx) {
+    if !ctx.json {
+        println!("--");
+    }
+}
+
+fn footer(ctx: &Ctx, path: &Path, shown: usize, total: usize) {
+    if ctx.json {
+        return;
+    }
+    println!("{}: {shown} of {total} tasks shown", prefix(path));
+}
+
 /// `list` / `listfile FILE`: one file, filtered, with its footer.
-pub fn list_file(path: &Path, terms: &[String]) -> Result<(), CliError> {
+pub fn list_file(ctx: &Ctx, path: &Path, terms: &[String]) -> Result<(), CliError> {
     let file = store::read(path)?;
     let shown = items(&file, terms);
-    print_items(&shown, padding(file.lines.len()));
-    println!("--");
-    println!(
-        "{}: {} of {} tasks shown",
-        prefix(path),
-        shown.len(),
-        file.lines.len()
-    );
+    print_items(ctx, &shown, padding(file.lines.len()));
+    separator(ctx);
+    footer(ctx, path, shown.len(), file.lines.len());
     Ok(())
 }
 
@@ -109,14 +122,9 @@ pub fn list_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
             |it| matches!(it.raw.as_bytes(), [b'(', p, b')', b' ', ..] if (lo..=hi).contains(p)),
         )
         .collect();
-    print_items(&shown, padding(file.lines.len()));
-    println!("--");
-    println!(
-        "{}: {} of {} tasks shown",
-        prefix(&ctx.paths.todo),
-        shown.len(),
-        file.lines.len()
-    );
+    print_items(ctx, &shown, padding(file.lines.len()));
+    separator(ctx);
+    footer(ctx, &ctx.paths.todo, shown.len(), file.lines.len());
     Ok(())
 }
 
@@ -133,27 +141,19 @@ pub fn list_all(ctx: &Ctx, terms: &[String]) -> Result<(), CliError> {
             raw: it.raw,
         })
         .collect();
-    print_items(&shown, width);
-    print_items(&shown_done, width);
-    println!("--");
-    println!(
-        "{}: {} of {} tasks shown",
-        prefix(&ctx.paths.todo),
-        shown.len(),
-        todo.lines.len()
-    );
-    println!(
-        "{}: {} of {} tasks shown",
-        prefix(&ctx.paths.done),
-        shown_done.len(),
-        done.lines.len()
-    );
+    print_items(ctx, &shown, width);
+    print_items(ctx, &shown_done, width);
+    separator(ctx);
+    footer(ctx, &ctx.paths.todo, shown.len(), todo.lines.len());
+    footer(ctx, &ctx.paths.done, shown_done.len(), done.lines.len());
     let (n, m) = (
         shown.len() + shown_done.len(),
         todo.lines.len() + done.lines.len(),
     );
     debug_assert!(n <= m, "shown within total");
-    println!("total {n} of {m} tasks shown");
+    if !ctx.json {
+        println!("total {n} of {m} tasks shown");
+    }
     Ok(())
 }
 
@@ -178,6 +178,10 @@ pub fn list_words(ctx: &Ctx, sigil: char, terms: &[String]) -> Result<(), CliErr
     words.sort();
     words.dedup();
     debug_assert!(words.iter().all(|w| w.starts_with(sigil)), "sigil kept");
+    if ctx.json {
+        println!("{}", crate::json::strs(words.iter().map(String::as_str)));
+        return Ok(());
+    }
     for w in words {
         println!("{w}");
     }
@@ -211,6 +215,10 @@ pub fn list_txt_files(ctx: &Ctx) -> Result<(), CliError> {
         .collect();
     names.sort();
     debug_assert!(names.iter().all(|n| n.ends_with(".txt")), "txt only");
+    if ctx.json {
+        println!("{}", crate::json::strs(names.iter().map(String::as_str)));
+        return Ok(());
+    }
     println!("Files in the todo.txt directory:");
     for n in names {
         println!("{n}");

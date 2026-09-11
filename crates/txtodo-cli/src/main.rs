@@ -5,6 +5,7 @@
 mod clock;
 mod commands;
 mod config;
+mod json;
 mod store;
 
 use clap::{Parser, Subcommand};
@@ -50,37 +51,43 @@ enum Command {
     /// List tasks matching every TERM (`-term` excludes), sorted.
     #[command(visible_alias = "ls")]
     List {
-        /// Search terms.
+        /// Search terms; `-term` excludes.
+        #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
     /// List tasks from todo.txt and done.txt.
     #[command(visible_alias = "lsa")]
     Listall {
-        /// Search terms.
+        /// Search terms; `-term` excludes.
+        #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
     /// List tasks with a priority, optionally only `A` or a range `A-C`.
     #[command(visible_alias = "lsp")]
     Listpri {
         /// An optional priority or range, then search terms.
+        #[arg(allow_hyphen_values = true)]
         args: Vec<String>,
     },
     /// List the projects (`+word`) of matching tasks.
     #[command(visible_alias = "lsprj")]
     Listproj {
-        /// Search terms.
+        /// Search terms; `-term` excludes.
+        #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
     /// List the contexts (`@word`) of matching tasks.
     #[command(visible_alias = "lsc")]
     Listcon {
-        /// Search terms.
+        /// Search terms; `-term` excludes.
+        #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
     /// List the `.txt` files in the todo directory, or the tasks in FILE.
     #[command(visible_alias = "lf")]
     Listfile {
         /// A file name (looked up in the todo directory) then search terms.
+        #[arg(allow_hyphen_values = true)]
         args: Vec<String>,
     },
 }
@@ -176,7 +183,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             print_env(&ctx);
             Ok(())
         }
-        Command::List { terms } => commands::list::list_file(&ctx.paths.todo, terms),
+        Command::List { terms } => commands::list::list_file(&ctx, &ctx.paths.todo, terms),
         Command::Listall { terms } => commands::list::list_all(&ctx, terms),
         Command::Listpri { args } => commands::list::list_pri(&ctx, args),
         Command::Listproj { terms } => commands::list::list_words(&ctx, '+', terms),
@@ -185,7 +192,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             None => commands::list::list_txt_files(&ctx),
             Some((name, terms)) => {
                 let path = commands::list::find_file(&ctx, name)?;
-                commands::list::list_file(&path, terms)
+                commands::list::list_file(&ctx, &path, terms)
             }
         },
     }
@@ -202,16 +209,16 @@ fn print_env(ctx: &Ctx) {
     if ctx.json {
         let object = format!(
             r#"{{"todo_dir":{},"todo_file":{},"done_file":{},"report_file":{},"config_file":{},"config_exists":{},"id_tags":{},"url_schemes":[{}]}}"#,
-            json_str(&ctx.paths.dir.to_string_lossy()),
-            json_str(&ctx.paths.todo.to_string_lossy()),
-            json_str(&ctx.paths.done.to_string_lossy()),
-            json_str(&ctx.paths.report.to_string_lossy()),
-            json_str(&ctx.paths.config.to_string_lossy()),
+            json::str(&ctx.paths.dir.to_string_lossy()),
+            json::str(&ctx.paths.todo.to_string_lossy()),
+            json::str(&ctx.paths.done.to_string_lossy()),
+            json::str(&ctx.paths.report.to_string_lossy()),
+            json::str(&ctx.paths.config.to_string_lossy()),
             exists.is_empty(),
             ctx.config.id_tags(),
             schemes
                 .iter()
-                .map(|s| json_str(s))
+                .map(|s| json::str(s))
                 .collect::<Vec<_>>()
                 .join(",")
         );
@@ -229,25 +236,4 @@ fn print_env(ctx: &Ctx) {
     println!("config_file={}{exists}", ctx.paths.config.display());
     println!("id_tags={}", ctx.config.id_tags());
     println!("url_schemes={}", schemes.join(","));
-}
-
-/// A JSON string literal (RFC 8259 §7): quotes, backslashes and control characters escaped.
-fn json_str(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 2);
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    debug_assert!(out.len() >= s.len() + 2, "quotes added");
-    debug_assert!(!out[1..out.len() - 1].contains('\n'), "newlines escaped");
-    out
 }
