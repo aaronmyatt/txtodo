@@ -4,6 +4,7 @@
 
 pub mod actor;
 pub mod clock;
+pub mod debounce;
 pub mod expected;
 mod external;
 mod fields;

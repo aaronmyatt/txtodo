@@ -1,6 +1,6 @@
 2026-09-11 Dependency ask: notify (FSEvents/inotify/ReadDirectoryChangesW); no debouncer crate — own debounce keeps the clock injectable +m3 @daemon
 2026-09-11 watcher.rs: RecommendedWatcher on the workspace root, recursive; raw events go into a bounded mpsc (WATCH_EVENT_CAP = 1024) drained by a tokio task +m3 @daemon
-2026-09-11 debounce.rs: pure Debouncer<K> keyed by path, DEBOUNCE_MS = 150, driven by an injected Clock; emits at most one ExternalChange per path per quiet window +m3 @daemon
+x 2026-09-11 2026-09-11 debounce.rs: pure Debouncer<K> keyed by path, DEBOUNCE_MS = 150, driven by an injected Clock; emits at most one ExternalChange per path per quiet window +m3 @daemon
 2026-09-11 ignore.rs: IGNORE_GLOBS = ["*.swp", "*~", "*.tmp", ".#*"] plus anything under .txtodo/; only basenames todo.txt done.txt notes.md pass; directory Create events route to the walker +m3 @daemon
 2026-09-11 Tests with paused tokio time: 5 events in 100 ms → one ExternalChange after 150 ms; .swp and .txtodo/ events produce nothing; two files debounce independently +m3 @daemon @test
 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon
