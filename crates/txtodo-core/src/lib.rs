@@ -7,6 +7,7 @@
 
 extern crate alloc;
 
+mod diff;
 mod edit;
 mod error;
 mod file;
@@ -20,6 +21,7 @@ mod types;
 mod ulid;
 pub mod urls;
 
+pub use diff::{diff_lines, diff_text, LineDiff, TextEdit};
 pub use edit::{apply, Edit, EditError};
 pub use error::ParseError;
 pub use format::{description_start, emit_prefix, Prefix};
