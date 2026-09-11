@@ -1,0 +1,222 @@
+//! The gRPC boundary: proto messages are parsed into typed values once, here (constitution §3:
+//! parse, don't validate); ops are rendered into `OpSummary` for log/blame/Watch. Pure.
+
+use crate::mutation::{Mutation, TaskRef};
+use tonic::Status;
+use txtodo_core::Date;
+use txtodo_model::{DeviceId, FilePath, OpKind, Principal, TaskId, TokenId, Ulid};
+use txtodo_proto::v1::{self as pb, mutation};
+use txtodo_store::{Stored, kind_tag};
+
+/// Line text in a summary is cut here (chars).
+pub const SUMMARY_MAX_CHARS: usize = 60;
+
+/// A workspace-relative path from the wire.
+pub fn parse_path(s: &str) -> Result<FilePath, Status> {
+    FilePath::new(s).map_err(|e| Status::invalid_argument(e.to_string()))
+}
+
+/// An optional ULID text from the wire (empty = none).
+pub fn parse_ulid_opt(s: &str) -> Result<Option<Ulid>, Status> {
+    if s.is_empty() {
+        return Ok(None);
+    }
+    Ulid::parse(s)
+        .map(Some)
+        .ok_or_else(|| Status::invalid_argument(format!("{s:?} is not a ULID")))
+}
+
+fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> {
+    let t = t.ok_or_else(|| Status::invalid_argument("mutation needs a task ref"))?;
+    let line_number =
+        usize::try_from(t.line_number).map_err(|_| Status::invalid_argument("line number"))?;
+    if line_number == 0 {
+        return Err(Status::invalid_argument("line numbers start at 1"));
+    }
+    let task_id = parse_ulid_opt(&t.task_id)?.map(TaskId::new);
+    Ok(TaskRef {
+        line_number,
+        task_id,
+    })
+}
+
+/// One wire mutation into the typed one.
+pub fn parse_mutation(m: pb::Mutation) -> Result<Mutation, Status> {
+    let kind = m
+        .kind
+        .ok_or_else(|| Status::invalid_argument("empty mutation"))?;
+    Ok(match kind {
+        mutation::Kind::Add(a) => Mutation::Add { line: a.line },
+        mutation::Kind::Complete(c) => {
+            let today = Date::parse(&c.today)
+                .ok_or_else(|| Status::invalid_argument("today must be YYYY-MM-DD"))?;
+            Mutation::Complete {
+                task: parse_task_ref(c.task)?,
+                today,
+            }
+        }
+        mutation::Kind::Edit(e) => Mutation::Edit {
+            task: parse_task_ref(e.task)?,
+            new_line: e.new_line,
+        },
+        mutation::Kind::Move(mv) => Mutation::Move {
+            task: parse_task_ref(mv.task)?,
+            to: parse_path(&mv.to_path)?,
+        },
+        mutation::Kind::Delete(d) => Mutation::Delete {
+            task: parse_task_ref(d.task)?,
+            leave_blank: d.leave_blank,
+        },
+    })
+}
+
+/// Who is applying: the user on this device unless an agent principal is present (M6).
+pub fn parse_principal(
+    agent: Option<pb::AgentPrincipal>,
+    device: DeviceId,
+) -> Result<Principal, Status> {
+    let Some(a) = agent else {
+        return Ok(Principal::User { device });
+    };
+    let token =
+        parse_ulid_opt(&a.token_id)?.ok_or_else(|| Status::invalid_argument("agent token id"))?;
+    if a.name.is_empty() || a.name.len() > 64 {
+        return Err(Status::invalid_argument("agent name must be 1..=64 bytes"));
+    }
+    Ok(Principal::Agent {
+        token_id: TokenId::new(token),
+        name: a.name,
+        device,
+    })
+}
+
+/// The task an op is about, when it has one.
+pub fn task_of(kind: &OpKind) -> Option<TaskId> {
+    match kind {
+        OpKind::Insert { task, .. }
+        | OpKind::SetField { task, .. }
+        | OpKind::EditText { task, .. }
+        | OpKind::Move { task, .. } => Some(*task),
+        OpKind::NotesEdit { .. } | OpKind::BlankInsert { .. } | OpKind::BlankRemove { .. } => None,
+    }
+}
+
+fn truncate(s: &str) -> String {
+    let mut out: String = s.chars().take(SUMMARY_MAX_CHARS).collect();
+    if s.chars().count() > SUMMARY_MAX_CHARS {
+        out.push('…');
+    }
+    debug_assert!(out.chars().count() <= SUMMARY_MAX_CHARS + 1);
+    out
+}
+
+/// One line of human summary per op kind. Never the whole line for edits (privacy of logs is
+/// elsewhere; this is the History RPC, which the client asked for).
+pub fn summary_of(kind: &OpKind) -> String {
+    match kind {
+        OpKind::Insert { line, .. } => truncate(line),
+        OpKind::SetField { field, value, .. } => format!("{field:?} = {value:?}"),
+        OpKind::EditText { edits, .. } => format!("description: {} edit(s)", edits.len()),
+        OpKind::Move { after, to_file, .. } => format!("move to {to_file} after {after:?}"),
+        OpKind::NotesEdit { edits, .. } => format!("notes: {} edit(s)", edits.len()),
+        OpKind::BlankInsert { after } => format!("blank after {after:?}"),
+        OpKind::BlankRemove { after } => format!("remove blank after {after:?}"),
+    }
+}
+
+/// A stored op as the wire sees it.
+pub fn to_summary(s: &Stored) -> pb::OpSummary {
+    pb::OpSummary {
+        seq: s.seq.0,
+        op_id: s.op.id.ulid().to_string(),
+        hlc_wall_ms: s.op.hlc.wall_ms,
+        hlc_counter: u32::from(s.op.hlc.counter),
+        device: s.op.hlc.device.to_string(),
+        principal: s.op.principal.to_string(),
+        kind: kind_tag(&s.op.kind).to_owned(),
+        task_id: task_of(&s.op.kind)
+            .map(|t| t.to_string())
+            .unwrap_or_default(),
+        summary: summary_of(&s.op.kind),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paths_ulids_and_task_refs_are_validated_once() {
+        assert!(parse_path("q4/todo.txt").is_ok());
+        assert_eq!(
+            parse_path("../x").unwrap_err().code(),
+            tonic::Code::InvalidArgument
+        );
+        assert_eq!(parse_ulid_opt("").unwrap(), None);
+        assert!(
+            parse_ulid_opt("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+                .unwrap()
+                .is_some()
+        );
+        assert!(parse_ulid_opt("nope").is_err());
+        let zero = pb::Mutation {
+            kind: Some(mutation::Kind::Delete(pb::Delete {
+                task: Some(pb::TaskRef {
+                    line_number: 0,
+                    task_id: String::new(),
+                }),
+                leave_blank: false,
+            })),
+        };
+        assert!(parse_mutation(zero).is_err());
+        let bad_date = pb::Mutation {
+            kind: Some(mutation::Kind::Complete(pb::Complete {
+                task: Some(pb::TaskRef {
+                    line_number: 1,
+                    task_id: String::new(),
+                }),
+                today: "yesterday".into(),
+            })),
+        };
+        assert!(parse_mutation(bad_date).is_err());
+        let ok = pb::Mutation {
+            kind: Some(mutation::Kind::Add(pb::Add { line: "x".into() })),
+        };
+        assert_eq!(
+            parse_mutation(ok).unwrap(),
+            Mutation::Add { line: "x".into() }
+        );
+    }
+
+    #[test]
+    fn principals_and_summaries_render() {
+        let device = DeviceId::new(Ulid::from_u128(7));
+        assert!(matches!(
+            parse_principal(None, device).unwrap(),
+            Principal::User { .. }
+        ));
+        let agent = pb::AgentPrincipal {
+            token_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+            name: "claude".into(),
+        };
+        assert!(matches!(
+            parse_principal(Some(agent), device).unwrap(),
+            Principal::Agent { .. }
+        ));
+        let long = "x".repeat(100);
+        assert_eq!(
+            summary_of(&OpKind::Insert {
+                task: TaskId::new(Ulid::from_u128(1)),
+                after: None,
+                line: long
+            })
+            .chars()
+            .count(),
+            SUMMARY_MAX_CHARS + 1
+        );
+        assert_eq!(
+            summary_of(&OpKind::BlankInsert { after: None }),
+            "blank after None"
+        );
+    }
+}
