@@ -53,7 +53,7 @@ fn every_line_tokenizes_exactly_as_the_oracle() {
 
 #[test]
 fn lenient_is_total_and_strict_fails_only_on_named_leniencies() {
-    let strict_only = Quirks::NO_COMPLETION_DATE | Quirks::PRIORITY_AFTER_X | Quirks::TABS | Quirks::TRAILING_WS;
+    let strict_only = Quirks::TABS | Quirks::TRAILING_WS | Quirks::LEADING_WS;
     let mut strict_failures = 0;
     for path in corpus_files() {
         for (i, line) in parse_file(&fs::read(&path).expect("read")).lines.iter().enumerate() {
@@ -65,5 +65,5 @@ fn lenient_is_total_and_strict_fails_only_on_named_leniencies() {
             strict_failures += usize::from(strict.is_err());
         }
     }
-    assert_eq!(strict_failures, 5, "lenient.txt lines 1,2,4,5,8 are the only strict failures");
+    assert_eq!(strict_failures, 3, "lenient.txt lines 4,5,8 (tabs, trailing ws, runs) are the only strict failures");
 }

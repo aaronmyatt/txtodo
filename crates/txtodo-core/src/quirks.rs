@@ -23,9 +23,11 @@ impl Quirks {
     pub const INVALID_REF: Quirks = Quirks(1 << 5);
     /// This line's ending differs from the file's dominant ending.
     pub const MIXED_ENDING: Quirks = Quirks(1 << 6);
+    /// Whitespace before the first word (indentation); kept as part of the description.
+    pub const LEADING_WS: Quirks = Quirks(1 << 7);
 
     /// All named quirks with their lint names, in bit order.
-    pub const ALL: [(Quirks, &'static str); 7] = [
+    pub const ALL: [(Quirks, &'static str); 8] = [
         (Quirks::NO_COMPLETION_DATE, "no_completion_date"),
         (Quirks::PRIORITY_AFTER_X, "priority_after_x"),
         (Quirks::PRIORITY_AFTER_DATE, "priority_after_date"),
@@ -33,6 +35,7 @@ impl Quirks {
         (Quirks::TRAILING_WS, "trailing_ws"),
         (Quirks::INVALID_REF, "invalid_ref"),
         (Quirks::MIXED_ENDING, "mixed_ending"),
+        (Quirks::LEADING_WS, "leading_ws"),
     ];
 
     /// True when every bit of `other` is set in `self`.

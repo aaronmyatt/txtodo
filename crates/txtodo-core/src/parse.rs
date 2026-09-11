@@ -84,10 +84,25 @@ impl<'a> Parser<'a> {
         Ok(true)
     }
 
+    /// Strict: `x` starts a completed line only when the grammar's `x SP date` is really there; otherwise
+    /// the line is an incomplete task whose description begins with `x`. Lenient: any leading `x` is the marker.
+    fn starts_completed(&self) -> bool {
+        if self.word() != Some("x") {
+            return false;
+        }
+        if self.mode == Mode::Lenient {
+            return true;
+        }
+        let sep = self.chunks.get(1).is_some_and(|c| c.is_ws && &self.raw[c.start..c.end] == " ");
+        let date = self.chunks.get(2).is_some_and(|c| !c.is_ws && Date::parse(&self.raw[c.start..c.end]).is_some());
+        debug_assert!(self.i == 0, "only the first word can be the marker");
+        sep && date
+    }
+
     /// Whole task: prefix, then the verbatim remainder as description.
     fn task(&mut self) -> Result<Task<'a>, ParseError> {
         let mut t = Task { completed: false, completion_date: None, creation_date: None, priority: None, description: "" };
-        if self.word() == Some("x") {
+        if self.starts_completed() {
             self.i += 1;
             t.completed = true;
             self.completed_prefix(&mut t)?;
@@ -173,6 +188,12 @@ impl<'a> Parser<'a> {
             if !c.is_ws {
                 continue;
             }
+            if n == 0 && start == 0 {
+                self.lenient_or_at(Quirks::LEADING_WS, "description", "leading whitespace", 0)?;
+                if rest.len() > 1 {
+                    continue;
+                }
+            }
             let trailing = n + 1 == rest.len();
             let single = &self.raw[c.start..c.end] == " ";
             if trailing {
@@ -221,8 +242,10 @@ mod tests {
     #[test]
     fn strict_errors_name_rule_and_byte() {
         assert_eq!(strict_err("x  2026-09-11 t"), ParseError::new("SP", 1, "words are separated by exactly one space"));
-        assert_eq!(strict_err("x"), ParseError::new("completed", 1, "expected a space and the completion date after x"));
-        assert_eq!(strict_err("x (A) 2026-09-11 t").rule, "completed");
+        let (t, _) = task("x", Mode::Strict);
+        assert_eq!((t.completed, t.description), (false, "x"), "grammar: a bare x is a description");
+        let (t, _) = task("x (A) 2026-09-11 t", Mode::Strict);
+        assert_eq!((t.completed, t.priority, t.description), (false, None, "x (A) 2026-09-11 t"));
         assert_eq!(strict_err("(A)  task"), ParseError::new("SP", 3, "words are separated by exactly one space"));
         assert_eq!(strict_err("2026-02-30 t"), ParseError::new("date", 0, "not a calendar date"));
         assert_eq!(strict_err("a\tb").rule, "SP");
@@ -249,6 +272,10 @@ mod tests {
         assert_eq!((t.creation_date.is_some(), t.description, q), (true, "tab\twords", Quirks::TABS));
         let (_, q) = task("2026-09-11 t   ", Mode::Lenient);
         assert_eq!(q, Quirks::TRAILING_WS);
+        let (t, q) = task("  indented", Mode::Lenient);
+        assert_eq!((t.description, q), ("  indented", Quirks::LEADING_WS));
+        assert_eq!(task("   ", Mode::Lenient).1, Quirks::LEADING_WS | Quirks::TRAILING_WS);
+        assert_eq!(strict_err(" 0"), ParseError::new("description", 0, "leading whitespace"));
         let (t, q) = task("x 2026-09-11", Mode::Lenient);
         assert_eq!((t.completion_date.is_some(), t.description, q), (true, "", Quirks::NONE), "empty description is allowed");
         let (t, q) = task("2026-02-30 t", Mode::Lenient);

@@ -9,9 +9,8 @@
 
 ; ---- lines -----------------------------------------------------------------------------------------
 line        = completed / incomplete / blank
-incomplete  = priority [SP date] [SP description]      ; a bare "(A)" or "2026-09-11" is a task with an
-incomplete  =/ date [SP description]                   ; empty description, as todo.sh reads it
-incomplete  =/ description
+; a bare "(A)" or "2026-09-11" is a task with an empty description, as todo.sh reads it
+incomplete  = priority [SP date] [SP description] / date [SP description] / description
 completed   = %s"x" SP date [SP date] [SP description] ; completion date, then creation date
 priority    = "(" %x41-5A ")"                          ; (A) through (Z), uppercase only
 date        = 4DIGIT "-" 2DIGIT "-" 2DIGIT             ; YYYY-MM-DD, calendar validity is checked by the parser
@@ -54,6 +53,7 @@ h-tag       = %s"h:1"                                  ; hidden
 ;   x 2026-… (A) … (priority after the date)        quirk priority_after_date
 ;   tabs, runs of spaces                            quirk tabs
 ;   trailing whitespace                             quirk trailing_ws
+;   leading whitespace (indentation)                quirk leading_ws
 ;   + or @ at the very start of the line            no quirk: it is a project/context by this grammar
 ;   ref: value that is not a valid <slug>           quirk invalid_ref (treated as no ref)
 ; File-level hygiene (BOM, LF/CRLF, trailing newline) is detected per file and preserved; mixed
