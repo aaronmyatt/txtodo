@@ -121,6 +121,11 @@ mod tests {
             ),
             "(A)"
         );
+    }
+
+    #[test]
+    fn emits_every_completed_shape() {
+        let a = Priority::new('A');
         assert_eq!(
             emit_prefix(
                 &Prefix {
