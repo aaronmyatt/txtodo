@@ -3,9 +3,9 @@
 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state
 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model ref:model-hlc-skew-guard
-2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli
-2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a version field from day one +m4 @sync
-2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync
+2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli ref:crdt-needs-review
+2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a version field from day one +m4 @sync ref:sync-protocol-frames
+2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync ref:sync-crypto-envelope
 2026-09-11 LAN transport via mdns-sd discovery and iroh QUIC local endpoint with relay off +m4 @sync
 2026-09-11 Pairing: txtodo pair shows QR and 6-word SAS from an X25519 handshake then snapshot plus ops +m4 @sync @cli
 2026-09-11 txtodo device remove rotates the group key +m4 @sync @cli
