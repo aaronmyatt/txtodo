@@ -1,0 +1,22 @@
+{
+  "projectName": "txtodo",
+  "functionLines": 60,
+  "fileLines": 400,
+  "diffLines": 300,
+  "maxParams": 5,
+  "maxDepth": 3,
+  "cyclomaticComplexity": 10,
+  "lineWidth": 100,
+  "assertionsMin": 2,
+  "payloadKB": null,
+  "criticalPathKB": null,
+  "latencyMs": 20,
+  "coveragePercent": 80,
+  "notes": {
+    "payloadKB": "N/A until M6: no HTTP surface in M0-M5 (libraries, CLI, daemon over unix socket). Re-justify when sisyphus-mcp lands.",
+    "latencyMs": "Plan section 5: reconcile one external line edit in a 10k-line file <= 20 ms on the Linux CI runner."
+  },
+  "slices": {},
+  "baselinePaths": [],
+  "commands": {}
+}
