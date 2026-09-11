@@ -1,0 +1,16 @@
+2026-09-12 flake.nix + flake.lock with crane building txtodo, txtodod and txtodo-tui from the workspace +m10 @release
+2026-09-12 deploy/nix/: overlay/package split and a devShell pinning rust 1.95 (fenix/rustup), zig, cosign, cargo-cyclonedx and cargo-zigbuild +m10 @release
+2026-09-12 .cargo/config.toml: zig linker per target for the cross builds +m10 @release
+2026-09-12 .github/workflows/release.yml: v* tag trigger with id-token: write for keyless signing +m10 @release @ci
+2026-09-12 release.yml: cargo-zigbuild matrix for linux glibc, linux musl, windows-gnu, macos native and wasm +m10 @release @ci
+2026-09-12 release.yml: static-check step asserting ldd is absent on the musl artifacts +m10 @release @ci
+2026-09-12 release.yml: cargo cyclonedx --all → bom.json listing every workspace crate and license +m10 @release @ci
+2026-09-12 release.yml: cosign sign-blob each artifact with the OIDC identity and attach .sig + bundle +m10 @release @ci
+2026-09-12 release.yml: gh release create with binaries, bom.json and sigs; reject re-tagging the same version +m10 @release @ci
+2026-09-12 release.yml: reproducibility gate — the Nix-built linux glibc artifact hash-matches the zigbuilt one +m10 @release @ci
+2026-09-12 justfile: fill the existing release recipe for the local build+sign+sbom pre-tag smoke +m10 @release
+2026-09-12 Test: nix develop + nix build .#txtodo succeed and two clean builds hash-match +m10 @release @test
+2026-09-12 Test: musl artifacts are static (ldd absent) and every binary runs --version +m10 @release @test
+2026-09-12 Test: cosign verify-blob passes for each artifact and bom.json parses as CycloneDX with all crates +m10 @release @test
+2026-09-12 Test: a dry-run release on a test tag publishes the full asset set and rejects a duplicate tag +m10 @release @test
+2026-09-12 Complete the parent line in ./todo.txt +m10 @release
