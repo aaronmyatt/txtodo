@@ -1,11 +1,13 @@
-2026-09-12 mcp/resources.rs: implement the six design §6.4 resource URIs — todo.txt, done.txt, task/{id}, project/{name}, context/{name}, history?since=… +m6 @mcp
-2026-09-12 mcp/resources.rs: read_resource resolves each URI to a typed value from the daemon — file bytes, single task, filtered view, op-log page +m6 @mcp
-2026-09-12 mcp/subscribe.rs: per-session subscription set bounded by MAX_SUBSCRIPTIONS, driven by resources/subscribe and resources/unsubscribe +m6 @mcp
-2026-09-12 mcp/watch.rs: one shared gRPC Watch handle; map a watch event's changed file to the resource URIs that read it +m6 @mcp
-2026-09-12 mcp/watch.rs: emit notifications/resources/updated with the affected URI(s), not a blanket changed signal +m6 @mcp
-2026-09-12 mcp/watch.rs: filter the notification against the token scope so project:+work never sees a +other resource update +m6 @mcp @security
-2026-09-12 mcp/watch.rs: coalesce the 150 ms watcher bursts to one notification per URI; assert a bounded pending queue +m6 @mcp
-2026-09-12 mcp/resources.rs: reject subscribing to todotxt://history?since=… — it is a computed read, not a live file +m6 @mcp
+2026-09-12 txtodo-mcp/src/resources.rs: declare the six design §6.4 resource URIs — todo.txt, done.txt, task/{id}, project/{name}, context/{name}, history?since=… +m6 @mcp
+2026-09-12 txtodo-mcp/src/resources.rs: read_resource resolves each URI to a typed value — file bytes, one task, filtered view, op-log page — via txtodo-query, no §8 re-implementation +m6 @mcp
+2026-09-12 txtodo-mcp/src/subscribe.rs: per-session SubscriptionSet bounded by MAX_SUBSCRIPTIONS, driven by resources/subscribe and resources/unsubscribe +m6 @mcp
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: hold one shared gRPC Watch stream and uris_for(path) mapping a changed file to the resource URIs that read it +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: intersect the changed URIs with each session's set and emit notifications/resources/updated for the affected URI(s) only +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: filter the notification against the token Scope at emit time so project:+work never sees a +other resource update +m6 @mcp @security
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: coalesce the 150 ms DEBOUNCE_MS bursts to one notification per URI; assert a bounded pending queue that drops with a warning when full +m6 @mcp @daemon
+2026-09-12 txtodo-mcp/src/resources.rs: reject subscribing to todotxt://history?since=… with the structured error — a computed read, not a live file +m6 @mcp
 2026-09-12 Test: an external edit to todo.txt reaches the subscribed session as exactly the todo.txt URI update within the debounce window +m6 @mcp @test
-2026-09-12 Test: an attenuated token subscribed to a project it cannot read receives no notification when that project changes +m6 @mcp @test
+2026-09-12 Test: a session subscribed to project/+work receives nothing when a +other task changes +m6 @mcp @test @security
+2026-09-12 Test: unsubscribe stops notifications and a duplicate subscribe to the same URI is idempotent +m6 @mcp @test
+2026-09-12 Test: subscribing to todotxt://history?since=… returns a structured error, not a silent no-op +m6 @mcp @test
 2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

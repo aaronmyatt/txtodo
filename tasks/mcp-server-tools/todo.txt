@@ -1,11 +1,14 @@
-2026-09-12 Add rmcp to crates/txtodo-mcp/Cargo.toml as a workspace dependency +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/tools.rs: tool schema for all §6.3 tools with the exact arg names from the table +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/tools.rs: todo_notes_get {id} and todo_notes_set {id, text} mapping to daemon GetNotes/EditNotes +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/tools.rs: file params accept a ref path resolved by the daemon walker, not a bare filename +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/error.rs: structured error type { code, message, line?, spec_rule? } carried by every handler +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/resources.rs: the six todotxt:// resource URIs from §6.4 +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/prompts.rs: plan_today, weekly_review, triage_inbox templates +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/server.rs: rmcp server registering list_tools/list_resources/list_prompts, handlers delegated to the daemon +m6 @mcp
-2026-09-12 Declare dry_run on todo_batch only; diff rendering stays in its own task +m6 @mcp
-2026-09-12 Test: the registered tool/resource/prompt set equals §6.3-6.4 exactly +m6 @mcp @test
+2026-09-12 Add rmcp and async-trait to crates/txtodo-mcp/Cargo.toml; record the choice + get human sign-off + cargo deny pass +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/backend.rs: define McpBackend trait, TaskRow, and the arg types (ListArgs, FieldPatch, MoveAnchor, TodoOp) +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/schema.rs: declare all 14 §6.3 tools with the exact arg names from the table via rmcp's tool macro +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/schema.rs: add todo_notes_get {id} and todo_notes_set {id, text} mapping to daemon GetNotes/EditNotes +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/tools.rs: dispatch each tool to the McpBackend method; scope is checked once before dispatch, not per handler +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/resources.rs: declare the six todotxt:// resource URIs from §6.4 (files, task/{id}, project, context, history) +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/prompts.rs: declare plan_today, weekly_review, triage_inbox parameterised templates from §6.4 +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/error.rs: McpError { code, message, line?, spec_rule? } mapped into the MCP JSON-RPC error range by every handler +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/error.rs: file args normalised to a ref path by the daemon backend, never a bare filename; bare todo.txt still = root +m6 @mcp
+2026-09-12 crates/txtodo-daemon/src/serve.rs: implement McpBackend against actor handles; todo_add re-stamp and delete/raw/archive confirm:true asserted +m6 @mcp @daemon
+2026-09-12 Test: the registered tool/resource/prompt set equals §6.3–6.4 exactly plus the two notes tools, and nothing else +m6 @mcp @test
+2026-09-12 Test: file "q4-roadmap/todo.txt" resolves to the sub-list and "todo.txt" to root; a bad paren in todo_add carries spec_rule +m6 @mcp @test
+2026-09-12 Test: todo_notes_get/set round-trip through the daemon and emit a NotesEdit op (integration against an in-memory workspace) +m6 @mcp @test
 2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
