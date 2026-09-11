@@ -3,10 +3,12 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+pub mod expected;
 mod fields;
 pub mod reconcile;
 pub mod state;
 pub mod textedit;
+pub mod write;
 
 #[cfg(test)]
 mod reconcile_tests;
