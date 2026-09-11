@@ -1,7 +1,7 @@
-(A) 2026-09-11 Wait for fuzz-stub-target: the job needs a real fuzz crate to run +m0 @ci
-(A) 2026-09-11 Add a fuzz job to .github/workflows/ci.yml: ubuntu only, nightly toolchain, cargo-fuzz via taiki-e/install-action +m0 @ci
-(A) 2026-09-11 Run cargo +nightly fuzz run --fuzz-dir crates/txtodo-core/fuzz parse_line -- -max_total_time=60 in that job +m0 @ci
-(A) 2026-09-11 Cache target/ for the fuzz job with Swatinem/rust-cache keyed on nightly +m0 @ci
-(A) 2026-09-11 Replace the justfile fuzz stub with the real recipe (same command, {{target}} {{secs}}) +m0 @ci
+x 2026-09-11 2026-09-11 Wait for fuzz-stub-target: the job needs a real fuzz crate to run +m0 @ci
+x 2026-09-11 2026-09-11 Add a fuzz job to .github/workflows/ci.yml: ubuntu only, nightly toolchain, cargo-fuzz via taiki-e/install-action +m0 @ci
+x 2026-09-11 2026-09-11 Run cargo +nightly fuzz run --fuzz-dir crates/txtodo-core/fuzz parse_line -- -max_total_time=60 in that job +m0 @ci
+x 2026-09-11 2026-09-11 Cache target/ for the fuzz job with Swatinem/rust-cache keyed on nightly +m0 @ci
+x 2026-09-11 2026-09-11 Replace the justfile fuzz stub with the real recipe (same command, {{target}} {{secs}}) +m0 @ci
 (A) 2026-09-11 Push and confirm the fuzz job is green on GitHub +m0 @ci
-(A) 2026-09-11 Complete the parent line in ./todo.txt +m0 @ci
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @ci

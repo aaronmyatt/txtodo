@@ -66,3 +66,24 @@ jobs:
       - uses: actions/checkout@v4
       # https://github.com/EmbarkStudios/cargo-deny-action
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  fuzz:
+    # 60 s libFuzzer smoke on the stub target (plan M0). Nightly only: cargo-fuzz needs -Z sanitizer.
+    # https://rust-fuzz.github.io/book/cargo-fuzz/setup.html
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "crates/txtodo-core/fuzz -> target"
+      - uses: taiki-e/install-action@cargo-fuzz
+      - name: fuzz parse_line for 60 s
+        run: cargo +nightly fuzz run --fuzz-dir crates/txtodo-core/fuzz parse_line -- -max_total_time=60
+      - name: keep any crash input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: crates/txtodo-core/fuzz/artifacts
+          if-no-files-found: ignore

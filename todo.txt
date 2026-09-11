@@ -7,7 +7,7 @@ x 2026-09-11 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs r
 x 2026-09-11 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs ref:ref-directories-spec
 x 2026-09-11 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle
 x 2026-09-11 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core ref:fuzz-stub-target
-(A) 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke
+x 2026-09-11 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke
 (B) 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core
 (B) 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core
 (B) 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core
