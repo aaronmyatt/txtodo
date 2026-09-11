@@ -1,0 +1,7 @@
+(A) 2026-09-11 Dry-run the rename map from notes.md with grep -c per pattern on both docs and record the counts +m0 @docs
+(A) 2026-09-11 Apply the map to txtodo-implementation-plan.md with sed, then re-read every changed line +m0 @docs
+(A) 2026-09-11 Apply the map to txtodo-design.md the same way +m0 @docs
+(A) 2026-09-11 Hand-check the exceptions: todotxt:// URIs, "todo.txt" the format, and prose uses of Sisyphus as a name +m0 @docs
+(A) 2026-09-11 Reconcile design §12 with plan §2: sisyphus-api and sisyphus-plugins have no crate; note them as M10 in the design +m0 @docs
+(A) 2026-09-11 grep -ci sisyphus on both files must be 0, or each hit is deliberate and listed in the commit body +m0 @docs
+(A) 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs
