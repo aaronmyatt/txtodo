@@ -1,10 +1,10 @@
-2026-09-12 ADR 0013: LWW stamped by our Hlc inside the value, not Loro's Lamport order; record the rejected alternative +m4 @crdt @docs
-2026-09-12 Add the loro dependency to the workspace and crates/txtodo-crdt, with a cargo deny pass and human sign-off before any code +m4 @crdt
+x 2026-09-12 2026-09-12 ADR 0013: LWW stamped by our Hlc inside the value, not Loro's Lamport order; record the rejected alternative +m4 @crdt @docs
+x 2026-09-12 2026-09-12 Add the loro dependency to the workspace and crates/txtodo-crdt, with a cargo deny pass and human sign-off before any code +m4 @crdt
 2026-09-12 doc.rs: LoroDocument wrapping LoroDoc with files/<path> movable lists and a tasks map; open, snapshot, hydrate from an Op iterator +m4 @crdt
 2026-09-12 lww.rs: Lww<T> { value, hlc } encode/decode for a task map key, with write-if-newer and a deterministic device-id tiebreak +m4 @crdt
 2026-09-12 to_loro.rs: exhaustive OpKind -> Loro mutations; Move across files in one transaction; idx_after(None) == 0 +m4 @crdt
 2026-09-12 from_loro.rs: Loro diff events -> Vec<Op>, exhaustive over container kinds, stamped with the local Hlc and Principal +m4 @crdt
-2026-09-12 Decide blank-line representation (reserved-prefix sentinel TaskId vs parallel list) and write it into notes.md before coding doc.rs +m4 @crdt @human
+x 2026-09-12 2026-09-12 Decide blank-line representation (reserved-prefix sentinel TaskId vs parallel list) and write it into notes.md before coding doc.rs +m4 @crdt @human
 2026-09-12 Tests: round-trip every OpKind variant through to_loro then from_loro; table test asserting the match arms stay exhaustive +m4 @crdt @test
 2026-09-12 Tests: two docs, concurrent SetField on the same field, the higher Hlc wins regardless of apply order +m4 @crdt @test
 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt

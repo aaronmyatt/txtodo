@@ -81,3 +81,14 @@ one Loro transaction so a peer never observes the task in neither list.
 permissive. No feature flag or version of loro avoids `im`/`xxhash-rust` — both are direct,
 non-optional deps of loro-internal. The per-crate manifest carries the dep (root `Cargo.toml` is
 frozen and untouched; `Cargo.lock` regenerates as a generated artifact).
+
+## Decisions (2026-09-12)
+
+- **Blank lines.** Reserved-prefix sentinel `TaskId`s in the file's movable list (the plan's lean).
+  A blank line is a list entry whose id carries a reserved ULID prefix; it has no `tasks` map entry.
+  One ordered structure, so a blank run stays ordered through a merge. Rejected: a parallel
+  `LoroList<bool>` (two structures to keep in sync).
+- **Oplog persistence.** Our `Op` log is the single source of truth; the Loro doc is in-memory and
+  re-hydrated from an `Op` iterator on start. Loro's own oplog is not kept on disk for M4.
+  Snapshot-on-close (`ExportMode::Snapshot`) is a deferred optimisation for long histories.
+- **LWW.** Option A (ADR 0013, now accepted): the stamp lives in the value, our HLC arbitrates.
