@@ -1,0 +1,6 @@
+(B) 2026-09-11 Lenient path in parse.rs: same prefix parser, but each named deviation sets a Quirks bit instead of erroring +m1 @core
+(B) 2026-09-11 Quirks: no_completion_date (x SP non-date), priority_after_x, priority_after_date, tabs, trailing_ws; invalid_ref lands with task views +m1 @core
+(B) 2026-09-11 Anything else in lenient mode is not an error: the prefix stops and the rest is the description (e.g. X 2026-09-11 …) +m1 @core
+(B) 2026-09-11 Lenient never returns Err for a str input; document that and test it with every corpus/lenient.txt line +m1 @core @test
+(B) 2026-09-11 Unit tests: each quirk in isolation and two combined (x (A) date with trailing ws); strict rejects each, lenient accepts with the bit set +m1 @core @test
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core

@@ -1,0 +1,6 @@
+(B) 2026-09-11 file.rs: pub fn parse_file(bytes: &[u8]) -> File; detect BOM (EF BB BF), dominant ending, trailing newline +m1 @core
+(B) 2026-09-11 Split on LF; a preceding CR makes that line CrLf; per-line ending stored on OwnedLine; MIXED_ENDING quirk when a line differs from the file's dominant ending +m1 @core
+(B) 2026-09-11 Invalid UTF-8: decode lossily per line? No — keep bytes: OwnedLine holds the raw line as String only when valid; otherwise a Bytes variant preserved verbatim (decide, see notes) +m1 @core
+(B) 2026-09-11 File::to_bytes() reproduces the input exactly when nothing changed: BOM, each line's ending, missing trailing newline +m1 @core
+(B) 2026-09-11 Unit tests: every corpus hygiene file (crlf, bom, no-trailing-newline, mixed-endings) round-trips byte-for-byte via include_bytes! +m1 @core @test
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core

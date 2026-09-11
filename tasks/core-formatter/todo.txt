@@ -1,0 +1,5 @@
+(B) 2026-09-11 format.rs: OwnedLine keeps raw bytes plus a Dirty set (completed, completion_date, creation_date, priority, description) +m1 @core
+(B) 2026-09-11 format(line) -> String: if Dirty is empty return raw unchanged; else rebuild only the prefix fields that are dirty, splice the untouched description bytes +m1 @core
+(B) 2026-09-11 Rebuilt prefix always follows the strict ABNF; a dirty field on a quirky line clears the quirks that touched that field only +m1 @core
+(B) 2026-09-11 Unit tests: untouched line is byte-identical (including tabs, trailing ws, quirks); set priority on a CRLF line keeps CRLF; clear a date removes exactly one SP +m1 @core @test
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
