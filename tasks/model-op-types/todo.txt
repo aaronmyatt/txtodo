@@ -1,5 +1,5 @@
-2026-09-11 ids.rs: newtypes DeviceId TaskId OpId (Ulid) TokenId and FilePath (workspace-relative, forward slashes); no raw strings cross the API +m3 @model
-2026-09-11 hlc.rs: Hlc { wall_ms, counter, device } with Ord = (wall_ms, counter, device); Hlc::tick(now_ms) never goes backwards; counter overflow is an error, not a wrap +m3 @model
+x 2026-09-11 2026-09-11 ids.rs: newtypes DeviceId TaskId OpId (Ulid) TokenId and FilePath (workspace-relative, forward slashes); no raw strings cross the API +m3 @model
+x 2026-09-11 2026-09-11 hlc.rs: Hlc { wall_ms, counter, device } with Ord = (wall_ms, counter, device); Hlc::tick(now_ms) never goes backwards; counter overflow is an error, not a wrap +m3 @model
 2026-09-11 op.rs: Op, OpKind (Insert SetField EditText Move NotesEdit BlankInsert BlankRemove), Field and FieldValue enums, Principal (User Agent External) exactly as plan M3 +m3 @model
 2026-09-11 Serde derives on every op type; postcard is the one payload codec (plan M4 uses it on the wire) — adding serde+postcard is a dependency ask per plan §0 +m3 @model
 2026-09-11 Display for Principal: you@<device> / agent:<name>@<device> / external@<device> (design §4.8) +m3 @model

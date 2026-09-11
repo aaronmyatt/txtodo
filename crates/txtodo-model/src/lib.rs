@@ -3,6 +3,8 @@
 //! Slice rule: depends on `txtodo-core` only. No I/O, no clock — callers pass `now_ms`.
 #![forbid(unsafe_code)]
 
+mod hlc;
 mod ids;
 
+pub use hlc::{Hlc, HlcError};
 pub use ids::{DeviceId, FILE_PATH_MAX_BYTES, FilePath, FilePathError, OpId, TaskId, TokenId};
