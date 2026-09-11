@@ -9,3 +9,7 @@ description = "parse, tokenize, model, format, diff for todo.txt lines. Sync, no
 
 [lints]
 workspace = true
+
+[features]
+default = ["std"]
+std = []
