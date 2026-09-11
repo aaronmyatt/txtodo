@@ -42,12 +42,18 @@ tracing-appender = "0.2"
 [dev-dependencies]
 # https://docs.rs/proptest — text-edit application inverts diff_text
 proptest = "1"
+# https://docs.rs/criterion — reconcile one edit in 10k lines (budgets.json.latencyMs)
+criterion = "0.5"
 # https://docs.rs/hyper-util — TokioIo adapter so a tonic client can dial the unix socket in tests
 hyper-util = "0.1"
 # https://docs.rs/tower — service_fn for the custom connector
 tower = { version = "0.5", features = ["util"] }
 # https://docs.rs/tempfile — every test gets its own workspace dir
 tempfile = "3"
+
+[[bench]]
+name = "reconcile"
+harness = false
 
 [lints]
 workspace = true
