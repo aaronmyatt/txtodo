@@ -13,6 +13,7 @@ pub mod handle;
 pub mod history;
 pub mod mutation;
 pub mod reconcile;
+pub mod server;
 pub mod state;
 pub mod stats;
 pub mod textedit;

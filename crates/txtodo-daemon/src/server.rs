@@ -1,0 +1,279 @@
+//! The gRPC service on the unix socket (ADR 0006). Handlers are thin: parse the request into
+//! typed values (`convert.rs`), send one message to the right actor, map the reply. No file or
+//! store access happens here except the read-only History query.
+//! https://docs.rs/tonic/latest/tonic/transport/server/struct.Server.html#method.serve_with_incoming
+
+use crate::convert::{
+    parse_mutation, parse_path, parse_principal, parse_ulid_opt, task_of, to_summary,
+};
+use crate::handle::{ActorError, ActorHandle, Applied, WATCH_CAP};
+use crate::mutation::MutationError;
+use crate::workspace::Workspace;
+use std::pin::Pin;
+use std::sync::{Arc, RwLock};
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{Request, Response, Status};
+use txtodo_model::{FilePath, Principal, TaskId};
+use txtodo_proto::v1::txtodo_server::Txtodo;
+use txtodo_proto::v1::{self as pb};
+
+/// History default page.
+pub const HISTORY_DEFAULT_LIMIT: usize = 50;
+/// History hard cap per call.
+pub const HISTORY_MAX_LIMIT: usize = 1_000;
+/// Concurrent RPCs per connection.
+pub const MAX_INFLIGHT_RPCS: usize = 64;
+
+/// The workspace behind a lock: the watcher task registers new documents, RPCs read.
+pub type SharedWorkspace = Arc<RwLock<Workspace>>;
+
+/// The service.
+pub struct TxtodoService {
+    ws: SharedWorkspace,
+}
+
+impl TxtodoService {
+    /// Wraps a workspace.
+    pub fn new(ws: SharedWorkspace) -> TxtodoService {
+        TxtodoService { ws }
+    }
+
+    fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
+        self.ws
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn actor(&self, path: &str) -> Result<ActorHandle, Status> {
+        let path = parse_path(path)?;
+        self.workspace()
+            .actor(&path)
+            .cloned()
+            .ok_or_else(|| Status::not_found(format!("no document {path}")))
+    }
+
+    fn all_actors(&self) -> Vec<ActorHandle> {
+        let ws = self.workspace();
+        ws.paths().filter_map(|p| ws.actor(p).cloned()).collect()
+    }
+}
+
+fn status_of(e: ActorError) -> Status {
+    match e {
+        ActorError::Mutation(MutationError::Stale { .. }) => {
+            Status::failed_precondition(e.to_string())
+        }
+        ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
+        ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
+        ActorError::Gone(_) => Status::unavailable(e.to_string()),
+        ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
+            Status::internal(e.to_string())
+        }
+    }
+}
+
+fn applied_of(a: Applied) -> pb::ApplyResponse {
+    pb::ApplyResponse {
+        applied: a.applied,
+        hash: a.hash.to_vec(),
+        hlc_wall_ms: a.hlc.wall_ms,
+        hlc_counter: u32::from(a.hlc.counter),
+    }
+}
+
+/// Forwards one actor's changes into the merged Watch stream until either side hangs up.
+async fn forward_changes(
+    h: ActorHandle,
+    mut sub: tokio::sync::broadcast::Receiver<crate::handle::Change>,
+    tx: mpsc::Sender<Result<pb::Change, Status>>,
+) {
+    // Bounded by the subscriber's lifetime: `tx.send` fails once the client is gone.
+    loop {
+        let item = match sub.recv().await {
+            Ok(c) => pb::Change {
+                path: c.path.to_string(),
+                hash: c.hash.to_vec(),
+                ops: c.ops.iter().map(to_summary).collect(),
+            },
+            Err(RecvError::Lagged(_)) => match h.get().await {
+                Ok(c) => pb::Change {
+                    path: h.path().to_string(),
+                    hash: c.hash.to_vec(),
+                    ops: Vec::new(),
+                },
+                Err(_) => return,
+            },
+            Err(RecvError::Closed) => return,
+        };
+        if tx.send(Ok(item)).await.is_err() {
+            return;
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl Txtodo for TxtodoService {
+    async fn list_files(
+        &self,
+        _r: Request<pb::ListFilesRequest>,
+    ) -> Result<Response<pb::ListFilesResponse>, Status> {
+        let handles = self.all_actors();
+        let mut files = Vec::with_capacity(handles.len());
+        for h in handles {
+            let c = h.get().await.map_err(status_of)?;
+            files.push(pb::FileInfo {
+                path: h.path().to_string(),
+                hash: c.hash.to_vec(),
+            });
+        }
+        Ok(Response::new(pb::ListFilesResponse { files }))
+    }
+
+    async fn get_file(
+        &self,
+        r: Request<pb::GetFileRequest>,
+    ) -> Result<Response<pb::FileContents>, Status> {
+        let h = self.actor(&r.get_ref().path)?;
+        let c = h.get().await.map_err(status_of)?;
+        Ok(Response::new(pb::FileContents {
+            path: h.path().to_string(),
+            bytes: c.bytes,
+            hash: c.hash.to_vec(),
+        }))
+    }
+
+    type WatchStream = Pin<Box<dyn tokio_stream::Stream<Item = Result<pb::Change, Status>> + Send>>;
+
+    async fn watch(
+        &self,
+        r: Request<pb::WatchRequest>,
+    ) -> Result<Response<Self::WatchStream>, Status> {
+        let wanted = &r.get_ref().paths;
+        let handles: Vec<ActorHandle> = if wanted.is_empty() {
+            self.all_actors()
+        } else {
+            wanted
+                .iter()
+                .map(|p| self.actor(p))
+                .collect::<Result<_, _>>()?
+        };
+        let (tx, rx) = mpsc::channel(WATCH_CAP);
+        for h in handles {
+            let sub = h.subscribe().await.map_err(status_of)?;
+            tokio::spawn(forward_changes(h, sub, tx.clone()));
+        }
+        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+    }
+
+    async fn apply(
+        &self,
+        r: Request<pb::ApplyRequest>,
+    ) -> Result<Response<pb::ApplyResponse>, Status> {
+        let req = r.into_inner();
+        let h = self.actor(&req.path)?;
+        let device = self.workspace().device();
+        let principal = parse_principal(req.agent, device)?;
+        let mutations = req
+            .mutations
+            .into_iter()
+            .map(parse_mutation)
+            .collect::<Result<Vec<_>, _>>()?;
+        let a = h.apply(mutations, principal).await.map_err(status_of)?;
+        Ok(Response::new(applied_of(a)))
+    }
+
+    async fn history(
+        &self,
+        r: Request<pb::HistoryRequest>,
+    ) -> Result<Response<pb::HistoryResponse>, Status> {
+        let req = r.get_ref();
+        let limit = if req.limit == 0 {
+            HISTORY_DEFAULT_LIMIT
+        } else {
+            (req.limit as usize).min(HISTORY_MAX_LIMIT)
+        };
+        let task = parse_ulid_opt(&req.task_id)?.map(TaskId::new);
+        let paths: Vec<FilePath> = if req.path.is_empty() {
+            self.workspace().paths().cloned().collect()
+        } else {
+            vec![parse_path(&req.path)?]
+        };
+        let ws = self.workspace();
+        let store = ws
+            .store()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut rows = Vec::new();
+        for p in &paths {
+            let newest = store
+                .newest(p, txtodo_store::MAX_OPS_PER_READ)
+                .map_err(|e| Status::internal(e.to_string()))?;
+            rows.extend(
+                newest
+                    .into_iter()
+                    .filter(|s| req.before_seq == 0 || s.seq.0 < req.before_seq),
+            );
+        }
+        rows.retain(|s| task.is_none_or(|t| task_of(&s.op.kind) == Some(t)));
+        rows.sort_by_key(|s| std::cmp::Reverse(s.seq));
+        rows.truncate(limit);
+        debug_assert!(rows.len() <= limit);
+        Ok(Response::new(pb::HistoryResponse {
+            ops: rows.iter().map(to_summary).collect(),
+        }))
+    }
+
+    async fn undo(
+        &self,
+        r: Request<pb::UndoRequest>,
+    ) -> Result<Response<pb::ApplyResponse>, Status> {
+        let req = r.get_ref();
+        let h = self.actor(&req.path)?;
+        let device = self.workspace().device();
+        let steps = u16::try_from(req.steps).map_err(|_| Status::invalid_argument("steps"))?;
+        let a = h
+            .undo(steps, Principal::User { device })
+            .await
+            .map_err(status_of)?;
+        Ok(Response::new(applied_of(a)))
+    }
+
+    async fn checkout(
+        &self,
+        r: Request<pb::CheckoutRequest>,
+    ) -> Result<Response<pb::FileContents>, Status> {
+        let req = r.get_ref();
+        let h = self.actor(&req.path)?;
+        let bytes = h.checkout(req.at_wall_ms).await.map_err(status_of)?;
+        let hash = crate::actor::hash_of(&bytes).to_vec();
+        Ok(Response::new(pb::FileContents {
+            path: h.path().to_string(),
+            bytes,
+            hash,
+        }))
+    }
+
+    async fn health(
+        &self,
+        _r: Request<pb::HealthRequest>,
+    ) -> Result<Response<pb::HealthResponse>, Status> {
+        let ws = self.workspace();
+        let (writes_total, watcher_alive, last_event_ms) = ws.stats().read();
+        let now_ms = crate::clock::Clock::now_ms(&crate::clock::SystemClock);
+        let last_event_age_ms = if last_event_ms == 0 {
+            u64::MAX
+        } else {
+            now_ms.saturating_sub(last_event_ms)
+        };
+        Ok(Response::new(pb::HealthResponse {
+            watcher_alive,
+            documents: u32::try_from(ws.paths().count()).unwrap_or(u32::MAX),
+            last_event_age_ms,
+            started_at_ms: ws.started_at_ms(),
+            writes_total,
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+        }))
+    }
+}
