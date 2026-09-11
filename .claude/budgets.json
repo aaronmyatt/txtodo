@@ -115,5 +115,6 @@
   "canary": {
     "source": ".claude/canary/failing_test.rs",
     "target": "crates/txtodo-query/tests/__setup_canary__.rs"
-  }
+  },
+  "constitutionVersion": "2.0.0"
 }
