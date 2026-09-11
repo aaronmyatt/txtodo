@@ -5,8 +5,10 @@
 //!
 //! Four passes: deletes (bottom-up), same-id changes, task inserts and moves (top-down, each right
 //! after its predecessor task), then new blank lines anchored to the task above them.
+//! Hot path: ids come from `fast_id_of`; the content index for stripped ids is built only when a
+//! line actually lacks one (budget: one edit in 10k lines ≤ 20 ms, plan §5).
 
-use crate::state::id_of;
+use crate::fastid::fast_id_of;
 use std::collections::{BTreeMap, VecDeque};
 use txtodo_core::{Edit, File, LineDiff, LineKind, OwnedLine, Task, diff_lines, diff_text};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, TextEdit, set_field};
@@ -32,8 +34,8 @@ pub fn reconcile(
     mint: &mut dyn FnMut() -> TaskId,
 ) -> Reconciled {
     let (file, minted, reused) = assign_ids(old, new, mint);
-    let old_ids: Vec<Option<TaskId>> = old.lines.iter().map(id_of).collect();
-    let new_ids: Vec<Option<TaskId>> = file.lines.iter().map(id_of).collect();
+    let old_ids: Vec<Option<TaskId>> = old.lines.iter().map(fast_id_of).collect();
+    let new_ids: Vec<Option<TaskId>> = file.lines.iter().map(fast_id_of).collect();
     let diffs = diff_lines(old, &file);
     let mut ops = Vec::new();
     delete_pass(&mut ops, &diffs, old, &old_ids);
@@ -45,7 +47,10 @@ pub fn reconcile(
         "op count is bounded by the line counts"
     );
     debug_assert!(
-        file.lines.iter().all(|l| !is_task(l) || id_of(l).is_some()),
+        new_ids
+            .iter()
+            .zip(&file.lines)
+            .all(|(id, l)| id.is_some() || !is_task(l)),
         "every task line has an id"
     );
     Reconciled {
@@ -193,21 +198,25 @@ fn prev_task(ids: &[Option<TaskId>], i: usize) -> Option<TaskId> {
 }
 
 /// Gives every id-less task line an id: recovered from an old line with the same text minus its
-/// tag when one is unclaimed, else minted. Returns the completed file and the two counts.
+/// tag when one is unclaimed, else minted. Returns the completed file and the two counts. The
+/// content index over `old` is built only when some new line needs it.
 fn assign_ids(old: &File, new: &File, mint: &mut dyn FnMut() -> TaskId) -> (File, usize, usize) {
+    let needs: Vec<usize> = (0..new.lines.len())
+        .filter(|&i| fast_id_of(&new.lines[i]).is_none() && is_task(&new.lines[i]))
+        .collect();
+    if needs.is_empty() {
+        return (new.clone(), 0, 0);
+    }
     let mut by_text: BTreeMap<String, VecDeque<TaskId>> = BTreeMap::new();
     for line in &old.lines {
-        if let (Some(id), Some(text)) = (id_of(line), text_without_id(line)) {
+        if let (Some(id), Some(text)) = (fast_id_of(line), text_without_id(line)) {
             by_text.entry(text).or_default().push_back(id);
         }
     }
     let mut file = new.clone();
     let (mut minted, mut reused) = (0usize, 0usize);
-    for line in file
-        .lines
-        .iter_mut()
-        .filter(|l| is_task(l) && id_of(l).is_none())
-    {
+    for i in needs {
+        let line = &mut file.lines[i];
         let recovered = line
             .raw()
             .and_then(|t| by_text.get_mut(t))

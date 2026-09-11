@@ -8,6 +8,7 @@ pub mod convert;
 pub mod debounce;
 pub mod expected;
 mod external;
+pub mod fastid;
 mod fields;
 pub mod handle;
 pub mod history;
