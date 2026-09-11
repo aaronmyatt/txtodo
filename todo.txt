@@ -1,13 +1,13 @@
 x 2026-09-11 2026-09-11 Push main and confirm all six CI jobs are green +m1 @ci
-(A) 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli
-(A) 2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli
-(A) 2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli
-(A) 2026-09-11 add stamps creation date and id: tag; --no-id flag; id_tags config +m2 @cli
-(A) 2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli
-(A) 2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli
-(A) 2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test
-(A) 2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test
-(A) 2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test
+x 2026-09-11 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 add stamps creation date and id: tag; --no-id flag; id_tags config +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli ref:cli-m2
+x 2026-09-11 2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test ref:cli-m2
+x 2026-09-11 2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test ref:cli-m2
+x 2026-09-11 2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test ref:cli-m2
 (B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test
 (B) 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model
 (B) 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store

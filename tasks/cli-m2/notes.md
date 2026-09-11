@@ -25,3 +25,17 @@ parity harness · CRLF/no-newline tests.
 - `del`/`move`/`deduplicate` leave a blank line (TODOTXT_PRESERVE_LINE_NUMBERS=1 default).
 - `append`/`prepend`/`replace`/`del TERM` are raw-text operations in todo.sh (sentence delimiters,
   priority+date prefix kept); they are reproduced on the raw line, not via `Edit`, so bytes match.
+
+## As built (2026-09-11)
+- Oracle pinned to todo.sh **v2.14.0** (todotxt/todo.txt-cli f06bbe18711055e95dac21e7f8d9b4251f43e5cd,
+  sha256 4fe13c1e…), the latest release, vendored verbatim and executable. Differences from 2.12 that
+  shaped the code: `replace` takes the replacement's own priority/date; `pri` takes NR PRIORITY pairs;
+  "already done" / "not prioritized" / "already prioritized" / "no duplicates" go to stderr with
+  exit 1; `archive` with nothing done says so; `move` prints "SRC: N moved to M in DEST.".
+- `pri`/`depri` are raw prefix edits like todo.sh (a completed line would otherwise lose the priority
+  silently through `emit_prefix`); only `do` goes through `core::Edit`.
+- `fmt` also collapses whitespace runs inside the description (the `tabs` quirk covers runs) — it is
+  the explicit canonicalisation command, so text spacing is fair game there and nowhere else.
+- Harness: 36 scenarios in `crates/txtodo-cli/tests/todosh_parity.rs`, twin temp dirs, scrubbed env,
+  exit-status agreement per step, byte-identical todo.txt/done.txt/other.txt after. ~3 s locally.
+- The vendored script is GPL-3.0; it is executed as a test oracle, never linked. Flagged for the human.
