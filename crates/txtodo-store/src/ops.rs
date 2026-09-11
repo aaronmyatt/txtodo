@@ -3,7 +3,7 @@
 //! without joining anything. Ref: https://docs.rs/rusqlite/latest/rusqlite/struct.Transaction.html
 
 use crate::{Store, StoreError};
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use txtodo_model::{FilePath, Hlc, Op, OpKind, Principal};
 
 /// Position in the log. Dense, increasing, per database.
@@ -49,7 +49,8 @@ fn principal_tag(p: &Principal) -> &'static str {
     }
 }
 
-fn kind_tag(k: &OpKind) -> &'static str {
+/// The `kind` column tag for an op; `txtodo log` filters on it.
+pub fn kind_tag(k: &OpKind) -> &'static str {
     match k {
         OpKind::Insert { .. } => "insert",
         OpKind::SetField { .. } => "set_field",
@@ -61,7 +62,7 @@ fn kind_tag(k: &OpKind) -> &'static str {
     }
 }
 
-fn wall_i64(wall_ms: u64) -> i64 {
+pub(crate) fn wall_i64(wall_ms: u64) -> i64 {
     // 2^63 ms is ~292 million years; the HLC never gets there, so saturating is an assertion in disguise.
     debug_assert!(
         wall_ms <= i64::MAX as u64,
@@ -75,54 +76,58 @@ fn decode_row(seq: i64, payload: Vec<u8>) -> Result<Stored, StoreError> {
     Ok(Stored { seq: Seq(seq), op })
 }
 
+/// Validates a batch and inserts every row on `conn`; the caller owns the transaction.
+pub(crate) fn insert_ops(conn: &Connection, ops: &[Op]) -> Result<SeqRange, StoreError> {
+    if ops.is_empty() {
+        return Err(StoreError::EmptyBatch);
+    }
+    if ops.len() > MAX_APPEND_BATCH {
+        return Err(StoreError::BatchTooLarge(ops.len()));
+    }
+    let mut stmt = conn
+        .prepare_cached(INSERT_OP)
+        .map_err(StoreError::query("prepare insert"))?;
+    let mut first: Option<i64> = None;
+    let mut last = 0i64;
+    for op in ops {
+        let payload =
+            postcard::to_allocvec(op).map_err(|source| StoreError::Codec { seq: -1, source })?;
+        stmt.execute(params![
+            op.id.ulid().to_u128().to_be_bytes().to_vec(),
+            wall_i64(op.hlc.wall_ms),
+            i64::from(op.hlc.counter),
+            op.hlc.device.ulid().to_u128().to_be_bytes().to_vec(),
+            principal_tag(&op.principal),
+            op.file.as_str(),
+            kind_tag(&op.kind),
+            payload,
+        ])
+        .map_err(StoreError::query("insert op"))?;
+        last = conn.last_insert_rowid();
+        first.get_or_insert(last);
+    }
+    let first = first.unwrap_or(last);
+    debug_assert_eq!(
+        last - first + 1,
+        ops.len() as i64,
+        "seqs are dense within one append"
+    );
+    Ok(SeqRange {
+        first: Seq(first),
+        last: Seq(last),
+    })
+}
+
 impl Store {
     /// Appends `ops` in one transaction; either all rows land or none. Returns their seqs.
     pub fn append(&mut self, ops: &[Op]) -> Result<SeqRange, StoreError> {
-        if ops.is_empty() {
-            return Err(StoreError::EmptyBatch);
-        }
-        if ops.len() > MAX_APPEND_BATCH {
-            return Err(StoreError::BatchTooLarge(ops.len()));
-        }
         let tx = self
             .conn
             .transaction()
             .map_err(StoreError::query("begin append"))?;
-        let mut first: Option<i64> = None;
-        let mut last = 0i64;
-        {
-            let mut stmt = tx
-                .prepare_cached(INSERT_OP)
-                .map_err(StoreError::query("prepare insert"))?;
-            for op in ops {
-                let payload = postcard::to_allocvec(op)
-                    .map_err(|source| StoreError::Codec { seq: -1, source })?;
-                stmt.execute(params![
-                    op.id.ulid().to_u128().to_be_bytes().to_vec(),
-                    wall_i64(op.hlc.wall_ms),
-                    i64::from(op.hlc.counter),
-                    op.hlc.device.ulid().to_u128().to_be_bytes().to_vec(),
-                    principal_tag(&op.principal),
-                    op.file.as_str(),
-                    kind_tag(&op.kind),
-                    payload,
-                ])
-                .map_err(StoreError::query("insert op"))?;
-                last = tx.last_insert_rowid();
-                first.get_or_insert(last);
-            }
-        }
+        let range = insert_ops(&tx, ops)?;
         tx.commit().map_err(StoreError::query("commit append"))?;
-        let first = first.unwrap_or(last);
-        debug_assert_eq!(
-            last - first + 1,
-            ops.len() as i64,
-            "seqs are dense within one append"
-        );
-        Ok(SeqRange {
-            first: Seq(first),
-            last: Seq(last),
-        })
+        Ok(range)
     }
 
     /// Ops for `file` with `seq > since`, oldest first, at most `MAX_OPS_PER_READ`.
@@ -178,7 +183,7 @@ impl Store {
     }
 }
 
-fn collect(
+pub(crate) fn collect(
     rows: impl Iterator<Item = rusqlite::Result<(i64, Vec<u8>)>>,
 ) -> Result<Vec<Stored>, StoreError> {
     let mut out = Vec::new();

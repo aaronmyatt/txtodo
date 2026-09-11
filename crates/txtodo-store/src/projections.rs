@@ -44,16 +44,7 @@ const SELECT_META: &str = "SELECT value FROM meta WHERE key = ?1";
 impl Store {
     /// Records the bytes just written for `p.file`, replacing the previous projection.
     pub fn put_projection(&mut self, p: &Projection) -> Result<(), StoreError> {
-        if p.bytes.len() > MAX_PROJECTION_BYTES {
-            return Err(StoreError::ProjectionTooLarge(p.bytes.len()));
-        }
-        let written = i64::try_from(p.written_at_ms).unwrap_or(i64::MAX);
-        self.conn
-            .execute(
-                UPSERT_PROJECTION,
-                params![p.file.as_str(), p.bytes, p.hash.to_vec(), written],
-            )
-            .map_err(StoreError::query("upsert projection"))?;
+        upsert_projection(&self.conn, p)?;
         debug_assert!(
             self.get_projection(&p.file)?
                 .is_some_and(|q| q.hash == p.hash)
@@ -116,11 +107,7 @@ impl Store {
 
     /// Sets a meta value (device id, schema notes, later the encrypted keys).
     pub fn meta_set(&mut self, key: &str, value: &[u8]) -> Result<(), StoreError> {
-        debug_assert!(!key.is_empty(), "meta key must be named");
-        self.conn
-            .execute(UPSERT_META, params![key, value])
-            .map_err(StoreError::query("upsert meta"))?;
-        Ok(())
+        upsert_meta(&self.conn, key, value)
     }
 
     /// Reads a meta value.
@@ -130,4 +117,33 @@ impl Store {
             .optional()
             .map_err(StoreError::query("select meta"))
     }
+}
+
+/// Upserts a projection on `conn`; the caller owns the transaction.
+pub(crate) fn upsert_projection(
+    conn: &rusqlite::Connection,
+    p: &Projection,
+) -> Result<(), StoreError> {
+    if p.bytes.len() > MAX_PROJECTION_BYTES {
+        return Err(StoreError::ProjectionTooLarge(p.bytes.len()));
+    }
+    let written = i64::try_from(p.written_at_ms).unwrap_or(i64::MAX);
+    conn.execute(
+        UPSERT_PROJECTION,
+        params![p.file.as_str(), p.bytes, p.hash.to_vec(), written],
+    )
+    .map_err(StoreError::query("upsert projection"))?;
+    Ok(())
+}
+
+/// Upserts a meta value on `conn`; the caller owns the transaction.
+pub(crate) fn upsert_meta(
+    conn: &rusqlite::Connection,
+    key: &str,
+    value: &[u8],
+) -> Result<(), StoreError> {
+    debug_assert!(!key.is_empty(), "meta key must be named");
+    conn.execute(UPSERT_META, params![key, value])
+        .map_err(StoreError::query("upsert meta"))?;
+    Ok(())
 }
