@@ -2,15 +2,18 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)] // the CLI is the output path (plan §0)
 
+mod client;
 mod clock;
 mod commands;
 mod config;
+mod daemon_mode;
+mod error;
 mod json;
 mod store;
 
 use clap::{Parser, Subcommand};
 use config::{Config, Env, Paths};
-use std::fmt;
+use error::CliError;
 use std::process::ExitCode;
 use txtodo_core::Date;
 
@@ -30,6 +33,9 @@ struct Cli {
     /// Do not archive after `do` (todo.sh -A).
     #[arg(short = 'A', long, global = true)]
     no_archive: bool,
+    /// Ignore a running daemon and edit the files directly (M2 behaviour).
+    #[arg(long, global = true)]
+    no_daemon: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -167,55 +173,51 @@ enum Command {
         #[arg(allow_hyphen_values = true)]
         args: Vec<String>,
     },
-}
-
-/// Anything that ends the run with a message on stderr and exit status 1.
-#[derive(Debug)]
-enum CliError {
-    /// The config file exists but is unusable.
-    Config(config::ConfigError),
-    /// The process environment or the random source could not be read.
-    Io(std::io::Error),
-    /// A file could not be read or written.
-    Store(store::StoreError),
-    /// An edit argument the core rejects.
-    Edit(txtodo_core::EditError),
-    /// Wrong arguments; the value is the todo.sh usage line.
-    Usage(&'static str),
-    /// A todo.sh-worded failure, printed as is.
-    Message(String),
-    /// Already printed to stderr by the command; only the exit status remains.
-    Reported,
-}
-
-impl From<store::StoreError> for CliError {
-    fn from(e: store::StoreError) -> CliError {
-        CliError::Store(e)
-    }
-}
-impl From<txtodo_core::EditError> for CliError {
-    fn from(e: txtodo_core::EditError) -> CliError {
-        CliError::Edit(e)
-    }
-}
-impl From<std::io::Error> for CliError {
-    fn from(e: std::io::Error) -> CliError {
-        CliError::Io(e)
-    }
-}
-
-impl fmt::Display for CliError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CliError::Config(e) => write!(f, "{e}"),
-            CliError::Io(e) => write!(f, "{e}"),
-            CliError::Store(e) => write!(f, "{e}"),
-            CliError::Edit(e) => write!(f, "{e}"),
-            CliError::Usage(u) => write!(f, "usage: txtodo {u}"),
-            CliError::Message(m) => write!(f, "{m}"),
-            CliError::Reported => Ok(()),
-        }
-    }
+    /// Show the op log, newest first (daemon mode).
+    Log {
+        /// Only this document (workspace-relative), e.g. done.txt.
+        #[arg(long)]
+        file: Option<String>,
+        /// How many ops.
+        #[arg(short = 'n', long)]
+        n: Option<u32>,
+    },
+    /// Who last touched each field of a task (daemon mode).
+    Blame {
+        /// Line number.
+        item: String,
+    },
+    /// Undo the newest ops (daemon mode).
+    Undo {
+        /// How many ops to invert.
+        #[arg(long, default_value_t = 1)]
+        steps: u32,
+    },
+    /// Render a document as it was at a local date-time (daemon mode).
+    Checkout {
+        /// YYYY-MM-DDTHH:MM[:SS] in the local zone.
+        at: String,
+        /// Print to stdout instead of a temp file.
+        #[arg(long)]
+        stdout: bool,
+        /// Which document.
+        #[arg(long, default_value = "todo.txt")]
+        file: String,
+    },
+    /// Check socket, watcher, files, clock and config; exit 1 on any failure.
+    Doctor {
+        /// Also print the daemon's recent JSON log.
+        #[arg(long)]
+        verbose: bool,
+    },
+    /// Manage the txtodod service for this workspace (launchd on macOS, systemd --user on Linux).
+    Daemon {
+        /// What to do.
+        action: commands::service::Action,
+        /// Overwrite an existing service file on install.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Everything a command needs: where the files are and what the config says.
@@ -261,43 +263,88 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         json: cli.json,
     };
     match &cli.command {
-        Command::Add { text } => commands::add::run(&ctx, &text.join(" "), false),
-        Command::Addm { text } => commands::add::run(&ctx, &text.join(" "), true),
+        Command::Doctor { verbose } => return commands::doctor::run(&ctx, *verbose),
+        Command::Daemon { action, force } => return commands::service::run(&ctx, *action, *force),
+        _ => {}
+    }
+    match client::select(&ctx.paths.dir, cli.no_daemon)? {
+        client::Mode::Direct => dispatch(&ctx, &cli.command),
+        client::Mode::Daemon(mut daemon) => dispatch_daemon(&ctx, &mut daemon, &cli.command),
+    }
+}
+
+/// Daemon mode: history commands talk to the daemon directly; every todo.sh command runs against a
+/// scratch copy and its diff is sent as mutations (`daemon_mode`). `env` reports the real paths.
+fn dispatch_daemon(
+    ctx: &Ctx,
+    daemon: &mut client::Daemon,
+    command: &Command,
+) -> Result<(), CliError> {
+    match command {
+        Command::Env => dispatch(ctx, command),
+        Command::Log { file, n } => {
+            commands::history::run_log(daemon, file.as_deref(), *n, ctx.json)
+        }
+        Command::Blame { item } => commands::history::run_blame(daemon, item, ctx.json),
+        Command::Undo { steps } => commands::history::run_undo(daemon, *steps, ctx.json),
+        Command::Checkout { at, stdout, file } => {
+            commands::history::run_checkout(daemon, at, file, *stdout)
+        }
+        // Every todo.sh command, present and future, goes through the scratch adapter by design.
+        todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
+    }
+}
+
+/// Direct-file mode (M2): one arm per command.
+fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
+    match command {
+        Command::Doctor { .. } | Command::Daemon { .. } => {
+            unreachable!("doctor and daemon are handled before mode selection")
+        }
+        Command::Log { .. }
+        | Command::Blame { .. }
+        | Command::Undo { .. }
+        | Command::Checkout { .. } => Err(CliError::Message(format!(
+            "txtodo: {}",
+            commands::history::NEEDS_DAEMON
+        ))),
+        Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
+        Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),
         Command::Append { item, text } => {
-            commands::text::run(&ctx, commands::text::Kind::Append, item, &text.join(" "))
+            commands::text::run(ctx, commands::text::Kind::Append, item, &text.join(" "))
         }
         Command::Prepend { item, text } => {
-            commands::text::run(&ctx, commands::text::Kind::Prepend, item, &text.join(" "))
+            commands::text::run(ctx, commands::text::Kind::Prepend, item, &text.join(" "))
         }
         Command::Replace { item, text } => {
-            commands::text::run(&ctx, commands::text::Kind::Replace, item, &text.join(" "))
+            commands::text::run(ctx, commands::text::Kind::Replace, item, &text.join(" "))
         }
-        Command::Archive => commands::archive::run(&ctx),
-        Command::Depri { items } => commands::edit::run_depri(&ctx, items),
-        Command::Deduplicate => commands::fileops::run_dedup(&ctx),
+        Command::Archive => commands::archive::run(ctx),
+        Command::Depri { items } => commands::edit::run_depri(ctx, items),
+        Command::Deduplicate => commands::fileops::run_dedup(ctx),
         Command::Move { item, dest, src } => {
-            commands::fileops::run_move(&ctx, item, dest, src.as_deref())
+            commands::fileops::run_move(ctx, item, dest, src.as_deref())
         }
-        Command::Report => commands::fileops::run_report(&ctx, &clock::now_local_iso()),
-        Command::Del { item, term } => commands::edit::run_del(&ctx, item, term.as_deref()),
-        Command::Do { items } => commands::edit::run_do(&ctx, items),
-        Command::Pri { args } => commands::edit::run_pri(&ctx, args),
+        Command::Report => commands::fileops::run_report(ctx, &clock::now_local_iso()),
+        Command::Del { item, term } => commands::edit::run_del(ctx, item, term.as_deref()),
+        Command::Do { items } => commands::edit::run_do(ctx, items),
+        Command::Pri { args } => commands::edit::run_pri(ctx, args),
         Command::Env => {
-            print_env(&ctx);
+            print_env(ctx);
             Ok(())
         }
-        Command::Fmt => commands::hygiene::run_fmt(&ctx),
-        Command::Lint => commands::hygiene::run_lint(&ctx),
-        Command::List { terms } => commands::list::list_file(&ctx, &ctx.paths.todo, terms),
-        Command::Listall { terms } => commands::list::list_all(&ctx, terms),
-        Command::Listpri { args } => commands::list::list_pri(&ctx, args),
-        Command::Listproj { terms } => commands::list::list_words(&ctx, '+', terms),
-        Command::Listcon { terms } => commands::list::list_words(&ctx, '@', terms),
+        Command::Fmt => commands::hygiene::run_fmt(ctx),
+        Command::Lint => commands::hygiene::run_lint(ctx),
+        Command::List { terms } => commands::list::list_file(ctx, &ctx.paths.todo, terms),
+        Command::Listall { terms } => commands::list::list_all(ctx, terms),
+        Command::Listpri { args } => commands::list::list_pri(ctx, args),
+        Command::Listproj { terms } => commands::list::list_words(ctx, '+', terms),
+        Command::Listcon { terms } => commands::list::list_words(ctx, '@', terms),
         Command::Listfile { args } => match args.split_first() {
-            None => commands::list::list_txt_files(&ctx),
+            None => commands::list::list_txt_files(ctx),
             Some((name, terms)) => {
-                let path = commands::list::find_file(&ctx, name)?;
-                commands::list::list_file(&ctx, &path, terms)
+                let path = commands::list::find_file(ctx, name)?;
+                commands::list::list_file(ctx, &path, terms)
             }
         },
     }

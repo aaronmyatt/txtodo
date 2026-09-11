@@ -3,8 +3,11 @@
 
 pub mod add;
 pub mod archive;
+pub mod doctor;
 pub mod edit;
 pub mod fileops;
+pub mod history;
 pub mod hygiene;
 pub mod list;
+pub mod service;
 pub mod text;

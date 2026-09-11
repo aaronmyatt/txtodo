@@ -51,7 +51,7 @@ impl Env {
 }
 
 /// `config.toml` as read from disk; every field optional (design §2.2 rule 4: absent means default).
-#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Directory holding todo.txt, done.txt and report.txt.
