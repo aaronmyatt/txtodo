@@ -1,7 +1,9 @@
-//! `add` / `addm`: todo.sh `add` with `-t` (date on add).
+//! `add` / `addm`: todo.sh `add` with `-t` (date on add), then the `id:` stamp (plan M2, decision 9).
 
-use crate::{CliError, Ctx, store};
-use txtodo_core::{Date, File, LineKind, Mode, OwnedLine, parse_line};
+use crate::{CliError, Ctx, clock, store};
+use txtodo_core::{
+    Date, Edit, EditError, File, LineKind, Mode, OwnedLine, Ulid, apply, parse_line,
+};
 
 /// todo.sh `cleaninput` + `uppercasePriority`: CR and LF become spaces; a leading `(a)` becomes `(A)`.
 pub fn clean(input: &str) -> String {
@@ -36,18 +38,27 @@ pub fn stamp(line: &str, today: Date) -> String {
     out
 }
 
-/// One `add`: clean, stamp, append. Returns the line number and its text.
-pub fn add_line(file: &mut File, input: &str, today: Date) -> (usize, String) {
+/// One `add`: clean, stamp, tag with `id` when given, append. Returns the line number and its text.
+pub fn add_line(
+    file: &mut File,
+    input: &str,
+    today: Date,
+    id: Option<Ulid>,
+) -> Result<(usize, String), EditError> {
     let text = stamp(&clean(input), today);
-    let line = OwnedLine::from_bytes(text.into_bytes(), file.ending);
+    let mut line = OwnedLine::from_bytes(text.into_bytes(), file.ending);
+    if let Some(id) = id {
+        let edit = Edit::new().set_tag("id", &id.to_string())?;
+        line = apply(&line, &edit);
+    }
     let raw = line.raw().unwrap_or_default().to_string();
     debug_assert!(
-        raw.contains(&today.to_string()) || raw.starts_with('x'),
-        "dated"
+        id.is_none() || raw.contains("id:"),
+        "id stamped when requested"
     );
     let number = store::append_line(file, line.bytes().to_vec());
     debug_assert!(number == file.lines.len(), "appended at the end");
-    (number, raw)
+    Ok((number, raw))
 }
 
 /// `txtodo add TEXT` / `txtodo addm TEXT` (one task per line of TEXT).
@@ -67,7 +78,12 @@ pub fn run(ctx: &Ctx, input: &str, multi: bool) -> Result<(), CliError> {
     };
     debug_assert!(!pieces.is_empty(), "non-blank input has a line");
     for piece in pieces {
-        let (number, raw) = add_line(&mut file, piece, ctx.today);
+        let id = if ctx.ids {
+            Some(clock::new_ulid()?)
+        } else {
+            None
+        };
+        let (number, raw) = add_line(&mut file, piece, ctx.today, id)?;
         println!("{number} {raw}");
         println!("TODO: {number} added.");
     }
@@ -100,10 +116,17 @@ mod tests {
     }
 
     #[test]
-    fn add_line_numbers_from_the_end() {
+    fn add_line_stamps_id_last_and_numbers_from_the_end() {
         let mut file = txtodo_core::parse_file(b"one\n");
-        let (n, raw) = add_line(&mut file, "(c) two", today());
-        assert_eq!((n, raw.as_str()), (2, "(C) 2026-09-11 two"));
-        assert_eq!(file.to_bytes(), b"one\n(C) 2026-09-11 two\n");
+        let id = Ulid::from_u128(1);
+        let (n, raw) = add_line(&mut file, "(c) two", today(), Some(id)).unwrap();
+        assert_eq!(
+            (n, raw.as_str()),
+            (2, "(C) 2026-09-11 two id:00000000000000000000000001")
+        );
+        assert_eq!(
+            file.to_bytes(),
+            b"one\n(C) 2026-09-11 two id:00000000000000000000000001\n"
+        );
     }
 }
