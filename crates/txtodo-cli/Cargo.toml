@@ -23,10 +23,17 @@ serde = { version = "1", features = ["derive"] }
 jiff = "0.2"
 # https://docs.rs/getrandom — the 80 random bits of a ULID
 getrandom = "0.3"
+# https://docs.rs/tonic — gRPC client to txtodod over the unix socket (ADR 0006); current-thread runtime
+tonic = "0.14"
+tokio = { version = "1", features = ["rt", "net"] }
+# https://docs.rs/hyper-util — TokioIo adapter for the unix-socket connector
+hyper-util = "0.1"
+# https://docs.rs/tower — service_fn for the custom connector
+tower = { version = "0.5", features = ["util"] }
+# https://docs.rs/tempfile — daemon mode runs each command against a scratch copy, then sends the diff
+tempfile = "3"
 
 [dev-dependencies]
-# https://docs.rs/tempfile — every test gets its own todo dir
-tempfile = "3"
 
 [lints]
 workspace = true
