@@ -1,7 +1,7 @@
-(A) 2026-09-11 Create specs/todotxt.abnf with a header naming it normative and RFC 5234 as the notation +m0 @specs
-(A) 2026-09-11 Copy the design §2.3 strict grammar verbatim +m0 @specs
-(A) 2026-09-11 Add ref-tag and slug rules from plan §3.2.1 as in notes.md, with the dot-only exclusion as a comment +m0 @specs
-(A) 2026-09-11 Add a Lenient-mode section as comments listing the four leniencies and their quirk names +m0 @specs
-(A) 2026-09-11 Validate the file parses with the abnf crate (cargo script in scratch, not committed) +m0 @specs
-(A) 2026-09-11 Point the design §2.3 heading at specs/todotxt.abnf as the source of truth +m0 @specs
-(A) 2026-09-11 Complete the parent line in ./todo.txt +m0 @specs
+x 2026-09-11 2026-09-11 Create specs/todotxt.abnf with a header naming it normative and RFC 5234 as the notation +m0 @specs
+x 2026-09-11 2026-09-11 Copy the design §2.3 strict grammar verbatim +m0 @specs
+x 2026-09-11 2026-09-11 Add ref-tag and slug rules from plan §3.2.1 as in notes.md, with the dot-only exclusion as a comment +m0 @specs
+x 2026-09-11 2026-09-11 Add a Lenient-mode section as comments listing the four leniencies and their quirk names +m0 @specs
+x 2026-09-11 2026-09-11 Validate the file parses with the abnf crate (cargo script in scratch, not committed) +m0 @specs
+x 2026-09-11 2026-09-11 Point the design §2.3 heading at specs/todotxt.abnf as the source of truth +m0 @specs
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @specs

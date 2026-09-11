@@ -1,0 +1,58 @@
+; txtodo — todo.txt grammar (NORMATIVE)
+;
+; Notation: RFC 5234 ABNF <https://www.rfc-editor.org/rfc/rfc5234> with RFC 7405 %s"…" case-sensitive
+; strings <https://www.rfc-editor.org/rfc/rfc7405>. Core rules DIGIT and SP are RFC 5234 Appendix B.
+; Source: txtodo-design.md §2.3 (strict grammar) and txtodo-implementation-plan.md §3.2.1 (ref slug).
+; The strict parser enforces this grammar; the formatter only ever emits it. M1's hand-written parser,
+; the test-only generated parser, and M7's Lezer grammar all derive from this file.
+; Format reference: https://github.com/todotxt/todo.txt
+
+; ---- lines -----------------------------------------------------------------------------------------
+line        = completed / incomplete / blank
+incomplete  = [priority SP] [date SP] description
+completed   = %s"x" SP date SP [date SP] description   ; completion date, then creation date
+priority    = "(" %x41-5A ")"                          ; (A) through (Z), uppercase only
+date        = 4DIGIT "-" 2DIGIT "-" 2DIGIT             ; YYYY-MM-DD, calendar validity is checked by the parser
+blank       = ""                                       ; blank lines are entries; they keep line numbers stable
+
+; ---- description -----------------------------------------------------------------------------------
+description = word *(SP word)
+word        = project / context / tag / plain
+project     = "+" 1*NONSP
+context     = "@" 1*NONSP
+tag         = key ":" 1*NONSP
+key         = 1*(%x21-39 / %x3B-7E / %x80-10FFFF)      ; any non-space, non-colon
+plain       = 1*NONSP
+NONSP       = %x21-7E / %x80-10FFFF                    ; anything except whitespace; Unicode, not ASCII
+
+; ---- extension tags (design Appendix A; all optional) ---------------------------------------------
+; These are RECOGNISED FORMS of <tag>, not new alternatives of <word>: an unknown key:value still
+; parses as <tag>. The parser exposes them as typed views; other tools see inert metadata.
+ref-tag     = %s"ref:" slug
+slug        = slug-start *63slug-char                  ; 1..64 chars; no "/", so no absolute paths, no traversal
+slug-start  = %x61-7A / DIGIT                          ; a-z 0-9
+slug-char   = slug-start / "." / "_" / "-"
+; "." and ".." match <slug> syntactically but are rejected by the parser as quirk invalid_ref
+; and treated as no ref (plan §3.2.1).
+
+id-tag      = %s"id:" ulid
+ulid        = 26(DIGIT / %x41-48 / %x4A-4B / %x4D-4E / %x50-54 / %x56-5A)
+                                                       ; Crockford base32: 0-9 A-Z without I L O U
+pri-tag     = %s"pri:" %x41-5A                         ; priority preserved through completion (spec)
+due-tag     = %s"due:" date
+t-tag       = %s"t:" date                              ; threshold: hide before this date
+rec-tag     = %s"rec:" ["+"] 1*DIGIT (%s"d" / %s"w" / %s"m" / %s"y")
+                                                       ; recurrence from completion; "+" = strictly from due
+h-tag       = %s"h:1"                                  ; hidden
+
+; ---- lenient mode (READ ONLY; never emitted) -------------------------------------------------------
+; Each leniency is recorded on the parsed task as a quirk so the line round-trips byte-for-byte:
+;   x with no completion date                       quirk no_completion_date
+;   x (A) 2026-…   (priority right after x)         quirk priority_after_x
+;   x 2026-… (A) … (priority after the date)        quirk priority_after_date
+;   tabs, runs of spaces                            quirk tabs
+;   trailing whitespace                             quirk trailing_ws
+;   + or @ at the very start of the line            no quirk: it is a project/context by this grammar
+;   ref: value that is not a valid <slug>           quirk invalid_ref (treated as no ref)
+; File-level hygiene (BOM, LF/CRLF, trailing newline) is detected per file and preserved; mixed
+; endings are a per-line quirk. Canonicalisation is `txtodo fmt`, never a side effect (design §2.2 rule 7).
