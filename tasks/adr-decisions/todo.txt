@@ -1,15 +1,15 @@
-(A) 2026-09-11 Wait for adr-template and rename-plan-names (ADR 0010 must use the txtodo names) +m0 @docs
-(A) 2026-09-11 0001-rust-below-the-ui.md +m0 @docs
-(A) 2026-09-11 0002-loro-as-crdt-engine.md (wrap behind a Doc trait only when a second impl exists) +m0 @docs
-(A) 2026-09-11 0003-iroh-and-mdns-for-networking.md +m0 @docs
-(A) 2026-09-11 0004-sqlite-via-rusqlite-wal.md +m0 @docs
-(A) 2026-09-11 0005-rmcp-for-mcp.md (verify the crate name and version first) +m0 @docs
-(A) 2026-09-11 0006-grpc-over-local-socket-with-rest-mirror.md +m0 @docs
-(A) 2026-09-11 0007-tauri-svelte-codemirror-desktop.md +m0 @docs
-(A) 2026-09-11 0008-native-text-views-on-mobile.md +m0 @docs
-(A) 2026-09-11 0009-ulid-id-tag-identity.md (sidecar mode deferred to M10) +m0 @docs
-(A) 2026-09-11 0010-ports-names-and-paths.md with txtodod txtodo .txtodo/ 8636 8637 _txtodo._udp _txtodo-mcp._tcp +m0 @docs
-(A) 2026-09-11 0011-local-date-stamps-no-timezones.md +m0 @docs
-(A) 2026-09-11 0012-ref-directory-convention.md pointing at specs/ref-directories.md +m0 @docs
-(A) 2026-09-11 Commit in two batches of six so each stays under the 300-line diff budget +m0 @docs
-(A) 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs
+x 2026-09-11 2026-09-11 Wait for adr-template and rename-plan-names (ADR 0010 must use the txtodo names) +m0 @docs
+x 2026-09-11 2026-09-11 0001-rust-below-the-ui.md +m0 @docs
+x 2026-09-11 2026-09-11 0002-loro-as-crdt-engine.md (wrap behind a Doc trait only when a second impl exists) +m0 @docs
+x 2026-09-11 2026-09-11 0003-iroh-and-mdns-for-networking.md +m0 @docs
+x 2026-09-11 2026-09-11 0004-sqlite-via-rusqlite-wal.md +m0 @docs
+x 2026-09-11 2026-09-11 0005-rmcp-for-mcp.md (verify the crate name and version first) +m0 @docs
+x 2026-09-11 2026-09-11 0006-grpc-over-local-socket-with-rest-mirror.md +m0 @docs
+x 2026-09-11 2026-09-11 0007-tauri-svelte-codemirror-desktop.md +m0 @docs
+x 2026-09-11 2026-09-11 0008-native-text-views-on-mobile.md +m0 @docs
+x 2026-09-11 2026-09-11 0009-ulid-id-tag-identity.md (sidecar mode deferred to M10) +m0 @docs
+x 2026-09-11 2026-09-11 0010-ports-names-and-paths.md with txtodod txtodo .txtodo/ 8636 8637 _txtodo._udp _txtodo-mcp._tcp +m0 @docs
+x 2026-09-11 2026-09-11 0011-local-date-stamps-no-timezones.md +m0 @docs
+x 2026-09-11 2026-09-11 0012-ref-directory-convention.md pointing at specs/ref-directories.md +m0 @docs
+x 2026-09-11 2026-09-11 Commit in two batches of six so each stays under the 300-line diff budget +m0 @docs
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs
