@@ -1,34 +1,91 @@
-# Tauri 2 shell talking gRPC to txtodod and spawning it if absent (plan M7, plan §7)
+# Tauri 2 shell: gRPC client to txtodod, spawn-if-absent, thin typed commands (plan M7, design §5/§7)
 
 ## Goal
 
-`apps/desktop/` is a Tauri 2 shell. The Rust side talks gRPC to `txtodod`; if the socket is
-absent it spawns the daemon. All clients are thin (design §7) — the daemon owns the files, the
-CRDT, and sync; the UI renders and calls into it.
+`apps/desktop/` is a Tauri 2 + Svelte 5 shell. The Rust side owns one `DaemonClient` that talks
+gRPC to `txtodod` over the local socket and spawns the daemon when the socket is absent. The Svelte
+frontend never opens a file, never parses a line, never touches the socket itself — design §7:
+"All clients are thin: they talk to `txtodod` over local IPC and render. None of them parse the
+file themselves."
 
 ## Design
 
-- Daemon local IPC: unix domain socket (named pipe on Windows) carrying gRPC over `tonic`
-  (design §5). Schema is the one shared proto `crates/txtodo-proto/proto/txtodo/v1/txtodo.proto`
-  (ADR 0006). The desktop client is generated from that proto, not hand-rolled — one schema, no drift.
-  Ref: https://docs.rs/tonic/latest/tonic/
-- Spawn: reuse the same start path as `txtodo daemon start`
-  (`tasks/daemon-service-files`), or spawn the binary directly. Detect the socket first; only spawn
-  when absent; never run two daemons. Resolve the socket path from the same config the CLI reads.
-- Connect with `tonic::transport::Channel::connect_lazy` so app startup does not block on daemon
-  startup; wrap with a bounded retry and a timeout.
-- Tauri commands expose a narrow typed surface (`ListFiles`, `GetFile`, `Watch`, `Apply`,
-  `History`) to the Svelte frontend. No file I/O in the frontend; every read/write goes through the
-  daemon.
-- Bounds: `MAX_CONNECT_RETRIES`, `connect_timeout_ms`, `spawn_timeout_ms` as named constants. A
-  "daemon absent / disconnected" state surfaces as a reconnect banner, never a crash.
+Transport is the daemon's local IPC, ADR 0010: unix domain socket at
+`<workspace>/.txtodo/txtodod.sock` carrying gRPC over `tonic` (design §5). The schema is the single
+shared proto `crates/txtodo-proto/proto/txtodo/v1/txtodo.proto`; the desktop client is *generated*
+from it, never hand-rolled (one schema, no drift — the same fence `proto-grpc` owns).
+
+```rust
+// apps/desktop/src-tauri/src/daemon.rs
+pub struct DaemonClient {
+    inner: TxtodoClient<Channel>,  // tonic-build generated from the shared proto
+    sock: PathBuf,                 // <workspace>/.txtodo/txtodod.sock (ADR 0010)
+}
+impl DaemonClient {
+    pub async fn connect(sock: &Path) -> Result<Self, DaemonError>;   // connect_lazy, non-blocking
+    pub async fn list_files(&mut self) -> Result<ListFilesResponse, DaemonError>;
+    pub async fn get_file(&mut self, path: &str) -> Result<FileContents, DaemonError>;
+    pub async fn watch(&mut self) -> Result<tonic::Streaming<Change>, DaemonError>;
+    pub async fn apply(&mut self, req: ApplyRequest) -> Result<ApplyResponse, DaemonError>;
+    pub async fn history(&mut self, req: HistoryRequest) -> Result<HistoryResponse, DaemonError>;
+    pub async fn resolve(&mut self, req: ResolveRequest) -> Result<ApplyResponse, DaemonError>;
+}
+pub async fn ensure_daemon(cfg: &DesktopConfig) -> Result<PathBuf, DaemonError>; // returns the sock
+```
+
+- Connect with `tonic::transport::Endpoint::from_static("unix:///…")` + `connect_lazy()` so app
+  startup never blocks on daemon startup; wrap in a bounded retry (`MAX_CONNECT_RETRIES`) with
+  `connect_timeout_ms`. tonic UDS:
+  https://docs.rs/tonic/latest/tonic/transport/struct.Endpoint.html#method.from_static
+- `ensure_daemon` first stats the ADR 0010 socket path. Absent → spawn `txtodod --dir <workspace>`
+  via `std::process::Command` with a fixed argv (no shell string — same discipline as
+  `daemon-service-files`); present → reuse. `spawn_timeout_ms` bounds the wait for "ready". A
+  lock-file (`flock`) guard prevents a double spawn: never two daemons on one workspace.
+- Tauri commands (`#[tauri::command]`) expose a narrow typed surface to Svelte: `list_files`,
+  `get_file`, `watch` (forwarded as events), `apply`, `history`, `resolve`. The frontend addresses
+  documents by workspace-relative path only; no raw OS paths cross the bridge.
+- Daemon-absent/disconnected is a state, never a panic: `DaemonStatus { Connected, Connecting,
+  Spawning, Dead }` surfaces as a reconnect banner with a retry button.
+
+## Placement/dependencies
+
+- New crate `apps/desktop/src-tauri` (Tauri 2, `tauri-build`), new workspace member → **root
+  `Cargo.toml` is frozen** (ask). New deps (`tauri`, `tonic`, `prost`, `tonic-build`, `tokio`)
+  each need human sign-off plus a `cargo deny` pass (`deny.toml` frozen). Reuse `txtodo-proto`;
+  do not copy proto files into `apps/desktop`.
+- `tonic-build` output is committed under `src-tauri/src/generated/` (generated artifact,
+  diff-budget exempt — constitution §6), regenerated by the same path `proto-grpc` owns (`cargo
+  build -p txtodo-proto --features regen`).
+- Depends on `proto-grpc` (service + messages), `daemon-service-files` (spawn/start path), and the
+  `desktop-stack-mapping` TS/Svelte lint/typecheck/test commands for the frontend half.
+
+## Edge cases & invariants
+
+- **Windows named pipes are M10** (`daemon-service-files`): UDS works on macOS/Linux now; the
+  Windows transport arrives with the per-user service. Gate the transport behind `#[cfg(unix)]` and
+  a stub that reports "Windows transport lands M10" — the shell must not assume `unix:` on Windows.
+- A stale socket file with no live daemon: `connect` fails, `ensure_daemon` re-spawns. The daemon
+  removes stale sockets itself (`daemon-service-files`), so the shell only retries, never unlinks.
+- `watch` is a long-lived stream: on drop, reconnect with the same bounded retry and re-issue
+  `get_file` so the UI re-baselines — no events lost between drop and reconnect.
+- Invariant (assert the negative): the Svelte bundle imports no `fs`/`path` module and the only
+  network code is the Tauri command bridge. Every read/write is a `DaemonClient` call.
 
 ## Acceptance
 
-- Fresh install, no daemon: launching the app spawns `txtodod`; the first `ListFiles` succeeds
-  within the startup budget.
-- A daemon already running (e.g. from the CLI) is reused, not duplicated.
-- Killing the daemon under the app shows a reconnect banner and recovers without a restart.
+- Fresh install, no daemon: launch spawns `txtodod`; first `list_files` succeeds within
+  `spawn_timeout_ms` and the startup budget.
+- A daemon already running (from the CLI) is reused — exactly one `txtodod` process per workspace.
+- Kill the daemon under the app: banner appears; retry reconnects and re-baselines via `get_file`.
+- `apps/desktop` builds on macOS/Linux CI; `cargo deny` passes for the new deps.
 
-Refs: plan M7 (txtodo-implementation-plan.md), design §5 and §7 (txtodo-design.md),
-Tauri 2 https://v2.tauri.app/
+## Frozen paths touched
+
+- `Cargo.toml` (root): add `apps/desktop/src-tauri` as a workspace member — ask, never silent.
+- `Cargo.lock`: new crates — lockfile update is a generated artifact, committed alone.
+
+## References
+
+- plan M7 (txtodo-implementation-plan.md), design §5 and §7 (txtodo-design.md)
+- https://docs.rs/tonic · https://docs.rs/prost · https://protobuf.dev/programming-guides/proto3/
+- Tauri 2 commands: https://v2.tauri.app/develop/calling-rust/

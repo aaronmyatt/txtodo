@@ -1,9 +1,11 @@
-2026-09-12 apps/desktop/playwright.config.ts plus a fixture spawning a real txtodod on a tempdir workspace seeded with todo.txt +m7 @desktop @test
-2026-09-12 Test: click a line opens the popover pre-filled with the raw line including id: +m7 @desktop @test
-2026-09-12 Test: Enter saves; the file on disk changes only that line (byte-diff before/after) +m7 @desktop @test
-2026-09-12 Test: double-click opens the detail view with pinned parent, notes editor, and sub-list +m7 @desktop @test
-2026-09-12 Test: typing into empty notes creates the ref directory and notes.md on first keystroke (§3.2.4 lazy creation) +m7 @desktop @test
+2026-09-12 apps/desktop/playwright.config.ts: define the test runner + webServer serving the Svelte app; pick tauri-driver (WebDriver) or a gRPC test bridge so the daemon is real, not mocked +m7 @desktop @test
+2026-09-12 apps/desktop/e2e/fixtures.ts: spawnDaemon(fixture) on a tempfile::tempdir() workspace seeded with fixture todo.txt, returning a handle that exposes the same commands as commands.rs +m7 @desktop @test
+2026-09-12 Test: click a line opens the popover pre-filled with the raw line including the hidden id: tag +m7 @desktop @test
+2026-09-12 Test: Enter saves; on-disk file changes only that line — byte-diff before/after, preserving line endings per rule 7 +m7 @desktop @test
+2026-09-12 Test: double-click opens the detail view with pinned parent, notes editor, and sub-list rendered by the same file-view component +m7 @desktop @test
+2026-09-12 Test: first keystroke into empty notes creates the ref: directory and notes.md; opening the detail view alone writes nothing (§3.2.4 lazy) +m7 @desktop @test
 2026-09-12 Test: double-clicking a sub-list line nests the breadcrumb todo.txt › N › q4-roadmap/todo.txt › M +m7 @desktop @test
-2026-09-12 Test: a second daemon injecting concurrent ops makes the conflict sheet appear (needs_review, M4 variants) +m7 @desktop @test
-2026-09-12 Wire the Playwright suite into the gate and CI so it runs green on every push +m7 @desktop @test
+2026-09-12 Test: a second daemon paired over loopback injects a concurrent op; the conflict banner + review sheet appear with M4's three variants reachable +m7 @desktop @test
+2026-09-12 apps/desktop/e2e: enforce a fresh seeded workspace per scenario and a hard per-test timeout so no test depends on another and the gate stays fast +m7 @desktop @test
+2026-09-12 Wire the Playwright suite into the gate and CI so it runs green on every push (constitution §5: gate runs slice tests, CI is law) +m7 @desktop @test
 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test
