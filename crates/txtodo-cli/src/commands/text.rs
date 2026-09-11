@@ -105,7 +105,15 @@ pub fn run(ctx: &Ctx, kind: Kind, item: &str, text: &str) -> Result<(), CliError
         Kind::Prepend => prepend(&old, &text),
         Kind::Replace => replace(&old, &text),
     };
-    debug_assert!(new.contains(text.as_str()), "the text landed");
+    let (tp, td) = prefix_lens(&text);
+    debug_assert!(
+        kind == Kind::Replace || new.contains(text.as_str()),
+        "the text landed"
+    );
+    debug_assert!(
+        kind != Kind::Replace || new.ends_with(&text[tp + td..]),
+        "the body landed"
+    );
     file.lines[idx] = OwnedLine::from_bytes(new.clone().into_bytes(), file.lines[idx].ending());
     store::write(&ctx.paths.todo, &file)?;
     if kind == Kind::Replace {
