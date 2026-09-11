@@ -1,0 +1,9 @@
+(B) 2026-09-11 Lay out txtodo-core modules: lib.rs re-exports only; types.rs quirks.rs error.rs ulid.rs (each ≤ 400 lines) +m1 @core
+(B) 2026-09-11 types.rs: Mode, Span, TokenKind, Date, Priority, LineEnding, Line<'a>, LineKind<'a>, Task<'a>, OwnedLine, File — doc comment on every public item +m1 @core
+(B) 2026-09-11 quirks.rs: Quirks as a u16 newtype with named consts and has()/insert(); no_std-safe, no bitflags crate +m1 @core
+(B) 2026-09-11 error.rs: ParseError { rule: &'static str, byte: usize, message } with Display; std::error::Error only behind a std feature +m1 @core
+(B) 2026-09-11 ulid.rs: Ulid([u8; 16]) with from_str (Crockford base32, 26 chars) and Display; no external crate +m1 @core
+(B) 2026-09-11 Date::new validates the calendar (month 1-12, day per month, leap years); debug_assert invariants in every constructor +m1 @core
+(B) 2026-09-11 Unit tests beside each type: Date leap-year table, Ulid round trip, Quirks set/has +m1 @core @test
+(B) 2026-09-11 cargo doc --no-deps -p txtodo-core builds with zero warnings; just check green; one commit per module, each ≤ 300 lines +m1 @core
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
