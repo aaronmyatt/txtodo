@@ -20,6 +20,14 @@ txtodo-crdt.workspace = true
 txtodo-sync.workspace = true
 txtodo-proto.workspace = true
 txtodo-mcp.workspace = true
+# https://docs.rs/getrandom — the 80 random bits of a ULID
+getrandom = "0.3"
+
+[dev-dependencies]
+# https://docs.rs/proptest — text-edit application inverts diff_text
+proptest = "1"
+# https://docs.rs/tempfile — every test gets its own workspace dir
+tempfile = "3"
 
 [lints]
 workspace = true

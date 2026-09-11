@@ -198,9 +198,9 @@ const ALL_QUIRKS: [Quirks; 8] = [
 /// Char-level text edit; same shape as `txtodo_core::TextEdit`, with serde.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TextEdit {
-    /// Insert `text` before char index `at`.
+    /// Insert `text` so that it starts at char index `at` of the result (`diff_text` convention).
     Insert {
-        /// Char index in the original.
+        /// Char index in the target text.
         at: usize,
         /// Chars to insert.
         text: String,
