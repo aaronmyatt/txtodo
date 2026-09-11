@@ -1,7 +1,7 @@
 //! Whole-file commands: `move`, `deduplicate`, `report`. Line numbers are preserved (todo.sh
 //! `TODOTXT_PRESERVE_LINE_NUMBERS=1`): a moved or duplicate line is left blank, never removed.
 
-use crate::commands::{archive, edit::get};
+use crate::commands::{archive, edit::get, list};
 use crate::{CliError, Ctx, store};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -14,16 +14,15 @@ pub fn run_move(ctx: &Ctx, item: &str, dest: &str, src: Option<&str>) -> Result<
     let src_path: PathBuf = src.map_or_else(|| ctx.paths.todo.clone(), |s| ctx.paths.dir.join(s));
     let dest_path = ctx.paths.dir.join(dest);
     if !src_path.is_file() {
-        return Err(CliError::Message(format!(
-            "TODO: Source file {} does not exist.",
-            src_path.display()
-        )));
+        let m = format!("TODO: Source file {} does not exist.", src_path.display());
+        return Err(CliError::Message(m));
     }
     if !dest_path.is_file() {
-        return Err(CliError::Message(format!(
+        let m = format!(
             "TODO: Destination file {} does not exist.",
             dest_path.display()
-        )));
+        );
+        return Err(CliError::Message(m));
     }
     let mut from = store::read(&src_path)?;
     let mut to = store::read(&dest_path)?;
@@ -31,22 +30,14 @@ pub fn run_move(ctx: &Ctx, item: &str, dest: &str, src: Option<&str>) -> Result<
     let moved = String::from_utf8_lossy(from.lines[idx].bytes()).into_owned();
     let bytes = from.lines[idx].bytes().to_vec();
     from.lines[idx] = OwnedLine::from_bytes(Vec::new(), from.lines[idx].ending());
-    store::append_line(&mut to, bytes);
+    let dest_number = store::append_line(&mut to, bytes);
     debug_assert!(from.lines[idx].bytes().is_empty(), "source line blanked");
-    debug_assert!(
-        to.lines
-            .last()
-            .is_some_and(|l| l.bytes() == moved.as_bytes()),
-        "landed last"
-    );
+    debug_assert!(dest_number == to.lines.len(), "landed last");
     store::write(&src_path, &from)?;
     store::write(&dest_path, &to)?;
     println!("{item} {moved}");
-    println!(
-        "TODO: {item} moved from '{}' to '{}'.",
-        src_path.display(),
-        dest_path.display()
-    );
+    let (src_name, dest_name) = (list::prefix(&src_path), list::prefix(&dest_path));
+    println!("{src_name}: {item} moved to {dest_number} in {dest_name}.");
     Ok(())
 }
 
@@ -69,16 +60,17 @@ pub fn dedup(file: &mut File) -> usize {
     removed
 }
 
-/// `deduplicate`.
+/// `deduplicate`; finding nothing is a failure, as in todo.sh 2.14.
 pub fn run_dedup(ctx: &Ctx) -> Result<(), CliError> {
     let mut file = store::read(&ctx.paths.todo)?;
     let removed = dedup(&mut file);
     store::write(&ctx.paths.todo, &file)?;
     if removed == 0 {
-        println!("TODO: No duplicate tasks found");
-    } else {
-        println!("TODO: {removed} duplicate task(s) removed");
+        return Err(CliError::Message(
+            "TODO: No duplicate tasks found".to_string(),
+        ));
     }
+    println!("TODO: {removed} duplicate task(s) removed");
     Ok(())
 }
 

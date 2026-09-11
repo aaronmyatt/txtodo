@@ -143,13 +143,12 @@ enum Command {
         /// Source file name (default todo.txt).
         src: Option<String>,
     },
-    /// Set a task's priority, A to Z.
+    /// Set task priorities: ITEM# PRIORITY pairs, A to Z.
     #[command(visible_alias = "p")]
     Pri {
-        /// Line number.
-        item: String,
-        /// The new priority letter.
-        priority: String,
+        /// `ITEM# PRIORITY` pairs.
+        #[arg(required = true, num_args = 2..)]
+        args: Vec<String>,
     },
     /// Archive, then record the task and done counts in report.txt.
     Report,
@@ -185,6 +184,8 @@ enum CliError {
     Usage(&'static str),
     /// A todo.sh-worded failure, printed as is.
     Message(String),
+    /// Already printed to stderr by the command; only the exit status remains.
+    Reported,
 }
 
 impl From<store::StoreError> for CliError {
@@ -212,6 +213,7 @@ impl fmt::Display for CliError {
             CliError::Edit(e) => write!(f, "{e}"),
             CliError::Usage(u) => write!(f, "usage: txtodo {u}"),
             CliError::Message(m) => write!(f, "{m}"),
+            CliError::Reported => Ok(()),
         }
     }
 }
@@ -233,6 +235,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
+        Err(CliError::Reported) => ExitCode::FAILURE,
         Err(e) => {
             eprintln!("txtodo: {e}");
             ExitCode::FAILURE
@@ -278,7 +281,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         Command::Report => commands::fileops::run_report(&ctx, &clock::now_local_iso()),
         Command::Del { item, term } => commands::edit::run_del(&ctx, item, term.as_deref()),
         Command::Do { items } => commands::edit::run_do(&ctx, items),
-        Command::Pri { item, priority } => commands::edit::run_pri(&ctx, item, priority),
+        Command::Pri { args } => commands::edit::run_pri(&ctx, args),
         Command::Env => {
             print_env(&ctx);
             Ok(())

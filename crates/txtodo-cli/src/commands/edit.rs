@@ -51,6 +51,7 @@ fn priority_prefix(raw: &str) -> Option<char> {
 }
 
 /// `do ITEM#...`: complete via the core (priority becomes `pri:P`), then archive unless disabled.
+/// An already-done item is reported on stderr and fails the run, like todo.sh 2.14.
 pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     const USAGE: &str = "do ITEM#[, ITEM#, ITEM#, ...]";
     let items = split_items(args);
@@ -58,10 +59,12 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         return Err(CliError::Usage(USAGE));
     }
     let mut file = store::read(&ctx.paths.todo)?;
+    let mut failed = false;
     for item in &items {
         let idx = get(&file, item, USAGE)?;
         if file.lines[idx].bytes().starts_with(b"x ") {
-            println!("TODO: {item} is already marked done.");
+            eprintln!("TODO: {item} is already marked done.");
+            failed = true;
             continue;
         }
         file.lines[idx] = apply(&file.lines[idx], &Edit::new().complete(ctx.today));
@@ -71,46 +74,63 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     }
     store::write(&ctx.paths.todo, &file)?;
     if ctx.auto_archive {
-        archive::run(ctx)
+        archive::run(ctx)?;
+    }
+    if failed {
+        Err(CliError::Reported)
     } else {
         Ok(())
     }
 }
 
-/// `pri ITEM# PRIORITY`: todo.sh strips any `(X) ` prefix and prepends the new one.
-pub fn run_pri(ctx: &Ctx, item: &str, priority: &str) -> Result<(), CliError> {
-    const USAGE: &str = "pri ITEM# PRIORITY\nnote: PRIORITY must be anywhere from A to Z.";
-    let new = match priority.as_bytes() {
-        [p] if p.is_ascii_alphabetic() => char::from(p.to_ascii_uppercase()),
-        _ => return Err(CliError::Usage(USAGE)),
-    };
+/// `pri ITEM# PRIORITY [ITEM# PRIORITY ...]`: todo.sh strips any `(X) ` prefix and prepends the new
+/// one. An item already at that priority is reported on stderr and fails the run.
+pub fn run_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
+    const USAGE: &str =
+        "pri ITEM# PRIORITY [ITEM# PRIORITY ...]\nnote: PRIORITY must be anywhere from A to Z.";
+    if args.is_empty() || !args.len().is_multiple_of(2) {
+        return Err(CliError::Usage(USAGE));
+    }
     let mut file = store::read(&ctx.paths.todo)?;
-    let idx = get(&file, item, USAGE)?;
-    let raw = raw_of(&file.lines[idx]);
-    let old = priority_prefix(&raw);
-    if old == Some(new) {
-        println!("{item} {raw}");
-        println!("TODO: {item} already prioritized ({new}).");
-        return Ok(());
+    let mut failed = false;
+    for pair in args.chunks_exact(2) {
+        let (item, priority) = (&pair[0], &pair[1]);
+        let new = match priority.as_bytes() {
+            [p] if p.is_ascii_alphabetic() => char::from(p.to_ascii_uppercase()),
+            _ => return Err(CliError::Usage(USAGE)),
+        };
+        let idx = get(&file, item, USAGE)?;
+        let raw = raw_of(&file.lines[idx]);
+        let old = priority_prefix(&raw);
+        if old == Some(new) {
+            println!("{item} {raw}");
+            eprintln!("TODO: {item} already prioritized ({new}).");
+            failed = true;
+            continue;
+        }
+        let rest = if old.is_some() {
+            &raw[4..]
+        } else {
+            raw.as_str()
+        };
+        let text = format!("({new}) {rest}");
+        debug_assert!(priority_prefix(&text) == Some(new), "new prefix in place");
+        set_raw(&mut file, idx, &text);
+        println!("{item} {text}");
+        match old {
+            Some(o) => println!("TODO: {item} re-prioritized from ({o}) to ({new})."),
+            None => println!("TODO: {item} prioritized ({new})."),
+        }
     }
-    let rest = if old.is_some() {
-        &raw[4..]
-    } else {
-        raw.as_str()
-    };
-    let text = format!("({new}) {rest}");
-    debug_assert!(priority_prefix(&text) == Some(new), "new prefix in place");
-    set_raw(&mut file, idx, &text);
     store::write(&ctx.paths.todo, &file)?;
-    println!("{item} {text}");
-    match old {
-        Some(o) => println!("TODO: {item} re-prioritized from ({o}) to ({new})."),
-        None => println!("TODO: {item} prioritized ({new})."),
+    if failed {
+        Err(CliError::Reported)
+    } else {
+        Ok(())
     }
-    Ok(())
 }
 
-/// `depri ITEM#...`: drop a `(X) ` prefix.
+/// `depri ITEM#...`: drop a `(X) ` prefix; an unprioritised item is reported and fails the run.
 pub fn run_depri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     const USAGE: &str = "depri ITEM#[, ITEM#, ITEM#, ...]";
     let items = split_items(args);
@@ -118,11 +138,13 @@ pub fn run_depri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         return Err(CliError::Usage(USAGE));
     }
     let mut file = store::read(&ctx.paths.todo)?;
+    let mut failed = false;
     for item in &items {
         let idx = get(&file, item, USAGE)?;
         let raw = raw_of(&file.lines[idx]);
         if priority_prefix(&raw).is_none() {
-            println!("TODO: {item} is not prioritized.");
+            eprintln!("TODO: {item} is not prioritized.");
+            failed = true;
             continue;
         }
         set_raw(&mut file, idx, &raw[4..]);
@@ -130,7 +152,12 @@ pub fn run_depri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         println!("{item} {}", &raw[4..]);
         println!("TODO: {item} deprioritized.");
     }
-    Ok(store::write(&ctx.paths.todo, &file)?)
+    store::write(&ctx.paths.todo, &file)?;
+    if failed {
+        Err(CliError::Reported)
+    } else {
+        Ok(())
+    }
 }
 
 /// `del ITEM# [TERM]`: blank the line (line numbers are preserved), or remove TERM from it.

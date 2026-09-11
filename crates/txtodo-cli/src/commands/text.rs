@@ -58,17 +58,20 @@ pub fn prepend(raw: &str, text: &str) -> String {
     out
 }
 
-/// Prefix kept, then `text` — but the old date is dropped when `text` itself opens with a priority
-/// or a date (todo.sh: "the replaced text starts with a [priority +] date, it will replace the date").
+/// Old prefix kept, except that a priority or date at the start of `text` replaces the old one
+/// and is then stripped from `text` (todo.sh 2.14 `replaceOrPrepend`).
 pub fn replace(raw: &str, text: &str) -> String {
     let (p, d) = prefix_lens(raw);
-    let keep = if prefix_lens(text) == (0, 0) {
-        p + d
+    let (np, nd) = prefix_lens(text);
+    let pri = if np > 0 { &text[..np] } else { &raw[..p] };
+    let date = if nd > 0 {
+        &text[np..np + nd]
     } else {
-        p
+        &raw[p..p + d]
     };
-    let out = format!("{}{text}", &raw[..keep]);
-    debug_assert!(out.ends_with(text), "text is the tail");
+    let out = format!("{pri}{date}{}", &text[np + nd..]);
+    debug_assert!(out.ends_with(&text[np + nd..]), "body is the tail");
+    debug_assert!(prefix_lens(&out).0 == pri.len(), "one priority");
     out
 }
 
@@ -140,6 +143,10 @@ mod tests {
             replace("(A) 2026-09-11 old", "2026-01-01 new"),
             "(A) 2026-01-01 new"
         );
-        assert_eq!(replace("2026-09-11 old", "(B) new"), "(B) new");
+        assert_eq!(replace("2026-09-11 old", "(B) new"), "(B) 2026-09-11 new");
+        assert_eq!(
+            replace("(A) 2026-09-11 old", "(B) new"),
+            "(B) 2026-09-11 new"
+        );
     }
 }
