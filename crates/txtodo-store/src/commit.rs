@@ -96,3 +96,27 @@ impl Store {
             .map_err(StoreError::query("select snapshot at or before"))
     }
 }
+
+impl Store {
+    /// SQLite's own consistency check; `Ok(true)` when it reports `ok`.
+    /// https://www.sqlite.org/pragma.html#pragma_integrity_check
+    pub fn integrity_ok(&self) -> Result<bool, StoreError> {
+        let verdict: String = self
+            .conn
+            .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+            .map_err(StoreError::query("integrity_check"))?;
+        debug_assert!(!verdict.is_empty());
+        Ok(verdict == "ok")
+    }
+
+    /// True when the op seqs are dense from 1 to `last_seq` (no holes from a torn write).
+    pub fn seqs_are_contiguous(&self) -> Result<bool, StoreError> {
+        let (count, max): (i64, Option<i64>) = self
+            .conn
+            .query_row("SELECT COUNT(*), MAX(seq) FROM ops", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .map_err(StoreError::query("count seqs"))?;
+        Ok(max.is_none_or(|m| m == count))
+    }
+}
