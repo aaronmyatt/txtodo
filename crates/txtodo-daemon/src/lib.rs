@@ -18,6 +18,7 @@ pub mod state;
 pub mod stats;
 pub mod textedit;
 pub mod walker;
+pub mod watcher;
 pub mod workspace;
 pub mod write;
 

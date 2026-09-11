@@ -30,6 +30,8 @@ tokio-stream = { version = "0.1", features = ["net"] }
 tonic = "0.14"
 # https://docs.rs/blake3 — projection hashes, 32 bytes, fast
 blake3 = "1"
+# https://docs.rs/notify — FSEvents / inotify / ReadDirectoryChangesW (plan M3 watcher)
+notify = "8"
 
 [dev-dependencies]
 # https://docs.rs/proptest — text-edit application inverts diff_text
