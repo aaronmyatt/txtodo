@@ -1,0 +1,15 @@
+2026-09-12 Add the Tokenizer service and Span/TokenKind/Candidate messages to the shared proto and regenerate committed output +m10 @editors @proto
+2026-09-12 crates/txtodo-daemon/src/tokenize.rs: implement Tokenize over txtodo_core::tokenize and Complete over the distinct project/context index +m10 @editors @daemon
+2026-09-12 crates/txtodo-cli/src/tokenize.rs: add txtodo tokenize|complete|conflicts --json subcommands proxying daemon-mode gRPC +m10 @editors @cli
+2026-09-12 apps/editors/nvim/lua/txtodo/highlight.lua: paint spans via txtodo tokenize --json with a 150 ms debounce +m10 @editors
+2026-09-12 apps/editors/nvim/lua/txtodo/complete.lua: +project/@context completions via txtodo complete --json under CursorMovedI +m10 @editors
+2026-09-12 apps/editors/vscode: language extension with a generated client to the loopback JSON mirror (ADR 0006) +m10 @editors
+2026-09-12 apps/editors/vscode: decorations from Tokenize and a CompletionItemProvider for +project/@context +m10 @editors
+2026-09-12 apps/editors/obsidian: plugin using the mirror with the wasm-bindgen core as the offline fallback (design §3) +m10 @editors @ffi
+2026-09-12 apps/editors/*: inline conflict markers from Watch needs_review with mine/theirs/merged resolved via Apply Edit +m10 @editors
+2026-09-12 Add the apps/editors Lua/TS stack mapping to .claude/stack.md +m10 @editors @setup
+2026-09-12 Test: txtodo tokenize --json equals the M1 .tokens.json oracle on every corpus line (parity) +m10 @editors @test
+2026-09-12 Test: headless nvim decorates a fixture buffer with the §3.1 colours and offers +/@ completions +m10 @editors @test
+2026-09-12 Test: the VS Code extension test runner asserts decoration ranges equal the desktop CM6 token set +m10 @editors @test
+2026-09-12 Test: Obsidian highlights with the daemon down via the WASM tokenize path +m10 @editors @test
+2026-09-12 Complete the parent line in ./todo.txt +m10 @editors
