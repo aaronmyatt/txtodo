@@ -1,5 +1,7 @@
-//! Workspace discovery (plan §3.2.11): every `todo.txt`, `done.txt`, `notes.md` under the root, at
-//! any depth. Walks the tree, never follows `ref:` tags, so a hand-made directory is found too.
+//! Workspace discovery (plan §3.2.11): every `todo.txt`, `done.txt` under the root, at any
+//! depth. Walks the tree, never follows `ref:` tags, so a hand-made directory is found too.
+//! `notes.md` is not here: it is prose, not a task list. The daemon leaves it alone until M5
+//! introduces it as a Loro text doc (tasks/crdt-notes-doc); stamping `id:` into prose is a bug.
 //! Iterative with an explicit stack — no recursion (constitution §3) and no walkdir dependency.
 //! https://doc.rust-lang.org/std/fs/fn.read_dir.html
 
@@ -7,8 +9,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use txtodo_model::FilePath;
 
-/// The document names txtodo manages. Anything else in a `ref:` directory is left alone.
-pub const DOCUMENT_NAMES: [&str; 3] = ["todo.txt", "done.txt", "notes.md"];
+/// The task-document names txtodo manages. Anything else in a `ref:` directory is left alone,
+/// `notes.md` included — it is prose, owned by M5 (tasks/crdt-notes-doc), not a task list.
+pub const DOCUMENT_NAMES: [&str; 2] = ["todo.txt", "done.txt"];
 /// Deepest directory nesting visited; far above sane `ref:` nesting, so hitting it is an error.
 pub const WALK_MAX_DEPTH: usize = 32;
 /// Most documents one workspace may hold (plan §5 talks about 10k lines, not 10k files).
@@ -170,11 +173,14 @@ mod tests {
             vec![
                 ".hidden/todo.txt",
                 "done.txt",
-                "q4/notes.md",
                 "q4/sync/todo.txt",
                 "q4/todo.txt",
                 "todo.txt"
             ]
+        );
+        assert!(
+            !is_document_name("notes.md"),
+            "notes.md is prose, not a task document"
         );
     }
 

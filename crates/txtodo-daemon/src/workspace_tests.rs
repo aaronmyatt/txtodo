@@ -27,7 +27,11 @@ async fn open_discovers_every_document_and_mints_one_device_id() {
     touch(&dir.path().join("q4/other.txt"), "ignored\n");
     let ws = open(dir.path());
     let paths: Vec<String> = ws.paths().map(ToString::to_string).collect();
-    assert_eq!(paths, vec!["q4/notes.md", "q4/todo.txt", "todo.txt"]);
+    assert_eq!(
+        paths,
+        vec!["q4/todo.txt", "todo.txt"],
+        "notes.md is not a managed document"
+    );
     let got = ws
         .actor(&FilePath::new("q4/todo.txt").unwrap())
         .unwrap()
@@ -68,5 +72,27 @@ async fn register_is_idempotent_and_discover_picks_up_a_new_directory() {
     assert!(
         ws.store().lock().unwrap().last_seq().unwrap().is_some(),
         "adoption wrote ops"
+    );
+}
+
+// Regression for the line-136 bug: the walker shipped notes.md and the actor stamped `id:` tags
+// into prose (DocState is the *task* model). Opening the workspace must leave notes.md untouched.
+#[tokio::test]
+async fn notes_md_is_left_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let notes = "Some prose about the roadmap.\n\n- a bullet\n";
+    touch(&dir.path().join("todo.txt"), "one\n");
+    touch(&dir.path().join("notes.md"), notes);
+    let ws = open(dir.path());
+    let paths: Vec<String> = ws.paths().map(ToString::to_string).collect();
+    assert_eq!(
+        paths,
+        vec!["todo.txt"],
+        "notes.md is not a managed document"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("notes.md")).unwrap(),
+        notes,
+        "notes.md bytes are byte-identical after open"
     );
 }
