@@ -1,0 +1,9 @@
+2026-09-12 tests/smoke.rs: drive the SDK reference client over stdio — initialize, tools/list, resources/list +m6 @mcp @test
+2026-09-12 tests/smoke.rs: the same client over Streamable HTTP on a test port with an Authorization: Bearer header +m6 @mcp @test
+2026-09-12 tests/smoke.rs: todo_list and todo_get return the seeded tasks with id, line, parsed fields and raw +m6 @mcp @test
+2026-09-12 tests/smoke.rs: todo_add through the client appears in the file and is attributed to the token principal +m6 @mcp @test
+2026-09-12 tests/smoke.rs: resources/subscribe on todotxt://todo.txt then an external edit yields notifications/resources/updated +m6 @mcp @test
+2026-09-12 tests/smoke.rs: todo_batch dry_run over the transport returns the unified diff without applying +m6 @mcp @test
+2026-09-12 tests/smoke.rs: a missing or tampered Bearer token over HTTP is refused; stdio fails auth the same way without a token +m6 @mcp @test
+2026-09-12 tests/smoke.rs: both transports are hermetic — temp todo_dir and an ephemeral port, no live 8636 daemon +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

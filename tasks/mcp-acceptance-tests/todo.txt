@@ -1,0 +1,11 @@
+2026-09-12 tests/quarantine.rs: token with quarantine=@inbox, todo_add "buy 400 rubber ducks", assert the written line carries @inbox +m6 @mcp @test
+2026-09-12 tests/quarantine.rs: a custom quarantine=@ctx caveat appends @ctx, and a token without the caveat appends nothing +m6 @mcp @test
+2026-09-12 tests/blame.rs: after an agent add, txtodo blame <line> names the token principal, not a bare agent label +m6 @mcp @test
+2026-09-12 tests/blame.rs: the op log row records Principal::Agent with the token name, so blame is answered from the log not guesswork +m6 @mcp @test
+2026-09-12 tests/dryrun.rs: hash the file bytes before and after todo_batch {dry_run:true}; assert byte-identical including the trailing newline +m6 @mcp @test
+2026-09-12 tests/ratelimit.rs: 61 mutations in a minute pause the token and the next mutation is denied +m6 @mcp @test
+2026-09-12 tests/ratelimit.rs: 11 deletes in a minute trip the separate delete budget; the two limits are independent +m6 @mcp @test
+2026-09-12 tests/ratelimit.rs: the pause emits the notification event carrying the token and the exceeded limit +m6 @mcp @test
+2026-09-12 tests/ratelimit.rs: rate limits use the injected fake clock, so the tests are deterministic with no sleeps +m6 @mcp @test
+2026-09-12 tests/ratelimit.rs: a paused token does not pause a second token, and the pause lifts after the window on a fake-clock advance +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
