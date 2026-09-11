@@ -115,6 +115,9 @@ exit $status
 - **`publish = false` on every crate.** cargo-deny treats version-less path deps as wildcards for publishable crates. Nothing is published yet. Revisit when the first crate ships to crates.io.
 - **feedback.lint runs whole-workspace clippy.** Clippy cannot lint one file. Cost: a few seconds per write. Rejected: skipping lint feedback.
 - **No baseline files.** Greenfield: zero violations, so `baselinePaths` is empty and `baselinePrune` is null. The fence's deny rule has nothing to guard until `/ratchet` adds a measurement tool.
+- **Gate loop guard.** Three identical failing rounds (`.git/setup-gate-strikes`) and the gate stops re-blocking with a notice. Rejected: block forever (an unattended Pi session would burn tokens with no human to decide). Seen live on 2026-09-11.
+- **Bash writes and the fence.** Claude Code's Bash tool can write any path. `fence.sh` asks when a command has a write operator (`>`, `sed -i`, `tee`, `mv`, `rm`, `cp`) and names a frozen path literal; denies for a baseline path. Heuristic, not airtight: prefer Edit/Write for machinery files. Pi's fence sees only `write`/`edit`, so the same gap exists for its `bash` tool.
+- **Windows CI skips tier-3 scripts.** They are bash; see `RATCHET.md` priority 3.
 
 ## Framework notes
 

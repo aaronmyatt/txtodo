@@ -1,0 +1,35 @@
+{
+  "setupDate": "2026-09-11",
+  "skillVersion": "1.0.0",
+  "constitutionVersion": "2.0.0",
+  "repoShape": "greenfield (2 markdown docs, no source, no git at start)",
+  "stack": "Rust 1.95, edition 2024, Cargo workspace of 12 crates; desktop TS/Svelte arrives at M7 and needs its own mapping",
+  "harnesses": ["claude-code (.claude/hooks/*.sh + settings.json)", "pi (.pi/extensions/guardrails/index.ts)"],
+  "decisions": [
+    { "id": "Q1", "decision": "projectName = txtodo (dir name), not sisyphus", "by": "human" },
+    { "id": "Q2", "decision": "budgets: fn 60, file 400, diff 300, params 5, depth 3, complexity 10, width 100, assertions 2, latency 20 ms; payload N/A until M6", "by": "human", "rationale": "Rust idiom is terse, so tighter than template defaults; loosening is never proposed by the agent" },
+    { "id": "Q3", "decision": "slice = Cargo crate; edges = plan §2 dependency allowlist checked by check-boundaries.sh; shared kernel = crates/txtodo-core; per-crate Cargo.toml not frozen", "by": "human" },
+    { "id": "rename", "decision": "all crates txtodo-*, binaries txtodo / txtodod / txtodo-tui", "by": "human", "note": "plan §1 decision 10 still names sisd, sis, .sisyphus/, _sisyphus._udp — human to update the plan docs" },
+    { "id": "Q4", "decision": "installs: cargo-llvm-cov, cargo-deny (brew), llvm-tools-preview (rustup); just already present; cargo-nextest and cargo-fuzz skipped", "by": "human" },
+    { "id": "Q5", "decision": "coveragePercent = 0 (measured), ratchet target 80 after M1 tests", "by": "human", "rationale": "skill rule: floor is today's measured number; 80 now would block every stop" },
+    { "id": "Q6", "decision": "CLAUDE.md rendered from constitution 2.0.0; .claude/stack.md written with 8 judgement calls", "by": "human" },
+    { "id": "Q7", "decision": "Pi guardrails extension written; fails closed with no UI", "by": "human" },
+    { "id": "Q8", "decision": "Claude Code hooks written; Bash matcher added with a write-operator + frozen-path heuristic", "by": "human" },
+    { "id": "Q9", "decision": "justfile + GitHub Actions ci.yml (check matrix, coverage, deny)", "by": "human" }
+  ],
+  "judgementCallsByAgent": [
+    "cognitive_complexity stands in for cyclomatic (clippy has no cyclomatic lint)",
+    "publish = false on every crate so cargo-deny accepts version-less path deps",
+    "coverage command pinned to `rustup run 1.95.0` because Homebrew cargo lacks llvm-profdata",
+    "gate loop guard: 3 identical failing rounds then release with a notice (.git/setup-gate-strikes)",
+    "feedback.lint runs whole-workspace clippy (no single-file mode)"
+  ],
+  "proof": {
+    "commandsClean": "format, lint, typecheck, test, boundaries, fileLength, deny, testCoverage all exit 0 on 2026-09-11",
+    "commandsBroken": "each exits non-zero on a deliberately broken tree (see .claude/stack.md §Commands)",
+    "claudeHooks": "fence ask/deny/allow, gate block, feedback additionalContext proven via stdin JSON in a scratch clone; gate then fired live in the /setup session itself (rounds 1-3 on a doc rename)",
+    "piExtension": "loaded via node:module.stripTypeScriptTypes and driven with a fake pi/ctx in the scratch clone: same 12 answers",
+    "ci": "not yet run: push to origin (github.com/aaronmyatt/txtodo) and check the ci workflow"
+  },
+  "installs": ["brew install cargo-llvm-cov cargo-deny", "rustup component add llvm-tools-preview", "rustup toolchain 1.95.0 (pulled by rust-toolchain.toml)"]
+}
