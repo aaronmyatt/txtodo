@@ -1,0 +1,6 @@
+2026-09-12 docs/relay.md: build, the relay's env/flags, a deploy/systemd example unit, TLS/reverse-proxy guidance, retention and blob-cap knobs +m8 @docs
+2026-09-12 README.md user-facing section: relay is optional, it cannot read your data, pointer to docs/relay.md, self-host only per Q5 default +m8 @docs
+2026-09-12 State exactly what the relay stores (ciphertext blobs + wake-up routing, nothing else); no overclaim or underclaim of the encryption +m8 @docs
+2026-09-12 Note that any S3 or WebDAV endpoint can substitute as a dumb relay, matching design §4.5 +m8 @docs
+2026-09-12 Test: the relay binary's --help output matches the flags docs/relay.md describes, so the doc cannot drift from the binary +m8 @docs @test
+2026-09-12 Complete the parent line in ./todo.txt +m8 @docs

@@ -1,0 +1,10 @@
+2026-09-12 carrier.rs in txtodo-sync: file carrier as a Link impl, send appends a frame to our own file, recv polls the folder for other devices' files +m8 @sync
+2026-09-12 Write path: assert the target path's device id equals our own before any write, so one device can never write another device's file +m8 @sync
+2026-09-12 frame.rs: length-prefixed append framing; ingest skips an incomplete trailing frame and re-reads when more bytes land +m8 @sync
+2026-09-12 Wire the user-chosen folder through config.toml and --sync-dir; validate it is a writable directory with real error handling, never an assert +m8 @sync @cli
+2026-09-12 Rotate the ops file at MAX_OPS_FILE_BYTES to sync/<device-id>-<n>.ops; readers scan all files in order, no manifest needed +m8 @sync
+2026-09-12 Import dedupes on op_id via the existing ops.op_id UNIQUE constraint, so re-reading a file or a duplicated chunk is idempotent +m8 @sync @store
+2026-09-12 Test: two in-process carriers over one temp dir converge with no network, each writing only its own file +m8 @sync @test
+2026-09-12 Test: re-reading the same .ops file imports nothing twice; a truncated trailing frame is skipped then completed on the next read +m8 @sync @test
+2026-09-12 Test: a device's write to another device's file is refused +m8 @sync @test
+2026-09-12 Complete the parent line in ./todo.txt +m8 @sync

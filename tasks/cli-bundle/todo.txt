@@ -1,0 +1,9 @@
+2026-09-12 bundle.rs in txtodo-cli: bundle export writes manifest, snapshot and op tail as one streamed archive, versioned from day one +m8 @cli
+2026-09-12 bundle import: verify version match, per-op Ed25519 signature and hashes before any insert, then materialise; tampered or truncated is a typed error +m8 @cli
+2026-09-12 Wrap the bundle with an Argon2id -> XChaCha20-Poly1305 passphrase key; confirm with the human whether the bundle carries the group key +m8 @cli @human
+2026-09-12 Stream export in bounded chunks; do not buffer a whole workspace in memory +m8 @cli
+2026-09-12 Import is all-or-nothing: reject the whole bundle on any failure, never partially insert +m8 @cli
+2026-09-12 Test: export on A, import on a fresh B gives identical file bytes and op log state +m8 @cli @test
+2026-09-12 Test: one flipped byte anywhere fails import with a distinct error and leaves no partial state +m8 @cli @test
+2026-09-12 Test: a nested-ref workspace round-trips through export/import reproducing the whole tree +m8 @cli @test
+2026-09-12 Complete the parent line in ./todo.txt +m8 @cli

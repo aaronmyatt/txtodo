@@ -1,0 +1,7 @@
+2026-09-12 CI script: create two network namespaces, each running a txtodod, reachable only through the relay node, no shared NIC path +m8 @test @ci
+2026-09-12 Relay converge test: poll with a 30 s deadline, not a sleep, and fail CI when the two daemons' projections have not converged +m8 @test
+2026-09-12 Assert the hole-punch path is exercised when punch succeeds, and a forced-relay mode still converges when punch is blocked +m8 @test
+2026-09-12 File-carrier converge test: two daemons sharing one temp dir with networking disabled, each appending only to its own sync/<device-id>.ops, converge bounded +m8 @test
+2026-09-12 Assert on the relay's store after the run: only opaque blobs, no op type distinguishable from stored bytes and routing metadata +m8 @test @security
+2026-09-12 Wire the netns job into the CI workflow so the topology test runs on every push, not once by hand +m8 @test @ci
+2026-09-12 Complete the parent line in ./todo.txt +m8 @test

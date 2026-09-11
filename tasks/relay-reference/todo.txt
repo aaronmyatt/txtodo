@@ -1,0 +1,9 @@
+2026-09-12 New relay/ crate: standalone Rust binary, no txtodo-* deps, so the relay can never accidentally import the crypto +m8 @relay
+2026-09-12 store.rs: put/get/list blobs keyed by (group_id, device_id), the value typed Vec<u8> with no structure so op types stay indistinguishable +m8 @relay
+2026-09-12 Bounds: MAX_BLOB_SIZE, MAX_BLOBS_PER_DEVICE, MAX_RETENTION_DAYS, MAX_WAKEUP_QUEUE, asserted, plus a per-group request cap +m8 @relay
+2026-09-12 push.rs: trait Push { wake(device, payload) }; a stored-blob write enqueues one wake-up; M8 ships a logging no-op impl, M9 swaps in APNs/FCM +m8 @relay
+2026-09-12 Config via env/flags: listen port, data dir, retention; refuse to run without an explicit data dir rather than guessing +m8 @relay
+2026-09-12 Tests: a blob is returned only for its exact (group, device) pair; other group or device gets nothing +m8 @relay @test
+2026-09-12 Test: blobs are stored byte-for-byte and nothing parses or decrypts them +m8 @relay @test
+2026-09-12 Tests: blob size and per-device caps are enforced; one write enqueues exactly one wake-up for the target device +m8 @relay @test
+2026-09-12 Complete the parent line in ./todo.txt +m8 @relay
