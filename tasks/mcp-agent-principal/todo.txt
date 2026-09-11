@@ -1,9 +1,13 @@
-2026-09-12 Route every MCP mutation through daemon Apply (handle.rs); no MCP path writes the file directly +m6 @mcp @daemon
-2026-09-12 Fill ApplyRequest.agent { token_id, name } from the verified token before Apply +m6 @mcp @daemon
-2026-09-12 convert.rs::parse_principal already maps AgentPrincipal -> Principal::Agent { token_id, name, device }; assert it is used, not User +m6 @daemon
-2026-09-12 Quarantine caveat appends its context (default @inbox) to todo_add lines before Apply +m6 @mcp @daemon
-2026-09-12 Quarantine is add-only: complete/edit/delete are not re-tagged +m6 @mcp
-2026-09-12 txtodo blame shows agent:name@device from the op-log principal string +m6 @mcp
-2026-09-12 Test: quarantined todo_add yields a line with the extra context +m6 @mcp @test
-2026-09-12 Test: mutation ops carry Principal::Agent, not Principal::User, and blame shows the agent +m6 @mcp @daemon @test
+2026-09-12 crates/txtodo-daemon/src/mcp_backend.rs: fill ApplyRequest.agent { token_id, name } from AuthContext before every Apply call +m6 @mcp @daemon
+2026-09-12 Route every MCP mutation through workspace.apply (handle.rs); no MCP path writes the file directly +m6 @mcp @daemon
+2026-09-12 Reuse convert.rs::parse_principal — assert the MCP path yields Principal::Agent, never Principal::User +m6 @daemon
+2026-09-12 Quarantine: append the AuthContext.quarantine context (default @inbox) to todo_add lines before building ApplyRequest +m6 @mcp @daemon
+2026-09-12 Quarantine is add-only: complete/edit/delete/move build the agent field but append no tag +m6 @mcp @daemon
+2026-09-12 Token without a quarantine caveat adds untagged lines; the append is conditional on the caveat, not unconditional +m6 @mcp
+2026-09-12 txtodo blame renders agent:name@device from the op-log principal string (Principal Display in op.rs) +m6 @cli
+2026-09-12 Test: a quarantined todo_add yields a line with the extra context plus daemon-stamped created:/id: +m6 @mcp @test
+2026-09-12 Test: the add op carries Principal::Agent and blame shows agent:name@device, not you@device +m6 @mcp @daemon @test
+2026-09-12 Test: todo_complete on a quarantined line carries the agent principal and adds no quarantine tag +m6 @mcp @test
+2026-09-12 Test: a token with no quarantine caveat adds an untagged line (default @inbox not appended) +m6 @mcp @test
+2026-09-12 Test: grep-style assertion that mcp_backend.rs performs no direct filesystem write (Apply/Watch/GetFile/History only) +m6 @mcp @daemon @test
 2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @daemon
