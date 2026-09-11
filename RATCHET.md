@@ -33,3 +33,18 @@ _(none)_
 line coverage (txtodo-core 88–100% per file; the empty crates' `fn main` are the misses). Set
 `budgets.json.coveragePercent = 80`, `commands.testCoverage --fail-under-lines 80`, justfile, CLAUDE.md row,
 stack.md rows. Priority 1 closed.
+
+---
+2026-09-12 · Exceptions granted (loro CRDT engine, plan M4 `crdt-loro-doc`). Supersedes the
+"_(none)_" placeholder in the Exceptions section above. `deny.toml` changes, narrowest scope:
+
+- **RUSTSEC-2026-0247 (bitmaps), RUSTSEC-2026-0248 (im), RUSTSEC-2026-0251 (sized-chunks)** —
+  unmaintained, transitive via `loro-internal → im`. Repos archived 2026-05-03; no safe upgrade; no
+  known vulnerability. `advisories.ignore` for these three IDs only.
+- **RUSTSEC-2023-0089 (atomic-polyfill)** — pre-existing via `postcard → heapless 0.7 → txtodo-model`,
+  NOT introduced by loro: `cargo deny check advisories` fails on the loro-free tree too. Ignored to
+  keep deny green; revisit when postcard drops heapless 0.7.
+- **BSL-1.0 license (xxhash-rust)** — Boost Software License, OSI-approved and permissive; added to
+  `licenses.allow`. Transitive via `loro-internal`, `loro-kv-store`.
+
+No blanket `unmaintained = allow` was taken; the four IDs are named individually.

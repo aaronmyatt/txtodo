@@ -1,9 +1,9 @@
 # 0013 — LWW registers carry our HLC stamp in the value
 
 <!-- MADR-lite — https://adr.github.io/madr/ -->
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-12
-- Deciders: crdt-loro-doc plan (decision A); project-owner acceptance pending
+- Deciders: project owner (crdt-loro-doc plan, decision A)
 
 ## Context
 Design §4.2 resolves last-writer-wins map keys by our hybrid logical clock (wall + counter +
