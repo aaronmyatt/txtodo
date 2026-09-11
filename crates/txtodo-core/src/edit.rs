@@ -244,15 +244,33 @@ pub fn apply(line: &OwnedLine, edit: &Edit) -> OwnedLine {
         return line.clone();
     }
     let split = description_start(raw);
-    let mut out = String::with_capacity(raw.len() + 16);
-    if prefix_dirty {
-        out.push_str(&emit_prefix(&draft.prefix, !draft.description.is_empty()));
+    let description = if description_dirty { draft.description.as_str() } else { &raw[split..] };
+    let out = if prefix_dirty {
+        emit_prefix(&draft.prefix, !description.is_empty()) + description
     } else {
-        out.push_str(&raw[..split]);
-    }
-    out.push_str(if description_dirty { &draft.description } else { &raw[split..] });
+        join(&raw[..split], description)
+    };
     debug_assert!(!out.contains('\n'), "edits never introduce line breaks");
     OwnedLine::from_bytes(out.into_bytes(), line.ending())
+}
+
+/// Splices an original prefix slice and a description with exactly one separator between them when both
+/// are non-empty, and none when the description is empty. Whitespace already inside the prefix slice
+/// (a tab quirk, say) is kept.
+fn join(prefix: &str, description: &str) -> String {
+    let mut out = String::with_capacity(prefix.len() + description.len() + 1);
+    out.push_str(prefix);
+    let ends_ws = out.bytes().last().is_some_and(|b| b == b' ' || b == b'\t');
+    if description.is_empty() {
+        while out.bytes().last().is_some_and(|b| b == b' ' || b == b'\t') {
+            out.pop();
+        }
+    } else if !out.is_empty() && !ends_ws {
+        out.push(' ');
+    }
+    out.push_str(description);
+    debug_assert!(description.is_empty() || out.ends_with(description), "description is the tail");
+    out
 }
 
 fn draft_of(raw: &str) -> Draft {
