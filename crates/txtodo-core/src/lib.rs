@@ -10,11 +10,15 @@ extern crate alloc;
 mod error;
 mod file;
 mod quirks;
+mod scanner;
+mod tokenize;
 mod types;
 mod ulid;
+pub mod urls;
 
 pub use error::ParseError;
 pub use file::{File, OwnedLine};
 pub use quirks::Quirks;
+pub use tokenize::{tokenize, tokenize_with_schemes};
 pub use types::{Date, Line, LineEnding, LineKind, Mode, Priority, Span, Task, TokenKind};
 pub use ulid::{Ulid, ULID_LEN};
