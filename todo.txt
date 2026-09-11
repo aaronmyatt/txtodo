@@ -1,4 +1,3 @@
-(B) 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench
 (B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets
 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state
@@ -16,7 +15,6 @@
 2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test ref:sync-reject-tests
 2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4
-x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core
 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree
 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation
 2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc
@@ -134,3 +132,5 @@ x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patte
 x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
 x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
 x 2026-09-12 2026-09-12 Bug: txtodod stamps id: tags into notes.md prose; the walker yields it and the actor builds a DocState for it +m3 @daemon @bug ref:crdt-notes-doc id:01M28Q73KEJ60TFF9QGJKWWPZQ
+x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core
+x 2026-09-12 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench

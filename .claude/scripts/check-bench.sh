@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-# Tier-2 perf budget: `parse_file_100k` mean must be ≤ budgets.json.perf.parse100kMs. Runs the criterion
-# bench in bencher output mode and compares. Exit 1 over budget. Runner noise is ±30 %; 150 ms is a ceiling.
-# criterion output format: https://bheisler.github.io/criterion.rs/book/user_guide/command_line_options.html
+# Tier-2 perf budgets: each criterion bench's mean must be ≤ its budgets.json.perf key. Runs each
+# bench in bencher output mode and compares. Exit 1 if any is over budget. Runner noise is ±30 %;
+# the ms numbers are ceilings. criterion output format:
+# https://bheisler.github.io/criterion.rs/book/user_guide/command_line_options.html
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-MAX_MS=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).perf.parse100kMs' "$ROOT/.claude/budgets.json")
-out=$(cd "$ROOT" && cargo bench -p txtodo-core --bench parse -- --output-format bencher parse_file_100k 2>&1)
-# Only parse_file_100k runs (filter arg), so the one `bench: <ns> ns/iter` token is ours. Matched by
-# token, not line shape: on a fresh runner criterion interleaves a stderr "missing baseline" error
-# into the same line (CI 2026-09-11) and the `^test … bench:` anchor missed it.
-ns=$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "bench:") { gsub(",", "", $(i+1)); print $(i+1) } }' | tail -1)
-[ -n "$ns" ] || { echo "bench-check: could not find parse_file_100k in bench output"; printf '%s\n' "$out" | tail -5; exit 1; }
-ms=$(( ns / 1000000 ))
-echo "bench-check: parse_file_100k = ${ms} ms (budget ${MAX_MS} ms)"
-[ "$ms" -le "$MAX_MS" ]
+# "bench_name:perf_key:crate:bench_target" — the two budgeted benches. parse_file_100k is the core
+# parse budget (M1); reconcile_10k_one_edit is the daemon reconcile budget (M3).
+BENCHES="parse_file_100k:parse100kMs:txtodo-core:parse reconcile_10k_one_edit:reconcile10kMs:txtodo-daemon:reconcile"
+status=0
+for entry in $BENCHES; do
+  IFS=: read -r name key crate target <<< "$entry"
+  max=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).perf[process.argv[2]]' "$ROOT/.claude/budgets.json" "$key")
+  out=$(cd "$ROOT" && cargo bench -p "$crate" --bench "$target" -- --output-format bencher "$name" 2>&1)
+  # Only `$name` runs (the filter arg), so the one `bench: <ns> ns/iter` token is ours. Matched by
+  # token, not line shape: on a fresh runner criterion interleaves a stderr "missing baseline" error
+  # into the same line (CI 2026-09-11) and the `^test … bench:` anchor missed it.
+  ns=$(printf '%s\n' "$out" | awk '{ for (i = 1; i < NF; i++) if ($i == "bench:") { gsub(",", "", $(i+1)); print $(i+1) } }' | tail -1)
+  if [ -z "$ns" ]; then
+    echo "bench-check: could not find $name in bench output"; printf '%s\n' "$out" | tail -5; status=1; continue
+  fi
+  ms=$(( ns / 1000000 ))
+  echo "bench-check: $name = ${ms} ms (budget ${max} ms)"
+  [ "$ms" -le "$max" ] || status=1
+done
+exit $status

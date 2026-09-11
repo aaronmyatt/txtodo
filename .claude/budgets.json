@@ -128,6 +128,7 @@
   "constitutionVersion": "2.0.0",
   "perf": {
     "parse100kMs": 150,
-    "note": "plan M1/§5: parse 100k lines ≤ 150 ms on the Linux CI runner; enforced by .claude/scripts/check-bench.sh"
+    "reconcile10kMs": 20,
+    "note": "plan §5: parse 100k lines ≤ 150 ms (M1) and reconcile one external line edit in 10k lines ≤ 20 ms (M3), both on the Linux CI runner; enforced by .claude/scripts/check-bench.sh"
   }
 }

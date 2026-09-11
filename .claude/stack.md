@@ -40,6 +40,7 @@ Rust 1.95 (edition 2024) Cargo workspace, 12 crates. Derived by `/setup` on 2026
 | Dead code | 1 | rustc `dead_code` under `-D warnings` | — |
 | Licences, advisories | 2 | [`cargo deny check`](https://embarkstudios.github.io/cargo-deny/checks/index.html), `deny.toml` | — |
 | Property tests (§7) | 1 | [`proptest`](https://docs.rs/proptest) (plan M1) — added when core lands, not by /setup | — |
+| Local round trip (§1) | 2 | `.claude/scripts/check-bench.sh` against `budgets.json.perf.reconcile10kMs` | 20 ms (`reconcile_10k_one_edit`) |
 
 ## Commands
 
@@ -92,7 +93,6 @@ exit $status
 ## Not mechanically enforced
 
 - **Response payload: N/A.** No HTTP surface until M6 (libraries, CLI, daemon over a unix socket). Re-justify when `txtodo-mcp` lands.
-- **Local round trip (20 ms):** tier 4 until M3. The plan's perf budgets become criterion benches in CI at M3 (`reconcile one edit in 10k lines ≤ 20 ms`).
 - **Swallowed errors:** `let _ = fallible()` and `.ok()` discard are legal; review greps for them. No clippy lint covers the intent without false positives.
 - **Bounded loops / collections:** review + assert. No mechanical form.
 - **Assertions ≥ 2:** heuristic reports, review decides (D3).

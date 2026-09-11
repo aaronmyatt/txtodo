@@ -28,6 +28,7 @@ code faster or by a human-approved change recorded in `RATCHET.md`, never by ret
 ## As built (2026-09-12)
 `benches/reconcile.rs`: `reconcile_10k_one_edit` 46.8 ms before, **12.1 ms** after the fast id
 scan and lazy id recovery (`perf(daemon)` commit). Attribution: `diff_lines` 9.0 ms (core), full
-parse per line 4.5 ms per 10k. **CI enforcement is not wired**: `check-bench.sh`, `budgets.json.perf`
-and the `CLAUDE.md` row are frozen paths — the human runs those edits (this notes file names the
-bench and the number they need).
+parse per line 4.5 ms per 10k. CI enforcement wired 2026-09-12: `budgets.json.perf.reconcile10kMs
+= 20`, `check-bench.sh` loops both budgeted benches (parse_file_100k, reconcile_10k_one_edit),
+`stack.md` tier 2, `CLAUDE.md` row names the bench. `just bench-check` green: parse_file_100k 31
+ms / 150, reconcile_10k_one_edit 15 ms / 20.
