@@ -24,3 +24,5 @@ mod mutation_tests;
 mod reconcile_tests;
 #[cfg(test)]
 mod state_tests;
+#[cfg(test)]
+mod workspace_tests;
