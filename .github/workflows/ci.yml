@@ -1,0 +1,67 @@
+# The outer wall: re-runs everything the hooks run, for everyone, on every push.
+# Commands are the ones in .claude/budgets.json.commands (drift audit diffs them).
+# GitHub Actions syntax: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # PR size check needs the base commit
+      # rust-toolchain.toml pins 1.95.0 with rustfmt + clippy; the action honours it.
+      # https://github.com/dtolnay/rust-toolchain
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: format
+        run: cargo fmt --all --check
+      - name: typecheck
+        run: cargo check --workspace --all-targets
+      - name: lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+      - name: boundaries + file length + assertions
+        if: runner.os != 'Windows'
+        run: |
+          .claude/scripts/check-boundaries.sh
+          .claude/scripts/check-file-length.sh
+          .claude/scripts/check-assertions.sh
+      - name: PR size (budgets.json.diffLines, Cargo.lock exempt)
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          MAX=$(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).diffLines')
+          N=$(git diff --numstat "origin/${{ github.base_ref }}"...HEAD -- . ':!Cargo.lock' | awk '{a+=$1+$2} END{print a+0}')
+          echo "changed lines: $N (max $MAX)"; [ "$N" -le "$MAX" ]
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      # https://github.com/taiki-e/cargo-llvm-cov#continuous-integration
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: coverage floor (budgets.json.coveragePercent)
+        run: cargo llvm-cov --workspace --fail-under-lines $(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).coveragePercent')
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # https://github.com/EmbarkStudios/cargo-deny-action
+      - uses: EmbarkStudios/cargo-deny-action@v2
