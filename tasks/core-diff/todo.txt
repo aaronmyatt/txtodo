@@ -1,5 +1,5 @@
-(B) 2026-09-11 diff.rs: pub fn diff_lines(a: &File, b: &File) -> Vec<LineDiff> with LineDiff { Keep, Insert, Delete, Move, Change } keyed by id when both sides have one, else by raw content +m1 @core
-(B) 2026-09-11 Myers diff over a key sequence (id or content hash); ≤ 60 lines per fn: split into keys(), myers(), classify() +m1 @core
-(B) 2026-09-11 pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit> with TextEdit { Insert{at,text}, Delete{at,len} } at char (not byte) granularity for the CRDT +m1 @core
-(B) 2026-09-11 Unit tests: insert in the middle, delete, reorder two lines with ids, edit one description (Change), strip all ids (falls back to content) +m1 @core @test
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 diff.rs: pub fn diff_lines(a: &File, b: &File) -> Vec<LineDiff> with LineDiff { Keep, Insert, Delete, Move, Change } keyed by id when both sides have one, else by raw content +m1 @core
+x 2026-09-11 2026-09-11 Myers diff over a key sequence (id or content hash); ≤ 60 lines per fn: split into keys(), myers(), classify() +m1 @core
+x 2026-09-11 2026-09-11 pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit> with TextEdit { Insert{at,text}, Delete{at,len} } at char (not byte) granularity for the CRDT +m1 @core
+x 2026-09-11 2026-09-11 Unit tests: insert in the middle, delete, reorder two lines with ids, edit one description (Change), strip all ids (falls back to content) +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
