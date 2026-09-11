@@ -1,6 +1,11 @@
-2026-09-12 docs/relay.md: build, the relay's env/flags, a deploy/systemd example unit, TLS/reverse-proxy guidance, retention and blob-cap knobs +m8 @docs
-2026-09-12 README.md user-facing section: relay is optional, it cannot read your data, pointer to docs/relay.md, self-host only per Q5 default +m8 @docs
-2026-09-12 State exactly what the relay stores (ciphertext blobs + wake-up routing, nothing else); no overclaim or underclaim of the encryption +m8 @docs
-2026-09-12 Note that any S3 or WebDAV endpoint can substitute as a dumb relay, matching design §4.5 +m8 @docs
-2026-09-12 Test: the relay binary's --help output matches the flags docs/relay.md describes, so the doc cannot drift from the binary +m8 @docs @test
+2026-09-12 docs/relay.md: write the build command, run flags (listen/port, data dir, retention, blob cap, TLS), and note flags must match relay --help +m8 @docs
+2026-09-12 docs/relay.md: document APNs/FCM wake-up forwarding is forward-only — the relay routes wake-ups but never holds platform push tokens or payloads +m8 @docs
+2026-09-12 docs/relay.md: TLS/reverse-proxy guidance stating the proxy sees only ciphertext (the trust boundary) +m8 @docs
+2026-09-12 docs/relay.md: document the dumb-relay substitution — any S3 or WebDAV endpoint works, per design §4.5 +m8 @docs
+2026-09-12 docs/relay.md: mark retention and blob-cap numbers as examples, real defaults live in the binary +m8 @docs
+2026-09-12 deploy/systemd/relay.service: commit an example unit (user scope, Restart=on-failure, EnvironmentFile), marked illustrative +m8 @docs
+2026-09-12 README.md user-facing section: relay is optional, it cannot read your data (design §4.6), self-host-only per Q5, pointer to docs/relay.md +m8 @docs
+2026-09-12 State the exact security sentence (opaque ciphertext blobs + wake-up routing, nothing else) with no overclaim or underclaim of the crypto +m8 @docs
+2026-09-12 Test: assert relay --help output matches every flag name docs/relay.md mentions, failing on rename or removal +m8 @docs @test
+2026-09-12 Test: assert README.md and docs/relay.md both contain the word "optional" so no reader concludes the relay is required +m8 @docs @test
 2026-09-12 Complete the parent line in ./todo.txt +m8 @docs
