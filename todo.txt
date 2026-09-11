@@ -5,7 +5,7 @@ x 2026-09-11 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 
 x 2026-09-11 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs ref:open-questions
 x 2026-09-11 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs ref:adr-decisions
 x 2026-09-11 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs ref:ref-directories-spec
-(A) 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle
+x 2026-09-11 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle
 (A) 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core ref:fuzz-stub-target
 (A) 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke
 (B) 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core

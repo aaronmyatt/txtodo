@@ -38,7 +38,7 @@ bench:
     cargo bench --workspace
 
 corpus:
-    @echo "corpus round-trip lands with txtodo-core (plan M1)"; exit 1
+    .claude/scripts/check-corpus-oracle.sh
 
 release:
     cargo build --workspace --release
