@@ -16,6 +16,9 @@ struct Cli {
     /// Todo directory (overrides $TXTODO_TODO_DIR and config `todo_dir`).
     #[arg(long, global = true, value_name = "DIR")]
     dir: Option<String>,
+    /// Emit one JSON object per line on listing commands.
+    #[arg(long, global = true)]
+    json: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -48,6 +51,7 @@ impl fmt::Display for CliError {
 struct Ctx {
     paths: Paths,
     config: Config,
+    json: bool,
 }
 
 fn main() -> ExitCode {
@@ -70,14 +74,18 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         paths.todo.ends_with("todo.txt"),
         "resolve names the todo file"
     );
-    let ctx = Ctx { paths, config };
+    let ctx = Ctx {
+        paths,
+        config,
+        json: cli.json,
+    };
     match cli.command {
         Command::Env => print_env(&ctx),
     }
     Ok(())
 }
 
-/// `txtodo env`: one `key=value` per line.
+/// `txtodo env`: one `key=value` per line, or one JSON object.
 fn print_env(ctx: &Ctx) {
     let schemes = ctx.config.url_schemes();
     let exists = if ctx.paths.config.exists() {
@@ -85,6 +93,29 @@ fn print_env(ctx: &Ctx) {
     } else {
         " (missing)"
     };
+    if ctx.json {
+        let object = format!(
+            r#"{{"todo_dir":{},"todo_file":{},"done_file":{},"report_file":{},"config_file":{},"config_exists":{},"id_tags":{},"url_schemes":[{}]}}"#,
+            json_str(&ctx.paths.dir.to_string_lossy()),
+            json_str(&ctx.paths.todo.to_string_lossy()),
+            json_str(&ctx.paths.done.to_string_lossy()),
+            json_str(&ctx.paths.report.to_string_lossy()),
+            json_str(&ctx.paths.config.to_string_lossy()),
+            exists.is_empty(),
+            ctx.config.id_tags(),
+            schemes
+                .iter()
+                .map(|s| json_str(s))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        debug_assert!(
+            object.starts_with('{') && object.ends_with('}'),
+            "one object"
+        );
+        println!("{object}");
+        return;
+    }
     println!("todo_dir={}", ctx.paths.dir.display());
     println!("todo_file={}", ctx.paths.todo.display());
     println!("done_file={}", ctx.paths.done.display());
@@ -92,4 +123,25 @@ fn print_env(ctx: &Ctx) {
     println!("config_file={}{exists}", ctx.paths.config.display());
     println!("id_tags={}", ctx.config.id_tags());
     println!("url_schemes={}", schemes.join(","));
+}
+
+/// A JSON string literal (RFC 8259 §7): quotes, backslashes and control characters escaped.
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    debug_assert!(out.len() >= s.len() + 2, "quotes added");
+    debug_assert!(!out[1..out.len() - 1].contains('\n'), "newlines escaped");
+    out
 }
