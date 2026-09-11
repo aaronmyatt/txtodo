@@ -19,6 +19,8 @@ clap = { version = "4", features = ["derive"] }
 # https://docs.rs/toml/latest/toml/ — config.toml
 toml = "1"
 serde = { version = "1", features = ["derive"] }
+# https://docs.rs/jiff — the local calendar date for creation/completion stamps (plan §1 decision 11)
+jiff = "0.2"
 
 [dev-dependencies]
 # https://docs.rs/tempfile — every test gets its own todo dir

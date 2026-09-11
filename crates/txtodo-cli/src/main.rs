@@ -2,12 +2,16 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)] // the CLI is the output path (plan §0)
 
+mod clock;
+mod commands;
 mod config;
+mod store;
 
 use clap::{Parser, Subcommand};
 use config::{Config, Env, Paths};
 use std::fmt;
 use std::process::ExitCode;
+use txtodo_core::Date;
 
 /// todo.sh-compatible todo.txt tool. Commands and aliases match todo.sh; line numbers are the ids.
 #[derive(Debug, Parser)]
@@ -25,6 +29,19 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
+    /// Add a task: today's date goes after the priority.
+    #[command(visible_alias = "a")]
+    Add {
+        /// The task; several words are joined with spaces.
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
+    },
+    /// Add several tasks, one per line of TEXT.
+    Addm {
+        /// The tasks; each line becomes one task.
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
+    },
     /// Print the resolved paths and config.
     Env,
 }
@@ -36,13 +53,24 @@ enum CliError {
     Config(config::ConfigError),
     /// The process environment could not be read.
     Io(std::io::Error),
+    /// A file could not be read or written.
+    Store(store::StoreError),
+    /// Wrong arguments; the value is the todo.sh usage line.
+    Usage(&'static str),
 }
 
+impl From<store::StoreError> for CliError {
+    fn from(e: store::StoreError) -> CliError {
+        CliError::Store(e)
+    }
+}
 impl fmt::Display for CliError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CliError::Config(e) => write!(f, "{e}"),
             CliError::Io(e) => write!(f, "{e}"),
+            CliError::Store(e) => write!(f, "{e}"),
+            CliError::Usage(u) => write!(f, "usage: txtodo {u}"),
         }
     }
 }
@@ -52,6 +80,8 @@ struct Ctx {
     paths: Paths,
     config: Config,
     json: bool,
+    /// The local calendar date at startup.
+    today: Date,
 }
 
 fn main() -> ExitCode {
@@ -75,14 +105,19 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         "resolve names the todo file"
     );
     let ctx = Ctx {
+        today: clock::today_local(),
         paths,
         config,
         json: cli.json,
     };
-    match cli.command {
-        Command::Env => print_env(&ctx),
+    match &cli.command {
+        Command::Add { text } => commands::add::run(&ctx, &text.join(" "), false),
+        Command::Addm { text } => commands::add::run(&ctx, &text.join(" "), true),
+        Command::Env => {
+            print_env(&ctx);
+            Ok(())
+        }
     }
-    Ok(())
 }
 
 /// `txtodo env`: one `key=value` per line, or one JSON object.
