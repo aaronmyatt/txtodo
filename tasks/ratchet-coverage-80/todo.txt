@@ -1,5 +1,5 @@
-(B) 2026-09-11 Measure: just coverage (cargo llvm-cov) once the M1 tests are in; record the number here +m1 @ratchet
-(B) 2026-09-11 If ≥ 80: set budgets.json coveragePercent = 80 (frozen: fence asks), update the testCoverage command's --fail-under-lines, re-render CLAUDE.md via /setup re-run drift audit +m1 @ratchet
-(B) 2026-09-11 If < 80: set the floor to the measured number now (never regresses) and leave 80 as the RATCHET.md priority +m1 @ratchet
-(B) 2026-09-11 Append the outcome to RATCHET.md under Campaigns (append-only) +m1 @ratchet
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @ratchet
+x 2026-09-11 2026-09-11 Measure: just coverage (cargo llvm-cov) once the M1 tests are in; record the number here +m1 @ratchet
+x 2026-09-11 2026-09-11 If ≥ 80: set budgets.json coveragePercent = 80 (frozen: fence asks), update the testCoverage command's --fail-under-lines, re-render CLAUDE.md via /setup re-run drift audit +m1 @ratchet
+x 2026-09-11 2026-09-11 If < 80: set the floor to the measured number now (never regresses) and leave 80 as the RATCHET.md priority +m1 @ratchet
+x 2026-09-11 2026-09-11 Append the outcome to RATCHET.md under Campaigns (append-only) +m1 @ratchet
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @ratchet
