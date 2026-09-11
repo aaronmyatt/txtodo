@@ -1447,7 +1447,6 @@ dependencies = [
  "postcard",
  "rusqlite",
  "tempfile",
- "txtodo-core",
  "txtodo-model",
 ]
 
