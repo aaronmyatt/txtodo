@@ -26,9 +26,15 @@ fuzz_target!(|data: &[u8]| { if let Ok(s) = core::str::from_utf8(data) {
 `fuzz/corpus/parse_line/` one file per corpus line (script it once from `corpus/*.txt`; the directory is
 gitignored, regenerate with `just fuzz-seed`, add that recipe).
 
-## Record of the 3600 s runs (fill in)
+## Record of the 3600 s runs
 | Target | Date | Runs | Result |
 |---|---|---|---|
-| parse_line | | | |
-| parse_file | | | |
-| slug | | | |
+| parse_line | 2026-09-12 | 111,975,023 | 0 crashes; 2 slow-units kept (not crashes) |
+| parse_file | 2026-09-12 | 52,020,955 | 0 crashes; 3 slow-units kept (not crashes) |
+| slug | — | — | not run (outside this task's scope) |
+
+Both runs were `just fuzz <target> 3600` on the local machine, slowed by concurrent agent load:
+parse_line counted 4313 s, parse_file 3601 s. `-max_total_time` is fuzz time, so the wall-clock
+total exceeded 3600 s. No `crash-*`, `timeout-*` or `oom-*` artifacts were produced; the
+`slow-unit-*` files under `fuzz/artifacts/<target>/` (gitignored) are inputs libFuzzer flagged as
+slow, not failures.
