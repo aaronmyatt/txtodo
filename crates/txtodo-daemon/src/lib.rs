@@ -3,4 +3,5 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+pub mod state;
 pub mod textedit;
