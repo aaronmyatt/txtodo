@@ -1,0 +1,10 @@
+2026-09-12 Characterization goldens first: pin DocState::to_bytes for the 8 external-edit scenarios as its own prior commit +m4 @daemon @test
+2026-09-12 Narrow DocState: add len, entry_at(i) -> Option<Entry> by value, line_of(TaskId), task_before(i); behaviour-preserving, no Loro +m4 @daemon
+2026-09-12 Move fields.rs mutation.rs history.rs state_tests.rs off entries() onto the new accessors, then delete entries() +m4 @daemon
+2026-09-12 Append the task_before duplication (3 copies: mutation.rs x2, history.rs x2) to ABSTRACTIONS.md; do not extract here +m4 @daemon @docs
+2026-09-12 Record the reconcile_10k_one_edit bench number before the swap in ./notes.md +m4 @daemon @perf
+2026-09-12 Swap DocState's Vec<Entry> for the txtodo-crdt LoroDocument; apply delegates to to_loro; to_bytes materialises the list +m4 @daemon @crdt
+2026-09-12 Assert apply stays all-or-nothing: the Loro transaction aborts on StateError, never commits a partial batch +m4 @daemon
+2026-09-12 Record the bench number after the swap and fail the task if it exceeds budgets.json latencyMs of 20 +m4 @daemon @perf
+2026-09-12 Separate commit: narrow StateError::Unsupported now that cross-file Move and undelete are representable +m4 @daemon
+2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @daemon
