@@ -1,0 +1,14 @@
+# txtodod systemd user unit (design §5). Rendered by `txtodo daemon install` into
+# ~/.config/systemd/user/{{LABEL}}.service; {{TXTODOD}} and {{WORKSPACE}} are replaced.
+# Reference: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
+[Unit]
+Description=txtodod for {{WORKSPACE}}
+After=default.target
+
+[Service]
+ExecStart={{TXTODOD}} --dir {{WORKSPACE}}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
