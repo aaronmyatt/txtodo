@@ -19,7 +19,7 @@ mod ulid;
 pub mod urls;
 
 pub use error::ParseError;
-pub use file::{File, OwnedLine};
+pub use file::{parse_file, File, OwnedLine};
 pub use parse::{parse_line, parse_line_with_schemes};
 pub use quirks::Quirks;
 pub use task::{is_valid_slug, SLUG_MAX_LEN};
