@@ -50,7 +50,7 @@ bench-check:
 
 # core must build with no std at all (plan M1); needs `rustup target add thumbv7em-none-eabihf`
 no-std:
-    cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
+    PATH="$(dirname "$(rustup which --toolchain 1.95.0 cargo)"):$PATH" cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
 
 corpus:
     .claude/scripts/check-corpus-oracle.sh
