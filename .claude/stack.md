@@ -24,7 +24,7 @@ Rust 1.95 (edition 2024) Cargo workspace, 12 crates. Derived by `/setup` on 2026
 | File length | 3 | `.claude/scripts/check-file-length.sh` | 400 |
 | Change size | gate + CI | `gate.sh` (git diff numstat) and CI PR-size step | 300 |
 | Params | 1 | clippy [`too_many_arguments`](https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments), `too-many-arguments-threshold` | 5 |
-| Nesting | 1 | clippy [`excessive_nesting`](https://rust-lang.github.io/rust-clippy/master/index.html#excessive_nesting), `excessive-nesting-threshold` | 3 |
+| Nesting | 1 | clippy [`excessive_nesting`](https://rust-lang.github.io/rust-clippy/master/index.html#excessive_nesting), `excessive-nesting-threshold` = 5 | 3 inside a method (clippy counts `impl` + `fn` blocks; found on 2026-09-11 when a `for`+`if` inside a method tripped 3) |
 | Complexity | 1 | clippy [`cognitive_complexity`](https://rust-lang.github.io/rust-clippy/master/index.html#cognitive_complexity) (nursery, enabled by name), `cognitive-complexity-threshold` | 10 |
 | Line width | 2 | [`rustfmt.toml max_width`](https://rust-lang.github.io/rustfmt/#max_width) | 100 |
 | Assertions / fn | 3 | `.claude/scripts/check-assertions.sh` (report only) | 2 |
@@ -117,6 +117,7 @@ exit $status
 - **No baseline files.** Greenfield: zero violations, so `baselinePaths` is empty and `baselinePrune` is null. The fence's deny rule has nothing to guard until `/ratchet` adds a measurement tool.
 - **Gate loop guard.** Three identical failing rounds (`.git/setup-gate-strikes`) and the gate stops re-blocking with a notice. Rejected: block forever (an unattended Pi session would burn tokens with no human to decide). Seen live on 2026-09-11.
 - **Bash writes and the fence.** Claude Code's Bash tool can write any path. `fence.sh` asks when a command has a write operator (`>`, `sed -i`, `tee`, `mv`, `rm`, `cp`) and names a frozen path literal; denies for a baseline path. Heuristic, not airtight: prefer Edit/Write for machinery files. Pi's fence sees only `write`/`edit`, so the same gap exists for its `bash` tool.
+- **Nesting threshold 5, not 3.** clippy's `excessive_nesting` counts the `impl` and `fn` blocks; 5 gives three real levels inside a method, four inside a free function. Rejected: 3 (no method may contain a loop with a branch).
 - **Windows CI skips tier-3 scripts.** They are bash; see `RATCHET.md` priority 3.
 
 ## Framework notes
