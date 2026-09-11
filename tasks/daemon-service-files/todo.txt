@@ -1,0 +1,7 @@
+2026-09-11 deploy/launchd/com.txtodo.txtodod.plist template: Label, ProgramArguments [txtodod --dir WORKSPACE], RunAtLoad, KeepAlive, StandardOut/ErrorPath under .txtodo/logs/ +m3 @daemon
+2026-09-11 deploy/systemd/txtodod.service template (user unit): ExecStart, Restart=on-failure, RestartSec=2, WantedBy=default.target +m3 @daemon
+2026-09-11 txtodod main: --dir flag, pid file .txtodo/txtodod.pid with an exclusive lock so a second instance exits 1 with the running pid; SIGTERM removes socket and pid file +m3 @daemon
+2026-09-11 txtodo daemon install: render the platform template with the resolved txtodod path and workspace into ~/Library/LaunchAgents or ~/.config/systemd/user; never overwrite an existing file without --force +m3 @cli
+2026-09-11 txtodo daemon start|stop|status: launchctl bootstrap/bootout/print gui/<uid>/… or systemctl --user start|stop|is-active; status also probes the socket; Windows → "not supported yet (M10)" exit 2 +m3 @cli
+2026-09-11 Tests: rendered plist and unit match golden files for a fixture path; status with no daemon exits 1; install refuses to overwrite; no test touches real launchd or systemd +m3 @cli @test
+2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @cli

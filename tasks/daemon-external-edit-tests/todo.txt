@@ -1,0 +1,8 @@
+2026-09-11 tests/support/mod.rs: Daemon::spawn(tempdir) runs CARGO_BIN_EXE_txtodod, waits for the socket (bounded 5 s), exposes client(), kill(); Drop kills the child +m3 @daemon @test
+2026-09-11 Quiescence helper: poll Health until last_event_age_ms > 300 and the file hash is stable, bounded by QUIESCE_TIMEOUT_MS = 3000; write counting via the file's ctime plus inode change (rename) observed between polls +m3 @daemon @test
+2026-09-11 Scenario 1-4: edit a description in place; insert a line in the middle; delete a line; reorder two lines — assert ops EditText / Insert / SetField Deleted / Move with principal External +m3 @daemon @test
+2026-09-11 Scenario 5-6: strip every id: tag → exactly one write that restores ids and changes nothing else; append a line with no id: → one write adding only that id +m3 @daemon @test
+2026-09-11 Scenario 7: replace the file with the same content in CRLF → zero ops, zero writes (line endings are per-file fidelity, design §2.2 rule 7) +m3 @daemon @test
+2026-09-11 Scenario 8: run crates/txtodo-cli/tests/vendor/todo.sh do 3 against the workspace → one Completed op, done.txt archive observed by its own actor +m3 @daemon @test
+2026-09-11 Every scenario asserts: GetFile bytes == disk bytes; at most one write; unrelated lines byte-identical; History kinds match the expected list exactly +m3 @daemon @test
+2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test

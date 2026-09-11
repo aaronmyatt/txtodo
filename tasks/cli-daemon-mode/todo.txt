@@ -1,0 +1,7 @@
+2026-09-11 client.rs: connect(dir) -> Option<TxtodoClient> when <dir>/.txtodo/txtodod.sock exists; tonic channel over a UnixStream connector (tower service_fn) +m3 @cli
+2026-09-11 Global flag --no-daemon forces direct-file mode; a socket that exists but refuses the connection is an error naming the path and suggesting txtodo doctor, not a silent fallback +m3 @cli
+2026-09-11 Mutating commands map to Apply mutations: add/addm → Add, do → Complete, pri/depri/append/prepend/replace → Edit, move → Move, del → Delete; principal User { device } +m3 @cli
+2026-09-11 Listing commands fetch bytes with GetFile and reuse the existing formatting so output is byte-identical between modes +m3 @cli
+2026-09-11 Commands with no daemon equivalent yet (archive, deduplicate, report, fmt) stay direct-file and say so in --json output (mode: direct) +m3 @cli
+2026-09-11 Tests: with a daemon on a temp dir, txtodo add produces a User op in log; --no-daemon writes the file and the daemon records an External op; every parity scenario passes in both modes +m3 @cli @test
+2026-09-11 Complete the parent line in ./todo.txt +m3 @cli
