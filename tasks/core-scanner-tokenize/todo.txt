@@ -1,7 +1,7 @@
-(B) 2026-09-11 scanner.rs: iterator over Whitespace | Word byte ranges of a line; tabs and runs of spaces form one Whitespace span +m1 @core
-(B) 2026-09-11 tokenize.rs: classify the prefix (x, dates, priority) then each word (Url, Project, Context, TagKey+TagValue, IdTag, Text) +m1 @core
-(B) 2026-09-11 Prefix classification is position-based: x → CompletionMarker; date after x → CompletionDate; next date → CreationDate; (A) in the prefix → Priority +m1 @core
-(B) 2026-09-11 pub fn tokenize(raw: &str) -> Vec<Span> never fails; unknown → Text; spans contiguous over [0, len) +m1 @core
-(B) 2026-09-11 Split key-value words: TagKey covers key and colon, TagValue the rest; an id tag with 26 Crockford chars is one IdTag span +m1 @core
-(B) 2026-09-11 Unit tests: include_str! corpus/edge-cases.tokens.json and compare; property: spans cover every byte with no gaps for 20 hand lines +m1 @core @test
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 scanner.rs: iterator over Whitespace | Word byte ranges of a line; tabs and runs of spaces form one Whitespace span +m1 @core
+x 2026-09-11 2026-09-11 tokenize.rs: classify the prefix (x, dates, priority) then each word (Url, Project, Context, TagKey+TagValue, IdTag, Text) +m1 @core
+x 2026-09-11 2026-09-11 Prefix classification is position-based: x → CompletionMarker; date after x → CompletionDate; next date → CreationDate; (A) in the prefix → Priority +m1 @core
+x 2026-09-11 2026-09-11 pub fn tokenize(raw: &str) -> Vec<Span> never fails; unknown → Text; spans contiguous over [0, len) +m1 @core
+x 2026-09-11 2026-09-11 Split key-value words: TagKey covers key and colon, TagValue the rest; an id tag with 26 Crockford chars is one IdTag span +m1 @core
+x 2026-09-11 2026-09-11 Unit tests: include_str! corpus/edge-cases.tokens.json and compare; property: spans cover every byte with no gaps for 20 hand lines +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core

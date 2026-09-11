@@ -1,6 +1,6 @@
 x 2026-09-11 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core ref:core-api-types
-(B) 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core ref:core-url-detection
-(B) 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core ref:core-scanner-tokenize
+x 2026-09-11 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core ref:core-url-detection
+x 2026-09-11 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core ref:core-scanner-tokenize
 (B) 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:core-parser-strict
 (B) 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:core-parser-lenient
 (B) 2026-09-11 Task views projects contexts tags tag id ref_slug with slug validation +m1 @core ref:core-task-views
