@@ -47,6 +47,42 @@ enum Command {
     },
     /// Print the resolved paths and config.
     Env,
+    /// List tasks matching every TERM (`-term` excludes), sorted.
+    #[command(visible_alias = "ls")]
+    List {
+        /// Search terms.
+        terms: Vec<String>,
+    },
+    /// List tasks from todo.txt and done.txt.
+    #[command(visible_alias = "lsa")]
+    Listall {
+        /// Search terms.
+        terms: Vec<String>,
+    },
+    /// List tasks with a priority, optionally only `A` or a range `A-C`.
+    #[command(visible_alias = "lsp")]
+    Listpri {
+        /// An optional priority or range, then search terms.
+        args: Vec<String>,
+    },
+    /// List the projects (`+word`) of matching tasks.
+    #[command(visible_alias = "lsprj")]
+    Listproj {
+        /// Search terms.
+        terms: Vec<String>,
+    },
+    /// List the contexts (`@word`) of matching tasks.
+    #[command(visible_alias = "lsc")]
+    Listcon {
+        /// Search terms.
+        terms: Vec<String>,
+    },
+    /// List the `.txt` files in the todo directory, or the tasks in FILE.
+    #[command(visible_alias = "lf")]
+    Listfile {
+        /// A file name (looked up in the todo directory) then search terms.
+        args: Vec<String>,
+    },
 }
 
 /// Anything that ends the run with a message on stderr and exit status 1.
@@ -62,6 +98,8 @@ enum CliError {
     Edit(txtodo_core::EditError),
     /// Wrong arguments; the value is the todo.sh usage line.
     Usage(&'static str),
+    /// A todo.sh-worded failure, printed as is.
+    Message(String),
 }
 
 impl From<store::StoreError> for CliError {
@@ -88,6 +126,7 @@ impl fmt::Display for CliError {
             CliError::Store(e) => write!(f, "{e}"),
             CliError::Edit(e) => write!(f, "{e}"),
             CliError::Usage(u) => write!(f, "usage: txtodo {u}"),
+            CliError::Message(m) => write!(f, "{m}"),
         }
     }
 }
@@ -137,6 +176,18 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             print_env(&ctx);
             Ok(())
         }
+        Command::List { terms } => commands::list::list_file(&ctx.paths.todo, terms),
+        Command::Listall { terms } => commands::list::list_all(&ctx, terms),
+        Command::Listpri { args } => commands::list::list_pri(&ctx, args),
+        Command::Listproj { terms } => commands::list::list_words(&ctx, '+', terms),
+        Command::Listcon { terms } => commands::list::list_words(&ctx, '@', terms),
+        Command::Listfile { args } => match args.split_first() {
+            None => commands::list::list_txt_files(&ctx),
+            Some((name, terms)) => {
+                let path = commands::list::find_file(&ctx, name)?;
+                commands::list::list_file(&path, terms)
+            }
+        },
     }
 }
 
