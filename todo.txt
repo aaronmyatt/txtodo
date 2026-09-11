@@ -4,9 +4,9 @@ x 2026-09-11 2026-09-11 tokenize sharing the parser scanner with tokens covering
 x 2026-09-11 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:core-parser-strict
 x 2026-09-11 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:core-parser-lenient
 x 2026-09-11 2026-09-11 Task views projects contexts tags tag id ref_slug with slug validation +m1 @core ref:core-task-views
-(B) 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core ref:core-parse-file
-(B) 2026-09-11 just corpus: every corpus line round-trips byte-for-byte and matches its .tokens.json +m1 @core @test ref:core-corpus-test
-(B) 2026-09-11 Named unit test for every row of the design §2.4 edge-case table +m1 @core @test ref:core-edge-case-tests
+x 2026-09-11 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core ref:core-parse-file
+x 2026-09-11 2026-09-11 just corpus: every corpus line round-trips byte-for-byte and matches its .tokens.json +m1 @core @test ref:core-corpus-test
+x 2026-09-11 2026-09-11 Named unit test for every row of the design §2.4 edge-case table +m1 @core @test ref:core-edge-case-tests
 (B) 2026-09-11 Byte-preserving formatter with field-level dirtiness +m1 @core ref:core-formatter
 (B) 2026-09-11 Edit builder and apply: set/clear priority, set_tag, remove_tag, append, prepend, set_description +m1 @core ref:core-edit-apply
 (B) 2026-09-11 complete() writes pri: per spec and uncomplete() restores priority and removes pri: +m1 @core ref:core-complete-pri
