@@ -1,21 +1,5 @@
-x 2026-09-11 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model ref:model-op-types
-x 2026-09-11 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store ref:store-schema
-x 2026-09-11 2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon ref:proto-grpc
-x 2026-09-11 2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon ref:daemon-file-actor
-x 2026-09-11 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon ref:daemon-watcher
-x 2026-09-11 2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon ref:daemon-reconciler
-x 2026-09-11 2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon ref:daemon-own-writes
-x 2026-09-11 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon ref:daemon-workspace-walker
-x 2026-09-12 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode
-x 2026-09-12 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history
-x 2026-09-12 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor
-x 2026-09-12 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs
-x 2026-09-12 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files
-x 2026-09-12 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests
-x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
-x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
-x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
 (B) 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench
+(B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets
 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon
 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model
@@ -132,4 +116,20 @@ x 2026-09-11 2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli re
 x 2026-09-11 2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test ref:cli-m2
 x 2026-09-11 2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test ref:cli-m2
 x 2026-09-11 2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test ref:cli-m2
-(B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets
+x 2026-09-11 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model ref:model-op-types
+x 2026-09-11 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store ref:store-schema
+x 2026-09-11 2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon ref:proto-grpc
+x 2026-09-11 2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon ref:daemon-file-actor
+x 2026-09-11 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon ref:daemon-watcher
+x 2026-09-11 2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon ref:daemon-reconciler
+x 2026-09-11 2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon ref:daemon-own-writes
+x 2026-09-11 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon ref:daemon-workspace-walker
+x 2026-09-12 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode
+x 2026-09-12 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history
+x 2026-09-12 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor
+x 2026-09-12 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs
+x 2026-09-12 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files
+x 2026-09-12 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests
+x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
+x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
+x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
