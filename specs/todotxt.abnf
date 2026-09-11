@@ -9,8 +9,10 @@
 
 ; ---- lines -----------------------------------------------------------------------------------------
 line        = completed / incomplete / blank
-incomplete  = [priority SP] [date SP] description
-completed   = %s"x" SP date SP [date SP] description   ; completion date, then creation date
+incomplete  = priority [SP date] [SP description]      ; a bare "(A)" or "2026-09-11" is a task with an
+incomplete  =/ date [SP description]                   ; empty description, as todo.sh reads it
+incomplete  =/ description
+completed   = %s"x" SP date [SP date] [SP description] ; completion date, then creation date
 priority    = "(" %x41-5A ")"                          ; (A) through (Z), uppercase only
 date        = 4DIGIT "-" 2DIGIT "-" 2DIGIT             ; YYYY-MM-DD, calendar validity is checked by the parser
 blank       = ""                                       ; blank lines are entries; they keep line numbers stable
