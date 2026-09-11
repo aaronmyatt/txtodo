@@ -25,3 +25,14 @@ Never edit or delete a prior entry.
   bytes changed, and returns the closure's value. Would also give every command the "write only if
   changed" behaviour `fmt` has today. Wait for M3, where daemon mode replaces this path for synced
   files: the shape may want to be "apply through core, then send or write".
+
+## 2026-09-11 — atomic temp + fsync + rename write, second copy in the daemon
+
+- Duplicated: write bytes to a temp file beside the target, fsync, rename over the target; read a
+  missing file as empty.
+- Where: crates/txtodo-cli/src/store.rs (`write`, `read`), crates/txtodo-daemon/src/write.rs
+  (`write_atomic`, `read_or_empty`). Two copies; the daemon's temp name starts with `.txtodo-` so
+  its own watcher ignores it, the CLI's does not need that.
+- Might become: a tiny `txtodo-fs` kernel crate, or a function in `txtodo-core` behind a `std`
+  feature (core is I/O-free by design, so probably not). Slices may not import each other, so the
+  copy stands until the human decides. Third copy would be the M8 file-carrier transport.
