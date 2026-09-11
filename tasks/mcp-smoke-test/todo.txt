@@ -1,9 +1,14 @@
-2026-09-12 tests/smoke.rs: drive the SDK reference client over stdio — initialize, tools/list, resources/list +m6 @mcp @test
-2026-09-12 tests/smoke.rs: the same client over Streamable HTTP on a test port with an Authorization: Bearer header +m6 @mcp @test
-2026-09-12 tests/smoke.rs: todo_list and todo_get return the seeded tasks with id, line, parsed fields and raw +m6 @mcp @test
-2026-09-12 tests/smoke.rs: todo_add through the client appears in the file and is attributed to the token principal +m6 @mcp @test
-2026-09-12 tests/smoke.rs: resources/subscribe on todotxt://todo.txt then an external edit yields notifications/resources/updated +m6 @mcp @test
-2026-09-12 tests/smoke.rs: todo_batch dry_run over the transport returns the unified diff without applying +m6 @mcp @test
-2026-09-12 tests/smoke.rs: a missing or tampered Bearer token over HTTP is refused; stdio fails auth the same way without a token +m6 @mcp @test
-2026-09-12 tests/smoke.rs: both transports are hermetic — temp todo_dir and an ephemeral port, no live 8636 daemon +m6 @mcp @test
+2026-09-12 crates/txtodo-daemon/tests/mcp_smoke.rs: hermetic harness — tempdir todo_dir, ephemeral 127.0.0.1:0 port, in-test minted token +m6 @mcp @test
+2026-09-12 stdio round: spawn CARGO_BIN_EXE_txtodo mcp --stdio --token … --dir …, drive the rmcp client over stdin/stdout, Drop guard reaps the child +m6 @mcp @test
+2026-09-12 HTTP round: start the server in-process on the ephemeral port, connect the rmcp Streamable-HTTP client with Authorization: Bearer +m6 @mcp @test
+2026-09-12 Both rounds run the same call list: initialize, tools/list, resources/list against §6.3–§6.4 +m6 @mcp @test
+2026-09-12 todo_list returns seeded tasks with id, line, parsed fields and raw over both transports +m6 @mcp @test
+2026-09-12 todo_add through the client appears in the file and is attributed to the token principal (agent:name@device) +m6 @mcp @test
+2026-09-12 resources/subscribe on todotxt://todo.txt then an external edit yields notifications/resources/updated +m6 @mcp @test
+2026-09-12 todo_batch dry_run returns the unified diff and leaves the file hash unchanged +m6 @mcp @test
+2026-09-12 Auth negative over HTTP: a missing and a tampered Bearer token are refused with 401 +m6 @mcp @test
+2026-09-12 Auth negative over stdio: no token fails auth the same way (server refuses to serve) +m6 @mcp @test
+2026-09-12 Readiness is a bounded poll on the handshake, never a sleep; injected clock keeps it deterministic +m6 @mcp @test
+2026-09-12 Assert the child daemon is killed and reaped on every exit path, including panics +m6 @mcp @test
+2026-09-12 Gate: cargo test -p txtodo-daemon --test mcp_smoke green, output shown +m6 @mcp @test
 2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
