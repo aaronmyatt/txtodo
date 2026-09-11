@@ -1,0 +1,5 @@
+(B) 2026-09-11 Edit::complete(today: Date): sets completed, completion_date = today, moves (P) to a pri:P tag appended at the end, keeps creation date +m1 @core
+(B) 2026-09-11 Edit::uncomplete(): clears completed and completion date; if a pri: tag exists restore (P) and remove the tag +m1 @core
+(B) 2026-09-11 Idempotence: complete on a completed line is a no-op (no dirty bits); uncomplete on an open line likewise +m1 @core
+(B) 2026-09-11 Unit tests: (A) 2026-09-01 t → x 2026-09-11 2026-09-01 t pri:A; round trip back; a line with pri:B and no (P); lenient x (A) … input +m1 @core @test
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
