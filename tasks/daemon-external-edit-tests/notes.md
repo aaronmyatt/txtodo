@@ -28,3 +28,9 @@ asserts on that and uses the inode as a cross-check.
 ## Determinism
 No sleeps except the bounded quiescence poll. The daemon's clock is real here (the test asserts
 kinds and principals, never timestamps); tasks/daemon-undo-checkout-tests injects time.
+
+## As built (2026-09-12)
+`tests/support/mod.rs` + `tests/external_edits.rs`: eight scenarios pass in ~2 s. Write counting is
+`Health.writes_total` only (no inode cross-check). `todo.sh do 3` runs the CLI slice's vendored
+script by path with a generated `todo.cfg`. Connect retries (bounded) cover eight daemons starting
+at once on a loaded machine.

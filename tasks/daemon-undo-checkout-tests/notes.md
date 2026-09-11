@@ -26,3 +26,9 @@ Ops at fake time 1 000 and 2 000; checkout at `1 500` renders op-1 state. Checko
 includes op 2 (inclusive upper bound, see tasks/cli-history). Both go through the CLI so the
 RFC 3339 conversion is covered; the fake clock's epoch is chosen so local-zone conversion is
 unambiguous (a date well away from DST changes).
+
+## As built (2026-09-12)
+No `--fake-clock-ms` seam in the binary: the exactness tests run in-process against `FileActor`
+with `FakeClock` (`actor_tests::undo_restores_bytes_exactly_and_checkout_renders_the_past`) and the
+socket path is covered by `tests/grpc.rs::undo_and_checkout_over_the_socket` with the real clock.
+Same invariants, no test-only flag to keep out of release builds.

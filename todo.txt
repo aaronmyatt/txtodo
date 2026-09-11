@@ -9,12 +9,12 @@ x 2026-09-11 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md 
 x 2026-09-12 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode
 x 2026-09-12 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history
 x 2026-09-12 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor
-(B) 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs
+x 2026-09-12 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs
 x 2026-09-12 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files
-(B) 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests
-(B) 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
-(B) 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
-(B) 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
+x 2026-09-12 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests
+x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
+x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
+x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
 (B) 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench
 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon

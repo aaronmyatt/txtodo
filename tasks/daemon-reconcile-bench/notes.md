@@ -24,3 +24,10 @@ code faster or by a human-approved change recorded in `RATCHET.md`, never by ret
 ## Frozen paths touched
 `budgets.json`, `check-bench.sh`, `CLAUDE.md`, `stack.md` — every one asks. Land them as one
 "semantic machinery" commit (constitution §6), separate from the bench itself.
+
+## As built (2026-09-12)
+`benches/reconcile.rs`: `reconcile_10k_one_edit` 46.8 ms before, **12.1 ms** after the fast id
+scan and lazy id recovery (`perf(daemon)` commit). Attribution: `diff_lines` 9.0 ms (core), full
+parse per line 4.5 ms per 10k. **CI enforcement is not wired**: `check-bench.sh`, `budgets.json.perf`
+and the `CLAUDE.md` row are frozen paths — the human runs those edits (this notes file names the
+bench and the number they need).

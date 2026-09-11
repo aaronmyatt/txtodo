@@ -33,3 +33,9 @@ let uds = tokio::net::UnixListener::bind(&sock)?;
 Server::builder().add_service(TxtodoServer::new(svc)).serve_with_incoming(UnixListenerStream::new(uds)).await?;
 ```
 Bounded: tonic `concurrency_limit_per_connection(MAX_INFLIGHT_RPCS)` and a `timeout`.
+
+## As built (2026-09-11)
+Regeneration is `cargo build -p txtodo-proto --features regen` (a cargo feature, not a just recipe),
+so CI needs neither protoc nor a frozen-file change. No CI drift step yet: `justfile` and `.github/`
+are frozen; the human decides. The generated file is exempt from the file-length check through
+`budgets.json.generatedPaths`.
