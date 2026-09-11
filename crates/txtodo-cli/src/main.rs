@@ -49,6 +49,15 @@ enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
+    /// Add text to the end of a task.
+    #[command(visible_alias = "app")]
+    Append {
+        /// Line number.
+        item: String,
+        /// Text to append; several words are joined with spaces.
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
+    },
     /// Move completed lines to done.txt and drop blank lines.
     Archive,
     /// Remove a task's priority.
@@ -109,6 +118,15 @@ enum Command {
         #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
+    /// Add text after a task's priority and date.
+    #[command(visible_alias = "prep")]
+    Prepend {
+        /// Line number.
+        item: String,
+        /// Text to prepend; several words are joined with spaces.
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
+    },
     /// Set a task's priority, A to Z.
     #[command(visible_alias = "p")]
     Pri {
@@ -116,6 +134,14 @@ enum Command {
         item: String,
         /// The new priority letter.
         priority: String,
+    },
+    /// Replace a task's text, keeping its priority and date.
+    Replace {
+        /// Line number.
+        item: String,
+        /// The new text; several words are joined with spaces.
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
     },
     /// List the `.txt` files in the todo directory, or the tasks in FILE.
     #[command(visible_alias = "lf")]
@@ -216,6 +242,15 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     match &cli.command {
         Command::Add { text } => commands::add::run(&ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(&ctx, &text.join(" "), true),
+        Command::Append { item, text } => {
+            commands::text::run(&ctx, commands::text::Kind::Append, item, &text.join(" "))
+        }
+        Command::Prepend { item, text } => {
+            commands::text::run(&ctx, commands::text::Kind::Prepend, item, &text.join(" "))
+        }
+        Command::Replace { item, text } => {
+            commands::text::run(&ctx, commands::text::Kind::Replace, item, &text.join(" "))
+        }
         Command::Archive => commands::archive::run(&ctx),
         Command::Depri { items } => commands::edit::run_depri(&ctx, items),
         Command::Del { item, term } => commands::edit::run_del(&ctx, item, term.as_deref()),

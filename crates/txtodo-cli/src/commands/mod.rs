@@ -5,3 +5,4 @@ pub mod add;
 pub mod archive;
 pub mod edit;
 pub mod list;
+pub mod text;
