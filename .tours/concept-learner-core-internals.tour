@@ -1,0 +1,79 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "txtodo-core Internals — Parse, Edit, Format, Diff",
+  "description": "How the only implemented slice actually works: one shared scanner feeding a strict/lenient parser, a byte-preserving formatter, and the tests that keep them honest.",
+  "steps": [
+    {
+      "file": "crates/txtodo-core/src/lib.rs",
+      "line": 1,
+      "description": "**Situation.** Start here: the crate's module doc states its whole contract in two lines.\n\n**Mechanism.** `#![cfg_attr(not(feature = \"std\"), no_std)]` plus `extern crate alloc` (line 8) means every type here can run without an OS — no clock, no file handle, no heap allocator assumed beyond `alloc`. `#![forbid(unsafe_code)]` (line 6) bans `unsafe` entirely, workspace-wide for this crate.\n\n**Implication.** This crate is designed to be embeddable anywhere: a CLI, a daemon, a WASM build, an MCP server — it has zero opinions about I/O.\n\n**Gotcha.** `mod`s on lines 10–21 are all private; only the `pub use` block below (line 24 on) is reachable from outside. If you can't find a type from outside the crate, check whether it's re-exported."
+    },
+    {
+      "file": "crates/txtodo-core/src/scanner.rs",
+      "line": 22,
+      "description": "**Situation.** `chunks()` is the single primitive that both the parser and the tokenizer build on.\n\n**Mechanism.** It splits a line into alternating runs of whitespace and non-whitespace (`Chunk { start, end, is_ws }`), covering every byte with no gaps — only ASCII space and tab count as separators (line 2's doc comment: Unicode spaces are `NONSP`, i.e. just more word bytes).\n\n**Implication.** Because both `parse.rs` and `tokenize.rs` scan the same way, a word boundary can never disagree between \"what the parser thinks is a token\" and \"what the highlighter paints\" — one source of truth.\n\n**Gotcha.** Tabs and multi-space runs *do* chunk correctly, but the parser will flag them as a `TABS` quirk later — chunking is permissive, meaning is stricter downstream."
+    },
+    {
+      "file": "crates/txtodo-core/src/types.rs",
+      "line": 212,
+      "description": "**Situation.** `Task<'a>` is the parsed shape of one line: completion flag, up to two dates, an optional priority, and `description` — everything else, verbatim.\n\n**Mechanism.** Notice what's *not* here: no `projects`, no `contexts`, no `tags` field. The doc comment above (line 209) says it directly — those are \"views computed from `description` on demand ... never stored.\"\n\n**Implication.** A `Task` never gets out of sync with its own description text, because there's no redundant derived state to go stale — you'll see the view functions two steps from now.\n\n**Gotcha.** `description` borrows from the original `&str` (`Task<'a>`) — this type is zero-copy. Editing it doesn't mutate `Task`; it produces a brand new line (see the `edit`/`apply` steps)."
+    },
+    {
+      "file": "crates/txtodo-core/src/parse.rs",
+      "line": 14,
+      "description": "**Situation.** `parse_line` is the crate's main entry point, and it's a two-line wrapper.\n\n**Mechanism.** All it does is call `parse_line_with_schemes` with `DEFAULT_SCHEMES` — the real work (and the extensibility point for custom URL schemes) lives one function down.\n\n**Implication.** This is a deliberate API pattern used throughout this crate: a convenience function with the common default, plus a `_with_schemes` variant for callers who need control (see `tokenize`/`tokenize_with_schemes` too).\n\n**Gotcha.** An empty string is `LineKind::Blank`, unconditionally, before any parser state is built (line 24) — blank lines never touch the `Parser` struct below."
+    },
+    {
+      "file": "crates/txtodo-core/src/parse.rs",
+      "line": 80,
+      "description": "**Situation.** `lenient_or` is where `Mode::Strict` and `Mode::Lenient` actually diverge — every other parsing function funnels through this one gate.\n\n**Mechanism.** In lenient mode, it records a quirk bit and returns `Ok(())`, so parsing continues; in strict mode, it turns the exact same situation into a `ParseError` naming the ABNF rule and byte offset that failed.\n\n**Implication.** Strict and lenient are not two separate code paths that could drift apart — they're the *same* parser, differing only at this one branch point. That's what the differential test (later in this tour) actually verifies against the ABNF.\n\n**Gotcha.** `debug_assert!` in `parse_line_with_schemes` (back in the previous step's file, near the end) checks that strict mode *never* accumulates quirks other than `INVALID_REF` — a real invariant, not just documentation."
+    },
+    {
+      "file": "crates/txtodo-core/src/quirks.rs",
+      "line": 30,
+      "description": "**Situation.** `Quirks::ALL` is the full catalog of every leniency the lenient parser can record, paired with its lint name.\n\n**Mechanism.** `Quirks` is a `u16` bitset (line 7) — each named constant above this array is one bit, and \"bits are never reused; new quirks get new bits\" (line 5's doc comment), so old serialized quirk sets stay meaningful forever.\n\n**Implication.** This array is also `txtodo lint`'s entire vocabulary (Milestone 2, not built yet) — whatever gets added here is what a future `txtodo lint` command will report by name.\n\n**Gotcha.** `TABS`, `TRAILING_WS`, `MIXED_ENDING`, `LEADING_WS` are all *preserved on write*, not corrected — quirks are recorded, never silently fixed, so a file's exact byte shape survives a read/write round-trip."
+    },
+    {
+      "file": "crates/txtodo-core/src/task.rs",
+      "line": 40,
+      "description": "**Situation.** Here's the payoff of `Task` storing only `description`: `projects()` re-scans it on every call.\n\n**Mechanism.** It reuses the same `chunks()` scanner from step 2, classifies each word, filters for `WordKind::Project`, and strips the `+` sigil — `contexts()` and `tags()` (just below) are the same shape for `@` and `key:value`.\n\n**Implication.** There's exactly one place that knows what a project/context/tag *looks like* lexically (`tokenize.rs`'s `classify_word`) — `Task`'s views and the tokenizer's spans can never disagree about what counts as a project.\n\n**Gotcha.** This is `O(n)` per call, not cached — calling `.projects()` in a loop re-scans the description every time. Fine for one line; something a query engine (future `txtodo-query`) will need to think about at file scale."
+    },
+    {
+      "file": "crates/txtodo-core/src/tokenize.rs",
+      "line": 9,
+      "description": "**Situation.** `tokenize` classifies every byte of a line into `Span`s for syntax highlighters — and unlike `parse_line`, it never fails.\n\n**Mechanism.** Doc comment on line 2 states the actual test oracle: \"The expected output for real lines is `corpus/*.tokens.json`\" — you don't verify this function by reading it, you verify it against hand-written fixtures (see the corpus step near the end).\n\n**Implication.** A malformed or unusual line still gets *some* reasonable coloring (`Text` for anything unrecognized) instead of the highlighter breaking — total functions are a deliberate choice for anything UI-facing.\n\n**Gotcha.** The two `debug_assert!`s after the loop (`no empty spans`, `spans cover the line`) are the actual contract: gaps or empty spans would make a highlighter mis-render, so they're asserted, not just hoped for."
+    },
+    {
+      "file": "crates/txtodo-core/src/format.rs",
+      "line": 35,
+      "description": "**Situation.** `emit_prefix` writes out the structured part of a line — completion marker, dates, priority — strictly, even if the line was read leniently.\n\n**Mechanism.** Doc comment above (line 1): \"Only the fields an `Edit` touched are rewritten; everything else is spliced through verbatim.\" This function is only ever called on the *touched* prefix; an unedited prefix's original bytes (quirks and all) pass straight through untouched (you'll see where in the `apply` step).\n\n**Implication.** This is the mechanism behind the crate's headline invariant, `format(parse(x)) == x` — editing one field of a task never silently \"fixes\" someone else's tabs or trailing whitespace elsewhere on the line.\n\n**Gotcha.** Line 33's comment: \"A completed prefix never carries `(A)`\" — the strict grammar has no priority slot after `x`. Watch what happens to that priority next."
+    },
+    {
+      "file": "crates/txtodo-core/src/edit.rs",
+      "line": 212,
+      "description": "**Situation.** This is the `pri:` rule from the todo.txt spec, implemented: what happens to a task's priority when you mark it complete.\n\n**Mechanism.** If the prefix has a priority, `complete()` moves it into a `pri:` tag in the description (line 218-219) rather than dropping it — because strict grammar has nowhere to put `(A)` after `x` (as flagged in the previous step).\n\n**Implication.** `uncomplete()` right below (line 224) does the reverse: it looks for a `pri:` tag, restores it as the structured priority, and removes the tag — so `complete()` then `uncomplete()` round-trips a task's priority losslessly.\n\n**Gotcha.** The `debug_assert!` on line 221 (\"priority moved to pri:\") is checking `complete()`'s own postcondition — a good example of this codebase's \"≥2 assertions per function\" rule from the constitution being a real invariant check, not decoration."
+    },
+    {
+      "file": "crates/txtodo-core/src/edit.rs",
+      "line": 244,
+      "description": "**Situation.** `apply()` is where every `Edit` actually becomes a new line — and it's built entirely around *not* touching bytes you didn't ask to change.\n\n**Mechanism.** It diffs the draft against the original at two independent points: `prefix_dirty` (line 253) and `description_dirty` (line 260). If *neither* changed, it returns the original line unmodified (line 261-263) rather than reformatting it — a strict-mode-sourced quirk in an untouched field literally cannot be lost.\n\n**Implication.** This is why the crate can promise \"an unchanged prefix or description is spliced from the original\" (doc comment, line 242) — edits are surgical, not \"parse, mutate the model, reserialize everything.\"\n\n**Gotcha.** Line 254's comment explains a second `pri:`-move case: even a lenient `x (A) …` line, if something *else* about the prefix gets dirtied by this edit, still needs its priority relocated — but if the prefix isn't touched at all, that same malformed line is left completely alone (line 253's `prefix_dirty` gate)."
+    },
+    {
+      "file": "crates/txtodo-core/src/diff.rs",
+      "line": 1,
+      "description": "**Situation.** `diff_lines` and `diff_text` — this crate's two diff algorithms — exist for milestones that don't exist yet.\n\n**Mechanism.** Both are Myers' greedy algorithm (the doc comment cites the 1986 paper directly), bounded and non-recursive. `diff_lines` prefers matching by `id:` tag when both sides have one (line 2's comment: \"so the reconciler (M3) can turn an external edit into ops\"); `diff_text` is character-level, earmarked for M4's CRDT text merges.\n\n**Implication.** This is a clear signal of how far ahead this crate's design reaches — code written now, in M1, anticipating a reconciler and CRDT that are still 2-3 milestones away.\n\n**Gotcha.** `LineDiff::Move` (further down this file) — same `id:` deleted at one position and inserted at another — is only detectable *because* tasks can carry a stable `id:` ULID tag; without that tag a moved line just looks like a delete plus an insert."
+    },
+    {
+      "file": "crates/txtodo-core/tests/differential.rs",
+      "line": 1,
+      "description": "**Situation.** This is the crate's strongest correctness guarantee, and it's a test file, not production code: a *second*, independently-generated parser checks the hand-written one.\n\n**Mechanism.** `abnf_to_pest` converts `specs/todotxt.abnf` (the normative grammar) into a pest grammar at test time, checked into `tests/todotxt.pest` so drift between the ABNF, the generated grammar, and the hand parser all fail loudly (doc comment, lines 1-4). It's run against every corpus line *and* 10,000 proptest-generated random lines.\n\n**Implication.** The hand-written recursive-descent parser in `parse.rs` can't silently diverge from the spec — if someone edits the ABNF without updating the parser (or vice versa), this test catches it, not a human reviewer eyeballing two files.\n\n**Gotcha.** Lines 6-9 document two deliberate, non-obvious PEG-vs-ABNF mechanical fixups (an RFC 7405 case-sensitivity quirk, and anchoring top-level alternatives with `~ EOI`) — read those before assuming a divergence here is a real bug rather than a known translation detail."
+    },
+    {
+      "directory": "corpus",
+      "description": "**Situation.** This is the oracle every other test in this crate is checked against: hand-written `.txt` fixture files, each with a sibling `.tokens.json` giving the exact expected token stream.\n\n**Mechanism.** Files like `edge-cases.txt`, `refs.txt`, `tags.txt`, `bom.txt`, `crlf.txt`, `mixed-endings.txt` cover the design doc's edge-case table by name — `corpus.rs` (in `tests/`) round-trips every line through `parse`→`format` and checks tokens against the JSON oracle.\n\n**Implication.** When you add a new parsing edge case to this crate, the correct workflow is: add a line here and its expected tokens, not just a unit test buried in a `_tests.rs` file — this is the human-auditable ground truth.\n\n**Gotcha.** `README.md` in this directory documents the fixture format — read it before hand-editing a `.tokens.json`, since `TokenKind` names must match `corpus/tokens.schema.json` exactly (also asserted in `types.rs`'s doc comment on `TokenKind`)."
+    },
+    {
+      "description": "**You now understand** the shape of `txtodo-core`: one shared scanner feeds both the parser and tokenizer; strict and lenient mode are the same code path branching at one gate (`lenient_or`); every leniency is a named, preserved bit, never silently corrected; edits are tracked per-field so untouched bytes are never rewritten; and a completely independent, spec-generated parser cross-checks the hand-written one on every test run.\n\n**What you can do next:**\n- Run `cargo test -p txtodo-core` and watch the corpus, proptest, and differential suites pass.\n- Open `crates/txtodo-core/src/edit_tests.rs` or `parse_tests.rs` to see the unit-test style used throughout.\n- Read `txtodo-design.md` §2–3 for the *design rationale* behind byte-preservation and the quirks model — this tour showed the *how*, that doc has the *why*."
+    }
+  ]
+}

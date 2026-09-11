@@ -93,6 +93,11 @@
     ]
   },
   "baselinePaths": [],
+  "generatedPaths": [
+    "Cargo.lock",
+    "crates/*/src/generated/**"
+  ],
+  "unfreezeSentinel": ".claude/UNFROZEN",
   "commands": {
     "format": "cargo fmt --all --check",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings",

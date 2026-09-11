@@ -1,0 +1,64 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "txtodo — Where This Project Stands Right Now",
+  "description": "For anyone picking up txtodo today: what's built, what's stubbed, and what's queued next.",
+  "nextTour": "txtodo-core Internals — Parse, Edit, Format, Diff",
+  "steps": [
+    {
+      "file": "CLAUDE.md",
+      "line": 8,
+      "description": "**Situation.** This is `txtodo`: a todo.txt-format tool being built as a Rust workspace, one milestone at a time.\n\n**Mechanism.** This file is *generated*, not hand-written — it comes from `.claude/budgets.json` via the `/setup` skill, and encodes hard constraints (function/file length, diff size, coverage floor, no cross-slice imports) that an AI agent (and a human) must follow on every change.\n\n**Implication.** Before you read any code, know the rules it was written under: ≤60-line functions, ≤300-line diffs, ≥2 assertions per function, slices that never import each other.\n\n**Gotcha.** Don't hand-edit this file to loosen a rule — it's a frozen path; changes flow through `.claude/budgets.json` and `/setup` so the number here always matches an enforced tool config."
+    },
+    {
+      "directory": "crates",
+      "description": "**Situation.** The workspace is split into 12 crates (\"slices\"), each meant to own one concern end-to-end.\n\n**Mechanism.** Per the constitution, slices never import each other — they talk through a boundary the stack can name (a URL, a process, a queue), never an in-process event bus.\n\n**Implication.** You can safely read one crate at a time; nothing here secretly reaches into a sibling.\n\n**Gotcha.** Most of these directories are still empty shells (2-line `lib.rs` stubs). Don't assume a crate existing means it's implemented — check next."
+    },
+    {
+      "file": "Cargo.toml",
+      "line": 13,
+      "description": "**Situation.** The workspace declares all 8 library crates up front, even though most have no code yet.\n\n**Mechanism.** `txtodo-core`, `-query`, `-model`, `-store`, `-crdt`, `-sync`, `-proto`, `-mcp` are all wired into `[workspace.dependencies]` so any crate that *does* need another can reference it by name later, path-pinned.\n\n**Implication.** This is the full intended shape of the system: parse/format (core) → query → CRDT model → storage → sync → wire protocol → MCP server for agents.\n\n**Gotcha.** Declared ≠ built. Only one of these eight has real logic behind it — the next step shows which."
+    },
+    {
+      "directory": "crates/txtodo-core",
+      "description": "**Situation.** `txtodo-core` is the only slice with substance: ~2,900 lines across 16 source files, plus differential tests, property tests, a corpus, fuzz targets, and a benchmark.\n\n**Mechanism.** It implements Milestone 1 of the plan: a byte-preserving parser, tokenizer, formatter, editor, and diff for single todo.txt lines and files — no I/O, no clock, `no_std`-compatible.\n\n**Implication.** Everything downstream (CLI, daemon, sync, CRDT) is designed to sit on top of this crate's types and never re-implement parsing.\n\n**Gotcha.** It's frozen-shape: the plan document says its public API \"may grow, may not shrink\" — see the plan step later in this tour."
+    },
+    {
+      "file": "crates/txtodo-core/CLAUDE.md",
+      "line": 1,
+      "description": "**Situation.** Every slice carries its own CLAUDE.md — this is `txtodo-core`'s: purpose, frozen public interface, and invariants.\n\n**Mechanism.** The invariants are executable, not aspirational: `format(parse(x)) == x` for every corpus line, a second ABNF-generated parser must agree with the hand-written one, `no_std` + `alloc` must build.\n\n**Implication.** Read this file before touching the crate — it's the contract the tests in the next tour actually enforce.\n\n**Gotcha.** \"May depend only on: nothing in the workspace\" — `txtodo-core` is a leaf. If you ever see it importing a sibling crate, that's a bug in the design, not a feature."
+    },
+    {
+      "file": "crates/txtodo-core/src/lib.rs",
+      "line": 24,
+      "description": "**Situation.** This is the crate's entire public surface — everything a consumer (CLI, daemon, or an agent via MCP) is allowed to touch.\n\n**Mechanism.** Grouped by concern: `diff` (Myers-based line/text diff), `edit`/`apply` (mutation), `file`/`parse_file` (whole-file model), `format` (byte-preserving emitter), `parse` (line parser), `tokenize` (highlighter feed), plus the value types on line 33.\n\n**Implication.** This is the M1 API frozen in the implementation plan — read it once and you know what every other crate in this workspace will eventually build on.\n\n**Gotcha.** The doc comment on line 4 says the shape may grow but never shrink — a breaking change here is a milestone-level decision, not a routine refactor."
+    },
+    {
+      "file": "crates/txtodo-cli/src/main.rs",
+      "line": 4,
+      "description": "**Situation.** This is the *entire* `txtodo-cli` crate today: `fn main() {}`.\n\n**Mechanism.** It's a placeholder from Milestone 0 (bootstrap) — the crate exists and builds so CI has something to check, but Milestone 2 (the actual clap-based CLI with todo.sh parity) hasn't started.\n\n**Implication.** This is the sharpest signal of \"current stage\": parsing/editing/formatting is done and heavily tested; nothing consumes it as a tool yet.\n\n**Gotcha.** `#![allow(clippy::print_stdout, ...)]` is already set up for when this crate does print — a small foreshadow of the CLI's output path."
+    },
+    {
+      "file": "txtodo-implementation-plan.md",
+      "line": 181,
+      "description": "**Situation.** The plan lays out 11 milestones, M0 through M10, and this is M1's header: `txtodo-core`, the crate you just toured.\n\n**Mechanism.** \"Order. Milestones M0–M10 are sequential. Do not start a milestone until the previous milestone's acceptance criteria pass in CI\" (line 9 of this file) — that's why nothing past `txtodo-core` has code yet.\n\n**Implication.** The project is currently sitting right at the M1 → M2 boundary: core's acceptance criteria (corpus round-trip, differential parser, fuzz, bench budget) are the gate the CLI work is waiting behind.\n\n**Gotcha.** M2 is CLI-only, direct-file mode — no daemon, no sync yet. Don't expect multi-device sync work to start until M3+."
+    },
+    {
+      "file": "txtodo-implementation-plan.md",
+      "line": 185,
+      "description": "**Situation.** Right under the M1 goal is the exact Rust API that was designed *before* a line of `txtodo-core` was written.\n\n**Mechanism.** Comparing this block to `crates/txtodo-core/src/lib.rs` (the earlier step) shows the crate matches it almost verbatim — `Mode`, `Span`, `TokenKind`, `Task`, `parse_line`, `tokenize`, `parse_file`, `Edit`/`apply`, `diff_lines`, `diff_text`.\n\n**Implication.** This repo plans function signatures and invariants *before* code, per the constitution's change protocol (\"Plan before code for anything non-trivial ... then wait for approval\").\n\n**Gotcha.** The crate's actual API has grown a few details since (see `crates/txtodo-core/CLAUDE.md`'s \"Grown details\" line) — the plan is the frozen shape, not a byte-for-byte spec."
+    },
+    {
+      "file": "RATCHET.md",
+      "line": 32,
+      "description": "**Situation.** This is the ratchet board's only campaign log entry so far — proof, not narrative, that M1 landed.\n\n**Mechanism.** When `txtodo-core`'s tests were measured, workspace line coverage came back at 97.07% (88–100% per file in core; the only misses are the still-stub crates' empty `fn main`s). That triggered raising the coverage floor from 0% to 80%.\n\n**Implication.** \"Current stage\" isn't just a vibe — it's a measured, ratcheted number: the one crate with code is thoroughly tested, and the floor now holds every crate after it to the same bar.\n\n**Gotcha.** The floor is 80%, not 97% — it was set conservatively so future, less-tested crates don't immediately fail CI; it only ever tightens (`/ratchet`), never loosens by hand."
+    },
+    {
+      "file": "todo.txt",
+      "line": 1,
+      "description": "**Situation.** The project's own todo.txt — dogfooding the format it implements — is the single source of truth for what's left.\n\n**Mechanism.** Line 1 is M1's last loose end (confirm CI green); line 2 is M2's first task (the clap CLI with todo.sh parity). Everything below is tagged `+m1` through `+m10`, matching the plan's milestone order.\n\n**Implication.** This is the most current \"what's next\" you can read — more current than either markdown doc, since it's edited every session.\n\n**Gotcha.** Priority `(A)` here doesn't mean \"do this globally first\" across milestones — it's priority *within* a milestone; M2 hasn't started even though several of its tasks are marked `(A)`."
+    },
+    {
+      "description": "**You now understand:** `txtodo` is a Rust workspace building a todo.txt tool milestone-by-milestone, under a generated constitution that fences diffs, freezes APIs before they're written, and ratchets quality bars up as code lands. Milestone 1 (`txtodo-core` — parse/tokenize/format/edit/diff) is done and 97%+ covered; every other crate, including the CLI, is an empty stub waiting on Milestone 2.\n\n**What you can do next:**\n- Run `cargo test -p txtodo-core` yourself to see the M1 suite (corpus, proptest, differential, edge cases) pass.\n- Read `txtodo-design.md` for the *why* behind the byte-preservation and quirks design, not just the *what*.\n- Take the next tour in this series to see exactly how parsing, editing, and formatting work inside `txtodo-core`."
+    }
+  ]
+}

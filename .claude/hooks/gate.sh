@@ -13,7 +13,7 @@ for k in format lint typecheck test boundaries fileLength; do
   out=$(bash -c "$cmd" 2>&1) || fail+="[$k] \`$cmd\`"$'\n'"$(echo "$out" | tail -15)"$'\n\n'
 done
 MAX=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).diffLines' $B)
-EXEMPT=$(node -pe 'const b=JSON.parse(require("fs").readFileSync(process.argv[1]));["Cargo.lock",...b.baselinePaths].map(g=>"^"+g.replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*\*/g,".*").replace(/(?<!\.)\*/g,"[^/]*")+"$").join("|")' $B)
+EXEMPT=$(node -pe 'const b=JSON.parse(require("fs").readFileSync(process.argv[1]));[...(b.generatedPaths||["Cargo.lock"]),...b.baselinePaths].map(g=>"^"+g.replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*\*/g,".*").replace(/(?<!\.)\*/g,"[^/]*")+"$").join("|")' $B)
 n=$(git diff HEAD --numstat | grep -Ev $'\t('"$EXEMPT"')$' | awk '{a+=$1+$2} END{print a+0}')
 u=$(git ls-files --others --exclude-standard | grep -Ev "^($EXEMPT)$" | xargs -I{} wc -l "{}" 2>/dev/null | awk '{a+=$1} END{print a+0}')
 [ $((n+u)) -gt "$MAX" ] && fail+="[diff] $((n+u)) changed lines > budget $MAX. Split the change and say so."$'\n'

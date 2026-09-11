@@ -6,3 +6,6 @@
 **/fuzz/corpus
 **/fuzz/artifacts
 **/fuzz/coverage
+
+# Human-owned unfreeze switch for the fence (.claude/budgets.json.unfreezeSentinel)
+.claude/UNFROZEN
