@@ -1,11 +1,14 @@
-2026-09-12 mcp/batch.rs: apply ops to an in-memory DocState clone; dry_run diffs and discards, never emits an Apply to the daemon +m6 @mcp
-2026-09-12 mcp/batch.rs: render the before/after projection via txtodo_core::diff_lines as a unified diff with ---/+++/@@ hunks per design §6.6 +m6 @mcp
-2026-09-12 mcp/error.rs: McpError { code, message, line: Option<u32>, spec_rule: Option<&'static str> } serialized to {code,message,line?,spec_rule?} +m6 @mcp
-2026-09-12 mcp/batch.rs: resolve line numbers against the file state after the preceding ops in the batch, not the on-disk file +m6 @mcp
-2026-09-12 mcp/error.rs: spec_rule pointers name the exact specs/todotxt.abnf rule the line violates (priority case, date placement) +m6 @mcp
-2026-09-12 mcp/batch.rs: atomic batch — one invalid op rejects the whole batch with the structured error, no partial apply +m6 @mcp
-2026-09-12 mcp/batch.rs: MAX_BATCH_OPS cap asserted before applying; an over-cap batch is refused outright +m6 @mcp
-2026-09-12 Test: dry_run returns the design §6.6 unified diff shape for that example input, byte-for-byte hunks +m6 @mcp @test
-2026-09-12 Test: `(a) task` add reports line and a spec_rule pointing at the priority-case rule +m6 @mcp @test
-2026-09-12 Test: a dry_run batch that would edit-then-add reports the shifted line for the second op's error +m6 @mcp @test
+2026-09-12 txtodo-mcp/src/batch.rs: declare the todo_batch tool schema with ops: Vec<ToolOp> and dry_run: bool, ToolOp mirroring the proto Mutation oneof +m6 @mcp
+2026-09-12 txtodo-mcp/src/error.rs: McpError { code, message, line: Option<u32>, spec_rule: Option<&'static str> } serialized to {code,message,line?,spec_rule?} in JSON-RPC data +m6 @mcp
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: dry_run clones the projection DocState, replays ops, re-renders bytes and diffs with txtodo_core::diff_lines, discarding the clone +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: render the before/after diff as a unified diff with ---/+++/@@ hunks matching design §6.6 exactly +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: convert ToolOp -> Mutation -> OpKind as an exhaustive match with no default arm, so a new op kind cannot silently no-op +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: resolve reported line numbers against the state after the preceding ops in the batch, not the on-disk file +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: one invalid op rejects the whole batch with the structured error; assert the real projection is never touched on dry_run +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: cap the batch at MAX_MUTATIONS_PER_APPLY, asserted before converting; an over-cap batch is refused outright +m6 @mcp @daemon
+2026-09-12 txtodo-daemon/src/mcp/batch.rs: Complete takes the injected clock Date; a dry run without the injected now stamps the wrong day +m6 @mcp @daemon
+2026-09-12 Test: dry_run on the design §6.6 example returns the unified diff byte-for-byte, and the file hash is unchanged +m6 @mcp @test
+2026-09-12 Test: `(a) task` add reports code, line and a spec_rule naming the priority-case rule from specs/todotxt.abnf +m6 @mcp @test
+2026-09-12 Test: an edit-then-add batch reports the shifted line for the second op's error +m6 @mcp @test
+2026-09-12 Test: one invalid op in a 3-op batch rejects all three with no partial apply +m6 @mcp @test
 2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
