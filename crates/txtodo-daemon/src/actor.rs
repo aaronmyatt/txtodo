@@ -252,6 +252,7 @@ impl FileActor {
         self.hash = new_hash;
         if write {
             self.write_projection()?;
+            tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&new_hash), "projection_written");
         }
         let first = range.map_or(0, |r| r.first.0);
         let stored: Vec<Stored> = ops
@@ -290,8 +291,15 @@ impl FileActor {
     }
 }
 
-/// Placeholder until tasks/daemon-tracing-logs lands: an actor error with nobody to reply to.
+/// An actor error with nobody to reply to (the watcher sent the message): logged, never dropped.
 fn tracing_stub_error(path: &FilePath, e: &ActorError) {
     debug_assert!(!path.as_str().is_empty());
-    let _ = (path, e);
+    tracing::error!(file = %path, error = %e, "external change failed");
+}
+
+/// The first 8 hex digits of a hash, enough to correlate log lines without logging content.
+pub fn hex8(hash: &Hash) -> String {
+    let s: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    debug_assert_eq!(s.len(), 8);
+    s
 }

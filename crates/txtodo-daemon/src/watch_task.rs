@@ -64,7 +64,9 @@ fn discover(ws: &SharedWorkspace, dir: &Path) {
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     // A walk error here is a directory vanishing between event and walk; the next event retries.
-    let _started = guard.discover(dir);
+    if let Err(e) = guard.discover(dir) {
+        tracing::warn!(dir = %dir.display(), error = %e, "discover failed");
+    }
 }
 
 /// A debounced document path: its actor gets `ExternalChange`; an unknown document in a known

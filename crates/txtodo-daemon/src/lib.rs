@@ -18,6 +18,7 @@ pub mod serve;
 pub mod server;
 pub mod state;
 pub mod stats;
+pub mod telemetry;
 pub mod textedit;
 pub mod walker;
 pub mod watch_task;

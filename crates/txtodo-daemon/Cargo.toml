@@ -32,6 +32,12 @@ tonic = "0.14"
 blake3 = "1"
 # https://docs.rs/notify — FSEvents / inotify / ReadDirectoryChangesW (plan M3 watcher)
 notify = "8"
+# https://docs.rs/tracing — span reconcile{file} and structured events (plan §5)
+tracing = "0.1"
+# https://docs.rs/tracing-subscriber — JSON layer + TXTODO_LOG env filter
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+# https://docs.rs/tracing-appender — daily files under .txtodo/logs/, non-blocking writer
+tracing-appender = "0.2"
 
 [dev-dependencies]
 # https://docs.rs/proptest — text-edit application inverts diff_text

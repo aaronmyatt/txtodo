@@ -69,6 +69,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let state_dir = args.dir.join(txtodo_daemon::walker::STATE_DIR);
     std::fs::create_dir_all(&state_dir)?;
     let _pid = PidFile::acquire(&state_dir.join("txtodod.pid"))?;
+    let _logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
+    tracing::info!(workspace = %args.dir.display(), version = env!("CARGO_PKG_VERSION"), "starting");
     let socket = state_dir.join("txtodod.sock");
     if socket.exists() {
         // The pid lock says no other instance runs, so this is a stale socket from a crash.

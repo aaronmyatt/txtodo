@@ -52,12 +52,15 @@ impl FileActor {
 
     /// Design §4.3 steps 2–7 on one device.
     pub(crate) fn on_external_change(&mut self) -> Result<Option<Change>, ActorError> {
+        let _span = tracing::info_span!("reconcile", file = %self.cfg.path).entered();
         let bytes = read_or_empty(&self.cfg.disk)?;
         let disk_hash = hash_of(&bytes);
         if disk_hash == self.hash {
+            tracing::debug!(reason = "current", "ignored_own_write");
             return Ok(None);
         }
         if self.expected.is_ours(&disk_hash, self.clock.now_instant()) {
+            tracing::debug!(reason = "recent", "ignored_own_write");
             return Ok(None);
         }
         let old = parse_file(&self.projection);
@@ -70,6 +73,13 @@ impl FileActor {
             Some(next) if next.to_bytes() == target => (next, true),
             _ => (DocState::from_file(self.cfg.path.clone(), &r.file)?, false),
         };
+        tracing::info!(
+            ops = r.ops.len(),
+            minted = r.minted,
+            reused = r.reused,
+            exact,
+            "ops_derived"
+        );
         let device = self.cfg.device;
         let ops = self.stamp(r.ops, Principal::External { device })?;
         let write_back = target != bytes;
