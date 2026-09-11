@@ -1,6 +1,6 @@
-(B) 2026-09-11 fuzz_targets/parse_line.rs: on valid UTF-8 run parse_line in both modes; assert lenient is Ok and, when strict is Ok, both agree on fields +m1 @core @test
-(B) 2026-09-11 fuzz_targets/parse_file.rs: parse_file(data).to_bytes() == data for arbitrary bytes (round trip on any input) +m1 @core @test
-(B) 2026-09-11 fuzz_targets/slug.rs: is_valid_slug never accepts a string containing / or equal to . or .. (plan §5 traversal check) +m1 @core @test
-(B) 2026-09-11 Seed fuzz/corpus/<target>/ from corpus/*.txt lines so libFuzzer starts from real shapes +m1 @core @test
+x 2026-09-11 2026-09-11 fuzz_targets/parse_line.rs: on valid UTF-8 run parse_line in both modes; assert lenient is Ok and, when strict is Ok, both agree on fields +m1 @core @test
+x 2026-09-11 2026-09-11 fuzz_targets/parse_file.rs: parse_file(data).to_bytes() == data for arbitrary bytes (round trip on any input) +m1 @core @test
+x 2026-09-11 2026-09-11 fuzz_targets/slug.rs: is_valid_slug never accepts a string containing / or equal to . or .. (plan §5 traversal check) +m1 @core @test
+x 2026-09-11 2026-09-11 Seed fuzz/corpus/<target>/ from corpus/*.txt lines so libFuzzer starts from real shapes +m1 @core @test
 (B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally; record runs and any crash in this notes.md +m1 @core @test
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
