@@ -1,0 +1,14 @@
+2026-09-12 Add iroh and mdns-sd to txtodo-sync with a cargo deny pass and human sign-off; check allowedDeps first +m4 @sync
+2026-09-12 link.rs: trait Link { send(Frame), recv() -> Frame } so the session state machine never sees a socket +m4 @sync
+2026-09-12 endpoint.rs: one iroh endpoint constructor with relay explicitly disabled and the reason in a comment +m4 @sync
+2026-09-12 discovery.rs: advertise _txtodo._udp with TXT device, group and proto; never the group key +m4 @sync
+2026-09-12 Drop our own advertisement by DeviceId and drop other groups before opening a connection +m4 @sync
+2026-09-12 MAX_LAN_PEERS and MAX_BACKOFF_MS consts, asserted; the retry loop has an explicit iteration cap +m4 @sync
+2026-09-12 Debounce peer re-announcements with the slice's own copy, not the daemon's debounce.rs +m4 @sync
+2026-09-12 LinkError names the peer and what was attempted; network input is validated, never asserted +m4 @sync
+2026-09-12 txtodo doctor reports the transport mode so relay-off is visible without reading code +m4 @cli
+2026-09-12 Test: the configured relay set is empty, so an iroh upgrade that changes the default fails here +m4 @sync @test @security
+2026-09-12 Test: two loopback endpoints discover each other and exchange Hello, driven off the callback with a timeout not a sleep +m4 @sync @test
+2026-09-12 Tests: a peer in another group is never connected to; our own advertisement is ignored +m4 @sync @test
+2026-09-12 Test: the peer past MAX_LAN_PEERS is dropped with a log line, not pushed +m4 @sync @test
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync
