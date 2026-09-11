@@ -36,3 +36,22 @@ Never edit or delete a prior entry.
 - Might become: a tiny `txtodo-fs` kernel crate, or a function in `txtodo-core` behind a `std`
   feature (core is I/O-free by design, so probably not). Slices may not import each other, so the
   copy stands until the human decides. Third copy would be the M8 file-carrier transport.
+
+## 2026-09-12 — tonic-over-unix-socket connector, three copies
+
+- Duplicated: `Endpoint::try_from("http://[::]:50051").connect_with_connector(service_fn(|_| UnixStream::connect(path).map(TokioIo::new)))`
+  plus a tonic client built on the channel.
+- Where: crates/txtodo-cli/src/client.rs (`Daemon::connect`), crates/txtodo-daemon/tests/grpc.rs
+  (`connect`), crates/txtodo-daemon/tests/support/mod.rs (`connect`, with retries). Three copies
+  in two slices; `txtodo-tui` (M10) and `txtodo-mcp` (M6) will want a fourth and fifth.
+- Might become: a `connect_uds(path) -> Result<Channel>` in `txtodo-proto` (it already owns the
+  generated client and depends on tonic; adding hyper-util + tower there is one place, not five).
+  Wait for M6, which is the next real consumer.
+
+## 2026-09-12 — real-daemon test harness beside the CLI test runner helper
+
+- Duplicated: spawn `txtodod --dir <tmp>`, poll for the socket (bounded), kill on drop.
+- Where: crates/txtodo-cli/tests/daemon_mode.rs (`Daemon::spawn`, locates or builds the binary),
+  crates/txtodo-daemon/tests/support/mod.rs (`Daemon::start`, `CARGO_BIN_EXE_txtodod`),
+  crates/txtodo-daemon/tests/crash.rs (`spawn`). Constitution §7 forbids cross-slice helpers, so
+  the CLI copy stays; the two daemon copies could share `tests/support`.
