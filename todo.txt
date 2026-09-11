@@ -14,8 +14,8 @@ x 2026-09-11 2026-09-11 diff_lines (Myers, by id else content) and diff_text (ch
 x 2026-09-11 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest
 x 2026-09-11 2026-09-11 ABNF-generated second parser (pest) in tests only, differential on corpus plus 10000 generated lines +m1 @core @test ref:core-pest-differential
 x 2026-09-11 2026-09-11 cargo-fuzz targets parse_line (both modes) and parse_file; one 3600s local run each +m1 @core @test ref:core-fuzz-targets
-(B) 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench
-(B) 2026-09-11 no_std + alloc feature flag builds +m1 @core ref:core-no-std
+x 2026-09-11 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench
+x 2026-09-11 2026-09-11 no_std + alloc feature flag builds +m1 @core ref:core-no-std
 (B) 2026-09-11 Raise budgets.json coveragePercent from 0 to 80 once core tests land +m1 @ratchet ref:ratchet-coverage-80
 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli
 2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli
