@@ -27,6 +27,9 @@ struct Cli {
     /// Do not stamp `id:` on added tasks (overrides config `id_tags`).
     #[arg(long, global = true)]
     no_id: bool,
+    /// Do not archive after `do` (todo.sh -A).
+    #[arg(short = 'A', long, global = true)]
+    no_archive: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -45,6 +48,21 @@ enum Command {
         /// The tasks; each line becomes one task.
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
+    },
+    /// Move completed lines to done.txt and drop blank lines.
+    Archive,
+    /// Remove a task's priority.
+    #[command(visible_alias = "dp")]
+    Depri {
+        /// Line numbers, comma or space separated.
+        #[arg(required = true, num_args = 1..)]
+        items: Vec<String>,
+    },
+    /// Mark tasks done: `x`, today's date, priority kept as `pri:`; then archive.
+    Do {
+        /// Line numbers, comma or space separated.
+        #[arg(required = true, num_args = 1..)]
+        items: Vec<String>,
     },
     /// Print the resolved paths and config.
     Env,
@@ -82,6 +100,14 @@ enum Command {
         /// Search terms; `-term` excludes.
         #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
+    },
+    /// Set a task's priority, A to Z.
+    #[command(visible_alias = "p")]
+    Pri {
+        /// Line number.
+        item: String,
+        /// The new priority letter.
+        priority: String,
     },
     /// List the `.txt` files in the todo directory, or the tasks in FILE.
     #[command(visible_alias = "lf")]
@@ -145,6 +171,8 @@ struct Ctx {
     json: bool,
     /// Stamp `id:` on add (config `id_tags` and not `--no-id`).
     ids: bool,
+    /// `do` archives afterwards (todo.sh default; `-A` turns it off).
+    auto_archive: bool,
     /// The local calendar date at startup.
     today: Date,
 }
@@ -171,6 +199,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     );
     let ctx = Ctx {
         ids: config.id_tags() && !cli.no_id,
+        auto_archive: !cli.no_archive,
         today: clock::today_local(),
         paths,
         config,
@@ -179,6 +208,10 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     match &cli.command {
         Command::Add { text } => commands::add::run(&ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(&ctx, &text.join(" "), true),
+        Command::Archive => commands::archive::run(&ctx),
+        Command::Depri { items } => commands::edit::run_depri(&ctx, items),
+        Command::Do { items } => commands::edit::run_do(&ctx, items),
+        Command::Pri { item, priority } => commands::edit::run_pri(&ctx, item, priority),
         Command::Env => {
             print_env(&ctx);
             Ok(())
