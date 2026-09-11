@@ -1,7 +1,11 @@
-2026-09-12 apps/desktop: Playwright projects for light and dark with toHaveScreenshot (https://playwright.dev/docs/test-snapshots) +m7 @desktop @test
-2026-09-12 Snapshot: main view on a 10k-line fixture, light and dark, id: hidden and decorations visible +m7 @desktop @test
-2026-09-12 Snapshot: popover, detail view, and conflict sheet, each in light and dark +m7 @desktop @test
-2026-09-12 apps/desktop/src: bound CM6 decorations to the visible viewport range so a 10k-line file only decorates the window +m7 @desktop
-2026-09-12 Perf test: load the 10k-line fixture, measure time to first paint, assert ≤ 500 ms on the CI runner +m7 @desktop @test
-2026-09-12 Commit the goldens and document the explicit-update path; no silent regeneration in CI +m7 @desktop @test
+2026-09-12 apps/desktop: add a checked-in generator or committed 10k-line fixture (todo-10k.txt) shared by both the visual snapshots and the perf test +m7 @desktop @test
+2026-09-12 apps/desktop/playwright.config.ts: add light and dark projects with colorScheme + snapshotPathSuffix so one spec runs in both themes +m7 @desktop @test
+2026-09-12 Snapshot: main view on the 10k fixture, light and dark, id: hidden, ref + n/m decorations visible, line numbers on, Add-a-line row present +m7 @desktop @test
+2026-09-12 Snapshot: edit popover and detail view (pinned parent, notes, breadcrumb, footer) and the conflict sheet with M4's three variants, each in light and dark +m7 @desktop @test
+2026-09-12 apps/desktop/src/decorations.ts: bound CM6 line decorations to visibleRanges via StateField so a 10k-line file only decorates the visible window +m7 @desktop
+2026-09-12 apps/desktop/e2e/visual: disable animations, freeze the footer clock, and pin the seed so goldens are deterministic across runs +m7 @desktop @test
+2026-09-12 apps/desktop/e2e/perf.spec.ts: load todo-10k.txt, time first paint to first visible line, assert ≤ 500 ms on the CI runner +m7 @desktop @test
+2026-09-12 Record the ≤ 500 ms first-paint budget in budgets.json (perf note or new perf key) so it has a named check, not a comment-only promise +m7 @desktop
+2026-09-12 Commit the goldens and document the explicit --update-snapshots path; CI runs snapshots without update and fails on any drift +m7 @desktop @test
+2026-09-12 Wire snapshot + perf suites into the gate and CI so both run green on every push (constitution §5: CI is law) +m7 @desktop @test
 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test
