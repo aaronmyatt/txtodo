@@ -27,3 +27,9 @@ _(none)_
 ## Exceptions granted
 
 _(none)_
+
+---
+2026-09-11 · Campaign: coverage floor 0 → 80 (priority 1). Measured after M1 core tests: workspace 97.07%
+line coverage (txtodo-core 88–100% per file; the empty crates' `fn main` are the misses). Set
+`budgets.json.coveragePercent = 80`, `commands.testCoverage --fail-under-lines 80`, justfile, CLAUDE.md row,
+stack.md rows. Priority 1 closed.

@@ -19,7 +19,7 @@ test:
 
 # line coverage against the floor in budgets.json (rustup toolchain: Homebrew cargo lacks llvm-profdata)
 coverage:
-    rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 0
+    rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 80
 
 boundaries:
     .claude/scripts/check-boundaries.sh

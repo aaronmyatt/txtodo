@@ -51,7 +51,7 @@ config, hook, or CI step. The drift audit treats disagreement as a bug.
 | Assertions per function | ≥ 2 | review + heuristic script |
 | Response payload | N/A until M6 (reason in stack.md §6) | re-justify at M6 |
 | Local round trip | < 20 ms p99 | perf test, or N/A with reason |
-| Coverage floor | 0%, never regresses | test runner + CI |
+| Coverage floor | 80%, never regresses | test runner + CI |
 | Queues, caches, buffers, retries, collections | explicit max, always | review + assert |
 
 Budgets may be tuned via budgets.json, but never deleted — only

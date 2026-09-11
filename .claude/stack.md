@@ -28,7 +28,7 @@ Rust 1.95 (edition 2024) Cargo workspace, 12 crates. Derived by `/setup` on 2026
 | Complexity | 1 | clippy [`cognitive_complexity`](https://rust-lang.github.io/rust-clippy/master/index.html#cognitive_complexity) (nursery, enabled by name), `cognitive-complexity-threshold` | 10 |
 | Line width | 2 | [`rustfmt.toml max_width`](https://rust-lang.github.io/rustfmt/#max_width) | 100 |
 | Assertions / fn | 3 | `.claude/scripts/check-assertions.sh` (report only) | 2 |
-| Coverage | 2 | [`cargo llvm-cov --fail-under-lines`](https://github.com/taiki-e/cargo-llvm-cov#usage) | 0 (ratchet → 80) |
+| Coverage | 2 | [`cargo llvm-cov --fail-under-lines`](https://github.com/taiki-e/cargo-llvm-cov#usage) | 80 (promoted 2026-09-11 from the measured 0; workspace measured 97.07%) |
 | Boundaries (§2) | 3 | `.claude/scripts/check-boundaries.sh` against `budgets.json.slices.allowedDeps` | — |
 | Exhaustive match (§3) | 1 | rustc: `match` is exhaustive by construction; [`non_exhaustive_omitted_patterns`](https://doc.rust-lang.org/rustc/lints/listing/allowed-by-default.html) not enabled | — |
 | Immutability (§3) | 1 | rustc: bindings immutable unless `mut`; `unused_mut` under `-D warnings` | — |
@@ -51,7 +51,7 @@ From `budgets.json.commands`. Proven 2026-09-11: clean tree / deliberately broke
 | lint | `cargo clippy --workspace --all-targets -- -D warnings` | 0 | 1 (fn with 6 params) |
 | typecheck | `cargo check --workspace --all-targets` | 0 | 1 (`-> u8 { "no" }`) |
 | test | `cargo test --workspace` | 0 | 1 (canary test) |
-| testCoverage | `rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 0` | 0 | not exercised: floor is 0 |
+| testCoverage | `rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 80` | 0 (97.07% measured) | not exercised since promotion |
 | boundaries | `.claude/scripts/check-boundaries.sh` | 0 | 1 (query → store edge) |
 | fileLength | `.claude/scripts/check-file-length.sh` | 0 | 1 (401-line file) |
 | assertions | `.claude/scripts/check-assertions.sh` | 0 | 0, reported `fn naked has 0 (min 2)` |
@@ -96,7 +96,7 @@ exit $status
 - **Swallowed errors:** `let _ = fallible()` and `.ok()` discard are legal; review greps for them. No clippy lint covers the intent without false positives.
 - **Bounded loops / collections:** review + assert. No mechanical form.
 - **Assertions ≥ 2:** heuristic reports, review decides (D3).
-- **Coverage floor 0:** measured, not chosen. First ratchet promotion raises it to 80 once M1 has tests.
+- **Coverage floor 80:** promoted from the measured 0 on 2026-09-11 once M1 core tests landed (97.07% measured).
 
 ## Idioms
 
