@@ -7,8 +7,10 @@
 
 extern crate alloc;
 
+mod edit;
 mod error;
 mod file;
+mod format;
 mod parse;
 mod quirks;
 mod scanner;
@@ -18,7 +20,9 @@ mod types;
 mod ulid;
 pub mod urls;
 
+pub use edit::{apply, Edit, EditError};
 pub use error::ParseError;
+pub use format::{description_start, emit_prefix, Prefix};
 pub use file::{parse_file, File, OwnedLine};
 pub use parse::{parse_line, parse_line_with_schemes};
 pub use quirks::Quirks;
