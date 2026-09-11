@@ -1,19 +1,16 @@
-x 2026-09-11 2026-09-11 Create the Cargo workspace with 12 empty crates per plan §2 +m0 @setup
-x 2026-09-11 2026-09-11 Add justfile with check test bench release recipes +m0 @setup
-x 2026-09-11 2026-09-11 Add GitHub Actions matrix ubuntu macos windows running the check commands and cargo deny +m0 @setup
 (A) 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci
 (A) 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core
 (A) 2026-09-11 Write docs/adr/0000-template.md +m0 @docs
-(A) 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs
-(A) 2026-09-11 Update plan §1 decision 10 names to txtodod txtodo .txtodo/ _txtodo._udp _txtodo-mcp._tcp +m0 @docs
-(A) 2026-09-11 Write specs/todotxt.abnf from design §2.3 plus the ref slug grammar from plan §3.2.1 +m0 @specs
-(A) 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs
-(A) 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 edge case and the ref cases +m0 @corpus
-(A) 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus
-(A) 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs
-(B) 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core
-(B) 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core
-(B) 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core
+(A) 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs ref:fuzz-ci-smoke
+(A) 2026-09-11 Update plan §1 decision 10 names to txtodod txtodo .txtodo/ _txtodo._udp _txtodo-mcp._tcp +m0 @docs ref:fuzz-stub-target
+(A) 2026-09-11 Write specs/todotxt.abnf from design §2.3 plus the ref slug grammar from plan §3.2.1 +m0 @specs ref:adr-template
+(A) 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs ref:adr-decisions
+(A) 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 edge case and the ref cases +m0 @corpus ref:rename-plan-names
+(A) 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:abnf-spec
+(A) 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs ref:ref-directories-spec
+(B) 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core ref:corpus-seed
+(B) 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:corpus-token-oracle
+(B) 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:open-questions
 (B) 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core
 (B) 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core
 (B) 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core
@@ -131,3 +128,6 @@ x 2026-09-11 2026-09-11 Add GitHub Actions matrix ubuntu macos windows running t
 2026-09-11 Answer plan Q3: rec: recurrence in core or plugin +questions @human
 2026-09-11 Answer plan Q4: iOS Local Network prompt vs relay-only MCP +questions @human
 2026-09-11 Answer plan Q5: public relay or self-host only +questions @human
+x 2026-09-11 2026-09-11 Create the Cargo workspace with 12 empty crates per plan §2 +m0 @setup
+x 2026-09-11 2026-09-11 Add justfile with check test bench release recipes +m0 @setup
+x 2026-09-11 2026-09-11 Add GitHub Actions matrix ubuntu macos windows running the check commands and cargo deny +m0 @setup
