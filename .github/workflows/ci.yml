@@ -53,8 +53,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: thumbv7em-none-eabihf
+      # `targets:` on the action would land on `stable`, but rust-toolchain.toml overrides the
+      # build to 1.95.0 (E0463 in CI 2026-09-11). rustup target add follows the override.
+      # https://rust-lang.github.io/rustup/overrides.html
+      - run: rustup target add thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
 
@@ -97,7 +99,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "crates/txtodo-core/fuzz -> target"
-      - uses: taiki-e/install-action@cargo-fuzz
+      # install-action has no cargo-fuzz manifest (the @cargo-fuzz ref resolved with an empty
+      # tool, CI 2026-09-11); build it on nightly. rust-cache keeps ~/.cargo/bin between runs.
+      # https://rust-fuzz.github.io/book/cargo-fuzz/setup.html
+      - run: cargo +nightly install cargo-fuzz --locked
       - name: fuzz parse_line for 60 s
         run: cargo +nightly fuzz run --fuzz-dir crates/txtodo-core/fuzz parse_line -- -max_total_time=60
       - name: keep any crash input

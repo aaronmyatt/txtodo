@@ -1,2 +1,5 @@
+# rustfmt.toml pins newline_style = "Unix"; Windows git would otherwise check out CRLF and fail
+# `cargo fmt --check` (seen in CI 2026-09-11). https://git-scm.com/docs/gitattributes#_eol
+*.rs text eol=lf
 # corpus bytes are the oracle: never normalise endings. https://git-scm.com/docs/gitattributes#_text
 corpus/* -text
