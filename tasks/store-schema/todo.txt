@@ -1,0 +1,8 @@
+2026-09-11 Dependency ask: rusqlite with the bundled feature (ADR 0004) — one crate, native build step +m3 @store
+2026-09-11 migrations/0001.sql: ops, ops_file_hlc index, projections, snapshots, meta exactly as plan M3; embedded with include_str! and applied by PRAGMA user_version +m3 @store
+2026-09-11 Store::open(path): WAL journal mode, synchronous=NORMAL, foreign keys on, runs pending migrations in one transaction +m3 @store
+2026-09-11 Ops API: append(&[Op]) -> Range<Seq> in one transaction; for_file(file, since: Seq); between(file, from: &Hlc, to: &Hlc); last_seq(); no update or delete methods exist +m3 @store
+2026-09-11 Projection API: put(file, bytes, hash, written_at) upsert; get(file) -> Option<Projection> +m3 @store
+2026-09-11 Snapshot and meta API: put_snapshot(file, seq, state) / latest_snapshot(file); meta_get/meta_set for device_id and schema_version +m3 @store
+2026-09-11 Tests: open twice is idempotent; duplicate op_id is rejected; journal_mode reads back WAL; between() is ordered by (hlc_wall, hlc_counter) +m3 @store @test
+2026-09-11 Complete the parent line in ./todo.txt +m3 @store

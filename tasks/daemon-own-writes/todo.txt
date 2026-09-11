@@ -1,0 +1,6 @@
+2026-09-11 Dependency ask: blake3 for projection hashes (fast, fixed 32 bytes) +m3 @daemon
+2026-09-11 expected.rs: ExpectedWrites ring of RECENT_WRITES = 8 (hash, written_at) with EXPECTED_WRITE_TTL_MS = 2000; arm() before rename, is_ours(hash, now) consumes a match, expired entries are pruned on every call +m3 @daemon
+2026-09-11 ExternalChange handler: hash the bytes just read; equal to current projection hash → ignore; matches an armed expected write → ignore and consume; otherwise reconcile +m3 @daemon
+2026-09-11 tracing event ignored_own_write{file, reason} for both ignore paths so doctor --verbose can show them +m3 @daemon
+2026-09-11 Tests with an injected clock: own write then its event → no ops, no write; two rapid writes then one coalesced event → no ops; event after TTL with changed bytes → reconciles; event after TTL with identical bytes → no write +m3 @daemon @test
+2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon
