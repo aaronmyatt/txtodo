@@ -112,11 +112,17 @@
     ],
     "baselinePrune": null,
     "specsMirror": ".claude/scripts/check-specs-mirror.sh",
-    "corpus": ".claude/scripts/check-corpus-oracle.sh"
+    "corpus": ".claude/scripts/check-corpus-oracle.sh",
+    "benchCheck": ".claude/scripts/check-bench.sh",
+    "noStd": "cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf"
   },
   "canary": {
     "source": ".claude/canary/failing_test.rs",
     "target": "crates/txtodo-query/tests/__setup_canary__.rs"
   },
-  "constitutionVersion": "2.0.0"
+  "constitutionVersion": "2.0.0",
+  "perf": {
+    "parse100kMs": 150,
+    "note": "plan M1/§5: parse 100k lines ≤ 150 ms on the Linux CI runner; enforced by .claude/scripts/check-bench.sh"
+  }
 }

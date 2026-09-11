@@ -47,6 +47,26 @@ jobs:
           N=$(git diff --numstat "origin/${{ github.base_ref }}"...HEAD -- . ':!Cargo.lock' | awk '{a+=$1+$2} END{print a+0}')
           echo "changed lines: $N (max $MAX)"; [ "$N" -le "$MAX" ]
 
+  no-std:
+    # core must build without std (plan M1): a target with no OS proves no std:: path leaked in
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
+
+  bench:
+    # perf budget (plan §5): parse 100k lines ≤ budgets.json.perf.parse100kMs on this runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: .claude/scripts/check-bench.sh
+
   coverage:
     runs-on: ubuntu-latest
     steps:

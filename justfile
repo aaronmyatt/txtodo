@@ -3,7 +3,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # fmt + clippy + typecheck + test + boundaries + file length (what the gate and CI run)
-check: fmt lint typecheck test boundaries
+check: fmt lint typecheck test boundaries no-std
 
 fmt:
     cargo fmt --all --check
@@ -43,6 +43,14 @@ fuzz-seed:
 
 bench:
     cargo bench --workspace
+
+# perf budget: parse_file_100k mean ≤ budgets.json.perf.parse100kMs
+bench-check:
+    .claude/scripts/check-bench.sh
+
+# core must build with no std at all (plan M1); needs `rustup target add thumbv7em-none-eabihf`
+no-std:
+    cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf
 
 corpus:
     .claude/scripts/check-corpus-oracle.sh
