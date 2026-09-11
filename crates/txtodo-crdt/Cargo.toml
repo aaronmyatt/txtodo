@@ -11,6 +11,8 @@ description = "Loro document, ops to/from Loro, reconciler."
 txtodo-model.workspace = true
 txtodo-store.workspace = true
 txtodo-core.workspace = true
+# https://docs.rs/loro — CRDT engine: movable list, text, maps (ADR 0002; LWW stamping ADR 0013)
+loro = "1.16.0"
 
 [lints]
 workspace = true
