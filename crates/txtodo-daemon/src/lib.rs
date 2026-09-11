@@ -5,6 +5,7 @@
 pub mod clock;
 pub mod expected;
 mod fields;
+pub mod mutation;
 pub mod reconcile;
 pub mod state;
 pub mod textedit;
