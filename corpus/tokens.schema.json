@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://txtodo.dev/corpus/tokens.schema.json",
+  "title": "txtodo corpus token oracle",
+  "description": "One entry per line of the sibling .txt, in file order, blank lines included. Offsets are byte offsets into `raw` (the line without its ending and without a file BOM). Spans are sorted, contiguous, and cover [0, byteLength(raw)) exactly (plan M1: tokenize covers every byte).",
+  "type": "array",
+  "items": {
+    "type": "object", "required": ["raw", "spans"], "additionalProperties": false,
+    "properties": {
+      "raw": { "type": "string" },
+      "spans": { "type": "array", "items": {
+        "type": "object", "required": ["kind", "start", "end"], "additionalProperties": false,
+        "properties": {
+          "kind": { "enum": ["CompletionMarker", "CompletionDate", "CreationDate", "Priority", "Project", "Context", "TagKey", "TagValue", "IdTag", "Url", "Text", "Whitespace"] },
+          "start": { "type": "integer", "minimum": 0 },
+          "end": { "type": "integer", "minimum": 0 }
+        } } }
+    }
+  }
+}

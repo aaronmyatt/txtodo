@@ -1,0 +1,5 @@
+[
+ {"raw":"2026-09-11 LF line","spans":[{"kind":"CreationDate","start":0,"end":10},{"kind":"Whitespace","start":10,"end":11},{"kind":"Text","start":11,"end":13},{"kind":"Whitespace","start":13,"end":14},{"kind":"Text","start":14,"end":18}]},
+ {"raw":"2026-09-11 CRLF line","spans":[{"kind":"CreationDate","start":0,"end":10},{"kind":"Whitespace","start":10,"end":11},{"kind":"Text","start":11,"end":15},{"kind":"Whitespace","start":15,"end":16},{"kind":"Text","start":16,"end":20}]},
+ {"raw":"2026-09-11 LF again","spans":[{"kind":"CreationDate","start":0,"end":10},{"kind":"Whitespace","start":10,"end":11},{"kind":"Text","start":11,"end":13},{"kind":"Whitespace","start":13,"end":14},{"kind":"Text","start":14,"end":19}]}
+]

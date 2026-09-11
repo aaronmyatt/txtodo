@@ -1,0 +1,4 @@
+[
+ {"raw":"2026-09-11 File starts with a BOM +bom","spans":[{"kind":"CreationDate","start":0,"end":10},{"kind":"Whitespace","start":10,"end":11},{"kind":"Text","start":11,"end":15},{"kind":"Whitespace","start":15,"end":16},{"kind":"Text","start":16,"end":22},{"kind":"Whitespace","start":22,"end":23},{"kind":"Text","start":23,"end":27},{"kind":"Whitespace","start":27,"end":28},{"kind":"Text","start":28,"end":29},{"kind":"Whitespace","start":29,"end":30},{"kind":"Text","start":30,"end":33},{"kind":"Whitespace","start":33,"end":34},{"kind":"Project","start":34,"end":38}]},
+ {"raw":"2026-09-11 Second line","spans":[{"kind":"CreationDate","start":0,"end":10},{"kind":"Whitespace","start":10,"end":11},{"kind":"Text","start":11,"end":17},{"kind":"Whitespace","start":17,"end":18},{"kind":"Text","start":18,"end":22}]}
+]
