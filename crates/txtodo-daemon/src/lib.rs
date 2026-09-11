@@ -9,6 +9,7 @@ pub mod expected;
 mod external;
 mod fields;
 pub mod handle;
+pub mod history;
 pub mod mutation;
 pub mod reconcile;
 pub mod state;

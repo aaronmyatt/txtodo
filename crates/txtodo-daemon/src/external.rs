@@ -2,7 +2,7 @@
 //! paths. Split from `actor.rs` for the file budget; same `impl FileActor`.
 
 use crate::actor::{Commit, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
-use crate::handle::{ActorError, Change};
+use crate::handle::{ActorError, Applied, Change};
 use crate::reconcile::reconcile;
 use crate::state::DocState;
 use crate::write::read_or_empty;
@@ -113,5 +113,45 @@ impl FileActor {
             self.lock_store().put_snapshot(&self.cfg.path, &snap)?;
         }
         Ok(())
+    }
+
+    /// Appends inverse ops for the newest `steps` ops (design §4.8: undo is ops, and it syncs).
+    pub(crate) fn on_undo(
+        &mut self,
+        steps: u16,
+        principal: Principal,
+    ) -> Result<Applied, ActorError> {
+        let kinds = {
+            let store = self.lock_store();
+            crate::history::undo_ops(&store, &self.cfg.path, steps)?
+        };
+        let mut next = self.state.clone();
+        for kind in &kinds {
+            next.apply(kind)?;
+        }
+        let bytes = next.to_bytes();
+        let ops = self.stamp(kinds, principal)?;
+        let write = bytes != self.projection;
+        let change = self.commit(Commit {
+            ops,
+            next,
+            bytes,
+            write,
+            snapshot: false,
+        })?;
+        let applied = u32::try_from(change.ops.len()).unwrap_or(u32::MAX);
+        Ok(Applied {
+            applied,
+            hash: change.hash,
+            hlc: self.hlc,
+        })
+    }
+
+    /// The document as it was at `at_wall_ms` (inclusive). A view; the file is untouched.
+    pub(crate) fn on_checkout(&self, at_wall_ms: u64) -> Result<Vec<u8>, ActorError> {
+        let store = self.lock_store();
+        let bytes = crate::history::checkout(&store, &self.cfg.path, at_wall_ms)?;
+        debug_assert!(bytes.len() <= txtodo_store::MAX_PROJECTION_BYTES);
+        Ok(bytes)
     }
 }

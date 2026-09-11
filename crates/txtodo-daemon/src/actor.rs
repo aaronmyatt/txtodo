@@ -140,11 +140,15 @@ impl FileActor {
             ActorMsg::Subscribe { reply } => {
                 let _ = reply.send(self.changes.subscribe());
             }
-            ActorMsg::Undo { reply, .. } => {
-                let _ = reply.send(Err(ActorError::Unsupported("undo")));
+            ActorMsg::Undo {
+                steps,
+                principal,
+                reply,
+            } => {
+                let _ = reply.send(self.on_undo(steps, principal));
             }
-            ActorMsg::Checkout { reply, .. } => {
-                let _ = reply.send(Err(ActorError::Unsupported("checkout")));
+            ActorMsg::Checkout { at_wall_ms, reply } => {
+                let _ = reply.send(self.on_checkout(at_wall_ms));
             }
         }
     }
