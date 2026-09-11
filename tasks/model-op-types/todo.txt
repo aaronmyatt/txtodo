@@ -4,4 +4,4 @@ x 2026-09-11 2026-09-11 op.rs: Op, OpKind (Insert SetField EditText Move NotesEd
 x 2026-09-11 2026-09-11 Serde derives on every op type; postcard is the one payload codec (plan M4 uses it on the wire) — adding serde+postcard is a dependency ask per plan §0 +m3 @model
 x 2026-09-11 2026-09-11 Display for Principal: you@<device> / agent:<name>@<device> / external@<device> (design §4.8) +m3 @model
 x 2026-09-11 2026-09-11 Tests: proptest Hlc is a total order and tick is monotone; Op postcard round trip; Display goldens +m3 @model @test
-2026-09-11 Complete the parent line in ./todo.txt +m3 @model
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @model
