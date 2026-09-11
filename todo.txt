@@ -1,49 +1,32 @@
-x 2026-09-11 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core ref:core-api-types
-x 2026-09-11 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core ref:core-url-detection
-x 2026-09-11 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core ref:core-scanner-tokenize
-x 2026-09-11 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:core-parser-strict
-x 2026-09-11 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:core-parser-lenient
-x 2026-09-11 2026-09-11 Task views projects contexts tags tag id ref_slug with slug validation +m1 @core ref:core-task-views
-x 2026-09-11 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core ref:core-parse-file
-x 2026-09-11 2026-09-11 just corpus: every corpus line round-trips byte-for-byte and matches its .tokens.json +m1 @core @test ref:core-corpus-test
-x 2026-09-11 2026-09-11 Named unit test for every row of the design §2.4 edge-case table +m1 @core @test ref:core-edge-case-tests
-x 2026-09-11 2026-09-11 Byte-preserving formatter with field-level dirtiness +m1 @core ref:core-formatter
-x 2026-09-11 2026-09-11 Edit builder and apply: set/clear priority, set_tag, remove_tag, append, prepend, set_description +m1 @core ref:core-edit-apply
-x 2026-09-11 2026-09-11 complete() writes pri: per spec and uncomplete() restores priority and removes pri: +m1 @core ref:core-complete-pri
-x 2026-09-11 2026-09-11 diff_lines (Myers, by id else content) and diff_text (char-level) +m1 @core ref:core-diff
-x 2026-09-11 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest
-x 2026-09-11 2026-09-11 ABNF-generated second parser (pest) in tests only, differential on corpus plus 10000 generated lines +m1 @core @test ref:core-pest-differential
-x 2026-09-11 2026-09-11 cargo-fuzz targets parse_line (both modes) and parse_file; one 3600s local run each +m1 @core @test ref:core-fuzz-targets
-x 2026-09-11 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench
-x 2026-09-11 2026-09-11 no_std + alloc feature flag builds +m1 @core ref:core-no-std
-x 2026-09-11 2026-09-11 Raise budgets.json coveragePercent from 0 to 80 once core tests land +m1 @ratchet ref:ratchet-coverage-80
-2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli
-2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli
-2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli
-2026-09-11 add stamps creation date and id: tag; --no-id flag; id_tags config +m2 @cli
-2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli
-2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli
-2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test
-2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test
-2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test
-2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model
-2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store
-2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon
-2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon
-2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon
-2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon
-2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon
-2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon
-2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli
-2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon
-2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli
-2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli
-2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon
-2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test
-2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test
-2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test
-2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test
-2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf
+(A) 2026-09-11 Push main and confirm all six CI jobs are green +m1 @ci
+(A) 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli
+(A) 2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli
+(A) 2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli
+(A) 2026-09-11 add stamps creation date and id: tag; --no-id flag; id_tags config +m2 @cli
+(A) 2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli
+(A) 2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli
+(A) 2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test
+(A) 2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test
+(A) 2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test
+(B) 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test
+(B) 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model
+(B) 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store
+(B) 2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon
+(B) 2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon
+(B) 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon
+(B) 2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon
+(B) 2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon
+(B) 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon
+(B) 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli
+(B) 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli
+(B) 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli
+(B) 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon
+(B) 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon
+(B) 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test
+(B) 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test
+(B) 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test
+(B) 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test
+(B) 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf
 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon
 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model
@@ -131,3 +114,22 @@ x 2026-09-11 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs
 x 2026-09-11 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle
 x 2026-09-11 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core ref:fuzz-stub-target
 x 2026-09-11 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke
+x 2026-09-11 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core ref:core-api-types
+x 2026-09-11 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core ref:core-url-detection
+x 2026-09-11 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core ref:core-scanner-tokenize
+x 2026-09-11 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:core-parser-strict
+x 2026-09-11 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:core-parser-lenient
+x 2026-09-11 2026-09-11 Task views projects contexts tags tag id ref_slug with slug validation +m1 @core ref:core-task-views
+x 2026-09-11 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core ref:core-parse-file
+x 2026-09-11 2026-09-11 just corpus: every corpus line round-trips byte-for-byte and matches its .tokens.json +m1 @core @test ref:core-corpus-test
+x 2026-09-11 2026-09-11 Named unit test for every row of the design §2.4 edge-case table +m1 @core @test ref:core-edge-case-tests
+x 2026-09-11 2026-09-11 Byte-preserving formatter with field-level dirtiness +m1 @core ref:core-formatter
+x 2026-09-11 2026-09-11 Edit builder and apply: set/clear priority, set_tag, remove_tag, append, prepend, set_description +m1 @core ref:core-edit-apply
+x 2026-09-11 2026-09-11 complete() writes pri: per spec and uncomplete() restores priority and removes pri: +m1 @core ref:core-complete-pri
+x 2026-09-11 2026-09-11 diff_lines (Myers, by id else content) and diff_text (char-level) +m1 @core ref:core-diff
+x 2026-09-11 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest
+x 2026-09-11 2026-09-11 ABNF-generated second parser (pest) in tests only, differential on corpus plus 10000 generated lines +m1 @core @test ref:core-pest-differential
+x 2026-09-11 2026-09-11 cargo-fuzz targets parse_line (both modes) and parse_file; one 3600s local run each +m1 @core @test ref:core-fuzz-targets
+x 2026-09-11 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench
+x 2026-09-11 2026-09-11 no_std + alloc feature flag builds +m1 @core ref:core-no-std
+x 2026-09-11 2026-09-11 Raise budgets.json coveragePercent from 0 to 80 once core tests land +m1 @ratchet ref:ratchet-coverage-80
