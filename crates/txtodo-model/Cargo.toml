@@ -9,6 +9,14 @@ description = "Workspace tree, task ids, HLC, op types."
 
 [dependencies]
 txtodo-core.workspace = true
+# https://serde.rs — derives on every op type; postcard is the one payload codec (plan M4 wire, M3 store)
+serde = { version = "1", features = ["derive"] }
+# https://docs.rs/postcard — compact, no_std-friendly serde format
+postcard = { version = "1", features = ["alloc"] }
+
+[dev-dependencies]
+# https://docs.rs/proptest — Hlc total order and monotone tick
+proptest = "1"
 
 [lints]
 workspace = true
