@@ -1,0 +1,31 @@
+// GENERATED from specs/todotxt.abnf by tests/differential.rs. Do not edit: the test regenerates and diffs.
+line = { completed ~ EOI | incomplete ~ EOI | blank ~ EOI }
+incomplete = { priority ~ (SP ~ date)? ~ (SP ~ description)? ~ EOI | date ~ (SP ~ description)? ~ EOI | description ~ EOI }
+completed = { "x" ~ SP ~ date ~ (SP ~ date)? ~ (SP ~ description)? }
+priority = { "(" ~ 'A'..'Z' ~ ")" }
+date = { DIGIT{4} ~ "-" ~ DIGIT{2} ~ "-" ~ DIGIT{2} }
+blank = { "" }
+description = { word ~ (SP ~ word)* }
+word = { project | context | tag | plain }
+project = { "+" ~ NONSP+ }
+context = { "@" ~ NONSP+ }
+tag = { key ~ ":" ~ NONSP+ }
+key = { ('!'..'9' | ';'..'~' | '\u{80}'..'\u{10FFFF}')+ }
+plain = { NONSP+ }
+NONSP = { '!'..'~' | '\u{80}'..'\u{10FFFF}' }
+ref_tag = { "ref:" ~ slug }
+slug = { slug_start ~ slug_char{0,63} }
+slug_start = { 'a'..'z' | DIGIT }
+slug_char = { slug_start | "." | "_" | "-" }
+id_tag = { "id:" ~ ulid }
+ulid = { (DIGIT | 'A'..'H' | 'J'..'K' | 'M'..'N' | 'P'..'T' | 'V'..'Z'){26} }
+pri_tag = { "pri:" ~ 'A'..'Z' }
+due_tag = { "due:" ~ date }
+t_tag = { "t:" ~ date }
+rec_tag = { "rec:" ~ ("+")? ~ DIGIT+ ~ ("d" | "w" | "m" | "y") }
+h_tag = { "h:1" }
+
+// RFC 5234 core rules the ABNF relies on, and the anchored entry point.
+DIGIT = { '0'..'9' }
+SP = { " " }
+entry = { SOI ~ line }
