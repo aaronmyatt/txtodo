@@ -1,0 +1,6 @@
+2026-09-12 Test: first notes write on a ref-less line is one op batch; the parent file changes only that line (History has one stamp) +m5 @test
+2026-09-12 Build the 3-level fixture with todo.txt and done.txt; assert rule-5 done/total per node, no recursion +m5 @test
+2026-09-12 Test: archiving a parent keeps the ref: tag and the directory in place +m5 @test
+2026-09-12 Test: deleting a line with a ref: keeps the directory; prune --orphans then lists it +m5 @test
+2026-09-12 Test: prune --orphans refuses without --yes and deletes with --yes +m5 @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @test

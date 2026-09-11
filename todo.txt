@@ -20,11 +20,11 @@ x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the s
 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree
 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation
 2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc
-2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon
-2026-09-11 txtodo open, notes, sub, prune --orphans commands +m5 @cli
-2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon
-2026-09-11 Tests: one op batch on first notes write, progress on a 3-level fixture, archive and delete keep the dir, prune finds the orphan +m5 @test
-2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test
+2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon ref:daemon-ref-move
+2026-09-11 txtodo open, notes, sub, prune --orphans commands +m5 @cli ref:cli-ref-commands
+2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon ref:proto-tree-progress
+2026-09-11 Tests: one op batch on first notes write, progress on a 3-level fixture, archive and delete keep the dir, prune finds the orphan +m5 @test ref:test-m5-acceptance
+2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test ref:test-nested-ref-sync
 2026-09-11 rmcp server with tools resources prompts from design §6.3-6.4 plus todo_notes_get and todo_notes_set +m6 @mcp
 2026-09-11 Transports txtodo mcp --stdio and Streamable HTTP on 127.0.0.1:8636/mcp with --lan advertising _txtodo-mcp._tcp +m6 @mcp
 2026-09-11 Macaroon-style tokens with scope project context file expires quarantine caveats and txtodo token create|list|revoke|attenuate +m6 @mcp @cli
