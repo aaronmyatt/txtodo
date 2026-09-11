@@ -10,3 +10,6 @@ mod op;
 pub use hlc::{Hlc, HlcError};
 pub use ids::{DeviceId, FILE_PATH_MAX_BYTES, FilePath, FilePathError, OpId, TaskId, TokenId};
 pub use op::{Field, FieldMismatch, FieldValue, Op, OpKind, Principal, TextEdit, set_field};
+
+#[cfg(test)]
+mod op_tests;
