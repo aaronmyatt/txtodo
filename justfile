@@ -34,6 +34,13 @@ deny:
 fuzz target secs="60":
     PATH="$(dirname "$(rustup which --toolchain nightly cargo)"):$PATH" cargo fuzz run --fuzz-dir crates/txtodo-core/fuzz {{target}} -- -max_total_time={{secs}}
 
+# regenerate the fuzz seed corpora (gitignored) from corpus/*.txt
+fuzz-seed:
+    rm -rf crates/txtodo-core/fuzz/corpus && mkdir -p crates/txtodo-core/fuzz/corpus/{parse_line,parse_file,slug}
+    cat corpus/*.txt | grep -v '^$' | awk '{ print > ("crates/txtodo-core/fuzz/corpus/parse_line/seed-" NR ".txt") }'
+    cp corpus/*.txt crates/txtodo-core/fuzz/corpus/parse_file/
+    printf 'q4-roadmap' > crates/txtodo-core/fuzz/corpus/slug/valid.txt; printf '../escape' > crates/txtodo-core/fuzz/corpus/slug/traversal.txt
+
 bench:
     cargo bench --workspace
 
