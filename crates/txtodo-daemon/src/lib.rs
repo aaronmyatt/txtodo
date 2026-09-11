@@ -12,14 +12,14 @@ pub mod mutation;
 pub mod reconcile;
 pub mod state;
 pub mod textedit;
+pub mod walker;
 pub mod write;
 
+#[cfg(test)]
+mod actor_tests;
 #[cfg(test)]
 mod mutation_tests;
 #[cfg(test)]
 mod reconcile_tests;
 #[cfg(test)]
 mod state_tests;
-
-#[cfg(test)]
-mod actor_tests;
