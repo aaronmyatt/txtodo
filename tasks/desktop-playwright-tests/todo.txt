@@ -1,0 +1,9 @@
+2026-09-12 apps/desktop/playwright.config.ts plus a fixture spawning a real txtodod on a tempdir workspace seeded with todo.txt +m7 @desktop @test
+2026-09-12 Test: click a line opens the popover pre-filled with the raw line including id: +m7 @desktop @test
+2026-09-12 Test: Enter saves; the file on disk changes only that line (byte-diff before/after) +m7 @desktop @test
+2026-09-12 Test: double-click opens the detail view with pinned parent, notes editor, and sub-list +m7 @desktop @test
+2026-09-12 Test: typing into empty notes creates the ref directory and notes.md on first keystroke (§3.2.4 lazy creation) +m7 @desktop @test
+2026-09-12 Test: double-clicking a sub-list line nests the breadcrumb todo.txt › N › q4-roadmap/todo.txt › M +m7 @desktop @test
+2026-09-12 Test: a second daemon injecting concurrent ops makes the conflict sheet appear (needs_review, M4 variants) +m7 @desktop @test
+2026-09-12 Wire the Playwright suite into the gate and CI so it runs green on every push +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test

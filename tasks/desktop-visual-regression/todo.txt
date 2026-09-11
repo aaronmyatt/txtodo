@@ -1,0 +1,7 @@
+2026-09-12 apps/desktop: Playwright projects for light and dark with toHaveScreenshot (https://playwright.dev/docs/test-snapshots) +m7 @desktop @test
+2026-09-12 Snapshot: main view on a 10k-line fixture, light and dark, id: hidden and decorations visible +m7 @desktop @test
+2026-09-12 Snapshot: popover, detail view, and conflict sheet, each in light and dark +m7 @desktop @test
+2026-09-12 apps/desktop/src: bound CM6 decorations to the visible viewport range so a 10k-line file only decorates the window +m7 @desktop
+2026-09-12 Perf test: load the 10k-line fixture, measure time to first paint, assert ≤ 500 ms on the CI runner +m7 @desktop @test
+2026-09-12 Commit the goldens and document the explicit-update path; no silent regeneration in CI +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test

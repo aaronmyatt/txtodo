@@ -1,0 +1,7 @@
+2026-09-12 .claude/stack.md: add a TS/Svelte toolchain table (prettier, eslint, svelte-check + tsc, vitest + Playwright) with versions +m7 @setup
+2026-09-12 .claude/stack.md: map each constitution budget (fn/file length, params, nesting, complexity, line width, assertions) to a TS/Svelte tool or review, same number +m7 @setup
+2026-09-12 .claude/budgets.json: add apps/desktop format/lint/typecheck/test commands and re-run /setup to derive the diff before writing +m7 @setup
+2026-09-12 .claude/stack.md: wire feedback/gate per-file and whole-tree commands for apps/desktop without touching the Rust commands +m7 @setup
+2026-09-12 .claude/stack.md: record the Lezer grammar and Playwright snapshots as generated artifacts (diff-budget exempt, committed alone) +m7 @setup
+2026-09-12 Confirm the frozen-path write to .claude/stack.md and .claude/budgets.json is asked, never silent +m7 @setup
+2026-09-12 Complete the parent line in ./todo.txt +m7 @setup
