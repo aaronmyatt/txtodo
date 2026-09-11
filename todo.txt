@@ -1,5 +1,5 @@
 x 2026-09-11 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model ref:model-op-types
-(B) 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store ref:store-schema
+x 2026-09-11 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store ref:store-schema
 (B) 2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon ref:proto-grpc
 (B) 2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon ref:daemon-file-actor
 (B) 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon ref:daemon-watcher

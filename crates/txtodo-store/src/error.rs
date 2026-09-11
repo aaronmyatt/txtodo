@@ -35,6 +35,10 @@ pub enum StoreError {
     BatchTooLarge(usize),
     /// A stored path failed `FilePath::new` (the database was edited by hand).
     BadPath(String),
+    /// `put_projection` was given more than `MAX_PROJECTION_BYTES`.
+    ProjectionTooLarge(usize),
+    /// A stored hash is not 32 bytes (the database was edited by hand); names the file.
+    BadHash(String),
 }
 
 impl StoreError {
@@ -85,6 +89,10 @@ impl fmt::Display for StoreError {
                 write!(f, "append called with {n} ops, over the batch limit")
             }
             StoreError::BadPath(p) => write!(f, "stored file path {p:?} is invalid"),
+            StoreError::ProjectionTooLarge(n) => {
+                write!(f, "projection of {n} bytes is over the size limit")
+            }
+            StoreError::BadHash(file) => write!(f, "stored hash for {file} is not 32 bytes"),
         }
     }
 }
@@ -97,7 +105,9 @@ impl std::error::Error for StoreError {
             StoreError::SchemaTooNew { .. }
             | StoreError::EmptyBatch
             | StoreError::BatchTooLarge(_)
-            | StoreError::BadPath(_) => None,
+            | StoreError::BadPath(_)
+            | StoreError::ProjectionTooLarge(_)
+            | StoreError::BadHash(_) => None,
         }
     }
 }

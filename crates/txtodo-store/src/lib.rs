@@ -6,9 +6,11 @@
 
 mod error;
 mod ops;
+mod projections;
 
 pub use error::StoreError;
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored};
+pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 
 use rusqlite::Connection;
 use std::path::Path;
