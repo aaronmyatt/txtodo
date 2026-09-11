@@ -77,17 +77,22 @@ pub fn run(ctx: &Ctx, input: &str, multi: bool) -> Result<(), CliError> {
         vec![input]
     };
     debug_assert!(!pieces.is_empty(), "non-blank input has a line");
+
+    let mut added: Vec<(usize, String)> = Vec::with_capacity(pieces.len());
     for piece in pieces {
         let id = if ctx.ids {
             Some(clock::new_ulid()?)
         } else {
             None
         };
-        let (number, raw) = add_line(&mut file, piece, ctx.today, id)?;
+        added.push(add_line(&mut file, piece, ctx.today, id)?);
+    }
+    store::write(&ctx.paths.todo, &file)?;
+    debug_assert!(!added.is_empty(), "every non-blank input line added");
+    for (number, raw) in added {
         println!("{number} {raw}");
         println!("TODO: {number} added.");
     }
-    store::write(&ctx.paths.todo, &file)?;
     Ok(())
 }
 

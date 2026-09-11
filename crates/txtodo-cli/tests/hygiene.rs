@@ -80,3 +80,19 @@ fn do_keeps_the_priority_as_a_pri_tag_unlike_todo_sh() {
         format!("x {} 2026-09-01 urgent +work pri:B\n", today())
     );
 }
+
+#[test]
+fn add_creates_a_missing_todo_dir_like_todo_sh() {
+    let dir = tempfile::tempdir().unwrap();
+    let new = dir.path().join("new").join("sub");
+    assert!(!new.exists());
+    assert!(txtodo(
+        dir.path(),
+        &["--dir", new.to_str().unwrap(), "add", "call mum"]
+    ));
+
+    assert_eq!(
+        todo_bytes(&new),
+        format!("{} call mum\n", today()).into_bytes()
+    );
+}

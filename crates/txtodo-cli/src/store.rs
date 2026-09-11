@@ -53,6 +53,11 @@ pub fn write(path: &Path, file: &File) -> Result<(), StoreError> {
         tmp.parent() == path.parent(),
         "temp file shares the directory"
     );
+
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err("create directory", dir))?;
+    }
+
     let result = std::fs::File::create(&tmp)
         .and_then(|mut f| f.write_all(&bytes).and_then(|()| f.sync_all()))
         .map_err(err("write", &tmp))
