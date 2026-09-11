@@ -64,3 +64,20 @@ one Loro transaction so a peer never observes the task in neither list.
 - Do we keep Loro's own oplog on disk at all, or re-hydrate the doc from our `Op` log on start?
   Re-hydrating is simpler and makes our log the single source of truth; it costs startup time on a
   long history. Snapshot-on-close (`ExportMode::Snapshot`) is the middle road.
+
+## Deny findings (2026-09-12, before code)
+
+`cargo deny check` with `loro = "1.16.0"` in `crates/txtodo-crdt/Cargo.toml`:
+
+| ID | crate | kind | path | resolution |
+|---|---|---|---|---|
+| RUSTSEC-2026-0247 | bitmaps 2.1.0 | unmaintained | loro-internal → im | no upgrade; ignore + RATCHET |
+| RUSTSEC-2026-0248 | im 15.1.0 | unmaintained | loro-internal | no upgrade; ignore + RATCHET |
+| RUSTSEC-2026-0251 | sized-chunks 0.6.5 | unmaintained | im | no upgrade; ignore + RATCHET |
+| (license) | xxhash-rust 0.8.18 | BSL-1.0 | loro-internal, loro-kv-store | add BSL-1.0 to deny.toml licenses.allow |
+| RUSTSEC-2023-0089 | atomic-polyfill 1.0.3 | unmaintained | **pre-existing**: postcard → heapless 0.7 → txtodo-model | not caused by loro; `deny check advisories` fails on the stashed tree too |
+
+`im` and `sized-chunks` were archived 2026-05-03; no safe upgrade. BSL-1.0 is OSI-approved and
+permissive. No feature flag or version of loro avoids `im`/`xxhash-rust` — both are direct,
+non-optional deps of loro-internal. The per-crate manifest carries the dep (root `Cargo.toml` is
+frozen and untouched; `Cargo.lock` regenerates as a generated artifact).
