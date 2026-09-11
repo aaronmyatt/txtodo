@@ -1,0 +1,11 @@
+2026-09-12 crates/txtodo-mcp/src/token.rs: macaroon model (root id, caveats, chained HMAC signature), no store/keystore deps +m6 @mcp
+2026-09-12 Decide macaroon crate vs minimal HMAC-chained impl per plan M6; record the choice in the doc comment +m6 @mcp
+2026-09-12 token::mint(root_key, caveats) -> Token +m6 @mcp
+2026-09-12 token::attenuate(&token, caveat) -> Token; attenuation can only narrow +m6 @mcp
+2026-09-12 token::verify(token, root_key, revocation) -> Scope evaluating scope/project/context/file/expires/quarantine +m6 @mcp
+2026-09-12 Caveat grammar scope=… project=… context=… file=… expires=… quarantine=@ctx +m6 @mcp
+2026-09-12 Daemon owns the root secret (keystore) and revocation list (store meta); passes them into token's pure fns +m6 @mcp @daemon
+2026-09-12 txtodo.proto: Token* messages and create/list/revoke/attenuate RPCs, regenerated artifact committed alone +m6 @proto
+2026-09-12 crates/txtodo-cli: `txtodo token create|list|revoke|attenuate` subcommand over gRPC +m6 @cli
+2026-09-12 Tests: mint→attenuate→verify; attenuated cannot widen; expired and revoked fail +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @cli

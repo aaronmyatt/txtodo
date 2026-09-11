@@ -1,0 +1,9 @@
+2026-09-12 Route every MCP mutation through daemon Apply (handle.rs); no MCP path writes the file directly +m6 @mcp @daemon
+2026-09-12 Fill ApplyRequest.agent { token_id, name } from the verified token before Apply +m6 @mcp @daemon
+2026-09-12 convert.rs::parse_principal already maps AgentPrincipal -> Principal::Agent { token_id, name, device }; assert it is used, not User +m6 @daemon
+2026-09-12 Quarantine caveat appends its context (default @inbox) to todo_add lines before Apply +m6 @mcp @daemon
+2026-09-12 Quarantine is add-only: complete/edit/delete are not re-tagged +m6 @mcp
+2026-09-12 txtodo blame shows agent:name@device from the op-log principal string +m6 @mcp
+2026-09-12 Test: quarantined todo_add yields a line with the extra context +m6 @mcp @test
+2026-09-12 Test: mutation ops carry Principal::Agent, not Principal::User, and blame shows the agent +m6 @mcp @daemon @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @daemon

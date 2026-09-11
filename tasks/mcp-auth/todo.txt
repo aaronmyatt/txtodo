@@ -1,0 +1,9 @@
+2026-09-12 HTTP bearer auth: parse Authorization: Bearer <token> on every MCP request, 401 otherwise +m6 @mcp
+2026-09-12 Verify the token via token::verify with the daemon's root secret and revocation list +m6 @mcp
+2026-09-12 Resolve caveats to a Scope + quarantine context and attach to the request for handlers +m6 @mcp
+2026-09-12 stdio inherits the token from --token, else config default_stdio_token +m6 @mcp
+2026-09-12 crates/txtodo-cli/src/config.rs: add default_stdio_token to Config keeping the existing precedence +m6 @mcp @cli
+2026-09-12 Distinct errors for missing/malformed/expired/revoked/insufficient-scope; log token_id only, never token text +m6 @mcp
+2026-09-12 Test: valid bearer accepted; garbage, revoked and expired tokens return 401 +m6 @mcp @test
+2026-09-12 Test: stdio without --token uses default_stdio_token; explicit --token wins +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

@@ -1,0 +1,9 @@
+2026-09-12 Per-token sliding-window limiter: 60 mutations/min and 10 deletes/min (two buckets) +m6 @mcp
+2026-09-12 Count mutations (all Apply ops) and deletes separately, keyed by token_id +m6 @mcp
+2026-09-12 On exceed: pause the token and emit a notification event +m6 @mcp
+2026-09-12 Paused tokens reject mutations until unpaused or TTL; pause mark persisted in store meta +m6 @mcp @daemon
+2026-09-12 Bounded bucket map with MAX_TRACKED_TOKENS asserted; evict idle tokens when full +m6 @mcp
+2026-09-12 Notification event rides the daemon event channel; mobile push is M9 +m6 @mcp @daemon
+2026-09-12 Test: 61st mutation / 11th delete in a minute pauses the token and emits the event +m6 @mcp @test
+2026-09-12 Test: distinct tokens have independent budgets; pause survives restart +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

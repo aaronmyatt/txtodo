@@ -1,0 +1,11 @@
+2026-09-12 Add rmcp to crates/txtodo-mcp/Cargo.toml as a workspace dependency +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/tools.rs: tool schema for all §6.3 tools with the exact arg names from the table +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/tools.rs: todo_notes_get {id} and todo_notes_set {id, text} mapping to daemon GetNotes/EditNotes +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/tools.rs: file params accept a ref path resolved by the daemon walker, not a bare filename +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/error.rs: structured error type { code, message, line?, spec_rule? } carried by every handler +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/resources.rs: the six todotxt:// resource URIs from §6.4 +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/prompts.rs: plan_today, weekly_review, triage_inbox templates +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/server.rs: rmcp server registering list_tools/list_resources/list_prompts, handlers delegated to the daemon +m6 @mcp
+2026-09-12 Declare dry_run on todo_batch only; diff rendering stays in its own task +m6 @mcp
+2026-09-12 Test: the registered tool/resource/prompt set equals §6.3-6.4 exactly +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
