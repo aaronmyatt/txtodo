@@ -1,0 +1,10 @@
+2026-09-12 Android QR scan (CameraX) decoding the pairing payload struct shared with txtodo pair <code> +m9 @android @pairing
+2026-09-12 Android SAS: 6-word compare + mutual confirm UI before group-key derivation, per sync-pairing +m9 @android @pairing
+2026-09-12 iOS QR scan (AVFoundation) + SAS confirm UI using the identical transcript +m9 @ios @pairing
+2026-09-12 Shared local snapshot store both platforms read, written by the daemon on reconcile +m9 @android @ios
+2026-09-12 Android AppWidget: due-today list, tap opens the tapped line, updates on reconcile +m9 @android @widget
+2026-09-12 Android Quick Settings tile: quick-add entry point +m9 @android @widget
+2026-09-12 iOS WidgetKit widget + Live Activity for tasks due today +m9 @ios @widget
+2026-09-12 iOS watchOS complication showing the open count from the snapshot +m9 @ios @widget
+2026-09-12 Test: decoded QR payload holds no key material; same transcript -> same SAS words across platforms +m9 @pairing @test
+2026-09-12 Complete the parent line in ./todo.txt +m9 @android @ios

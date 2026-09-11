@@ -1,0 +1,11 @@
+2026-09-12 Scaffold apps/android Gradle module and wire the uniffi-generated Kotlin bindings from txtodo-ffi +m9 @android
+2026-09-12 ForegroundService (dataSync) hosting DaemonHandle in-process with a persistent foreground notification +m9 @android
+2026-09-12 FileViewModel subscribing to the Change callback and mapping bytes -> per-line tokenize spans +m9 @android
+2026-09-12 Main LazyColumn: line numbers, AnnotatedString per line, id: hidden with toggle, n/m ref indicator +m9 @android
+2026-09-12 Edit popover: raw-line field + token chips per §3.2, strict-mode validation via FFI, lenient save allowed +m9 @android
+2026-09-12 Detail view: breadcrumb, pinned parent, notes.md editor, recursive sub-list, lazy directory creation +m9 @android
+2026-09-12 LAN MCP over HTTP reusing txtodo-mcp, guarded by --lan (refuse non-loopback) +m9 @android
+2026-09-12 FCM token registration with the daemon so the relay forwards wake-ups +m9 @android
+2026-09-12 Footer "Line N · device, relative time" from the op log +m9 @android
+2026-09-12 Instrumented test: tokenize -> AnnotatedString spans (id: absent, completed struck through) on device +m9 @android @test
+2026-09-12 Complete the parent line in ./todo.txt +m9 @android

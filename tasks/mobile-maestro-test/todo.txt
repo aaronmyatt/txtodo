@@ -1,0 +1,10 @@
+2026-09-12 Add Maestro to the mobile CI workflow with emulator/simulator bootstrap +m9 @test
+2026-09-12 Port the M7 Playwright scenario into a Maestro flow YAML shared by Android and iOS +m9 @test
+2026-09-12 Flow: single tap opens edit popover with the raw line incl id:, save changes only that line +m9 @test
+2026-09-12 Flow: double-tap opens detail, first keystroke into empty notes creates the directory +m9 @test
+2026-09-12 Flow: conflict banner + review sheet after a second daemon injects concurrent ops +m9 @test
+2026-09-12 Assert rendered attributed text: id: hidden by default, completed line struck through (tokenize, not re-parse) +m9 @test
+2026-09-12 LAN convergence: pair phone + desktop on LAN, assert the op lands ≤ 2 s +m9 @test
+2026-09-12 Relay convergence: pair over relay in a two-network setup, assert ≤ 30 s +m9 @test
+2026-09-12 Wire the ≤ 2 s and ≤ 30 s budgets into CI as hard failures +m9 @test
+2026-09-12 Complete the parent line in ./todo.txt +m9 @test

@@ -1,0 +1,11 @@
+2026-09-12 Re-run the tracing-capture test across relay, file-carrier and bundle paths; assert no key or passphrase bytes appear in any JSON log +m8 @security @test
+2026-09-12 Test: the bundle manifest contains no key material in the clear; the group key only ever sits inside the passphrase wrap +m8 @security @test
+2026-09-12 Test: a wrong-passphrase bundle import fails without writing any state +m8 @security @test
+2026-09-12 Test: --sync-dir refuses a symlink escape or .. outside the chosen folder, validating it as external input +m8 @security @test
+2026-09-12 Confirm the relay stores only opaque Vec<u8> blobs and its logs carry routing metadata, never payload; close the M4-deferred op-type item +m8 @security
+2026-09-12 Verify every network message across relay and file carrier is versioned, authenticated, encrypted; Hello is the likely gap to re-check +m8 @security
+2026-09-12 Assert ops on the file-carrier disk are ciphertext only, never the group key or plaintext ops +m8 @security @test
+2026-09-12 Confirm the M4/M6 inherited tests (MCP loopback, tokens never logged, ref: slug fuzz) still pass unchanged +m8 @security @test
+2026-09-12 Write the dated RATCHET.md findings section: pass, fail or deferred to M<n> per checklist item, each with its test +m8 @security @docs
+2026-09-12 Add a todo.txt line in the owning milestone for anything deferred, never a note nobody reads +m8 @security
+2026-09-12 Complete the parent line in ./todo.txt +m8 @security
