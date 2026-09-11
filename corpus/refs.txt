@@ -1,0 +1,10 @@
+2026-09-11 Valid ref ref:q4-roadmap
+2026-09-11 Valid ref with dots and underscores ref:v1.2_beta-3
+2026-09-11 Nested ref, this line lives in a sub-list ref:sync-section
+2026-09-11 Bad ref dot ref:.
+2026-09-11 Bad ref dotdot ref:..
+2026-09-11 Bad ref traversal ref:../escape
+2026-09-11 Bad ref absolute ref:/etc/passwd
+2026-09-11 Bad ref uppercase ref:Q4-Roadmap
+2026-09-11 Bad ref leading dash ref:-x
+2026-09-11 Bad ref 65 chars ref:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

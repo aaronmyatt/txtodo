@@ -1,0 +1,8 @@
+x no completion date here
+x (A) 2026-09-11 priority after x
+x 2026-09-11 (A) priority after date
+2026-09-11	tab	separated	words
+2026-09-11 trailing whitespace   
++project at start of line
+@context at start of line
+2026-09-11 runs  of   spaces

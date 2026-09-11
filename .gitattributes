@@ -1,0 +1,2 @@
+# corpus bytes are the oracle: never normalise endings. https://git-scm.com/docs/gitattributes#_text
+corpus/* -text

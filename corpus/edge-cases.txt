@@ -1,0 +1,8 @@
+mail bob@example.com
+see https://example.com/x
+learn C++ +cpp
+买菜 +家务 @手机
+X 2026-09-11 not done
+x 2026-09-11 (A) task
+note: buy milk
+(a) task

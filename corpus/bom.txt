@@ -1,0 +1,2 @@
+﻿2026-09-11 File starts with a BOM +bom
+2026-09-11 Second line

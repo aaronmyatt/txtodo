@@ -1,0 +1,9 @@
+2026-09-11 Q4 roadmap +work ref:q4-roadmap id:01J9K3H5Z7Q8X2M4N6P8R0T2V4
+x 2026-09-11 2026-09-01 Renew passport +admin pri:A
+(A) 2026-09-11 Call the plumber +house @phone due:2026-09-15 t:2026-09-14 rec:1w
+2026-09-11 Water the plants +home rec:+1w
+2026-09-11 Secret errand +home h:1
+2026-09-11 Custom metadata color:blue weight:3
+2026-09-11 Not a tag note: buy milk
+2026-09-11 Two colons a:b:c is one tag
+2026-09-11 URL with an at sign https://user@example.com/x is one url
