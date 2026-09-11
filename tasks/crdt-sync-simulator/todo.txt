@@ -1,0 +1,16 @@
+2026-09-12 SimConfig { seed, devices, ops, partition_rate } so the fast and the full run are one simulator, not two +m4 @crdt @test
+2026-09-12 In-process Link pair plus a partition switch, driving the real session state machine +m4 @crdt @test
+2026-09-12 Inject clock, ULID entropy, op choice, edit positions and external-edit content from the seeded PRNG +m4 @crdt @test
+2026-09-12 External edits go through the real reconciler, never a shortcut that skips id minting +m4 @crdt @test
+2026-09-12 Sync to fixpoint after healing with a bounded, asserted iteration cap +m4 @crdt @test
+2026-09-12 Assert convergence: every device's to_bytes per file is byte-identical including endings, BOM and quirks +m4 @crdt @test
+2026-09-12 Assert no loss: every inserted and undeleted description is present somewhere +m4 @crdt @test
+2026-09-12 Assert no duplication: every task id appears exactly once per file +m4 @crdt @test
+2026-09-12 Print seed and config on failure; TXTODO_SIM_SEED reproduces a run exactly +m4 @crdt @test
+2026-09-12 Shrinker: greedily reduce ops, devices and partitions with a bounded loop, keeping the failure +m4 @crdt @test
+2026-09-12 Emit the minimal failing trace as a paste-ready #[test] to keep as a regression test +m4 @crdt @test
+2026-09-12 Note in ./notes.md that ciphertext bytes differ per run by design; assert on state, never on wire bytes +m4 @crdt @test
+2026-09-12 Default cargo test runs 20 fixed seeds; just sim runs the full 1000 with random seeds +m4 @crdt @test
+2026-09-12 Meta-test: a deliberately broken merge behind a test flag makes the run fail, proving the assertions are wired +m4 @crdt @test
+2026-09-12 Meta-test: the same seed twice produces the same converged state +m4 @crdt @test
+2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @test

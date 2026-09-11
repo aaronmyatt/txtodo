@@ -9,9 +9,9 @@
 2026-09-11 LAN transport via mdns-sd discovery and iroh QUIC local endpoint with relay off +m4 @sync ref:sync-lan-transport
 2026-09-11 Pairing: txtodo pair shows QR and 6-word SAS from an X25519 handshake then snapshot plus ops +m4 @sync @cli ref:sync-pairing
 2026-09-11 txtodo device remove rotates the group key +m4 @sync @cli ref:sync-device-remove
-2026-09-11 Keys in the OS keystore via keyring with an encrypted-file passphrase fallback on headless Linux +m4 @sync
-2026-09-11 Sync simulator tests/sim.rs: N devices, seeded PRNG, partitions, external edits, assert convergence and no loss +m4 @crdt @test
-2026-09-11 specs/conflicts.md rows as tests/conflicts.rs including delete-vs-edit resurrect and delete-vs-complete +m4 @crdt @test
+2026-09-11 Keys in the OS keystore via keyring with an encrypted-file passphrase fallback on headless Linux +m4 @sync ref:sync-keystore
+2026-09-11 Sync simulator tests/sim.rs: N devices, seeded PRNG, partitions, external edits, assert convergence and no loss +m4 @crdt @test ref:crdt-sync-simulator
+2026-09-11 specs/conflicts.md rows as tests/conflicts.rs including delete-vs-edit resurrect and delete-vs-complete +m4 @crdt @test ref:crdt-conflict-table
 2026-09-11 Test two daemons on loopback pair and converge within 2 s +m4 @sync @test
 2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test
 2026-09-11 Security checklist review before M4 close +m4 @security
