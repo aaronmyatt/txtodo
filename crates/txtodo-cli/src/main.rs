@@ -58,6 +58,14 @@ enum Command {
         #[arg(required = true, num_args = 1..)]
         items: Vec<String>,
     },
+    /// Delete a task (its line stays blank), or remove TERM from it.
+    #[command(visible_alias = "rm")]
+    Del {
+        /// Line number.
+        item: String,
+        /// Text to remove from the line instead of deleting it.
+        term: Option<String>,
+    },
     /// Mark tasks done: `x`, today's date, priority kept as `pri:`; then archive.
     Do {
         /// Line numbers, comma or space separated.
@@ -210,6 +218,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         Command::Addm { text } => commands::add::run(&ctx, &text.join(" "), true),
         Command::Archive => commands::archive::run(&ctx),
         Command::Depri { items } => commands::edit::run_depri(&ctx, items),
+        Command::Del { item, term } => commands::edit::run_del(&ctx, item, term.as_deref()),
         Command::Do { items } => commands::edit::run_do(&ctx, items),
         Command::Pri { item, priority } => commands::edit::run_pri(&ctx, item, priority),
         Command::Env => {
