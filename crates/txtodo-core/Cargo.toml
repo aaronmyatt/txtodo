@@ -23,3 +23,7 @@ pest_derive = "2"
 pretty = "0.12"
 proptest = "1"
 serde_json = "1"
+
+[[bench]]
+name = "parse"
+harness = false
