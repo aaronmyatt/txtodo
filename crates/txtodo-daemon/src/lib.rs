@@ -3,5 +3,6 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+mod fields;
 pub mod state;
 pub mod textedit;

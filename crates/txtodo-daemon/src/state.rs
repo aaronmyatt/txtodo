@@ -129,6 +129,18 @@ impl DocState {
         self.entries.iter().position(|e| e.id() == Some(id))
     }
 
+    /// Replaces the entry at `i` (fields.rs rewrites lines in place).
+    pub(crate) fn replace_entry(&mut self, i: usize, entry: Entry) {
+        debug_assert!(i < self.entries.len(), "replace_entry index {i} in range");
+        self.entries[i] = entry;
+    }
+
+    /// Removes the entry at `i`.
+    pub(crate) fn remove_entry(&mut self, i: usize) -> Entry {
+        debug_assert!(i < self.entries.len(), "remove_entry index {i} in range");
+        self.entries.remove(i)
+    }
+
     /// The file as bytes, byte-faithful to what `from_file` read plus the applied ops.
     pub fn to_bytes(&self) -> Vec<u8> {
         let file = File {
@@ -146,8 +158,10 @@ impl DocState {
         let before = self.entries.len();
         match kind {
             OpKind::Insert { task, after, line } => self.insert(*task, *after, line)?,
-            OpKind::SetField { .. } => return Err(StateError::Unsupported("SetField")),
-            OpKind::EditText { .. } => return Err(StateError::Unsupported("EditText")),
+            OpKind::SetField { task, field, value } => {
+                crate::fields::set_field(self, *task, *field, *value)?
+            }
+            OpKind::EditText { task, edits } => crate::fields::edit_text(self, *task, edits)?,
             OpKind::Move {
                 task,
                 after,
