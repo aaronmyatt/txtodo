@@ -1,7 +1,7 @@
-(A) 2026-09-11 Wait for rename-plan-names so the mirror is copied with txtodo names +m0 @specs
-(A) 2026-09-11 Create specs/ref-directories.md with a header: normative, mirrors plan §3.2, update both in the same PR +m0 @specs
-(A) 2026-09-11 Copy the 12 numbered rules of plan §3.2 verbatim +m0 @specs
-(A) 2026-09-11 Add a Worked examples section: top-level ref, nested ref, dangling ref, collision -2 +m0 @specs
-(A) 2026-09-11 Add .claude/scripts/check-specs-mirror.sh that diffs the numbered list in both files and exits 1 on drift +m0 @specs
-(A) 2026-09-11 Register the mirror check in the justfile boundaries recipe and the CI boundaries step +m0 @specs
-(A) 2026-09-11 Complete the parent line in ./todo.txt +m0 @specs
+x 2026-09-11 2026-09-11 Wait for rename-plan-names so the mirror is copied with txtodo names +m0 @specs
+x 2026-09-11 2026-09-11 Create specs/ref-directories.md with a header: normative, mirrors plan §3.2, update both in the same PR +m0 @specs
+x 2026-09-11 2026-09-11 Copy the 12 numbered rules of plan §3.2 verbatim +m0 @specs
+x 2026-09-11 2026-09-11 Add a Worked examples section: top-level ref, nested ref, dangling ref, collision -2 +m0 @specs
+x 2026-09-11 2026-09-11 Add .claude/scripts/check-specs-mirror.sh that diffs the numbered list in both files and exits 1 on drift +m0 @specs
+x 2026-09-11 2026-09-11 Register the mirror check in the justfile boundaries recipe and the CI boundaries step +m0 @specs
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @specs

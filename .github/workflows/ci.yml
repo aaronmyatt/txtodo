@@ -39,6 +39,7 @@ jobs:
           .claude/scripts/check-boundaries.sh
           .claude/scripts/check-file-length.sh
           .claude/scripts/check-assertions.sh
+          .claude/scripts/check-specs-mirror.sh
       - name: PR size (budgets.json.diffLines, Cargo.lock exempt)
         if: github.event_name == 'pull_request' && runner.os == 'Linux'
         run: |

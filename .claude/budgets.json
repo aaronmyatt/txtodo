@@ -110,7 +110,8 @@
     "feedbackExtensions": [
       "rs"
     ],
-    "baselinePrune": null
+    "baselinePrune": null,
+    "specsMirror": ".claude/scripts/check-specs-mirror.sh"
   },
   "canary": {
     "source": ".claude/canary/failing_test.rs",

@@ -25,6 +25,7 @@ boundaries:
     .claude/scripts/check-boundaries.sh
     .claude/scripts/check-file-length.sh
     .claude/scripts/check-assertions.sh
+    .claude/scripts/check-specs-mirror.sh
 
 deny:
     cargo deny check
