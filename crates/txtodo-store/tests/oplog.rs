@@ -3,8 +3,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use std::path::Path;
-use txtodo_core::Ulid;
-use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId};
+
+use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 use txtodo_store::{Seq, Store, StoreError};
 
 fn device() -> DeviceId {

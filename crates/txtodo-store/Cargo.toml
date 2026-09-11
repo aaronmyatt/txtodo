@@ -17,7 +17,6 @@ postcard = { version = "1", features = ["alloc"] }
 [dev-dependencies]
 # https://docs.rs/tempfile — WAL needs a real file, so every test gets its own dir
 tempfile = "3"
-txtodo-core.workspace = true
 
 [lints]
 workspace = true

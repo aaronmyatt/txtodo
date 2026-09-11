@@ -5,7 +5,7 @@ Task ids, HLC, Op/OpKind/Principal — the op model every later layer records, s
 Plan M3 (as built 2026-09-11). Workspace tree + progress (plan §3.2.5) is M5 and not here yet.
 
 ## Public interface
-- Ids: `DeviceId`, `TaskId`, `OpId`, `TokenId` (ULID bits, `ulid()` for the core view);
+- Ids: `DeviceId`, `TaskId`, `OpId`, `TokenId` (ULID bits, `ulid()` for the core view); `Ulid` re-exported;
   `FilePath::new` validates a workspace-relative `/`-separated path once, at the boundary.
 - `Hlc { wall_ms, counter, device }`, `Hlc::zero`, `Hlc::tick(now_ms) -> Result<Hlc, HlcError>`.
 - `Op { id, hlc, principal, file, kind }`; `OpKind` = Insert · SetField · EditText · Move ·
