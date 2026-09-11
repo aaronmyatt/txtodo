@@ -1,0 +1,12 @@
+2026-09-12 Write both budget definitions into budgets.json notes: what the 500 ms clock covers and what idle means +m4 @perf
+2026-09-12 Add syncMs and idleRssMb keys to budgets.json alongside latencyMs +m4 @perf
+2026-09-12 criterion bench: 1000 ops between two paired loopback daemons, clock from first frame to all 1000 committed +m4 @perf
+2026-09-12 Exclude discovery and pairing from the throughput clock; that is the 2 s budget in sync-loopback-converge +m4 @perf
+2026-09-12 Keep AEAD and signature verification inside the measured path; signatures are the plausible bottleneck +m4 @perf
+2026-09-12 Bench both shapes: one big Ops frame and MAX_OPS_PER_BATCH-sized frames, record both +m4 @perf
+2026-09-12 Doc comment stating this is a loopback regression guard, not a network performance claim +m4 @perf
+2026-09-12 Wire the sync bench into check-bench.sh so CI fails on regression, as the reconcile bench does +m4 @perf @ci
+2026-09-12 Separate idle RSS script reading VmRSS on Linux and rusage on macOS, skipping where unsupported +m4 @perf
+2026-09-12 State the workspace size the RSS number is measured against; use the 10k-line workspace the other budgets use +m4 @perf
+2026-09-12 Record the first passing numbers in ./notes.md so later drift has a baseline +m4 @perf
+2026-09-12 Complete the parent line in ./todo.txt +m4 @perf

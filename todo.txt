@@ -12,10 +12,10 @@
 2026-09-11 Keys in the OS keystore via keyring with an encrypted-file passphrase fallback on headless Linux +m4 @sync ref:sync-keystore
 2026-09-11 Sync simulator tests/sim.rs: N devices, seeded PRNG, partitions, external edits, assert convergence and no loss +m4 @crdt @test ref:crdt-sync-simulator
 2026-09-11 specs/conflicts.md rows as tests/conflicts.rs including delete-vs-edit resurrect and delete-vs-complete +m4 @crdt @test ref:crdt-conflict-table
-2026-09-11 Test two daemons on loopback pair and converge within 2 s +m4 @sync @test
-2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test
-2026-09-11 Security checklist review before M4 close +m4 @security
-2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf
+2026-09-11 Test two daemons on loopback pair and converge within 2 s +m4 @sync @test ref:sync-loopback-converge
+2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test ref:sync-reject-tests
+2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review
+2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4
 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core
 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model
 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon

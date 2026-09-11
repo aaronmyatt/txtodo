@@ -1,0 +1,11 @@
+2026-09-12 Test: capture tracing output across a pair and a sync, assert no key or passphrase bytes appear in the JSON logs +m4 @security @test
+2026-09-12 Test: no key material is written anywhere outside the configured keystore during a full pair-and-sync run +m4 @security @test
+2026-09-12 Audit every Message variant for version, authentication and encryption coverage; Hello is the likely gap +m4 @security
+2026-09-12 Decide whether Hello's heads are an acceptable privacy leak and record the answer, not a silence +m4 @security @human
+2026-09-12 Test: a replayed Hello teaches an attacker nothing and changes no state +m4 @security @test
+2026-09-12 fuzz target for the ref slug validator: no /, \, .., NUL, leading dot or Windows reserved name survives validation +m4 @security @test
+2026-09-12 Run the slug fuzz target for a bounded session and record the result in ./notes.md +m4 @security @test
+2026-09-12 Record the M8 gap that Ops frame length may leak op type, so the relay item is not discovered late +m4 @security @docs
+2026-09-12 Write the dated findings section in RATCHET.md: pass, fail or deferred to M<n> per checklist item, each with its test +m4 @security @docs
+2026-09-12 Add a todo.txt line in M6 and M8 for every deferred item, rather than a note nobody reads +m4 @security
+2026-09-12 Complete the parent line in ./todo.txt +m4 @security
