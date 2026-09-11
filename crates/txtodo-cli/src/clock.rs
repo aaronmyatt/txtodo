@@ -20,6 +20,15 @@ pub fn today_local() -> Date {
     date
 }
 
+/// Local wall-clock time as `YYYY-MM-DDTHH:MM:SS` (todo.sh `date +%Y-%m-%dT%T`) for report.txt.
+/// https://docs.rs/jiff/latest/jiff/fmt/strtime/index.html
+pub fn now_local_iso() -> String {
+    let now = jiff::Zoned::now().strftime("%Y-%m-%dT%H:%M:%S").to_string();
+    debug_assert!(now.len() == 19, "fixed-width timestamp");
+    debug_assert!(now.as_bytes()[10] == b'T', "date and time joined by T");
+    now
+}
+
 /// A ULID: 48 bits of Unix milliseconds, then 80 random bits. https://github.com/ulid/spec
 pub fn new_ulid() -> io::Result<Ulid> {
     let ms = SystemTime::now()

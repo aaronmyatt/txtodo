@@ -67,6 +67,8 @@ enum Command {
         #[arg(required = true, num_args = 1..)]
         items: Vec<String>,
     },
+    /// Blank every later repeat of an identical line.
+    Deduplicate,
     /// Delete a task (its line stays blank), or remove TERM from it.
     #[command(visible_alias = "rm")]
     Del {
@@ -127,6 +129,16 @@ enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
+    /// Move a task to another file in the todo directory (its line stays blank).
+    #[command(visible_alias = "mv")]
+    Move {
+        /// Line number.
+        item: String,
+        /// Destination file name.
+        dest: String,
+        /// Source file name (default todo.txt).
+        src: Option<String>,
+    },
     /// Set a task's priority, A to Z.
     #[command(visible_alias = "p")]
     Pri {
@@ -135,6 +147,8 @@ enum Command {
         /// The new priority letter.
         priority: String,
     },
+    /// Archive, then record the task and done counts in report.txt.
+    Report,
     /// Replace a task's text, keeping its priority and date.
     Replace {
         /// Line number.
@@ -253,6 +267,11 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         }
         Command::Archive => commands::archive::run(&ctx),
         Command::Depri { items } => commands::edit::run_depri(&ctx, items),
+        Command::Deduplicate => commands::fileops::run_dedup(&ctx),
+        Command::Move { item, dest, src } => {
+            commands::fileops::run_move(&ctx, item, dest, src.as_deref())
+        }
+        Command::Report => commands::fileops::run_report(&ctx, &clock::now_local_iso()),
         Command::Del { item, term } => commands::edit::run_del(&ctx, item, term.as_deref()),
         Command::Do { items } => commands::edit::run_do(&ctx, items),
         Command::Pri { item, priority } => commands::edit::run_pri(&ctx, item, priority),
