@@ -9,4 +9,6 @@ pub mod state;
 pub mod textedit;
 
 #[cfg(test)]
+mod reconcile_tests;
+#[cfg(test)]
 mod state_tests;
