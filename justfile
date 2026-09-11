@@ -32,7 +32,7 @@ deny:
 
 # fuzz <target> <secs>: plan M0 wants this; cargo-fuzz needs nightly and is installed at M1, not by /setup
 fuzz target secs="60":
-    @echo "cargo fuzz not installed yet (plan M1); would run: cargo +nightly fuzz run {{target}} -- -max_total_time={{secs}}"; exit 1
+    PATH="$(dirname "$(rustup which --toolchain nightly cargo)"):$PATH" cargo fuzz run --fuzz-dir crates/txtodo-core/fuzz {{target}} -- -max_total_time={{secs}}
 
 bench:
     cargo bench --workspace
