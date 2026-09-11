@@ -1,6 +1,6 @@
-# Sisyphus — implementation plan
+# txtodo — implementation plan
 
-This document is written for a coding agent. It is deliberately explicit. Read `sisyphus-design.md` first; where the two disagree, this plan wins because it is newer and incorporates UI decisions made after the design doc was written (§3).
+This document is written for a coding agent. It is deliberately explicit. Read `txtodo-design.md` first; where the two disagree, this plan wins because it is newer and incorporates UI decisions made after the design doc was written (§3).
 
 ---
 
@@ -20,13 +20,13 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 
 - Changing anything that is written to `todo.txt`, `done.txt`, or `notes.md`.
 - Adding a new `key:value` tag or changing the meaning of an existing one.
-- Adding a dependency with a native/C build step, or any dependency over 1 MB compiled into `todotxt-core`.
+- Adding a dependency with a native/C build step, or any dependency over 1 MB compiled into `txtodo-core`.
 - Moving code across crate boundaries defined in §2.
 - Anything that would violate a rule in §1.
 
 **Non-negotiables (from the design doc, restated).**
 
-1. The files are the truth. Everything under `.sisyphus/` is rebuildable from them.
+1. The files are the truth. Everything under `.txtodo/` is rebuildable from them.
 2. Byte-preserving round trip for untouched lines.
 3. Never write a construct the todo.txt spec doesn't define.
 4. App metadata lives only in the documented tags: `id`, `pri`, `due`, `t`, `rec`, `h`, `ref`.
@@ -37,10 +37,10 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 **Conventions.**
 
 - Rust, edition 2024, stable toolchain pinned in `rust-toolchain.toml`. MSRV = the pinned version.
-- Cargo workspace; one crate per §2 entry; `#![forbid(unsafe_code)]` everywhere except `sisyphus-ffi`.
+- Cargo workspace; one crate per §2 entry; `#![forbid(unsafe_code)]` everywhere except `txtodo-ffi`.
 - Errors: `thiserror` in libraries, `anyhow` in binaries. Never `unwrap()` outside tests.
 - Logging/tracing: `tracing` with structured fields; no `println!` outside the CLI's output path.
-- Async: `tokio`. The daemon is async; `todotxt-core` is sync and has no async dependency.
+- Async: `tokio`. The daemon is async; `txtodo-core` is sync and has no async dependency.
 - Tests: unit tests beside code; integration tests in `tests/`; property tests with `proptest`; fuzz targets under `fuzz/`.
 - Commits: conventional commits (`feat(core): …`, `fix(sync): …`, `test(cli): …`).
 - Architecture decisions go in `docs/adr/NNNN-title.md` (template in M0). Decisions in §1 of this plan are ADR 0001–0012; write them up as the first task of M0.
@@ -58,9 +58,9 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 | 5 | MCP: the official Rust MCP SDK (`rmcp`; verify current crate name/version before adding). Transports: stdio and Streamable HTTP. | Don't hand-roll a protocol. |
 | 6 | Local IPC: unix domain socket / Windows named pipe carrying **gRPC** (`tonic`). The REST/JSON mirror is generated from the same protobuf via `tonic-web` or a thin axum shim. | One schema, two surfaces. |
 | 7 | Desktop UI: **Tauri 2** + **Svelte 5** + **CodeMirror 6**. The main view is a read-only CodeMirror document with a custom todo.txt language (Lezer grammar generated from `specs/todotxt.abnf`). | CM6 gives line numbers, wrapping, virtualisation, search, and decorations for free; the "interactive text file" feel is native to it. |
-| 8 | Mobile UI: iOS SwiftUI over a `UITextView` with `NSTextStorage` highlighting; Android Jetpack Compose `BasicTextField` with `AnnotatedString`. Both highlight using `todotxt-core::tokenize` via uniffi so token boundaries are identical everywhere. | The core owns the grammar; UIs only paint. |
+| 8 | Mobile UI: iOS SwiftUI over a `UITextView` with `NSTextStorage` highlighting; Android Jetpack Compose `BasicTextField` with `AnnotatedString`. Both highlight using `txtodo_core::tokenize` via uniffi so token boundaries are identical everywhere. | The core owns the grammar; UIs only paint. |
 | 9 | Task identity: `id:<ULID>` tag, tagged mode only for M1–M7. Sidecar (purist) mode is M10. | Ship the robust path first. |
-| 10 | Ports and names: MCP HTTP on `127.0.0.1:8636`; gRPC on the socket only; metrics on `127.0.0.1:8637`. mDNS services `_sisyphus._udp` (sync) and `_sisyphus-mcp._tcp` (MCP). Daemon binary `sisd`, CLI `sis`, config at `$XDG_CONFIG_HOME/sisyphus/config.toml`, state at `<workspace>/.sisyphus/`. | Fixed so docs and tests can rely on them. |
+| 10 | Ports and names: MCP HTTP on `127.0.0.1:8636`; gRPC on the socket only; metrics on `127.0.0.1:8637`. mDNS services `_txtodo._udp` (sync) and `_txtodo-mcp._tcp` (MCP). Daemon binary `txtodod`, CLI `txtodo`, config at `$XDG_CONFIG_HOME/txtodo/config.toml`, state at `<workspace>/.txtodo/`. | Fixed so docs and tests can rely on them. |
 | 11 | Dates: the daemon's local date at write time for `creation_date` and `completion_date`, formatted `YYYY-MM-DD`. No time zones in the file, ever. | Spec. |
 | 12 | Detail files: the `ref:` directory convention in §3.2. | Agreed in design review. |
 
@@ -69,23 +69,23 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 ## 2. Repository layout and crate boundaries
 
 ```
-sisyphus/
+txtodo/
 ├── Cargo.toml                 workspace
 ├── rust-toolchain.toml
 ├── justfile                   check · test · fuzz · bench · corpus · release
 ├── crates/
-│   ├── todotxt-core/          parse · tokenize · model · format · diff        (sync, no_std-friendly, no I/O)
-│   ├── todotxt-query/         query language: parse → plan → evaluate          (depends: core)
-│   ├── sisyphus-model/        workspace tree, Task ids, HLC, op types          (depends: core)
-│   ├── sisyphus-store/        SQLite op log, snapshots, projection cache       (depends: model)
-│   ├── sisyphus-crdt/         Loro document, ops ⇄ Loro, reconciler            (depends: model, store, core)
-│   ├── sisyphus-sync/         protocol, transports, pairing, crypto            (depends: model, store)
-│   ├── sisyphus-daemon/       sisd: actors, watcher, IPC server, MCP host       (depends: all above)
-│   ├── sisyphus-proto/        .proto files + generated gRPC types              (no deps)
-│   ├── sisyphus-mcp/          MCP tools/resources/prompts, tokens              (depends: proto, query)
-│   ├── sisyphus-cli/          sis                                              (depends: core, proto; talks to daemon, falls back to direct file mode)
-│   ├── sisyphus-tui/          ratatui client                                   (M10)
-│   └── sisyphus-ffi/          uniffi + wasm-bindgen + cbindgen                 (depends: core, query)
+│   ├── txtodo-core/          parse · tokenize · model · format · diff        (sync, no_std-friendly, no I/O)
+│   ├── txtodo-query/         query language: parse → plan → evaluate          (depends: core)
+│   ├── txtodo-model/        workspace tree, Task ids, HLC, op types          (depends: core)
+│   ├── txtodo-store/        SQLite op log, snapshots, projection cache       (depends: model)
+│   ├── txtodo-crdt/         Loro document, ops ⇄ Loro, reconciler            (depends: model, store, core)
+│   ├── txtodo-sync/         protocol, transports, pairing, crypto            (depends: model, store)
+│   ├── txtodo-daemon/       txtodod: actors, watcher, IPC server, MCP host       (depends: all above)
+│   ├── txtodo-proto/        .proto files + generated gRPC types              (no deps)
+│   ├── txtodo-mcp/          MCP tools/resources/prompts, tokens              (depends: proto, query)
+│   ├── txtodo-cli/          txtodo                                              (depends: core, proto; talks to daemon, falls back to direct file mode)
+│   ├── txtodo-tui/          ratatui client                                   (M10)
+│   └── txtodo-ffi/          uniffi + wasm-bindgen + cbindgen                 (depends: core, query)
 ├── apps/
 │   ├── desktop/               Tauri 2 + Svelte 5 + CodeMirror 6
 │   ├── android/               Kotlin, Compose
@@ -102,7 +102,7 @@ sisyphus/
 └── docs/questions.md          open questions for the human
 ```
 
-**Dependency direction is strictly downward in the list above.** `todotxt-core` depends on nothing in the workspace and on no async runtime. If you find yourself importing `tokio` into `core`, stop.
+**Dependency direction is strictly downward in the list above.** `txtodo-core` depends on nothing in the workspace and on no async runtime. If you find yourself importing `tokio` into `core`, stop.
 
 ---
 
@@ -141,14 +141,14 @@ sisyphus/
 
 1. **Tag.** Key `ref`, value = a *slug*: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, not `.` or `..`. Absolute paths and parent traversal are rejected by the parser as a quirk `invalid_ref` and treated as no ref.
 2. **Resolution.** The slug names a directory in the same directory as the file containing the line. `~/todo/todo.txt` line with `ref:q4-roadmap` → `~/todo/q4-roadmap/`. Nesting follows naturally: a line in `~/todo/q4-roadmap/todo.txt` with `ref:sync-section` → `~/todo/q4-roadmap/sync-section/`.
-3. **Contents.** Any of `todo.txt`, `done.txt`, `notes.md`. All optional. Nothing else is managed or synced by Sisyphus (other files are left alone).
+3. **Contents.** Any of `todo.txt`, `done.txt`, `notes.md`. All optional. Nothing else is managed or synced by txtodo (other files are left alone).
 4. **Creation is lazy.** The tag is added and the directory created on the first write into the detail view's notes or sub-list. Slug = kebab-case of the description's plain words, truncated to 40 chars; on collision append `-2`, `-3`. The user can rename the slug in the edit popover; the daemon renames the directory atomically and rewrites the tag in the same op.
 5. **Progress.** `done = completed lines in <ref>/todo.txt + task lines in <ref>/done.txt`; `total = task lines in <ref>/todo.txt + task lines in <ref>/done.txt`; blank lines excluded. Displayed as `open/total` on the parent line's indicator and `done of total` in the detail header.
 6. **Parent completion is never automatic.** When `open == 0 && total > 0`, the UI offers "Mark parent done"; the daemon does nothing on its own. Completing the parent does not touch the sub-list.
 7. **Archiving the parent** to `done.txt` keeps the `ref:` tag on the archived line and leaves the directory in place.
-8. **Moving a line between files** (e.g. `sis mv`, or drag on desktop) moves its directory to sit beside the destination file, applying the collision rule. If the move fails mid-way, the op is rolled back and the user is told.
+8. **Moving a line between files** (e.g. `txtodo mv`, or drag on desktop) moves its directory to sit beside the destination file, applying the collision rule. If the move fails mid-way, the op is rolled back and the user is told.
 9. **Dangling refs** (tag present, directory missing) are not errors: the detail view opens empty and lazy creation applies.
-10. **Deleting a line** with a `ref:` never deletes the directory. `sis prune --orphans` lists directories no line points to and deletes them only with `--yes`.
+10. **Deleting a line** with a `ref:` never deletes the directory. `txtodo prune --orphans` lists directories no line points to and deletes them only with `--yes`.
 11. **Sync scope.** Every `todo.txt`, `done.txt`, and `notes.md` under the workspace root, at any depth, is a synced document. Discovery is by walking the tree, not by following tags, so a directory created by hand is picked up too.
 12. **Other tools** see an inert tag. `todo.sh -d <ref-dir>/todo.cfg` works on a sub-list like any other file.
 
@@ -178,7 +178,7 @@ Each milestone lists: goal, tasks, acceptance criteria, and what is explicitly o
 
 **Acceptance.** CI green on all three OSes. `just fuzz parse_line 60` runs (target may be a stub that does nothing yet).
 
-### M1 — `todotxt-core` (est. 1–2 weeks)
+### M1 — `txtodo-core` (est. 1–2 weeks)
 
 **Goal.** A correct, fast, round-trip-preserving parser/formatter/tokenizer with bindings-ready types.
 
@@ -247,7 +247,7 @@ pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit>;             // char-level, 
 
 **Out of scope.** Query language, any file I/O beyond `parse_file(bytes)`.
 
-### M2 — `sis` CLI with todo.sh parity, direct-file mode (est. 1 week)
+### M2 — `txtodo` CLI with todo.sh parity, direct-file mode (est. 1 week)
 
 **Goal.** A useful tool on day one, before any daemon exists.
 
@@ -256,21 +256,21 @@ pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit>;             // char-level, 
 - `clap` CLI. Commands and aliases exactly as todo.sh: `add`/`a`, `addm`, `list`/`ls`, `listall`/`lsa`, `listpri`/`lsp`, `listproj`/`lsprj`, `listcon`/`lsc`, `listfile`/`lf`, `do`, `pri`/`p`, `depri`/`dp`, `append`/`app`, `prepend`/`prep`, `replace`, `del`/`rm`, `move`/`mv`, `archive`, `deduplicate`, `report`.
 - Line numbers as identifiers, exactly like todo.sh. Add `--json` on every listing command (one object per line: `line`, `raw`, parsed fields, `spans`).
 - Direct-file mode: read → mutate via `core::apply` → atomic write (temp + rename), honouring §1 rules. `add` stamps the creation date and appends `id:` (config `id_tags = true` default; `--no-id` flag for tests).
-- `sis fmt` (canonicalise quirks, explicit), `sis lint` (report quirks), `sis env` (print resolved paths/config).
-- Config: `config.toml` with `todo_dir`, `id_tags`, `url_schemes`; env `SISYPHUS_TODO_DIR`; `--dir` flag.
+- `txtodo fmt` (canonicalise quirks, explicit), `txtodo lint` (report quirks), `txtodo env` (print resolved paths/config).
+- Config: `config.toml` with `todo_dir`, `id_tags`, `url_schemes`; env `TXTODO_TODO_DIR`; `--dir` flag.
 
 **Acceptance.**
 
-- Differential harness `tests/todosh_parity.rs`: for each scripted scenario (≥ 25, covering every command), run the same commands through `todo.sh` (vendored at a pinned commit under `tests/vendor/`) and through `sis --no-id`, then assert the resulting `todo.txt` and `done.txt` are byte-identical. Skip on Windows CI if `todo.sh` can't run there; must pass on Linux and macOS.
-- `sis add` on a CRLF file keeps CRLF; on a file without trailing newline, behaves like todo.sh.
+- Differential harness `tests/todosh_parity.rs`: for each scripted scenario (≥ 25, covering every command), run the same commands through `todo.sh` (vendored at a pinned commit under `tests/vendor/`) and through `txtodo --no-id`, then assert the resulting `todo.txt` and `done.txt` are byte-identical. Skip on Windows CI if `todo.sh` can't run there; must pass on Linux and macOS.
+- `txtodo add` on a CRLF file keeps CRLF; on a file without trailing newline, behaves like todo.sh.
 
 **Out of scope.** Daemon, history, sync.
 
 ### M3 — Store, projection and reconciler on one device (est. 2 weeks)
 
-**Goal.** `sisd` owns the file, records every change, survives external edits, and offers history and undo. Still one device, no CRDT yet — but the op model must already be the one the CRDT will use.
+**Goal.** `txtodod` owns the file, records every change, survives external edits, and offers history and undo. Still one device, no CRDT yet — but the op model must already be the one the CRDT will use.
 
-**Op model (`sisyphus-model`).**
+**Op model (`txtodo-model`).**
 
 ```rust
 pub struct Hlc { pub wall_ms: u64, pub counter: u16, pub device: DeviceId }
@@ -286,7 +286,7 @@ pub enum OpKind {
 pub enum Principal { User { device: DeviceId }, Agent { token_id: TokenId, name: String, device: DeviceId }, External { device: DeviceId } }
 ```
 
-**Store (`sisyphus-store`).** SQLite schema (write it as `migrations/0001.sql`):
+**Store (`txtodo-store`).** SQLite schema (write it as `migrations/0001.sql`):
 
 ```sql
 CREATE TABLE ops (seq INTEGER PRIMARY KEY, op_id BLOB UNIQUE, hlc_wall INTEGER, hlc_counter INTEGER,
@@ -297,23 +297,23 @@ CREATE TABLE snapshots (file TEXT, seq INTEGER, state BLOB, PRIMARY KEY(file, se
 CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encrypted), schema version
 ```
 
-**Daemon (`sisyphus-daemon`).**
+**Daemon (`txtodo-daemon`).**
 
 - One `FileActor` per synced document (todo.txt / done.txt / notes.md), single writer, owning: in-memory state, projection bytes, projection hash.
 - `Watcher` (`notify` crate) with 150 ms debounce; ignore list `*.swp *~ *.tmp .#*`; on event, send `ExternalChange` to the actor.
 - Reconciler in the actor (design doc §4.3), implemented without the CRDT for now: state = ordered `Vec<TaskState>`; external edit → `diff_lines` by `id:` → ops → apply → write projection. Lines that arrive without `id:` get one assigned and written back (tagged mode). Our own writes are recognised by projection hash *and* by a short-lived "expected write" token, because some filesystems coalesce events.
 - Workspace walker: discover documents per §3.2.11 at startup and on directory create events.
-- gRPC server on the socket (`sisyphus-proto`): `ListFiles`, `GetFile`, `Watch` (server-stream of changes), `Apply` (batch of intent-level mutations: add/complete/edit/move/delete; the daemon turns them into ops), `History`, `Undo`, `Checkout`. The CLI switches to daemon mode when the socket exists; direct-file mode remains as fallback and for `--no-daemon`.
-- Service files: `deploy/launchd/`, `deploy/systemd/`; `sis daemon install|start|stop|status`.
-- `sis log`, `sis blame <line>`, `sis undo`, `sis checkout <iso-datetime> [--stdout]`.
-- `sis doctor`: socket reachable, watcher alive, file writable, clock sanity, config valid.
+- gRPC server on the socket (`txtodo-proto`): `ListFiles`, `GetFile`, `Watch` (server-stream of changes), `Apply` (batch of intent-level mutations: add/complete/edit/move/delete; the daemon turns them into ops), `History`, `Undo`, `Checkout`. The CLI switches to daemon mode when the socket exists; direct-file mode remains as fallback and for `--no-daemon`.
+- Service files: `deploy/launchd/`, `deploy/systemd/`; `txtodo daemon install|start|stop|status`.
+- `txtodo log`, `txtodo blame <line>`, `txtodo undo`, `txtodo checkout <iso-datetime> [--stdout]`.
+- `txtodo doctor`: socket reachable, watcher alive, file writable, clock sanity, config valid.
 
-**Acceptance (integration tests in `sisyphus-daemon/tests/`, each starting a real daemon on a temp dir).**
+**Acceptance (integration tests in `txtodo-daemon/tests/`, each starting a real daemon on a temp dir).**
 
-- External edit scenarios: edit description in place; insert a line in the middle; delete a line; reorder two lines; strip every `id:` tag; append a line with no `id:`; replace the whole file with a copy that has different line endings; write via `todo.sh do 3`. After each: the daemon's state matches the file, exactly one write occurred (if any), unrelated lines are byte-identical, and `sis log` shows the expected ops with principal `External`.
+- External edit scenarios: edit description in place; insert a line in the middle; delete a line; reorder two lines; strip every `id:` tag; append a line with no `id:`; replace the whole file with a copy that has different line endings; write via `todo.sh do 3`. After each: the daemon's state matches the file, exactly one write occurred (if any), unrelated lines are byte-identical, and `txtodo log` shows the expected ops with principal `External`.
 - Editor save patterns: vim (write temp + rename), VS Code (truncate + write), `sed -i` (rename). All three reconcile correctly.
-- `sis undo` after an external edit restores the previous bytes exactly.
-- `sis checkout` at a timestamp between two ops renders the intermediate state.
+- `txtodo undo` after an external edit restores the previous bytes exactly.
+- `txtodo checkout` at a timestamp between two ops renders the intermediate state.
 - Crash safety: kill -9 the daemon mid-write; on restart the file is either the old or new projection, never partial (atomic rename), and the op log is consistent.
 
 **Out of scope.** Sync, CRDT merge semantics (single device ⇒ no concurrency).
@@ -324,15 +324,15 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Tasks.**
 
-- `sisyphus-crdt`: Loro document per file with the shape in the design doc §4.2. Map `OpKind` ⇄ Loro ops both ways; the op log stores our `Op`, Loro is the merge engine. Replace M3's `Vec<TaskState>` with the Loro-backed state; keep the reconciler's external interface unchanged.
+- `txtodo-crdt`: Loro document per file with the shape in the design doc §4.2. Map `OpKind` ⇄ Loro ops both ways; the op log stores our `Op`, Loro is the merge engine. Replace M3's `Vec<TaskState>` with the Loro-backed state; keep the reconciler's external interface unchanged.
 - HLC implementation with clock-skew guard (reject/warn on > 5 min drift from peers).
-- Same-word edit detection: after a merge, if two concurrent `EditText` ops overlap in range, mark the task `needs_review` (stored in the op log as a local flag, not in the file) and expose it via gRPC `Watch`. `sis conflicts` lists them; `sis conflicts resolve <line> mine|theirs|merged` clears the flag by writing the chosen text as a new op.
-- `sisyphus-sync` protocol: messages `Hello{device, group, heads}`, `Want{missing ranges}`, `Ops{batch}`, `Ack`. Encoding: `postcard`. Every `Ops` payload encrypted with the group key (XChaCha20-Poly1305) and signed by the device (Ed25519). Version field from day one.
+- Same-word edit detection: after a merge, if two concurrent `EditText` ops overlap in range, mark the task `needs_review` (stored in the op log as a local flag, not in the file) and expose it via gRPC `Watch`. `txtodo conflicts` lists them; `txtodo conflicts resolve <line> mine|theirs|merged` clears the flag by writing the chosen text as a new op.
+- `txtodo-sync` protocol: messages `Hello{device, group, heads}`, `Want{missing ranges}`, `Ops{batch}`, `Ack`. Encoding: `postcard`. Every `Ops` payload encrypted with the group key (XChaCha20-Poly1305) and signed by the device (Ed25519). Version field from day one.
 - Transports: LAN via mDNS discovery + iroh QUIC endpoint (iroh's local-discovery; do not enable relay yet).
-- Pairing: `sis pair` shows a QR + SAS (6 words from the EFF short list) derived from an X25519 handshake; the other device runs `sis pair <code>` or scans. Result: both devices hold the group key; new device receives a full snapshot then ops.
-- Device removal: `sis device remove <id>` rotates the group key; remaining devices re-encrypt nothing (old ops stay under old key, kept for history; new ops use new key).
+- Pairing: `txtodo pair` shows a QR + SAS (6 words from the EFF short list) derived from an X25519 handshake; the other device runs `txtodo pair <code>` or scans. Result: both devices hold the group key; new device receives a full snapshot then ops.
+- Device removal: `txtodo device remove <id>` rotates the group key; remaining devices re-encrypt nothing (old ops stay under old key, kept for history; new ops use new key).
 - Keys in the OS keystore via the `keyring` crate; fall back to an encrypted file with a user passphrase on headless Linux.
-- **Sync simulator** (`sisyphus-crdt/tests/sim.rs`): N in-process devices, deterministic PRNG, random ops + random external edits + random partitions; after healing, assert all projections byte-identical and every inserted description substring is present somewhere (no-loss).
+- **Sync simulator** (`txtodo-crdt/tests/sim.rs`): N in-process devices, deterministic PRNG, random ops + random external edits + random partitions; after healing, assert all projections byte-identical and every inserted description substring is present somewhere (no-loss).
 
 **Acceptance.**
 
@@ -350,11 +350,11 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 **Tasks.**
 
 - Ref slug validation in `core` (M1 already parses it; add the `invalid_ref` quirk if missing).
-- Workspace tree model in `sisyphus-model`: a file's parent line, children discovery, progress computation (§3.2.5) cached and invalidated on ops.
+- Workspace tree model in `txtodo-model`: a file's parent line, children discovery, progress computation (§3.2.5) cached and invalidated on ops.
 - Lazy creation, slug generation and collision rule, rename with atomic directory move + tag rewrite in one op batch.
 - `notes.md` as a Loro text document; `NotesEdit` ops; exposed via gRPC `GetNotes`/`EditNotes`.
 - Move-line-between-files moves the directory (§3.2.8) with rollback.
-- `sis open <line>` prints the ref path; `sis notes <line>` opens `$EDITOR` on `notes.md` (creating lazily); `sis sub <line>` runs any `sis` command scoped to the sub-list (`sis sub 2 ls`); `sis prune --orphans [--yes]`.
+- `txtodo open <line>` prints the ref path; `txtodo notes <line>` opens `$EDITOR` on `notes.md` (creating lazily); `txtodo sub <line>` runs any `txtodo` command scoped to the sub-list (`txtodo sub 2 ls`); `txtodo prune --orphans [--yes]`.
 - gRPC `ListFiles` returns the tree with progress; `Watch` emits progress changes.
 
 **Acceptance.**
@@ -371,9 +371,9 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Tasks.**
 
-- `sisyphus-mcp` using `rmcp`: tools, resources, prompts exactly as the design doc §6.3–6.4, plus `todo_notes_get {id}` / `todo_notes_set {id, text}` and `file` parameters accepting a ref path (`q4-roadmap/todo.txt`).
-- Transports: stdio (`sis mcp --stdio`) and Streamable HTTP on `127.0.0.1:8636/mcp`; `--lan` flag binds `0.0.0.0` and advertises `_sisyphus-mcp._tcp`.
-- Tokens: macaroon-style (`macaroon` crate or a minimal HMAC-chained implementation in `sisyphus-mcp::token`): root secret in the keystore; caveats `scope=…`, `project=…`, `context=…`, `file=…`, `expires=…`, `quarantine=@ctx`. `sis token create|list|revoke|attenuate`. Revocation list in the store.
+- `txtodo-mcp` using `rmcp`: tools, resources, prompts exactly as the design doc §6.3–6.4, plus `todo_notes_get {id}` / `todo_notes_set {id, text}` and `file` parameters accepting a ref path (`q4-roadmap/todo.txt`).
+- Transports: stdio (`txtodo mcp --stdio`) and Streamable HTTP on `127.0.0.1:8636/mcp`; `--lan` flag binds `0.0.0.0` and advertises `_txtodo-mcp._tcp`.
+- Tokens: macaroon-style (`macaroon` crate or a minimal HMAC-chained implementation in `txtodo-mcp::token`): root secret in the keystore; caveats `scope=…`, `project=…`, `context=…`, `file=…`, `expires=…`, `quarantine=@ctx`. `txtodo token create|list|revoke|attenuate`. Revocation list in the store.
 - Bearer auth on HTTP; stdio inherits a token from `--token` or the config's `default_stdio_token`.
 - Every mutation passes through the daemon's `Apply` with `Principal::Agent`. Quarantine caveat appends the context to `todo_add` lines. Rate limit: 60 mutations/min/token, 10 deletes/min/token, exceeding ⇒ token paused + notification event.
 - `dry_run` on `todo_batch` returns a unified diff against the projection.
@@ -383,7 +383,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 **Acceptance.**
 
 - Scope matrix test: for each (scope set × tool) pair, the expected allow/deny; attenuated tokens can't widen.
-- Quarantined `todo_add` produces a line with the extra context and `sis blame` shows the agent principal.
+- Quarantined `todo_add` produces a line with the extra context and `txtodo blame` shows the agent principal.
 - Dry run leaves the file's hash unchanged.
 - Rate-limit test pauses a token and emits the event.
 - Smoke test with a real MCP client (the SDK's reference client) over both transports.
@@ -394,10 +394,10 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Tasks.**
 
-- Tauri 2 shell; Rust side talks gRPC to `sisd` (spawns it if absent).
+- Tauri 2 shell; Rust side talks gRPC to `txtodod` (spawns it if absent).
 - Lezer grammar for todo.txt generated from `specs/todotxt.abnf` (script in `apps/desktop/scripts/abnf-to-lezer.mjs`; check the generated grammar in and add a CI step that fails if regeneration differs). Highlight tags map to the semantic token names in §3.1.
 - Main view: read-only CM6 `EditorView` bound to the daemon's `Watch` stream; decorations for hidden `id:` tags, ref indicators, hover pencil, "Add a line" trailing row.
-- Edit popover: a floating single-line CM6 instance with the same language; chips per §3.2; strict-mode validation via the WASM build of `core` (`sisyphus-ffi` wasm target) so the UI never re-implements the grammar.
+- Edit popover: a floating single-line CM6 instance with the same language; chips per §3.2; strict-mode validation via the WASM build of `core` (`txtodo-ffi` wasm target) so the UI never re-implements the grammar.
 - Detail view: pinned parent, notes editor (CM6 markdown mode), recursive file view component, breadcrumb, footer.
 - Conflict banner + review sheet when `needs_review` arrives (three variants from M4).
 - Devices and agents screen: pair (QR render + scan via webcam), token create/revoke, activity feed from the op log.
@@ -412,13 +412,13 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 ### M8 — Relay, internet sync, push (est. 2 weeks)
 
-**Tasks.** Enable iroh relay + hole-punching; reference relay binary in `relay/` (stores ciphertext blobs keyed by group + device, forwards APNs/FCM wake-ups when M9 registers tokens); file-carrier transport (`sync/<device-id>.ops` append-only files under a user-chosen folder); `sis bundle export|import`. Relay is optional; self-hosting docs.
+**Tasks.** Enable iroh relay + hole-punching; reference relay binary in `relay/` (stores ciphertext blobs keyed by group + device, forwards APNs/FCM wake-ups when M9 registers tokens); file-carrier transport (`sync/<device-id>.ops` append-only files under a user-chosen folder); `txtodo bundle export|import`. Relay is optional; self-hosting docs.
 
 **Acceptance.** Two daemons on separate networks (simulate with network namespaces in CI, or a two-VM job) converge via relay within 30 s; via direct hole-punch when possible. File-carrier: two daemons sharing a directory (no network) converge after each writes its ops file.
 
 ### M9 — Android, then iOS (est. 4–6 weeks)
 
-**Tasks.** `sisyphus-ffi` uniffi bindings for core + a `DaemonHandle` API that embeds `sisd` in-process. Android: foreground service running the daemon, Compose UI implementing §3.1–3.2 with `AnnotatedString` from `tokenize`, MCP over HTTP on LAN while the service runs, FCM wake-ups. iOS: SwiftUI + `UITextView`, daemon embedded in the app process, `BGAppRefresh`, silent push, App Intents for add/complete/list, share sheet. Both: QR pairing, widgets.
+**Tasks.** `txtodo-ffi` uniffi bindings for core + a `DaemonHandle` API that embeds `txtodod` in-process. Android: foreground service running the daemon, Compose UI implementing §3.1–3.2 with `AnnotatedString` from `tokenize`, MCP over HTTP on LAN while the service runs, FCM wake-ups. iOS: SwiftUI + `UITextView`, daemon embedded in the app process, `BGAppRefresh`, silent push, App Intents for add/complete/list, share sheet. Both: QR pairing, widgets.
 
 **Acceptance.** Shared UI test script (Maestro or equivalent) runs the same scenario as M7's Playwright suite. A phone and a desktop pair and converge on LAN in ≤ 2 s and via relay in ≤ 30 s.
 
@@ -434,7 +434,7 @@ Sidecar identity mode; web PWA; TUI; editor plugins (Neovim, VS Code, Obsidian) 
 
 **Security checklist** (review before M4, M6, M8 close): no secrets in logs; keys only in keystore; every network message versioned, authenticated, encrypted; MCP HTTP refuses non-loopback unless `--lan`; tokens never logged; path traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types.
 
-**Observability from M3 onward:** `tracing` spans `reconcile{file}`, `sync.session{peer}`, `mcp.call{tool,principal}`; JSON logs to `.sisyphus/logs/` with rotation; `sis doctor --verbose` dumps the last 100 events.
+**Observability from M3 onward:** `tracing` spans `reconcile{file}`, `sync.session{peer}`, `mcp.call{tool,principal}`; JSON logs to `.txtodo/logs/` with rotation; `txtodo doctor --verbose` dumps the last 100 events.
 
 **Docs:** each milestone updates `README.md` (user-facing) and `docs/` (contributor-facing). The `specs/` files are normative and must be updated in the same PR as any behaviour they describe.
 
