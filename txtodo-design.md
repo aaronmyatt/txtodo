@@ -1,8 +1,8 @@
-# Sisyphus — the most over-engineered todo.txt app
+# txtodo — the most over-engineered todo.txt app
 
 > One must imagine the todo list complete.
 
-Sisyphus is a todo.txt app built like a distributed database, because your todo list deserves the same convergence guarantees as a bank ledger. It is cross-platform (macOS, Linux, Windows, iOS, Android, web, terminal), cross-device (your phone, laptop, watch and the Raspberry Pi under the stairs form one *device group*), syncs peer-to-peer with end-to-end encryption and no required server, and runs an MCP server on every device so agents can work your list from wherever they happen to be running.
+txtodo is a todo.txt app built like a distributed database, because your todo list deserves the same convergence guarantees as a bank ledger. It is cross-platform (macOS, Linux, Windows, iOS, Android, web, terminal), cross-device (your phone, laptop, watch and the Raspberry Pi under the stairs form one *device group*), syncs peer-to-peer with end-to-end encryption and no required server, and runs an MCP server on every device so agents can work your list from wherever they happen to be running.
 
 And it is still just a text file. `cat todo.txt` works. `vim todo.txt` works. `todo.sh` works on the same file at the same time.
 
@@ -14,7 +14,7 @@ A note on the brief: "MVP server" is read here as **MCP** (Model Context Protoco
 
 | Goal | What it means in practice |
 |---|---|
-| **The file is the truth** | `todo.txt` (and `done.txt`) is the canonical state. Every other structure in this document is a cache, index, or projection of it. If Sisyphus vanished tomorrow, you'd lose nothing. |
+| **The file is the truth** | `todo.txt` (and `done.txt`) is the canonical state. Every other structure in this document is a cache, index, or projection of it. If txtodo vanished tomorrow, you'd lose nothing. |
 | **Faithful to the one-line standard** | The app never writes a line that isn't valid todo.txt. App metadata lives only in `key:value` tags, which the spec explicitly permits, and the app still works if those tags are stripped. |
 | **Cross-platform** | One Rust core, compiled to native, WASM, Swift, Kotlin, C, Python and Node. Thin native shells per platform. |
 | **Cross-device, no server required** | Devices form an encrypted peer group. Sync works over LAN, over the internet with hole-punching, through an optional dumb relay, over Bluetooth, over your existing Dropbox/Syncthing folder, or over a USB stick. |
@@ -28,13 +28,13 @@ A note on the brief: "MVP server" is read here as **MCP** (Model Context Protoco
 ```
                     ┌──────────────────────────────────────────┐
                     │              CLIENTS (per device)         │
-                    │  sis CLI · TUI · Tauri desktop · iOS ·    │
+                    │  txtodo CLI · TUI · Tauri desktop · iOS ·    │
                     │  Android · Web PWA · nvim/VS Code/Emacs · │
                     │  widgets · Shortcuts · Raycast            │
                     └───────────────┬──────────────────────────┘
                                     │ local IPC (unix socket / named pipe / gRPC)
    agents ──MCP (stdio|http)──▶ ┌───┴──────────────────────────────┐
-   curl   ──REST/OpenAPI────▶  │         sisd  (per-device daemon) │
+   curl   ──REST/OpenAPI────▶  │         txtodod  (per-device daemon) │
    Grafana──/metrics────────▶  │  file watcher · reconciler ·      │
                                │  CRDT doc · op log · sync engine  │
                                │  MCP server · REST · plugins      │
@@ -47,7 +47,7 @@ A note on the brief: "MVP server" is read here as **MCP** (Model Context Protoco
                      └──────────────────────┘    └────────────────────────────┘
 ```
 
-Everything that touches a line of text goes through `todotxt-core`, the Rust library that every client and the daemon share.
+Everything that touches a line of text goes through `txtodo-core`, the Rust library that every client and the daemon share.
 
 ---
 
@@ -74,12 +74,12 @@ That's it. The rest of this document exists to serve those eight bullets.
 ### 2.2 The contract (seven rules the codebase is not allowed to break)
 
 1. **Canonical file.** All state is derived from `todo.txt` + `done.txt`. Indexes, CRDT state, history and caches can be deleted and rebuilt from the files. The reverse is never true.
-2. **Byte-preserving round trip.** A line Sisyphus didn't change is written back byte-for-byte: same whitespace, same tag order, same quirks. `parse ∘ format = id` and `format ∘ parse = id` are property tests over every line in the compatibility corpus.
-3. **Spec-only output.** Sisyphus never emits a construct the spec doesn't define. It writes `pri:A` on completion rather than inventing its own priority placement.
+2. **Byte-preserving round trip.** A line txtodo didn't change is written back byte-for-byte: same whitespace, same tag order, same quirks. `parse ∘ format = id` and `format ∘ parse = id` are property tests over every line in the compatibility corpus.
+3. **Spec-only output.** txtodo never emits a construct the spec doesn't define. It writes `pri:A` on completion rather than inventing its own priority placement.
 4. **Metadata only in tags.** Every app-specific datum is a `key:value` tag, documented in Appendix A. The app degrades gracefully, never breaks, when tags are absent.
 5. **Order is data.** Line order is preserved and synced, because `todo.sh` (and humans) identify tasks by line number.
 6. **Blank lines are entries.** They're preserved as void entries so line numbers stay stable for other tools.
-7. **File hygiene is preserved, not imposed.** Line endings (LF/CRLF), a BOM, trailing newline or lack of one: detected per file and kept. Canonicalisation is an explicit command (`sis fmt`), never a side effect.
+7. **File hygiene is preserved, not imposed.** Line endings (LF/CRLF), a BOM, trailing newline or lack of one: detected per file and kept. Canonicalisation is an explicit command (`txtodo fmt`), never a side effect.
 
 ### 2.3 Grammar
 
@@ -109,7 +109,7 @@ blank       = ""
 - tabs, runs of spaces, trailing whitespace (all preserved)
 - `+` or `@` at the very start of the line
 
-Each leniency is recorded on the parsed task as a *quirk* so it round-trips (rule 2). `sis lint` reports quirks; `sis fmt` fixes them on request.
+Each leniency is recorded on the parsed task as a *quirk* so it round-trips (rule 2). `txtodo lint` reports quirks; `txtodo fmt` fixes them on request.
 
 ### 2.4 Edge cases the parser gets right
 
@@ -131,13 +131,13 @@ All optional, all `key:value`, all borrowed from existing conventions where one 
 
 | Tag | Meaning | Origin |
 |---|---|---|
-| `id:01J9K…` | stable task identity (ULID) — see §4.1 | Sisyphus (key name configurable) |
+| `id:01J9K…` | stable task identity (ULID) — see §4.1 | txtodo (key name configurable) |
 | `pri:A` | priority preserved through completion | todo.txt spec |
 | `due:2026-09-15` | due date | widespread convention |
 | `t:2026-09-14` | threshold: don't show before this date | SimpleTask convention |
 | `rec:1w` / `rec:+1w` | recurrence, from completion / strictly from due | SimpleTask convention |
 | `h:1` | hidden | SimpleTask convention |
-| `ref:q4-roadmap` | a sibling directory holding this task's notes and sub-list — see §2.6 | Sisyphus |
+| `ref:q4-roadmap` | a sibling directory holding this task's notes and sub-list — see §2.6 | txtodo |
 
 Nothing else. Attribution ("which agent added this"), history, and sync state live in the op log, not in the file.
 
@@ -149,20 +149,20 @@ A task that needs more than one line gets a directory, not a richer line.
 - The directory may hold `todo.txt`, `done.txt` and `notes.md`. All optional; the sub-list is a full todo.txt file, so it highlights, archives, syncs and nests exactly like the top level.
 - Creation is lazy: the tag is added and the directory created on the first keystroke into either notes or sub-list. Slug defaults to kebab-case of the description; collisions get `-2`, `-3`.
 - Progress on the parent line = open/total across `<ref>/todo.txt` and `<ref>/done.txt`. Completing the parent is never automatic; the UI offers it when nothing is open.
-- Archiving or deleting the parent leaves the directory alone. `sis prune --orphans` is the only thing that removes one.
+- Archiving or deleting the parent leaves the directory alone. `txtodo prune --orphans` is the only thing that removes one.
 - Every `todo.txt`, `done.txt` and `notes.md` under the workspace root, at any depth, is a synced document, discovered by walking the tree rather than by following tags.
 - Other tools see an inert tag; `todo.sh` pointed at the sub-directory works on the sub-list.
 
-The full normative version, including the rename and move-between-files rules, is §3.2 of `sisyphus-implementation-plan.md`.
+The full normative version, including the rename and move-between-files rules, is §3.2 of `txtodo-implementation-plan.md`.
 
 ---
 
-## 3. Layer 1 — `todotxt-core`
+## 3. Layer 1 — `txtodo-core`
 
 A `no_std`-compatible Rust crate. No I/O, no clocks, no allocation on the parser hot path.
 
 ```
-todotxt-core/
+txtodo-core/
   grammar.rs   hand-written recursive-descent parser; a second parser is generated
                mechanically from the ABNF and differentially tested against it in CI
   model.rs     Task { completed, completion_date, creation_date, priority,
@@ -175,7 +175,7 @@ todotxt-core/
 
 **Key modelling decision:** the structured fields are exactly the spec's prefix (`x`, dates, priority). The description is a single string, and projects, contexts and tags are parsed *out of it* as views. This is what makes the CRDT in §4 faithful: it syncs precisely the structure the spec defines, and nothing more.
 
-**Bindings** (`crates/sisyphus-ffi`):
+**Bindings** (`crates/txtodo-ffi`):
 
 - Swift and Kotlin via `uniffi`
 - WASM via `wasm-bindgen` (web app, Obsidian plugin)
@@ -186,7 +186,7 @@ todotxt-core/
 
 - `proptest`: generate random valid tasks; assert both round-trip identities
 - `cargo-fuzz`: the parser never panics on any byte sequence
-- Differential tests: run the same command sequence through `sis` and `todo.sh`, diff the resulting files, expect zero differences
+- Differential tests: run the same command sequence through `txtodo` and `todo.sh`, diff the resulting files, expect zero differences
 - Miri on the zero-copy paths
 
 ---
@@ -199,7 +199,7 @@ todo.txt lines have no IDs. Line 7 on your laptop and line 7 on your phone are o
 
 **Tagged mode (default).** Every task carries `id:<ULID>` (26 chars, sortable by creation time). Spec-compliant metadata; other tools ignore it. Robust under any combination of concurrent edits. Cost: about 30 bytes of visual noise per line, which clients hide by default.
 
-**Sidecar mode (purist).** No tags in the file. IDs live in `.sisyphus/index` on each device, keyed by a *fingerprint*. After an external edit, lines are re-identified by solving an assignment problem: cost = weighted mix of creation-date equality, project/context overlap, normalised Levenshtein distance on the description, and distance from the previous line position; solved with the Hungarian algorithm; matches below a confidence threshold become delete+insert. Honest caveat: in sidecar mode, *simultaneous* external edits to the same task on two devices may resurrect an edit as a duplicate rather than merge it. It will never lose text.
+**Sidecar mode (purist).** No tags in the file. IDs live in `.txtodo/index` on each device, keyed by a *fingerprint*. After an external edit, lines are re-identified by solving an assignment problem: cost = weighted mix of creation-date equality, project/context overlap, normalised Levenshtein distance on the description, and distance from the previous line position; solved with the Hungarian algorithm; matches below a confidence threshold become delete+insert. Honest caveat: in sidecar mode, *simultaneous* external edits to the same task on two devices may resurrect an edit as a duplicate rather than merge it. It will never lose text.
 
 The `id:` key name is configurable (`sid:`, `uid:`, …) to avoid colliding with tools that use `id:` for something else.
 
@@ -245,22 +245,22 @@ The file is the truth; the CRDT is how the truth travels. Both directions must b
 
 ### 4.4 Storage
 
-- Append-only op log in SQLite (`.sisyphus/oplog.db`), one row per op: `(hlc, device_id, principal, op_bytes, signature)`.
+- Append-only op log in SQLite (`.txtodo/oplog.db`), one row per op: `(hlc, device_id, principal, op_bytes, signature)`.
 - Snapshots every N ops; compaction keeps snapshots plus ops since. Full history is retained by default (it's a todo list; it's small), with configurable retention.
-- Everything under `.sisyphus/` is rebuildable from the files. Deleting it is the nuclear reset.
+- Everything under `.txtodo/` is rebuildable from the files. Deleting it is the nuclear reset.
 
 ### 4.5 Transports
 
-The sync engine speaks one protocol (`sisyphus-sync`: authenticated op exchange with vector-clock "what do you have that I don't") over whatever carrier is available, trying them in order:
+The sync engine speaks one protocol (`txtodo-sync`: authenticated op exchange with vector-clock "what do you have that I don't") over whatever carrier is available, trying them in order:
 
 | Carrier | When | How |
 |---|---|---|
-| **LAN** | same network | mDNS/DNS-SD (`_sisyphus._udp`) discovery, QUIC transport |
+| **LAN** | same network | mDNS/DNS-SD (`_txtodo._udp`) discovery, QUIC transport |
 | **Direct internet** | different networks | QUIC with NAT hole-punching (iroh-style), relay-assisted rendezvous |
 | **Relay** | hole-punching fails, or a device is asleep | stores *encrypted* op blobs per device group and forwards push wake-ups (APNs/FCM) to mobile. The reference relay is a single Rust binary; any S3 or WebDAV endpoint also works as a dumb relay |
 | **Bluetooth LE** | two phones, no network | same protocol, chunked over GATT |
 | **File carrier** | you already run Syncthing / Dropbox / iCloud Drive | each device appends ops only to *its own* file in a shared folder (`sync/<device-id>.ops`), so dumb file sync never conflicts; devices ingest each other's files |
-| **Sneakernet** | air-gapped | `sis bundle export` / `sis bundle import`, git-bundle style |
+| **Sneakernet** | air-gapped | `txtodo bundle export` / `txtodo bundle import`, git-bundle style |
 
 All carriers are optional. LAN alone is a complete system.
 
@@ -274,7 +274,7 @@ All carriers are optional. LAN alone is a complete system.
 
 ### 4.7 Conflict semantics
 
-The user-visible guarantee: **Sisyphus never silently loses something you typed.**
+The user-visible guarantee: **txtodo never silently loses something you typed.**
 
 | Device A | Device B | Result |
 |---|---|---|
@@ -282,7 +282,7 @@ The user-visible guarantee: **Sisyphus never silently loses something you typed.
 | complete | edit description | completed, with the edit |
 | edit word 1 | edit word 5 | both edits |
 | edit word 3 | edit word 3 | char-level merge, flagged for a one-tap review |
-| set `(A)` | set `(B)` | LWW by HLC; the loser is visible in `sis log` |
+| set `(A)` | set `(B)` | LWW by HLC; the loser is visible in `txtodo log` |
 | delete | edit | edit wins, task resurrected (default; configurable) |
 | delete | complete | completed, not deleted (default; configurable) |
 | move up | move down | both moves apply deterministically; same result on every device |
@@ -293,15 +293,15 @@ The user-visible guarantee: **Sisyphus never silently loses something you typed.
 
 Because the op log is append-only and signed:
 
-- `sis log` — every change, with device and principal (`you@laptop`, `agent:claude-code@laptop`)
-- `sis blame` — per line, who last touched each field
-- `sis checkout 2026-09-01T09:00` — render the file as it was, to stdout or a temp path
-- `sis undo` — inverse ops, which themselves sync
+- `txtodo log` — every change, with device and principal (`you@laptop`, `agent:claude-code@laptop`)
+- `txtodo blame` — per line, who last touched each field
+- `txtodo checkout 2026-09-01T09:00` — render the file as it was, to stdout or a temp path
+- `txtodo undo` — inverse ops, which themselves sync
 - Time travel is a *view*; the on-disk `todo.txt` is always "now".
 
 ---
 
-## 5. Layer 3 — `sisd`, the per-device daemon
+## 5. Layer 3 — `txtodod`, the per-device daemon
 
 One process per device, owning the file(s), the CRDT, the op log, sync, and the API surfaces. Clients never touch the file directly.
 
@@ -316,7 +316,7 @@ One process per device, owning the file(s), the CRDT, the op log, sync, and the 
 
 Local IPC: unix domain socket or named pipe carrying gRPC (`tonic`), with a JSON-over-HTTP mirror on loopback for scripts.
 
-`sis doctor` checks: file permissions, watcher health, clock skew vs peers, keystore access, port availability, relay reachability, and whether some other tool is holding the file open.
+`txtodo doctor` checks: file permissions, watcher health, clock skew vs peers, keystore access, port availability, relay reachability, and whether some other tool is holding the file open.
 
 ---
 
@@ -324,14 +324,14 @@ Local IPC: unix domain socket or named pipe carrying gRPC (`tonic`), with a JSON
 
 ### 6.1 Transports
 
-- **stdio**: `sis mcp --stdio`, for local agents (Claude Code, Cursor, an editor plugin) that spawn a subprocess.
-- **Streamable HTTP**: `http://127.0.0.1:8636/mcp` (8636 spells TODO on a phone keypad). Optionally bound to the LAN and advertised over mDNS as `_sisyphus-mcp._tcp`, so an agent on your desktop can find the daemon on your phone.
+- **stdio**: `txtodo mcp --stdio`, for local agents (Claude Code, Cursor, an editor plugin) that spawn a subprocess.
+- **Streamable HTTP**: `http://127.0.0.1:8636/mcp` (8636 spells TODO on a phone keypad). Optionally bound to the LAN and advertised over mDNS as `_txtodo-mcp._tcp`, so an agent on your desktop can find the daemon on your phone.
 - Both are the same server; the daemon is the only thing behind them.
 
 ### 6.2 Auth: scoped capability tokens
 
 ```
-sis token create --name "claude-code" --scope read,write:add,write:complete --project +work --expires 30d
+txtodo token create --name "claude-code" --scope read,write:add,write:complete --project +work --expires 30d
 ```
 
 Tokens are macaroon-style: a signed root with attenuating caveats, so a token holder can mint a *narrower* token (hand a sub-agent read-only on `+work`) but never a broader one. Scopes:
@@ -346,7 +346,7 @@ Tokens are macaroon-style: a signed root with attenuating caveats, so a token ho
 | `raw` | line-level read/write; bypasses structure; for tools that speak todo.txt natively |
 | `project:+x`, `context:@y`, `file:work.txt` | restrict every other scope to matching tasks |
 
-Every mutation is recorded in the op log with the token's principal, so `sis blame` can tell you which agent added "buy 400 rubber ducks".
+Every mutation is recorded in the op log with the token's principal, so `txtodo blame` can tell you which agent added "buy 400 rubber ducks".
 
 ### 6.3 Tools
 
@@ -406,13 +406,13 @@ Two seconds later the same two lines are on your phone.
 
 ## 7. Clients
 
-All clients are thin: they talk to `sisd` over local IPC and render. None of them parse the file themselves.
+All clients are thin: they talk to `txtodod` over local IPC and render. None of them parse the file themselves.
 
-**The UI model is the file.** Every graphical client renders `todo.txt` as a syntax-highlighted document with real line numbers, using `todotxt-core::tokenize` so token boundaries are identical on every platform. `id:` tags are hidden by default with a toggle. A single click or tap on a line opens a popover that edits the raw line (with chips that insert or toggle tokens); a double click or tap opens the line's `ref:` directory as a detail view: the parent line pinned at the top, `notes.md` as a plain markdown editor, and the sub-list rendered by the same file-view component, recursively. The precise interaction spec is §3 of `sisyphus-implementation-plan.md`.
+**The UI model is the file.** Every graphical client renders `todo.txt` as a syntax-highlighted document with real line numbers, using `txtodo_core::tokenize` so token boundaries are identical on every platform. `id:` tags are hidden by default with a toggle. A single click or tap on a line opens a popover that edits the raw line (with chips that insert or toggle tokens); a double click or tap opens the line's `ref:` directory as a detail view: the parent line pinned at the top, `notes.md` as a plain markdown editor, and the sub-list rendered by the same file-view component, recursively. The precise interaction spec is §3 of `txtodo-implementation-plan.md`.
 
 | Client | Stack | Notable |
 |---|---|---|
-| `sis` CLI | Rust, `clap` | **todo.sh command-compatible** (`add`, `ls`, `do`, `pri`, `depri`, `append`, `prepend`, `replace`, `del`, `archive`, `listproj`, `listcon`) so existing aliases and muscle memory keep working; plus `log`, `blame`, `checkout`, `undo`, `sync`, `pair`, `token`, `mcp`, `doctor`, `fmt`, `lint`; `--json` on everything |
+| `txtodo` CLI | Rust, `clap` | **todo.sh command-compatible** (`add`, `ls`, `do`, `pri`, `depri`, `append`, `prepend`, `replace`, `del`, `archive`, `listproj`, `listcon`) so existing aliases and muscle memory keep working; plus `log`, `blame`, `checkout`, `undo`, `sync`, `pair`, `token`, `mcp`, `doctor`, `fmt`, `lint`; `--json` on everything |
 | TUI | `ratatui` | vim keys, live sync indicator, conflict review |
 | Desktop | Tauri 2 shell, Svelte UI | macOS / Windows / Linux; menu-bar quick-add; global hotkey |
 | iOS | SwiftUI + uniffi core | widgets, Live Activities for tasks due today, App Intents / Shortcuts, watchOS complication, Share Sheet |
@@ -428,16 +428,16 @@ All clients are thin: they talk to `sisd` over local IPC and render. None of the
 One grammar shared by the CLI, MCP, and every UI's filter bar:
 
 ```
-sis ls '+work and @phone and not done'
-sis ls 'pri >= B and (due < today+7d or due is none)'
-sis ls 'created > 2026-09-01 and text ~ "roadmap"'
-sis ls 'done and completed >= start_of_week'
+txtodo ls '+work and @phone and not done'
+txtodo ls 'pri >= B and (due < today+7d or due is none)'
+txtodo ls 'created > 2026-09-01 and text ~ "roadmap"'
+txtodo ls 'done and completed >= start_of_week'
 ```
 
 - Operands: `done`, `pri`, `due`, `t`, `created`, `completed`, `+project`, `@context`, `key:value`, `text`, `line`, `id`
 - Relative dates (`today`, `+3d`, `start_of_week`, `eom`); natural-language dates via a plugin
-- Compiles to a plan over the in-memory index; `sis ls --explain` prints the plan, because of course it does
-- Saved views (`sis view save today '…'`) sync like everything else
+- Compiles to a plan over the in-memory index; `txtodo ls --explain` prints the plan, because of course it does
+- Saved views (`txtodo view save today '…'`) sync like everything else
 
 ---
 
@@ -447,7 +447,7 @@ WASM Component Model (WASI 0.2), sandboxed, capability-gated: a plugin declares 
 
 Hooks: `on_parse_line`, `before_write`, `on_task_added`, `on_task_completed`, `query_function`, `view_filter`, `format_line`.
 
-Ships with: recurrence (`rec:`), ICS calendar export for `due:`, natural-language dates, a GitHub issue mirror (`gh:owner/repo#123` ↔ task), and "notify when something is due today". Plugins run inside `sisd` and install from a registry or a local path.
+Ships with: recurrence (`rec:`), ICS calendar export for `due:`, natural-language dates, a GitHub issue mirror (`gh:owner/repo#123` ↔ task), and "notify when something is due today". Plugins run inside `txtodod` and install from a registry or a local path.
 
 ---
 
@@ -455,9 +455,9 @@ Ships with: recurrence (`rec:`), ICS calendar export for `due:`, natural-languag
 
 Because you should be able to page yourself when your todo list falls behind.
 
-- `sisd` exposes Prometheus at `/metrics`: `sisyphus_tasks{file,state,project}`, `sisyphus_sync_lag_seconds{peer}`, `sisyphus_reconcile_total{outcome}`, `sisyphus_conflicts_flagged_total`, `sisyphus_mcp_calls_total{tool,principal}`.
+- `txtodod` exposes Prometheus at `/metrics`: `txtodo_tasks{file,state,project}`, `txtodo_sync_lag_seconds{peer}`, `txtodo_reconcile_total{outcome}`, `txtodo_conflicts_flagged_total`, `txtodo_mcp_calls_total{tool,principal}`.
 - OpenTelemetry traces: one trace per sync session and per reconciliation, so you can see exactly why your phone took four seconds to learn about the plumber.
-- Structured JSON logs; `sis doctor` for humans.
+- Structured JSON logs; `txtodo doctor` for humans.
 - A Grafana dashboard JSON lives in `deploy/grafana/`. Yes, "tasks completed per week by project" is a panel.
 - SLOs, written down: convergence within 2 s on LAN and 30 s via relay for 99.9 % of ops; zero data loss, ever.
 
@@ -476,20 +476,20 @@ Because you should be able to page yourself when your todo list falls behind.
 ## 12. Repository layout
 
 ```
-sisyphus/
+txtodo/
 ├── crates/
-│   ├── todotxt-core/      parser · model · formatter · diff   (no_std)
-│   ├── todotxt-query/     query language
-│   ├── sisyphus-crdt/     document model · reconciler
-│   ├── sisyphus-sync/     protocol · transports · pairing · crypto
-│   ├── sisyphus-store/    op log · snapshots · index
-│   ├── sisyphus-daemon/   sisd
-│   ├── sisyphus-mcp/      MCP server
-│   ├── sisyphus-api/      gRPC + REST
-│   ├── sisyphus-plugins/  WASM host
-│   ├── sisyphus-cli/      sis
-│   ├── sisyphus-tui/
-│   └── sisyphus-ffi/      uniffi · wasm-bindgen · cbindgen · pyo3 · napi
+│   ├── txtodo-core/      parser · model · formatter · diff   (no_std)
+│   ├── txtodo-query/     query language
+│   ├── txtodo-crdt/     document model · reconciler
+│   ├── txtodo-sync/     protocol · transports · pairing · crypto
+│   ├── txtodo-store/    op log · snapshots · index
+│   ├── txtodo-daemon/   txtodod
+│   ├── txtodo-mcp/      MCP server
+│   ├── txtodo-api/      gRPC + REST            (M10; not in plan §2 — plan wins)
+│   ├── txtodo-plugins/  WASM host              (M10; not in plan §2 — plan wins)
+│   ├── txtodo-cli/      txtodo
+│   ├── txtodo-tui/
+│   └── txtodo-ffi/      uniffi · wasm-bindgen · cbindgen · pyo3 · napi
 ├── apps/
 │   ├── desktop/           Tauri
 │   ├── ios/
@@ -508,8 +508,8 @@ sisyphus/
 
 If you want to *use* it before you finish it:
 
-1. `todotxt-core` + `sis` CLI with todo.sh parity. Useful on day one.
-2. `sisd` + file watcher + reconciler + op log. History and undo on one device.
+1. `txtodo-core` + `txtodo` CLI with todo.sh parity. Useful on day one.
+2. `txtodod` + file watcher + reconciler + op log. History and undo on one device.
 3. CRDT + LAN sync + pairing. Two laptops on the same Wi-Fi.
 4. MCP server, stdio first, then HTTP + tokens. Agents.
 5. Relay + hole-punching. Phone to laptop across the internet.
@@ -522,7 +522,7 @@ Steps 1–4 are a couple of months for one person. Step 7 is a lifestyle.
 
 ## Appendix A — extension tags (normative)
 
-| Key | Value | Written by Sisyphus? | Safe to strip? |
+| Key | Value | Written by txtodo? | Safe to strip? |
 |---|---|---|---|
 | `id` | ULID | yes, in tagged mode | yes; falls back to fingerprints |
 | `pri` | `A`–`Z` | on completion | yes; priority is lost, as the spec warns |
