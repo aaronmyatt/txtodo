@@ -5,8 +5,10 @@
 #![forbid(unsafe_code)]
 
 mod error;
+mod ops;
 
 pub use error::StoreError;
+pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored};
 
 use rusqlite::Connection;
 use std::path::Path;
