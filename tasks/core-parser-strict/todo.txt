@@ -1,6 +1,6 @@
-(B) 2026-09-11 parse.rs: pub fn parse_line(raw, mode) -> Result<Line, ParseError>; strict path first; empty raw → LineKind::Blank +m1 @core
-(B) 2026-09-11 Prefix parser over the scanner: x SP date SP [date SP] | [priority SP] [date SP]; description = the rest, verbatim slice +m1 @core
-(B) 2026-09-11 Strict errors: missing SP after priority, bad date shape or calendar, priority after x, trailing whitespace, tabs → ParseError with the ABNF rule name +m1 @core
-(B) 2026-09-11 Keep parse_line ≤ 60 lines by splitting: parse_completed, parse_incomplete, take_date, take_priority (each ≤ 30) +m1 @core
-(B) 2026-09-11 Unit tests: every ABNF rule has a passing and a failing case; error.byte points at the offending byte +m1 @core @test
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 parse.rs: pub fn parse_line(raw, mode) -> Result<Line, ParseError>; strict path first; empty raw → LineKind::Blank +m1 @core
+x 2026-09-11 2026-09-11 Prefix parser over the scanner: x SP date SP [date SP] | [priority SP] [date SP]; description = the rest, verbatim slice +m1 @core
+x 2026-09-11 2026-09-11 Strict errors: missing SP after priority, bad date shape or calendar, priority after x, trailing whitespace, tabs → ParseError with the ABNF rule name +m1 @core
+x 2026-09-11 2026-09-11 Keep parse_line ≤ 60 lines by splitting: parse_completed, parse_incomplete, take_date, take_priority (each ≤ 30) +m1 @core
+x 2026-09-11 2026-09-11 Unit tests: every ABNF rule has a passing and a failing case; error.byte points at the offending byte +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
