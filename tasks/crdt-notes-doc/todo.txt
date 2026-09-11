@@ -1,0 +1,12 @@
+2026-09-12 Regression test first: a workspace holding notes.md leaves it byte-identical across daemon start, watch and an external edit +m5 @daemon @test
+2026-09-12 DocKind enum decided once at the walker boundary, so DocState::from_file can never be reached with a notes path +m5 @daemon
+2026-09-12 Actor holds a Doc enum over Tasks and Notes rather than a DocState, exhaustive match +m5 @daemon
+2026-09-12 NotesState: one LoroText plus BOM, line ending and trailing-newline fidelity bits +m5 @crdt
+2026-09-12 External notes reconciliation via core::diff_text, mapped straight onto NotesEdit TextEdits +m5 @crdt
+2026-09-12 MAX_NOTES_BYTES const, asserted; a prose file has no line cap so it needs a byte cap +m5 @crdt
+2026-09-12 proto GetNotes and EditNotes with new field numbers, plus a comment justifying separate rpcs from GetFile and Apply +m5 @proto
+2026-09-12 EditNotes takes a base version and rejects a stale one with a typed error, never a silent apply +m5 @daemon
+2026-09-12 Test: prose edit to NotesEdit to materialise is byte-identical to the edit +m5 @crdt @test
+2026-09-12 Tests: BOM, CRLF and missing-trailing-newline notes files survive unchanged +m5 @crdt @test
+2026-09-12 Test: a notes.md whose content looks like todo.txt is still treated as prose; kind comes from the name +m5 @daemon @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @crdt @proto

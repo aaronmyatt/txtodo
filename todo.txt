@@ -17,9 +17,9 @@
 2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4
 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core
-2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model
-2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon
-2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto
+2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree
+2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation
+2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc
 2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon
 2026-09-11 txtodo open, notes, sub, prune --orphans commands +m5 @cli
 2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon
@@ -133,3 +133,4 @@ x 2026-09-12 2026-09-11 Integration tests for the 8 external-edit scenarios with
 x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
 x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
 x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test
+(A) 2026-09-12 Bug: txtodod stamps id: tags into notes.md prose; the walker yields it and the actor builds a DocState for it +m3 @daemon @bug ref:crdt-notes-doc id:01M28Q73KEJ60TFF9QGJKWWPZQ

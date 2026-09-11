@@ -1,0 +1,14 @@
+2026-09-12 Doc comment stating progress is non-recursive per specs/ref-directories.md rule 5, so nobody helpfully sums grandchildren +m5 @model
+2026-09-12 Node and edge model over ref directories, taking the walker's file set rather than discovering anything +m5 @model
+2026-09-12 Handle an orphan directory as a node with no parent edge and a dangling ref as an edge with no node +m5 @model
+2026-09-12 Assert acyclicity explicitly and cap MAX_TREE_DEPTH; a hand-edited tag or symlink can make a cycle +m5 @model
+2026-09-12 progress(ref) -> Progress { done, total } per rule 5 exactly, blanks excluded, u32 with an asserted cap +m5 @model
+2026-09-12 invalidates(op, file) -> Invalidation, exhaustive over OpKind with no default arm +m5 @model
+2026-09-12 EditText that adds or removes a ref: tag is an edge change, not a counter change; the arm that is easiest to miss +m5 @model
+2026-09-12 NotesEdit BlankInsert BlankRemove invalidate nothing; say so in the arm rather than defaulting +m5 @model
+2026-09-12 Bounded cache keyed by ref directory with MAX_TRACKED_REFS asserted +m5 @model
+2026-09-12 debug_assertions-only recompute_and_assert_equal after each invalidation batch +m5 @model
+2026-09-12 proptest: for any op sequence cached counters equal freshly computed ones +m5 @model @test
+2026-09-12 Tests: one arm per OpKind variant, plus a cross-file Move invalidating both source and destination +m5 @model @test
+2026-09-12 Test: a cycle in the ref graph is caught rather than hanging the consumer +m5 @model @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @model
