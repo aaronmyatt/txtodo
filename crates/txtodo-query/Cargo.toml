@@ -1,0 +1,10 @@
+[package]
+name = "txtodo-query"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Query language: parse, plan, evaluate."
+
+[dependencies]
+txtodo-core.workspace = true

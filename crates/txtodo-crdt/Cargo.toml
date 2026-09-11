@@ -1,0 +1,12 @@
+[package]
+name = "txtodo-crdt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Loro document, ops to/from Loro, reconciler."
+
+[dependencies]
+txtodo-model.workspace = true
+txtodo-store.workspace = true
+txtodo-core.workspace = true

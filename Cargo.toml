@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+
+[workspace.dependencies]
+txtodo-core   = { path = "crates/txtodo-core" }
+txtodo-query  = { path = "crates/txtodo-query" }
+txtodo-model  = { path = "crates/txtodo-model" }
+txtodo-store  = { path = "crates/txtodo-store" }
+txtodo-crdt   = { path = "crates/txtodo-crdt" }
+txtodo-sync   = { path = "crates/txtodo-sync" }
+txtodo-proto  = { path = "crates/txtodo-proto" }
+txtodo-mcp    = { path = "crates/txtodo-mcp" }

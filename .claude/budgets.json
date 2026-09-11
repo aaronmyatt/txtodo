@@ -16,7 +16,80 @@
     "payloadKB": "N/A until M6: no HTTP surface in M0-M5 (libraries, CLI, daemon over unix socket). Re-justify when sisyphus-mcp lands.",
     "latencyMs": "Plan section 5: reconcile one external line edit in a 10k-line file <= 20 ms on the Linux CI runner."
   },
-  "slices": {},
+  "slices": {
+    "root": "crates",
+    "shared": "crates/txtodo-core",
+    "unit": "cargo crate; edges are the plan §2 dependency list, checked by check-boundaries.sh",
+    "allowedDeps": {
+      "txtodo-core": [],
+      "txtodo-query": [
+        "txtodo-core"
+      ],
+      "txtodo-model": [
+        "txtodo-core"
+      ],
+      "txtodo-store": [
+        "txtodo-model"
+      ],
+      "txtodo-crdt": [
+        "txtodo-model",
+        "txtodo-store",
+        "txtodo-core"
+      ],
+      "txtodo-sync": [
+        "txtodo-model",
+        "txtodo-store"
+      ],
+      "txtodo-proto": [],
+      "txtodo-mcp": [
+        "txtodo-proto",
+        "txtodo-query"
+      ],
+      "txtodo-cli": [
+        "txtodo-core",
+        "txtodo-proto"
+      ],
+      "txtodo-daemon": [
+        "txtodo-core",
+        "txtodo-query",
+        "txtodo-model",
+        "txtodo-store",
+        "txtodo-crdt",
+        "txtodo-sync",
+        "txtodo-proto",
+        "txtodo-mcp"
+      ],
+      "txtodo-tui": [
+        "txtodo-core",
+        "txtodo-proto"
+      ],
+      "txtodo-ffi": [
+        "txtodo-core",
+        "txtodo-query"
+      ]
+    },
+    "frozenPaths": [
+      "crates/txtodo-core/**",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      "justfile",
+      "rustfmt.toml",
+      "clippy.toml",
+      "deny.toml",
+      ".github/**",
+      "specs/**",
+      "CLAUDE.md",
+      ".claude/**",
+      ".pi/extensions/**",
+      "ABSTRACTIONS.md",
+      "RATCHET.md"
+    ],
+    "appendOnly": [
+      "ABSTRACTIONS.md",
+      "RATCHET.md"
+    ]
+  },
   "baselinePaths": [],
   "commands": {}
 }

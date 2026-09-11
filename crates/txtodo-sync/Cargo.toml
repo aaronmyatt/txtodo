@@ -1,0 +1,11 @@
+[package]
+name = "txtodo-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Sync protocol, transports, pairing, crypto."
+
+[dependencies]
+txtodo-model.workspace = true
+txtodo-store.workspace = true

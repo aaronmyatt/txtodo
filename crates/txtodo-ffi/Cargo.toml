@@ -1,0 +1,11 @@
+[package]
+name = "txtodo-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "uniffi, wasm-bindgen, cbindgen bindings over core and query."
+
+[dependencies]
+txtodo-core.workspace = true
+txtodo-query.workspace = true

@@ -1,0 +1,11 @@
+[package]
+name = "txtodo-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "MCP tools, resources, prompts, tokens."
+
+[dependencies]
+txtodo-proto.workspace = true
+txtodo-query.workspace = true

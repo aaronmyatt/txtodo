@@ -1,0 +1,10 @@
+[package]
+name = "txtodo-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "SQLite op log, snapshots, projection cache."
+
+[dependencies]
+txtodo-model.workspace = true

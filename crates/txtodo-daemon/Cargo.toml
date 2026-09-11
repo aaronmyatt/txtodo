@@ -1,0 +1,21 @@
+[package]
+name = "txtodo-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "txtodod: actors, watcher, IPC server, MCP host."
+
+[[bin]]
+name = "txtodod"
+path = "src/main.rs"
+
+[dependencies]
+txtodo-core.workspace = true
+txtodo-query.workspace = true
+txtodo-model.workspace = true
+txtodo-store.workspace = true
+txtodo-crdt.workspace = true
+txtodo-sync.workspace = true
+txtodo-proto.workspace = true
+txtodo-mcp.workspace = true
