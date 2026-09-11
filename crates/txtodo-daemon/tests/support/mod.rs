@@ -31,16 +31,32 @@ pub struct Daemon {
     seq_baseline: i64,
 }
 
+/// Dials the socket; a daemon that has bound but not yet accepted answers a few hundred ms later,
+/// so this retries (bounded) instead of failing the whole scenario on a slow test machine.
 async fn connect(socket: PathBuf) -> Client {
-    let channel = Endpoint::try_from("http://[::]:50051")
-        .unwrap_or_else(|e| panic!("{e}"))
-        .connect_with_connector(service_fn(move |_: Uri| {
-            let socket = socket.clone();
-            async move { UnixStream::connect(socket).await.map(TokioIo::new) }
-        }))
-        .await
-        .unwrap_or_else(|e| panic!("connect: {e}"));
-    TxtodoClient::new(channel)
+    let start = Instant::now();
+    let mut attempt = 0u32;
+    loop {
+        attempt += 1;
+        let dial = socket.clone();
+        let result = Endpoint::try_from("http://[::]:50051")
+            .unwrap_or_else(|e| panic!("{e}"))
+            .connect_with_connector(service_fn(move |_: Uri| {
+                let dial = dial.clone();
+                async move { UnixStream::connect(dial).await.map(TokioIo::new) }
+            }))
+            .await;
+        match result {
+            Ok(channel) => return TxtodoClient::new(channel),
+            Err(e) => {
+                assert!(
+                    start.elapsed() < SOCKET_WAIT,
+                    "connect failed after {attempt} attempts: {e}"
+                );
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
 }
 
 impl Daemon {
