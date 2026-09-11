@@ -56,7 +56,10 @@ impl Quirks {
     }
     /// The lint names of the set quirks, in bit order.
     pub fn names(self) -> impl Iterator<Item = &'static str> {
-        Quirks::ALL.into_iter().filter(move |(q, _)| self.has(*q)).map(|(_, n)| n)
+        Quirks::ALL
+            .into_iter()
+            .filter(move |(q, _)| self.has(*q))
+            .map(|(_, n)| n)
     }
 }
 

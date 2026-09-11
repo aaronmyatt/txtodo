@@ -13,12 +13,12 @@
 // pest_derive generates an undocumented `pub enum Rule` in this test binary.
 #![allow(missing_docs)]
 
-use pest::iterators::Pair;
 use pest::Parser;
+use pest::iterators::Pair;
 use proptest::prelude::*;
 use std::fs;
 use std::path::Path;
-use txtodo_core::{parse_file, parse_line, Date, LineKind, Mode, Task};
+use txtodo_core::{Date, LineKind, Mode, Task, parse_file, parse_line};
 
 #[derive(pest_derive::Parser)]
 #[grammar = "tests/todotxt.pest"]
@@ -31,8 +31,15 @@ const PEST: &str = include_str!("todotxt.pest");
 fn generate_pest(abnf: &str) -> String {
     let rules = abnf_to_pest::parse_abnf(&abnf.replace("%s\"", "\"")).expect("valid ABNF");
     let mut out = Vec::new();
-    abnf_to_pest::render_rules_to_pest(rules).render(100, &mut out).expect("render");
-    let body: Vec<String> = String::from_utf8(out).expect("utf8").replace("^\"", "\"").lines().map(anchor).collect();
+    abnf_to_pest::render_rules_to_pest(rules)
+        .render(100, &mut out)
+        .expect("render");
+    let body: Vec<String> = String::from_utf8(out)
+        .expect("utf8")
+        .replace("^\"", "\"")
+        .lines()
+        .map(anchor)
+        .collect();
     format!(
         "// GENERATED from specs/todotxt.abnf by tests/differential.rs. Do not edit: the test regenerates and diffs.\n\
          {}\n\n// RFC 5234 core rules the ABNF relies on, and the anchored entry point.\nDIGIT = {{ '0'..'9' }}\nSP = {{ \" \" }}\nentry = {{ SOI ~ line }}\n",
@@ -44,7 +51,10 @@ fn generate_pest(abnf: &str) -> String {
 fn anchor(line: &str) -> String {
     for name in ["line", "incomplete"] {
         let prefix = format!("{name} = {{ ");
-        if let Some(body) = line.strip_prefix(&prefix).and_then(|b| b.strip_suffix(" }")) {
+        if let Some(body) = line
+            .strip_prefix(&prefix)
+            .and_then(|b| b.strip_suffix(" }"))
+        {
             let alts: Vec<String> = body.split(" | ").map(|a| format!("{a} ~ EOI")).collect();
             return format!("{prefix}{} }}", alts.join(" | "));
         }
@@ -54,7 +64,11 @@ fn anchor(line: &str) -> String {
 
 #[test]
 fn generated_grammar_is_current() {
-    assert_eq!(PEST, generate_pest(ABNF), "tests/todotxt.pest is stale: regenerate it from specs/todotxt.abnf");
+    assert_eq!(
+        PEST,
+        generate_pest(ABNF),
+        "tests/todotxt.pest is stale: regenerate it from specs/todotxt.abnf"
+    );
 }
 
 /// What both parsers agree to compare.
@@ -69,7 +83,11 @@ struct Fields {
 fn hand_fields(t: &Task<'_>) -> Fields {
     Fields {
         completed: t.completed,
-        dates: [t.completion_date, t.creation_date].iter().flatten().map(ToString::to_string).collect(),
+        dates: [t.completion_date, t.creation_date]
+            .iter()
+            .flatten()
+            .map(ToString::to_string)
+            .collect(),
         priority: t.priority.map(|p| p.as_char()),
         description: t.description.to_string(),
     }
@@ -77,7 +95,12 @@ fn hand_fields(t: &Task<'_>) -> Fields {
 
 /// Walks the pest tree iteratively (depth is bounded by the grammar; asserted ≤ 8).
 fn pest_fields(root: Pair<'_, Rule>) -> Fields {
-    let mut f = Fields { completed: false, dates: Vec::new(), priority: None, description: String::new() };
+    let mut f = Fields {
+        completed: false,
+        dates: Vec::new(),
+        priority: None,
+        description: String::new(),
+    };
     let mut stack: Vec<(Pair<'_, Rule>, usize)> = vec![(root, 0)];
     while let Some((pair, depth)) = stack.pop() {
         assert!(depth <= 8, "grammar depth is small");
@@ -101,7 +124,15 @@ fn pest_fields(root: Pair<'_, Rule>) -> Fields {
 /// The one known divergence: the ABNF fixes only the shape of a date; the hand parser also checks the
 /// calendar. Lines whose prefix has a date-shaped word that is not a real date are skipped.
 fn has_impossible_prefix_date(raw: &str) -> bool {
-    raw.split(' ').take(3).any(|w| w.len() == 10 && w.as_bytes()[4] == b'-' && w.as_bytes()[7] == b'-' && w.bytes().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit()) && Date::parse(w).is_none())
+    raw.split(' ').take(3).any(|w| {
+        w.len() == 10
+            && w.as_bytes()[4] == b'-'
+            && w.as_bytes()[7] == b'-'
+            && w.bytes()
+                .enumerate()
+                .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+            && Date::parse(w).is_none()
+    })
 }
 
 fn compare(raw: &str) -> Result<(), String> {
@@ -117,10 +148,19 @@ fn compare(raw: &str) -> Result<(), String> {
         (Ok(line), Ok(mut pairs)) => {
             let expected = match line.kind {
                 LineKind::Task(t) => hand_fields(&t),
-                LineKind::Blank => Fields { completed: false, dates: vec![], priority: None, description: String::new() },
+                LineKind::Blank => Fields {
+                    completed: false,
+                    dates: vec![],
+                    priority: None,
+                    description: String::new(),
+                },
             };
             let got = pest_fields(pairs.next().expect("entry"));
-            if got == expected { Ok(()) } else { Err(format!("{raw:?}: hand {expected:?} vs pest {got:?}")) }
+            if got == expected {
+                Ok(())
+            } else {
+                Err(format!("{raw:?}: hand {expected:?} vs pest {got:?}"))
+            }
         }
     }
 }
@@ -135,7 +175,8 @@ fn both_parsers_agree_on_the_corpus() {
             continue;
         }
         for line in parse_file(&fs::read(&path).expect("read")).lines {
-            compare(line.raw().expect("utf8")).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            compare(line.raw().expect("utf8"))
+                .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
             checked += 1;
         }
     }

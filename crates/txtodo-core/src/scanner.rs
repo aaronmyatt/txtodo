@@ -33,7 +33,11 @@ pub(crate) fn chunks(raw: &str) -> impl Iterator<Item = Chunk> + '_ {
         }
         debug_assert!(pos > start, "a chunk is never empty");
         debug_assert!(raw.is_char_boundary(pos), "separators are ASCII");
-        Some(Chunk { start, end: pos, is_ws: ws })
+        Some(Chunk {
+            start,
+            end: pos,
+            is_ws: ws,
+        })
     })
 }
 
@@ -43,14 +47,33 @@ mod tests {
     use alloc::vec::Vec;
 
     fn parts(raw: &str) -> Vec<(&str, bool)> {
-        chunks(raw).map(|c| (&raw[c.start..c.end], c.is_ws)).collect()
+        chunks(raw)
+            .map(|c| (&raw[c.start..c.end], c.is_ws))
+            .collect()
     }
 
     #[test]
     fn splits_on_space_and_tab_runs_only() {
-        assert_eq!(parts("a  b\tc "), alloc::vec![("a", false), ("  ", true), ("b", false), ("\t", true), ("c", false), (" ", true)]);
+        assert_eq!(
+            parts("a  b\tc "),
+            alloc::vec![
+                ("a", false),
+                ("  ", true),
+                ("b", false),
+                ("\t", true),
+                ("c", false),
+                (" ", true)
+            ]
+        );
         assert_eq!(parts(""), alloc::vec![]);
-        assert_eq!(parts("买菜 +家务"), alloc::vec![("买菜", false), (" ", true), ("+家务", false)]);
-        assert_eq!(parts("a\u{a0}b"), alloc::vec![("a\u{a0}b", false)], "NBSP is not a separator");
+        assert_eq!(
+            parts("买菜 +家务"),
+            alloc::vec![("买菜", false), (" ", true), ("+家务", false)]
+        );
+        assert_eq!(
+            parts("a\u{a0}b"),
+            alloc::vec![("a\u{a0}b", false)],
+            "NBSP is not a separator"
+        );
     }
 }

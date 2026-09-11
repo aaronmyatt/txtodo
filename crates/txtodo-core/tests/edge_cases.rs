@@ -2,11 +2,16 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use txtodo_core::{parse_file, parse_line, tokenize, LineEnding, LineKind, Mode, Priority, Quirks, Task, TokenKind};
 use TokenKind::*;
+use txtodo_core::{
+    LineEnding, LineKind, Mode, Priority, Quirks, Task, TokenKind, parse_file, parse_line, tokenize,
+};
 
 fn task(raw: &str) -> Task<'_> {
-    match parse_line(raw, Mode::Lenient).expect("lenient is total").kind {
+    match parse_line(raw, Mode::Lenient)
+        .expect("lenient is total")
+        .kind
+    {
         LineKind::Task(t) => t,
         LineKind::Blank => panic!("blank"),
     }
@@ -29,28 +34,42 @@ fn url_is_not_a_tag() {
 
 #[test]
 fn plus_inside_word_is_not_a_project() {
-    assert_eq!(task("learn C++ +cpp").projects().collect::<Vec<_>>(), ["cpp"]);
+    assert_eq!(
+        task("learn C++ +cpp").projects().collect::<Vec<_>>(),
+        ["cpp"]
+    );
 }
 
 #[test]
 fn unicode_project_and_context() {
     let t = task("买菜 +家务 @手机");
-    assert_eq!((t.projects().next(), t.contexts().next()), (Some("家务"), Some("手机")));
+    assert_eq!(
+        (t.projects().next(), t.contexts().next()),
+        (Some("家务"), Some("手机"))
+    );
 }
 
 #[test]
 fn uppercase_x_is_not_completion() {
     let t = task("X 2026-09-11 not done");
-    assert_eq!((t.completed, t.creation_date, t.description), (false, None, "X 2026-09-11 not done"));
+    assert_eq!(
+        (t.completed, t.creation_date, t.description),
+        (false, None, "X 2026-09-11 not done")
+    );
 }
 
 #[test]
 fn priority_after_date_is_lenient_quirk() {
     let raw = "x 2026-09-11 (A) task";
     let strict = parse_line(raw, Mode::Strict).expect("grammar accepts it as description text");
-    assert!(matches!(strict.kind, LineKind::Task(Task { priority: None, .. })));
+    assert!(matches!(
+        strict.kind,
+        LineKind::Task(Task { priority: None, .. })
+    ));
     let lenient = parse_line(raw, Mode::Lenient).expect("total");
-    assert!(matches!(lenient.kind, LineKind::Task(Task { priority: Some(p), .. }) if p.as_char() == 'A'));
+    assert!(
+        matches!(lenient.kind, LineKind::Task(Task { priority: Some(p), .. }) if p.as_char() == 'A')
+    );
     assert!(lenient.quirks.has(Quirks::PRIORITY_AFTER_DATE));
 }
 

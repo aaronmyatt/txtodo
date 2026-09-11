@@ -20,7 +20,12 @@ pub struct Prefix {
 impl Prefix {
     /// The prefix of a parsed task.
     pub fn of(task: &Task<'_>) -> Prefix {
-        Prefix { completed: task.completed, completion_date: task.completion_date, creation_date: task.creation_date, priority: task.priority }
+        Prefix {
+            completed: task.completed,
+            completion_date: task.completion_date,
+            creation_date: task.creation_date,
+            priority: task.priority,
+        }
     }
 }
 
@@ -41,8 +46,14 @@ pub fn emit_prefix(p: &Prefix, has_description: bool) -> String {
     if !out.is_empty() && has_description {
         out.push(' ');
     }
-    debug_assert!(!out.starts_with(' '), "prefix never starts with a separator");
-    debug_assert!(has_description || !out.ends_with(' '), "no trailing separator without a description");
+    debug_assert!(
+        !out.starts_with(' '),
+        "prefix never starts with a separator"
+    );
+    debug_assert!(
+        has_description || !out.ends_with(' '),
+        "no trailing separator without a description"
+    );
     out
 }
 
@@ -79,19 +90,83 @@ mod tests {
     #[test]
     fn emits_every_strict_shape() {
         let a = Priority::new('A');
-        assert_eq!(emit_prefix(&Prefix { priority: a, creation_date: d("2026-09-11"), ..Prefix::default() }, true), "(A) 2026-09-11 ");
-        assert_eq!(emit_prefix(&Prefix { priority: a, ..Prefix::default() }, true), "(A) ");
-        assert_eq!(emit_prefix(&Prefix { priority: a, ..Prefix::default() }, false), "(A)");
-        assert_eq!(emit_prefix(&Prefix { completed: true, completion_date: d("2026-09-11"), creation_date: d("2026-09-01"), ..Prefix::default() }, true), "x 2026-09-11 2026-09-01 ");
-        assert_eq!(emit_prefix(&Prefix { completed: true, completion_date: d("2026-09-11"), priority: a, ..Prefix::default() }, false), "x 2026-09-11", "no priority slot on completed lines");
-        assert_eq!(emit_prefix(&Prefix { completed: true, ..Prefix::default() }, true), "x ");
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    priority: a,
+                    creation_date: d("2026-09-11"),
+                    ..Prefix::default()
+                },
+                true
+            ),
+            "(A) 2026-09-11 "
+        );
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    priority: a,
+                    ..Prefix::default()
+                },
+                true
+            ),
+            "(A) "
+        );
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    priority: a,
+                    ..Prefix::default()
+                },
+                false
+            ),
+            "(A)"
+        );
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    completed: true,
+                    completion_date: d("2026-09-11"),
+                    creation_date: d("2026-09-01"),
+                    ..Prefix::default()
+                },
+                true
+            ),
+            "x 2026-09-11 2026-09-01 "
+        );
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    completed: true,
+                    completion_date: d("2026-09-11"),
+                    priority: a,
+                    ..Prefix::default()
+                },
+                false
+            ),
+            "x 2026-09-11",
+            "no priority slot on completed lines"
+        );
+        assert_eq!(
+            emit_prefix(
+                &Prefix {
+                    completed: true,
+                    ..Prefix::default()
+                },
+                true
+            ),
+            "x "
+        );
         assert_eq!(emit_prefix(&Prefix::default(), true), "");
     }
 
     #[test]
     fn description_start_is_after_the_prefix() {
         assert_eq!(description_start("(A) 2026-09-11 Call"), 15);
-        assert_eq!(description_start("x 2026-09-11 (A) t"), 17, "lenient priority is part of the prefix");
+        assert_eq!(
+            description_start("x 2026-09-11 (A) t"),
+            17,
+            "lenient priority is part of the prefix"
+        );
         assert_eq!(description_start("plain"), 0);
         assert_eq!(description_start("x 2026-09-11"), 12);
         assert_eq!(description_start(""), 0);

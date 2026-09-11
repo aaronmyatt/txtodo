@@ -53,7 +53,10 @@ impl fmt::Display for Ulid {
             *slot = ALPHABET[(bits & 31) as usize];
             bits >>= 5;
         }
-        debug_assert!(bits == 0, "128 bits fit in 26 five-bit chars with room to spare");
+        debug_assert!(
+            bits == 0,
+            "128 bits fit in 26 five-bit chars with room to spare"
+        );
         // The alphabet is ASCII, so this cannot fail; fall through to an empty string rather than panic.
         f.write_str(core::str::from_utf8(&out).unwrap_or(""))
     }
@@ -68,20 +71,39 @@ mod tests {
         let text = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
         let u = Ulid::parse(text).unwrap();
         assert_eq!(alloc::format!("{u}"), text);
-        assert_eq!(u.to_u128() >> 80, 1_469_922_850_259, "timestamp: hand-decoded 01ARZ3NDEK");
-        assert_eq!(alloc::format!("{}", Ulid::from_u128(1 << 80)), "00000000010000000000000000", "bit 80 is the 17th char from the right");
+        assert_eq!(
+            u.to_u128() >> 80,
+            1_469_922_850_259,
+            "timestamp: hand-decoded 01ARZ3NDEK"
+        );
+        assert_eq!(
+            alloc::format!("{}", Ulid::from_u128(1 << 80)),
+            "00000000010000000000000000",
+            "bit 80 is the 17th char from the right"
+        );
     }
 
     #[test]
     fn rejects_bad_length_overflow_and_excluded_letters() {
         assert_eq!(Ulid::parse("01ARZ3NDEKTSV4RRFFQ69G5FA"), None, "25 chars");
-        assert_eq!(Ulid::parse("8ARZ3NDEKTSV4RRFFQ69G5FAVX"), None, "first char > 7");
-        assert_eq!(Ulid::parse("01ARZ3NDEKTSV4RRFFQ69G5FAI"), None, "I is excluded");
+        assert_eq!(
+            Ulid::parse("8ARZ3NDEKTSV4RRFFQ69G5FAVX"),
+            None,
+            "first char > 7"
+        );
+        assert_eq!(
+            Ulid::parse("01ARZ3NDEKTSV4RRFFQ69G5FAI"),
+            None,
+            "I is excluded"
+        );
         assert_eq!(Ulid::parse("01arz3ndektsv4rrffq69g5fav"), None, "lowercase");
     }
 
     #[test]
     fn zero_displays_as_all_zeros() {
-        assert_eq!(alloc::format!("{}", Ulid::from_u128(0)), "00000000000000000000000000");
+        assert_eq!(
+            alloc::format!("{}", Ulid::from_u128(0)),
+            "00000000000000000000000000"
+        );
     }
 }

@@ -2,7 +2,7 @@
 //! Strict mode errors on any grammar deviation; lenient mode records the named leniencies as quirks and
 //! is total over `&str` (never `Err`). A second, ABNF-generated parser checks this one in tests.
 
-use crate::scanner::{chunks, Chunk};
+use crate::scanner::{Chunk, chunks};
 use crate::task::is_valid_slug;
 use crate::tokenize::is_priority_word;
 use crate::urls::DEFAULT_SCHEMES;
@@ -16,17 +16,43 @@ pub fn parse_line(raw: &str, mode: Mode) -> Result<Line<'_>, ParseError> {
 }
 
 /// [`parse_line`] with a custom URL scheme list (only affects the `INVALID_REF` check on tags).
-pub fn parse_line_with_schemes<'a>(raw: &'a str, mode: Mode, schemes: &[&str]) -> Result<Line<'a>, ParseError> {
+pub fn parse_line_with_schemes<'a>(
+    raw: &'a str,
+    mode: Mode,
+    schemes: &[&str],
+) -> Result<Line<'a>, ParseError> {
     if raw.is_empty() {
-        return Ok(Line { raw, kind: LineKind::Blank, quirks: Quirks::NONE, ending: LineEnding::default() });
+        return Ok(Line {
+            raw,
+            kind: LineKind::Blank,
+            quirks: Quirks::NONE,
+            ending: LineEnding::default(),
+        });
     }
-    let mut p = Parser { raw, chunks: chunks(raw).collect(), i: 0, mode, quirks: Quirks::NONE };
+    let mut p = Parser {
+        raw,
+        chunks: chunks(raw).collect(),
+        i: 0,
+        mode,
+        quirks: Quirks::NONE,
+    };
     let task = p.task()?;
-    if task.tag_with_schemes("ref", schemes).is_some_and(|slug| !is_valid_slug(slug)) {
+    if task
+        .tag_with_schemes("ref", schemes)
+        .is_some_and(|slug| !is_valid_slug(slug))
+    {
         p.quirks.insert(Quirks::INVALID_REF);
     }
-    debug_assert!(mode == Mode::Lenient || p.quirks == Quirks::NONE || p.quirks == Quirks::INVALID_REF, "strict has no leniency quirks");
-    Ok(Line { raw, kind: LineKind::Task(task), quirks: p.quirks, ending: LineEnding::default() })
+    debug_assert!(
+        mode == Mode::Lenient || p.quirks == Quirks::NONE || p.quirks == Quirks::INVALID_REF,
+        "strict has no leniency quirks"
+    );
+    Ok(Line {
+        raw,
+        kind: LineKind::Task(task),
+        quirks: p.quirks,
+        ending: LineEnding::default(),
+    })
 }
 
 /// Cursor over the scanner's chunks plus the quirks collected so far.
@@ -51,13 +77,24 @@ impl<'a> Parser<'a> {
     }
 
     /// In lenient mode records `quirk` and continues; in strict mode fails with `rule` at the cursor.
-    fn lenient_or(&mut self, quirk: Quirks, rule: &'static str, message: &'static str) -> Result<(), ParseError> {
+    fn lenient_or(
+        &mut self,
+        quirk: Quirks,
+        rule: &'static str,
+        message: &'static str,
+    ) -> Result<(), ParseError> {
         let byte = self.pos();
         self.lenient_or_at(quirk, rule, message, byte)
     }
 
     /// [`Parser::lenient_or`] with an explicit error offset.
-    fn lenient_or_at(&mut self, quirk: Quirks, rule: &'static str, message: &'static str, byte: usize) -> Result<(), ParseError> {
+    fn lenient_or_at(
+        &mut self,
+        quirk: Quirks,
+        rule: &'static str,
+        message: &'static str,
+        byte: usize,
+    ) -> Result<(), ParseError> {
         debug_assert!(byte <= self.raw.len(), "offset within the line");
         if self.mode == Mode::Lenient {
             self.quirks.insert(quirk);
@@ -72,13 +109,25 @@ impl<'a> Parser<'a> {
         let Some(c) = self.chunks.get(self.i).copied() else {
             return Ok(false);
         };
-        debug_assert!(c.is_ws, "prefix elements are words; the next chunk is whitespace or end");
+        debug_assert!(
+            c.is_ws,
+            "prefix elements are words; the next chunk is whitespace or end"
+        );
         if &self.raw[c.start..c.end] != " " {
-            self.lenient_or(Quirks::TABS, "SP", "words are separated by exactly one space")?;
+            self.lenient_or(
+                Quirks::TABS,
+                "SP",
+                "words are separated by exactly one space",
+            )?;
         }
         self.i += 1;
         if self.i == self.chunks.len() {
-            self.lenient_or_at(Quirks::TRAILING_WS, "description", "trailing whitespace", c.start)?;
+            self.lenient_or_at(
+                Quirks::TRAILING_WS,
+                "description",
+                "trailing whitespace",
+                c.start,
+            )?;
             return Ok(false);
         }
         Ok(true)
@@ -93,15 +142,27 @@ impl<'a> Parser<'a> {
         if self.mode == Mode::Lenient {
             return true;
         }
-        let sep = self.chunks.get(1).is_some_and(|c| c.is_ws && &self.raw[c.start..c.end] == " ");
-        let date = self.chunks.get(2).is_some_and(|c| !c.is_ws && Date::parse(&self.raw[c.start..c.end]).is_some());
+        let sep = self
+            .chunks
+            .get(1)
+            .is_some_and(|c| c.is_ws && &self.raw[c.start..c.end] == " ");
+        let date = self
+            .chunks
+            .get(2)
+            .is_some_and(|c| !c.is_ws && Date::parse(&self.raw[c.start..c.end]).is_some());
         debug_assert!(self.i == 0, "only the first word can be the marker");
         sep && date
     }
 
     /// Whole task: prefix, then the verbatim remainder as description.
     fn task(&mut self) -> Result<Task<'a>, ParseError> {
-        let mut t = Task { completed: false, completion_date: None, creation_date: None, priority: None, description: "" };
+        let mut t = Task {
+            completed: false,
+            completion_date: None,
+            creation_date: None,
+            priority: None,
+            description: "",
+        };
         if self.starts_completed() {
             self.i += 1;
             t.completed = true;
@@ -116,14 +177,24 @@ impl<'a> Parser<'a> {
     /// After `x`: `SP date [SP date]`, with lenient priority placements.
     fn completed_prefix(&mut self, t: &mut Task<'a>) -> Result<(), ParseError> {
         if !self.separator()? {
-            return self.lenient_or(Quirks::NO_COMPLETION_DATE, "completed", "expected a space and the completion date after x");
+            return self.lenient_or(
+                Quirks::NO_COMPLETION_DATE,
+                "completed",
+                "expected a space and the completion date after x",
+            );
         }
         if self.mode == Mode::Lenient && self.take_priority(t)? {
             self.quirks.insert(Quirks::PRIORITY_AFTER_X);
         }
         match self.take_date()? {
             Some(d) => t.completion_date = Some(d),
-            None => return self.lenient_or(Quirks::NO_COMPLETION_DATE, "completed", "expected the completion date after x"),
+            None => {
+                return self.lenient_or(
+                    Quirks::NO_COMPLETION_DATE,
+                    "completed",
+                    "expected the completion date after x",
+                );
+            }
         }
         if self.separator()? {
             self.take_optional_date(&mut t.creation_date)?;
@@ -197,9 +268,19 @@ impl<'a> Parser<'a> {
             let trailing = n + 1 == rest.len();
             let single = &self.raw[c.start..c.end] == " ";
             if trailing {
-                self.lenient_or_at(Quirks::TRAILING_WS, "description", "trailing whitespace", c.start)?;
+                self.lenient_or_at(
+                    Quirks::TRAILING_WS,
+                    "description",
+                    "trailing whitespace",
+                    c.start,
+                )?;
             } else if !single {
-                self.lenient_or_at(Quirks::TABS, "SP", "words are separated by exactly one space", c.start)?;
+                self.lenient_or_at(
+                    Quirks::TABS,
+                    "SP",
+                    "words are separated by exactly one space",
+                    c.start,
+                )?;
             }
         }
         Ok(&self.raw[start..])
@@ -209,7 +290,12 @@ impl<'a> Parser<'a> {
 /// `dddd-dd-dd` by shape, valid or not.
 fn has_date_shape(word: &str) -> bool {
     let b = word.as_bytes();
-    b.len() == 10 && b[4] == b'-' && b[7] == b'-' && b.iter().enumerate().all(|(i, &c)| i == 4 || i == 7 || c.is_ascii_digit())
+    b.len() == 10
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b.iter()
+            .enumerate()
+            .all(|(i, &c)| i == 4 || i == 7 || c.is_ascii_digit())
 }
 
 #[cfg(test)]
@@ -230,56 +316,129 @@ mod tests {
     #[test]
     fn strict_prefixes() {
         let (t, q) = task("(A) 2026-09-11 Call +house due:2026-09-15", Mode::Strict);
-        assert_eq!((t.priority.map(Priority::as_char), t.creation_date, t.description), (Some('A'), Date::new(2026, 9, 11), "Call +house due:2026-09-15"));
+        assert_eq!(
+            (
+                t.priority.map(Priority::as_char),
+                t.creation_date,
+                t.description
+            ),
+            (
+                Some('A'),
+                Date::new(2026, 9, 11),
+                "Call +house due:2026-09-15"
+            )
+        );
         assert!(q.is_empty());
         let (t, _) = task("x 2026-09-11 2026-09-01 Renew", Mode::Strict);
-        assert_eq!((t.completed, t.completion_date, t.creation_date, t.description), (true, Date::new(2026, 9, 11), Date::new(2026, 9, 1), "Renew"));
+        assert_eq!(
+            (
+                t.completed,
+                t.completion_date,
+                t.creation_date,
+                t.description
+            ),
+            (true, Date::new(2026, 9, 11), Date::new(2026, 9, 1), "Renew")
+        );
         let (t, _) = task("x 2026-09-11 (A) task", Mode::Strict);
-        assert_eq!((t.priority, t.description), (None, "(A) task"), "strict: a priority after the date is description text");
+        assert_eq!(
+            (t.priority, t.description),
+            (None, "(A) task"),
+            "strict: a priority after the date is description text"
+        );
         assert_eq!(parse_line("", Mode::Strict).unwrap().kind, LineKind::Blank);
     }
 
     #[test]
     fn strict_errors_name_rule_and_byte() {
-        assert_eq!(strict_err("x  2026-09-11 t"), ParseError::new("SP", 1, "words are separated by exactly one space"));
+        assert_eq!(
+            strict_err("x  2026-09-11 t"),
+            ParseError::new("SP", 1, "words are separated by exactly one space")
+        );
         let (t, _) = task("x", Mode::Strict);
-        assert_eq!((t.completed, t.description), (false, "x"), "grammar: a bare x is a description");
+        assert_eq!(
+            (t.completed, t.description),
+            (false, "x"),
+            "grammar: a bare x is a description"
+        );
         let (t, _) = task("x (A) 2026-09-11 t", Mode::Strict);
-        assert_eq!((t.completed, t.priority, t.description), (false, None, "x (A) 2026-09-11 t"));
-        assert_eq!(strict_err("(A)  task"), ParseError::new("SP", 3, "words are separated by exactly one space"));
-        assert_eq!(strict_err("2026-02-30 t"), ParseError::new("date", 0, "not a calendar date"));
+        assert_eq!(
+            (t.completed, t.priority, t.description),
+            (false, None, "x (A) 2026-09-11 t")
+        );
+        assert_eq!(
+            strict_err("(A)  task"),
+            ParseError::new("SP", 3, "words are separated by exactly one space")
+        );
+        assert_eq!(
+            strict_err("2026-02-30 t"),
+            ParseError::new("date", 0, "not a calendar date")
+        );
         assert_eq!(strict_err("a\tb").rule, "SP");
-        assert_eq!(strict_err("task "), ParseError::new("description", 4, "trailing whitespace"));
-        assert_eq!(strict_err("(A) task  "), ParseError::new("description", 8, "trailing whitespace"));
+        assert_eq!(
+            strict_err("task "),
+            ParseError::new("description", 4, "trailing whitespace")
+        );
+        assert_eq!(
+            strict_err("(A) task  "),
+            ParseError::new("description", 8, "trailing whitespace")
+        );
     }
 
     #[test]
     fn lenient_records_quirks_and_never_fails() {
         let (t, q) = task("x no completion date here", Mode::Lenient);
-        assert_eq!((t.completed, t.completion_date, t.description), (true, None, "no completion date here"));
+        assert_eq!(
+            (t.completed, t.completion_date, t.description),
+            (true, None, "no completion date here")
+        );
         assert_eq!(q, Quirks::NO_COMPLETION_DATE);
         let (t, q) = task("x (A) 2026-09-11 priority after x", Mode::Lenient);
-        assert_eq!((t.priority.map(Priority::as_char), t.completion_date.is_some()), (Some('A'), true));
+        assert_eq!(
+            (
+                t.priority.map(Priority::as_char),
+                t.completion_date.is_some()
+            ),
+            (Some('A'), true)
+        );
         assert_eq!(q, Quirks::PRIORITY_AFTER_X);
         let (t, q) = task("x 2026-09-11 (A) priority after date", Mode::Lenient);
-        assert_eq!((t.priority.map(Priority::as_char), t.description), (Some('A'), "priority after date"));
+        assert_eq!(
+            (t.priority.map(Priority::as_char), t.description),
+            (Some('A'), "priority after date")
+        );
         assert_eq!(q, Quirks::PRIORITY_AFTER_DATE);
     }
 
     #[test]
     fn lenient_whitespace_and_shape_quirks() {
         let (t, q) = task("2026-09-11\ttab\twords", Mode::Lenient);
-        assert_eq!((t.creation_date.is_some(), t.description, q), (true, "tab\twords", Quirks::TABS));
+        assert_eq!(
+            (t.creation_date.is_some(), t.description, q),
+            (true, "tab\twords", Quirks::TABS)
+        );
         let (_, q) = task("2026-09-11 t   ", Mode::Lenient);
         assert_eq!(q, Quirks::TRAILING_WS);
         let (t, q) = task("  indented", Mode::Lenient);
         assert_eq!((t.description, q), ("  indented", Quirks::LEADING_WS));
-        assert_eq!(task("   ", Mode::Lenient).1, Quirks::LEADING_WS | Quirks::TRAILING_WS);
-        assert_eq!(strict_err(" 0"), ParseError::new("description", 0, "leading whitespace"));
+        assert_eq!(
+            task("   ", Mode::Lenient).1,
+            Quirks::LEADING_WS | Quirks::TRAILING_WS
+        );
+        assert_eq!(
+            strict_err(" 0"),
+            ParseError::new("description", 0, "leading whitespace")
+        );
         let (t, q) = task("x 2026-09-11", Mode::Lenient);
-        assert_eq!((t.completion_date.is_some(), t.description, q), (true, "", Quirks::NONE), "empty description is allowed");
+        assert_eq!(
+            (t.completion_date.is_some(), t.description, q),
+            (true, "", Quirks::NONE),
+            "empty description is allowed"
+        );
         let (t, q) = task("2026-02-30 t", Mode::Lenient);
-        assert_eq!((t.creation_date, t.description, q), (None, "2026-02-30 t", Quirks::NONE));
+        assert_eq!(
+            (t.creation_date, t.description, q),
+            (None, "2026-02-30 t", Quirks::NONE)
+        );
         let (_, q) = task("Bad ref:../x", Mode::Lenient);
         assert_eq!(q, Quirks::INVALID_REF);
     }
@@ -287,7 +446,10 @@ mod tests {
     #[test]
     fn design_2_4_non_errors() {
         let (t, _) = task("X 2026-09-11 not done", Mode::Strict);
-        assert_eq!((t.completed, t.creation_date, t.description), (false, None, "X 2026-09-11 not done"));
+        assert_eq!(
+            (t.completed, t.creation_date, t.description),
+            (false, None, "X 2026-09-11 not done")
+        );
         let (t, _) = task("(a) task", Mode::Strict);
         assert_eq!((t.priority, t.description), (None, "(a) task"));
         let (t, _) = task("+project at start", Mode::Strict);

@@ -82,10 +82,13 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 }
 
 fn key_of(line: &OwnedLine) -> Key {
-    let id = line.raw().and_then(|r| crate::parse_line(r, Mode::Lenient).ok()).and_then(|l| match l.kind {
-        LineKind::Task(t) => t.id(),
-        LineKind::Blank => None,
-    });
+    let id = line
+        .raw()
+        .and_then(|r| crate::parse_line(r, Mode::Lenient).ok())
+        .and_then(|l| match l.kind {
+            LineKind::Task(t) => t.id(),
+            LineKind::Blank => None,
+        });
     id.map_or_else(|| Key::Content(fnv1a(line.bytes())), Key::Id)
 }
 
@@ -97,14 +100,27 @@ pub fn diff_lines(a: &File, b: &File) -> Vec<LineDiff> {
     let mut out: Vec<LineDiff> = myers(&ka, &kb)
         .into_iter()
         .map(|s| match s {
-            Step::Keep(i, j) if a.lines[i].bytes() == b.lines[j].bytes() => LineDiff::Keep { from: i, to: j },
+            Step::Keep(i, j) if a.lines[i].bytes() == b.lines[j].bytes() => {
+                LineDiff::Keep { from: i, to: j }
+            }
             Step::Keep(i, j) => LineDiff::Change { from: i, to: j },
             Step::Delete(i) => LineDiff::Delete { from: i },
             Step::Insert(j) => LineDiff::Insert { to: j },
         })
         .collect();
     pair_moves(&mut out, &ka, &kb);
-    debug_assert!(out.iter().filter(|d| matches!(d, LineDiff::Keep { .. } | LineDiff::Change { .. } | LineDiff::Move { .. } | LineDiff::Delete { .. })).count() <= a.lines.len() + b.lines.len());
+    debug_assert!(
+        out.iter()
+            .filter(|d| matches!(
+                d,
+                LineDiff::Keep { .. }
+                    | LineDiff::Change { .. }
+                    | LineDiff::Move { .. }
+                    | LineDiff::Delete { .. }
+            ))
+            .count()
+            <= a.lines.len() + b.lines.len()
+    );
     out
 }
 
@@ -120,10 +136,14 @@ fn pair_moves(out: &mut Vec<LineDiff>, ka: &[Key], kb: &[Key]) {
             i += 1;
             continue;
         };
-        let inserted = out.iter().position(|d| matches!(d, LineDiff::Insert { to } if kb[*to] == Key::Id(id)));
+        let inserted = out
+            .iter()
+            .position(|d| matches!(d, LineDiff::Insert { to } if kb[*to] == Key::Id(id)));
         match inserted {
             Some(j) => {
-                let LineDiff::Insert { to } = out[j] else { unreachable!("matched Insert above") };
+                let LineDiff::Insert { to } = out[j] else {
+                    unreachable!("matched Insert above")
+                };
                 out[i] = LineDiff::Move { from, to };
                 out.remove(j);
             }
@@ -141,8 +161,15 @@ pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit> {
         match (step, out.last_mut()) {
             (Step::Delete(i), Some(TextEdit::Delete { at, len })) if *at + *len == i => *len += 1,
             (Step::Delete(i), _) => out.push(TextEdit::Delete { at: i, len: 1 }),
-            (Step::Insert(j), Some(TextEdit::Insert { at, text })) if *at + text.chars().count() == j => text.push(cb[j]),
-            (Step::Insert(j), _) => out.push(TextEdit::Insert { at: j, text: String::from(cb[j]) }),
+            (Step::Insert(j), Some(TextEdit::Insert { at, text }))
+                if *at + text.chars().count() == j =>
+            {
+                text.push(cb[j])
+            }
+            (Step::Insert(j), _) => out.push(TextEdit::Insert {
+                at: j,
+                text: String::from(cb[j]),
+            }),
             (Step::Keep(..), _) => {}
         }
     }
@@ -198,14 +225,22 @@ fn backtrack(trace: &[Vec<usize>], n: usize, m: usize, off: usize) -> Vec<Step> 
         let at = |kk: isize| v[(kk + off as isize) as usize] as isize;
         let down = k == -d || (k != d && at(k - 1) < at(k + 1));
         let prev_k = if down { k + 1 } else { k - 1 };
-        let (prev_x, prev_y) = if d == 0 { (0, 0) } else { (at(prev_k), at(prev_k) - prev_k) };
+        let (prev_x, prev_y) = if d == 0 {
+            (0, 0)
+        } else {
+            (at(prev_k), at(prev_k) - prev_k)
+        };
         while x > prev_x && y > prev_y {
             x -= 1;
             y -= 1;
             steps.push(Step::Keep(x as usize, y as usize));
         }
         if d > 0 {
-            steps.push(if down { Step::Insert(prev_y as usize) } else { Step::Delete(prev_x as usize) });
+            steps.push(if down {
+                Step::Insert(prev_y as usize)
+            } else {
+                Step::Delete(prev_x as usize)
+            });
             x = prev_x;
             y = prev_y;
         }
@@ -228,30 +263,93 @@ mod tests {
 
     #[test]
     fn keep_insert_delete_by_content() {
-        assert_eq!(diff_lines(&f("a\nb\n"), &f("a\nb\n")), [LineDiff::Keep { from: 0, to: 0 }, LineDiff::Keep { from: 1, to: 1 }]);
-        assert_eq!(diff_lines(&f("a\nc\n"), &f("a\nb\nc\n")), [LineDiff::Keep { from: 0, to: 0 }, LineDiff::Insert { to: 1 }, LineDiff::Keep { from: 1, to: 2 }]);
-        assert_eq!(diff_lines(&f("a\nb\nc\n"), &f("a\nc\n")), [LineDiff::Keep { from: 0, to: 0 }, LineDiff::Delete { from: 1 }, LineDiff::Keep { from: 2, to: 1 }]);
+        assert_eq!(
+            diff_lines(&f("a\nb\n"), &f("a\nb\n")),
+            [
+                LineDiff::Keep { from: 0, to: 0 },
+                LineDiff::Keep { from: 1, to: 1 }
+            ]
+        );
+        assert_eq!(
+            diff_lines(&f("a\nc\n"), &f("a\nb\nc\n")),
+            [
+                LineDiff::Keep { from: 0, to: 0 },
+                LineDiff::Insert { to: 1 },
+                LineDiff::Keep { from: 1, to: 2 }
+            ]
+        );
+        assert_eq!(
+            diff_lines(&f("a\nb\nc\n"), &f("a\nc\n")),
+            [
+                LineDiff::Keep { from: 0, to: 0 },
+                LineDiff::Delete { from: 1 },
+                LineDiff::Keep { from: 2, to: 1 }
+            ]
+        );
         assert_eq!(diff_lines(&f(""), &f("a\n")), [LineDiff::Insert { to: 0 }]);
     }
 
     #[test]
     fn ids_give_change_and_move() {
         let a = f(&alloc::format!("{A}\n{B}\n"));
-        let edited = f(&alloc::format!("one edited id:01J9K3H5Z7Q8X2M4N6P8R0T2V4\n{B}\n"));
-        assert_eq!(diff_lines(&a, &edited), [LineDiff::Change { from: 0, to: 0 }, LineDiff::Keep { from: 1, to: 1 }]);
+        let edited = f(&alloc::format!(
+            "one edited id:01J9K3H5Z7Q8X2M4N6P8R0T2V4\n{B}\n"
+        ));
+        assert_eq!(
+            diff_lines(&a, &edited),
+            [
+                LineDiff::Change { from: 0, to: 0 },
+                LineDiff::Keep { from: 1, to: 1 }
+            ]
+        );
         let swapped = f(&alloc::format!("{B}\n{A}\n"));
-        assert_eq!(diff_lines(&a, &swapped), [LineDiff::Move { from: 0, to: 1 }, LineDiff::Keep { from: 1, to: 0 }]);
+        assert_eq!(
+            diff_lines(&a, &swapped),
+            [
+                LineDiff::Move { from: 0, to: 1 },
+                LineDiff::Keep { from: 1, to: 0 }
+            ]
+        );
         let stripped = f("one\ntwo\n");
-        assert_eq!(diff_lines(&a, &stripped).iter().filter(|d| matches!(d, LineDiff::Keep { .. })).count(), 0, "without ids, content differs");
+        assert_eq!(
+            diff_lines(&a, &stripped)
+                .iter()
+                .filter(|d| matches!(d, LineDiff::Keep { .. }))
+                .count(),
+            0,
+            "without ids, content differs"
+        );
     }
 
     #[test]
     fn text_edits_are_char_runs() {
         assert_eq!(diff_text("abc", "abc"), []);
-        assert_eq!(diff_text("abc", "abXYc"), [TextEdit::Insert { at: 2, text: "XY".into() }]);
-        assert_eq!(diff_text("abXYc", "abc"), [TextEdit::Delete { at: 2, len: 2 }]);
-        assert_eq!(diff_text("买菜", "买好菜"), [TextEdit::Insert { at: 1, text: "好".into() }], "char, not byte, positions");
-        assert_eq!(diff_text("", "ab"), [TextEdit::Insert { at: 0, text: "ab".into() }]);
+        assert_eq!(
+            diff_text("abc", "abXYc"),
+            [TextEdit::Insert {
+                at: 2,
+                text: "XY".into()
+            }]
+        );
+        assert_eq!(
+            diff_text("abXYc", "abc"),
+            [TextEdit::Delete { at: 2, len: 2 }]
+        );
+        assert_eq!(
+            diff_text("买菜", "买好菜"),
+            [TextEdit::Insert {
+                at: 1,
+                text: "好".into()
+            }],
+            "char, not byte, positions"
+        );
+        assert_eq!(
+            diff_text("", "ab"),
+            [TextEdit::Insert {
+                at: 0,
+                text: "ab".into()
+            }]
+        );
         assert_eq!(diff_text("ab", ""), [TextEdit::Delete { at: 0, len: 2 }]);
     }
 }

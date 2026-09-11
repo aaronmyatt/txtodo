@@ -17,13 +17,21 @@ pub struct ParseError {
 impl ParseError {
     /// Builds an error; `byte` must be within or at the end of the line being parsed.
     pub const fn new(rule: &'static str, byte: usize, message: &'static str) -> ParseError {
-        ParseError { rule, byte, message }
+        ParseError {
+            rule,
+            byte,
+            message,
+        }
     }
 }
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "byte {}: {} (rule `{}` in specs/todotxt.abnf)", self.byte, self.message, self.rule)
+        write!(
+            f,
+            "byte {}: {} (rule `{}` in specs/todotxt.abnf)",
+            self.byte, self.message, self.rule
+        )
     }
 }
 
@@ -36,7 +44,11 @@ mod tests {
 
     #[test]
     fn display_names_rule_and_byte() {
-        let e = ParseError::new("priority", 0, "priority must be an uppercase letter in parentheses");
+        let e = ParseError::new(
+            "priority",
+            0,
+            "priority must be an uppercase letter in parentheses",
+        );
         assert_eq!(
             alloc::format!("{e}"),
             "byte 0: priority must be an uppercase letter in parentheses (rule `priority` in specs/todotxt.abnf)"

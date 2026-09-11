@@ -2,7 +2,7 @@
 //! Nothing here is stored; that is what keeps the CRDT faithful to the spec (design §3).
 
 use crate::scanner::chunks;
-use crate::tokenize::{classify_word, WordKind};
+use crate::tokenize::{WordKind, classify_word};
 use crate::urls::DEFAULT_SCHEMES;
 use crate::{Task, Ulid};
 
@@ -12,10 +12,17 @@ pub const SLUG_MAX_LEN: usize = 64;
 /// `[a-z0-9][a-z0-9._-]*`, 1–64 bytes, not `.` or `..`. No `/` is possible, so no path traversal.
 pub fn is_valid_slug(s: &str) -> bool {
     let b = s.as_bytes();
-    let head_ok = b.first().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
-    let tail_ok = b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'_' | b'-'));
+    let head_ok = b
+        .first()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let tail_ok = b
+        .iter()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'_' | b'-'));
     let ok = head_ok && tail_ok && b.len() <= SLUG_MAX_LEN && s != "." && s != "..";
-    debug_assert!(!ok || !s.contains('/'), "a valid slug never contains a slash");
+    debug_assert!(
+        !ok || !s.contains('/'),
+        "a valid slug never contains a slash"
+    );
     ok
 }
 
@@ -31,12 +38,16 @@ impl<'a> Task<'a> {
 
     /// `+project` names without the sigil, in order, duplicates kept.
     pub fn projects(&self) -> impl Iterator<Item = &'a str> {
-        self.words().filter(|(k, _)| *k == WordKind::Project).map(|(_, w)| &w[1..])
+        self.words()
+            .filter(|(k, _)| *k == WordKind::Project)
+            .map(|(_, w)| &w[1..])
     }
 
     /// `@context` names without the sigil, in order, duplicates kept.
     pub fn contexts(&self) -> impl Iterator<Item = &'a str> {
-        self.words().filter(|(k, _)| *k == WordKind::Context).map(|(_, w)| &w[1..])
+        self.words()
+            .filter(|(k, _)| *k == WordKind::Context)
+            .map(|(_, w)| &w[1..])
     }
 
     /// `(key, value)` for every `key:value` word, including `id`, `ref`, `pri`. URLs are not tags.
@@ -79,7 +90,7 @@ impl<'a> Task<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{parse_line, LineKind, Mode};
+    use crate::{LineKind, Mode, parse_line};
     use alloc::vec::Vec;
 
     fn task(raw: &str) -> Task<'_> {
@@ -96,19 +107,39 @@ mod tests {
         assert_eq!(t.contexts().collect::<Vec<_>>(), ["home"]);
         assert!(t.tags().next().is_none(), "the URL is not a tag");
         let t = task("买菜 +家务 @手机");
-        assert_eq!((t.projects().next(), t.contexts().next()), (Some("家务"), Some("手机")));
+        assert_eq!(
+            (t.projects().next(), t.contexts().next()),
+            (Some("家务"), Some("手机"))
+        );
     }
 
     #[test]
     fn tags_id_and_ref() {
-        let t = task("2026-09-11 Q4 +work ref:q4-roadmap id:01J9K3H5Z7Q8X2M4N6P8R0T2V4 due:2026-09-15 a:b:c note:");
-        assert_eq!(t.tags().collect::<Vec<_>>(), [("ref", "q4-roadmap"), ("id", "01J9K3H5Z7Q8X2M4N6P8R0T2V4"), ("due", "2026-09-15"), ("a", "b:c")]);
+        let t = task(
+            "2026-09-11 Q4 +work ref:q4-roadmap id:01J9K3H5Z7Q8X2M4N6P8R0T2V4 due:2026-09-15 a:b:c note:",
+        );
+        assert_eq!(
+            t.tags().collect::<Vec<_>>(),
+            [
+                ("ref", "q4-roadmap"),
+                ("id", "01J9K3H5Z7Q8X2M4N6P8R0T2V4"),
+                ("due", "2026-09-15"),
+                ("a", "b:c")
+            ]
+        );
         assert_eq!(t.tag("due"), Some("2026-09-15"));
         assert_eq!(t.tag("missing"), None);
-        assert_eq!(t.id().map(|u| alloc::format!("{u}")).as_deref(), Some("01J9K3H5Z7Q8X2M4N6P8R0T2V4"));
+        assert_eq!(
+            t.id().map(|u| alloc::format!("{u}")).as_deref(),
+            Some("01J9K3H5Z7Q8X2M4N6P8R0T2V4")
+        );
         assert_eq!(t.ref_slug(), Some("q4-roadmap"));
         assert_eq!(task("x id:short").id(), None);
-        assert_eq!(task("t due:a due:b").tag("due"), Some("a"), "first match wins");
+        assert_eq!(
+            task("t due:a due:b").tag("due"),
+            Some("a"),
+            "first match wins"
+        );
     }
 
     #[test]
@@ -116,11 +147,37 @@ mod tests {
         for good in ["q4-roadmap", "v1.2_beta-3", "a", "0", &"a".repeat(64)] {
             assert!(is_valid_slug(good), "{good}");
         }
-        for bad in [".", "..", "../escape", "/etc/passwd", "Q4-Roadmap", "-x", "_x", ".x", "", "a/b", "a b", &"a".repeat(65)] {
+        for bad in [
+            ".",
+            "..",
+            "../escape",
+            "/etc/passwd",
+            "Q4-Roadmap",
+            "-x",
+            "_x",
+            ".x",
+            "",
+            "a/b",
+            "a b",
+            &"a".repeat(65),
+        ] {
             assert!(!is_valid_slug(bad), "{bad:?}");
         }
-        for bad in [".", "..", "../escape", "/etc/passwd", "Q4-Roadmap", "-x", "", &"a".repeat(65)] {
-            assert_eq!(task(&alloc::format!("t ref:{bad}")).ref_slug(), None, "{bad:?}");
+        for bad in [
+            ".",
+            "..",
+            "../escape",
+            "/etc/passwd",
+            "Q4-Roadmap",
+            "-x",
+            "",
+            &"a".repeat(65),
+        ] {
+            assert_eq!(
+                task(&alloc::format!("t ref:{bad}")).ref_slug(),
+                None,
+                "{bad:?}"
+            );
         }
     }
 }

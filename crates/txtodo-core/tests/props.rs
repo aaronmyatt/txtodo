@@ -4,7 +4,10 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use proptest::prelude::*;
-use txtodo_core::{apply, emit_prefix, parse_file, parse_line, tokenize, Date, Edit, LineEnding, LineKind, Mode, OwnedLine, Prefix, Priority, Task};
+use txtodo_core::{
+    Date, Edit, LineEnding, LineKind, Mode, OwnedLine, Prefix, Priority, Task, apply, emit_prefix,
+    parse_file, parse_line, tokenize,
+};
 
 fn date() -> impl Strategy<Value = Date> {
     (1970u16..=2100, 1u8..=12, 1u8..=31).prop_filter_map("calendar", |(y, m, d)| Date::new(y, m, d))
@@ -34,18 +37,36 @@ fn description() -> impl Strategy<Value = String> {
 
 /// A task whose strict form re-parses to itself. Completed tasks carry no priority (the grammar has no slot).
 fn strict_task() -> impl Strategy<Value = (Prefix, String)> {
-    (any::<bool>(), prop::option::of(date()), prop::option::of(date()), prop::option::of(priority()), prop::option::of(description())).prop_filter_map(
-        "shape",
-        |(completed, completion_date, creation_date, priority, description)| {
-            let prefix = if completed {
-                Prefix { completed: true, completion_date: Some(completion_date?), creation_date, priority: None }
-            } else {
-                Prefix { completed: false, completion_date: None, creation_date, priority }
-            };
-            let description = description.unwrap_or_default();
-            (!description.is_empty() || prefix != Prefix::default()).then_some((prefix, description))
-        },
+    (
+        any::<bool>(),
+        prop::option::of(date()),
+        prop::option::of(date()),
+        prop::option::of(priority()),
+        prop::option::of(description()),
     )
+        .prop_filter_map(
+            "shape",
+            |(completed, completion_date, creation_date, priority, description)| {
+                let prefix = if completed {
+                    Prefix {
+                        completed: true,
+                        completion_date: Some(completion_date?),
+                        creation_date,
+                        priority: None,
+                    }
+                } else {
+                    Prefix {
+                        completed: false,
+                        completion_date: None,
+                        creation_date,
+                        priority,
+                    }
+                };
+                let description = description.unwrap_or_default();
+                (!description.is_empty() || prefix != Prefix::default())
+                    .then_some((prefix, description))
+            },
+        )
 }
 
 fn strict_line() -> impl Strategy<Value = String> {

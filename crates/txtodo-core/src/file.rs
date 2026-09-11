@@ -1,7 +1,7 @@
 //! Whole-file model: owned lines plus the hygiene that must round-trip (BOM, endings, trailing newline).
 //! Design §2.2 rules 6 and 7: blank lines are entries; endings, BOM and trailing newline are preserved.
 
-use crate::{parse_line, Line, LineEnding, Mode, Quirks};
+use crate::{Line, LineEnding, Mode, Quirks, parse_line};
 use alloc::vec::Vec;
 
 /// UTF-8 byte order mark.
@@ -19,8 +19,15 @@ pub struct OwnedLine {
 impl OwnedLine {
     /// Wraps line bytes (without ending). Callers pass what they read; nothing is validated here.
     pub fn new(bytes: Vec<u8>, ending: LineEnding, quirks: Quirks) -> OwnedLine {
-        debug_assert!(!bytes.contains(&b'\n'), "a line never contains its own ending");
-        OwnedLine { bytes, ending, quirks }
+        debug_assert!(
+            !bytes.contains(&b'\n'),
+            "a line never contains its own ending"
+        );
+        OwnedLine {
+            bytes,
+            ending,
+            quirks,
+        }
     }
     /// Wraps line bytes and records the lenient parser's quirks (none for an opaque, non-UTF-8 line).
     pub fn from_bytes(bytes: Vec<u8>, ending: LineEnding) -> OwnedLine {
@@ -74,14 +81,34 @@ pub fn parse_file(bytes: &[u8]) -> File {
     let bom = bytes.starts_with(BOM);
     let body = if bom { &bytes[BOM.len()..] } else { bytes };
     let trailing_newline = body.last() == Some(&b'\n');
-    let mut lines: Vec<OwnedLine> = split_lines(body).map(|(b, e)| OwnedLine::from_bytes(b.to_vec(), e)).collect();
+    let mut lines: Vec<OwnedLine> = split_lines(body)
+        .map(|(b, e)| OwnedLine::from_bytes(b.to_vec(), e))
+        .collect();
     let ending = dominant_ending(&lines);
-    for line in lines.iter_mut().filter(|l| l.ending != LineEnding::None && l.ending != ending) {
+    for line in lines
+        .iter_mut()
+        .filter(|l| l.ending != LineEnding::None && l.ending != ending)
+    {
         line.quirks.insert(Quirks::MIXED_ENDING);
     }
-    debug_assert!(lines.iter().filter(|l| l.ending == LineEnding::None).count() <= 1, "only the last line may lack a newline");
-    debug_assert!(trailing_newline == lines.last().is_some_and(|l| l.ending != LineEnding::None), "trailing newline agrees with the last line");
-    File { lines, bom, ending, trailing_newline }
+    debug_assert!(
+        lines
+            .iter()
+            .filter(|l| l.ending == LineEnding::None)
+            .count()
+            <= 1,
+        "only the last line may lack a newline"
+    );
+    debug_assert!(
+        trailing_newline == lines.last().is_some_and(|l| l.ending != LineEnding::None),
+        "trailing newline agrees with the last line"
+    );
+    File {
+        lines,
+        bom,
+        ending,
+        trailing_newline,
+    }
 }
 
 /// Yields `(line bytes, ending)` for each line. A final piece with no newline is a line with `None`;
@@ -110,10 +137,17 @@ fn split_lines(body: &[u8]) -> impl Iterator<Item = (&[u8], LineEnding)> {
 
 /// Majority of `Lf` vs `CrLf`; ties and empty files are `Lf`.
 fn dominant_ending(lines: &[OwnedLine]) -> LineEnding {
-    let crlf = lines.iter().filter(|l| l.ending == LineEnding::CrLf).count();
+    let crlf = lines
+        .iter()
+        .filter(|l| l.ending == LineEnding::CrLf)
+        .count();
     let lf = lines.iter().filter(|l| l.ending == LineEnding::Lf).count();
     debug_assert!(crlf + lf <= lines.len(), "counts cover at most every line");
-    if crlf > lf { LineEnding::CrLf } else { LineEnding::Lf }
+    if crlf > lf {
+        LineEnding::CrLf
+    } else {
+        LineEnding::Lf
+    }
 }
 
 impl File {
@@ -140,7 +174,10 @@ mod tests {
     #[test]
     fn owned_line_reports_invalid_utf8_as_opaque() {
         let line = OwnedLine::from_bytes(alloc::vec![0xFF, b'x'], LineEnding::Lf);
-        assert_eq!((line.raw(), line.parse(), line.quirks()), (None, None, Quirks::NONE));
+        assert_eq!(
+            (line.raw(), line.parse(), line.quirks()),
+            (None, None, Quirks::NONE)
+        );
         assert_eq!(line.bytes(), &[0xFF, b'x']);
     }
 
@@ -149,23 +186,50 @@ mod tests {
         for (name, bytes) in [
             ("crlf", &include_bytes!("../../../corpus/crlf.txt")[..]),
             ("bom", include_bytes!("../../../corpus/bom.txt")),
-            ("no-trailing-newline", include_bytes!("../../../corpus/no-trailing-newline.txt")),
-            ("mixed-endings", include_bytes!("../../../corpus/mixed-endings.txt")),
+            (
+                "no-trailing-newline",
+                include_bytes!("../../../corpus/no-trailing-newline.txt"),
+            ),
+            (
+                "mixed-endings",
+                include_bytes!("../../../corpus/mixed-endings.txt"),
+            ),
             ("empty", b""),
             ("lone newline", b"\n"),
         ] {
             assert_eq!(parse_file(bytes).to_bytes(), bytes, "{name}");
         }
         let crlf = parse_file(include_bytes!("../../../corpus/crlf.txt"));
-        assert_eq!((crlf.lines.len(), crlf.ending, crlf.trailing_newline), (3, LineEnding::CrLf, true));
-        assert!(crlf.lines.iter().all(|l| l.ending() == LineEnding::CrLf && !l.quirks().has(Quirks::MIXED_ENDING)));
+        assert_eq!(
+            (crlf.lines.len(), crlf.ending, crlf.trailing_newline),
+            (3, LineEnding::CrLf, true)
+        );
+        assert!(
+            crlf.lines
+                .iter()
+                .all(|l| l.ending() == LineEnding::CrLf && !l.quirks().has(Quirks::MIXED_ENDING))
+        );
         let bom = parse_file(include_bytes!("../../../corpus/bom.txt"));
         assert!(bom.bom && bom.lines[0].raw() == Some("2026-09-11 File starts with a BOM +bom"));
         let ntn = parse_file(include_bytes!("../../../corpus/no-trailing-newline.txt"));
-        assert_eq!((ntn.trailing_newline, ntn.lines[1].ending()), (false, LineEnding::None));
+        assert_eq!(
+            (ntn.trailing_newline, ntn.lines[1].ending()),
+            (false, LineEnding::None)
+        );
         let mixed = parse_file(include_bytes!("../../../corpus/mixed-endings.txt"));
         assert_eq!(mixed.ending, LineEnding::Lf);
-        assert_eq!(mixed.lines.iter().map(|l| l.quirks().has(Quirks::MIXED_ENDING)).collect::<Vec<_>>(), [false, true, false]);
-        assert_eq!(parse_file(b"\n").lines.len(), 1, "a lone newline is one blank entry");
+        assert_eq!(
+            mixed
+                .lines
+                .iter()
+                .map(|l| l.quirks().has(Quirks::MIXED_ENDING))
+                .collect::<Vec<_>>(),
+            [false, true, false]
+        );
+        assert_eq!(
+            parse_file(b"\n").lines.len(),
+            1,
+            "a lone newline is one blank entry"
+        );
     }
 }

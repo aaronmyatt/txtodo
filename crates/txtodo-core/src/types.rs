@@ -1,6 +1,5 @@
 //! Core value types of the M1 API: modes, spans, dates, priorities, lines, tasks, files.
 
-
 use core::fmt;
 
 /// How strictly to read a line. `Strict` enforces `specs/todotxt.abnf`; `Lenient` records deviations as quirks.
@@ -119,7 +118,10 @@ fn days_in_month(year: u16, month: u8) -> u8 {
 
 /// Parses 1–4 ASCII digits; `None` on any non-digit.
 fn ascii_number(digits: &[u8]) -> Option<u16> {
-    debug_assert!(!digits.is_empty() && digits.len() <= 4, "callers pass 2 or 4 digits");
+    debug_assert!(
+        !digits.is_empty() && digits.len() <= 4,
+        "callers pass 2 or 4 digits"
+    );
     let mut n: u16 = 0;
     for &d in digits {
         if !d.is_ascii_digit() {
@@ -145,7 +147,10 @@ impl Priority {
     }
     /// The letter, `'A'..='Z'`.
     pub fn as_char(self) -> char {
-        debug_assert!(self.0.is_ascii_uppercase(), "constructor guarantees uppercase");
+        debug_assert!(
+            self.0.is_ascii_uppercase(),
+            "constructor guarantees uppercase"
+        );
         char::from(self.0)
     }
 }
@@ -224,7 +229,13 @@ mod tests {
     #[test]
     fn leap_years_follow_gregorian_rules() {
         // (year, feb 29 valid?) — 2000 is a leap year, 1900 and 2100 are not, 2024 is.
-        for (year, ok) in [(2000, true), (1900, false), (2100, false), (2024, true), (2023, false)] {
+        for (year, ok) in [
+            (2000, true),
+            (1900, false),
+            (2100, false),
+            (2024, true),
+            (2023, false),
+        ] {
             assert_eq!(Date::new(year, 2, 29).is_some(), ok, "year {year}");
         }
     }
@@ -232,14 +243,25 @@ mod tests {
     #[test]
     fn parse_accepts_only_exact_shape_and_real_days() {
         assert_eq!(Date::parse("2026-09-11"), Date::new(2026, 9, 11));
-        for bad in ["2026-9-11", "2026-09-31", "2026-13-01", "2026-00-10", "26-09-11", "2026-09-11x", "2026/09/11"] {
+        for bad in [
+            "2026-9-11",
+            "2026-09-31",
+            "2026-13-01",
+            "2026-00-10",
+            "26-09-11",
+            "2026-09-11x",
+            "2026/09/11",
+        ] {
             assert_eq!(Date::parse(bad), None, "{bad}");
         }
     }
 
     #[test]
     fn date_displays_zero_padded() {
-        assert_eq!(alloc::format!("{}", Date::new(2026, 1, 2).unwrap()), "2026-01-02");
+        assert_eq!(
+            alloc::format!("{}", Date::new(2026, 1, 2).unwrap()),
+            "2026-01-02"
+        );
     }
 
     #[test]
@@ -249,5 +271,4 @@ mod tests {
         assert_eq!(Priority::new('É'), None);
         assert_eq!(alloc::format!("{}", Priority::new('Z').unwrap()), "(Z)");
     }
-
 }

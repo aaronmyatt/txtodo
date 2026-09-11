@@ -1,8 +1,8 @@
 //! `tokenize`: classify every byte of a line for highlighters. Never fails; unknown words are `Text`.
 //! The expected output for real lines is `corpus/*.tokens.json`; that oracle is the contract.
 
-use crate::scanner::{chunks, Chunk};
-use crate::urls::{is_url, DEFAULT_SCHEMES};
+use crate::scanner::{Chunk, chunks};
+use crate::urls::{DEFAULT_SCHEMES, is_url};
 use crate::{Date, Priority, Span, TokenKind, Ulid};
 use alloc::vec::Vec;
 
@@ -13,12 +13,20 @@ pub fn tokenize(raw: &str) -> Vec<Span> {
 
 /// Tokenizes with a custom URL scheme list.
 pub fn tokenize_with_schemes<'a>(raw: &'a str, schemes: &'a [&'a str]) -> Vec<Span> {
-    let mut t = Tokenizer { raw, schemes, spans: Vec::new(), prefix: Prefix::default() };
+    let mut t = Tokenizer {
+        raw,
+        schemes,
+        spans: Vec::new(),
+        prefix: Prefix::default(),
+    };
     for (index, chunk) in chunks(raw).enumerate() {
         t.push_chunk(chunk, index);
     }
     debug_assert!(t.spans.iter().all(|s| s.start < s.end), "no empty spans");
-    debug_assert!(t.spans.last().is_none_or(|s| s.end == raw.len()), "spans cover the line");
+    debug_assert!(
+        t.spans.last().is_none_or(|s| s.end == raw.len()),
+        "spans cover the line"
+    );
     t.spans
 }
 
@@ -44,7 +52,11 @@ impl Tokenizer<'_> {
     fn push_chunk(&mut self, chunk: Chunk, index: usize) {
         let Chunk { start, end, is_ws } = chunk;
         if is_ws {
-            self.spans.push(Span { kind: TokenKind::Whitespace, start, end });
+            self.spans.push(Span {
+                kind: TokenKind::Whitespace,
+                start,
+                end,
+            });
             return;
         }
         let word = &self.raw[start..end];
@@ -84,7 +96,11 @@ fn classify_date(p: &mut Prefix) -> Option<TokenKind> {
     }
     p.dates += 1;
     let is_completion = p.seen_x && p.dates == 1;
-    Some(if is_completion { TokenKind::CompletionDate } else { TokenKind::CreationDate })
+    Some(if is_completion {
+        TokenKind::CompletionDate
+    } else {
+        TokenKind::CreationDate
+    })
 }
 
 /// `(A)`–`(Z)` exactly.
@@ -138,8 +154,16 @@ fn push_word(spans: &mut Vec<Span>, word: &str, start: usize, schemes: &[&str]) 
         WordKind::Context => TokenKind::Context,
         WordKind::Text => TokenKind::Text,
         WordKind::Tag(colon) => {
-            spans.push(Span { kind: TokenKind::TagKey, start, end: start + colon + 1 });
-            spans.push(Span { kind: TokenKind::TagValue, start: start + colon + 1, end });
+            spans.push(Span {
+                kind: TokenKind::TagKey,
+                start,
+                end: start + colon + 1,
+            });
+            spans.push(Span {
+                kind: TokenKind::TagValue,
+                start: start + colon + 1,
+                end,
+            });
             return;
         }
     };
@@ -166,21 +190,81 @@ mod tests {
     fn design_2_4_rows() {
         assert_eq!(kinds("mail bob@example.com"), [Text, Whitespace, Text]);
         assert_eq!(kinds("see https://example.com/x"), [Text, Whitespace, Url]);
-        assert_eq!(kinds("learn C++ +cpp"), [Text, Whitespace, Text, Whitespace, Project]);
-        assert_eq!(kinds("买菜 +家务 @手机"), [Text, Whitespace, Project, Whitespace, Context]);
-        assert_eq!(kinds("X 2026-09-11 not done"), [Text, Whitespace, Text, Whitespace, Text, Whitespace, Text]);
-        assert_eq!(kinds("x 2026-09-11 (A) task"), [CompletionMarker, Whitespace, CompletionDate, Whitespace, Priority, Whitespace, Text]);
-        assert_eq!(kinds("note: buy milk"), [Text, Whitespace, Text, Whitespace, Text]);
+        assert_eq!(
+            kinds("learn C++ +cpp"),
+            [Text, Whitespace, Text, Whitespace, Project]
+        );
+        assert_eq!(
+            kinds("买菜 +家务 @手机"),
+            [Text, Whitespace, Project, Whitespace, Context]
+        );
+        assert_eq!(
+            kinds("X 2026-09-11 not done"),
+            [Text, Whitespace, Text, Whitespace, Text, Whitespace, Text]
+        );
+        assert_eq!(
+            kinds("x 2026-09-11 (A) task"),
+            [
+                CompletionMarker,
+                Whitespace,
+                CompletionDate,
+                Whitespace,
+                Priority,
+                Whitespace,
+                Text
+            ]
+        );
+        assert_eq!(
+            kinds("note: buy milk"),
+            [Text, Whitespace, Text, Whitespace, Text]
+        );
         assert_eq!(kinds("(a) task"), [Text, Whitespace, Text]);
     }
 
     #[test]
     fn prefix_and_tags() {
-        assert_eq!(kinds("(A) 2026-09-11 t due:2026-09-15"), [Priority, Whitespace, CreationDate, Whitespace, Text, Whitespace, TagKey, TagValue]);
-        assert_eq!(kinds("x 2026-09-11 2026-09-01 t pri:A"), [CompletionMarker, Whitespace, CompletionDate, Whitespace, CreationDate, Whitespace, Text, Whitespace, TagKey, TagValue]);
-        assert_eq!(kinds("2026-09-11 2026-09-01 t"), [CreationDate, Whitespace, Text, Whitespace, Text], "second date is text");
-        assert_eq!(kinds("t id:01J9K3H5Z7Q8X2M4N6P8R0T2V4"), [Text, Whitespace, IdTag]);
-        assert_eq!(kinds("t id:short"), [Text, Whitespace, TagKey, TagValue], "bad ulid is an ordinary tag");
+        assert_eq!(
+            kinds("(A) 2026-09-11 t due:2026-09-15"),
+            [
+                Priority,
+                Whitespace,
+                CreationDate,
+                Whitespace,
+                Text,
+                Whitespace,
+                TagKey,
+                TagValue
+            ]
+        );
+        assert_eq!(
+            kinds("x 2026-09-11 2026-09-01 t pri:A"),
+            [
+                CompletionMarker,
+                Whitespace,
+                CompletionDate,
+                Whitespace,
+                CreationDate,
+                Whitespace,
+                Text,
+                Whitespace,
+                TagKey,
+                TagValue
+            ]
+        );
+        assert_eq!(
+            kinds("2026-09-11 2026-09-01 t"),
+            [CreationDate, Whitespace, Text, Whitespace, Text],
+            "second date is text"
+        );
+        assert_eq!(
+            kinds("t id:01J9K3H5Z7Q8X2M4N6P8R0T2V4"),
+            [Text, Whitespace, IdTag]
+        );
+        assert_eq!(
+            kinds("t id:short"),
+            [Text, Whitespace, TagKey, TagValue],
+            "bad ulid is an ordinary tag"
+        );
         assert_eq!(kinds("a:b:c"), [TagKey, TagValue]);
         assert_eq!(tokenize("a:b:c")[0].end, 2, "key span includes the colon");
     }
