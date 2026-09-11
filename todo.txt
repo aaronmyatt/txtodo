@@ -11,7 +11,7 @@ x 2026-09-11 2026-09-11 Byte-preserving formatter with field-level dirtiness +m1
 x 2026-09-11 2026-09-11 Edit builder and apply: set/clear priority, set_tag, remove_tag, append, prepend, set_description +m1 @core ref:core-edit-apply
 x 2026-09-11 2026-09-11 complete() writes pri: per spec and uncomplete() restores priority and removes pri: +m1 @core ref:core-complete-pri
 x 2026-09-11 2026-09-11 diff_lines (Myers, by id else content) and diff_text (char-level) +m1 @core ref:core-diff
-(B) 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest
+x 2026-09-11 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest
 (B) 2026-09-11 ABNF-generated second parser (pest) in tests only, differential on corpus plus 10000 generated lines +m1 @core @test ref:core-pest-differential
 (B) 2026-09-11 cargo-fuzz targets parse_line (both modes) and parse_file; one 3600s local run each +m1 @core @test ref:core-fuzz-targets
 (B) 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench

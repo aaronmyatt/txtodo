@@ -1,6 +1,6 @@
-(B) 2026-09-11 dev-dependency proptest; strategies: valid Date, Priority, description words (NONSP without sigils), tags, full strict Task, lenient variants +m1 @core @test
-(B) 2026-09-11 Property 1: format(parse(x)) == x for every corpus line and for generated strict lines +m1 @core @test
-(B) 2026-09-11 Property 2: parse(format(t)) == t (structurally) for generated tasks, both modes +m1 @core @test
-(B) 2026-09-11 Property 3: tokenize(x) spans are contiguous and cover [0, len) for arbitrary &str (any Unicode) +m1 @core @test
-(B) 2026-09-11 Property 4: apply(set_priority(P)) then clear_priority, and complete(d) then uncomplete, restore the original line byte-for-byte for generated open tasks +m1 @core @test
-(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
+x 2026-09-11 2026-09-11 dev-dependency proptest; strategies: valid Date, Priority, description words (NONSP without sigils), tags, full strict Task, lenient variants +m1 @core @test
+x 2026-09-11 2026-09-11 Property 1: format(parse(x)) == x for every corpus line and for generated strict lines +m1 @core @test
+x 2026-09-11 2026-09-11 Property 2: parse(format(t)) == t (structurally) for generated tasks, both modes +m1 @core @test
+x 2026-09-11 2026-09-11 Property 3: tokenize(x) spans are contiguous and cover [0, len) for arbitrary &str (any Unicode) +m1 @core @test
+x 2026-09-11 2026-09-11 Property 4: apply(set_priority(P)) then clear_priority, and complete(d) then uncomplete, restore the original line byte-for-byte for generated open tasks +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
