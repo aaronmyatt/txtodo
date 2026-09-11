@@ -6,11 +6,11 @@ x 2026-09-11 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp 
 x 2026-09-11 2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon ref:daemon-reconciler
 x 2026-09-11 2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon ref:daemon-own-writes
 x 2026-09-11 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon ref:daemon-workspace-walker
-(B) 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode
-(B) 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history
-(B) 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor
+x 2026-09-12 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode
+x 2026-09-12 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history
+x 2026-09-12 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor
 (B) 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs
-(B) 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files
+x 2026-09-12 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files
 (B) 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests
 (B) 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests
 (B) 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests
