@@ -39,6 +39,7 @@ bench:
 
 corpus:
     .claude/scripts/check-corpus-oracle.sh
+    cargo test -p txtodo-core --test corpus
 
 release:
     cargo build --workspace --release
