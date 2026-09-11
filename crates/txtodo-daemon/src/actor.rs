@@ -40,6 +40,8 @@ pub struct ActorConfig {
     pub disk: PathBuf,
     /// This device.
     pub device: DeviceId,
+    /// Shared Health counters.
+    pub stats: Arc<crate::stats::Stats>,
 }
 
 /// One persisted change, ready to commit.
@@ -278,6 +280,7 @@ impl FileActor {
         self.expected.arm(self.hash, self.clock.now_instant());
         write_atomic(&self.cfg.disk, &self.projection)?;
         self.writes_total += 1;
+        self.cfg.stats.count_write();
         debug_assert!(self.writes_total > 0);
         Ok(())
     }

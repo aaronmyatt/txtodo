@@ -12,12 +12,12 @@ pub mod handle;
 pub mod mutation;
 pub mod reconcile;
 pub mod state;
+pub mod stats;
 pub mod textedit;
 pub mod walker;
+pub mod workspace;
 pub mod write;
 
-#[cfg(test)]
-mod actor_tests;
 #[cfg(test)]
 mod mutation_tests;
 #[cfg(test)]
