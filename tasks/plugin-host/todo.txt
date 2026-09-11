@@ -1,0 +1,16 @@
+2026-09-12 Add wasmtime, wasmtime-wasi and wit-bindgen to crates/txtodo-daemon/Cargo.toml with sign-off and cargo deny pass +m10 @plugins
+2026-09-12 crates/txtodo-daemon/wit/txtodo.wit: define the host interface and the seven export hooks from design §9 +m10 @plugins
+2026-09-12 crates/txtodo-daemon/src/plugins/manifest.rs: PluginManifest with the Hook set parsed from plugin.toml +m10 @plugins
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: PluginHost with fuel/epoch/memory caps and the WASI 0.2 linker with no preopens +m10 @plugins
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: load() from a local .wasm path then registry pull; capability gate is the per-hook linker +m10 @plugins
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: the seven call_* methods with spawn_blocking + timeout and trap handling +m10 @plugins
+2026-09-12 crates/txtodo-daemon/src/reconciler.rs: call on_parse_line and before_write in the write path (M3 reconciler) +m10 @plugins @daemon
+2026-09-12 crates/txtodo-daemon/src/actor.rs: call on_task_added and on_task_completed in the apply path +m10 @plugins @daemon
+2026-09-12 crates/txtodo-query/src/plan.rs: add a FunctionResolver trait the daemon implements for query_function/view_filter +m10 @plugins @query
+2026-09-12 crates/txtodo-cli/src/plugin.rs: txtodo plugin install|list|uninstall <path|registry-ref> +m10 @plugins @cli
+2026-09-12 Build recurrence, ics-export, natlang-dates, github-mirror and notify-due as cargo component crates under crates/txtodo-daemon/plugins/ +m10 @plugins
+2026-09-12 justfile: plugin-build recipe running cargo component build per plugin dir +m10 @plugins
+2026-09-12 Test: install a fixture plugin and assert on_task_added fires exactly once via host.log +m10 @plugins @test
+2026-09-12 Test: a plugin without add-task cannot call it, filesystem access traps, and an infinite loop is killed by fuel +m10 @plugins @test
+2026-09-12 Test: recurrence spawns the next rec: occurrence and natlang due:tomorrow parses to a YYYY-MM-DD date +m10 @plugins @test
+2026-09-12 Complete the parent line in ./todo.txt +m10 @plugins
