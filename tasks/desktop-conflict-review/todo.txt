@@ -1,0 +1,7 @@
+2026-09-12 Subscribe to Watch for Change ops carrying the needs_review flag and hold the pending set in the app store +m7 @desktop
+2026-09-12 Conflict banner showing the count of needs_review lines, opening the review sheet on click +m7 @desktop
+2026-09-12 Review sheet: task text plus a char-level diff between mine and theirs via the WASM core diff_text +m7 @desktop
+2026-09-12 Three resolution actions mine|theirs|merged that clear the flag by writing the chosen text as a new Apply(Edit) op +m7 @desktop
+2026-09-12 Dismissing the banner never clears the flag; only a resolve op clears it +m7 @desktop
+2026-09-12 Test: injecting concurrent ops via a second daemon shows the sheet; resolving writes the chosen line and clears the flag +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop
