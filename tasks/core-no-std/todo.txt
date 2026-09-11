@@ -1,0 +1,5 @@
+(B) 2026-09-11 Cargo.toml features: default = ["std"]; std = []; crate root #![cfg_attr(not(feature = "std"), no_std)] + extern crate alloc +m1 @core
+(B) 2026-09-11 Replace std:: paths with core::/alloc:: throughout (String, Vec, format!, ToString); std::error::Error impl behind cfg(feature = "std") +m1 @core
+(B) 2026-09-11 CI step: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf (rustup target add) proves no std leaks +m1 @core @ci
+(B) 2026-09-11 just check gains the no_std build; budgets.json commands.noStd records it +m1 @core
+(B) 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
