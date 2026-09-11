@@ -93,29 +93,57 @@ pub(crate) fn is_priority_word(word: &str) -> bool {
     b.len() == 3 && b[0] == b'(' && b[2] == b')' && Priority::new(char::from(b[1])).is_some()
 }
 
-/// Description word classification, in the order design §2.4 requires: URL first, then id, sigils, tags.
-fn push_word(spans: &mut Vec<Span>, word: &str, start: usize, schemes: &[&str]) {
-    let end = start + word.len();
-    let whole = |kind| Span { kind, start, end };
+/// What a description word is. One classifier for the tokenizer, the parser and the task views.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum WordKind {
+    /// Recognised scheme and a colon.
+    Url,
+    /// `id:` plus a valid ULID.
+    IdTag,
+    /// `+x`.
+    Project,
+    /// `@x`.
+    Context,
+    /// `key:value`; the byte index of the colon.
+    Tag(usize),
+    /// Anything else.
+    Text,
+}
+
+/// Classifies one description word in the order design §2.4 requires: URL first, then id, sigils, tags.
+pub(crate) fn classify_word(word: &str, schemes: &[&str]) -> WordKind {
+    debug_assert!(!word.is_empty(), "scanner never yields empty words");
     if is_url(word, schemes) {
-        return spans.push(whole(TokenKind::Url));
+        return WordKind::Url;
     }
     if word.strip_prefix("id:").and_then(Ulid::parse).is_some() {
-        return spans.push(whole(TokenKind::IdTag));
+        return WordKind::IdTag;
     }
     if word.len() > 1 && word.starts_with('+') {
-        return spans.push(whole(TokenKind::Project));
+        return WordKind::Project;
     }
     if word.len() > 1 && word.starts_with('@') {
-        return spans.push(whole(TokenKind::Context));
+        return WordKind::Context;
     }
-    match tag_split(word) {
-        Some(colon) => {
+    tag_split(word).map_or(WordKind::Text, WordKind::Tag)
+}
+
+/// Pushes the span(s) for one description word.
+fn push_word(spans: &mut Vec<Span>, word: &str, start: usize, schemes: &[&str]) {
+    let end = start + word.len();
+    let kind = match classify_word(word, schemes) {
+        WordKind::Url => TokenKind::Url,
+        WordKind::IdTag => TokenKind::IdTag,
+        WordKind::Project => TokenKind::Project,
+        WordKind::Context => TokenKind::Context,
+        WordKind::Text => TokenKind::Text,
+        WordKind::Tag(colon) => {
             spans.push(Span { kind: TokenKind::TagKey, start, end: start + colon + 1 });
             spans.push(Span { kind: TokenKind::TagValue, start: start + colon + 1, end });
+            return;
         }
-        None => spans.push(whole(TokenKind::Text)),
-    }
+    };
+    spans.push(Span { kind, start, end });
 }
 
 /// Byte index of the colon in a `key:value` word with non-empty key and value; `None` otherwise.
