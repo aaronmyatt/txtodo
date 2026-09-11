@@ -1,0 +1,8 @@
+2026-09-12 Detail view shell: header with back button and breadcrumb "todo.txt › line N", footer with absolute dir path and sync status +m7 @desktop
+2026-09-12 Pin the parent line at the top, highlighted, reusing the click-to-edit popover +m7 @desktop
+2026-09-12 Notes editor: CM6 markdown mode bound to gRPC GetNotes/EditNotes, rendering even when notes.md is absent +m7 @desktop
+2026-09-12 Lazy creation: first keystroke into notes or the sub-list triggers the daemon's M5 one-op-batch ref creation +m7 @desktop
+2026-09-12 Reuse the main-view file component recursively for <ref>/todo.txt, fully clickable with its own ref: lines +m7 @desktop
+2026-09-12 "n of m done" header from the tree progress for the sub-list +m7 @desktop
+2026-09-12 Test: double-click opens detail; typing into empty notes creates the directory; sub-list double-click nests the breadcrumb +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop
