@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+publish.workspace = true
 description = "ratatui client (M10)."
 
 [[bin]]
@@ -13,3 +14,6 @@ path = "src/main.rs"
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true
+
+[lints]
+workspace = true

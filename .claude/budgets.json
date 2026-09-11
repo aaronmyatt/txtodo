@@ -11,10 +11,11 @@
   "payloadKB": null,
   "criticalPathKB": null,
   "latencyMs": 20,
-  "coveragePercent": 80,
+  "coveragePercent": 0,
   "notes": {
     "payloadKB": "N/A until M6: no HTTP surface in M0-M5 (libraries, CLI, daemon over unix socket). Re-justify when sisyphus-mcp lands.",
-    "latencyMs": "Plan section 5: reconcile one external line edit in a 10k-line file <= 20 ms on the Linux CI runner."
+    "latencyMs": "Plan section 5: reconcile one external line edit in a 10k-line file <= 20 ms on the Linux CI runner.",
+    "coveragePercent": "Measured 0% at /setup (2026-09-11, no tests yet). Ratchet target: 80 once M1 lands tests. See RATCHET.md."
   },
   "slices": {
     "root": "crates",
@@ -83,7 +84,8 @@
       ".claude/**",
       ".pi/extensions/**",
       "ABSTRACTIONS.md",
-      "RATCHET.md"
+      "RATCHET.md",
+      ".claude/scripts/**"
     ],
     "appendOnly": [
       "ABSTRACTIONS.md",
@@ -91,5 +93,27 @@
     ]
   },
   "baselinePaths": [],
-  "commands": {}
+  "commands": {
+    "format": "cargo fmt --all --check",
+    "lint": "cargo clippy --workspace --all-targets -- -D warnings",
+    "typecheck": "cargo check --workspace --all-targets",
+    "test": "cargo test --workspace",
+    "testCoverage": "rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 0",
+    "boundaries": ".claude/scripts/check-boundaries.sh",
+    "fileLength": ".claude/scripts/check-file-length.sh",
+    "assertions": ".claude/scripts/check-assertions.sh",
+    "deny": "cargo deny check",
+    "feedback": {
+      "format": "rustfmt --edition 2024 --check {file}",
+      "lint": "cargo clippy --workspace --all-targets -- -D warnings"
+    },
+    "feedbackExtensions": [
+      "rs"
+    ],
+    "baselinePrune": null
+  },
+  "canary": {
+    "source": ".claude/canary/failing_test.rs",
+    "target": "crates/txtodo-query/tests/__setup_canary__.rs"
+  }
 }
