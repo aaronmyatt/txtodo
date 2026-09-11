@@ -4,10 +4,12 @@
 //! for them). Everything here is rebuildable from the files; deleting `.txtodo/` is the reset.
 #![forbid(unsafe_code)]
 
+mod commit;
 mod error;
 mod ops;
 mod projections;
 
+pub use commit::prev_hash_key;
 pub use error::StoreError;
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
