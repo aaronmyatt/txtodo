@@ -1,4 +1,4 @@
-(A) 2026-09-11 Push main and confirm all six CI jobs are green +m1 @ci
+x 2026-09-11 2026-09-11 Push main and confirm all six CI jobs are green +m1 @ci
 (A) 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli
 (A) 2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli
 (A) 2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli

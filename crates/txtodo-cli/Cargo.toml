@@ -14,6 +14,15 @@ path = "src/main.rs"
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true
+# https://docs.rs/clap/latest/clap/_derive/index.html
+clap = { version = "4", features = ["derive"] }
+# https://docs.rs/toml/latest/toml/ — config.toml
+toml = "1"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# https://docs.rs/tempfile — every test gets its own todo dir
+tempfile = "3"
 
 [lints]
 workspace = true
