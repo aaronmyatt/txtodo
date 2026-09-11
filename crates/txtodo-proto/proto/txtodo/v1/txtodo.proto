@@ -1,0 +1,133 @@
+// txtodo local IPC (ADR 0006): one schema, gRPC on the unix socket now, a REST mirror later.
+// Language guide: https://protobuf.dev/programming-guides/proto3/
+// Every field is optional in proto3; adding fields is compatible, renumbering is not.
+syntax = "proto3";
+
+package txtodo.v1;
+
+service Txtodo {
+  // Every synced document with its current projection hash.
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  // The exact bytes the daemon holds for one document.
+  rpc GetFile(GetFileRequest) returns (FileContents);
+  // A change per reconcile or apply, for the requested paths (all when empty).
+  rpc Watch(WatchRequest) returns (stream Change);
+  // Intent-level mutations; the daemon turns them into ops.
+  rpc Apply(ApplyRequest) returns (ApplyResponse);
+  // Ops newest first, filtered by path and/or task.
+  rpc History(HistoryRequest) returns (HistoryResponse);
+  // Appends inverse ops for the newest `steps` ops of a document.
+  rpc Undo(UndoRequest) returns (ApplyResponse);
+  // Renders a document as it was at a moment in time.
+  rpc Checkout(CheckoutRequest) returns (FileContents);
+  // Liveness for `txtodo doctor` and tests.
+  rpc Health(HealthRequest) returns (HealthResponse);
+}
+
+message ListFilesRequest {}
+
+message FileInfo {
+  string path = 1;      // workspace-relative, `/` separators
+  bytes hash = 2;       // blake3 of the projection, 32 bytes
+}
+
+message ListFilesResponse { repeated FileInfo files = 1; }
+
+message GetFileRequest { string path = 1; }
+
+message FileContents {
+  string path = 1;
+  bytes bytes = 2;
+  bytes hash = 3;
+}
+
+message WatchRequest { repeated string paths = 1; }
+
+message OpSummary {
+  int64 seq = 1;
+  string op_id = 2;         // ULID text
+  uint64 hlc_wall_ms = 3;
+  uint32 hlc_counter = 4;
+  string device = 5;        // ULID text
+  string principal = 6;     // "you@dev" / "agent:name@dev" / "external@dev"
+  string kind = 7;          // store kind tag: insert, set_field, edit_text, move, ...
+  string task_id = 8;       // ULID text, empty for blank ops
+  string summary = 9;       // one-line human summary, truncated by the daemon
+}
+
+message Change {
+  string path = 1;
+  bytes hash = 2;
+  repeated OpSummary ops = 3;
+}
+
+// A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
+message TaskRef {
+  uint32 line_number = 1;   // 1-based over every line, blanks included
+  string task_id = 2;       // ULID text; empty when the line has no id yet
+}
+
+message Add { string line = 1; }                          // full line text, no ending; id added if missing
+message Complete { TaskRef task = 1; string today = 2; }  // YYYY-MM-DD in the client's local zone (ADR 0011)
+message Edit { TaskRef task = 1; string new_line = 2; }  // whole-line replacement; the daemon derives field ops
+message Move { TaskRef task = 1; string to_path = 2; }
+message Delete { TaskRef task = 1; bool leave_blank = 2; } // todo.sh leaves a blank line by default
+
+message Mutation {
+  oneof kind {
+    Add add = 1;
+    Complete complete = 2;
+    Edit edit = 3;
+    Move move = 4;
+    Delete delete = 5;
+  }
+}
+
+// Who is applying. M3 knows users only; M6 fills `agent`.
+message AgentPrincipal {
+  string token_id = 1;
+  string name = 2;
+}
+
+message ApplyRequest {
+  string path = 1;
+  repeated Mutation mutations = 2;
+  AgentPrincipal agent = 3;   // unset = the user on this device
+}
+
+message ApplyResponse {
+  uint32 applied = 1;         // ops appended
+  bytes hash = 2;             // projection hash after the write
+  uint64 hlc_wall_ms = 3;
+  uint32 hlc_counter = 4;
+}
+
+message HistoryRequest {
+  string path = 1;            // empty = every document
+  string task_id = 2;         // empty = every task
+  uint32 limit = 3;           // 0 = daemon default
+  int64 before_seq = 4;       // 0 = newest
+}
+
+message HistoryResponse { repeated OpSummary ops = 1; }
+
+message UndoRequest {
+  string path = 1;
+  uint32 steps = 2;           // 0 = 1
+}
+
+message CheckoutRequest {
+  string path = 1;
+  uint64 at_wall_ms = 2;      // inclusive upper bound on hlc wall time
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  bool watcher_alive = 1;
+  uint32 documents = 2;
+  uint64 last_event_age_ms = 3;
+  uint64 started_at_ms = 4;
+  uint64 writes_total = 5;
+  string version = 6;
+}
