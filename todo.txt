@@ -1,13 +1,13 @@
 (A) 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke
 (A) 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core ref:fuzz-stub-target
-(A) 2026-09-11 Write docs/adr/0000-template.md +m0 @docs
+(A) 2026-09-11 Write docs/adr/0000-template.md +m0 @docs ref:adr-template
 (A) 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs ref:adr-decisions
 (A) 2026-09-11 Update plan §1 decision 10 names to txtodod txtodo .txtodo/ _txtodo._udp _txtodo-mcp._tcp +m0 @docs ref:rename-plan-names
-(A) 2026-09-11 Write specs/todotxt.abnf from design §2.3 plus the ref slug grammar from plan §3.2.1 +m0 @specs
-(A) 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs
-(A) 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 edge case and the ref cases +m0 @corpus
+(A) 2026-09-11 Write specs/todotxt.abnf from design §2.3 plus the ref slug grammar from plan §3.2.1 +m0 @specs ref:abnf-spec
+(A) 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs ref:ref-directories-spec
+(A) 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 edge case and the ref cases +m0 @corpus ref:corpus-seed
 (A) 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle
-(A) 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs
+(A) 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs ref:open-questions
 (B) 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core
 (B) 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core
 (B) 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core
