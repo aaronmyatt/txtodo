@@ -20,6 +20,8 @@ pub mod workspace;
 pub mod write;
 
 #[cfg(test)]
+mod history_tests;
+#[cfg(test)]
 mod mutation_tests;
 #[cfg(test)]
 mod reconcile_tests;
