@@ -5,5 +5,6 @@ pub mod add;
 pub mod archive;
 pub mod edit;
 pub mod fileops;
+pub mod hygiene;
 pub mod list;
 pub mod text;

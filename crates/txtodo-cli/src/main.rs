@@ -85,6 +85,10 @@ enum Command {
     },
     /// Print the resolved paths and config.
     Env,
+    /// Canonicalise quirks in todo.txt (the only command that rewrites untouched lines).
+    Fmt,
+    /// Report quirks and file hygiene in todo.txt.
+    Lint,
     /// List tasks matching every TERM (`-term` excludes), sorted.
     #[command(visible_alias = "ls")]
     List {
@@ -279,6 +283,8 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             print_env(&ctx);
             Ok(())
         }
+        Command::Fmt => commands::hygiene::run_fmt(&ctx),
+        Command::Lint => commands::hygiene::run_lint(&ctx),
         Command::List { terms } => commands::list::list_file(&ctx, &ctx.paths.todo, terms),
         Command::Listall { terms } => commands::list::list_all(&ctx, terms),
         Command::Listpri { args } => commands::list::list_pri(&ctx, args),
