@@ -1,6 +1,6 @@
 x 2026-09-11 2026-09-11 walker.rs: walk(root) -> Vec<FilePath> of every todo.txt done.txt notes.md at any depth (plan §3.2.11); iterative with an explicit Vec stack, WALK_MAX_DEPTH = 32, WALK_MAX_FILES = 10_000, both asserted +m3 @daemon
 x 2026-09-11 2026-09-11 Skip .txtodo/ and do not follow symlinked directories (loop safety); everything else is visited even when hidden +m3 @daemon
-2026-09-11 Startup: walk, spawn one FileActor per document, register in the Workspace map +m3 @daemon
-2026-09-11 On a directory Create event from the watcher: walk that subtree only and spawn actors for documents not yet registered (idempotent) +m3 @daemon
-2026-09-11 Tests: a 3-level fixture yields 5 documents in sorted order; foo.txt and .txtodo/oplog.db are skipped; a symlink loop terminates; creating q4/todo.txt after start registers an actor +m3 @daemon @test
-2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon
+x 2026-09-11 2026-09-11 Startup: walk, spawn one FileActor per document, register in the Workspace map +m3 @daemon
+x 2026-09-11 2026-09-11 On a directory Create event from the watcher: walk that subtree only and spawn actors for documents not yet registered (idempotent) +m3 @daemon
+x 2026-09-11 2026-09-11 Tests: a 3-level fixture yields 5 documents in sorted order; foo.txt and .txtodo/oplog.db are skipped; a symlink loop terminates; creating q4/todo.txt after start registers an actor +m3 @daemon @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon

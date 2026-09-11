@@ -1,7 +1,7 @@
 x 2026-09-11 2026-09-11 reconcile.rs: pure fn reconcile(old: &File, new: &File, ctx: &ReconcileCtx) -> Reconciled { ops: Vec<Op>, assigned_ids: usize } — no I/O, no clock inside +m3 @daemon
 x 2026-09-11 2026-09-11 Map core::LineDiff to ops: Insert → OpKind::Insert; Delete → SetField Deleted=true; Change → one SetField per changed prefix field plus EditText from core::diff_text on the description; Move → OpKind::Move; blank runs → BlankInsert/BlankRemove +m3 @daemon
 x 2026-09-11 2026-09-11 Lines without id: get a fresh TaskId (ULID from injected entropy) and Edit::set_tag("id", …) applied to the inserted line; the write-back happens in the actor's projection write (ADR 0009 tagged mode) +m3 @daemon
-2026-09-11 Actor path: ExternalChange → read bytes → parse_file → reconcile → store.append → apply to state → materialise → write only if bytes differ from the file just read +m3 @daemon
+x 2026-09-11 2026-09-11 Actor path: ExternalChange → read bytes → parse_file → reconcile → store.append → apply to state → materialise → write only if bytes differ from the file just read +m3 @daemon
 x 2026-09-11 2026-09-11 All ops in one reconcile share one Hlc tick and Principal::External { device } +m3 @daemon
-2026-09-11 Tests: table test LineDiff kind → OpKind; reconcile(x, x) is empty; strip-all-ids yields zero text changes and N id assignments; unrelated lines are byte-identical after materialise +m3 @daemon @test
-2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon
+x 2026-09-11 2026-09-11 Tests: table test LineDiff kind → OpKind; reconcile(x, x) is empty; strip-all-ids yields zero text changes and N id assignments; unrelated lines are byte-identical after materialise +m3 @daemon @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon
