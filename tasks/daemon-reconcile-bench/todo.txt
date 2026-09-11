@@ -1,0 +1,5 @@
+2026-09-11 benches/reconcile.rs (criterion, dev-dependency already in the workspace via core): build a 10k-line File from corpus shapes with ids, change one description, bench reconcile(old, new) → ops +m3 @daemon @perf
+2026-09-11 Second bench, informational: full actor path in-process (parse + reconcile + append to an in-memory store + materialise), no fsync +m3 @daemon @perf
+2026-09-11 budgets.json perf.reconcile10kMs = 20 (frozen: ask) and cite it from CLAUDE.md's "Local round trip" row; stack.md §Not mechanically enforced moves it from tier 4 to tier 2 +m3 @perf @setup
+2026-09-11 .claude/scripts/check-bench.sh (frozen: ask) reads both perf keys and both bench names; just bench-check unchanged; CI bench job already runs it +m3 @perf @ci
+2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @perf
