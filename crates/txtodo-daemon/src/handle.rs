@@ -3,13 +3,13 @@
 //! Ref: https://docs.rs/tokio/latest/tokio/sync/mpsc/index.html
 
 use crate::expected::Hash;
-use crate::mutation::{Mutation, MutationError};
+use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::state::StateError;
 use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use txtodo_model::{FilePath, Hlc, HlcError, Principal};
-use txtodo_store::{StoreError, Stored};
+use txtodo_model::{DeviceId, FilePath, Hlc, HlcError, Principal, TaskId};
+use txtodo_store::{ReviewRow, StoreError, Stored};
 
 /// Mailbox depth per document.
 pub const ACTOR_MAILBOX_CAP: usize = 256;
@@ -45,6 +45,28 @@ pub struct Change {
     pub hash: Hash,
     /// The ops appended, with their seqs.
     pub ops: Vec<Stored>,
+    /// needs_review flags this change raised (an import), if any.
+    pub review: Vec<ReviewRow>,
+}
+
+/// Which side a resolution keeps. Closed set; mirrors the wire enum.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resolution {
+    /// This device's text at flag time.
+    Mine,
+    /// The peer's text at flag time.
+    Theirs,
+    /// What is in the file now; only the flag is cleared.
+    Merged,
+}
+
+/// An open flag with the line its task sits on now (0 when it left the file).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConflictRow {
+    /// The stored flag.
+    pub row: ReviewRow,
+    /// 1-based line, 0 when the task is no longer in the file.
+    pub line_number: usize,
 }
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
@@ -63,6 +85,8 @@ pub enum ActorError {
     Hlc(HlcError),
     /// The Loro mirror could not be built when the actor opened (a bug, not a client error).
     Mirror(String),
+    /// A resolution named a task with no open needs_review flag.
+    NoFlag(TaskId),
     /// The actor task has stopped.
     Gone(FilePath),
     /// Not available on one device in M3.
@@ -78,6 +102,7 @@ impl fmt::Display for ActorError {
             ActorError::Write(e) => write!(f, "{e}"),
             ActorError::Hlc(e) => write!(f, "{e}"),
             ActorError::Mirror(m) => write!(f, "mirror: {m}"),
+            ActorError::NoFlag(t) => write!(f, "no open needs_review flag for task {t}"),
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
         }
@@ -150,6 +175,31 @@ pub enum ActorMsg {
         at_wall_ms: u64,
         /// Result channel.
         reply: oneshot::Sender<Result<Vec<u8>, ActorError>>,
+    },
+    /// A peer's Loro updates to merge (plan M4).
+    Import {
+        /// `LoroDocument::export_updates` bytes from the peer.
+        updates: Vec<u8>,
+        /// The peer.
+        peer: DeviceId,
+        /// Result channel.
+        reply: oneshot::Sender<Result<Applied, ActorError>>,
+    },
+    /// The open needs_review flags.
+    Conflicts {
+        /// Result channel.
+        reply: oneshot::Sender<Result<Vec<ConflictRow>, ActorError>>,
+    },
+    /// Resolve one flag.
+    Resolve {
+        /// The line.
+        task: TaskRef,
+        /// Which side.
+        resolution: Resolution,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<Applied, ActorError>>,
     },
 }
 
@@ -229,5 +279,40 @@ impl ActorHandle {
     pub async fn checkout(&self, at_wall_ms: u64) -> Result<Vec<u8>, ActorError> {
         self.ask(|reply| ActorMsg::Checkout { at_wall_ms, reply })
             .await?
+    }
+
+    /// Merges a peer's Loro updates.
+    pub async fn import_updates(
+        &self,
+        updates: Vec<u8>,
+        peer: DeviceId,
+    ) -> Result<Applied, ActorError> {
+        self.ask(|reply| ActorMsg::Import {
+            updates,
+            peer,
+            reply,
+        })
+        .await?
+    }
+
+    /// The open needs_review flags with their current lines.
+    pub async fn conflicts(&self) -> Result<Vec<ConflictRow>, ActorError> {
+        self.ask(|reply| ActorMsg::Conflicts { reply }).await?
+    }
+
+    /// Resolves one flag.
+    pub async fn resolve(
+        &self,
+        task: TaskRef,
+        resolution: Resolution,
+        principal: Principal,
+    ) -> Result<Applied, ActorError> {
+        self.ask(|reply| ActorMsg::Resolve {
+            task,
+            resolution,
+            principal,
+            reply,
+        })
+        .await?
     }
 }
