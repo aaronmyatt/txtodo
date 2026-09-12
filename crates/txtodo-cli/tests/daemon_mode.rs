@@ -181,3 +181,55 @@ fn history_commands_without_a_daemon_say_so() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("needs the daemon"));
 }
+
+#[test]
+fn conflicts_without_a_daemon_say_so() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    // Both subcommands are daemon-only: a flag lives in the store, never in the file.
+    for args in [
+        &["conflicts"] as &[&str],
+        &["conflicts", "resolve", "1", "mine"],
+    ] {
+        let out = txtodo(dir.path(), args);
+        assert!(!out.status.success(), "{args:?} must fail");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("needs the daemon"),
+            "{args:?}"
+        );
+    }
+}
+
+#[test]
+fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path());
+    assert!(txtodo(dir.path(), &["add", "first"]).status.success());
+    let out = txtodo(dir.path(), &["conflicts"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout(&out).contains("TODO: no conflicts."),
+        "{}",
+        stdout(&out)
+    );
+    // JSON mode prints nothing when there is nothing to report.
+    let out = txtodo(dir.path(), &["conflicts", "--json"]);
+    assert!(out.status.success());
+    assert!(stdout(&out).is_empty(), "{}", stdout(&out));
+    // No flag has been raised (no sync has happened), so the daemon refuses the resolve.
+    let before = todo_txt(dir.path());
+    let out = txtodo(dir.path(), &["conflicts", "resolve", "1", "merged"]);
+    assert!(!out.status.success(), "resolve without a flag must fail");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("no open needs_review flag"), "{err}");
+    assert_eq!(
+        before,
+        todo_txt(dir.path()),
+        "a refused resolve writes nothing"
+    );
+}
