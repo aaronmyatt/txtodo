@@ -40,6 +40,15 @@ impl Entry {
     }
 }
 
+/// Task-line counts for one document: blanks are excluded (plan §3.2.5's progress rule).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TaskCounts {
+    /// Task lines, blanks excluded.
+    pub total: usize,
+    /// Of those, lines that start `x ` (completed).
+    pub completed: usize,
+}
+
 /// Why an op or a file could not be applied. An op that fails here is a daemon bug or a stale
 /// client; the message says which task and what was attempted.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -137,6 +146,23 @@ impl DocState {
     /// True when the document has no lines.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    /// Counts task lines and how many are completed; blanks are excluded (plan §3.2.5, used by the
+    /// `ListFiles` RPC's progress field). Re-parses each task's stored bytes rather than the whole
+    /// file, since `Entry` keeps completion state in the line text, not as a cached flag.
+    pub fn task_counts(&self) -> TaskCounts {
+        let mut counts = TaskCounts::default();
+        for entry in &self.entries {
+            let Entry::Task { line, .. } = entry else {
+                continue;
+            };
+            counts.total += 1;
+            if is_completed(line) {
+                counts.completed += 1;
+            }
+        }
+        counts
     }
 
     /// The entry at `i`, by value: the backing store is not a slice after M4 (plan M4), so no
@@ -303,6 +329,15 @@ impl DocState {
             _ => Err(StateError::NoBlank(after)),
         }
     }
+}
+
+/// Whether a task line starts `x ` (todo.txt's completed marker); `false` for anything else,
+/// blanks included.
+fn is_completed(line: &OwnedLine) -> bool {
+    matches!(
+        line.parse().map(|l| l.kind),
+        Some(LineKind::Task(t)) if t.completed
+    )
 }
 
 fn entry_of(index: usize, line: &OwnedLine) -> Result<Entry, StateError> {

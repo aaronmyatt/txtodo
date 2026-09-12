@@ -1,6 +1,6 @@
 //! DocState: from_file validation, byte-faithful materialise, every OpKind applied and refused.
 
-use crate::state::{DocState, Entry, StateError, task_id};
+use crate::state::{DocState, Entry, StateError, TaskCounts, task_id};
 use txtodo_core::{Date, parse_file};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TextEdit, set_field};
 
@@ -158,6 +158,28 @@ fn set_field_rewrites_the_prefix_and_delete_removes_the_line() {
         state.apply_kind(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap()),
         Err(StateError::UnknownTask(a))
     );
+}
+
+#[test]
+fn task_counts_excludes_blanks_and_counts_completed() {
+    // Two done, one undone, one blank (plan §3.2.5's rule: blanks excluded from both counts).
+    let bytes = format!(
+        "(A) 2026-09-11 buy ducks +farm id:{A}\n\nwalk the dog @home id:{B}\nx 2026-09-11 2026-09-10 call mum @phone id:{C}\n"
+    );
+    let state = doc(bytes.as_bytes());
+    assert_eq!(
+        state.task_counts(),
+        TaskCounts {
+            total: 3,
+            completed: 1
+        }
+    );
+}
+
+#[test]
+fn task_counts_is_zero_for_an_empty_document() {
+    let state = doc(b"");
+    assert_eq!(state.task_counts(), TaskCounts::default());
 }
 
 #[test]

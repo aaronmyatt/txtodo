@@ -14,9 +14,10 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
   committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
   ops) · `history` (replay, checkout, inverse) · `walker`, `watcher`, `debounce`, `watch_task` ·
-  `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `write` (temp + fsync +
-  rename) · `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`,
-  `stats`, `pidfile`.
+  `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `progress` (`ListFiles`
+  done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of `server.rs` for its line
+  budget, same pattern as `notes.rs`) · `write` (temp + fsync + rename) · `expected` (own-write
+  ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`, `pidfile`.
 - Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
   `tests/external_edits.rs` (plan M3's eight scenarios), `tests/editor_saves.rs`, `tests/crash.rs`
   (kill -9 rounds) — the last three spawn the real binary through `tests/support`.

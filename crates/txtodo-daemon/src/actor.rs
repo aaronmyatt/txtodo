@@ -168,6 +168,9 @@ impl FileActor {
                     hash: self.hash,
                 });
             }
+            ActorMsg::Progress { reply } => {
+                let _ = reply.send(self.state.task_counts());
+            }
             ActorMsg::Subscribe { reply } => {
                 let _ = reply.send(self.changes.subscribe());
             }

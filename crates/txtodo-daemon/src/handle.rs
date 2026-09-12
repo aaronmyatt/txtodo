@@ -4,7 +4,7 @@
 
 use crate::expected::Hash;
 use crate::mutation::{Mutation, MutationError, TaskRef};
-use crate::state::StateError;
+use crate::state::{StateError, TaskCounts};
 use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -155,6 +155,11 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Contents>,
     },
+    /// Task-line counts (plan §3.2.5's `ListFiles` progress field).
+    Progress {
+        /// Result channel.
+        reply: oneshot::Sender<TaskCounts>,
+    },
     /// A stream of future changes.
     Subscribe {
         /// Result channel.
@@ -270,6 +275,11 @@ impl ActorHandle {
     /// Current bytes and hash.
     pub async fn get(&self) -> Result<Contents, ActorError> {
         self.ask(|reply| ActorMsg::Get { reply }).await
+    }
+
+    /// Task-line counts, from the actor's already-parsed state (plan §3.2.5).
+    pub async fn progress(&self) -> Result<TaskCounts, ActorError> {
+        self.ask(|reply| ActorMsg::Progress { reply }).await
     }
 
     /// Future changes.
