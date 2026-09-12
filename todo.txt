@@ -1,4 +1,4 @@
-2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync ref:sync-crypto-envelope
+x 2026-09-12 2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync ref:sync-crypto-envelope
 2026-09-11 LAN transport via mdns-sd discovery and iroh QUIC local endpoint with relay off +m4 @sync ref:sync-lan-transport
 2026-09-11 Pairing: txtodo pair shows QR and 6-word SAS from an X25519 handshake then snapshot plus ops +m4 @sync @cli ref:sync-pairing
 2026-09-11 txtodo device remove rotates the group key +m4 @sync @cli ref:sync-device-remove

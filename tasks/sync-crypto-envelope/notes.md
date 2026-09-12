@@ -71,3 +71,33 @@ rejected whole; partial import of a signed batch is not a thing.
 - `signing_bytes` golden: checked-in bytes for a fixed `Op`, so a field reorder fails loudly.
 - A `HashMap` in a signed payload is caught — assert `signing_bytes` is stable across 100 runs in
   one process (hash seeds differ per process, so also across two).
+
+## As built (2026-09-12, agent)
+
+- `crates/txtodo-model`: `Op::signing_bytes()` (postcard of the op; there is no `signature` field to
+  strip — it lives in `ops.signature`, never inside `Op`), golden `goldens/op_signing.postcard`, and
+  the `OpKind` append-only security note. Audited: no `HashMap`/`HashSet` anywhere reachable from
+  `Op`.
+- `crates/txtodo-sync/src/sign.rs`: `DeviceSigningKey` (redacted `Debug`, injected, never read from
+  disk), `DevicePublicKey`, `Signature`, `sign`/`verify`, and all-or-nothing `verify_batch` over
+  parallel `ops`/`signatures` slices. The origin is `op.hlc.device`, so a signature cannot be
+  re-attributed to another device by editing the op.
+- `crates/txtodo-sync/src/aead.rs`: `GroupKey`/`GroupKeys`, `seal`/`open`. Nonce comes straight from
+  `getrandom`; there is no RNG parameter, so the simulator's seeded PRNG has no path in. AAD is
+  `version || group || epoch`; the clear header is `version || group || epoch || nonce`.
+- `crates/txtodo-sync/src/crypto_error.rs`: one `CryptoError`, every variant names the epoch, device
+  or group it failed against. All failures are validated (`Err`), nothing panics.
+- `cargo deny check` run 2026-09-12: `advisories ok, bans ok, licenses ok, sources ok`. ed25519-dalek
+  2.2.0 (BSD-3-Clause) and chacha20poly1305 0.10.1 (Apache-2.0/MIT) are both allowed by `deny.toml`.
+- Judgement calls, flagged for the human:
+  - The clear header carries `version` and `group` as well as `epoch`, so "wrong group in the AAD"
+    is a distinct `WrongGroup` error rather than an indistinguishable tag failure. The notes only
+    promised `epoch` in the clear; the extra two fields are public (they are in `Hello`) and make the
+    required three distinct errors possible.
+  - `MAX_RETAINED_KEY_EPOCHS = 16` (no number was specified). The keystore's `MAX_STORED_EPOCHS`
+    should re-use this constant, per its notes.
+- Not in this slice (named so the next one can pick them up): carrying signatures on the wire
+  (`Message::Ops` still holds only `Vec<Op>`), persisting them via the `ops.signature` column
+  (`Store::append` omits it), and the daemon import path that calls `verify_batch` before insert.
+  The crypto contract — verify the whole batch, insert nothing on one bad signature — is in
+  `verify_batch`'s doc and is enforced there; only the call site is pending.
