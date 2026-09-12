@@ -1,12 +1,28 @@
 # txtodo-crdt
 
 ## Purpose
-Loro document per file, ops to/from Loro, reconciler. Plan M4.
+The Loro merge engine (plan M4, ADR 0002/0013): one `LoroDocument` per workspace with a movable
+list per file and a shared `tasks` map; our `Op`s in, Loro updates between devices, `Op`s and
+review flags out. As built 2026-09-12.
 
 ## Public interface
-`Doc` (Loro-backed), reconcile(external bytes) -> ops, materialise() -> bytes.
+- `LoroDocument::{open, hydrate(ops), fork, at(frontiers), snapshot, from_snapshot, set_peer,
+  version, export_updates(since), import(bytes) -> Imported}`; views `list_ids(file)`,
+  `is_deleted`, `description`, `set_description`, `last_blank_id`; `is_blank(id)`,
+  `rebuild_line(doc, task)` (canonical, not byte-faithful).
+- `apply(doc, &Op)` — `OpKind → Loro`, one commit per op, exhaustive; Insert of a deleted id
+  resurrects it; `BlankRemove` skips tombstones. `hydrate_file(doc, file, lines, hlc)` — O(n) bulk
+  load of an empty list. `from_batch(doc, diff, stamp, mint)` — Loro diff → `Op`s.
+- `Lww { value, hlc }`, `write_if_newer` (ADR 0013: our HLC arbitrates; an equal stamp lands).
+- `detect(doc, &Imported) -> Review { flags: Vec<ReviewFlag { task, file, mine, theirs }>,
+  overflowed }`, `MAX_REVIEW_FLAGS_PER_FILE`.
 
 ## Invariants
-- Three-way apply on top of current state, never overwrite.
-- Untouched lines materialise byte-identical.
+- Untouched lines materialise byte-identical — the host keeps the bytes (`txtodo-daemon`
+  `DocState`); this crate holds fields + text and never claims to re-emit quirks.
+- One id, one list entry: a deleted task is a tombstone (`deleted` register), never removed.
+- Every list mutation goes through the per-file shadow (`doc/shadow.rs`); an import or snapshot
+  load invalidates it. Concurrency is asked of Loro frontiers, never of the `Hlc`.
+- Two devices merge only if their documents share lineage (fork/snapshot at pairing, then
+  updates); replaying our `Op`s into independent documents does not converge.
 - May depend only on: txtodo-model, txtodo-store, txtodo-core.

@@ -71,3 +71,16 @@ Whose is "mine"? This device's edit, or the edit made by this *user* (same perso
 Device is trivial and what the code wants; user is what the words mean. Leaning **device**, with the
 CLI labelling the sides by device name rather than the words mine/theirs in `list` output — the
 subcommand keeps `mine|theirs` for muscle memory.
+
+## Reading taken and as built (2026-09-12, agent)
+
+- **"mine" = this device.** The CLI keeps `mine|theirs` for the subcommand; `list` labels sides
+  by device. Recorded here, not confirmed by the human yet.
+- `concurrent.rs` + `overlap.rs` landed as one `review.rs` in txtodo-crdt: with the frontiers an
+  import names (`Imported { before, remote, ancestor, after }`), local edits are
+  `diff(ancestor → before)` and the peer's `diff(ancestor → remote)`, both in ancestor
+  coordinates, so overlap-or-adjacent is a plain range test. `mine`/`theirs` come from
+  `doc.at(before)` / `doc.at(remote)`. No merged-text mapping was needed.
+- Prerequisite discovered: an import is a *Loro update* import, so the daemon's mirror must be
+  persisted and pairing must ship a snapshot (shared lineage). The store/proto/daemon/CLI halves
+  follow.
