@@ -95,7 +95,12 @@ fn insert(
 }
 
 /// Writes the description text and every prefix field of a freshly inserted task.
-fn populate(doc: &LoroDocument, task: TaskId, line: &str, hlc: Hlc) -> Result<(), ToLoroError> {
+pub(crate) fn populate(
+    doc: &LoroDocument,
+    task: TaskId,
+    line: &str,
+    hlc: Hlc,
+) -> Result<(), ToLoroError> {
     let parsed =
         parse_line(line, Mode::Lenient).map_err(|_| ToLoroError::NotATask(line.to_owned()))?;
     let LineKind::Task(t) = parsed.kind else {

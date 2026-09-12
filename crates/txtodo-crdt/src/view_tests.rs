@@ -6,7 +6,7 @@ use txtodo_model::{
     set_field,
 };
 
-use crate::{LoroDocument, apply, is_blank, rebuild_line};
+use crate::{HydrateLine, LoroDocument, apply, hydrate_file, is_blank, rebuild_line};
 
 fn dev() -> DeviceId {
     DeviceId::new(Ulid::from_u128(7))
@@ -176,4 +176,37 @@ fn blank_remove_skips_a_deleted_tombstone_and_set_description_replaces_the_text(
     doc.set_description(task(2), "b pri:B").unwrap();
     assert_eq!(doc.description(task(2)).as_deref(), Some("b pri:B"));
     assert_eq!(doc.description(task(3)), None);
+}
+
+#[test]
+fn hydrate_file_appends_in_order_under_one_commit_and_refuses_a_non_empty_list() {
+    let mut doc = LoroDocument::open();
+    let a = format!("a id:{}", Ulid::from_u128(1));
+    let b = format!("b id:{}", Ulid::from_u128(2));
+    let lines = [
+        HydrateLine::Task {
+            task: task(1),
+            line: &a,
+        },
+        HydrateLine::Blank,
+        HydrateLine::Blank,
+        HydrateLine::Task {
+            task: task(2),
+            line: &b,
+        },
+    ];
+    let ids = hydrate_file(&mut doc, &file(), &lines, hlc(0)).unwrap();
+    assert_eq!(ids.len(), 4);
+    assert_eq!((ids[0], ids[3]), (task(1), task(2)));
+    assert!(is_blank(ids[1]) && is_blank(ids[2]) && ids[1] != ids[2]);
+    assert_eq!(
+        doc.list_ids(&file()),
+        ids,
+        "the list is exactly the hydrated order"
+    );
+    assert_eq!(doc.description(task(2)).as_deref(), Some(b.as_str()));
+    assert!(matches!(
+        hydrate_file(&mut doc, &file(), &lines, hlc(0)),
+        Err(crate::ToLoroError::Unsupported(_))
+    ));
 }

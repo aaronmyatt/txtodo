@@ -302,17 +302,23 @@ pub(crate) fn decode_field_value(field: Field, v: &LoroValue) -> Option<FieldVal
 
 /// Whether a list holds the given task-id string.
 pub(crate) fn list_contains(list: &LoroMovableList, needle: &str) -> bool {
-    list.to_vec()
-        .iter()
-        .any(|v| v.as_string().is_some_and(|s| s.as_str() == needle))
+    position_of(list, needle).is_some()
 }
 
 /// The list index of a task id, if present.
 pub(crate) fn index_of(list: &LoroMovableList, task: TaskId) -> Option<usize> {
-    let needle = task_id_str(task);
-    list.to_vec()
-        .iter()
-        .position(|v| v.as_string().is_some_and(|s| s.as_str() == needle))
+    position_of(list, &task_id_str(task))
+}
+
+/// A linear scan by `get(i)` — no `to_vec`, so a 10k-entry list is not cloned per lookup.
+fn position_of(list: &LoroMovableList, needle: &str) -> Option<usize> {
+    let len = list.len();
+    // Bounded by the list length.
+    (0..len).find(|&i| {
+        list.get(i)
+            .and_then(|voc| voc.into_value().ok())
+            .is_some_and(|v| v.as_string().is_some_and(|s| s.as_str() == needle))
+    })
 }
 
 /// Rebuilds a canonical `Insert` line from the task map's description text and prefix fields.
