@@ -39,7 +39,7 @@ struct Replayed {
 fn replay(before: &str, after: &str) -> Replayed {
     let old = parse_file(before.as_bytes());
     let new = parse_file(after.as_bytes());
-    let mut state = DocState::from_file(path(), &old).unwrap();
+    let mut state = DocState::from_tagged_file(path(), &old).unwrap();
     assert_eq!(
         state.to_bytes(),
         before.as_bytes(),
@@ -209,7 +209,7 @@ fn golden_same_content_with_crlf_yields_no_ops() {
     // Zero ops: the state stays LF and the actor adopts the CRLF file (apply(ops) != file).
     let old = parse_file(before.as_bytes());
     let new = parse_file(after.as_bytes());
-    let mut state = DocState::from_file(path(), &old).unwrap();
+    let mut state = DocState::from_tagged_file(path(), &old).unwrap();
     let mut mint = || task_id(MINT_BASE);
     let reconciled = reconcile(&old, &new, &path(), &mut mint);
     assert!(reconciled.ops.is_empty(), "{:?}", kinds(&reconciled.ops));

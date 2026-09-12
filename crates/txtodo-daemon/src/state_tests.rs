@@ -13,7 +13,7 @@ fn ulid_bits(text: &str) -> u128 {
 }
 
 fn doc(bytes: &[u8]) -> DocState {
-    DocState::from_file(FilePath::new("todo.txt").unwrap(), &parse_file(bytes)).unwrap()
+    DocState::from_tagged_file(FilePath::new("todo.txt").unwrap(), &parse_file(bytes)).unwrap()
 }
 
 fn two_lines_crlf() -> Vec<u8> {
@@ -30,12 +30,12 @@ fn from_file_is_byte_faithful_and_requires_ids() {
     assert_eq!(state.index_of(task_id(ulid_bits(B))), Some(2));
     let no_id = parse_file(b"(A) no id here\n");
     assert_eq!(
-        DocState::from_file(FilePath::new("todo.txt").unwrap(), &no_id).unwrap_err(),
+        DocState::from_tagged_file(FilePath::new("todo.txt").unwrap(), &no_id).unwrap_err(),
         StateError::MissingId(0)
     );
     let opaque = parse_file(b"\xff\xfe bad\n");
     assert_eq!(
-        DocState::from_file(FilePath::new("t.txt").unwrap(), &opaque).unwrap_err(),
+        DocState::from_tagged_file(FilePath::new("t.txt").unwrap(), &opaque).unwrap_err(),
         StateError::Opaque(0)
     );
 }

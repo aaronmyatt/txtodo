@@ -31,7 +31,7 @@ fn run(old_file: &File, new_bytes: &str) -> Reconciled {
     };
     let new = parse_file(new_bytes.as_bytes());
     let out = reconcile(old_file, &new, &path(), &mut mint);
-    let mut state = DocState::from_file(path(), old_file).unwrap();
+    let mut state = DocState::from_tagged_file(path(), old_file).unwrap();
     for op in &out.ops {
         state
             .apply_kind(op)

@@ -3,7 +3,11 @@
 ## Purpose
 The `txtodod` binary: one process per workspace owning the files, the op log and the IPC socket.
 Plan M3, as built 2026-09-12; token data layer (plan M6), the activity feed (plan M7) and
-`notes.md` as a Loro text doc (plan M5) added the same day.
+`notes.md` as a Loro text doc (plan M5) added the same day. Sidecar identity mode (no `id:` tag in
+the file, docs/questions.md Q2) under construction 2026-09-13 — `DocState`/`reconcile` are mode-
+aware and `reconcile_sidecar`/`identity_fingerprint`/`identity_assign`/`identity_levenshtein` exist
+and are unit-tested, but nothing wires a real workspace to sidecar mode yet (no `ActorConfig`
+field, no `--identity-mode` flag): every workspace still runs tagged mode today.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on

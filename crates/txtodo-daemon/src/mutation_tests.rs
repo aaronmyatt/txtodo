@@ -16,7 +16,7 @@ fn id(text: &str) -> txtodo_model::TaskId {
 
 fn state() -> DocState {
     let bytes = format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\nwalk the dog @home id:{B}\n");
-    DocState::from_file(
+    DocState::from_tagged_file(
         FilePath::new("todo.txt").unwrap(),
         &parse_file(bytes.as_bytes()),
     )

@@ -1,8 +1,9 @@
 //! Mirror: hydration matches the state, a flush keeps descriptions in step through a `complete`
 //! (which appends ` pri:`), a refused op is reported and a rebuild heals it.
 
+use crate::fastid::hydration_op;
 use crate::mirror::{Mirror, MirrorError};
-use crate::state::{DocState, hydration_op, task_id};
+use crate::state::{DocState, task_id};
 use txtodo_core::parse_file;
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TextEdit, set_field};
 
@@ -15,7 +16,7 @@ fn ulid_bits(text: &str) -> u128 {
 
 fn doc() -> DocState {
     let bytes = format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\nwalk the dog @home id:{B}\n");
-    DocState::from_file(
+    DocState::from_tagged_file(
         FilePath::new("todo.txt").unwrap(),
         &parse_file(bytes.as_bytes()),
     )
@@ -143,7 +144,7 @@ fn converge_places_a_line_after_a_blank_where_the_reconciler_could_not() {
     // Mirror: A, blank, B. Adopted state: A, blank, N, B — N sits after the blank.
     let mut mirror = Mirror::from_state(&doc(), 1).unwrap();
     let n = "01ARZ3NDEKTSV4RRFFQ69G5FAN";
-    let adopted = DocState::from_file(
+    let adopted = DocState::from_tagged_file(
         FilePath::new("todo.txt").unwrap(),
         &parse_file(
             format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\nnew one id:{n}\nwalk the dog @home id:{B}\n")
@@ -162,7 +163,7 @@ fn converge_reorders_deletes_and_trims_blanks_keeping_the_lineage() {
     let mut mirror = Mirror::from_state(&doc(), 1).unwrap();
     let before = mirror.version();
     // Adopted: B first, A last, no blank at all.
-    let adopted = DocState::from_file(
+    let adopted = DocState::from_tagged_file(
         FilePath::new("todo.txt").unwrap(),
         &parse_file(
             format!("walk the dog @home id:{B}\n(A) 2026-09-11 buy ducks +farm id:{A}\n")
@@ -174,7 +175,7 @@ fn converge_reorders_deletes_and_trims_blanks_keeping_the_lineage() {
     assert!(ops >= 2, "a move and a blank removal at least: {ops}");
     assert!(mirror.agrees_with(&adopted));
     // Then a state that drops A entirely and adds a trailing blank.
-    let smaller = DocState::from_file(
+    let smaller = DocState::from_tagged_file(
         FilePath::new("todo.txt").unwrap(),
         &parse_file(format!("walk the dog @home id:{B}\n\n").as_bytes()),
     )

@@ -103,7 +103,7 @@ impl FileActor {
     fn adopt_mirror_rendering(&self, e: &crate::state::StateError) -> Result<DocState, ActorError> {
         tracing::warn!(file = %self.cfg.path, error = %e, "import_ops_refused_adopting_mirror");
         let file = file_like(&self.mirror.canonical_bytes(&self.state), &self.state);
-        let adopted = DocState::from_file(self.cfg.path.clone(), &file)?;
+        let adopted = DocState::from_tagged_file(self.cfg.path.clone(), &file)?;
         debug_assert!(self.mirror.agrees_with(&adopted));
         Ok(adopted)
     }

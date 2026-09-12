@@ -11,8 +11,9 @@
 //! value would treat that prose as "the id tag with an empty value" and give up right there,
 //! diverging from `Task::id()` on any line where a real `id:<ulid>` tag follows such prose.
 
-use txtodo_core::OwnedLine;
-use txtodo_model::{TaskId, Ulid};
+use crate::state::{DocState, StateError};
+use txtodo_core::{File, OwnedLine};
+use txtodo_model::{FilePath, IdentityMode, TaskId, Ulid};
 
 /// The `id:` tag's ULID without parsing the line, or `None` (no tag, invalid value, opaque line).
 pub fn fast_id_of(line: &OwnedLine) -> Option<TaskId> {
@@ -27,6 +28,31 @@ pub fn fast_id_of(line: &OwnedLine) -> Option<TaskId> {
         "a parsed ULID is 26 chars"
     );
     id
+}
+
+impl DocState {
+    /// Tagged-mode convenience: reads every id via `fast_id_of`, then `from_file`.
+    pub fn from_tagged_file(path: FilePath, file: &File) -> Result<DocState, StateError> {
+        let ids: Vec<Option<TaskId>> = file.lines.iter().map(fast_id_of).collect();
+        Self::from_file(path, file, &ids, IdentityMode::Tagged)
+    }
+}
+
+/// A synthetic op under a zero stamp (device 0, HLC 0): for the mirror's hydration and for tests,
+/// so any real op's field write wins over it. Never stored, never sent.
+#[cfg(test)]
+pub(crate) fn hydration_op(path: &FilePath, kind: txtodo_model::OpKind) -> txtodo_model::Op {
+    let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
+    let op = txtodo_model::Op {
+        id: txtodo_model::OpId::new(Ulid::from_u128(0)),
+        hlc: txtodo_model::Hlc::zero(zero),
+        principal: txtodo_model::Principal::External { device: zero },
+        file: path.clone(),
+        kind,
+    };
+    debug_assert_eq!(op.hlc.wall_ms, 0);
+    debug_assert_eq!(&op.file, path);
+    op
 }
 
 #[cfg(test)]

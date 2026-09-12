@@ -5,7 +5,7 @@
 use crate::textedit::TextEditError;
 use std::fmt;
 use txtodo_core::{File, LineEnding, LineKind, OwnedLine};
-use txtodo_model::{FilePath, Op, OpKind, TaskId, Ulid};
+use txtodo_model::{FilePath, IdentityMode, Op, OpKind, TaskId, Ulid};
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -13,7 +13,7 @@ pub const MAX_LINES_PER_FILE: usize = 1_000_000;
 /// One line of the document.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Entry {
-    /// A task line with a valid `id:` tag.
+    /// A task line.
     Task {
         /// Its id.
         id: TaskId,
@@ -53,7 +53,8 @@ pub struct TaskCounts {
 /// client; the message says which task and what was attempted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
-    /// A task line has no valid `id:` tag (line index).
+    /// A task line has no resolved id: no `id:` tag in tagged mode, no fingerprint match minted
+    /// one in sidecar mode (line index).
     MissingId(usize),
     /// A line is not valid UTF-8 (line index).
     Opaque(usize),
@@ -100,18 +101,25 @@ pub struct DocState {
     bom: bool,
     ending: LineEnding,
     trailing_newline: bool,
+    mode: IdentityMode,
 }
 
 impl DocState {
-    /// Builds the state from a parsed file. Every task line must already carry an `id:` (the
-    /// reconciler assigns ids before calling this).
-    pub fn from_file(path: FilePath, file: &File) -> Result<DocState, StateError> {
+    /// Builds the state from a parsed file and each line's resolved id (`ids[i]`, `None` for a
+    /// blank); `mode` decides whether `insert`/`edit_text` still cross-check a line's text.
+    pub fn from_file(
+        path: FilePath,
+        file: &File,
+        ids: &[Option<TaskId>],
+        mode: IdentityMode,
+    ) -> Result<DocState, StateError> {
         if file.lines.len() > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(file.lines.len()));
         }
+        debug_assert_eq!(ids.len(), file.lines.len(), "one resolved id per line");
         let mut entries = Vec::with_capacity(file.lines.len());
         for (i, line) in file.lines.iter().enumerate() {
-            entries.push(entry_of(i, line)?);
+            entries.push(entry_of(i, line, ids.get(i).copied().flatten())?);
         }
         debug_assert_eq!(entries.len(), file.lines.len());
         Ok(DocState {
@@ -120,12 +128,18 @@ impl DocState {
             bom: file.bom,
             ending: file.ending,
             trailing_newline: file.trailing_newline,
+            mode,
         })
     }
 
     /// The document's path.
     pub fn path(&self) -> &FilePath {
         &self.path
+    }
+
+    /// How this document establishes task identity.
+    pub fn mode(&self) -> IdentityMode {
+        self.mode
     }
 
     /// The file's line ending.
@@ -247,7 +261,10 @@ impl DocState {
     /// Test seam: applies a bare `OpKind` under a zero stamp. Tests pin bytes, not clocks.
     #[cfg(test)]
     pub(crate) fn apply_kind(&mut self, kind: &OpKind) -> Result<(), StateError> {
-        self.apply(&hydration_op(&self.path.clone(), kind.clone()))
+        self.apply(&crate::fastid::hydration_op(
+            &self.path.clone(),
+            kind.clone(),
+        ))
     }
 
     fn position_after(&self, after: Option<TaskId>) -> Result<usize, StateError> {
@@ -271,12 +288,14 @@ impl DocState {
         }
         let at = self.position_after(after)?;
         let owned = OwnedLine::from_bytes(line.as_bytes().to_vec(), self.ending);
-        let parsed_id = owned.parse().and_then(|l| match l.kind {
-            LineKind::Task(t) => t.id(),
-            LineKind::Blank => None,
-        });
-        if parsed_id != Some(task.ulid()) {
-            return Err(StateError::IdMismatch(task));
+        if self.mode == IdentityMode::Tagged {
+            let parsed_id = owned.parse().and_then(|l| match l.kind {
+                LineKind::Task(t) => t.id(),
+                LineKind::Blank => None,
+            });
+            if parsed_id != Some(task.ulid()) {
+                return Err(StateError::IdMismatch(task));
+            }
         }
         self.entries.insert(
             at,
@@ -347,38 +366,18 @@ fn is_completed(line: &OwnedLine) -> bool {
     )
 }
 
-fn entry_of(index: usize, line: &OwnedLine) -> Result<Entry, StateError> {
+fn entry_of(index: usize, line: &OwnedLine, id: Option<TaskId>) -> Result<Entry, StateError> {
     let parsed = line.parse().ok_or(StateError::Opaque(index))?;
     match parsed.kind {
         LineKind::Blank => Ok(Entry::Blank(line.clone())),
-        LineKind::Task(task) => {
-            let id = task
-                .id()
-                .map(TaskId::new)
-                .ok_or(StateError::MissingId(index))?;
+        LineKind::Task(_) => {
+            let id = id.ok_or(StateError::MissingId(index))?;
             Ok(Entry::Task {
                 id,
                 line: line.clone(),
             })
         }
     }
-}
-
-/// A synthetic op under a zero stamp (device 0, HLC 0): for the mirror's hydration and for tests,
-/// so any real op's field write wins over it. Never stored, never sent.
-#[cfg(test)]
-pub(crate) fn hydration_op(path: &FilePath, kind: OpKind) -> Op {
-    let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
-    let op = Op {
-        id: txtodo_model::OpId::new(Ulid::from_u128(0)),
-        hlc: txtodo_model::Hlc::zero(zero),
-        principal: txtodo_model::Principal::External { device: zero },
-        file: path.clone(),
-        kind,
-    };
-    debug_assert_eq!(op.hlc.wall_ms, 0);
-    debug_assert_eq!(&op.file, path);
-    op
 }
 
 /// A `TaskId` from a parsed line, when it has one.

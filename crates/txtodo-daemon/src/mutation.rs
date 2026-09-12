@@ -6,7 +6,7 @@ use crate::reconcile::change_ops;
 use crate::state::{DocState, Entry, id_of};
 use std::fmt;
 use txtodo_core::{Date, Edit, LineKind, OwnedLine};
-use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, set_field};
+use txtodo_model::{Field, FieldValue, FilePath, IdentityMode, OpKind, TaskId, set_field};
 
 /// Most mutations one Apply accepts.
 pub const MAX_MUTATIONS_PER_APPLY: usize = 10_000;
@@ -182,20 +182,27 @@ fn add_ops(
     mint: &mut dyn FnMut() -> TaskId,
 ) -> Result<Vec<OpKind>, MutationError> {
     let owned = task_line(line)?;
-    let owned = match id_of(&owned) {
-        Some(_) => owned,
-        None => {
-            let tag = mint().ulid().to_string();
-            let edit = Edit::new()
-                .set_tag("id", &tag)
-                .map_err(|_| MutationError::NotATask(line.to_owned()))?;
-            txtodo_core::apply(&owned, &edit)
+    let (task, owned) = if state.mode() == IdentityMode::Sidecar {
+        (mint(), owned)
+    } else {
+        match id_of(&owned) {
+            Some(id) => (id, owned),
+            None => {
+                let id = mint();
+                let tag = id.ulid().to_string();
+                let edit = Edit::new()
+                    .set_tag("id", &tag)
+                    .map_err(|_| MutationError::NotATask(line.to_owned()))?;
+                (id, txtodo_core::apply(&owned, &edit))
+            }
         }
     };
-    let task = id_of(&owned).ok_or_else(|| MutationError::NotATask(line.to_owned()))?;
     let after = state.task_before(state.len());
     let text = owned.raw().unwrap_or_default().to_owned();
-    debug_assert!(text.contains("id:"), "an added line always carries its id");
+    debug_assert!(
+        state.mode() != IdentityMode::Tagged || text.contains("id:"),
+        "an added line always carries its id in tagged mode"
+    );
     Ok(vec![OpKind::Insert {
         task,
         after,
@@ -210,7 +217,7 @@ fn edit_ops(
 ) -> Result<Vec<OpKind>, MutationError> {
     let (_, id) = resolve(state, task)?;
     let new = task_line(new_line)?;
-    if id_of(&new) != Some(id) {
+    if state.mode() == IdentityMode::Tagged && id_of(&new) != Some(id) {
         return Err(MutationError::IdChanged(id));
     }
     let old = state

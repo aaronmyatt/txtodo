@@ -53,7 +53,7 @@ impl FileActor {
         let Some(p) = projection else {
             return self.on_external_change().map(|_| ());
         };
-        match DocState::from_file(self.cfg.path.clone(), &parse_file(&p.bytes)) {
+        match DocState::from_tagged_file(self.cfg.path.clone(), &parse_file(&p.bytes)) {
             Ok(state) => {
                 self.state = state;
                 self.projection = p.bytes;
@@ -136,7 +136,10 @@ impl FileActor {
         let ops = self.stamp(r.ops, &Principal::External { device })?;
         let (next, exact) = match self.replay_on_clone(&ops) {
             Some(next) if next.to_bytes() == target => (next, true),
-            _ => (DocState::from_file(self.cfg.path.clone(), &r.file)?, false),
+            _ => (
+                DocState::from_tagged_file(self.cfg.path.clone(), &r.file)?,
+                false,
+            ),
         };
         tracing::info!(
             ops = ops.len(),

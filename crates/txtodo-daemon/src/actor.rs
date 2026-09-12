@@ -103,7 +103,7 @@ impl FileActor {
         clock: Arc<dyn Clock>,
     ) -> Result<FileActor, ActorError> {
         let (changes, _) = broadcast::channel(WATCH_CAP);
-        let empty = DocState::from_file(cfg.path.clone(), &File::default())?;
+        let empty = DocState::from_tagged_file(cfg.path.clone(), &File::default())?;
         let mirror = Mirror::from_state(&empty, loro_peer(cfg.device))
             .map_err(|e| ActorError::Mirror(e.to_string()))?;
         let mut actor = FileActor {

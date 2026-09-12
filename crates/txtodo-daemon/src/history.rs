@@ -23,7 +23,7 @@ pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<DocSt
         Some(s) => (s.seq, parse_file(&s.state)),
         None => (Seq(0), File::default()),
     };
-    let mut state = DocState::from_file(path.clone(), &base)?;
+    let mut state = DocState::from_tagged_file(path.clone(), &base)?;
     for _page in 0..MAX_REPLAY_PAGES {
         let ops = store.for_file(path, since)?;
         let Some(last) = ops.last() else { break };

@@ -4,7 +4,7 @@
 use crate::state::{DocState, Entry, StateError};
 use crate::textedit::apply_text_edits;
 use txtodo_core::{Edit, LineKind, OwnedLine, Prefix, Priority, description_start, emit_prefix};
-use txtodo_model::{Field, FieldValue, TaskId, TextEdit};
+use txtodo_model::{Field, FieldValue, IdentityMode, TaskId, TextEdit};
 
 /// Applies `SetField`. `Deleted = true` removes the entry; other fields re-emit the prefix.
 pub(crate) fn set_field(
@@ -27,7 +27,7 @@ pub(crate) fn set_field(
     let new_line = rewrite_prefix(&line, field, value)
         .ok_or(StateError::Unsupported("SetField on this line"))?;
     debug_assert!(
-        crate::state::id_of(&new_line) == Some(task),
+        state.mode() != IdentityMode::Tagged || crate::state::id_of(&new_line) == Some(task),
         "prefix rewrite keeps the id"
     );
     state.replace_entry(
@@ -58,7 +58,7 @@ pub(crate) fn edit_text(
         .set_description(&new_description)
         .map_err(|_| StateError::Unsupported("line break"))?;
     let new_line = txtodo_core::apply(&line, &edit);
-    if crate::state::id_of(&new_line) != Some(task) {
+    if state.mode() == IdentityMode::Tagged && crate::state::id_of(&new_line) != Some(task) {
         return Err(StateError::IdMismatch(task));
     }
     state.replace_entry(
