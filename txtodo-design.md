@@ -286,7 +286,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | delete | edit | edit wins, task resurrected (default; configurable) |
 | delete | complete | completed, not deleted (default; configurable) |
 | move up | move down | both moves apply deterministically; same result on every device |
-| strip all `id:` tags in vim | anything | fingerprint re-identification (§4.1) |
+| strip all `id:` tags in vim | anything | fingerprint re-identification (§4.1); M10 sidecar. Until then (M4): tagged-mode re-match by content where possible, else a fresh id |
 | archive to `done.txt` | edit | the edit lands in `done.txt` |
 
 ### 4.8 History
