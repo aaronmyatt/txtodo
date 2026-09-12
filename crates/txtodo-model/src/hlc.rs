@@ -126,4 +126,36 @@ impl Hlc {
         debug_assert_eq!(self.device, before.device, "tick never changes the device");
         Ok(*self)
     }
+
+    /// Receive rule (Kulkarni §3): folds `remote` in and returns a stamp greater than both `self`
+    /// and `remote`. A peer more than `MAX_PEER_SKEW_AHEAD_MS` ahead of `now_ms` is refused with
+    /// `PeerAhead`; on any `Err` the clock is unchanged.
+    pub fn merge(&mut self, remote: Hlc, now_ms: u64) -> Result<Hlc, HlcError> {
+        if let Skew::Ahead(_) = Skew::check(remote.wall_ms, now_ms) {
+            return Err(HlcError::PeerAhead {
+                peer_ms: remote.wall_ms,
+                local_ms: now_ms,
+                bound_ms: MAX_PEER_SKEW_AHEAD_MS,
+            });
+        }
+        let before = *self;
+        let wall_ms = self.wall_ms.max(remote.wall_ms).max(now_ms);
+        let counter = match (wall_ms == self.wall_ms, wall_ms == remote.wall_ms) {
+            (true, true) => self.counter.max(remote.counter).checked_add(1),
+            (true, false) => self.counter.checked_add(1),
+            (false, true) => remote.counter.checked_add(1),
+            (false, false) => Some(0),
+        }
+        .ok_or(HlcError::Overflow { wall_ms })?;
+        let next = Hlc {
+            wall_ms,
+            counter,
+            device: before.device,
+        };
+        debug_assert!(next > before, "merge is strictly monotone");
+        debug_assert!(next > remote, "merge dominates the remote stamp");
+        debug_assert_eq!(next.device, before.device, "merge never changes the device");
+        *self = next;
+        Ok(next)
+    }
 }
