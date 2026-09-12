@@ -1,0 +1,47 @@
+[package]
+name = "desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Tauri 2 desktop shell: thin gRPC bridge to txtodod (plan M7, design §5/§7)."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+# https://docs.rs/tauri-build — embeds tauri.conf.json and generates capability schemas
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Reused, not copied: the same generated gRPC client the daemon and CLI use (ADR 0006). Never
+# hand-rolled — one schema, no drift.
+txtodo-proto = { workspace = true }
+# https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+# https://docs.rs/serde — DTOs that cross the Tauri IPC bridge (prost types aren't Serialize)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# https://docs.rs/tonic — transport::{Endpoint, Channel} for the unix-socket gRPC connection (ADR 0010)
+tonic = "0.14"
+# https://docs.rs/tokio — async runtime backing the Tauri commands and the spawn/probe logic
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time", "process"] }
+
+[dev-dependencies]
+# https://docs.rs/tempfile — every test gets its own workspace dir, like crates/txtodo-daemon/tests
+tempfile = "3"
+
+[lints]
+workspace = true
+
+# `[profile.*]` only takes effect from the workspace root, which is frozen outside the member-list
+# line; the Tauri scaffold's release-size tuning (https://tauri.app/concept/size/#cargo-configuration)
+# is left for whoever revisits the root profile, not duplicated here where cargo would ignore it.

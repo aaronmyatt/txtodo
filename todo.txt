@@ -30,7 +30,7 @@ x 2026-09-12 2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and si
 2026-09-11 Tests: quarantine line and blame show the agent, dry run leaves the hash unchanged, rate limit pauses the token +m6 @mcp @test
 2026-09-11 Smoke test with the SDK reference MCP client over both transports +m6 @mcp @test
 2026-09-11 Security checklist review before M6 close and re-justify the payloadKB budget +m6 @security
-2026-09-11 Tauri 2 shell talking gRPC to txtodod and spawning it if absent +m7 @desktop
+x 2026-09-12 2026-09-11 Tauri 2 shell talking gRPC to txtodod and spawning it if absent +m7 @desktop ref:desktop-tauri-shell
 2026-09-11 abnf-to-lezer.mjs generates the Lezer grammar with a CI step failing if regeneration differs +m7 @desktop
 2026-09-11 Main view read-only CM6 bound to Watch with decorations for hidden id:, ref indicators, hover pencil, Add-a-line row +m7 @desktop
 2026-09-11 Edit popover single-line CM6 with token chips and strict validation via the WASM core +m7 @desktop @ffi
