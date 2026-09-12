@@ -11,7 +11,7 @@ mod heads;
 mod ops;
 mod projections;
 
-pub use commit::prev_hash_key;
+pub use commit::{CommitExtras, prev_hash_key};
 pub use error::StoreError;
 pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;

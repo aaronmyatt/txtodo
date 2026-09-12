@@ -138,11 +138,7 @@ impl Store {
         if snapshot.len() > MAX_MIRROR_BYTES {
             return Err(StoreError::ProjectionTooLarge(snapshot.len()));
         }
-        debug_assert!(seq.0 >= 0, "seqs start at 1; 0 means before any op");
-        self.conn
-            .execute(UPSERT_MIRROR, params![file.as_str(), snapshot, seq.0])
-            .map_err(StoreError::query("upsert mirror"))?;
-        Ok(())
+        upsert_mirror_on(&self.conn, file, snapshot, seq)
     }
 
     /// The stored mirror snapshot and its log position, if any.
@@ -168,5 +164,21 @@ pub(crate) fn clear_flag_on(
     conn.execute(CLEAR_FLAG, params![file.as_str(), task_blob(task), at])
         .map_err(StoreError::query("clear flag"))?;
     debug_assert!(!file.as_str().is_empty());
+    Ok(())
+}
+
+/// Upserts the mirror row on `conn`; the caller owns the transaction.
+pub(crate) fn upsert_mirror_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    snapshot: &[u8],
+    seq: Seq,
+) -> Result<(), StoreError> {
+    if snapshot.len() > MAX_MIRROR_BYTES {
+        return Err(StoreError::ProjectionTooLarge(snapshot.len()));
+    }
+    debug_assert!(seq.0 >= 0, "seqs start at 1; 0 means before any op");
+    conn.execute(UPSERT_MIRROR, params![file.as_str(), snapshot, seq.0])
+        .map_err(StoreError::query("upsert mirror"))?;
     Ok(())
 }
