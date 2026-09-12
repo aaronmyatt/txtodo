@@ -2,11 +2,12 @@
 //! hash remembered in `meta` so a restart can tell "our rename never landed" from "someone edited
 //! the file while we were down" (plan M3 crash safety). Plus the two reads undo and checkout need.
 
+use crate::flags::clear_flag_on;
 use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
 use crate::{MAX_OPS_PER_READ, Projection, Seq, SeqRange, Snapshot, Store, StoreError, Stored};
 use rusqlite::{OptionalExtension, params};
-use txtodo_model::{FilePath, Op};
+use txtodo_model::{FilePath, Op, TaskId};
 
 const SELECT_NEWEST: &str =
     "SELECT seq, payload FROM ops WHERE file = ?1 ORDER BY seq DESC LIMIT ?2";
@@ -27,6 +28,18 @@ impl Store {
         projection: &Projection,
         prev_hash: Option<[u8; 32]>,
     ) -> Result<Option<SeqRange>, StoreError> {
+        self.commit_change_clearing(ops, projection, prev_hash, None)
+    }
+
+    /// `commit_change` that also clears one needs_review flag in the same transaction, so a
+    /// resolution's write-back and its flag clear land together or not at all (plan M4).
+    pub fn commit_change_clearing(
+        &mut self,
+        ops: &[Op],
+        projection: &Projection,
+        prev_hash: Option<[u8; 32]>,
+        clear: Option<(TaskId, u64)>,
+    ) -> Result<Option<SeqRange>, StoreError> {
         debug_assert!(
             ops.iter().all(|o| o.file == projection.file),
             "one document per commit"
@@ -43,9 +56,19 @@ impl Store {
         upsert_projection(&tx, projection)?;
         let key = prev_hash_key(&projection.file);
         upsert_meta(&tx, &key, prev_hash.as_ref().map_or(&[][..], |h| &h[..]))?;
+        if let Some((task, at_ms)) = clear {
+            clear_flag_on(&tx, &projection.file, task, at_ms)?;
+        }
         tx.commit()
             .map_err(StoreError::query("commit commit_change"))?;
         debug_assert!(range.is_none_or(|r| r.first <= r.last));
+        debug_assert!(
+            clear.is_none_or(|(task, _)| {
+                self.open_flags(&projection.file)
+                    .is_ok_and(|f| !f.iter().any(|r| r.task == task))
+            }),
+            "the flag is cleared with the commit"
+        );
         Ok(range)
     }
 

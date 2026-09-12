@@ -120,10 +120,7 @@ impl Store {
         task: TaskId,
         at_ms: u64,
     ) -> Result<(), StoreError> {
-        let at = i64::try_from(at_ms).unwrap_or(i64::MAX);
-        self.conn
-            .execute(CLEAR_FLAG, params![file.as_str(), task_blob(task), at])
-            .map_err(StoreError::query("clear flag"))?;
+        clear_flag_on(&self.conn, file, task, at_ms)?;
         debug_assert!(
             !self.open_flags(file)?.iter().any(|f| f.task == task),
             "a cleared flag is not open"
@@ -157,4 +154,19 @@ impl Store {
             .optional()
             .map_err(StoreError::query("select mirror"))
     }
+}
+
+/// Clears one flag on `conn`; the caller owns the transaction.
+pub(crate) fn clear_flag_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    task: TaskId,
+    at_ms: u64,
+) -> Result<(), StoreError> {
+    let at = i64::try_from(at_ms).unwrap_or(i64::MAX);
+    debug_assert!(at >= 0);
+    conn.execute(CLEAR_FLAG, params![file.as_str(), task_blob(task), at])
+        .map_err(StoreError::query("clear flag"))?;
+    debug_assert!(!file.as_str().is_empty());
+    Ok(())
 }

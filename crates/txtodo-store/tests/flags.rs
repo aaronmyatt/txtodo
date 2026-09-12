@@ -97,3 +97,26 @@ fn mirror_snapshot_round_trips_with_its_seq_and_replaces_the_previous_one() {
         None
     );
 }
+
+#[test]
+fn commit_change_clearing_lands_the_ops_and_the_clear_together() {
+    use txtodo_store::Projection;
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
+    store.raise_flag(&row(1, 100, "mine", "theirs")).unwrap();
+    let projection = Projection {
+        file: todo(),
+        bytes: b"resolved\n".to_vec(),
+        hash: [7; 32],
+        written_at_ms: 200,
+    };
+    let range = store
+        .commit_change_clearing(&[], &projection, None, Some((task(1), 200)))
+        .unwrap();
+    assert!(range.is_none(), "no ops in this commit");
+    assert!(store.open_flags(&todo()).unwrap().is_empty());
+    assert_eq!(
+        store.get_projection(&todo()).unwrap().unwrap().bytes,
+        b"resolved\n"
+    );
+}
