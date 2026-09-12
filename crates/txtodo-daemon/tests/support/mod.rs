@@ -62,10 +62,15 @@ async fn connect(socket: PathBuf) -> Client {
 }
 
 impl Daemon {
-    /// Writes `todo` as todo.txt, starts txtodod in tagged mode (this harness's whole M3
-    /// acceptance suite is about `id:` tag adoption/stamping, which sidecar mode never does), waits
-    /// for the socket and for adoption to settle.
+    /// `start_with_mode(todo, "tagged")`: this harness's whole M3 acceptance suite is about
+    /// `id:` tag adoption/stamping, which sidecar mode never does.
     pub async fn start(todo: &str) -> Daemon {
+        Self::start_with_mode(todo, "tagged").await
+    }
+
+    /// Writes `todo` as todo.txt, starts txtodod under `--identity-mode <mode>`, waits for the
+    /// socket and for adoption to settle.
+    pub async fn start_with_mode(todo: &str, mode: &str) -> Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
         std::fs::write(dir.path().join("todo.txt"), todo).unwrap_or_else(|e| panic!("{e}"));
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
@@ -73,7 +78,7 @@ impl Daemon {
                 "--dir",
                 &dir.path().to_string_lossy(),
                 "--identity-mode",
-                "tagged",
+                mode,
             ])
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
