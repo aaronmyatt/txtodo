@@ -24,6 +24,17 @@ review flags out. As built 2026-09-12.
   merge character-wise through Loro's text CRDT; `txtodo-daemon` derives its own op-log entry from
   the text before/after an import rather than from a Loro diff (no task list to reconcile).
 
+## Tests
+- `tests/sim.rs` (plan M4 `crdt-sync-simulator`): N devices fork one ancestor, a seeded PRNG (own
+  splitmix64, `tests/sim/rng.rs` — no `rand` dependency) drives every random choice (clock, ULID
+  entropy, op kind, partition flips), convergence runs through `export_updates`/`import` like the
+  real system. `cargo test` runs 20 fixed seeds; `just sim` runs the full 1000 random-seed sweep
+  (`--release`: ~40s vs. minutes in debug), `TXTODO_SIM_SEED=<n>` reproduces exactly one. Asserts
+  CRDT-level convergence (id order, deleted flags, canonical line text) plus no-loss/no-duplication
+  — not byte-identical files (needs `txtodo-daemon`'s `DocState`, out of scope here; see the file's
+  own doc comment for the full scope decision). No shrinker or 1000-op-mutation meta-test framework
+  yet — a hand-built "diverged device" case proves the assertion itself is wired instead.
+
 ## Invariants
 - Untouched lines materialise byte-identical — the host keeps the bytes (`txtodo-daemon`
   `DocState`); this crate holds fields + text and never claims to re-emit quirks.
