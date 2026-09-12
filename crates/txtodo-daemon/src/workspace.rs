@@ -159,6 +159,12 @@ impl Workspace {
     pub fn device(&self) -> DeviceId {
         self.device
     }
+    /// The injected clock: entropy and time enter the daemon only through this (plan §5's
+    /// "inject the clock" idiom), so a token's id and timestamps come from here, never a bare
+    /// `SystemTime`/`getrandom` call at the RPC boundary.
+    pub fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
+    }
     /// Shared Health counters.
     pub fn stats(&self) -> &Arc<Stats> {
         &self.stats

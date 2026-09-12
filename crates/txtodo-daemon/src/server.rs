@@ -42,7 +42,7 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
-    fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
+    pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
