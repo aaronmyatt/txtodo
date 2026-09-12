@@ -4,8 +4,10 @@
 //! https://docs.rs/tonic/latest/tonic/transport/server/struct.Server.html#method.serve_with_incoming
 
 use crate::convert::{
-    parse_mutation, parse_path, parse_principal, parse_ulid_opt, task_of, to_summary,
+    parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref, parse_ulid_opt,
+    task_of, to_flag, to_summary,
 };
+use crate::handle::ConflictRow;
 use crate::handle::{ActorError, ActorHandle, Applied, WATCH_CAP};
 use crate::mutation::MutationError;
 use crate::workspace::Workspace;
@@ -68,6 +70,7 @@ fn status_of(e: ActorError) -> Status {
         ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
         ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
         ActorError::Mirror(_) => Status::internal(e.to_string()),
+        ActorError::NoFlag(_) => Status::failed_precondition(e.to_string()),
         ActorError::Gone(_) => Status::unavailable(e.to_string()),
         ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
             Status::internal(e.to_string())
@@ -97,12 +100,24 @@ async fn forward_changes(
                 path: c.path.to_string(),
                 hash: c.hash.to_vec(),
                 ops: c.ops.iter().map(to_summary).collect(),
+                // Line numbers are not known on the broadcast path; ListConflicts has them.
+                review: c
+                    .review
+                    .iter()
+                    .map(|row| {
+                        to_flag(&ConflictRow {
+                            row: row.clone(),
+                            line_number: 0,
+                        })
+                    })
+                    .collect(),
             },
             Err(RecvError::Lagged(_)) => match h.get().await {
                 Ok(c) => pb::Change {
                     path: h.path().to_string(),
                     hash: c.hash.to_vec(),
                     ops: Vec::new(),
+                    review: Vec::new(),
                 },
                 Err(_) => return,
             },
@@ -254,6 +269,33 @@ impl Txtodo for TxtodoService {
             bytes,
             hash,
         }))
+    }
+
+    async fn list_conflicts(
+        &self,
+        r: Request<pb::ConflictsRequest>,
+    ) -> Result<Response<pb::ConflictsResponse>, Status> {
+        let h = self.actor(&r.get_ref().path)?;
+        let rows = h.conflicts().await.map_err(status_of)?;
+        Ok(Response::new(pb::ConflictsResponse {
+            flags: rows.iter().map(to_flag).collect(),
+        }))
+    }
+
+    async fn resolve_conflict(
+        &self,
+        r: Request<pb::ResolveRequest>,
+    ) -> Result<Response<pb::ApplyResponse>, Status> {
+        let req = r.into_inner();
+        let h = self.actor(&req.path)?;
+        let task = parse_task_ref(req.task)?;
+        let resolution = parse_resolution(req.resolution)?;
+        let device = self.workspace().device();
+        let a = h
+            .resolve(task, resolution, Principal::User { device })
+            .await
+            .map_err(status_of)?;
+        Ok(Response::new(applied_of(a)))
     }
 
     async fn health(

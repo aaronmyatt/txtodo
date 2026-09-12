@@ -27,8 +27,12 @@ pub fn init(logs_dir: &Path) -> Result<LogGuard, std::io::Error> {
     let file = tracing_appender::rolling::daily(logs_dir, LOG_FILE_PREFIX);
     // Bounded buffer (default 128k lines), lossy on overflow: logging never blocks an actor.
     let (writer, guard) = tracing_appender::non_blocking(file);
+    // Loro logs encode diagnostics at info; they carry payload sizes, not our ids, and a 10k-task
+    // snapshot emits thousands of lines. Quiet them unless the operator asks for them by name.
     let filter = tracing_subscriber::EnvFilter::try_from_env(LOG_FILTER_ENV)
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
+        .add_directive("loro=warn".parse().unwrap_or_default())
+        .add_directive("loro_internal=warn".parse().unwrap_or_default());
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer().json().with_writer(writer))

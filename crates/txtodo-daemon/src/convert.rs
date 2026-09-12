@@ -1,6 +1,7 @@
 //! The gRPC boundary: proto messages are parsed into typed values once, here (constitution §3:
 //! parse, don't validate); ops are rendered into `OpSummary` for log/blame/Watch. Pure.
 
+use crate::handle::{ConflictRow, Resolution};
 use crate::mutation::{Mutation, TaskRef};
 use tonic::Status;
 use txtodo_core::Date;
@@ -26,7 +27,7 @@ pub fn parse_ulid_opt(s: &str) -> Result<Option<Ulid>, Status> {
         .ok_or_else(|| Status::invalid_argument(format!("{s:?} is not a ULID")))
 }
 
-fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> {
+pub(crate) fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> {
     let t = t.ok_or_else(|| Status::invalid_argument("mutation needs a task ref"))?;
     let line_number =
         usize::try_from(t.line_number).map_err(|_| Status::invalid_argument("line number"))?;
@@ -121,6 +122,29 @@ pub fn summary_of(kind: &OpKind) -> String {
         OpKind::NotesEdit { edits, .. } => format!("notes: {} edit(s)", edits.len()),
         OpKind::BlankInsert { after } => format!("blank after {after:?}"),
         OpKind::BlankRemove { after } => format!("remove blank after {after:?}"),
+    }
+}
+
+/// An open flag as the wire sees it.
+pub fn to_flag(c: &ConflictRow) -> pb::ReviewFlag {
+    pb::ReviewFlag {
+        task_id: c.row.task.to_string(),
+        line_number: u32::try_from(c.line_number).unwrap_or(u32::MAX),
+        mine: String::from_utf8_lossy(&c.row.mine).into_owned(),
+        theirs: String::from_utf8_lossy(&c.row.theirs).into_owned(),
+        raised_at_ms: c.row.raised_at_ms,
+    }
+}
+
+/// The wire resolution into the closed enum; unspecified is an error, not a default.
+pub fn parse_resolution(raw: i32) -> Result<Resolution, Status> {
+    match pb::Resolution::try_from(raw) {
+        Ok(pb::Resolution::Mine) => Ok(Resolution::Mine),
+        Ok(pb::Resolution::Theirs) => Ok(Resolution::Theirs),
+        Ok(pb::Resolution::Merged) => Ok(Resolution::Merged),
+        Ok(pb::Resolution::Unspecified) | Err(_) => Err(Status::invalid_argument(
+            "resolution must be mine, theirs or merged",
+        )),
     }
 }
 
