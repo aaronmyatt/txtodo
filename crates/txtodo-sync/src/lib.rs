@@ -5,14 +5,18 @@
 
 mod frame;
 mod message;
+mod want;
 
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
     OriginRange,
 };
+pub use want::{Gap, advance, want};
 
 #[cfg(test)]
 mod frame_tests;
 #[cfg(test)]
 mod message_tests;
+#[cfg(test)]
+mod want_tests;
