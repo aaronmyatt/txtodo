@@ -6,13 +6,16 @@ SQLite op log, snapshots, projection cache at `<workspace>/.txtodo/oplog.db`. Pl
 
 ## Public interface
 - `Store::open(path)` — creates, switches to WAL, applies `migrations/000N.sql` in order by
-  `user_version` (now 2), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
+  `user_version` (now 3), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
 - Op log: `append(&[Op]) -> SeqRange` (one transaction, `MAX_APPEND_BATCH`),
   `for_file(file, since: Seq)`, `between(file, &Hlc, &Hlc)` (inclusive, HLC order),
   `last_seq()`. Reads return `Stored { seq, op }`, at most `MAX_OPS_PER_READ`.
 - Sync heads (M4): `heads() -> BTreeMap<DeviceId, u64>` (≤ `MAX_DEVICES_PER_HEADS`),
   `head_of(device)`, `next_origin_seq(device)`, `ops_for(device, first, last)` — origin_seq is
   the op's rank in its device's HLC order, derived from rows, never a column.
+- Review flags (M4): `raise_flag(&ReviewRow)`, `open_flags(file)` (≤ `MAX_OPEN_FLAGS_PER_READ`,
+  oldest first), `clear_flag(file, task, at_ms)` (idempotent upsert). Mirror: `put_mirror(file,
+  snapshot, seq)` / `get_mirror(file)` — the Loro snapshot as of a log position.
 - Projections: `put_projection(&Projection)` / `get_projection(file)`; `MAX_PROJECTION_BYTES`.
 - Snapshots: `put_snapshot(file, &Snapshot { seq, state })` / `latest_snapshot(file)`.
 - Meta: `meta_set(key, bytes)` / `meta_get(key)` — device id, later encrypted keys.
