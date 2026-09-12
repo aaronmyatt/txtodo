@@ -120,7 +120,10 @@ fn add_and_pri_go_through_the_daemon() {
     assert!(stdout(&out).contains("TODO: 1 added."), "{}", stdout(&out));
     let text = todo_txt(dir.path());
     assert!(text.starts_with("(B) "), "{text}");
-    assert!(text.contains("call mum @phone id:"), "{text}");
+    assert!(
+        !text.contains("id:"),
+        "sidecar is the daemon's default too: {text}"
+    );
     assert!(txtodo(dir.path(), &["pri", "1", "A"]).status.success());
     assert!(
         todo_txt(dir.path()).starts_with("(A) "),

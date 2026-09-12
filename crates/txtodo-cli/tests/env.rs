@@ -52,7 +52,11 @@ fn defaults_to_cwd_and_reports_missing_config() {
     );
     assert!(line(&out, "todo_file").ends_with("todo.txt"));
     assert!(line(&out, "config_file").ends_with(" (missing)"), "{out}");
-    assert_eq!(line(&out, "id_tags"), "true");
+    assert_eq!(
+        line(&out, "id_tags"),
+        "false",
+        "sidecar is the default now, docs/questions.md Q2"
+    );
     assert!(line(&out, "url_schemes").starts_with("http"));
 }
 
@@ -101,7 +105,10 @@ fn json_env_is_one_object_and_bad_config_fails() {
         out.starts_with("{\"todo_dir\":\"") && out.trim_end().ends_with('}'),
         "{out}"
     );
-    assert!(out.contains("\"id_tags\":true"));
+    assert!(
+        out.contains("\"id_tags\":false"),
+        "sidecar is the default now, docs/questions.md Q2"
+    );
     let cfg = dir.path().join("bad.toml");
     std::fs::write(&cfg, "nope = 1\n").expect("write");
     let out = txtodo(dir.path())

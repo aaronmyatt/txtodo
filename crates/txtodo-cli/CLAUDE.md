@@ -14,9 +14,11 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `doctor [--verbose]` (five checks, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`.
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
-- Config `config.toml` (`todo_dir`, `id_tags`, `url_schemes`) at `$TXTODO_CONFIG`, else
-  `$XDG_CONFIG_HOME|%APPDATA%|~/.config` + `txtodo/config.toml`; env `TXTODO_TODO_DIR`.
-  Precedence: `--dir` > env > config > cwd.
+- Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `url_schemes`) at `$TXTODO_CONFIG`,
+  else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` + `txtodo/config.toml`; env `TXTODO_TODO_DIR`.
+  Precedence: `--dir` > env > config > cwd. `identity_mode = "tagged"|"sidecar"` (docs/questions.md
+  Q2) is the name to reach for going forward; `id_tags` still works alone for an existing config,
+  but an unset config is `Sidecar` now, not `Tagged` (plan §1 decision 9, reversed).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `commands::{add, list, edit, archive, text, fileops, hygiene,
@@ -33,6 +35,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
 - todo.sh parity is a test: `tests/todosh_parity.rs` (direct mode). `tests/daemon_mode.rs` spawns a
   real txtodod (built on demand with cargo — this crate may not depend on the daemon crate).
-- `add` stamps today's local date and `id:<ULID>` unless `--no-id`; the daemon adds an id when a
-  line arrives without one. `Env`, today and ULIDs enter at `main`; command logic takes values.
+- `add` always stamps today's local date; it stamps `id:<ULID>` too only when `Config::id_tags()`
+  says so (`identity_mode` `Tagged`, or `--no-id` never overrides an explicit request to skip it) —
+  unset config means `Sidecar`, so a fresh workspace gets no `id:` tag from either mode (daemon
+  mode reuses this same direct-mode `add` against its scratch copy, so the same default applies
+  there too; the daemon mints its own id regardless of what the text does or doesn't carry).
+  `Env`, today and ULIDs enter at `main`; command logic takes values.
 - May depend only on: txtodo-core, txtodo-proto.

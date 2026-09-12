@@ -50,14 +50,30 @@ impl Env {
     }
 }
 
+/// How a workspace establishes task identity (docs/questions.md Q2). This crate's own copy —
+/// `txtodo-model::IdentityMode` isn't a dependency this crate may take — but the same two values,
+/// spelled the same way as the daemon's own `--identity-mode` flag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum IdentityMode {
+    /// Every task line carries an `id:<ULID>` tag.
+    Tagged,
+    /// No tags in the file; identity lives in the daemon's fingerprint index.
+    Sidecar,
+}
+
 /// `config.toml` as read from disk; every field optional (design §2.2 rule 4: absent means default).
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Directory holding todo.txt, done.txt and report.txt.
     pub todo_dir: Option<String>,
-    /// Stamp `id:<ULID>` on `add`. Default true (plan §1 decision 9).
+    /// Stamp `id:<ULID>` on `add`. Superseded by `identity_mode` when that is also set; kept
+    /// working on its own for an existing config (docs/questions.md Q2 reverses plan §1 decision
+    /// 9's old default of `true` — an unset config is `Sidecar` now, not `Tagged`).
     pub id_tags: Option<bool>,
+    /// `"tagged"` or `"sidecar"` (docs/questions.md Q2); the name to reach for going forward.
+    /// Unrecognised values fall back to `Sidecar`, same as leaving it unset.
+    pub identity_mode: Option<String>,
     /// URL schemes recognised before tags; default `txtodo_core::urls::DEFAULT_SCHEMES`.
     pub url_schemes: Option<Vec<String>>,
 }
@@ -98,9 +114,24 @@ impl Config {
             message: e.to_string(),
         })
     }
-    /// Effective `id_tags`.
+    /// Effective identity mode: `identity_mode` if set, else `id_tags` (`true` -> `Tagged`,
+    /// `false` -> `Sidecar`) if THAT is set, else `Sidecar` (docs/questions.md Q2).
+    pub fn identity_mode(&self) -> IdentityMode {
+        if let Some(mode) = self.identity_mode.as_deref() {
+            return match mode {
+                "tagged" => IdentityMode::Tagged,
+                _ => IdentityMode::Sidecar,
+            };
+        }
+        match self.id_tags {
+            Some(true) => IdentityMode::Tagged,
+            Some(false) | None => IdentityMode::Sidecar,
+        }
+    }
+    /// Effective `id_tags`, derived from `identity_mode()` when `id_tags` itself isn't set.
     pub fn id_tags(&self) -> bool {
-        self.id_tags.unwrap_or(true)
+        self.id_tags
+            .unwrap_or_else(|| self.identity_mode() == IdentityMode::Tagged)
     }
     /// Effective URL schemes.
     pub fn url_schemes(&self) -> Vec<String> {

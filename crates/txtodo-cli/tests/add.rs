@@ -24,9 +24,35 @@ fn today() -> String {
 }
 
 #[test]
-fn add_stamps_date_then_id_and_no_id_skips_the_tag() {
+fn add_stamps_date_but_no_id_by_default() {
+    // docs/questions.md Q2: sidecar is the default, so a fresh workspace with no config gets no
+    // id: tag written into it at all.
     let dir = tempfile::tempdir().unwrap();
     let out = txtodo(dir.path(), &["add", "(b)", "call", "mum", "+family"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let expected = format!("(B) {} call mum +family\n", today());
+    assert_eq!(todo_txt(dir.path()), expected);
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with(&format!("1 {}", expected.trim_end()))
+            && stdout.ends_with("TODO: 1 added.\n")
+    );
+}
+
+#[test]
+fn add_stamps_id_when_tagged_mode_is_configured_and_no_id_still_skips_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("cfg.toml"), "identity_mode = \"tagged\"\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(dir.path())
+        .env("TXTODO_CONFIG", dir.path().join("cfg.toml"))
+        .args(["add", "(b)", "call", "mum", "+family"])
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
     assert!(
         out.status.success(),
         "{}",
@@ -40,12 +66,16 @@ fn add_stamps_date_then_id_and_no_id_skips_the_tag() {
         id.len() == 26 && txtodo_core::Ulid::parse(id).is_some(),
         "ulid: {id}"
     );
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    assert!(stdout.starts_with(&format!("1 {prefix}")) && stdout.ends_with("TODO: 1 added.\n"));
-    txtodo(dir.path(), &["--no-id", "a", "second"]);
+    Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(dir.path())
+        .env("TXTODO_CONFIG", dir.path().join("cfg.toml"))
+        .args(["--no-id", "a", "second"])
+        .output()
+        .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(
         todo_txt(dir.path()).lines().nth(1).unwrap(),
-        format!("{} second", today())
+        format!("{} second", today()),
+        "--no-id overrides identity_mode = tagged"
     );
 }
 
