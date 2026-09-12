@@ -50,11 +50,16 @@ impl FileActor {
     /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by
     /// converging from the state — never surfaced to the client, whose change is already durable.
     pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
-        match self.mirror.flush(ops, &self.state) {
+        let result = self.mirror.flush(ops, &self.state);
+        self.after_flush(ops, result);
+        debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
+    }
+
+    fn after_flush(&mut self, ops: &[Op], result: Result<(), MirrorError>) {
+        match result {
             Ok(()) => tracing::debug!(file = %self.cfg.path, ops = ops.len(), "mirror_flushed"),
             Err(e) => self.flush_refused(&e),
         }
-        debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
     }
 
     fn flush_refused(&mut self, e: &MirrorError) {
@@ -65,11 +70,16 @@ impl FileActor {
     /// Brings the mirror to the state with corrective ops, keeping its lineage; only if that
     /// fails too is it rebuilt from scratch (a new lineage, logged as such).
     pub(crate) fn converge_mirror(&mut self) {
-        match self.mirror.converge_to(&self.state, self.hlc) {
+        let result = self.mirror.converge_to(&self.state, self.hlc);
+        self.after_converge(result);
+        debug_assert!(self.mirror.agrees_with(&self.state));
+    }
+
+    fn after_converge(&mut self, result: Result<usize, MirrorError>) {
+        match result {
             Ok(n) => tracing::info!(file = %self.cfg.path, ops = n, "mirror_converged"),
             Err(e) => self.converge_failed(&e),
         }
-        debug_assert!(self.mirror.agrees_with(&self.state));
     }
 
     fn converge_failed(&mut self, e: &MirrorError) {
@@ -108,5 +118,13 @@ impl FileActor {
 
     fn log_raise_flag_failed(path: &FilePath, e: &txtodo_store::StoreError) {
         tracing::error!(file = %path, error = %e, "raise_flag_failed");
+    }
+
+    /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that
+    /// just landed durably (`Err` only means no receiver is left, which the guard excludes).
+    pub(crate) fn broadcast(&self, change: &crate::handle::Change) {
+        if self.changes.receiver_count() > 0 {
+            let _ = self.changes.send(change.clone());
+        }
     }
 }
