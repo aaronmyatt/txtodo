@@ -36,6 +36,8 @@ mod actor_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
+mod import_tests;
+#[cfg(test)]
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;

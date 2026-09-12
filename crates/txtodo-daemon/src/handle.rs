@@ -190,6 +190,18 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<Vec<ConflictRow>, ActorError>>,
     },
+    /// The mirror's version as opaque bytes (what a peer exports since).
+    Version {
+        /// Result channel.
+        reply: oneshot::Sender<Vec<u8>>,
+    },
+    /// The Loro updates a peer at `since` is missing.
+    Export {
+        /// The peer's `Version` bytes.
+        since: Vec<u8>,
+        /// Result channel.
+        reply: oneshot::Sender<Result<Vec<u8>, ActorError>>,
+    },
     /// Resolve one flag.
     Resolve {
         /// The line.
@@ -298,6 +310,16 @@ impl ActorHandle {
     /// The open needs_review flags with their current lines.
     pub async fn conflicts(&self) -> Result<Vec<ConflictRow>, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
+    }
+
+    /// The mirror's version as opaque bytes.
+    pub async fn version(&self) -> Result<Vec<u8>, ActorError> {
+        self.ask(|reply| ActorMsg::Version { reply }).await
+    }
+
+    /// The Loro updates a peer at `since` is missing.
+    pub async fn export_since(&self, since: Vec<u8>) -> Result<Vec<u8>, ActorError> {
+        self.ask(|reply| ActorMsg::Export { since, reply }).await?
     }
 
     /// Resolves one flag.
