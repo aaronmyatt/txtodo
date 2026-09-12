@@ -23,4 +23,6 @@ mod frame_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]
+mod session_tests;
+#[cfg(test)]
 mod want_tests;
