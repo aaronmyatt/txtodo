@@ -60,16 +60,23 @@ impl LoroDocument {
         self.description_if_exists(task).map(|t| t.to_string())
     }
 
-    /// Replaces the description text wholesale and commits. For a host whose byte-faithful line
-    /// changed its description outside an `EditText` (e.g. `complete` appending ` pri:B`), so the
-    /// text and the host's bytes never drift apart.
+    /// Converges the description text onto `text` with a minimal char diff, then commits. For a
+    /// host whose byte-faithful line changed its description outside an `EditText` (e.g.
+    /// `complete` appending ` pri:B`), so the text and the host's bytes never drift apart.
+    ///
+    /// It must be a diff, never a delete-all-then-insert: a wholesale rewrite gives every
+    /// character a new identity, and a peer's concurrent edit then merges against characters this
+    /// document no longer has — its text lands at the end as garbage instead of in place.
     pub fn set_description(&mut self, task: TaskId, text: &str) -> LoroResult<()> {
         let t = self.description_text(task)?;
-        let stale = t.len_unicode();
-        if stale > 0 {
-            t.delete(0, stale)?;
+        let current = t.to_string();
+        if current == text {
+            return Ok(());
         }
-        t.insert(0, text)?;
+        let edits = txtodo_core::diff_text(&current, text);
+        debug_assert!(!edits.is_empty(), "differing texts have a non-empty diff");
+        // `diff_text` is dual-indexed; `replay_edits` walks it onto the evolving Loro text.
+        crate::to_loro::replay_edits(&t, &edits)?;
         self.commit();
         debug_assert_eq!(t.to_string(), text);
         debug_assert_eq!(self.description(task).as_deref(), Some(text));

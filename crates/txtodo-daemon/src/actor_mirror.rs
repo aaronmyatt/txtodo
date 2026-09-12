@@ -18,6 +18,16 @@ pub(crate) fn loro_peer(device: DeviceId) -> u64 {
 }
 
 impl FileActor {
+    /// The Loro updates a peer at `since` is missing.
+    pub(crate) fn on_export(&self, since: &[u8]) -> Result<Vec<u8>, ActorError> {
+        let bytes = self
+            .mirror
+            .export_since(since)
+            .map_err(|e| ActorError::Mirror(e.to_string()))?;
+        debug_assert!(!bytes.is_empty());
+        Ok(bytes)
+    }
+
     /// The store-transaction extras a commit tail asks for.
     pub(crate) fn commit_extras(&self, tail: &CommitTail) -> Result<CommitExtras, ActorError> {
         let mirror = if tail.persist_mirror {

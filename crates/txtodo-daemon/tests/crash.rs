@@ -47,7 +47,7 @@ fn spawn(dir: &Path) -> std::process::Child {
     let start = Instant::now();
     while !socket.exists() {
         assert!(
-            start.elapsed() < Duration::from_secs(30),
+            start.elapsed() < Duration::from_secs(180),
             "socket did not appear"
         );
         std::thread::sleep(Duration::from_millis(10));
@@ -64,7 +64,7 @@ fn wait_stamped(dir: &Path) -> String {
             return text;
         }
         assert!(
-            start.elapsed() < Duration::from_secs(30),
+            start.elapsed() < Duration::from_secs(180),
             "daemon never stamped ids"
         );
         std::thread::sleep(Duration::from_millis(10));

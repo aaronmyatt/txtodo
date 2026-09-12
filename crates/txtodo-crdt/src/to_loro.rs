@@ -8,6 +8,7 @@
 
 use std::fmt;
 
+use loro::{LoroResult, LoroText};
 use txtodo_core::{LineKind, Mode, parse_line};
 use txtodo_model::{Field, FieldValue, FilePath, Hlc, Op, OpKind, TaskId, TextEdit};
 
@@ -155,10 +156,47 @@ fn set_field(
 /// Replays char-level edits onto the task's description `LoroText`.
 fn edit_text(doc: &mut LoroDocument, task: TaskId, edits: &[TextEdit]) -> Result<(), ToLoroError> {
     let text = doc.description_text(task)?;
+    // The op carries the model's dual-index convention; `replay_edits` speaks the evolving one.
+    let edits: Vec<txtodo_core::TextEdit> = edits.iter().cloned().map(Into::into).collect();
+    replay_edits(&text, &edits)?;
+    debug_assert_eq!(text.len_unicode(), text.to_string().chars().count());
+    Ok(())
+}
+
+/// Replays a `diff_text`-convention edit stream onto a Loro text.
+///
+/// The stream is dual-indexed (`txtodo_model::TextEdit`): a `Delete`'s `at` counts the *source*,
+/// an `Insert`'s `at` counts the *target*, both in order. Loro holds one evolving string, so each
+/// position is translated through two cursors — an insert before a later delete shifts that delete.
+/// A naive single-cursor replay lands on the wrong characters whenever both kinds appear.
+/// Positions are Unicode code points, matching `LoroText::len_unicode`:
+/// <https://docs.rs/loro/latest/loro/struct.LoroText.html#method.insert>
+pub(crate) fn replay_edits(text: &LoroText, edits: &[txtodo_core::TextEdit]) -> LoroResult<()> {
+    let mut cursor = 0usize; // next unconsumed char of the source text
+    let mut emitted = 0usize; // chars of the target already produced or kept
     for edit in edits {
         match edit {
-            TextEdit::Insert { at, text: s } => text.insert(*at, s.as_str())?,
-            TextEdit::Delete { at, len } => text.delete(*at, *len)?,
+            txtodo_core::TextEdit::Delete { at, len } => {
+                debug_assert!(
+                    *at >= cursor,
+                    "a delete never moves backwards in the source"
+                );
+                let pos = emitted + (at - cursor);
+                text.delete(pos, *len)?;
+                cursor = at + len;
+                emitted = pos;
+            }
+            txtodo_core::TextEdit::Insert { at, text: s } => {
+                debug_assert!(
+                    *at >= emitted,
+                    "an insert never moves backwards in the target"
+                );
+                let keep = at - emitted;
+                let pos = emitted + keep;
+                text.insert(pos, s)?;
+                cursor += keep;
+                emitted = pos + s.chars().count();
+            }
         }
     }
     Ok(())

@@ -3,6 +3,8 @@
 //! consistent state with at most one daemon write and no ops with principal User.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+// The daemon listens on a unix-domain socket (ADR 0010); these scenarios cannot run on Windows.
+#![cfg(unix)]
 
 mod support;
 

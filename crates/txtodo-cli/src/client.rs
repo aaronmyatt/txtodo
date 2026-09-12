@@ -4,14 +4,21 @@
 //! crash is worth surfacing), not a silent fallback; `--no-daemon` forces direct-file mode.
 //! tonic over UDS: https://github.com/hyperium/tonic/tree/master/examples/src/uds
 
-use hyper_util::rt::TokioIo;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use tokio::net::UnixStream;
-use tonic::transport::{Channel, Endpoint, Uri};
-use tower::service_fn;
+use tonic::transport::Channel;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb};
+// Unix-domain sockets are the daemon's only transport (ADR 0010), and tokio gates `UnixStream` to
+// unix targets; on Windows the connector is compiled out and `connect` refuses instead.
+#[cfg(unix)]
+use hyper_util::rt::TokioIo;
+#[cfg(unix)]
+use tokio::net::UnixStream;
+#[cfg(unix)]
+use tonic::transport::{Endpoint, Uri};
+#[cfg(unix)]
+use tower::service_fn;
 
 /// Where the daemon listens, relative to the todo dir (ADR 0010).
 pub const SOCKET_REL: &str = ".txtodo/txtodod.sock";
@@ -72,6 +79,7 @@ pub fn select(dir: &Path, no_daemon: bool) -> Result<Mode, ClientError> {
 }
 
 impl Daemon {
+    #[cfg(unix)]
     fn connect(socket: PathBuf) -> Result<Daemon, ClientError> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -97,6 +105,15 @@ impl Daemon {
         Ok(Daemon {
             rt,
             client: TxtodoClient::new(channel),
+        })
+    }
+
+    /// Windows has no unix-domain sockets, so only direct-file mode exists there.
+    #[cfg(not(unix))]
+    fn connect(socket: PathBuf) -> Result<Daemon, ClientError> {
+        Err(ClientError::SocketRefused {
+            socket,
+            detail: "unix domain sockets are unavailable on this platform".to_owned(),
         })
     }
 

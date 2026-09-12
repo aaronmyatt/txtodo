@@ -63,25 +63,6 @@ fn stamp_for(op: &Op) -> Stamp {
     }
 }
 
-/// Applies a text edit list to a string, for semantic round-trip comparison.
-fn apply_text(text: &str, edits: &[TextEdit]) -> String {
-    let mut chars: Vec<char> = text.chars().collect();
-    for e in edits {
-        match e {
-            TextEdit::Insert { at, text: s } => {
-                let tail = chars.split_off(*at);
-                chars.extend(s.chars());
-                chars.extend(tail);
-            }
-            TextEdit::Delete { at, len } => {
-                let end = (*at + len).min(chars.len());
-                chars.drain(*at..end);
-            }
-        }
-    }
-    chars.into_iter().collect()
-}
-
 /// Applies one op and translates the single diff it produced back into ops.
 fn capture(
     doc: &mut LoroDocument,
@@ -190,12 +171,14 @@ fn set_field_round_trips() -> Result<(), Box<dyn Error>> {
 #[test]
 fn edit_text_round_trips() -> Result<(), Box<dyn Error>> {
     let a = task(1);
+    // Canonical dual-index order: the delete addresses the source, the insert the target. A
+    // single-cursor replay would shift the second edit and corrupt the text.
     let edits = vec![
+        TextEdit::Delete { at: 0, len: 4 },
         TextEdit::Insert {
-            at: 4,
+            at: 0,
             text: "400 ".to_owned(),
         },
-        TextEdit::Delete { at: 0, len: 4 },
     ];
     let mut doc = two_tasks()?;
     let mut m = mint();
@@ -218,9 +201,23 @@ fn edit_text_round_trips() -> Result<(), Box<dyn Error>> {
         panic!("not an EditText");
     };
     assert_eq!(*t, a);
-    // Loro canonicalises the text delta, so assert semantic equivalence, not literal order.
-    let original = format!("walk dog id:{}", a.ulid());
-    assert_eq!(apply_text(&original, back), apply_text(&original, &edits));
+    // Loro canonicalises the delta, so assert the resulting text, not the literal edit order. The
+    // target prepends "400 " and drops "walk": a naive single-cursor replay would land it mid-word.
+    let expected = format!("400  dog id:{}", a.ulid());
+    assert_eq!(doc.description(a).as_deref(), Some(expected.as_str()));
+    // The diff the round-trip extracted must reproduce the same description.
+    let replay = op(
+        4,
+        hlc(3),
+        todo_file(),
+        OpKind::EditText {
+            task: a,
+            edits: back.clone(),
+        },
+    );
+    let mut other = two_tasks()?;
+    apply(&mut other, &replay)?;
+    assert_eq!(other.description(a), doc.description(a));
     Ok(())
 }
 

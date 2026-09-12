@@ -298,24 +298,38 @@ fn text_diff(
 }
 
 fn text_edits(deltas: &[TextDelta]) -> Vec<TextEdit> {
+    // Loro's delta walks one cursor in the *target*; our `TextEdit` is dual-indexed (a delete
+    // addresses the source, an insert the target, `txtodo_core::diff_text`'s convention). So the
+    // source cursor only advances on retain and delete, the target cursor on retain and insert.
+    let mut source = 0usize;
+    let mut target = 0usize;
     let mut edits = Vec::new();
-    let mut pos = 0usize;
     for d in deltas {
         match d {
-            TextDelta::Retain { retain, .. } => pos += retain,
+            TextDelta::Retain { retain, .. } => {
+                source += retain;
+                target += retain;
+            }
             TextDelta::Insert { insert, .. } => {
                 edits.push(TextEdit::Insert {
-                    at: pos,
+                    at: target,
                     text: insert.clone(),
                 });
-                pos += insert.chars().count();
+                target += insert.chars().count();
             }
-            TextDelta::Delete { delete } => edits.push(TextEdit::Delete {
-                at: pos,
-                len: *delete,
-            }),
+            TextDelta::Delete { delete } => {
+                edits.push(TextEdit::Delete {
+                    at: source,
+                    len: *delete,
+                });
+                source += delete;
+            }
         }
     }
+    debug_assert!(
+        source <= target.max(source),
+        "cursors advance monotonically"
+    );
     edits
 }
 

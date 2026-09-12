@@ -13,10 +13,12 @@ use tower::service_fn;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb};
 
-/// How long to wait for the socket after spawn.
-pub const SOCKET_WAIT: Duration = Duration::from_secs(20);
-/// How long the daemon gets to notice and finish reconciling an external write.
-pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(8);
+/// How long to wait for the socket after spawn. Generous: a debug `txtodod` adopts the whole
+/// workspace before it binds and CI runners are slow (20 s timed out on ubuntu 2026-09-12).
+pub const SOCKET_WAIT: Duration = Duration::from_secs(120);
+/// How long the daemon gets to notice and finish reconciling an external write. Bounded, above the
+/// debug-build reconcile cost the slow runners add.
+pub const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
 /// Quiet time (no hash change) before an external edit counts as settled; above the 150 ms debounce.
 pub const QUIET_MS: u64 = 400;
 
