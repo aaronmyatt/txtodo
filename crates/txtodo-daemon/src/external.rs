@@ -3,6 +3,7 @@
 
 use crate::actor::{Commit, CommitTail, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
 use crate::actor_mirror::loro_peer;
+use crate::expected::{Hash, hex8};
 use crate::handle::{ActorError, Applied, Change};
 use crate::mirror::Mirror;
 use crate::reconcile::reconcile;
@@ -294,6 +295,14 @@ impl FileActor {
         self.writes_total += 1;
         self.cfg.stats.count_write();
         debug_assert!(self.writes_total > 0);
+        Ok(())
+    }
+
+    /// `write_projection`, then logs it — split out of `commit` purely to keep that function's
+    /// cognitive-complexity budget (the log line's field interpolation counts against the caller).
+    pub(crate) fn write_projection_and_log(&mut self, hash: Hash) -> Result<(), ActorError> {
+        self.write_projection()?;
+        tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&hash), "projection_written");
         Ok(())
     }
 }

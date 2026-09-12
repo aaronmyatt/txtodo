@@ -7,7 +7,7 @@
 
 use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
-use crate::expected::{ExpectedWrites, Hash, hex8};
+use crate::expected::{ExpectedWrites, Hash};
 use crate::external::tracing_stub_error;
 use crate::handle::{
     ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Applied, Change, Contents, WATCH_CAP,
@@ -323,8 +323,7 @@ impl FileActor {
         // Disk first: the file never waits on the mirror (a first flush after a restart
         // materialises the whole Loro snapshot, seconds for 10k tasks in debug).
         if write {
-            self.write_projection()?;
-            tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&new_hash), "projection_written");
+            self.write_projection_and_log(new_hash)?;
         }
         self.update_mirror_after_commit(snapshot, tail.flush, &ops);
         self.raise_flags(&tail.review);
