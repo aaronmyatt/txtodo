@@ -27,13 +27,55 @@ service Txtodo {
   // Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
   // and clears the flag — both or neither.
   rpc ResolveConflict(ResolveRequest) returns (ApplyResponse);
+
+  // notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
+  // to its ref dir; the client never resolves a slug or touches the filesystem itself.
+  rpc GetNotes(TaskRef) returns (NotesDoc);
+  // Applies one edit to notes.md as a Loro NotesEdit op; lazily creates the ref: directory (and
+  // the task's `ref:` tag) on the first edit when neither exists yet (plan §3.2.4).
+  rpc EditNotes(NotesEditRequest) returns (ApplyResponse);
+
+  // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
+  rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
+  // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
+  rpc PairAccept(PairAcceptRequest) returns (PairResult);
+  // Confirms the SAS shown to the human on this device. The group key lands only once both
+  // sides have confirmed (never on one-sided trust).
+  rpc PairConfirmSas(PairConfirmRequest) returns (PairResult);
+
+  // Mints a new capability token from the design §6.2 scope/caveat grammar.
+  rpc TokenCreate(TokenCreateRequest) returns (Token);
+  // Lists tokens for this workspace, scopes included (never secret material).
+  rpc TokenList(TokenListRequest) returns (TokenListResponse);
+  // Revokes a token; the daemon refuses it on its next use.
+  rpc TokenRevoke(TokenRevokeRequest) returns (TokenRevokeResponse);
+
+  // Streams the op log (ADR 0004) newest-first for the devices/agents activity feed.
+  rpc OpLogStream(OpLogRequest) returns (stream OpLogEntry);
 }
 
 message ListFilesRequest {}
 
+// done/total task-line counts for a todo.txt (plan §3.2.5). Unset (both 0) for done.txt/notes.md.
+message Progress {
+  uint32 done = 1;
+  uint32 total = 2;
+}
+
+enum FileKind {
+  FILE_KIND_UNSPECIFIED = 0;
+  FILE_KIND_TODO = 1;
+  FILE_KIND_DONE = 2;
+  FILE_KIND_NOTES = 3;
+}
+
 message FileInfo {
   string path = 1;      // workspace-relative, `/` separators
   bytes hash = 2;       // blake3 of the projection, 32 bytes
+  FileKind kind = 3;
+  // done = completed lines in this todo.txt + task lines in the sibling done.txt; total = task
+  // lines in both, blanks excluded (plan §3.2.5). Unset for done.txt/notes.md rows.
+  Progress progress = 4;
 }
 
 message ListFilesResponse { repeated FileInfo files = 1; }
@@ -163,4 +205,72 @@ message HealthResponse {
   uint64 started_at_ms = 4;
   uint64 writes_total = 5;
   string version = 6;
+}
+
+// --- notes.md (plan M5, design §7) ---
+
+message NotesDoc {
+  string path = 1;        // workspace-relative <ref>/notes.md; absent (empty) until first write
+  bytes bytes = 2;         // current markdown bytes; empty when the file does not exist yet
+  bytes hash = 3;
+}
+
+message NotesEditRequest {
+  TaskRef task = 1;        // the line whose ref: directory owns the notes.md
+  string new_text = 2;     // whole-document replacement; the daemon derives the Loro text ops
+}
+
+// --- pairing (plan M4, design §4) ---
+
+message PairOfferRequest {}
+
+// QR payload: identity + handshake material only, never the group key or a private key.
+message PairOfferResponse {
+  string device = 1;
+  string group_id = 2;
+  string x25519_pub = 3;
+  string endpoint = 4;
+  string nonce = 5;
+}
+
+message PairAcceptRequest { string code = 1; }   // the scanned/decoded PairOffer, re-encoded
+
+message PairResult { string sas = 1; }           // 6-word SAS (EFF short list); no key material
+
+message PairConfirmRequest {}
+
+// --- capability tokens (plan M6, design §6.2) ---
+
+message TokenCreateRequest {
+  string name = 1;
+  repeated string scopes = 2;   // closed union: read/write:*/raw/project:*/context:*/file:*
+  string expires = 3;           // RFC 3339; empty = no expiry
+}
+
+message Token {
+  string id = 1;
+  string name = 2;
+  repeated string scopes = 3;
+  string expires = 4;
+  uint64 created_at_ms = 5;
+  // Bearer secret, present only in the TokenCreate response — never returned by TokenList.
+  string secret = 6;
+}
+
+message TokenListRequest {}
+
+message TokenListResponse { repeated Token tokens = 1; }
+
+message TokenRevokeRequest { string id = 1; }
+
+message TokenRevokeResponse { bool revoked = 1; }
+
+// --- activity feed (ADR 0004 oplog.db) ---
+
+message OpLogRequest {}
+
+message OpLogEntry {
+  string principal = 1;    // "you@dev" / "agent:name@dev" / "external@dev" — same as OpSummary
+  string op = 2;           // one-line human summary, same shape as OpSummary.summary
+  uint64 at_ms = 3;
 }
