@@ -23,6 +23,8 @@ pub enum ToLoroError {
     Unsupported(&'static str),
     /// A predecessor or moved task was not found in the list.
     TaskNotFound(TaskId),
+    /// `BlankRemove` found no blank sentinel after the anchor (deleted tasks are skipped).
+    NoBlankAfter(Option<TaskId>),
     /// An `Insert` line did not parse as a task.
     NotATask(String),
     /// The underlying Loro operation failed.
@@ -34,6 +36,7 @@ impl fmt::Display for ToLoroError {
         match self {
             ToLoroError::Unsupported(what) => write!(f, "unsupported in this document: {what}"),
             ToLoroError::TaskNotFound(t) => write!(f, "no task {t} in the list"),
+            ToLoroError::NoBlankAfter(a) => write!(f, "no blank line after {a:?}"),
             ToLoroError::NotATask(line) => write!(f, "insert line is not a task: {line:?}"),
             ToLoroError::Loro(e) => write!(f, "loro: {e}"),
         }
@@ -190,16 +193,32 @@ fn blank_insert(doc: &mut LoroDocument, op: &Op, after: Option<TaskId>) -> Resul
     Ok(())
 }
 
-/// Removes the blank sentinel after `after`, asserting it is really a blank.
+/// Removes the first blank sentinel after `after`. Deleted tasks stay in the list as tombstones
+/// and are skipped; a live task before any blank means there is no blank to remove.
 fn blank_remove(doc: &mut LoroDocument, op: &Op, after: Option<TaskId>) -> Result<(), ToLoroError> {
     let list = doc.file_list(&op.file);
-    let idx = insert_index(&list, after)?;
-    debug_assert!(
-        is_blank_at(&list, idx),
-        "BlankRemove must target a blank sentinel entry"
-    );
+    let start = insert_index(&list, after)?;
+    let idx = next_blank_index(doc, &list, start).ok_or(ToLoroError::NoBlankAfter(after))?;
+    debug_assert!(idx >= start && idx < list.len());
     list.delete(idx, 1)?;
     Ok(())
+}
+
+/// The first blank sentinel at or after `start`, looking past deleted tasks only.
+fn next_blank_index(doc: &LoroDocument, list: &LoroMovableList, start: usize) -> Option<usize> {
+    let len = list.len();
+    debug_assert!(start <= len);
+    // Bounded by the list length.
+    for idx in start..len {
+        let id = id_at(list, idx)?;
+        if is_blank(id) {
+            return Some(idx);
+        }
+        if !doc.is_deleted(id) {
+            return None;
+        }
+    }
+    None
 }
 
 /// The insertion index for `after`: `0` for `None`, else the predecessor index plus one.
@@ -225,11 +244,11 @@ fn mov_to(
     Ok(if a_idx < from { a_idx + 1 } else { a_idx })
 }
 
-/// Whether the list entry at `idx` is a blank sentinel.
-fn is_blank_at(list: &LoroMovableList, idx: usize) -> bool {
+/// The task id stored at list index `idx`, if that entry is one.
+fn id_at(list: &LoroMovableList, idx: usize) -> Option<TaskId> {
     list.get(idx)
         .and_then(|voc| voc.into_value().ok())
         .and_then(|v| v.as_string().cloned())
         .and_then(|s| Ulid::parse(s.as_ref()))
-        .is_some_and(|u| is_blank(TaskId::new(u)))
+        .map(TaskId::new)
 }

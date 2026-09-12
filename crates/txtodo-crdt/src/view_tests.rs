@@ -119,3 +119,61 @@ fn reinserting_a_deleted_id_resurrects_one_entry_with_a_reset_description() {
         "the stale text was reset: {line}"
     );
 }
+
+#[test]
+fn blank_remove_skips_a_deleted_tombstone_and_set_description_replaces_the_text() {
+    // A, X, blank, B — then delete X; BlankRemove after A must take the blank, not X's tombstone.
+    let mut doc = LoroDocument::open();
+    apply(&mut doc, &insert(1, 1, None, "a")).unwrap();
+    apply(&mut doc, &insert(2, 9, Some(task(1)), "x")).unwrap();
+    apply(
+        &mut doc,
+        &op(
+            3,
+            OpKind::BlankInsert {
+                after: Some(task(9)),
+            },
+        ),
+    )
+    .unwrap();
+    let blank = doc.last_blank_id().unwrap();
+    apply(&mut doc, &insert(4, 2, Some(blank), "b")).unwrap();
+    apply(
+        &mut doc,
+        &op(
+            5,
+            set_field(task(9), Field::Deleted, FieldValue::Bool(true)).unwrap(),
+        ),
+    )
+    .unwrap();
+    assert!(doc.is_deleted(task(9)) && !doc.is_deleted(task(1)));
+    apply(
+        &mut doc,
+        &op(
+            6,
+            OpKind::BlankRemove {
+                after: Some(task(1)),
+            },
+        ),
+    )
+    .unwrap();
+    let ids = doc.list_ids(&file());
+    assert_eq!(
+        ids,
+        vec![task(1), task(9), task(2)],
+        "blank gone, tombstone kept"
+    );
+    let again = apply(
+        &mut doc,
+        &op(
+            7,
+            OpKind::BlankRemove {
+                after: Some(task(1)),
+            },
+        ),
+    );
+    assert!(matches!(again, Err(crate::ToLoroError::NoBlankAfter(_))));
+    doc.set_description(task(2), "b pri:B").unwrap();
+    assert_eq!(doc.description(task(2)).as_deref(), Some("b pri:B"));
+    assert_eq!(doc.description(task(3)), None);
+}
