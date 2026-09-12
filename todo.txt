@@ -1,4 +1,3 @@
-2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state
 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model ref:model-hlc-skew-guard
 2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli ref:crdt-needs-review
@@ -134,3 +133,4 @@ x 2026-09-12 2026-09-12 Bug: txtodod stamps id: tags into notes.md prose; the wa
 x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core
 x 2026-09-12 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench
 x 2026-09-12 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets
+x 2026-09-12 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc

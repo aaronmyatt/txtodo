@@ -1,163 +1,374 @@
-//! The Loro document shape (design §4.2): one movable list per file, one shared `tasks` map, LWW
-//! registers per field (ADR 0013). Loro: <https://loro.dev/docs/tutorial/get_started>,
-//! movable lists: <https://loro.dev/docs/tutorial/list>, maps: <https://loro.dev/docs/tutorial/map>.
+//! Loro document shape (design §4.2): one `LoroMovableList` per file keyed `files/<path>`,
+//! plus one shared `LoroMap` named `tasks` whose values are per-task nested `LoroMap`s.
+//!
+//! Within a task map the `description` key is a `LoroText`; every other field is an LWW register
+//! (see [`crate::lww`]). Blank lines are reserved-prefix sentinel [`TaskId`]s (top byte `0xFF`)
+//! with no `tasks` entry, so one ordered list keeps a blank run ordered through a merge. Loro
+//! list API: <https://loro.dev/docs/tutorial/list> · map: <https://loro.dev/docs/tutorial/map>.
 
 use loro::{
-    ExportMode, LoroDoc, LoroEncodeError, LoroError, LoroMap, LoroMovableList, LoroText, LoroValue,
+    Container, ContainerID, ContainerTrait, ExportMode, LoroDoc, LoroMap, LoroMovableList,
+    LoroResult, LoroText, LoroValue, ValueOrContainer,
 };
-use txtodo_model::{FilePath, TaskId, Ulid};
+use txtodo_core::{Date, Priority, Ulid};
+use txtodo_model::{Field, FieldValue, FilePath, Op, TaskId};
 
-/// The shared map holding every task, keyed by its ULID string.
-pub const TASKS_MAP: &str = "tasks";
-/// Prefix of each file's movable-list name; the rest is the workspace-relative path.
-pub const FILES_PREFIX: &str = "files/";
-/// Key of the per-task description text inside the task map.
-pub const DESCRIPTION_KEY: &str = "description";
-/// A task id whose ULID high byte is `0xFF` is a blank-line sentinel, never a real task: real ULIDs
-/// are minted from wall time, so `0xFF` as the leading byte is year 10889.
-pub const BLANK_TAG: u128 = 0xFF << 120;
+use crate::from_loro::FromLoroError;
+use crate::lww::Lww;
+use crate::to_loro::{ToLoroError, apply};
 
-/// True when `id` marks a blank line rather than a task.
-pub fn is_blank(id: TaskId) -> bool {
-    let bits = id.ulid().to_u128();
-    let blank = bits & BLANK_TAG == BLANK_TAG;
-    debug_assert_eq!(blank, (bits >> 120) == 0xFF, "the high byte is the tag");
-    blank
-}
+/// Root map name holding one nested `LoroMap` per task.
+pub(crate) const TASKS_MAP: &str = "tasks";
+/// Prefix of every per-file movable list's root name.
+pub(crate) const FILES_PREFIX: &str = "files/";
+/// Key of the description `LoroText` inside each task map.
+pub(crate) const DESCRIPTION_KEY: &str = "description";
+/// Reserved top byte: any task id whose high byte is `0xFF` is a blank-line sentinel.
+pub(crate) const BLANK_PREFIX_MASK: u128 = 0xFF00_0000_0000_0000_0000_0000_0000_0000;
 
-/// The blank-line sentinel id carrying `n` in its low 120 bits. Callers pass a unique `n` (an op id).
-pub fn blank_id(n: u128) -> TaskId {
-    let id = TaskId::new(Ulid::from_u128(BLANK_TAG | (n & !BLANK_TAG)));
-    debug_assert!(is_blank(id));
-    id
-}
-
-/// The Loro-backed document.
+/// The Loro-backed document. In-memory only: the `txtodo-store` op log is the source of truth
+/// and this doc is re-hydrated from an op iterator on start (design §4.2 / ADR 0013).
 pub struct LoroDocument {
+    /// The underlying Loro document.
     doc: LoroDoc,
+    /// Low bits minted into the next blank sentinel; deterministic per re-hydration.
+    next_blank: u128,
 }
 
 impl LoroDocument {
-    /// An empty document.
+    /// Opens an empty document.
     pub fn open() -> LoroDocument {
-        let doc = LoroDoc::new();
-        debug_assert_eq!(doc.get_map(TASKS_MAP).len(), 0, "a fresh doc is empty");
-        LoroDocument { doc }
+        LoroDocument {
+            doc: LoroDoc::new(),
+            next_blank: 0,
+        }
     }
 
-    /// The underlying Loro document.
-    pub fn doc(&self) -> &LoroDoc {
-        &self.doc
-    }
-
-    /// The movable list for `path`, created empty on first use.
-    pub fn list(&self, path: &FilePath) -> LoroMovableList {
-        let name = format!("{FILES_PREFIX}{path}");
-        debug_assert!(name.starts_with(FILES_PREFIX));
-        self.doc.get_movable_list(name)
-    }
-
-    /// The shared tasks map.
-    pub fn tasks(&self) -> LoroMap {
-        let map = self.doc.get_map(TASKS_MAP);
-        debug_assert!(map.is_attached(), "a doc-attached map");
-        map
-    }
-
-    /// The nested map for `id`, created on first use.
-    ///
-    /// Ref: <https://docs.rs/loro/1.16.0/loro/struct.LoroMap.html#method.ensure_mergeable_map>
-    pub fn task(&self, id: TaskId) -> Result<LoroMap, LoroError> {
-        let map = self.tasks().ensure_mergeable_map(&id.to_string())?;
-        debug_assert!(map.is_attached());
-        Ok(map)
-    }
-
-    /// The description text for `id`, created on first use.
-    ///
-    /// Ref: <https://docs.rs/loro/1.16.0/loro/struct.LoroMap.html#method.ensure_mergeable_text>
-    pub fn description(&self, id: TaskId) -> Result<LoroText, LoroError> {
-        let text = self.task(id)?.ensure_mergeable_text(DESCRIPTION_KEY)?;
-        debug_assert!(text.is_attached());
-        Ok(text)
-    }
-
-    /// The ids stored in `path`'s list, in order. Blank sentinels are included.
-    pub fn ids(&self, path: &FilePath) -> Vec<TaskId> {
-        let list = self.list(path);
-        let ids: Vec<TaskId> = list
-            .to_vec()
-            .iter()
-            .filter_map(|v| match v {
-                LoroValue::String(s) => Ulid::parse(s).map(TaskId::new),
-                _ => None,
-            })
-            .collect();
-        debug_assert!(ids.len() <= list.len(), "at most one id per list entry");
-        ids
-    }
-
-    /// A snapshot of the whole document.
-    ///
-    /// Ref: <https://docs.rs/loro/1.16.0/loro/struct.LoroDoc.html#method.export>
-    pub fn snapshot(&self) -> Result<Vec<u8>, LoroEncodeError> {
-        let bytes = self.doc.export(ExportMode::Snapshot)?;
-        debug_assert!(!bytes.is_empty(), "a snapshot is never empty");
-        Ok(bytes)
+    /// Exports the current state as a full snapshot. See <https://docs.rs/loro> `ExportMode`.
+    pub fn snapshot(&self) -> Result<Vec<u8>, loro::LoroEncodeError> {
+        self.doc.export(ExportMode::Snapshot)
     }
 
     /// Rebuilds a document from a snapshot written by [`LoroDocument::snapshot`].
-    pub fn from_snapshot(bytes: &[u8]) -> Result<LoroDocument, LoroError> {
-        let doc = LoroDoc::new();
-        doc.import(bytes)?;
-        debug_assert!(doc.get_map(TASKS_MAP).is_attached());
-        Ok(LoroDocument { doc })
+    pub fn from_snapshot(bytes: &[u8]) -> LoroResult<LoroDocument> {
+        let doc = LoroDoc::from_snapshot(bytes)?;
+        let next_blank = Self::blank_after(&doc);
+        Ok(LoroDocument { doc, next_blank })
+    }
+
+    /// Opens an empty document and applies each op through [`apply`], one commit per op.
+    pub fn hydrate(ops: impl Iterator<Item = Op>) -> Result<LoroDocument, ToLoroError> {
+        let mut doc = LoroDocument::open();
+        for op in ops {
+            apply(&mut doc, &op)?;
+        }
+        Ok(doc)
+    }
+
+    /// The current state frontiers, for [`LoroDocument::diff`].
+    pub fn state_frontiers(&self) -> loro::Frontiers {
+        self.doc.state_frontiers()
+    }
+
+    /// The owned diff between two frontiers, for [`crate::from_batch`].
+    pub fn diff(
+        &self,
+        a: &loro::Frontiers,
+        b: &loro::Frontiers,
+    ) -> LoroResult<loro::event::DiffBatch> {
+        self.doc.diff(a, b)
+    }
+
+    /// Commits the pending Loro transaction, making its diffs observable.
+    pub(crate) fn commit(&self) {
+        self.doc.commit();
+    }
+
+    /// The per-file movable list, creating the root container if needed.
+    pub(crate) fn file_list(&self, file: &FilePath) -> LoroMovableList {
+        self.doc.get_movable_list(file_list_name(file))
+    }
+
+    /// The shared `tasks` root map.
+    pub(crate) fn tasks_map(&self) -> LoroMap {
+        self.doc.get_map(TASKS_MAP)
+    }
+
+    /// The task's nested map, creating it (mergeably) if needed.
+    pub(crate) fn task_map(&self, task: TaskId) -> LoroResult<LoroMap> {
+        self.tasks_map().ensure_mergeable_map(&task_id_str(task))
+    }
+
+    /// The task's nested map if it already exists.
+    pub(crate) fn task_map_if_exists(&self, task: TaskId) -> Option<LoroMap> {
+        match self.tasks_map().get(&task_id_str(task)) {
+            Some(ValueOrContainer::Container(Container::Map(m))) => Some(m),
+            _ => None,
+        }
+    }
+
+    /// The task's description text, creating the task map (mergeably) if needed.
+    pub(crate) fn description_text(&self, task: TaskId) -> LoroResult<LoroText> {
+        self.task_map(task)?.ensure_mergeable_text(DESCRIPTION_KEY)
+    }
+
+    /// The task's description text if it already exists.
+    pub(crate) fn description_if_exists(&self, task: TaskId) -> Option<LoroText> {
+        match self.task_map_if_exists(task)?.get(DESCRIPTION_KEY) {
+            Some(ValueOrContainer::Container(Container::Text(t))) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Mints the next blank sentinel id. Deterministic per re-hydration (see `next_blank`).
+    pub(crate) fn blank_id(&mut self) -> TaskId {
+        let bits = BLANK_PREFIX_MASK | self.next_blank;
+        debug_assert!(
+            self.next_blank < BLANK_PREFIX_MASK,
+            "blank sentinel counter stays below the reserved prefix"
+        );
+        self.next_blank = self.next_blank.saturating_add(1);
+        TaskId::new(Ulid::from_u128(bits))
+    }
+
+    /// Every `files/<path>` root list's path, in root-map key order.
+    pub(crate) fn file_paths(&self) -> Vec<FilePath> {
+        let LoroValue::Map(root) = self.doc.get_deep_value() else {
+            return Vec::new();
+        };
+        root.iter()
+            .filter_map(|(k, v)| {
+                let path = k.strip_prefix(FILES_PREFIX)?;
+                if !matches!(v, LoroValue::List(_)) {
+                    return None;
+                }
+                FilePath::new(path).ok()
+            })
+            .collect()
+    }
+
+    /// The file whose list currently holds `task`, if any.
+    pub(crate) fn file_of_task(&self, task: TaskId) -> Option<FilePath> {
+        let needle = task_id_str(task);
+        self.file_paths()
+            .into_iter()
+            .find(|p| list_contains(&self.file_list(p), &needle))
+    }
+
+    /// The file list whose container id is `id`, if any.
+    pub(crate) fn file_of_container(&self, id: &ContainerID) -> Option<FilePath> {
+        self.file_paths()
+            .into_iter()
+            .find(|p| &self.file_list(p).id() == id)
+    }
+
+    /// The task whose nested map or description text has container id `id`, if any.
+    pub(crate) fn task_of_container(&self, id: &ContainerID) -> Option<TaskId> {
+        for key in self.tasks_map().keys() {
+            let Some(task) = parse_task_id(&key) else {
+                continue;
+            };
+            let Some(map) = self.task_map_if_exists(task) else {
+                continue;
+            };
+            if &map.id() == id {
+                return Some(task);
+            }
+            if let Some(text) = self.description_if_exists(task)
+                && &text.id() == id
+            {
+                return Some(task);
+            }
+        }
+        None
+    }
+
+    /// One past the largest blank sentinel low bits found in a snapshot, so new sentinels never
+    /// collide with the ones already written there.
+    fn blank_after(doc: &LoroDoc) -> u128 {
+        let LoroValue::Map(root) = doc.get_deep_value() else {
+            return 0;
+        };
+        let mut max = 0u128;
+        for (k, v) in root.iter() {
+            if !k.starts_with(FILES_PREFIX) {
+                continue;
+            }
+            let LoroValue::List(list) = v else {
+                continue;
+            };
+            for item in list.iter() {
+                let LoroValue::String(s) = item else {
+                    continue;
+                };
+                let Some(id) = Ulid::parse(s.as_ref()) else {
+                    continue;
+                };
+                let bits = id.to_u128();
+                if bits & BLANK_PREFIX_MASK == BLANK_PREFIX_MASK {
+                    max = max.max(bits & !BLANK_PREFIX_MASK);
+                }
+            }
+        }
+        max.saturating_add(1)
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// The root name of a file's movable list.
+pub(crate) fn file_list_name(file: &FilePath) -> String {
+    format!("{FILES_PREFIX}{file}")
+}
 
-    fn path(s: &str) -> FilePath {
-        FilePath::new(s).expect("test path is valid")
-    }
+/// The list-entry string for a task id (its ULID text).
+pub(crate) fn task_id_str(task: TaskId) -> String {
+    task.ulid().to_string()
+}
 
-    #[test]
-    fn blank_sentinels_are_tagged_and_unique() {
-        let a = blank_id(1);
-        let b = blank_id(2);
-        assert!(is_blank(a) && is_blank(b));
-        assert_ne!(a, b);
-        // A normal, time-minted id is never blank.
-        let real = TaskId::new(Ulid::from_u128(0x0192_0000_0000_0000_0000_0000_0000_0001));
-        assert!(!is_blank(real));
-    }
+/// Parses a list-entry string back to a task id.
+pub(crate) fn parse_task_id(s: &str) -> Option<TaskId> {
+    Ulid::parse(s).map(TaskId::new)
+}
 
-    #[test]
-    fn lists_are_per_path_and_ids_round_trip() {
-        let doc = LoroDocument::open();
-        let todo = path("todo.txt");
-        let other = path("work/todo.txt");
-        let id = TaskId::new(Ulid::from_u128(0x0192_0000_0000_0000_0000_0000_0000_0002));
-        doc.list(&todo).insert(0, id.to_string()).unwrap();
-        doc.list(&other).insert(0, blank_id(9).to_string()).unwrap();
-        assert_eq!(doc.ids(&todo), vec![id]);
-        assert_eq!(doc.ids(&other), vec![blank_id(9)]);
-        assert_eq!(doc.list(&todo).len(), 1);
-    }
+/// True when the task id carries the reserved blank prefix.
+pub(crate) fn is_blank(task: TaskId) -> bool {
+    task.ulid().to_u128() & BLANK_PREFIX_MASK == BLANK_PREFIX_MASK
+}
 
-    #[test]
-    fn snapshot_round_trips_the_whole_document() {
-        let doc = LoroDocument::open();
-        let todo = path("todo.txt");
-        let id = TaskId::new(Ulid::from_u128(0x0192_0000_0000_0000_0000_0000_0000_0003));
-        doc.list(&todo).insert(0, id.to_string()).unwrap();
-        doc.description(id).unwrap().insert(0, "buy milk").unwrap();
-        doc.doc().commit();
-        let bytes = doc.snapshot().unwrap();
-        let back = LoroDocument::from_snapshot(&bytes).unwrap();
-        assert_eq!(back.ids(&todo), vec![id]);
-        assert_eq!(back.description(id).unwrap().to_string(), "buy milk");
+/// The Loro map key for a prefix field.
+pub(crate) fn field_key(field: Field) -> &'static str {
+    match field {
+        Field::Completed => "completed",
+        Field::CompletionDate => "completion_date",
+        Field::CreationDate => "creation_date",
+        Field::Priority => "priority",
+        Field::Deleted => "deleted",
+        Field::Quirks => "quirks",
     }
+}
+
+/// The prefix field named by a Loro map key.
+pub(crate) fn field_from_key(key: &str) -> Option<Field> {
+    match key {
+        "completed" => Some(Field::Completed),
+        "completion_date" => Some(Field::CompletionDate),
+        "creation_date" => Some(Field::CreationDate),
+        "priority" => Some(Field::Priority),
+        "deleted" => Some(Field::Deleted),
+        "quirks" => Some(Field::Quirks),
+        _ => None,
+    }
+}
+
+/// Encodes a field value as a plain `LoroValue` (the `v` half of an LWW register).
+pub(crate) fn encode_field_value(fv: FieldValue) -> LoroValue {
+    match fv {
+        FieldValue::Bool(b) => LoroValue::Bool(b),
+        FieldValue::Date(None) => LoroValue::Null,
+        FieldValue::Date(Some((y, m, d))) => LoroValue::from(format!("{y:04}-{m:02}-{d:02}")),
+        FieldValue::Priority(None) => LoroValue::Null,
+        FieldValue::Priority(Some(c)) => LoroValue::from(c.to_string()),
+        FieldValue::Quirks(bits) => LoroValue::I64(i64::from(bits)),
+    }
+}
+
+/// Decodes the `v` half of an LWW register back to a field value, checked against `field`.
+pub(crate) fn decode_field_value(field: Field, v: &LoroValue) -> Option<FieldValue> {
+    match field {
+        Field::Completed | Field::Deleted => v.as_bool().copied().map(FieldValue::Bool),
+        Field::CompletionDate | Field::CreationDate => {
+            if v.is_null() {
+                return Some(FieldValue::Date(None));
+            }
+            let d = Date::parse(v.as_string()?.as_ref())?;
+            Some(FieldValue::Date(Some((d.year(), d.month(), d.day()))))
+        }
+        Field::Priority => {
+            if v.is_null() {
+                return Some(FieldValue::Priority(None));
+            }
+            let c = v.as_string()?.as_ref().chars().next()?;
+            let p = Priority::new(c)?;
+            Some(FieldValue::Priority(Some(p.as_char())))
+        }
+        Field::Quirks => v
+            .as_i64()
+            .copied()
+            .and_then(|i| u16::try_from(i).ok())
+            .map(FieldValue::Quirks),
+    }
+}
+
+/// Whether a list holds the given task-id string.
+pub(crate) fn list_contains(list: &LoroMovableList, needle: &str) -> bool {
+    list.to_vec()
+        .iter()
+        .any(|v| v.as_string().is_some_and(|s| s.as_str() == needle))
+}
+
+/// The list index of a task id, if present.
+pub(crate) fn index_of(list: &LoroMovableList, task: TaskId) -> Option<usize> {
+    let needle = task_id_str(task);
+    list.to_vec()
+        .iter()
+        .position(|v| v.as_string().is_some_and(|s| s.as_str() == needle))
+}
+
+/// Rebuilds a canonical `Insert` line from the task map's description text and prefix fields.
+pub(crate) fn rebuild_line(doc: &LoroDocument, task: TaskId) -> Result<String, FromLoroError> {
+    let map = doc
+        .task_map_if_exists(task)
+        .ok_or(FromLoroError::MissingTask(task))?;
+    let description = doc
+        .description_if_exists(task)
+        .map_or(String::new(), |t| t.to_string());
+    let completed = match read_field(&map, Field::Completed)? {
+        Some(FieldValue::Bool(b)) => b,
+        Some(_) => return Err(FromLoroError::Malformed("completed is not a bool".into())),
+        None => false,
+    };
+    let completion_date = read_date(&map, Field::CompletionDate)?;
+    let creation_date = read_date(&map, Field::CreationDate)?;
+    let priority = match read_field(&map, Field::Priority)? {
+        Some(FieldValue::Priority(p)) => p,
+        Some(_) => return Err(FromLoroError::Malformed("priority is not a char".into())),
+        None => None,
+    };
+    let prefix = txtodo_core::Prefix {
+        completed,
+        completion_date: completion_date.and_then(|(y, m, d)| Date::new(y, m, d)),
+        creation_date: creation_date.and_then(|(y, m, d)| Date::new(y, m, d)),
+        priority: priority.and_then(Priority::new),
+    };
+    let has_description = !description.is_empty();
+    Ok(format!(
+        "{}{}",
+        txtodo_core::emit_prefix(&prefix, has_description),
+        description
+    ))
+}
+
+/// Reads a date field back as `Option<(year, month, day)>`.
+fn read_date(map: &LoroMap, field: Field) -> Result<Option<(u16, u8, u8)>, FromLoroError> {
+    match read_field(map, field)? {
+        Some(FieldValue::Date(d)) => Ok(d),
+        Some(_) => Err(FromLoroError::Malformed("date field is not a date".into())),
+        None => Ok(None),
+    }
+}
+
+/// Reads and decodes one LWW register from a task map.
+fn read_field(map: &LoroMap, field: Field) -> Result<Option<FieldValue>, FromLoroError> {
+    let Some(voc) = map.get(field_key(field)) else {
+        return Ok(None);
+    };
+    let value = voc
+        .into_value()
+        .ok()
+        .ok_or_else(|| FromLoroError::Malformed(format!("field {field:?} is not a value")))?;
+    let lww = Lww::decode(&value).ok_or_else(|| {
+        FromLoroError::Malformed(format!("field {field:?} is not an LWW register"))
+    })?;
+    decode_field_value(field, &lww.value)
+        .map(Some)
+        .ok_or_else(|| FromLoroError::Malformed(format!("field {field:?} has a bad value")))
 }

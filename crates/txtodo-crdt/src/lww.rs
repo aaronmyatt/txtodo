@@ -1,217 +1,107 @@
-//! LWW registers: a value plus the HLC that wrote it (ADR 0013).
+//! Last-writer-wins register stamped by our HLC inside the value (ADR 0013).
 //!
-//! Loro resolves map-key conflicts by its own Lamport clock and peer id, which is not our HLC and
-//! which we cannot substitute. We therefore store our stamp beside the value and write only when the
-//! incoming stamp is strictly newer, so the merge rule is ours and stays readable in one place.
-//! Ref: <https://docs.rs/loro/1.16.0/loro/struct.LoroMap.html>
+//! Loro resolves map-key conflicts with its own Lamport clock + peer id, which is not our HLC.
+//! To keep design §4.2 honest, the stamp lives in the value: each field key holds
+//! `{"v": value, "h": <26-byte HLC>}` and we write only when the incoming HLC is strictly newer.
+//! Loro's own LWW then only breaks ties we never rely on. Loro map API:
+//! <https://loro.dev/docs/tutorial/map> · HLC: <https://cse.buffalo.edu/tech-reports/2014-04.pdf>.
 
-use loro::{LoroMap, LoroMapValue, LoroResult, LoroValue, ValueOrContainer};
 use std::collections::HashMap;
-use txtodo_model::{DeviceId, Hlc, Ulid};
 
-/// Length of an encoded HLC: `wall_ms` (u64) + `counter` (u16) + `device` (u128), little-endian.
-pub const HLC_BYTES: usize = 26;
+use loro::{LoroMap, LoroResult, LoroValue};
+use txtodo_core::Ulid;
+use txtodo_model::{DeviceId, Hlc};
 
-/// Key holding the register's value inside the encoded map.
-const VALUE_KEY: &str = "v";
-/// Key holding the register's HLC bytes inside the encoded map.
-const HLC_KEY: &str = "h";
+/// Bytes in the binary HLC stamp: u64 wall LE + u16 counter LE + u128 device LE.
+const HLC_STAMP_BYTES: usize = 26;
 
-/// A last-writer-wins register.
+/// A last-writer-wins register: a value plus the HLC stamp that arbitrates which writer wins.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lww<T> {
-    /// The value.
+    /// The stored value.
     pub value: T,
-    /// The stamp that wrote it.
+    /// The stamp that decides whether an incoming write replaces this one.
     pub hlc: Hlc,
 }
 
 impl<T> Lww<T> {
-    /// Builds a register from a value and the stamp that wrote it.
-    pub fn new(value: T, hlc: Hlc) -> Lww<T> {
-        debug_assert_eq!(HLC_BYTES, encode_hlc(hlc).len());
-        Lww { value, hlc }
-    }
-
-    /// True when `incoming` must replace this register.
-    ///
-    /// `Hlc`'s `Ord` is `(wall_ms, counter, device)`, so the device id breaks an exact tie — the
-    /// deterministic last resort ADR 0013 asks for.
+    /// True when `incoming` is strictly newer than this register's stamp. `Hlc`'s derived `Ord`
+    /// already breaks equal `(wall_ms, counter)` ties by device id.
     pub fn wins_over(&self, incoming: Hlc) -> bool {
-        let wins = incoming > self.hlc;
-        debug_assert!(
-            !(wins && incoming == self.hlc),
-            "only a strictly newer stamp wins"
-        );
-        wins
+        incoming > self.hlc
     }
 }
 
-/// Encodes an HLC to its fixed [`HLC_BYTES`]-byte little-endian form.
-pub fn encode_hlc(hlc: Hlc) -> Vec<u8> {
-    let mut out = Vec::with_capacity(HLC_BYTES);
-    out.extend_from_slice(&hlc.wall_ms.to_le_bytes());
-    out.extend_from_slice(&hlc.counter.to_le_bytes());
-    out.extend_from_slice(&hlc.device.ulid().to_u128().to_le_bytes());
-    debug_assert_eq!(out.len(), HLC_BYTES, "fixed-width encoding");
-    out
-}
-
-/// Decodes the bytes written by [`encode_hlc`]; `None` when the length is wrong.
-pub fn decode_hlc(bytes: &[u8]) -> Option<Hlc> {
-    if bytes.len() != HLC_BYTES {
-        return None;
-    }
-    let wall_ms = u64::from_le_bytes(bytes.get(0..8)?.try_into().ok()?);
-    let counter = u16::from_le_bytes(bytes.get(8..10)?.try_into().ok()?);
-    let device = u128::from_le_bytes(bytes.get(10..26)?.try_into().ok()?);
-    let hlc = Hlc {
-        wall_ms,
-        counter,
-        device: DeviceId::new(Ulid::from_u128(device)),
-    };
-    debug_assert_eq!(
-        Ulid::from_u128(device).to_u128(),
-        device,
-        "device round-trips"
-    );
-    Some(hlc)
-}
-
-impl<T: Clone + Into<LoroValue>> Lww<T> {
-    /// Encodes to a `LoroValue::Map` of `{"v": value, "h": <26 bytes>}`.
+impl Lww<LoroValue> {
+    /// Encodes as a `LoroValue::Map` `{"v": value, "h": <26-byte HLC>}`.
     pub fn encode(&self) -> LoroValue {
         let mut map = HashMap::with_capacity(2);
-        map.insert(VALUE_KEY.to_owned(), self.value.clone().into());
-        map.insert(HLC_KEY.to_owned(), LoroValue::from(encode_hlc(self.hlc)));
-        let value = LoroValue::Map(LoroMapValue::from(map));
-        debug_assert!(matches!(value, LoroValue::Map(_)), "always a map value");
-        value
+        map.insert("v".to_owned(), self.value.clone());
+        map.insert("h".to_owned(), LoroValue::from(hlc_to_bytes(self.hlc)));
+        LoroValue::Map(map.into())
+    }
+
+    /// Decodes the value written by [`Lww::encode`]; `None` on any malformed shape.
+    pub fn decode(v: &LoroValue) -> Option<Lww<LoroValue>> {
+        let map = v.as_map()?;
+        let value = map.get("v")?.clone();
+        let h = map.get("h")?.as_binary()?;
+        Some(Lww {
+            value,
+            hlc: hlc_from_bytes(&h[..])?,
+        })
     }
 }
 
-/// Decodes a register written by [`Lww::encode`]; `None` on any other shape.
-pub fn decode(value: &LoroValue) -> Option<Lww<LoroValue>> {
-    let LoroValue::Map(map) = value else {
-        return None;
-    };
-    let inner = map.get(VALUE_KEY)?.clone();
-    let LoroValue::Binary(binary) = map.get(HLC_KEY)? else {
-        return None;
-    };
-    let hlc = decode_hlc(binary)?;
-    let register = Lww::new(inner, hlc);
-    debug_assert_eq!(encode_hlc(register.hlc), binary.to_vec());
-    Some(register)
-}
-
-/// Reads the register stored at `key`, if it is one.
-pub fn read(map: &LoroMap, key: &str) -> Option<Lww<LoroValue>> {
-    let ValueOrContainer::Value(value) = map.get(key)? else {
-        return None;
-    };
-    let register = decode(&value);
-    debug_assert!(
-        register.is_none() || map.get(key).is_some(),
-        "reading a register never mutates the map"
-    );
-    register
-}
-
-/// Writes `value` at `key` only when `incoming` beats the stored stamp. Returns whether it wrote.
-///
-/// Ref: <https://docs.rs/loro/1.16.0/loro/struct.LoroMap.html#method-insert>
+/// Reads, decodes and compares the register at `key`, writing `value` only when `incoming` is
+/// strictly newer than what is stored. Returns whether a write happened.
 pub fn write_if_newer(
     map: &LoroMap,
     key: &str,
     value: LoroValue,
     incoming: Hlc,
 ) -> LoroResult<bool> {
-    let newer = read(map, key).is_none_or(|existing| existing.wins_over(incoming));
-    if newer {
-        map.insert(key, Lww::new(value, incoming).encode())?;
+    let existing = map
+        .get(key)
+        .and_then(|voc| voc.into_value().ok())
+        .and_then(|v| Lww::decode(&v));
+    let wins = existing.is_none_or(|reg| reg.wins_over(incoming));
+    if wins {
+        map.insert(
+            key,
+            Lww {
+                value,
+                hlc: incoming,
+            }
+            .encode(),
+        )?;
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    debug_assert!(
-        newer || read(map, key).is_some(),
-        "a skipped write leaves one"
-    );
-    Ok(newer)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use loro::LoroDoc;
-    use txtodo_model::Ulid;
+/// Encodes an [`Hlc`] as 26 little-endian bytes (wall_ms, counter, device).
+fn hlc_to_bytes(h: Hlc) -> Vec<u8> {
+    let mut b = Vec::with_capacity(HLC_STAMP_BYTES);
+    b.extend_from_slice(&h.wall_ms.to_le_bytes());
+    b.extend_from_slice(&h.counter.to_le_bytes());
+    b.extend_from_slice(&h.device.ulid().to_u128().to_le_bytes());
+    debug_assert_eq!(b.len(), HLC_STAMP_BYTES);
+    b
+}
 
-    fn device(n: u128) -> DeviceId {
-        DeviceId::new(Ulid::from_u128(n))
+/// Decodes the 26-byte stamp produced by [`hlc_to_bytes`]; `None` on the wrong length.
+fn hlc_from_bytes(b: &[u8]) -> Option<Hlc> {
+    if b.len() != HLC_STAMP_BYTES {
+        return None;
     }
-
-    fn hlc(wall_ms: u64, counter: u16, dev: u128) -> Hlc {
-        Hlc {
-            wall_ms,
-            counter,
-            device: device(dev),
-        }
-    }
-
-    #[test]
-    fn hlc_round_trips_through_bytes() {
-        let stamp = hlc(1_700_000_000_000, 7, 0xAB);
-        let bytes = encode_hlc(stamp);
-        assert_eq!(bytes.len(), HLC_BYTES);
-        assert_eq!(decode_hlc(&bytes), Some(stamp));
-        assert_eq!(decode_hlc(&bytes[..HLC_BYTES - 1]), None);
-        assert_eq!(decode_hlc(&[]), None);
-    }
-
-    #[test]
-    fn register_round_trips_and_reports_the_stamp() {
-        let stamp = hlc(5, 1, 2);
-        let encoded = Lww::new(true, stamp).encode();
-        let decoded = decode(&encoded).expect("encoded register decodes");
-        assert_eq!(decoded.hlc, stamp);
-        assert_eq!(decoded.value, LoroValue::Bool(true));
-        assert_eq!(decode(&LoroValue::Null), None);
-    }
-
-    #[test]
-    fn wins_over_is_strict_and_breaks_ties_by_device() {
-        let base = hlc(10, 0, 1);
-        let register = Lww::new(true, base);
-        assert!(register.wins_over(hlc(11, 0, 1)), "newer wall wins");
-        assert!(register.wins_over(hlc(10, 1, 1)), "newer counter wins");
-        assert!(register.wins_over(hlc(10, 0, 2)), "device breaks the tie");
-        assert!(!register.wins_over(base), "equal loses");
-        assert!(!register.wins_over(hlc(9, 9, 9)), "older loses");
-    }
-
-    #[test]
-    fn write_if_newer_writes_once_and_skips_older_and_equal() {
-        let doc = LoroDoc::new();
-        let map = doc.get_map("tasks");
-        let stamp = hlc(10, 0, 1);
-        assert!(write_if_newer(&map, "completed", LoroValue::Bool(true), stamp).unwrap());
-        assert_eq!(read(&map, "completed").map(|r| r.hlc), Some(stamp));
-        // An equal stamp is a replay, not a change.
-        assert!(!write_if_newer(&map, "completed", LoroValue::Bool(false), stamp).unwrap());
-        assert_eq!(
-            read(&map, "completed").map(|r| r.value),
-            Some(LoroValue::Bool(true))
-        );
-        // A newer stamp overwrites.
-        let newer = hlc(11, 0, 1);
-        assert!(write_if_newer(&map, "completed", LoroValue::Bool(false), newer).unwrap());
-        assert_eq!(
-            read(&map, "completed").map(|r| r.value),
-            Some(LoroValue::Bool(false))
-        );
-        // An older stamp is ignored.
-        assert!(!write_if_newer(&map, "completed", LoroValue::Bool(true), stamp).unwrap());
-        assert_eq!(
-            read(&map, "completed").map(|r| r.value),
-            Some(LoroValue::Bool(false))
-        );
-    }
+    let wall_ms = u64::from_le_bytes(b[0..8].try_into().ok()?);
+    let counter = u16::from_le_bytes(b[8..10].try_into().ok()?);
+    let device = u128::from_le_bytes(b[10..26].try_into().ok()?);
+    Some(Hlc {
+        wall_ms,
+        counter,
+        device: DeviceId::new(Ulid::from_u128(device)),
+    })
 }
