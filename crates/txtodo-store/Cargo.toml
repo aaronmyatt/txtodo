@@ -13,6 +13,9 @@ txtodo-model.workspace = true
 rusqlite = { version = "0.40", features = ["bundled"] }
 # https://docs.rs/postcard — op payload codec, shared with txtodo-model
 postcard = { version = "1", features = ["alloc"] }
+# https://docs.rs/blake3 — hashes a token's bearer secret (plan M6, design §6.2); the plaintext
+# itself is never stored, matching the daemon's existing blake3 use for projection hashes
+blake3 = "1"
 
 [dev-dependencies]
 # https://docs.rs/tempfile — WAL needs a real file, so every test gets its own dir
