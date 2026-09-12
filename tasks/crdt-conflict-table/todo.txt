@@ -1,16 +1,16 @@
-2026-09-12 Ask the human to unfreeze specs/ before starting; specs/** is a frozen path and this task creates a file there +m4 @crdt @human
-2026-09-12 Decide whether delete-vs-edit and delete-vs-complete stay configurable or the words leave the spec +m4 @crdt @human
-2026-09-12 Write specs/conflicts.md with the 11 design section 4.7 rows, each row numbered and named +m4 @specs
-2026-09-12 Mark the id-stripping row M10 with the tagged-mode behaviour stated as the M4 expectation +m4 @specs
-2026-09-12 Extend check-specs-mirror.sh with a second comparison for conflicts.md against design section 4.7 +m4 @specs
+x 2026-09-12 2026-09-12 Ask the human to unfreeze specs/ before starting; specs/** is a frozen path and this task creates a file there +m4 @crdt @human
+x 2026-09-12 2026-09-12 Decide whether delete-vs-edit and delete-vs-complete stay configurable or the words leave the spec +m4 @crdt @human
+x 2026-09-12 2026-09-12 Write specs/conflicts.md with the 11 design section 4.7 rows, each row numbered and named +m4 @specs
+x 2026-09-12 2026-09-12 Mark the id-stripping row M10 with the tagged-mode behaviour stated as the M4 expectation +m4 @specs
+x 2026-09-12 2026-09-12 Extend check-specs-mirror.sh with a second comparison for conflicts.md against design section 4.7 +m4 @specs
 2026-09-12 tests/conflicts.rs parses specs/conflicts.md and asserts row coverage both ways: no row without a test, no test without a row +m4 @crdt @test
 2026-09-12 Reuse the simulator's in-process Link rather than building a second two-device harness +m4 @crdt @test
-2026-09-12 Assert converged bytes on both devices for every row, never just one +m4 @crdt @test
-2026-09-12 Row: complete vs complete is idempotent, one op survives and there is no duplicate x +m4 @crdt @test
-2026-09-12 Row: complete vs edit description keeps both; edit word 1 vs word 5 keeps both with no flag +m4 @crdt @test
-2026-09-12 Row: edit word 3 vs word 3 char-merges and raises needs_review +m4 @crdt @test
-2026-09-12 Row: priority A vs B is LWW by Hlc and the losing op is still visible in txtodo log, asserted on the log +m4 @crdt @test
+x 2026-09-12 2026-09-12 Assert converged bytes on both devices for every row, never just one +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: complete vs complete is idempotent, one op survives and there is no duplicate x +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: complete vs edit description keeps both; edit word 1 vs word 5 keeps both with no flag +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: edit word 3 vs word 3 char-merges and raises needs_review +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: priority A vs B is LWW by Hlc and the losing op is still visible in txtodo log, asserted on the log +m4 @crdt @test
 2026-09-12 Rows: delete vs edit resurrects, delete vs complete completes, both settings tested if configurable +m4 @crdt @test
-2026-09-12 Row: move up vs move down applies both in the same order on every device +m4 @crdt @test
-2026-09-12 Row: archive to done.txt vs edit lands the edit in done.txt +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: move up vs move down applies both in the same order on every device +m4 @crdt @test
+x 2026-09-12 2026-09-12 Row: archive to done.txt vs edit lands the edit in done.txt +m4 @crdt @test
 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @test
