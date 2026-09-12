@@ -5,6 +5,8 @@
 
 mod frame;
 mod message;
+mod session;
+mod session_error;
 mod want;
 
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
@@ -12,6 +14,8 @@ pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
     OriginRange,
 };
+pub use session::{Greeting, Session, SessionState};
+pub use session_error::SessionError;
 pub use want::{Gap, advance, want};
 
 #[cfg(test)]
