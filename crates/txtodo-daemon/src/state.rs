@@ -211,14 +211,7 @@ impl DocState {
     /// Test seam: applies a bare `OpKind` under a zero stamp. Tests pin bytes, not clocks.
     #[cfg(test)]
     pub(crate) fn apply_kind(&mut self, kind: &OpKind) -> Result<(), StateError> {
-        let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
-        self.apply(&Op {
-            id: txtodo_model::OpId::new(Ulid::from_u128(0)),
-            hlc: txtodo_model::Hlc::zero(zero),
-            principal: txtodo_model::Principal::External { device: zero },
-            file: self.path.clone(),
-            kind: kind.clone(),
-        })
+        self.apply(&hydration_op(&self.path.clone(), kind.clone()))
     }
 
     fn position_after(&self, after: Option<TaskId>) -> Result<usize, StateError> {
@@ -317,6 +310,23 @@ fn entry_of(index: usize, line: &OwnedLine) -> Result<Entry, StateError> {
             })
         }
     }
+}
+
+/// A synthetic op under a zero stamp (device 0, HLC 0): for the mirror's hydration and for tests,
+/// so any real op's field write wins over it. Never stored, never sent.
+#[cfg(test)]
+pub(crate) fn hydration_op(path: &FilePath, kind: OpKind) -> Op {
+    let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
+    let op = Op {
+        id: txtodo_model::OpId::new(Ulid::from_u128(0)),
+        hlc: txtodo_model::Hlc::zero(zero),
+        principal: txtodo_model::Principal::External { device: zero },
+        file: path.clone(),
+        kind,
+    };
+    debug_assert_eq!(op.hlc.wall_ms, 0);
+    debug_assert_eq!(&op.file, path);
+    op
 }
 
 /// A `TaskId` from a parsed line, when it has one.

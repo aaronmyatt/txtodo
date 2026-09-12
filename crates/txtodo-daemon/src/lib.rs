@@ -12,6 +12,7 @@ pub mod fastid;
 mod fields;
 pub mod handle;
 pub mod history;
+pub mod mirror;
 pub mod mutation;
 pub mod pidfile;
 pub mod reconcile;
