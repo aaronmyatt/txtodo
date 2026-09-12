@@ -77,3 +77,11 @@ asserted at both encode and decode. State machine as an explicit enum
 - A v1 decoder reading a v2 frame yields `UnknownVersion { got, supported }`, not garbage.
 - Property: for any two head maps, the `Want` derived from them requests exactly the ops one side
   holds and the other does not — no more, no fewer.
+
+## Reading taken (2026-09-12, agent, pending human confirmation)
+
+Built under **A — per-device `origin_seq`**: `heads: BTreeMap<DeviceId, u64>` and `Want` as
+`(DeviceId, RangeInclusive<u64>)` ranges. The sync crate lands first (frame, message, want,
+session — pure, no store); the `0003.sql` migration and the three `Store` methods are the @store
+half and follow as their own commits. If the human picks **B — HLC watermark**, `Heads` changes
+type and `want.rs` loses range holes; `frame.rs` and `session.rs` are unaffected.

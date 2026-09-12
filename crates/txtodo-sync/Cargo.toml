@@ -10,6 +10,14 @@ description = "Sync protocol, transports, pairing, crypto."
 [dependencies]
 txtodo-model.workspace = true
 txtodo-store.workspace = true
+# https://serde.rs — derives on every wire message; the same derives txtodo-model already carries
+serde = { version = "1", features = ["derive"] }
+# https://docs.rs/postcard — the one payload codec (model, store BLOB, and now the wire)
+postcard = { version = "1", features = ["alloc"] }
+
+[dev-dependencies]
+# https://docs.rs/proptest — want(local, remote) requests exactly the missing ops
+proptest = "1"
 
 [lints]
 workspace = true
