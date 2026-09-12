@@ -161,3 +161,31 @@ fn field_only_changes_and_empty_imports_never_flag() {
     assert!(b.export_updates_since(b"garbage").is_err());
     assert_eq!(detect(&a, &nothing).unwrap(), crate::Review::default());
 }
+
+/// A host settling a description (the daemon's `Mirror`) must not restart the text's identity:
+/// if it does, a peer's concurrent edit merges against characters that no longer exist and its
+/// text is appended after the `id:` tag, which does not even parse as the same task.
+#[test]
+fn settling_a_description_keeps_character_identity_for_a_concurrent_peer() {
+    let (mut a, mut b) = paired();
+    let tag = format!(" id:{}", Ulid::from_u128(0x77));
+    b.set_description(task(), &format!("buy cows +farm{tag}"))
+        .unwrap();
+    apply(&mut a, &replace(1, 10, DESC, "ducks", "geese")).unwrap();
+    let imported = sync(&b, &mut a);
+    assert!(imported.applied);
+    let merged = a.description(task()).unwrap();
+    assert!(
+        merged.ends_with(&tag),
+        "the id tag is still the tail, so the line still parses: {merged}"
+    );
+    // Character identity is preserved, so the peer's edit merges in place and the pair is
+    // flagged for review. The merged text may interleave a shared character (here the `s` in
+    // "ducks"/"cows") — that garble is exactly what the flag exists for; demanding both whole
+    // words survive would need a word-level diff, which the CRDT cannot do.
+    assert!(merged.contains("gee"), "{merged}");
+    let review = detect(&a, &imported).unwrap();
+    assert_eq!(review.flags.len(), 1, "{review:?}");
+    assert!(review.flags[0].mine.contains("gee"), "{review:?}");
+    assert!(review.flags[0].theirs.contains("cow"), "{review:?}");
+}
