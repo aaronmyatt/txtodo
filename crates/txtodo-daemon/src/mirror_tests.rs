@@ -32,7 +32,7 @@ fn step(state: &mut DocState, mirror: &mut Mirror, kind: OpKind) -> Result<(), M
 #[test]
 fn from_state_holds_every_line_in_order_with_blanks_as_sentinels() {
     let state = doc();
-    let mirror = Mirror::from_state(&state).unwrap();
+    let mirror = Mirror::from_state(&state, 1).unwrap();
     assert!(mirror.agrees_with(&state));
     let ids = mirror.doc().list_ids(state.path());
     assert_eq!(ids.len(), 3);
@@ -46,7 +46,7 @@ fn from_state_holds_every_line_in_order_with_blanks_as_sentinels() {
 #[test]
 fn flush_follows_complete_edit_delete_and_blank_ops() {
     let mut state = doc();
-    let mut mirror = Mirror::from_state(&state).unwrap();
+    let mut mirror = Mirror::from_state(&state, 1).unwrap();
     let a = task_id(ulid_bits(A));
     // complete moves (A) to a trailing ` pri:A` — a description change outside any EditText.
     step(
@@ -100,7 +100,7 @@ fn flush_follows_complete_edit_delete_and_blank_ops() {
 #[test]
 fn a_refused_op_is_reported_and_a_rebuild_heals_the_mirror() {
     let mut state = doc();
-    let mut mirror = Mirror::from_state(&state).unwrap();
+    let mut mirror = Mirror::from_state(&state, 1).unwrap();
     // Feed the mirror an op the state never saw: a move of a task it does not hold.
     let stray = hydration_op(
         state.path(),
@@ -128,6 +128,67 @@ fn a_refused_op_is_reported_and_a_rebuild_heals_the_mirror() {
         ))
         .unwrap();
     assert!(!mirror.agrees_with(&state), "out of step until rebuilt");
-    mirror = Mirror::from_state(&state).unwrap();
+    mirror = Mirror::from_state(&state, 1).unwrap();
     assert!(mirror.agrees_with(&state));
+}
+
+fn hlc0() -> txtodo_model::Hlc {
+    txtodo_model::Hlc::zero(txtodo_model::DeviceId::new(txtodo_model::Ulid::from_u128(
+        0,
+    )))
+}
+
+#[test]
+fn converge_places_a_line_after_a_blank_where_the_reconciler_could_not() {
+    // Mirror: A, blank, B. Adopted state: A, blank, N, B — N sits after the blank.
+    let mut mirror = Mirror::from_state(&doc(), 1).unwrap();
+    let n = "01ARZ3NDEKTSV4RRFFQ69G5FAN";
+    let adopted = DocState::from_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\nnew one id:{n}\nwalk the dog @home id:{B}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    assert!(!mirror.agrees_with(&adopted));
+    let ops = mirror.converge_to(&adopted, hlc0()).unwrap();
+    assert_eq!(ops, 1, "one insert, anchored to the blank sentinel");
+    assert!(mirror.agrees_with(&adopted));
+}
+
+#[test]
+fn converge_reorders_deletes_and_trims_blanks_keeping_the_lineage() {
+    let mut mirror = Mirror::from_state(&doc(), 1).unwrap();
+    let before = mirror.version();
+    // Adopted: B first, A last, no blank at all.
+    let adopted = DocState::from_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("walk the dog @home id:{B}\n(A) 2026-09-11 buy ducks +farm id:{A}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    let ops = mirror.converge_to(&adopted, hlc0()).unwrap();
+    assert!(ops >= 2, "a move and a blank removal at least: {ops}");
+    assert!(mirror.agrees_with(&adopted));
+    // Then a state that drops A entirely and adds a trailing blank.
+    let smaller = DocState::from_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(format!("walk the dog @home id:{B}\n\n").as_bytes()),
+    )
+    .unwrap();
+    mirror.converge_to(&smaller, hlc0()).unwrap();
+    assert!(mirror.agrees_with(&smaller));
+    assert_ne!(
+        mirror.version(),
+        before,
+        "the same lineage moved forward, not a new one"
+    );
+    assert_eq!(
+        mirror.converge_to(&smaller, hlc0()).unwrap(),
+        0,
+        "already there"
+    );
 }
