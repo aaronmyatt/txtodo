@@ -1,16 +1,16 @@
-2026-09-12 Vendor the EFF short wordlist with a test asserting 1296 entries, no duplicates and a file hash +m4 @sync
-2026-09-12 transcript.rs: protocol_version || device_a || pub_a || device_b || pub_b || group_id, ordered deterministically +m4 @sync
-2026-09-12 sas.rs: HKDF-SHA256 over the x25519 secret salted with the transcript, info txtodo-sas-v1, documented bit-slicing to 6 words +m4 @sync
-2026-09-12 Derive the key-wrap key with a separate info string txtodo-pair-v1; never reuse one derived key for two purposes +m4 @sync @security
-2026-09-12 offer.rs: QR and base32 payload with device, group_id, public key, endpoint and a one-time nonce; no secrets +m4 @sync
-2026-09-12 PAIRING_WINDOW_MS and MAX_CONCURRENT_PAIRINGS consts, asserted; a nonce is consumed on first use, success or failure +m4 @sync
-2026-09-12 Send the group key only after both sides confirm; a one-sided confirm transfers nothing +m4 @sync @security
-2026-09-12 Close the pairing window after a failed SAS confirmation instead of allowing retries +m4 @sync @security
+x 2026-09-12 2026-09-12 Vendor the EFF short wordlist with a test asserting 1296 entries, no duplicates and a file hash +m4 @sync
+x 2026-09-12 2026-09-12 transcript.rs: protocol_version || device_a || pub_a || device_b || pub_b || group_id, ordered deterministically +m4 @sync
+x 2026-09-12 2026-09-12 sas.rs: HKDF-SHA256 over the x25519 secret salted with the transcript, info txtodo-sas-v1, documented bit-slicing to 6 words +m4 @sync
+x 2026-09-12 2026-09-12 Derive the key-wrap key with a separate info string txtodo-pair-v1; never reuse one derived key for two purposes +m4 @sync @security
+x 2026-09-12 2026-09-12 offer.rs: QR and base32 payload with device, group_id, public key, endpoint and a one-time nonce; no secrets +m4 @sync
+x 2026-09-12 2026-09-12 PAIRING_WINDOW_MS and MAX_CONCURRENT_PAIRINGS consts, asserted; a nonce is consumed on first use, success or failure +m4 @sync
+x 2026-09-12 2026-09-12 Send the group key only after both sides confirm; a one-sided confirm transfers nothing +m4 @sync @security
+x 2026-09-12 2026-09-12 Close the pairing window after a failed SAS confirmation instead of allowing retries +m4 @sync @security
 2026-09-12 Snapshot then op tail to the new device, streamed and bounded, every op signature-verified like a normal batch +m4 @sync
 2026-09-12 CLI txtodo pair shows the QR and the six words; txtodo pair <code> takes the base32 payload +m4 @cli
 2026-09-12 CLI confirmation prompt is explicit yes on both devices and never defaults to yes +m4 @cli @security
-2026-09-12 MITM test: a relay running two handshakes produces two different SAS strings +m4 @sync @test @security
-2026-09-12 Tests: identical transcripts give identical words; any single-bit transcript change changes them +m4 @sync @test
-2026-09-12 Tests: expired nonce, reused nonce and one-sided confirmation each fail distinctly and transfer no key +m4 @sync @test
-2026-09-12 Test: the decoded QR payload contains no key material, asserted field by field +m4 @sync @test @security
+x 2026-09-12 2026-09-12 MITM test: a relay running two handshakes produces two different SAS strings +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Tests: identical transcripts give identical words; any single-bit transcript change changes them +m4 @sync @test
+x 2026-09-12 2026-09-12 Tests: expired nonce, reused nonce and one-sided confirmation each fail distinctly and transfer no key +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: the decoded QR payload contains no key material, asserted field by field +m4 @sync @test @security
 2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @cli

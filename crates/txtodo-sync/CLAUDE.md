@@ -24,7 +24,20 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `ARGON2_MEMORY_KIB`/`ARGON2_ITERATIONS`/`ARGON2_PARALLELISM`), `OsKeyStore` (`keyring` crate,
   `probe` for reachability). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
   KeyStore>)` implements `key_store = "auto" | "os" | "file"`; `KeyStoreMode`, `ResolvedBackend::name`.
-- Not here yet: transports, `pair` (later M4/M8 tasks).
+- Pairing (M4 `sync-pairing`), transport-agnostic — no networking, just the crypto/state machine:
+  `wordlist()` (the vendored EFF short list, `WORDLIST_LEN` = 1296, `WORDLIST_SHA256`);
+  `transcript(protocol_version, Party, Party, GroupId) -> [u8; TRANSCRIPT_BYTES]` (`Party { device,
+  public_key }`, canonically ordered by `DeviceId` so either side's own/peer view agrees);
+  `sas_words`/`pair_key(shared_secret, transcript)` (HKDF-SHA256, `SAS_INFO`/`PAIR_KEY_INFO` distinct);
+  `PairingOffer` (device, group, ephemeral X25519 public key, endpoint hint, nonce, `issued_at_ms` —
+  no secrets) with `to_qr_bytes`/`from_qr_bytes`/`to_code`/`from_code` (base32); `NonceRegistry`
+  (`issue`+`consume` for the initiator's own offer, `witness` for the joiner's replay/window check
+  against the offer's own `issued_at_ms`), `PAIRING_WINDOW_MS`, `MAX_CONCURRENT_PAIRINGS` (= 1);
+  `PairingSession::{offer, accept, complete, sas_words, confirm_local, confirm_remote, reject,
+  is_ready_to_send_key, wrap_group_key, unwrap_group_key, peer_device}`, `MAX_FAILED_SAS_CONFIRMATIONS`,
+  `PairingError`.
+- Not here yet: transports, the `devices` table / static-key persistence, snapshot-then-ops transfer
+  to a newly paired device, and the `txtodo pair` CLI/daemon wiring (separate M4 subtasks/slices).
 
 ## Invariants
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
@@ -49,4 +62,13 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - `FileKeyStore` never `Debug`s or logs its derived key; a permissive file (group/world-readable) is
   refused, never `chmod`'d back. `create` refuses to replace an existing file (checked, then closed
   against the TOCTOU race with `hard_link` rather than `rename`, which would silently replace).
+- The pairing SAS commits to both devices' identities and ephemeral keys via `transcript`: an active
+  MITM running two independent handshakes gets two different transcripts and thus two different SAS
+  (`pairing_tests::mitm_relay_running_two_handshakes_produces_two_different_sas`). `SAS_INFO` and
+  `PAIR_KEY_INFO` are distinct `HKDF-Expand` labels from the same extract step — never the same
+  derived bytes for two purposes. The group key moves only once both `confirm_local` and
+  `confirm_remote` are true and the window is not `closed`; a one-sided confirmation transfers
+  nothing. A nonce is single-use whether the attempt succeeds or fails: the initiator tracks its own
+  offer with `issue`/`consume`; the joiner, which never issued it, uses `witness` against the
+  offer's own `issued_at_ms` instead.
 - May depend only on: txtodo-model, txtodo-store.

@@ -6,6 +6,7 @@
 
 mod aead;
 mod crypto_error;
+mod eff_wordlist;
 mod frame;
 mod keystore;
 mod keystore_error;
@@ -14,9 +15,15 @@ mod keystore_memory;
 mod keystore_os;
 mod keystore_resolve;
 mod message;
+mod nonce_registry;
+mod offer;
+mod pairing;
+mod pairing_error;
+mod sas;
 mod session;
 mod session_error;
 mod sign;
+mod transcript;
 mod want;
 
 pub use aead::{
@@ -24,6 +31,7 @@ pub use aead::{
     SEALED_HEADER_BYTES, TAG_BYTES, open, seal,
 };
 pub use crypto_error::CryptoError;
+pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
 pub use keystore_error::KeyStoreError;
@@ -35,18 +43,30 @@ pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
     OriginRange,
 };
+pub use nonce_registry::{
+    MAX_CONCURRENT_PAIRINGS, Nonce, NonceError, NonceRegistry, PAIRING_WINDOW_MS,
+};
+pub use offer::{OfferError, PairingOffer, from_code, from_qr_bytes, to_code, to_qr_bytes};
+pub use pairing::{MAX_FAILED_SAS_CONFIRMATIONS, PairingSession};
+pub use pairing_error::PairingError;
+pub use sas::{
+    PAIR_KEY_BYTES, PAIR_KEY_INFO, SAS_INFO, SAS_WORD_COUNT, SasError, pair_key, sas_words,
+};
 pub use session::{Greeting, Session, SessionState};
 pub use session_error::SessionError;
 pub use sign::{
     DevicePublicKey, DeviceSigningKey, PUBLIC_KEY_BYTES, SIGNATURE_BYTES, SIGNING_KEY_BYTES,
     Signature, sign, verify, verify_batch,
 };
+pub use transcript::{TRANSCRIPT_BYTES, X25519_PUBLIC_KEY_BYTES, transcript};
 pub use want::{Gap, advance, want};
 
 #[cfg(test)]
 mod aead_tests;
 #[cfg(test)]
 mod crypto_error_tests;
+#[cfg(test)]
+mod eff_wordlist_tests;
 #[cfg(test)]
 mod frame_tests;
 #[cfg(test)]
@@ -60,8 +80,18 @@ mod keystore_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]
+mod nonce_registry_tests;
+#[cfg(test)]
+mod offer_tests;
+#[cfg(test)]
+mod pairing_tests;
+#[cfg(test)]
+mod sas_tests;
+#[cfg(test)]
 mod session_tests;
 #[cfg(test)]
 mod sign_tests;
+#[cfg(test)]
+mod transcript_tests;
 #[cfg(test)]
 mod want_tests;
