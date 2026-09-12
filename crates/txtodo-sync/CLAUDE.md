@@ -17,7 +17,14 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `DeviceSigningKey`/`DevicePublicKey`/`Signature` with `from_bytes`/`to_bytes`.
 - `seal(version, group, epoch, &GroupKey, plaintext)` / `open(version, group, &GroupKeys, sealed)`,
   `GroupKey`, `GroupKeys`, `CryptoError`, `MAX_RETAINED_KEY_EPOCHS`, header/AAD/nonce/tag byte consts.
-- Not here yet: transports, `pair`, keystore I/O (later M4/M8 tasks).
+- Keystore (M4 `sync-keystore`): `KeyStore` trait (`get`/`put`/`delete`), `KeyId`
+  (`DeviceSigning`/`DeviceStatic`/`Group(epoch)`), `Secret` (redacted `Debug`, zeroized on drop),
+  `KeyStoreError`, `MAX_STORED_EPOCHS`. Backends: `MemoryKeyStore` (tests only), `FileKeyStore`
+  (`create`/`open`, Argon2id + XChaCha20-Poly1305, params in the file header,
+  `ARGON2_MEMORY_KIB`/`ARGON2_ITERATIONS`/`ARGON2_PARALLELISM`), `OsKeyStore` (`keyring` crate,
+  `probe` for reachability). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
+  KeyStore>)` implements `key_store = "auto" | "os" | "file"`; `KeyStoreMode`, `ResolvedBackend::name`.
+- Not here yet: transports, `pair` (later M4/M8 tasks).
 
 ## Invariants
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
@@ -35,4 +42,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   paths; a hostile length is refused before allocation.
 - `Ack` carries committed runs, never received ones; `advance` refuses a run that leaves a hole.
 - Transport- and store-agnostic: no sockets, no SQLite; the caller moves frames and commits ops.
+- `key_store = "auto"` never writes a key file on its own: an unreachable OS backend under `auto` is
+  `KeyStoreError::AutoNeedsChoice`, not a silent fallback to `FileKeyStore`. No test in this crate
+  calls the real `keyring` backend (would pop a Keychain dialog in CI); `resolve`'s OS-availability
+  check is always injected, and `OsKeyStore` itself is exercised only by inspection, not by a test.
+- `FileKeyStore` never `Debug`s or logs its derived key; a permissive file (group/world-readable) is
+  refused, never `chmod`'d back. `create` refuses to replace an existing file (checked, then closed
+  against the TOCTOU race with `hard_link` rather than `rename`, which would silently replace).
 - May depend only on: txtodo-model, txtodo-store.

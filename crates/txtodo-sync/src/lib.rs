@@ -7,6 +7,12 @@
 mod aead;
 mod crypto_error;
 mod frame;
+mod keystore;
+mod keystore_error;
+mod keystore_file;
+mod keystore_memory;
+mod keystore_os;
+mod keystore_resolve;
 mod message;
 mod session;
 mod session_error;
@@ -19,6 +25,12 @@ pub use aead::{
 };
 pub use crypto_error::CryptoError;
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
+pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
+pub use keystore_error::KeyStoreError;
+pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM, FileKeyStore};
+pub use keystore_memory::MemoryKeyStore;
+pub use keystore_os::OsKeyStore;
+pub use keystore_resolve::{KeyStoreMode, ResolvedBackend, resolve};
 pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
     OriginRange,
@@ -37,6 +49,14 @@ mod aead_tests;
 mod crypto_error_tests;
 #[cfg(test)]
 mod frame_tests;
+#[cfg(test)]
+mod keystore_file_tests;
+#[cfg(test)]
+mod keystore_memory_tests;
+#[cfg(test)]
+mod keystore_resolve_tests;
+#[cfg(test)]
+mod keystore_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]

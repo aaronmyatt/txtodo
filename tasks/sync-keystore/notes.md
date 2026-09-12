@@ -79,3 +79,45 @@ epoch, capped, rather than one ever-growing blob.
 - `Secret`'s `Debug` output contains no key bytes (cheap, and it catches the derive being added
   back).
 - Round-trip through the in-memory store for every `KeyId` variant, exhaustively.
+
+## As built (2026-09-12, agent) — the `txtodo-sync` half only
+
+- `crates/txtodo-sync/src/keystore.rs`: `KeyId` (`DeviceSigning`/`DeviceStatic`/`Group(u32)`, `Ord`
+  so a `BTreeMap<KeyId, _>` never touches a hash-ordered collection), `Secret` (owns the bytes,
+  zeroized on `Drop`, hand-written `Debug` prints `Secret(<redacted>)`), the `KeyStore` trait
+  (`get`/`put`/`delete`), `MAX_STORED_EPOCHS` — a re-export of
+  [`sync-crypto-envelope`](../sync-crypto-envelope/notes.md)'s `MAX_RETAINED_KEY_EPOCHS`, not a
+  second constant.
+- `crates/txtodo-sync/src/keystore_memory.rs`: `MemoryKeyStore`, a `Mutex<BTreeMap>` for tests.
+- `crates/txtodo-sync/src/keystore_file.rs`: `FileKeyStore`. Layout `magic || version ||
+  memory_kib || iterations || parallelism || salt(16) || nonce(24) || ciphertext`; everything up to
+  the nonce is both the clear header and the AEAD associated data. Argon2id params travel in the
+  header, read back on `open`, so raising `ARGON2_MEMORY_KIB`/`ITERATIONS`/`PARALLELISM` never
+  strands an old file (tested). Permission check runs before every read, refusing (not repairing) a
+  group/world-readable file. `create` refuses to replace an existing file — checked, then closed
+  against the TOCTOU race with `hard_link` (fails atomically if the target exists) rather than
+  `rename` (which would silently replace it); `put`/`delete` still use temp-file-then-`rename` since
+  those are legitimate replacements. Both paths write the temp file at mode `0600` directly, never
+  `chmod`'d after.
+- `crates/txtodo-sync/src/keystore_os.rs`: `OsKeyStore` over the `keyring` crate, one entry per
+  `(scope, KeyId)` so two groups on one machine cannot collide. `probe` round-trips a throwaway entry
+  to test reachability without assuming any real key exists yet.
+- `crates/txtodo-sync/src/keystore_resolve.rs`: `resolve(mode, probe_os, make_os, make_file)`. The
+  one rule that matters: `KeyStoreMode::Auto` with the OS probe failing returns
+  `KeyStoreError::AutoNeedsChoice` and never calls `make_file` — no file is written on `auto`'s own
+  initiative. `probe_os` is always an injected closure, in production `|| OsKeyStore::probe(scope)`;
+  no test in this crate touches the real `keyring` backend (would pop a Keychain dialog in CI).
+- `cargo deny check` run 2026-09-12: `advisories ok, bans ok, licenses ok, sources ok`. `keyring`
+  3.6.3 (MIT/Apache-2.0), `argon2` 0.5.3 (MIT/Apache-2.0), `zeroize` 1.9.0 (MIT/Apache-2.0).
+- Judgement calls, flagged for the human:
+  - `KeyId` needed `Serialize`/`Deserialize` (the file backend's on-disk map is a
+    `BTreeMap<KeyId, Vec<u8>>`, postcard-encoded) — added the derives rather than hand-rolling a
+    second encoding. `Secret` itself stays non-`Serialize`; the file backend copies
+    `secret.expose()` into a plain `Vec<u8>` for the map instead.
+  - `OsKeyStore` and its `keyring`-backed `probe` have no dedicated unit test, per the task's own
+    "no test ever touches the real Keychain" rule — the `auto`/`os`/`file` decision logic they feed
+    is exercised in full via injected fakes in `keystore_resolve_tests.rs`.
+- Not in this slice (the three `@cli` subtasks below, and the parent line): `config.toml`'s
+  `key_store` field, prompting the passphrase without echo, and `txtodo doctor` printing the active
+  backend by name (`ResolvedBackend::name()` is ready for it). These are `txtodo-cli` changes and
+  land as their own commit under this repo's one-slice-per-session rule.

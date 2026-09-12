@@ -1,16 +1,16 @@
-2026-09-12 KeyId enum DeviceSigning DeviceStatic Group(epoch) and trait KeyStore get put delete, no string keys +m4 @sync
-2026-09-12 Secret type with zeroize on drop and a manual Debug printing Secret(<redacted>), never a derive +m4 @sync @security
-2026-09-12 os.rs: keyring backend, one entry per KeyId; unavailable is a typed error naming the backend and the reason +m4 @sync
-2026-09-12 file.rs: Argon2id header with ARGON2_MEMORY_KIB ITERATIONS PARALLELISM stored per file, sealed with XChaCha20-Poly1305 +m4 @sync
-2026-09-12 Create the key file 0600 at creation, and refuse to open a group- or world-readable file rather than repairing it +m4 @sync @security
+x 2026-09-12 2026-09-12 KeyId enum DeviceSigning DeviceStatic Group(epoch) and trait KeyStore get put delete, no string keys +m4 @sync
+x 2026-09-12 2026-09-12 Secret type with zeroize on drop and a manual Debug printing Secret(<redacted>), never a derive +m4 @sync @security
+x 2026-09-12 2026-09-12 os.rs: keyring backend, one entry per KeyId; unavailable is a typed error naming the backend and the reason +m4 @sync
+x 2026-09-12 2026-09-12 file.rs: Argon2id header with ARGON2_MEMORY_KIB ITERATIONS PARALLELISM stored per file, sealed with XChaCha20-Poly1305 +m4 @sync
+x 2026-09-12 2026-09-12 Create the key file 0600 at creation, and refuse to open a group- or world-readable file rather than repairing it +m4 @sync @security
 2026-09-12 config key_store = auto | os | file; auto never writes a key file on its own, it stops and says what to do +m4 @cli @security
 2026-09-12 Prompt the passphrase without echo and zeroize it; never a key in an argv, an env var or an error message +m4 @cli @security
-2026-09-12 MAX_STORED_EPOCHS defined once and imported by the crypto task, not duplicated as a second number +m4 @sync
+x 2026-09-12 2026-09-12 MAX_STORED_EPOCHS defined once and imported by the crypto task, not duplicated as a second number +m4 @sync
 2026-09-12 txtodo doctor reports the active key backend by name +m4 @cli
-2026-09-12 In-memory KeyStore for tests; no test touches the real Keychain or pops a dialog in CI +m4 @sync @test
-2026-09-12 Test: auto with the OS backend unavailable errors and no key file appears on disk +m4 @sync @test @security
-2026-09-12 Test: a group-readable key file is refused, not repaired +m4 @sync @test @security
-2026-09-12 Test: a file written with low Argon2 parameters still opens after the constants are raised +m4 @sync @test
-2026-09-12 Test: Secret's Debug output contains no key bytes +m4 @sync @test @security
-2026-09-12 Test: round-trip every KeyId variant through the in-memory store, exhaustively +m4 @sync @test
+x 2026-09-12 2026-09-12 In-memory KeyStore for tests; no test touches the real Keychain or pops a dialog in CI +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: auto with the OS backend unavailable errors and no key file appears on disk +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: a group-readable key file is refused, not repaired +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: a file written with low Argon2 parameters still opens after the constants are raised +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: Secret's Debug output contains no key bytes +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: round-trip every KeyId variant through the in-memory store, exhaustively +m4 @sync @test
 2026-09-12 Complete the parent line in ./todo.txt +m4 @sync
