@@ -7,6 +7,11 @@ rust-version.workspace = true
 publish.workspace = true
 description = "uniffi, wasm-bindgen, cbindgen bindings over core and query."
 
+# cdylib: wasm-bindgen/uniffi/cbindgen all need a dynamic library to bind against; rlib keeps it
+# usable as an ordinary Rust dependency too (e.g. from `cargo test -p txtodo-ffi` on the host).
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 txtodo-core.workspace = true
 txtodo-query.workspace = true
