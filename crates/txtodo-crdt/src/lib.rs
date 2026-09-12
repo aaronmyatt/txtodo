@@ -19,6 +19,7 @@ mod roundtrip_tests;
 #[cfg(test)]
 mod view_tests;
 
+pub use doc::sync::Imported;
 pub use doc::{LoroDocument, is_blank, rebuild_line};
 pub use from_loro::{FromLoroError, Stamp, from_batch};
 pub use hydrate::{HydrateLine, hydrate_file};

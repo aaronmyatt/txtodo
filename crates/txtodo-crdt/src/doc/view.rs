@@ -76,6 +76,20 @@ impl LoroDocument {
         Ok(())
     }
 
+    /// A read-only copy of the document as it was at `frontiers` (for "mine"/"theirs" text).
+    /// <https://docs.rs/loro/latest/loro/struct.LoroDoc.html#method.fork_at>
+    pub fn at(&self, frontiers: &loro::Frontiers) -> LoroResult<LoroDocument> {
+        let doc = self.doc.fork_at(frontiers)?;
+        let view = LoroDocument {
+            doc,
+            next_blank: self.next_blank,
+            shadows: std::collections::HashMap::new(),
+        };
+        debug_assert_eq!(view.next_blank, self.next_blank);
+        debug_assert!(view.shadows.is_empty(), "a view rebuilds shadows lazily");
+        Ok(view)
+    }
+
     /// The blank sentinel minted most recently by a `BlankInsert`, if any.
     pub fn last_blank_id(&self) -> Option<TaskId> {
         if self.next_blank == 0 {
