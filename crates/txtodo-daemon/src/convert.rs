@@ -41,6 +41,7 @@ pub(crate) fn status_of(e: ActorError) -> Status {
             Status::resource_exhausted(e.to_string())
         }
         ActorError::RefDir(RefDirError::Io { .. }) => Status::internal(e.to_string()),
+        ActorError::Notes(_) => Status::invalid_argument(e.to_string()),
     }
 }
 
@@ -90,6 +91,15 @@ pub fn parse_ulid_opt(s: &str) -> Result<Option<Ulid>, Status> {
     Ulid::parse(s)
         .map(Some)
         .ok_or_else(|| Status::invalid_argument(format!("{s:?} is not a ULID")))
+}
+
+/// The task id a notes RPC requires: bare `TaskRef` carries no path, so the daemon locates the
+/// task by id across the whole workspace (`notes.rs::locate_task`) rather than by line number in
+/// a document it does not yet know.
+pub(crate) fn parse_required_task_id(t: &pb::TaskRef) -> Result<TaskId, Status> {
+    parse_ulid_opt(&t.task_id)?
+        .map(TaskId::new)
+        .ok_or_else(|| Status::invalid_argument("a task id is required"))
 }
 
 pub(crate) fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> {

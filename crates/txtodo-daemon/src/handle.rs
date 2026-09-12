@@ -4,6 +4,8 @@
 
 use crate::expected::Hash;
 use crate::mutation::{Mutation, MutationError, TaskRef};
+use crate::notes_lookup::TaskLineInfo;
+use crate::notes_state::NotesStateError;
 use crate::refdir::{RefDirError, RefDirInfo};
 use crate::state::{StateError, TaskCounts};
 use crate::write::WriteError;
@@ -90,10 +92,13 @@ pub enum ActorError {
     NoFlag(TaskId),
     /// The actor task has stopped.
     Gone(FilePath),
-    /// Not supported by this crate (`NotesEdit`, undelete-via-`SetField`).
+    /// Not supported by a `DocState` document (undelete-via-`SetField`; `NotesEdit` is handled by
+    /// `NotesActor`/`NotesState` instead, not this document type).
     Unsupported(&'static str),
     /// A `ref:` directory operation failed (`refdir.rs`).
     RefDir(RefDirError),
+    /// A `notes.md` op or byte buffer could not be applied (`notes_state.rs`).
+    Notes(NotesStateError),
 }
 
 impl fmt::Display for ActorError {
@@ -109,6 +114,7 @@ impl fmt::Display for ActorError {
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
             ActorError::RefDir(e) => write!(f, "{e}"),
+            ActorError::Notes(e) => write!(f, "{e}"),
         }
     }
 }
@@ -242,6 +248,13 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
     },
+    /// Whether this document currently holds `task_id`, and if so where (plan M5's notes lookup).
+    TaskLine {
+        /// The task to look for.
+        task_id: TaskId,
+        /// Result channel.
+        reply: oneshot::Sender<Option<TaskLineInfo>>,
+    },
 }
 
 /// A cheap handle to one document's actor.
@@ -372,6 +385,7 @@ impl ActorHandle {
         .await?
     }
 
-    // ensure_ref_dir/rename_ref_dir live in refdir.rs (impl ActorHandle extension) — moved out
-    // purely to keep this file within its line budget; `ask`/`send` are `pub(crate)` for it.
+    // ensure_ref_dir/rename_ref_dir live in refdir.rs, task_line in notes_lookup.rs (both `impl
+    // ActorHandle` extensions) — moved out purely to keep this file within its line budget;
+    // `ask`/`send` are `pub(crate)` for exactly this sibling-module use.
 }

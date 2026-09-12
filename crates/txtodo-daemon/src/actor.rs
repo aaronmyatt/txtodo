@@ -155,7 +155,10 @@ impl FileActor {
             let _ = reply.send(self.state.task_counts());
             return;
         }
-        if let Some(msg) = self.handle_refdir(msg) {
+        let Some(msg) = self.handle_refdir(msg) else {
+            return;
+        };
+        if let Some(msg) = crate::notes_lookup::handle_task_line(self, msg) {
             self.handle_core(msg);
         }
     }
@@ -202,25 +205,9 @@ impl FileActor {
             } => {
                 let _ = reply.send(self.on_import(updates, peer));
             }
-            ActorMsg::Conflicts { reply } => {
-                let _ = reply.send(self.on_conflicts());
-            }
-            ActorMsg::Version { reply } => {
-                let _ = reply.send(self.mirror.version());
-            }
-            ActorMsg::Export { since, reply } => {
-                let _ = reply.send(self.on_export(&since));
-            }
-            ActorMsg::Resolve {
-                task,
-                resolution,
-                principal,
-                reply,
-            } => {
-                let _ = reply.send(self.on_resolve(task, resolution, principal));
-            }
-            // Unreachable: `handle_refdir` above already consumed both.
-            ActorMsg::EnsureRefDir { .. } | ActorMsg::RenameRefDir { .. } => {}
+            // `handle_sync` (import.rs) takes the rest: Conflicts/Version/Export/Resolve plus
+            // every variant `handle`/this match already consumed (never actually reached there).
+            other => self.handle_sync(other),
         }
     }
 

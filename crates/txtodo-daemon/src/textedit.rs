@@ -31,8 +31,10 @@ impl fmt::Display for TextEditError {
 
 impl std::error::Error for TextEditError {}
 
-/// Applies `edits` to `source`, producing the target text.
-pub fn apply_text_edits(source: &str, edits: &[TextEdit]) -> Result<String, TextEditError> {
+/// Applies `edits` to `source`, producing the target text. Shared by descriptions (one line, via
+/// [`apply_text_edits`]) and `notes.md` prose (may contain newlines, via [`apply_notes_edits`]) —
+/// the two wrappers differ only in which invariant they then assert on the result.
+fn apply_text_edits_core(source: &str, edits: &[TextEdit]) -> Result<String, TextEditError> {
     debug_assert!(
         edits.len() <= MAX_TEXT_EDITS,
         "EditText carries at most {MAX_TEXT_EDITS} edits"
@@ -68,12 +70,22 @@ pub fn apply_text_edits(source: &str, edits: &[TextEdit]) -> Result<String, Text
         }
     }
     out.extend_from_slice(&src[cursor..]);
-    let out: String = out.into_iter().collect();
+    Ok(out.into_iter().collect())
+}
+
+/// Applies `edits` to a description `source`, producing the target text.
+pub fn apply_text_edits(source: &str, edits: &[TextEdit]) -> Result<String, TextEditError> {
+    let out = apply_text_edits_core(source, edits)?;
     debug_assert!(
         !out.contains('\n'),
         "descriptions never contain line breaks"
     );
     Ok(out)
+}
+
+/// Applies `edits` to `notes.md` prose, which may contain newlines (plan M5).
+pub fn apply_notes_edits(source: &str, edits: &[TextEdit]) -> Result<String, TextEditError> {
+    apply_text_edits_core(source, edits)
 }
 
 #[cfg(test)]
@@ -115,5 +127,13 @@ mod tests {
             let edits: Vec<TextEdit> = diff_text(&a, &b).into_iter().map(TextEdit::from).collect();
             prop_assert_eq!(apply_text_edits(&a, &edits).unwrap(), b);
         }
+    }
+
+    #[test]
+    fn notes_edits_may_contain_newlines() {
+        let a = "line one\nline two\n";
+        let b = "line one\nline TWO\nline three\n";
+        let edits: Vec<TextEdit> = diff_text(a, b).into_iter().map(TextEdit::from).collect();
+        assert_eq!(apply_notes_edits(a, &edits).unwrap(), b);
     }
 }

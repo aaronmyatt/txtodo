@@ -5,6 +5,8 @@
 use crate::actor::{ActorConfig, FileActor, SharedStore};
 use crate::clock::Clock;
 use crate::handle::{ActorError, ActorHandle};
+use crate::notes_actor::NotesActorConfig;
+use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_state::{PairingRegistry, PairingStateError};
 use crate::stats::Stats;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
@@ -78,6 +80,8 @@ pub struct Workspace {
     key_store: Arc<dyn KeyStore + Send + Sync>,
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pairing: PairingRegistry,
+    /// Live `notes.md` actors, one per `ref:` directory, opened lazily (plan M5).
+    notes: NotesRegistry,
 }
 
 impl Workspace {
@@ -105,6 +109,7 @@ impl Workspace {
             // Placeholder backend: not yet persisted across restarts. See module doc.
             key_store: Arc::new(MemoryKeyStore::default()),
             pairing: PairingRegistry::new(),
+            notes: NotesRegistry::new(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -209,6 +214,16 @@ impl Workspace {
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pub(crate) fn pairing(&self) -> &PairingRegistry {
         &self.pairing
+    }
+    /// The `notes.md` actor for `path`, opening it from disk/store on first use (plan M5). `path`
+    /// need not already be a registered document — a notes document never gets a `FileActor`.
+    pub(crate) fn notes_actor(&self, path: &FilePath) -> Result<NotesCell, ActorError> {
+        let cfg = NotesActorConfig {
+            path: path.clone(),
+            disk: self.root.join(path.as_str()),
+            device: self.device,
+        };
+        self.notes.get_or_open(cfg, &self.store, &self.clock)
     }
     /// Finishes a pairing on the joiner's side: unwraps the sealed group key the initiator sent
     /// (see `pairing_grpc.rs`'s module doc — there is no transport yet, so this is driven directly

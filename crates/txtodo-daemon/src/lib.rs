@@ -23,6 +23,12 @@ mod move_coordinator;
 mod move_coordinator_tests;
 pub mod mutation;
 mod notes;
+pub mod notes_actor;
+pub mod notes_history;
+pub mod notes_lookup;
+pub mod notes_mirror;
+pub mod notes_registry;
+pub mod notes_state;
 mod pairing_grpc;
 mod pairing_state;
 mod pairing_wire;
@@ -54,6 +60,8 @@ mod import_tests;
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;
+#[cfg(test)]
+mod notes_actor_tests;
 #[cfg(test)]
 mod pairing_grpc_tests;
 #[cfg(test)]

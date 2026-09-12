@@ -2,8 +2,8 @@
 
 ## Purpose
 The `txtodod` binary: one process per workspace owning the files, the op log and the IPC socket.
-Plan M3, as built 2026-09-12; token data layer (plan M6) and the activity feed (plan M7) added
-the same day.
+Plan M3, as built 2026-09-12; token data layer (plan M6), the activity feed (plan M7) and
+`notes.md` as a Loro text doc (plan M5) added the same day.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
@@ -19,18 +19,28 @@ the same day.
   and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
   two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers
   `todo.txt`/`done.txt`/`notes.md`; only the first two get a `FileActor`), `watcher`, `debounce`,
-  `watch_task` · `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `progress`
-  (`ListFiles` done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of `server.rs`
-  for its line budget, same pattern as `notes.rs`) · `write` (temp + fsync + rename) · `expected`
-  (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`, `pidfile` ·
-  `tokens` (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity` (`OpLogStream`,
-  plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
+  `watch_task` · `server` + `serve` + `convert` (tonic service, socket, proto boundary) ·
+  `progress` (`ListFiles` done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of
+  `server.rs` for its line budget, same pattern as `notes.rs`) · `write` (temp + fsync + rename) ·
+  `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`,
+  `pidfile` · `tokens` (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity`
+  (`OpLogStream`, plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
+- `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
+  `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
+  no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
+  analogue of `mirror.rs`, wrapping `txtodo_crdt::NotesDoc`) · `notes_actor` (`NotesActor`, the
+  notes analogue of `FileActor`: same store-first-then-rename write discipline, no tokio mailbox —
+  one writer is instead one `Arc<Mutex<NotesActor>>` per path) · `notes_registry` (one
+  `NotesActor` per `ref:` directory, opened lazily) · `notes_history` (replay/checkout/undo_ops/
+  inverse, the notes analogue of `history.rs`) · `notes_lookup` (resolves a bare task id to the
+  document holding it, since `GetNotes`/`EditNotes`'s wire `TaskRef` carries no path).
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
-  `tokens`, `activity` and `pairing_grpc` can reach the workspace/store at all — Rust's default
-  privacy does not extend to sibling modules, only descendants, so this was a required compiler
-  fix, not a style choice.
+  `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's
+  default privacy does not extend to sibling modules, only descendants, so this was a required
+  compiler fix, not a style choice.
 - Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
+  `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
   `tests/editor_saves.rs`, `tests/crash.rs` (kill -9 rounds) — the last three spawn the real binary
@@ -57,10 +67,19 @@ the same day.
   wire message has no revoked marker). Request-time enforcement of a revoked/expired bearer is
   plan M6's larger MCP-auth-server milestone — out of scope here; `Store::verify_token` is the
   primitive it will call.
-- M3 scope: NotesEdit and undelete-via-SetField are refused as Unsupported. Cross-file Move works
-  (plan M7): `mutation.rs::move_ops` records the source's departure; `move_coordinator.rs` inserts
-  the arriving line at the destination as its own `Insert` and relocates the `ref:` directory —
-  two ops, one per document, no shared op row (see that module's doc for why).
+- M3 scope: undelete-via-`SetField` is refused as Unsupported (`DocState`, `state.rs`). Cross-file
+  Move works (plan M7): `mutation.rs::move_ops` records the source's departure;
+  `move_coordinator.rs` inserts the arriving line at the destination as its own `Insert` and
+  relocates the `ref:` directory — two ops, one per document, no shared op row (see that module's
+  doc for why). `NotesEdit` works too (plan M5): a `notes.md`'s own document/actor kind
+  (`notes_state`/`notes_actor`), never a `DocState` — `DocState::apply`/`FileActor` still refuse a
+  `NotesEdit` op that reaches them (a routing bug, since one is never stamped against a task
+  document's path), which is why `StateError::Unsupported`/`ActorError::Unsupported` still name it.
+- No watcher drives a `notes.md`: `NotesActor` has no tokio mailbox and no external-change
+  reconciliation (a live editor save to notes.md is a natural follow-up, not built here). One
+  writer is instead `notes_registry.rs`'s `Arc<Mutex<NotesActor>>` per path. Its Loro mirror
+  persists (`Store::put_mirror`) and restores across a restart the same way the task mirror's
+  periodic snapshot does, so pairing can seed a second device from it the same way.
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
