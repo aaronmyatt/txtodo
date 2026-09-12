@@ -3779,8 +3779,10 @@ dependencies = [
 name = "txtodo-ffi"
 version = "0.0.0"
 dependencies = [
+ "js-sys",
  "txtodo-core",
  "txtodo-query",
+ "wasm-bindgen",
 ]
 
 [[package]]
