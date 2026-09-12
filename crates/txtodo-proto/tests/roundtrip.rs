@@ -6,8 +6,9 @@
 use prost::Message;
 use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
-    Edit, FileContents, FileInfo, GetFileRequest, HealthResponse, HistoryRequest, HistoryResponse,
-    ListFilesResponse, Move, Mutation, OpSummary, TaskRef, UndoRequest, WatchRequest, mutation,
+    Edit, FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
+    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, TaskRef, UndoRequest,
+    WatchRequest, mutation,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -80,6 +81,8 @@ fn responses_and_streams_round_trip() {
         files: vec![FileInfo {
             path: "todo.txt".into(),
             hash: vec![1; 32],
+            kind: FileKind::Todo as i32,
+            progress: Some(Progress { done: 1, total: 3 }),
         }],
     });
     round_trip(&FileContents {
