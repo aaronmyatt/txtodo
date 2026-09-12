@@ -119,6 +119,16 @@ impl DocState {
         &self.path
     }
 
+    /// The file's line ending.
+    pub fn ending(&self) -> LineEnding {
+        self.ending
+    }
+
+    /// Whether the file starts with a BOM.
+    pub fn bom(&self) -> bool {
+        self.bom
+    }
+
     /// Number of lines, blanks included.
     pub fn len(&self) -> usize {
         self.entries.len()

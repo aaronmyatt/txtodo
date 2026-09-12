@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod actor;
+mod actor_mirror;
 pub mod clock;
 pub mod convert;
 pub mod debounce;
@@ -12,7 +13,9 @@ pub mod fastid;
 mod fields;
 pub mod handle;
 pub mod history;
+mod import;
 pub mod mirror;
+mod mirror_converge;
 pub mod mutation;
 pub mod pidfile;
 pub mod reconcile;
