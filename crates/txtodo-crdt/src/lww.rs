@@ -25,10 +25,12 @@ pub struct Lww<T> {
 }
 
 impl<T> Lww<T> {
-    /// True when `incoming` is strictly newer than this register's stamp. `Hlc`'s derived `Ord`
-    /// already breaks equal `(wall_ms, counter)` ties by device id.
+    /// True when `incoming` is at least as new as this register's stamp. Across devices `Hlc`'s
+    /// derived `Ord` breaks `(wall_ms, counter)` ties by device id, so a true tie only happens
+    /// within one device's batch (one HLC tick per batch, ADR 0013): there the later write must
+    /// land, which is Loro's own last-writer order — the tiebreak the ADR said we lean on.
     pub fn wins_over(&self, incoming: Hlc) -> bool {
-        incoming > self.hlc
+        incoming >= self.hlc
     }
 }
 

@@ -58,12 +58,15 @@ fn higher_hlc_wins_regardless_of_apply_order() {
 }
 
 #[test]
-fn wins_over_is_strictly_newer() {
+fn wins_over_is_newer_or_the_same_stamp_and_never_older() {
     let reg = Lww {
         value: LoroValue::Null,
         hlc: hlc(5),
     };
     assert!(reg.wins_over(hlc(6)));
-    assert!(!reg.wins_over(hlc(5)));
+    assert!(
+        reg.wins_over(hlc(5)),
+        "same batch, same stamp: the later write lands"
+    );
     assert!(!reg.wins_over(hlc(4)));
 }
