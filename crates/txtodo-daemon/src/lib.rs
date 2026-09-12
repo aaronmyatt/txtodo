@@ -33,6 +33,8 @@ mod actor_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
+mod mirror_tests;
+#[cfg(test)]
 mod mutation_tests;
 #[cfg(test)]
 mod reconcile_tests;

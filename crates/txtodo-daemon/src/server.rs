@@ -67,6 +67,7 @@ fn status_of(e: ActorError) -> Status {
         }
         ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
         ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
+        ActorError::Mirror(_) => Status::internal(e.to_string()),
         ActorError::Gone(_) => Status::unavailable(e.to_string()),
         ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
             Status::internal(e.to_string())

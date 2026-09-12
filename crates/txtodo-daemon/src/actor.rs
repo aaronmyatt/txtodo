@@ -10,6 +10,7 @@ use crate::expected::{ExpectedWrites, Hash};
 use crate::handle::{
     ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Applied, Change, Contents, WATCH_CAP,
 };
+use crate::mirror::Mirror;
 use crate::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
 use crate::state::DocState;
 use crate::write::write_atomic;
@@ -57,6 +58,8 @@ pub(crate) struct Commit {
 pub struct FileActor {
     pub(crate) cfg: ActorConfig,
     pub(crate) state: DocState,
+    /// The Loro merge engine fed every committed op (see `mirror.rs`); derived, never the truth.
+    pub(crate) mirror: Mirror,
     pub(crate) projection: Vec<u8>,
     pub(crate) hash: Hash,
     pub(crate) hlc: Hlc,
@@ -76,9 +79,11 @@ impl FileActor {
     ) -> Result<FileActor, ActorError> {
         let (changes, _) = broadcast::channel(WATCH_CAP);
         let empty = DocState::from_file(cfg.path.clone(), &File::default())?;
+        let mirror = Mirror::from_state(&empty).map_err(|e| ActorError::Mirror(e.to_string()))?;
         let mut actor = FileActor {
             hlc: Hlc::zero(cfg.device),
             state: empty,
+            mirror,
             projection: Vec::new(),
             hash: hash_of(&[]),
             cfg,
@@ -269,6 +274,12 @@ impl FileActor {
         self.state = next;
         self.projection = bytes;
         self.hash = new_hash;
+        // An adopted state (snapshot) is not the sum of its ops: rebuild the mirror instead.
+        if snapshot {
+            self.resync_mirror();
+        } else {
+            self.flush_mirror(&ops);
+        }
         if write {
             self.write_projection()?;
             tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&new_hash), "projection_written");
@@ -298,6 +309,28 @@ impl FileActor {
             "state tracks the projection"
         );
         Ok(change)
+    }
+
+    /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by
+    /// a rebuild from the state — never surfaced to the client, whose change is already durable.
+    pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
+        match self.mirror.flush(ops, &self.state) {
+            Ok(()) => tracing::debug!(file = %self.cfg.path, ops = ops.len(), "mirror_flushed"),
+            Err(e) => {
+                tracing::error!(file = %self.cfg.path, error = %e, "mirror_refused_rebuilding");
+                self.resync_mirror();
+            }
+        }
+        debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
+    }
+
+    /// Rebuilds the mirror from the state (after an adopt, a recover, or a refused flush).
+    pub(crate) fn resync_mirror(&mut self) {
+        match Mirror::from_state(&self.state) {
+            Ok(m) => self.mirror = m,
+            Err(e) => tracing::error!(file = %self.cfg.path, error = %e, "mirror_rebuild_failed"),
+        }
+        debug_assert!(self.mirror.agrees_with(&self.state));
     }
 
     pub(crate) fn write_projection(&mut self) -> Result<(), ActorError> {

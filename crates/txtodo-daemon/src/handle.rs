@@ -61,6 +61,8 @@ pub enum ActorError {
     Write(WriteError),
     /// HLC counter overflow.
     Hlc(HlcError),
+    /// The Loro mirror could not be built when the actor opened (a bug, not a client error).
+    Mirror(String),
     /// The actor task has stopped.
     Gone(FilePath),
     /// Not available on one device in M3.
@@ -75,6 +77,7 @@ impl fmt::Display for ActorError {
             ActorError::Store(e) => write!(f, "store: {e}"),
             ActorError::Write(e) => write!(f, "{e}"),
             ActorError::Hlc(e) => write!(f, "{e}"),
+            ActorError::Mirror(m) => write!(f, "mirror: {m}"),
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
         }

@@ -37,6 +37,7 @@ impl FileActor {
                 self.state = state;
                 self.projection = p.bytes;
                 self.hash = p.hash;
+                self.resync_mirror();
             }
             Err(_) => return self.on_external_change().map(|_| ()),
         }
