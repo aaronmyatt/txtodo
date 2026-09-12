@@ -23,6 +23,28 @@ pub struct CommitExtras {
     pub mirror: Option<Vec<u8>>,
 }
 
+/// Lands the flag clear and/or the mirror snapshot on `tx`; the caller owns the transaction.
+fn land_extras(
+    tx: &rusqlite::Connection,
+    file: &FilePath,
+    range: Option<SeqRange>,
+    extras: &CommitExtras,
+) -> Result<(), StoreError> {
+    if let Some((task, at_ms)) = extras.clear {
+        clear_flag_on(tx, file, task, at_ms)?;
+    }
+    if let Some(snapshot) = &extras.mirror {
+        let seq = match range {
+            Some(r) => r.last,
+            None => last_seq_on(tx)?,
+        };
+        debug_assert!(seq.0 >= 0);
+        upsert_mirror_on(tx, file, snapshot, seq)?;
+    }
+    debug_assert!(!file.as_str().is_empty());
+    Ok(())
+}
+
 /// The newest seq on `conn` (0 on an empty log); the caller owns the transaction.
 fn last_seq_on(conn: &rusqlite::Connection) -> Result<Seq, StoreError> {
     let seq: Option<i64> = conn
@@ -76,16 +98,7 @@ impl Store {
         upsert_projection(&tx, projection)?;
         let key = prev_hash_key(&projection.file);
         upsert_meta(&tx, &key, prev_hash.as_ref().map_or(&[][..], |h| &h[..]))?;
-        if let Some((task, at_ms)) = extras.clear {
-            clear_flag_on(&tx, &projection.file, task, at_ms)?;
-        }
-        if let Some(snapshot) = &extras.mirror {
-            let seq = match range {
-                Some(r) => r.last,
-                None => last_seq_on(&tx)?,
-            };
-            upsert_mirror_on(&tx, &projection.file, snapshot, seq)?;
-        }
+        land_extras(&tx, &projection.file, range, extras)?;
         tx.commit()
             .map_err(StoreError::query("commit commit_change"))?;
         debug_assert!(range.is_none_or(|r| r.first <= r.last));
