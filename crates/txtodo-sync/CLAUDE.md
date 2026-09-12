@@ -55,13 +55,24 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `recv() -> Result<Frame, LinkError>`, `Send` but not `Sync` (one link, one driver). `ChannelLink` +
   `channel_link_pair()` is the in-process implementation the loopback tests and the simulator use;
   `MAX_QUEUED_FRAMES` bounds each direction rather than growing without limit.
-- Not here yet: the real iroh/mDNS `Link` implementation, the `devices` table (persisting each
-  peer's `DeviceStaticPublic` — this crate only produces/consumes the bytes, never stores them),
-  the daemon-level rotation sequencing ("close the epoch before announcing the removal"),
+- `endpoint.rs` (M4 `sync-lan-transport`): `bind_local_endpoint()` — the one iroh `Endpoint`
+  constructor (`presets::Minimal`, `RelayMode::Disabled`), `ALPN`. Not yet wired to `Link`; see
+  Invariants for a known upstream connect/accept blocker on this crate's own loopback test.
+- Not here yet: `discovery.rs` (mDNS), the real iroh `Link` implementation (needs the blocker below
+  resolved or a real LAN to test against), the `devices` table (persisting each peer's
+  `DeviceStaticPublic` — this crate only produces/consumes the bytes, never stores them), the
+  daemon-level rotation sequencing ("close the epoch before announcing the removal"),
   snapshot-then-ops transfer to a newly paired device, and the `txtodo pair`/`txtodo device`
   CLI/daemon wiring (separate M4 subtasks/slices).
 
 ## Invariants
+- Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact):
+  `noq-proto` 1.3.0 (vendored by `iroh` 1.2.0, latest published) refuses a real QUIC connect/accept
+  between two endpoints both bound to literal `127.0.0.1` — logs `network_path=(local: 127.0.0.1,
+  remote: [::ffff:127.0.0.1]:_)` and calls `refuse()`. `endpoint_tests::
+  two_loopback_endpoints_exchange_one_frame` is `#[ignore]`d with this reason rather than deleted or
+  worked around; `bind_local_endpoint` (production, binds all interfaces) is not shown to hit this
+  path. Re-test once iroh/noq-proto ships a fix or a real LAN is available.
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
 - A device key and a group key are **injected**, never read here: `sign`/`seal` take them as arguments,
   so tests use fixtures and the keystore owns I/O. `seal` draws its nonce straight from `getrandom`;

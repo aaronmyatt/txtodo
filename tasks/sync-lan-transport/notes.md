@@ -87,3 +87,49 @@ other loop in this codebase.
   across versions) without the ability to test real multicast mDNS in this environment, this pass
   stopped at the transport-agnostic trait, which is real, tested, immediately useful infrastructure
   on its own, and left the network-facing half as a clearly scoped follow-up.
+
+## As built (2026-09-12, agent, pass 2) — `endpoint.rs`, the relay-off proof; blocked on an upstream bug
+
+- `crates/txtodo-sync/src/endpoint.rs`: `bind_local_endpoint()` — the one iroh endpoint constructor
+  (`Endpoint::builder(presets::Minimal).relay_mode(RelayMode::Disabled)`), `ALPN =
+  b"txtodo/sync/1"`. `presets::Minimal` chosen over `N0`/`N0DisableRelay`: those pull in n0's public
+  relay/DNS discovery infrastructure, which is exactly what a pure-LAN mode must not depend on even
+  transiently.
+- `the_configured_relay_set_is_empty` test: passes. This is the test the task notes call "the single
+  most useful test in this task" and it does its job — asserts `home_relay_status()` is empty by
+  construction.
+- **Blocked: `two_loopback_endpoints_exchange_one_frame` (real connect/accept/stream exchange of a
+  `Frame`) cannot pass, and it is not this crate's bug.** Root cause, confirmed on both macOS and
+  Linux (Docker `rust:1.95-bookworm`, ruling out a sandbox/OS artifact): `noq-proto` 1.3.0 (vendored
+  by `iroh` 1.2.0, the latest published version as of 2026-09-12) refuses the incoming connection —
+  `noq-proto-1.3.0/src/endpoint.rs:738`'s `refuse()`, traced as `network_path=(local: 127.0.0.1,
+  remote: [::ffff:127.0.0.1]:_)`. The local address is reported as plain IPv4, the remote as an
+  IPv4-mapped-IPv6 form of the same address, and `noq-proto` treats that as a path mismatch worth
+  refusing. Raw UDP loopback (tiny and 1200-byte payloads, both directions) was verified to work
+  fine underneath this, so it is not a socket/MTU/sandbox networking limit — it is specifically in
+  how `noq-proto`/`iroh` validate the QUIC path when both ends bind literally to `127.0.0.1`.
+  - Searched for an existing upstream issue/fix; found nothing exact (closest is n0-computer/iroh
+    #3244, a different loopback-related bug — log noise from STUN probes, not a refusal — already
+    closed). No newer iroh version is published to fix this.
+  - `iroh`'s relay/reqwest code is compiled in unconditionally (no feature flag drops it, even with
+    `RelayMode::Disabled`), and its transitive deps brought 5 new `cargo deny` license rejections
+    (`Unlicense` via `ws_stream_wasm`/`pharos`/`async_io_stream`, `CDLA-Permissive-2.0` via
+    `webpki-root-certs`/`webpki-roots`, the Mozilla CA bundle). Flagged to the human per this task's
+    own "cargo deny pass and human sign-off" line; both allowed in `deny.toml` with dated comments,
+    same pattern as the existing `CC0-1.0`/`BSL-1.0` entries.
+  - Did not work around it in application code: `bind_local_endpoint` (the real, production
+    constructor, used by every other test in this file and by anything that will eventually call
+    it) binds on all interfaces, not literally `127.0.0.1`, and is not shown to hit this path — there
+    is nothing in this crate to change. The test's own loopback-forcing helper is what triggers it.
+  - Test is `#[ignore = "..."]`, not deleted: the intent (prove `connect`/`accept`/`open_uni`/
+    `accept_uni` actually work end to end) is still correct and still worth having once the upstream
+    bug is fixed, or once this can be verified on a real two-machine LAN instead.
+  - Two throwaway diagnostic tests used during triage (raw UDP loopback round-trip, small and large
+    payload) are removed now that the root cause is precisely identified; they've served their
+    purpose. The `tracing-subscriber` dev-dependency and the trace-level `try_init()` call used to
+    find the `refuse()` call site are removed too.
+- **Not attempted this pass** (unchanged from pass 1): `discovery.rs` (mDNS), `MAX_LAN_PEERS`,
+  `MAX_BACKOFF_MS`, `txtodo doctor`'s transport-mode line, and the four `@test` subtasks that depend
+  on discovery existing. Continuing discovery work makes sense — it does not depend on the blocked
+  connect/accept path — but the two connect/accept-dependent test subtasks stay unchecked and blocked
+  on the upstream fix, not on more work here.

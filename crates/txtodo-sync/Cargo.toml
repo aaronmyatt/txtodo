@@ -39,6 +39,15 @@ hkdf = "0.12"
 sha2 = "0.10"
 # https://docs.rs/data-encoding — base32 for `txtodo pair <code>`'s text form of the QR payload
 data-encoding = "2"
+# https://docs.rs/iroh — LAN QUIC transport (plan M4 `sync-lan-transport`); relay support (M8) is
+# the same dependency, so this crate needs only one p2p library across both milestones.
+iroh = "1"
+# https://docs.rs/mdns-sd — `_txtodo._udp` discovery; no async runtime dependency of its own (runs
+# its own thread), so it does not force tokio on anything that never touches the LAN transport.
+mdns-sd = "0.21"
+# https://docs.rs/tokio — iroh's endpoint/connection API is async; the daemon already runs tokio,
+# this crate's own transport code needs a runtime handle to drive it.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
 
 [dev-dependencies]
 # https://docs.rs/proptest — want(local, remote) requests exactly the missing ops

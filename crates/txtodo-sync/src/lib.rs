@@ -8,6 +8,7 @@ mod aead;
 mod crypto_error;
 mod device_static;
 mod eff_wordlist;
+mod endpoint;
 mod frame;
 mod keystore;
 mod keystore_error;
@@ -38,6 +39,7 @@ pub use aead::{
 pub use crypto_error::CryptoError;
 pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
+pub use endpoint::{ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
 pub use keystore_error::KeyStoreError;
@@ -81,6 +83,8 @@ mod crypto_error_tests;
 mod device_static_tests;
 #[cfg(test)]
 mod eff_wordlist_tests;
+#[cfg(test)]
+mod endpoint_tests;
 #[cfg(test)]
 mod frame_tests;
 #[cfg(test)]
