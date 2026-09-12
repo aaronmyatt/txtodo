@@ -77,6 +77,14 @@ pub fn start(root: &Path) -> notify::Result<(RecommendedWatcher, mpsc::Receiver<
     let (tx, rx) = mpsc::channel(RAW_EVENT_CAP);
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else { return };
+        // `Access` (open/read/close-no-write) never signals a content change; inotify emits it for
+        // a plain read, and on some backends/filesystems it can repeat indefinitely for a file that
+        // is merely open. Forwarding it would let it re-arm the debounce forever, so the file that
+        // triggered it can never settle — filtered here rather than in `ingest`, so the debounce
+        // never even learns of an event with no signal in it.
+        if matches!(event.kind, EventKind::Access(_)) {
+            return;
+        }
         let dir_created = matches!(
             event.kind,
             EventKind::Create(notify::event::CreateKind::Folder)

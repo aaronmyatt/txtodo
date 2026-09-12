@@ -124,6 +124,20 @@ impl Daemon {
             .unwrap_or_default()
     }
 
+    /// Diagnostic only: the daemon's own JSON log, whatever rotation file(s) exist.
+    pub fn log_tail(&self) -> String {
+        let dir = self.dir.path().join(".txtodo").join("logs");
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return format!("(no log dir at {})", dir.display());
+        };
+        let mut out = String::new();
+        for entry in entries.flatten() {
+            out.push_str(&format!("--- {} ---\n", entry.path().display()));
+            out.push_str(&std::fs::read_to_string(entry.path()).unwrap_or_default());
+        }
+        out
+    }
+
     /// An editor-style save: write the whole file in place (truncate + write).
     pub fn external_write(&self, text: &str) {
         std::fs::write(self.dir.path().join("todo.txt"), text).unwrap_or_else(|e| panic!("{e}"));
@@ -139,6 +153,7 @@ impl Daemon {
         loop {
             let daemon = self.daemon_bytes().await;
             let disk = std::fs::read(self.dir.path().join("todo.txt")).unwrap_or_default();
+            let daemon_debug = String::from_utf8_lossy(&daemon).into_owned();
             if daemon == disk && last.as_ref() == Some(&daemon) {
                 let since = *stable_since.get_or_insert_with(Instant::now);
                 if since.elapsed() >= Duration::from_millis(QUIET_MS) {
@@ -150,8 +165,10 @@ impl Daemon {
             }
             assert!(
                 start.elapsed() < SETTLE_TIMEOUT,
-                "daemon did not settle: disk={:?}",
-                String::from_utf8_lossy(&disk)
+                "daemon did not settle: disk={:?}\ndaemon={:?}\nlog={}",
+                String::from_utf8_lossy(&disk),
+                daemon_debug,
+                self.log_tail()
             );
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
