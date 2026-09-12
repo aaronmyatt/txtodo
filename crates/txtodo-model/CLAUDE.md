@@ -14,6 +14,8 @@ Plan M3 (as built 2026-09-11). Workspace tree + progress (plan §3.2.5) is M5 an
 - `Op { id, hlc, principal, file, kind }`; `OpKind` = Insert · SetField · EditText · Move ·
   NotesEdit · BlankInsert · BlankRemove; `set_field(task, field, value)` is the only SetField
   constructor; `FieldValue::{date, priority, quirks, as_date, as_quirks}` bridge core types.
+- `Op::signing_bytes()` — the canonical postcard bytes a device signature covers. Signature lives in
+  the store column, not in `Op`, so there is nothing to strip. Golden in `goldens/op_signing.postcard`.
 - `TextEdit` mirrors `txtodo_core::TextEdit` with `From` both ways; `Principal` displays as
   `you@dev` / `agent:name@dev` / `external@dev`.
 - Codec: `serde` derives everywhere; `postcard` is the payload format (store BLOB, M4 wire).
@@ -25,4 +27,7 @@ Plan M3 (as built 2026-09-11). Workspace tree + progress (plan §3.2.5) is M5 an
 - `Hlc::merge` returns a stamp greater than both inputs; a peer more than 5 min ahead is
   refused (`PeerAhead`) and the clock is untouched on any `Err`. Behind is safe; callers warn.
 - The `FieldValue::Quirks(u16)` bit order is `op.rs::ALL_QUIRKS`; append only.
+- `OpKind` is append-only by **security**, not style: a variant insert/reorder changes every signed
+  op's `signing_bytes`. No `HashMap`/`HashSet` anywhere reachable from `Op` — `BTreeMap` or sorted
+  `Vec` only.
 - May depend only on: txtodo-core.

@@ -22,7 +22,30 @@ pub struct Op {
     pub kind: OpKind,
 }
 
+impl Op {
+    /// The canonical bytes a device Ed25519 signature covers: postcard of every field of this op in
+    /// declaration order. There is no `signature` field to strip — the signature lives in the
+    /// durable `ops.signature` column beside the op (`migrations/0001.sql`), never inside it, so a
+    /// caller cannot accidentally sign a signature or forget to clear one.
+    ///
+    /// This is security-relevant, not a codec convenience. postcard is deterministic for a fixed
+    /// struct shape, so a reordered field or an inserted `OpKind` variant changes these bytes and
+    /// invalidates every signature already in the log (`OpKind`'s doc says so). Every type reachable
+    /// from `Op` must also iterate deterministically: no `HashMap`/`HashSet`, only `BTreeMap` or a
+    /// sorted `Vec`. Audited 2026-09-12: `Op`, `OpKind`, `Principal`, `FieldValue`, `TextEdit`,
+    /// `Hlc`, `FilePath` hold no maps at all. `goldens/op_signing.postcard` freezes these bytes for
+    /// a fixed op; changing it is a deliberate wire break, not a refactor.
+    pub fn signing_bytes(&self) -> Result<Vec<u8>, postcard::Error> {
+        postcard::to_allocvec(self)
+    }
+}
+
 /// What an op does. Closed set; every `match` over it is exhaustive.
+///
+/// **Append-only is a security invariant, not a style rule.** postcard tags a variant by its index
+/// (<https://postcard.jamesmunns.com/wire-format#tagged-unions>) and a device signature covers the
+/// encoded op ([`Op::signing_bytes`]). Reordering or inserting a variant changes those bytes and
+/// makes every signature over an op of that kind unverifiable. Add at the end; never renumber.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OpKind {
     /// A new task line placed after `after` (`None` = at the top).

@@ -1,10 +1,76 @@
 //! Unit tests for the op model: pairing guard, round trips, Display goldens.
 
+use std::fs;
+use std::path::PathBuf;
+
 use crate::*;
 use txtodo_core::{Date, Priority, Quirks, Ulid};
 
 fn task() -> TaskId {
     TaskId::new(Ulid::from_u128(42))
+}
+
+/// One op with a value in every branch of `OpKind`-reachable types, used to freeze the signed bytes.
+/// Regenerate the golden deliberately with `TXTODO_UPDATE_GOLDENS=1 cargo test -p txtodo-model`.
+fn golden_op() -> Op {
+    Op {
+        id: OpId::new(Ulid::from_u128(0x0102_0304_0506_0708_090a_0b0c_0d0e_0f10)),
+        hlc: Hlc {
+            wall_ms: 1_700_000_000_000,
+            counter: 3,
+            device: DeviceId::new(Ulid::from_u128(1)),
+        },
+        principal: Principal::Agent {
+            token_id: TokenId::new(Ulid::from_u128(2)),
+            name: "claude-code".into(),
+            device: DeviceId::new(Ulid::from_u128(1)),
+        },
+        file: FilePath::new("q4/todo.txt").unwrap(),
+        kind: OpKind::EditText {
+            task: TaskId::new(Ulid::from_u128(3)),
+            edits: vec![
+                TextEdit::Insert {
+                    at: 0,
+                    text: "héllo".into(),
+                },
+                TextEdit::Delete { at: 5, len: 2 },
+            ],
+        },
+    }
+}
+
+#[test]
+fn signing_bytes_match_the_checked_in_golden() {
+    let bytes = golden_op().signing_bytes().unwrap();
+    let path: PathBuf = [env!("CARGO_MANIFEST_DIR"), "goldens", "op_signing.postcard"]
+        .iter()
+        .collect();
+    // Test-only seam; regenerating the golden is an explicit act, never an automatic fallback.
+    if std::env::var_os("TXTODO_UPDATE_GOLDENS").is_some() {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &bytes).unwrap();
+    }
+    let want = fs::read(&path)
+        .unwrap_or_else(|e| panic!("missing golden {}: {e}; see module doc", path.display()));
+    assert_eq!(
+        bytes, want,
+        "signed bytes changed — every stored signature is now unverifiable"
+    );
+    // The round trip is the other half: the signature is over bytes that decode back to this op.
+    assert_eq!(postcard::from_bytes::<Op>(&bytes).unwrap(), golden_op());
+}
+
+#[test]
+fn signing_bytes_are_stable_across_100_calls_in_one_process() {
+    let want = golden_op().signing_bytes().unwrap();
+    for call in 0..100 {
+        assert_eq!(golden_op().signing_bytes().unwrap(), want, "call {call}");
+    }
+    // Cross-process stability is what the checked-in golden proves: it was written by another run.
+    assert!(
+        !want.is_empty(),
+        "even the smallest op encodes its variant tag"
+    );
 }
 
 fn device() -> DeviceId {
