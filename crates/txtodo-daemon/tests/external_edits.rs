@@ -3,6 +3,8 @@
 //! lines are byte-identical, and History shows the expected External op kinds.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+// The daemon listens on a unix-domain socket (ADR 0010); these scenarios cannot run on Windows.
+#![cfg(unix)]
 
 mod support;
 

@@ -3,6 +3,8 @@
 //! Health and a Watch event. tonic over UDS: https://github.com/hyperium/tonic/tree/master/examples/src/uds
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+// A unix-domain socket is the daemon's only transport (ADR 0010); this cannot run on Windows.
+#![cfg(unix)]
 
 use hyper_util::rt::TokioIo;
 use std::path::{Path, PathBuf};
