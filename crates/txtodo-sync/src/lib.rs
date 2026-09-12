@@ -14,6 +14,7 @@ mod keystore_file;
 mod keystore_memory;
 mod keystore_os;
 mod keystore_resolve;
+mod link;
 mod message;
 mod nonce_registry;
 mod offer;
@@ -39,6 +40,7 @@ pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM
 pub use keystore_memory::MemoryKeyStore;
 pub use keystore_os::OsKeyStore;
 pub use keystore_resolve::{KeyStoreMode, ResolvedBackend, resolve};
+pub use link::{ChannelLink, Link, LinkError, MAX_QUEUED_FRAMES, channel_link_pair};
 pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
     OriginRange,
@@ -77,6 +79,8 @@ mod keystore_memory_tests;
 mod keystore_resolve_tests;
 #[cfg(test)]
 mod keystore_tests;
+#[cfg(test)]
+mod link_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]

@@ -36,8 +36,13 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `PairingSession::{offer, accept, complete, sas_words, confirm_local, confirm_remote, reject,
   is_ready_to_send_key, wrap_group_key, unwrap_group_key, peer_device}`, `MAX_FAILED_SAS_CONFIRMATIONS`,
   `PairingError`.
-- Not here yet: transports, the `devices` table / static-key persistence, snapshot-then-ops transfer
-  to a newly paired device, and the `txtodo pair` CLI/daemon wiring (separate M4 subtasks/slices).
+- `Link` trait (M4 `sync-lan-transport`, foundation only): `send(Frame) -> Result<(), LinkError>` /
+  `recv() -> Result<Frame, LinkError>`, `Send` but not `Sync` (one link, one driver). `ChannelLink` +
+  `channel_link_pair()` is the in-process implementation the loopback tests and the simulator use;
+  `MAX_QUEUED_FRAMES` bounds each direction rather than growing without limit.
+- Not here yet: the real iroh/mDNS `Link` implementation, the `devices` table / static-key
+  persistence, snapshot-then-ops transfer to a newly paired device, and the `txtodo pair` CLI/daemon
+  wiring (separate M4 subtasks/slices).
 
 ## Invariants
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
@@ -71,4 +76,7 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   nothing. A nonce is single-use whether the attempt succeeds or fails: the initiator tracks its own
   offer with `issue`/`consume`; the joiner, which never issued it, uses `witness` against the
   offer's own `issued_at_ms` instead.
+- `Link` is the only place a real transport may ever be wired in; `Session`/`Message`/`Frame` never
+  see a socket directly. `ChannelLink` closes its outbox on `Drop`, so a peer blocked in `recv`
+  learns the other side is gone rather than blocking forever.
 - May depend only on: txtodo-model, txtodo-store.

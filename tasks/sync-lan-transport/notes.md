@@ -66,3 +66,24 @@ other loop in this codebase.
 - A peer advertising a different group id is never connected to.
 - Own advertisement is ignored.
 - `MAX_LAN_PEERS` is enforced: the 101st peer is dropped with a log line, not pushed.
+
+## As built (2026-09-12, agent) — partial: the `Link` trait and its in-process implementation only
+
+- `crates/txtodo-sync/src/link.rs`: `Link { send(Frame) -> Result<(), LinkError>, recv() ->
+  Result<Frame, LinkError> }`, `Send` but not `Sync` (one link, one driver thread/task).
+  `ChannelLink` + `channel_link_pair()`: two in-memory, mutex+condvar-backed queues wired to each
+  other, `MAX_QUEUED_FRAMES` (256) enforced per direction, `Drop` closes the sender's outbox so a
+  peer blocked in `recv` gets `LinkError::Closed` rather than hanging forever. This is the seam
+  `crdt-sync-simulator`, `sync-loopback-converge`-style tests, and the M8 file-carrier are meant to
+  share — none of them need a socket to exercise the session state machine.
+- **Not attempted this pass**: `endpoint.rs` (the real iroh QUIC endpoint, relay explicitly disabled
+  and proven by a test), `discovery.rs` (`mdns-sd`, `_txtodo._udp`, TXT records, self/foreign-group
+  filtering, `MAX_LAN_PEERS`, debounce, backoff), and the `txtodo doctor` transport-mode line. These
+  need a real dependency addition (`iroh`, `mdns-sd`) and, per the task notes, "human sign-off" on
+  that addition before landing — flagged rather than added speculatively in the same pass as
+  everything else in this session. Also unattempted: MAX_BACKOFF_MS, the relay-empty test (the task
+  calls this "the single most useful test in this task"), and all four `@test` subtasks.
+- Judgement call: rather than guess at `iroh`'s current API surface (it has changed materially
+  across versions) without the ability to test real multicast mDNS in this environment, this pass
+  stopped at the transport-agnostic trait, which is real, tested, immediately useful infrastructure
+  on its own, and left the network-facing half as a clearly scoped follow-up.
