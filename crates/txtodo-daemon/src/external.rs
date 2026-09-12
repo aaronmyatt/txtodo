@@ -1,8 +1,10 @@
 //! The actor's recovery, external-change (design §4.3 steps 2–7 on one device) and snapshot
 //! paths. Split from `actor.rs` for the file budget; same `impl FileActor`.
 
-use crate::actor::{Commit, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
+use crate::actor::{Commit, CommitTail, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
+use crate::actor_mirror::loro_peer;
 use crate::handle::{ActorError, Applied, Change};
+use crate::mirror::Mirror;
 use crate::reconcile::reconcile;
 use crate::state::DocState;
 use crate::write::read_or_empty;
@@ -37,7 +39,7 @@ impl FileActor {
                 self.state = state;
                 self.projection = p.bytes;
                 self.hash = p.hash;
-                self.resync_mirror();
+                self.load_mirror();
             }
             Err(_) => return self.on_external_change().map(|_| ()),
         }
@@ -90,6 +92,7 @@ impl FileActor {
             bytes: target,
             write: write_back,
             snapshot: !exact,
+            tail: CommitTail::default(),
         })?;
         Ok(Some(change))
     }
@@ -121,9 +124,62 @@ impl FileActor {
                 seq,
                 state: self.projection.clone(),
             };
-            self.lock_store().put_snapshot(&self.cfg.path, &snap)?;
+            let mut store = self.lock_store();
+            store.put_snapshot(&self.cfg.path, &snap)?;
+            // The mirror is persisted only once it is a shared lineage (an import wrote the first
+            // row). Before that a restart rebuilds it from the state, which is cheap; loading a
+            // snapshot makes Loro materialise the whole document on first use.
+            if store.get_mirror(&self.cfg.path)?.is_some() {
+                let mirror = self
+                    .mirror
+                    .snapshot()
+                    .map_err(|e| ActorError::Mirror(e.to_string()))?;
+                store.put_mirror(&self.cfg.path, &mirror, seq)?;
+            }
         }
         Ok(())
+    }
+
+    /// The stored mirror with the ops since it replayed, or a fresh one when there is none.
+    /// A replay that disagrees with the state is converged; a broken snapshot is logged and
+    /// replaced (a new lineage).
+    pub(crate) fn load_mirror(&mut self) {
+        let loaded = self.lock_store().get_mirror(&self.cfg.path);
+        let Ok(Some((bytes, seq))) = loaded else {
+            self.resync_mirror();
+            return;
+        };
+        match self.replayed_mirror(&bytes, seq) {
+            Ok(m) => self.mirror = m,
+            Err(e) => {
+                tracing::error!(file = %self.cfg.path, error = %e, "mirror_snapshot_unusable");
+                self.resync_mirror();
+            }
+        }
+        // No agreement check here: it would materialise the whole Loro state on the startup
+        // path (22 s for 10k tasks in a debug build). The first flush asserts agreement in debug
+        // and converges on a refusal, which is where a stale snapshot would show.
+        tracing::debug!(file = %self.cfg.path, since = seq.0, "mirror_loaded");
+    }
+
+    fn replayed_mirror(&self, bytes: &[u8], since: Seq) -> Result<Mirror, ActorError> {
+        let mut mirror = Mirror::from_snapshot(bytes, &self.cfg.path, loro_peer(self.cfg.device))
+            .map_err(|e| ActorError::Mirror(e.to_string()))?;
+        let mut since = since;
+        for _page in 0..crate::history::MAX_REPLAY_PAGES {
+            let ops = self.lock_store().for_file(&self.cfg.path, since)?;
+            let Some(last) = ops.last() else { break };
+            let plain: Vec<txtodo_model::Op> = ops.iter().map(|s| s.op.clone()).collect();
+            mirror
+                .replay(&plain)
+                .map_err(|e| ActorError::Mirror(e.to_string()))?;
+            since = last.seq;
+            if ops.len() < txtodo_store::MAX_OPS_PER_READ {
+                break;
+            }
+        }
+        debug_assert!(since.0 >= 0);
+        Ok(mirror)
     }
 
     /// Appends inverse ops for the newest `steps` ops (design §4.8: undo is ops, and it syncs).
@@ -149,6 +205,7 @@ impl FileActor {
             bytes,
             write,
             snapshot: false,
+            tail: CommitTail::default(),
         })?;
         let applied = u32::try_from(change.ops.len()).unwrap_or(u32::MAX);
         Ok(Applied {

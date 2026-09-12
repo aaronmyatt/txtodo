@@ -5,6 +5,7 @@
 //! Startup (plan M3 crash safety): the store's projection and `prev_hash` say whether the file is
 //! ours, an interrupted write (disk == prev_hash → finish the write) or a foreign edit (reconcile).
 
+use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
 use crate::expected::{ExpectedWrites, Hash};
 use crate::handle::{
@@ -19,7 +20,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use txtodo_core::File;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId};
-use txtodo_store::{Projection, Seq, Store, Stored};
+use txtodo_store::{Projection, ReviewRow, Seq, Store, Stored};
 
 /// A checkpoint is written every this many ops (design §4.4 "every N ops").
 pub const SNAPSHOT_EVERY_OPS: i64 = 500;
@@ -52,6 +53,30 @@ pub(crate) struct Commit {
     pub(crate) bytes: Vec<u8>,
     pub(crate) write: bool,
     pub(crate) snapshot: bool,
+    pub(crate) tail: CommitTail,
+}
+
+/// What a commit does besides landing ops and bytes (plan M4 sync paths).
+pub(crate) struct CommitTail {
+    /// needs_review flags to raise with this change.
+    pub(crate) review: Vec<ReviewRow>,
+    /// Feed the ops to the mirror afterwards (false when the mirror already holds them: import).
+    pub(crate) flush: bool,
+    /// Clear this flag in the store transaction (a resolution).
+    pub(crate) clear: Option<(TaskId, u64)>,
+    /// Store the mirror snapshot in the store transaction (an import).
+    pub(crate) persist_mirror: bool,
+}
+
+impl Default for CommitTail {
+    fn default() -> CommitTail {
+        CommitTail {
+            review: Vec::new(),
+            flush: true,
+            clear: None,
+            persist_mirror: false,
+        }
+    }
 }
 
 /// The actor.
@@ -79,7 +104,8 @@ impl FileActor {
     ) -> Result<FileActor, ActorError> {
         let (changes, _) = broadcast::channel(WATCH_CAP);
         let empty = DocState::from_file(cfg.path.clone(), &File::default())?;
-        let mirror = Mirror::from_state(&empty).map_err(|e| ActorError::Mirror(e.to_string()))?;
+        let mirror = Mirror::from_state(&empty, loro_peer(cfg.device))
+            .map_err(|e| ActorError::Mirror(e.to_string()))?;
         let mut actor = FileActor {
             hlc: Hlc::zero(cfg.device),
             state: empty,
@@ -155,6 +181,24 @@ impl FileActor {
             ActorMsg::Checkout { at_wall_ms, reply } => {
                 let _ = reply.send(self.on_checkout(at_wall_ms));
             }
+            ActorMsg::Import {
+                updates,
+                peer,
+                reply,
+            } => {
+                let _ = reply.send(self.on_import(updates, peer));
+            }
+            ActorMsg::Conflicts { reply } => {
+                let _ = reply.send(self.on_conflicts());
+            }
+            ActorMsg::Resolve {
+                task,
+                resolution,
+                principal,
+                reply,
+            } => {
+                let _ = reply.send(self.on_resolve(task, resolution, principal));
+            }
         }
     }
 
@@ -199,6 +243,7 @@ impl FileActor {
             bytes,
             write,
             snapshot: false,
+            tail: CommitTail::default(),
         })?;
         let applied = u32::try_from(change.ops.len()).unwrap_or(u32::MAX);
         Ok(Applied {
@@ -260,6 +305,7 @@ impl FileActor {
             bytes,
             write,
             snapshot,
+            tail,
         } = plan;
         let new_hash = hash_of(&bytes);
         let projection = Projection {
@@ -268,22 +314,26 @@ impl FileActor {
             hash: new_hash,
             written_at_ms: self.clock.now_ms(),
         };
-        let range = self
-            .lock_store()
-            .commit_change(&ops, &projection, Some(self.hash))?;
+        let extras = self.commit_extras(&tail)?;
+        let range =
+            self.lock_store()
+                .commit_change_with(&ops, &projection, Some(self.hash), &extras)?;
         self.state = next;
         self.projection = bytes;
         self.hash = new_hash;
-        // An adopted state (snapshot) is not the sum of its ops: rebuild the mirror instead.
-        if snapshot {
-            self.resync_mirror();
-        } else {
-            self.flush_mirror(&ops);
-        }
+        // Disk first: the file never waits on the mirror (a first flush after a restart
+        // materialises the whole Loro snapshot, seconds for 10k tasks in debug).
         if write {
             self.write_projection()?;
             tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&new_hash), "projection_written");
         }
+        // An adopted state (snapshot) is not the sum of its ops: converge the mirror instead.
+        if snapshot {
+            self.converge_mirror();
+        } else if tail.flush {
+            self.flush_mirror(&ops);
+        }
+        self.raise_flags(&tail.review);
         let first = range.map_or(0, |r| r.first.0);
         let stored: Vec<Stored> = ops
             .into_iter()
@@ -298,6 +348,7 @@ impl FileActor {
             path: self.cfg.path.clone(),
             hash: new_hash,
             ops: stored,
+            review: tail.review,
         };
         if self.changes.receiver_count() > 0 {
             // Err only when no receiver is left, which the guard above excludes.
@@ -309,28 +360,6 @@ impl FileActor {
             "state tracks the projection"
         );
         Ok(change)
-    }
-
-    /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by
-    /// a rebuild from the state — never surfaced to the client, whose change is already durable.
-    pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
-        match self.mirror.flush(ops, &self.state) {
-            Ok(()) => tracing::debug!(file = %self.cfg.path, ops = ops.len(), "mirror_flushed"),
-            Err(e) => {
-                tracing::error!(file = %self.cfg.path, error = %e, "mirror_refused_rebuilding");
-                self.resync_mirror();
-            }
-        }
-        debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
-    }
-
-    /// Rebuilds the mirror from the state (after an adopt, a recover, or a refused flush).
-    pub(crate) fn resync_mirror(&mut self) {
-        match Mirror::from_state(&self.state) {
-            Ok(m) => self.mirror = m,
-            Err(e) => tracing::error!(file = %self.cfg.path, error = %e, "mirror_rebuild_failed"),
-        }
-        debug_assert!(self.mirror.agrees_with(&self.state));
     }
 
     pub(crate) fn write_projection(&mut self) -> Result<(), ActorError> {
