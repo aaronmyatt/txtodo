@@ -1,0 +1,35 @@
+// GENERATED FILE — do not hand-edit. See apps/desktop/scripts/abnf-to-lezer.mjs.
+// Lezer grammar for todo.txt (CodeMirror 6 highlighting only — NOT the strict write grammar;
+// specs/todotxt.abnf + crates/txtodo-core own strict validation). Token names mirror plan §3.1:
+// completion-marker, priority, date, project, context, tag-key, tag-value, id-tag, text.
+// Grammar guide: https://lezer.codemirror.net/docs/guide/#writing-a-grammar
+
+@top File { item* }
+
+// Tracks whether we're still in the still-unbroken leading run of a line (word 0 for
+// CompletionMarker, any position up to the first non-special word for Priority/Date) — see
+// todotxt.tokens.js. Also resolves TagKey/TagValue/IdTag, which need lookahead a plain @tokens
+// regex can't express (does ":" have a value after it? is it a "scheme://" URL instead of a tag?).
+@context todotxtContext from "./todotxt.tokens.js"
+@external tokens todotxtTokens from "./todotxt.tokens.js" {
+  CompletionMarker, Priority, Date, TagKey, TagValue, IdTag, Space, Newline
+}
+
+@tokens {
+  // "+"/"@" are recognised anywhere on the line (unlike CompletionMarker/Priority/Date, which are
+  // only recognised in a line's still-unbroken leading run — see todotxt.tokens.js).
+  Project { "+" NonSp+ }
+  Context { "@" NonSp+ }
+  NonSp { $[!-~\u{80}-\u{10ffff}] }
+  Text { NonSp+ }
+  @precedence { Project, Context, Text }
+}
+
+@skip { Space | Newline }
+
+// tag = key ":" 1*NONSP -> tag-key ":" tag-value (notes.md: "split the key and the value"; the
+// generated TagKey token includes the ":" itself). due-tag/t-tag reuse the 'date' rule for their
+// value, so todotxt.tokens.js also prefers Date here whenever a tag's value has that exact shape.
+Tag { TagKey (Date | TagValue) }
+
+item { CompletionMarker | Priority | Date | Project | Context | IdTag | Tag | Text }
