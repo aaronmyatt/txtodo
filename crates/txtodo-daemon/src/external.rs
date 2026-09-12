@@ -64,16 +64,48 @@ impl FileActor {
         let _span = tracing::info_span!("reconcile", file = %self.cfg.path).entered();
         let bytes = read_or_empty(&self.cfg.disk)?;
         let disk_hash = hash_of(&bytes);
-        if disk_hash == self.hash {
-            tracing::debug!(reason = "current", "ignored_own_write");
+        if let Some(reason) = self.ignored_own_write_reason(&disk_hash) {
+            tracing::debug!(reason, "ignored_own_write");
             return Ok(None);
         }
-        if self.expected.is_ours(&disk_hash, self.clock.now_instant()) {
-            tracing::debug!(reason = "recent", "ignored_own_write");
-            return Ok(None);
+        let (ops, next, target, exact) = self.derive_reconciled_ops(&bytes)?;
+        let write_back = target != bytes;
+        let change = self.commit(Commit {
+            ops,
+            next,
+            bytes: target,
+            write: write_back,
+            snapshot: !exact,
+            tail: CommitTail::default(),
+        })?;
+        Ok(Some(change))
+    }
+
+    /// "current" when disk already matches our own projection; "recent" when it matches a write
+    /// this actor made a moment ago (own-write ring, `expected.rs`). Neither is a foreign edit.
+    fn ignored_own_write_reason(
+        &mut self,
+        disk_hash: &crate::expected::Hash,
+    ) -> Option<&'static str> {
+        if disk_hash == &self.hash {
+            return Some("current");
         }
+        if self.expected.is_ours(disk_hash, self.clock.now_instant()) {
+            return Some("recent");
+        }
+        None
+    }
+
+    /// Reconciles `disk_bytes` against our projection into stamped ops plus the state they land
+    /// on: `exact` when replaying those ops onto our current state reproduces the reconciler's
+    /// own render byte-for-byte (the common case), otherwise the reconciler's render is adopted
+    /// directly and a snapshot is forced (mirror/state disagreement, healed on next flush).
+    fn derive_reconciled_ops(
+        &mut self,
+        disk_bytes: &[u8],
+    ) -> Result<(Vec<Op>, DocState, Vec<u8>, bool), ActorError> {
         let old = parse_file(&self.projection);
-        let new = parse_file(&bytes);
+        let new = parse_file(disk_bytes);
         let clock = Arc::clone(&self.clock);
         let mut mint = || TaskId::new(clock.new_ulid());
         let r = reconcile(&old, &new, &self.cfg.path, &mut mint);
@@ -91,16 +123,7 @@ impl FileActor {
             exact,
             "ops_derived"
         );
-        let write_back = target != bytes;
-        let change = self.commit(Commit {
-            ops,
-            next,
-            bytes: target,
-            write: write_back,
-            snapshot: !exact,
-            tail: CommitTail::default(),
-        })?;
-        Ok(Some(change))
+        Ok((ops, next, target, exact))
     }
 
     fn replay_on_clone(&self, ops: &[Op]) -> Option<DocState> {
