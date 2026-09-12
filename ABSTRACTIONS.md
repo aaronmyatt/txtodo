@@ -55,3 +55,16 @@ Never edit or delete a prior entry.
   crates/txtodo-daemon/tests/support/mod.rs (`Daemon::start`, `CARGO_BIN_EXE_txtodod`),
   crates/txtodo-daemon/tests/crash.rs (`spawn`). Constitution §7 forbids cross-slice helpers, so
   the CLI copy stays; the two daemon copies could share `tests/support`.
+
+## 2026-09-12 — "nearest task id before index i" idiom, four copies in the daemon
+
+- Duplicated: `state.entries()[..i].iter().rev().find_map(Entry::id)` — the `after` anchor an op
+  at position `i` needs (a blank has no id, so walk back to the last task).
+- Where (as of e468113): crates/txtodo-daemon/src/mutation.rs:159 (`Delete`), mutation.rs:189
+  (`add_ops`, over the whole list), history.rs:90 (inverse of `Deleted`), history.rs:102 (inverse
+  of `Move`). Four copies, all inside one slice.
+- Became: `DocState::task_before(i)` in 46ee551 — not an extraction for its own sake but part of
+  narrowing the state's surface for the Loro swap (tasks/crdt-loro-state), where a borrowed slice
+  can no longer be lent out. Recorded here so the ledger shows where the idiom went; the
+  reconciler (`reconcile.rs`) still has its own id-scan over `File` lines, which is a fifth shape
+  on a different type and stays where it is.

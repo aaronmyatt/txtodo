@@ -64,3 +64,49 @@ Behaviour-preserving refactor and behaviour change never share a commit (CLAUDE.
 at least three: (1) narrow the `DocState` surface, (2) swap the backing store, (3) widen
 `Unsupported`. Each ≤ 300 lines. Bench `reconcile_10k_one_edit` must still pass ≤ 20 ms
 (`budgets.json.latencyMs`) — run it before and after (2) and record both numbers here.
+
+## Bench (reconcile_10k_one_edit, budget 20 ms)
+
+| when | mean | run |
+|---|---|---|
+| before the swap (HEAD 46ee551, Vec<Entry>) | 11.5 ms (±4.1) | `cargo bench -p txtodo-daemon --bench reconcile -- --output-format bencher reconcile_10k_one_edit`, 2026-09-12 |
+
+## Swap plan (2026-09-12, awaiting approval before code — constitution §4)
+
+**Finding.** The Loro doc holds each task canonically (LWW prefix fields + a `LoroText`
+description). Core's `Quirks` is a `u16` of flags (`TABS`, `TRAILING_WS`, `LEADING_WS`, … carry no
+positions), so `txtodo_crdt::rebuild_line` cannot re-emit a quirky line byte-for-byte. A
+`to_bytes` materialised from Loro alone rewrites every quirky line on the next write, breaking the
+crdt CLAUDE.md invariant "untouched lines materialise byte-identical" and the goldens landed in
+47100dc.
+
+**Option A — Loro owns order + merge, raw bytes ride beside it (recommended).**
+
+```rust
+pub struct DocState {
+    path: FilePath,
+    doc: LoroDocument,                 // files/<path> list = order; tasks map = mergeable fields
+    raw: BTreeMap<TaskId, OwnedLine>,  // exact bytes per list id (tasks and blank sentinels)
+    bom: bool, ending: LineEnding, trailing_newline: bool,
+}
+pub fn from_file(path: FilePath, file: &File) -> Result<DocState, StateError>; // unchanged
+pub fn apply(&mut self, op: &Op) -> Result<(), StateError>;                     // was &OpKind
+pub fn to_bytes(&self) -> Vec<u8>;                                              // unchanged
+```
+
+- Invariants: every id in the file list has a `raw` line and vice versa (asserted in `to_bytes`);
+  `apply` is all-or-nothing (compute the new raw line first, then `txtodo_crdt::apply`; the actor's
+  clone-and-swap of `next` already discards a failed batch); one HLC tick per batch still holds.
+- Local op: `fields.rs` computes the new bytes exactly as today, then the op goes to Loro. `apply`
+  takes `&Op` because LWW registers need the HLC (ADR 0013) — `actor.rs:183` stamps the batch
+  before applying instead of after; `history.rs:31` already holds `stored.op`.
+- Remote op (sync, later task): apply to Loro, then `raw[task] = rebuild_line(doc, task)` for the
+  touched task only. Canonical bytes only where a peer changed something.
+- `from_file`: synthetic `Op`s (`Insert` per task, `BlankInsert` per blank, zero HLC, the device
+  principal) hydrated through `to_loro::apply`; `raw` filled from the file's lines.
+- Files: `state.rs`, `fields.rs`, `actor.rs`, `history.rs`, `state_tests.rs`. Two commits:
+  (1) `apply(&OpKind)` → `apply(&Op)` in the callers (behaviour-preserving), (2) the swap.
+
+**Option B — canonical materialisation from Loro alone.** Simpler state, no `raw` map. Rewrites
+quirky lines on the next write, fails the goldens, changes M3 bytes. Only if the human drops the
+byte-identical invariant for quirky lines.
