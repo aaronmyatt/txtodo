@@ -42,7 +42,10 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
-    fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
+    // pub(crate), not private: `pairing_grpc.rs` (plan M4 gRPC exposure) is a sibling module that
+    // needs read access to the workspace's device id, group id, keystore and pairing bookkeeping.
+    // This is the one line that module needs touched here; every RPC body above is untouched.
+    pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

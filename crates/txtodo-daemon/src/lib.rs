@@ -20,6 +20,8 @@ mod mirror_converge;
 pub mod mutation;
 mod notes;
 mod pairing_grpc;
+mod pairing_state;
+mod pairing_wire;
 pub mod pidfile;
 pub mod reconcile;
 pub mod serve;
@@ -45,6 +47,8 @@ mod import_tests;
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;
+#[cfg(test)]
+mod pairing_grpc_tests;
 #[cfg(test)]
 mod reconcile_tests;
 #[cfg(test)]

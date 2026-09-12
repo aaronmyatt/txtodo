@@ -5,6 +5,7 @@
 use crate::actor::{ActorConfig, FileActor, SharedStore};
 use crate::clock::Clock;
 use crate::handle::{ActorError, ActorHandle};
+use crate::pairing_state::{PairingRegistry, PairingStateError};
 use crate::stats::Stats;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
 use std::collections::BTreeMap;
@@ -13,9 +14,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use txtodo_model::{DeviceId, FilePath, Ulid};
 use txtodo_store::{Store, StoreError};
+use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
 
 /// The `meta` key holding this install's device id.
 pub const DEVICE_ID_KEY: &str = "device_id";
+/// The `meta` key holding this workspace's sync group id (plan M4 pairing).
+pub const GROUP_ID_KEY: &str = "group_id";
 /// Where the store lives under the workspace root (ADR 0010).
 pub const STORE_FILE: &str = "oplog.db";
 
@@ -65,6 +69,15 @@ pub struct Workspace {
     actors: BTreeMap<FilePath, ActorHandle>,
     started_at_ms: u64,
     stats: Arc<Stats>,
+    /// This workspace's sync group (plan M4 pairing): minted once, like the device id, and
+    /// replaced with a peer's group once this device joins theirs — see [`Workspace::adopt_group_key`].
+    group: Mutex<GroupId>,
+    /// Where this workspace's sync keys live (device/group). Plan M4 gRPC exposure's own new
+    /// plumbing: nothing wired a live `KeyStore` into the daemon before this. Placeholder backend —
+    /// see the module doc on [`load_or_mint_group`] and this crate's `pairing_grpc.rs` module doc.
+    key_store: Arc<dyn KeyStore + Send + Sync>,
+    /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
+    pairing: PairingRegistry,
 }
 
 impl Workspace {
@@ -78,6 +91,7 @@ impl Workspace {
         })?;
         let mut store = Store::open(&state_dir.join(STORE_FILE))?;
         let device = load_or_mint_device(&mut store, clock.as_ref())?;
+        let group = load_or_mint_group(&mut store)?;
         let started_at_ms = clock.now_ms();
         let mut ws = Workspace {
             root: root.to_path_buf(),
@@ -87,6 +101,10 @@ impl Workspace {
             actors: BTreeMap::new(),
             started_at_ms,
             stats: Arc::new(Stats::default()),
+            group: Mutex::new(group),
+            // Placeholder backend: not yet persisted across restarts. See module doc.
+            key_store: Arc::new(MemoryKeyStore::default()),
+            pairing: PairingRegistry::new(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -167,6 +185,53 @@ impl Workspace {
     pub fn started_at_ms(&self) -> u64 {
         self.started_at_ms
     }
+    /// This workspace's sync group (plan M4 pairing).
+    pub fn group(&self) -> GroupId {
+        *self
+            .group
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    /// The keystore backing this workspace's sync keys (device signing/static, group key epochs).
+    /// See the module doc on [`load_or_mint_group`] for the current placeholder backend.
+    pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {
+        &self.key_store
+    }
+    /// The injected clock (pairing needs `now_ms` for its own window bookkeeping).
+    pub fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
+    }
+    /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
+    pub(crate) fn pairing(&self) -> &PairingRegistry {
+        &self.pairing
+    }
+    /// Finishes a pairing on the joiner's side: unwraps the sealed group key the initiator sent
+    /// (see `pairing_grpc.rs`'s module doc — there is no transport yet, so this is driven directly
+    /// by whoever stands in for one today), stores it under this workspace's keystore, and adopts
+    /// `group` as this workspace's own — atomically from the caller's point of view, so this
+    /// workspace never claims a group it does not also hold the key for. Only called by
+    /// `pairing_grpc_tests.rs` today (no transport exists to call it in production yet).
+    #[allow(dead_code)]
+    pub(crate) fn adopt_group_key(
+        &self,
+        group: GroupId,
+        sealed: &[u8],
+        now_ms: u64,
+    ) -> Result<(), PairingStateError> {
+        self.pairing
+            .adopt_group_key(self.key_store.as_ref(), sealed, now_ms)?;
+        let mut store = self
+            .store
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        store.meta_set(GROUP_ID_KEY, &group.0.to_be_bytes())?;
+        drop(store);
+        *self
+            .group
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = group;
+        Ok(())
+    }
 }
 
 fn load_or_mint_device(store: &mut Store, clock: &dyn Clock) -> Result<DeviceId, StoreError> {
@@ -179,4 +244,22 @@ fn load_or_mint_device(store: &mut Store, clock: &dyn Clock) -> Result<DeviceId,
     store.meta_set(DEVICE_ID_KEY, &id.ulid().to_u128().to_be_bytes())?;
     debug_assert!(store.meta_get(DEVICE_ID_KEY)?.is_some());
     Ok(id)
+}
+
+/// Loads this workspace's sync group id from `meta`, or mints a fresh one (128 random bits; unlike
+/// the device id, nothing needs to sort on it) and persists it. `getrandom` failure is not
+/// recoverable in a meaningful way — `clock.rs`'s `SystemClock::new_ulid` takes the same stance for
+/// a ULID's random half — so a fixed fallback pattern still yields a usable, if less unique, id.
+fn load_or_mint_group(store: &mut Store) -> Result<GroupId, StoreError> {
+    if let Some(bytes) = store.meta_get(GROUP_ID_KEY)?
+        && let Ok(raw) = <[u8; 16]>::try_from(bytes.as_slice())
+    {
+        return Ok(GroupId(u128::from_be_bytes(raw)));
+    }
+    let mut raw = [0u8; 16];
+    if getrandom::fill(&mut raw).is_err() {
+        raw = [0xA5; 16];
+    }
+    store.meta_set(GROUP_ID_KEY, &raw)?;
+    Ok(GroupId(u128::from_be_bytes(raw)))
 }
