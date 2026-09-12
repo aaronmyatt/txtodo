@@ -8,7 +8,7 @@ use crate::state::DocState;
 use crate::write::read_or_empty;
 use std::sync::Arc;
 use txtodo_core::parse_file;
-use txtodo_model::{Hlc, OpKind, Principal, TaskId};
+use txtodo_model::{Hlc, Op, Principal, TaskId};
 use txtodo_store::{Seq, Snapshot};
 
 impl FileActor {
@@ -69,19 +69,19 @@ impl FileActor {
         let mut mint = || TaskId::new(clock.new_ulid());
         let r = reconcile(&old, &new, &self.cfg.path, &mut mint);
         let target = r.file.to_bytes();
-        let (next, exact) = match self.replay_on_clone(&r.ops) {
+        let device = self.cfg.device;
+        let ops = self.stamp(r.ops, &Principal::External { device })?;
+        let (next, exact) = match self.replay_on_clone(&ops) {
             Some(next) if next.to_bytes() == target => (next, true),
             _ => (DocState::from_file(self.cfg.path.clone(), &r.file)?, false),
         };
         tracing::info!(
-            ops = r.ops.len(),
+            ops = ops.len(),
             minted = r.minted,
             reused = r.reused,
             exact,
             "ops_derived"
         );
-        let device = self.cfg.device;
-        let ops = self.stamp(r.ops, Principal::External { device })?;
         let write_back = target != bytes;
         let change = self.commit(Commit {
             ops,
@@ -93,7 +93,7 @@ impl FileActor {
         Ok(Some(change))
     }
 
-    fn replay_on_clone(&self, ops: &[OpKind]) -> Option<DocState> {
+    fn replay_on_clone(&self, ops: &[Op]) -> Option<DocState> {
         let mut next = self.state.clone();
         for op in ops {
             next.apply(op).ok()?;
@@ -135,12 +135,12 @@ impl FileActor {
             let store = self.lock_store();
             crate::history::undo_ops(&store, &self.cfg.path, steps)?
         };
+        let ops = self.stamp(kinds, &principal)?;
         let mut next = self.state.clone();
-        for kind in &kinds {
-            next.apply(kind)?;
+        for op in &ops {
+            next.apply(op)?;
         }
         let bytes = next.to_bytes();
-        let ops = self.stamp(kinds, principal)?;
         let write = bytes != self.projection;
         let change = self.commit(Commit {
             ops,

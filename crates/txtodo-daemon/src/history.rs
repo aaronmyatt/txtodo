@@ -28,7 +28,7 @@ pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<DocSt
         let ops = store.for_file(path, since)?;
         let Some(last) = ops.last() else { break };
         for stored in ops.iter().take_while(|s| s.seq <= target) {
-            state.apply(&stored.op.kind)?;
+            state.apply(&stored.op)?;
         }
         since = last.seq;
         if last.seq >= target || ops.len() < MAX_OPS_PER_READ {

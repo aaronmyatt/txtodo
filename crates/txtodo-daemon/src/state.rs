@@ -5,7 +5,7 @@
 use crate::textedit::TextEditError;
 use std::fmt;
 use txtodo_core::{File, LineEnding, LineKind, OwnedLine};
-use txtodo_model::{FilePath, OpKind, TaskId, Ulid};
+use txtodo_model::{FilePath, Op, OpKind, TaskId, Ulid};
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -181,10 +181,11 @@ impl DocState {
         file.to_bytes()
     }
 
-    /// Applies one op. On `Err` the state is unchanged.
-    pub fn apply(&mut self, kind: &OpKind) -> Result<(), StateError> {
+    /// Applies one op. On `Err` the state is unchanged. Takes the whole `Op` because the M4 store
+    /// arbitrates prefix fields by the op's HLC (ADR 0013); the caller stamps before applying.
+    pub fn apply(&mut self, op: &Op) -> Result<(), StateError> {
         let before = self.entries.len();
-        match kind {
+        match &op.kind {
             OpKind::Insert { task, after, line } => self.insert(*task, *after, line)?,
             OpKind::SetField { task, field, value } => {
                 crate::fields::set_field(self, *task, *field, *value)?
@@ -205,6 +206,19 @@ impl DocState {
             "an op removes at most one entry"
         );
         Ok(())
+    }
+
+    /// Test seam: applies a bare `OpKind` under a zero stamp. Tests pin bytes, not clocks.
+    #[cfg(test)]
+    pub(crate) fn apply_kind(&mut self, kind: &OpKind) -> Result<(), StateError> {
+        let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
+        self.apply(&Op {
+            id: txtodo_model::OpId::new(Ulid::from_u128(0)),
+            hlc: txtodo_model::Hlc::zero(zero),
+            principal: txtodo_model::Principal::External { device: zero },
+            file: self.path.clone(),
+            kind: kind.clone(),
+        })
     }
 
     fn position_after(&self, after: Option<TaskId>) -> Result<usize, StateError> {

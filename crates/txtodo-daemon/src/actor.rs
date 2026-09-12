@@ -175,17 +175,18 @@ impl FileActor {
             return Err(MutationError::TooMany(mutations.len()).into());
         }
         let mut next = self.state.clone();
-        let mut kinds = Vec::new();
+        let mut ops = Vec::new();
         let clock = Arc::clone(&self.clock);
         let mut mint = || TaskId::new(clock.new_ulid());
+        let hlc = self.tick()?;
         for m in &mutations {
             for kind in mutation_ops(&next, m, &mut mint)? {
-                next.apply(&kind)?;
-                kinds.push(kind);
+                let op = self.stamped(kind, hlc, &principal);
+                next.apply(&op)?;
+                ops.push(op);
             }
         }
         let bytes = next.to_bytes();
-        let ops = self.stamp(kinds, principal)?;
         let write = bytes != self.projection;
         let change = self.commit(Commit {
             ops,
@@ -202,27 +203,45 @@ impl FileActor {
         })
     }
 
-    /// One HLC tick per batch; every op gets its own id.
+    /// One HLC tick per batch, taken before the batch is applied so every op carries its stamp
+    /// into the state (the M4 store arbitrates fields by it). A batch that then fails has spent a
+    /// tick; the clock only ever moves forward, so that is harmless.
+    pub(crate) fn tick(&mut self) -> Result<Hlc, ActorError> {
+        let before = self.hlc;
+        let hlc = self.hlc.tick(self.clock.now_ms())?;
+        debug_assert!(hlc > before, "tick is strictly monotone");
+        debug_assert_eq!(hlc.device, self.cfg.device);
+        Ok(hlc)
+    }
+
+    /// One op of the batch stamped `hlc`; every op gets its own id.
+    pub(crate) fn stamped(&self, kind: OpKind, hlc: Hlc, principal: &Principal) -> Op {
+        debug_assert_eq!(hlc.device, self.cfg.device, "ops carry this device's stamp");
+        let op = Op {
+            id: OpId::new(self.clock.new_ulid()),
+            hlc,
+            principal: principal.clone(),
+            file: self.cfg.path.clone(),
+            kind,
+        };
+        debug_assert_eq!(op.file, self.cfg.path);
+        op
+    }
+
+    /// Stamps a whole batch of kinds (one tick) without applying them.
     pub(crate) fn stamp(
         &mut self,
         kinds: Vec<OpKind>,
-        principal: Principal,
+        principal: &Principal,
     ) -> Result<Vec<Op>, ActorError> {
         if kinds.is_empty() {
             return Ok(Vec::new());
         }
-        let hlc = self.hlc.tick(self.clock.now_ms())?;
-        let file = self.cfg.path.clone();
-        let ops = kinds
+        let hlc = self.tick()?;
+        let ops: Vec<Op> = kinds
             .into_iter()
-            .map(|kind| Op {
-                id: OpId::new(self.clock.new_ulid()),
-                hlc,
-                principal: principal.clone(),
-                file: file.clone(),
-                kind,
-            })
-            .collect::<Vec<_>>();
+            .map(|kind| self.stamped(kind, hlc, principal))
+            .collect();
         debug_assert!(ops.iter().all(|o| o.hlc == hlc), "one stamp per batch");
         Ok(ops)
     }

@@ -68,24 +68,24 @@ fn insert_move_and_blank_ops_reorder_the_document() {
         task_id(ulid_bits(C)),
     );
     state
-        .apply(&OpKind::Insert {
+        .apply_kind(&OpKind::Insert {
             task: c,
             after: Some(a),
             line: format!("new one id:{C}"),
         })
         .unwrap();
     state
-        .apply(&OpKind::BlankRemove { after: Some(c) })
+        .apply_kind(&OpKind::BlankRemove { after: Some(c) })
         .unwrap();
     state
-        .apply(&OpKind::Move {
+        .apply_kind(&OpKind::Move {
             task: b,
             after: None,
             to_file: FilePath::new("todo.txt").unwrap(),
         })
         .unwrap();
     state
-        .apply(&OpKind::BlankInsert { after: Some(b) })
+        .apply_kind(&OpKind::BlankInsert { after: Some(b) })
         .unwrap();
     let expected = format!(
         "x 2026-09-11 2026-09-10 call mum @phone id:{B}\r\n\r\n(A) 2026-09-11 buy ducks +farm id:{A}\r\nnew one id:{C}\r\n"
@@ -100,14 +100,14 @@ fn insert_move_and_blank_ops_reorder_the_document() {
         after: None,
         line: "wrong id:01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
     };
-    assert_eq!(state.apply(&bad), Err(StateError::IdMismatch(c)));
+    assert_eq!(state.apply_kind(&bad), Err(StateError::IdMismatch(c)));
     assert_eq!(
-        state.apply(&OpKind::BlankRemove { after: Some(a) }),
+        state.apply_kind(&OpKind::BlankRemove { after: Some(a) }),
         Err(StateError::NoBlank(Some(a)))
     );
     let other = FilePath::new("done.txt").unwrap();
     assert_eq!(
-        state.apply(&OpKind::Move {
+        state.apply_kind(&OpKind::Move {
             task: a,
             after: None,
             to_file: other
@@ -121,19 +121,19 @@ fn set_field_rewrites_the_prefix_and_delete_removes_the_line() {
     let mut state = doc(&two_lines_crlf());
     let a = task_id(ulid_bits(A));
     state
-        .apply(&set_field(a, Field::Priority, FieldValue::Priority(Some('B'))).unwrap())
+        .apply_kind(&set_field(a, Field::Priority, FieldValue::Priority(Some('B'))).unwrap())
         .unwrap();
     assert!(state.to_bytes().starts_with(b"(B) 2026-09-11 buy ducks"));
     state
-        .apply(&set_field(a, Field::CreationDate, FieldValue::Date(None)).unwrap())
+        .apply_kind(&set_field(a, Field::CreationDate, FieldValue::Date(None)).unwrap())
         .unwrap();
     assert!(state.to_bytes().starts_with(b"(B) buy ducks +farm"));
     // Completing keeps the priority as pri:, like core's Edit::complete.
     state
-        .apply(&set_field(a, Field::Completed, FieldValue::Bool(true)).unwrap())
+        .apply_kind(&set_field(a, Field::Completed, FieldValue::Bool(true)).unwrap())
         .unwrap();
     state
-        .apply(
+        .apply_kind(
             &set_field(
                 a,
                 Field::CompletionDate,
@@ -150,12 +150,12 @@ fn set_field_rewrites_the_prefix_and_delete_removes_the_line() {
         .to_owned();
     assert_eq!(first, format!("x 2026-09-12 buy ducks +farm id:{A} pri:B"));
     state
-        .apply(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap())
+        .apply_kind(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap())
         .unwrap();
     assert_eq!(state.len(), 2);
     assert_eq!(state.line_of(a), None);
     assert_eq!(
-        state.apply(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap()),
+        state.apply_kind(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap()),
         Err(StateError::UnknownTask(a))
     );
 }
@@ -169,7 +169,9 @@ fn edit_text_changes_only_the_description() {
         at: 4,
         text: "400 ".into(),
     }];
-    state.apply(&OpKind::EditText { task: a, edits }).unwrap();
+    state
+        .apply_kind(&OpKind::EditText { task: a, edits })
+        .unwrap();
     assert!(
         state
             .to_bytes()
@@ -177,7 +179,7 @@ fn edit_text_changes_only_the_description() {
     );
     let strip_id = vec![TextEdit::Delete { at: 0, len: 60 }];
     assert!(matches!(
-        state.apply(&OpKind::EditText {
+        state.apply_kind(&OpKind::EditText {
             task: a,
             edits: strip_id
         }),
@@ -185,7 +187,7 @@ fn edit_text_changes_only_the_description() {
     ));
     let remove_tag = vec![TextEdit::Delete { at: 20, len: 29 }];
     assert_eq!(
-        state.apply(&OpKind::EditText {
+        state.apply_kind(&OpKind::EditText {
             task: a,
             edits: remove_tag
         }),

@@ -55,7 +55,7 @@ fn replay(before: &str, after: &str) -> Replayed {
     };
     let reconciled = reconcile(&old, &new, &path(), &mut mint);
     for op in &reconciled.ops {
-        state.apply(op).unwrap();
+        state.apply_kind(op).unwrap();
     }
     assert!(
         reconciled.ops.len() <= 6 * new.lines.len() + old.lines.len(),
@@ -214,7 +214,7 @@ fn golden_same_content_with_crlf_yields_no_ops() {
     let reconciled = reconcile(&old, &new, &path(), &mut mint);
     assert!(reconciled.ops.is_empty(), "{:?}", kinds(&reconciled.ops));
     for op in &reconciled.ops {
-        state.apply(op).unwrap();
+        state.apply_kind(op).unwrap();
     }
     assert_eq!(
         state.to_bytes(),

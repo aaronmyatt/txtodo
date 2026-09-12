@@ -119,7 +119,7 @@ fn inverses_restore_the_previous_state_and_undo_ops_are_newest_first() {
     ));
     let mut state = replay(&store, &path(), None).unwrap();
     for inv in &inverses {
-        state.apply(inv).unwrap();
+        state.apply_kind(inv).unwrap();
     }
     assert_eq!(
         String::from_utf8(state.to_bytes()).unwrap(),

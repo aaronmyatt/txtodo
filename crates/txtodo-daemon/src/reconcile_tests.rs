@@ -33,7 +33,9 @@ fn run(old_file: &File, new_bytes: &str) -> Reconciled {
     let out = reconcile(old_file, &new, &path(), &mut mint);
     let mut state = DocState::from_file(path(), old_file).unwrap();
     for op in &out.ops {
-        state.apply(op).unwrap_or_else(|e| panic!("{op:?}: {e}"));
+        state
+            .apply_kind(op)
+            .unwrap_or_else(|e| panic!("{op:?}: {e}"));
     }
     assert_eq!(
         String::from_utf8(state.to_bytes()).unwrap(),
