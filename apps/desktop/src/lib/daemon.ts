@@ -36,3 +36,56 @@ export function retryConnect(): Promise<DaemonStatus> {
 export function onDaemonStatus(cb: (status: DaemonStatus) => void): Promise<UnlistenFn> {
 	return listen<DaemonStatus>("daemon-status", (event) => cb(event.payload));
 }
+
+/** A line addressed by line number and/or id, mirroring `dto::TaskRefDto`. */
+export interface TaskRef {
+	line_number: number;
+	task_id: string;
+}
+
+/** The one `MutationDto` variant the edit popover needs (`dto::MutationDto::Edit`); the other
+ * variants (`Add`/`Complete`/`Move`/`Delete`) belong to features outside this task. */
+export interface EditMutation {
+	kind: "edit";
+	task: TaskRef;
+	new_line: string;
+}
+
+/** Mirrors `desktop_lib::dto::ApplyResultDto`. */
+export interface ApplyResult {
+	applied: number;
+	hash: string;
+	hlc_wall_ms: number;
+	hlc_counter: number;
+}
+
+/** Whole-line replacement on one workspace-relative document (`Apply`); the daemon derives
+ * field-level ops and rejects a stale write against a moved/deleted line via `task`. */
+export function applyEdit(path: string, mutation: EditMutation): Promise<ApplyResult> {
+	return invoke("apply", { path, mutations: [mutation] });
+}
+
+/** Mirrors `desktop_lib::dto::OpSummaryDto`. `op_id` is a ULID, whose first 10 chars embed the
+ * op's millisecond timestamp (https://github.com/ulid/spec) — there's no separate timestamp
+ * field on the DTO today. */
+export interface OpSummary {
+	seq: number;
+	op_id: string;
+	device: string;
+	principal: string;
+	kind: string;
+	task_id: string;
+	summary: string;
+}
+
+/** Mirrors `desktop_lib::dto::HistoryDto`. */
+export interface HistoryResult {
+	ops: OpSummary[];
+}
+
+/** Ops newest first for one path/task (`History`); the edit popover's footer uses `limit: 1`.
+ * Tauri maps camelCase JS invoke args to the command's snake_case parameter names, so `taskId`
+ * here reaches `commands::history`'s `task_id`. Ref: https://v2.tauri.app/develop/calling-rust/ */
+export function history(path: string, taskId: string, limit: number): Promise<HistoryResult> {
+	return invoke("history", { path, taskId, limit });
+}
