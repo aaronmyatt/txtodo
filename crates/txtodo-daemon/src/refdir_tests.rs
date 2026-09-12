@@ -9,7 +9,7 @@ use crate::stats::Stats;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use txtodo_core::{LineKind, parse_line};
-use txtodo_model::{DeviceId, FilePath, Principal, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Principal, Ulid};
 use txtodo_store::Store;
 
 fn device() -> DeviceId {
@@ -32,6 +32,7 @@ fn cfg(dir: &Path) -> ActorConfig {
         disk: dir.join("todo.txt"),
         device: device(),
         stats: Arc::new(Stats::default()),
+        identity_mode: IdentityMode::Tagged,
     }
 }
 

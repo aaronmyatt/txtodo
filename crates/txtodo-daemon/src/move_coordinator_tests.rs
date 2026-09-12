@@ -8,7 +8,7 @@ use crate::mutation::TaskRef;
 use crate::stats::Stats;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use txtodo_model::{DeviceId, FilePath, Principal, TaskId, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Principal, TaskId, Ulid};
 use txtodo_store::Store;
 
 const ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAA";
@@ -38,6 +38,7 @@ fn open_at(
         disk: root.join(rel),
         device: device(),
         stats: Arc::new(Stats::default()),
+        identity_mode: IdentityMode::Tagged,
     };
     FileActor::open(cfg, Arc::clone(store), Arc::clone(clock)).unwrap_or_else(|e| panic!("{e}"))
 }

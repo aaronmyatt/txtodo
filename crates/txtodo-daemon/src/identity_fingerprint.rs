@@ -8,9 +8,6 @@
 //! tags/URLs for exactly this kind of "meaningful content only" comparison (it's also what a
 //! `ref:` slug is generated from). Using the raw description instead would double-count a
 //! `+project`/`@context` change in both its own term and the description term.
-// Only `identity_assign::assign` calls `cost`, and `fingerprint_of` isn't called anywhere yet —
-// wired in when `state.rs`/`reconcile_sidecar.rs` land (plan `floofy-swinging-brooks.md`).
-#![allow(dead_code)]
 
 use txtodo_core::Task;
 use txtodo_model::{CostWeights, Fingerprint};

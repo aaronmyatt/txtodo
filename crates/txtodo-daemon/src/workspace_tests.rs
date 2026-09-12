@@ -38,7 +38,10 @@ async fn open_discovers_every_document_and_mints_one_device_id() {
         .get()
         .await
         .unwrap();
-    assert!(got.bytes.starts_with(b"two id:"), "adopted with an id");
+    assert_eq!(
+        got.bytes, b"two\n",
+        "sidecar mode is the default: adopted with no id: tag written into it"
+    );
     assert!(
         ws.actor_for_disk(&dir.path().join("q4").join("todo.txt"))
             .is_some()

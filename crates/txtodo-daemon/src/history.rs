@@ -2,18 +2,29 @@
 //! time, and invert ops for undo. Replay starts at the newest snapshot at or before the target
 //! and applies the ops after it, so an adopted (non-op) state is honoured too.
 
+use crate::fastid::fast_id_of;
 use crate::handle::ActorError;
+use crate::reconcile::task_of;
 use crate::state::DocState;
 use crate::textedit::apply_text_edits;
 use txtodo_core::{File, LineKind, parse_file};
-use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, TextEdit, set_field};
+use txtodo_model::{
+    Field, FieldValue, FilePath, IdentityMode, OpKind, TaskId, TextEdit, set_field,
+};
 use txtodo_store::{MAX_OPS_PER_READ, Seq, Store, Stored};
 
 /// Most read pages one replay walks; 1000 × MAX_OPS_PER_READ ops is far past any todo list.
 pub const MAX_REPLAY_PAGES: usize = 1_000;
 
-/// The document state after every op with `seq <= upto` (all ops when `upto` is `None`).
-pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<DocState, ActorError> {
+/// The document state after every op with `seq <= upto` (all ops when `upto` is `None`). Ops
+/// carry their own task ids (`OpKind::Insert{task,..}` etc.), so replay itself needs no id
+/// resolution; only the *starting* `base` (empty, or a snapshot) does — see `resolve_base_ids`.
+pub fn replay(
+    store: &Store,
+    path: &FilePath,
+    upto: Option<Seq>,
+    mode: IdentityMode,
+) -> Result<DocState, ActorError> {
     let target = match upto {
         Some(s) => s,
         None => store.last_seq()?.unwrap_or(Seq(0)),
@@ -23,7 +34,8 @@ pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<DocSt
         Some(s) => (s.seq, parse_file(&s.state)),
         None => (Seq(0), File::default()),
     };
-    let mut state = DocState::from_tagged_file(path.clone(), &base)?;
+    let ids = resolve_base_ids(store, path, &base, mode)?;
+    let mut state = DocState::from_file(path.clone(), &base, &ids, mode)?;
     for _page in 0..MAX_REPLAY_PAGES {
         let ops = store.for_file(path, since)?;
         let Some(last) = ops.last() else { break };
@@ -37,6 +49,35 @@ pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<DocSt
     }
     debug_assert!(state.to_bytes().len() <= txtodo_store::MAX_PROJECTION_BYTES);
     Ok(state)
+}
+
+/// Every line's id for `base`, the state replay starts from: tagged mode reads them off the text
+/// (`fast_id_of`), same as always. Sidecar mode has no text to read, so this falls back to the
+/// live fingerprints — exact whenever `base` is the current live state (the common case: no
+/// snapshot yet, or the newest one), best-effort for an older snapshot, since fingerprints are
+/// not themselves versioned by history. `None` per line, not an error, when nothing lines up
+/// (`DocState::from_file` reports it as `MissingId`).
+fn resolve_base_ids(
+    store: &Store,
+    path: &FilePath,
+    base: &File,
+    mode: IdentityMode,
+) -> Result<Vec<Option<TaskId>>, ActorError> {
+    if mode == IdentityMode::Tagged {
+        return Ok(base.lines.iter().map(fast_id_of).collect());
+    }
+    let mut rows = store.live_fingerprints(path)?.into_iter();
+    Ok(base
+        .lines
+        .iter()
+        .map(|line| {
+            if task_of(line).is_none() {
+                None
+            } else {
+                rows.next().map(|row| row.task)
+            }
+        })
+        .collect())
 }
 
 /// The newest seq whose op has `hlc.wall_ms <= at_wall_ms`, or `None` when nothing is that old.
@@ -67,11 +108,16 @@ pub fn seq_at_wall(
 }
 
 /// The document bytes as they were at `at_wall_ms` (inclusive).
-pub fn checkout(store: &Store, path: &FilePath, at_wall_ms: u64) -> Result<Vec<u8>, ActorError> {
+pub fn checkout(
+    store: &Store,
+    path: &FilePath,
+    at_wall_ms: u64,
+    mode: IdentityMode,
+) -> Result<Vec<u8>, ActorError> {
     let Some(seq) = seq_at_wall(store, path, at_wall_ms)? else {
         return Ok(Vec::new());
     };
-    Ok(replay(store, path, Some(seq))?.to_bytes())
+    Ok(replay(store, path, Some(seq), mode)?.to_bytes())
 }
 
 /// The op that undoes `stored`, given the state just before it. `None` for ops with no inverse
@@ -146,12 +192,17 @@ fn inverse_edit_text(before: &DocState, task: TaskId, edits: &[TextEdit]) -> Opt
 
 /// Inverse ops for the newest `steps` ops of `path`, newest first, each computed against the
 /// state just before its op. Ops without an inverse are skipped.
-pub fn undo_ops(store: &Store, path: &FilePath, steps: u16) -> Result<Vec<OpKind>, ActorError> {
+pub fn undo_ops(
+    store: &Store,
+    path: &FilePath,
+    steps: u16,
+    mode: IdentityMode,
+) -> Result<Vec<OpKind>, ActorError> {
     let steps = usize::from(steps.max(1));
     let newest = store.newest(path, steps)?;
     let mut out = Vec::with_capacity(newest.len());
     for stored in &newest {
-        let before = replay(store, path, Some(Seq(stored.seq.0 - 1)))?;
+        let before = replay(store, path, Some(Seq(stored.seq.0 - 1)), mode)?;
         if let Some(inv) = inverse(&before, stored) {
             out.push(inv);
         }

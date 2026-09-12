@@ -13,7 +13,7 @@ use tower::service_fn;
 use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
-use txtodo_model::{TaskId, Ulid};
+use txtodo_model::{IdentityMode, TaskId, Ulid};
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb, mutation};
 
@@ -31,9 +31,10 @@ async fn connect(socket: PathBuf) -> Client {
     TxtodoClient::new(channel)
 }
 
+/// Tagged mode: this suite checks `id:` tag behavior throughout (predates sidecar mode).
 async fn serve(root: &Path) -> (Client, tokio::sync::oneshot::Sender<()>) {
-    let ws =
-        Workspace::open(root, Arc::new(SystemClock)).unwrap_or_else(|e| panic!("workspace: {e}"));
+    let ws = Workspace::open_with_default_mode(root, Arc::new(SystemClock), IdentityMode::Tagged)
+        .unwrap_or_else(|e| panic!("workspace: {e}"));
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let socket = root.join(".txtodo").join("txtodod.sock");
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();

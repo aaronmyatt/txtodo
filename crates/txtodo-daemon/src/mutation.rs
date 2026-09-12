@@ -117,7 +117,10 @@ impl fmt::Display for MutationError {
 
 impl std::error::Error for MutationError {}
 
-/// Resolves a `TaskRef` against the state: the entry index and its id.
+/// Resolves a `TaskRef` against the state: the entry index and its id. `task.task_id` (parsed by
+/// the caller from the last text it read) is a staleness guard against a concurrent edit; only
+/// meaningful in tagged mode, where that text is really the daemon's own id — a client's parse of
+/// sidecar-mode text carries no such thing, id: substrings there are just ordinary words.
 pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), MutationError> {
     let n = task.line_number;
     let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
@@ -126,7 +129,8 @@ pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), Muta
         Entry::Task { id, .. } => id,
         Entry::Blank(_) => return Err(MutationError::Blank(n)),
     };
-    if let Some(expected) = task.task_id
+    if state.mode() == IdentityMode::Tagged
+        && let Some(expected) = task.task_id
         && expected != found
     {
         return Err(MutationError::Stale {

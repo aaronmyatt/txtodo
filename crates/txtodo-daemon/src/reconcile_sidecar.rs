@@ -22,7 +22,7 @@
 //!   alone, any excess becomes a `Delete` (old) or `Insert` (new) — "run-based positional
 //!   pairing".
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use txtodo_core::{File, LineDiff};
 use txtodo_model::{CostWeights, FilePath, Fingerprint, TaskId};
@@ -52,37 +52,19 @@ pub fn reconcile_sidecar(
     weights: &CostWeights,
     mint: &mut dyn FnMut() -> TaskId,
 ) -> Reconciled {
-    let OldFingerprints { pairs, info } = old_fingerprints(old);
-    let (new_fps, new_task_positions) = new_fingerprints(new);
-    let assignment = assign(&pairs, &new_fps, weights);
+    let m = resolve_matches(old, new, weights, mint);
 
-    let mut new_ids: Vec<Option<TaskId>> = vec![None; new.lines.len()];
-    for &(task, new_tli) in &assignment.matched {
-        new_ids[new_task_positions[new_tli]] = Some(task);
-    }
-    let mut minted = 0usize;
-    for &new_tli in &assignment.inserted {
-        new_ids[new_task_positions[new_tli]] = Some(mint());
-        minted += 1;
-    }
-    let reused = assignment.matched.len();
-
-    let mut deletes: Vec<usize> = assignment.deleted.iter().map(|task| info[task].1).collect();
-    let mut inserts: Vec<usize> = assignment
+    let mut deletes: Vec<usize> = m.deleted.iter().map(|task| m.info[task].1).collect();
+    let mut inserts: Vec<usize> = m
         .inserted
         .iter()
-        .map(|&tli| new_task_positions[tli])
+        .map(|&tli| m.new_task_positions[tli])
         .collect();
-    let Classified { changes, moves } = classify_matched(
-        &assignment.matched,
-        &info,
-        &new_task_positions,
-        old.file,
-        new,
-    );
+    let Classified { changes, moves } =
+        classify_matched(&m.matched, &m.info, &m.new_task_positions, old.file, new);
     let new_side = Side {
         file: new,
-        ids: &new_ids,
+        ids: &m.new_ids,
     };
     pair_blank_runs(old, new_side, &mut deletes, &mut inserts);
 
@@ -102,15 +84,97 @@ pub fn reconcile_sidecar(
     let mut ops = Vec::new();
     delete_pass(&mut ops, &diffs, old.file, old.ids);
     change_pass(&mut ops, &diffs, old.file, old.ids, new);
-    task_pass(&mut ops, &diffs, new, &new_ids, path);
-    blank_pass(&mut ops, &diffs, &new_ids);
+    task_pass(&mut ops, &diffs, new, &m.new_ids, path);
+    blank_pass(&mut ops, &diffs, &m.new_ids);
 
     Reconciled {
         ops,
         file: new.clone(),
+        minted: m.minted,
+        reused: m.reused,
+        ids: m.new_ids,
+    }
+}
+
+/// Every task's resolved identity for this reconcile round, plus the lookup tables the rest of
+/// `reconcile_sidecar` needs to turn them into raw-row diffs.
+struct Matching {
+    /// `(task, index into the full `new_fps`)` for every task that kept its old id.
+    matched: Vec<(TaskId, usize)>,
+    /// Old tasks with no acceptable match in `new`.
+    deleted: Vec<TaskId>,
+    /// Indices into the full `new_fps` with no acceptable match in `old`.
+    inserted: Vec<usize>,
+    /// Every line's resolved id in `new`'s order, `None` for a blank.
+    new_ids: Vec<Option<TaskId>>,
+    minted: usize,
+    reused: usize,
+    /// `task -> (old position, raw row in `old.lines`)`.
+    info: BTreeMap<TaskId, (usize, usize)>,
+    /// Task-line index -> raw row, for `new`.
+    new_task_positions: Vec<usize>,
+}
+
+/// Resolves every task's identity: exact-content pairs for free (`split_exact_matches`), then the
+/// Hungarian solver (`identity_assign::assign`) for whatever is left, minting a fresh id for each
+/// unmatched new line.
+fn resolve_matches(
+    old: Side<'_>,
+    new: &File,
+    weights: &CostWeights,
+    mint: &mut dyn FnMut() -> TaskId,
+) -> Matching {
+    let OldFingerprints { pairs, info } = old_fingerprints(old);
+    let (new_fps, new_task_positions) = new_fingerprints(new);
+    // The whole file's task count, for the cost function's position term -- NOT the (possibly
+    // much smaller) counts below, which only cover what `split_exact_matches` left unmatched.
+    let max_task_count = pairs.len().max(new_fps.len());
+    let split = split_exact_matches(
+        &pairs,
+        &new_fps,
+        (old.file, &info),
+        (new, &new_task_positions),
+    );
+    let solved = assign(
+        &split.remaining_old,
+        &split.remaining_new,
+        weights,
+        max_task_count,
+    );
+
+    let mut matched = split.trivial;
+    matched.extend(
+        solved
+            .matched
+            .iter()
+            .map(|&(task, i)| (task, split.remaining_new_tli[i])),
+    );
+    let inserted: Vec<usize> = solved
+        .inserted
+        .iter()
+        .map(|&i| split.remaining_new_tli[i])
+        .collect();
+
+    let mut new_ids: Vec<Option<TaskId>> = vec![None; new.lines.len()];
+    for &(task, new_tli) in &matched {
+        new_ids[new_task_positions[new_tli]] = Some(task);
+    }
+    let mut minted = 0usize;
+    for &new_tli in &inserted {
+        new_ids[new_task_positions[new_tli]] = Some(mint());
+        minted += 1;
+    }
+    let reused = matched.len();
+
+    Matching {
+        matched,
+        deleted: solved.deleted,
+        inserted,
+        new_ids,
         minted,
         reused,
-        ids: new_ids,
+        info,
+        new_task_positions,
     }
 }
 
@@ -150,6 +214,67 @@ fn new_fingerprints(new: &File) -> (Vec<Fingerprint>, Vec<usize>) {
         positions.push(raw);
     }
     (fps, positions)
+}
+
+/// `pairs`/`new_fps` split into pairs whose lines are byte-identical (matched for free — no need
+/// to run them through `assign`) and everything left over, which still needs the O(n³) Hungarian
+/// solve. Most reconciles touch only a handful of lines; without this, a single edit in a 10k-line
+/// file would build (and solve) a 10k×10k cost matrix for lines that were never in question —
+/// exactly the blow-up the design's bench budget calls out.
+struct Split {
+    /// Exact-content pairs, greedily matched in old order.
+    trivial: Vec<(TaskId, usize)>,
+    /// Old entries with no exact-content match, still needing `assign`.
+    remaining_old: Vec<(TaskId, Fingerprint)>,
+    /// New entries with no exact-content match.
+    remaining_new: Vec<Fingerprint>,
+    /// `remaining_new[i]`'s index in the original, full `new_fps`/`new_task_positions`.
+    remaining_new_tli: Vec<usize>,
+}
+
+fn split_exact_matches(
+    pairs: &[(TaskId, Fingerprint)],
+    new_fps: &[Fingerprint],
+    old: (&File, &BTreeMap<TaskId, (usize, usize)>),
+    new: (&File, &[usize]),
+) -> Split {
+    let (old, info) = old;
+    let (new, new_task_positions) = new;
+    let mut by_bytes: BTreeMap<&[u8], VecDeque<usize>> = BTreeMap::new();
+    for (new_tli, &raw) in new_task_positions.iter().enumerate().take(new_fps.len()) {
+        by_bytes
+            .entry(new.lines[raw].bytes())
+            .or_default()
+            .push_back(new_tli);
+    }
+    let mut trivial = Vec::new();
+    let mut consumed = vec![false; new_fps.len()];
+    let mut remaining_old = Vec::new();
+    for &(task, ref fp) in pairs {
+        let old_raw = info[&task].1;
+        let bytes = old.lines[old_raw].bytes();
+        match by_bytes.get_mut(bytes).and_then(VecDeque::pop_front) {
+            Some(new_tli) => {
+                trivial.push((task, new_tli));
+                consumed[new_tli] = true;
+            }
+            None => remaining_old.push((task, fp.clone())),
+        }
+    }
+    let mut remaining_new = Vec::new();
+    let mut remaining_new_tli = Vec::new();
+    for (new_tli, fp) in new_fps.iter().enumerate() {
+        if !consumed[new_tli] {
+            remaining_new.push(fp.clone());
+            remaining_new_tli.push(new_tli);
+        }
+    }
+    Split {
+        trivial,
+        remaining_old,
+        remaining_new,
+        remaining_new_tli,
+    }
 }
 
 /// Raw-row pairs for a matched-pair pass, split by whether the pair stayed in relative order.

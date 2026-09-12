@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use txtodo_core::File;
-use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId};
+use txtodo_model::{DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal, TaskId};
 use txtodo_store::{Projection, ReviewRow, Seq, Store, Stored};
 
 /// A checkpoint is written every this many ops (design §4.4 "every N ops").
@@ -44,6 +44,8 @@ pub struct ActorConfig {
     pub device: DeviceId,
     /// Shared Health counters.
     pub stats: Arc<crate::stats::Stats>,
+    /// How this document establishes task identity (fixed for the workspace's lifetime).
+    pub identity_mode: IdentityMode,
 }
 
 /// One persisted change, ready to commit.
@@ -103,7 +105,8 @@ impl FileActor {
         clock: Arc<dyn Clock>,
     ) -> Result<FileActor, ActorError> {
         let (changes, _) = broadcast::channel(WATCH_CAP);
-        let empty = DocState::from_tagged_file(cfg.path.clone(), &File::default())?;
+        let empty =
+            DocState::from_file(cfg.path.clone(), &File::default(), &[], cfg.identity_mode)?;
         let mirror = Mirror::from_state(&empty, loro_peer(cfg.device))
             .map_err(|e| ActorError::Mirror(e.to_string()))?;
         let mut actor = FileActor {
@@ -316,7 +319,7 @@ impl FileActor {
             tail,
         } = plan;
         let new_hash = hash_of(&bytes);
-        let range = self.persist_change(&ops, &bytes, new_hash, &tail)?;
+        let range = self.persist_change(&ops, &bytes, &tail, &next)?;
         self.state = next;
         self.projection = bytes;
         self.hash = new_hash;
@@ -345,16 +348,16 @@ impl FileActor {
         &mut self,
         ops: &[Op],
         bytes: &[u8],
-        hash: Hash,
         tail: &CommitTail,
+        next: &DocState,
     ) -> Result<Option<txtodo_store::SeqRange>, ActorError> {
         let projection = Projection {
             file: self.cfg.path.clone(),
             bytes: bytes.to_vec(),
-            hash,
+            hash: hash_of(bytes),
             written_at_ms: self.clock.now_ms(),
         };
-        let extras = self.commit_extras(tail)?;
+        let extras = self.commit_extras(tail, next)?;
         Ok(self
             .lock_store()
             .commit_change_with(ops, &projection, Some(self.hash), &extras)?)

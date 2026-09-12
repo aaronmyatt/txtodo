@@ -12,19 +12,39 @@ use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::watch_task;
 use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
+use txtodo_model::IdentityMode;
 
-/// `txtodod --dir <workspace>`; nothing is guessed from the cwd in a service.
+/// `txtodod --dir <workspace> [--identity-mode <tagged|sidecar>]`; nothing is guessed from the
+/// cwd in a service.
 struct Args {
     dir: PathBuf,
+    /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3);
+    /// `Sidecar` when the flag is omitted (docs/questions.md Q2).
+    identity_mode: IdentityMode,
+}
+
+fn parse_identity_mode(raw: &std::ffi::OsStr) -> Result<IdentityMode, String> {
+    match raw.to_str() {
+        Some("tagged") => Ok(IdentityMode::Tagged),
+        Some("sidecar") => Ok(IdentityMode::Sidecar),
+        _ => Err(format!(
+            "--identity-mode must be tagged or sidecar, got {raw:?}"
+        )),
+    }
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut args = std::env::args_os().skip(1);
     let mut dir: Option<PathBuf> = None;
-    // Bounded by the argv length; two flags are all this binary knows.
+    let mut identity_mode = IdentityMode::Sidecar;
+    // Bounded by the argv length; three flags are all this binary knows.
     while let Some(a) = args.next() {
         match a.to_str() {
             Some("--dir") => dir = args.next().map(PathBuf::from),
+            Some("--identity-mode") => {
+                let raw = args.next().ok_or("--identity-mode needs a value")?;
+                identity_mode = parse_identity_mode(&raw)?;
+            }
             Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
             _ => {
                 return Err(format!(
@@ -38,7 +58,7 @@ fn parse_args() -> Result<Args, String> {
         .canonicalize()
         .map_err(|e| format!("cannot open workspace {}: {e}", dir.display()))?;
     debug_assert!(dir.is_absolute());
-    Ok(Args { dir })
+    Ok(Args { dir, identity_mode })
 }
 
 fn main() -> ExitCode {
@@ -76,7 +96,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         // The pid lock says no other instance runs, so this is a stale socket from a crash.
         std::fs::remove_file(&socket)?;
     }
-    let ws = Workspace::open(&args.dir, Arc::new(SystemClock))?;
+    let ws =
+        Workspace::open_with_default_mode(&args.dir, Arc::new(SystemClock), args.identity_mode)?;
     let documents = ws.paths().count();
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let (_watcher, watch_handle) = watch_task::start(Arc::clone(&ws), Arc::new(SystemClock))?;

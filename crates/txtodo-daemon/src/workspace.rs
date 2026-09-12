@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use txtodo_model::{DeviceId, FilePath, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid};
 use txtodo_store::{Store, StoreError};
 use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
 
@@ -22,6 +22,8 @@ use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
 pub const DEVICE_ID_KEY: &str = "device_id";
 /// The `meta` key holding this workspace's sync group id (plan M4 pairing).
 pub const GROUP_ID_KEY: &str = "group_id";
+/// The `meta` key holding this workspace's identity mode (docs/questions.md Q2).
+pub const IDENTITY_MODE_KEY: &str = "identity_mode";
 /// Where the store lives under the workspace root (ADR 0010).
 pub const STORE_FILE: &str = "oplog.db";
 
@@ -68,6 +70,9 @@ pub struct Workspace {
     store: SharedStore,
     clock: Arc<dyn Clock>,
     device: DeviceId,
+    /// How every document in this workspace establishes task identity: minted once, at first
+    /// open, and fixed for the workspace's lifetime (`load_or_mint_identity_mode`).
+    identity_mode: IdentityMode,
     actors: BTreeMap<FilePath, ActorHandle>,
     started_at_ms: u64,
     stats: Arc<Stats>,
@@ -85,9 +90,22 @@ pub struct Workspace {
 }
 
 impl Workspace {
+    /// `open_with_default_mode` under the project-wide default (`IdentityMode::Sidecar`,
+    /// docs/questions.md Q2).
+    pub fn open(root: &Path, clock: Arc<dyn Clock>) -> Result<Workspace, WorkspaceError> {
+        Self::open_with_default_mode(root, clock, IdentityMode::Sidecar)
+    }
+
     /// Opens the store under `<root>/.txtodo/`, loads or mints the device id, walks the tree and
     /// spawns one actor per document. Must run inside a tokio runtime (actors are tasks).
-    pub fn open(root: &Path, clock: Arc<dyn Clock>) -> Result<Workspace, WorkspaceError> {
+    /// `default_identity_mode` decides a brand-new workspace's mode when nothing on disk already
+    /// carries an `id:` tag (`txtodod --identity-mode`); one already tagged is always `Tagged`
+    /// regardless (plan decision 3).
+    pub fn open_with_default_mode(
+        root: &Path,
+        clock: Arc<dyn Clock>,
+        default_identity_mode: IdentityMode,
+    ) -> Result<Workspace, WorkspaceError> {
         let state_dir = root.join(walker::STATE_DIR);
         std::fs::create_dir_all(&state_dir).map_err(|source| WalkError::Io {
             path: state_dir.clone(),
@@ -96,12 +114,14 @@ impl Workspace {
         let mut store = Store::open(&state_dir.join(STORE_FILE))?;
         let device = load_or_mint_device(&mut store, clock.as_ref())?;
         let group = load_or_mint_group(&mut store)?;
+        let identity_mode = load_or_mint_identity_mode(&mut store, root, default_identity_mode)?;
         let started_at_ms = clock.now_ms();
         let mut ws = Workspace {
             root: root.to_path_buf(),
             store: Arc::new(Mutex::new(store)),
             clock,
             device,
+            identity_mode,
             actors: BTreeMap::new(),
             started_at_ms,
             stats: Arc::new(Stats::default()),
@@ -150,6 +170,7 @@ impl Workspace {
             disk: self.root.join(path.as_str()),
             device: self.device,
             stats: Arc::clone(&self.stats),
+            identity_mode: self.identity_mode,
         };
         let actor = FileActor::open(cfg, Arc::clone(&self.store), Arc::clone(&self.clock))
             .map_err(|e| WorkspaceError::Actor(path.clone(), Box::new(e)))?;
@@ -184,6 +205,10 @@ impl Workspace {
     /// This device.
     pub fn device(&self) -> DeviceId {
         self.device
+    }
+    /// How every document in this workspace establishes task identity (docs/questions.md Q2).
+    pub fn identity_mode(&self) -> IdentityMode {
+        self.identity_mode
     }
     /// The injected clock: entropy and time enter the daemon only through this (plan §5's
     /// "inject the clock" idiom), so a token's id and timestamps come from here, never a bare
@@ -287,4 +312,65 @@ fn load_or_mint_group(store: &mut Store) -> Result<GroupId, StoreError> {
     }
     store.meta_set(GROUP_ID_KEY, &raw)?;
     Ok(GroupId(u128::from_be_bytes(raw)))
+}
+
+/// Loads this workspace's identity mode from `meta`, or mints one: `Tagged` if any discovered
+/// document already carries an `id:` tag (no silent mode flip on upgrade, plan decision 3), else
+/// `default` (`txtodod --identity-mode`, itself `Sidecar` by default — docs/questions.md Q2, a
+/// plain todo.txt needs no `id:` tags written into it). Fixed for the workspace's lifetime once
+/// minted, like the device/group id.
+fn load_or_mint_identity_mode(
+    store: &mut Store,
+    root: &Path,
+    default: IdentityMode,
+) -> Result<IdentityMode, WorkspaceError> {
+    if let Some(bytes) = store.meta_get(IDENTITY_MODE_KEY)?
+        && let Some(mode) = decode_identity_mode(&bytes)
+    {
+        return Ok(mode);
+    }
+    let mode = if any_document_is_tagged(root)? {
+        IdentityMode::Tagged
+    } else {
+        default
+    };
+    store.meta_set(IDENTITY_MODE_KEY, &encode_identity_mode(mode))?;
+    Ok(mode)
+}
+
+fn encode_identity_mode(mode: IdentityMode) -> [u8; 1] {
+    match mode {
+        IdentityMode::Tagged => [0],
+        IdentityMode::Sidecar => [1],
+    }
+}
+
+fn decode_identity_mode(bytes: &[u8]) -> Option<IdentityMode> {
+    match bytes {
+        [0] => Some(IdentityMode::Tagged),
+        [1] => Some(IdentityMode::Sidecar),
+        _ => None,
+    }
+}
+
+/// Whether any already-discoverable document in `root` carries at least one `id:` tag — decides a
+/// brand-new workspace's identity mode (never re-checked once minted).
+fn any_document_is_tagged(root: &Path) -> Result<bool, WorkspaceError> {
+    for rel in walker::walk(root)? {
+        if walker::is_notes_document(basename(&rel)) {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(root.join(rel.as_str())) else {
+            continue;
+        };
+        let file = txtodo_core::parse_file(&bytes);
+        if file
+            .lines
+            .iter()
+            .any(|l| crate::fastid::fast_id_of(l).is_some())
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

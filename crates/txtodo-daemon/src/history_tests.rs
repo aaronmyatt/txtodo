@@ -3,8 +3,8 @@
 use crate::history::{checkout, inverse, replay, seq_at_wall, undo_ops};
 use crate::state::task_id;
 use txtodo_model::{
-    DeviceId, Field, FieldValue, FilePath, Hlc, Op, OpId, OpKind, Principal, TextEdit, Ulid,
-    set_field,
+    DeviceId, Field, FieldValue, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal,
+    TextEdit, Ulid, set_field,
 };
 use txtodo_store::{Seq, Store, Stored};
 
@@ -81,10 +81,19 @@ fn seeded() -> (tempfile::TempDir, Store) {
 #[test]
 fn replay_and_checkout_render_intermediate_states() {
     let (_dir, store) = seeded();
-    let all = String::from_utf8(replay(&store, &path(), None).unwrap().to_bytes()).unwrap();
+    let all = String::from_utf8(
+        replay(&store, &path(), None, IdentityMode::Tagged)
+            .unwrap()
+            .to_bytes(),
+    )
+    .unwrap();
     assert_eq!(all, format!("(B) buy 400 ducks id:{A}\nwalk dog id:{B}\n"));
-    let at_two =
-        String::from_utf8(replay(&store, &path(), Some(Seq(2))).unwrap().to_bytes()).unwrap();
+    let at_two = String::from_utf8(
+        replay(&store, &path(), Some(Seq(2)), IdentityMode::Tagged)
+            .unwrap()
+            .to_bytes(),
+    )
+    .unwrap();
     assert_eq!(at_two, format!("(A) buy ducks id:{A}\nwalk dog id:{B}\n"));
     assert_eq!(seq_at_wall(&store, &path(), 2500).unwrap(), Some(Seq(2)));
     assert_eq!(
@@ -93,9 +102,12 @@ fn replay_and_checkout_render_intermediate_states() {
         "inclusive"
     );
     assert_eq!(seq_at_wall(&store, &path(), 500).unwrap(), None);
-    assert_eq!(checkout(&store, &path(), 500).unwrap(), b"");
     assert_eq!(
-        String::from_utf8(checkout(&store, &path(), 3999).unwrap()).unwrap(),
+        checkout(&store, &path(), 500, IdentityMode::Tagged).unwrap(),
+        b""
+    );
+    assert_eq!(
+        String::from_utf8(checkout(&store, &path(), 3999, IdentityMode::Tagged).unwrap()).unwrap(),
         format!("(B) buy ducks id:{A}\nwalk dog id:{B}\n")
     );
 }
@@ -103,7 +115,7 @@ fn replay_and_checkout_render_intermediate_states() {
 #[test]
 fn inverses_restore_the_previous_state_and_undo_ops_are_newest_first() {
     let (_dir, store) = seeded();
-    let inverses = undo_ops(&store, &path(), 2).unwrap();
+    let inverses = undo_ops(&store, &path(), 2, IdentityMode::Tagged).unwrap();
     assert_eq!(inverses.len(), 2);
     assert!(
         matches!(&inverses[0], OpKind::EditText { .. }),
@@ -117,7 +129,7 @@ fn inverses_restore_the_previous_state_and_undo_ops_are_newest_first() {
             ..
         }
     ));
-    let mut state = replay(&store, &path(), None).unwrap();
+    let mut state = replay(&store, &path(), None, IdentityMode::Tagged).unwrap();
     for inv in &inverses {
         state.apply_kind(inv).unwrap();
     }
@@ -130,7 +142,7 @@ fn inverses_restore_the_previous_state_and_undo_ops_are_newest_first() {
 #[test]
 fn undoing_an_insert_deletes_and_undoing_a_delete_reinserts_the_exact_line() {
     let (_dir, store) = seeded();
-    let before_b = replay(&store, &path(), Some(Seq(1))).unwrap();
+    let before_b = replay(&store, &path(), Some(Seq(1)), IdentityMode::Tagged).unwrap();
     let ins_b = Stored {
         seq: Seq(2),
         op: op(
@@ -150,7 +162,7 @@ fn undoing_an_insert_deletes_and_undoing_a_delete_reinserts_the_exact_line() {
             ..
         })
     ));
-    let after_b = replay(&store, &path(), Some(Seq(2))).unwrap();
+    let after_b = replay(&store, &path(), Some(Seq(2)), IdentityMode::Tagged).unwrap();
     let del_b = Stored {
         seq: Seq(9),
         op: op(

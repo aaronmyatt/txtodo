@@ -13,9 +13,6 @@
 //! 13.5 at most), so a real pairing is always preferred to a padded one wherever one exists, and a
 //! row or column stuck with padding is exactly a deletion or insertion.
 //! Ref: https://docs.rs/pathfinding/latest/pathfinding/kuhn_munkres/fn.kuhn_munkres_min.html
-// Nothing calls `assign` outside its own tests yet — wired in when `reconcile_sidecar.rs` lands
-// (plan `floofy-swinging-brooks.md`).
-#![allow(dead_code)]
 
 use pathfinding::matrix::Matrix;
 use pathfinding::prelude::kuhn_munkres_min;
@@ -47,11 +44,17 @@ fn scaled(cost: f64) -> i64 {
 
 /// Matches `old` (already-identified tasks) against `new` (this scan's fingerprints, in file
 /// order) by solving the assignment problem at minimum total cost, then rejecting any pairing at
-/// or above `weights.match_threshold`.
+/// or above `weights.match_threshold`. `max_task_count` is the position term's normaliser
+/// (`identity_fingerprint::cost`) — the *whole file's* task count, not just `old`/`new`'s own
+/// lengths: a caller that pre-filters exact-content matches out of `old`/`new` before calling this
+/// (`reconcile_sidecar`'s own fast path) must still pass the untrimmed count, or a moved task's
+/// position delta gets normalised against a handful of leftover lines instead of the real file
+/// size and can swamp every other term.
 pub fn assign(
     old: &[(TaskId, Fingerprint)],
     new: &[Fingerprint],
     weights: &CostWeights,
+    max_task_count: usize,
 ) -> Assignment {
     let n = old.len().max(new.len());
     if n == 0 {
@@ -61,8 +64,6 @@ pub fn assign(
             inserted: Vec::new(),
         };
     }
-    // The position term normalises by the larger of the two line counts in play for this round.
-    let max_task_count = n;
     let padding = scaled(PADDING_COST);
     let pair_cost = |row: usize, col: usize| -> i64 {
         if row < old.len() && col < new.len() {
@@ -123,7 +124,7 @@ mod tests {
 
     #[test]
     fn both_empty_assigns_nothing() {
-        let got = assign(&[], &[], &CostWeights::DEFAULT);
+        let got = assign(&[], &[], &CostWeights::DEFAULT, 0);
         assert_eq!(
             got,
             Assignment {
@@ -139,7 +140,7 @@ mod tests {
         let a = task(1);
         let old = [(a, fp("buy milk", 0))];
         let new = [fp("buy milk", 0)];
-        let got = assign(&old, &new, &CostWeights::DEFAULT);
+        let got = assign(&old, &new, &CostWeights::DEFAULT, 1);
         assert_eq!(got.matched, vec![(a, 0)]);
         assert!(got.deleted.is_empty());
         assert!(got.inserted.is_empty());
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn a_pure_insertion_with_no_old_tasks_is_all_inserts() {
         let new = [fp("buy milk", 0), fp("call mom", 1)];
-        let got = assign(&[], &new, &CostWeights::DEFAULT);
+        let got = assign(&[], &new, &CostWeights::DEFAULT, 2);
         assert!(got.matched.is_empty());
         assert!(got.deleted.is_empty());
         assert_eq!(got.inserted, vec![0, 1]);
@@ -159,7 +160,7 @@ mod tests {
         let a = task(1);
         let b = task(2);
         let old = [(a, fp("buy milk", 0)), (b, fp("call mom", 1))];
-        let got = assign(&old, &[], &CostWeights::DEFAULT);
+        let got = assign(&old, &[], &CostWeights::DEFAULT, 2);
         assert!(got.matched.is_empty());
         assert_eq!(got.deleted.len(), 2);
         assert!(got.deleted.contains(&a));
@@ -172,7 +173,7 @@ mod tests {
         let a = task(1);
         let old = [(a, fp("buy milk", 0))];
         let new = [fp("call the dentist about a checkup", 0)];
-        let got = assign(&old, &new, &CostWeights::DEFAULT);
+        let got = assign(&old, &new, &CostWeights::DEFAULT, 1);
         assert!(
             got.matched.is_empty(),
             "a full rewrite must not force-match"
@@ -189,7 +190,7 @@ mod tests {
         // assignment, i.e. pair `a` with the near-identical line, not the unrelated one.
         let old = [(a, fp("buy milk", 0))];
         let new = [fp("buy oat milk", 0), fp("call the dentist", 1)];
-        let got = assign(&old, &new, &CostWeights::DEFAULT);
+        let got = assign(&old, &new, &CostWeights::DEFAULT, 2);
         assert_eq!(got.matched, vec![(a, 0)]);
         assert_eq!(got.inserted, vec![1]);
     }
@@ -201,7 +202,7 @@ mod tests {
         let old = [(a, fp("buy milk", 0)), (b, fp("call mom", 1))];
         // Same two tasks, order swapped in the file.
         let new = [fp("call mom", 0), fp("buy milk", 1)];
-        let got = assign(&old, &new, &CostWeights::DEFAULT);
+        let got = assign(&old, &new, &CostWeights::DEFAULT, 2);
         let mut matched = got.matched.clone();
         matched.sort_by_key(|(t, _)| *t);
         assert_eq!(matched, vec![(a, 1), (b, 0)]);

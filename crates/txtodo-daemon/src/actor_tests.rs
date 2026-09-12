@@ -8,7 +8,7 @@ use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::stats::Stats;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use txtodo_model::{DeviceId, FilePath, Principal, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Principal, Ulid};
 use txtodo_store::{Seq, Store};
 
 const A: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAA";
@@ -33,6 +33,7 @@ fn cfg(dir: &Path) -> ActorConfig {
         disk: dir.join("todo.txt"),
         device: device(),
         stats: Arc::new(Stats::default()),
+        identity_mode: IdentityMode::Tagged,
     }
 }
 

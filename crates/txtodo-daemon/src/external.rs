@@ -6,12 +6,13 @@ use crate::actor_mirror::loro_peer;
 use crate::expected::{Hash, hex8};
 use crate::handle::{ActorError, Applied, Change};
 use crate::mirror::Mirror;
-use crate::reconcile::reconcile;
+use crate::reconcile::{Reconciled, reconcile, task_of};
+use crate::reconcile_sidecar::{Side, reconcile_sidecar};
 use crate::state::DocState;
 use crate::write::read_or_empty;
 use std::sync::Arc;
-use txtodo_core::parse_file;
-use txtodo_model::{FilePath, Hlc, Op, Principal, TaskId};
+use txtodo_core::{File, parse_file};
+use txtodo_model::{CostWeights, FilePath, Hlc, IdentityMode, Op, Principal, TaskId};
 use txtodo_store::{Seq, Snapshot};
 
 /// An actor error with nobody to reply to (the watcher sent the message): logged, never dropped.
@@ -53,7 +54,12 @@ impl FileActor {
         let Some(p) = projection else {
             return self.on_external_change().map(|_| ());
         };
-        match DocState::from_tagged_file(self.cfg.path.clone(), &parse_file(&p.bytes)) {
+        let parsed = parse_file(&p.bytes);
+        let ids = match self.stored_ids(&parsed)? {
+            Some(ids) => ids,
+            None => return self.on_external_change().map(|_| ()),
+        };
+        match DocState::from_file(self.cfg.path.clone(), &parsed, &ids, self.cfg.identity_mode) {
             Ok(state) => {
                 self.state = state;
                 self.projection = p.bytes;
@@ -70,6 +76,36 @@ impl FileActor {
             return Ok(());
         }
         self.on_external_change().map(|_| ())
+    }
+
+    /// Every line's task id for `file`: read straight off the text in tagged mode, or reconstructed
+    /// from the fingerprints this same commit's `CommitExtras` landed last time in sidecar mode
+    /// (`None` overall when they no longer line up with `file`'s task-line count — a caller should
+    /// fall back to reconciling from scratch, same as a parse failure).
+    fn stored_ids(&self, file: &File) -> Result<Option<Vec<Option<TaskId>>>, ActorError> {
+        if self.cfg.identity_mode == IdentityMode::Tagged {
+            return Ok(Some(
+                file.lines.iter().map(crate::fastid::fast_id_of).collect(),
+            ));
+        }
+        let rows = self.lock_store().live_fingerprints(&self.cfg.path)?;
+        let mut rows = rows.into_iter();
+        let mut ids = Vec::with_capacity(file.lines.len());
+        for line in &file.lines {
+            if task_of(line).is_none() {
+                ids.push(None);
+                continue;
+            }
+            let Some(row) = rows.next() else {
+                return Ok(None);
+            };
+            ids.push(Some(row.task));
+        }
+        Ok(if rows.next().is_some() {
+            None
+        } else {
+            Some(ids)
+        })
     }
 
     /// Design §4.3 steps 2–7 on one device.
@@ -130,14 +166,19 @@ impl FileActor {
         let new = parse_file(disk_bytes);
         let clock = Arc::clone(&self.clock);
         let mut mint = || TaskId::new(clock.new_ulid());
-        let r = reconcile(&old, &new, &self.cfg.path, &mut mint);
+        let r = self.reconcile_against(&old, &new, &mut mint);
         let target = r.file.to_bytes();
         let device = self.cfg.device;
         let ops = self.stamp(r.ops, &Principal::External { device })?;
         let (next, exact) = match self.replay_on_clone(&ops) {
             Some(next) if next.to_bytes() == target => (next, true),
             _ => (
-                DocState::from_tagged_file(self.cfg.path.clone(), &r.file)?,
+                DocState::from_file(
+                    self.cfg.path.clone(),
+                    &r.file,
+                    &r.ids,
+                    self.cfg.identity_mode,
+                )?,
                 false,
             ),
         };
@@ -156,6 +197,29 @@ impl FileActor {
             exact,
             write_back,
         })
+    }
+
+    /// Diffs `old` (our last projection) against `new` (the bytes just read): tagged mode reads
+    /// ids straight off the text; sidecar mode re-identifies by fingerprint, matching against
+    /// `self.state`'s own ids for `old` (the two agree byte-for-byte — "state tracks the
+    /// projection" — so `self.state`'s entries line up with `old`'s lines one for one).
+    fn reconcile_against(
+        &self,
+        old: &File,
+        new: &File,
+        mint: &mut dyn FnMut() -> TaskId,
+    ) -> Reconciled {
+        if self.cfg.identity_mode == IdentityMode::Tagged {
+            return reconcile(old, new, &self.cfg.path, mint);
+        }
+        let old_ids: Vec<Option<TaskId>> = (0..self.state.len())
+            .map(|i| self.state.entry_at(i).and_then(|e| e.id()))
+            .collect();
+        let side = Side {
+            file: old,
+            ids: &old_ids,
+        };
+        reconcile_sidecar(side, new, &self.cfg.path, &CostWeights::DEFAULT, mint)
     }
 
     fn replay_on_clone(&self, ops: &[Op]) -> Option<DocState> {
@@ -257,7 +321,7 @@ impl FileActor {
     ) -> Result<Applied, ActorError> {
         let kinds = {
             let store = self.lock_store();
-            crate::history::undo_ops(&store, &self.cfg.path, steps)?
+            crate::history::undo_ops(&store, &self.cfg.path, steps, self.cfg.identity_mode)?
         };
         let ops = self.stamp(kinds, &principal)?;
         let mut next = self.state.clone();
@@ -285,7 +349,8 @@ impl FileActor {
     /// The document as it was at `at_wall_ms` (inclusive). A view; the file is untouched.
     pub(crate) fn on_checkout(&self, at_wall_ms: u64) -> Result<Vec<u8>, ActorError> {
         let store = self.lock_store();
-        let bytes = crate::history::checkout(&store, &self.cfg.path, at_wall_ms)?;
+        let bytes =
+            crate::history::checkout(&store, &self.cfg.path, at_wall_ms, self.cfg.identity_mode)?;
         debug_assert!(bytes.len() <= txtodo_store::MAX_PROJECTION_BYTES);
         Ok(bytes)
     }

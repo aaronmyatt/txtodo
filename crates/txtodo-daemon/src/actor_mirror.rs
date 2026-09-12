@@ -5,9 +5,12 @@
 
 use crate::actor::{CommitTail, FileActor};
 use crate::handle::ActorError;
+use crate::identity_fingerprint::fingerprint_of;
 use crate::mirror::{Mirror, MirrorError};
-use txtodo_model::{DeviceId, FilePath, Op};
-use txtodo_store::{CommitExtras, ReviewRow};
+use crate::reconcile::task_of;
+use crate::state::DocState;
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Op};
+use txtodo_store::{CommitExtras, FingerprintRow, ReviewRow};
 
 /// The Loro peer id for a device: the ULID's low 64 bits (its random half).
 pub(crate) fn loro_peer(device: DeviceId) -> u64 {
@@ -29,7 +32,11 @@ impl FileActor {
     }
 
     /// The store-transaction extras a commit tail asks for.
-    pub(crate) fn commit_extras(&self, tail: &CommitTail) -> Result<CommitExtras, ActorError> {
+    pub(crate) fn commit_extras(
+        &self,
+        tail: &CommitTail,
+        next: &DocState,
+    ) -> Result<CommitExtras, ActorError> {
         let mirror = if tail.persist_mirror {
             Some(
                 self.mirror
@@ -44,7 +51,29 @@ impl FileActor {
         Ok(CommitExtras {
             clear: tail.clear,
             mirror,
+            fingerprints: self.fingerprints_for(next),
         })
+    }
+
+    /// Every live task's fingerprint in `next`, for `CommitExtras::fingerprints` — empty outside
+    /// sidecar mode, where there is nothing to track (identity lives in the `id:` tag instead).
+    fn fingerprints_for(&self, next: &DocState) -> Vec<FingerprintRow> {
+        if self.cfg.identity_mode != IdentityMode::Sidecar {
+            return Vec::new();
+        }
+        let now_ms = self.clock.now_ms();
+        next.task_lines()
+            .enumerate()
+            .filter_map(|(i, (task, line))| {
+                let parsed = task_of(line)?;
+                Some(FingerprintRow {
+                    file: self.cfg.path.clone(),
+                    task,
+                    fingerprint: fingerprint_of(&parsed, i),
+                    updated_at_ms: now_ms,
+                })
+            })
+            .collect()
     }
 
     /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by

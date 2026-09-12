@@ -53,8 +53,7 @@ pub struct TaskCounts {
 /// client; the message says which task and what was attempted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
-    /// A task line has no resolved id: no `id:` tag in tagged mode, no fingerprint match minted
-    /// one in sidecar mode (line index).
+    /// A task line has no resolved id, tag or fingerprint match (line index).
     MissingId(usize),
     /// A line is not valid UTF-8 (line index).
     Opaque(usize),
@@ -105,8 +104,7 @@ pub struct DocState {
 }
 
 impl DocState {
-    /// Builds the state from a parsed file and each line's resolved id (`ids[i]`, `None` for a
-    /// blank); `mode` decides whether `insert`/`edit_text` still cross-check a line's text.
+    /// Builds the state from a file and each line's resolved id (`ids[i]`, `None` for a blank).
     pub fn from_file(
         path: FilePath,
         file: &File,
@@ -205,6 +203,14 @@ impl DocState {
     /// Position of a task, if present.
     pub fn index_of(&self, id: TaskId) -> Option<usize> {
         self.entries.iter().position(|e| e.id() == Some(id))
+    }
+
+    /// Every task's id and line, in file order (blanks skipped): item `i` is task-line index `i`.
+    pub fn task_lines(&self) -> impl Iterator<Item = (TaskId, &OwnedLine)> {
+        self.entries.iter().filter_map(|e| match e {
+            Entry::Task { id, line } => Some((*id, line)),
+            Entry::Blank(_) => None,
+        })
     }
 
     /// Replaces the entry at `i` (fields.rs rewrites lines in place).

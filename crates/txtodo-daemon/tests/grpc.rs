@@ -16,7 +16,7 @@ use tower::service_fn;
 use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
-use txtodo_model::{FilePath, TaskId, Ulid};
+use txtodo_model::{FilePath, IdentityMode, TaskId, Ulid};
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb, mutation};
 use txtodo_store::{ReviewRow, Store};
@@ -37,9 +37,10 @@ async fn connect(socket: PathBuf) -> Client {
 }
 
 /// Serves `root` on a socket inside it; the server task ends when the returned sender drops.
+/// Tagged mode: this whole suite predates sidecar mode and checks `id:` tag behavior throughout.
 async fn serve(root: &Path) -> (Client, tokio::sync::oneshot::Sender<()>) {
-    let ws =
-        Workspace::open(root, Arc::new(SystemClock)).unwrap_or_else(|e| panic!("workspace: {e}"));
+    let ws = Workspace::open_with_default_mode(root, Arc::new(SystemClock), IdentityMode::Tagged)
+        .unwrap_or_else(|e| panic!("workspace: {e}"));
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let socket = root.join(".txtodo").join("txtodod.sock");
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
