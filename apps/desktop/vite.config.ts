@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-// @ts-expect-error type error without @types/node package
+// `@types/node` is now present (pulled in as a `vitest` peer devDependency for
+// `src/devices/*.test.ts`), so `node:process` no longer needs a `@ts-expect-error` suppression.
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
