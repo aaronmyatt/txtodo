@@ -38,6 +38,7 @@ mod pairing_wire;
 pub mod pidfile;
 mod progress;
 pub mod reconcile;
+pub mod reconcile_sidecar;
 pub mod refdir;
 mod refdir_ops;
 pub mod serve;
@@ -67,6 +68,8 @@ mod mutation_tests;
 mod notes_actor_tests;
 #[cfg(test)]
 mod pairing_grpc_tests;
+#[cfg(test)]
+mod reconcile_sidecar_tests;
 #[cfg(test)]
 mod reconcile_tests;
 #[cfg(test)]

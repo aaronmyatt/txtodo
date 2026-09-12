@@ -18,11 +18,14 @@ use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, TextEdit, set_fi
 pub struct Reconciled {
     /// Ops in application order.
     pub ops: Vec<OpKind>,
-    /// The new file with an `id:` on every task line — what the projection must become.
+    /// The file exactly as the projection must become: tagged mode stamps a fresh `id:` onto
+    /// every task line here; sidecar mode leaves the bytes untouched (identity lives in `ids`
+    /// and the fingerprint store instead).
     pub file: File,
-    /// Ids minted for lines that matched nothing.
+    /// Ids minted for a brand-new task that matched nothing in `old`.
     pub minted: usize,
-    /// Ids recovered by content for lines whose tag was stripped.
+    /// Ids carried forward from `old`: a stripped tag recovered by content in tagged mode, a
+    /// fingerprint match in sidecar mode.
     pub reused: usize,
     /// Every line's task id in `file`'s order, `None` for a blank — what `DocState::from_file`
     /// takes instead of re-deriving ids from text (sidecar mode has no `id:` tag to derive from).
