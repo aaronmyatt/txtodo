@@ -9,7 +9,7 @@ x 2026-09-12 2026-09-12 Daemon: raise flags after an import batch merges, never 
 x 2026-09-12 2026-09-12 Daemon ResolveConflict: write the chosen EditText and clear the flag in one transaction, or neither +m4 @daemon
 x 2026-09-12 2026-09-12 CLI txtodo conflicts list with a unified diff of mine vs theirs and --json; exit non-zero under --no-daemon +m4 @cli
 x 2026-09-12 2026-09-12 CLI txtodo conflicts resolve <line> mine|theirs|merged as a clap enum; merged clears the flag and writes no op +m4 @cli
-2026-09-12 Test: two devices edit the same word offline, merge, exactly one flag is raised and the file bytes are unchanged +m4 @crdt @test
-2026-09-12 Test: two devices edit different words, no flag; sequential edits to the same word, no flag +m4 @crdt @test
-2026-09-12 Test: resolve merged writes no op; resolve mine writes one EditText and the second resolve is a no-op +m4 @cli @test
-2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @cli
+x 2026-09-12 2026-09-12 Test: two devices edit the same word offline, merge, exactly one flag is raised and the file bytes are unchanged +m4 @crdt @test
+x 2026-09-12 2026-09-12 Test: two devices edit different words, no flag; sequential edits to the same word, no flag +m4 @crdt @test
+x 2026-09-12 2026-09-12 Test: resolve merged writes no op; resolve mine writes one EditText and the second resolve is a no-op +m4 @cli @test
+x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @cli
