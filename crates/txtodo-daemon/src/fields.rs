@@ -23,8 +23,8 @@ pub(crate) fn set_field(
             _ => Err(StateError::Unsupported("undelete via SetField")),
         };
     }
-    let line = state.entries()[i].line();
-    let new_line = rewrite_prefix(line, field, value)
+    let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
+    let new_line = rewrite_prefix(&line, field, value)
         .ok_or(StateError::Unsupported("SetField on this line"))?;
     debug_assert!(
         crate::state::id_of(&new_line) == Some(task),
@@ -47,7 +47,7 @@ pub(crate) fn edit_text(
     edits: &[TextEdit],
 ) -> Result<(), StateError> {
     let i = state.index_of(task).ok_or(StateError::UnknownTask(task))?;
-    let line = state.entries()[i].line();
+    let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
     let description = match line.parse().map(|l| l.kind) {
         Some(LineKind::Task(t)) => t.description.to_owned(),
         _ => return Err(StateError::Opaque(i)),
@@ -57,7 +57,7 @@ pub(crate) fn edit_text(
     let edit = Edit::new()
         .set_description(&new_description)
         .map_err(|_| StateError::Unsupported("line break"))?;
-    let new_line = txtodo_core::apply(line, &edit);
+    let new_line = txtodo_core::apply(&line, &edit);
     if crate::state::id_of(&new_line) != Some(task) {
         return Err(StateError::IdMismatch(task));
     }

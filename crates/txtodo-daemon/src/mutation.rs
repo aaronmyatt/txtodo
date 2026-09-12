@@ -116,9 +116,9 @@ impl std::error::Error for MutationError {}
 pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), MutationError> {
     let n = task.line_number;
     let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
-    let entry = state.entries().get(i).ok_or(MutationError::NoLine(n))?;
+    let entry = state.entry_at(i).ok_or(MutationError::NoLine(n))?;
     let found = match entry {
-        Entry::Task { id, .. } => *id,
+        Entry::Task { id, .. } => id,
         Entry::Blank(_) => return Err(MutationError::Blank(n)),
     };
     if let Some(expected) = task.task_id
@@ -147,16 +147,18 @@ pub fn mutation_ops(
     match mutation {
         Mutation::Add { line } => add_ops(state, line, mint),
         Mutation::Complete { task, today } => {
-            let (i, _) = resolve(state, task)?;
-            let old = state.entries()[i].line();
-            let new = txtodo_core::apply(old, &Edit::new().complete(*today));
-            Ok(change_ops(old, &new))
+            let (_, id) = resolve(state, task)?;
+            let old = state
+                .line_of(id)
+                .ok_or(MutationError::NoLine(task.line_number))?;
+            let new = txtodo_core::apply(&old, &Edit::new().complete(*today));
+            Ok(change_ops(&old, &new))
         }
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { .. } => Err(MutationError::Unsupported("Move between files")),
         Mutation::Delete { task, leave_blank } => {
             let (i, id) = resolve(state, task)?;
-            let after = state.entries()[..i].iter().rev().find_map(Entry::id);
+            let after = state.task_before(i);
             let mut ops = vec![
                 set_field(id, Field::Deleted, FieldValue::Bool(true))
                     .unwrap_or(OpKind::BlankRemove { after }),
@@ -186,7 +188,7 @@ fn add_ops(
         }
     };
     let task = id_of(&owned).ok_or_else(|| MutationError::NotATask(line.to_owned()))?;
-    let after = state.entries().iter().rev().find_map(Entry::id);
+    let after = state.task_before(state.len());
     let text = owned.raw().unwrap_or_default().to_owned();
     debug_assert!(text.contains("id:"), "an added line always carries its id");
     Ok(vec![OpKind::Insert {
@@ -201,12 +203,15 @@ fn edit_ops(
     task: &TaskRef,
     new_line: &str,
 ) -> Result<Vec<OpKind>, MutationError> {
-    let (i, id) = resolve(state, task)?;
+    let (_, id) = resolve(state, task)?;
     let new = task_line(new_line)?;
     if id_of(&new) != Some(id) {
         return Err(MutationError::IdChanged(id));
     }
-    Ok(change_ops(state.entries()[i].line(), &new))
+    let old = state
+        .line_of(id)
+        .ok_or(MutationError::NoLine(task.line_number))?;
+    Ok(change_ops(&old, &new))
 }
 
 /// Validates client text into a task line (LF ending; the state re-ends it on insert).

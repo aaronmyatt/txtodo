@@ -3,7 +3,7 @@
 //! and applies the ops after it, so an adopted (non-op) state is honoured too.
 
 use crate::handle::ActorError;
-use crate::state::{DocState, Entry};
+use crate::state::DocState;
 use crate::textedit::apply_text_edits;
 use txtodo_core::{File, LineKind, parse_file};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, TextEdit, set_field};
@@ -87,8 +87,8 @@ pub fn inverse(before: &DocState, stored: &Stored) -> Option<OpKind> {
             ..
         } => {
             let i = before.index_of(*task)?;
-            let after = before.entries()[..i].iter().rev().find_map(Entry::id);
-            let line = before.entries()[i].line().raw()?.to_owned();
+            let after = before.task_before(i);
+            let line = before.line_of(*task)?.raw()?.to_owned();
             Some(OpKind::Insert {
                 task: *task,
                 after,
@@ -98,8 +98,7 @@ pub fn inverse(before: &DocState, stored: &Stored) -> Option<OpKind> {
         OpKind::SetField { task, field, .. } => inverse_set_field(before, *task, *field),
         OpKind::EditText { task, edits } => inverse_edit_text(before, *task, edits),
         OpKind::Move { task, to_file, .. } => {
-            let i = before.index_of(*task)?;
-            let after = before.entries()[..i].iter().rev().find_map(Entry::id);
+            let after = before.task_before(before.index_of(*task)?);
             Some(OpKind::Move {
                 task: *task,
                 after,
@@ -114,7 +113,7 @@ pub fn inverse(before: &DocState, stored: &Stored) -> Option<OpKind> {
 
 /// The previous value of a prefix field, read from the state before the op.
 fn inverse_set_field(before: &DocState, task: TaskId, field: Field) -> Option<OpKind> {
-    let line = before.entries()[before.index_of(task)?].line();
+    let line = before.line_of(task)?;
     let LineKind::Task(t) = line.parse()?.kind else {
         return None;
     };
@@ -131,7 +130,7 @@ fn inverse_set_field(before: &DocState, task: TaskId, field: Field) -> Option<Op
 
 /// `diff_text(after, before)` — the edit stream that takes the description back.
 fn inverse_edit_text(before: &DocState, task: TaskId, edits: &[TextEdit]) -> Option<OpKind> {
-    let line = before.entries()[before.index_of(task)?].line();
+    let line = before.line_of(task)?;
     let LineKind::Task(t) = line.parse()?.kind else {
         return None;
     };

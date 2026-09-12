@@ -119,9 +119,37 @@ impl DocState {
         &self.path
     }
 
-    /// The entries in file order.
-    pub fn entries(&self) -> &[Entry] {
-        &self.entries
+    /// Number of lines, blanks included.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// True when the document has no lines.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// The entry at `i`, by value: the backing store is not a slice after M4 (plan M4), so no
+    /// borrowed `&[Entry]` is lent out.
+    pub fn entry_at(&self, i: usize) -> Option<Entry> {
+        self.entries.get(i).cloned()
+    }
+
+    /// The line bytes of a task, if present.
+    pub fn line_of(&self, id: TaskId) -> Option<OwnedLine> {
+        let i = self.index_of(id)?;
+        debug_assert!(i < self.entries.len(), "index_of is in range");
+        Some(self.entries[i].line().clone())
+    }
+
+    /// The nearest task id strictly before position `i` — the `after` anchor an op at `i` needs.
+    /// `i == len()` asks for the last task in the document.
+    pub fn task_before(&self, i: usize) -> Option<TaskId> {
+        debug_assert!(i <= self.entries.len(), "task_before index {i} in range");
+        self.entries[..i.min(self.entries.len())]
+            .iter()
+            .rev()
+            .find_map(Entry::id)
     }
 
     /// Position of a task, if present.

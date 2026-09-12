@@ -25,8 +25,8 @@ fn from_file_is_byte_faithful_and_requires_ids() {
     let bytes = two_lines_crlf();
     let state = doc(&bytes);
     assert_eq!(state.to_bytes(), bytes);
-    assert_eq!(state.entries().len(), 3);
-    assert!(matches!(state.entries()[1], Entry::Blank(_)));
+    assert_eq!(state.len(), 3);
+    assert!(matches!(state.entry_at(1), Some(Entry::Blank(_))));
     assert_eq!(state.index_of(task_id(ulid_bits(B))), Some(2));
     let no_id = parse_file(b"(A) no id here\n");
     assert_eq!(
@@ -38,6 +38,25 @@ fn from_file_is_byte_faithful_and_requires_ids() {
         DocState::from_file(FilePath::new("t.txt").unwrap(), &opaque).unwrap_err(),
         StateError::Opaque(0)
     );
+}
+
+#[test]
+fn accessors_answer_by_index_and_by_id() {
+    let state = doc(&two_lines_crlf());
+    let (a, b) = (task_id(ulid_bits(A)), task_id(ulid_bits(B)));
+    assert!(!state.is_empty());
+    assert_eq!(state.entry_at(3), None, "past the end");
+    assert_eq!(state.entry_at(2).and_then(|e| e.id()), Some(b));
+    assert_eq!(state.task_before(0), None, "nothing before the first line");
+    assert_eq!(state.task_before(2), Some(a), "skips the blank at 1");
+    assert_eq!(
+        state.task_before(3),
+        Some(b),
+        "len() asks for the last task"
+    );
+    let line = state.line_of(a).and_then(|l| l.raw().map(str::to_owned));
+    assert_eq!(line, Some(format!("(A) 2026-09-11 buy ducks +farm id:{A}")));
+    assert_eq!(state.line_of(task_id(ulid_bits(C))), None);
 }
 
 #[test]
@@ -133,7 +152,8 @@ fn set_field_rewrites_the_prefix_and_delete_removes_the_line() {
     state
         .apply(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap())
         .unwrap();
-    assert_eq!(state.entries().len(), 2);
+    assert_eq!(state.len(), 2);
+    assert_eq!(state.line_of(a), None);
     assert_eq!(
         state.apply(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap()),
         Err(StateError::UnknownTask(a))
