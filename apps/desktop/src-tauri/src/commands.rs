@@ -6,7 +6,7 @@
 use crate::daemon::{self, DaemonClient, DaemonError};
 use crate::dto::{
     ApplyResultDto, ChangeDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto,
-    ResolutionDto, TaskRefDto,
+    ResolutionDto, ReviewFlagDto, TaskRefDto,
 };
 use crate::state::AppState;
 use crate::status::DaemonStatus;
@@ -37,8 +37,12 @@ pub(crate) async fn connect_and_store(
     Ok(())
 }
 
-/// Ensures a client is stored, connecting/spawning first if this is the first call.
-async fn ensure_connected(app: &AppHandle, state: &AppState) -> Result<(), String> {
+/// Ensures a client is stored, connecting/spawning first if this is the first call. `pub(crate)`
+/// (not private) so the sibling `commands_*` modules (split out of this file the way
+/// `crates/txtodo-daemon/src/server.rs` splits into `notes.rs`/`tokens.rs`/`pairing_grpc.rs`/
+/// `activity.rs`) can reach it — Rust's default privacy does not extend to sibling modules, only
+/// descendants.
+pub(crate) async fn ensure_connected(app: &AppHandle, state: &AppState) -> Result<(), String> {
     if state.client.lock().await.is_some() {
         return Ok(());
     }
@@ -176,4 +180,22 @@ pub async fn resolve(
     };
     let resp = client.resolve(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))
+}
+
+/// Open `needs_review` flags for one workspace-relative document (plan M4): two devices rewrote
+/// the same word.
+#[tauri::command]
+pub async fn list_conflicts(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<Vec<ReviewFlagDto>, String> {
+    ensure_connected(&app, &state).await?;
+    let mut guard = state.client.lock().await;
+    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let resp = client
+        .list_conflicts(&path)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(resp.flags.into_iter().map(ReviewFlagDto::from).collect())
 }

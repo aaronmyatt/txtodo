@@ -160,4 +160,98 @@ impl DaemonClient {
     ) -> Result<pb::ApplyResponse, DaemonError> {
         Ok(self.inner.resolve_conflict(req).await?.into_inner())
     }
+
+    /// Open `needs_review` flags for `path` (plan M4): two devices rewrote the same word.
+    pub async fn list_conflicts(
+        &mut self,
+        path: &str,
+    ) -> Result<pb::ConflictsResponse, DaemonError> {
+        let req = pb::ConflictsRequest {
+            path: path.to_owned(),
+        };
+        Ok(self.inner.list_conflicts(req).await?.into_inner())
+    }
+
+    /// `notes.md` for one task's `ref:` directory (plan M5); the daemon resolves the task to its
+    /// directory, this client never touches the filesystem itself.
+    pub async fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, DaemonError> {
+        Ok(self.inner.get_notes(task).await?.into_inner())
+    }
+
+    /// One whole-document edit to `notes.md`; the daemon derives the Loro text ops and lazily
+    /// creates the `ref:` directory on the first edit (plan §3.2.4).
+    pub async fn edit_notes(
+        &mut self,
+        req: pb::NotesEditRequest,
+    ) -> Result<pb::ApplyResponse, DaemonError> {
+        Ok(self.inner.edit_notes(req).await?.into_inner())
+    }
+
+    /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
+    pub async fn pair_offer(&mut self) -> Result<pb::PairOfferResponse, DaemonError> {
+        Ok(self
+            .inner
+            .pair_offer(pb::PairOfferRequest {})
+            .await?
+            .into_inner())
+    }
+
+    /// Accepts a peer's scanned `PairOffer` (`code`) and begins the X25519 handshake; returns the
+    /// 6-word SAS.
+    pub async fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, DaemonError> {
+        let req = pb::PairAcceptRequest { code };
+        Ok(self.inner.pair_accept(req).await?.into_inner())
+    }
+
+    /// Confirms the SAS shown to the human on this device; the group key lands only once both
+    /// sides have confirmed.
+    pub async fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, DaemonError> {
+        Ok(self
+            .inner
+            .pair_confirm_sas(pb::PairConfirmRequest {})
+            .await?
+            .into_inner())
+    }
+
+    /// Mints a new capability token from the design §6.2 scope/caveat grammar.
+    pub async fn token_create(
+        &mut self,
+        req: pb::TokenCreateRequest,
+    ) -> Result<pb::Token, DaemonError> {
+        Ok(self.inner.token_create(req).await?.into_inner())
+    }
+
+    /// Tokens for this workspace, scopes included, secrets never returned.
+    pub async fn token_list(&mut self) -> Result<pb::TokenListResponse, DaemonError> {
+        Ok(self
+            .inner
+            .token_list(pb::TokenListRequest {})
+            .await?
+            .into_inner())
+    }
+
+    /// Revokes a token; the daemon refuses it on its next use.
+    pub async fn token_revoke(
+        &mut self,
+        id: String,
+    ) -> Result<pb::TokenRevokeResponse, DaemonError> {
+        let req = pb::TokenRevokeRequest { id };
+        Ok(self.inner.token_revoke(req).await?.into_inner())
+    }
+
+    /// Newest ops across every tracked file, at most 200, newest first: one bounded read, not a
+    /// live tail (unlike [`DaemonClient::watch`]) — so this drains the whole stream before
+    /// returning instead of forwarding it as an event stream.
+    pub async fn op_log(&mut self) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
+        let mut stream = self
+            .inner
+            .op_log_stream(pb::OpLogRequest {})
+            .await?
+            .into_inner();
+        let mut entries = Vec::new();
+        while let Some(entry) = stream.message().await? {
+            entries.push(entry);
+        }
+        Ok(entries)
+    }
 }

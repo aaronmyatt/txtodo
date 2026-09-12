@@ -5,7 +5,15 @@
 #![allow(clippy::print_stderr)] // startup failure's only human-output path, like txtodod's main.rs
 
 mod commands;
+mod commands_activity;
+mod commands_notes;
+mod commands_pairing;
+mod commands_tokens;
 mod dto;
+mod dto_activity;
+mod dto_notes;
+mod dto_pairing;
+mod dto_tokens;
 mod state;
 mod status;
 
@@ -44,6 +52,16 @@ pub fn run() {
             commands::apply,
             commands::history,
             commands::resolve,
+            commands::list_conflicts,
+            commands_notes::get_notes,
+            commands_notes::edit_notes,
+            commands_pairing::pair_offer,
+            commands_pairing::pair_accept,
+            commands_pairing::pair_confirm_sas,
+            commands_tokens::token_create,
+            commands_tokens::token_list,
+            commands_tokens::token_revoke,
+            commands_activity::op_log,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

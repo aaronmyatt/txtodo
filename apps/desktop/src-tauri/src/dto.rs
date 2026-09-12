@@ -7,8 +7,19 @@
 use serde::{Deserialize, Serialize};
 use txtodo_proto::v1 as pb;
 
-/// Lowercase-hex encoding of a byte slice (blake3 projection hashes are 32 bytes).
-fn hex(bytes: &[u8]) -> String {
+// Split out of this file for the same reason `crates/txtodo-daemon/src/server.rs` delegates to
+// `notes.rs`/`tokens.rs`/`pairing_grpc.rs`/`activity.rs`: keeping every DTO in one file would blow
+// the line budget. Each sibling re-exports through here so callers keep a single `crate::dto::*`
+// import surface, unaware of the split.
+pub use crate::dto_activity::OpLogEntryDto;
+pub use crate::dto_notes::NotesDocDto;
+pub use crate::dto_pairing::{PairOfferDto, PairResultDto};
+pub use crate::dto_tokens::TokenDto;
+
+/// Lowercase-hex encoding of a byte slice (blake3 projection hashes are 32 bytes). `pub(crate)`
+/// (not private) so `dto_notes.rs` — a sibling module, not a descendant of this one — can reuse it
+/// for `NotesDoc`'s hash instead of duplicating the encoding.
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
