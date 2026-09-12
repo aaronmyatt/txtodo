@@ -10,7 +10,7 @@ x 2026-09-12 2026-09-12 Row: complete vs complete is idempotent, one op survives
 x 2026-09-12 2026-09-12 Row: complete vs edit description keeps both; edit word 1 vs word 5 keeps both with no flag +m4 @crdt @test
 x 2026-09-12 2026-09-12 Row: edit word 3 vs word 3 char-merges and raises needs_review +m4 @crdt @test
 x 2026-09-12 2026-09-12 Row: priority A vs B is LWW by Hlc and the losing op is still visible in txtodo log, asserted on the log +m4 @crdt @test
-2026-09-12 Rows: delete vs edit resurrects, delete vs complete completes, both settings tested if configurable +m4 @crdt @test
+2026-09-12 Rows: delete vs edit resurrects, delete vs complete completes, both settings tested if configurable +m4 @crdt @test — blocked: this policy isn't implemented anywhere (fields merge independently, no cross-field rule); already flagged separately as its own follow-up task (task_4704d157), not re-built here piecemeal
 x 2026-09-12 2026-09-12 Row: move up vs move down applies both in the same order on every device +m4 @crdt @test
 x 2026-09-12 2026-09-12 Row: archive to done.txt vs edit lands the edit in done.txt +m4 @crdt @test
 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @test

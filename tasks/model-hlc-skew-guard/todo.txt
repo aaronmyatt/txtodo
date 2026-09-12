@@ -4,7 +4,7 @@ x 2026-09-12 2026-09-12 Add MAX_PEER_SKEW_AHEAD_MS and MAX_PEER_SKEW_BEHIND_MS c
 x 2026-09-12 2026-09-12 Hlc::merge(&mut self, remote: Hlc, now_ms: u64) per Kulkarni section 3, asserting result > self and result > remote and device unchanged +m4 @model
 x 2026-09-12 2026-09-12 merge returns Err(PeerAhead) when remote.wall_ms exceeds now_ms by the bound; a failed merge leaves the clock unchanged +m4 @model
 x 2026-09-12 2026-09-12 Skew::check(peer_ms, local_ms) -> Skew { Ok, Behind(ms), Ahead(ms) } for the Hello handshake and doctor to share +m4 @model
-2026-09-12 Extend txtodo doctor's clock check with one line per known peer, warn on Behind, fail on Ahead +m4 @cli
+2026-09-12 Extend txtodo doctor's clock check with one line per known peer, warn on Behind, fail on Ahead +m4 @cli — blocked: no "known peers" list exists yet (the devices table, tasks/sync-device-remove), and txtodo-cli can't reach txtodo-sync directly anyway; needs a new gRPC method on txtodo-daemon (off-limits this session)
 x 2026-09-12 2026-09-12 Table tests for the four merge branches, plus a failed merge leaves the clock unchanged +m4 @model @test
 x 2026-09-12 2026-09-12 proptest: merging a then b and b then a both yield a stamp greater than self, a and b +m4 @model @test
 x 2026-09-12 2026-09-12 Test: a peer 5 min 1 ms ahead is rejected, 4 min 59 s ahead is accepted, 1 day behind merges with a warning +m4 @model @test
