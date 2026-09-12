@@ -1,6 +1,9 @@
 //! Encrypted-file backend: permission refusal, Argon2 header round-trip, wrong-passphrase, and the
 //! "no file appears" assertion the resolver test also leans on.
 
+// `check_permissions` (keystore_file.rs) is a no-op on non-Unix targets, so the mode-bit
+// assertions below only make sense on Unix; `std::os::unix` itself does not exist elsewhere.
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
 use crate::keystore::{KeyId, KeyStore, Secret};
@@ -71,6 +74,7 @@ fn wrong_passphrase_is_refused_not_corrupted() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[cfg(unix)]
 #[test]
 fn group_or_world_readable_file_is_refused_not_repaired() {
     let path = tmp_path("perms");
@@ -95,6 +99,7 @@ fn group_or_world_readable_file_is_refused_not_repaired() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[cfg(unix)]
 #[test]
 fn created_file_has_owner_only_permissions() {
     let path = tmp_path("createmode");
@@ -105,6 +110,7 @@ fn created_file_has_owner_only_permissions() {
     let _ = std::fs::remove_file(&path);
 }
 
+#[cfg(unix)]
 #[test]
 fn low_argon2_parameters_still_open_after_constants_are_raised() {
     // Simulates "raised the constants later": derive+seal by hand with deliberately tiny
