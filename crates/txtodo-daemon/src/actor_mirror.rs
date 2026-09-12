@@ -5,8 +5,8 @@
 
 use crate::actor::{CommitTail, FileActor};
 use crate::handle::ActorError;
-use crate::mirror::Mirror;
-use txtodo_model::{DeviceId, Op};
+use crate::mirror::{Mirror, MirrorError};
+use txtodo_model::{DeviceId, FilePath, Op};
 use txtodo_store::{CommitExtras, ReviewRow};
 
 /// The Loro peer id for a device: the ULID's low 64 bits (its random half).
@@ -52,12 +52,14 @@ impl FileActor {
     pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
         match self.mirror.flush(ops, &self.state) {
             Ok(()) => tracing::debug!(file = %self.cfg.path, ops = ops.len(), "mirror_flushed"),
-            Err(e) => {
-                tracing::error!(file = %self.cfg.path, error = %e, "mirror_refused_converging");
-                self.converge_mirror();
-            }
+            Err(e) => self.flush_refused(&e),
         }
         debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
+    }
+
+    fn flush_refused(&mut self, e: &MirrorError) {
+        tracing::error!(file = %self.cfg.path, error = %e, "mirror_refused_converging");
+        self.converge_mirror();
     }
 
     /// Brings the mirror to the state with corrective ops, keeping its lineage; only if that
@@ -65,12 +67,14 @@ impl FileActor {
     pub(crate) fn converge_mirror(&mut self) {
         match self.mirror.converge_to(&self.state, self.hlc) {
             Ok(n) => tracing::info!(file = %self.cfg.path, ops = n, "mirror_converged"),
-            Err(e) => {
-                tracing::error!(file = %self.cfg.path, error = %e, "mirror_converge_failed_new_lineage");
-                self.resync_mirror();
-            }
+            Err(e) => self.converge_failed(&e),
         }
         debug_assert!(self.mirror.agrees_with(&self.state));
+    }
+
+    fn converge_failed(&mut self, e: &MirrorError) {
+        tracing::error!(file = %self.cfg.path, error = %e, "mirror_converge_failed_new_lineage");
+        self.resync_mirror();
     }
 
     /// Rebuilds the mirror from the state: a new Loro lineage. For a first open with no
@@ -78,9 +82,13 @@ impl FileActor {
     pub(crate) fn resync_mirror(&mut self) {
         match Mirror::from_state(&self.state, loro_peer(self.cfg.device)) {
             Ok(m) => self.mirror = m,
-            Err(e) => tracing::error!(file = %self.cfg.path, error = %e, "mirror_rebuild_failed"),
+            Err(e) => Self::log_rebuild_failed(&self.cfg.path, &e),
         }
         debug_assert!(self.mirror.agrees_with(&self.state));
+    }
+
+    fn log_rebuild_failed(path: &FilePath, e: &MirrorError) {
+        tracing::error!(file = %path, error = %e, "mirror_rebuild_failed");
     }
 
     /// Stores the flags a change raised; a store failure is logged, the change is already durable.
@@ -88,12 +96,17 @@ impl FileActor {
         if rows.is_empty() {
             return;
         }
+        let path = self.cfg.path.clone();
         let mut store = self.lock_store();
         for row in rows {
             if let Err(e) = store.raise_flag(row) {
-                tracing::error!(file = %self.cfg.path, error = %e, "raise_flag_failed");
+                Self::log_raise_flag_failed(&path, &e);
             }
         }
         debug_assert!(rows.iter().all(|r| r.file == self.cfg.path));
+    }
+
+    fn log_raise_flag_failed(path: &FilePath, e: &txtodo_store::StoreError) {
+        tracing::error!(file = %path, error = %e, "raise_flag_failed");
     }
 }
