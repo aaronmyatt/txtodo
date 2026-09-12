@@ -21,6 +21,7 @@ pub mod mutation;
 mod notes;
 mod pairing_grpc;
 pub mod pidfile;
+mod progress;
 pub mod reconcile;
 pub mod serve;
 pub mod server;

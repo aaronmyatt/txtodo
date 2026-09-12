@@ -3,6 +3,7 @@
 
 use crate::handle::{ConflictRow, Resolution};
 use crate::mutation::{Mutation, TaskRef};
+use crate::state::TaskCounts;
 use tonic::Status;
 use txtodo_core::Date;
 use txtodo_model::{DeviceId, FilePath, OpKind, Principal, TaskId, TokenId, Ulid};
@@ -26,6 +27,32 @@ pub fn file_kind_of(path: &FilePath) -> pb::FileKind {
         pb::FileKind::Notes
     } else {
         pb::FileKind::Todo
+    }
+}
+
+/// The sibling `done.txt` path in the same directory as `path` (plan §3.2.5's progress rule),
+/// whether or not that document is tracked. `path` need not itself be a `todo.txt`.
+pub fn sibling_done_path(path: &FilePath) -> FilePath {
+    let p = path.as_str();
+    let sibling = match p.rfind('/') {
+        Some(i) => format!("{}/done.txt", &p[..i]),
+        None => "done.txt".to_owned(),
+    };
+    let done = FilePath::new(&sibling);
+    debug_assert!(
+        done.is_ok(),
+        "sibling of a valid path is valid: {sibling:?}"
+    );
+    done.unwrap_or_else(|_| path.clone())
+}
+
+/// `FileInfo.progress` for a TODO-kind file (plan §3.2.5): `sibling` is its `done.txt`'s counts,
+/// when tracked. Every task line in `done.txt` counts toward both `done` and `total`.
+pub fn progress_of(todo: TaskCounts, sibling: Option<TaskCounts>) -> pb::Progress {
+    let done_extra = sibling.map_or(0, |d| d.total);
+    pb::Progress {
+        done: u32::try_from(todo.completed + done_extra).unwrap_or(u32::MAX),
+        total: u32::try_from(todo.total + done_extra).unwrap_or(u32::MAX),
     }
 }
 
@@ -180,6 +207,30 @@ pub fn to_summary(s: &Stored) -> pb::OpSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sibling_done_path_stays_in_the_same_directory() {
+        let root = FilePath::new("todo.txt").unwrap();
+        assert_eq!(sibling_done_path(&root).as_str(), "done.txt");
+        let nested = FilePath::new("q4/ref/abc/todo.txt").unwrap();
+        assert_eq!(sibling_done_path(&nested).as_str(), "q4/ref/abc/done.txt");
+    }
+
+    #[test]
+    fn progress_of_combines_todo_and_sibling_done_counts() {
+        let todo = TaskCounts {
+            total: 3,
+            completed: 1,
+        };
+        let no_sibling = progress_of(todo, None);
+        assert_eq!((no_sibling.done, no_sibling.total), (1, 3));
+        let done = TaskCounts {
+            total: 2,
+            completed: 2,
+        };
+        let with_sibling = progress_of(todo, Some(done));
+        assert_eq!((with_sibling.done, with_sibling.total), (3, 5));
+    }
 
     #[test]
     fn paths_ulids_and_task_refs_are_validated_once() {

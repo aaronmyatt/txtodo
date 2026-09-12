@@ -42,7 +42,7 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
-    fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
+    pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -62,7 +62,9 @@ impl TxtodoService {
     }
 }
 
-fn status_of(e: ActorError) -> Status {
+// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, split out to keep this
+// file within its line budget; the pattern mirrors notes.rs's `impl TxtodoService` extension.
+pub(crate) fn status_of(e: ActorError) -> Status {
     match e {
         ActorError::Mutation(MutationError::Stale { .. }) => {
             Status::failed_precondition(e.to_string())
@@ -139,12 +141,16 @@ impl Txtodo for TxtodoService {
         let mut files = Vec::with_capacity(handles.len());
         for h in handles {
             let c = h.get().await.map_err(status_of)?;
+            let kind = file_kind_of(h.path());
+            let progress = match kind {
+                pb::FileKind::Todo => Some(self.progress_for(&h).await?),
+                _ => None,
+            };
             files.push(pb::FileInfo {
                 path: h.path().to_string(),
                 hash: c.hash.to_vec(),
-                kind: file_kind_of(h.path()) as i32,
-                // Real done/total lands with the tree-progress task; unset until then.
-                progress: None,
+                kind: kind as i32,
+                progress,
             });
         }
         Ok(Response::new(pb::ListFilesResponse { files }))
