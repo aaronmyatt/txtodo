@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use crate::actor::{Commit, CommitTail, FileActor};
-use crate::handle::{ActorError, Applied, ConflictRow, Resolution};
+use crate::handle::{ActorError, ActorMsg, Applied, ConflictRow, Resolution};
 use crate::mirror::file_like;
 use crate::mutation::{TaskRef, resolve};
 use crate::reconcile::change_ops;
@@ -99,6 +99,32 @@ impl FileActor {
         let adopted = DocState::from_file(self.cfg.path.clone(), &file)?;
         debug_assert!(self.mirror.agrees_with(&adopted));
         Ok(adopted)
+    }
+
+    /// The sync/conflict-resolution messages — split out of `actor.rs::handle_core` purely to
+    /// keep that function's line count in budget. The wildcard covers every variant
+    /// `handle`/`handle_core` already consumed (never actually reached here).
+    pub(crate) fn handle_sync(&mut self, msg: ActorMsg) {
+        match msg {
+            ActorMsg::Conflicts { reply } => {
+                let _ = reply.send(self.on_conflicts());
+            }
+            ActorMsg::Version { reply } => {
+                let _ = reply.send(self.mirror.version());
+            }
+            ActorMsg::Export { since, reply } => {
+                let _ = reply.send(self.on_export(&since));
+            }
+            ActorMsg::Resolve {
+                task,
+                resolution,
+                principal,
+                reply,
+            } => {
+                let _ = reply.send(self.on_resolve(task, resolution, principal));
+            }
+            _ => {}
+        }
     }
 
     /// Open flags with the line each task sits on now (0 when it is no longer in the file).
