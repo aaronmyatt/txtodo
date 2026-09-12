@@ -113,6 +113,7 @@ fn commit_change_with_lands_the_clear_and_the_mirror_with_the_commit() {
     let extras = CommitExtras {
         clear: Some((task(1), 200)),
         mirror: Some(b"mirror-at-commit".to_vec()),
+        fingerprints: Vec::new(),
     };
     let range = store
         .commit_change_with(&[], &projection, None, &extras)

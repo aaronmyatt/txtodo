@@ -3,9 +3,13 @@
 //! the file while we were down" (plan M3 crash safety). Plus the two reads undo and checkout need.
 
 use crate::flags::{clear_flag_on, upsert_mirror_on};
+use crate::identity::upsert_fingerprint_on;
 use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
-use crate::{MAX_OPS_PER_READ, Projection, Seq, SeqRange, Snapshot, Store, StoreError, Stored};
+use crate::{
+    FingerprintRow, MAX_OPS_PER_READ, Projection, Seq, SeqRange, Snapshot, Store, StoreError,
+    Stored,
+};
 use rusqlite::{OptionalExtension, params};
 use txtodo_model::{FilePath, Op, TaskId};
 
@@ -21,9 +25,14 @@ pub struct CommitExtras {
     pub clear: Option<(TaskId, u64)>,
     /// Store this Loro mirror snapshot at the commit's last seq (or the current last seq).
     pub mirror: Option<Vec<u8>>,
+    /// Sidecar identity mode (docs/questions.md Q2): every live task's fingerprint as of this
+    /// commit's new projection, upserted alongside it so identity and content never part ways
+    /// across a crash. Empty in tagged mode — nothing to track.
+    pub fingerprints: Vec<FingerprintRow>,
 }
 
-/// Lands the flag clear and/or the mirror snapshot on `tx`; the caller owns the transaction.
+/// Lands the flag clear, the mirror snapshot and/or the fingerprints on `tx`; the caller owns the
+/// transaction.
 fn land_extras(
     tx: &rusqlite::Connection,
     file: &FilePath,
@@ -41,7 +50,21 @@ fn land_extras(
         debug_assert!(seq.0 >= 0);
         upsert_mirror_on(tx, file, snapshot, seq)?;
     }
+    land_fingerprints(tx, file, &extras.fingerprints)?;
     debug_assert!(!file.as_str().is_empty());
+    Ok(())
+}
+
+/// Upserts every row of `fingerprints` on `tx`; the caller owns the transaction.
+fn land_fingerprints(
+    tx: &rusqlite::Connection,
+    file: &FilePath,
+    fingerprints: &[FingerprintRow],
+) -> Result<(), StoreError> {
+    for row in fingerprints {
+        debug_assert_eq!(&row.file, file, "a commit's own file's fingerprints only");
+        upsert_fingerprint_on(tx, file, row.task, &row.fingerprint, row.updated_at_ms)?;
+    }
     Ok(())
 }
 

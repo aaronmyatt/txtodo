@@ -105,22 +105,7 @@ impl Store {
         fingerprint: &Fingerprint,
         updated_at_ms: u64,
     ) -> Result<(), StoreError> {
-        self.conn
-            .execute(
-                UPSERT_FINGERPRINT,
-                params![
-                    file.as_str(),
-                    task_blob(task),
-                    encode_date(fingerprint.creation_date),
-                    encode_names(&fingerprint.projects)?,
-                    encode_names(&fingerprint.contexts)?,
-                    fingerprint.description_norm,
-                    i64::try_from(fingerprint.line_index).unwrap_or(i64::MAX),
-                    wall_i64(updated_at_ms),
-                ],
-            )
-            .map_err(StoreError::query("upsert fingerprint"))?;
-        Ok(())
+        upsert_fingerprint_on(&self.conn, file, task, fingerprint, updated_at_ms)
     }
 
     /// Marks `file`/`task`'s fingerprint tombstoned at `at_ms`. Idempotent: retiring twice just
@@ -209,4 +194,31 @@ impl Store {
         debug_assert!(out.len() <= MAX_FINGERPRINTS_PER_READ);
         Ok(out)
     }
+}
+
+/// Upserts one fingerprint on `conn`; the caller owns the transaction. What `commit.rs`'s
+/// `land_extras` calls for each of `CommitExtras::fingerprints`, so a sidecar commit's identity
+/// and content land together or not at all.
+pub(crate) fn upsert_fingerprint_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    task: TaskId,
+    fingerprint: &Fingerprint,
+    updated_at_ms: u64,
+) -> Result<(), StoreError> {
+    conn.execute(
+        UPSERT_FINGERPRINT,
+        params![
+            file.as_str(),
+            task_blob(task),
+            encode_date(fingerprint.creation_date),
+            encode_names(&fingerprint.projects)?,
+            encode_names(&fingerprint.contexts)?,
+            fingerprint.description_norm,
+            i64::try_from(fingerprint.line_index).unwrap_or(i64::MAX),
+            wall_i64(updated_at_ms),
+        ],
+    )
+    .map_err(StoreError::query("upsert fingerprint"))?;
+    Ok(())
 }
