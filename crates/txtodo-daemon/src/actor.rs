@@ -316,16 +316,7 @@ impl FileActor {
             tail,
         } = plan;
         let new_hash = hash_of(&bytes);
-        let projection = Projection {
-            file: self.cfg.path.clone(),
-            bytes: bytes.clone(),
-            hash: new_hash,
-            written_at_ms: self.clock.now_ms(),
-        };
-        let extras = self.commit_extras(&tail)?;
-        let range =
-            self.lock_store()
-                .commit_change_with(&ops, &projection, Some(self.hash), &extras)?;
+        let range = self.persist_change(&ops, &bytes, new_hash, &tail)?;
         self.state = next;
         self.projection = bytes;
         self.hash = new_hash;
@@ -346,6 +337,28 @@ impl FileActor {
             "state tracks the projection"
         );
         Ok(change)
+    }
+
+    /// Lands `ops` and the new projection in one store transaction; this is the durability point
+    /// (see the module doc) — everything after it (state swap, disk write, mirror) may still fail
+    /// without losing the change.
+    fn persist_change(
+        &mut self,
+        ops: &[Op],
+        bytes: &[u8],
+        hash: Hash,
+        tail: &CommitTail,
+    ) -> Result<Option<txtodo_store::SeqRange>, ActorError> {
+        let projection = Projection {
+            file: self.cfg.path.clone(),
+            bytes: bytes.to_vec(),
+            hash,
+            written_at_ms: self.clock.now_ms(),
+        };
+        let extras = self.commit_extras(tail)?;
+        Ok(self
+            .lock_store()
+            .commit_change_with(ops, &projection, Some(self.hash), &extras)?)
     }
 
     /// An adopted state (snapshot) is not the sum of its ops: converge the mirror instead of
@@ -380,14 +393,6 @@ impl FileActor {
             hash,
             ops: stored,
             review,
-        }
-    }
-
-    /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that
-    /// just landed durably (`Err` only means no receiver is left, which the guard excludes).
-    fn broadcast(&self, change: &Change) {
-        if self.changes.receiver_count() > 0 {
-            let _ = self.changes.send(change.clone());
         }
     }
 }
