@@ -19,6 +19,18 @@ pub(crate) fn tracing_stub_error(path: &FilePath, e: &ActorError) {
     tracing::error!(file = %path, error = %e, "external change failed");
 }
 
+/// What reconciling an external change against our projection produced (`derive_reconciled_ops`).
+struct ReconciledChange {
+    ops: Vec<Op>,
+    next: DocState,
+    /// The reconciler's rendering of the file (may differ from what's on disk right now).
+    target: Vec<u8>,
+    /// Replaying `ops` onto our current state reproduced `target` byte-for-byte.
+    exact: bool,
+    /// `target` differs from the bytes we just read off disk, so the file needs rewriting.
+    write_back: bool,
+}
+
 impl FileActor {
     pub(crate) fn recover(&mut self) -> Result<(), ActorError> {
         let (projection, prev, newest) = {
@@ -63,22 +75,34 @@ impl FileActor {
     pub(crate) fn on_external_change(&mut self) -> Result<Option<Change>, ActorError> {
         let _span = tracing::info_span!("reconcile", file = %self.cfg.path).entered();
         let bytes = read_or_empty(&self.cfg.disk)?;
-        let disk_hash = hash_of(&bytes);
-        if let Some(reason) = self.ignored_own_write_reason(&disk_hash) {
-            tracing::debug!(reason, "ignored_own_write");
+        if self.log_and_skip_own_write(&bytes) {
             return Ok(None);
         }
-        let (ops, next, target, exact) = self.derive_reconciled_ops(&bytes)?;
-        let write_back = target != bytes;
-        let change = self.commit(Commit {
-            ops,
-            next,
-            bytes: target,
-            write: write_back,
-            snapshot: !exact,
-            tail: CommitTail::default(),
-        })?;
+        let reconciled = self.derive_reconciled_ops(&bytes)?;
+        let change = self.commit_reconciled(reconciled)?;
         Ok(Some(change))
+    }
+
+    /// True (and logged) when `bytes` is a write this actor itself made — current or recent
+    /// (own-write ring, `expected.rs`) — never a foreign edit worth reconciling.
+    fn log_and_skip_own_write(&mut self, bytes: &[u8]) -> bool {
+        let disk_hash = hash_of(bytes);
+        let Some(reason) = self.ignored_own_write_reason(&disk_hash) else {
+            return false;
+        };
+        tracing::debug!(reason, "ignored_own_write");
+        true
+    }
+
+    fn commit_reconciled(&mut self, r: ReconciledChange) -> Result<Change, ActorError> {
+        self.commit(Commit {
+            ops: r.ops,
+            next: r.next,
+            bytes: r.target,
+            write: r.write_back,
+            snapshot: !r.exact,
+            tail: CommitTail::default(),
+        })
     }
 
     /// "current" when disk already matches our own projection; "recent" when it matches a write
@@ -100,10 +124,7 @@ impl FileActor {
     /// on: `exact` when replaying those ops onto our current state reproduces the reconciler's
     /// own render byte-for-byte (the common case), otherwise the reconciler's render is adopted
     /// directly and a snapshot is forced (mirror/state disagreement, healed on next flush).
-    fn derive_reconciled_ops(
-        &mut self,
-        disk_bytes: &[u8],
-    ) -> Result<(Vec<Op>, DocState, Vec<u8>, bool), ActorError> {
+    fn derive_reconciled_ops(&mut self, disk_bytes: &[u8]) -> Result<ReconciledChange, ActorError> {
         let old = parse_file(&self.projection);
         let new = parse_file(disk_bytes);
         let clock = Arc::clone(&self.clock);
@@ -123,7 +144,14 @@ impl FileActor {
             exact,
             "ops_derived"
         );
-        Ok((ops, next, target, exact))
+        let write_back = target != disk_bytes;
+        Ok(ReconciledChange {
+            ops,
+            next,
+            target,
+            exact,
+            write_back,
+        })
     }
 
     fn replay_on_clone(&self, ops: &[Op]) -> Option<DocState> {
@@ -256,5 +284,16 @@ impl FileActor {
         let bytes = crate::history::checkout(&store, &self.cfg.path, at_wall_ms)?;
         debug_assert!(bytes.len() <= txtodo_store::MAX_PROJECTION_BYTES);
         Ok(bytes)
+    }
+
+    /// Writes the current projection to disk, arming the own-write ring first so the watcher's
+    /// own notification of this write is recognized and ignored, not reconciled as foreign.
+    pub(crate) fn write_projection(&mut self) -> Result<(), ActorError> {
+        self.expected.arm(self.hash, self.clock.now_instant());
+        crate::write::write_atomic(&self.cfg.disk, &self.projection)?;
+        self.writes_total += 1;
+        self.cfg.stats.count_write();
+        debug_assert!(self.writes_total > 0);
+        Ok(())
     }
 }

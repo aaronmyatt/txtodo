@@ -15,7 +15,6 @@ use crate::handle::{
 use crate::mirror::Mirror;
 use crate::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
 use crate::state::DocState;
-use crate::write::write_atomic;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
@@ -336,13 +335,37 @@ impl FileActor {
             self.write_projection()?;
             tracing::info!(file = %self.cfg.path, bytes = self.projection.len(), hash = %hex8(&new_hash), "projection_written");
         }
-        // An adopted state (snapshot) is not the sum of its ops: converge the mirror instead.
+        self.update_mirror_after_commit(snapshot, tail.flush, &ops);
+        self.raise_flags(&tail.review);
+        let change = self.stored_change(new_hash, range, ops, tail.review);
+        self.maybe_snapshot(range.map(|r| r.last), snapshot)?;
+        self.broadcast(&change);
+        debug_assert_eq!(
+            self.state.to_bytes(),
+            self.projection,
+            "state tracks the projection"
+        );
+        Ok(change)
+    }
+
+    /// An adopted state (snapshot) is not the sum of its ops: converge the mirror instead of
+    /// feeding it ops it never actually replayed.
+    fn update_mirror_after_commit(&mut self, snapshot: bool, flush: bool, ops: &[Op]) {
         if snapshot {
             self.converge_mirror();
-        } else if tail.flush {
-            self.flush_mirror(&ops);
+        } else if flush {
+            self.flush_mirror(ops);
         }
-        self.raise_flags(&tail.review);
+    }
+
+    /// Numbers the committed ops and assembles the `Change` this commit produced.
+    fn stored_change(
+        &self,
+        hash: Hash,
+        range: Option<txtodo_store::SeqRange>,
+        ops: Vec<Op>,
+        review: Vec<ReviewRow>,
+    ) -> Change {
         let first = range.map_or(0, |r| r.first.0);
         let stored: Vec<Stored> = ops
             .into_iter()
@@ -352,31 +375,19 @@ impl FileActor {
                 op,
             })
             .collect();
-        self.maybe_snapshot(range.map(|r| r.last), snapshot)?;
-        let change = Change {
+        Change {
             path: self.cfg.path.clone(),
-            hash: new_hash,
+            hash,
             ops: stored,
-            review: tail.review,
-        };
-        if self.changes.receiver_count() > 0 {
-            // Err only when no receiver is left, which the guard above excludes.
-            let _ = self.changes.send(change.clone());
+            review,
         }
-        debug_assert_eq!(
-            self.state.to_bytes(),
-            self.projection,
-            "state tracks the projection"
-        );
-        Ok(change)
     }
 
-    pub(crate) fn write_projection(&mut self) -> Result<(), ActorError> {
-        self.expected.arm(self.hash, self.clock.now_instant());
-        write_atomic(&self.cfg.disk, &self.projection)?;
-        self.writes_total += 1;
-        self.cfg.stats.count_write();
-        debug_assert!(self.writes_total > 0);
-        Ok(())
+    /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that
+    /// just landed durably (`Err` only means no receiver is left, which the guard excludes).
+    fn broadcast(&self, change: &Change) {
+        if self.changes.receiver_count() > 0 {
+            let _ = self.changes.send(change.clone());
+        }
     }
 }
