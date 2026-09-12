@@ -51,6 +51,7 @@ fn hello() -> Message {
         group: GroupId(0xABCD),
         heads,
         protocol: PROTOCOL_VERSION,
+        wall_ms: 1_700_000_000_000,
     }
 }
 
@@ -142,6 +143,7 @@ fn caps_are_checked_before_encode() {
         group: GroupId(1),
         heads: too_many_heads,
         protocol: PROTOCOL_VERSION,
+        wall_ms: 0,
     };
     assert_eq!(
         hello.encode().unwrap_err(),

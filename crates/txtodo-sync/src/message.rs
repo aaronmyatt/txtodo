@@ -53,6 +53,9 @@ pub enum Message {
         heads: Heads,
         /// Application protocol the sender speaks; `PROTOCOL_VERSION` for this build.
         protocol: u16,
+        /// The sender's wall clock, Unix ms, so the receiver can run the HLC skew guard
+        /// (`txtodo_model::Skew::check`) before it merges a single op.
+        wall_ms: u64,
     },
     /// The ops the sender is missing, derived by diffing heads. Empty means "in sync".
     Want {
