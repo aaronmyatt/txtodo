@@ -36,6 +36,8 @@ mod mutation_tests;
 #[cfg(test)]
 mod reconcile_tests;
 #[cfg(test)]
+mod state_goldens;
+#[cfg(test)]
 mod state_tests;
 #[cfg(test)]
 mod workspace_tests;
