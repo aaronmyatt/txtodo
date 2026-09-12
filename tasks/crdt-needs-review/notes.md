@@ -84,3 +84,21 @@ subcommand keeps `mine|theirs` for muscle memory.
 - Prerequisite discovered: an import is a *Loro update* import, so the daemon's mirror must be
   persisted and pairing must ship a snapshot (shared lineage). The store/proto/daemon/CLI halves
   follow.
+
+## CLI as built (2026-09-12, agent)
+
+- `txtodo conflicts` with no subcommand is `list`; `conflicts resolve <line> mine|theirs|merged`,
+  with `Side` as a closed clap enum (`Mine|Theirs|Merged` mapped onto the wire `Resolution`).
+- `list` prints one block per flag: the line it sits on now (or "gone from the file"), the current
+  line text, then a two-line unified diff `- mine / + theirs`. `--json` emits one object per flag;
+  an empty list prints nothing in JSON mode ("TODO: no conflicts." in text mode).
+- The device-name labelling from the reading above could not happen: proto `ReviewFlag` carries
+  no device fields, so the sides are labelled mine/theirs. A future proto field (device names at
+  flag time) would let `list` label sides by device as intended.
+- `resolve` sends `TaskRef` with **both** addresses when the line has an id — the daemon then
+  rejects a stale line number — and an empty id when it does not; the daemon resolves by line.
+- Both subcommands fail with the history commands' `NEEDS_DAEMON` line in direct-file mode.
+- Remaining for the parent line: the resolve-semantics tests (merged writes no op; mine writes one
+  EditText; a second resolve is a no-op) — they need a raised flag, which needs an import, so they
+  live with the daemon test harness (`tests/grpc.rs` can raise one via the store directly), as
+  their own slice session.
