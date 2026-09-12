@@ -10,7 +10,8 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
   `TXTODO_LOG` filter). SIGTERM/SIGINT drain and remove the socket.
 - Module map: `workspace` (registry, device id, discovery) → `actor` + `external` (FileActor:
   open/recover, apply, external change, commit, undo, checkout) ← `handle` (messages, replies) ·
-  `state` + `fields` (DocState, every OpKind applied) · `reconcile` + `fastid` (pure diff → ops;
+  `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every
+  committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
   ops) · `history` (replay, checkout, inverse) · `walker`, `watcher`, `debounce`, `watch_task` ·
   `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `write` (temp + fsync +
@@ -35,5 +36,7 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
 - Every loop is bounded: mailbox 256, watch 64, raw events 4096, pending paths 1024, walk depth
   32, documents 10 000, replay pages 1 000, mutations per apply 10 000.
 - M3 scope: cross-file Move, NotesEdit and undelete-via-SetField are refused as Unsupported.
+- The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
+  after the store commit and a refusal is logged and healed by a rebuild, never a client error.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
   txtodo-sync, txtodo-proto, txtodo-mcp.

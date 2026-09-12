@@ -110,3 +110,29 @@ pub fn to_bytes(&self) -> Vec<u8>;                                              
 **Option B — canonical materialisation from Loro alone.** Simpler state, no `raw` map. Rewrites
 quirky lines on the next write, fails the goldens, changes M3 bytes. Only if the human drops the
 byte-identical invariant for quirky lines.
+
+## As built (2026-09-12) — re-planned from option A after measuring
+
+Option A was built and measured in debug: a per-op Loro mirror *inside* `DocState` cost **168 s**
+for a 10k-line adopt (every anchor lookup walked the Loro list) and **2.5 s per `clone`**
+(`LoroDoc::fork` exports and imports a snapshot; the actor clones per batch). Loro is addressed by
+index, we key by task id, and its history is not something a clone can share cheaply. So:
+
+- `DocState` keeps its M3 shape (`Vec<Entry>`, byte-faithful, `apply(&Op)` from step 2).
+- The **actor** owns a `Mirror` (`mirror.rs`): a `LoroDocument` hydrated from the state
+  (`txtodo_crdt::hydrate_file`, O(n), one commit) and fed every committed op *after* the store
+  commit. It is derived state: never consulted for bytes, rebuilt on recover/adopt/refusal.
+- crdt got what the mirror needs: a per-file shadow index (10k anchored inserts 168 s → 2.1 s
+  debug), `hydrate_file`, `fork`/`list_ids`/`is_deleted`/`description`/`set_description`,
+  tombstone-aware `BlankRemove`, resurrect-on-reinsert, and an LWW tie rule where the later write
+  in a batch lands.
+- Deviation from the task title ("Loro-backed state"): stated here, not silent. The reconciler
+  interface is unchanged; the goldens from 47100dc are untouched and green.
+
+Bench after: `reconcile_10k_one_edit` is unaffected by construction (the mirror flush happens
+after commit); the number is recorded below. The kill -9 crash test (10k lines, debug binary) went
+from ~30 s to ~66 s because the first reconcile flushes 10k Inserts into the mirror in debug.
+
+Open for the sync tasks: the mirror is in-memory only. For two devices to share Loro lineage the
+mirror's snapshot must be persisted (`LoroDocument::snapshot`, a store blob) and sync must exchange
+Loro updates, not replay our Ops into independent docs (independent replays never converge).
