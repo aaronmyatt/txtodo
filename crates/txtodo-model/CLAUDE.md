@@ -3,10 +3,17 @@
 ## Purpose
 Task ids, HLC, Op/OpKind/Principal — the op model every later layer records, ships and merges.
 Plan M3 (as built 2026-09-11). Workspace tree + progress (plan §3.2.5) is M5 and not here yet.
+Identity mode (tagged vs. sidecar, `docs/questions.md` Q2) added 2026-09-13.
 
 ## Public interface
 - Ids: `DeviceId`, `TaskId`, `OpId`, `TokenId` (ULID bits, `ulid()` for the core view); `Ulid` re-exported;
   `FilePath::new` validates a workspace-relative `/`-separated path once, at the boundary.
+- `IdentityMode::{Tagged, Sidecar}` — which way a workspace establishes task identity, minted once
+  and fixed for its lifetime (`txtodo-daemon`'s `workspace.rs`). `Fingerprint` — the pure-data shape
+  sidecar mode matches on (creation date, projects, contexts, normalised description, line index);
+  no matching algorithm lives here (it needs a string-distance dependency this crate must not
+  carry). `CostWeights::DEFAULT` — the v1 cost-function weights and match threshold from Q2;
+  `crates/txtodo-daemon/src/identity/` is where they're actually applied.
 - `Hlc { wall_ms, counter, device }`, `Hlc::zero`, `Hlc::tick(now_ms)` (send rule),
   `Hlc::merge(remote, now_ms)` (receive rule, Kulkarni §3), both `-> Result<Hlc, HlcError>`;
   `HlcError::{Overflow, PeerAhead}`; `Skew::check(peer_ms, local_ms) -> Skew::{Ok, Behind, Ahead}`
