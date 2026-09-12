@@ -10,6 +10,7 @@ use crate::convert::{
 use crate::handle::ConflictRow;
 use crate::handle::{ActorError, ActorHandle, Applied, WATCH_CAP};
 use crate::mutation::MutationError;
+use crate::refdir::RefDirError;
 use crate::workspace::Workspace;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -42,7 +43,7 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
-    fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
+    pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -50,8 +51,12 @@ impl TxtodoService {
 
     fn actor(&self, path: &str) -> Result<ActorHandle, Status> {
         let path = parse_path(path)?;
+        self.actor_by_path(&path)
+    }
+
+    pub(crate) fn actor_by_path(&self, path: &FilePath) -> Result<ActorHandle, Status> {
         self.workspace()
-            .actor(&path)
+            .actor(path)
             .cloned()
             .ok_or_else(|| Status::not_found(format!("no document {path}")))
     }
@@ -62,7 +67,7 @@ impl TxtodoService {
     }
 }
 
-fn status_of(e: ActorError) -> Status {
+pub(crate) fn status_of(e: ActorError) -> Status {
     match e {
         ActorError::Mutation(MutationError::Stale { .. }) => {
             Status::failed_precondition(e.to_string())
@@ -75,6 +80,13 @@ fn status_of(e: ActorError) -> Status {
         ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
             Status::internal(e.to_string())
         }
+        ActorError::RefDir(RefDirError::InvalidSlug(_) | RefDirError::SlugTaken(_)) => {
+            Status::invalid_argument(e.to_string())
+        }
+        ActorError::RefDir(RefDirError::CollisionsExhausted) => {
+            Status::resource_exhausted(e.to_string())
+        }
+        ActorError::RefDir(RefDirError::Io { .. }) => Status::internal(e.to_string()),
     }
 }
 
@@ -191,7 +203,7 @@ impl Txtodo for TxtodoService {
         r: Request<pb::ApplyRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
         let req = r.into_inner();
-        let h = self.actor(&req.path)?;
+        let path = parse_path(&req.path)?;
         let device = self.workspace().device();
         let principal = parse_principal(req.agent, device)?;
         let mutations = req
@@ -199,7 +211,7 @@ impl Txtodo for TxtodoService {
             .into_iter()
             .map(parse_mutation)
             .collect::<Result<Vec<_>, _>>()?;
-        let a = h.apply(mutations, principal).await.map_err(status_of)?;
+        let a = self.route_apply(path, mutations, principal).await?;
         Ok(Response::new(applied_of(a)))
     }
 

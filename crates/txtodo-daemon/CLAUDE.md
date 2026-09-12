@@ -13,10 +13,14 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
   `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every
   committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
-  ops) · `history` (replay, checkout, inverse) · `walker`, `watcher`, `debounce`, `watch_task` ·
-  `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `write` (temp + fsync +
-  rename) · `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`,
-  `stats`, `pidfile`.
+  ops; also `peek_line`, a read-only `TaskRef` resolve) · `history` (replay, checkout, inverse) ·
+  `refdir` + `refdir_ops` (slug generation, collision-safe filesystem moves, lazy `ref:` creation
+  and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
+  two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers
+  `todo.txt`/`done.txt`/`notes.md`; only the first two get a `FileActor`), `watcher`, `debounce`,
+  `watch_task` · `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `write`
+  (temp + fsync + rename) · `expected` (own-write ring) · `clock` (injected time, FakeClock) ·
+  `telemetry`, `stats`, `pidfile`.
 - Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
   `tests/external_edits.rs` (plan M3's eight scenarios), `tests/editor_saves.rs`, `tests/crash.rs`
   (kill -9 rounds) — the last three spawn the real binary through `tests/support`.
@@ -35,7 +39,10 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - Every loop is bounded: mailbox 256, watch 64, raw events 4096, pending paths 1024, walk depth
   32, documents 10 000, replay pages 1 000, mutations per apply 10 000.
-- M3 scope: cross-file Move, NotesEdit and undelete-via-SetField are refused as Unsupported.
+- M3 scope: NotesEdit and undelete-via-SetField are refused as Unsupported. Cross-file Move works
+  (plan M7): `mutation.rs::move_ops` records the source's departure; `move_coordinator.rs` inserts
+  the arriving line at the destination as its own `Insert` and relocates the `ref:` directory —
+  two ops, one per document, no shared op row (see that module's doc for why).
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,

@@ -5,6 +5,7 @@
 mod activity;
 pub mod actor;
 mod actor_mirror;
+mod apply_route;
 pub mod clock;
 pub mod convert;
 pub mod debounce;
@@ -17,11 +18,16 @@ pub mod history;
 mod import;
 pub mod mirror;
 mod mirror_converge;
+mod move_coordinator;
+#[cfg(test)]
+mod move_coordinator_tests;
 pub mod mutation;
 mod notes;
 mod pairing_grpc;
 pub mod pidfile;
 pub mod reconcile;
+pub mod refdir;
+mod refdir_ops;
 pub mod serve;
 pub mod server;
 pub mod state;
@@ -47,6 +53,8 @@ mod mirror_tests;
 mod mutation_tests;
 #[cfg(test)]
 mod reconcile_tests;
+#[cfg(test)]
+mod refdir_tests;
 #[cfg(test)]
 mod state_goldens;
 #[cfg(test)]

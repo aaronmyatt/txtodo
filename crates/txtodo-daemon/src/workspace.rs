@@ -111,9 +111,12 @@ impl Workspace {
         Ok(started)
     }
 
-    /// Starts an actor for `path` unless one exists. Returns true when it started one.
+    /// Starts an actor for `path` unless one exists. Returns true when it started one. `notes.md`
+    /// is discovered (`walker::is_notes_document`) but never gets a `FileActor` here: it is Loro
+    /// text prose, not task lines, and a future notes actor (tasks/crdt-notes-doc) owns it — see
+    /// `walker.rs`'s module doc and `workspace_tests::notes_md_is_left_alone`.
     pub fn register(&mut self, path: FilePath) -> Result<bool, WorkspaceError> {
-        if self.actors.contains_key(&path) {
+        if self.actors.contains_key(&path) || walker::is_notes_document(basename(&path)) {
             return Ok(false);
         }
         if self.actors.len() >= WALK_MAX_FILES {
@@ -167,6 +170,11 @@ impl Workspace {
     pub fn started_at_ms(&self) -> u64 {
         self.started_at_ms
     }
+}
+
+/// The last `/`-separated segment of a workspace-relative path.
+fn basename(path: &FilePath) -> &str {
+    path.as_str().rsplit('/').next().unwrap_or(path.as_str())
 }
 
 fn load_or_mint_device(store: &mut Store, clock: &dyn Clock) -> Result<DeviceId, StoreError> {

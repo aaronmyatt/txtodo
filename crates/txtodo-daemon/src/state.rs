@@ -56,7 +56,7 @@ pub enum StateError {
     Text(TaskId, TextEditError),
     /// `BlankRemove` found no blank at that position.
     NoBlank(Option<TaskId>),
-    /// The op kind is not handled on one device in M3 (cross-file move, notes, undelete, quirks).
+    /// The op kind is not handled in this document model (notes, undelete-via-`SetField`).
     Unsupported(&'static str),
     /// The document would exceed `MAX_LINES_PER_FILE`.
     TooManyLines(usize),
@@ -262,6 +262,11 @@ impl DocState {
         Ok(())
     }
 
+    /// A same-file reorder moves the entry to its new position; a cross-file move (`to_file !=
+    /// self.path`) only removes it here — this document is the *source*, and `after` names a
+    /// position in `to_file`, which is meaningless in this one. The destination actor never
+    /// replays this op: `crate::move_coordinator` inserts the line there as its own `Insert`
+    /// (plan §3.2.8, root todo.txt task 16).
     fn move_task(
         &mut self,
         task: TaskId,
@@ -269,7 +274,9 @@ impl DocState {
         to_file: &FilePath,
     ) -> Result<(), StateError> {
         if *to_file != self.path {
-            return Err(StateError::Unsupported("cross-file Move"));
+            let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
+            self.entries.remove(from);
+            return Ok(());
         }
         if after == Some(task) {
             return Err(StateError::UnknownTask(task));

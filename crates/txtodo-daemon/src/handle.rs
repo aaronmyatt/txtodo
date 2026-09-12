@@ -4,6 +4,7 @@
 
 use crate::expected::Hash;
 use crate::mutation::{Mutation, MutationError, TaskRef};
+use crate::refdir::{RefDirError, RefDirInfo};
 use crate::state::StateError;
 use crate::write::WriteError;
 use std::fmt;
@@ -89,8 +90,10 @@ pub enum ActorError {
     NoFlag(TaskId),
     /// The actor task has stopped.
     Gone(FilePath),
-    /// Not available on one device in M3.
+    /// Not supported by this crate (`NotesEdit`, undelete-via-`SetField`).
     Unsupported(&'static str),
+    /// A `ref:` directory operation failed (`refdir.rs`).
+    RefDir(RefDirError),
 }
 
 impl fmt::Display for ActorError {
@@ -105,6 +108,7 @@ impl fmt::Display for ActorError {
             ActorError::NoFlag(t) => write!(f, "no open needs_review flag for task {t}"),
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
+            ActorError::RefDir(e) => write!(f, "{e}"),
         }
     }
 }
@@ -212,6 +216,26 @@ pub enum ActorMsg {
         principal: Principal,
         /// Result channel.
         reply: oneshot::Sender<Result<Applied, ActorError>>,
+    },
+    /// Lazy `ref:` creation (`refdir.rs`): the tag and directory as one op batch.
+    EnsureRefDir {
+        /// The line.
+        task: TaskRef,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
+    },
+    /// Renames an existing `ref:` slug and its directory to match (`refdir.rs`).
+    RenameRefDir {
+        /// The line.
+        task: TaskRef,
+        /// The slug to rename to.
+        new_slug: String,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
     },
 }
 
@@ -332,6 +356,36 @@ impl ActorHandle {
         self.ask(|reply| ActorMsg::Resolve {
             task,
             resolution,
+            principal,
+            reply,
+        })
+        .await?
+    }
+
+    /// Lazy `ref:` creation: the tag and directory in one op batch.
+    pub async fn ensure_ref_dir(
+        &self,
+        task: TaskRef,
+        principal: Principal,
+    ) -> Result<RefDirInfo, ActorError> {
+        self.ask(|reply| ActorMsg::EnsureRefDir {
+            task,
+            principal,
+            reply,
+        })
+        .await?
+    }
+
+    /// Renames an existing `ref:` slug and its directory to match.
+    pub async fn rename_ref_dir(
+        &self,
+        task: TaskRef,
+        new_slug: String,
+        principal: Principal,
+    ) -> Result<RefDirInfo, ActorError> {
+        self.ask(|reply| ActorMsg::RenameRefDir {
+            task,
+            new_slug,
             principal,
             reply,
         })
