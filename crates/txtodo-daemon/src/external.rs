@@ -178,17 +178,23 @@ impl FileActor {
             self.resync_mirror();
             return;
         };
-        match self.replayed_mirror(&bytes, seq) {
+        self.adopt_or_resync_mirror(&bytes, seq);
+        // No agreement check here: it would materialise the whole Loro state on the startup
+        // path (22 s for 10k tasks in a debug build). The first flush asserts agreement in debug
+        // and converges on a refusal, which is where a stale snapshot would show.
+        tracing::debug!(file = %self.cfg.path, since = seq.0, "mirror_loaded");
+    }
+
+    /// Replays the stored snapshot; a broken one is logged and replaced with a fresh lineage
+    /// rather than left as an error the caller has to handle.
+    fn adopt_or_resync_mirror(&mut self, bytes: &[u8], seq: Seq) {
+        match self.replayed_mirror(bytes, seq) {
             Ok(m) => self.mirror = m,
             Err(e) => {
                 tracing::error!(file = %self.cfg.path, error = %e, "mirror_snapshot_unusable");
                 self.resync_mirror();
             }
         }
-        // No agreement check here: it would materialise the whole Loro state on the startup
-        // path (22 s for 10k tasks in a debug build). The first flush asserts agreement in debug
-        // and converges on a refusal, which is where a stale snapshot would show.
-        tracing::debug!(file = %self.cfg.path, since = seq.0, "mirror_loaded");
     }
 
     fn replayed_mirror(&self, bytes: &[u8], since: Seq) -> Result<Mirror, ActorError> {
