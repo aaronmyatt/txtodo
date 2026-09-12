@@ -2,6 +2,7 @@
 //! The binary in `main.rs` only wires these together; everything here is testable in-process.
 #![forbid(unsafe_code)]
 
+mod activity;
 pub mod actor;
 mod actor_mirror;
 pub mod clock;
@@ -17,6 +18,8 @@ mod import;
 pub mod mirror;
 mod mirror_converge;
 pub mod mutation;
+mod notes;
+mod pairing_grpc;
 pub mod pidfile;
 pub mod reconcile;
 pub mod serve;
@@ -25,6 +28,7 @@ pub mod state;
 pub mod stats;
 pub mod telemetry;
 pub mod textedit;
+mod tokens;
 pub mod walker;
 pub mod watch_task;
 pub mod watcher;

@@ -4,8 +4,8 @@
 //! https://docs.rs/tonic/latest/tonic/transport/server/struct.Server.html#method.serve_with_incoming
 
 use crate::convert::{
-    parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref, parse_ulid_opt,
-    task_of, to_flag, to_summary,
+    file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
+    parse_ulid_opt, task_of, to_flag, to_summary,
 };
 use crate::handle::ConflictRow;
 use crate::handle::{ActorError, ActorHandle, Applied, WATCH_CAP};
@@ -142,6 +142,9 @@ impl Txtodo for TxtodoService {
             files.push(pb::FileInfo {
                 path: h.path().to_string(),
                 hash: c.hash.to_vec(),
+                kind: file_kind_of(h.path()) as i32,
+                // Real done/total lands with the tree-progress task; unset until then.
+                progress: None,
             });
         }
         Ok(Response::new(pb::ListFilesResponse { files }))
@@ -318,5 +321,67 @@ impl Txtodo for TxtodoService {
             writes_total,
             version: env!("CARGO_PKG_VERSION").to_owned(),
         }))
+    }
+
+    async fn get_notes(&self, r: Request<pb::TaskRef>) -> Result<Response<pb::NotesDoc>, Status> {
+        self.get_notes_impl(r).await
+    }
+
+    async fn edit_notes(
+        &self,
+        r: Request<pb::NotesEditRequest>,
+    ) -> Result<Response<pb::ApplyResponse>, Status> {
+        self.edit_notes_impl(r).await
+    }
+
+    async fn pair_offer(
+        &self,
+        r: Request<pb::PairOfferRequest>,
+    ) -> Result<Response<pb::PairOfferResponse>, Status> {
+        self.pair_offer_impl(r).await
+    }
+
+    async fn pair_accept(
+        &self,
+        r: Request<pb::PairAcceptRequest>,
+    ) -> Result<Response<pb::PairResult>, Status> {
+        self.pair_accept_impl(r).await
+    }
+
+    async fn pair_confirm_sas(
+        &self,
+        r: Request<pb::PairConfirmRequest>,
+    ) -> Result<Response<pb::PairResult>, Status> {
+        self.pair_confirm_sas_impl(r).await
+    }
+
+    async fn token_create(
+        &self,
+        r: Request<pb::TokenCreateRequest>,
+    ) -> Result<Response<pb::Token>, Status> {
+        self.token_create_impl(r).await
+    }
+
+    async fn token_list(
+        &self,
+        r: Request<pb::TokenListRequest>,
+    ) -> Result<Response<pb::TokenListResponse>, Status> {
+        self.token_list_impl(r).await
+    }
+
+    async fn token_revoke(
+        &self,
+        r: Request<pb::TokenRevokeRequest>,
+    ) -> Result<Response<pb::TokenRevokeResponse>, Status> {
+        self.token_revoke_impl(r).await
+    }
+
+    type OpLogStreamStream = crate::activity::OpLogStream;
+
+    async fn op_log_stream(
+        &self,
+        r: Request<pb::OpLogRequest>,
+    ) -> Result<Response<Self::OpLogStreamStream>, Status> {
+        self.op_log_stream_impl(r).await
     }
 }

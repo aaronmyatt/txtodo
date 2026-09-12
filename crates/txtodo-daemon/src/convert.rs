@@ -17,6 +17,18 @@ pub fn parse_path(s: &str) -> Result<FilePath, Status> {
     FilePath::new(s).map_err(|e| Status::invalid_argument(e.to_string()))
 }
 
+/// Classifies a workspace-relative path for `FileInfo.kind` (plan §3.2.5).
+pub fn file_kind_of(path: &FilePath) -> pb::FileKind {
+    let p = path.to_string();
+    if p == "done.txt" || p.ends_with("/done.txt") {
+        pb::FileKind::Done
+    } else if p == "notes.md" || p.ends_with("/notes.md") {
+        pb::FileKind::Notes
+    } else {
+        pb::FileKind::Todo
+    }
+}
+
 /// An optional ULID text from the wire (empty = none).
 pub fn parse_ulid_opt(s: &str) -> Result<Option<Ulid>, Status> {
     if s.is_empty() {
