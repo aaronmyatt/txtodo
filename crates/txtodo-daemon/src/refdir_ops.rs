@@ -51,7 +51,7 @@ impl FileActor {
         principal: &Principal,
     ) -> Result<(), ActorError> {
         let old = self.state.line_of(id).ok_or(StateError::UnknownTask(id))?;
-        let kinds = change_ops(&old, &new_line);
+        let kinds = change_ops(&old, &new_line, id);
         if kinds.is_empty() {
             return Ok(());
         }

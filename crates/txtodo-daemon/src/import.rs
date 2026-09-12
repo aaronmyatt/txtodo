@@ -215,7 +215,7 @@ impl FileActor {
             .set_description(want)
             .map_err(|_| ActorError::Unsupported("a flag side with a line break"))?;
         let new_line = txtodo_core::apply(&line, &edit);
-        let kinds = change_ops(&line, &new_line);
+        let kinds = change_ops(&line, &new_line, task);
         debug_assert!(
             kinds
                 .iter()

@@ -24,6 +24,9 @@ pub struct Reconciled {
     pub minted: usize,
     /// Ids recovered by content for lines whose tag was stripped.
     pub reused: usize,
+    /// Every line's task id in `file`'s order, `None` for a blank — what `DocState::from_file`
+    /// takes instead of re-deriving ids from text (sidecar mode has no `id:` tag to derive from).
+    pub ids: Vec<Option<TaskId>>,
 }
 
 /// Derives ops that turn `old` (our last projection) into `new` (the bytes on disk).
@@ -39,7 +42,7 @@ pub fn reconcile(
     let diffs = diff_lines(old, &file);
     let mut ops = Vec::new();
     delete_pass(&mut ops, &diffs, old, &old_ids);
-    change_pass(&mut ops, &diffs, old, &file);
+    change_pass(&mut ops, &diffs, old, &old_ids, &file);
     task_pass(&mut ops, &diffs, &file, &new_ids, path);
     blank_pass(&mut ops, &diffs, &new_ids);
     debug_assert!(
@@ -58,19 +61,18 @@ pub fn reconcile(
         file,
         minted,
         reused,
+        ids: new_ids,
     }
 }
 
-/// Field-level ops for a same-id line whose bytes changed: priority first (so a completion that
-/// dropped `(A)` does not move it to `pri:`), then dates, completion, then the description.
-pub fn change_ops(old: &OwnedLine, new: &OwnedLine) -> Vec<OpKind> {
+/// Field-level ops for a changed line paired to `task` by the caller (an id read off the line in
+/// tagged mode, a fingerprint match in sidecar mode — this function doesn't care which): priority
+/// first (so a completion that dropped `(A)` does not move it to `pri:`), then dates, completion,
+/// then the description.
+pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind> {
     let (Some(a), Some(b)) = (task_of(old), task_of(new)) else {
         return Vec::new();
     };
-    let Some(task) = a.id().map(TaskId::new) else {
-        return Vec::new();
-    };
-    debug_assert_eq!(a.id(), b.id(), "change_ops is for same-id lines");
     let mut ops = Vec::new();
     let mut push = |field: Field, value: FieldValue| {
         if let Ok(op) = set_field(task, field, value) {
@@ -100,7 +102,12 @@ pub fn change_ops(old: &OwnedLine, new: &OwnedLine) -> Vec<OpKind> {
 }
 
 /// Pass 1: deletions, bottom-up so a blank's anchor task is still present when the blank goes.
-fn delete_pass(ops: &mut Vec<OpKind>, diffs: &[LineDiff], old: &File, old_ids: &[Option<TaskId>]) {
+pub(crate) fn delete_pass(
+    ops: &mut Vec<OpKind>,
+    diffs: &[LineDiff],
+    old: &File,
+    old_ids: &[Option<TaskId>],
+) {
     for d in diffs.iter().rev() {
         if let LineDiff::Delete { from } = d {
             ops.push(delete_op(old, old_ids, *from));
@@ -108,17 +115,26 @@ fn delete_pass(ops: &mut Vec<OpKind>, diffs: &[LineDiff], old: &File, old_ids: &
     }
 }
 
-/// Pass 2: same-id lines whose bytes changed.
-fn change_pass(ops: &mut Vec<OpKind>, diffs: &[LineDiff], old: &File, file: &File) {
+/// Pass 2: changed lines paired by the caller's diff, each already resolved to the task it was
+/// (`old_ids[from]`, `None` skips it — a changed line with no id has nothing to stamp ops against).
+pub(crate) fn change_pass(
+    ops: &mut Vec<OpKind>,
+    diffs: &[LineDiff],
+    old: &File,
+    old_ids: &[Option<TaskId>],
+    file: &File,
+) {
     for d in diffs {
-        if let LineDiff::Change { from, to } = d {
-            ops.extend(change_ops(&old.lines[*from], &file.lines[*to]));
+        if let LineDiff::Change { from, to } = d
+            && let Some(task) = old_ids[*from]
+        {
+            ops.extend(change_ops(&old.lines[*from], &file.lines[*to], task));
         }
     }
 }
 
 /// Pass 3: new and moved task lines, top-down, each placed right after its predecessor task.
-fn task_pass(
+pub(crate) fn task_pass(
     ops: &mut Vec<OpKind>,
     diffs: &[LineDiff],
     file: &File,
@@ -148,7 +164,7 @@ fn task_pass(
 }
 
 /// Pass 4: new blank lines, after every task is in place, each anchored to the task above it.
-fn blank_pass(ops: &mut Vec<OpKind>, diffs: &[LineDiff], new_ids: &[Option<TaskId>]) {
+pub(crate) fn blank_pass(ops: &mut Vec<OpKind>, diffs: &[LineDiff], new_ids: &[Option<TaskId>]) {
     for d in diffs {
         if let LineDiff::Insert { to } = d
             && new_ids[*to].is_none()
@@ -192,7 +208,7 @@ fn insert_op(file: &File, new_ids: &[Option<TaskId>], to: usize) -> OpKind {
 }
 
 /// The nearest task id above index `i`, or `None` at the top.
-fn prev_task(ids: &[Option<TaskId>], i: usize) -> Option<TaskId> {
+pub(crate) fn prev_task(ids: &[Option<TaskId>], i: usize) -> Option<TaskId> {
     debug_assert!(i <= ids.len());
     ids[..i].iter().rev().find_map(|id| *id)
 }
@@ -240,14 +256,14 @@ fn assign_ids(old: &File, new: &File, mint: &mut dyn FnMut() -> TaskId) -> (File
     (file, minted, reused)
 }
 
-fn task_of(line: &OwnedLine) -> Option<Task<'_>> {
+pub(crate) fn task_of(line: &OwnedLine) -> Option<Task<'_>> {
     match line.parse()?.kind {
         LineKind::Task(t) => Some(t),
         LineKind::Blank => None,
     }
 }
 
-fn is_task(line: &OwnedLine) -> bool {
+pub(crate) fn is_task(line: &OwnedLine) -> bool {
     task_of(line).is_some()
 }
 

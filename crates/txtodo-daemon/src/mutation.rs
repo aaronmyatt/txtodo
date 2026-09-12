@@ -157,7 +157,7 @@ pub fn mutation_ops(
                 .line_of(id)
                 .ok_or(MutationError::NoLine(task.line_number))?;
             let new = txtodo_core::apply(&old, &Edit::new().complete(*today));
-            Ok(change_ops(&old, &new))
+            Ok(change_ops(&old, &new, id))
         }
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),
@@ -216,7 +216,7 @@ fn edit_ops(
     let old = state
         .line_of(id)
         .ok_or(MutationError::NoLine(task.line_number))?;
-    Ok(change_ops(&old, &new))
+    Ok(change_ops(&old, &new, id))
 }
 
 /// The source half of a cross-file `Move`: this document only ever records that the task left
