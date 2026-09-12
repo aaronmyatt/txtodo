@@ -59,7 +59,7 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 | 6 | Local IPC: unix domain socket / Windows named pipe carrying **gRPC** (`tonic`). The REST/JSON mirror is generated from the same protobuf via `tonic-web` or a thin axum shim. | One schema, two surfaces. |
 | 7 | Desktop UI: **Tauri 2** + **Svelte 5** + **CodeMirror 6**. The main view is a read-only CodeMirror document with a custom todo.txt language (Lezer grammar generated from `specs/todotxt.abnf`). | CM6 gives line numbers, wrapping, virtualisation, search, and decorations for free; the "interactive text file" feel is native to it. |
 | 8 | Mobile UI: iOS SwiftUI over a `UITextView` with `NSTextStorage` highlighting; Android Jetpack Compose `BasicTextField` with `AnnotatedString`. Both highlight using `txtodo_core::tokenize` via uniffi so token boundaries are identical everywhere. | The core owns the grammar; UIs only paint. |
-| 9 | Task identity: `id:<ULID>` tag, tagged mode only for M1–M7. Sidecar (purist) mode is M10. | Ship the robust path first. |
+| 9 | ~~Task identity: `id:<ULID>` tag, tagged mode only for M1–M7. Sidecar (purist) mode is M10.~~ **Reversed 2026-09-13** (`docs/questions.md` Q2): sidecar mode (no `id:` tag; identity by fingerprint re-matching, `crates/txtodo-model/src/identity.rs` + `crates/txtodo-daemon/src/identity_*.rs`/`reconcile_sidecar.rs`) is the default for every new workspace; tagged mode is now the opt-in (`--identity-mode tagged`, or auto-detected when a workspace already carries `id:` tags). Both are fully built and tested, not just tagged. | A plain, unmanaged todo.txt should work with `txtodo` with zero `id:` metadata written into it (user request, superseding "ship the robust path first"). |
 | 10 | Ports and names: MCP HTTP on `127.0.0.1:8636`; gRPC on the socket only; metrics on `127.0.0.1:8637`. mDNS services `_txtodo._udp` (sync) and `_txtodo-mcp._tcp` (MCP). Daemon binary `txtodod`, CLI `txtodo`, config at `$XDG_CONFIG_HOME/txtodo/config.toml`, state at `<workspace>/.txtodo/`. | Fixed so docs and tests can rely on them. |
 | 11 | Dates: the daemon's local date at write time for `creation_date` and `completion_date`, formatted `YYYY-MM-DD`. No time zones in the file, ever. | Spec. |
 | 12 | Detail files: the `ref:` directory convention in §3.2. | Agreed in design review. |
@@ -424,7 +424,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 ### M10 — Everything else (ongoing)
 
-Sidecar identity mode; web PWA; TUI; editor plugins (Neovim, VS Code, Obsidian) that use the LSP-style `tokenize` over the socket; WASM plugin host; Prometheus + OTel; TLA+ spec and TLC run in CI; Nix flake; signed releases; SBOM. Each item gets its own mini-plan when started.
+~~Sidecar identity mode~~ (built early, now the default — decision 9, `docs/questions.md` Q2); web PWA; TUI; editor plugins (Neovim, VS Code, Obsidian) that use the LSP-style `tokenize` over the socket; WASM plugin host; Prometheus + OTel; TLA+ spec and TLC run in CI; Nix flake; signed releases; SBOM. Each item gets its own mini-plan when started.
 
 ---
 

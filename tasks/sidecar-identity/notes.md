@@ -1,94 +1,97 @@
-# Sidecar identity mode with fingerprint assignment via the Hungarian algorithm (plan M10, plan §4.1)
+# Sidecar identity mode with fingerprint assignment via the Hungarian algorithm (design §4.1)
+
+**Status: built and merged 2026-09-13, now the default identity mode** (plan decision 9,
+reversed; `docs/questions.md` Q2). This file originally planned it as an M10 opt-in; corrected
+below to match what actually shipped, in case a future change needs the real file/module map.
 
 ## Goal
 
-Tagged mode (default) puts `id:<ULID>` in every line. Sidecar (purist) mode puts no tags in the
-file: IDs live in `.txtodo/index` on each device, keyed by a *fingerprint*. After an external edit,
-the reconciler re-identifies `L_old ↔ L_new` by solving an assignment problem — cost = weighted mix
-of creation-date equality, project/context overlap, normalised Levenshtein on the description, and
-position distance — with the Hungarian algorithm; matches below a confidence threshold become
-delete+insert (design §4.1, §4.3 step 4).
+Tagged mode puts `id:<ULID>` in every line. Sidecar mode (now the default) puts no tags in the
+file: identity lives in a `fingerprints` table in the daemon's own SQLite store, keyed by a
+*fingerprint*. After an external edit, the reconciler re-identifies old lines against new ones by
+solving an assignment problem — cost = weighted mix of creation-date equality, project/context
+overlap, normalised Levenshtein on the description, and position distance — with the Hungarian
+algorithm; matches below a confidence threshold become delete+insert (design §4.1, §4.3 step 4).
 
-## Design
+## As built (corrections to the original plan below)
 
-The matching step lives in the reconciler, which currently diffs by `id:` tag (M3/M4). Sidecar mode
-replaces that matcher with fingerprint assignment; everything downstream (ops, op log, projection)
-is unchanged — the reconciler's external interface stays identical (the M4 constraint).
+- **Types**: `crates/txtodo-model/src/identity.rs` — `IdentityMode { Tagged, Sidecar }`,
+  `Fingerprint { creation_date, projects, contexts, description_norm, line_index }`,
+  `CostWeights` (with `CostWeights::DEFAULT`). Not `crates/txtodo-crdt/` — that crate is CRDT-only;
+  identity types are mode-agnostic shapes both `txtodo-cli` and `txtodo-daemon` need, and
+  `txtodo-model` already depends on nothing else.
+- **Matching**: `crates/txtodo-daemon/src/identity_fingerprint.rs` (`fingerprint_of`, the cost
+  function), `identity_levenshtein.rs` (wraps `strsim`, not a hand-rolled Levenshtein),
+  `identity_assign.rs` (`assign`, `pathfinding::kuhn_munkres_min` — **not** the `munkres` crate,
+  which turned out to have a worse API for this; `pathfinding` is MIT/Apache-2.0, already allowed).
+- **Diffing**: `crates/txtodo-daemon/src/reconcile_sidecar.rs` — builds its own `Vec<LineDiff>`
+  (a longest-increasing-subsequence over matched pairs decides `Change` vs `Move`; blanks pair
+  positionally per anchor-task run) and feeds it into the *same* `delete_pass`/`change_pass`/
+  `task_pass`/`blank_pass` tagged mode uses (`reconcile.rs`) — not a separate op-emission path.
+  An exact-content prefilter matches byte-identical lines for free before any fingerprint is even
+  built, so a single edit in a 10k-line file doesn't fingerprint (or Hungarian-solve) the other
+  9,999 lines — see `benches/reconcile.rs`'s `reconcile_sidecar_10k_one_edit` (budget 20 ms).
+- **Storage**: `crates/txtodo-store/migrations/0005.sql`'s `fingerprints` table (`file, task,
+  status, creation_date, projects, contexts, description_norm, line_index, updated_at,
+  retired_at`, PK `(file, task)`) — not `.txtodo/index`. Retiring tombstones the row (never
+  deletes it), so a late-arriving peer op against a task since split by a delete+insert still
+  finds something that explains it. `Store::{upsert_fingerprint, retire_fingerprint,
+  live_fingerprints, tombstoned_fingerprints}`.
+- **Mode selection**: `txtodod --identity-mode <tagged|sidecar>` (default `sidecar`); a workspace
+  that already has `id:` tags on disk is auto-detected as `Tagged` regardless of the flag — no
+  silent mode flip on upgrade (`workspace.rs`'s `load_or_mint_identity_mode`), minted once and
+  fixed for the workspace's lifetime, same idiom as `device_id`/`group_id`. CLI config
+  `identity_mode = "tagged" | "sidecar"` (`txtodo-cli/src/config.rs`), unset means `Sidecar`.
+  The `id:` key name is **not** configurable (no `sid:`/`uid:` alias) — out of scope, not needed:
+  sidecar mode never writes any such key at all.
+- **Weights** (`docs/questions.md` Q2, `CostWeights::DEFAULT`):
+  ```
+  cost = 3.0 * date_mismatch(0 or 1)
+       + 2.0 * (1 - jaccard(projects))
+       + 1.0 * (1 - jaccard(contexts))
+       + 6.0 * normalized_levenshtein(description)
+       + 1.5 * (position_delta / max_task_count)
+  MATCH_THRESHOLD = 5.0   // below the cost of "same everything, description fully rewritten" (6.0)
+  ```
+  `max_task_count` is the *whole file's* task count, not just the unmatched subset the exact-content
+  prefilter leaves for the solver — using the smaller count would let the position term swamp
+  every other one whenever only a couple of lines actually changed.
 
-```rust
-// crates/txtodo-crdt/src/identity.rs — new module, owns mode + fingerprint + assignment.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum IdentityMode { Tagged, Sidecar }   // design §4.1; Tagged is the default
+## Edge cases & invariants (verified, not just asserted)
 
-pub struct Fingerprint {
-    pub creation_date: Option<Date>,        // YYYY-MM-DD, plan §1 decision 11 (no timezones in file)
-    pub projects: BTreeSet<String>,         // +project set, order-insensitive
-    pub contexts: BTreeSet<String>,         // @context set, order-insensitive
-    pub description: String,                // normalised (trimmed, lowercased) before distance
-}
+- Honest caveat (design §4.1, not softened): *simultaneous* external edits to the same task on two
+  devices may resurrect an edit as a duplicate rather than merge it. No text is ever lost.
+- Deleting `.txtodo/` is **not** a full reset for a sidecar workspace the way it is for tagged mode
+  (`txtodo-store/CLAUDE.md`'s own invariant now carries this exception): tagged mode recovers ids
+  by re-reading `id:` tags from the files; sidecar mode's identity lives only in the fingerprints
+  table, so nuking the store loses task-identity continuity for it. Worth a line in user docs.
+- Stripping every `id:` tag doesn't apply to sidecar mode (there's nothing to strip) — the
+  equivalent stress case is `external_edits_sidecar.rs`'s scenarios: insert/append/delete/reorder/
+  CRLF/todo.sh archive, all with zero `id:` tags at any point, against a real `txtodod`.
+- A full description rewrite becomes delete+insert, not a forced match — asserted directly
+  (`identity_assign.rs`'s and `reconcile_sidecar_tests.rs`'s own unit tests, and
+  `external_edits_sidecar.rs`'s daemon-level equivalent).
+- Position is one cost term, never the only one.
+- Pairing does not yet propagate a group's `identity_mode` to a joining device — `docs/questions.md`
+  Q6, raised rather than guessed: unlike `group_id` (a meaningless label safely overwritten), a
+  mismatch between what the initiator says and what the joiner's own files already imply has no
+  defined resolution, and needs a human decision before it's wired in.
 
-pub struct CostWeights {                    // plan §6 Q2 — threshold + weights, answered in docs/questions.md first
-    pub creation_date_eq: f64,              // reward for equal creation dates
-    pub project_overlap: f64,               // Jaccard overlap of +project sets
-    pub context_overlap: f64,               // Jaccard overlap of @context sets
-    pub levenshtein: f64,                   // normalised edit distance on description (0..1)
-    pub position: f64,                      // |old_line_index - new_line_index|, line order is data (rule 5)
-    pub match_threshold: f64,               // cost above this → delete + insert, not a match
-}
+## Tests
 
-/// Rectangular cost matrix solved by the Hungarian algorithm (Kuhn–Munkres, O(n³)).
-/// Ref: https://docs.rs/munkres
-pub fn assign(old: &[TaskState], new: &[TaskState], w: &CostWeights) -> Assignment;
-pub struct Assignment { pub matched: Vec<(usize, usize)>, pub inserted: Vec<usize>, pub deleted: Vec<usize> }
-```
-
-- The cost matrix is `old.len() × new.len()`: `cost(i,j) = w.creation_date_eq * (date_i != date_j)
-  + w.project_overlap * (1 - jaccard(proj_i, proj_j)) + w.context_overlap * (1 - jaccard(ctx_i,
-  ctx_j)) + w.levenshtein * lev_norm(desc_i, desc_j) + w.position * |i - j|`. Pad to square for the
-  solver; mask pad rows/cols to ∞ so they never match.
-- Matches whose cost exceeds `w.match_threshold` are *not* taken — the old line becomes a delete and
-  the new line an insert (a fresh ULID), exactly as design §4.1 states.
-- `.txtodo/index` maps `Fingerprint → TaskId` and lives in `txtodo-store` (a new table in the op-log
-  SQLite, alongside `ops`/`snapshots`). In sidecar mode the `id:` is derived at ingest, stored only
-  in the index, never written to the file. The index is rebuildable from the files (fingerprints are
-  derivable), so deleting `.txtodo/` stays the nuclear reset.
-- Mode is a workspace config flag (`identity_mode = "tagged" | "sidecar"`); tagged remains default.
-  The `id:` key name is configurable (`sid:`, `uid:`, …) per design §4.1, so `id:` never collides.
-
-## Placement/dependencies
-
-- `crates/txtodo-crdt/src/identity.rs` (new), `txtodo-store` schema migration (new `index` table),
-  a config flag, and the reconciler matcher swap in the existing reconcile path. New dep `munkres`
-  (pure Rust, no native build) needs human sign-off + `cargo deny` pass.
-- Depends on `crdt-loro-state` (Loro-backed `TaskState` the matcher consumes) and the reconciler's
-  existing external-edit flow. `crates/txtodo-core` and `Cargo.toml` remain frozen.
-
-## Edge cases & invariants
-
-- Honest caveat (design §4.1, do not soften): *simultaneous* external edits to the same task on two
-  devices may resurrect an edit as a duplicate rather than merge it. It will never lose text — the
-  no-loss invariant holds (every description substring survives somewhere).
-- Strip all `id:` tags in vim → fingerprint re-identification (design §4.7 row) must reassign by
-  content, not position, and no line may vanish.
-- Below-threshold: two near-identical descriptions must not cross-match (delete+insert instead);
-  above-threshold false-positives are worse than a duplicate.
-- Position is one cost term, never the only one — a pure position match would silently swap
-  identities on any insert/delete above.
-- Weights + threshold are plan §6 Q2: answer in `docs/questions.md` *before* tuning; keep them named
-  constants with units in the name (e.g. `POSITION_WEIGHT`, `MATCH_THRESHOLD`), not magic numbers.
-
-## Acceptance
-
-- Strip every `id:` tag from a 10 k-line file externally: the reconciler re-identifies via
-  fingerprint, `txtodo log` shows no spurious delete+insert beyond genuine edits, and no text is lost.
-- Insert a line at the top: position cost does not steal identities; every surviving line keeps its
-  stored `TaskId` across the edit.
-- Two near-identical descriptions with different creation dates score below threshold → delete+insert.
-- Simulator: sidecar-mode runs reuse the M4 sync simulator (random ops + external edits + partitions)
-  and assert convergence + no-loss with the same zero-failure bar.
+- `crates/txtodo-model/src/identity.rs` (round-trip, threshold-below-description-weight const
+  assertion), `crates/txtodo-store/tests/identity.rs` (upsert/retire/live/tombstoned),
+  `crates/txtodo-daemon/src/identity_assign.rs`/`identity_fingerprint.rs`/`identity_levenshtein.rs`
+  (unit), `crates/txtodo-daemon/src/reconcile_sidecar_tests.rs` (8 scenarios, no `DocState`
+  round-trip needed), `crates/txtodo-daemon/tests/external_edits_sidecar.rs` (8 scenarios against
+  a real `txtodod --identity-mode sidecar`), `benches/reconcile.rs`'s
+  `reconcile_sidecar_10k_one_edit` (perf budget).
+- Not yet built: a two-device concurrent-edit test asserting the documented duplicate-on-conflict
+  tradeoff end to end (needs the CRDT/import machinery, not just single-device reconcile).
 
 ## References
 
-- design §4.1 + §4.3 step 4 + §4.7 conflict table (txtodo-design.md); plan M10 + §6 Q2
-- `munkres`: https://docs.rs/munkres · Levenshtein: https://docs.rs/levenshtein (normalise to 0..1)
-- [../crdt-loro-state/notes.md](../crdt-loro-state/notes.md) (the `TaskState` the matcher consumes)
+- design §4.1 + §4.3 step 4 + §4.7 conflict table (txtodo-design.md); `docs/questions.md` Q2, Q6
+- `pathfinding`: https://docs.rs/pathfinding · `strsim`: https://docs.rs/strsim
+- Plan file for the implementation session: `floofy-swinging-brooks.md` (not checked into the
+  repo — a Claude Code plan-mode artifact; this notes.md is the durable record).
