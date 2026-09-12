@@ -5,12 +5,12 @@
 //! (`txtodo_model::Skew`), before a single op is accepted, and `Ack` carries only runs the caller
 //! reports as *committed* — never merely received — so a crash mid-import re-requests them.
 
-use txtodo_model::{DeviceId, Skew};
+use txtodo_model::{DeviceId, Op, Skew};
 
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Heads, Message, OriginRange};
 use crate::session_error::SessionError;
-use crate::want::want;
+use crate::want::{advance, want};
 
 /// Where the session is. Closed set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,12 +152,86 @@ impl Session {
         })
     }
 
+    /// `Wanting → Importing`: hands the batch to the caller to commit. Every run in the batch
+    /// must lie inside a run we asked for.
+    pub fn on_ops(&mut self, msg: &Message) -> Result<Vec<Op>, SessionError> {
+        match self.state {
+            SessionState::Wanting => {}
+            SessionState::Idle | SessionState::Greeted | SessionState::Importing => {
+                return Err(self.unexpected("Ops"));
+            }
+        }
+        let Message::Ops { ops, ranges } = msg else {
+            return Err(self.unexpected(name_of(msg)));
+        };
+        if let Some(stray) = ranges.iter().find(|r| !covered(&self.wanted, r)) {
+            return Err(SessionError::Unrequested(*stray));
+        }
+        self.inflight = ranges.clone();
+        self.state = SessionState::Importing;
+        debug_assert!(self.inflight.iter().all(|r| covered(&self.wanted, r)));
+        debug_assert_eq!(self.state, SessionState::Importing);
+        Ok(ops.clone())
+    }
+
+    /// `Importing → Wanting | Idle`: the caller reports what it durably committed; heads advance
+    /// and the `Ack` to send carries exactly those runs. A run outside the batch is refused.
+    pub fn committed(&mut self, ranges: &[OriginRange]) -> Result<Message, SessionError> {
+        match self.state {
+            SessionState::Importing => {}
+            SessionState::Idle | SessionState::Greeted | SessionState::Wanting => {
+                return Err(self.unexpected("committed()"));
+            }
+        }
+        if let Some(stray) = ranges.iter().find(|r| !covered(&self.inflight, r)) {
+            return Err(SessionError::NotInBatch(*stray));
+        }
+        let mut heads = self.heads.clone();
+        for r in ranges {
+            advance(&mut heads, r).map_err(SessionError::Gap)?;
+        }
+        self.heads = heads;
+        consume(&mut self.wanted, ranges);
+        self.inflight.clear();
+        self.state = if self.wanted.is_empty() {
+            SessionState::Idle
+        } else {
+            SessionState::Wanting
+        };
+        debug_assert!(self.wanted.iter().all(|r| r.first <= r.last));
+        debug_assert!(self.inflight.is_empty());
+        Ok(Message::Ack {
+            committed: ranges.to_vec(),
+        })
+    }
+
     fn unexpected(&self, what: &'static str) -> SessionError {
         SessionError::Unexpected {
             state: self.state,
             what,
         }
     }
+}
+
+/// True when `r` lies within one of `runs` (same device, inside its bounds).
+fn covered(runs: &[OriginRange], r: &OriginRange) -> bool {
+    runs.iter()
+        .any(|w| w.device == r.device && w.first <= r.first && r.last <= w.last)
+}
+
+/// Drops the committed prefix of each wanted run; a run fully covered disappears.
+fn consume(wanted: &mut Vec<OriginRange>, committed: &[OriginRange]) {
+    let before = wanted.len();
+    for c in committed {
+        for w in wanted.iter_mut() {
+            if w.device == c.device && c.last >= w.first {
+                w.first = c.last + 1;
+            }
+        }
+    }
+    wanted.retain(|w| w.first <= w.last);
+    debug_assert!(wanted.len() <= before, "consume never adds a run");
+    debug_assert!(wanted.iter().all(|w| w.first <= w.last));
 }
 
 fn name_of(msg: &Message) -> &'static str {
