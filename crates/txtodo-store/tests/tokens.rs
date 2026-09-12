@@ -1,5 +1,5 @@
 //! Capability tokens (plan M6, design §6.2): create → list → revoke round-trips, a revoked or
-//! expired secret is refused by `verify_token`, and the schema lands at 4.
+//! expired secret is refused by `verify_token`, and the schema lands at 5.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -23,10 +23,10 @@ fn new_token(n: u128, scopes: &[&str], secret: &str, expires_at_ms: Option<u64>)
 }
 
 #[test]
-fn migrating_to_tokens_lands_the_schema_at_four() {
+fn migrating_to_tokens_lands_the_schema_at_five() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(dir.path());
-    assert_eq!(store.user_version().unwrap(), 4);
+    assert_eq!(store.user_version().unwrap(), 5);
 }
 
 #[test]

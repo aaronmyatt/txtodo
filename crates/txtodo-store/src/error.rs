@@ -52,6 +52,8 @@ pub enum StoreError {
     BadTokenId(usize),
     /// A stored `scopes` list did not decode (the database was edited by hand).
     BadScopes(postcard::Error),
+    /// A stored fingerprint's `projects`/`contexts` set did not decode (edited by hand).
+    BadFingerprint(postcard::Error),
 }
 
 impl StoreError {
@@ -115,6 +117,9 @@ impl fmt::Display for StoreError {
             StoreError::BadHash(file) => write!(f, "stored hash for {file} is not 32 bytes"),
             StoreError::BadTokenId(len) => write!(f, "stored token id is {len} bytes, not 16"),
             StoreError::BadScopes(source) => write!(f, "decode stored token scopes: {source}"),
+            StoreError::BadFingerprint(source) => {
+                write!(f, "decode stored fingerprint project/context set: {source}")
+            }
         }
     }
 }
@@ -125,6 +130,7 @@ impl std::error::Error for StoreError {
             StoreError::Sqlite { source, .. } => Some(source),
             StoreError::Codec { source, .. } => Some(source),
             StoreError::BadScopes(source) => Some(source),
+            StoreError::BadFingerprint(source) => Some(source),
             StoreError::SchemaTooNew { .. }
             | StoreError::EmptyBatch
             | StoreError::BatchTooLarge(_)

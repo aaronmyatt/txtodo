@@ -2,11 +2,12 @@
 
 ## Purpose
 SQLite op log, snapshots, projection cache at `<workspace>/.txtodo/oplog.db`. Plan M3, ADR 0004
-(rusqlite bundled, WAL). As built 2026-09-12 (capability tokens, plan M6 data layer).
+(rusqlite bundled, WAL). As built 2026-09-12 (capability tokens, plan M6 data layer). Sidecar
+identity fingerprints (docs/questions.md Q2, now the default identity mode) added 2026-09-13.
 
 ## Public interface
 - `Store::open(path)` — creates, switches to WAL, applies `migrations/000N.sql` in order by
-  `user_version` (now 4), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
+  `user_version` (now 5), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
 - Op log: `append(&[Op]) -> SeqRange` (one transaction, `MAX_APPEND_BATCH`),
   `for_file(file, since: Seq)`, `between(file, &Hlc, &Hlc)` (inclusive, HLC order),
   `last_seq()`. Reads return `Stored { seq, op }`, at most `MAX_OPS_PER_READ`.
@@ -25,11 +26,21 @@ SQLite op log, snapshots, projection cache at `<workspace>/.txtodo/oplog.db`. Pl
   the wire boundary decides what a client sees), `revoke_token(id, at_ms)` (upsert, idempotent),
   `verify_token(secret, now_ms) -> Result<TokenId, TokenError>` — the enforcement primitive a
   future request-time agent-auth path calls; nothing in this repo calls it over the wire yet.
+- Sidecar identity fingerprints (docs/questions.md Q2): `upsert_fingerprint(file, task,
+  &Fingerprint, updated_at_ms)` (upsert, revives a tombstoned row), `retire_fingerprint(file,
+  task, at_ms)` (idempotent, tombstones — never deletes — the row), `live_fingerprints(file)` /
+  `tombstoned_fingerprints(file)` (≤ `MAX_FINGERPRINTS_PER_READ` each). What
+  `crates/txtodo-daemon/src/identity/assign.rs` matches an external edit's fresh fingerprints
+  against.
 
 ## Invariants
 - Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/oplog.rs greps).
-  Projections, snapshots, meta and tokens are upserts and carry no history of their own.
-- Everything here is rebuildable from the files; deleting `.txtodo/` is the reset.
+  Projections, snapshots, meta, tokens and fingerprints are upserts and carry no history of their
+  own.
+- Everything here is rebuildable from the files **except sidecar fingerprints**: a tagged
+  workspace can always re-derive ids by re-reading `id:` tags, but a sidecar workspace's identity
+  lives only here — deleting `.txtodo/` loses task-identity continuity for it (known tradeoff,
+  plan `floofy-swinging-brooks.md`).
 - Every read has an upper bound; every error names the operation and, when known, the path.
 - Ids are stored as 16-byte big-endian BLOBs; wall times as i64 milliseconds.
 - A device's ops are dense by construction (own ops always land; sync commits contiguous runs
