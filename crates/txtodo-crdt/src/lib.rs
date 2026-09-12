@@ -16,6 +16,8 @@ mod to_loro;
 #[cfg(test)]
 mod lww_tests;
 #[cfg(test)]
+mod review_tests;
+#[cfg(test)]
 mod roundtrip_tests;
 #[cfg(test)]
 mod view_tests;
