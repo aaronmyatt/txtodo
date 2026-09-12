@@ -47,3 +47,27 @@ Append only. Never edit a prior answer; add a dated follow-up.
 - Status: open · Raised: 2026-09-11 (plan §6.5) · Blocks: M8 self-hosting docs, M9 push registration
 - Default until answered: **self-host only**; docs describe running `relay/` yourself.
 - Answer: not sure what this means, the app should sync across devices, let me know what infra is required to deploy the CRDT setup.
+
+## Q6 — Pairing: what happens when the initiator's and joiner's identity_mode disagree?
+- Status: open · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·
+  Blocks: pairing inheriting identity_mode (a joining device otherwise decides its own, from
+  whatever `id:` tags its own files already have — plan decision 3)
+- Default until answered: **no propagation yet**. `load_or_mint_identity_mode` runs unconditionally
+  in `Workspace::open_with_default_mode`, before pairing ever touches the workspace, so a joiner's
+  mode is fixed by the time any pair RPC could adopt one.
+- Context: `group_id` propagates today as a plaintext field on `PairOfferResponse`
+  (`crates/txtodo-daemon/src/pairing_grpc.rs`), a meaningless random label a joiner blindly
+  overwrites via `Workspace::adopt_group_key` — harmless, since nothing about the joiner's own
+  state depended on its old value. `identity_mode` is not that: it is derived from real properties
+  of the joiner's own files (`Tagged` iff a document already carries an `id:` tag, "no silent mode
+  flip on upgrade" — `workspace.rs`'s `load_or_mint_identity_mode` doc) and `DocState`/`reconcile`
+  assume it matches what is actually on disk. Blindly overwriting it the way `group_id` is
+  overwritten could desync that invariant (e.g. a joiner with already-tagged files told to adopt
+  `Sidecar` from the initiator). No wire message for the sealed group key exists yet either
+  (`pairing_grpc.rs`'s own module doc: the daemon-to-daemon transport, `sync-lan-transport`,
+  doesn't exist) — `PairingRegistry`/`Workspace::adopt_group_key` are a relay seam exercised only
+  by `pairing_grpc_tests.rs` standing in for that transport.
+- Needs a human decision, not just implementation: does a mode mismatch refuse the pairing outright
+  (with what message), does the joiner defer to the initiator only when the joiner's own workspace
+  has zero tasks yet (so there is nothing on disk to desync), or something else? Once decided, the
+  wire part is small — a new field on `PairOfferResponse`, the same shape as `group_id`'s.
