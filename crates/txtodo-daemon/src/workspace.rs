@@ -177,6 +177,12 @@ impl Workspace {
     pub fn device(&self) -> DeviceId {
         self.device
     }
+    /// The injected clock: entropy and time enter the daemon only through this (plan §5's
+    /// "inject the clock" idiom), so a token's id and timestamps come from here, never a bare
+    /// `SystemTime`/`getrandom` call at the RPC boundary.
+    pub fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
+    }
     /// Shared Health counters.
     pub fn stats(&self) -> &Arc<Stats> {
         &self.stats
@@ -196,10 +202,6 @@ impl Workspace {
     /// See the module doc on [`load_or_mint_group`] for the current placeholder backend.
     pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {
         &self.key_store
-    }
-    /// The injected clock (pairing needs `now_ms` for its own window bookkeeping).
-    pub fn clock(&self) -> &Arc<dyn Clock> {
-        &self.clock
     }
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pub(crate) fn pairing(&self) -> &PairingRegistry {

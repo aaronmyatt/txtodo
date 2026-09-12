@@ -48,6 +48,10 @@ pub enum StoreError {
         /// Last origin_seq asked for.
         last: u64,
     },
+    /// A stored token id is not 16 bytes (the database was edited by hand); the length found.
+    BadTokenId(usize),
+    /// A stored `scopes` list did not decode (the database was edited by hand).
+    BadScopes(postcard::Error),
 }
 
 impl StoreError {
@@ -109,6 +113,8 @@ impl fmt::Display for StoreError {
                 )
             }
             StoreError::BadHash(file) => write!(f, "stored hash for {file} is not 32 bytes"),
+            StoreError::BadTokenId(len) => write!(f, "stored token id is {len} bytes, not 16"),
+            StoreError::BadScopes(source) => write!(f, "decode stored token scopes: {source}"),
         }
     }
 }
@@ -118,6 +124,7 @@ impl std::error::Error for StoreError {
         match self {
             StoreError::Sqlite { source, .. } => Some(source),
             StoreError::Codec { source, .. } => Some(source),
+            StoreError::BadScopes(source) => Some(source),
             StoreError::SchemaTooNew { .. }
             | StoreError::EmptyBatch
             | StoreError::BatchTooLarge(_)
@@ -125,7 +132,8 @@ impl std::error::Error for StoreError {
             | StoreError::BadDevice(_)
             | StoreError::BadRun { .. }
             | StoreError::ProjectionTooLarge(_)
-            | StoreError::BadHash(_) => None,
+            | StoreError::BadHash(_)
+            | StoreError::BadTokenId(_) => None,
         }
     }
 }

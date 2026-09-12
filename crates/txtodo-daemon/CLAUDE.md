@@ -2,7 +2,8 @@
 
 ## Purpose
 The `txtodod` binary: one process per workspace owning the files, the op log and the IPC socket.
-Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in-process.
+Plan M3, as built 2026-09-12; token data layer (plan M6) and the activity feed (plan M7) added
+the same day.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
@@ -17,10 +18,19 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
   `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `progress` (`ListFiles`
   done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of `server.rs` for its line
   budget, same pattern as `notes.rs`) · `write` (temp + fsync + rename) · `expected` (own-write
-  ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`, `pidfile`.
+  ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`, `pidfile` · `tokens`
+  (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity` (`OpLogStream`, plan M7,
+  ADR 0004) — both delegated to from `server.rs`, owned end to end here.
+- `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
+  `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
+  `tokens`, `activity` and `pairing_grpc` can reach the workspace/store at all — Rust's default
+  privacy does not extend to sibling modules, only descendants, so this was a required compiler
+  fix, not a style choice.
 - Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
-  `tests/external_edits.rs` (plan M3's eight scenarios), `tests/editor_saves.rs`, `tests/crash.rs`
-  (kill -9 rounds) — the last three spawn the real binary through `tests/support`.
+  `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
+  `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
+  `tests/editor_saves.rs`, `tests/crash.rs` (kill -9 rounds) — the last three spawn the real binary
+  through `tests/support`.
 - Bench: `benches/reconcile.rs`, `reconcile_10k_one_edit` measured 12.1 ms (budget 20 ms).
 
 ## Invariants
@@ -35,7 +45,14 @@ Plan M3, as built 2026-09-12. Library + thin binary so every part is testable in
   from the injected `Clock`; unit tests use `FakeClock` and never sleep.
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - Every loop is bounded: mailbox 256, watch 64, raw events 4096, pending paths 1024, walk depth
-  32, documents 10 000, replay pages 1 000, mutations per apply 10 000.
+  32, documents 10 000, replay pages 1 000, mutations per apply 10 000, op log stream 200.
+- Token scopes are the design §6.2 closed union (`read`, `write:*`, `raw`, `project:`/`context:`/
+  `file:` restrictors with a non-empty suffix); an unrecognized scope is refused at create time,
+  never silently accepted. The bearer secret is returned in plaintext exactly once, at creation;
+  `TokenList` never carries it or the hash, and a revoked token simply drops out of the list (the
+  wire message has no revoked marker). Request-time enforcement of a revoked/expired bearer is
+  plan M6's larger MCP-auth-server milestone — out of scope here; `Store::verify_token` is the
+  primitive it will call.
 - M3 scope: cross-file Move, NotesEdit and undelete-via-SetField are refused as Unsupported.
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
