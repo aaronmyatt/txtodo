@@ -83,17 +83,24 @@ impl FileActor {
     /// The state with the derived ops applied; if the state cannot take them, the mirror's
     /// canonical rendering becomes the state (bytes over quirks — convergence first).
     fn state_after(&self, ops: &[txtodo_model::Op]) -> Result<DocState, ActorError> {
-        let mut next = self.state.clone();
-        let mut failed = None;
-        for op in ops {
-            if let Err(e) = next.apply(op) {
-                failed = Some(e);
-                break;
-            }
+        match self.apply_all(ops) {
+            Ok(next) => Ok(next),
+            Err(e) => self.adopt_mirror_rendering(&e),
         }
-        let Some(e) = failed else {
-            return Ok(next);
-        };
+    }
+
+    /// Every op applied in order to a clone of the current state; stops at the first refusal.
+    fn apply_all(&self, ops: &[txtodo_model::Op]) -> Result<DocState, crate::state::StateError> {
+        let mut next = self.state.clone();
+        for op in ops {
+            next.apply(op)?;
+        }
+        Ok(next)
+    }
+
+    /// The mirror's own rendering, adopted as the state, when the derived ops didn't apply
+    /// cleanly (bytes over quirks — convergence first).
+    fn adopt_mirror_rendering(&self, e: &crate::state::StateError) -> Result<DocState, ActorError> {
         tracing::warn!(file = %self.cfg.path, error = %e, "import_ops_refused_adopting_mirror");
         let file = file_like(&self.mirror.canonical_bytes(&self.state), &self.state);
         let adopted = DocState::from_file(self.cfg.path.clone(), &file)?;
@@ -220,21 +227,27 @@ impl FileActor {
 
 /// Flags as store rows, all raised `now`; an over-cap file is logged, not flagged per task.
 fn review_rows(review: &txtodo_crdt::Review, now: u64) -> Vec<ReviewRow> {
-    for file in &review.overflowed {
-        tracing::warn!(file = %file, "review_flags_overflowed");
-    }
-    let rows: Vec<ReviewRow> = review
-        .flags
-        .iter()
-        .map(|f| ReviewRow {
-            file: f.file.clone(),
-            task: f.task,
-            raised_at_ms: now,
-            mine: f.mine.clone().into_bytes(),
-            theirs: f.theirs.clone().into_bytes(),
-        })
-        .collect();
+    warn_overflowed(&review.overflowed);
+    let rows: Vec<ReviewRow> = review.flags.iter().map(|f| row_of(f, now)).collect();
     debug_assert_eq!(rows.len(), review.flags.len());
     debug_assert!(rows.iter().all(|r| r.raised_at_ms == now));
     rows
+}
+
+/// Logs (never flags per task) every file whose review-flag cap overflowed this import.
+fn warn_overflowed(overflowed: &[txtodo_model::FilePath]) {
+    for file in overflowed {
+        tracing::warn!(file = %file, "review_flags_overflowed");
+    }
+}
+
+/// One raised flag as a store row.
+fn row_of(f: &txtodo_crdt::ReviewFlag, now: u64) -> ReviewRow {
+    ReviewRow {
+        file: f.file.clone(),
+        task: f.task,
+        raised_at_ms: now,
+        mine: f.mine.clone().into_bytes(),
+        theirs: f.theirs.clone().into_bytes(),
+    }
 }
