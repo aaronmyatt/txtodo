@@ -3,17 +3,15 @@
 //! One op is one Loro commit: mutations are applied immediately, then `commit()` groups them into
 //! one observable diff. A cross-file `Move` touches two lists inside that single commit so a peer
 //! never observes the task in neither list (Loro has no cross-container transaction; the commit is
-//! the atomic batch boundary). Loro list API: <https://loro.dev/docs/tutorial/list>.
+//! the atomic batch boundary). Every list index comes from the per-file shadow (`doc/shadow.rs`),
+//! never from a Loro walk. Loro list API: <https://loro.dev/docs/tutorial/list>.
 
 use std::fmt;
 
-use loro::LoroMovableList;
-use txtodo_core::{LineKind, Mode, Ulid, parse_line};
+use txtodo_core::{LineKind, Mode, parse_line};
 use txtodo_model::{Field, FieldValue, FilePath, Hlc, Op, OpKind, TaskId, TextEdit};
 
-use crate::doc::{
-    DESCRIPTION_KEY, LoroDocument, encode_field_value, field_key, index_of, is_blank, task_id_str,
-};
+use crate::doc::{DESCRIPTION_KEY, LoroDocument, encode_field_value, field_key, is_blank};
 use crate::lww::write_if_newer;
 
 /// Why an op could not be applied to the Loro document.
@@ -53,6 +51,7 @@ impl From<loro::LoroError> for ToLoroError {
 
 /// Applies one op to the document, then commits once so the op is a single diff batch.
 pub fn apply(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
+    doc.ensure_shadow(&op.file);
     match &op.kind {
         OpKind::Insert { task, after, line } => insert(doc, op, *task, *after, line)?,
         OpKind::SetField { task, field, value } => set_field(doc, op, *task, *field, *value)?,
@@ -84,13 +83,12 @@ fn insert(
     after: Option<TaskId>,
     line: &str,
 ) -> Result<(), ToLoroError> {
-    let list = doc.file_list(&op.file);
-    if let Some(old) = index_of(&list, task) {
-        list.delete(old, 1)?;
+    if let Some(old) = doc.index_in(&op.file, task) {
+        doc.list_delete(&op.file, old)?;
     }
-    let idx = insert_index(&list, after)?;
-    list.insert(idx, task_id_str(task))?;
-    debug_assert!(index_of(&list, task) == Some(idx), "one entry per id");
+    let idx = insert_index(doc, &op.file, after)?;
+    doc.list_insert(&op.file, idx, task)?;
+    debug_assert_eq!(doc.index_in(&op.file, task), Some(idx), "one entry per id");
     populate(doc, task, line, op.hlc)
 }
 
@@ -175,47 +173,48 @@ fn mov(
     after: Option<TaskId>,
     to_file: &FilePath,
 ) -> Result<(), ToLoroError> {
-    let source = doc.file_list(&op.file);
-    let from = index_of(&source, task).ok_or(ToLoroError::TaskNotFound(task))?;
+    let from = doc
+        .index_in(&op.file, task)
+        .ok_or(ToLoroError::TaskNotFound(task))?;
     if to_file == &op.file {
-        let to = mov_to(&source, from, after)?;
-        source.mov(from, to)?;
+        let to = mov_to(doc, &op.file, from, after)?;
+        doc.list_mov(&op.file, from, to)?;
     } else {
-        let target = doc.file_list(to_file);
-        let to = insert_index(&target, after)?;
-        source.delete(from, 1)?;
-        target.insert(to, task_id_str(task))?;
+        doc.ensure_shadow(to_file);
+        let to = insert_index(doc, to_file, after)?;
+        doc.list_delete(&op.file, from)?;
+        doc.list_insert(to_file, to, task)?;
     }
+    debug_assert!(doc.index_in(to_file, task).is_some());
     Ok(())
 }
 
 /// Inserts a blank sentinel after `after`.
 fn blank_insert(doc: &mut LoroDocument, op: &Op, after: Option<TaskId>) -> Result<(), ToLoroError> {
-    let list = doc.file_list(&op.file);
-    let idx = insert_index(&list, after)?;
+    let idx = insert_index(doc, &op.file, after)?;
     let sentinel = doc.blank_id();
-    list.insert(idx, task_id_str(sentinel))?;
+    doc.list_insert(&op.file, idx, sentinel)?;
+    debug_assert_eq!(doc.id_at(&op.file, idx), Some(sentinel));
     Ok(())
 }
 
 /// Removes the first blank sentinel after `after`. Deleted tasks stay in the list as tombstones
 /// and are skipped; a live task before any blank means there is no blank to remove.
 fn blank_remove(doc: &mut LoroDocument, op: &Op, after: Option<TaskId>) -> Result<(), ToLoroError> {
-    let list = doc.file_list(&op.file);
-    let start = insert_index(&list, after)?;
-    let idx = next_blank_index(doc, &list, start).ok_or(ToLoroError::NoBlankAfter(after))?;
-    debug_assert!(idx >= start && idx < list.len());
-    list.delete(idx, 1)?;
+    let start = insert_index(doc, &op.file, after)?;
+    let idx = next_blank_index(doc, &op.file, start).ok_or(ToLoroError::NoBlankAfter(after))?;
+    debug_assert!(idx >= start && idx < doc.len_of(&op.file));
+    doc.list_delete(&op.file, idx)?;
     Ok(())
 }
 
 /// The first blank sentinel at or after `start`, looking past deleted tasks only.
-fn next_blank_index(doc: &LoroDocument, list: &LoroMovableList, start: usize) -> Option<usize> {
-    let len = list.len();
+fn next_blank_index(doc: &LoroDocument, file: &FilePath, start: usize) -> Option<usize> {
+    let len = doc.len_of(file);
     debug_assert!(start <= len);
     // Bounded by the list length.
     for idx in start..len {
-        let id = id_at(list, idx)?;
+        let id = doc.id_at(file, idx)?;
         if is_blank(id) {
             return Some(idx);
         }
@@ -227,10 +226,15 @@ fn next_blank_index(doc: &LoroDocument, list: &LoroMovableList, start: usize) ->
 }
 
 /// The insertion index for `after`: `0` for `None`, else the predecessor index plus one.
-fn insert_index(list: &LoroMovableList, after: Option<TaskId>) -> Result<usize, ToLoroError> {
+fn insert_index(
+    doc: &LoroDocument,
+    file: &FilePath,
+    after: Option<TaskId>,
+) -> Result<usize, ToLoroError> {
     match after {
         None => Ok(0),
-        Some(a) => index_of(list, a)
+        Some(a) => doc
+            .index_in(file, a)
             .map(|i| i + 1)
             .ok_or(ToLoroError::TaskNotFound(a)),
     }
@@ -238,22 +242,15 @@ fn insert_index(list: &LoroMovableList, after: Option<TaskId>) -> Result<usize, 
 
 /// The `to` index for a same-file `mov`, as the final index after the predecessor.
 fn mov_to(
-    list: &LoroMovableList,
+    doc: &LoroDocument,
+    file: &FilePath,
     from: usize,
     after: Option<TaskId>,
 ) -> Result<usize, ToLoroError> {
     let Some(a) = after else {
         return Ok(0);
     };
-    let a_idx = index_of(list, a).ok_or(ToLoroError::TaskNotFound(a))?;
+    let a_idx = doc.index_in(file, a).ok_or(ToLoroError::TaskNotFound(a))?;
+    debug_assert!(a_idx != from, "a task is not its own anchor");
     Ok(if a_idx < from { a_idx + 1 } else { a_idx })
-}
-
-/// The task id stored at list index `idx`, if that entry is one.
-fn id_at(list: &LoroMovableList, idx: usize) -> Option<TaskId> {
-    list.get(idx)
-        .and_then(|voc| voc.into_value().ok())
-        .and_then(|v| v.as_string().cloned())
-        .and_then(|s| Ulid::parse(s.as_ref()))
-        .map(TaskId::new)
 }

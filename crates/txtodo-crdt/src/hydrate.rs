@@ -5,7 +5,7 @@
 
 use txtodo_model::{FilePath, Hlc, TaskId};
 
-use crate::doc::{LoroDocument, task_id_str};
+use crate::doc::LoroDocument;
 use crate::to_loro::{ToLoroError, populate};
 
 /// One line to hydrate, in file order.
@@ -30,8 +30,8 @@ pub fn hydrate_file(
     lines: &[HydrateLine<'_>],
     hlc: Hlc,
 ) -> Result<Vec<TaskId>, ToLoroError> {
-    let list = doc.file_list(file);
-    if !list.is_empty() {
+    doc.ensure_shadow(file);
+    if doc.len_of(file) != 0 {
         return Err(ToLoroError::Unsupported(
             "hydrate_file needs an empty file list",
         ));
@@ -41,13 +41,13 @@ pub fn hydrate_file(
     for entry in lines {
         let id = match *entry {
             HydrateLine::Task { task, line } => {
-                list.push(task_id_str(task))?;
+                doc.list_push(file, task)?;
                 populate(doc, task, line, hlc)?;
                 task
             }
             HydrateLine::Blank => {
                 let sentinel = doc.blank_id();
-                list.push(task_id_str(sentinel))?;
+                doc.list_push(file, sentinel)?;
                 sentinel
             }
         };
@@ -55,6 +55,6 @@ pub fn hydrate_file(
     }
     doc.commit();
     debug_assert_eq!(ids.len(), lines.len());
-    debug_assert_eq!(list.len(), lines.len(), "every line became one entry");
+    debug_assert_eq!(doc.len_of(file), lines.len(), "every line became one entry");
     Ok(ids)
 }

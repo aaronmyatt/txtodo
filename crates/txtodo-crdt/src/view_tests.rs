@@ -112,6 +112,7 @@ fn reinserting_a_deleted_id_resurrects_one_entry_with_a_reset_description() {
     let ids = doc.list_ids(&file());
     assert_eq!(ids.len(), 3, "one entry per id, never a duplicate");
     assert_eq!(ids[0], task(2), "moved to the new position");
+    assert!(doc.shadow_matches_list(&file()));
     let line = rebuild_line(&doc, task(2)).unwrap();
     assert!(line.starts_with("second again id:"), "{line}");
     assert!(

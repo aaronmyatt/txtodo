@@ -10,6 +10,8 @@ use loro::{
     Container, ContainerID, ContainerTrait, ExportMode, LoroDoc, LoroMap, LoroMovableList,
     LoroResult, LoroText, LoroValue, ValueOrContainer,
 };
+use std::collections::HashMap;
+
 use txtodo_core::{Date, Priority, Ulid};
 use txtodo_model::{Field, FieldValue, FilePath, Op, TaskId};
 
@@ -17,6 +19,7 @@ use crate::from_loro::FromLoroError;
 use crate::lww::Lww;
 use crate::to_loro::{ToLoroError, apply};
 
+mod shadow;
 mod view;
 
 /// Root map name holding one nested `LoroMap` per task.
@@ -35,6 +38,8 @@ pub struct LoroDocument {
     doc: LoroDoc,
     /// Low bits minted into the next blank sentinel; deterministic per re-hydration.
     next_blank: u128,
+    /// Per-file-list shadow of the ids in order (see `doc/shadow.rs`), keyed by list name.
+    shadows: HashMap<String, Vec<TaskId>>,
 }
 
 impl LoroDocument {
@@ -43,6 +48,7 @@ impl LoroDocument {
         LoroDocument {
             doc: LoroDoc::new(),
             next_blank: 0,
+            shadows: HashMap::new(),
         }
     }
 
@@ -55,7 +61,14 @@ impl LoroDocument {
     pub fn from_snapshot(bytes: &[u8]) -> LoroResult<LoroDocument> {
         let doc = LoroDoc::from_snapshot(bytes)?;
         let next_blank = Self::blank_after(&doc);
-        Ok(LoroDocument { doc, next_blank })
+        let mut loaded = LoroDocument {
+            doc,
+            next_blank,
+            shadows: HashMap::new(),
+        };
+        // The lists came from bytes, not from our mutations: shadows rebuild on first use.
+        loaded.invalidate_shadows();
+        Ok(loaded)
     }
 
     /// Opens an empty document and applies each op through [`apply`], one commit per op.
@@ -151,10 +164,9 @@ impl LoroDocument {
 
     /// The file whose list currently holds `task`, if any.
     pub(crate) fn file_of_task(&self, task: TaskId) -> Option<FilePath> {
-        let needle = task_id_str(task);
         self.file_paths()
             .into_iter()
-            .find(|p| list_contains(&self.file_list(p), &needle))
+            .find(|p| self.index_in(p, task).is_some())
     }
 
     /// The file list whose container id is `id`, if any.
@@ -300,12 +312,8 @@ pub(crate) fn decode_field_value(field: Field, v: &LoroValue) -> Option<FieldVal
     }
 }
 
-/// Whether a list holds the given task-id string.
-pub(crate) fn list_contains(list: &LoroMovableList, needle: &str) -> bool {
-    position_of(list, needle).is_some()
-}
-
-/// The list index of a task id, if present.
+/// The list index of a task id, if present. Slow path (a Loro walk) used only before a shadow
+/// exists; `LoroDocument::index_in` is the fast path.
 pub(crate) fn index_of(list: &LoroMovableList, task: TaskId) -> Option<usize> {
     position_of(list, &task_id_str(task))
 }
