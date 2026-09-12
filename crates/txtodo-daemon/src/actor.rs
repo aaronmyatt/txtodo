@@ -7,7 +7,8 @@
 
 use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
-use crate::expected::{ExpectedWrites, Hash};
+use crate::expected::{ExpectedWrites, Hash, hex8};
+use crate::external::tracing_stub_error;
 use crate::handle::{
     ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Applied, Change, Contents, WATCH_CAP,
 };
@@ -149,6 +150,17 @@ impl FileActor {
     }
 
     fn handle(&mut self, msg: ActorMsg) {
+        // Handled here, not in `handle_core`, purely to keep that function's line count in budget.
+        if let ActorMsg::Progress { reply } = msg {
+            let _ = reply.send(self.state.task_counts());
+            return;
+        }
+        if let Some(msg) = self.handle_refdir(msg) {
+            self.handle_core(msg);
+        }
+    }
+
+    fn handle_core(&mut self, msg: ActorMsg) {
         match msg {
             ActorMsg::ExternalChange => {
                 if let Err(e) = self.on_external_change() {
@@ -168,9 +180,8 @@ impl FileActor {
                     hash: self.hash,
                 });
             }
-            ActorMsg::Progress { reply } => {
-                let _ = reply.send(self.state.task_counts());
-            }
+            // Handled in `handle`, before this function is reached — never here.
+            ActorMsg::Progress { .. } => {}
             ActorMsg::Subscribe { reply } => {
                 let _ = reply.send(self.changes.subscribe());
             }
@@ -208,6 +219,8 @@ impl FileActor {
             } => {
                 let _ = reply.send(self.on_resolve(task, resolution, principal));
             }
+            // Unreachable: `handle_refdir` above already consumed both.
+            ActorMsg::EnsureRefDir { .. } | ActorMsg::RenameRefDir { .. } => {}
         }
     }
 
@@ -379,17 +392,4 @@ impl FileActor {
         debug_assert!(self.writes_total > 0);
         Ok(())
     }
-}
-
-/// An actor error with nobody to reply to (the watcher sent the message): logged, never dropped.
-fn tracing_stub_error(path: &FilePath, e: &ActorError) {
-    debug_assert!(!path.as_str().is_empty());
-    tracing::error!(file = %path, error = %e, "external change failed");
-}
-
-/// The first 8 hex digits of a hash, enough to correlate log lines without logging content.
-pub fn hex8(hash: &Hash) -> String {
-    let s: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
-    debug_assert_eq!(s.len(), 8);
-    s
 }

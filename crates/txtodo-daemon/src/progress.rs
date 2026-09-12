@@ -3,9 +3,10 @@
 //! (whose `list_files` delegates here) to keep that file within its line budget — the pattern
 //! mirrors notes.rs's `impl TxtodoService` extension.
 
+use crate::convert::status_of;
 use crate::convert::{progress_of, sibling_done_path};
 use crate::handle::ActorHandle;
-use crate::server::{TxtodoService, status_of};
+use crate::server::TxtodoService;
 use tonic::Status;
 use txtodo_proto::v1 as pb;
 

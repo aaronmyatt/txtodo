@@ -1,17 +1,24 @@
-//! Workspace discovery (plan §3.2.11): every `todo.txt`, `done.txt` under the root, at any
-//! depth. Walks the tree, never follows `ref:` tags, so a hand-made directory is found too.
-//! `notes.md` is not here: it is prose, not a task list. The daemon leaves it alone until M5
-//! introduces it as a Loro text doc (tasks/crdt-notes-doc); stamping `id:` into prose is a bug.
-//! Iterative with an explicit stack — no recursion (constitution §3) and no walkdir dependency.
-//! https://doc.rust-lang.org/std/fs/fn.read_dir.html
+//! Workspace discovery (plan §3.2.11): every `todo.txt`, `done.txt` and `notes.md` under the
+//! root, at any depth. Walks the tree, never follows `ref:` tags, so a hand-made directory is
+//! found too. Iterative with an explicit stack — no recursion (constitution §3) and no walkdir
+//! dependency. https://doc.rust-lang.org/std/fs/fn.read_dir.html
+//!
+//! `notes.md` is discovered here like any other document (rule 11: "Discovery is by walking the
+//! tree, not by following tags") so sync and a `notes.md` Loro-text-doc actor (tasks/crdt-notes-doc)
+//! can find it — but it is prose, not a task list, so `Workspace::register` deliberately does not
+//! build a line-oriented `FileActor`/`DocState` for it (that stamped `id:` tags into prose, the
+//! bug `workspace_tests::notes_md_is_left_alone` guards against). `is_notes_document` is the seam
+//! callers use to tell the two kinds of discovered document apart.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 use txtodo_model::FilePath;
 
-/// The task-document names txtodo manages. Anything else in a `ref:` directory is left alone,
-/// `notes.md` included — it is prose, owned by M5 (tasks/crdt-notes-doc), not a task list.
-pub const DOCUMENT_NAMES: [&str; 2] = ["todo.txt", "done.txt"];
+/// The basenames the walker discovers under a workspace: task documents plus `notes.md`.
+pub const DOCUMENT_NAMES: [&str; 3] = ["todo.txt", "done.txt", "notes.md"];
+/// `notes.md` specifically — a synced document (plan §3.2 rule 11) that is Loro-text prose, not
+/// task lines. See the module doc for why this is discovered but not actor-registered.
+pub const NOTES_DOCUMENT_NAME: &str = "notes.md";
 /// Deepest directory nesting visited; far above sane `ref:` nesting, so hitting it is an error.
 pub const WALK_MAX_DEPTH: usize = 32;
 /// Most documents one workspace may hold (plan §5 talks about 10k lines, not 10k files).
@@ -52,9 +59,14 @@ impl fmt::Display for WalkError {
 
 impl std::error::Error for WalkError {}
 
-/// True for a basename txtodo manages.
+/// True for a basename the walker discovers (task documents and `notes.md`).
 pub fn is_document_name(name: &str) -> bool {
     DOCUMENT_NAMES.contains(&name)
+}
+
+/// True for `notes.md` specifically — see the module doc.
+pub fn is_notes_document(name: &str) -> bool {
+    name == NOTES_DOCUMENT_NAME
 }
 
 /// Every document under `root`, as workspace-relative paths, sorted. `root` itself is depth 0.
@@ -173,14 +185,15 @@ mod tests {
             vec![
                 ".hidden/todo.txt",
                 "done.txt",
+                "q4/notes.md",
                 "q4/sync/todo.txt",
                 "q4/todo.txt",
                 "todo.txt"
             ]
         );
         assert!(
-            !is_document_name("notes.md"),
-            "notes.md is prose, not a task document"
+            is_document_name("notes.md") && is_notes_document("notes.md"),
+            "notes.md is a synced document (plan §3.2 rule 11)"
         );
     }
 

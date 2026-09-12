@@ -8,8 +8,7 @@ use crate::convert::{
     parse_ulid_opt, task_of, to_flag, to_summary,
 };
 use crate::handle::ConflictRow;
-use crate::handle::{ActorError, ActorHandle, Applied, WATCH_CAP};
-use crate::mutation::MutationError;
+use crate::handle::{ActorHandle, Applied, WATCH_CAP};
 use crate::workspace::Workspace;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -52,8 +51,12 @@ impl TxtodoService {
 
     fn actor(&self, path: &str) -> Result<ActorHandle, Status> {
         let path = parse_path(path)?;
+        self.actor_by_path(&path)
+    }
+
+    pub(crate) fn actor_by_path(&self, path: &FilePath) -> Result<ActorHandle, Status> {
         self.workspace()
-            .actor(&path)
+            .actor(path)
             .cloned()
             .ok_or_else(|| Status::not_found(format!("no document {path}")))
     }
@@ -64,23 +67,9 @@ impl TxtodoService {
     }
 }
 
-// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, split out to keep this
-// file within its line budget; the pattern mirrors notes.rs's `impl TxtodoService` extension.
-pub(crate) fn status_of(e: ActorError) -> Status {
-    match e {
-        ActorError::Mutation(MutationError::Stale { .. }) => {
-            Status::failed_precondition(e.to_string())
-        }
-        ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
-        ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
-        ActorError::Mirror(_) => Status::internal(e.to_string()),
-        ActorError::NoFlag(_) => Status::failed_precondition(e.to_string()),
-        ActorError::Gone(_) => Status::unavailable(e.to_string()),
-        ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
-            Status::internal(e.to_string())
-        }
-    }
-}
+// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, and `status_of` in
+// convert.rs, both split out to keep this file within its line budget.
+use crate::convert::status_of;
 
 fn applied_of(a: Applied) -> pb::ApplyResponse {
     pb::ApplyResponse {
@@ -199,7 +188,7 @@ impl Txtodo for TxtodoService {
         r: Request<pb::ApplyRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
         let req = r.into_inner();
-        let h = self.actor(&req.path)?;
+        let path = parse_path(&req.path)?;
         let device = self.workspace().device();
         let principal = parse_principal(req.agent, device)?;
         let mutations = req
@@ -207,7 +196,7 @@ impl Txtodo for TxtodoService {
             .into_iter()
             .map(parse_mutation)
             .collect::<Result<Vec<_>, _>>()?;
-        let a = h.apply(mutations, principal).await.map_err(status_of)?;
+        let a = self.route_apply(path, mutations, principal).await?;
         Ok(Response::new(applied_of(a)))
     }
 

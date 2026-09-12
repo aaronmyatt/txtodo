@@ -20,7 +20,10 @@ pub struct TaskRef {
     pub task_id: Option<TaskId>,
 }
 
-/// What a client can ask for. Cross-file `Move` is M5.
+/// What a client can ask for. `Move` always names another document (plan §3.2.8); the daemon
+/// appends the line at the destination's end. It must be the only mutation in its `Apply` batch —
+/// `crate::move_coordinator` is what actually moves it, coordinating the two documents' actors and
+/// the task's `ref:` directory, so `mutation_ops` below only ever sees the *source* half of it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mutation {
     /// Append a task line; an `id:` is added when missing.
@@ -42,7 +45,8 @@ pub enum Mutation {
         /// New text without ending.
         new_line: String,
     },
-    /// Move to another document (M5).
+    /// Move to another document (plan §3.2.8, root todo.txt task 16). Always cross-file: a
+    /// same-file reorder is not part of this client API.
     Move {
         /// The line.
         task: TaskRef,
@@ -78,7 +82,8 @@ pub enum MutationError {
     NotATask(String),
     /// The edit dropped or changed the `id:` tag.
     IdChanged(TaskId),
-    /// Not supported on one device in M3.
+    /// A batch mixed a cross-file `Move` with other mutations, or named an op this crate does
+    /// not support (`NotesEdit`, undelete-via-`SetField`; see this crate's CLAUDE.md).
     Unsupported(&'static str),
     /// More than `MAX_MUTATIONS_PER_APPLY`.
     TooMany(usize),
@@ -155,7 +160,7 @@ pub fn mutation_ops(
             Ok(change_ops(&old, &new))
         }
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
-        Mutation::Move { .. } => Err(MutationError::Unsupported("Move between files")),
+        Mutation::Move { task, to } => move_ops(state, task, to),
         Mutation::Delete { task, leave_blank } => {
             let (i, id) = resolve(state, task)?;
             let after = state.task_before(i);
@@ -212,6 +217,62 @@ fn edit_ops(
         .line_of(id)
         .ok_or(MutationError::NoLine(task.line_number))?;
     Ok(change_ops(&old, &new))
+}
+
+/// The source half of a cross-file `Move`: this document only ever records that the task left
+/// (`OpKind::Move` with no in-file `after` — `to` is a different document, so no position here is
+/// meaningful). `crate::move_coordinator` resolves the destination anchor and inserts the line
+/// there as its own `Add`; see that module for the full, two-actor operation and the `ref:`
+/// directory relocation that rides along with it.
+fn move_ops(state: &DocState, task: &TaskRef, to: &FilePath) -> Result<Vec<OpKind>, MutationError> {
+    let (_, id) = resolve(state, task)?;
+    Ok(vec![OpKind::Move {
+        task: id,
+        after: None,
+        to_file: to.clone(),
+    }])
+}
+
+/// A task line read without mutating anything: its id, full raw bytes and `ref:` slug (if any).
+/// `crate::move_coordinator` uses this to capture what a cross-file `Move` carries before it
+/// touches either document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeekedLine {
+    /// The task's id.
+    pub id: TaskId,
+    /// The line's exact bytes (no ending), `id:` tag included.
+    pub line: String,
+    /// Its `ref:` tag value, when it has one valid per plan §3.2.1.
+    pub ref_slug: Option<String>,
+}
+
+/// Resolves `task` against `bytes` (a document's current projection, e.g. from `ActorHandle::get`)
+/// without any actor round trip: read-only, so a caller may inspect a line before deciding what
+/// mutation to send. `MutationError::Stale` on a mismatched id, exactly like [`resolve`].
+pub fn peek_line(bytes: &[u8], task: &TaskRef) -> Result<PeekedLine, MutationError> {
+    let n = task.line_number;
+    let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
+    let file = txtodo_core::parse_file(bytes);
+    let line = file.lines.get(i).ok_or(MutationError::NoLine(n))?;
+    let parsed = line.parse().ok_or(MutationError::NoLine(n))?;
+    let LineKind::Task(t) = parsed.kind else {
+        return Err(MutationError::Blank(n));
+    };
+    let found = t.id().map(TaskId::new).ok_or(MutationError::NoLine(n))?;
+    if let Some(expected) = task.task_id
+        && expected != found
+    {
+        return Err(MutationError::Stale {
+            line_number: n,
+            expected,
+            found,
+        });
+    }
+    Ok(PeekedLine {
+        id: found,
+        line: line.raw().unwrap_or_default().to_owned(),
+        ref_slug: t.ref_slug().map(str::to_owned),
+    })
 }
 
 /// Validates client text into a task line (LF ending; the state re-ends it on insert).

@@ -76,19 +76,29 @@ async fn register_is_idempotent_and_discover_picks_up_a_new_directory() {
 }
 
 // Regression for the line-136 bug: the walker shipped notes.md and the actor stamped `id:` tags
-// into prose (DocState is the *task* model). Opening the workspace must leave notes.md untouched.
+// into prose (DocState is the *task* model). M5 (tasks/daemon-workspace-walker) now discovers
+// `notes.md` at the walker level, plan §3.2 rule 11 ("every notes.md ... is a synced document"),
+// so a future notes actor (tasks/crdt-notes-doc) can find it — but opening the workspace must
+// still leave the file itself untouched: no `FileActor`/`DocState` is built for it here.
 #[tokio::test]
 async fn notes_md_is_left_alone() {
     let dir = tempfile::tempdir().unwrap();
     let notes = "Some prose about the roadmap.\n\n- a bullet\n";
     touch(&dir.path().join("todo.txt"), "one\n");
     touch(&dir.path().join("notes.md"), notes);
+    assert!(
+        crate::walker::walk(dir.path())
+            .unwrap()
+            .iter()
+            .any(|p| p.as_str() == "notes.md"),
+        "the walker discovers notes.md"
+    );
     let ws = open(dir.path());
     let paths: Vec<String> = ws.paths().map(ToString::to_string).collect();
     assert_eq!(
         paths,
         vec!["todo.txt"],
-        "notes.md is not a managed document"
+        "notes.md is discovered but gets no FileActor/DocState"
     );
     assert_eq!(
         std::fs::read_to_string(dir.path().join("notes.md")).unwrap(),

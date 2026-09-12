@@ -10,8 +10,14 @@ use crate::state::DocState;
 use crate::write::read_or_empty;
 use std::sync::Arc;
 use txtodo_core::parse_file;
-use txtodo_model::{Hlc, Op, Principal, TaskId};
+use txtodo_model::{FilePath, Hlc, Op, Principal, TaskId};
 use txtodo_store::{Seq, Snapshot};
+
+/// An actor error with nobody to reply to (the watcher sent the message): logged, never dropped.
+pub(crate) fn tracing_stub_error(path: &FilePath, e: &ActorError) {
+    debug_assert!(!path.as_str().is_empty());
+    tracing::error!(file = %path, error = %e, "external change failed");
+}
 
 impl FileActor {
     pub(crate) fn recover(&mut self) -> Result<(), ActorError> {

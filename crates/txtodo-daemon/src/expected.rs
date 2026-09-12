@@ -14,6 +14,13 @@ pub const EXPECTED_WRITE_TTL_MS: u64 = 2_000;
 /// 32-byte blake3 digest of a projection.
 pub type Hash = [u8; 32];
 
+/// The first 8 hex digits of a hash, enough to correlate log lines without logging content.
+pub fn hex8(hash: &Hash) -> String {
+    let s: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    debug_assert_eq!(s.len(), 8);
+    s
+}
+
 /// The ring.
 #[derive(Debug, Default)]
 pub struct ExpectedWrites {

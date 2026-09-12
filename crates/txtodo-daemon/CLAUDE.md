@@ -14,6 +14,7 @@ the same day.
   `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every
   committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
+<<<<<<< HEAD
   ops) · `history` (replay, checkout, inverse) · `walker`, `watcher`, `debounce`, `watch_task` ·
   `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `progress` (`ListFiles`
   done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of `server.rs` for its line
@@ -26,6 +27,16 @@ the same day.
   `tokens`, `activity` and `pairing_grpc` can reach the workspace/store at all — Rust's default
   privacy does not extend to sibling modules, only descendants, so this was a required compiler
   fix, not a style choice.
+=======
+  ops; also `peek_line`, a read-only `TaskRef` resolve) · `history` (replay, checkout, inverse) ·
+  `refdir` + `refdir_ops` (slug generation, collision-safe filesystem moves, lazy `ref:` creation
+  and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
+  two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers
+  `todo.txt`/`done.txt`/`notes.md`; only the first two get a `FileActor`), `watcher`, `debounce`,
+  `watch_task` · `server` + `serve` + `convert` (tonic service, socket, proto boundary) · `write`
+  (temp + fsync + rename) · `expected` (own-write ring) · `clock` (injected time, FakeClock) ·
+  `telemetry`, `stats`, `pidfile`.
+>>>>>>> worktree-agent-a70361a947e913cea
 - Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
@@ -45,6 +56,7 @@ the same day.
   from the injected `Clock`; unit tests use `FakeClock` and never sleep.
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - Every loop is bounded: mailbox 256, watch 64, raw events 4096, pending paths 1024, walk depth
+<<<<<<< HEAD
   32, documents 10 000, replay pages 1 000, mutations per apply 10 000, op log stream 200.
 - Token scopes are the design §6.2 closed union (`read`, `write:*`, `raw`, `project:`/`context:`/
   `file:` restrictors with a non-empty suffix); an unrecognized scope is refused at create time,
@@ -54,6 +66,13 @@ the same day.
   plan M6's larger MCP-auth-server milestone — out of scope here; `Store::verify_token` is the
   primitive it will call.
 - M3 scope: cross-file Move, NotesEdit and undelete-via-SetField are refused as Unsupported.
+=======
+  32, documents 10 000, replay pages 1 000, mutations per apply 10 000.
+- M3 scope: NotesEdit and undelete-via-SetField are refused as Unsupported. Cross-file Move works
+  (plan M7): `mutation.rs::move_ops` records the source's departure; `move_coordinator.rs` inserts
+  the arriving line at the destination as its own `Insert` and relocates the `ref:` directory —
+  two ops, one per document, no shared op row (see that module's doc for why).
+>>>>>>> worktree-agent-a70361a947e913cea
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,

@@ -64,6 +64,16 @@ impl<'a> Task<'a> {
         self.tags().find(|(k, _)| *k == key).map(|(_, v)| v)
     }
 
+    /// Description words that are not a `+project`, `@context`, `key:value` tag, `id:`, or a URL,
+    /// in order, duplicates kept. This is the "plain words" a `ref:` slug is generated from
+    /// (plan §3.2 rule 4) — callers mint a slug from these rather than re-splitting the
+    /// description and re-deriving the same classification.
+    pub fn plain_words(&self) -> impl Iterator<Item = &'a str> {
+        self.words()
+            .filter(|(k, _)| *k == WordKind::Text)
+            .map(|(_, w)| w)
+    }
+
     /// Like [`Task::tag`] but with a custom URL scheme list (a word that is a URL is never a tag).
     pub fn tag_with_schemes(&self, key: &str, schemes: &[&str]) -> Option<&'a str> {
         let d = self.description;
@@ -111,6 +121,14 @@ mod tests {
             (t.projects().next(), t.contexts().next()),
             (Some("家务"), Some("手机"))
         );
+    }
+
+    #[test]
+    fn plain_words_excludes_sigils_tags_and_urls() {
+        let t = task("learn C++ +cpp see https://example.com/a ref:q4 id:x");
+        assert_eq!(t.plain_words().collect::<Vec<_>>(), ["learn", "C++", "see"]);
+        let t = task("买菜 +家务 @手机");
+        assert_eq!(t.plain_words().collect::<Vec<_>>(), ["买菜"]);
     }
 
     #[test]

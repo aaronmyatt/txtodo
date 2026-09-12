@@ -105,14 +105,33 @@ fn insert_move_and_blank_ops_reorder_the_document() {
         state.apply_kind(&OpKind::BlankRemove { after: Some(a) }),
         Err(StateError::NoBlank(Some(a)))
     );
+}
+
+// Cross-file: this document is the source, so the task just leaves. `after` names a position in
+// `to_file`, meaningless here — the destination actor never replays this op (see `move_task`'s
+// doc and `move_coordinator_tests`).
+#[test]
+fn cross_file_move_only_removes_on_the_source() {
+    let mut state = doc(&two_lines_crlf());
+    let a = task_id(ulid_bits(A));
     let other = FilePath::new("done.txt").unwrap();
+    assert!(state.index_of(a).is_some());
+    state
+        .apply_kind(&OpKind::Move {
+            task: a,
+            after: None,
+            to_file: other,
+        })
+        .unwrap();
+    assert_eq!(state.index_of(a), None, "the task left this document");
     assert_eq!(
         state.apply_kind(&OpKind::Move {
             task: a,
             after: None,
-            to_file: other
+            to_file: FilePath::new("todo.txt").unwrap(),
         }),
-        Err(StateError::Unsupported("cross-file Move"))
+        Err(StateError::UnknownTask(a)),
+        "it is gone, so a second move of it fails"
     );
 }
 

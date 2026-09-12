@@ -1,8 +1,9 @@
 //! The gRPC boundary: proto messages are parsed into typed values once, here (constitution §3:
 //! parse, don't validate); ops are rendered into `OpSummary` for log/blame/Watch. Pure.
 
-use crate::handle::{ConflictRow, Resolution};
-use crate::mutation::{Mutation, TaskRef};
+use crate::handle::{ActorError, ConflictRow, Resolution};
+use crate::mutation::{Mutation, MutationError, TaskRef};
+use crate::refdir::RefDirError;
 use crate::state::TaskCounts;
 use tonic::Status;
 use txtodo_core::Date;
@@ -16,6 +17,31 @@ pub const SUMMARY_MAX_CHARS: usize = 60;
 /// A workspace-relative path from the wire.
 pub fn parse_path(s: &str) -> Result<FilePath, Status> {
     FilePath::new(s).map_err(|e| Status::invalid_argument(e.to_string()))
+}
+
+/// An actor error onto the wire status it deserves. Lives here, not in `server.rs`, purely to
+/// keep that file within its line budget.
+pub(crate) fn status_of(e: ActorError) -> Status {
+    match e {
+        ActorError::Mutation(MutationError::Stale { .. }) => {
+            Status::failed_precondition(e.to_string())
+        }
+        ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
+        ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
+        ActorError::Mirror(_) => Status::internal(e.to_string()),
+        ActorError::NoFlag(_) => Status::failed_precondition(e.to_string()),
+        ActorError::Gone(_) => Status::unavailable(e.to_string()),
+        ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
+            Status::internal(e.to_string())
+        }
+        ActorError::RefDir(RefDirError::InvalidSlug(_) | RefDirError::SlugTaken(_)) => {
+            Status::invalid_argument(e.to_string())
+        }
+        ActorError::RefDir(RefDirError::CollisionsExhausted) => {
+            Status::resource_exhausted(e.to_string())
+        }
+        ActorError::RefDir(RefDirError::Io { .. }) => Status::internal(e.to_string()),
+    }
 }
 
 /// Classifies a workspace-relative path for `FileInfo.kind` (plan §3.2.5).

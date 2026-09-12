@@ -1,6 +1,8 @@
 //! Mutations → ops: resolution by line number + id, each mutation kind, each refusal.
 
-use crate::mutation::{Mutation, MutationError, TaskRef, mutation_ops, resolve};
+use crate::mutation::{
+    Mutation, MutationError, PeekedLine, TaskRef, mutation_ops, peek_line, resolve,
+};
 use crate::state::{DocState, task_id};
 use txtodo_core::{Date, parse_file};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind};
@@ -149,7 +151,7 @@ fn edit_replaces_the_line_but_must_keep_the_id() {
 }
 
 #[test]
-fn delete_tombstones_and_optionally_leaves_a_blank_and_move_is_m5() {
+fn delete_tombstones_and_optionally_leaves_a_blank() {
     let s = state();
     let ops = mutation_ops(
         &s,
@@ -179,12 +181,62 @@ fn delete_tombstones_and_optionally_leaves_a_blank_and_move_is_m5() {
     )
     .unwrap();
     assert_eq!(plain.len(), 1);
+}
+
+#[test]
+fn move_records_the_source_departure_to_the_named_destination() {
+    let s = state();
     let mv = Mutation::Move {
-        task: line(1, None),
+        task: line(1, Some(A)),
         to: FilePath::new("done.txt").unwrap(),
     };
+    let ops = mutation_ops(&s, &mv, &mut mint()).unwrap();
     assert_eq!(
-        mutation_ops(&s, &mv, &mut mint()),
-        Err(MutationError::Unsupported("Move between files"))
+        ops,
+        vec![OpKind::Move {
+            task: id(A),
+            after: None,
+            to_file: FilePath::new("done.txt").unwrap(),
+        }]
+    );
+    // A stale id is still refused, exactly like every other mutation.
+    let stale = Mutation::Move {
+        task: line(1, Some(B)),
+        to: FilePath::new("done.txt").unwrap(),
+    };
+    assert!(matches!(
+        mutation_ops(&s, &stale, &mut mint()),
+        Err(MutationError::Stale { .. })
+    ));
+}
+
+#[test]
+fn peek_line_reads_the_id_bytes_and_ref_slug_without_mutating() {
+    let bytes = format!("(A) roadmap +work ref:q4-roadmap id:{A}\n\nwalk the dog id:{B}\n");
+    assert_eq!(
+        peek_line(bytes.as_bytes(), &line(1, Some(A))).unwrap(),
+        PeekedLine {
+            id: id(A),
+            line: format!("(A) roadmap +work ref:q4-roadmap id:{A}"),
+            ref_slug: Some("q4-roadmap".into()),
+        }
+    );
+    assert_eq!(
+        peek_line(bytes.as_bytes(), &line(3, None))
+            .unwrap()
+            .ref_slug,
+        None
+    );
+    assert_eq!(
+        peek_line(bytes.as_bytes(), &line(2, None)),
+        Err(MutationError::Blank(2))
+    );
+    assert_eq!(
+        peek_line(bytes.as_bytes(), &line(1, Some(B))),
+        Err(MutationError::Stale {
+            line_number: 1,
+            expected: id(B),
+            found: id(A)
+        })
     );
 }

@@ -4,6 +4,7 @@
 
 use crate::expected::Hash;
 use crate::mutation::{Mutation, MutationError, TaskRef};
+use crate::refdir::{RefDirError, RefDirInfo};
 use crate::state::{StateError, TaskCounts};
 use crate::write::WriteError;
 use std::fmt;
@@ -89,8 +90,10 @@ pub enum ActorError {
     NoFlag(TaskId),
     /// The actor task has stopped.
     Gone(FilePath),
-    /// Not available on one device in M3.
+    /// Not supported by this crate (`NotesEdit`, undelete-via-`SetField`).
     Unsupported(&'static str),
+    /// A `ref:` directory operation failed (`refdir.rs`).
+    RefDir(RefDirError),
 }
 
 impl fmt::Display for ActorError {
@@ -105,6 +108,7 @@ impl fmt::Display for ActorError {
             ActorError::NoFlag(t) => write!(f, "no open needs_review flag for task {t}"),
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
+            ActorError::RefDir(e) => write!(f, "{e}"),
         }
     }
 }
@@ -218,6 +222,26 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<Applied, ActorError>>,
     },
+    /// Lazy `ref:` creation (`refdir.rs`): the tag and directory as one op batch.
+    EnsureRefDir {
+        /// The line.
+        task: TaskRef,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
+    },
+    /// Renames an existing `ref:` slug and its directory to match (`refdir.rs`).
+    RenameRefDir {
+        /// The line.
+        task: TaskRef,
+        /// The slug to rename to.
+        new_slug: String,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
+    },
 }
 
 /// A cheap handle to one document's actor.
@@ -237,14 +261,14 @@ impl ActorHandle {
         &self.path
     }
 
-    async fn send(&self, msg: ActorMsg) -> Result<(), ActorError> {
+    pub(crate) async fn send(&self, msg: ActorMsg) -> Result<(), ActorError> {
         self.tx
             .send(msg)
             .await
             .map_err(|_| ActorError::Gone(self.path.clone()))
     }
 
-    async fn ask<T>(
+    pub(crate) async fn ask<T>(
         &self,
         build: impl FnOnce(oneshot::Sender<T>) -> ActorMsg,
     ) -> Result<T, ActorError> {
@@ -347,4 +371,7 @@ impl ActorHandle {
         })
         .await?
     }
+
+    // ensure_ref_dir/rename_ref_dir live in refdir.rs (impl ActorHandle extension) — moved out
+    // purely to keep this file within its line budget; `ask`/`send` are `pub(crate)` for it.
 }
