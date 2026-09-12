@@ -204,6 +204,11 @@ enum Command {
         #[arg(long, default_value = "todo.txt")]
         file: String,
     },
+    /// Open needs_review flags and resolve them (daemon mode): `list` (default) or `resolve`.
+    Conflicts {
+        #[command(subcommand)]
+        action: Option<commands::conflicts::Action>,
+    },
     /// Check socket, watcher, files, clock and config; exit 1 on any failure.
     Doctor {
         /// Also print the daemon's recent JSON log.
@@ -290,6 +295,9 @@ fn dispatch_daemon(
         Command::Checkout { at, stdout, file } => {
             commands::history::run_checkout(daemon, at, file, *stdout)
         }
+        Command::Conflicts { action } => {
+            commands::conflicts::run(daemon, action.as_ref(), ctx.json)
+        }
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -304,7 +312,8 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Log { .. }
         | Command::Blame { .. }
         | Command::Undo { .. }
-        | Command::Checkout { .. } => Err(CliError::Message(format!(
+        | Command::Checkout { .. }
+        | Command::Conflicts { .. } => Err(CliError::Message(format!(
             "txtodo: {}",
             commands::history::NEEDS_DAEMON
         ))),

@@ -3,6 +3,7 @@
 
 pub mod add;
 pub mod archive;
+pub mod conflicts;
 pub mod doctor;
 pub mod edit;
 pub mod fileops;

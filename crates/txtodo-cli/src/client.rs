@@ -183,4 +183,29 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
+
+    /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+    pub fn conflicts(&mut self, path: &str) -> Result<Vec<pb::ReviewFlag>, ClientError> {
+        let req = pb::ConflictsRequest {
+            path: path.to_owned(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.list_conflicts(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner().flags)
+    }
+
+    /// Resolves one flag: writes the chosen side (mine/theirs) or keeps the file (merged), and
+    /// clears the flag — both or neither (daemon `ResolveConflict`).
+    pub fn resolve_conflict(
+        &mut self,
+        req: pb::ResolveRequest,
+    ) -> Result<pb::ApplyResponse, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.resolve_conflict(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
 }
