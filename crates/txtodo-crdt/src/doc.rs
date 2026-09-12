@@ -17,6 +17,8 @@ use crate::from_loro::FromLoroError;
 use crate::lww::Lww;
 use crate::to_loro::{ToLoroError, apply};
 
+mod view;
+
 /// Root map name holding one nested `LoroMap` per task.
 pub(crate) const TASKS_MAP: &str = "tasks";
 /// Prefix of every per-file movable list's root name.
@@ -230,7 +232,7 @@ pub(crate) fn parse_task_id(s: &str) -> Option<TaskId> {
 }
 
 /// True when the task id carries the reserved blank prefix.
-pub(crate) fn is_blank(task: TaskId) -> bool {
+pub fn is_blank(task: TaskId) -> bool {
     task.ulid().to_u128() & BLANK_PREFIX_MASK == BLANK_PREFIX_MASK
 }
 
@@ -314,7 +316,8 @@ pub(crate) fn index_of(list: &LoroMovableList, task: TaskId) -> Option<usize> {
 }
 
 /// Rebuilds a canonical `Insert` line from the task map's description text and prefix fields.
-pub(crate) fn rebuild_line(doc: &LoroDocument, task: TaskId) -> Result<String, FromLoroError> {
+/// Canonical, not byte-faithful: quirks (tabs, trailing space) are flag bits and are not replayed.
+pub fn rebuild_line(doc: &LoroDocument, task: TaskId) -> Result<String, FromLoroError> {
     let map = doc
         .task_map_if_exists(task)
         .ok_or(FromLoroError::MissingTask(task))?;

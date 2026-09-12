@@ -71,7 +71,9 @@ pub fn apply(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
     Ok(())
 }
 
-/// Inserts the task into the file list and populates its task map from the parsed line.
+/// Inserts the task into the file list and populates its task map from the parsed line. An id
+/// already in the list (a deleted task being re-inserted by undo) is moved, not duplicated, and
+/// its description is reset — one id, one list entry, always.
 fn insert(
     doc: &mut LoroDocument,
     op: &Op,
@@ -80,8 +82,12 @@ fn insert(
     line: &str,
 ) -> Result<(), ToLoroError> {
     let list = doc.file_list(&op.file);
+    if let Some(old) = index_of(&list, task) {
+        list.delete(old, 1)?;
+    }
     let idx = insert_index(&list, after)?;
     list.insert(idx, task_id_str(task))?;
+    debug_assert!(index_of(&list, task) == Some(idx), "one entry per id");
     populate(doc, task, line, op.hlc)
 }
 
@@ -94,7 +100,16 @@ fn populate(doc: &LoroDocument, task: TaskId, line: &str, hlc: Hlc) -> Result<()
     };
     let map = doc.task_map(task)?;
     let text = map.ensure_mergeable_text(DESCRIPTION_KEY)?;
+    let stale = text.len_unicode();
+    if stale > 0 {
+        text.delete(0, stale)?;
+    }
     text.insert(0, t.description)?;
+    debug_assert_eq!(
+        text.to_string(),
+        t.description,
+        "description is exactly the line's"
+    );
     let fields = [
         (Field::Completed, FieldValue::Bool(t.completed)),
         (

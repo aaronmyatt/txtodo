@@ -15,8 +15,10 @@ mod to_loro;
 mod lww_tests;
 #[cfg(test)]
 mod roundtrip_tests;
+#[cfg(test)]
+mod view_tests;
 
-pub use doc::LoroDocument;
+pub use doc::{LoroDocument, is_blank, rebuild_line};
 pub use from_loro::{FromLoroError, Stamp, from_batch};
 pub use lww::{Lww, write_if_newer};
 pub use to_loro::{ToLoroError, apply};
