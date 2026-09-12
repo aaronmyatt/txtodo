@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use serde::{Deserialize, Serialize};
 use txtodo_model::{DeviceId, Op};
 
 use crate::crypto_error::CryptoError;
@@ -66,9 +67,39 @@ impl DevicePublicKey {
     }
 }
 
-/// An Ed25519 signature over one op's `signing_bytes`.
+/// An Ed25519 signature over one op's `signing_bytes`. Public (it travels on the wire and in the
+/// `ops.signature` column) — only the *signing* key needs the redaction discipline.
+///
+/// `Serialize`/`Deserialize` are hand-written, not derived: `SIGNATURE_BYTES` is 64, and serde's
+/// built-in array impls only cover `[T; 0..=32]`. Encoded as a byte string rather than a fixed
+/// array (postcard then length-prefixes it) rather than pulling in `serde-big-array` for one type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Signature([u8; SIGNATURE_BYTES]);
+
+impl Serialize for Signature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for Signature {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Signature, D::Error> {
+        struct SignatureVisitor;
+        impl serde::de::Visitor<'_> for SignatureVisitor {
+            type Value = Signature;
+            fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{SIGNATURE_BYTES} signature bytes")
+            }
+            fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Signature, E> {
+                let bytes: [u8; SIGNATURE_BYTES] = v
+                    .try_into()
+                    .map_err(|_| E::invalid_length(v.len(), &self))?;
+                Ok(Signature(bytes))
+            }
+        }
+        deserializer.deserialize_bytes(SignatureVisitor)
+    }
+}
 
 impl Signature {
     /// Wraps raw signature bytes read from the store or the wire.

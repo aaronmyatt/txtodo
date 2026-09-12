@@ -160,6 +160,14 @@ fn a_signature_debug_shows_a_prefix_not_all_64_bytes() {
 }
 
 #[test]
+fn a_signature_round_trips_through_postcard() {
+    let sig = Signature::from_bytes([0x11; 64]);
+    let bytes = postcard::to_allocvec(&sig).unwrap();
+    let back: Signature = postcard::from_bytes(&bytes).unwrap();
+    assert_eq!(back, sig);
+}
+
+#[test]
 fn a_public_key_that_is_not_a_point_is_a_typed_error() {
     // Not every 32-byte string is a compressed Edwards point; 0x02 repeated is not.
     assert_eq!(
