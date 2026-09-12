@@ -22,6 +22,11 @@ service Txtodo {
   rpc Checkout(CheckoutRequest) returns (FileContents);
   // Liveness for `txtodo doctor` and tests.
   rpc Health(HealthRequest) returns (HealthResponse);
+  // Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+  rpc ListConflicts(ConflictsRequest) returns (ConflictsResponse);
+  // Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
+  // and clears the flag — both or neither.
+  rpc ResolveConflict(ResolveRequest) returns (ApplyResponse);
 }
 
 message ListFilesRequest {}
@@ -55,10 +60,38 @@ message OpSummary {
   string summary = 9;       // one-line human summary, truncated by the daemon
 }
 
+// One needs_review flag: the description each side had when they diverged (plan M4).
+message ReviewFlag {
+  string task_id = 1;         // ULID text
+  uint32 line_number = 2;     // 1-based line the task sits on now; 0 when it is no longer in the file
+  string mine = 3;            // this device's description at flag time
+  string theirs = 4;          // the peer's description at flag time
+  uint64 raised_at_ms = 5;
+}
+
 message Change {
   string path = 1;
   bytes hash = 2;
   repeated OpSummary ops = 3;
+  repeated ReviewFlag review = 4;   // flags raised by this change (an import), if any
+}
+
+message ConflictsRequest { string path = 1; }
+
+message ConflictsResponse { repeated ReviewFlag flags = 1; }
+
+// Which side wins. `MERGED` keeps what is in the file and only clears the flag.
+enum Resolution {
+  RESOLUTION_UNSPECIFIED = 0;
+  RESOLUTION_MINE = 1;
+  RESOLUTION_THEIRS = 2;
+  RESOLUTION_MERGED = 3;
+}
+
+message ResolveRequest {
+  string path = 1;
+  TaskRef task = 2;
+  Resolution resolution = 3;
 }
 
 // A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
