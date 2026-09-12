@@ -6,11 +6,13 @@
 
 mod commit;
 mod error;
+mod heads;
 mod ops;
 mod projections;
 
 pub use commit::prev_hash_key;
 pub use error::StoreError;
+pub use heads::MAX_DEVICES_PER_HEADS;
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 
@@ -18,9 +20,12 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 1;
-/// The first migration, embedded so the binary is self-contained.
-const MIGRATION_0001: &str = include_str!("../migrations/0001.sql");
+const SCHEMA_VERSION: i64 = 2;
+/// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
+const MIGRATIONS: [(i64, &str); 2] = [
+    (1, include_str!("../migrations/0001.sql")),
+    (2, include_str!("../migrations/0002.sql")),
+];
 
 /// One open op-log database.
 pub struct Store {
@@ -46,11 +51,14 @@ impl Store {
                 supported: SCHEMA_VERSION,
             });
         }
-        if found < SCHEMA_VERSION {
-            debug_assert_eq!(found, 0, "only one migration exists");
-            conn.execute_batch(MIGRATION_0001)
-                .map_err(StoreError::sqlite("migrate 0001", path))?;
+        // Bounded by MIGRATIONS.len(); each applies only when the file is behind it.
+        for (version, sql) in MIGRATIONS {
+            if found < version {
+                conn.execute_batch(sql)
+                    .map_err(StoreError::sqlite("migrate", path))?;
+            }
         }
+        debug_assert_eq!(MIGRATIONS.last().map(|m| m.0), Some(SCHEMA_VERSION));
         let store = Store { conn };
         debug_assert_eq!(store.user_version()?, SCHEMA_VERSION);
         Ok(store)

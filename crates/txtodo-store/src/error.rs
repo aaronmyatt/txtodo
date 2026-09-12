@@ -39,6 +39,15 @@ pub enum StoreError {
     ProjectionTooLarge(usize),
     /// A stored hash is not 32 bytes (the database was edited by hand); names the file.
     BadHash(String),
+    /// A stored device id is not 16 bytes (the database was edited by hand); the length found.
+    BadDevice(usize),
+    /// `ops_for` was given an empty, inverted or over-wide run (1-based, ≤ `MAX_OPS_PER_READ`).
+    BadRun {
+        /// First origin_seq asked for.
+        first: u64,
+        /// Last origin_seq asked for.
+        last: u64,
+    },
 }
 
 impl StoreError {
@@ -92,6 +101,13 @@ impl fmt::Display for StoreError {
             StoreError::ProjectionTooLarge(n) => {
                 write!(f, "projection of {n} bytes is over the size limit")
             }
+            StoreError::BadDevice(len) => write!(f, "stored device id is {len} bytes, not 16"),
+            StoreError::BadRun { first, last } => {
+                write!(
+                    f,
+                    "run {first}..={last} is empty, inverted or wider than one read"
+                )
+            }
             StoreError::BadHash(file) => write!(f, "stored hash for {file} is not 32 bytes"),
         }
     }
@@ -106,6 +122,8 @@ impl std::error::Error for StoreError {
             | StoreError::EmptyBatch
             | StoreError::BatchTooLarge(_)
             | StoreError::BadPath(_)
+            | StoreError::BadDevice(_)
+            | StoreError::BadRun { .. }
             | StoreError::ProjectionTooLarge(_)
             | StoreError::BadHash(_) => None,
         }
