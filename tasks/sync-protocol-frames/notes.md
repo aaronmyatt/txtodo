@@ -85,3 +85,12 @@ Built under **A — per-device `origin_seq`**: `heads: BTreeMap<DeviceId, u64>` 
 session — pure, no store); the `0003.sql` migration and the three `Store` methods are the @store
 half and follow as their own commits. If the human picks **B — HLC watermark**, `Heads` changes
 type and `want.rs` loses range holes; `frame.rs` and `session.rs` are unaffected.
+
+## Store half, as built (2026-09-12)
+
+`origin_seq` is **derived, not a column**: an op's 1-based rank in its own device's
+`(hlc_wall, hlc_counter)` order (HLC is strictly monotone per device, so that is its generation
+order), and a head is `COUNT(*)` per device. No backfill `UPDATE`, so the append-only invariant
+(`tests/oplog.rs` greps) holds. Migration landed as `0002.sql` (an index on `(device, hlc_wall,
+hlc_counter)`), not `0003` — needs-review's `review_flags` table will be `0003`. Dense-ness is
+the protocol's guarantee (Ack = committed runs, `advance` refuses gaps).

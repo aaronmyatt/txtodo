@@ -1,6 +1,6 @@
 2026-09-12 Confirm per-device origin_seq over an HLC watermark for heads; record the answer in ./notes.md before the migration +m4 @sync @human
-2026-09-12 migrations/0003.sql: ops.origin_seq INTEGER with UNIQUE(device, origin_seq), backfilled in hlc order, user_version 3 +m4 @store
-2026-09-12 Store: next_origin_seq(device), heads() -> Map<DeviceId, u64>, ops_for(device, range) +m4 @store
+x 2026-09-12 2026-09-12 migrations/0003.sql: ops.origin_seq INTEGER with UNIQUE(device, origin_seq), backfilled in hlc order, user_version 3 +m4 @store
+x 2026-09-12 2026-09-12 Store: next_origin_seq(device), heads() -> Map<DeviceId, u64>, ops_for(device, range) +m4 @store
 x 2026-09-12 2026-09-12 frame.rs: magic b"TXTO", Frame { version: u16, body: Vec<u8> }, layout frozen forever with a doc comment saying so +m4 @sync
 x 2026-09-12 2026-09-12 message.rs: Message enum Hello Want Ops Ack, append-only variants, doc comment on why postcard forbids inserting one +m4 @sync
 x 2026-09-12 2026-09-12 MAX_OPS_PER_BATCH MAX_WANT_RANGES MAX_FRAME_BYTES consts, asserted at encode and at decode before any allocation +m4 @sync

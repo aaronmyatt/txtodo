@@ -69,7 +69,8 @@ at least three: (1) narrow the `DocState` surface, (2) swap the backing store, (
 
 | when | mean | run |
 |---|---|---|
-| before the swap (HEAD 46ee551, Vec<Entry>) | 11.5 ms (±4.1) | `cargo bench -p txtodo-daemon --bench reconcile -- --output-format bencher reconcile_10k_one_edit`, 2026-09-12 |
+| before the swap (HEAD 46ee551, Vec<Entry>) | 11.5 ms (±4.1) |
+| after the mirror landed (HEAD 31647d7) | 11 ms (check-bench.sh, budget 20) | `cargo bench -p txtodo-daemon --bench reconcile -- --output-format bencher reconcile_10k_one_edit`, 2026-09-12 |
 
 ## Swap plan (2026-09-12, awaiting approval before code — constitution §4)
 
