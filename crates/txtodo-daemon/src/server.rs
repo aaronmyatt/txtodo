@@ -42,6 +42,8 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
+    // pub(crate), not private: sibling modules (pairing_grpc.rs, tokens.rs, activity.rs, progress.rs)
+    // need read access to the workspace. Every RPC body in this file's trait impl is untouched.
     pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()

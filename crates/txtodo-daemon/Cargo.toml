@@ -38,6 +38,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 # https://docs.rs/tracing-appender — daily files under .txtodo/logs/, non-blocking writer
 tracing-appender = "0.2"
+# https://docs.rs/serde_json — the pair_accept `code` wire format (plan M4 gRPC exposure)
+serde_json = "1"
 
 [dev-dependencies]
 # https://docs.rs/proptest — text-edit application inverts diff_text

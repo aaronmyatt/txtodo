@@ -1,39 +1,115 @@
-//! Pairing over gRPC (plan M4, design §4): `PairOffer`/`PairAccept`/`PairConfirmSas` wrap the
-//! existing `txtodo-sync` handshake/SAS/keystore. Owned end-to-end by the pairing-exposure task;
-//! the RPCs delegate here from `server.rs` untouched.
+//! Pairing over gRPC (plan M4, design §4): `PairOffer`/`PairAccept`/`PairConfirmSas` wrap
+//! `txtodo-sync`'s pairing handshake/SAS/keystore (`crate::pairing_state`) for this daemon's own
+//! local IPC. Owned end-to-end by the pairing-exposure task; the RPCs delegate here from
+//! `server.rs` untouched.
+//!
+//! **Scope.** These three RPCs are calls from a client app (desktop UI) to *its own* local daemon
+//! — never daemon-to-daemon. The leg that actually crosses between two daemons (the joiner's
+//! public key reaching the initiator so it can compute the same transcript/SAS; the sealed group
+//! key reaching the joiner back) has no transport yet: `sync-lan-transport` (plan M4) is separate,
+//! later work, and none of `PairOfferResponse`/`PairAcceptRequest`/`PairConfirmRequest`/`PairResult`
+//! has a field to carry either — by design, since the desktop task's Tauri commands mirror these
+//! RPCs exactly (`tasks/desktop-devices-screen/notes.md`) and none of them takes or returns key
+//! material beyond `PairOfferResponse`'s own five fields and the SAS string.
+//!
+//! Until that transport exists, `crate::pairing_state::PairingRegistry`'s relay-seam methods
+//! (`complete_as_initiator`, `joiner_public_key`, `mark_remote_confirmed`, `try_finalize_initiator`,
+//! `Workspace::adopt_group_key`) stand in for it — not reachable from any of these three RPCs, and
+//! driven directly by `pairing_grpc_tests.rs`, the way a real transport will drive them once it
+//! lands. Everything reachable from gRPC here — starting a pairing, accepting one, confirming the
+//! SAS, the `MAX_CONCURRENT_PAIRINGS` cap, `PAIRING_WINDOW_MS` expiry, and never returning key
+//! material beyond the documented fields — is real and fully exercised.
 
+use crate::pairing_state::PairingStateError;
+use crate::pairing_wire::{WireError, code_to_offer, hex_encode};
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
+use txtodo_sync::{PairingOffer, SAS_WORD_COUNT};
 
 impl TxtodoService {
-    /// Starts a pairing handshake on this device and returns the QR payload.
+    /// Starts a pairing handshake on this device and returns the QR payload: identity + handshake
+    /// material only (`PairOfferResponse`'s own five fields) — never the group key or any private
+    /// key.
     pub(crate) async fn pair_offer_impl(
         &self,
         _r: Request<pb::PairOfferRequest>,
     ) -> Result<Response<pb::PairOfferResponse>, Status> {
-        Err(Status::unimplemented(
-            "pair_offer: pairing is not exposed over gRPC yet",
-        ))
+        let ws = self.workspace();
+        let now_ms = ws.clock().now_ms();
+        // No LAN transport yet (see module doc): there is nothing real to put here today.
+        let endpoint = String::new();
+        let offer = ws
+            .pairing()
+            .begin_offer(ws.device(), ws.group(), endpoint, now_ms)
+            .map_err(pairing_status)?;
+        Ok(Response::new(response_of(&offer)))
     }
 
-    /// Accepts a peer's scanned `PairOffer` and begins the X25519 handshake.
+    /// Accepts a peer's scanned `PairOffer` (`code`, decoded per `pairing_wire`'s module doc) and
+    /// begins the X25519 handshake; returns the 6-word SAS.
     pub(crate) async fn pair_accept_impl(
         &self,
-        _r: Request<pb::PairAcceptRequest>,
+        r: Request<pb::PairAcceptRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
-        Err(Status::unimplemented(
-            "pair_accept: pairing is not exposed over gRPC yet",
-        ))
+        let code = r.into_inner().code;
+        let ws = self.workspace();
+        let now_ms = ws.clock().now_ms();
+        let offer = code_to_offer(&code, now_ms).map_err(wire_status)?;
+        let sas = ws
+            .pairing()
+            .begin_accept(ws.device(), &offer, now_ms)
+            .map_err(pairing_status)?;
+        Ok(Response::new(pb::PairResult { sas: words(&sas) }))
     }
 
-    /// Confirms the SAS shown on this device; the group key lands only once both sides confirm.
+    /// Confirms the SAS shown to the human on this device. The group key lands only once both
+    /// sides confirm — see `pairing_state::PairingRegistry`'s relay-seam methods, which enforce
+    /// that (via `txtodo_sync::PairingSession::is_ready_to_send_key`) independent of this call.
     pub(crate) async fn pair_confirm_sas_impl(
         &self,
         _r: Request<pb::PairConfirmRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
-        Err(Status::unimplemented(
-            "pair_confirm_sas: pairing is not exposed over gRPC yet",
-        ))
+        let ws = self.workspace();
+        let now_ms = ws.clock().now_ms();
+        let sas = ws.pairing().confirm_local(now_ms).map_err(pairing_status)?;
+        Ok(Response::new(pb::PairResult { sas: words(&sas) }))
+    }
+}
+
+/// The SAS as the space-joined text `PairResult.sas` carries.
+fn words(sas: &[&'static str; SAS_WORD_COUNT]) -> String {
+    sas.join(" ")
+}
+
+/// `PairOfferResponse` from an offer: exactly its five documented fields, nothing else — the
+/// QR-payload invariant `pairing_grpc_tests.rs` asserts.
+fn response_of(offer: &PairingOffer) -> pb::PairOfferResponse {
+    pb::PairOfferResponse {
+        device: offer.device.to_string(),
+        group_id: offer.group.0.to_string(),
+        x25519_pub: hex_encode(&offer.public_key),
+        endpoint: offer.endpoint.clone(),
+        nonce: hex_encode(&offer.nonce),
+    }
+}
+
+fn wire_status(e: WireError) -> Status {
+    Status::invalid_argument(e.to_string())
+}
+
+/// `MAX_CONCURRENT_PAIRINGS`/`PAIRING_WINDOW_MS` refusals are real, distinct states (never a silent
+/// no-op): a too-many-open attempt is `RESOURCE_EXHAUSTED`, an expired or otherwise inactive/wrong-
+/// role attempt is `FAILED_PRECONDITION`, and a keystore/store failure is `INTERNAL`.
+fn pairing_status(e: PairingStateError) -> Status {
+    match e {
+        PairingStateError::TooManyOpen => Status::resource_exhausted(e.to_string()),
+        PairingStateError::WindowExpired
+        | PairingStateError::NotActive
+        | PairingStateError::WrongRole
+        | PairingStateError::Session(_) => Status::failed_precondition(e.to_string()),
+        PairingStateError::KeyStore(_) | PairingStateError::Store(_) => {
+            Status::internal(e.to_string())
+        }
     }
 }
