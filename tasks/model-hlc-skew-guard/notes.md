@@ -75,3 +75,12 @@ Deterministic, no sleeps (CLAUDE.md §7): `now_ms` is a parameter, so every case
 Property worth having: for any pair of stamps and any `now_ms` within bounds, `merge` is
 commutative in effect — merging `a` then `b` and `b` then `a` both yield a stamp greater than all
 three inputs. That is the invariant, not literal equality.
+
+## Reading taken (2026-09-12, agent, pending human confirmation)
+
+Built under **A — refuse the peer**: `Hlc::merge` returns `Err(HlcError::PeerAhead { peer_ms,
+local_ms, bound_ms })` and leaves the clock untouched; no op is dropped at the model layer because
+the caller (the `Hello` handshake, later) never lets such a peer send ops. `Skew::check` is the one
+shared rule for `merge`, `Hello` and `doctor`. If the human prefers **B — clamp**, `merge` loses
+the `Err` branch and the `result > remote` postcondition, and the tests in `hlc_tests.rs` change
+with it. The `txtodo doctor` per-peer line (subtask 7, @cli) waits until peers exist (`sync-pairing`).

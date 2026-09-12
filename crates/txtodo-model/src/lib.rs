@@ -7,11 +7,13 @@ mod hlc;
 mod ids;
 mod op;
 
-pub use hlc::{Hlc, HlcError};
+pub use hlc::{Hlc, HlcError, MAX_PEER_SKEW_AHEAD_MS, MAX_PEER_SKEW_BEHIND_MS, Skew};
 pub use ids::{DeviceId, FILE_PATH_MAX_BYTES, FilePath, FilePathError, OpId, TaskId, TokenId};
 pub use op::{Field, FieldMismatch, FieldValue, Op, OpKind, Principal, TextEdit, set_field};
 /// Re-exported so id-only consumers (store, daemon tests) need not depend on `txtodo-core`.
 pub use txtodo_core::Ulid;
 
+#[cfg(test)]
+mod hlc_tests;
 #[cfg(test)]
 mod op_tests;
