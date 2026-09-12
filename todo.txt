@@ -1,7 +1,5 @@
 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state
-2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model ref:model-hlc-skew-guard
 2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli ref:crdt-needs-review
-2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a version field from day one +m4 @sync ref:sync-protocol-frames
 2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync ref:sync-crypto-envelope
 2026-09-11 LAN transport via mdns-sd discovery and iroh QUIC local endpoint with relay off +m4 @sync ref:sync-lan-transport
 2026-09-11 Pairing: txtodo pair shows QR and 6-word SAS from an X25519 handshake then snapshot plus ops +m4 @sync @cli ref:sync-pairing
@@ -13,6 +11,8 @@
 2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test ref:sync-reject-tests
 2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4
+2026-09-12 migrations/0003.sql ops.origin_seq UNIQUE(device, origin_seq) backfilled in hlc order, Store next_origin_seq heads ops_for +m4 @store ref:sync-protocol-frames
+2026-09-12 txtodo doctor shows one line per known peer from Skew::check, warn Behind, fail Ahead +m4 @cli ref:model-hlc-skew-guard
 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree
 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation
 2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc
@@ -134,3 +134,5 @@ x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the s
 x 2026-09-12 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench
 x 2026-09-12 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets
 x 2026-09-12 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc
+x 2026-09-12 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model ref:model-hlc-skew-guard
+x 2026-09-12 2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a version field from day one +m4 @sync ref:sync-protocol-frames

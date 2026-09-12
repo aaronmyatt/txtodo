@@ -11,4 +11,4 @@ x 2026-09-12 2026-09-12 Checked-in postcard golden bytes for every message, so a
 x 2026-09-12 2026-09-12 Test: a v1 decoder reading a v2 frame returns UnknownVersion { got, supported } and consumes nothing +m4 @sync @test
 x 2026-09-12 2026-09-12 proptest: want(local, remote) requests exactly the ops remote holds and local does not, no more and no fewer +m4 @sync @test
 x 2026-09-12 2026-09-12 Test: a frame with a hostile length prefix is rejected before allocating +m4 @sync @test
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync
+x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @sync
