@@ -37,28 +37,39 @@ export function onDaemonStatus(cb: (status: DaemonStatus) => void): Promise<Unli
 	return listen<DaemonStatus>("daemon-status", (event) => cb(event.payload));
 }
 
-/** Mirrors `desktop_lib::dto::ReviewFlagDto` (plan M4): one `needs_review` flag — two devices
- * rewrote the same word offline (design §4.7: "char-level merge, flagged for a one-tap review"). */
-export interface ReviewFlag {
-	task_id: string;
-	line_number: number;
-	mine: string;
-	theirs: string;
+/** Mirrors `desktop_lib::dto::FileContentsDto` (`GetFile`'s response). */
+export interface FileContents {
+	path: string;
+	text: string;
+	hash: string;
 }
 
-/** Mirrors `desktop_lib::dto::TaskRefDto`: a line addressed by 1-based line number and/or ULID. */
+/** The exact bytes the daemon holds for one workspace-relative document path. */
+export function getFile(path: string): Promise<FileContents> {
+	return invoke("get_file", { path });
+}
+
+/** A line addressed by line number and/or ULID task id (`""` when the line has none yet). Mirrors `desktop_lib::dto::TaskRefDto`. */
 export interface TaskRef {
 	line_number: number;
 	task_id: string;
 }
 
-/** The one `MutationDto` variant the edit popover needs (`dto::MutationDto::Edit`); the other
- * variants (`Add`/`Complete`/`Move`/`Delete`) belong to features outside this task. */
-export interface EditMutation {
-	kind: "edit";
-	task: TaskRef;
-	new_line: string;
-}
+/**
+ * One intent-level mutation `apply()` can make. Mirrors `desktop_lib::dto::MutationDto`
+ * (`#[serde(tag = "kind", rename_all = "snake_case")]` — field names below are otherwise
+ * untouched by serde, so they stay exactly as declared on the Rust side).
+ */
+export type Mutation =
+	| { kind: "add"; line: string }
+	| { kind: "complete"; task: TaskRef; today: string }
+	| { kind: "edit"; task: TaskRef; new_line: string }
+	| { kind: "move"; task: TaskRef; to_path: string }
+	| { kind: "delete"; task: TaskRef; leave_blank: boolean };
+
+/** The one `MutationDto` variant the edit popover needs, as its own type so callers don't have to
+ * narrow `Mutation`'s union. Structurally identical to `Mutation`'s `"edit"` arm. */
+export type EditMutation = Extract<Mutation, { kind: "edit" }>;
 
 /** Mirrors `desktop_lib::dto::ResolutionDto` (serde `rename_all = "snake_case"` on a fieldless
  * enum serializes as a bare string). `"merged"` keeps whatever is already in the file and only
@@ -66,7 +77,7 @@ export interface EditMutation {
  * same thing as this app's client-side merge *preview*. */
 export type ResolveChoice = "mine" | "theirs" | "merged";
 
-/** Mirrors `desktop_lib::dto::ApplyResultDto` (`Apply`/`ResolveConflict` result). */
+/** Result of `apply()`/`resolve()`. Mirrors `desktop_lib::dto::ApplyResultDto`. */
 export interface ApplyResult {
 	applied: number;
 	hash: string;
@@ -74,15 +85,21 @@ export interface ApplyResult {
 	hlc_counter: number;
 }
 
-/** Whole-line replacement on one workspace-relative document (`Apply`); the daemon derives
- * field-level ops and rejects a stale write against a moved/deleted line via `task`. */
-export function applyEdit(path: string, mutation: EditMutation): Promise<ApplyResult> {
-	return invoke("apply", { path, mutations: [mutation] });
+/** Intent-level mutations on one workspace-relative document; the daemon turns them into ops. */
+export function applyMutations(path: string, mutations: Mutation[]): Promise<ApplyResult> {
+	return invoke("apply", { path, mutations });
 }
 
-/** Mirrors `desktop_lib::dto::OpSummaryDto`. `op_id` is a ULID, whose first 10 chars embed the
- * op's millisecond timestamp (https://github.com/ulid/spec) — there's no separate timestamp
- * field on the DTO today. */
+/** Whole-line replacement on one workspace-relative document (`Apply`); the daemon derives
+ * field-level ops and rejects a stale write against a moved/deleted line via `task`. Thin
+ * convenience over `applyMutations` for the edit popover's single-mutation case. */
+export function applyEdit(path: string, mutation: EditMutation): Promise<ApplyResult> {
+	return applyMutations(path, [mutation]);
+}
+
+/** One recorded op, as surfaced on a `Change`. Mirrors `desktop_lib::dto::OpSummaryDto`. `op_id`
+ * is a ULID, whose first 10 chars embed the op's millisecond timestamp
+ * (https://github.com/ulid/spec) — there's no separate timestamp field on the DTO today. */
 export interface OpSummary {
 	seq: number;
 	op_id: string;
@@ -105,8 +122,15 @@ export function history(path: string, taskId: string, limit: number): Promise<Hi
 	return invoke("history", { path, taskId, limit });
 }
 
-/** Mirrors `desktop_lib::dto::ChangeDto`, forwarded from a `Watch` stream as a `daemon-change`
- * event (`commands.rs::watch`). */
+/** One `needs_review` flag raised by a change. Mirrors `desktop_lib::dto::ReviewFlagDto`. */
+export interface ReviewFlag {
+	task_id: string;
+	line_number: number;
+	mine: string;
+	theirs: string;
+}
+
+/** One `Watch` event. Mirrors `desktop_lib::dto::ChangeDto`. */
 export interface Change {
 	path: string;
 	hash: string;
@@ -114,15 +138,21 @@ export interface Change {
 	review: ReviewFlag[];
 }
 
-/** Starts a `Watch` stream for `paths` (every document when empty); each change is forwarded as
- * a `daemon-change` event (see `onDaemonChange`). Resolves once the stream is established, not
- * when it ends — safe to call more than once (e.g. once per open document).
+/** Starts (or restarts) a `Watch` stream scoped to `paths` (every document when empty); each
+ * change is forwarded as a `daemon-change` event (see `onDaemonChange`). Resolves once the stream
+ * is established, not when it ends — safe to call more than once (e.g. once per open document).
  * Ref: https://v2.tauri.app/develop/calling-rust/ */
 export function watch(paths: string[] = []): Promise<void> {
 	return invoke("watch", { paths });
 }
 
-/** Subscribes to `daemon-change` events pushed by an active `watch()` stream. */
+/** Alias for {@link watch} taking a required `paths` array; kept for `FileView.svelte`'s call
+ * sites so neither needs renaming. */
+export function watchPaths(paths: string[]): Promise<void> {
+	return watch(paths);
+}
+
+/** Subscribes to `daemon-change` events forwarded from an active `watch()` stream. */
 export function onDaemonChange(cb: (change: Change) => void): Promise<UnlistenFn> {
 	return listen<Change>("daemon-change", (event) => cb(event.payload));
 }
