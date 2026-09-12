@@ -3,7 +3,8 @@
 
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Heads, Message, OriginRange};
-use crate::session::{Session, SessionError, SessionState};
+use crate::session::{Session, SessionState};
+use crate::session_error::SessionError;
 use crate::want::Gap;
 use txtodo_model::{DeviceId, MAX_PEER_SKEW_AHEAD_MS, Skew, Ulid};
 
