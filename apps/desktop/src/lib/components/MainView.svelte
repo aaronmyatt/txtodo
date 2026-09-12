@@ -7,6 +7,7 @@
 	import { onMount } from "svelte";
 	import { applyMutations, daemonStatus, onDaemonStatus, retryConnect, type DaemonStatus } from "$lib/daemon";
 	import type { EditRequest } from "$lib/todotxt/editRequest";
+	import ConflictBanner from "./ConflictBanner.svelte";
 	import EditPopover from "./EditPopover.svelte";
 	import FileView from "./FileView.svelte";
 
@@ -63,7 +64,12 @@
 		</div>
 	{/if}
 
-	<h1>txtodo</h1>
+	<div class="top-nav">
+		<h1>txtodo</h1>
+		<a href="/devices">Devices &amp; agents</a>
+	</div>
+
+	<ConflictBanner path={ROOT_PATH} />
 
 	<FileView path={ROOT_PATH} depth={0} onEditRequest={(req) => (popover = req)} />
 
@@ -80,6 +86,12 @@
 </main>
 
 <style>
+	.top-nav {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+	}
+
 	.main-view {
 		padding: 2rem;
 		font-family:
