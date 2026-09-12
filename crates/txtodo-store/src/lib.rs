@@ -6,12 +6,14 @@
 
 mod commit;
 mod error;
+mod flags;
 mod heads;
 mod ops;
 mod projections;
 
 pub use commit::prev_hash_key;
 pub use error::StoreError;
+pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
@@ -20,11 +22,12 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 /// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
-const MIGRATIONS: [(i64, &str); 2] = [
+const MIGRATIONS: [(i64, &str); 3] = [
     (1, include_str!("../migrations/0001.sql")),
     (2, include_str!("../migrations/0002.sql")),
+    (3, include_str!("../migrations/0003.sql")),
 ];
 
 /// One open op-log database.
