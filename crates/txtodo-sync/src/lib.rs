@@ -6,6 +6,7 @@
 
 mod aead;
 mod crypto_error;
+mod device_static;
 mod eff_wordlist;
 mod frame;
 mod keystore;
@@ -20,6 +21,9 @@ mod nonce_registry;
 mod offer;
 mod pairing;
 mod pairing_error;
+mod pairing_grant;
+mod rotation;
+mod rotation_error;
 mod sas;
 mod session;
 mod session_error;
@@ -32,6 +36,7 @@ pub use aead::{
     SEALED_HEADER_BYTES, TAG_BYTES, open, seal,
 };
 pub use crypto_error::CryptoError;
+pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
@@ -51,6 +56,11 @@ pub use nonce_registry::{
 pub use offer::{OfferError, PairingOffer, from_code, from_qr_bytes, to_code, to_qr_bytes};
 pub use pairing::{MAX_FAILED_SAS_CONFIRMATIONS, PairingSession};
 pub use pairing_error::PairingError;
+pub use pairing_grant::{PairingGrant, PairingGrantError};
+pub use rotation::{
+    GRANT_INFO, WrappedGrant, open_grant, plan_rotation, validate_removal, wrap_grant_for,
+};
+pub use rotation_error::{RemovalError, RotationError};
 pub use sas::{
     PAIR_KEY_BYTES, PAIR_KEY_INFO, SAS_INFO, SAS_WORD_COUNT, SasError, pair_key, sas_words,
 };
@@ -67,6 +77,8 @@ pub use want::{Gap, advance, want};
 mod aead_tests;
 #[cfg(test)]
 mod crypto_error_tests;
+#[cfg(test)]
+mod device_static_tests;
 #[cfg(test)]
 mod eff_wordlist_tests;
 #[cfg(test)]
@@ -88,7 +100,11 @@ mod nonce_registry_tests;
 #[cfg(test)]
 mod offer_tests;
 #[cfg(test)]
+mod pairing_grant_tests;
+#[cfg(test)]
 mod pairing_tests;
+#[cfg(test)]
+mod rotation_tests;
 #[cfg(test)]
 mod sas_tests;
 #[cfg(test)]

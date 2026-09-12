@@ -30,7 +30,7 @@ argon2 = "0.5"
 # https://docs.rs/zeroize — `Secret` is wiped on drop; keys never linger in freed memory
 zeroize = "1"
 # https://docs.rs/x25519-dalek — the pairing ECDH handshake (plan M4 `sync-pairing`)
-x25519-dalek = { version = "2", features = ["static_secrets"] }
+x25519-dalek = { version = "2", features = ["static_secrets", "getrandom"] }
 # https://docs.rs/rand_core — x25519-dalek's ephemeral-key RNG bound; OsRng draws from the OS CSPRNG
 rand_core = { version = "0.6", features = ["getrandom"] }
 # https://docs.rs/hkdf — RFC 5869; derives the SAS and the key-wrap key from the pairing transcript

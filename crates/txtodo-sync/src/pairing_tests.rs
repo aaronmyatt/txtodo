@@ -58,6 +58,43 @@ fn group_key_moves_only_after_both_sides_confirm() {
     assert_eq!(b.unwrap_group_key(&sealed).unwrap(), group_key);
 }
 
+/// `sync-device-remove`'s own notes: the static key has to be registered *at pairing*, or
+/// rotation has nothing to wrap a future group key to. This is that registration: each side's
+/// static public key rides inside the same confirmed exchange as the group key itself.
+#[test]
+fn pairing_also_registers_each_sides_static_public_key() {
+    use crate::device_static::DeviceStaticSecret;
+    use crate::pairing_grant::PairingGrant;
+
+    let (mut a, mut b) = handshake(device(1), device(2), GroupId(1));
+    a.confirm_local().unwrap();
+    b.confirm_local().unwrap();
+    a.confirm_remote().unwrap();
+    b.confirm_remote().unwrap();
+
+    let a_static = DeviceStaticSecret::generate();
+    let b_static = DeviceStaticSecret::generate();
+    let group_key = [5u8; 32];
+
+    let from_a = PairingGrant {
+        group_key,
+        static_public: a_static.public_key().to_bytes(),
+    };
+    let sealed = a.wrap_grant(&from_a).unwrap();
+    let seen_by_b = b.unwrap_grant(&sealed).unwrap();
+    assert_eq!(seen_by_b.group_key, group_key);
+    assert_eq!(seen_by_b.static_public, a_static.public_key().to_bytes());
+
+    // The exchange is symmetric: B registers its own static key back to A the same way.
+    let from_b = PairingGrant {
+        group_key,
+        static_public: b_static.public_key().to_bytes(),
+    };
+    let sealed_back = b.wrap_grant(&from_b).unwrap();
+    let seen_by_a = a.unwrap_grant(&sealed_back).unwrap();
+    assert_eq!(seen_by_a.static_public, b_static.public_key().to_bytes());
+}
+
 #[test]
 fn one_sided_confirmation_transfers_no_key_on_either_side() {
     let (mut a, b) = handshake(device(1), device(2), GroupId(1));

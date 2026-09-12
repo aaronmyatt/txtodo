@@ -34,15 +34,32 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   (`issue`+`consume` for the initiator's own offer, `witness` for the joiner's replay/window check
   against the offer's own `issued_at_ms`), `PAIRING_WINDOW_MS`, `MAX_CONCURRENT_PAIRINGS` (= 1);
   `PairingSession::{offer, accept, complete, sas_words, confirm_local, confirm_remote, reject,
-  is_ready_to_send_key, wrap_group_key, unwrap_group_key, peer_device}`, `MAX_FAILED_SAS_CONFIRMATIONS`,
-  `PairingError`.
+  is_ready_to_send_key, wrap_group_key, unwrap_group_key, wrap_grant, unwrap_grant, peer_device}`,
+  `MAX_FAILED_SAS_CONFIRMATIONS`, `PairingError`. `PairingGrant { group_key, static_public }` is the
+  normative confirmed-exchange payload — bundles the group key with the sender's long-term static
+  public key so a caller cannot register one without the other; hand-written `Debug` redacts
+  `group_key` only (`static_public` is not secret).
+- Device static keys (M4 `sync-device-remove`, registered *at* pairing via `PairingGrant` above):
+  `DeviceStaticSecret::{generate, from_bytes, to_bytes, public_key, diffie_hellman_with}`,
+  `DeviceStaticPublic::{from_bytes, to_bytes}`, `DEVICE_STATIC_KEY_BYTES`. Long-term (unlike
+  `pairing.rs`'s ephemeral per-handshake key) — generated once, stored via the keystore under
+  `KeyId::DeviceStatic`.
+- Rotation (M4 `sync-device-remove`), the crypto core only: `wrap_grant_for(new_key_bytes, epoch,
+  &DeviceStaticPublic) -> WrappedGrant` (one ephemeral ECDH per recipient — the recipient's
+  long-term key never doubles as an AEAD key directly), `open_grant(&WrappedGrant,
+  &DeviceStaticSecret)`, `plan_rotation(current_epoch, new_key_bytes, &BTreeMap<DeviceId,
+  DeviceStaticPublic>) -> BTreeMap<DeviceId, WrappedGrant>`, `validate_removal(removing,
+  this_device, devices_before)` (never self, never the last device), `GRANT_INFO`, `RotationError`,
+  `RemovalError`.
 - `Link` trait (M4 `sync-lan-transport`, foundation only): `send(Frame) -> Result<(), LinkError>` /
   `recv() -> Result<Frame, LinkError>`, `Send` but not `Sync` (one link, one driver). `ChannelLink` +
   `channel_link_pair()` is the in-process implementation the loopback tests and the simulator use;
   `MAX_QUEUED_FRAMES` bounds each direction rather than growing without limit.
-- Not here yet: the real iroh/mDNS `Link` implementation, the `devices` table / static-key
-  persistence, snapshot-then-ops transfer to a newly paired device, and the `txtodo pair` CLI/daemon
-  wiring (separate M4 subtasks/slices).
+- Not here yet: the real iroh/mDNS `Link` implementation, the `devices` table (persisting each
+  peer's `DeviceStaticPublic` — this crate only produces/consumes the bytes, never stores them),
+  the daemon-level rotation sequencing ("close the epoch before announcing the removal"),
+  snapshot-then-ops transfer to a newly paired device, and the `txtodo pair`/`txtodo device`
+  CLI/daemon wiring (separate M4 subtasks/slices).
 
 ## Invariants
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
@@ -79,4 +96,9 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - `Link` is the only place a real transport may ever be wired in; `Session`/`Message`/`Frame` never
   see a socket directly. `ChannelLink` closes its outbox on `Drop`, so a peer blocked in `recv`
   learns the other side is gone rather than blocking forever.
+- A rotation grant is sealed with a fresh ephemeral keypair per recipient, never the recipient's
+  static key as an AEAD key directly (`GRANT_INFO` is a distinct `HKDF-Expand` label from
+  `SAS_INFO`/`PAIR_KEY_INFO`); the epoch is bound as AEAD associated data, so a grant for one epoch
+  cannot be relabelled as another. `validate_removal` is checked before any crypto runs — a removal
+  refusal never touches key material.
 - May depend only on: txtodo-model, txtodo-store.

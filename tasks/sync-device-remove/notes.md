@@ -72,3 +72,44 @@ memory.
 - A device offline during rotation comes back, finds its grant, and reads new ops.
 - Ops sealed *before* the rotation still open, under the retained old epoch.
 - Removing yourself, removing the last device, and removing twice each fail or no-op distinctly.
+
+## As built (2026-09-12, agent) — the crypto core only, in `txtodo-sync`
+
+- `crates/txtodo-sync/src/device_static.rs`: `DeviceStaticSecret`/`DeviceStaticPublic`, an X25519
+  keypair generated once at pairing (`x25519_dalek::StaticSecret`, reusable — unlike the ephemeral
+  key `pairing.rs` uses for the handshake itself, this one is meant to be reused for every future
+  rotation). `x25519-dalek`'s own `zeroize` feature (on by default) wipes the secret on drop.
+- `crates/txtodo-sync/src/pairing_grant.rs`: `PairingGrant { group_key, static_public }` — the
+  normative payload for `PairingSession::wrap_group_key`/`unwrap_group_key` (via the new
+  `wrap_grant`/`unwrap_grant` convenience methods added to `PairingSession`), bundling the group
+  key with the sender's static public key so integrating this later cannot register one without
+  the other. This directly answers subtask 1 ("register a long-term X25519 public key per device
+  during pairing... must land before rotation has anything to wrap to") — it now does, at the
+  protocol level; `pairing_tests::pairing_also_registers_each_sides_static_public_key` exercises
+  the full exchange both directions.
+- `crates/txtodo-sync/src/rotation.rs`: `wrap_grant_for`/`open_grant` (one ephemeral ECDH per
+  recipient, HKDF-SHA256 wrap key salted with both public keys, epoch bound as AEAD associated
+  data so a grant cannot be relabelled to another epoch), `plan_rotation` (one grant per remaining
+  device, epoch + 1), `validate_removal` (never self, never the last device — checked before any
+  crypto runs, per the notes' "removal is refused... hard to reverse" framing).
+- **`MAX_RETAINED_KEY_EPOCHS` justified against rotation rate** (subtask asked for this rather than
+  picking a number): rotation only happens on `device remove`, not on a schedule — for a personal
+  or small-team todo group, that is a rare, deliberate action (losing a laptop, someone leaving a
+  shared list), realistically at most a handful of times a year. 16 retained epochs
+  (`sync-crypto-envelope`'s constant, reused here rather than duplicated) covers many years of
+  removals before the oldest history becomes unreadable, with headroom for a group that churns
+  devices unusually often. If real usage ever shows faster churn, the number is one named constant
+  to change, not a scattered assumption.
+- `cargo test -p txtodo-sync --lib` (115 tests), `cargo clippy -p txtodo-sync --all-targets -D
+  warnings`, `check-boundaries.sh`, `check-file-length.sh` all clean. `cargo deny check` shows an
+  unrelated `advisories` failure from a concurrent session's `apps/desktop` (tauri) addition — not
+  from anything added here (no new dependency; `x25519-dalek` gained the already-default
+  `getrandom` feature it needed for `StaticSecret::random()`).
+- Not in this slice (all daemon/store/CLI, deliberately avoided — a concurrent session was actively
+  building M6/M7 in `crates/txtodo-daemon/` throughout this work): the `devices` table itself
+  (persisting each peer's `DeviceStaticPublic`, replicated as ops), the sequencing rule ("close the
+  epoch locally first, then generate N+1, then stop accepting the removed device" — this crate has
+  no notion of "accepting a session" or "the current epoch" as mutable state to sequence),
+  `txtodo device list`/`txtodo device remove` CLI, and the six `@test` subtasks that need a real
+  `KeyStore` + `devices` table wired together (this crate's own unit tests cover the crypto
+  primitives those integration tests would exercise, but not the sequencing itself).

@@ -19,6 +19,7 @@ use crate::message::GroupId;
 use crate::nonce_registry::{Nonce, NonceRegistry};
 use crate::offer::PairingOffer;
 use crate::pairing_error::PairingError;
+use crate::pairing_grant::PairingGrant;
 use crate::sas::{PAIR_KEY_BYTES, SAS_WORD_COUNT, pair_key, sas_words};
 use crate::transcript::{Party, TRANSCRIPT_BYTES, X25519_PUBLIC_KEY_BYTES, transcript};
 
@@ -316,6 +317,21 @@ impl PairingSession {
                 },
             )
             .map_err(|_| PairingError::Seal)
+    }
+
+    /// [`PairingSession::wrap_group_key`] for the normative payload: the group key **and** this
+    /// device's long-term static public key, so a caller cannot send one without the other
+    /// (`sync-device-remove` needs the static key registered here to have anything to wrap a
+    /// future rotation to).
+    pub fn wrap_grant(&self, grant: &PairingGrant) -> Result<Vec<u8>, PairingError> {
+        let bytes = grant.to_bytes().map_err(|_| PairingError::Seal)?;
+        self.wrap_group_key(&bytes)
+    }
+
+    /// [`PairingSession::unwrap_group_key`] decoded back into a [`PairingGrant`].
+    pub fn unwrap_grant(&self, sealed: &[u8]) -> Result<PairingGrant, PairingError> {
+        let bytes = self.unwrap_group_key(sealed)?;
+        PairingGrant::from_bytes(&bytes).map_err(|_| PairingError::Seal)
     }
 
     /// The peer's device id, once the handshake has identified it.
