@@ -7,6 +7,7 @@
 mod aead;
 mod crypto_error;
 mod device_static;
+mod discovery;
 mod eff_wordlist;
 mod endpoint;
 mod frame;
@@ -38,6 +39,11 @@ pub use aead::{
 };
 pub use crypto_error::CryptoError;
 pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
+pub use discovery::{
+    Announcement, AnnouncementError, DEBOUNCE_MS, DiscoveredPeer, Discovery, DiscoveryError,
+    Ignored, MAX_BACKOFF_MS, MAX_LAN_PEERS, PeerEvent, PeerTable, SERVICE_TYPE, TXT_DEVICE,
+    TXT_GROUP, TXT_PROTO, backoff_ms, parse_announcement,
+};
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use endpoint::{ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
@@ -81,6 +87,8 @@ mod aead_tests;
 mod crypto_error_tests;
 #[cfg(test)]
 mod device_static_tests;
+#[cfg(test)]
+mod discovery_tests;
 #[cfg(test)]
 mod eff_wordlist_tests;
 #[cfg(test)]

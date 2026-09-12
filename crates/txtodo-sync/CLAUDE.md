@@ -58,12 +58,23 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - `endpoint.rs` (M4 `sync-lan-transport`): `bind_local_endpoint()` — the one iroh `Endpoint`
   constructor (`presets::Minimal`, `RelayMode::Disabled`), `ALPN`. Not yet wired to `Link`; see
   Invariants for a known upstream connect/accept blocker on this crate's own loopback test.
-- Not here yet: `discovery.rs` (mDNS), the real iroh `Link` implementation (needs the blocker below
-  resolved or a real LAN to test against), the `devices` table (persisting each peer's
-  `DeviceStaticPublic` — this crate only produces/consumes the bytes, never stores them), the
-  daemon-level rotation sequencing ("close the epoch before announcing the removal"),
-  snapshot-then-ops transfer to a newly paired device, and the `txtodo pair`/`txtodo device`
-  CLI/daemon wiring (separate M4 subtasks/slices).
+- `discovery.rs` (M4 `sync-lan-transport`): `SERVICE_TYPE` (`_txtodo._udp.local.`), TXT keys
+  `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO` (never the group key), `Announcement`,
+  `parse_announcement(&TxtProperties) -> Result<Announcement, AnnouncementError>`. `PeerTable` — the
+  pure decision core, no sockets, no clock (`now_ms` injected): `new`/`with_limits`, `observe(
+  announcement, addresses, now_ms) -> PeerEvent` (self/foreign-group/protocol filter, then debounce
+  `DEBOUNCE_MS`, then `MAX_LAN_PEERS`, in that order), `remove(device)`, `len`/`is_empty`.
+  `backoff_ms(attempt) -> u64` (`250ms * 2^attempt`, capped at `MAX_BACKOFF_MS`) — pure, not yet
+  called by anything since there is no live retry loop until `endpoint.rs`'s connect works.
+  `Discovery::start(device, group, host_name, port)` owns the `mdns-sd` daemon and registers our
+  advertisement (`enable_addr_auto`), `browse()` hands back the raw event receiver — turning events
+  into `PeerTable` calls is the future daemon wiring's job, same seam as `Link`.
+- Not here yet: the real iroh `Link` implementation (needs the endpoint blocker below resolved, or a
+  real LAN to test against), anything that drives `Discovery`'s events into `PeerTable` or dials a
+  found peer, the `devices` table (persisting each peer's `DeviceStaticPublic` — this crate only
+  produces/consumes the bytes, never stores them), the daemon-level rotation sequencing ("close the
+  epoch before announcing the removal"), snapshot-then-ops transfer to a newly paired device, and
+  the `txtodo pair`/`txtodo device` CLI/daemon wiring (separate M4 subtasks/slices).
 
 ## Invariants
 - Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact):
@@ -73,6 +84,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   two_loopback_endpoints_exchange_one_frame` is `#[ignore]`d with this reason rather than deleted or
   worked around; `bind_local_endpoint` (production, binds all interfaces) is not shown to hit this
   path. Re-test once iroh/noq-proto ships a fix or a real LAN is available.
+- Discovery never leaks the group key, only its id (`TXT_GROUP`); `PeerTable::observe` checks
+  self-advertisement, then group, then protocol version, before debounce or the peer-table bound —
+  a foreign-group peer can never consume a `MAX_LAN_PEERS` slot. `parse_announcement` never panics on
+  a foreign program's TXT record under our service type; a missing or malformed field is a typed
+  `AnnouncementError` naming which field.
 - Every message versioned, authenticated, encrypted. Keys only in keystore.
 - A device key and a group key are **injected**, never read here: `sign`/`seal` take them as arguments,
   so tests use fixtures and the keystore owns I/O. `seal` draws its nonce straight from `getrandom`;

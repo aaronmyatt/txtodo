@@ -128,8 +128,41 @@ other loop in this codebase.
     payload) are removed now that the root cause is precisely identified; they've served their
     purpose. The `tracing-subscriber` dev-dependency and the trace-level `try_init()` call used to
     find the `refuse()` call site are removed too.
-- **Not attempted this pass** (unchanged from pass 1): `discovery.rs` (mDNS), `MAX_LAN_PEERS`,
-  `MAX_BACKOFF_MS`, `txtodo doctor`'s transport-mode line, and the four `@test` subtasks that depend
-  on discovery existing. Continuing discovery work makes sense — it does not depend on the blocked
-  connect/accept path — but the two connect/accept-dependent test subtasks stay unchecked and blocked
-  on the upstream fix, not on more work here.
+- **Not attempted this pass** (unchanged from pass 1): `txtodo doctor`'s transport-mode line. See
+  pass 3 below for `discovery.rs`.
+
+## As built (2026-09-12, agent, pass 3) — `discovery.rs`: mDNS discovery, self-contained and tested
+
+Does not depend on the blocked connect/accept path above — discovery only needs to find peers and
+hand back their addresses; dialing them is `endpoint.rs`'s job, still blocked.
+
+- `SERVICE_TYPE = "_txtodo._udp.local."`; TXT keys `device`/`group`/`proto` (never the group key —
+  only its id, per the task notes' accepted M4 privacy trade-off). `parse_announcement(&TxtProperties)
+  -> Result<Announcement, AnnouncementError>` — a foreign program advertising under our service type
+  with a missing or malformed field is a typed error naming the field, never a panic.
+- `PeerTable` is the pure decision core: self-advertisement, foreign-group, and unsupported-protocol
+  filtering (in that order, so a foreign-group peer never reaches the debounce/table-size checks),
+  then debounce (`DEBOUNCE_MS`), then `MAX_LAN_PEERS`. Takes `now_ms` from the caller rather than a
+  real clock, so every one of the four `@test` subtasks below runs with no sleeps. `remove(device)`
+  drops a peer immediately, e.g. on an mDNS goodbye, without waiting out its debounce window.
+- `backoff_ms(attempt) -> u64`: `250ms * 2^attempt`, capped at `MAX_BACKOFF_MS` — the pure
+  computation the eventual dial-retry loop will call; that loop itself waits on `endpoint.rs`'s
+  connect path, so it is not wired up yet (nothing to retry without a working connect).
+- `Discovery`: owns the `mdns-sd` `ServiceDaemon`, `start()` registers our advertisement
+  (`enable_addr_auto()` so every real interface address is published rather than us guessing which
+  one a LAN peer can reach), `browse()` hands back the raw `ServiceEvent` receiver — turning events
+  into `PeerTable` calls is left to the caller (the future daemon wiring), same seam as `Link`.
+- Verified mDNS multicast actually works in this sandbox *before* building on it (a throwaway
+  standalone probe in the scratchpad, not checked in) — unlike the `iroh` loopback QUIC issue above,
+  self-discovery resolved cleanly, so no repeat of that rabbit hole here.
+- `two_real_daemons_discover_each_other_on_the_lan`: the one test in this file that is a real,
+  non-mocked mDNS round trip (register → browse → resolve → `parse_announcement`), timeout-bound,
+  ~0.8s, run 3x locally with no flakes, and separately verified on Linux (Docker
+  `rust:1.95-bookworm`) rather than trusted on macOS alone, after the iroh lesson above.
+- All four `@test` subtasks for discovery are done: relay-set-empty (pass 2), self-ignored,
+  foreign-group-ignored, and `MAX_LAN_PEERS` drop-with-reason (this pass, as `PeerTable` unit tests —
+  "discover each other... and exchange Hello" from the original wording is split: the discovery half
+  is tested for real here, the Hello-exchange half needs `endpoint.rs`'s connect, which is blocked).
+- Not attempted: wiring `Discovery`/`PeerTable` into anything that calls `endpoint.rs`'s connect (no
+  point retrying a connect that's known to fail) or into `txtodo-daemon` (out of scope for this
+  session — another session is actively working in that crate).
