@@ -156,5 +156,8 @@ fn field_only_changes_and_empty_imports_never_flag() {
     assert!(detect(&a, &imported).unwrap().flags.is_empty());
     let nothing = sync(&b, &mut a);
     assert!(!nothing.applied, "nothing new the second time");
+    let by_bytes = b.export_updates_since(&a.version_bytes()).unwrap();
+    assert!(!a.import(&by_bytes).unwrap().applied, "bytes form agrees");
+    assert!(b.export_updates_since(b"garbage").is_err());
     assert_eq!(detect(&a, &nothing).unwrap(), crate::Review::default());
 }

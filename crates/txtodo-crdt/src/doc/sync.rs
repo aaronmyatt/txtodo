@@ -37,6 +37,26 @@ impl LoroDocument {
         self.doc.oplog_vv()
     }
 
+    /// `version()` as opaque bytes, for a host that must not name Loro types (the daemon, the
+    /// wire). <https://docs.rs/loro/latest/loro/struct.VersionVector.html#method.encode>
+    pub fn version_bytes(&self) -> Vec<u8> {
+        let bytes = self.doc.oplog_vv().encode();
+        debug_assert!(VersionVector::decode(&bytes).is_ok());
+        bytes
+    }
+
+    /// `export_updates` for a version given as `version_bytes()`; garbage bytes are an error,
+    /// never a full export.
+    pub fn export_updates_since(&self, since: &[u8]) -> LoroResult<Vec<u8>> {
+        let vv = VersionVector::decode(since)?;
+        let bytes = self
+            .doc
+            .export(loro::ExportMode::updates(&vv))
+            .map_err(|e| loro::LoroError::DecodeError(e.to_string().into_boxed_str()))?;
+        debug_assert!(!bytes.is_empty());
+        Ok(bytes)
+    }
+
     /// The updates a peer at `since` is missing.
     pub fn export_updates(&self, since: &VersionVector) -> Result<Vec<u8>, LoroEncodeError> {
         let bytes = self.doc.export(loro::ExportMode::updates(since))?;
