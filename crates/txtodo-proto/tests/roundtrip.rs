@@ -91,6 +91,7 @@ fn responses_and_streams_round_trip() {
         path: "todo.txt".into(),
         hash: vec![3; 32],
         ops: vec![op.clone()],
+        review: Vec::new(),
     });
     round_trip(&HistoryResponse { ops: vec![op] });
     round_trip(&ApplyResponse {
