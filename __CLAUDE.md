@@ -201,7 +201,6 @@ The harness is convenience for whoever's driving the agent in the moment.
 - `clippy.toml`
 - `deny.toml`
 - `.github/**`
-- `specs/**`
 - `CLAUDE.md`
 - `.claude/**`
 - `.pi/extensions/**`

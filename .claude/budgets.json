@@ -79,7 +79,6 @@
       "clippy.toml",
       "deny.toml",
       ".github/**",
-      "specs/**",
       "CLAUDE.md",
       ".claude/**",
       ".pi/extensions/**",
