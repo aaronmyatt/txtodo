@@ -11,6 +11,7 @@ mod from_loro;
 mod hydrate;
 mod lww;
 mod notes;
+mod resurrect;
 mod review;
 mod to_loro;
 

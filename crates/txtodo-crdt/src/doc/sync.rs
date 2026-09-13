@@ -99,12 +99,19 @@ impl LoroDocument {
             self.doc.frontiers_to_vv(&ancestor).is_some(),
             "the ancestor is in the document"
         );
-        Ok(Imported {
+        let mut imported = Imported {
             before,
             remote,
             ancestor,
             after,
             applied,
-        })
+        };
+        // specs/conflicts.md rows 6-7: a concurrent delete loses to a concurrent edit or
+        // completion (fixed policy, not configurable — tasks/crdt-conflict-table/notes.md "As
+        // built"). Runs on every import so both sides resolve independently; may add a commit,
+        // so `after` is refreshed to include it.
+        crate::resurrect::resolve(self, &imported)?;
+        imported.after = self.doc.state_frontiers();
+        Ok(imported)
     }
 }
