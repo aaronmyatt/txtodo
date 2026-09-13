@@ -77,6 +77,12 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   in practice sub-2-millisecond, convergence; see its module doc and `lan.rs`'s for the corrected
   same-*process* (not same-host) connect finding this test's own investigation produced),
   `tests/debug_hooks.rs` (`DebugSetGroupKey` refused/allowed by the env var, over a real socket),
+  `tests/lan_sync_bench.rs` (plan M4 `sync-bench-m4`: 1 000 real ops between two real, paired
+  daemons converge in single-digit milliseconds, budget 500 ms — not wired into `check-bench.sh`/
+  `budgets.json`, both frozen paths this session had no sign-off to touch; see its module doc),
+  `tests/idle_rss.rs` (the same task's other number — `#[ignore]`d: idle RSS at 10k lines measures
+  ~1.7 GB against a 50 MB budget, a real and apparently super-linear memory issue in the adoption/
+  mirror pipeline, flagged to the human, not root-caused or fixed by this pass),
   `tests/grpc.rs` (in-process server on a temp socket),
   `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),

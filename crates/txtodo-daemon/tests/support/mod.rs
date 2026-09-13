@@ -151,6 +151,12 @@ impl Daemon {
             .unwrap_or_else(|e| panic!("debug_set_group_key: {e}"));
     }
 
+    /// The real OS pid of the spawned `txtodod` — for out-of-band inspection (`ps`, `/proc`) that
+    /// no RPC exposes, e.g. `tests/idle_rss.rs`'s memory reading.
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
     pub async fn health(&mut self) -> pb::HealthResponse {
         self.client
             .health(pb::HealthRequest {})
