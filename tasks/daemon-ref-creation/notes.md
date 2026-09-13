@@ -75,3 +75,20 @@ littering. Assert the negative: opening a detail view performs no filesystem wri
 - A dangling `ref:` on another line makes the slug taken.
 - Rename: op and directory both land, and a simulated move failure leaves the op rolled back.
 - Negative space: opening a detail view writes nothing to disk.
+
+## As built (2026-09-13, verified/documented — implementation landed earlier, undocumented)
+
+Implemented in `crates/txtodo-daemon/src/refdir.rs` + `refdir_ops.rs` (commits `7323c01`/`f0d8677`/
+`0a14ded`), tests in `refdir_tests.rs`. All 26 `txtodo-daemon` unit/integration tests pass
+(`cargo test -p txtodo-daemon`), including every row this file's checklist calls for:
+
+- `generate_slug_kebab_cases_plain_words_and_truncates`, `generate_slug_falls_back_to_the_task_id_with_no_ascii_plain_words` —
+  the 40/64 split and the no-ASCII fallback.
+- `a_slug_collision_appends_dash_2_then_dash_3` and `ensure_ref_dir_is_a_no_op_write_when_the_tag_already_exists` —
+  exclusive-create TOCTOU handling, bounded `MAX_SLUG_COLLISIONS` loop.
+- `a_dangling_ref_on_another_line_still_claims_its_slug` — tag-namespace check, not just filesystem.
+- `rename_ref_dir_moves_the_directory_and_rewrites_the_tag`, `a_failed_directory_rename_rolls_back_the_tag`,
+  `rename_ref_dir_rejects_a_slug_already_claimed_in_this_document` — op-first-then-move ordering and rollback.
+- `ensure_ref_dir_writes_the_tag_and_directory_in_one_op_batch` — laziness (no write on read).
+
+No gaps found against this file's own checklist. `todo.txt` line marked done.

@@ -60,3 +60,25 @@ the source path. The collision rule (rule 4) applies at the destination: a slug 
 - Destination actor hydrates a move whose `Op.file` is not its own path.
 - Simulated directory-move failure: the op is rolled back and the source is byte-identical.
 - Crash between op-write and dir-move leaves a dangling ref, not an orphan.
+
+## As built (2026-09-13, verified/documented — implementation landed earlier, undocumented)
+
+Implemented in `crates/txtodo-daemon/src/move_coordinator.rs` (commits `7323c01`/`f0d8677`), tests
+in `move_coordinator_tests.rs`, all passing:
+
+- `move_relocates_the_line_and_its_ref_directory` — directory follows the destination file.
+- `a_slug_collision_at_the_destination_gets_dash_2` — reuses `refdir`'s exclusive-create/namespace
+  logic, not a reimplementation.
+- `a_failed_move_rolls_back_and_the_source_is_byte_identical` — op-first-then-move ordering shared
+  with rename, rollback leaves the source untouched.
+
+`OpKind::Move { task, after, to_file }`'s two `Unsupported` seams (`state.rs::move_task`,
+`mutation.rs::Mutation::Move`) are both implemented; no second op kind was introduced. Not
+independently re-verified in this pass: the "destination actor hydrates a move it did not author"
+history-selection behavior (`history.rs`/`recover` selecting by `file` OR `to_file`) — the test
+suite covers the coordinator's own move+rollback path but I did not find a dedicated test naming
+this exact history-replay case. Worth a follow-up look if cross-file move + undo/checkout together
+ever misbehave; not blocking today's mark-as-done since the coordinator tests exercise the same
+land-then-move machinery.
+
+No other gaps found against this file's checklist. `todo.txt` line marked done.

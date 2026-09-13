@@ -11,9 +11,9 @@ x 2026-09-12 2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and si
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4 — blocked: needs two real txtodod processes, off-limits this session id:01M2B4ZWQDY3MXJMW0164D3RB4
 2026-09-12 txtodo doctor shows one line per known peer from Skew::check, warn Behind, fail Ahead +m4 @cli ref:model-hlc-skew-guard — Hlc::merge/Skew/the guard are done and tested; this line needs the devices table plus a daemon gRPC surface id:01M2B4ZWQD893GFBC48KH73FJC
 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree id:01M2B4ZWQD2KKGH94DT2N52CKN
-2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation id:01M2B4ZWQDQYF1V9KYAWQ78JNE
-2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc id:01M2B4ZWQDEW5231YM2BPGY5ZR
-2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon ref:daemon-ref-move id:01M2B4ZWQDQ8FCWYHWSEHBY1G4
+x 2026-09-13 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation id:01M2B4ZWQDQYF1V9KYAWQ78JNE
+x 2026-09-13 2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc id:01M2B4ZWQDEW5231YM2BPGY5ZR
+x 2026-09-13 2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon ref:daemon-ref-move id:01M2B4ZWQDQ8FCWYHWSEHBY1G4
 2026-09-11 txtodo open, notes, sub, prune --orphans commands +m5 @cli ref:cli-ref-commands id:01M2B4ZWQDKB3QVZPQ85JGMRAR
 2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon ref:proto-tree-progress id:01M2B4ZWQDRFPEXXQGGS266WEQ
 2026-09-11 Tests: one op batch on first notes write, progress on a 3-level fixture, archive and delete keep the dir, prune finds the orphan +m5 @test ref:test-m5-acceptance id:01M2B4ZWQDCD9N2KF2JVADWVAZ
