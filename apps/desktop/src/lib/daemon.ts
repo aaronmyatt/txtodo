@@ -2,8 +2,7 @@
 // ONLY place the frontend talks to the daemon: no `fs`, no `path`, no socket — every read/write
 // crosses through these `invoke` calls (design §7).
 // Ref: https://v2.tauri.app/develop/calling-rust/ and https://v2.tauri.app/develop/calling-frontend/
-import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke, listen, type UnlistenFn } from "./tauriShim";
 
 /** Mirrors `desktop_lib::status::DaemonStatus` (serde `rename_all = "snake_case"`). */
 export type DaemonStatus = "connected" | "connecting" | "spawning" | "dead";

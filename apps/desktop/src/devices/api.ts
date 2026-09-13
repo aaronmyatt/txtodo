@@ -3,7 +3,7 @@
 // write crosses through `invoke` (design §7). No crypto, no pairing/token state lives here; the
 // daemon is the only source of truth.
 // Ref: https://v2.tauri.app/develop/calling-rust/
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "$lib/tauriShim";
 import type { OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
 
 /** Starts a pairing handshake on this device; returns the QR payload. */
