@@ -46,29 +46,7 @@ Append only. Never edit a prior answer; add a dated follow-up.
 ## Q5 — Relay hosting: does the project run a public relay, or self-host only?
 - Status: open · Raised: 2026-09-11 (plan §6.5) · Blocks: M8 self-hosting docs, M9 push registration
 - Default until answered: **self-host only**; docs describe running `relay/` yourself.
-- Answer: not sure what this means, the app should sync across devices, let me know what infra is required to deploy the CRDT setup.
-- Follow-up 2026-09-13 (agent): answering the literal question — two separate things are being
-  asked, and the relay is only needed for one of them.
-  - **Devices on the same network sync with no server at all.** M4's LAN transport (mDNS discovery
-    + a direct iroh QUIC connection between the two devices) is the whole path — two laptops on the
-    same wifi, or a phone and a desktop on the same LAN, converge peer-to-peer. Zero infra.
-  - **The relay (plan M8, tasks/relay-reference) exists only for devices that are never on the same
-    network at the same time** — a phone on cellular data syncing with a home desktop, for example.
-    Per design §4.6 it is deliberately dumb and untrusted: it stores encrypted blobs it cannot read
-    and forwards push wake-ups (APNs/FCM), nothing else. Concretely, self-hosting it means running
-    one small Rust binary (`relay/`, no `txtodo-*` dependencies by construction) with either SQLite
-    or a plain filesystem directory for storage, behind an HTTP/QUIC listener — resource needs are
-    tiny (it never touches plaintext or does any CRDT work), comparable to running any small web
-    service on a $5/mo VM or a container. The design notes explicitly also allow "any S3/WebDAV
-    endpoint" as a dumb relay instead of running the custom binary at all.
-  - **The actual open policy question** is not technical, it's who runs that one relay for people
-    who don't want to run their own: keep the documented default (self-host only, `tasks/
-    docs-relay-selfhost` ships the how-to and nothing runs on the project's own infra), or also
-    stand up and operate a public default relay. The second option is a real, recurring commitment
-    — hosting cost, abuse/rate-limit handling, and uptime expectations — even though the relay
-    never sees plaintext, so it isn't something to default into without you deciding it. Recommend
-    keeping the documented default (self-host only) unless you want to commit to running a public
-    one; flag if you'd like that revisited.
+- Answer: The relay will be a hosted SaaS that I will grant users access to manually
 
 ## Q6 — Pairing: what happens when the initiator's and joiner's identity_mode disagree?
 - Status: open · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·
