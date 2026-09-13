@@ -84,3 +84,44 @@ the caller (the `Hello` handshake, later) never lets such a peer send ops. `Skew
 shared rule for `merge`, `Hello` and `doctor`. If the human prefers **B — clamp**, `merge` loses
 the `Err` branch and the `result > remote` postcondition, and the tests in `hlc_tests.rs` change
 with it. The `txtodo doctor` per-peer line (subtask 7, @cli) waits until peers exist (`sync-pairing`).
+
+## As built (2026-09-13, agent) — the `txtodo doctor` per-peer line
+
+Peers now exist (`tasks/sync-device-remove`'s `devices` table, landed the same day), so this was
+the remaining subtask. `Hlc::merge`/`Skew::check` themselves are untouched — this slice only wires
+the already-built, already-tested rule through to a human-visible line.
+
+- `crates/txtodo-proto`'s `Device` message carries a `SkewStatus` (`Unknown`/`Ok`/`Behind`/`Ahead`)
+  and a `skew_ms` magnitude. `crates/txtodo-daemon/src/devices_grpc.rs` computes it server-side,
+  once, via `txtodo_model::Skew::check(peer_ms, now_ms)` against each device row's
+  `last_known_wall_ms` (`None` → `Unknown`, never a guessed verdict) — the same classification
+  `txtodo device list` and `txtodo doctor` both read, so there is exactly one place this runs.
+  `txtodo-cli` cannot depend on `txtodo-model` (constitution §2), which is why the enum crosses the
+  wire pre-computed rather than the CLI re-deriving it from raw clock values.
+- `crates/txtodo-cli/src/commands/doctor.rs` gained a sixth fixed check (`keystore`, plan M4
+  `sync-keystore`, unrelated to this task but landed in the same pass) and a variable-length tail:
+  one `peer` row per known, active (non-removed, non-self) device — `Ok`/`Behind` is a warn (safe
+  to sync with), `Ahead` fails the whole command (a real sync session with that peer would be
+  refused), `Unknown` warns rather than asserting a clock is fine when no sample exists yet.
+  `debug_assert_eq!(checks.len(), 5, ...)` (five fixed checks) became `6` fixed checks plus
+  `peer_checks(&devices)` appended after.
+- **Known, honestly-scoped gap**: `last_known_wall_ms` is populated by exactly one code path today
+  — a joiner registering the initiator's device at pairing — and that path does not yet have a
+  genuine peer clock sample to put there (no wire message in the current local-RPC pairing surface
+  carries one; see `tasks/sync-device-remove`'s own "As built" for why only one direction of
+  registration exists at all yet). So every peer row a real user sees today will read `Unknown`
+  until a live sync session (or a richer pairing exchange) actually observes a peer's wall clock —
+  the column and the classification are real and tested, the data feeding them in production is
+  not there yet. This is deliberately not papered over with a fabricated sample.
+- Tests: `crates/txtodo-cli/tests/daemon_mode.rs::doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired`
+  asserts zero peer rows before any pairing. `crates/txtodo-daemon/src/devices_grpc.rs`'s own
+  `tests` module unit-tests `skew_of` directly against `txtodo_model`'s own bounds
+  (`MAX_PEER_SKEW_AHEAD_MS`/`MAX_PEER_SKEW_BEHIND_MS`): no sample is `Unknown`, and the
+  Ok/Behind/Ahead boundaries and reported magnitudes match `Skew::check` exactly — since `skew_of`
+  is a pure function, this needed no daemon, no store row, no fixture disconnected from a real run.
+  `Skew::check`'s own exhaustive coverage is `crates/txtodo-model/src/hlc_tests.rs`, unchanged by
+  this pass. What is *not* tested end to end is a real peer row actually reaching `Behind`/`Ahead`
+  through a live daemon, because (per the gap above) nothing in this repo populates
+  `last_known_wall_ms` from a real peer clock yet.
+- `cargo build --workspace`, `cargo test -p txtodo-daemon -p txtodo-cli`, `cargo clippy --workspace
+  --all-targets -D warnings`, `cargo fmt --all --check` all clean.
