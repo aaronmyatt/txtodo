@@ -99,3 +99,71 @@ Append only. Never edit a prior answer; add a dated follow-up.
   detected mismatch whenever the joiner's workspace already has tasks, proceeding unmodified (never
   adopting the initiator's mode) when modes match or the joiner is empty. The actual policy — what
   a real, non-empty mismatch should eventually do instead of just refusing — is still unanswered.
+
+## Q7 — Is priority one global scale across workspaces, or per workspace?
+- Status: open · Raised: 2026-09-13 (board review; todo `desktop-universal-view`, `adr-global-daemon`)
+  · Blocks: M11 universal view sort order, the `pri` operand in `txtodo-query`, ordering in the
+  multi-workspace MCP gateway
+- Default until answered: **global** — `(A)` in `+home` ranks with `(A)` in `+work`; the universal
+  view sorts by (priority, created, workspace) and shows the owning workspace in the breadcrumb,
+  which is what todo line 140 already says.
+- Context: nothing today compares tasks across files; `crates/txtodo-cli/src/commands/list.rs`'s
+  `sort_key` is per-file todo.sh order. Two readings of "universal priority interface":
+  (a) one scale, projects are labels; (b) per-workspace scales plus a workspace weight (`+work`
+  outranks `+home` on weekdays), which needs a saved-view or plugin concept (design §8 saved views,
+  §9). Recommend (a) for v1, (b) later as a saved view over the query language, never as a core
+  rule.
+
+## Q8 — Global daemon: one sync group per set of devices, or one per workspace?
+- Status: open · Raised: 2026-09-13 · Blocks: `daemon-workspace-registry` (todo 130),
+  `daemon-workspace-actor` (132: "each with its own store, op log, CRDT and sync Link"), the
+  `sync-pairing` second-device handoff
+- Default until answered: **per workspace**, as line 132 is written. Pairing N projects then means
+  N `txtodo pair` runs and N group keys in the keystore.
+- Context: `Workspace` owns the device id, key store and group key
+  (`crates/txtodo-daemon/src/workspace.rs:35-54`, `adopt_group_key` at :339); ADR 0010 puts state
+  under `<workspace>/.txtodo/`. "All your devices, all your projects" reads as pair once.
+  Options: (a) one device identity and one group per device-set; a workspace is a namespace inside
+  the group, ops carry a workspace id, one `Link` multiplexes; (b) per-workspace groups, pair each.
+  Recommend (a): it is what "universal" means, and it is cheaper before M11's actor nesting than
+  after. Either answer wants an ADR — line 129 is the place.
+
+## Q9 — Pull `txtodo-query` (design §8) forward from M10 into M11?
+- Status: open · Raised: 2026-09-13 · Blocks: the universal view's filter bar (todo 140), MCP
+  `todo_search` (line 21: "substring-only, no query index yet"), a cross-workspace `txtodo ls`
+- Default until answered: three ad-hoc filters keep growing (ABSTRACTIONS.md 2026-09-13, third
+  entry); `crates/txtodo-query/src/lib.rs` stays two lines.
+- Decide: (a) a v1 subset now — operands `done pri +project @context text key:value`, connectives
+  `and or not`, no relative dates — behind `Query::parse` / `Query::matches(&Task)` / one
+  `SortKey`, called by CLI, MCP and desktop; (b) wait for M10. Recommend (a). Sub-question: may
+  v1 be a strict subset of the §8 grammar, or is §8 frozen as written (relative dates, `--explain`)?
+
+## Q10 — Is "no two real txtodod processes in an agent session" a standing rule?
+- Status: open · Raised: 2026-09-13 · Blocks: todo lines 8, 9 (integration half), 10, 11, 20 — each
+  says "off-limits this session"
+- Default until answered: agents keep skipping them; those five lines never close.
+- Decide: (a) standing rule — then add a human-run `just sync-e2e` recipe and retag the five lines
+  `@human`; (b) per-session — say so, and the `TwoDaemons` fixture (ABSTRACTIONS.md 2026-09-13,
+  last entry) gets built with a bounded timeout and kill-on-drop. Recommend (b); (a) only if the
+  worry is stray sockets or ports on your machine.
+
+## Q11 — LAN transport: wire it into the daemon now for a two-host test, or skip to M8 relay?
+- Status: open · Raised: 2026-09-13 · Blocks: `sync-lan-transport` (todo 2), the `sync-pairing`
+  handoff (3), `test-nested-ref-sync` fresh-device half (20)
+- Context: the M4 blocker is one `#[ignore]`d test (`crates/txtodo-sync/src/endpoint_tests.rs:74`)
+  that forces both ends onto `127.0.0.1`; the production constructor `bind_local_endpoint` binds
+  all interfaces and has never been exercised host to host. Separately, `Discovery`/`PeerTable`/
+  `Link` are not referenced anywhere in `crates/txtodo-daemon/src` — the daemon wiring was "not
+  attempted" (notes.md pass 3), so nothing end to end exists to run on two machines yet.
+- Decide: (a) wire discovery + `Link` into `txtodod` behind a flag as the next `@sync` task, then
+  you run the two-host check below and paste `doctor`'s output here; (b) leave LAN QUIC untested
+  and make M8's file-carrier or relay the first real cross-device transport. Recommend (a): the
+  wiring is unblocked work, and one real run either clears or confirms the upstream bug.
+  Once (a) lands, the drivable check:
+  ```bash
+  # host A
+  txtodo --dir ~/todo daemon start && txtodo --dir ~/todo pair
+  # host B, same Wi-Fi, paste the code A printed
+  txtodo --dir ~/todo pair <code>
+  txtodo --dir ~/todo doctor   # expect one peer line, skew Ok
+  ```
