@@ -209,6 +209,12 @@ enum Command {
         #[command(subcommand)]
         action: Option<commands::conflicts::Action>,
     },
+    /// Devices paired into this workspace's sync group (daemon mode): `list` (default) or
+    /// `remove <id>`.
+    Device {
+        #[command(subcommand)]
+        action: Option<commands::device::Action>,
+    },
     /// Check socket, watcher, files, clock and config; exit 1 on any failure.
     Doctor {
         /// Also print the daemon's recent JSON log.
@@ -298,6 +304,7 @@ fn dispatch_daemon(
         Command::Conflicts { action } => {
             commands::conflicts::run(daemon, action.as_ref(), ctx.json)
         }
+        Command::Device { action } => commands::device::run(daemon, action.as_ref(), ctx.json),
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -313,7 +320,8 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Blame { .. }
         | Command::Undo { .. }
         | Command::Checkout { .. }
-        | Command::Conflicts { .. } => Err(CliError::Message(format!(
+        | Command::Conflicts { .. }
+        | Command::Device { .. } => Err(CliError::Message(format!(
             "txtodo: {}",
             commands::history::NEEDS_DAEMON
         ))),
@@ -339,7 +347,7 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Do { items } => commands::edit::run_do(ctx, items),
         Command::Pri { args } => commands::edit::run_pri(ctx, args),
         Command::Env => {
-            print_env(ctx);
+            commands::env::run(ctx);
             Ok(())
         }
         Command::Fmt => commands::hygiene::run_fmt(ctx),
@@ -357,44 +365,4 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
             }
         },
     }
-}
-
-/// `txtodo env`: one `key=value` per line, or one JSON object.
-fn print_env(ctx: &Ctx) {
-    let schemes = ctx.config.url_schemes();
-    let exists = if ctx.paths.config.exists() {
-        ""
-    } else {
-        " (missing)"
-    };
-    if ctx.json {
-        let object = format!(
-            r#"{{"todo_dir":{},"todo_file":{},"done_file":{},"report_file":{},"config_file":{},"config_exists":{},"id_tags":{},"url_schemes":[{}]}}"#,
-            json::str(&ctx.paths.dir.to_string_lossy()),
-            json::str(&ctx.paths.todo.to_string_lossy()),
-            json::str(&ctx.paths.done.to_string_lossy()),
-            json::str(&ctx.paths.report.to_string_lossy()),
-            json::str(&ctx.paths.config.to_string_lossy()),
-            exists.is_empty(),
-            ctx.config.id_tags(),
-            schemes
-                .iter()
-                .map(|s| json::str(s))
-                .collect::<Vec<_>>()
-                .join(",")
-        );
-        debug_assert!(
-            object.starts_with('{') && object.ends_with('}'),
-            "one object"
-        );
-        println!("{object}");
-        return;
-    }
-    println!("todo_dir={}", ctx.paths.dir.display());
-    println!("todo_file={}", ctx.paths.todo.display());
-    println!("done_file={}", ctx.paths.done.display());
-    println!("report_file={}", ctx.paths.report.display());
-    println!("config_file={}{exists}", ctx.paths.config.display());
-    println!("id_tags={}", ctx.config.id_tags());
-    println!("url_schemes={}", schemes.join(","));
 }

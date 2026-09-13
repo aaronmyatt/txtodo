@@ -1,5 +1,6 @@
-//! `txtodo doctor` (plan M3, design §5): socket, watcher, files, clock, config. Five checks in a
-//! fixed order so scripts can index them; each carries the command that fixes it. Exit status 1
+//! `txtodo doctor` (plan M3, design §5): socket, watcher, files, clock, config, keystore. Six
+//! fixed checks in a fixed order so scripts can index them, plus one row per known sync peer
+//! (plan M4 tasks/model-hlc-skew-guard) — each carries the command that fixes it. Exit status 1
 //! when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
@@ -53,8 +54,10 @@ fn check(name: &'static str, status: Status, detail: impl Into<String>) -> Check
     }
 }
 
-/// The daemon side: socket reachability and, through Health, the watcher.
-fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>) {
+/// The daemon side: socket reachability and, through Health, the watcher; when connected, also
+/// the known sync peers `DeviceList` reports (best-effort — a failed list still leaves the health
+/// checks meaningful, so it degrades to an empty peer set rather than failing the whole command).
+fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>, Vec<pb::Device>) {
     let socket = ctx.paths.dir.join(SOCKET_REL);
     let unknown = check("watcher", Status::Warn, "unknown: no daemon");
     match client::select(&ctx.paths.dir, false) {
@@ -63,13 +66,26 @@ fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>) {
                 "no socket at {}; run `txtodo daemon start`",
                 socket.display()
             );
-            (vec![check("socket", Status::Fail, fix), unknown], None)
+            (
+                vec![check("socket", Status::Fail, fix), unknown],
+                None,
+                Vec::new(),
+            )
         }
         Err(e) => (
             vec![check("socket", Status::Fail, e.to_string()), unknown],
             None,
+            Vec::new(),
         ),
-        Ok(Mode::Daemon(mut d)) => health_checks(&mut d),
+        Ok(Mode::Daemon(mut d)) => {
+            let (checks, health) = health_checks(&mut d);
+            let devices = if health.is_some() {
+                d.device_list().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            (checks, health, devices)
+        }
     }
 }
 
@@ -177,13 +193,66 @@ fn config_check(ctx: &Ctx) -> Check {
     }
 }
 
+/// The resolved sync-keystore backend (plan M4 `sync-keystore`), by name, straight from Health —
+/// "a human should be able to answer where are my keys? without reading code."
+fn keystore_check(health: Option<&pb::HealthResponse>) -> Check {
+    match health {
+        Some(h) if !h.key_store_backend.is_empty() => check(
+            "keystore",
+            Status::Ok,
+            format!("backend: {}", h.key_store_backend),
+        ),
+        Some(_) => check("keystore", Status::Warn, "daemon did not report a backend"),
+        None => check("keystore", Status::Warn, "unknown: no daemon"),
+    }
+}
+
+/// One line per known, active sync peer (plan M4 `tasks/model-hlc-skew-guard`): a peer behind is
+/// safe (warn); a peer ahead would be refused by a real sync session (fail); no sample yet is a
+/// warn, never a guessed verdict. Removed devices and this device itself are not peers to report.
+fn peer_checks(devices: &[pb::Device]) -> Vec<Check> {
+    devices
+        .iter()
+        .filter(|d| !d.is_self && !d.removed)
+        .map(|d| {
+            let label = if d.name.is_empty() {
+                d.id.clone()
+            } else {
+                format!("{} ({})", d.name, d.id)
+            };
+            let (status, detail) = match pb::SkewStatus::try_from(d.skew_status)
+                .unwrap_or(pb::SkewStatus::Unspecified)
+            {
+                pb::SkewStatus::Ok => (Status::Ok, format!("{label}: clock ok")),
+                pb::SkewStatus::Behind => (
+                    Status::Warn,
+                    format!("{label}: clock behind by {} ms; check NTP on that device", d.skew_ms),
+                ),
+                pb::SkewStatus::Ahead => (
+                    Status::Fail,
+                    format!(
+                        "{label}: clock ahead by {} ms; a sync session with it is refused until fixed",
+                        d.skew_ms
+                    ),
+                ),
+                pb::SkewStatus::Unknown | pb::SkewStatus::Unspecified => {
+                    (Status::Warn, format!("{label}: no clock sample yet"))
+                }
+            };
+            check("peer", status, detail)
+        })
+        .collect()
+}
+
 /// Runs every check, prints the report, exits 1 on any failure.
 pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
-    let (mut checks, health) = daemon_checks(ctx);
+    let (mut checks, health, devices) = daemon_checks(ctx);
     checks.push(files_check(ctx));
     checks.push(clock_check(health.as_ref()));
     checks.push(config_check(ctx));
-    debug_assert_eq!(checks.len(), 5, "five checks in a fixed order");
+    checks.push(keystore_check(health.as_ref()));
+    debug_assert_eq!(checks.len(), 6, "six fixed checks in a fixed order");
+    checks.extend(peer_checks(&devices));
     if ctx.json {
         let rows: Vec<String> = checks
             .iter()

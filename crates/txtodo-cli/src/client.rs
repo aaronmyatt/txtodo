@@ -225,4 +225,25 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
+
+    /// Devices paired into this workspace's sync group (plan M4), each with `is_self`/`removed`
+    /// and a `SkewStatus` already computed — `txtodo device list` and `txtodo doctor`'s per-peer
+    /// clock line both read this.
+    pub fn device_list(&mut self) -> Result<Vec<pb::Device>, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.device_list(pb::DeviceListRequest {}))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner().devices)
+    }
+
+    /// Removes a device and rotates the group key to the remaining devices (plan M4).
+    pub fn device_remove(&mut self, id: &str) -> Result<pb::DeviceRemoveResponse, ClientError> {
+        let req = pb::DeviceRemoveRequest { id: id.to_owned() };
+        let rep = self
+            .rt
+            .block_on(self.client.device_remove(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
 }
