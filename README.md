@@ -91,3 +91,16 @@ todo_dir = "~/todo"
 identity_mode = "tagged"  # or "sidecar" (default)
 url_schemes = ["http", "https"]
 ```
+
+## Sync relay (optional)
+
+Sync tries several carriers in order — LAN, direct connection, then the relay — and **the relay
+is optional**: LAN alone is a complete system. Reach for it only when your devices can't find
+each other directly (a phone asleep on cellular, or two networks that hole-punching can't
+traverse).
+
+The relay is a self-host-only mailbox for encrypted sync data: it stores ciphertext blobs keyed
+by device and forwards push wake-ups, and **it cannot read your list** — every blob it stores is
+already encrypted by your own devices before it ever arrives (design §4.6). This project does
+not run a public relay; if you want one, you (or someone you trust) run `relay/` yourself. See
+[`docs/relay.md`](docs/relay.md) for build, run flags, and deployment.

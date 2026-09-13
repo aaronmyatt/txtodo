@@ -18,10 +18,14 @@ async fn spawn_server() -> String {
         Box::new(NoopPush::default()),
         Limits::default(),
     );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
     let addr = listener.local_addr().expect("local_addr");
     tokio::spawn(async move {
-        axum::serve(listener, http::router(state)).await.expect("serve");
+        axum::serve(listener, http::router(state))
+            .await
+            .expect("serve");
     });
     // Leak the tempdir for the test's lifetime rather than let it drop while the server still
     // has the file open.
@@ -73,7 +77,10 @@ async fn put_then_get_then_list_round_trip_over_http() {
         .json()
         .await
         .expect("get body is JSON");
-    assert_eq!(other.as_array().expect("array"), &Vec::<serde_json::Value>::new());
+    assert_eq!(
+        other.as_array().expect("array"),
+        &Vec::<serde_json::Value>::new()
+    );
 }
 
 #[tokio::test]

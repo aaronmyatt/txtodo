@@ -7,9 +7,9 @@
 //! Routing metadata only: group id, device id, envelope length, stored-at. Nothing in this
 //! module ever parses or decrypts `blob`'s contents.
 
-use rusqlite::{Connection, params};
 #[cfg(test)]
 use rusqlite::OptionalExtension;
+use rusqlite::{Connection, params};
 use std::path::Path;
 
 /// A group id — an opaque routing label, never parsed for meaning (design §4.6).
@@ -133,7 +133,8 @@ impl Store {
             .map_err(sqlite_err("set journal_mode"))?;
         conn.pragma_update(None, "synchronous", "NORMAL")
             .map_err(sqlite_err("set synchronous"))?;
-        conn.execute_batch(SCHEMA).map_err(sqlite_err("create schema"))?;
+        conn.execute_batch(SCHEMA)
+            .map_err(sqlite_err("create schema"))?;
         Ok(Store { conn })
     }
 
@@ -141,7 +142,8 @@ impl Store {
     #[cfg(test)]
     fn open_in_memory() -> Result<Store, StoreError> {
         let conn = Connection::open_in_memory().map_err(sqlite_err("open store"))?;
-        conn.execute_batch(SCHEMA).map_err(sqlite_err("create schema"))?;
+        conn.execute_batch(SCHEMA)
+            .map_err(sqlite_err("create schema"))?;
         Ok(Store { conn })
     }
 
@@ -151,9 +153,17 @@ impl Store {
     /// wake queue would exceed `max_wakeup_queue` (tasks/relay-reference/notes.md "per-device
     /// cap evicts oldest first").
     pub fn put(&mut self, write: Write<'_>, limits: Limits) -> Result<(), StoreError> {
-        let Write { group, device, blob, now_ms } = write;
+        let Write {
+            group,
+            device,
+            blob,
+            now_ms,
+        } = write;
         if blob.len() > limits.max_blob_bytes {
-            return Err(StoreError::BlobTooLarge { len: blob.len(), max: limits.max_blob_bytes });
+            return Err(StoreError::BlobTooLarge {
+                len: blob.len(),
+                max: limits.max_blob_bytes,
+            });
         }
         self.conn
             .execute(
@@ -173,7 +183,12 @@ impl Store {
                 params![device, group.as_bytes(), now_ms],
             )
             .map_err(sqlite_err("insert wakeup"))?;
-        self.evict_oldest("wakeups", "device_id = ?1", params![device], limits.max_wakeup_queue)?;
+        self.evict_oldest(
+            "wakeups",
+            "device_id = ?1",
+            params![device],
+            limits.max_wakeup_queue,
+        )?;
         Ok(())
     }
 
@@ -187,9 +202,11 @@ impl Store {
     ) -> Result<(), StoreError> {
         let count: i64 = self
             .conn
-            .query_row(&format!("SELECT COUNT(*) FROM {table} WHERE {where_clause}"), params, |r| {
-                r.get(0)
-            })
+            .query_row(
+                &format!("SELECT COUNT(*) FROM {table} WHERE {where_clause}"),
+                params,
+                |r| r.get(0),
+            )
             .map_err(sqlite_err("count rows"))?;
         let over = count.saturating_sub(i64::try_from(cap).unwrap_or(i64::MAX));
         if over <= 0 {
@@ -200,7 +217,9 @@ impl Store {
                 SELECT id FROM {table} WHERE {where_clause} ORDER BY id ASC LIMIT {over}\
              )"
         );
-        self.conn.execute(&sql, params).map_err(sqlite_err("evict oldest"))?;
+        self.conn
+            .execute(&sql, params)
+            .map_err(sqlite_err("evict oldest"))?;
         Ok(())
     }
 
@@ -217,10 +236,14 @@ impl Store {
             .map_err(sqlite_err("prepare get"))?;
         let rows = stmt
             .query_map(params![group, device], |r| {
-                Ok(StoredBlob { blob: r.get(0)?, stored_at_ms: r.get(1)? })
+                Ok(StoredBlob {
+                    blob: r.get(0)?,
+                    stored_at_ms: r.get(1)?,
+                })
             })
             .map_err(sqlite_err("query get"))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_err("read get row"))
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(sqlite_err("read get row"))
     }
 
     /// Every device id with at least one stored blob under `group`, in no particular order
@@ -228,12 +251,15 @@ impl Store {
     pub fn list(&mut self, group: &str) -> Result<Vec<DeviceId>, StoreError> {
         let mut stmt = self
             .conn
-            .prepare("SELECT DISTINCT device_id FROM blobs WHERE group_id = ?1 ORDER BY device_id ASC")
+            .prepare(
+                "SELECT DISTINCT device_id FROM blobs WHERE group_id = ?1 ORDER BY device_id ASC",
+            )
             .map_err(sqlite_err("prepare list"))?;
         let rows = stmt
             .query_map(params![group], |r| r.get(0))
             .map_err(sqlite_err("query list"))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_err("read list row"))
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(sqlite_err("read list row"))
     }
 
     /// The wake-ups queued for `device`, oldest first — what `http::drain_wakeups` hands to
@@ -244,9 +270,15 @@ impl Store {
             .prepare("SELECT id, payload FROM wakeups WHERE device_id = ?1 ORDER BY id ASC")
             .map_err(sqlite_err("prepare wakeups"))?;
         let rows = stmt
-            .query_map(params![device], |r| Ok(QueuedWake { id: r.get(0)?, payload: r.get(1)? }))
+            .query_map(params![device], |r| {
+                Ok(QueuedWake {
+                    id: r.get(0)?,
+                    payload: r.get(1)?,
+                })
+            })
             .map_err(sqlite_err("query wakeups"))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(sqlite_err("read wakeup row"))
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(sqlite_err("read wakeup row"))
     }
 
     /// Removes one delivered wake-up by row id. Idempotent: removing an id twice (or one that
@@ -265,7 +297,10 @@ impl Store {
         let cutoff_ms = now_ms.saturating_sub(retention_days.saturating_mul(86_400_000));
         let removed = self
             .conn
-            .execute("DELETE FROM blobs WHERE stored_at_ms < ?1", params![cutoff_ms])
+            .execute(
+                "DELETE FROM blobs WHERE stored_at_ms < ?1",
+                params![cutoff_ms],
+            )
             .map_err(sqlite_err("sweep expired"))?;
         Ok(removed)
     }
@@ -307,7 +342,17 @@ mod tests {
     use crate::bounds::MAX_WAKEUP_QUEUE;
 
     fn put_ok(store: &mut Store, group: &str, device: &str, blob: &[u8], now_ms: i64) {
-        store.put(Write { group, device, blob, now_ms }, Limits::default()).expect("put succeeds");
+        store
+            .put(
+                Write {
+                    group,
+                    device,
+                    blob,
+                    now_ms,
+                },
+                Limits::default(),
+            )
+            .expect("put succeeds");
     }
 
     // @test id:01M2B4ZWFWGW3GKNKDMHRF9R2Q — a blob written under (g1,d1) is returned only for
@@ -345,20 +390,44 @@ mod tests {
         let mut store = Store::open_in_memory().expect("open");
 
         // Size cap.
-        let tight = Limits { max_blob_bytes: 5, ..Limits::default() };
+        let tight = Limits {
+            max_blob_bytes: 5,
+            ..Limits::default()
+        };
         let err = store
-            .put(Write { group: "g1", device: "d1", blob: &[0u8; 10], now_ms: 1 }, tight)
+            .put(
+                Write {
+                    group: "g1",
+                    device: "d1",
+                    blob: &[0u8; 10],
+                    now_ms: 1,
+                },
+                tight,
+            )
             .expect_err("oversized blob is refused");
         assert!(matches!(err, StoreError::BlobTooLarge { len: 10, max: 5 }));
 
         // Per-device cap: write past the cap, oldest is evicted.
-        let small_cap = Limits { max_blobs_per_device: 5, ..Limits::default() };
+        let small_cap = Limits {
+            max_blobs_per_device: 5,
+            ..Limits::default()
+        };
         for i in 0..5 {
-            let w = Write { group: "g1", device: "d1", blob: &[i], now_ms: i64::from(i) };
+            let w = Write {
+                group: "g1",
+                device: "d1",
+                blob: &[i],
+                now_ms: i64::from(i),
+            };
             store.put(w, small_cap).expect("put succeeds");
         }
         assert_eq!(store.get("g1", "d1").expect("get").len(), 5);
-        let w = Write { group: "g1", device: "d1", blob: &[9], now_ms: 5 };
+        let w = Write {
+            group: "g1",
+            device: "d1",
+            blob: &[9],
+            now_ms: 5,
+        };
         store.put(w, small_cap).expect("put succeeds");
         let remaining = store.get("g1", "d1").expect("get");
         assert_eq!(remaining.len(), 5, "cap holds at 5 after eviction");
@@ -376,11 +445,19 @@ mod tests {
     #[test]
     fn wakeup_queue_is_bounded() {
         let mut store = Store::open_in_memory().expect("open");
-        let small_queue =
-            Limits { max_blobs_per_device: usize::MAX, max_wakeup_queue: 3, ..Limits::default() };
+        let small_queue = Limits {
+            max_blobs_per_device: usize::MAX,
+            max_wakeup_queue: 3,
+            ..Limits::default()
+        };
         for i in 0..(MAX_WAKEUP_QUEUE + 3) {
             let now_ms = i64::try_from(i).unwrap_or(0);
-            let w = Write { group: "g1", device: "d1", blob: &[0], now_ms };
+            let w = Write {
+                group: "g1",
+                device: "d1",
+                blob: &[0],
+                now_ms,
+            };
             store.put(w, small_queue).expect("put succeeds");
         }
         assert_eq!(
@@ -400,11 +477,17 @@ mod tests {
 
         let now_ms = 40 * day_ms;
         let removed = store.sweep_expired(now_ms, 30).expect("sweep");
-        assert_eq!(removed, 1, "only the 40-day-old blob is expired against a 30-day retention");
+        assert_eq!(
+            removed, 1,
+            "only the 40-day-old blob is expired against a 30-day retention"
+        );
 
         let remaining = store.get("g1", "d1").expect("get");
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].blob, b"new");
-        assert_eq!(store.oldest_stored_at_ms().expect("oldest"), Some(40 * day_ms));
+        assert_eq!(
+            store.oldest_stored_at_ms().expect("oldest"),
+            Some(40 * day_ms)
+        );
     }
 }

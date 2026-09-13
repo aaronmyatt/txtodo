@@ -68,13 +68,26 @@ mod tests {
         let mut store = Store::open(&dir.path().join("relay.db")).expect("open store");
         let day_ms = 86_400_000;
 
-        let old = Write { group: "g1", device: "d1", blob: b"old", now_ms: 0 };
+        let old = Write {
+            group: "g1",
+            device: "d1",
+            blob: b"old",
+            now_ms: 0,
+        };
         store.put(old, Limits::default()).expect("put succeeds");
-        let fresh = Write { group: "g1", device: "d1", blob: b"fresh", now_ms: 10 * day_ms };
+        let fresh = Write {
+            group: "g1",
+            device: "d1",
+            blob: b"fresh",
+            now_ms: 10 * day_ms,
+        };
         store.put(fresh, Limits::default()).expect("put succeeds");
 
         let removed = sweep(&mut store, 40 * day_ms, 30).expect("sweep");
-        assert_eq!(removed, 1, "only the blob older than the 30-day window is removed");
+        assert_eq!(
+            removed, 1,
+            "only the blob older than the 30-day window is removed"
+        );
 
         let remaining = store.get("g1", "d1").expect("get");
         assert_eq!(remaining.len(), 1);

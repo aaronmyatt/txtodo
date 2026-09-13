@@ -23,10 +23,10 @@ impl RateLimiter {
     /// `window_ms`; records the request when it does. A new window starts the first time a
     /// group is seen after its previous window has elapsed.
     pub fn allow(&mut self, group: &str, now_ms: i64, cap: u32, window_ms: i64) -> bool {
-        let window = self
-            .windows
-            .entry(group.to_owned())
-            .or_insert(Window { started_at_ms: now_ms, count: 0 });
+        let window = self.windows.entry(group.to_owned()).or_insert(Window {
+            started_at_ms: now_ms,
+            count: 0,
+        });
         if now_ms.saturating_sub(window.started_at_ms) >= window_ms {
             window.started_at_ms = now_ms;
             window.count = 0;
@@ -49,8 +49,17 @@ mod tests {
         for _ in 0..3 {
             assert!(limiter.allow("g1", 0, 3, 1000));
         }
-        assert!(!limiter.allow("g1", 500, 3, 1000), "fourth request in the same window is refused");
-        assert!(limiter.allow("g1", 1500, 3, 1000), "a new window resets the count");
-        assert!(limiter.allow("g2", 500, 3, 1000), "a different group has its own window");
+        assert!(
+            !limiter.allow("g1", 500, 3, 1000),
+            "fourth request in the same window is refused"
+        );
+        assert!(
+            limiter.allow("g1", 1500, 3, 1000),
+            "a new window resets the count"
+        );
+        assert!(
+            limiter.allow("g2", 500, 3, 1000),
+            "a different group has its own window"
+        );
     }
 }

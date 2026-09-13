@@ -52,7 +52,10 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     let body_limit = state.limits.max_blob_bytes.saturating_add(4096);
     Router::new()
-        .route("/v1/groups/{group}/devices/{device}/blobs", put(put_blob).get(get_blobs))
+        .route(
+            "/v1/groups/{group}/devices/{device}/blobs",
+            put(put_blob).get(get_blobs),
+        )
         .route("/v1/groups/{group}/devices", get(list_devices))
         .layer(DefaultBodyLimit::max(body_limit))
         .with_state(state)
@@ -65,11 +68,20 @@ async fn put_blob(
 ) -> Response {
     let now_ms = crate::clock::now_ms();
     if !allowed(&state, &group, now_ms).await {
-        return (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded for this group").into_response();
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            "rate limit exceeded for this group",
+        )
+            .into_response();
     }
     let outcome = {
         let mut store = state.store.lock().await;
-        let write = Write { group: &group, device: &device, blob: &body, now_ms };
+        let write = Write {
+            group: &group,
+            device: &device,
+            blob: &body,
+            now_ms,
+        };
         store.put(write, state.limits)
     };
     match outcome {
@@ -90,7 +102,9 @@ async fn allowed(state: &AppState, group: &str, now_ms: i64) -> bool {
 /// handled — a push failure is logged, not retried (M8's `NoopPush` never fails; a real
 /// provider's retry policy is M9's concern, not this loop's).
 async fn drain_wakeups(state: &AppState, device: &str) {
-    let Some(pending) = read_pending(state, device).await else { return };
+    let Some(pending) = read_pending(state, device).await else {
+        return;
+    };
     for wake in pending {
         deliver_one(state, device, wake).await;
     }
@@ -152,7 +166,10 @@ async fn get_blobs(
         Ok(blobs) => {
             let views: Vec<BlobView> = blobs
                 .into_iter()
-                .map(|b| BlobView { stored_at_ms: b.stored_at_ms, blob: b.blob })
+                .map(|b| BlobView {
+                    stored_at_ms: b.stored_at_ms,
+                    blob: b.blob,
+                })
                 .collect();
             Json(views).into_response()
         }
@@ -170,7 +187,9 @@ async fn list_devices(State(state): State<AppState>, Path(group): Path<String>) 
 
 fn store_error_response(err: &StoreError) -> Response {
     match err {
-        StoreError::BlobTooLarge { .. } => (StatusCode::PAYLOAD_TOO_LARGE, err.to_string()).into_response(),
+        StoreError::BlobTooLarge { .. } => {
+            (StatusCode::PAYLOAD_TOO_LARGE, err.to_string()).into_response()
+        }
         StoreError::Sqlite { .. } => {
             tracing::error!(%err, "store error");
             (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()

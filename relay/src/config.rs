@@ -67,7 +67,10 @@ struct Source<'a> {
 
 impl Source<'_> {
     fn get(&self, flag: &str, env_name: &str) -> Option<String> {
-        self.args.get(flag).cloned().or_else(|| (self.env)(env_name))
+        self.args
+            .get(flag)
+            .cloned()
+            .or_else(|| (self.env)(env_name))
     }
 }
 
@@ -93,18 +96,33 @@ pub fn parse(
 }
 
 fn build_config(source: &Source<'_>) -> Result<Config, String> {
-    let data_dir = source
-        .get("--data-dir", "RELAY_DATA_DIR")
-        .ok_or("refusing to start without an explicit data dir: pass --data-dir or set RELAY_DATA_DIR")?;
+    let data_dir = source.get("--data-dir", "RELAY_DATA_DIR").ok_or(
+        "refusing to start without an explicit data dir: pass --data-dir or set RELAY_DATA_DIR",
+    )?;
     let listen = source
         .get("--listen", "RELAY_LISTEN")
         .unwrap_or_else(|| DEFAULT_LISTEN.to_owned());
     let listen = listen
         .parse::<SocketAddr>()
         .map_err(|e| format!("--listen {listen:?} is not ADDR:PORT: {e}"))?;
-    let retention_days = parse_num(source, "--retention-days", "RELAY_RETENTION_DAYS", MAX_RETENTION_DAYS)?;
-    let max_blob_bytes = parse_num(source, "--max-blob-bytes", "RELAY_MAX_BLOB_BYTES", MAX_BLOB_SIZE)?;
-    Ok(Config { data_dir: PathBuf::from(data_dir), listen, retention_days, max_blob_bytes })
+    let retention_days = parse_num(
+        source,
+        "--retention-days",
+        "RELAY_RETENTION_DAYS",
+        MAX_RETENTION_DAYS,
+    )?;
+    let max_blob_bytes = parse_num(
+        source,
+        "--max-blob-bytes",
+        "RELAY_MAX_BLOB_BYTES",
+        MAX_BLOB_SIZE,
+    )?;
+    Ok(Config {
+        data_dir: PathBuf::from(data_dir),
+        listen,
+        retention_days,
+        max_blob_bytes,
+    })
 }
 
 fn parse_num<T: std::str::FromStr<Err = std::num::ParseIntError>>(
@@ -115,7 +133,9 @@ fn parse_num<T: std::str::FromStr<Err = std::num::ParseIntError>>(
 ) -> Result<T, String> {
     match source.get(flag, env_name) {
         None => Ok(default),
-        Some(raw) => raw.parse::<T>().map_err(|e| format!("{flag} {raw:?} is not a number: {e}")),
+        Some(raw) => raw
+            .parse::<T>()
+            .map_err(|e| format!("{flag} {raw:?} is not a number: {e}")),
     }
 }
 
@@ -130,7 +150,10 @@ mod tests {
     #[test]
     fn refuses_to_run_without_a_data_dir() {
         let err = parse(std::iter::empty(), &no_env).expect_err("no --data-dir, no RELAY_DATA_DIR");
-        assert!(err.contains("data dir"), "error names the missing setting: {err}");
+        assert!(
+            err.contains("data dir"),
+            "error names the missing setting: {err}"
+        );
     }
 
     #[test]
@@ -146,17 +169,24 @@ mod tests {
             "RELAY_LISTEN" => Some("127.0.0.1:9999".to_owned()),
             _ => None,
         };
-        let args = vec![
-            "--data-dir".to_owned(),
-            "/flag/dir".to_owned(),
-        ]
-        .into_iter();
+        let args = vec!["--data-dir".to_owned(), "/flag/dir".to_owned()].into_iter();
         let Ok(Action::Run(config)) = parse(args, &env) else {
             panic!("expected Run with data_dir set by flag, listen by env")
         };
-        assert_eq!(config.data_dir, PathBuf::from("/flag/dir"), "--data-dir beats RELAY_DATA_DIR");
-        assert_eq!(config.listen, "127.0.0.1:9999".parse().expect("valid addr"), "env beats default");
-        assert_eq!(config.retention_days, MAX_RETENTION_DAYS, "unset flag/env falls back to bounds default");
+        assert_eq!(
+            config.data_dir,
+            PathBuf::from("/flag/dir"),
+            "--data-dir beats RELAY_DATA_DIR"
+        );
+        assert_eq!(
+            config.listen,
+            "127.0.0.1:9999".parse().expect("valid addr"),
+            "env beats default"
+        );
+        assert_eq!(
+            config.retention_days, MAX_RETENTION_DAYS,
+            "unset flag/env falls back to bounds default"
+        );
         assert_eq!(config.max_blob_bytes, MAX_BLOB_SIZE);
     }
 
@@ -170,12 +200,21 @@ mod tests {
         ]
         .into_iter();
         let err = parse(args, &no_env).expect_err("non-numeric --retention-days");
-        assert!(err.contains("--retention-days"), "error names the bad flag: {err}");
+        assert!(
+            err.contains("--retention-days"),
+            "error names the bad flag: {err}"
+        );
     }
 
     #[test]
     fn help_text_documents_every_flag_it_accepts() {
-        for flag in ["--data-dir", "--listen", "--retention-days", "--max-blob-bytes", "--help"] {
+        for flag in [
+            "--data-dir",
+            "--listen",
+            "--retention-days",
+            "--max-blob-bytes",
+            "--help",
+        ] {
             assert!(HELP.contains(flag), "HELP must mention {flag}");
         }
     }

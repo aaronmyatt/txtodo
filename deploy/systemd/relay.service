@@ -1,0 +1,29 @@
+# Illustrative example only — a starting point, not a finished production unit. See
+# docs/relay.md's "Running as a service" section. Adjust paths, the running user, and any
+# distro-specific hardening for your own host before using this for real.
+#
+# User-scoped unit: install to ~/.config/systemd/user/relay.service, then:
+#   systemctl --user enable --now relay.service
+#
+# Flags come entirely from the EnvironmentFile below (see docs/relay.md's flags table for the
+# full set) so this unit file itself never needs to change when a value does.
+# Ref: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
+
+[Unit]
+Description=txtodo relay (reference relay binary, plan M8, design §4.5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Path to the built release binary; adjust to wherever you deployed it.
+ExecStart=%h/.local/bin/relay
+# RELAY_DATA_DIR (required), RELAY_LISTEN, RELAY_RETENTION_DAYS, RELAY_MAX_BLOB_BYTES —
+# see docs/relay.md. Keep this file out of version control if it ever carries secrets; today it
+# only carries plain configuration, since the relay itself needs no credentials (design §4.6).
+EnvironmentFile=%h/.config/txtodo-relay/relay.env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

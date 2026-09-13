@@ -32,14 +32,27 @@ pub const REQUEST_WINDOW_MS: i64 = 60_000;
 // Every bound above is asserted at compile time: a future edit that moves one to zero (or
 // negative) fails the build outright, not just a test run — clippy's own suggested fix for an
 // assertion whose operands are already compile-time constants.
-const _: () = assert!(MAX_BLOB_SIZE > 0, "MAX_BLOB_SIZE must accept at least one byte");
-const _: () =
-    assert!(MAX_BLOBS_PER_DEVICE > 0, "MAX_BLOBS_PER_DEVICE must allow at least one blob");
-const _: () =
-    assert!(MAX_RETENTION_DAYS > 0, "MAX_RETENTION_DAYS must keep a blob for some time");
-const _: () = assert!(MAX_WAKEUP_QUEUE > 0, "MAX_WAKEUP_QUEUE must queue at least one wake-up");
+const _: () = assert!(
+    MAX_BLOB_SIZE > 0,
+    "MAX_BLOB_SIZE must accept at least one byte"
+);
+const _: () = assert!(
+    MAX_BLOBS_PER_DEVICE > 0,
+    "MAX_BLOBS_PER_DEVICE must allow at least one blob"
+);
+const _: () = assert!(
+    MAX_RETENTION_DAYS > 0,
+    "MAX_RETENTION_DAYS must keep a blob for some time"
+);
+const _: () = assert!(
+    MAX_WAKEUP_QUEUE > 0,
+    "MAX_WAKEUP_QUEUE must queue at least one wake-up"
+);
 const _: () = assert!(
     MAX_REQUESTS_PER_GROUP_PER_WINDOW > 0,
     "MAX_REQUESTS_PER_GROUP_PER_WINDOW must allow at least one request"
 );
-const _: () = assert!(REQUEST_WINDOW_MS > 0, "REQUEST_WINDOW_MS must be a real window");
+const _: () = assert!(
+    REQUEST_WINDOW_MS > 0,
+    "REQUEST_WINDOW_MS must be a real window"
+);

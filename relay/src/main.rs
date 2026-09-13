@@ -47,27 +47,40 @@ fn init_tracing() {
 
 async fn run(config: Config) -> ExitCode {
     let db_path = config.data_dir.join("relay.db");
-    let Some(store) = open_store(&config.data_dir, &db_path) else { return ExitCode::FAILURE };
+    let Some(store) = open_store(&config.data_dir, &db_path) else {
+        return ExitCode::FAILURE;
+    };
     let store = Arc::new(Mutex::new(store));
     spawn_retention(Arc::clone(&store), config.retention_days);
 
-    let Some(listener) = bind_listener(config.listen).await else { return ExitCode::FAILURE };
+    let Some(listener) = bind_listener(config.listen).await else {
+        return ExitCode::FAILURE;
+    };
     tracing::info!(addr = %config.listen, data_dir = %config.data_dir.display(), "relay listening");
 
-    let limits = Limits { max_blob_bytes: config.max_blob_bytes, ..Limits::default() };
+    let limits = Limits {
+        max_blob_bytes: config.max_blob_bytes,
+        ..Limits::default()
+    };
     let state = AppState::new(store, Box::new(NoopPush::default()), limits);
     serve(listener, http::router(state)).await
 }
 
 fn open_store(data_dir: &std::path::Path, db_path: &std::path::Path) -> Option<Store> {
     if let Err(source) = std::fs::create_dir_all(data_dir) {
-        eprintln!("relay: cannot create data dir {}: {source}", data_dir.display());
+        eprintln!(
+            "relay: cannot create data dir {}: {source}",
+            data_dir.display()
+        );
         return None;
     }
     match Store::open(db_path) {
         Ok(store) => Some(store),
         Err(source) => {
-            eprintln!("relay: cannot open store at {}: {source}", db_path.display());
+            eprintln!(
+                "relay: cannot open store at {}: {source}",
+                db_path.display()
+            );
             None
         }
     }
@@ -94,5 +107,9 @@ async fn serve(listener: tokio::net::TcpListener, app: axum::Router) -> ExitCode
 }
 
 fn spawn_retention(store: Arc<Mutex<Store>>, retention_days: i64) {
-    tokio::spawn(retention::run_forever(store, retention_days, RETENTION_SWEEP_INTERVAL));
+    tokio::spawn(retention::run_forever(
+        store,
+        retention_days,
+        RETENTION_SWEEP_INTERVAL,
+    ));
 }
