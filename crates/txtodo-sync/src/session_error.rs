@@ -3,6 +3,7 @@
 
 use std::fmt;
 
+use crate::crypto_error::CryptoError;
 use crate::message::{GroupId, OriginRange};
 use crate::session::SessionState;
 use crate::want::Gap;
@@ -46,6 +47,9 @@ pub enum SessionError {
     NotInBatch(OriginRange),
     /// A committed run does not follow the head we hold.
     Gap(Gap),
+    /// An op's signature did not verify, or its device is unrecognised. Checked before anything
+    /// else in `on_ops`, so a bad batch never advances `wanted`/`inflight`.
+    Crypto(CryptoError),
 }
 
 impl fmt::Display for SessionError {
@@ -83,6 +87,7 @@ impl fmt::Display for SessionError {
                 )
             }
             SessionError::Gap(g) => write!(f, "{g}"),
+            SessionError::Crypto(e) => write!(f, "{e}"),
         }
     }
 }

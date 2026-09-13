@@ -8,15 +8,27 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION`, `MAX_FRAME_BYTES`.
 - `Message::{Hello, Want, Ops, Ack}` (append-only variants), `Message::{encode, decode,
   check_caps}`, `MessageError`, `Heads = BTreeMap<DeviceId, u64>`, `OriginRange`, `GroupId`,
-  caps `MAX_OPS_PER_BATCH` / `MAX_WANT_RANGES` / `MAX_HEADS`. Goldens in `goldens/*.postcard`.
+  caps `MAX_OPS_PER_BATCH` / `MAX_WANT_RANGES` / `MAX_HEADS`. `Ops` carries `signatures: Vec<Signature>`
+  parallel to `ops` (`sync-reject-tests`); a length mismatch is `MessageError::SignatureCount`.
+  Goldens in `goldens/*.postcard`.
 - `want(local, remote) -> Vec<OriginRange>`, `advance(heads, run) -> Result<(), Gap>`.
 - `Session` — `Idle → Greeted → Wanting → Importing → (Wanting | Idle)` via `hello`, `on_hello`
-  (group, protocol, `Skew` guard), `on_ops`, `committed`; `SessionError`, `Greeting`.
+  (group, protocol, `Skew` guard), `on_ops(msg, &BTreeMap<DeviceId, DevicePublicKey>)`, `committed`;
+  `SessionError`, `Greeting`. `on_ops` runs `verify_batch` on `msg`'s ops/signatures before the
+  wanted-range check — a bad signature or unrecognised device is `SessionError::Crypto` and never
+  touches `wanted`/`inflight`. `Session` never touches the group-key AEAD; a caller decrypts first
+  (`sealed_ops::open_ops`) and only hands `Session::on_ops` an already-opened `Message`.
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,
   `verify_batch(&[Op], &[Signature], &BTreeMap<DeviceId, DevicePublicKey>)` (all-or-nothing);
   `DeviceSigningKey`/`DevicePublicKey`/`Signature` with `from_bytes`/`to_bytes`.
 - `seal(version, group, epoch, &GroupKey, plaintext)` / `open(version, group, &GroupKeys, sealed)`,
   `GroupKey`, `GroupKeys`, `CryptoError`, `MAX_RETAINED_KEY_EPOCHS`, header/AAD/nonce/tag byte consts.
+- `sealed_ops.rs` (`sync-reject-tests`, M4): the actual op send/receive path, wiring the crypto above
+  into real `Frame`s instead of leaving `Session` to call it. `seal_ops(ops, ranges,
+  &DeviceSigningKey, &SealContext)` signs then seals (`SealContext { group, epoch, key }` bundles the
+  three so the function stays under the 5-argument cap); `open_ops(&Frame, GroupId, &GroupKeys,
+  &BTreeMap<DeviceId, DevicePublicKey>)` opens then verifies, all-or-nothing, and its `Ok(Message)` is
+  ready to hand to `Session::on_ops`. `SealedOpsError` wraps `CryptoError`/`MessageError`.
 - Keystore (M4 `sync-keystore`): `KeyStore` trait (`get`/`put`/`delete`), `KeyId`
   (`DeviceSigning`/`DeviceStatic`/`Group(epoch)`), `Secret` (redacted `Debug`, zeroized on drop),
   `KeyStoreError`, `MAX_STORED_EPOCHS`. Backends: `MemoryKeyStore` (tests only), `FileKeyStore`
@@ -74,7 +86,10 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   found peer, the `devices` table (persisting each peer's `DeviceStaticPublic` — this crate only
   produces/consumes the bytes, never stores them), the daemon-level rotation sequencing ("close the
   epoch before announcing the removal"), snapshot-then-ops transfer to a newly paired device, and
-  the `txtodo pair`/`txtodo device` CLI/daemon wiring (separate M4 subtasks/slices).
+  the `txtodo pair`/`txtodo device` CLI/daemon wiring (separate M4 subtasks/slices). `sealed_ops`'s
+  `seal_ops`/`open_ops` are proven at the unit level (`sealed_ops_tests.rs`) but nothing in
+  `txtodo-daemon` calls them yet, and there is no two-daemon integration test — that needs a real
+  `Link` MITM and the daemon import path, tracked as the still-open half of `sync-reject-tests`.
 
 ## Invariants
 - Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact):
@@ -95,6 +110,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   there is no RNG seam for the simulator's seeded PRNG to reach.
 - Signature is per op and durable (`Op::signing_bytes` excludes nothing: the signature is never a
   field of `Op`); the AEAD is per batch and stripped at import. `verify_batch` is all-or-nothing.
+- `sealed_ops::open_ops` opens before it decodes and decodes before it verifies: a wrong/absent
+  group key never reaches `Message` parsing, and a bad signature never reaches `Session`.
+  `Session::on_ops` re-verifies regardless of what its caller already checked — it does not trust a
+  caller that skipped `open_ops` — and does so before touching `wanted`/`inflight`, so a rejected
+  batch changes nothing about session state.
 - Sealed header is `version || group || epoch || nonce`, and `version || group || epoch` is the AAD,
   so a foreign group/version or a tampered header fails rather than decrypting into something
   plausible. An unknown epoch is a typed error naming it, never a try-every-key loop.

@@ -5,11 +5,14 @@
 //! (`txtodo_model::Skew`), before a single op is accepted, and `Ack` carries only runs the caller
 //! reports as *committed* — never merely received — so a crash mid-import re-requests them.
 
+use std::collections::BTreeMap;
+
 use txtodo_model::{DeviceId, Op, Skew};
 
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Heads, Message, OriginRange};
 use crate::session_error::SessionError;
+use crate::sign::{DevicePublicKey, verify_batch};
 use crate::want::{advance, want};
 
 /// Where the session is. Closed set.
@@ -152,18 +155,32 @@ impl Session {
         })
     }
 
-    /// `Wanting → Importing`: hands the batch to the caller to commit. Every run in the batch
-    /// must lie inside a run we asked for.
-    pub fn on_ops(&mut self, msg: &Message) -> Result<Vec<Op>, SessionError> {
+    /// `Wanting → Importing`: hands the batch to the caller to commit. Every op's signature is
+    /// verified against `device_keys` before anything else runs — a batch with one bad signature
+    /// or one unrecognised device is refused whole, never partially accepted (`sign::verify_batch`
+    /// is all-or-nothing). Only once authorship checks out does a run outside our `Want` get
+    /// checked. `msg` must already be opened (see `sealed_ops::open_ops`) — `Session` never touches
+    /// the group-key AEAD, only per-op signatures.
+    pub fn on_ops(
+        &mut self,
+        msg: &Message,
+        device_keys: &BTreeMap<DeviceId, DevicePublicKey>,
+    ) -> Result<Vec<Op>, SessionError> {
         match self.state {
             SessionState::Wanting => {}
             SessionState::Idle | SessionState::Greeted | SessionState::Importing => {
                 return Err(self.unexpected("Ops"));
             }
         }
-        let Message::Ops { ops, ranges } = msg else {
+        let Message::Ops {
+            ops,
+            signatures,
+            ranges,
+        } = msg
+        else {
             return Err(self.unexpected(name_of(msg)));
         };
+        verify_batch(ops, signatures, device_keys).map_err(SessionError::Crypto)?;
         if let Some(stray) = ranges.iter().find(|r| !covered(&self.wanted, r)) {
             return Err(SessionError::Unrequested(*stray));
         }

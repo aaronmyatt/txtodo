@@ -10,6 +10,7 @@ use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
 use crate::message::{
     GroupId, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError, OriginRange,
 };
+use crate::sign::Signature;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 
 fn dev(n: u128) -> DeviceId {
@@ -22,6 +23,12 @@ fn range(device: u128, first: u64, last: u64) -> OriginRange {
         first,
         last,
     }
+}
+
+/// A deterministic, non-zero fixture signature; these tests exercise `Message`'s shape, not the
+/// crypto — `sign_tests.rs`/`sealed_ops_tests.rs` own real signing.
+fn sig(n: u8) -> Signature {
+    Signature::from_bytes([n; 64])
 }
 
 fn op(n: u128) -> Op {
@@ -92,6 +99,7 @@ fn every_message_matches_its_checked_in_golden() {
         "ops",
         &Message::Ops {
             ops: vec![op(1), op(2)],
+            signatures: vec![sig(1), sig(2)],
             ranges: vec![range(1, 43, 44)],
         },
     );
@@ -111,6 +119,7 @@ fn variant_tags_are_frozen_in_declaration_order() {
         Message::Want { ranges: Vec::new() },
         Message::Ops {
             ops: Vec::new(),
+            signatures: Vec::new(),
             ranges: Vec::new(),
         },
         Message::Ack {
@@ -153,14 +162,28 @@ fn caps_are_checked_before_encode() {
             max: MAX_HEADS
         }
     );
+    let too_many_ops: Vec<Op> = (0..=MAX_OPS_PER_BATCH as u128).map(op).collect();
     let ops = Message::Ops {
-        ops: (0..=MAX_OPS_PER_BATCH as u128).map(op).collect(),
+        signatures: too_many_ops.iter().map(|_| sig(0)).collect(),
+        ops: too_many_ops,
         ranges: Vec::new(),
     };
     assert!(matches!(
         ops.encode(),
         Err(MessageError::TooMany { what: "ops", .. })
     ));
+    let mismatched = Message::Ops {
+        ops: vec![op(1)],
+        signatures: Vec::new(),
+        ranges: Vec::new(),
+    };
+    assert_eq!(
+        mismatched.encode().unwrap_err(),
+        MessageError::SignatureCount {
+            ops: 1,
+            signatures: 0
+        }
+    );
     let backwards = Message::Ack {
         committed: vec![range(1, 5, 4)],
     };
