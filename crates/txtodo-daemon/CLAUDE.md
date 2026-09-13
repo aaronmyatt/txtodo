@@ -40,6 +40,25 @@ true of this binary (`main.rs` still runs one workspace per process via `--dir`)
   `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`,
   `pidfile` · `tokens` (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity`
   (`OpLogStream`, plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
+  `server_actors.rs` (`actor`/`actor_by_path`/`all_actors`) is split out of `server.rs` for its
+  line budget, the same pattern as `progress.rs`.
+- `bundle_export.rs`/`bundle_import.rs`/`bundle_import_error.rs`/`bundle_wire.rs`/
+  `bundle_crypto.rs`/`bundle_grpc.rs` (plan M8 `cli-bundle`, design §4.5): `BundleExport`/
+  `BundleImport`, the air-gapped sneakernet carrier. The synchronous core
+  (`export_into`/`import_from_chunks`) never touches gRPC; `bundle_grpc.rs` bridges it to the
+  async RPCs via `spawn_blocking`, the same pattern `txtodo_sync::IrohLink` uses the other way
+  round. Export streams the clear header/manifest, then every document's exact bytes plus live
+  sidecar fingerprints (docs/questions.md Q2 — so a sidecar-mode importer's `recover()` takes the
+  fast path instead of reconciling from scratch), then the whole op log signed with this device's
+  Ed25519 op-signing key (`KeyId::DeviceSigning`, minted via `keystore_setup::
+  load_or_mint_device_signing` — defined in `txtodo_sync::sign` but unused anywhere in this crate
+  before this task). Import checks version/schema from the clear manifest before deriving any
+  key, then every per-file blake3 hash and per-op signature against the actual decrypted stream
+  before a single byte lands; re-import is idempotent via `existing_op_ids`. Deliberately
+  key-free (plan M8, 2026-09-13 decision): `BundleManifest` carries no group key, ever — only the
+  exporting device's *public* signing key. `bundle_tests.rs` covers the todo.txt `@test` items
+  in-process (no socket); `txtodo-cli`'s `tests/bundle.rs` is the real two-daemon, real-socket
+  proof of the CLI-facing half.
 - `workspace_error` (`WorkspaceError`) and `workspace_mint` (device/group/identity-mode load-or-
   mint helpers) are split out of `workspace.rs` for its line budget, the same pattern as
   `txtodo-sync`'s `*_error.rs` files.
