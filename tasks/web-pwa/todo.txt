@@ -1,12 +1,12 @@
-2026-09-12 Scaffold apps/web with Vite + wasm-pack wiring in the txtodo-ffi wasm-bindgen build of tokenize/parse_line +m10 @web
-2026-09-12 Worker core module: load the WASM core and expose tokenize/parse_line to the main thread +m10 @web
-2026-09-12 OPFS db module: append-only oplog.bin + projection.txt under navigator.storage.getDirectory(), with persist() requested +m10 @web
-2026-09-12 WebSocket sync module: Hello/Want/Ops/Ack (postcard) to the M8 relay, decrypt+verify each batch, applyAll through the worker +m10 @web
-2026-09-12 Offline queue: append ops to OPFS before any send, flush + re-run Want on reconnect with bounded backoff +m10 @web
-2026-09-12 Service worker caching the shell + .wasm only (never todo data) and manifest.webmanifest for installability +m10 @web
-2026-09-12 Main view: highlighted, numbered lines from tokenize spans, id: hidden with toggle, edit popover + detail view per §3.1–3.2 +m10 @web
-2026-09-12 Keys in IndexedDB as CryptoKey with QR/SAS pairing for enrollment, matching sync-crypto-envelope byte-for-byte +m10 @web
-2026-09-12 Test: tokenize in the worker returns byte-identical spans to txtodo_core::tokenize for corpus lines +m10 @web @test
-2026-09-12 Test: offline edits (airplane mode) render from OPFS and flush on reconnect with no loss +m10 @web @test
-2026-09-12 Test: two browsers converge via the relay over WebSocket; SW update replaces the shell without touching OPFS data +m10 @web @test
-2026-09-12 Complete the parent line in ./todo.txt +m10 @web
+2026-09-12 Scaffold apps/web with Vite + wasm-pack wiring in the txtodo-ffi wasm-bindgen build of tokenize/parse_line +m10 @web id:01M2B4ZWPYT4CJ3WEWD70T6TCJ
+2026-09-12 Worker core module: load the WASM core and expose tokenize/parse_line to the main thread +m10 @web id:01M2B4ZWPYFK5C8A9EBATHWXS9
+2026-09-12 OPFS db module: append-only oplog.bin + projection.txt under navigator.storage.getDirectory(), with persist() requested +m10 @web id:01M2B4ZWPY72M99MQG5NCC0C2B
+2026-09-12 WebSocket sync module: Hello/Want/Ops/Ack (postcard) to the M8 relay, decrypt+verify each batch, applyAll through the worker +m10 @web id:01M2B4ZWPYN9PMC7F0Y6SZMDNJ
+2026-09-12 Offline queue: append ops to OPFS before any send, flush + re-run Want on reconnect with bounded backoff +m10 @web id:01M2B4ZWPYGM9D6YP72VCFRZ9T
+2026-09-12 Service worker caching the shell + .wasm only (never todo data) and manifest.webmanifest for installability +m10 @web id:01M2B4ZWPY3G9G1P1P95D2ARHJ
+2026-09-12 Main view: highlighted, numbered lines from tokenize spans, id: hidden with toggle, edit popover + detail view per §3.1–3.2 +m10 @web id:01M2B4ZWPY21XWGSWF2GM34RPM
+2026-09-12 Keys in IndexedDB as CryptoKey with QR/SAS pairing for enrollment, matching sync-crypto-envelope byte-for-byte +m10 @web id:01M2B4ZWPYKF644EM3QABEVT2K
+2026-09-12 Test: tokenize in the worker returns byte-identical spans to txtodo_core::tokenize for corpus lines +m10 @web @test id:01M2B4ZWPYFNRWN6JNVJBY3AT1
+2026-09-12 Test: offline edits (airplane mode) render from OPFS and flush on reconnect with no loss +m10 @web @test id:01M2B4ZWPYX3BXWTM4X9H1FC4G
+2026-09-12 Test: two browsers converge via the relay over WebSocket; SW update replaces the shell without touching OPFS data +m10 @web @test id:01M2B4ZWPY77CPXHHSGEQ0A747
+2026-09-12 Complete the parent line in ./todo.txt +m10 @web id:01M2B4ZWPYDTF5TAZ89Q8TM5W3

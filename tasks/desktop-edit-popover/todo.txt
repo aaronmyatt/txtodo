@@ -1,8 +1,8 @@
-2026-09-12 Popover component: single-line CM6 with the shared Lezer language, pre-filled with the raw line including id: +m7 @desktop
-2026-09-12 Token chips row implementing plan §3.2 semantics: priority replace/remove, x completion toggle, insert-at-caret for the rest +m7 @desktop
-2026-09-12 wasm-bindgen export of core parse_line (strict) in crates/txtodo-ffi and load the wasm module in the popover +m7 @desktop @ffi
-2026-09-12 Strict-mode validation: render the parser error inline (13 px danger) but still allow a lenient save with the quirk +m7 @desktop
-2026-09-12 Footer "Line N · <device>, <relative time>" from the daemon History stream, plus Cancel and Save +m7 @desktop
-2026-09-12 Save = Apply(Edit{TaskRef line_number+id, new_line}); Enter saves, Esc cancels, an identical line is a no-op +m7 @desktop
-2026-09-12 Test: click opens the popover with the raw id: line; Enter saves and only that line changes; a no-op save emits no op +m7 @desktop @test
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @ffi
+2026-09-12 Popover component: single-line CM6 with the shared Lezer language, pre-filled with the raw line including id: +m7 @desktop id:01M2B4ZW4JYYDQHAKQS8KAWPTW
+2026-09-12 Token chips row implementing plan §3.2 semantics: priority replace/remove, x completion toggle, insert-at-caret for the rest +m7 @desktop id:01M2B4ZW4JMEG4GHN5CVRQCDFW
+2026-09-12 wasm-bindgen export of core parse_line (strict) in crates/txtodo-ffi and load the wasm module in the popover +m7 @desktop @ffi id:01M2B4ZW4JR7WGSYG441SRX61S
+2026-09-12 Strict-mode validation: render the parser error inline (13 px danger) but still allow a lenient save with the quirk +m7 @desktop id:01M2B4ZW4J9SJYSSC6S4DWBBYR
+2026-09-12 Footer "Line N · <device>, <relative time>" from the daemon History stream, plus Cancel and Save +m7 @desktop id:01M2B4ZW4JV677Q57SATFA8KP5
+2026-09-12 Save = Apply(Edit{TaskRef line_number+id, new_line}); Enter saves, Esc cancels, an identical line is a no-op +m7 @desktop id:01M2B4ZW4JN589A40B1T6E3N7H
+2026-09-12 Test: click opens the popover with the raw id: line; Enter saves and only that line changes; a no-op save emits no op +m7 @desktop @test id:01M2B4ZW4JQMR37WYENSSMFW1M
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @ffi id:01M2B4ZW4J28Q33R59GDBF46EZ

@@ -1,15 +1,15 @@
-x 2026-09-12 2026-09-12 Op::signing_bytes(): canonical postcard bytes excluding the signature, with a checked-in golden +m4 @model
-x 2026-09-12 2026-09-12 Doc comment on OpKind stating that append-only variants are now a security invariant, not a style rule +m4 @model
-x 2026-09-12 2026-09-12 Audit every signed type for HashMap or HashSet; replace with BTreeMap or a sorted Vec +m4 @model @security
-x 2026-09-12 2026-09-12 sign.rs: Ed25519 sign and verify over signing_bytes via ed25519-dalek, device key injected not read +m4 @sync
-x 2026-09-12 2026-09-12 Verify on import before insert; a batch with one bad signature is rejected whole, never partially +m4 @sync
-x 2026-09-12 2026-09-12 aead.rs: XChaCha20-Poly1305 seal and open with a fresh OS-CSPRNG 24-byte nonce per batch +m4 @sync
-x 2026-09-12 2026-09-12 AAD is version || group_id || key_epoch so a foreign group or a downgraded version fails the tag check +m4 @sync
-x 2026-09-12 2026-09-12 Ciphertext header carries key_epoch in the clear; unknown epoch is a typed error, never a try-every-key loop +m4 @sync
-x 2026-09-12 2026-09-12 MAX_RETAINED_KEY_EPOCHS const, asserted; cargo deny pass for ed25519-dalek and chacha20poly1305 +m4 @sync @security
-x 2026-09-12 2026-09-12 CryptoError enum: each variant names what failed and against which epoch or device; validate, never assert +m4 @sync
-x 2026-09-12 2026-09-12 Test: flipping one byte of a signed op fails verification (plan M4 acceptance) +m4 @sync @test
-x 2026-09-12 2026-09-12 Tests: wrong group key, wrong group in AAD, wrong epoch each give a distinct error +m4 @sync @test
-x 2026-09-12 2026-09-12 Test: the seeded simulator PRNG is not reachable from nonce generation +m4 @sync @test @security
-x 2026-09-12 2026-09-12 Test: signing_bytes is stable across 100 calls in one process and across two processes +m4 @model @test
-x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @sync
+x 2026-09-12 2026-09-12 Op::signing_bytes(): canonical postcard bytes excluding the signature, with a checked-in golden +m4 @model id:01M2B4ZWJE1EPZDVQP53KQQ1JV
+x 2026-09-12 2026-09-12 Doc comment on OpKind stating that append-only variants are now a security invariant, not a style rule +m4 @model id:01M2B4ZWJE170FYWF07RC8WM7E
+x 2026-09-12 2026-09-12 Audit every signed type for HashMap or HashSet; replace with BTreeMap or a sorted Vec +m4 @model @security id:01M2B4ZWJEXT3V1X1K4Y9TM1AT
+x 2026-09-12 2026-09-12 sign.rs: Ed25519 sign and verify over signing_bytes via ed25519-dalek, device key injected not read +m4 @sync id:01M2B4ZWJE4KKZCD3Q6WH1AQ8B
+x 2026-09-12 2026-09-12 Verify on import before insert; a batch with one bad signature is rejected whole, never partially +m4 @sync id:01M2B4ZWJEVNJWRJKPRSHAE05T
+x 2026-09-12 2026-09-12 aead.rs: XChaCha20-Poly1305 seal and open with a fresh OS-CSPRNG 24-byte nonce per batch +m4 @sync id:01M2B4ZWJEFNKR53MKCJ6YYV9R
+x 2026-09-12 2026-09-12 AAD is version || group_id || key_epoch so a foreign group or a downgraded version fails the tag check +m4 @sync id:01M2B4ZWJE1TBG0X4VYZV70XHX
+x 2026-09-12 2026-09-12 Ciphertext header carries key_epoch in the clear; unknown epoch is a typed error, never a try-every-key loop +m4 @sync id:01M2B4ZWJES81WHSDJHY9M31QW
+x 2026-09-12 2026-09-12 MAX_RETAINED_KEY_EPOCHS const, asserted; cargo deny pass for ed25519-dalek and chacha20poly1305 +m4 @sync @security id:01M2B4ZWJE5RNYV00PRPJJPEZY
+x 2026-09-12 2026-09-12 CryptoError enum: each variant names what failed and against which epoch or device; validate, never assert +m4 @sync id:01M2B4ZWJEEENTWKAVG77T6ZWA
+x 2026-09-12 2026-09-12 Test: flipping one byte of a signed op fails verification (plan M4 acceptance) +m4 @sync @test id:01M2B4ZWJEMH90TYVYCBM06GRF
+x 2026-09-12 2026-09-12 Tests: wrong group key, wrong group in AAD, wrong epoch each give a distinct error +m4 @sync @test id:01M2B4ZWJEVCSE83Q4VHF9RF51
+x 2026-09-12 2026-09-12 Test: the seeded simulator PRNG is not reachable from nonce generation +m4 @sync @test @security id:01M2B4ZWJE225Q65E4ABKC35A9
+x 2026-09-12 2026-09-12 Test: signing_bytes is stable across 100 calls in one process and across two processes +m4 @model @test id:01M2B4ZWJFQHHPN6XWRVTZC32T
+x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @sync id:01M2B4ZWJF4PERCYKV7HK957J3

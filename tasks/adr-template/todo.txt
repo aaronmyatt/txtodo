@@ -1,3 +1,3 @@
-x 2026-09-11 2026-09-11 Write docs/adr/0000-template.md with sections Status Date Context Decision Consequences Alternatives +m0 @docs
-x 2026-09-11 2026-09-11 Add a one-line README stanza at the top of the template explaining numbering and the accepted/superseded flow +m0 @docs
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs
+x 2026-09-11 2026-09-11 Write docs/adr/0000-template.md with sections Status Date Context Decision Consequences Alternatives +m0 @docs id:01M2B3X5NTW5KYHPHC3TDNCFQ7
+x 2026-09-11 2026-09-11 Add a one-line README stanza at the top of the template explaining numbering and the accepted/superseded flow +m0 @docs id:01M2B3X5NTXAB6Y6F01DQQ963X
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs id:01M2B3X5NTGF4Z5YWAM7930A94

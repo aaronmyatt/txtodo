@@ -1,13 +1,13 @@
-2026-09-12 Add uniffi to crates/txtodo-ffi/Cargo.toml and expose tokenize(raw) -> Vec<Span> over txtodo_core::tokenize; get human sign-off + cargo deny +m9 @ffi
-2026-09-12 crates/txtodo-ffi/src/span.rs: SpanKind enum with the nine plan §3.1 semantic names and the TokenKind -> SpanKind collapse (dates merge, Url/Whitespace -> Text) +m9 @ffi
-2026-09-12 Map txtodo_daemon::handle::ActorError to a generated DaemonError enum — all 7 variants (Mutation/State/Store/Write/Hlc/Gone/Unsupported), none dropped +m9 @ffi
-2026-09-12 Surface the allowedDeps gap: txtodo-ffi needs txtodo-daemon but budgets.json allows only core+query — ask before editing budgets.json/.claude (frozen) +m9 @ffi @human
-2026-09-12 crates/txtodo-ffi/src/handle.rs: DaemonHandle::new(root) spawns an owned tokio runtime and boots the daemon actors in-process +m9 @ffi
-2026-09-12 DaemonHandle::get(file) and apply(mutations, principal) as uniffi async methods delegating to ActorHandle::get/apply +m9 @ffi
-2026-09-12 DaemonHandle::subscribe(listener) as a uniffi callback interface streaming Change events from the actor broadcast channel +m9 @ffi
-2026-09-12 Mirror Mutation and Principal as FFI records/enums so Kotlin/Swift never parse a line; the daemon turns them into ops +m9 @ffi
-2026-09-12 Test: tokenize via the FFI equals txtodo_core::tokenize spans for a known corpus line, byte-identical boundaries +m9 @ffi @test
-2026-09-12 Test: DaemonHandle in a Rust process applies a mutation, reads bytes back, and drops without leaking the runtime +m9 @ffi @test
-2026-09-12 Test: force each ActorError variant and assert a typed DaemonError crosses the boundary, none dropped to a string +m9 @ffi @test
-2026-09-12 CI: run uniffi-bindgen for Kotlin and Swift and assert the generated sources compile +m9 @ffi @test
-2026-09-12 Complete the parent line in ./todo.txt +m9 @ffi
+2026-09-12 Add uniffi to crates/txtodo-ffi/Cargo.toml and expose tokenize(raw) -> Vec<Span> over txtodo_core::tokenize; get human sign-off + cargo deny +m9 @ffi id:01M2B4ZW7SGVM7WA41R69AYCE3
+2026-09-12 crates/txtodo-ffi/src/span.rs: SpanKind enum with the nine plan §3.1 semantic names and the TokenKind -> SpanKind collapse (dates merge, Url/Whitespace -> Text) +m9 @ffi id:01M2B4ZW7SE6G623F4MF7GBJXA
+2026-09-12 Map txtodo_daemon::handle::ActorError to a generated DaemonError enum — all 7 variants (Mutation/State/Store/Write/Hlc/Gone/Unsupported), none dropped +m9 @ffi id:01M2B4ZW7SEAJEF97407KZJNZE
+2026-09-12 Surface the allowedDeps gap: txtodo-ffi needs txtodo-daemon but budgets.json allows only core+query — ask before editing budgets.json/.claude (frozen) +m9 @ffi @human id:01M2B4ZW7SPTMN6ZZWB1XFT7MX
+2026-09-12 crates/txtodo-ffi/src/handle.rs: DaemonHandle::new(root) spawns an owned tokio runtime and boots the daemon actors in-process +m9 @ffi id:01M2B4ZW7SANPD0P42X4YM1XAT
+2026-09-12 DaemonHandle::get(file) and apply(mutations, principal) as uniffi async methods delegating to ActorHandle::get/apply +m9 @ffi id:01M2B4ZW7SYNJFFGKYQA8QAR4V
+2026-09-12 DaemonHandle::subscribe(listener) as a uniffi callback interface streaming Change events from the actor broadcast channel +m9 @ffi id:01M2B4ZW7S7R27VTK0C5TMGXEH
+2026-09-12 Mirror Mutation and Principal as FFI records/enums so Kotlin/Swift never parse a line; the daemon turns them into ops +m9 @ffi id:01M2B4ZW7SKG9HTQ6CBQMQ4FR6
+2026-09-12 Test: tokenize via the FFI equals txtodo_core::tokenize spans for a known corpus line, byte-identical boundaries +m9 @ffi @test id:01M2B4ZW7SDYCP4BVQWE8Z1QHV
+2026-09-12 Test: DaemonHandle in a Rust process applies a mutation, reads bytes back, and drops without leaking the runtime +m9 @ffi @test id:01M2B4ZW7SN3HJS9VVY89MFJZ0
+2026-09-12 Test: force each ActorError variant and assert a typed DaemonError crosses the boundary, none dropped to a string +m9 @ffi @test id:01M2B4ZW7T96Q5VN0WQ0GMK8QF
+2026-09-12 CI: run uniffi-bindgen for Kotlin and Swift and assert the generated sources compile +m9 @ffi @test id:01M2B4ZW7TN1N689BP9S18Z315
+2026-09-12 Complete the parent line in ./todo.txt +m9 @ffi id:01M2B4ZW7TP25PMRNHKG7PPGHE

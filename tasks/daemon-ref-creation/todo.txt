@@ -1,14 +1,14 @@
-2026-09-12 SLUG_GENERATE_MAX_LEN = 40 with a comment saying why it is narrower than core's SLUG_MAX_LEN of 64, and a compile-time assert +m5 @daemon
-2026-09-12 slug_from(description) using Task::words() so projects, contexts, tags and URLs are excluded, not re-split +m5 @daemon
-2026-09-12 Decide the fallback when no ASCII plain word exists; a stable TaskId derivation, never an empty slug +m5 @daemon @human
-2026-09-12 Strip a leading non-alphanumeric rather than rejecting; never end a truncation on a hyphen +m5 @daemon
-2026-09-12 Collision: create with exclusive semantics and treat AlreadyExists as the next suffix, bounded by MAX_SLUG_COLLISIONS +m5 @daemon
-2026-09-12 Treat a slug claimed by a dangling ref: on another line as taken, not free +m5 @daemon
-2026-09-12 Lazy creation only on the first write into notes or the sub-list, never on read or render +m5 @daemon
-2026-09-12 Rename writes the op first and moves the directory second, so a crash leaves a dangling ref not an orphan +m5 @daemon
-2026-09-12 On move failure roll the op back and tell the user; note the shared rollback shape with daemon-ref-move in ABSTRACTIONS.md +m5 @daemon @docs
-2026-09-12 Table test: description to slug, one row per edge case including CJK, emoji, URL-only and digit-leading +m5 @daemon @test
-2026-09-12 Test: two concurrent lazy creations of the same slug produce x and x-2, never one overwrite +m5 @daemon @test
-2026-09-12 Test: rename lands both the op and the directory; a simulated move failure leaves the op rolled back +m5 @daemon @test
-2026-09-12 Test negative space: opening a detail view performs no filesystem write +m5 @daemon @test
-2026-09-12 Complete the parent line in ./todo.txt +m5 @daemon
+2026-09-12 SLUG_GENERATE_MAX_LEN = 40 with a comment saying why it is narrower than core's SLUG_MAX_LEN of 64, and a compile-time assert +m5 @daemon id:01M2B4ZW1JTVNF573ZD1THX2SD
+2026-09-12 slug_from(description) using Task::words() so projects, contexts, tags and URLs are excluded, not re-split +m5 @daemon id:01M2B4ZW1J8E6ZXPMPC9W456K9
+2026-09-12 Decide the fallback when no ASCII plain word exists; a stable TaskId derivation, never an empty slug +m5 @daemon @human id:01M2B4ZW1KFKYEE1FXEQQNJMRY
+2026-09-12 Strip a leading non-alphanumeric rather than rejecting; never end a truncation on a hyphen +m5 @daemon id:01M2B4ZW1KXMQTJJ24YBN76BJ0
+2026-09-12 Collision: create with exclusive semantics and treat AlreadyExists as the next suffix, bounded by MAX_SLUG_COLLISIONS +m5 @daemon id:01M2B4ZW1KVQ9ZGDK40HCR0GD7
+2026-09-12 Treat a slug claimed by a dangling ref: on another line as taken, not free +m5 @daemon id:01M2B4ZW1K353E55AGN3WX2FXH
+2026-09-12 Lazy creation only on the first write into notes or the sub-list, never on read or render +m5 @daemon id:01M2B4ZW1KP5M2M4CXA440Z7VN
+2026-09-12 Rename writes the op first and moves the directory second, so a crash leaves a dangling ref not an orphan +m5 @daemon id:01M2B4ZW1K2PD1TK5G3MW5V7WN
+2026-09-12 On move failure roll the op back and tell the user; note the shared rollback shape with daemon-ref-move in ABSTRACTIONS.md +m5 @daemon @docs id:01M2B4ZW1K1FX515QF8GVXEBWD
+2026-09-12 Table test: description to slug, one row per edge case including CJK, emoji, URL-only and digit-leading +m5 @daemon @test id:01M2B4ZW1K634DVYJ15GYMW8MX
+2026-09-12 Test: two concurrent lazy creations of the same slug produce x and x-2, never one overwrite +m5 @daemon @test id:01M2B4ZW1KZXEDXA2T7F79EDS3
+2026-09-12 Test: rename lands both the op and the directory; a simulated move failure leaves the op rolled back +m5 @daemon @test id:01M2B4ZW1KQHSQT90YTE5H8E3F
+2026-09-12 Test negative space: opening a detail view performs no filesystem write +m5 @daemon @test id:01M2B4ZW1K3G01XKDHMPN2WE38
+2026-09-12 Complete the parent line in ./todo.txt +m5 @daemon id:01M2B4ZW1KRJRGYMJGFEMSX42Q

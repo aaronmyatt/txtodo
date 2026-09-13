@@ -1,5 +1,5 @@
-x 2026-09-11 2026-09-11 dev-dependency criterion; benches/parse.rs: parse_file + parse_line(Lenient) over a generated 100k-line file built from corpus shapes +m1 @core @perf
-x 2026-09-11 2026-09-11 Also bench tokenize over the same lines and format on 1k dirty lines (informational, no budget yet) +m1 @core @perf
-x 2026-09-11 2026-09-11 CI: a bench job on ubuntu runs cargo bench -p txtodo-core -- --output-format bencher and fails if parse_100k mean > 150 ms (budgets.json.perf.parse100kMs) +m1 @core @perf @ci
-x 2026-09-11 2026-09-11 budgets.json: add perf { parse100kMs: 150 } and cite it in CLAUDE.md via the latency row note +m1 @core @perf
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @perf
+x 2026-09-11 2026-09-11 dev-dependency criterion; benches/parse.rs: parse_file + parse_line(Lenient) over a generated 100k-line file built from corpus shapes +m1 @core @perf id:01M2B4ZVS69DDXNC2SR84QSC6A
+x 2026-09-11 2026-09-11 Also bench tokenize over the same lines and format on 1k dirty lines (informational, no budget yet) +m1 @core @perf id:01M2B4ZVS659K1P1DDA2X6B28A
+x 2026-09-11 2026-09-11 CI: a bench job on ubuntu runs cargo bench -p txtodo-core -- --output-format bencher and fails if parse_100k mean > 150 ms (budgets.json.perf.parse100kMs) +m1 @core @perf @ci id:01M2B4ZVS6112F3250FZJF7HX4
+x 2026-09-11 2026-09-11 budgets.json: add perf { parse100kMs: 150 } and cite it in CLAUDE.md via the latency row note +m1 @core @perf id:01M2B4ZVS6HXX01VPGTGC9RP3R
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @perf id:01M2B4ZVS6ZQZ4VK16N377EQWM

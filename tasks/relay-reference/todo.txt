@@ -1,13 +1,13 @@
-2026-09-12 New relay/ crate: standalone Rust binary, zero txtodo-* deps (asserted by a test) so the relay can never accidentally import the crypto; workspace member → Cargo.toml frozen (ask) +m8 @relay
-2026-09-12 store.rs: put/get/list blobs keyed by (group_id, device_id); the value typed Vec<u8> with no structure so op types stay indistinguishable +m8 @relay
-2026-09-12 Routing metadata only: group id, device id, envelope length, stored-at — never parse or decrypt a blob +m8 @relay
-2026-09-12 Bounds, asserted: MAX_BLOB_SIZE, MAX_BLOBS_PER_DEVICE, MAX_RETENTION_DAYS, MAX_WAKEUP_QUEUE, plus a per-group request cap +m8 @relay
-2026-09-12 push.rs: trait Push { wake(device, payload) }; a stored-blob write enqueues exactly one wake-up; M8 ships a logging NoopPush, M9 swaps APNs/FCM behind the same trait +m8 @relay
-2026-09-12 Config via env/flags: listen port, data dir, retention; refuse to run without an explicit data dir rather than guessing +m8 @relay
-2026-09-12 Retention sweep removes blobs older than MAX_RETENTION_DAYS; per-device cap evicts oldest first +m8 @relay
-2026-09-12 No strong device auth (all ciphertext, design §4.6); HTTP surface stays dumb: put/get/list + wake, nothing else +m8 @relay
-2026-09-12 Test: a blob written under (g1,d1) is returned only for (g1,d1); (g1,d2) and (g2,d1) get nothing +m8 @relay @test
-2026-09-12 Test: blobs round-trip byte-for-byte and nothing parses or decrypts them +m8 @relay @test
-2026-09-12 Test: blob size and per-device caps are enforced; one write enqueues exactly one wake-up for the target device +m8 @relay @test
-2026-09-12 Test: the retention sweep removes expired blobs only +m8 @relay @test
-2026-09-12 Complete the parent line in ./todo.txt +m8 @relay
+2026-09-12 New relay/ crate: standalone Rust binary, zero txtodo-* deps (asserted by a test) so the relay can never accidentally import the crypto; workspace member → Cargo.toml frozen (ask) +m8 @relay id:01M2B4ZWFV5A2SMQY7ECB135J8
+2026-09-12 store.rs: put/get/list blobs keyed by (group_id, device_id); the value typed Vec<u8> with no structure so op types stay indistinguishable +m8 @relay id:01M2B4ZWFV2H34QVFYD5J4M7D9
+2026-09-12 Routing metadata only: group id, device id, envelope length, stored-at — never parse or decrypt a blob +m8 @relay id:01M2B4ZWFVNNF2DPPFXHW7ZJHP
+2026-09-12 Bounds, asserted: MAX_BLOB_SIZE, MAX_BLOBS_PER_DEVICE, MAX_RETENTION_DAYS, MAX_WAKEUP_QUEUE, plus a per-group request cap +m8 @relay id:01M2B4ZWFV0VSKBVJ3HSB4JH2J
+2026-09-12 push.rs: trait Push { wake(device, payload) }; a stored-blob write enqueues exactly one wake-up; M8 ships a logging NoopPush, M9 swaps APNs/FCM behind the same trait +m8 @relay id:01M2B4ZWFVC87RQQ5YFTFMH4EG
+2026-09-12 Config via env/flags: listen port, data dir, retention; refuse to run without an explicit data dir rather than guessing +m8 @relay id:01M2B4ZWFV2H6KAZEHQ308DPN6
+2026-09-12 Retention sweep removes blobs older than MAX_RETENTION_DAYS; per-device cap evicts oldest first +m8 @relay id:01M2B4ZWFV3WFX1M2Q1DMN1ACN
+2026-09-12 No strong device auth (all ciphertext, design §4.6); HTTP surface stays dumb: put/get/list + wake, nothing else +m8 @relay id:01M2B4ZWFVM60PRSKMDK37R4SG
+2026-09-12 Test: a blob written under (g1,d1) is returned only for (g1,d1); (g1,d2) and (g2,d1) get nothing +m8 @relay @test id:01M2B4ZWFWGW3GKNKDMHRF9R2Q
+2026-09-12 Test: blobs round-trip byte-for-byte and nothing parses or decrypts them +m8 @relay @test id:01M2B4ZWFW0B05X6NB87ASDTJ4
+2026-09-12 Test: blob size and per-device caps are enforced; one write enqueues exactly one wake-up for the target device +m8 @relay @test id:01M2B4ZWFW5J09BNWPVMAXFY5Q
+2026-09-12 Test: the retention sweep removes expired blobs only +m8 @relay @test id:01M2B4ZWFW7RFDTGR16HKF0ERJ
+2026-09-12 Complete the parent line in ./todo.txt +m8 @relay id:01M2B4ZWFW7WT806353KVDVK2D

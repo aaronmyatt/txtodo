@@ -1,13 +1,13 @@
-2026-09-12 crates/txtodo-crdt/src/identity.rs: IdentityMode enum, Fingerprint struct, CostWeights struct, and assign() signature +m10 @crdt
-2026-09-12 Answer plan §6 Q2 in docs/questions.md: sidecar confidence threshold and cost weights +m10 @human
-2026-09-12 Build the cost matrix: date-equality + Jaccard project/context overlap + normalised Levenshtein + |i-j| position, padded to square +m10 @crdt
-2026-09-12 Solve the assignment with the munkres Hungarian algorithm and drop matches above match_threshold into delete+insert +m10 @crdt
-2026-09-12 txtodo-store migration: fingerprint_index table mapping Fingerprint -> TaskId, rebuildable from files +m10 @store
-2026-09-12 Wire sidecar mode into the reconciler matcher (swap diff-by-id for assign), keeping the reconciler external interface unchanged +m10 @crdt
-2026-09-12 Add identity_mode config flag (tagged default, sidecar opt-in) and configurable id: key name per design §4.1 +m10 @daemon
-2026-09-12 Test: strip every id: tag externally -> fingerprint re-identification, no loss, no spurious delete+insert beyond real edits +m10 @crdt @test
-2026-09-12 Test: insert a line at the top -> position cost does not steal identities; every surviving line keeps its TaskId +m10 @crdt @test
-2026-09-12 Test: near-identical descriptions with different creation dates score below threshold -> delete+insert +m10 @crdt @test
-2026-09-12 Test: sidecar-mode runs of the M4 sync simulator assert convergence and no-loss with zero failures +m10 @crdt @test
-2026-09-12 Add munkres as a dependency with human sign-off and a cargo deny pass +m10 @crdt
-2026-09-12 Complete the parent line in ./todo.txt +m10 @crdt
+2026-09-12 crates/txtodo-crdt/src/identity.rs: IdentityMode enum, Fingerprint struct, CostWeights struct, and assign() signature +m10 @crdt id:01M2B4ZWHMXEE8AQP3SFYEXG8K
+2026-09-12 Answer plan §6 Q2 in docs/questions.md: sidecar confidence threshold and cost weights +m10 @human id:01M2B4ZWHMWYDT3NV7DXZ5Z0PC
+2026-09-12 Build the cost matrix: date-equality + Jaccard project/context overlap + normalised Levenshtein + |i-j| position, padded to square +m10 @crdt id:01M2B4ZWHM0027B6G3MD3AZZS5
+2026-09-12 Solve the assignment with the munkres Hungarian algorithm and drop matches above match_threshold into delete+insert +m10 @crdt id:01M2B4ZWHMQ9MMGP3TBTT4KFN9
+2026-09-12 txtodo-store migration: fingerprint_index table mapping Fingerprint -> TaskId, rebuildable from files +m10 @store id:01M2B4ZWHM83EBNVG27GGP6R8N
+2026-09-12 Wire sidecar mode into the reconciler matcher (swap diff-by-id for assign), keeping the reconciler external interface unchanged +m10 @crdt id:01M2B4ZWHMA1HP6FBNFJGHPJA4
+2026-09-12 Add identity_mode config flag (tagged default, sidecar opt-in) and configurable id: key name per design §4.1 +m10 @daemon id:01M2B4ZWHMY00Q8SW7CW3Q8R5Z
+2026-09-12 Test: strip every id: tag externally -> fingerprint re-identification, no loss, no spurious delete+insert beyond real edits +m10 @crdt @test id:01M2B4ZWHM7RZKC5MFKCMCMJ78
+2026-09-12 Test: insert a line at the top -> position cost does not steal identities; every surviving line keeps its TaskId +m10 @crdt @test id:01M2B4ZWHMARETAD12YCNYMKBQ
+2026-09-12 Test: near-identical descriptions with different creation dates score below threshold -> delete+insert +m10 @crdt @test id:01M2B4ZWHM0CQTARZJDZCRVJEF
+2026-09-12 Test: sidecar-mode runs of the M4 sync simulator assert convergence and no-loss with zero failures +m10 @crdt @test id:01M2B4ZWHMHSYTCPJSPT0K2TA3
+2026-09-12 Add munkres as a dependency with human sign-off and a cargo deny pass +m10 @crdt id:01M2B4ZWHMXPQ8X2Z86CW14X90
+2026-09-12 Complete the parent line in ./todo.txt +m10 @crdt id:01M2B4ZWHMR51NWA7W5JMAN4VD

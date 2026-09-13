@@ -1,13 +1,13 @@
-2026-09-12 Scaffold apps/android Gradle module and wire the uniffi-generated Kotlin bindings from txtodo-ffi (tokenize, SpanKind, DaemonHandle) +m9 @android
-2026-09-12 DaemonService foreground service (dataSync) hosting DaemonHandle in-process with a persistent foreground notification +m9 @android
-2026-09-12 FileViewModel mapping bytes -> per-line tokenize spans and applying SpanStyle per SpanKind in one place +m9 @android
-2026-09-12 Main LazyColumn: line numbers, AnnotatedString per line, id: filtered with header toggle, n/m ref indicator +m9 @android
-2026-09-12 Edit popover: raw-line field + token chips per plan §3.2, strict-mode validation via FFI, lenient save allowed +m9 @android
-2026-09-12 Detail view: breadcrumb, pinned parent, notes.md editor, recursive sub-list, lazy directory creation on first keystroke +m9 @android
-2026-09-12 LAN MCP over HTTP reusing txtodo-mcp in-process, guarded by --lan (refuse non-loopback) and advertised as _txtodo-mcp._tcp:8636 +m9 @android
-2026-09-12 FCM token registration with the daemon plus onNewToken re-registration for relay wake-ups +m9 @android
-2026-09-12 Footer "Line N · device, relative time" from the op log on the edit popover +m9 @android
-2026-09-12 Instrumented test: tokenize -> AnnotatedString spans match SpanKind, id: absent, completed struck through on device +m9 @android @test
-2026-09-12 Instrumented test: activity recreation leaves the daemon alive and the list re-binds without re-parsing +m9 @android @test
-2026-09-12 Integration test: an MCP client on the LAN calls a tool and gets a result while the service is foreground +m9 @android @test
-2026-09-12 Complete the parent line in ./todo.txt +m9 @android
+2026-09-12 Scaffold apps/android Gradle module and wire the uniffi-generated Kotlin bindings from txtodo-ffi (tokenize, SpanKind, DaemonHandle) +m9 @android id:01M2B4ZVQ1PCM22MNJB7T1TWAR
+2026-09-12 DaemonService foreground service (dataSync) hosting DaemonHandle in-process with a persistent foreground notification +m9 @android id:01M2B4ZVQ1DAN38PV9Y2WRDK0S
+2026-09-12 FileViewModel mapping bytes -> per-line tokenize spans and applying SpanStyle per SpanKind in one place +m9 @android id:01M2B4ZVQ13CAJ1JXHB78DFH2Z
+2026-09-12 Main LazyColumn: line numbers, AnnotatedString per line, id: filtered with header toggle, n/m ref indicator +m9 @android id:01M2B4ZVQ1YAYDCP71Z4H73Q8F
+2026-09-12 Edit popover: raw-line field + token chips per plan §3.2, strict-mode validation via FFI, lenient save allowed +m9 @android id:01M2B4ZVQ11KBD9RAM7H0276G7
+2026-09-12 Detail view: breadcrumb, pinned parent, notes.md editor, recursive sub-list, lazy directory creation on first keystroke +m9 @android id:01M2B4ZVQ1AF39M0AH26N3X93T
+2026-09-12 LAN MCP over HTTP reusing txtodo-mcp in-process, guarded by --lan (refuse non-loopback) and advertised as _txtodo-mcp._tcp:8636 +m9 @android id:01M2B4ZVQ1FGC0WXZGWJQ83RW1
+2026-09-12 FCM token registration with the daemon plus onNewToken re-registration for relay wake-ups +m9 @android id:01M2B4ZVQ1AFZC1MTD0QSY2JNZ
+2026-09-12 Footer "Line N · device, relative time" from the op log on the edit popover +m9 @android id:01M2B4ZVQ1JYA3D4D321JYDZQJ
+2026-09-12 Instrumented test: tokenize -> AnnotatedString spans match SpanKind, id: absent, completed struck through on device +m9 @android @test id:01M2B4ZVQ1T6H56T70XQZ2T99H
+2026-09-12 Instrumented test: activity recreation leaves the daemon alive and the list re-binds without re-parsing +m9 @android @test id:01M2B4ZVQ1MRXZQPHZWNG6N894
+2026-09-12 Integration test: an MCP client on the LAN calls a tool and gets a result while the service is foreground +m9 @android @test id:01M2B4ZVQ1VJFRMQ0QRAJ8S5EE
+2026-09-12 Complete the parent line in ./todo.txt +m9 @android id:01M2B4ZVQ1MZ6FWCJ5P9TR8DKC

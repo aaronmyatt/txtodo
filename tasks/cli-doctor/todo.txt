@@ -1,8 +1,8 @@
-x 2026-09-12 2026-09-11 doctor.rs: Check { name, status: Ok|Warn|Fail, detail } and a fixed list run in order; exit 1 if any Fail; --json emits the list +m3 @cli
-x 2026-09-12 2026-09-11 socket: path exists and ListFiles answers within DOCTOR_RPC_TIMEOUT_MS = 2000; stale socket (exists, refused) is its own Fail with the fix +m3 @cli
-x 2026-09-12 2026-09-11 watcher: add a Health RPC to the proto (watcher alive, documents count, last event age) — proto change, generated code committed alone +m3 @cli @proto
-x 2026-09-12 2026-09-11 files: open todo.txt and done.txt for append (no write) and report permissions; missing done.txt is Warn +m3 @cli
-x 2026-09-12 2026-09-11 clock: system time not earlier than the last op's hlc wall_ms and not more than CLOCK_SKEW_WARN_MS = 300_000 ahead of it; Warn only in M3 (M4 makes peer skew an error) +m3 @cli
-x 2026-09-12 2026-09-11 config: Config::load result; --verbose additionally prints the last 100 JSON log events from .txtodo/logs/ +m3 @cli
-x 2026-09-12 2026-09-11 Tests: no daemon → socket Fail, others Ok; read-only todo.txt → files Fail; malformed config → config Fail; --json golden +m3 @cli @test
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @cli
+x 2026-09-12 2026-09-11 doctor.rs: Check { name, status: Ok|Warn|Fail, detail } and a fixed list run in order; exit 1 if any Fail; --json emits the list +m3 @cli id:01M2B4ZVR44JN12VAXC76XV8WE
+x 2026-09-12 2026-09-11 socket: path exists and ListFiles answers within DOCTOR_RPC_TIMEOUT_MS = 2000; stale socket (exists, refused) is its own Fail with the fix +m3 @cli id:01M2B4ZVR4KPG0AB6Q2G3HCD6X
+x 2026-09-12 2026-09-11 watcher: add a Health RPC to the proto (watcher alive, documents count, last event age) — proto change, generated code committed alone +m3 @cli @proto id:01M2B4ZVR41Y7F6VZ39YV55K6G
+x 2026-09-12 2026-09-11 files: open todo.txt and done.txt for append (no write) and report permissions; missing done.txt is Warn +m3 @cli id:01M2B4ZVR54P0VVK25SRF9X5R2
+x 2026-09-12 2026-09-11 clock: system time not earlier than the last op's hlc wall_ms and not more than CLOCK_SKEW_WARN_MS = 300_000 ahead of it; Warn only in M3 (M4 makes peer skew an error) +m3 @cli id:01M2B4ZVR5JDHDJCTKVEW7HV8V
+x 2026-09-12 2026-09-11 config: Config::load result; --verbose additionally prints the last 100 JSON log events from .txtodo/logs/ +m3 @cli id:01M2B4ZVR504ZQNM5DM32MQ7K1
+x 2026-09-12 2026-09-11 Tests: no daemon → socket Fail, others Ok; read-only todo.txt → files Fail; malformed config → config Fail; --json golden +m3 @cli @test id:01M2B4ZVR5B0EXAE6E8MQEMWWP
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @cli id:01M2B4ZVR5DZ8TW0WPFVKQKE2R

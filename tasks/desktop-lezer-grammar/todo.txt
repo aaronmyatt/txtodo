@@ -1,7 +1,7 @@
-2026-09-12 Add apps/desktop/scripts/abnf-to-lezer.mjs that reads specs/todotxt.abnf and emits a Lezer .grammar with the plan §3.1 token names +m7 @desktop
-2026-09-12 Map the ABNF rules line completed incomplete priority date project context tag id-tag ref-tag to Lezer rule syntax in the generator +m7 @desktop
-2026-09-12 Make lenient/quirk lines fall back to text tokens instead of failing the grammar, so a real file always renders +m7 @desktop
-2026-09-12 Check in the generated grammar and wire the CM6 language pack to it under apps/desktop +m7 @desktop
-2026-09-12 Add a CI step to .github/workflows/ci.yml that regenerates and fails with git diff --exit-code on drift +m7 @desktop
-2026-09-12 Test: regeneration is idempotent and each corpus edge-case line tokenizes to the expected §3.1 names +m7 @desktop @test
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop
+2026-09-12 Add apps/desktop/scripts/abnf-to-lezer.mjs that reads specs/todotxt.abnf and emits a Lezer .grammar with the plan §3.1 token names +m7 @desktop id:01M2B4ZW4VJP98H1PJV4EN67JG
+2026-09-12 Map the ABNF rules line completed incomplete priority date project context tag id-tag ref-tag to Lezer rule syntax in the generator +m7 @desktop id:01M2B4ZW4VC9QD4S7NY5CPM194
+2026-09-12 Make lenient/quirk lines fall back to text tokens instead of failing the grammar, so a real file always renders +m7 @desktop id:01M2B4ZW4V3TVDGBMXDCZ49NBB
+2026-09-12 Check in the generated grammar and wire the CM6 language pack to it under apps/desktop +m7 @desktop id:01M2B4ZW4VBVBPPT3M9KC8F6XB
+2026-09-12 Add a CI step to .github/workflows/ci.yml that regenerates and fails with git diff --exit-code on drift +m7 @desktop id:01M2B4ZW4VMSW9W8NEBCDEDA92
+2026-09-12 Test: regeneration is idempotent and each corpus edge-case line tokenizes to the expected §3.1 names +m7 @desktop @test id:01M2B4ZW4V1XBR9FR8V761H4YT
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW4VP0NMJQ42SNYXGS3A

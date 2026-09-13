@@ -1,13 +1,13 @@
-2026-09-12 relay.rs in txtodo-sync: one iroh endpoint constructor taking RelayConfig { url, max_peers }; relay-off when url is None, with the reason in a comment +m8 @sync
-2026-09-12 holepunch.rs: direct-connection rendezvous with relay fallback, implemented as a Link (send/recv Frame) so the session machine never sees a socket +m8 @sync
-2026-09-12 Wire the relay URL through config.toml and a --relay flag; empty means M4 relay-off behaviour unchanged +m8 @sync @cli
-2026-09-12 MAX_RELAY_PEERS asserted; named RENDEZVOUS_TIMEOUT_MS / CONNECT_TIMEOUT_MS; bounded backoff with an explicit iteration cap +m8 @sync
-2026-09-12 LinkError variants for relay + hole-punch naming the peer and what was attempted; validate, never assert, network input +m8 @sync
-2026-09-12 Gate rendezvous on Hello.group: a peer in another group is dropped before connecting, not after the handshake fails +m8 @sync
-2026-09-12 One constructor, mode explicit: relay-on ⇒ configured set non-empty, relay-off ⇒ empty (guards an iroh upgrade changing defaults) +m8 @sync
-2026-09-12 Extend txtodo doctor to report the configured relay URL and the last punch/relay outcome (design §5) +m8 @cli
-2026-09-12 Test: relay-on endpoint has a non-empty configured relay set and relay-off an empty one, so an iroh upgrade that changes defaults fails +m8 @sync @test
-2026-09-12 Test: two in-process endpoints rendezvous via a local iroh relay node and exchange Hello within a bounded time, callback-driven with a failing timeout not a sleep +m8 @sync @test
-2026-09-12 Test: a peer in another group is never connected to over relay +m8 @sync @test
-2026-09-12 Test: hole-punch fallback — punch fails, the relay path still delivers Ops (simulated via the loopback pair) +m8 @sync @test
-2026-09-12 Complete the parent line in ./todo.txt +m8 @sync
+2026-09-12 relay.rs in txtodo-sync: one iroh endpoint constructor taking RelayConfig { url, max_peers }; relay-off when url is None, with the reason in a comment +m8 @sync id:01M2B4ZWNGDH8ZYHW9GS29QPCM
+2026-09-12 holepunch.rs: direct-connection rendezvous with relay fallback, implemented as a Link (send/recv Frame) so the session machine never sees a socket +m8 @sync id:01M2B4ZWNGH1Z1RWDG2ZYA06MX
+2026-09-12 Wire the relay URL through config.toml and a --relay flag; empty means M4 relay-off behaviour unchanged +m8 @sync @cli id:01M2B4ZWNGR1QXSHW6WANAZGP1
+2026-09-12 MAX_RELAY_PEERS asserted; named RENDEZVOUS_TIMEOUT_MS / CONNECT_TIMEOUT_MS; bounded backoff with an explicit iteration cap +m8 @sync id:01M2B4ZWNH81ZCQGV8YP9TGWF7
+2026-09-12 LinkError variants for relay + hole-punch naming the peer and what was attempted; validate, never assert, network input +m8 @sync id:01M2B4ZWNHHKSD1DX168ARMQXX
+2026-09-12 Gate rendezvous on Hello.group: a peer in another group is dropped before connecting, not after the handshake fails +m8 @sync id:01M2B4ZWNH9VE3PEZSZXF5ESV0
+2026-09-12 One constructor, mode explicit: relay-on ⇒ configured set non-empty, relay-off ⇒ empty (guards an iroh upgrade changing defaults) +m8 @sync id:01M2B4ZWNH8PQDCRXKJN1BV2YF
+2026-09-12 Extend txtodo doctor to report the configured relay URL and the last punch/relay outcome (design §5) +m8 @cli id:01M2B4ZWNHZQF6KNW3E4K53TWB
+2026-09-12 Test: relay-on endpoint has a non-empty configured relay set and relay-off an empty one, so an iroh upgrade that changes defaults fails +m8 @sync @test id:01M2B4ZWNHMTM2KZ6C4JB8830N
+2026-09-12 Test: two in-process endpoints rendezvous via a local iroh relay node and exchange Hello within a bounded time, callback-driven with a failing timeout not a sleep +m8 @sync @test id:01M2B4ZWNH0BX3EFBQRJV6FV5S
+2026-09-12 Test: a peer in another group is never connected to over relay +m8 @sync @test id:01M2B4ZWNHMZF5A991NA4BM84C
+2026-09-12 Test: hole-punch fallback — punch fails, the relay path still delivers Ops (simulated via the loopback pair) +m8 @sync @test id:01M2B4ZWNHWDY2G3JMC0Q52Z9P
+2026-09-12 Complete the parent line in ./todo.txt +m8 @sync id:01M2B4ZWNH5FGG9DTWPMGZDECE

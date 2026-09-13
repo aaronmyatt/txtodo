@@ -1,13 +1,13 @@
-2026-09-12 txtodo-mcp/src/resources.rs: declare the six design §6.4 resource URIs — todo.txt, done.txt, task/{id}, project/{name}, context/{name}, history?since=… +m6 @mcp
-2026-09-12 txtodo-mcp/src/resources.rs: read_resource resolves each URI to a typed value — file bytes, one task, filtered view, op-log page — via txtodo-query, no §8 re-implementation +m6 @mcp
-2026-09-12 txtodo-mcp/src/subscribe.rs: per-session SubscriptionSet bounded by MAX_SUBSCRIPTIONS, driven by resources/subscribe and resources/unsubscribe +m6 @mcp
-2026-09-12 txtodo-daemon/src/mcp/watch.rs: hold one shared gRPC Watch stream and uris_for(path) mapping a changed file to the resource URIs that read it +m6 @mcp @daemon
-2026-09-12 txtodo-daemon/src/mcp/watch.rs: intersect the changed URIs with each session's set and emit notifications/resources/updated for the affected URI(s) only +m6 @mcp @daemon
-2026-09-12 txtodo-daemon/src/mcp/watch.rs: filter the notification against the token Scope at emit time so project:+work never sees a +other resource update +m6 @mcp @security
-2026-09-12 txtodo-daemon/src/mcp/watch.rs: coalesce the 150 ms DEBOUNCE_MS bursts to one notification per URI; assert a bounded pending queue that drops with a warning when full +m6 @mcp @daemon
-2026-09-12 txtodo-mcp/src/resources.rs: reject subscribing to todotxt://history?since=… with the structured error — a computed read, not a live file +m6 @mcp
-2026-09-12 Test: an external edit to todo.txt reaches the subscribed session as exactly the todo.txt URI update within the debounce window +m6 @mcp @test
-2026-09-12 Test: a session subscribed to project/+work receives nothing when a +other task changes +m6 @mcp @test @security
-2026-09-12 Test: unsubscribe stops notifications and a duplicate subscribe to the same URI is idempotent +m6 @mcp @test
-2026-09-12 Test: subscribing to todotxt://history?since=… returns a structured error, not a silent no-op +m6 @mcp @test
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
+2026-09-12 txtodo-mcp/src/resources.rs: declare the six design §6.4 resource URIs — todo.txt, done.txt, task/{id}, project/{name}, context/{name}, history?since=… +m6 @mcp id:01M2B4ZWAGN8DCQ54RJPTS3T51
+2026-09-12 txtodo-mcp/src/resources.rs: read_resource resolves each URI to a typed value — file bytes, one task, filtered view, op-log page — via txtodo-query, no §8 re-implementation +m6 @mcp id:01M2B4ZWAGBV7G5GC7XCFA4M2X
+2026-09-12 txtodo-mcp/src/subscribe.rs: per-session SubscriptionSet bounded by MAX_SUBSCRIPTIONS, driven by resources/subscribe and resources/unsubscribe +m6 @mcp id:01M2B4ZWAG1F99VZ74XB824ZK2
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: hold one shared gRPC Watch stream and uris_for(path) mapping a changed file to the resource URIs that read it +m6 @mcp @daemon id:01M2B4ZWAG1T4W0APRDW0EB135
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: intersect the changed URIs with each session's set and emit notifications/resources/updated for the affected URI(s) only +m6 @mcp @daemon id:01M2B4ZWAGRZSYRB6SKPN20QEB
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: filter the notification against the token Scope at emit time so project:+work never sees a +other resource update +m6 @mcp @security id:01M2B4ZWAGNB937DVT4DTXB1EY
+2026-09-12 txtodo-daemon/src/mcp/watch.rs: coalesce the 150 ms DEBOUNCE_MS bursts to one notification per URI; assert a bounded pending queue that drops with a warning when full +m6 @mcp @daemon id:01M2B4ZWAGGEB51VQZNA4A2K25
+2026-09-12 txtodo-mcp/src/resources.rs: reject subscribing to todotxt://history?since=… with the structured error — a computed read, not a live file +m6 @mcp id:01M2B4ZWAG4BH7EAD5C47CT83N
+2026-09-12 Test: an external edit to todo.txt reaches the subscribed session as exactly the todo.txt URI update within the debounce window +m6 @mcp @test id:01M2B4ZWAGAVXR0BCHJB9Y6F2F
+2026-09-12 Test: a session subscribed to project/+work receives nothing when a +other task changes +m6 @mcp @test @security id:01M2B4ZWAG4SZGNE5HQKG9N4MQ
+2026-09-12 Test: unsubscribe stops notifications and a duplicate subscribe to the same URI is idempotent +m6 @mcp @test id:01M2B4ZWAGCYFSCEZS9EY4ZHFH
+2026-09-12 Test: subscribing to todotxt://history?since=… returns a structured error, not a silent no-op +m6 @mcp @test id:01M2B4ZWAGQ3YTKBH80Y7827MM
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp id:01M2B4ZWAG48QH41SKPE5352N5

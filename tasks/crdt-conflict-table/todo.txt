@@ -1,16 +1,16 @@
-x 2026-09-12 2026-09-12 Ask the human to unfreeze specs/ before starting; specs/** is a frozen path and this task creates a file there +m4 @crdt @human
-x 2026-09-12 2026-09-12 Decide whether delete-vs-edit and delete-vs-complete stay configurable or the words leave the spec +m4 @crdt @human
-x 2026-09-12 2026-09-12 Write specs/conflicts.md with the 11 design section 4.7 rows, each row numbered and named +m4 @specs
-x 2026-09-12 2026-09-12 Mark the id-stripping row M10 with the tagged-mode behaviour stated as the M4 expectation +m4 @specs
-x 2026-09-12 2026-09-12 Extend check-specs-mirror.sh with a second comparison for conflicts.md against design section 4.7 +m4 @specs
-2026-09-12 tests/conflicts.rs parses specs/conflicts.md and asserts row coverage both ways: no row without a test, no test without a row +m4 @crdt @test
-2026-09-12 Reuse the simulator's two-device harness rather than building a second one +m4 @crdt @test — crdt-sync-simulator turned out Loro-native, no Link involved (Session/Link aren't reachable from txtodo-crdt); reuse its fork/export_updates/import pattern (tests/sim.rs) instead, not a Link pair
-x 2026-09-12 2026-09-12 Assert converged bytes on both devices for every row, never just one +m4 @crdt @test
-x 2026-09-12 2026-09-12 Row: complete vs complete is idempotent, one op survives and there is no duplicate x +m4 @crdt @test
-x 2026-09-12 2026-09-12 Row: complete vs edit description keeps both; edit word 1 vs word 5 keeps both with no flag +m4 @crdt @test
-x 2026-09-12 2026-09-12 Row: edit word 3 vs word 3 char-merges and raises needs_review +m4 @crdt @test
-x 2026-09-12 2026-09-12 Row: priority A vs B is LWW by Hlc and the losing op is still visible in txtodo log, asserted on the log +m4 @crdt @test
-2026-09-12 Rows: delete vs edit resurrects, delete vs complete completes, both settings tested if configurable +m4 @crdt @test — blocked: this policy isn't implemented anywhere (fields merge independently, no cross-field rule); already flagged separately as its own follow-up task (task_4704d157), not re-built here piecemeal
-x 2026-09-12 2026-09-12 Row: move up vs move down applies both in the same order on every device +m4 @crdt @test
-x 2026-09-12 2026-09-12 Row: archive to done.txt vs edit lands the edit in done.txt +m4 @crdt @test
-2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @test
+x 2026-09-12 2026-09-12 Ask the human to unfreeze specs/ before starting; specs/** is a frozen path and this task creates a file there +m4 @crdt @human id:01M2B4ZVXQ2YRV61C9GPS22B3P
+x 2026-09-12 2026-09-12 Decide whether delete-vs-edit and delete-vs-complete stay configurable or the words leave the spec +m4 @crdt @human id:01M2B4ZVXR3ZMECM2FP1XCB0DQ
+x 2026-09-12 2026-09-12 Write specs/conflicts.md with the 11 design section 4.7 rows, each row numbered and named +m4 @specs id:01M2B4ZVXRSBGMHRN8V3SHYVYP
+x 2026-09-12 2026-09-12 Mark the id-stripping row M10 with the tagged-mode behaviour stated as the M4 expectation +m4 @specs id:01M2B4ZVXR27DEBVKGA45XC14E
+x 2026-09-12 2026-09-12 Extend check-specs-mirror.sh with a second comparison for conflicts.md against design section 4.7 +m4 @specs id:01M2B4ZVXR6BMJQR6FQZXZCC7P
+2026-09-12 tests/conflicts.rs parses specs/conflicts.md and asserts row coverage both ways: no row without a test, no test without a row +m4 @crdt @test id:01M2B4ZVXRTS5H2W9HEKPH603N
+2026-09-12 Reuse the simulator's two-device harness rather than building a second one +m4 @crdt @test — crdt-sync-simulator turned out Loro-native, no Link involved (Session/Link aren't reachable from txtodo-crdt); reuse its fork/export_updates/import pattern (tests/sim.rs) instead, not a Link pair id:01M2B4ZVXRA1GPSJZP6N0R4SNN
+x 2026-09-12 2026-09-12 Assert converged bytes on both devices for every row, never just one +m4 @crdt @test id:01M2B4ZVXRRR38N3ZPKX2814TT
+x 2026-09-12 2026-09-12 Row: complete vs complete is idempotent, one op survives and there is no duplicate x +m4 @crdt @test id:01M2B4ZVXRJHF5HSRXCY4BKQDA
+x 2026-09-12 2026-09-12 Row: complete vs edit description keeps both; edit word 1 vs word 5 keeps both with no flag +m4 @crdt @test id:01M2B4ZVXRNRCFDZEJ92T1F220
+x 2026-09-12 2026-09-12 Row: edit word 3 vs word 3 char-merges and raises needs_review +m4 @crdt @test id:01M2B4ZVXRT705N6D5FTZZKSEP
+x 2026-09-12 2026-09-12 Row: priority A vs B is LWW by Hlc and the losing op is still visible in txtodo log, asserted on the log +m4 @crdt @test id:01M2B4ZVXRGYQJH9EDAVQ69SJ0
+2026-09-12 Rows: delete vs edit resurrects, delete vs complete completes, both settings tested if configurable +m4 @crdt @test — blocked: this policy isn't implemented anywhere (fields merge independently, no cross-field rule); already flagged separately as its own follow-up task (task_4704d157), not re-built here piecemeal id:01M2B4ZVXRFCFE0K5HKC68N2KA
+x 2026-09-12 2026-09-12 Row: move up vs move down applies both in the same order on every device +m4 @crdt @test id:01M2B4ZVXRFYAB46GJ6CGTWZ65
+x 2026-09-12 2026-09-12 Row: archive to done.txt vs edit lands the edit in done.txt +m4 @crdt @test id:01M2B4ZVXRMXT9F3DDNBPEFQ52
+2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @test id:01M2B4ZVXRNT2YKQY19JKVKB1C

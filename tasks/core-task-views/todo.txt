@@ -1,6 +1,6 @@
-x 2026-09-11 2026-09-11 task.rs: impl Task { projects(), contexts(), tags(), tag(key), id(), ref_slug() } as iterators over the description via the scanner +m1 @core
-x 2026-09-11 2026-09-11 tags() yields (key, value) with the colon stripped from key; skips URLs; first match wins in tag(key) +m1 @core
-x 2026-09-11 2026-09-11 id() parses the id tag value with Ulid::from_str; a malformed value is None, not an error +m1 @core
-x 2026-09-11 2026-09-11 ref_slug() validates per specs/todotxt.abnf slug: [a-z0-9][a-z0-9._-]{0,63}, not . or ..; invalid → None and Quirks::INVALID_REF set at parse time +m1 @core
-x 2026-09-11 2026-09-11 Unit tests from corpus/tags.txt and corpus/refs.txt lines: every valid and invalid slug; +cpp in learn C++ +cpp; @ in emails and URLs +m1 @core @test
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 task.rs: impl Task { projects(), contexts(), tags(), tag(key), id(), ref_slug() } as iterators over the description via the scanner +m1 @core id:01M2B4ZVWP8FEX13YPASM80M3Y
+x 2026-09-11 2026-09-11 tags() yields (key, value) with the colon stripped from key; skips URLs; first match wins in tag(key) +m1 @core id:01M2B4ZVWPZAXVPPBRYXM6NFS5
+x 2026-09-11 2026-09-11 id() parses the id tag value with Ulid::from_str; a malformed value is None, not an error +m1 @core id:01M2B4ZVWPWH8HWXPG1KS9HRV4
+x 2026-09-11 2026-09-11 ref_slug() validates per specs/todotxt.abnf slug: [a-z0-9][a-z0-9._-]{0,63}, not . or ..; invalid → None and Quirks::INVALID_REF set at parse time +m1 @core id:01M2B4ZVWPTCAPEEWEA5G6K6AP
+x 2026-09-11 2026-09-11 Unit tests from corpus/tags.txt and corpus/refs.txt lines: every valid and invalid slug; +cpp in learn C++ +cpp; @ in emails and URLs +m1 @core @test id:01M2B4ZVWPMDYEF6ASV31YRDPT
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core id:01M2B4ZVWPSBRS8HJYXF0TV0TN

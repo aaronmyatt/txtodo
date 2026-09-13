@@ -1,16 +1,16 @@
-2026-09-12 Add wasmtime, wasmtime-wasi and wit-bindgen to crates/txtodo-daemon/Cargo.toml with sign-off and cargo deny pass +m10 @plugins
-2026-09-12 crates/txtodo-daemon/wit/txtodo.wit: define the host interface and the seven export hooks from design §9 +m10 @plugins
-2026-09-12 crates/txtodo-daemon/src/plugins/manifest.rs: PluginManifest with the Hook set parsed from plugin.toml +m10 @plugins
-2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: PluginHost with fuel/epoch/memory caps and the WASI 0.2 linker with no preopens +m10 @plugins
-2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: load() from a local .wasm path then registry pull; capability gate is the per-hook linker +m10 @plugins
-2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: the seven call_* methods with spawn_blocking + timeout and trap handling +m10 @plugins
-2026-09-12 crates/txtodo-daemon/src/reconciler.rs: call on_parse_line and before_write in the write path (M3 reconciler) +m10 @plugins @daemon
-2026-09-12 crates/txtodo-daemon/src/actor.rs: call on_task_added and on_task_completed in the apply path +m10 @plugins @daemon
-2026-09-12 crates/txtodo-query/src/plan.rs: add a FunctionResolver trait the daemon implements for query_function/view_filter +m10 @plugins @query
-2026-09-12 crates/txtodo-cli/src/plugin.rs: txtodo plugin install|list|uninstall <path|registry-ref> +m10 @plugins @cli
-2026-09-12 Build recurrence, ics-export, natlang-dates, github-mirror and notify-due as cargo component crates under crates/txtodo-daemon/plugins/ +m10 @plugins
-2026-09-12 justfile: plugin-build recipe running cargo component build per plugin dir +m10 @plugins
-2026-09-12 Test: install a fixture plugin and assert on_task_added fires exactly once via host.log +m10 @plugins @test
-2026-09-12 Test: a plugin without add-task cannot call it, filesystem access traps, and an infinite loop is killed by fuel +m10 @plugins @test
-2026-09-12 Test: recurrence spawns the next rec: occurrence and natlang due:tomorrow parses to a YYYY-MM-DD date +m10 @plugins @test
-2026-09-12 Complete the parent line in ./todo.txt +m10 @plugins
+2026-09-12 Add wasmtime, wasmtime-wasi and wit-bindgen to crates/txtodo-daemon/Cargo.toml with sign-off and cargo deny pass +m10 @plugins id:01M2B4ZWE9EYZFWVQ6E10HYCD4
+2026-09-12 crates/txtodo-daemon/wit/txtodo.wit: define the host interface and the seven export hooks from design §9 +m10 @plugins id:01M2B4ZWE917FK9C9B43XDKWD7
+2026-09-12 crates/txtodo-daemon/src/plugins/manifest.rs: PluginManifest with the Hook set parsed from plugin.toml +m10 @plugins id:01M2B4ZWEAC88QK0DZSH24KN8S
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: PluginHost with fuel/epoch/memory caps and the WASI 0.2 linker with no preopens +m10 @plugins id:01M2B4ZWEA0RG5DJEZQHG6WZEM
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: load() from a local .wasm path then registry pull; capability gate is the per-hook linker +m10 @plugins id:01M2B4ZWEAW13825SFAWS2QX7Q
+2026-09-12 crates/txtodo-daemon/src/plugins/host.rs: the seven call_* methods with spawn_blocking + timeout and trap handling +m10 @plugins id:01M2B4ZWEA76D4SBTR2DA5W6MB
+2026-09-12 crates/txtodo-daemon/src/reconciler.rs: call on_parse_line and before_write in the write path (M3 reconciler) +m10 @plugins @daemon id:01M2B4ZWEAZ28YEWFE65YWVGN8
+2026-09-12 crates/txtodo-daemon/src/actor.rs: call on_task_added and on_task_completed in the apply path +m10 @plugins @daemon id:01M2B4ZWEABNW45XPAWBF00FVK
+2026-09-12 crates/txtodo-query/src/plan.rs: add a FunctionResolver trait the daemon implements for query_function/view_filter +m10 @plugins @query id:01M2B4ZWEAN0R8R4WWNT475ZSK
+2026-09-12 crates/txtodo-cli/src/plugin.rs: txtodo plugin install|list|uninstall <path|registry-ref> +m10 @plugins @cli id:01M2B4ZWEAVX1SHPBZCNVFGMAV
+2026-09-12 Build recurrence, ics-export, natlang-dates, github-mirror and notify-due as cargo component crates under crates/txtodo-daemon/plugins/ +m10 @plugins id:01M2B4ZWEA1V1BR4V3R1YTQAH9
+2026-09-12 justfile: plugin-build recipe running cargo component build per plugin dir +m10 @plugins id:01M2B4ZWEAE2R6RNPHVW1VK1H8
+2026-09-12 Test: install a fixture plugin and assert on_task_added fires exactly once via host.log +m10 @plugins @test id:01M2B4ZWEAS5JEBKSZ9EZVF2AS
+2026-09-12 Test: a plugin without add-task cannot call it, filesystem access traps, and an infinite loop is killed by fuel +m10 @plugins @test id:01M2B4ZWEAA8Q2E9SSDPK8NYR0
+2026-09-12 Test: recurrence spawns the next rec: occurrence and natlang due:tomorrow parses to a YYYY-MM-DD date +m10 @plugins @test id:01M2B4ZWEARYFECRYP3XFT6ZSN
+2026-09-12 Complete the parent line in ./todo.txt +m10 @plugins id:01M2B4ZWEA89NJKJAEGN8YACGJ

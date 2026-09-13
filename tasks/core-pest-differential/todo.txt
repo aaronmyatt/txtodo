@@ -1,5 +1,5 @@
-x 2026-09-11 2026-09-11 Decide the generator: abnf crate → hand-converted pest grammar checked in at tests/todotxt.pest, plus a test that re-derives it from specs/todotxt.abnf and fails on drift +m1 @core @test
-x 2026-09-11 2026-09-11 tests/differential.rs: parse every corpus line and 10 000 proptest any_line() values with both parsers; compare accept/reject (strict) and the prefix fields +m1 @core @test
-x 2026-09-11 2026-09-11 Both parsers must agree on strict accept/reject exactly; lenient is hand-written only (no ABNF for it) so compare strict only +m1 @core @test
-x 2026-09-11 2026-09-11 pest and abnf are dev-dependencies only; core's [dependencies] stays empty +m1 @core @test
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
+x 2026-09-11 2026-09-11 Decide the generator: abnf crate → hand-converted pest grammar checked in at tests/todotxt.pest, plus a test that re-derives it from specs/todotxt.abnf and fails on drift +m1 @core @test id:01M2B4ZVVZYNTJY5KBF5WJMMMP
+x 2026-09-11 2026-09-11 tests/differential.rs: parse every corpus line and 10 000 proptest any_line() values with both parsers; compare accept/reject (strict) and the prefix fields +m1 @core @test id:01M2B4ZVVZ5NYJRMC6VK2DQ3A1
+x 2026-09-11 2026-09-11 Both parsers must agree on strict accept/reject exactly; lenient is hand-written only (no ABNF for it) so compare strict only +m1 @core @test id:01M2B4ZVVZBTJ1QEWH0T47QEPC
+x 2026-09-11 2026-09-11 pest and abnf are dev-dependencies only; core's [dependencies] stays empty +m1 @core @test id:01M2B4ZVVZMGDFP2J9BQA6RCZQ
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test id:01M2B4ZVVZ3DK9RF3GEMV3VKK7

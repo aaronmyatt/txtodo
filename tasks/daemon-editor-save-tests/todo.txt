@@ -1,5 +1,5 @@
-x 2026-09-12 2026-09-11 vim pattern: create .todo.txt.swp, write the new bytes to a temp beside the file, rename over todo.txt, remove the swap → one reconcile, ops only for the changed line +m3 @daemon @test
-x 2026-09-12 2026-09-11 VS Code pattern: open with truncate, write the first half, 50 ms gap, write the rest → the half-written state produces no ops (debounce), final state reconciles once +m3 @daemon @test
-x 2026-09-12 2026-09-11 sed -i pattern: write sedXXXXXX in the same dir, rename over todo.txt → one reconcile; the sed temp name never reaches the actor +m3 @daemon @test
-x 2026-09-12 2026-09-11 Each pattern: state == disk, at most one write, unrelated lines byte-identical, no ops with principal User +m3 @daemon @test
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test
+x 2026-09-12 2026-09-11 vim pattern: create .todo.txt.swp, write the new bytes to a temp beside the file, rename over todo.txt, remove the swap → one reconcile, ops only for the changed line +m3 @daemon @test id:01M2B4ZW01R2A7A9CGR56P38WM
+x 2026-09-12 2026-09-11 VS Code pattern: open with truncate, write the first half, 50 ms gap, write the rest → the half-written state produces no ops (debounce), final state reconciles once +m3 @daemon @test id:01M2B4ZW01CDYBWTAARYTV3D2T
+x 2026-09-12 2026-09-11 sed -i pattern: write sedXXXXXX in the same dir, rename over todo.txt → one reconcile; the sed temp name never reaches the actor +m3 @daemon @test id:01M2B4ZW019YPJ2S9ZP51XDH0E
+x 2026-09-12 2026-09-11 Each pattern: state == disk, at most one write, unrelated lines byte-identical, no ops with principal User +m3 @daemon @test id:01M2B4ZW01GAY61WPZ1J45QTXM
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test id:01M2B4ZW01DWJHZER2GF5BY493

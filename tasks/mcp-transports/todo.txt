@@ -1,13 +1,13 @@
-2026-09-12 crates/txtodo-mcp/src/transport.rs: named constants MCP_PORT=8636, MCP_PATH=/mcp, MCP_SERVICE=_txtodo-mcp._tcp, MCP_LOOPBACK, MCP_LAN +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/transport.rs: serve_stdio(server, token) wiring rmcp's stdio transport over stdin/stdout +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/transport.rs: serve_http(server, addr, token) serving exactly /mcp via rmcp's Streamable HTTP layer +m6 @mcp
-2026-09-12 crates/txtodo-mcp/src/transport.rs: --lan binds 0.0.0.0 and advertises _txtodo-mcp._tcp on MCP_PORT via mdns-sd (add dep + deny pass) +m6 @mcp
-2026-09-12 Reject --lan --stdio as a usage error; --lan with no token configured refuses to start rather than ship an open daemon +m6 @mcp
-2026-09-12 crates/txtodo-daemon/src/serve.rs: start the HTTP server on MCP_PORT and own bind + graceful shutdown; port-conflict error names 8636 +m6 @mcp @daemon
-2026-09-12 crates/txtodo-cli/src/commands/mcp.rs: `txtodo mcp --stdio | --http [--lan] [--token <t>]` subcommand passing the token through +m6 @mcp @cli
-2026-09-12 crates/txtodo-cli/src/main.rs: register the mcp subcommand in the command enum + argument parsing +m6 @mcp @cli
-2026-09-12 Test: rmcp client round-trips initialize + tools/list + one tool call over stdio +m6 @mcp @test
-2026-09-12 Test: HTTP reachable on 127.0.0.1:8636/mcp returns the server's tool list; other paths 404 +m6 @mcp @test
-2026-09-12 Test: --lan binds 0.0.0.0 and the mDNS _txtodo-mcp._tcp record resolves to port 8636 +m6 @mcp @test
-2026-09-12 Test: --lan --stdio is a usage error and a bound-port conflict fails naming 8636 +m6 @mcp @test
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/transport.rs: named constants MCP_PORT=8636, MCP_PATH=/mcp, MCP_SERVICE=_txtodo-mcp._tcp, MCP_LOOPBACK, MCP_LAN +m6 @mcp id:01M2B4ZWC2XA3NQQ47TMZPXWMV
+2026-09-12 crates/txtodo-mcp/src/transport.rs: serve_stdio(server, token) wiring rmcp's stdio transport over stdin/stdout +m6 @mcp id:01M2B4ZWC2JBEYT571CS3W1ADS
+2026-09-12 crates/txtodo-mcp/src/transport.rs: serve_http(server, addr, token) serving exactly /mcp via rmcp's Streamable HTTP layer +m6 @mcp id:01M2B4ZWC28C0P6R091AEYJHFN
+2026-09-12 crates/txtodo-mcp/src/transport.rs: --lan binds 0.0.0.0 and advertises _txtodo-mcp._tcp on MCP_PORT via mdns-sd (add dep + deny pass) +m6 @mcp id:01M2B4ZWC2A7WE06556K2SSYMP
+2026-09-12 Reject --lan --stdio as a usage error; --lan with no token configured refuses to start rather than ship an open daemon +m6 @mcp id:01M2B4ZWC2AWRJCJAR88W13K5E
+2026-09-12 crates/txtodo-daemon/src/serve.rs: start the HTTP server on MCP_PORT and own bind + graceful shutdown; port-conflict error names 8636 +m6 @mcp @daemon id:01M2B4ZWC2C4ZGVCH73PFH5G81
+2026-09-12 crates/txtodo-cli/src/commands/mcp.rs: `txtodo mcp --stdio | --http [--lan] [--token <t>]` subcommand passing the token through +m6 @mcp @cli id:01M2B4ZWC2KSV37QKG5Y9ZEMKW
+2026-09-12 crates/txtodo-cli/src/main.rs: register the mcp subcommand in the command enum + argument parsing +m6 @mcp @cli id:01M2B4ZWC24D20JGDA8EB88AC7
+2026-09-12 Test: rmcp client round-trips initialize + tools/list + one tool call over stdio +m6 @mcp @test id:01M2B4ZWC2JSHBH2B9SP5RJN6P
+2026-09-12 Test: HTTP reachable on 127.0.0.1:8636/mcp returns the server's tool list; other paths 404 +m6 @mcp @test id:01M2B4ZWC2SH780454DRJMSYMM
+2026-09-12 Test: --lan binds 0.0.0.0 and the mDNS _txtodo-mcp._tcp record resolves to port 8636 +m6 @mcp @test id:01M2B4ZWC2FXBH58Z7DVPCREBP
+2026-09-12 Test: --lan --stdio is a usage error and a bound-port conflict fails naming 8636 +m6 @mcp @test id:01M2B4ZWC27ZP5M2WMRFRXZE9X
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp id:01M2B4ZWC2Q12RH925DR8KPCYV

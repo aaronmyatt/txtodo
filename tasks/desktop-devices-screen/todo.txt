@@ -1,12 +1,12 @@
-2026-09-12 apps/desktop/src/devices/types.ts: define PairOffer, PairResult, Scope (closed union), TokenCreateReq, OpEvent with no extra fields beyond the daemon's +m7 @desktop
-2026-09-12 apps/desktop/src-tauri/commands.rs: pair_offer / pair_accept / pair_confirm_sas / token_create / token_revoke / op_log_stream tonic proxies to txtodod +m7 @desktop
-2026-09-12 apps/desktop/src/devices/Devices.svelte: render pair_offer() as a QR via node-qrcode; show PAIRING_WINDOW_MS expiry and MAX_CONCURRENT_PAIRINGS as visible states +m7 @desktop
-2026-09-12 apps/desktop/src/devices/Devices.svelte: scan a peer QR via getUserMedia + jsQR, call pair_accept(code), assert the decoded payload equals PairOffer with no key material +m7 @desktop
-2026-09-12 apps/desktop/src/devices/Devices.svelte: show the 6-word SAS and require an explicit tap on both sides before pair_confirm_sas(); no trust-by-default +m7 @desktop @security
-2026-09-12 apps/desktop/src/devices/Tokens.svelte: create form mapping name/scope/project/context/file/expires to the design §6.2 caveats; list existing tokens with their scope +m7 @desktop
-2026-09-12 apps/desktop/src/devices/Tokens.svelte: revoke via token_revoke(id); a revoked token is refused on its next use (surface the daemon's refusal, never a local flag) +m7 @desktop
-2026-09-12 apps/desktop/src/devices/ActivityFeed.svelte: subscribe to op_log_stream(), render principal + relative time newest-first from oplog.db (ADR 0004) +m7 @desktop
-2026-09-12 Test: QR payload unit test asserts the rendered PairOffer holds no field outside {device, group_id, x25519_pub, endpoint, nonce} +m7 @desktop @test
-2026-09-12 Test: pair against a loopback second daemon converges only after both confirmations; token create/list/revoke round-trips and the revoked token is refused +m7 @desktop @test
-2026-09-12 Test: feed streams a mutation with the correct principal and a non-empty relative time; nothing fabricated when the stream is empty +m7 @desktop @test
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop
+2026-09-12 apps/desktop/src/devices/types.ts: define PairOffer, PairResult, Scope (closed union), TokenCreateReq, OpEvent with no extra fields beyond the daemon's +m7 @desktop id:01M2B4ZW480QRTCK2A28ZRDB6F
+2026-09-12 apps/desktop/src-tauri/commands.rs: pair_offer / pair_accept / pair_confirm_sas / token_create / token_revoke / op_log_stream tonic proxies to txtodod +m7 @desktop id:01M2B4ZW4851GAZTCPAMT0PSZX
+2026-09-12 apps/desktop/src/devices/Devices.svelte: render pair_offer() as a QR via node-qrcode; show PAIRING_WINDOW_MS expiry and MAX_CONCURRENT_PAIRINGS as visible states +m7 @desktop id:01M2B4ZW48P9550RXN9JAVEQSQ
+2026-09-12 apps/desktop/src/devices/Devices.svelte: scan a peer QR via getUserMedia + jsQR, call pair_accept(code), assert the decoded payload equals PairOffer with no key material +m7 @desktop id:01M2B4ZW48GEAAMQHSETJQYP9M
+2026-09-12 apps/desktop/src/devices/Devices.svelte: show the 6-word SAS and require an explicit tap on both sides before pair_confirm_sas(); no trust-by-default +m7 @desktop @security id:01M2B4ZW48CFXGJQGSDWRKJ7MQ
+2026-09-12 apps/desktop/src/devices/Tokens.svelte: create form mapping name/scope/project/context/file/expires to the design §6.2 caveats; list existing tokens with their scope +m7 @desktop id:01M2B4ZW482VD1J12BMX7X07PT
+2026-09-12 apps/desktop/src/devices/Tokens.svelte: revoke via token_revoke(id); a revoked token is refused on its next use (surface the daemon's refusal, never a local flag) +m7 @desktop id:01M2B4ZW48WTY4N24VXV7X8MAG
+2026-09-12 apps/desktop/src/devices/ActivityFeed.svelte: subscribe to op_log_stream(), render principal + relative time newest-first from oplog.db (ADR 0004) +m7 @desktop id:01M2B4ZW4865JNWC8YAKD9X1J9
+2026-09-12 Test: QR payload unit test asserts the rendered PairOffer holds no field outside {device, group_id, x25519_pub, endpoint, nonce} +m7 @desktop @test id:01M2B4ZW4853GKPNJ4QYRNEMXF
+2026-09-12 Test: pair against a loopback second daemon converges only after both confirmations; token create/list/revoke round-trips and the revoked token is refused +m7 @desktop @test id:01M2B4ZW48H47G0D6X3FBXA7C9
+2026-09-12 Test: feed streams a mutation with the correct principal and a non-empty relative time; nothing fabricated when the stream is empty +m7 @desktop @test id:01M2B4ZW48BQDAV4V0W915AMRK
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW48CKAEGNBMEZHZ4YNW

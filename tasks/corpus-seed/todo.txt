@@ -1,10 +1,10 @@
-x 2026-09-11 2026-09-11 Create corpus/ with the layout in notes.md: one .txt per theme, LF unless the theme is about endings +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/edge-cases.txt: the 9 design §2.4 rows, one line each, in table order +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/lenient.txt: x without date, priority after x, priority after date, tabs, trailing ws, leading + and @ +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/tags.txt: the id pri due t rec h tags (rec both forms), an unknown key-value, and a bare note word +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/refs.txt: valid slug, nested slug, dot, dotdot, slash, absolute, uppercase, 65 chars +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/structure.txt: blank lines between tasks, blank first line, blank last line, unicode, multiple projects +m0 @corpus
-x 2026-09-11 2026-09-11 corpus/crlf.txt (CRLF), corpus/bom.txt (UTF-8 BOM), corpus/no-trailing-newline.txt, corpus/mixed-endings.txt +m0 @corpus
-x 2026-09-11 2026-09-11 Count: grep -vc '^$' corpus/*.txt must total ≥ 30 task lines +m0 @corpus
-x 2026-09-11 2026-09-11 Add a corpus/README.md that lists each file, its theme, and the rule it exercises (allowed: plan M0 asks for it) +m0 @corpus
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @corpus
+x 2026-09-11 2026-09-11 Create corpus/ with the layout in notes.md: one .txt per theme, LF unless the theme is about endings +m0 @corpus id:01M2B4ZVX6KET3HCV8JSM7FDJB
+x 2026-09-11 2026-09-11 corpus/edge-cases.txt: the 9 design §2.4 rows, one line each, in table order +m0 @corpus id:01M2B4ZVX6EQS70F3R7ZKQQCGX
+x 2026-09-11 2026-09-11 corpus/lenient.txt: x without date, priority after x, priority after date, tabs, trailing ws, leading + and @ +m0 @corpus id:01M2B4ZVX612PH6043ACZT79JZ
+x 2026-09-11 2026-09-11 corpus/tags.txt: the id pri due t rec h tags (rec both forms), an unknown key-value, and a bare note word +m0 @corpus id:01M2B4ZVX686EMCAD63GTQ80SH
+x 2026-09-11 2026-09-11 corpus/refs.txt: valid slug, nested slug, dot, dotdot, slash, absolute, uppercase, 65 chars +m0 @corpus id:01M2B4ZVX6S5SGYFQMT1YT6N0W
+x 2026-09-11 2026-09-11 corpus/structure.txt: blank lines between tasks, blank first line, blank last line, unicode, multiple projects +m0 @corpus id:01M2B4ZVX6F4N38YNPJ9605VTV
+x 2026-09-11 2026-09-11 corpus/crlf.txt (CRLF), corpus/bom.txt (UTF-8 BOM), corpus/no-trailing-newline.txt, corpus/mixed-endings.txt +m0 @corpus id:01M2B4ZVX6RM8NJPDAKC6DF31G
+x 2026-09-11 2026-09-11 Count: grep -vc '^$' corpus/*.txt must total ≥ 30 task lines +m0 @corpus id:01M2B4ZVX6QB7G9CY05555T7NH
+x 2026-09-11 2026-09-11 Add a corpus/README.md that lists each file, its theme, and the rule it exercises (allowed: plan M0 asks for it) +m0 @corpus id:01M2B4ZVX6P46GXMEQ2242T89R
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @corpus id:01M2B4ZVX6F8HFJ0AFJ67GRM82

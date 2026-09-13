@@ -1,6 +1,6 @@
-x 2026-09-11 2026-09-11 crates/txtodo-core/tests/corpus.rs: walk ../../corpus/*.txt at test time via std (tests may use I/O; the crate itself may not) +m1 @core @test
-x 2026-09-11 2026-09-11 Assert 1: parse_file(bytes).to_bytes() == bytes for every corpus file +m1 @core @test
-x 2026-09-11 2026-09-11 Assert 2: for every line, tokenize(raw) == the sibling .tokens.json entry (deserialise with serde_json as a dev-dependency only) +m1 @core @test
-x 2026-09-11 2026-09-11 Assert 3: parse_line(raw, Lenient) is Ok for every line; strict fails exactly on lenient.txt lines and the bad-ref lines +m1 @core @test
-x 2026-09-11 2026-09-11 justfile corpus recipe: run the oracle self-check script, then cargo test -p txtodo-core --test corpus +m1 @core @test
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test
+x 2026-09-11 2026-09-11 crates/txtodo-core/tests/corpus.rs: walk ../../corpus/*.txt at test time via std (tests may use I/O; the crate itself may not) +m1 @core @test id:01M2B4ZVSMBM8ANT4RJW0ZX0TH
+x 2026-09-11 2026-09-11 Assert 1: parse_file(bytes).to_bytes() == bytes for every corpus file +m1 @core @test id:01M2B4ZVSMEFS2G6KBHFK2S714
+x 2026-09-11 2026-09-11 Assert 2: for every line, tokenize(raw) == the sibling .tokens.json entry (deserialise with serde_json as a dev-dependency only) +m1 @core @test id:01M2B4ZVSMTEM6GWHE878M39ME
+x 2026-09-11 2026-09-11 Assert 3: parse_line(raw, Lenient) is Ok for every line; strict fails exactly on lenient.txt lines and the bad-ref lines +m1 @core @test id:01M2B4ZVSMYR2W5HC7PK25YRPF
+x 2026-09-11 2026-09-11 justfile corpus recipe: run the oracle self-check script, then cargo test -p txtodo-core --test corpus +m1 @core @test id:01M2B4ZVSMKH7NGVN9ZSGYHYMH
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test id:01M2B4ZVSMNJXNJKDFKTZN095F

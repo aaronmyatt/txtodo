@@ -1,15 +1,15 @@
-2026-09-12 apps/desktop/src/lib/types.ts: TreeFile, BreadcrumbStep, DetailParams matching the daemon ListFiles tree + §3.2.5 progress +m7 @desktop
-2026-09-12 Add DetailView.svelte shell: header back button + breadcrumb "todo.txt › line N" (nested), footer with absolute dir path + sync status +m7 @desktop
-2026-09-12 Extend DaemonClient (src-tauri) with get_notes/edit_notes mapping to gRPC GetNotes/EditNotes; keep list_files/get_file/watch/apply +m7 @desktop
-2026-09-12 Pin the parent line at the top, highlighted, reusing the click-to-edit popover; source it from the parent file's Watch stream, not the sub-list +m7 @desktop
-2026-09-12 NotesEditor.svelte: CM6 @codemirror/lang-markdown, light highlighting (headings/list markers/code fences), no WYSIWYG, renders when notes.md is absent +m7 @desktop
-2026-09-12 Reuse the main-view FileView.svelte recursively for <ref>/todo.txt; its lines click/double-click and carry their own ref: +m7 @desktop
-2026-09-12 "n of m done" header from TreeFile.progress (§3.2.5: done = completed in todo.txt + task lines in done.txt; total = task lines both; blanks excluded) +m7 @desktop
-2026-09-12 Lazy creation: first keystroke into notes or sub-list triggers the daemon's M5 one-op-batch ref creation; UI never resolves slug or mkdir +m7 @desktop
-2026-09-12 Keyboard + a11y (§3.3): Cmd/Ctrl+Enter opens detail; detail is a page not a modal; listbox role + focus trap on the popover +m7 @desktop
-2026-09-12 Dangling ref: ref tag present but directory missing opens the view empty with lazy creation applying (§3.2.9) +m7 @desktop
-2026-09-12 Parent completion: when open==0 && total>0 offer "Mark parent done"; never auto-complete the parent (§3.2.6) +m7 @desktop
-2026-09-12 Test: double-click opens detail; typing into empty notes creates dir + file in exactly one op batch and the parent file changes only that one line +m7 @desktop @test
-2026-09-12 Test: sub-list line double-click nests the breadcrumb to "todo.txt › 2 › q4-roadmap/todo.txt › 3"; progress header matches §3.2.5 on a 3-level fixture +m7 @desktop @test
-2026-09-12 Test: a notes edit emits a NotesEdit op and syncs to a fresh device (whole nested tree reproduced) +m7 @desktop @test
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop
+2026-09-12 apps/desktop/src/lib/types.ts: TreeFile, BreadcrumbStep, DetailParams matching the daemon ListFiles tree + §3.2.5 progress +m7 @desktop id:01M2B4ZW3W3EA2WWMDNW623YEV
+2026-09-12 Add DetailView.svelte shell: header back button + breadcrumb "todo.txt › line N" (nested), footer with absolute dir path + sync status +m7 @desktop id:01M2B4ZW3WG10CPRD5A5TC5KZA
+2026-09-12 Extend DaemonClient (src-tauri) with get_notes/edit_notes mapping to gRPC GetNotes/EditNotes; keep list_files/get_file/watch/apply +m7 @desktop id:01M2B4ZW3WE3WP22FFPFK9VHFS
+2026-09-12 Pin the parent line at the top, highlighted, reusing the click-to-edit popover; source it from the parent file's Watch stream, not the sub-list +m7 @desktop id:01M2B4ZW3WQTDAY083KWRWWS51
+2026-09-12 NotesEditor.svelte: CM6 @codemirror/lang-markdown, light highlighting (headings/list markers/code fences), no WYSIWYG, renders when notes.md is absent +m7 @desktop id:01M2B4ZW3WPX36AMKRE9NWSJFM
+2026-09-12 Reuse the main-view FileView.svelte recursively for <ref>/todo.txt; its lines click/double-click and carry their own ref: +m7 @desktop id:01M2B4ZW3WJC2HM1YVWJ17DJSB
+2026-09-12 "n of m done" header from TreeFile.progress (§3.2.5: done = completed in todo.txt + task lines in done.txt; total = task lines both; blanks excluded) +m7 @desktop id:01M2B4ZW3WT9KVG4EPXPJDNCRB
+2026-09-12 Lazy creation: first keystroke into notes or sub-list triggers the daemon's M5 one-op-batch ref creation; UI never resolves slug or mkdir +m7 @desktop id:01M2B4ZW3XJRGSPEYMD465SGCY
+2026-09-12 Keyboard + a11y (§3.3): Cmd/Ctrl+Enter opens detail; detail is a page not a modal; listbox role + focus trap on the popover +m7 @desktop id:01M2B4ZW3XDK3346XFVB4EPHMT
+2026-09-12 Dangling ref: ref tag present but directory missing opens the view empty with lazy creation applying (§3.2.9) +m7 @desktop id:01M2B4ZW3XBZ1WA7KTDA11VSYX
+2026-09-12 Parent completion: when open==0 && total>0 offer "Mark parent done"; never auto-complete the parent (§3.2.6) +m7 @desktop id:01M2B4ZW3XQPJ36DMRKWDZ7YYM
+2026-09-12 Test: double-click opens detail; typing into empty notes creates dir + file in exactly one op batch and the parent file changes only that one line +m7 @desktop @test id:01M2B4ZW3X1SB1CQGR5Y27TT8T
+2026-09-12 Test: sub-list line double-click nests the breadcrumb to "todo.txt › 2 › q4-roadmap/todo.txt › 3"; progress header matches §3.2.5 on a 3-level fixture +m7 @desktop @test id:01M2B4ZW3XW299J3436QNM4ZCA
+2026-09-12 Test: a notes edit emits a NotesEdit op and syncs to a fresh device (whole nested tree reproduced) +m7 @desktop @test id:01M2B4ZW3X2D6AKD7KEDN6T0C4
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW3XR581V25PMGJH1EYC

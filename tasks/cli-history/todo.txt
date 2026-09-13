@@ -1,7 +1,7 @@
-x 2026-09-12 2026-09-11 txtodo log [--file F] [-n N] [--json]: History RPC rendered as hlc · principal · kind · line summary, newest first; -n defaults to LOG_DEFAULT_LIMIT = 50 +m3 @cli
-x 2026-09-12 2026-09-11 txtodo blame <line> [--json]: for each field of that line the newest op that set it → principal and time; uses History filtered by TaskId +m3 @cli
-x 2026-09-12 2026-09-11 txtodo undo [--steps N]: Undo RPC; the daemon appends inverse ops (Deleted flip, SetField previous value, EditText inverse via core::diff_text, Move back); undo of an undo is redo +m3 @cli @daemon
-x 2026-09-12 2026-09-11 txtodo checkout <iso-datetime> [--stdout] [--file F]: Checkout RPC replays latest snapshot plus ops up to the Hlc; prints to stdout or writes a temp path and prints it +m3 @cli @daemon
-x 2026-09-12 2026-09-11 In direct-file mode all four commands fail with "needs the daemon: run txtodo daemon start or txtodo doctor" +m3 @cli
-x 2026-09-12 2026-09-11 Tests through a real daemon: log shows External then User ops; blame names the principal per field; checkout at a time between two ops renders the intermediate bytes; --json shapes are stable +m3 @cli @test
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @cli
+x 2026-09-12 2026-09-11 txtodo log [--file F] [-n N] [--json]: History RPC rendered as hlc · principal · kind · line summary, newest first; -n defaults to LOG_DEFAULT_LIMIT = 50 +m3 @cli id:01M2B4ZVRCCVBKJVFTZYJP09AJ
+x 2026-09-12 2026-09-11 txtodo blame <line> [--json]: for each field of that line the newest op that set it → principal and time; uses History filtered by TaskId +m3 @cli id:01M2B4ZVRCKNHK7J9489AZN3M8
+x 2026-09-12 2026-09-11 txtodo undo [--steps N]: Undo RPC; the daemon appends inverse ops (Deleted flip, SetField previous value, EditText inverse via core::diff_text, Move back); undo of an undo is redo +m3 @cli @daemon id:01M2B4ZVRC7BV66FQEJZZS49BZ
+x 2026-09-12 2026-09-11 txtodo checkout <iso-datetime> [--stdout] [--file F]: Checkout RPC replays latest snapshot plus ops up to the Hlc; prints to stdout or writes a temp path and prints it +m3 @cli @daemon id:01M2B4ZVRCDZW2B0C9NAE2W6AC
+x 2026-09-12 2026-09-11 In direct-file mode all four commands fail with "needs the daemon: run txtodo daemon start or txtodo doctor" +m3 @cli id:01M2B4ZVRCH03XN00FTSSCZ8PN
+x 2026-09-12 2026-09-11 Tests through a real daemon: log shows External then User ops; blame names the principal per field; checkout at a time between two ops renders the intermediate bytes; --json shapes are stable +m3 @cli @test id:01M2B4ZVRCGFMAGQ8GGH0A87KT
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @cli id:01M2B4ZVRDFVZ217G8A20G7H4Q

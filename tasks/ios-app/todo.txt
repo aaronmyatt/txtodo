@@ -1,13 +1,13 @@
-2026-09-12 Scaffold apps/ios Xcode project and wire the uniffi-generated Swift bindings from txtodo-ffi (tokenize, SpanKind, DaemonHandle) +m9 @ios
-2026-09-12 Boot DaemonHandle in the app process at launch with an app-lifetime runtime; drop shuts it down cleanly +m9 @ios
-2026-09-12 AttributedLine: tokenize -> NSAttributedString with id: filtered and per-SpanKind colour, in one module +m9 @ios
-2026-09-12 EditorTextView: UIViewRepresentable over UITextView editing via NSTextStorage so spans survive typing +m9 @ios
-2026-09-12 Main line list: SwiftUI rows with line numbers, id: hidden toggle, n/m ref indicator, trailing Add-a-line row +m9 @ios
-2026-09-12 Edit popover (raw line + token chips per §3.2) and double-tap detail view (breadcrumb, notes, recursive sub-list) +m9 @ios
-2026-09-12 BGAppRefresh handler driving a daemon reconcile then refreshing widgets, plus reconcile on foreground +m9 @ios
-2026-09-12 Silent push: APNs content-available triggers the same reconcile path as BGAppRefresh +m9 @ios
-2026-09-12 App Intents AddTodo / CompleteTodo / ListTodos over DaemonHandle, runnable from Shortcuts +m9 @ios
-2026-09-12 Share sheet accepting UTType.text and adding it as a todo through the daemon +m9 @ios
-2026-09-12 Unit test: tokenize -> NSAttributedString spans byte-identical to the Android span mapping on a corpus fixture +m9 @ios @test
-2026-09-12 Integration test: BGAppRefresh and silent push both reconcile and exit; App Intents mutate exactly one line +m9 @ios @test
-2026-09-12 Complete the parent line in ./todo.txt +m9 @ios
+2026-09-12 Scaffold apps/ios Xcode project and wire the uniffi-generated Swift bindings from txtodo-ffi (tokenize, SpanKind, DaemonHandle) +m9 @ios id:01M2B4ZW8KFFP19PR7N9851K0D
+2026-09-12 Boot DaemonHandle in the app process at launch with an app-lifetime runtime; drop shuts it down cleanly +m9 @ios id:01M2B4ZW8KH638FE9900Z9R8JE
+2026-09-12 AttributedLine: tokenize -> NSAttributedString with id: filtered and per-SpanKind colour, in one module +m9 @ios id:01M2B4ZW8KF0GDBFAMFNAA07H8
+2026-09-12 EditorTextView: UIViewRepresentable over UITextView editing via NSTextStorage so spans survive typing +m9 @ios id:01M2B4ZW8K25C9GDGC16X6D3NY
+2026-09-12 Main line list: SwiftUI rows with line numbers, id: hidden toggle, n/m ref indicator, trailing Add-a-line row +m9 @ios id:01M2B4ZW8KQQR52XWZ3QRF8NSY
+2026-09-12 Edit popover (raw line + token chips per §3.2) and double-tap detail view (breadcrumb, notes, recursive sub-list) +m9 @ios id:01M2B4ZW8KVNWW1AE1CQBV37QV
+2026-09-12 BGAppRefresh handler driving a daemon reconcile then refreshing widgets, plus reconcile on foreground +m9 @ios id:01M2B4ZW8K8B0K1SQ7KKS3GAX9
+2026-09-12 Silent push: APNs content-available triggers the same reconcile path as BGAppRefresh +m9 @ios id:01M2B4ZW8K8ZRP1NFENHR85SK3
+2026-09-12 App Intents AddTodo / CompleteTodo / ListTodos over DaemonHandle, runnable from Shortcuts +m9 @ios id:01M2B4ZW8KTSTHAVP1ZGEAEH93
+2026-09-12 Share sheet accepting UTType.text and adding it as a todo through the daemon +m9 @ios id:01M2B4ZW8KTXF5NHACYYQN72C8
+2026-09-12 Unit test: tokenize -> NSAttributedString spans byte-identical to the Android span mapping on a corpus fixture +m9 @ios @test id:01M2B4ZW8KP57CJ70XSXSYD4TF
+2026-09-12 Integration test: BGAppRefresh and silent push both reconcile and exit; App Intents mutate exactly one line +m9 @ios @test id:01M2B4ZW8KZCDFYG9044RYNG9R
+2026-09-12 Complete the parent line in ./todo.txt +m9 @ios id:01M2B4ZW8KEPFK4MFSDP5SDMJG

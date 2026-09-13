@@ -1,11 +1,11 @@
-2026-09-12 docs/relay.md: write the build command, run flags (listen/port, data dir, retention, blob cap, TLS), and note flags must match relay --help +m8 @docs
-2026-09-12 docs/relay.md: document APNs/FCM wake-up forwarding is forward-only — the relay routes wake-ups but never holds platform push tokens or payloads +m8 @docs
-2026-09-12 docs/relay.md: TLS/reverse-proxy guidance stating the proxy sees only ciphertext (the trust boundary) +m8 @docs
-2026-09-12 docs/relay.md: document the dumb-relay substitution — any S3 or WebDAV endpoint works, per design §4.5 +m8 @docs
-2026-09-12 docs/relay.md: mark retention and blob-cap numbers as examples, real defaults live in the binary +m8 @docs
-2026-09-12 deploy/systemd/relay.service: commit an example unit (user scope, Restart=on-failure, EnvironmentFile), marked illustrative +m8 @docs
-2026-09-12 README.md user-facing section: relay is optional, it cannot read your data (design §4.6), self-host-only per Q5, pointer to docs/relay.md +m8 @docs
-2026-09-12 State the exact security sentence (opaque ciphertext blobs + wake-up routing, nothing else) with no overclaim or underclaim of the crypto +m8 @docs
-2026-09-12 Test: assert relay --help output matches every flag name docs/relay.md mentions, failing on rename or removal +m8 @docs @test
-2026-09-12 Test: assert README.md and docs/relay.md both contain the word "optional" so no reader concludes the relay is required +m8 @docs @test
-2026-09-12 Complete the parent line in ./todo.txt +m8 @docs
+2026-09-12 docs/relay.md: write the build command, run flags (listen/port, data dir, retention, blob cap, TLS), and note flags must match relay --help +m8 @docs id:01M2B4ZW766BQ2QHC4SW72N8Z4
+2026-09-12 docs/relay.md: document APNs/FCM wake-up forwarding is forward-only — the relay routes wake-ups but never holds platform push tokens or payloads +m8 @docs id:01M2B4ZW76WP90VR2C8N98MFGF
+2026-09-12 docs/relay.md: TLS/reverse-proxy guidance stating the proxy sees only ciphertext (the trust boundary) +m8 @docs id:01M2B4ZW76NSSEECNWAQ4Q0RBG
+2026-09-12 docs/relay.md: document the dumb-relay substitution — any S3 or WebDAV endpoint works, per design §4.5 +m8 @docs id:01M2B4ZW76SBVJ7K348JXE20KS
+2026-09-12 docs/relay.md: mark retention and blob-cap numbers as examples, real defaults live in the binary +m8 @docs id:01M2B4ZW76J2AX52TJEAM5NT7H
+2026-09-12 deploy/systemd/relay.service: commit an example unit (user scope, Restart=on-failure, EnvironmentFile), marked illustrative +m8 @docs id:01M2B4ZW76FD216QWCPPTWFN7M
+2026-09-12 README.md user-facing section: relay is optional, it cannot read your data (design §4.6), self-host-only per Q5, pointer to docs/relay.md +m8 @docs id:01M2B4ZW76MN644YRB1G4RTX45
+2026-09-12 State the exact security sentence (opaque ciphertext blobs + wake-up routing, nothing else) with no overclaim or underclaim of the crypto +m8 @docs id:01M2B4ZW76Q1XMJM2GZ8G7PAKD
+2026-09-12 Test: assert relay --help output matches every flag name docs/relay.md mentions, failing on rename or removal +m8 @docs @test id:01M2B4ZW76J0R7KSCJNBM9QKQT
+2026-09-12 Test: assert README.md and docs/relay.md both contain the word "optional" so no reader concludes the relay is required +m8 @docs @test id:01M2B4ZW76XXKWN52TPKBQEMVC
+2026-09-12 Complete the parent line in ./todo.txt +m8 @docs id:01M2B4ZW763FNT3VRMY6V75455

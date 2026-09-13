@@ -1,8 +1,8 @@
-x 2026-09-11 2026-09-11 Install locally: rustup toolchain install nightly and cargo install cargo-fuzz +m0 @core
-x 2026-09-11 2026-09-11 Run cargo fuzz init inside crates/txtodo-core to scaffold fuzz/Cargo.toml and fuzz_targets/ +m0 @core
-x 2026-09-11 2026-09-11 Rename the generated target to parse_line and make its body a no-op over &[u8] (core has no parser yet) +m0 @core
-x 2026-09-11 2026-09-11 Add exclude = ["crates/txtodo-core/fuzz"] to the root Cargo.toml so the fuzz crate stays outside the workspace +m0 @core
-x 2026-09-11 2026-09-11 Add fuzz/target and fuzz/corpus and fuzz/artifacts to .gitignore +m0 @core
-x 2026-09-11 2026-09-11 Run just fuzz parse_line 5 locally and confirm it starts and stops cleanly +m0 @core
-x 2026-09-11 2026-09-11 Commit the fuzz crate alone (its Cargo.lock is a generated artifact) +m0 @core
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @core
+x 2026-09-11 2026-09-11 Install locally: rustup toolchain install nightly and cargo install cargo-fuzz +m0 @core id:01M2B4ZW8A944Q8Q5QE2NZMN5T
+x 2026-09-11 2026-09-11 Run cargo fuzz init inside crates/txtodo-core to scaffold fuzz/Cargo.toml and fuzz_targets/ +m0 @core id:01M2B4ZW8AXY3107JRC7BAJV52
+x 2026-09-11 2026-09-11 Rename the generated target to parse_line and make its body a no-op over &[u8] (core has no parser yet) +m0 @core id:01M2B4ZW8A3TPXW74JZTWN1SQ2
+x 2026-09-11 2026-09-11 Add exclude = ["crates/txtodo-core/fuzz"] to the root Cargo.toml so the fuzz crate stays outside the workspace +m0 @core id:01M2B4ZW8A7YSBP778ZT9HYHTX
+x 2026-09-11 2026-09-11 Add fuzz/target and fuzz/corpus and fuzz/artifacts to .gitignore +m0 @core id:01M2B4ZW8ADGEKB9WGSBK9XA60
+x 2026-09-11 2026-09-11 Run just fuzz parse_line 5 locally and confirm it starts and stops cleanly +m0 @core id:01M2B4ZW8AAFWGW3D342GK5VPT
+x 2026-09-11 2026-09-11 Commit the fuzz crate alone (its Cargo.lock is a generated artifact) +m0 @core id:01M2B4ZW8A2MRSF6MJQ2Y9PBHN
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @core id:01M2B4ZW8AM12HD2P503XN20P4

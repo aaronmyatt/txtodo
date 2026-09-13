@@ -1,14 +1,14 @@
-2026-09-12 Android QR scan (CameraX) decoding the PairingPayload struct shared with txtodo pair <code> +m9 @android @pairing
-2026-09-12 iOS QR scan (AVFoundation) decoding the identical PairingPayload struct +m9 @ios @pairing
-2026-09-12 Shared SAS derivation (HKDF over the full transcript) producing 6 EFF words, identical on both platforms +m9 @android @ios @pairing
-2026-09-12 Mutual-confirm UI: both humans compare and confirm before the group key is derived (info=txtodo-pair-v1) +m9 @android @ios @pairing
-2026-09-12 Pairing bounds on mobile: window expiry, single-use nonce, MAX_CONCURRENT_PAIRINGS, rate-limited confirm +m9 @android @ios @pairing
-2026-09-12 Shared local snapshot store both platforms read, written by the daemon on every reconcile +m9 @android @ios
-2026-09-12 Android AppWidget: due-today list, tap opens the tapped line, updates on reconcile +m9 @android @widget
-2026-09-12 Android Quick Settings tile (TileService): quick-add entry point +m9 @android @widget
-2026-09-12 iOS WidgetKit widget + Live Activity for tasks due today +m9 @ios @widget
-2026-09-12 iOS watchOS complication showing the open count from the snapshot +m9 @ios @widget
-2026-09-12 Test: decoded QR payload holds no key material; same transcript -> same SAS words across platforms +m9 @pairing @test
-2026-09-12 Test: MITM transcript change yields different words; single-bit transcript change changes the SAS (mirror sync-pairing) +m9 @pairing @test
-2026-09-12 Test: widgets render due-today tasks from the snapshot and deep-link to the right line +m9 @widget @test
-2026-09-12 Complete the parent line in ./todo.txt +m9 @android @ios
+2026-09-12 Android QR scan (CameraX) decoding the PairingPayload struct shared with txtodo pair <code> +m9 @android @pairing id:01M2B4ZWCMTZMGZ41MYF1CMBGQ
+2026-09-12 iOS QR scan (AVFoundation) decoding the identical PairingPayload struct +m9 @ios @pairing id:01M2B4ZWCMC2V66SBRW0A3MTKA
+2026-09-12 Shared SAS derivation (HKDF over the full transcript) producing 6 EFF words, identical on both platforms +m9 @android @ios @pairing id:01M2B4ZWCM43H0RDN5PPC0W4HW
+2026-09-12 Mutual-confirm UI: both humans compare and confirm before the group key is derived (info=txtodo-pair-v1) +m9 @android @ios @pairing id:01M2B4ZWCMXCSCZ5EJSX1CZ01G
+2026-09-12 Pairing bounds on mobile: window expiry, single-use nonce, MAX_CONCURRENT_PAIRINGS, rate-limited confirm +m9 @android @ios @pairing id:01M2B4ZWCM68BWZHGTWSA3JFZM
+2026-09-12 Shared local snapshot store both platforms read, written by the daemon on every reconcile +m9 @android @ios id:01M2B4ZWCM7TCR34TMJJ3D8SRT
+2026-09-12 Android AppWidget: due-today list, tap opens the tapped line, updates on reconcile +m9 @android @widget id:01M2B4ZWCMDE3KTWEEEMZKJMWK
+2026-09-12 Android Quick Settings tile (TileService): quick-add entry point +m9 @android @widget id:01M2B4ZWCMTAHPZMEQR4HVB3ST
+2026-09-12 iOS WidgetKit widget + Live Activity for tasks due today +m9 @ios @widget id:01M2B4ZWCM7QW0A077K09SX71Y
+2026-09-12 iOS watchOS complication showing the open count from the snapshot +m9 @ios @widget id:01M2B4ZWCMG3S378A5B0SWCKHA
+2026-09-12 Test: decoded QR payload holds no key material; same transcript -> same SAS words across platforms +m9 @pairing @test id:01M2B4ZWCM1TJ98SPW82X14PQM
+2026-09-12 Test: MITM transcript change yields different words; single-bit transcript change changes the SAS (mirror sync-pairing) +m9 @pairing @test id:01M2B4ZWCMPRZ9TJFKHY6R9NW6
+2026-09-12 Test: widgets render due-today tasks from the snapshot and deep-link to the right line +m9 @widget @test id:01M2B4ZWCMFHA7R600PBPWY4CA
+2026-09-12 Complete the parent line in ./todo.txt +m9 @android @ios id:01M2B4ZWCMN8SXT8JP3TR19T2E

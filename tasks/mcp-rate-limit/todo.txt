@@ -1,15 +1,15 @@
-2026-09-12 crates/txtodo-mcp/src/rate.rs: MUTATIONS_PER_MIN=60, DELETES_PER_MIN=10, WINDOW_MS=60000, OpClass { Mutation, Delete } +m6 @mcp
-2026-09-12 crates/txtodo-daemon/src/rate_limit.rs: SlidingWindow over the injected clock, drops entries older than WINDOW_MS per check +m6 @daemon
-2026-09-12 RateLimiter keyed by TokenId with two windows per token (mutations and deletes), clock injected via the Clock trait +m6 @daemon
-2026-09-12 OpClass::Delete counts todo_delete and todo_archive; everything else is Mutation +m6 @daemon
-2026-09-12 On exceed: persist the pause in the store meta table (token_paused:<id>) so a restart keeps it +m6 @daemon
-2026-09-12 On exceed: emit DaemonEvent::TokenPaused { token_id, name, reason } on the existing event channel; M9 owns the mobile push +m6 @daemon
-2026-09-12 Paused tokens reject mutations until unpaused or TTL; mcp_backend.rs checks rate before building ApplyRequest +m6 @mcp @daemon
-2026-09-12 Bounded bucket map: assert len() <= MAX_TRACKED_TOKENS; evict least-recently-active window when full +m6 @daemon
-2026-09-12 A Pause decision becomes an McpError before Apply; no mutation is applied after a pause +m6 @mcp @daemon
-2026-09-12 Test: the 61st mutation within a minute pauses the token and emits TokenPaused +m6 @daemon @test
-2026-09-12 Test: the 11th delete pauses; 60 mutations + 10 deletes do not +m6 @daemon @test
-2026-09-12 Test: distinct tokens have independent budgets (one paused, the other still completes 60) +m6 @daemon @test
-2026-09-12 Test: the pause survives a daemon restart (read back from the meta table) +m6 @daemon @test
-2026-09-12 Test: the bucket map never exceeds MAX_TRACKED_TOKENS when hammered with many token ids +m6 @daemon @test
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @daemon
+2026-09-12 crates/txtodo-mcp/src/rate.rs: MUTATIONS_PER_MIN=60, DELETES_PER_MIN=10, WINDOW_MS=60000, OpClass { Mutation, Delete } +m6 @mcp id:01M2B4ZWA6XEPTC59E86AAWJNP
+2026-09-12 crates/txtodo-daemon/src/rate_limit.rs: SlidingWindow over the injected clock, drops entries older than WINDOW_MS per check +m6 @daemon id:01M2B4ZWA68362T62EDM7C7Z2K
+2026-09-12 RateLimiter keyed by TokenId with two windows per token (mutations and deletes), clock injected via the Clock trait +m6 @daemon id:01M2B4ZWA67ND1DBC1TFT954YP
+2026-09-12 OpClass::Delete counts todo_delete and todo_archive; everything else is Mutation +m6 @daemon id:01M2B4ZWA6YV25HQAY3PMSVMBB
+2026-09-12 On exceed: persist the pause in the store meta table (token_paused:<id>) so a restart keeps it +m6 @daemon id:01M2B4ZWA6AE06HGB6R58CEZJJ
+2026-09-12 On exceed: emit DaemonEvent::TokenPaused { token_id, name, reason } on the existing event channel; M9 owns the mobile push +m6 @daemon id:01M2B4ZWA6SXBRFPAK956YP807
+2026-09-12 Paused tokens reject mutations until unpaused or TTL; mcp_backend.rs checks rate before building ApplyRequest +m6 @mcp @daemon id:01M2B4ZWA62KTST4DZY1GBJR0V
+2026-09-12 Bounded bucket map: assert len() <= MAX_TRACKED_TOKENS; evict least-recently-active window when full +m6 @daemon id:01M2B4ZWA6XTRDZ83JF996HANR
+2026-09-12 A Pause decision becomes an McpError before Apply; no mutation is applied after a pause +m6 @mcp @daemon id:01M2B4ZWA6YDBMVZ846PC33SDV
+2026-09-12 Test: the 61st mutation within a minute pauses the token and emits TokenPaused +m6 @daemon @test id:01M2B4ZWA62YYHFQ8P319XMQ23
+2026-09-12 Test: the 11th delete pauses; 60 mutations + 10 deletes do not +m6 @daemon @test id:01M2B4ZWA6VGVNKRWKEX3QWVCP
+2026-09-12 Test: distinct tokens have independent budgets (one paused, the other still completes 60) +m6 @daemon @test id:01M2B4ZWA6H0K3VH5VJ8JQZQDJ
+2026-09-12 Test: the pause survives a daemon restart (read back from the meta table) +m6 @daemon @test id:01M2B4ZWA66CB4RXWKGA2SV3NW
+2026-09-12 Test: the bucket map never exceeds MAX_TRACKED_TOKENS when hammered with many token ids +m6 @daemon @test id:01M2B4ZWA6XBWQJ8RJV32D5EJJ
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @daemon id:01M2B4ZWA6E793M73V1HMBVWBX

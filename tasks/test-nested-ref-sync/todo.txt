@@ -1,5 +1,5 @@
-2026-09-12 Loopback pair (sync-loopback-converge harness) with a nested-ref fixture; the fresh device's whole tree and bytes match +m5 @test
-2026-09-12 Copy the nested-ref fixture into this slice; no shared fixture module (constitution §7) +m5 @test
-2026-09-12 Test: todo.sh -d <ref>/todo.cfg ls lists the sub-list (rule 12) +m5 @test
-2026-09-12 Test: txtodo sub 2 ls agrees with todo.sh -d on the same sub-list +m5 @test
-2026-09-12 Complete the parent line in ./todo.txt +m5 @test
+2026-09-12 Loopback pair (sync-loopback-converge harness) with a nested-ref fixture; the fresh device's whole tree and bytes match +m5 @test id:01M2B4ZWPCS9PT7T1NTACRQ5QC
+2026-09-12 Copy the nested-ref fixture into this slice; no shared fixture module (constitution §7) +m5 @test id:01M2B4ZWPCVYZZQW8R60KVCRZ4
+2026-09-12 Test: todo.sh -d <ref>/todo.cfg ls lists the sub-list (rule 12) +m5 @test id:01M2B4ZWPCK58ETJ7TFEGZ49W1
+2026-09-12 Test: txtodo sub 2 ls agrees with todo.sh -d on the same sub-list +m5 @test id:01M2B4ZWPCSD7QKQP5YTAN0HW4
+2026-09-12 Complete the parent line in ./todo.txt +m5 @test id:01M2B4ZWPCN5YETN7HAPQDT500

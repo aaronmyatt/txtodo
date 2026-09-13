@@ -1,16 +1,16 @@
-2026-09-12 Add prometheus, opentelemetry, opentelemetry-otlp, tracing-opentelemetry and axum to crates/txtodo-daemon/Cargo.toml with sign-off and deny pass +m10 @observability
-2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: Metrics struct registering the five §10 families with exact names and label sets +m10 @observability
-2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: record_* methods with bounded cardinality (project top-20 + other) +m10 @observability
-2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: serve() on 127.0.0.1:8637 exposing GET /metrics only +m10 @observability
-2026-09-12 crates/txtodo-daemon/src/observability/otel.rs: init_otlp + tracing-opentelemetry layer exporting the existing plan §5 spans +m10 @observability
-2026-09-12 crates/txtodo-daemon/src/reconciler.rs: record_reconcile(outcome) and reconcile_span(file) at the reconcile site +m10 @observability @daemon
-2026-09-12 crates/txtodo-daemon/src/sync/: record_sync_lag(peer) and sync_session_span(peer) on each inbound ops batch +m10 @observability @daemon
-2026-09-12 crates/txtodo-daemon/src/mcp/: record_mcp_call(tool, principal) in the dispatch and record_conflict_flagged on needs_review +m10 @observability @daemon
-2026-09-12 crates/txtodo-daemon/src/actor.rs: record_tasks(file, state, project) after each projection rebuild +m10 @observability @daemon
-2026-09-12 deploy/grafana/txtodo.json: dashboard with the §10 panels including tasks-completed-per-week-by-project +m10 @observability
-2026-09-12 Test: scrape /metrics and assert the five family names and label sets match design §10 exactly +m10 @observability @test
-2026-09-12 Test: reconcile an external edit increments reconcile_total{applied}; noop write → noop; a conflict → conflict +m10 @observability @test
-2026-09-12 Test: two paired loopback daemons set sync_lag and emit a sync.session trace via an in-process OTLP exporter +m10 @observability @test
-2026-09-12 Test: an MCP call increments mcp_calls_total and a needs_review flag increments conflicts_flagged_total +m10 @observability @test
-2026-09-12 Test: the Grafana JSON parses and every panel references one of the five metric names +m10 @observability @test
-2026-09-12 Complete the parent line in ./todo.txt +m10 @observability
+2026-09-12 Add prometheus, opentelemetry, opentelemetry-otlp, tracing-opentelemetry and axum to crates/txtodo-daemon/Cargo.toml with sign-off and deny pass +m10 @observability id:01M2B4ZWDRE5BNQ02YC6AGJ1XK
+2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: Metrics struct registering the five §10 families with exact names and label sets +m10 @observability id:01M2B4ZWDRZ9SR6ECKQGFE8GJ0
+2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: record_* methods with bounded cardinality (project top-20 + other) +m10 @observability id:01M2B4ZWDRR9QNXF470PYP2SB4
+2026-09-12 crates/txtodo-daemon/src/observability/metrics.rs: serve() on 127.0.0.1:8637 exposing GET /metrics only +m10 @observability id:01M2B4ZWDRD8ARKZS3GWPYJJN1
+2026-09-12 crates/txtodo-daemon/src/observability/otel.rs: init_otlp + tracing-opentelemetry layer exporting the existing plan §5 spans +m10 @observability id:01M2B4ZWDRVSHT0PXMYJZE0EZB
+2026-09-12 crates/txtodo-daemon/src/reconciler.rs: record_reconcile(outcome) and reconcile_span(file) at the reconcile site +m10 @observability @daemon id:01M2B4ZWDR1J177GF4BG39KN5H
+2026-09-12 crates/txtodo-daemon/src/sync/: record_sync_lag(peer) and sync_session_span(peer) on each inbound ops batch +m10 @observability @daemon id:01M2B4ZWDR2CEXVM9EFSXS2TR5
+2026-09-12 crates/txtodo-daemon/src/mcp/: record_mcp_call(tool, principal) in the dispatch and record_conflict_flagged on needs_review +m10 @observability @daemon id:01M2B4ZWDRY78S4A11N6KQVGQK
+2026-09-12 crates/txtodo-daemon/src/actor.rs: record_tasks(file, state, project) after each projection rebuild +m10 @observability @daemon id:01M2B4ZWDR4JZN67VJ3CYJ9BCT
+2026-09-12 deploy/grafana/txtodo.json: dashboard with the §10 panels including tasks-completed-per-week-by-project +m10 @observability id:01M2B4ZWDR6AXMHN6K0P7AX254
+2026-09-12 Test: scrape /metrics and assert the five family names and label sets match design §10 exactly +m10 @observability @test id:01M2B4ZWDRKJ6BYQ4GFKG9WRXN
+2026-09-12 Test: reconcile an external edit increments reconcile_total{applied}; noop write → noop; a conflict → conflict +m10 @observability @test id:01M2B4ZWDRQ28CQPMC2TMS7V6W
+2026-09-12 Test: two paired loopback daemons set sync_lag and emit a sync.session trace via an in-process OTLP exporter +m10 @observability @test id:01M2B4ZWDRMN70YTEV6Q32QHC8
+2026-09-12 Test: an MCP call increments mcp_calls_total and a needs_review flag increments conflicts_flagged_total +m10 @observability @test id:01M2B4ZWDR4K40NJAXKQVD163M
+2026-09-12 Test: the Grafana JSON parses and every panel references one of the five metric names +m10 @observability @test id:01M2B4ZWDRT2AVB4XBXRNKS9YH
+2026-09-12 Complete the parent line in ./todo.txt +m10 @observability id:01M2B4ZWDR8JR1FZ1ADWWE2BEZ

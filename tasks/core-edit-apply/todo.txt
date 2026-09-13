@@ -1,6 +1,6 @@
-x 2026-09-11 2026-09-11 edit.rs: pub struct Edit builder with set_priority, clear_priority, set_description, set_tag(key, value), remove_tag(key), append(text), prepend(text) +m1 @core
-x 2026-09-11 2026-09-11 pub fn apply(line: &OwnedLine, edit: &Edit) -> OwnedLine: returns a new line; sets Dirty bits only for fields the edit changed +m1 @core
-x 2026-09-11 2026-09-11 set_tag replaces the first existing key:value in place, else appends with one leading SP; remove_tag drops the word and exactly one adjacent SP +m1 @core
-x 2026-09-11 2026-09-11 append/prepend operate on the description with one SP separator; applying to a Blank line turns it into a task with just the text +m1 @core
-x 2026-09-11 2026-09-11 Unit tests: each op alone; set_tag on an existing key keeps its position; apply with an empty Edit is byte-identical and not dirty +m1 @core @test
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 edit.rs: pub struct Edit builder with set_priority, clear_priority, set_description, set_tag(key, value), remove_tag(key), append(text), prepend(text) +m1 @core id:01M2B4ZVTA6ZHD7ZQY17GA6G8A
+x 2026-09-11 2026-09-11 pub fn apply(line: &OwnedLine, edit: &Edit) -> OwnedLine: returns a new line; sets Dirty bits only for fields the edit changed +m1 @core id:01M2B4ZVTAS2AENDDNS03Z02GB
+x 2026-09-11 2026-09-11 set_tag replaces the first existing key:value in place, else appends with one leading SP; remove_tag drops the word and exactly one adjacent SP +m1 @core id:01M2B4ZVTA3TR02YDNSTDAB3N2
+x 2026-09-11 2026-09-11 append/prepend operate on the description with one SP separator; applying to a Blank line turns it into a task with just the text +m1 @core id:01M2B4ZVTA633ZFXPB24ZWZWG5
+x 2026-09-11 2026-09-11 Unit tests: each op alone; set_tag on an existing key keeps its position; apply with an empty Edit is byte-identical and not dirty +m1 @core @test id:01M2B4ZVTA43VKZ6N36CH4TVRX
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core id:01M2B4ZVTA5A4EGAJ1PSH0TV6S

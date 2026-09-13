@@ -1,11 +1,11 @@
-2026-09-12 .claude/budgets.json: add apps/desktop command keys (desktop.format/lint/typecheck/test) with the same numbers as the Rust rows, plus the 500 ms first-paint perf note if that task landed +m7 @setup
-2026-09-12 Run /setup to derive the stack.md diff from budgets.json; review the shown diff before writing (frozen path — asked, never silent) +m7 @setup
-2026-09-12 .claude/stack.md: add a TS/Svelte toolchain table (prettier, eslint, svelte-check + tsc --noEmit, vitest + Playwright) with pinned versions +m7 @setup
-2026-09-12 .claude/stack.md: map each constitution budget (fn/file length, params, nesting, complexity, line width) to an eslint/prettier rule with the same number from budgets.json +m7 @setup
-2026-09-12 .claude/stack.md: record review-only reasons for budgets with no TS analogue (assertions/fn, collections max) so no budget is silently unmapped +m7 @setup
-2026-09-12 .claude/stack.md: note exhaustive-match/immutability/floating-promise via @typescript-eslint rules so §3 mechanical checks have a TS form +m7 @setup
-2026-09-12 .claude/stack.md: wire feedback (per-file) and gate (whole-tree) apps/desktop commands so a touched apps/desktop file runs TS/Svelte checks and a touched crates file runs Rust — neither disturbs the other +m7 @setup
-2026-09-12 .claude/stack.md: record the Lezer grammar and Playwright snapshots as generated artifacts (diff-budget exempt, committed alone) +m7 @setup
-2026-09-12 Verify: rustfmt max_width 100 and prettier printWidth 100 agree; the Rust Rule → tier rows and commands stay byte-for-byte untouched (additive only) +m7 @setup
-2026-09-12 Confirm the frozen-path writes to .claude/stack.md and .claude/budgets.json were asked, derived through /setup, with the diff shown before writing +m7 @setup
-2026-09-12 Complete the parent line in ./todo.txt +m7 @setup
+2026-09-12 .claude/budgets.json: add apps/desktop command keys (desktop.format/lint/typecheck/test) with the same numbers as the Rust rows, plus the 500 ms first-paint perf note if that task landed +m7 @setup id:01M2B4ZW6BTV6RP61AAQQ0J8FZ
+2026-09-12 Run /setup to derive the stack.md diff from budgets.json; review the shown diff before writing (frozen path — asked, never silent) +m7 @setup id:01M2B4ZW6BWEJ3801V8S5T4WDV
+2026-09-12 .claude/stack.md: add a TS/Svelte toolchain table (prettier, eslint, svelte-check + tsc --noEmit, vitest + Playwright) with pinned versions +m7 @setup id:01M2B4ZW6BR03Y62GPR82DVZ50
+2026-09-12 .claude/stack.md: map each constitution budget (fn/file length, params, nesting, complexity, line width) to an eslint/prettier rule with the same number from budgets.json +m7 @setup id:01M2B4ZW6BGJCS4ERA24AR3350
+2026-09-12 .claude/stack.md: record review-only reasons for budgets with no TS analogue (assertions/fn, collections max) so no budget is silently unmapped +m7 @setup id:01M2B4ZW6BHQGTRCP8FM9VMTAH
+2026-09-12 .claude/stack.md: note exhaustive-match/immutability/floating-promise via @typescript-eslint rules so §3 mechanical checks have a TS form +m7 @setup id:01M2B4ZW6BVBZ8WK9YNVCZGWER
+2026-09-12 .claude/stack.md: wire feedback (per-file) and gate (whole-tree) apps/desktop commands so a touched apps/desktop file runs TS/Svelte checks and a touched crates file runs Rust — neither disturbs the other +m7 @setup id:01M2B4ZW6BA7B432J2FTF5NWT0
+2026-09-12 .claude/stack.md: record the Lezer grammar and Playwright snapshots as generated artifacts (diff-budget exempt, committed alone) +m7 @setup id:01M2B4ZW6BF13VM564CH2PZKHT
+2026-09-12 Verify: rustfmt max_width 100 and prettier printWidth 100 agree; the Rust Rule → tier rows and commands stay byte-for-byte untouched (additive only) +m7 @setup id:01M2B4ZW6BR5MTV1VJVEVG6AJE
+2026-09-12 Confirm the frozen-path writes to .claude/stack.md and .claude/budgets.json were asked, derived through /setup, with the diff shown before writing +m7 @setup id:01M2B4ZW6BD9K0ZAY12KAPAH33
+2026-09-12 Complete the parent line in ./todo.txt +m7 @setup id:01M2B4ZW6B6YDBY7HBHDYTAQGR

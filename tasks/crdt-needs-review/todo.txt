@@ -1,15 +1,15 @@
-2026-09-12 Decide whether mine means this device or this user; record it in ./notes.md before the CLI lands +m4 @crdt @human
-x 2026-09-12 2026-09-12 concurrent.rs: pairwise concurrency from Loro frontiers, never from Hlc; a doc comment saying why Hlc cannot answer this +m4 @crdt
-x 2026-09-12 2026-09-12 overlap.rs: map each concurrent EditText onto char ranges in the merged text and report overlapping or adjacent pairs +m4 @crdt
-x 2026-09-12 2026-09-12 MAX_REVIEW_FLAGS_PER_FILE const, asserted; past the cap flag the file once instead of every task +m4 @crdt
-x 2026-09-12 2026-09-12 migrations/0002.sql: review_flags table with mine and theirs description bytes, PRAGMA user_version = 2, additive only +m4 @store
-x 2026-09-12 2026-09-12 Store API: raise_flag, open_flags(file), clear_flag(file, task); clearing is idempotent +m4 @store
-x 2026-09-12 2026-09-12 proto: ReviewFlag message and Change.review field 4, plus ResolveConflict rpc; new field numbers only, regen check green +m4 @proto
-x 2026-09-12 2026-09-12 Daemon: raise flags after an import batch merges, never on the local edit path; emit them on the Watch stream +m4 @daemon
-x 2026-09-12 2026-09-12 Daemon ResolveConflict: write the chosen EditText and clear the flag in one transaction, or neither +m4 @daemon
-x 2026-09-12 2026-09-12 CLI txtodo conflicts list with a unified diff of mine vs theirs and --json; exit non-zero under --no-daemon +m4 @cli
-x 2026-09-12 2026-09-12 CLI txtodo conflicts resolve <line> mine|theirs|merged as a clap enum; merged clears the flag and writes no op +m4 @cli
-x 2026-09-12 2026-09-12 Test: two devices edit the same word offline, merge, exactly one flag is raised and the file bytes are unchanged +m4 @crdt @test
-x 2026-09-12 2026-09-12 Test: two devices edit different words, no flag; sequential edits to the same word, no flag +m4 @crdt @test
-x 2026-09-12 2026-09-12 Test: resolve merged writes no op; resolve mine writes one EditText and the second resolve is a no-op +m4 @cli @test
-x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @cli
+2026-09-12 Decide whether mine means this device or this user; record it in ./notes.md before the CLI lands +m4 @crdt @human id:01M2B4ZVYREK11E94905NFY162
+x 2026-09-12 2026-09-12 concurrent.rs: pairwise concurrency from Loro frontiers, never from Hlc; a doc comment saying why Hlc cannot answer this +m4 @crdt id:01M2B4ZVYRF1YN78MXNF8C9XQC
+x 2026-09-12 2026-09-12 overlap.rs: map each concurrent EditText onto char ranges in the merged text and report overlapping or adjacent pairs +m4 @crdt id:01M2B4ZVYRBWNTHFZHYQ78W26A
+x 2026-09-12 2026-09-12 MAX_REVIEW_FLAGS_PER_FILE const, asserted; past the cap flag the file once instead of every task +m4 @crdt id:01M2B4ZVYRG237JFTJHVA38D39
+x 2026-09-12 2026-09-12 migrations/0002.sql: review_flags table with mine and theirs description bytes, PRAGMA user_version = 2, additive only +m4 @store id:01M2B4ZVYR3XP1NTXTHVFYFRJB
+x 2026-09-12 2026-09-12 Store API: raise_flag, open_flags(file), clear_flag(file, task); clearing is idempotent +m4 @store id:01M2B4ZVYSJ4B88PZ3QW32BFZR
+x 2026-09-12 2026-09-12 proto: ReviewFlag message and Change.review field 4, plus ResolveConflict rpc; new field numbers only, regen check green +m4 @proto id:01M2B4ZVYSQKT0A9KTHM361YJB
+x 2026-09-12 2026-09-12 Daemon: raise flags after an import batch merges, never on the local edit path; emit them on the Watch stream +m4 @daemon id:01M2B4ZVYS2NRHNKXZV5W5X26K
+x 2026-09-12 2026-09-12 Daemon ResolveConflict: write the chosen EditText and clear the flag in one transaction, or neither +m4 @daemon id:01M2B4ZVYSN8RYZRBMGS6Y3RP1
+x 2026-09-12 2026-09-12 CLI txtodo conflicts list with a unified diff of mine vs theirs and --json; exit non-zero under --no-daemon +m4 @cli id:01M2B4ZVYSXP4TDV6V0ZE8BWD3
+x 2026-09-12 2026-09-12 CLI txtodo conflicts resolve <line> mine|theirs|merged as a clap enum; merged clears the flag and writes no op +m4 @cli id:01M2B4ZVYSED98QFB5886G6J46
+x 2026-09-12 2026-09-12 Test: two devices edit the same word offline, merge, exactly one flag is raised and the file bytes are unchanged +m4 @crdt @test id:01M2B4ZVYS7JPWJ7F6RTHSJW64
+x 2026-09-12 2026-09-12 Test: two devices edit different words, no flag; sequential edits to the same word, no flag +m4 @crdt @test id:01M2B4ZVYSMFNAD9N5REN9EBYF
+x 2026-09-12 2026-09-12 Test: resolve merged writes no op; resolve mine writes one EditText and the second resolve is a no-op +m4 @cli @test id:01M2B4ZVYSXP03J4MYW36RDJ7W
+x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @cli id:01M2B4ZVYS94A4EB0PXCA2E7V9

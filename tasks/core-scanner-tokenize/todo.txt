@@ -1,7 +1,7 @@
-x 2026-09-11 2026-09-11 scanner.rs: iterator over Whitespace | Word byte ranges of a line; tabs and runs of spaces form one Whitespace span +m1 @core
-x 2026-09-11 2026-09-11 tokenize.rs: classify the prefix (x, dates, priority) then each word (Url, Project, Context, TagKey+TagValue, IdTag, Text) +m1 @core
-x 2026-09-11 2026-09-11 Prefix classification is position-based: x → CompletionMarker; date after x → CompletionDate; next date → CreationDate; (A) in the prefix → Priority +m1 @core
-x 2026-09-11 2026-09-11 pub fn tokenize(raw: &str) -> Vec<Span> never fails; unknown → Text; spans contiguous over [0, len) +m1 @core
-x 2026-09-11 2026-09-11 Split key-value words: TagKey covers key and colon, TagValue the rest; an id tag with 26 Crockford chars is one IdTag span +m1 @core
-x 2026-09-11 2026-09-11 Unit tests: include_str! corpus/edge-cases.tokens.json and compare; property: spans cover every byte with no gaps for 20 hand lines +m1 @core @test
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core
+x 2026-09-11 2026-09-11 scanner.rs: iterator over Whitespace | Word byte ranges of a line; tabs and runs of spaces form one Whitespace span +m1 @core id:01M2B4ZVWEXYGZZNTK0HA53TT2
+x 2026-09-11 2026-09-11 tokenize.rs: classify the prefix (x, dates, priority) then each word (Url, Project, Context, TagKey+TagValue, IdTag, Text) +m1 @core id:01M2B4ZVWE4J3ZVZ1F09GPX92G
+x 2026-09-11 2026-09-11 Prefix classification is position-based: x → CompletionMarker; date after x → CompletionDate; next date → CreationDate; (A) in the prefix → Priority +m1 @core id:01M2B4ZVWEQ7J56637TNE9HK27
+x 2026-09-11 2026-09-11 pub fn tokenize(raw: &str) -> Vec<Span> never fails; unknown → Text; spans contiguous over [0, len) +m1 @core id:01M2B4ZVWEWHCBVDFJ0BBSAZ6J
+x 2026-09-11 2026-09-11 Split key-value words: TagKey covers key and colon, TagValue the rest; an id tag with 26 Crockford chars is one IdTag span +m1 @core id:01M2B4ZVWEBZF4STSDCQ7B99SV
+x 2026-09-11 2026-09-11 Unit tests: include_str! corpus/edge-cases.tokens.json and compare; property: spans cover every byte with no gaps for 20 hand lines +m1 @core @test id:01M2B4ZVWENH10P8EE6AC3XJCX
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core id:01M2B4ZVWEC9XJJ2RF4A0DEKFA
