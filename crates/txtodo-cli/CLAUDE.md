@@ -28,7 +28,14 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   detail. `open`/`notes`/`sub`/
   `prune --orphans` (plan M5, `specs/ref-directories.md`): a line's `ref:` directory, its
   `notes.md` in `$EDITOR`, a scoped `todo.sh -d`, and orphaned `ref:` directories no line points to
-  (`--yes` to actually delete).
+  (`--yes` to actually delete). `bundle export [--out FILE] [--passphrase-file -]` / `bundle import
+  FILE [--passphrase-file -]` (plan M8 `cli-bundle`, design §4.5, `bundle.rs`): the air-gapped
+  sneakernet carrier — streams the daemon's `BundleExport`/`BundleImport` gRPC chunks to/from a
+  local file as `[u32 LE length][bytes]` frames (never re-chunked to an I/O buffer's own size, so
+  encrypted STREAM chunk boundaries survive the round trip); `--passphrase-file -` reads stdin,
+  a path reads and trims that file, omitted prompts interactively (CLAUDE.md §3.1: never a CLI
+  argument or env var). `BundleImport`'s passphrase rides in gRPC request metadata, not a request
+  field — that RPC is client-streaming, so its request type is fixed to the streamed `BundleChunk`.
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
@@ -51,7 +58,8 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   resolved path and, when set, whether it currently validates (`sync_dir_problem` in JSON).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
-  adapter, `plan_mutations`), `commands::{add, list, edit, archive, text, fileops, hygiene,
+  adapter, `plan_mutations`), `bundle` (`export`/`import`, plan M8 `cli-bundle`),
+  `commands::{add, list, edit, archive, text, fileops, hygiene,
   history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
   split out of `main.rs` purely for its own file-length budget.

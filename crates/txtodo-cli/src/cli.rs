@@ -1,6 +1,7 @@
 //! The `clap` argument grammar: `Cli` (global flags) and `Command` (every subcommand). Split out
 //! of `main.rs` for the file budget; `main.rs` keeps `run`/`dispatch`/`dispatch_daemon`.
 
+use crate::bundle;
 use crate::commands;
 use clap::{Parser, Subcommand};
 
@@ -261,6 +262,13 @@ pub enum Command {
         /// The command (and its own arguments) to run inside that directory.
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
         cmd: Vec<String>,
+    },
+    /// Moves the whole workspace as one file (daemon mode, plan M8, design §4.5): `export` writes
+    /// it, `import` reads it back — no network involved either way (air-gapped sneakernet
+    /// carrier).
+    Bundle {
+        #[command(subcommand)]
+        action: bundle::Action,
     },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).

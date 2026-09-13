@@ -25,7 +25,10 @@ jiff = "0.2"
 getrandom = "0.3"
 # https://docs.rs/tonic — gRPC client to txtodod over the unix socket (ADR 0006); current-thread runtime
 tonic = "0.14"
-tokio = { version = "1", features = ["rt", "net"] }
+tokio = { version = "1", features = ["rt", "net", "sync"] }
+# https://docs.rs/tokio-stream — ReceiverStream, the client-streaming request body for
+# `txtodo bundle import` (plan M8 `cli-bundle`)
+tokio-stream = "0.1"
 # https://docs.rs/hyper-util — TokioIo adapter for the unix-socket connector
 hyper-util = "0.1"
 # https://docs.rs/tower — service_fn for the custom connector

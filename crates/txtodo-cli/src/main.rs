@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)] // the CLI is the output path (plan §0)
 
+mod bundle;
 mod cli;
 mod client;
 mod clock;
@@ -112,6 +113,7 @@ fn dispatch_daemon(
             commands::refdir::run_prune(daemon, *orphans, *yes, ctx.json)
         }
         Command::Device { action } => commands::device::run(daemon, action.as_ref(), ctx.json),
+        Command::Bundle { action } => bundle::run(daemon, action),
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -133,7 +135,8 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Notes { .. }
         | Command::Sub { .. }
         | Command::Prune { .. }
-        | Command::Device { .. } => Err(CliError::Message(format!(
+        | Command::Device { .. }
+        | Command::Bundle { .. } => Err(CliError::Message(format!(
             "txtodo: {}",
             commands::history::NEEDS_DAEMON
         ))),
