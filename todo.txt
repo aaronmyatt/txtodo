@@ -5,11 +5,11 @@
 2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review — meant to run last per its own notes; several items need a real daemon run (off-limits this session) id:01M2B4ZWQD5VY8A9K9NHZ2AQSR
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4 — blocked: needs two real txtodod processes, off-limits this session id:01M2B4ZWQDY3MXJMW0164D3RB4
 2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test ref:test-nested-ref-sync — todo.sh -d half done and tested; fresh-device sync half blocked by the upstream iroh/noq-proto loopback bug id:01M2B4ZWQD543EWGT4CG3WE4MD
-2026-09-11 abnf-to-lezer.mjs generates the Lezer grammar with a CI step failing if regeneration differs +m7 @desktop id:01M2B4ZWQDSHP5PJM3GG6241KZ
-2026-09-11 Detail view with pinned parent, notes editor, recursive file view, breadcrumb, footer +m7 @desktop id:01M2B4ZWQDBE5XQ9X0HDRKKRZN
-2026-09-11 Menu-bar quick-add with a global hotkey +m7 @desktop id:01M2B4ZWQDB9C6SM3T08DVVHKT
+x 2026-09-13 2026-09-11 abnf-to-lezer.mjs generates the Lezer grammar with a CI step failing if regeneration differs +m7 @desktop — regen produces no diff, check-todotxt-lezer.mjs passes (idempotence + 54-line corpus); CI job proposed in notes.md, not wired (frozen path) id:01M2B4ZWQDSHP5PJM3GG6241KZ
+x 2026-09-13 2026-09-11 Detail view with pinned parent, notes editor, recursive file view, breadcrumb, footer +m7 @desktop — built and tested; notes editor shows an honest empty state for sidecar-mode tasks with no id: tag (documented gap, GetNotes/EditNotes resolve by task_id only) id:01M2B4ZWQDBE5XQ9X0HDRKKRZN
+x 2026-09-13 2026-09-11 Menu-bar quick-add with a global hotkey +m7 @desktop — built and tested (Cmd/Ctrl+Shift+Space, shared EditPopover, dirty-main-window guard); needs a human to verify the OS hotkey/window behavior for real id:01M2B4ZWQDB9C6SM3T08DVVHKT
 2026-09-11 Stretch: raw mode Cmd/Ctrl+E through the reconciler +m7 @desktop id:01M2B4ZWQDKE2P7F13FX2A6WRB
-2026-09-11 Playwright tests for popover, detail, notes creation, nested breadcrumb, conflict sheet +m7 @desktop @test id:01M2B4ZWQD1S5WKFAJ3AV1WNKT
+x 2026-09-13 2026-09-11 Playwright tests for popover, detail, notes creation, nested breadcrumb, conflict sheet +m7 @desktop @test — 6 scenarios against a real txtodod via a test-only e2e_bridge binary; 14/14 clean under --repeat-each=2 id:01M2B4ZWQD1S5WKFAJ3AV1WNKT
 2026-09-11 Visual regression snapshots light and dark and 10k-line first paint ≤ 500 ms +m7 @desktop @test id:01M2B4ZWQEX226K4DSXCKGSC2T
 2026-09-11 Add a stack.md mapping for the TS/Svelte second stack under apps/desktop +m7 @setup id:01M2B4ZWQEYA2BSN8NH5JVHDBG
 2026-09-11 Enable iroh relay and hole-punching +m8 @sync id:01M2B4ZWQEYNJJ4J7WB192Q5ZM
