@@ -84,3 +84,56 @@ const TOKEN = {                  // ABNF rule -> Lezer token name (plan §3.1)
 - plan M7 and §3.1 (txtodo-implementation-plan.md), design §2.3 (txtodo-design.md)
 - Lezer: https://lezer.codemirror.net/ · grammar guide https://lezer.codemirror.net/docs/guide/#writing-a-grammar
 - CodeMirror 6: https://codemirror.net/
+
+## As built (2026-09-13, agent)
+
+Found already built from an earlier session (no "As built" section existed yet, so this records
+what's there rather than building it fresh — the same "check before assuming a fresh start"
+discipline the orchestrator asked for):
+
+- `apps/desktop/scripts/abnf-to-lezer.mjs` reads `specs/todotxt.abnf` and emits
+  `apps/desktop/src/lang/{todotxt.grammar,todotxt.parser.js,todotxt.parser.terms.js,todotxt.shapes.js,todotxt.tokens.js}`,
+  mapping each ABNF rule to the §3.1 token names exactly as sketched here, including the
+  `tag`→`tag-key`/`tag-value` split and a lenient terminal fallback so a quirked line still
+  tokenizes as `text`.
+- `apps/desktop/scripts/check-todotxt-lezer.mjs` is the CI gate script: (1) idempotence — runs the
+  generator twice, diffs the four generated files byte-for-byte; (2) corpus coverage — every
+  `corpus/*.tokens.json` line must tokenize through the compiled grammar to the expected §3.1 name,
+  converting the corpus's byte offsets to CM6's UTF-16 offsets first so multi-byte lines don't
+  false-positive. Ran it directly (`node apps/desktop/scripts/check-todotxt-lezer.mjs`) this
+  session: both checks pass against the current `specs/todotxt.abnf` and corpus.
+- `apps/desktop/src/lib/lang/todotxtLanguage.ts` wraps the generated parser as a CM6
+  `LanguageSupport` (`styleTags`, a neutral `tok-<name>` `HighlightStyle`) — the single seam
+  `desktop-main-view`/`desktop-edit-popover` import, confirmed by grep: both do.
+
+**Not yet done — flagged, not fixed silently**: the notes' own acceptance criterion "a CI job in
+`.github/workflows/ci.yml` regenerates and fails with `git diff --exit-code` on drift" is not
+present. `.github/workflows/ci.yml` is this task's own documented frozen path ("add the
+regenerate-and-diff step — ask, never silent"), and today's `ci.yml` has no Node/npm setup at all
+for any of the `apps/desktop` suites (lezer, vitest, or the new Playwright suite from
+`desktop-playwright-tests`) — wiring one in is a bigger, standing decision (Node toolchain version,
+caching, which `apps/desktop` checks run on every push) than this one gate alone. Proposed job,
+for the human to review and land:
+
+```yaml
+  desktop-lezer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - working-directory: apps/desktop
+        run: npm ci && node scripts/check-todotxt-lezer.mjs
+      - working-directory: apps/desktop
+        run: node scripts/abnf-to-lezer.mjs && git diff --exit-code -- src/lang
+```
+
+## What to open and look at
+
+- Run `node apps/desktop/scripts/abnf-to-lezer.mjs` from `apps/desktop`, then `git status` —
+  expect no diff against `src/lang/`.
+- Run `node apps/desktop/scripts/check-todotxt-lezer.mjs` from `apps/desktop` — expect
+  `all checks passed.`
+- Open `apps/desktop` in an editor with the CM6 dev tools (or just read
+  `src/lib/lang/todotxtLanguage.ts` next to `src/lang/todotxt.grammar`) to see the token-name
+  mapping described above.

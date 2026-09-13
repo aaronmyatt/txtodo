@@ -72,3 +72,54 @@ pub fn diff_text(a: &str, b: &str) -> JsValue;    // char-level diff, reused by 
 
 - plan M7 and §3.2 (txtodo-implementation-plan.md), design §2.3 and §7 (txtodo-design.md)
 - wasm-bindgen: https://rustwasm.github.io/wasm-bindgen/ · CodeMirror 6: https://codemirror.net/
+
+## As built (2026-09-13, agent)
+
+Found already substantially built from an earlier session — and the WASM dependency this task
+flags as "investigate before assuming" turned out to be **done**: `crates/txtodo-ffi/src/wasm.rs`
+exports `parse_line_strict`/`diff_text` over `wasm-bindgen` (target `wasm32-unknown-unknown`), the
+compiled artifact is checked in at `apps/desktop/src/lib/wasm-core/txtodo_ffi_bg.wasm` (55 KB) with
+its `.js`/`.d.ts` glue, `apps/desktop/scripts/build-wasm-core.sh` regenerates it, and
+`$lib/wasmCore.ts` wraps both calls with the one-time `init()` hidden behind two typed async
+functions. `EditPopover.svelte` already had: the raw line (id: included) in a single-line CM6
+instance, all nine token chips (`editPopoverLogic.ts`'s `applyChip`/`toggleComplete`, unit-tested in
+`__tests__/editPopoverLogic.test.ts`), debounced strict-mode validation via `parseLineStrict`, a
+`History`-sourced footer, and Enter-saves/Esc-cancels via a `Prec.highest` keymap.
+
+**Bug found and fixed this session**: `EditPopover`'s `saveAndClose` called `applyEdit` (the Tauri
+`apply` command) itself, *and* every host (`MainView.svelte`'s `savePopover`, `FileView.svelte`'s
+`saveLocalEdit`) called `applyMutations` again in its own `onSave` callback — every edit through
+the *hosted* path (the one `MainView` actually uses) was applied **twice**, appending two identical
+`edit_text` ops per save. Fixed by inverting control: `EditPopover` now only calls the `onSave`
+prop and never touches `$lib/daemon` itself (see the module doc added to
+`apps/desktop/src/lib/components/EditPopover.svelte`); `MainView`/`FileView`'s existing `onSave`
+callbacks were already the correct single point of the real `Apply` call, so they needed no change.
+This also directly enabled reuse for `desktop-quick-add`: `taskRef` widened to `TaskRef | null`
+(`null` = no existing line yet, no `Line N` footer, no `History` lookup) and `onSave` widened to
+`(text: string) => void | Promise<void>`, so the same component now serves the main view/detail
+view (host performs an `Edit`) and quick-add (host performs an `Add`) without forking into two
+components — see `desktop-quick-add`'s "As built" for why `EditPopover.svelte` itself (not a new
+`Popover.svelte`) is that shared component.
+
+Also added an optional `onDirtyChange?: (dirty: boolean) => void` prop (fires on every keystroke,
+comparing against `initialLine`) for `desktop-quick-add`'s "don't open quick-add over an unsaved
+main-window edit" guard — unused by every other host, so it's optional rather than forced on every
+caller.
+
+Tests: existing `editPopoverLogic.test.ts` (24 cases) untouched and still green; no new pure logic
+was introduced by the bugfix (it's a control-flow change, not new logic), so no new unit tests were
+needed for it — the fix is instead exercised end-to-end by `desktop-playwright-tests/e2e/save.spec.ts`,
+which byte-diffs the file before/after and asserts **exactly one** line changed (a second silent op
+from the old double-apply bug would not have failed that specific assertion, but a duplicate
+`edit_text` op is directly visible in `History`/the op log, which `apps/desktop/src-tauri/tests/new_rpcs.rs::op_log_drains_the_stream_into_a_vec` — an existing test — already asserts increments by
+exactly one per `Apply`).
+
+## What to open and look at
+
+- `npm run tauri dev`, click a line's pencil, edit it, press Enter. Then run
+  `txtodo history <file> --task <id> --limit 5` (or open `.txtodo/oplog.db`) and confirm **one**
+  new op landed, not two — this is the regression the bugfix above targets.
+- Type a chip (`(A)`, `x`, `+`, `@`, `due:`, etc.) at different caret positions; confirm no
+  double-spacing and that `x` swaps in `pri:<P>` correctly for a prioritized line.
+- Type a strict-invalid-but-lenient line (e.g. trailing whitespace); confirm the inline error shows
+  but Enter still saves.
