@@ -11,7 +11,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
-  `doctor [--verbose]` (five checks, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`;
+  `doctor [--verbose]` (six fixed checks plus one row per known sync peer, exit 1 on any FAIL);
+  `daemon install|start|stop|status [--force]`; `device list|remove <id> [--yes]` (plan M4
+  tasks/sync-device-remove — removal confirms by making the human type the id back unless `--yes`);
   `pair [CODE]` (plan M4, design §4): no `CODE` starts a handshake as the initiator (renders the QR
   and text code from `PairOffer`); `CODE` joins as the joiner (`PairAccept`, real SAS, an explicit
   typed "yes" before `PairConfirmSas` — never a default yes). Refuses a detected `identity_mode`
@@ -19,20 +21,27 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   guessing a merge. The daemon-to-daemon leg (a joiner's key reaching the initiator, the sealed
   group key reaching the joiner back) has no transport yet, so the initiator cannot show a
   completed SAS and the joiner's confirmed pairing cannot receive the real group key today — both
-  say so plainly (`commands::pair`'s own module doc).
+  say so plainly (`commands::pair`'s own module doc). `open`/`notes`/`sub`/`prune --orphans` (plan
+  M5, `specs/ref-directories.md`): a line's `ref:` directory, its `notes.md` in `$EDITOR`, a scoped
+  `todo.sh -d`, and orphaned `ref:` directories no line points to (`--yes` to actually delete).
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
-- Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `url_schemes`) at `$TXTODO_CONFIG`,
-  else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` + `txtodo/config.toml`; env `TXTODO_TODO_DIR`.
-  Precedence: `--dir` > env > config > cwd. `identity_mode = "tagged"|"sidecar"` (docs/questions.md
-  Q2) is the name to reach for going forward; `id_tags` still works alone for an existing config,
-  but an unset config is `Sidecar` now, not `Tagged` (plan §1 decision 9, reversed).
+- Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `url_schemes`) at
+  `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` + `txtodo/config.toml`; env
+  `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd. `identity_mode =
+  "tagged"|"sidecar"` (docs/questions.md Q2) is the name to reach for going forward; `id_tags`
+  still works alone for an existing config, but an unset config is `Sidecar` now, not `Tagged`
+  (plan §1 decision 9, reversed). `key_store = "auto"|"os"|"file"` (plan M4 `sync-keystore`,
+  `Config::key_store_mode()`) mirrors the daemon's own `--key-store` flag by name; like
+  `identity_mode`, nothing in this crate threads it through the service install templates yet
+  (a pre-existing gap for that flag, not new here) — set it directly on `txtodod --key-store`
+  for now. `txtodo env` reports the effective value.
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `commands::{add, list, edit, archive, text, fileops, hygiene,
-  history, doctor, service, conflicts, env, pair}`; `main` = `dispatch` (direct) and
-  `dispatch_daemon`. `commands::env` and `commands::pair` are split out of `main.rs` (rather than
-  left inline, like every other dispatched command) purely for `main.rs`'s own file-length budget.
+  history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
+  (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
+  split out of `main.rs` purely for its own file-length budget.
 
 ## Invariants
 - Writes are atomic: temp file beside the target, fsync, rename. Untouched lines round-trip

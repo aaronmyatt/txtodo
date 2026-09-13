@@ -115,9 +115,9 @@ fn a_version_one_database_migrates_to_two_and_keeps_its_rows() {
         assert_eq!(v, 1);
     }
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.user_version().unwrap(), 5);
+    assert_eq!(store.user_version().unwrap(), 6);
     store.append(&[op(9, dev(9), 5)]).unwrap();
     assert_eq!(store.head_of(dev(9)).unwrap(), 1);
     let again = Store::open(&path).unwrap();
-    assert_eq!(again.user_version().unwrap(), 5, "idempotent");
+    assert_eq!(again.user_version().unwrap(), 6, "idempotent");
 }

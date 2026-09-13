@@ -196,6 +196,12 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<commands::conflicts::Action>,
     },
+    /// Devices paired into this workspace's sync group (daemon mode): `list` (default) or
+    /// `remove <id>`.
+    Device {
+        #[command(subcommand)]
+        action: Option<commands::device::Action>,
+    },
     /// Pair with another device: no CODE starts a handshake and shows a QR/code; CODE (scanned or
     /// pasted from the other device) joins it and shows the six-word SAS to compare (daemon mode,
     /// plan M4, design §4).

@@ -128,27 +128,22 @@ async fn handshake_and_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64
     assert_eq!(sas_a, sas_b, "both sides derive the same SAS");
 }
 
-#[tokio::test]
-async fn full_round_trip_converges_only_after_both_sides_confirm() {
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
-    let clock = Arc::new(FakeClock::new(1_000));
-    let a = service(dir_a.path(), Arc::clone(&clock));
-    let b = service(dir_b.path(), Arc::clone(&clock));
-    let now_ms = clock.now_ms();
+/// Both sides have called `pair_confirm_sas` but neither has learned of the other's confirmation
+/// (no transport): `try_finalize_initiator` reports not-ready. Then relays both confirmations and
+/// finishes the exchange for real, returning the group id both sides now hold.
+async fn finalize_after_both_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64) -> GroupId {
     let group = a.workspace().group();
-
-    handshake_and_confirm(&a, &b, now_ms).await;
-
-    // Both sides have called pair_confirm_sas, but neither has *learned* of the other's
-    // confirmation yet (no transport) — no key moves on a one-sided view of "confirmed".
-    let ready = |ws: &crate::server::TxtodoService| {
+    let ready = |ws: &TxtodoService| {
         ws.workspace()
             .pairing()
-            .try_finalize_initiator(ws.workspace().key_store().as_ref(), now_ms)
+            .try_finalize_initiator(
+                ws.workspace().key_store().as_ref(),
+                ws.workspace().device_static_public(),
+                now_ms,
+            )
             .unwrap()
     };
-    assert!(ready(&a).is_none());
+    assert!(ready(a).is_none());
 
     a.workspace()
         .pairing()
@@ -159,10 +154,24 @@ async fn full_round_trip_converges_only_after_both_sides_confirm() {
         .mark_remote_confirmed(now_ms)
         .unwrap();
 
-    let sealed = ready(&a).expect("both sides confirmed: the initiator now wraps its group key");
+    let sealed = ready(a).expect("both sides confirmed: the initiator now wraps its group key");
     b.workspace()
         .adopt_group_key(group, &sealed, now_ms)
         .unwrap();
+    group
+}
+
+#[tokio::test]
+async fn full_round_trip_converges_only_after_both_sides_confirm() {
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let clock = Arc::new(FakeClock::new(1_000));
+    let a = service(dir_a.path(), Arc::clone(&clock));
+    let b = service(dir_b.path(), Arc::clone(&clock));
+    let now_ms = clock.now_ms();
+
+    handshake_and_confirm(&a, &b, now_ms).await;
+    let group = finalize_after_both_confirm(&a, &b, now_ms).await;
 
     let key_a = a
         .workspace()
@@ -189,6 +198,32 @@ async fn full_round_trip_converges_only_after_both_sides_confirm() {
 }
 
 #[tokio::test]
+async fn pairing_registers_the_initiators_static_public_key_in_the_joiners_devices_table() {
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let clock = Arc::new(FakeClock::new(1_000));
+    let a = service(dir_a.path(), Arc::clone(&clock));
+    let b = service(dir_b.path(), Arc::clone(&clock));
+    let now_ms = clock.now_ms();
+
+    handshake_and_confirm(&a, &b, now_ms).await;
+    finalize_after_both_confirm(&a, &b, now_ms).await;
+
+    // Plan M4 tasks/sync-device-remove: the joiner registers the initiator's long-term static
+    // public key in its own `devices` table — the persistence rotation is gated on.
+    let b_ws = b.workspace();
+    let b_store = b_ws.store().lock().unwrap();
+    let devices = b_store.list_devices().unwrap();
+    assert_eq!(devices.len(), 1, "the joiner learned exactly one peer");
+    assert_eq!(devices[0].device, a.workspace().device());
+    assert_eq!(
+        devices[0].static_public,
+        a.workspace().device_static_public().to_bytes()
+    );
+    assert!(devices[0].removed_at_ms.is_none());
+}
+
+#[tokio::test]
 async fn one_sided_confirmation_lands_no_key_on_either_side() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
@@ -205,7 +240,11 @@ async fn one_sided_confirmation_lands_no_key_on_either_side() {
     let sealed = a
         .workspace()
         .pairing()
-        .try_finalize_initiator(a.workspace().key_store().as_ref(), now_ms)
+        .try_finalize_initiator(
+            a.workspace().key_store().as_ref(),
+            a.workspace().device_static_public(),
+            now_ms,
+        )
         .unwrap();
     assert!(sealed.is_none(), "one-sided confirmation transfers no key");
     assert!(

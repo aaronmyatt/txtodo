@@ -4,6 +4,7 @@
 pub mod add;
 pub mod archive;
 pub mod conflicts;
+pub mod device;
 pub mod doctor;
 pub mod edit;
 pub mod env;

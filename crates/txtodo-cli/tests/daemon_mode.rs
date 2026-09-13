@@ -236,3 +236,99 @@ fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
         "a refused resolve writes nothing"
     );
 }
+
+// --- plan M4 tasks/sync-device-remove: `txtodo device list`/`remove` ---
+// A fresh, never-paired workspace is a one-device group, so these exercise the guard paths
+// (unpaired list, "cannot remove the last device", the confirmation prompt) without needing a
+// real pairing handshake between two daemons — that is covered in-process, at the daemon layer,
+// by txtodo-daemon's pairing_grpc_tests.rs (see that crate's own notes on why a two-real-process
+// test is out of scope here).
+
+#[test]
+fn device_list_reports_none_before_any_pairing() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path());
+    let out = txtodo(dir.path(), &["device", "list"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        stdout(&out).contains("TODO: no paired devices."),
+        "{}",
+        stdout(&out)
+    );
+}
+
+#[test]
+fn device_remove_refuses_the_last_device_in_an_unpaired_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path());
+    // No peers at all: this device is the whole group, so any removal is refused before any
+    // crypto runs — `--yes` skips only the confirmation prompt, never this guard.
+    let out = txtodo(
+        dir.path(),
+        &["device", "remove", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "--yes"],
+    );
+    assert!(!out.status.success(), "removal must be refused");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("cannot remove the last device"), "{err}");
+}
+
+#[test]
+fn device_remove_without_yes_needs_the_id_typed_back() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path());
+    let mut child = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(dir.path())
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", dir.path().join("none.toml"))
+        .args(["device", "remove", "01ARZ3NDEKTSV4RRFFQ69G5FAV"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|e| panic!("spawn txtodo: {e}"));
+    // Closing stdin without writing anything is an EOF the prompt reads as an empty line, which
+    // never matches the id — refused, not a hang and not the "cannot remove the last device"
+    // guard (that check would also refuse it, but this test is specifically about confirmation).
+    drop(child.stdin.take());
+    let out = child
+        .wait_with_output()
+        .unwrap_or_else(|e| panic!("wait: {e}"));
+    assert!(!out.status.success(), "an unconfirmed removal must fail");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("not confirmed"), "{err}");
+}
+
+// --- plan M4 tasks/model-hlc-skew-guard + tasks/sync-keystore: `txtodo doctor` extensions ---
+
+#[test]
+fn doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path());
+    let out = txtodo(dir.path(), &["doctor"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = stdout(&out);
+    // The test daemon is spawned with no --key-store flag, so it resolves to the same in-memory
+    // placeholder `Workspace::open`/`open_with_default_mode` always have (see txtodo-daemon's
+    // main.rs doc: omitting the flag must never touch the real OS keychain).
+    assert!(text.contains("keystore"), "{text}");
+    assert!(
+        text.contains("key_store=memory") || text.contains("backend: memory"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("peer "),
+        "no peers before any pairing: {text}"
+    );
+}

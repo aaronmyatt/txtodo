@@ -54,6 +54,9 @@ pub enum StoreError {
     BadScopes(postcard::Error),
     /// A stored fingerprint's `projects`/`contexts` set did not decode (edited by hand).
     BadFingerprint(postcard::Error),
+    /// A stored device static public key is not 32 bytes (the database was edited by hand); the
+    /// length found.
+    BadStaticPublic(usize),
 }
 
 impl StoreError {
@@ -120,6 +123,9 @@ impl fmt::Display for StoreError {
             StoreError::BadFingerprint(source) => {
                 write!(f, "decode stored fingerprint project/context set: {source}")
             }
+            StoreError::BadStaticPublic(len) => {
+                write!(f, "stored device static public key is {len} bytes, not 32")
+            }
         }
     }
 }
@@ -139,7 +145,8 @@ impl std::error::Error for StoreError {
             | StoreError::BadRun { .. }
             | StoreError::ProjectionTooLarge(_)
             | StoreError::BadHash(_)
-            | StoreError::BadTokenId(_) => None,
+            | StoreError::BadTokenId(_)
+            | StoreError::BadStaticPublic(_) => None,
         }
     }
 }

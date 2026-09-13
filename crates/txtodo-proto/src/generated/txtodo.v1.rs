@@ -298,6 +298,10 @@ pub struct HealthResponse {
     pub writes_total: u64,
     #[prost(string, tag = "6")]
     pub version: ::prost::alloc::string::String,
+    /// The resolved sync keystore backend (plan M4 tasks/sync-keystore): "os" or "file". A human
+    /// should be able to answer "where are my keys?" from `txtodo doctor` without reading code.
+    #[prost(string, tag = "7")]
+    pub key_store_backend: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -451,6 +455,63 @@ pub struct OpLogEntry {
     #[prost(uint64, tag = "3")]
     pub at_ms: u64,
 }
+/// A device this workspace has paired with. `txtodo device list` and `txtodo doctor`'s per-peer
+/// clock line both read this one shape.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Device {
+    /// ULID text
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// this device; never removable
+    #[prost(bool, tag = "3")]
+    pub is_self: bool,
+    #[prost(bool, tag = "4")]
+    pub removed: bool,
+    /// newest epoch this device is known to hold
+    #[prost(uint32, tag = "5")]
+    pub key_epoch: u32,
+    #[prost(uint64, tag = "6")]
+    pub paired_at_ms: u64,
+    /// 0 = never contacted since registration
+    #[prost(uint64, tag = "7")]
+    pub last_seen_ms: u64,
+    #[prost(enumeration = "SkewStatus", tag = "8")]
+    pub skew_status: i32,
+    /// magnitude for BEHIND/AHEAD; 0 for OK/UNKNOWN
+    #[prost(uint64, tag = "9")]
+    pub skew_ms: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceListRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DeviceListResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub devices: ::prost::alloc::vec::Vec<Device>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceRemoveRequest {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceRemoveResponse {
+    /// false when the device was unknown
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+    /// true when it was removed before this call; nothing rotated
+    #[prost(bool, tag = "2")]
+    pub already_removed: bool,
+    /// 0 when nothing rotated
+    #[prost(uint32, tag = "3")]
+    pub rotated_to_epoch: u32,
+    /// Always present on a successful removal: the "does not un-share history" caveat (plan M4
+    /// tasks/sync-device-remove's own notes — a security feature the human believes does more than
+    /// it does is worse than no feature).
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum FileKind {
@@ -512,6 +573,46 @@ impl Resolution {
             "RESOLUTION_MINE" => Some(Self::Mine),
             "RESOLUTION_THEIRS" => Some(Self::Theirs),
             "RESOLUTION_MERGED" => Some(Self::Merged),
+            _ => None,
+        }
+    }
+}
+/// How a device's last-known clock reading compares to ours (txtodo_model::Skew), shared by
+/// `txtodo device list` and `txtodo doctor`'s per-peer clock line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SkewStatus {
+    Unspecified = 0,
+    /// No clock sample from this peer yet (e.g. paired but never yet synced).
+    Unknown = 1,
+    Ok = 2,
+    /// The peer lags by skew_ms, more than the bound. Safe to sync with; the human is warned.
+    Behind = 3,
+    /// The peer leads by skew_ms, more than the bound. A sync session with it is refused.
+    Ahead = 4,
+}
+impl SkewStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SKEW_STATUS_UNSPECIFIED",
+            Self::Unknown => "SKEW_STATUS_UNKNOWN",
+            Self::Ok => "SKEW_STATUS_OK",
+            Self::Behind => "SKEW_STATUS_BEHIND",
+            Self::Ahead => "SKEW_STATUS_AHEAD",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SKEW_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "SKEW_STATUS_UNKNOWN" => Some(Self::Unknown),
+            "SKEW_STATUS_OK" => Some(Self::Ok),
+            "SKEW_STATUS_BEHIND" => Some(Self::Behind),
+            "SKEW_STATUS_AHEAD" => Some(Self::Ahead),
             _ => None,
         }
     }
@@ -1082,6 +1183,59 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "OpLogStream"));
             self.inner.server_streaming(req, path, codec).await
         }
+        /// Devices paired into this workspace's sync group (plan M4 tasks/sync-device-remove). Removed
+        /// rows are kept, tombstoned like every other table in txtodo-store, not deleted.
+        pub async fn device_list(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeviceListRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeviceListResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/DeviceList",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DeviceList"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Removes a device and rotates the group key to the remaining devices (plan M4
+        /// tasks/sync-device-remove). Refuses removing this device itself or the last device; removing
+        /// an already-removed device rotates nothing and says so.
+        pub async fn device_remove(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DeviceRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeviceRemoveResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/DeviceRemove",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DeviceRemove"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1242,6 +1396,25 @@ pub mod txtodo_server {
             request: tonic::Request<super::OpLogRequest>,
         ) -> std::result::Result<
             tonic::Response<Self::OpLogStreamStream>,
+            tonic::Status,
+        >;
+        /// Devices paired into this workspace's sync group (plan M4 tasks/sync-device-remove). Removed
+        /// rows are kept, tombstoned like every other table in txtodo-store, not deleted.
+        async fn device_list(
+            &self,
+            request: tonic::Request<super::DeviceListRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeviceListResponse>,
+            tonic::Status,
+        >;
+        /// Removes a device and rotates the group key to the remaining devices (plan M4
+        /// tasks/sync-device-remove). Refuses removing this device itself or the last device; removing
+        /// an already-removed device rotates nothing and says so.
+        async fn device_remove(
+            &self,
+            request: tonic::Request<super::DeviceRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DeviceRemoveResponse>,
             tonic::Status,
         >;
     }
@@ -2234,6 +2407,94 @@ pub mod txtodo_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/DeviceList" => {
+                    #[allow(non_camel_case_types)]
+                    struct DeviceListSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::DeviceListRequest>
+                    for DeviceListSvc<T> {
+                        type Response = super::DeviceListResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DeviceListRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::device_list(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = DeviceListSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/DeviceRemove" => {
+                    #[allow(non_camel_case_types)]
+                    struct DeviceRemoveSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::DeviceRemoveRequest>
+                    for DeviceRemoveSvc<T> {
+                        type Response = super::DeviceRemoveResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DeviceRemoveRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::device_remove(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = DeviceRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)

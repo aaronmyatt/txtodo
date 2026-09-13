@@ -35,11 +35,11 @@ fn open(dir: &Path) -> Store {
 fn open_migrates_once_and_is_idempotent_in_wal_mode() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(dir.path());
-    assert_eq!(store.user_version().unwrap(), 5);
+    assert_eq!(store.user_version().unwrap(), 6);
     assert_eq!(store.journal_mode().unwrap(), "wal");
     drop(store);
     let again = open(dir.path());
-    assert_eq!(again.user_version().unwrap(), 5);
+    assert_eq!(again.user_version().unwrap(), 6);
     assert_eq!(again.last_seq().unwrap(), None);
 }
 

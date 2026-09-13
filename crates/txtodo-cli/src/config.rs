@@ -61,6 +61,30 @@ pub enum IdentityMode {
     Sidecar,
 }
 
+/// Which sync-keystore backend to resolve (plan M4 `sync-keystore`). This crate's own copy —
+/// `txtodo-sync::KeyStoreMode` isn't a dependency this crate may take — spelled the same way as
+/// the daemon's own `--key-store` flag.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyStoreMode {
+    /// Prefer the OS backend; stop and ask rather than fall back to a file.
+    Auto,
+    /// OS keystore only. Unavailable is a hard error naming the reason.
+    Os,
+    /// Encrypted file only, chosen deliberately.
+    File,
+}
+
+impl KeyStoreMode {
+    /// The lowercase word `txtodo env` prints, matching the config/flag spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            KeyStoreMode::Auto => "auto",
+            KeyStoreMode::Os => "os",
+            KeyStoreMode::File => "file",
+        }
+    }
+}
+
 /// `config.toml` as read from disk; every field optional (design §2.2 rule 4: absent means default).
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -76,6 +100,11 @@ pub struct Config {
     pub identity_mode: Option<String>,
     /// URL schemes recognised before tags; default `txtodo_core::urls::DEFAULT_SCHEMES`.
     pub url_schemes: Option<Vec<String>>,
+    /// `"auto"` | `"os"` | `"file"` (plan M4 `sync-keystore`); unset or unrecognised is `"auto"`.
+    /// Threaded to the daemon's own `--key-store` flag the same way `identity_mode` is threaded
+    /// to `--identity-mode` (see that flag's own known gap: the service templates do not pass
+    /// either through yet — a pre-existing limitation, not something this field introduces).
+    pub key_store: Option<String>,
 }
 
 /// A config file that exists but cannot be used.
@@ -126,6 +155,15 @@ impl Config {
         match self.id_tags {
             Some(true) => IdentityMode::Tagged,
             Some(false) | None => IdentityMode::Sidecar,
+        }
+    }
+    /// Effective sync-keystore backend mode (plan M4 `sync-keystore`); unset or unrecognised is
+    /// `Auto`, the same "never fall back silently" default the daemon flag itself defaults to.
+    pub fn key_store_mode(&self) -> KeyStoreMode {
+        match self.key_store.as_deref() {
+            Some("os") => KeyStoreMode::Os,
+            Some("file") => KeyStoreMode::File,
+            _ => KeyStoreMode::Auto,
         }
     }
     /// Effective `id_tags`, derived from `identity_mode()` when `id_tags` itself isn't set.

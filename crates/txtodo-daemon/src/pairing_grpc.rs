@@ -125,8 +125,8 @@ fn pairing_status(e: PairingStateError) -> Status {
         | PairingStateError::NotActive
         | PairingStateError::WrongRole
         | PairingStateError::Session(_) => Status::failed_precondition(e.to_string()),
-        PairingStateError::KeyStore(_) | PairingStateError::Store(_) => {
-            Status::internal(e.to_string())
-        }
+        PairingStateError::KeyStore(_)
+        | PairingStateError::Store(_)
+        | PairingStateError::CorruptGroupKey(_) => Status::internal(e.to_string()),
     }
 }

@@ -281,6 +281,7 @@ impl Txtodo for TxtodoService {
             started_at_ms: ws.started_at_ms(),
             writes_total,
             version: env!("CARGO_PKG_VERSION").to_owned(),
+            key_store_backend: ws.key_store_backend_name().to_owned(),
         }))
     }
 
@@ -358,5 +359,19 @@ impl Txtodo for TxtodoService {
         r: Request<pb::OpLogRequest>,
     ) -> Result<Response<Self::OpLogStreamStream>, Status> {
         self.op_log_stream_impl(r).await
+    }
+
+    async fn device_list(
+        &self,
+        r: Request<pb::DeviceListRequest>,
+    ) -> Result<Response<pb::DeviceListResponse>, Status> {
+        self.device_list_impl(r).await
+    }
+
+    async fn device_remove(
+        &self,
+        r: Request<pb::DeviceRemoveRequest>,
+    ) -> Result<Response<pb::DeviceRemoveResponse>, Status> {
+        self.device_remove_impl(r).await
     }
 }

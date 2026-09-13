@@ -6,9 +6,10 @@
 use prost::Message;
 use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
-    Edit, FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
-    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, TaskRef, TreeNode,
-    UndoRequest, WatchRequest, mutation,
+    Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
+    FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
+    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, SkewStatus, TaskRef,
+    TreeNode, UndoRequest, WatchRequest, mutation,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -119,6 +120,7 @@ fn responses_and_streams_round_trip() {
         started_at_ms: 20,
         writes_total: 30,
         version: "0.0.0".into(),
+        key_store_backend: "os".into(),
     });
 }
 
@@ -143,5 +145,31 @@ fn requests_round_trip() {
     round_trip(&CheckoutRequest {
         path: "todo.txt".into(),
         at_wall_ms: 99,
+    });
+    round_trip(&DeviceListRequest {});
+    round_trip(&DeviceRemoveRequest { id: "x".into() });
+}
+
+#[test]
+fn device_messages_round_trip() {
+    round_trip(&Device {
+        id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        name: "laptop".into(),
+        is_self: false,
+        removed: false,
+        key_epoch: 2,
+        paired_at_ms: 1_000,
+        last_seen_ms: 2_000,
+        skew_status: SkewStatus::Behind as i32,
+        skew_ms: 400_000,
+    });
+    round_trip(&DeviceListResponse {
+        devices: vec![Device::default()],
+    });
+    round_trip(&DeviceRemoveResponse {
+        removed: true,
+        already_removed: false,
+        rotated_to_epoch: 3,
+        message: "Rotated to key epoch 3.".into(),
     });
 }

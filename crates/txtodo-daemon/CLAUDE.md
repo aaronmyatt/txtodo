@@ -8,6 +8,8 @@ the file, docs/questions.md Q2) under construction 2026-09-13 — `DocState`/`re
 aware and `reconcile_sidecar`/`identity_fingerprint`/`identity_assign`/`identity_levenshtein` exist
 and are unit-tested, but nothing wires a real workspace to sidecar mode yet (no `ActorConfig`
 field, no `--identity-mode` flag): every workspace still runs tagged mode today.
+Devices table wiring, keystore resolution and `DeviceList`/`DeviceRemove` (plan M4
+tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added 2026-09-13.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
@@ -29,6 +31,22 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`,
   `pidfile` · `tokens` (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity`
   (`OpLogStream`, plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
+- `workspace_error` (`WorkspaceError`) and `workspace_mint` (device/group/identity-mode load-or-
+  mint helpers) are split out of `workspace.rs` for its line budget, the same pattern as
+  `txtodo-sync`'s `*_error.rs` files. `keystore_setup` resolves the real OS/file sync-keystore
+  backend for `Workspace::open_with_key_store` (plan M4 `sync-keystore`) — `resolve`/
+  `open`/`open_with_default_mode` (every test in this crate) still use an in-memory placeholder,
+  never OS-keychain-reachability-dependent. `device_remove` (plan M4 `tasks/sync-device-remove`):
+  `Workspace::remove_device` — validates via `txtodo_sync::validate_removal` (never self, never the
+  last device), rotates the group key epoch via `txtodo_sync::plan_rotation` when peers remain,
+  tombstones the row (`txtodo_store::Store::remove_device`). Every store lock is scoped to a block,
+  never held across a call into another `Workspace` method that re-locks it — `std::sync::Mutex` is
+  not reentrant, and an earlier version of this deadlocked exactly that way (caught by
+  `device_remove_tests.rs`, which now runs with a real, not in-memory, workspace store). `devices_grpc`
+  (`DeviceList`/`DeviceRemove`) — an `impl TxtodoService` extension like `progress`/`tokens`;
+  `DeviceList` also carries each peer's `SkewStatus` (`txtodo_model::Skew::check` against
+  `last_known_wall_ms`) so `txtodo doctor`'s per-peer clock line (plan M4
+  `tasks/model-hlc-skew-guard`) and `txtodo device list` share one RPC and one classification.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
@@ -48,7 +66,11 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
   `tests/editor_saves.rs`, `tests/crash.rs` (kill -9 rounds) — the last three spawn the real binary
-  through `tests/support`.
+  through `tests/support`. `pairing_grpc_tests.rs` also asserts pairing registers the initiator's
+  static public key in the joiner's `devices` table; `device_remove_tests.rs` covers
+  `Workspace::remove_device`'s guards and rotation. Both are in-process, single-daemon tests — no
+  test here spawns two real `txtodod` processes on the network (out of scope; see the module doc's
+  known gap on grant delivery).
 - Bench: `benches/reconcile.rs`, `reconcile_10k_one_edit` measured 12.1 ms (budget 20 ms).
 
 ## Invariants

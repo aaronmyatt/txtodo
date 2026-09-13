@@ -62,6 +62,14 @@ service Txtodo {
 
   // Streams the op log (ADR 0004) newest-first for the devices/agents activity feed.
   rpc OpLogStream(OpLogRequest) returns (stream OpLogEntry);
+
+  // Devices paired into this workspace's sync group (plan M4 tasks/sync-device-remove). Removed
+  // rows are kept, tombstoned like every other table in txtodo-store, not deleted.
+  rpc DeviceList(DeviceListRequest) returns (DeviceListResponse);
+  // Removes a device and rotates the group key to the remaining devices (plan M4
+  // tasks/sync-device-remove). Refuses removing this device itself or the last device; removing
+  // an already-removed device rotates nothing and says so.
+  rpc DeviceRemove(DeviceRemoveRequest) returns (DeviceRemoveResponse);
 }
 
 message ListFilesRequest {}
@@ -237,6 +245,9 @@ message HealthResponse {
   uint64 started_at_ms = 4;
   uint64 writes_total = 5;
   string version = 6;
+  // The resolved sync keystore backend (plan M4 tasks/sync-keystore): "os" or "file". A human
+  // should be able to answer "where are my keys?" from `txtodo doctor` without reading code.
+  string key_store_backend = 7;
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -332,4 +343,49 @@ message OpLogEntry {
   string principal = 1;    // "you@dev" / "agent:name@dev" / "external@dev" — same as OpSummary
   string op = 2;           // one-line human summary, same shape as OpSummary.summary
   uint64 at_ms = 3;
+}
+
+// --- devices (plan M4 tasks/sync-device-remove, tasks/model-hlc-skew-guard) ---
+
+// How a device's last-known clock reading compares to ours (txtodo_model::Skew), shared by
+// `txtodo device list` and `txtodo doctor`'s per-peer clock line.
+enum SkewStatus {
+  SKEW_STATUS_UNSPECIFIED = 0;
+  // No clock sample from this peer yet (e.g. paired but never yet synced).
+  SKEW_STATUS_UNKNOWN = 1;
+  SKEW_STATUS_OK = 2;
+  // The peer lags by skew_ms, more than the bound. Safe to sync with; the human is warned.
+  SKEW_STATUS_BEHIND = 3;
+  // The peer leads by skew_ms, more than the bound. A sync session with it is refused.
+  SKEW_STATUS_AHEAD = 4;
+}
+
+// A device this workspace has paired with. `txtodo device list` and `txtodo doctor`'s per-peer
+// clock line both read this one shape.
+message Device {
+  string id = 1;                // ULID text
+  string name = 2;
+  bool is_self = 3;              // this device; never removable
+  bool removed = 4;
+  uint32 key_epoch = 5;          // newest epoch this device is known to hold
+  uint64 paired_at_ms = 6;
+  uint64 last_seen_ms = 7;       // 0 = never contacted since registration
+  SkewStatus skew_status = 8;
+  uint64 skew_ms = 9;            // magnitude for BEHIND/AHEAD; 0 for OK/UNKNOWN
+}
+
+message DeviceListRequest {}
+
+message DeviceListResponse { repeated Device devices = 1; }
+
+message DeviceRemoveRequest { string id = 1; }   // ULID text
+
+message DeviceRemoveResponse {
+  bool removed = 1;              // false when the device was unknown
+  bool already_removed = 2;      // true when it was removed before this call; nothing rotated
+  uint32 rotated_to_epoch = 3;   // 0 when nothing rotated
+  // Always present on a successful removal: the "does not un-share history" caveat (plan M4
+  // tasks/sync-device-remove's own notes — a security feature the human believes does more than
+  // it does is worse than no feature).
+  string message = 4;
 }

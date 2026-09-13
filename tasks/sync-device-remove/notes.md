@@ -113,3 +113,79 @@ memory.
   `txtodo device list`/`txtodo device remove` CLI, and the six `@test` subtasks that need a real
   `KeyStore` + `devices` table wired together (this crate's own unit tests cover the crypto
   primitives those integration tests would exercise, but not the sequencing itself).
+
+## As built (2026-09-13, agent) — the `devices` table, daemon wiring, and the CLI
+
+Picks up exactly where the previous pass left off: the crypto (`wrap_grant_for`/`open_grant`/
+`plan_rotation`/`validate_removal`) is unchanged and reused as-is, nowhere reimplemented.
+
+- `crates/txtodo-store/migrations/0006.sql` (schema now 6) + `crates/txtodo-store/src/devices.rs`:
+  the `devices` table — `device`, `name`, `static_public` (32 bytes, plain — this crate cannot
+  depend on `txtodo-sync`'s `DeviceStaticPublic`), `paired_at`, `last_seen`, `last_known_wall`
+  (the peer's own clock reading, `NULL` until observed — feeds `model-hlc-skew-guard`'s doctor
+  line), `key_epoch`, `removed_at`. `register_device` (upsert, un-tombstones a rejoining device —
+  same idiom as `upsert_fingerprint`), `list_devices`, `device`, `remove_device` (idempotent
+  tombstone), `set_device_key_epoch`. Removed rows are kept, never deleted, like every other table
+  here — the wire boundary decides visibility.
+- Pairing now actually registers a peer (`crates/txtodo-daemon/src/pairing_state.rs`,
+  `crates/txtodo-daemon/src/workspace.rs::adopt_group_key`): `try_finalize_initiator`/
+  `adopt_group_key` were still calling the bare `wrap_group_key`/`unwrap_group_key` from
+  `sync-pairing`, not the `PairingGrant`-bundling `wrap_grant`/`unwrap_grant` this task's own crypto
+  pass built for exactly this purpose. Switched them over: the initiator now sends its own
+  `DeviceStaticPublic` alongside the group key, and the joiner's `adopt_group_key` registers it in
+  its `devices` table. `pairing_grpc_tests.rs` gained
+  `pairing_registers_the_initiators_static_public_key_in_the_joiners_devices_table`, driven the
+  same in-process, no-transport way every other test in that file already is (relay-seam methods,
+  not a real socket).
+  - **Known, explicitly scoped gap**: only the joiner registers the initiator. The reverse
+    direction (the initiator learning the joiner's static key) needs a second `PairingGrant` to
+    flow back, and the only place bytes cross between two real daemons is the LAN transport
+    (`sync-lan-transport`), which does not exist yet (see that task's own notes). The pairing
+    *session* already supports both directions symmetrically
+    (`pairing_also_registers_each_sides_static_public_key` in `txtodo-sync`'s own tests proves
+    it) — this is a daemon-wiring gap, not a crypto one, and it means a 2-device group only has
+    the *joiner's* devices table populated until a transport exists to carry the return trip.
+- `crates/txtodo-daemon/src/device_remove.rs` — `Workspace::remove_device(target, now_ms)`:
+  `validate_removal` first (never self, never the last device — devices_before is peer-count + 1,
+  since the table holds peers only, never a self-row), idempotent tombstone, generates a fresh
+  epoch key and calls `plan_rotation` for whatever peers remain (skipped, not treated as an error,
+  when removing the last peer leaves a solo group — nobody to grant to), stores the new epoch's key
+  under this workspace's own keystore, advances `meta`'s `group_key_epoch`, tombstones the target,
+  advances each remaining peer's `key_epoch` column. Sequencing matches the task notes: the new
+  epoch lands locally *before* the target row is tombstoned.
+  - **Known gap, flagged for the human**: `plan_rotation`'s `WrappedGrant`s are computed for real
+    (proving the crypto integrates) but not persisted or delivered anywhere — there is no "pending
+    grants" store. "A device offline during rotation comes back and finds its grant" (this task's
+    own acceptance criterion) needs either the LAN transport or a new store this task deliberately
+    did not add (the brief asked for the `devices` table, not a second one). Each remaining
+    device's `key_epoch` column records what this device *believes* it has minted a grant for, not
+    confirmed delivery.
+  - Found and fixed a real deadlock while writing `device_remove_tests.rs`: an earlier version held
+    the store's `std::sync::Mutex` across a call into another `Workspace` method that re-locked it
+    (`Mutex` is not reentrant). Every lock is now scoped to a block. `device_remove_tests.rs` (6
+    tests): self-removal refused, last-device-in-a-solo-group refused, unknown device is a no-op
+    (not an error), a real two-peer removal rotates the epoch/tombstones/advances the remaining
+    peer, removing the sole remaining peer still rotates (with `grants_minted: 0`), and idempotent
+    re-removal rotates nothing.
+- `crates/txtodo-proto`: `Device`/`DeviceListRequest`/`DeviceListResponse`/`DeviceRemoveRequest`/
+  `DeviceRemoveResponse`/`SkewStatus` messages, `DeviceList`/`DeviceRemove` RPCs.
+  `crates/txtodo-daemon/src/devices_grpc.rs` wires them (same split as `tokens.rs`/`pairing_grpc.rs`);
+  `DeviceRemoveResponse.message` always carries the "does not un-share history... only ops made from
+  now on" caveat verbatim, per this task's own "say the true thing" section.
+- `txtodo device list|remove <id> [--yes]` (`crates/txtodo-cli/src/commands/device.rs`): list shows
+  id/name/last-seen/key-epoch/is-self/clock-skew; remove requires typing the device's id back to
+  confirm (CLAUDE.md: outward-facing, hard to reverse) unless `--yes`, then prints the daemon's own
+  caveat message. Covered by `crates/txtodo-cli/tests/daemon_mode.rs` (spawns a real `txtodod`):
+  list-before-pairing, last-device-refused (with `--yes`, proving the guard isn't just the prompt),
+  and an EOF on stdin refusing an unconfirmed removal rather than hanging or defaulting to yes.
+- **Not attempted, and explicitly out of scope for this pass** (per the task brief): a real
+  two-`txtodod`-process integration test. Everything above is exercised either as a daemon-crate
+  unit/in-process test (pairing registration, removal/rotation) or a single-daemon CLI integration
+  test (the guard paths) — nothing here spins up two live daemons on a real or simulated network.
+  The six `@test` subtasks from the original notes that specifically asked for that
+  (`sync-loopback-converge`-style, real `KeyStore` + `devices` table across two processes reading
+  new-epoch ops) still need `sync-lan-transport` before they can exist as anything but the
+  in-process approximations above.
+- `cargo build --workspace`, `cargo test -p txtodo-store -p txtodo-daemon -p txtodo-cli` (includes
+  `tests/crash.rs`, which spawns the real binary and kills it mid-write), `cargo clippy --workspace
+  --all-targets -D warnings`, `cargo fmt --all --check` all clean.
