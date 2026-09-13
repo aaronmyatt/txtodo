@@ -10,6 +10,8 @@ and are unit-tested, but nothing wires a real workspace to sidecar mode yet (no 
 field, no `--identity-mode` flag): every workspace still runs tagged mode today.
 Devices table wiring, keystore resolution and `DeviceList`/`DeviceRemove` (plan M4
 tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added 2026-09-13.
+Real cross-device pairing over the LAN transport (plan M4 `sync-pairing`'s LAN wiring pass —
+`pairing_lan.rs`, `pairing_lan_state.rs`, the `PairAwaitPeer` RPC) added the same day.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
@@ -64,14 +66,28 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   a local edit made after an earlier sync round still converges quickly without this module
   watching the store for changes — the cost (a QUIC handshake roughly every second while paired) is
   a known, flagged tradeoff; see Invariants for the rest of this pass's real scope limits (per-op
-  signatures are a stand-in derived key, not real per-device attribution; pairing not wired over
-  this transport) and the corrected same-*process* (not same-host) connect finding. `lan_status.rs`:
+  signatures are a stand-in derived key, not real per-device attribution) and the corrected same-
+  *process* (not same-host) connect finding. `lan.rs`'s accept loop (plan M4 `sync-pairing`'s LAN
+  wiring pass) also dispatches by `IrohLink::alpn()`: `txtodo_sync::PAIRING_ALPN` routes to
+  `pairing_lan::handle_incoming` instead of the group-sync driver, since one bound endpoint now
+  accepts both kinds of connection. `rebuild_on_group_change` (called on the same `RESYNC_INTERVAL`
+  tick) re-registers `Discovery` and rebuilds `PeerTable` when `Workspace::group()` has changed
+  since this task's own `setup()` ran — the fix for a real gap: pairing can change a workspace's
+  group *after* `lan.rs` already bound `Discovery`/`PeerTable` to the old one, and neither notices a
+  later change on its own; without this, a freshly paired joiner would hold the right group key but
+  never actually be found by (or find) its peer. `lan_status.rs`:
   `LanStatus` (endpoint-bound/
   discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and updated by `lan.rs`;
   `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/
-  `lan_group_key_present`. `debug_hooks.rs`: `DebugSetGroupKey`'s handler and `Workspace::
-  debug_set_group_key`/`has_group_key` — the test-only seam a real two-daemon test pairs through
-  (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`, refused with `UNIMPLEMENTED` unless set to `"1"`).
+  `lan_group_key_present`. `pairing_lan_state.rs`'s `PairingLan` (plan M4 `sync-pairing`'s LAN
+  wiring pass) is `lan.rs`'s other piece of shared state: the bound `LanEndpoint` (so the pairing
+  relay driver can reuse it rather than binding a second one) and every raw mDNS sighting
+  regardless of group (`lan.rs`'s own `KnownPeers`/`PeerTable` are group-filtered by design and
+  cannot serve pairing's "find this specific peer before we share a group" lookup). `debug_hooks.rs`:
+  `DebugSetGroupKey`'s handler and `Workspace::debug_set_group_key`/`has_group_key` — a test-only
+  seam still used by `lan_loopback_converge.rs`/`nested_ref_sync.rs` for tests that seed a shared
+  group up front rather than exercise pairing itself (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`,
+  refused with `UNIMPLEMENTED` unless set to `"1"`); `tests/pairing_lan.rs` pairs for real instead.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
@@ -116,10 +132,13 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
   `tests/editor_saves.rs`, `tests/crash.rs` (kill -9 rounds) — the last three spawn the real binary
   through `tests/support`. `pairing_grpc_tests.rs` also asserts pairing registers the initiator's
-  static public key in the joiner's `devices` table; `device_remove_tests.rs` covers
-  `Workspace::remove_device`'s guards and rotation. Both are in-process, single-daemon tests — no
-  test here spawns two real `txtodod` processes on the network (out of scope; see the module doc's
-  known gap on grant delivery).
+  static public key in the joiner's `devices` table (in-process, single-daemon, whitebox — still
+  the right tool for asserting a group key never appears on the wire); `device_remove_tests.rs`
+  covers `Workspace::remove_device`'s guards and rotation. `tests/pairing_lan.rs` (plan M4
+  `sync-pairing`'s LAN wiring pass) is the real two-daemon proof `pairing_grpc_tests.rs`
+  deliberately isn't: two real `txtodod` processes complete `PairOffer`/`PairAccept`/
+  `PairConfirmSas` over the real LAN transport, no `DebugSetGroupKey`, asserting identical SAS
+  words, the group key landing on the joiner, and the joiner's file converging to the initiator's.
 - Bench: `benches/reconcile.rs`, `reconcile_10k_one_edit` measured 12.1 ms (budget 20 ms).
 
 ## Invariants
@@ -171,13 +190,25 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   only, not at rest. Each connection is one short-lived convergence burst
   (`IrohLink`'s idle timeout in `txtodo-sync`), and `lan.rs`'s periodic redial is what makes that
   keep converging new local edits — see `lan.rs`'s own doc for why, and the tradeoff it accepts.
-  Real pairing has no transport over the LAN link yet (`pairing_grpc.rs`'s own module doc) — a real
-  two-daemon test pairs through the test-only `DebugSetGroupKey` RPC instead (refused unless
-  `TXTODO_TEST_HOOKS=1`), never a production path. **Corrected finding (this pass's own step-3
+  Real pairing now has a transport over the LAN link (plan M4 `sync-pairing`'s LAN wiring pass,
+  `pairing_lan.rs`) — `DebugSetGroupKey` remains for tests that want to seed a shared group
+  up front rather than exercise pairing itself (still refused unless `TXTODO_TEST_HOOKS=1`), never
+  a production path; `tests/pairing_lan.rs` is the real two-daemon proof of the production one.
+  **Corrected finding (this pass's own step-3
   investigation):** a real QUIC connect between two `iroh` endpoints *does* work between two real
   `txtodod` processes on the same host — the earlier belief that same-host connects are blocked
   outright was wrong; the actual upstream `noq-proto`/`iroh` bug fires only when both endpoints
   live in the *same process* (`txtodo-sync`'s `endpoint_tests.rs` has the corrected, evidenced
   diagnosis). `tests/lan_loopback_converge.rs` is the real, repeatable, cross-process proof.
+- Pairing relay (`pairing_lan.rs`, plan M4 `sync-pairing`'s LAN wiring pass): `process_hello`
+  checks `PairingLan::cached_grant` *before* requiring an active `PairingRegistry` session, not
+  after — `try_finalize_initiator` clears that session on success (by design), so a retried
+  `JoinerHello` arriving after a dropped reply must still find the cached grant rather than seeing
+  `NotActive`. `finish_joiner` (the joiner's own completion) calls `mark_remote_confirmed` on the
+  joiner's *own* session before `adopt_group_key`: `is_ready_to_send_key` reads one local session's
+  own `remote_confirmed` flag, which the joiner's side has no other way to learn — receiving a
+  non-empty `Grant` at all is itself proof the initiator's session was ready to send one. Both were
+  real bugs found only by actually driving the handshake end to end, not by unit-testing either
+  side in isolation — a lesson for anything that touches this file again.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
   txtodo-sync, txtodo-proto, txtodo-mcp.
