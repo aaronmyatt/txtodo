@@ -5,26 +5,38 @@
 //! workspace with no group key yet. `iroh`/`mdns-sd` never appear here or anywhere else in this
 //! crate; only `txtodo_sync`'s own types do (`.claude/budgets.json`'s `allowedDeps`).
 //!
-//! **Known limitation, not a bug in this module**: two endpoints on the very same host cannot
-//! actually complete a QUIC connection right now (`txtodo-sync`'s `endpoint_tests.rs` and
-//! `CLAUDE.md` have the full diagnosis) — a real LAN with two distinct machines is not expected to
-//! hit it. This module dials and accepts in good faith regardless; on this sandbox a dial simply
-//! times out or fails, logged and left to the next discovery re-announcement, exactly like any
-//! other transient LAN failure would be handled.
+//! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
+//! closed after `IDLE_TIMEOUT` (750 ms) of silence, not only on a real close, so
+//! `lan_session::drive_session` naturally returns once a connection has caught the peer up and
+//! gone quiet. The periodic resync below (`spawn_resync_dial`, driven from `run`'s own timer) is
+//! the other half: every known peer is redialed every `RESYNC_INTERVAL`, so a local edit made
+//! after an earlier round still converges quickly, without this module needing to watch the store
+//! for changes. The cost — a new QUIC handshake roughly every second for as long as two daemons
+//! stay paired and on the LAN — is a known, flagged tradeoff of this M4-scoped design; a
+//! push/notify model would avoid it.
+//!
+//! **Real same-host, cross-process connect works.** An earlier pass of this task believed a real
+//! `iroh` QUIC connect could never complete between two endpoints on the same host at all — true
+//! only when both endpoints live in the *same process* (confirmed with hard evidence in
+//! `txtodo-sync`'s `endpoint_tests.rs`). Two real `txtodod` *processes* on one machine connect and
+//! sync for real: `tests/lan_loopback_converge.rs` measures real, repeatable sub-2-second
+//! convergence in both directions. `LanEndpoint::connect` still prefers non-loopback addresses
+//! (falling back to loopback only when nothing else was advertised) since a real LAN would never
+//! offer only loopback in the first place — see `txtodo-sync`'s `CLAUDE.md`.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
-use txtodo_sync::{
-    DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, PeerEvent, PeerTable, Sighting,
-    backoff_ms,
-};
+use txtodo_sync::{DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, Sighting};
 
 use crate::clock::Clock;
+use crate::lan_peers::{
+    DialState, KnownPeers, SharedDialState, peers_to_resync, record_dial_outcome, remember_peer,
+    worth_dialing,
+};
 use crate::lan_session::{drive_session, read};
 use crate::server::SharedWorkspace;
 
@@ -34,6 +46,11 @@ pub const MAX_CONCURRENT_LAN_SESSIONS: usize = 16;
 
 /// Bounded: a real connect that never resolves (a black-holed peer) cannot hang this forever.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How often already-known peers are redialed — see the module doc on why this, together with
+/// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Longer than `IDLE_TIMEOUT` so the
+/// common case is one live session per peer, not two briefly overlapping ones.
+const RESYNC_INTERVAL: Duration = Duration::from_millis(1_000);
 
 /// The background LAN transport task; `abort()` on daemon shutdown, same pattern as
 /// `watch_task`'s `JoinHandle`.
@@ -53,38 +70,6 @@ impl LanTransport {
 pub fn start(ws: SharedWorkspace, clock: Arc<dyn Clock>) -> LanTransport {
     LanTransport {
         task: tokio::spawn(run(ws, clock)),
-    }
-}
-
-/// Attempt/backoff bookkeeping per peer: when we last dialed, and how many failures in a row.
-#[derive(Default)]
-struct DialState {
-    last_attempt_ms: BTreeMap<DeviceId, u64>,
-    failures: BTreeMap<DeviceId, u32>,
-}
-
-impl DialState {
-    /// Whether enough time has passed since the last attempt at `peer`, per `backoff_ms`.
-    fn due(&self, peer: DeviceId, now_ms: u64) -> bool {
-        match self.last_attempt_ms.get(&peer) {
-            None => true,
-            Some(&last) => {
-                let attempt = self.failures.get(&peer).copied().unwrap_or(0);
-                now_ms.saturating_sub(last) >= backoff_ms(attempt)
-            }
-        }
-    }
-
-    fn record_attempt(&mut self, peer: DeviceId, now_ms: u64) {
-        self.last_attempt_ms.insert(peer, now_ms);
-    }
-
-    fn record_failure(&mut self, peer: DeviceId) {
-        *self.failures.entry(peer).or_insert(0) += 1;
-    }
-
-    fn record_success(&mut self, peer: DeviceId) {
-        self.failures.remove(&peer);
     }
 }
 
@@ -133,19 +118,29 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
     else {
         return;
     };
-    let mut table = PeerTable::new(ctx.device, ctx.group);
-    let dial_state = Arc::new(std::sync::Mutex::new(DialState::default()));
+    let mut table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
+    let dial_state: SharedDialState = Arc::new(std::sync::Mutex::new(DialState::default()));
+    let known_peers: KnownPeers =
+        Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::new()));
     let sessions = Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS));
+    let mut resync = tokio::time::interval(RESYNC_INTERVAL);
+    resync.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
             incoming = endpoint.accept() => accept_one(incoming, &sessions, &ctx),
             sighting = browse.recv() => {
                 let keep_going = handle_sighting(
-                    sighting, &mut table, &dial_state, clock.as_ref(), &sessions, &ctx, &endpoint,
+                    sighting, &mut table, &dial_state, &known_peers, clock.as_ref(), &sessions,
+                    &ctx, &endpoint,
                 );
                 if !keep_going {
                     return;
+                }
+            }
+            _ = resync.tick() => {
+                for peer in peers_to_resync(&known_peers, ctx.device) {
+                    spawn_resync_dial(Arc::clone(&sessions), ctx.clone(), Arc::clone(&endpoint), peer);
                 }
             }
         }
@@ -155,8 +150,9 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
 #[allow(clippy::too_many_arguments)]
 fn handle_sighting(
     sighting: Option<Sighting>,
-    table: &mut PeerTable,
-    dial_state: &Arc<std::sync::Mutex<DialState>>,
+    table: &mut txtodo_sync::PeerTable,
+    dial_state: &SharedDialState,
+    known_peers: &KnownPeers,
     clock: &dyn Clock,
     sessions: &Arc<Semaphore>,
     ctx: &LanCtx,
@@ -168,6 +164,7 @@ fn handle_sighting(
     };
     let now_ms = clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
+        remember_peer(known_peers, &peer);
         spawn_dial(
             Arc::clone(sessions),
             ctx.clone(),
@@ -254,47 +251,32 @@ fn accept_one(
     spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
 }
 
-/// `table.observe` plus the dial tie-break and backoff check, collapsed to one `Option`: `Some`
-/// only when this device should actually dial `peer` right now.
-fn worth_dialing(
-    sighting: Sighting,
-    table: &mut PeerTable,
-    dial_state: &Arc<std::sync::Mutex<DialState>>,
-    now_ms: u64,
-    device: DeviceId,
-) -> Option<DiscoveredPeer> {
-    let PeerEvent::Found(peer) = table.observe(sighting.announcement, sighting.addresses, now_ms)
-    else {
-        return None;
-    };
-    log_peer_found(&peer);
-    let mut dial_state = dial_state
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // Tie-break: only the lower device id dials, so two daemons that discover each other at the
-    // same moment never open two redundant connections.
-    if device >= peer.device || !dial_state.due(peer.device, now_ms) {
-        return None;
-    }
-    dial_state.record_attempt(peer.device, now_ms);
-    Some(peer)
+fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
+    tracing::debug!(peer = %peer, error = %e, "lan_connect_failed");
 }
 
-/// Logged for every real sighting, dialed or not — the only externally observable (via the JSON
-/// log) proof that discovery itself worked, independent of whether the connect step that follows
-/// succeeds (`lan.rs`'s module doc on the confirmed same-host connect blocker).
-fn log_peer_found(peer: &DiscoveredPeer) {
-    tracing::info!(peer = %peer.device, addresses = ?peer.addresses, "lan_peer_found");
-}
-
-fn record_dial_outcome(dial_state: &Arc<std::sync::Mutex<DialState>>, peer: DeviceId, ok: bool) {
-    let mut dial_state = dial_state
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if ok {
-        dial_state.record_success(peer);
-    } else {
-        dial_state.record_failure(peer);
+/// Connects to `peer` and, on success, spawns its session driver; `permit` is dropped on every
+/// path either way (held onward by the driver only after a successful connect).
+async fn dial_and_spawn(
+    ctx: LanCtx,
+    endpoint: Arc<LanEndpoint>,
+    peer: DiscoveredPeer,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) -> bool {
+    let dial = endpoint.connect(peer.node, &peer.addresses);
+    match tokio::time::timeout(CONNECT_TIMEOUT, dial).await {
+        Ok(Ok(link)) => {
+            spawn_driver(ctx.ws, ctx.device, ctx.group, link, permit);
+            true
+        }
+        Ok(Err(e)) => {
+            log_connect_failed(peer.device, &e);
+            false
+        }
+        Err(_) => {
+            tracing::debug!(peer = %peer.device, "lan_connect_timed_out");
+            false
+        }
     }
 }
 
@@ -302,7 +284,7 @@ fn spawn_dial(
     sessions: Arc<Semaphore>,
     ctx: LanCtx,
     endpoint: Arc<LanEndpoint>,
-    dial_state: Arc<std::sync::Mutex<DialState>>,
+    dial_state: SharedDialState,
     peer: DiscoveredPeer,
 ) {
     let Ok(permit) = sessions.try_acquire_owned() else {
@@ -310,24 +292,25 @@ fn spawn_dial(
         return;
     };
     tokio::spawn(async move {
-        let dial = endpoint.connect(peer.node, &peer.addresses);
-        match tokio::time::timeout(CONNECT_TIMEOUT, dial).await {
-            Ok(Ok(link)) => {
-                record_dial_outcome(&dial_state, peer.device, true);
-                spawn_driver(ctx.ws, ctx.device, ctx.group, link, permit);
-            }
-            Ok(Err(e)) => {
-                record_dial_outcome(&dial_state, peer.device, false);
-                log_connect_failed(peer.device, &e);
-            }
-            Err(_) => {
-                record_dial_outcome(&dial_state, peer.device, false);
-                tracing::debug!(peer = %peer.device, "lan_connect_timed_out");
-            }
-        }
+        let device = peer.device;
+        let ok = dial_and_spawn(ctx, endpoint, peer, permit).await;
+        record_dial_outcome(&dial_state, device, ok);
     });
 }
 
-fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
-    tracing::debug!(peer = %peer, error = %e, "lan_connect_failed");
+/// The periodic-resync counterpart of `spawn_dial`: same connect-and-drive, but no `DialState`
+/// bookkeeping — deliberate, unconditional churn rather than failure recovery (module doc).
+fn spawn_resync_dial(
+    sessions: Arc<Semaphore>,
+    ctx: LanCtx,
+    endpoint: Arc<LanEndpoint>,
+    peer: DiscoveredPeer,
+) {
+    let Ok(permit) = sessions.try_acquire_owned() else {
+        tracing::debug!(peer = %peer.device, "lan_session_cap_reached_skipping_resync");
+        return;
+    };
+    tokio::spawn(async move {
+        let _ = dial_and_spawn(ctx, endpoint, peer, permit).await;
+    });
 }

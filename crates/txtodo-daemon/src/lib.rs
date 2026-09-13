@@ -22,6 +22,7 @@ mod identity_levenshtein;
 mod import;
 pub mod lan;
 mod lan_apply;
+mod lan_peers;
 mod lan_session;
 pub mod lan_status;
 pub mod mirror;

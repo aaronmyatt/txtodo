@@ -29,26 +29,30 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   `expected` (own-write ring) · `clock` (injected time, FakeClock) · `telemetry`, `stats`,
   `pidfile` · `tokens` (`TokenCreate`/`List`/`Revoke`, plan M6, design §6.2) · `activity`
   (`OpLogStream`, plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
-- `lan.rs`/`lan_session.rs`/`lan_apply.rs`/`sync_ops.rs` (plan M4 `sync-lan-transport`, daemon-
-  wiring pass): `lan::start(ws, clock)` spawns the background LAN transport task — binds
-  `txtodo_sync::LanEndpoint`, starts `Discovery` advertising this device, browses for peers in the
-  same group, dials a newly found peer (lower `DeviceId` dials, tie-break) with `backoff_ms`-paced
-  retries, and accepts incoming connections, both bounded by `MAX_CONCURRENT_LAN_SESSIONS`. Never
-  fatal: a bind/discovery failure is logged and the daemon runs without LAN sync. Each connection
-  is driven by `lan_session::drive_session` on a `spawn_blocking` thread (the real, synchronous
-  `Link` trait), sealing/opening every message with the workspace's epoch-0 group key and serving/
-  committing through `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
+- `lan.rs`/`lan_peers.rs`/`lan_session.rs`/`lan_apply.rs`/`sync_ops.rs` (plan M4
+  `sync-lan-transport`, daemon-wiring pass): `lan::start(ws, clock)` spawns the background LAN
+  transport task — binds `txtodo_sync::LanEndpoint`, starts `Discovery` advertising this device,
+  browses for peers in the same group, dials a newly found peer (lower `DeviceId` dials, tie-break;
+  `lan_peers.rs` owns this decision and its `backoff_ms`-paced retry bookkeeping) and accepts
+  incoming connections, both bounded by `MAX_CONCURRENT_LAN_SESSIONS`. Never fatal: a bind/
+  discovery failure is logged and the daemon runs without LAN sync. Each connection is driven by
+  `lan_session::drive_session` on a `spawn_blocking` thread (the real, synchronous `Link` trait),
+  sealing/opening every message with the workspace's epoch-0 group key and serving/committing
+  through `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
   `FileActor::on_sync_ops` (`sync_ops.rs`), the verbatim-apply path for a peer's already-signed ops
   (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
-  crate; only `txtodo_sync`'s own types do. See Invariants for this pass's real scope limits
-  (single convergence pass per connection, no per-op signature verification, pairing not wired
-  over this transport) and the confirmed same-host connect blocker. `lan_status.rs`: `LanStatus`
-  (endpoint-bound/discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and
-  updated by `lan.rs`; `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/
-  `lan_discovery_active`/`lan_group_key_present`. `debug_hooks.rs`: `DebugSetGroupKey`'s handler
-  and `Workspace::debug_set_group_key`/`has_group_key` — the test-only seam a real two-daemon test
-  pairs through (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`, refused with `UNIMPLEMENTED` unless
-  set to `"1"`).
+  crate; only `txtodo_sync`'s own types do. Sessions are short-lived by design (`IrohLink`'s own
+  idle timeout in `txtodo-sync`) and `lan.rs` redials every known peer every `RESYNC_INTERVAL`, so
+  a local edit made after an earlier sync round still converges quickly without this module
+  watching the store for changes — the cost (a QUIC handshake roughly every second while paired) is
+  a known, flagged tradeoff; see Invariants for the rest of this pass's real scope limits (no
+  per-op signature verification, pairing not wired over this transport) and the corrected
+  same-*process* (not same-host) connect finding. `lan_status.rs`: `LanStatus` (endpoint-bound/
+  discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and updated by `lan.rs`;
+  `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/
+  `lan_group_key_present`. `debug_hooks.rs`: `DebugSetGroupKey`'s handler and `Workspace::
+  debug_set_group_key`/`has_group_key` — the test-only seam a real two-daemon test pairs through
+  (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`, refused with `UNIMPLEMENTED` unless set to `"1"`).
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
@@ -64,11 +68,14 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   default privacy does not extend to sibling modules, only descendants, so this was a required
   compiler fix, not a style choice.
 - Tests: unit (`*_tests.rs`, including `sync_ops_tests.rs` and `lan_session_tests.rs` — the latter
-  drives a real `drive_session` over a real `ChannelLink`, the only place this codebase can
-  currently exercise the LAN sync protocol end to end), `tests/lan_discovery.rs` (two real
+  drives a real `drive_session` over a real `ChannelLink`), `tests/lan_discovery.rs` (two real
   `txtodod` processes, real mDNS, seeded to share a group before either starts — see its module
   doc for why `DebugSetGroupKey` can't do that instead — proving real discovery at the full daemon
-  level; deliberately does not wait on a real sync connection, the confirmed same-host blocker),
+  level, discovery only), `tests/lan_loopback_converge.rs` (the fuller proof: two real `txtodod`
+  processes pair through `DebugSetGroupKey`, find each other over real mDNS, and converge a real
+  external edit in both directions through a real `iroh` QUIC connection — repeatable sub-2-second,
+  in practice sub-2-millisecond, convergence; see its module doc and `lan.rs`'s for the corrected
+  same-*process* (not same-host) connect finding this test's own investigation produced),
   `tests/debug_hooks.rs` (`DebugSetGroupKey` refused/allowed by the env var, over a real socket),
   `tests/grpc.rs` (in-process server on a temp socket),
   `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
@@ -117,15 +124,16 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   tamper-evidence for the batch), but individual op *authorship* is not re-verified — `Message::
   Ops` carries `Op` values with no accompanying `Signature` (no wire field for one, and `txtodo-
   store`'s `ops.signature` column is unpopulated), flagged for `sync-reject-tests`/`sync-crypto-
-  envelope`, not silently treated as done. One convergence pass per connection: `drive_session`
-  does not watch the local store for new ops and re-greet mid-connection. Real pairing has no
-  transport over the LAN link yet (`pairing_grpc.rs`'s own module doc) — a real two-daemon test
-  pairs through the test-only `DebugSetGroupKey` RPC instead (refused unless
-  `TXTODO_TEST_HOOKS=1`), never a production path. Confirmed same-host connect blocker (an upstream
-  `noq-proto`/`iroh` bug, not this crate's): two `txtodod` processes on one machine cannot complete
-  a real QUIC connection at all in this sandbox — `lan.rs`'s module doc and `txtodo-sync`'s
-  `CLAUDE.md` have the full diagnosis. `lan_session_tests.rs`'s `ChannelLink`-based test is the
-  actual proof the protocol-driving logic (seal/open, `Session`, commit-through-`FileActor`) works;
-  a real LAN with two distinct hosts is not expected to hit the connect blocker.
+  envelope`, not silently treated as done. Each connection is one short-lived convergence burst
+  (`IrohLink`'s idle timeout in `txtodo-sync`), and `lan.rs`'s periodic redial is what makes that
+  keep converging new local edits — see `lan.rs`'s own doc for why, and the tradeoff it accepts.
+  Real pairing has no transport over the LAN link yet (`pairing_grpc.rs`'s own module doc) — a real
+  two-daemon test pairs through the test-only `DebugSetGroupKey` RPC instead (refused unless
+  `TXTODO_TEST_HOOKS=1`), never a production path. **Corrected finding (this pass's own step-3
+  investigation):** a real QUIC connect between two `iroh` endpoints *does* work between two real
+  `txtodod` processes on the same host — the earlier belief that same-host connects are blocked
+  outright was wrong; the actual upstream `noq-proto`/`iroh` bug fires only when both endpoints
+  live in the *same process* (`txtodo-sync`'s `endpoint_tests.rs` has the corrected, evidenced
+  diagnosis). `tests/lan_loopback_converge.rs` is the real, repeatable, cross-process proof.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
   txtodo-sync, txtodo-proto, txtodo-mcp.

@@ -1,19 +1,15 @@
 //! Step 3 of the `sync-lan-transport` daemon-wiring brief: two REAL `txtodod` processes, same
-//! sync group, finding each other over real mDNS on this machine's real LAN interface — not a
-//! mocked transport, not the loopback-forcing shape known to trigger the upstream connect bug.
+//! sync group, finding each other over real mDNS on this machine's real LAN interface.
 //!
-//! **What this test proves, and what it deliberately does not.** It proves discovery end to end
-//! at the full daemon level: `lan::start` binds a real `iroh` endpoint, `Discovery::start`
-//! advertises under `_txtodo._udp` with this device's real `TXT_NODE`, and the *other* real
-//! process's `Discovery::browse` resolves it — the `lan_peer_found` log line is the externally
-//! observable proof (`lan.rs`'s own doc comment on that log line). It does **not** wait for or
-//! assert a successful sync `Connection`: `crates/txtodo-sync/src/endpoint_tests.rs`'s
-//! `two_real_bind_local_endpoints_on_the_same_host_hit_the_same_bug` (and this crate's own
-//! `CLAUDE.md`) already established, with full trace evidence, that a real QUIC connect between
-//! two endpoints on the *same host* cannot complete here — an upstream `noq-proto`/`iroh` bug, not
-//! a defect in this wiring. Asserting a successful connect in this test would either hang forever
-//! or paper over a real, external blocker; neither is honest. A real LAN with two distinct hosts
-//! is not expected to hit it.
+//! **Scope.** This test proves discovery specifically, at the full daemon level: `lan::start`
+//! binds a real `iroh` endpoint, `Discovery::start` advertises under `_txtodo._udp` with this
+//! device's real `TXT_NODE`, and the *other* real process's `Discovery::browse` resolves it — the
+//! `lan_peer_found` log line is the externally observable proof (`lan_peers.rs`'s doc comment on
+//! that log line). It stops there rather than also asserting a synced outcome —
+//! `tests/lan_loopback_converge.rs` is the fuller proof that a real connect and a real sync round
+//! trip both work between two real processes on this host (this task's step 3 initially suspected
+//! a same-*host* connect bug; it turned out to be same-*process*-only — see that test's module
+//! doc and `crates/txtodo-sync/src/endpoint_tests.rs` for the full, corrected diagnosis).
 
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 #![cfg(unix)]
