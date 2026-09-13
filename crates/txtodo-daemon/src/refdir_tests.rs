@@ -33,6 +33,7 @@ fn cfg(dir: &Path) -> ActorConfig {
         device: device(),
         stats: Arc::new(Stats::default()),
         identity_mode: IdentityMode::Tagged,
+        tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
     }
 }
 

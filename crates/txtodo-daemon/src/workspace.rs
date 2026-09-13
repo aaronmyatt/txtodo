@@ -9,12 +9,13 @@ use crate::notes_actor::NotesActorConfig;
 use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_state::{PairingRegistry, PairingStateError};
 use crate::stats::Stats;
+use crate::tree_dirty::TreeDirty;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid, WorkspaceTree};
 use txtodo_store::{Store, StoreError};
 use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
 
@@ -87,6 +88,12 @@ pub struct Workspace {
     pairing: PairingRegistry,
     /// Live `notes.md` actors, one per `ref:` directory, opened lazily (plan M5).
     notes: NotesRegistry,
+    /// Marked by any actor whose commit could change the workspace tree; cleared by `tree.rs`'s
+    /// `TxtodoService::workspace_tree` after a rebuild (plan M5). `pub(crate)`, like `notes` above,
+    /// so that sibling module can reach it directly without an accessor pair.
+    pub(crate) tree_dirty: Arc<TreeDirty>,
+    /// The last full rebuild of the workspace tree; stale exactly when `tree_dirty` is set.
+    pub(crate) cached_tree: Mutex<WorkspaceTree>,
 }
 
 impl Workspace {
@@ -130,6 +137,8 @@ impl Workspace {
             key_store: Arc::new(MemoryKeyStore::default()),
             pairing: PairingRegistry::new(),
             notes: NotesRegistry::new(),
+            tree_dirty: Arc::new(TreeDirty::default()),
+            cached_tree: Mutex::new(WorkspaceTree::default()),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -171,6 +180,7 @@ impl Workspace {
             device: self.device,
             stats: Arc::clone(&self.stats),
             identity_mode: self.identity_mode,
+            tree_dirty: Arc::clone(&self.tree_dirty),
         };
         let actor = FileActor::open(cfg, Arc::clone(&self.store), Arc::clone(&self.clock))
             .map_err(|e| WorkspaceError::Actor(path.clone(), Box::new(e)))?;

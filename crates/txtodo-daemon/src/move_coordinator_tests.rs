@@ -39,6 +39,7 @@ fn open_at(
         device: device(),
         stats: Arc::new(Stats::default()),
         identity_mode: IdentityMode::Tagged,
+        tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
     };
     FileActor::open(cfg, Arc::clone(store), Arc::clone(clock)).unwrap_or_else(|e| panic!("{e}"))
 }

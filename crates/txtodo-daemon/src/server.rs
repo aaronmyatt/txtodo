@@ -7,12 +7,10 @@ use crate::convert::{
     file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
     parse_ulid_opt, task_of, to_flag, to_summary,
 };
-use crate::handle::ConflictRow;
 use crate::handle::{ActorHandle, Applied, WATCH_CAP};
 use crate::workspace::Workspace;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
-use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
@@ -30,7 +28,9 @@ pub const MAX_INFLIGHT_RPCS: usize = 64;
 /// The workspace behind a lock: the watcher task registers new documents, RPCs read.
 pub type SharedWorkspace = Arc<RwLock<Workspace>>;
 
-/// The service.
+/// The service. `Clone` is a cheap `Arc` clone (`SharedWorkspace`), used to hand a live handle to
+/// `forward_changes`'s spawned tasks (plan M5's `Watch` progress, `tree.rs`).
+#[derive(Clone)]
 pub struct TxtodoService {
     ws: SharedWorkspace,
 }
@@ -61,15 +61,17 @@ impl TxtodoService {
             .ok_or_else(|| Status::not_found(format!("no document {path}")))
     }
 
-    fn all_actors(&self) -> Vec<ActorHandle> {
+    pub(crate) fn all_actors(&self) -> Vec<ActorHandle> {
         let ws = self.workspace();
         ws.paths().filter_map(|p| ws.actor(p).cloned()).collect()
     }
 }
 
-// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, and `status_of` in
-// convert.rs, both split out to keep this file within its line budget.
+// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, `status_of` in
+// convert.rs, and `forward_changes` in watch_forward.rs, all split out to keep this file within
+// its line budget.
 use crate::convert::status_of;
+use crate::watch_forward::forward_changes;
 
 fn applied_of(a: Applied) -> pb::ApplyResponse {
     pb::ApplyResponse {
@@ -77,48 +79,6 @@ fn applied_of(a: Applied) -> pb::ApplyResponse {
         hash: a.hash.to_vec(),
         hlc_wall_ms: a.hlc.wall_ms,
         hlc_counter: u32::from(a.hlc.counter),
-    }
-}
-
-/// Forwards one actor's changes into the merged Watch stream until either side hangs up.
-async fn forward_changes(
-    h: ActorHandle,
-    mut sub: tokio::sync::broadcast::Receiver<crate::handle::Change>,
-    tx: mpsc::Sender<Result<pb::Change, Status>>,
-) {
-    // Bounded by the subscriber's lifetime: `tx.send` fails once the client is gone.
-    loop {
-        let item = match sub.recv().await {
-            Ok(c) => pb::Change {
-                path: c.path.to_string(),
-                hash: c.hash.to_vec(),
-                ops: c.ops.iter().map(to_summary).collect(),
-                // Line numbers are not known on the broadcast path; ListConflicts has them.
-                review: c
-                    .review
-                    .iter()
-                    .map(|row| {
-                        to_flag(&ConflictRow {
-                            row: row.clone(),
-                            line_number: 0,
-                        })
-                    })
-                    .collect(),
-            },
-            Err(RecvError::Lagged(_)) => match h.get().await {
-                Ok(c) => pb::Change {
-                    path: h.path().to_string(),
-                    hash: c.hash.to_vec(),
-                    ops: Vec::new(),
-                    review: Vec::new(),
-                },
-                Err(_) => return,
-            },
-            Err(RecvError::Closed) => return,
-        };
-        if tx.send(Ok(item)).await.is_err() {
-            return;
-        }
     }
 }
 
@@ -144,7 +104,11 @@ impl Txtodo for TxtodoService {
                 progress,
             });
         }
-        Ok(Response::new(pb::ListFilesResponse { files }))
+        let tree = self.workspace_tree().await?;
+        Ok(Response::new(pb::ListFilesResponse {
+            tree: Some(crate::tree::to_pb_tree(&tree, &files)),
+            files,
+        }))
     }
 
     async fn get_file(
@@ -178,7 +142,7 @@ impl Txtodo for TxtodoService {
         let (tx, rx) = mpsc::channel(WATCH_CAP);
         for h in handles {
             let sub = h.subscribe().await.map_err(status_of)?;
-            tokio::spawn(forward_changes(h, sub, tx.clone()));
+            tokio::spawn(forward_changes(self.clone(), h, sub, tx.clone()));
         }
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
@@ -329,6 +293,20 @@ impl Txtodo for TxtodoService {
         r: Request<pb::NotesEditRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
         self.edit_notes_impl(r).await
+    }
+
+    async fn ref_dir(
+        &self,
+        r: Request<pb::RefDirRequest>,
+    ) -> Result<Response<pb::RefDirInfo>, Status> {
+        self.ref_dir_impl(r).await
+    }
+
+    async fn prune_orphans(
+        &self,
+        r: Request<pb::PruneOrphansRequest>,
+    ) -> Result<Response<pb::PruneOrphansResponse>, Status> {
+        self.prune_orphans_impl(r).await
     }
 
     async fn pair_offer(
