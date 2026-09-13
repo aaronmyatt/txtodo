@@ -70,19 +70,29 @@ async fn wait_for_direct_address(endpoint: &Endpoint) -> iroh::EndpointAddr {
 /// **2026-09-13 correction (`sync-lan-transport`, wiring pass): this is not a 127.0.0.1-specific
 /// bug.** The note above (and this crate's own `CLAUDE.md`) previously claimed `bind_local_endpoint`
 /// — the real, production, bind-all-interfaces constructor — was "not known to hit this path". That
-/// was wrong: [`two_real_bind_local_endpoints_on_the_same_host_hit_the_same_bug`] below reproduces
+/// was wrong: [`two_real_bind_local_endpoints_in_the_same_process_hit_the_same_bug`] below reproduces
 /// the identical `refusing incoming` trace line using `bind_local_endpoint()` unmodified, dialed via
 /// this machine's real LAN address (`192.168.100.24` in the environment it was found in), not
-/// `127.0.0.1` at all. The actual trigger is **the connecting side's source IP being numerically
-/// equal to the accepting endpoint's own bound IP** — true for any same-host connection, loopback or
-/// real-interface — which `noq-proto` represents as plain IPv4 on one side of the comparison and
-/// IPv4-mapped-IPv6 on the other, then refuses as a path mismatch. Also ruled out as the cause:
-/// `PortmapperConfig` being left at its default `Enabled` (disabled in `endpoint.rs` regardless, as
-/// its own stray-default problem), and dual-stack (`[::]`) binding — an IPv4-only bind
-/// (`clear_ip_transports().bind_addr("0.0.0.0:0")`) hits the identical refusal. A real LAN with two
-/// distinct hosts (genuinely different source/destination IPs) is not expected to trigger this path
-/// at all; only same-host testing is blocked. Re-enable both tests once `noq-proto`/`iroh` ships a
-/// fix, or once a real two-machine LAN run is available.
+/// `127.0.0.1` at all. Also ruled out as the cause at the time: `PortmapperConfig` being left at its
+/// default `Enabled` (disabled in `endpoint.rs` regardless, as its own stray-default problem), and
+/// dual-stack (`[::]`) binding — an IPv4-only bind (`clear_ip_transports().bind_addr("0.0.0.0:0")`)
+/// hit the identical refusal too.
+///
+/// **2026-09-13 second correction, same session (`sync-lan-transport` daemon-wiring pass): the
+/// trigger is same-*process*, not same-host.** The paragraph above concluded "true for any
+/// same-host connection" — that overreached. `txtodo-daemon`'s `tests/lan_loopback_converge.rs`
+/// spawns two real, separate `txtodod` *processes* on this same host, dialing each other via the
+/// same real LAN address family this test uses, and they connect and sync for real, repeatedly,
+/// with no `refusing incoming` anywhere in either process's log. The two tests in this file both
+/// construct **both** `Endpoint`s inside the same process (necessarily, being single-process unit
+/// tests) — that is the actual precondition: two `iroh::Endpoint`s coexisting in one process,
+/// something about their shared process-local state (global/thread-local caches, or how the OS
+/// reports a path back to two sockets owned by the same process — not narrowed further, since the
+/// real, correct answer for this crate is "test across processes instead," not chasing a one-off
+/// upstream bug deeper than needed to route around it). A real LAN, with two distinct hosts *or*
+/// two distinct processes on one host, is not expected to hit this at all. Re-enable both tests
+/// (as same-process regression checks) once `noq-proto`/`iroh` ships a fix; there is no need to
+/// wait for one to build real LAN sync, which is already proven working cross-process.
 #[tokio::test]
 #[ignore = "upstream noq-proto 1.3.0 refuses 127.0.0.1 <-> [::ffff:127.0.0.1] as a path mismatch; see doc comment"]
 async fn two_loopback_endpoints_exchange_one_frame() {
@@ -131,18 +141,17 @@ async fn two_loopback_endpoints_exchange_one_frame() {
 /// The `sync-lan-transport` daemon-wiring pass's step-3 finding, reproduced with the real,
 /// unmodified [`bind_local_endpoint`] — no loopback-forcing helper, no literal `127.0.0.1`
 /// anywhere. Both endpoints bind to every interface exactly as production does; `b`'s own
-/// `watch_addr()` direct address (this machine's real LAN IP) is what `a` dials. See the doc
-/// comment on [`two_loopback_endpoints_exchange_one_frame`] above for the full diagnosis: the
-/// upstream bug fires whenever the connecting side's source IP numerically equals the accepting
-/// endpoint's own bound IP (any same-host connection), not specifically `127.0.0.1`. This is the
-/// reason `sync-loopback-converge`/`sync-bench-m4`/`test-nested-ref-sync`'s two-real-daemon
-/// convergence tests could not be built against a real `iroh` connection in this sandbox (a single
-/// host, so both daemons necessarily share one machine's addresses) — only against two genuinely
-/// distinct hosts. Re-enable once `noq-proto`/`iroh` ships a fix, or a real two-machine LAN is
-/// available.
+/// `watch_addr()` direct address (this machine's real LAN IP) is what `a` dials. See the second
+/// correction on [`two_loopback_endpoints_exchange_one_frame`] above for the full, final
+/// diagnosis: **this test's own precondition — both `Endpoint`s living in this one process — is
+/// what triggers the bug, not the same-host address it dials.** `txtodo-daemon`'s
+/// `tests/lan_loopback_converge.rs` runs the equivalent connect between two real, separate
+/// `txtodod` *processes* on this same host and it works, repeatedly, for real. Re-enable this test
+/// (as a same-process regression check) once `noq-proto`/`iroh` ships a fix; real LAN sync does
+/// not need to wait for that.
 #[tokio::test]
-#[ignore = "same upstream noq-proto 1.3.0 same-host refusal, reproduced with the real bind_local_endpoint() and a real LAN address, not a loopback-forcing helper; see doc comment"]
-async fn two_real_bind_local_endpoints_on_the_same_host_hit_the_same_bug() {
+#[ignore = "upstream noq-proto 1.3.0 refuses two Endpoints in the same process dialing each other; see doc comment — real LAN sync works fine across processes (txtodo-daemon's tests/lan_loopback_converge.rs)"]
+async fn two_real_bind_local_endpoints_in_the_same_process_hit_the_same_bug() {
     let a = bind_local_endpoint().await.unwrap();
     let b = bind_local_endpoint().await.unwrap();
     let b_addr = tokio::time::timeout(TEST_TIMEOUT, wait_for_direct_address(&b))

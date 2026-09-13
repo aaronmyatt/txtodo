@@ -96,21 +96,18 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 
 ## Invariants
 - Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact;
-  **corrected and broadened 2026-09-13**): `noq-proto` 1.3.0 (vendored by `iroh` 1.2.0) refuses a
-  QUIC connection whenever the connecting side's source IP is numerically equal to the accepting
-  endpoint's own bound IP — logged as `network_path=(local: X, remote: [::ffff:X]:_)` and a
-  `refuse()`. The earlier note here claimed this was specific to both ends binding literally to
-  `127.0.0.1`, and that the real `bind_local_endpoint` (all interfaces) was "not shown to hit this
-  path" — that was wrong. `endpoint_tests::
-  two_real_bind_local_endpoints_on_the_same_host_hit_the_same_bug` reproduces the identical failure
-  using `bind_local_endpoint()` unmodified, dialed via this machine's real LAN address, not
-  `127.0.0.1`; disabling the portmapper and binding IPv4-only were also ruled out as the cause.
-  Practical effect: **any same-host two-endpoint test is blocked**, including two `txtodod`
-  processes on one machine (`sync-loopback-converge`/`sync-bench-m4`/`test-nested-ref-sync`'s
-  two-real-daemon convergence halves) — a real LAN with two distinct hosts is not expected to hit
-  it, since source and destination IPs then genuinely differ. Both `endpoint_tests.rs` tests stay
-  `#[ignore]`d with this reason rather than deleted or worked around. Re-test once `noq-proto`/
-  `iroh` ships a fix, or once a real two-machine LAN run is available.
+  **corrected 2026-09-13, corrected again the same day**): `noq-proto` 1.3.0 (vendored by `iroh`
+  1.2.0) refuses a QUIC connection between two `Endpoint`s that live in the **same process** —
+  logged as `network_path=(local: X, remote: [::ffff:X]:_)` and a `refuse()`, regardless of
+  whether `X` is `127.0.0.1` or a real interface address (both were tried; both fail identically),
+  and regardless of portmapper/dual-stack settings (also ruled out). Two intermediate, now-
+  superseded theories are recorded and corrected in `endpoint_tests.rs`'s doc comments for anyone
+  re-deriving this: first "both ends bind literally to `127.0.0.1`", then "any same-host
+  connection" — both wrong. The actual precondition is same-*process*, confirmed by
+  `txtodo-daemon`'s `tests/lan_loopback_converge.rs`: two real, separate `txtodod` processes on
+  this same host connect and sync for real, repeatedly, with sub-millisecond measured convergence.
+  `endpoint_tests.rs`'s two single-process tests stay `#[ignore]`d as same-process regression
+  checks rather than deleted; nothing about real LAN sync is blocked on fixing them.
 - Discovery never leaks the group key, only its id (`TXT_GROUP`); `PeerTable::observe` checks
   self-advertisement, then group, then protocol version, before debounce or the peer-table bound —
   a foreign-group peer can never consume a `MAX_LAN_PEERS` slot. `parse_announcement` never panics on
@@ -162,7 +159,7 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - `LanEndpoint::connect` prefers non-loopback candidate addresses, falling back to loopback only
   when nothing else was advertised (real two-process testing on one host sometimes resolves only a
   loopback address for a peer before its real interface address is known — refusing it outright
-  made LAN sync flaky in exactly that situation). This is not a fix for the same-host bug above,
+  made LAN sync flaky in exactly that situation). This is unrelated to the same-process bug above,
   which is about which process the two `Endpoint`s live in, not which address family is dialed.
 - A rotation grant is sealed with a fresh ephemeral keypair per recipient, never the recipient's
   static key as an AEAD key directly (`GRANT_INFO` is a distinct `HKDF-Expand` label from
