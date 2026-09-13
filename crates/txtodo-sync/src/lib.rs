@@ -27,6 +27,7 @@ mod pairing_grant;
 mod rotation;
 mod rotation_error;
 mod sas;
+mod sealed_ops;
 mod session;
 mod session_error;
 mod sign;
@@ -72,6 +73,7 @@ pub use rotation_error::{RemovalError, RotationError};
 pub use sas::{
     PAIR_KEY_BYTES, PAIR_KEY_INFO, SAS_INFO, SAS_WORD_COUNT, SasError, pair_key, sas_words,
 };
+pub use sealed_ops::{SealContext, SealedOpsError, open_ops, seal_ops};
 pub use session::{Greeting, Session, SessionState};
 pub use session_error::SessionError;
 pub use sign::{
@@ -119,6 +121,8 @@ mod pairing_tests;
 mod rotation_tests;
 #[cfg(test)]
 mod sas_tests;
+#[cfg(test)]
+mod sealed_ops_tests;
 #[cfg(test)]
 mod session_tests;
 #[cfg(test)]
