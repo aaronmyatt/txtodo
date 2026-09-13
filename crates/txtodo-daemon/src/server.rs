@@ -49,6 +49,14 @@ impl TxtodoService {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// The raw `SharedWorkspace` handle, for a sibling module that needs to hand it to a spawned
+    /// background task rather than a bounded-lifetime read guard — `pairing_grpc.rs`'s
+    /// `pair_accept_impl` hands this to `pairing_lan::spawn_joiner`, the same way
+    /// `forward_changes`'s own spawned tasks already do from inside this file.
+    pub(crate) fn shared_workspace(&self) -> SharedWorkspace {
+        Arc::clone(&self.ws)
+    }
+
     fn actor(&self, path: &str) -> Result<ActorHandle, Status> {
         let path = parse_path(path)?;
         self.actor_by_path(&path)

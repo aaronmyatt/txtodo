@@ -50,7 +50,11 @@ impl TxtodoService {
     }
 
     /// Accepts a peer's scanned `PairOffer` (`code`, decoded per `pairing_wire`'s module doc) and
-    /// begins the X25519 handshake; returns the 6-word SAS.
+    /// begins the X25519 handshake; returns the 6-word SAS immediately (no network needed for this
+    /// half — the offer already carries the initiator's public key). Also starts this daemon's
+    /// background relay task (`pairing_lan::spawn_joiner`, plan M4 `sync-pairing`'s LAN wiring
+    /// pass), which finds the initiator over the real LAN transport and carries this device's own
+    /// keys and confirmation to it, retrying until a grant arrives or the pairing window closes.
     pub(crate) async fn pair_accept_impl(
         &self,
         r: Request<pb::PairAcceptRequest>,
@@ -63,6 +67,12 @@ impl TxtodoService {
             .pairing()
             .begin_accept(ws.device(), &offer, now_ms)
             .map_err(pairing_status)?;
+        let own_public = ws
+            .pairing()
+            .joiner_public_key(now_ms)
+            .map_err(pairing_status)?;
+        drop(ws);
+        crate::pairing_lan::spawn_joiner(self.shared_workspace(), offer, own_public);
         Ok(Response::new(pb::PairResult { sas: words(&sas) }))
     }
 

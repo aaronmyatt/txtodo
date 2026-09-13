@@ -2,22 +2,27 @@
 //! (`MAX_CONCURRENT_PAIRINGS`), its own `NonceRegistry`, and `PAIRING_WINDOW_MS` expiry —
 //! everything `pairing_grpc.rs` needs to drive `txtodo-sync`'s state machine from gRPC.
 //!
-//! The three gRPC RPCs only reach this device's *own* daemon; the leg between two daemons (the
-//! joiner's public key reaching the initiator, and the sealed group key reaching the joiner back)
-//! has no transport yet (`sync-lan-transport` is separate, later work — see `pairing_grpc.rs`'s
-//! module doc). The `_relay`-suited methods below (`complete_as_initiator`, `joiner_public_key`,
-//! `mark_remote_confirmed`, `try_finalize_initiator`, `adopt_group_key`) are that leg's seam: not
-//! reachable from any of the three RPCs, driven directly by `pairing_grpc_tests.rs` today, the way
-//! a real transport will drive them once it exists.
+//! The three original gRPC RPCs only ever reached this device's *own* daemon; the leg between two
+//! daemons (the joiner's public key reaching the initiator, and the sealed group key reaching the
+//! joiner back) now has a real transport: `pairing_lan.rs` drives the relay-seam methods below
+//! (`complete_as_initiator`, `joiner_public_key`, `mark_remote_confirmed`, `try_finalize_initiator`,
+//! `adopt_group_key`, plus the read-only [`PairingRegistry::snapshot`] and the peer-static-key
+//! bookkeeping) over the LAN `Link` `sync-lan-transport` built, on its own ALPN
+//! (`txtodo_sync::PAIRING_ALPN`) so a pairing connection is never confused with the group-keyed
+//! sync protocol. `pairing_grpc_tests.rs` still drives every method directly too (whitebox,
+//! same-process) — exactly how a real two-daemon test drives the same methods through a real
+//! socket instead.
 
 use std::sync::Mutex;
 
 use txtodo_model::DeviceId;
 use txtodo_sync::{
-    DeviceStaticPublic, GroupId, KEY_BYTES, KeyId, KeyStore, KeyStoreError,
-    MAX_CONCURRENT_PAIRINGS, NonceRegistry, PAIRING_WINDOW_MS, PairingError, PairingGrant,
+    DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, GroupId, KEY_BYTES, KeyId, KeyStore,
+    MAX_CONCURRENT_PAIRINGS, Nonce, NonceRegistry, PAIRING_WINDOW_MS, PairingError, PairingGrant,
     PairingOffer, PairingSession, SAS_WORD_COUNT, Secret, X25519_PUBLIC_KEY_BYTES,
 };
+
+pub(crate) use crate::pairing_state_error::PairingStateError;
 
 /// The group-key epoch pairing establishes. Rotation (`txtodo device remove`) is future work.
 const INITIAL_GROUP_EPOCH: u32 = 0;
@@ -36,79 +41,23 @@ struct Active {
     role: Role,
     opened_at_ms: u64,
     /// The joiner's own ephemeral public key, kept so a relay can hand it to the initiator's
-    /// `complete_as_initiator`. Only ever set on the joiner's side; only read by the relay-seam
-    /// methods below, which today only `pairing_grpc_tests.rs` calls (see module doc) — hence the
-    /// `allow` rather than a live, non-test caller.
-    #[allow(dead_code)]
+    /// `complete_as_initiator`. Only ever set on the joiner's side.
     own_public: Option<[u8; X25519_PUBLIC_KEY_BYTES]>,
+    /// The peer's long-term static public key, learned from the network (`pairing_lan.rs`'s
+    /// `JoinerHello`) before both sides have confirmed. Only ever set on the initiator's side —
+    /// the joiner learns the initiator's static key later, bundled inside the sealed
+    /// [`PairingGrant`] itself, so it has no need to stash one here.
+    peer_static: Option<[u8; DEVICE_STATIC_KEY_BYTES]>,
 }
 
-/// Why a pairing step was refused: this daemon's own bookkeeping folded in with
-/// [`PairingError`] so `pairing_grpc.rs` has one error type to map to a `Status`.
-#[derive(Debug)]
-pub(crate) enum PairingStateError {
-    /// `MAX_CONCURRENT_PAIRINGS` already active and not expired.
-    TooManyOpen,
-    /// The active pairing's `PAIRING_WINDOW_MS` window elapsed; it has been cleared.
-    WindowExpired,
-    /// No pairing is active on this daemon.
-    NotActive,
-    /// The active pairing exists but is not in the role this call needs.
-    WrongRole,
-    /// The state machine itself refused the step.
-    Session(PairingError),
-    /// The keystore refused a read or write.
-    KeyStore(KeyStoreError),
-    /// Persisting the adopted group id to the store's `meta` table failed.
-    Store(txtodo_store::StoreError),
-    /// The stored group key is not `KEY_BYTES` long (the keystore was edited or corrupted by hand).
-    CorruptGroupKey(usize),
-}
-
-impl std::fmt::Display for PairingStateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PairingStateError::TooManyOpen => {
-                write!(
-                    f,
-                    "{MAX_CONCURRENT_PAIRINGS} pairing(s) already open on this daemon"
-                )
-            }
-            PairingStateError::WindowExpired => {
-                write!(f, "the pairing window ({PAIRING_WINDOW_MS} ms) has expired")
-            }
-            PairingStateError::NotActive => write!(f, "no pairing is active on this daemon"),
-            PairingStateError::WrongRole => {
-                write!(f, "the active pairing is not in the role this call needs")
-            }
-            PairingStateError::Session(e) => write!(f, "{e}"),
-            PairingStateError::KeyStore(e) => write!(f, "{e}"),
-            PairingStateError::Store(e) => write!(f, "{e}"),
-            PairingStateError::CorruptGroupKey(len) => {
-                write!(f, "stored group key is {len} bytes, not {KEY_BYTES}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for PairingStateError {}
-
-impl From<PairingError> for PairingStateError {
-    fn from(e: PairingError) -> PairingStateError {
-        PairingStateError::Session(e)
-    }
-}
-
-impl From<KeyStoreError> for PairingStateError {
-    fn from(e: KeyStoreError) -> PairingStateError {
-        PairingStateError::KeyStore(e)
-    }
-}
-
-impl From<txtodo_store::StoreError> for PairingStateError {
-    fn from(e: txtodo_store::StoreError) -> PairingStateError {
-        PairingStateError::Store(e)
-    }
+/// A read-only snapshot of the active pairing, enough for the LAN relay driver (`pairing_lan.rs`)
+/// to validate an incoming `JoinerHello` before touching any crypto state.
+pub(crate) struct ActiveSnapshot {
+    pub(crate) role: Role,
+    pub(crate) group: GroupId,
+    pub(crate) nonce: Nonce,
+    pub(crate) is_handshaken: bool,
+    pub(crate) peer_device: Option<DeviceId>,
 }
 
 #[derive(Default)]
@@ -210,6 +159,7 @@ impl PairingRegistry {
             role: Role::Initiator,
             opened_at_ms: now_ms,
             own_public: None,
+            peer_static: None,
         });
         Ok(offer)
     }
@@ -231,6 +181,7 @@ impl PairingRegistry {
             role: Role::Joiner,
             opened_at_ms: now_ms,
             own_public: Some(own_public),
+            peer_static: None,
         });
         Ok(sas)
     }
@@ -247,9 +198,8 @@ impl PairingRegistry {
     }
 
     /// Relay seam: the joiner's own public key, for handing to the initiator's
-    /// [`PairingRegistry::complete_as_initiator`]. See the module doc — no transport calls this
-    /// yet, only `pairing_grpc_tests.rs`.
-    #[allow(dead_code)]
+    /// [`PairingRegistry::complete_as_initiator`]. Driven for real by `pairing_lan.rs`'s incoming
+    /// `JoinerHello` handler; `pairing_grpc_tests.rs` also drives it directly (whitebox).
     pub(crate) fn joiner_public_key(
         &self,
         now_ms: u64,
@@ -263,9 +213,10 @@ impl PairingRegistry {
     }
 
     /// Relay seam: completes the initiator's side of the handshake once the joiner's public key
-    /// arrives, so this device can compute the same transcript/SAS/shared secret. See the module
-    /// doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
-    #[allow(dead_code)]
+    /// arrives, so this device can compute the same transcript/SAS/shared secret. Driven for real
+    /// by `pairing_lan.rs`'s incoming `JoinerHello` handler (after it has checked the hello's
+    /// nonce/group against [`PairingRegistry::snapshot`] itself); `pairing_grpc_tests.rs` also
+    /// drives it directly (whitebox).
     pub(crate) fn complete_as_initiator(
         &self,
         peer_device: DeviceId,
@@ -284,9 +235,9 @@ impl PairingRegistry {
         Ok(())
     }
 
-    /// Relay seam: records that the peer's SAS confirmation arrived. See the module doc — no
-    /// transport calls this yet, only `pairing_grpc_tests.rs`.
-    #[allow(dead_code)]
+    /// Relay seam: records that the peer's SAS confirmation arrived. Driven for real by
+    /// `pairing_lan.rs` when a `JoinerHello.confirmed` arrives true; `pairing_grpc_tests.rs` also
+    /// drives it directly (whitebox).
     pub(crate) fn mark_remote_confirmed(&self, now_ms: u64) -> Result<(), PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
@@ -299,9 +250,11 @@ impl PairingRegistry {
     /// static key (plan M4 `sync-device-remove`), bundled via [`PairingGrant`]/`wrap_grant` rather
     /// than the bare `wrap_group_key`, so the joiner learns a static key it can be handed a
     /// rotation grant to later, registered nowhere before this call. Returns `None` when not yet
-    /// ready, or when this daemon is not the initiator — the joiner has nothing to send. See the
-    /// module doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
-    #[allow(dead_code)]
+    /// ready, or when this daemon is not the initiator — the joiner has nothing to send. Clears
+    /// `active` on success, so `pairing_lan.rs`'s driver caches the returned sealed bytes itself
+    /// (network-layer retry concern, not this registry's) rather than calling this a second time.
+    /// Driven for real by `pairing_lan.rs`; `pairing_grpc_tests.rs` also drives it directly
+    /// (whitebox).
     pub(crate) fn try_finalize_initiator(
         &self,
         key_store: &dyn KeyStore,
@@ -332,12 +285,13 @@ impl PairingRegistry {
     /// Relay seam: the joiner's side of the same finish — unwraps the initiator's
     /// [`PairingGrant`], stores the group key, and this side's pairing finishes too. Returns the
     /// initiator's `DeviceId` and long-term static public key so the caller
-    /// ([`crate::workspace::Workspace::adopt_group_key`]) can register it in the `devices` table —
-    /// this is the only leg of the static-key exchange this daemon wires today; the reverse
-    /// direction (the initiator learning the joiner's static key) needs a real transport to carry
-    /// a second grant back, which does not exist yet (`sync-lan-transport`, separate work). See the
-    /// module doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
-    #[allow(dead_code)]
+    /// ([`crate::workspace::Workspace::adopt_group_key`]) can register it in the `devices` table.
+    /// The reverse direction (the initiator learning the joiner's static key) is
+    /// [`PairingRegistry::peer_static`] below, populated from the network by `pairing_lan.rs`'s
+    /// incoming `JoinerHello` handler rather than bundled in a grant, since the joiner sends its
+    /// static key before either side has confirmed (see `pairing_relay.rs`'s module doc on why
+    /// that is safe: it is no more secret than the ephemeral key exchanged the same way). Driven
+    /// for real by `pairing_lan.rs`; `pairing_grpc_tests.rs` also drives it directly (whitebox).
     pub(crate) fn adopt_group_key(
         &self,
         key_store: &dyn KeyStore,
@@ -370,5 +324,53 @@ impl PairingRegistry {
         )?;
         inner.active = None;
         Ok((peer_device, peer_static))
+    }
+
+    /// A read-only [`ActiveSnapshot`] of whatever pairing is active, for `pairing_lan.rs` to
+    /// validate an incoming `JoinerHello`'s `group`/`nonce` before calling any method above that
+    /// would mutate state (in particular, before `complete_as_initiator`, which can only ever
+    /// succeed once per session).
+    pub(crate) fn snapshot(&self, now_ms: u64) -> Result<ActiveSnapshot, PairingStateError> {
+        let mut inner = self.lock();
+        let active = active_mut(&mut inner.active, now_ms)?;
+        Ok(ActiveSnapshot {
+            role: active.role,
+            group: active.session.group(),
+            nonce: active.session.nonce(),
+            is_handshaken: active.session.is_handshaken(),
+            peer_device: active.session.peer_device(),
+        })
+    }
+
+    /// Records the joiner's long-term static public key, learned from its `JoinerHello` — the
+    /// reverse leg of the static-key exchange `adopt_group_key`'s doc names (the initiator learning
+    /// the joiner's key, rather than the other way around). Only meaningful on the initiator's
+    /// side; overwrites silently on a retried `JoinerHello`, which always resends the same key.
+    pub(crate) fn set_peer_static(
+        &self,
+        static_public: [u8; DEVICE_STATIC_KEY_BYTES],
+        now_ms: u64,
+    ) -> Result<(), PairingStateError> {
+        let mut inner = self.lock();
+        let active = active_mut(&mut inner.active, now_ms)?;
+        active.peer_static = Some(static_public);
+        Ok(())
+    }
+
+    /// The joiner's static public key recorded by [`PairingRegistry::set_peer_static`], if any —
+    /// read once both sides have confirmed, to register the joiner symmetrically in the
+    /// initiator's own `devices` table.
+    pub(crate) fn peer_static(&self, now_ms: u64) -> Option<[u8; DEVICE_STATIC_KEY_BYTES]> {
+        let mut inner = self.lock();
+        active_mut(&mut inner.active, now_ms).ok()?.peer_static
+    }
+
+    /// Whether *this* device's own human has confirmed the SAS yet — read by the joiner's
+    /// background relay task (`pairing_lan.rs`) on every retry so a `JoinerHello.confirmed` always
+    /// reflects the current, real state rather than a value captured once at the start of pairing.
+    pub(crate) fn joiner_local_confirmed(&self, now_ms: u64) -> Result<bool, PairingStateError> {
+        let mut inner = self.lock();
+        let active = active_mut(&mut inner.active, now_ms)?;
+        Ok(active.session.is_locally_confirmed())
     }
 }
