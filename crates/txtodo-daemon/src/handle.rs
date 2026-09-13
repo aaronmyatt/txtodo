@@ -255,6 +255,14 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Option<TaskLineInfo>>,
     },
+    /// A peer's already-signed LAN sync ops (`lan.rs`), applied verbatim, never re-stamped
+    /// (`sync_ops.rs`'s module doc explains why this differs from `Import`'s Loro-diff path).
+    SyncOps {
+        /// Already filtered to this actor's document (the caller routes by `op.file`).
+        ops: Vec<txtodo_model::Op>,
+        /// Result channel.
+        reply: oneshot::Sender<Result<(), ActorError>>,
+    },
 }
 
 /// A cheap handle to one document's actor.

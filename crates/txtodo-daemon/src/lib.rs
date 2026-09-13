@@ -19,6 +19,9 @@ mod identity_assign;
 mod identity_fingerprint;
 mod identity_levenshtein;
 mod import;
+pub mod lan;
+mod lan_apply;
+mod lan_session;
 pub mod mirror;
 mod mirror_converge;
 mod move_coordinator;
@@ -45,6 +48,7 @@ pub mod serve;
 pub mod server;
 pub mod state;
 pub mod stats;
+mod sync_ops;
 pub mod telemetry;
 pub mod textedit;
 mod tokens;
@@ -60,6 +64,8 @@ mod actor_tests;
 mod history_tests;
 #[cfg(test)]
 mod import_tests;
+#[cfg(test)]
+mod lan_session_tests;
 #[cfg(test)]
 mod mirror_tests;
 #[cfg(test)]
@@ -78,5 +84,7 @@ mod refdir_tests;
 mod state_goldens;
 #[cfg(test)]
 mod state_tests;
+#[cfg(test)]
+mod sync_ops_tests;
 #[cfg(test)]
 mod workspace_tests;
