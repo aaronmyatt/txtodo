@@ -12,6 +12,9 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:visual": "playwright test --project=light --project=dark",
+    "test:visual:update": "playwright test --project=light --project=dark --update-snapshots",
+    "test:perf": "playwright test --project=functional e2e/perf.spec.ts",
     "tauri": "tauri",
     "build:wasm-core": "bash scripts/build-wasm-core.sh"
   },

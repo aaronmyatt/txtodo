@@ -1,11 +1,11 @@
-2026-09-12 apps/desktop: add a checked-in generator or committed 10k-line fixture (todo-10k.txt) shared by both the visual snapshots and the perf test +m7 @desktop @test id:01M2B4ZW6WPKT0BCGZ5CE4N59W
-2026-09-12 apps/desktop/playwright.config.ts: add light and dark projects with colorScheme + snapshotPathSuffix so one spec runs in both themes +m7 @desktop @test id:01M2B4ZW6X8N84TNHTVBS065NA
-2026-09-12 Snapshot: main view on the 10k fixture, light and dark, id: hidden, ref + n/m decorations visible, line numbers on, Add-a-line row present +m7 @desktop @test id:01M2B4ZW6XY2TKTB92EZXZSCV5
-2026-09-12 Snapshot: edit popover and detail view (pinned parent, notes, breadcrumb, footer) and the conflict sheet with M4's three variants, each in light and dark +m7 @desktop @test id:01M2B4ZW6X3JBG8YAWPB8DCVRM
-2026-09-12 apps/desktop/src/decorations.ts: bound CM6 line decorations to visibleRanges via StateField so a 10k-line file only decorates the visible window +m7 @desktop id:01M2B4ZW6X9CWDEJ9MDCARX0A4
-2026-09-12 apps/desktop/e2e/visual: disable animations, freeze the footer clock, and pin the seed so goldens are deterministic across runs +m7 @desktop @test id:01M2B4ZW6XDQ4WR07GSQZ6GB9C
-2026-09-12 apps/desktop/e2e/perf.spec.ts: load todo-10k.txt, time first paint to first visible line, assert ≤ 500 ms on the CI runner +m7 @desktop @test id:01M2B4ZW6XVQ20SW2D6YRDQNYN
-2026-09-12 Record the ≤ 500 ms first-paint budget in budgets.json (perf note or new perf key) so it has a named check, not a comment-only promise +m7 @desktop id:01M2B4ZW6X4QAMDMZHVK68V1VS
-2026-09-12 Commit the goldens and document the explicit --update-snapshots path; CI runs snapshots without update and fails on any drift +m7 @desktop @test id:01M2B4ZW6XK1S63MCJWV90GAZQ
+x 2026-09-13 2026-09-12 apps/desktop: add a checked-in generator or committed 10k-line fixture (todo-10k.txt) shared by both the visual snapshots and the perf test +m7 @desktop @test id:01M2B4ZW6WPKT0BCGZ5CE4N59W
+x 2026-09-13 2026-09-12 apps/desktop/playwright.config.ts: add light and dark projects with colorScheme + snapshotPathSuffix so one spec runs in both themes +m7 @desktop @test id:01M2B4ZW6X8N84TNHTVBS065NA
+x 2026-09-13 2026-09-12 Snapshot: main view on the 10k fixture, light and dark, id: hidden, ref + n/m decorations visible, line numbers on, Add-a-line row present +m7 @desktop @test id:01M2B4ZW6XY2TKTB92EZXZSCV5
+x 2026-09-13 2026-09-12 Snapshot: edit popover and detail view (pinned parent, notes, breadcrumb, footer) and the conflict sheet with M4's three variants, each in light and dark +m7 @desktop @test id:01M2B4ZW6X3JBG8YAWPB8DCVRM
+x 2026-09-13 2026-09-12 apps/desktop/src/decorations.ts: bound CM6 line decorations to visibleRanges via StateField so a 10k-line file only decorates the visible window +m7 @desktop id:01M2B4ZW6X9CWDEJ9MDCARX0A4
+x 2026-09-13 2026-09-12 apps/desktop/e2e/visual: disable animations, freeze the footer clock, and pin the seed so goldens are deterministic across runs +m7 @desktop @test id:01M2B4ZW6XDQ4WR07GSQZ6GB9C
+x 2026-09-13 2026-09-12 apps/desktop/e2e/perf.spec.ts: load todo-10k.txt, time first paint to first visible line, assert ≤ 500 ms on the CI runner +m7 @desktop @test id:01M2B4ZW6XVQ20SW2D6YRDQNYN
+2026-09-12 Record the ≤ 500 ms first-paint budget in budgets.json (perf note or new perf key) so it has a named check, not a comment-only promise +m7 @desktop @human id:01M2B4ZW6X4QAMDMZHVK68V1VS
+x 2026-09-13 2026-09-12 Commit the goldens and document the explicit --update-snapshots path; CI runs snapshots without update and fails on any drift +m7 @desktop @test id:01M2B4ZW6XK1S63MCJWV90GAZQ
 2026-09-12 Wire snapshot + perf suites into the gate and CI so both run green on every push (constitution §5: CI is law) +m7 @desktop @test id:01M2B4ZW6XCB8XCSDA1RK39EXK
 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test id:01M2B4ZW6XKDWMBNTZHYG89HVN

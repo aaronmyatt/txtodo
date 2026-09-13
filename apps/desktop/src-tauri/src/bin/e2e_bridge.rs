@@ -160,12 +160,22 @@ fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
 /// instead of using a real `Watch` stream (see that file's module doc for why that's still "real
 /// reconciliation"). Dispatches to one `cmd_*` function per command (kept separate, not inlined,
 /// so no single match arm grows past this crate's line-count lint).
+///
+/// `workspace_root` was added by tasks/desktop-visual-regression: `e2e/shim/core.ts` used to
+/// hardcode `""` for it ("not exercised by the six e2e scenarios"), which is exactly what left
+/// `DetailView.svelte`'s footer (`{absoluteRefDir}`) empty for that task's detail-view golden —
+/// the one thing the real Tauri command surface has that those six scenarios happened never to
+/// need. No daemon RPC involved: the bridge already knows its own workspace root.
 async fn invoke(
     State(state): State<Shared>,
     Json(req): Json<InvokeReq>,
 ) -> Result<Response, ApiError> {
     if req.cmd == "debug_raise_conflict" {
         let value = cmd_debug_raise_conflict(&state.workspace, req.args)?;
+        return Ok(Json(value).into_response());
+    }
+    if req.cmd == "workspace_root" {
+        let value = Value::String(state.workspace.display().to_string());
         return Ok(Json(value).into_response());
     }
     let mut client = state.client.lock().await;

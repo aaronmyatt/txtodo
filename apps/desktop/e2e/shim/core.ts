@@ -41,7 +41,11 @@ export async function invoke<T>(cmd: string, args: Record<string, unknown> = {})
 			return undefined as T;
 		}
 		case "workspace_root":
-			return "" as T; // not exercised by the six e2e scenarios; harmless placeholder
+			// tasks/desktop-visual-regression: forwarded to the bridge (see e2e_bridge.rs's
+			// `invoke` doc comment) so DetailView.svelte's footer shows a real, non-empty
+			// directory path — the six original scenarios never needed this, but a detail-view
+			// golden with an empty footer wouldn't show what the acceptance criteria describe.
+			return (await callBridge(cmd, args)) as T;
 		case "set_main_popover_dirty":
 			return undefined as T; // quick-add's guard isn't part of this harness's scenarios
 		default:
