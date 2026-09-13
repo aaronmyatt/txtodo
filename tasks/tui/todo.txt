@@ -1,15 +1,15 @@
-2026-09-12 Add SyncStatus + Tokenizer/Complete to crates/txtodo-proto/proto/txtodo/v1/txtodo.proto and regenerate the committed output +m10 @tui @proto id:01M2B4ZWPK57BMQ5361SHHMVCT
-2026-09-12 crates/txtodo-tui/src/daemon.rs: Daemon struct with connect/get_file/watch/apply/sync_status over the socket +m10 @tui id:01M2B4ZWPKCSPCE77KNV6P11TE
-2026-09-12 crates/txtodo-tui/src/paint.rs: paint_line mapping TokenKind to the §3.1 colours with completed-line strike and hidden id: +m10 @tui id:01M2B4ZWPK8VEXWZQQ32DDX97V
-2026-09-12 crates/txtodo-tui/src/state.rs: AppState holding lines, spans, sync status and the needs_review set, updated from Watch +m10 @tui id:01M2B4ZWPKVTH4AXTNQ2S41E3A
-2026-09-12 crates/txtodo-tui/src/ui/list.rs: line list widget with vim navigation j/k gg/G and the trailing Add-a-line row +m10 @tui id:01M2B4ZWPK5GQYA94YK66N8ZDJ
-2026-09-12 crates/txtodo-tui/src/ui/edit.rs: single-line editor for i/a/A mapping to Apply Edit/Add mutations +m10 @tui id:01M2B4ZWPKR9PYKCK6XBSV4DJZ
-2026-09-12 crates/txtodo-tui/src/ui/conflicts.rs: r pane listing needs_review with mine/theirs/merged resolved via Apply Edit +m10 @tui id:01M2B4ZWPKQ2K2D6CGVA1FTTCP
-2026-09-12 crates/txtodo-tui/src/ui/sync.rs: s indicator rendering SyncStatus peers and pending_ops on a 1 s tick +m10 @tui id:01M2B4ZWPK3RJP79CEQAQFYSMB
-2026-09-12 crates/txtodo-tui/src/app.rs: ratatui event loop wiring keys to Daemon calls with bounded reconnect +m10 @tui id:01M2B4ZWPKM53TEJGKQZHV4K7W
-2026-09-12 Test: every TokenKind maps to a §3.1 semantic colour and paint_line covers every byte of a corpus line +m10 @tui @test id:01M2B4ZWPKRRWXWH53W16M2477
-2026-09-12 Test: integration against a real txtodod on a temp dir — dd/Space/i+save round-trip through Apply and repaint via Watch +m10 @tui @test id:01M2B4ZWPK59FKSTJK6XQEKVN5
-2026-09-12 Test: an external edit appears via Watch without refresh and a Watch drop reconnects and re-baselines +m10 @tui @test id:01M2B4ZWPK7D2SF3GQGFEHFT8S
-2026-09-12 Test: the r pane lists seeded needs_review and a merged resolve lands an Edit op and clears the flag +m10 @tui @test id:01M2B4ZWPK65Q4EHNK1GGD31MP
-2026-09-12 Test: two loopback daemons pair; the s indicator shows the peer and pending_ops reaches 0 within 2 s +m10 @tui @test id:01M2B4ZWPKR2YNEF33NVATY9EZ
-2026-09-12 Complete the parent line in ./todo.txt +m10 @tui id:01M2B4ZWPK108B1DNPE5YK6963
+2026-09-12 Add SyncStatus + Tokenizer/Complete to crates/txtodo-proto/proto/txtodo/v1/txtodo.proto and regenerate the committed output +m10 @tui @proto id:01M2B4ZWPK57BMQ5361SHHMVCT note:blocked-2026-09-13-slice-fence-is-txtodo-proto-not-txtodo-tui-needs-its-own-session
+2026-09-12 crates/txtodo-tui/src/daemon.rs: Daemon struct with connect/get_file/watch/apply/sync_status over the socket +m10 @tui id:01M2B4ZWPKCSPCE77KNV6P11TE note:connect-get_file-watch-apply-list_conflicts-resolve-done-2026-09-13-sync_status-blocked-on-item-above
+2026-09-12 Test: the r pane lists seeded needs_review and a merged resolve lands an Edit op and clears the flag +m10 @tui @test id:01M2B4ZWPK65Q4EHNK1GGD31MP note:blocked-2026-09-13-seeding-a-real-flag-needs-txtodo-store-directly-or-a-full-two-daemon-lan-sync-out-of-slice-or-time
+2026-09-12 Test: two loopback daemons pair; the s indicator shows the peer and pending_ops reaches 0 within 2 s +m10 @tui @test id:01M2B4ZWPKR2YNEF33NVATY9EZ note:blocked-2026-09-13-needs-the-SyncStatus-rpc-item-1
+2026-09-12 Complete the parent line in ./todo.txt +m10 @tui id:01M2B4ZWPK108B1DNPE5YK6963 note:not-done-2026-09-13-ticket-is-partial-see-notes-above
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/paint.rs: paint_line mapping TokenKind to the §3.1 colours with completed-line strike and hidden id: +m10 @tui id:01M2B4ZWPK8VEXWZQQ32DDX97V
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/state.rs: AppState holding lines, spans, sync status and the needs_review set, updated from Watch +m10 @tui id:01M2B4ZWPKVTH4AXTNQ2S41E3A
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/ui/list.rs: line list widget with vim navigation j/k gg/G and the trailing Add-a-line row +m10 @tui id:01M2B4ZWPK5GQYA94YK66N8ZDJ
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/ui/edit.rs: single-line editor for i/a/A mapping to Apply Edit/Add mutations +m10 @tui id:01M2B4ZWPKR9PYKCK6XBSV4DJZ
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/ui/conflicts.rs: r pane listing needs_review with mine/theirs/merged resolved via Apply Edit +m10 @tui id:01M2B4ZWPKQ2K2D6CGVA1FTTCP
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/ui/sync.rs: s indicator rendering SyncStatus peers and pending_ops on a 1 s tick +m10 @tui id:01M2B4ZWPK3RJP79CEQAQFYSMB
+x 2026-09-13 2026-09-12 crates/txtodo-tui/src/app.rs: ratatui event loop wiring keys to Daemon calls with bounded reconnect +m10 @tui id:01M2B4ZWPKM53TEJGKQZHV4K7W
+x 2026-09-13 2026-09-12 Test: every TokenKind maps to a §3.1 semantic colour and paint_line covers every byte of a corpus line +m10 @tui @test id:01M2B4ZWPKRRWXWH53W16M2477
+x 2026-09-13 2026-09-12 Test: integration against a real txtodod on a temp dir — dd/Space/i+save round-trip through Apply and repaint via Watch +m10 @tui @test id:01M2B4ZWPK59FKSTJK6XQEKVN5
+x 2026-09-13 2026-09-12 Test: an external edit appears via Watch without refresh and a Watch drop reconnects and re-baselines +m10 @tui @test id:01M2B4ZWPK7D2SF3GQGFEHFT8S
