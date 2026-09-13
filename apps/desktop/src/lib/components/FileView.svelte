@@ -54,6 +54,11 @@
 	let localPopover = $state<EditRequest | null>(null);
 	let addLineValue = $state("");
 	let loadError = $state("");
+	// Testability hook only (tasks/desktop-visual-regression): the perf test waits on
+	// `[data-line-count='10000']` to know the 10k-line fixture has actually reached the editor,
+	// rather than guessing a fixed sleep. Kept to a single `$state` + one line in the template —
+	// no behavior change for the shipped app.
+	let docLineCount = $state(0);
 
 	// Per-instance reconfigurable slots (never shared across FileView instances — see
 	// $lib/todotxt/decorations.ts) so toggling "show id: tags" or refreshing ref: progress is a
@@ -81,6 +86,12 @@
 					hoveredLine = null;
 				},
 				dblclick: handleDblClick
+			}),
+			// Keeps `docLineCount` (the `data-line-count` testability hook below) in sync with the
+			// actual document — fires on the initial `refreshDoc` load and on every later change,
+			// never a separate poll.
+			EditorView.updateListener.of((u) => {
+				if (u.docChanged) docLineCount = u.state.doc.lines;
 			})
 		];
 	}
@@ -231,7 +242,7 @@
 	});
 </script>
 
-<div class="file-view" class:fill style={`--depth: ${depth};`}>
+<div class="file-view" class:fill style={`--depth: ${depth};`} data-line-count={docLineCount}>
 	<header class="file-view-header">
 		<label>
 			<input type="checkbox" checked={showIdTags} onchange={toggleIdTags} />

@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { generateTenKLines, TEN_K_REF_SLUG } from "./tenKFixture";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // apps/desktop/e2e -> apps/desktop -> apps -> repo root
@@ -57,7 +58,7 @@ export interface DaemonHandle {
  * new sidecar-by-default identity mode (see tasks/desktop-detail-view/notes.md's "As built" for
  * the full explanation).
  */
-export type FixtureName = "todo" | "popover" | "nested" | "notes-create" | "conflict";
+export type FixtureName = "todo" | "popover" | "nested" | "notes-create" | "conflict" | "ten-k";
 
 function seed(dir: string, fixture: FixtureName): void {
 	switch (fixture) {
@@ -87,6 +88,17 @@ function seed(dir: string, fixture: FixtureName): void {
 			// `resolve_merged_keeps_bytes_and_mine_writes_the_side_back` fixture exactly — see
 			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
 			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
+			return;
+		case "ten-k":
+			// tasks/desktop-visual-regression: the 10k-line fixture shared by the main-view snapshot
+			// and the first-paint perf budget — see tenKFixture.ts's module doc for why it's a
+			// generator, not a checked-in 10k-line text file. Line 1's `ref:` tag needs a real
+			// sub-directory (not a dangling ref) so the main view's `n/m` progress decoration
+			// resolves on the very first screen instead of silently rendering nothing
+			// (`$lib/todotxt/lineInfo.ts::resolveRefIndicator` returns `null` for a dangling ref).
+			writeFileSync(join(dir, "todo.txt"), generateTenKLines());
+			mkdirSync(join(dir, TEN_K_REF_SLUG));
+			writeFileSync(join(dir, TEN_K_REF_SLUG, "todo.txt"), "x 2026-01-01 done sub-task\n(B) open sub-task\n");
 			return;
 	}
 }
