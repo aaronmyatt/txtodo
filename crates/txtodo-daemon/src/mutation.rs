@@ -259,7 +259,11 @@ fn move_to_end_ops(state: &DocState, task: &TaskRef) -> Result<Vec<OpKind>, Muta
     let (i, id) = resolve(state, task)?;
     let last = state.task_before(state.len());
     // Already last: anchor to its own predecessor instead, so the reorder is a true no-op.
-    let after = if last == Some(id) { state.task_before(i) } else { last };
+    let after = if last == Some(id) {
+        state.task_before(i)
+    } else {
+        last
+    };
     Ok(vec![OpKind::Move {
         task: id,
         after,

@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use txtodo_store::{Store, StoreError};
 use txtodo_sync::{
-    DEVICE_STATIC_KEY_BYTES, DeviceStaticSecret, FileKeyStore, KeyId, KeyStore, KeyStoreError,
-    KeyStoreMode, OsKeyStore, ResolvedBackend, Secret,
+    DEVICE_STATIC_KEY_BYTES, DeviceSigningKey, DeviceStaticSecret, FileKeyStore, KeyId, KeyStore,
+    KeyStoreError, KeyStoreMode, OsKeyStore, ResolvedBackend, SIGNING_KEY_BYTES, Secret,
 };
 
 use crate::workspace_error::WorkspaceError;
@@ -94,6 +94,27 @@ pub(crate) fn load_or_mint_device_static(
         &Secret::new(generated.to_bytes().to_vec()),
     )?;
     Ok(generated)
+}
+
+/// Loads this device's Ed25519 op-signing key from the keystore, or mints and stores one — same
+/// "mint once, fixed for the workspace's lifetime" idiom as [`load_or_mint_device_static`]. Unlike
+/// that one, `DeviceSigningKey` has no `to_bytes`/`generate` pair (it only wraps an existing
+/// 32-byte seed), so the seed itself is minted here with the same injected-entropy call every
+/// other id in this crate uses, then wrapped.
+pub(crate) fn load_or_mint_device_signing(
+    key_store: &dyn KeyStore,
+) -> Result<DeviceSigningKey, WorkspaceError> {
+    if let Some(secret) = key_store.get(KeyId::DeviceSigning)? {
+        let bytes: [u8; SIGNING_KEY_BYTES] = secret
+            .expose()
+            .try_into()
+            .map_err(|_| WorkspaceError::CorruptDeviceSigning(secret.expose().len()))?;
+        return Ok(DeviceSigningKey::from_bytes(bytes));
+    }
+    let mut seed = [0u8; SIGNING_KEY_BYTES];
+    getrandom::fill(&mut seed).map_err(|_| WorkspaceError::Entropy)?;
+    key_store.put(KeyId::DeviceSigning, &Secret::new(seed.to_vec()))?;
+    Ok(DeviceSigningKey::from_bytes(seed))
 }
 
 /// Loads the group key epoch from `meta`, defaulting to 0 (no rotation has happened yet). Unlike

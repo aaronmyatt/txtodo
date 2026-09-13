@@ -52,28 +52,11 @@ impl TxtodoService {
     pub(crate) fn shared_workspace(&self) -> SharedWorkspace {
         Arc::clone(&self.ws)
     }
-
-    fn actor(&self, path: &str) -> Result<ActorHandle, Status> {
-        let path = parse_path(path)?;
-        self.actor_by_path(&path)
-    }
-
-    pub(crate) fn actor_by_path(&self, path: &FilePath) -> Result<ActorHandle, Status> {
-        self.workspace()
-            .actor(path)
-            .cloned()
-            .ok_or_else(|| Status::not_found(format!("no document {path}")))
-    }
-
-    pub(crate) fn all_actors(&self) -> Vec<ActorHandle> {
-        let ws = self.workspace();
-        ws.paths().filter_map(|p| ws.actor(p).cloned()).collect()
-    }
 }
 
-// `progress_for` (ListFiles progress, plan §3.2.5) lives in progress.rs, `status_of` in
-// convert.rs, and `forward_changes` in watch_forward.rs, all split out to keep this file within
-// its line budget.
+// `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` (ListFiles
+// progress, plan §3.2.5) in progress.rs, `status_of` in convert.rs, and `forward_changes` in
+// watch_forward.rs, all split out to keep this file within its line budget.
 use crate::convert::status_of;
 use crate::watch_forward::forward_changes;
 
@@ -396,5 +379,21 @@ impl Txtodo for TxtodoService {
         r: Request<pb::DebugSetGroupKeyRequest>,
     ) -> Result<Response<pb::DebugSetGroupKeyResponse>, Status> {
         self.debug_set_group_key_impl(r).await
+    }
+
+    type BundleExportStream = crate::bundle_grpc::BundleExportStream;
+
+    async fn bundle_export(
+        &self,
+        r: Request<pb::BundleExportRequest>,
+    ) -> Result<Response<Self::BundleExportStream>, Status> {
+        self.bundle_export_impl(r).await
+    }
+
+    async fn bundle_import(
+        &self,
+        r: Request<tonic::Streaming<pb::BundleChunk>>,
+    ) -> Result<Response<pb::BundleImportResponse>, Status> {
+        self.bundle_import_impl(r).await
     }
 }

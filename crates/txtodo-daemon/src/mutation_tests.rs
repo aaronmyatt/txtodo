@@ -214,8 +214,14 @@ fn move_records_the_source_departure_to_the_named_destination() {
 fn move_to_end_anchors_after_the_last_other_task_and_is_a_no_op_when_already_last() {
     let s = state();
     // Task A (line 1) moves after the last other task, B (line 3).
-    let ops = mutation_ops(&s, &Mutation::MoveToEnd { task: line(1, Some(A)) }, &mut mint())
-        .unwrap();
+    let ops = mutation_ops(
+        &s,
+        &Mutation::MoveToEnd {
+            task: line(1, Some(A)),
+        },
+        &mut mint(),
+    )
+    .unwrap();
     assert_eq!(
         ops,
         vec![OpKind::Move {
@@ -225,8 +231,14 @@ fn move_to_end_anchors_after_the_last_other_task_and_is_a_no_op_when_already_las
         }]
     );
     // Task B (line 3) is already last: anchors to its own predecessor, A, a true no-op.
-    let ops = mutation_ops(&s, &Mutation::MoveToEnd { task: line(3, Some(B)) }, &mut mint())
-        .unwrap();
+    let ops = mutation_ops(
+        &s,
+        &Mutation::MoveToEnd {
+            task: line(3, Some(B)),
+        },
+        &mut mint(),
+    )
+    .unwrap();
     assert_eq!(
         ops,
         vec![OpKind::Move {

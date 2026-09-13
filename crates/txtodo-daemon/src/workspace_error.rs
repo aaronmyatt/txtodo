@@ -7,7 +7,7 @@ use crate::walker::{WALK_MAX_FILES, WalkError};
 use std::fmt;
 use txtodo_model::FilePath;
 use txtodo_store::StoreError;
-use txtodo_sync::{DEVICE_STATIC_KEY_BYTES, KeyStoreError};
+use txtodo_sync::{DEVICE_STATIC_KEY_BYTES, KeyStoreError, SIGNING_KEY_BYTES};
 
 /// Why the workspace could not open.
 #[derive(Debug)]
@@ -25,6 +25,11 @@ pub enum WorkspaceError {
     /// A stored device static secret is not `DEVICE_STATIC_KEY_BYTES` long (the keystore was
     /// edited or corrupted by hand); the length found.
     CorruptDeviceStatic(usize),
+    /// A stored device signing seed is not `SIGNING_KEY_BYTES` long (the keystore was edited or
+    /// corrupted by hand); the length found.
+    CorruptDeviceSigning(usize),
+    /// The OS entropy source failed while minting a new device key.
+    Entropy,
 }
 
 impl fmt::Display for WorkspaceError {
@@ -39,6 +44,11 @@ impl fmt::Display for WorkspaceError {
                 f,
                 "stored device static secret is {len} bytes, not {DEVICE_STATIC_KEY_BYTES}"
             ),
+            WorkspaceError::CorruptDeviceSigning(len) => write!(
+                f,
+                "stored device signing seed is {len} bytes, not {SIGNING_KEY_BYTES}"
+            ),
+            WorkspaceError::Entropy => write!(f, "entropy source failed"),
         }
     }
 }

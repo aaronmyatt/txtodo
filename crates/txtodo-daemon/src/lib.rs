@@ -6,6 +6,12 @@ mod activity;
 pub mod actor;
 mod actor_mirror;
 mod apply_route;
+mod bundle_crypto;
+mod bundle_export;
+mod bundle_grpc;
+mod bundle_import;
+mod bundle_import_error;
+mod bundle_wire;
 pub mod clock;
 mod commit;
 mod conflict_row;
@@ -58,6 +64,7 @@ mod refdir_grpc;
 mod refdir_ops;
 pub mod serve;
 pub mod server;
+mod server_actors;
 pub mod state;
 pub mod stats;
 mod sync_ops;
@@ -80,6 +87,8 @@ pub mod write;
 
 #[cfg(test)]
 mod actor_tests;
+#[cfg(test)]
+mod bundle_tests;
 #[cfg(test)]
 mod device_remove_tests;
 #[cfg(test)]

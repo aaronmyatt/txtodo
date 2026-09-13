@@ -44,6 +44,20 @@ tracing-appender = "0.2"
 serde_json = "1"
 pathfinding = "4.16.0"
 strsim = "0.11.1"
+# https://docs.rs/argon2 — RFC 9106 KDF for the bundle passphrase wrap (plan M8 `cli-bundle`); same
+# crate/version already vetted via txtodo-sync's FileKeyStore (deny.toml already covers it).
+argon2 = "0.5"
+# https://docs.rs/chacha20poly1305 — XChaCha20-Poly1305; `stream` enables the STREAM AEAD
+# construction (`aead::stream::{EncryptorBE32, DecryptorBE32}`) a bundle needs to seal its body in
+# bounded chunks rather than one giant blob. Same crate/version already vetted via txtodo-sync.
+chacha20poly1305 = { version = "0.10", features = ["getrandom", "stream"] }
+# https://docs.rs/postcard — the bundle's own record framing (same codec txtodo-store already uses
+# for the ops.payload column); this crate has no prior direct dependency on it.
+postcard = { version = "1", features = ["alloc"] }
+# https://docs.rs/serde — derives for the bundle's own wire records (bundle_wire.rs)
+serde = { version = "1", features = ["derive"] }
+# https://docs.rs/prost — encodes BundleManifest to bytes for the bundle's clear header frame
+prost = "0.14"
 
 [dev-dependencies]
 # https://docs.rs/proptest — text-edit application inverts diff_text

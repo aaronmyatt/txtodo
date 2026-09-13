@@ -119,7 +119,11 @@ impl TxtodoService {
         let handles = self.all_actors();
         let mut inputs = Vec::with_capacity(handles.len() + 1);
         for h in &handles {
-            debug_assert_eq!(file_kind_of(h.path()), pb::FileKind::Todo, "no other actor kind");
+            debug_assert_eq!(
+                file_kind_of(h.path()),
+                pb::FileKind::Todo,
+                "no other actor kind"
+            );
             inputs.push(self.node_input_for(h).await?);
         }
         for dir in notes_only_dirs(self.workspace().root(), &handles) {

@@ -296,17 +296,19 @@ impl Workspace {
     pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {
         &self.key_store
     }
-    /// The resolved sync keystore backend's name (plan M4 `sync-keystore`): `"memory"` for every
-    /// test and the `open`/`open_with_default_mode` convenience constructors, `"os"`/`"file"` for
-    /// a real backend resolved by `open_with_key_store`. `txtodo doctor` reports this by name.
+    /// The resolved sync keystore backend's name: `"memory"` for tests, `"os"`/`"file"` for real
+    /// (plan M4 `sync-keystore`). `txtodo doctor` reports this by name.
     pub fn key_store_backend_name(&self) -> &'static str {
         self.key_store_backend
     }
-    /// This device's long-term X25519 static public key (plan M4 `sync-device-remove`), safe to
-    /// hand to a peer during pairing.
+    /// This device's long-term X25519 static public key, safe to hand to a peer during pairing.
     pub fn device_static_public(&self) -> DeviceStaticPublic {
         self.device_static.public_key()
     }
+    // This device's Ed25519 op-signing key is not a `Workspace` field: `bundle_grpc.rs` loads it
+    // on demand from `key_store()` (plan M8 `cli-bundle`), the same "mint once, persist via the
+    // keystore" idiom as `device_static_public` above but without adding a hot field for a code
+    // path only two RPCs ever touch.
     /// The group key epoch this workspace currently seals ops under (plan M4
     /// `sync-device-remove`); 0 until the first `device remove` rotates it.
     pub(crate) fn group_epoch(&self) -> u32 {
