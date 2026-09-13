@@ -11,7 +11,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
-  `doctor [--verbose]` (five checks, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`.
+  `doctor [--verbose]` (six checks including `transport` — plan M4 `sync-lan-transport`: relay
+  off, endpoint bound, discovery active, paired — exit 1 on any FAIL); `daemon
+  install|start|stop|status [--force]`.
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `url_schemes`) at `$TXTODO_CONFIG`,
