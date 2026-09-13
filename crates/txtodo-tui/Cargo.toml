@@ -7,6 +7,10 @@ rust-version.workspace = true
 publish.workspace = true
 description = "ratatui client (M10)."
 
+[lib]
+name = "txtodo_tui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "txtodo-tui"
 path = "src/main.rs"
@@ -14,6 +18,26 @@ path = "src/main.rs"
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true
+# https://docs.rs/ratatui — terminal UI widgets/layout; the crossterm backend feature is on by
+# default, so this alone covers rendering.
+ratatui = "0.30"
+# https://docs.rs/crossterm — raw-mode terminal + key/event types for the vim-key input loop.
+crossterm = "0.29"
+# https://docs.rs/tonic — gRPC client to txtodod over the unix socket (ADR 0006), same seam
+# desktop's DaemonClient and the CLI use.
+tonic = "0.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+# https://docs.rs/hyper-util — TokioIo adapter for the unix-socket connector
+hyper-util = "0.1"
+# https://docs.rs/tower — service_fn for the custom connector
+tower = { version = "0.5", features = ["util"] }
+# https://docs.rs/jiff — the local calendar date for `Space`'s Complete mutation (ADR 0011), same
+# dependency and rationale as `txtodo-cli`'s own use for creation/completion stamps.
+jiff = "0.2"
+
+[dev-dependencies]
+# https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own
+tempfile = "3"
 
 [lints]
 workspace = true
