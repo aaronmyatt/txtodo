@@ -127,3 +127,33 @@ impl TxtodoService {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use txtodo_model::{MAX_PEER_SKEW_AHEAD_MS, MAX_PEER_SKEW_BEHIND_MS};
+
+    #[test]
+    fn skew_of_is_unknown_with_no_sample() {
+        assert_eq!(skew_of(None, 1_000), (pb::SkewStatus::Unknown, 0));
+    }
+
+    #[test]
+    fn skew_of_matches_txtodo_models_own_bounds() {
+        let now_ms = 10 * MAX_PEER_SKEW_AHEAD_MS;
+        // Within both bounds.
+        assert_eq!(skew_of(Some(now_ms), now_ms), (pb::SkewStatus::Ok, 0));
+        // Behind, safe: warn with the lag magnitude.
+        let lag = MAX_PEER_SKEW_BEHIND_MS + 1;
+        assert_eq!(
+            skew_of(Some(now_ms - lag), now_ms),
+            (pb::SkewStatus::Behind, lag)
+        );
+        // Ahead: fail with the lead magnitude.
+        let lead = MAX_PEER_SKEW_AHEAD_MS + 1;
+        assert_eq!(
+            skew_of(Some(now_ms + lead), now_ms),
+            (pb::SkewStatus::Ahead, lead)
+        );
+    }
+}
