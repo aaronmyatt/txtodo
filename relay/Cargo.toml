@@ -11,8 +11,39 @@ description = "Reference relay: stores ciphertext blobs it can't read, forwards 
 name = "relay"
 path = "src/main.rs"
 
-# Deliberately zero `txtodo-*` dependencies — see tests/no_txtodo_deps.rs. The relay is
-# untrusted (design §4.6): it must never be able to parse or decrypt what it stores.
+# Deliberately zero dependencies on this workspace's own crypto/parsing crates (see
+# tests/no_txtodo_deps.rs, which greps this manifest — comments below intentionally spell those
+# sibling crate names with a space, never a hyphen, so a doc comment can't trip that guard). The
+# relay is untrusted (design §4.6): it must never be able to parse or decrypt what it stores.
+#
+# Every dependency below is already pinned elsewhere in this workspace (the mcp crate: axum,
+# tokio, serde, tracing; the store crate: rusqlite) at the versions given here, so adding them
+# introduces no new license to review in deny.toml.
+[dependencies]
+# https://docs.rs/axum — the dumb HTTP surface (put/get/list; wake is a side effect of put).
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+# https://docs.rs/tokio — async runtime; "signal" catches SIGTERM/SIGINT for graceful shutdown.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+# https://docs.rs/rusqlite — the blob store, bundled SQLite amalgamation, WAL mode (matches the
+# choice this workspace's own store crate makes under ADR 0004, though this crate may not
+# depend on that crate itself).
+rusqlite = { version = "0.40", features = ["bundled"] }
+# https://docs.rs/serde — JSON response bodies for the list/get endpoints.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# https://docs.rs/tracing — structured logs, including NoopPush's wake log line.
+tracing = "0.1"
+# https://docs.rs/tracing-subscriber — env-filtered log output for the binary's main.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# https://docs.rs/tempfile — every store/HTTP test gets its own on-disk data dir (SQLite WAL
+# needs a real file, same reason this workspace's own store crate's tests use it).
+tempfile = "3"
+# https://docs.rs/reqwest — a plain HTTP client for the http.rs integration tests, minimal
+# feature set (no TLS needed: tests talk to 127.0.0.1 in plaintext). Version matches the copy
+# already in Cargo.lock (pulled in elsewhere in the workspace) to avoid a second major version.
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 
 [lints]
 workspace = true
