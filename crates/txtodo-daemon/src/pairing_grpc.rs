@@ -10,7 +10,10 @@
 //! later work, and none of `PairOfferResponse`/`PairAcceptRequest`/`PairConfirmRequest`/`PairResult`
 //! has a field to carry either — by design, since the desktop task's Tauri commands mirror these
 //! RPCs exactly (`tasks/desktop-devices-screen/notes.md`) and none of them takes or returns key
-//! material beyond `PairOfferResponse`'s own five fields and the SAS string.
+//! material beyond `PairOfferResponse`'s own six fields and the SAS string. `identity_mode` (the
+//! sixth field, added for this task's CLI slice) is not key material either — it lets a joiner
+//! detect a mismatch against its own mode and refuse instead of guessing a merge policy that
+//! `docs/questions.md` Q6 has not settled yet.
 //!
 //! Until that transport exists, `crate::pairing_state::PairingRegistry`'s relay-seam methods
 //! (`complete_as_initiator`, `joiner_public_key`, `mark_remote_confirmed`, `try_finalize_initiator`,
@@ -43,7 +46,7 @@ impl TxtodoService {
             .pairing()
             .begin_offer(ws.device(), ws.group(), endpoint, now_ms)
             .map_err(pairing_status)?;
-        Ok(Response::new(response_of(&offer)))
+        Ok(Response::new(response_of(&offer, ws.identity_mode())))
     }
 
     /// Accepts a peer's scanned `PairOffer` (`code`, decoded per `pairing_wire`'s module doc) and
@@ -82,15 +85,29 @@ fn words(sas: &[&'static str; SAS_WORD_COUNT]) -> String {
     sas.join(" ")
 }
 
-/// `PairOfferResponse` from an offer: exactly its five documented fields, nothing else — the
-/// QR-payload invariant `pairing_grpc_tests.rs` asserts.
-fn response_of(offer: &PairingOffer) -> pb::PairOfferResponse {
+/// `PairOfferResponse` from an offer: exactly its six documented fields, nothing else — the
+/// QR-payload invariant `pairing_grpc_tests.rs` asserts. `identity_mode` is this daemon's own
+/// (docs/questions.md Q2/Q6), not part of the crypto offer itself.
+fn response_of(
+    offer: &PairingOffer,
+    identity_mode: txtodo_model::IdentityMode,
+) -> pb::PairOfferResponse {
     pb::PairOfferResponse {
         device: offer.device.to_string(),
         group_id: offer.group.0.to_string(),
         x25519_pub: hex_encode(&offer.public_key),
         endpoint: offer.endpoint.clone(),
         nonce: hex_encode(&offer.nonce),
+        identity_mode: identity_mode_str(identity_mode).to_owned(),
+    }
+}
+
+/// `"tagged"` or `"sidecar"` — the same spelling as the daemon's own `--identity-mode` flag and
+/// the CLI's `config.toml` (docs/questions.md Q2), so the two ends of the wire agree by string.
+fn identity_mode_str(mode: txtodo_model::IdentityMode) -> &'static str {
+    match mode {
+        txtodo_model::IdentityMode::Tagged => "tagged",
+        txtodo_model::IdentityMode::Sidecar => "sidecar",
     }
 }
 

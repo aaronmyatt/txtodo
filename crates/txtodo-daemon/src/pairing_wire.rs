@@ -1,8 +1,10 @@
-//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s five fields —
-//! `device`, `group_id`, `x25519_pub`, `endpoint`, `nonce` — the same text a frontend's
-//! `JSON.stringify(pair_offer_response)` produces for the QR, so scanning it back needs no field
-//! this daemon didn't already return from `pair_offer`. Binary fields are lowercase hex; `device`
-//! is a ULID; `group_id` is decimal. Ref: <https://docs.rs/serde_json>.
+//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s six fields —
+//! `device`, `group_id`, `x25519_pub`, `endpoint`, `nonce`, `identity_mode` — the same text a
+//! frontend's `JSON.stringify(pair_offer_response)` produces for the QR, so scanning it back needs
+//! no field this daemon didn't already return from `pair_offer`. Binary fields are lowercase hex;
+//! `device` is a ULID; `group_id` is decimal; `identity_mode` is `"tagged"`/`"sidecar"` and is not
+//! part of the decoded [`PairingOffer`] — it is daemon/workspace metadata (docs/questions.md Q6),
+//! read directly off the JSON by the CLI, not by [`code_to_offer`]. Ref: <https://docs.rs/serde_json>.
 
 use serde_json::Value;
 use txtodo_model::{DeviceId, Ulid};
@@ -68,10 +70,11 @@ fn str_field<'a>(v: &'a Value, name: &'static str) -> Result<&'a str, WireError>
         .ok_or(WireError::MissingField(name))
 }
 
-/// Builds the JSON `code`/QR text for a `pair_offer` response: exactly its own five fields, byte
+/// Builds the JSON `code`/QR text for a `pair_offer` response: exactly its own six fields, byte
 /// for byte what a frontend's `JSON.stringify(pair_offer_response)` would produce. Used by
 /// `pairing_grpc_tests.rs` to drive `pair_accept` the way a real QR scan will — production code
-/// never calls this (the frontend does the encoding), hence the `allow`.
+/// never calls this (the frontend, or `txtodo-cli`'s own copy of this shape, does the encoding),
+/// hence the `allow`.
 #[allow(dead_code)]
 pub(crate) fn response_to_code(r: &pb::PairOfferResponse) -> String {
     serde_json::json!({
@@ -80,13 +83,15 @@ pub(crate) fn response_to_code(r: &pb::PairOfferResponse) -> String {
         "x25519_pub": r.x25519_pub,
         "endpoint": r.endpoint,
         "nonce": r.nonce,
+        "identity_mode": r.identity_mode,
     })
     .to_string()
 }
 
 /// Parses a `code` string back into offer fields, using `now_ms` (this daemon's own clock) as
-/// `issued_at_ms`: the wire never carries the initiator's original timestamp (only the five fields
-/// above cross it), so the `PAIRING_WINDOW_MS` check runs from when this daemon received the code
+/// `issued_at_ms`: the wire never carries the initiator's original timestamp (only the six fields
+/// above cross it, and `identity_mode` is not one of [`PairingOffer`]'s own fields either — see
+/// the module doc), so the `PAIRING_WINDOW_MS` check runs from when this daemon received the code
 /// rather than from when it was actually issued.
 pub(crate) fn code_to_offer(code: &str, now_ms: u64) -> Result<PairingOffer, WireError> {
     let v: Value = serde_json::from_str(code).map_err(WireError::Json)?;
