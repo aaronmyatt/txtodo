@@ -1,10 +1,12 @@
 //! The real `iroh`-backed [`Link`] (plan M4 `sync-lan-transport`, daemon-wiring pass). `endpoint.rs`
 //! owns the one endpoint constructor; this module owns everything that *uses* the bound endpoint —
-//! dialing, accepting, and turning a QUIC connection's one bidirectional stream into a `Link` — so
-//! it is still true that `iroh` appears in exactly these two files and nowhere else (check
-//! `.claude/budgets.json`'s `allowedDeps` before wiring anything else to it). `txtodo-daemon` sees
-//! only [`LanEndpoint`], [`IrohLink`] and [`LanError`] from this module; it never names an `iroh`
-//! type directly.
+//! dialing, accepting, and turning a QUIC connection's one bidirectional stream into a `Link`.
+//! `iroh` also appears in `relay.rs`/`holepunch.rs` (plan M8 `sync-relay-enable`), which reuses
+//! [`IrohLink`] rather than duplicating it — a `Link` over one QUIC connection's stream is the same
+//! type regardless of whether the connection reached its peer via LAN or relay (check
+//! `.claude/budgets.json`'s `allowedDeps` before wiring `iroh` in anywhere else). `txtodo-daemon`
+//! sees only [`LanEndpoint`], [`IrohLink`] and [`LanError`] from this module; it never names an
+//! `iroh` type directly.
 //!
 //! **Known upstream blocker, confirmed both here and in `endpoint_tests.rs`:** `noq-proto` 1.3.0
 //! (vendored by `iroh` 1.2.0) refuses a same-host connection — the connecting side's source IP
@@ -208,7 +210,10 @@ const READ_CHUNK_BYTES: usize = 64 * 1024;
 const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(750);
 
 impl IrohLink {
-    fn new(
+    /// `pub(crate)` rather than private: `holepunch.rs` (plan M8 `sync-relay-enable`) wraps a
+    /// relay-dialed connection the identical way — a `Link` over one QUIC connection's stream
+    /// doesn't care whether the connection reached its peer via LAN or relay.
+    pub(crate) fn new(
         connection: iroh::endpoint::Connection,
         send: iroh::endpoint::SendStream,
         recv: iroh::endpoint::RecvStream,

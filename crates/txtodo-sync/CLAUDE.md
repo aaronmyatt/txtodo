@@ -85,10 +85,29 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `build_endpoint(&RelayConfig) -> Result<Endpoint, RelayError>` binds `presets::Minimal` with
   `RelayMode::Custom(RelayMap::try_from_iter([url]))` (never iroh's own `Default`/`Staging`
   presets) and `PortmapperConfig::Disabled`, same `ALPN`/`PAIRING_ALPN` pair as `endpoint.rs`.
-  `iroh` appears in this file, `endpoint.rs` and `lan_link.rs` only (`.claude/budgets.json`'s
-  `allowedDeps`). Not yet wired into `txtodo-daemon`'s background sync loop (`lan.rs`'s relay
-  counterpart) or exposed via `config.toml`/`--relay`/`txtodo doctor` — those are `sync-relay-enable`'s
-  remaining todo items, plus `holepunch.rs`'s hole-punch-with-relay-fallback `Link` impl.
+  `iroh` appears in this file, `endpoint.rs`, `lan_link.rs` and `holepunch.rs` only
+  (`.claude/budgets.json`'s `allowedDeps`). Not yet wired into `txtodo-daemon`'s background sync
+  loop (`lan.rs`'s relay counterpart) or exposed via `config.toml`/`--relay`/`txtodo doctor` — those
+  are `sync-relay-enable`'s remaining todo items.
+- `holepunch.rs` (M8 `sync-relay-enable`, design §4.5): connect/accept over a `relay.rs`-built
+  endpoint, mirroring `lan_link.rs`'s split from `endpoint.rs`. Hole-punch-with-relay-fallback is
+  not hand-rolled: iroh's own connection establishment already does it, so this module is one
+  `Endpoint::connect`/`accept` call each, reusing [`IrohLink`] (now `pub(crate)`, not private —
+  a `Link` over one QUIC stream is the same type whether the connection reached its peer via LAN or
+  relay). `RelayEndpoint::{node_id_bytes, online, bind}` (`bind` takes a `GroupId` — every
+  `connect` gates on the peer sharing it, refusing before dialing rather than after a handshake
+  fails, same as LAN's `PeerTable::observe`), `connect(node, their_group)`, `accept()`.
+  `HolepunchError` (`ForeignGroup` / `InvalidPeerId` / `Connect` / `Connection` / `NoIncoming` /
+  `Stream`, same split as `LanError`: a peer's own protocol violation is `LinkError`'s job, not
+  this type's). `RelayEndpoint::bind_insecure_for_test`/`relay::build_endpoint_insecure_for_test`
+  are `#[cfg(test)]`-only (compiled out of every real build) so a test can dial
+  `iroh::test_utils::run_relay_server`'s self-signed local relay; production code has no path to
+  skipping certificate verification. The real-local-relay rendezvous test is `#[ignore]`d — the
+  QUIC connection genuinely establishes (confirmed with `RUST_LOG=iroh=debug`) but `open_bi`/
+  `accept_bi` never settle within two `iroh` endpoints sharing one process, the same class of
+  same-process artifact `endpoint_tests.rs`/`lan_link.rs` document for LAN; real cross-process proof
+  is `relay-converge-test`'s job (plan M8, its own ticket), same relationship as
+  `lan_loopback_converge.rs` proving LAN for real.
 - `discovery.rs` (M4 `sync-lan-transport`): `SERVICE_TYPE` (`_txtodo._udp.local.`), TXT keys
   `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO`/`TXT_NODE` (never the group key; `TXT_NODE` is the
   advertiser's iroh `EndpointId`, opaque `[u8; 32]` here — this module still never names `iroh`),

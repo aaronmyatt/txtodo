@@ -76,20 +76,43 @@ pub(crate) fn relay_map(cfg: &RelayConfig) -> Result<RelayMap, RelayError> {
     RelayMap::try_from_iter([cfg.url.as_str()]).map_err(RelayError::InvalidUrl)
 }
 
+/// Shared by [`build_endpoint`] and the test-only insecure variant below: everything except
+/// certificate verification, which the caller's builder closure sets.
+async fn build(
+    cfg: &RelayConfig,
+    customize: impl FnOnce(iroh::endpoint::Builder) -> iroh::endpoint::Builder,
+) -> Result<Endpoint, RelayError> {
+    let map = relay_map(cfg)?;
+    let builder = customize(
+        Endpoint::builder(Minimal)
+            .relay_mode(RelayMode::Custom(map))
+            .portmapper_config(PortmapperConfig::Disabled),
+    );
+    let endpoint = builder.bind().await.map_err(RelayError::Bind)?;
+    endpoint.set_alpns(vec![ALPN.to_vec(), PAIRING_ALPN.to_vec()]);
+    Ok(endpoint)
+}
+
 /// Binds an endpoint whose relay set is exactly `cfg.url` — never iroh's own `Default`/`Staging`
 /// presets, which would silently route this device's traffic through n0's servers instead of the
 /// relay this device was told to use. Port mapping stays disabled: routing through a configured
 /// relay is not a reason to also ask the LAN router to open an external port (same reasoning as
 /// `endpoint.rs`). Accepts both [`ALPN`] and [`PAIRING_ALPN`], same as the LAN endpoint, so a
-/// caller can tell a sync connection from a pairing one purely by which ALPN it negotiated.
+/// caller can tell a sync connection from a pairing one purely by which ALPN it negotiated. This
+/// crate's one production constructor: certificate verification is never skipped.
 pub async fn build_endpoint(cfg: &RelayConfig) -> Result<Endpoint, RelayError> {
-    let map = relay_map(cfg)?;
-    let endpoint = Endpoint::builder(Minimal)
-        .relay_mode(RelayMode::Custom(map))
-        .portmapper_config(PortmapperConfig::Disabled)
-        .bind()
-        .await
-        .map_err(RelayError::Bind)?;
-    endpoint.set_alpns(vec![ALPN.to_vec(), PAIRING_ALPN.to_vec()]);
-    Ok(endpoint)
+    build(cfg, |b| b).await
+}
+
+/// Test-only twin of [`build_endpoint`] that skips relay TLS certificate verification, so a test
+/// can dial `iroh::test_utils::run_relay_server`'s self-signed local relay. `#[cfg(test)]` compiles
+/// this out of every real build entirely — production code has no path to an insecure endpoint.
+#[cfg(test)]
+pub(crate) async fn build_endpoint_insecure_for_test(
+    cfg: &RelayConfig,
+) -> Result<Endpoint, RelayError> {
+    build(cfg, |b| {
+        b.ca_tls_config(iroh::tls::CaTlsConfig::insecure_skip_verify())
+    })
+    .await
 }

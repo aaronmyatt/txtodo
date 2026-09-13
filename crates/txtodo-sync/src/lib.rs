@@ -11,6 +11,7 @@ mod discovery;
 mod eff_wordlist;
 mod endpoint;
 mod frame;
+mod holepunch;
 mod keystore;
 mod keystore_error;
 mod keystore_file;
@@ -52,6 +53,7 @@ pub use discovery::{
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use endpoint::{ALPN, PAIRING_ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
+pub use holepunch::{HolepunchError, RelayEndpoint};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
 pub use keystore_error::KeyStoreError;
 pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM, FileKeyStore};
@@ -107,6 +109,8 @@ mod endpoint_tests;
 mod frame_tests;
 #[cfg(test)]
 mod hello_wire_tests;
+#[cfg(test)]
+mod holepunch_tests;
 #[cfg(test)]
 mod keystore_file_tests;
 #[cfg(test)]
