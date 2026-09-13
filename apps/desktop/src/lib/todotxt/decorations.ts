@@ -44,6 +44,49 @@ export const idTagsHidden: Extension = ViewPlugin.fromClass(
 	{ decorations: (v) => v.decorations }
 );
 
+/** Ghost text ("Add a line…") on the document's last line, only while that line is empty — a
+ * blank trailing line is already a real document line (design §2.6: blanks are entries), and the
+ * daemon appends a new task there, so this needs no dedicated "add" affordance of its own: typing
+ * over the placeholder and committing (blur/Cmd-S) goes through the exact same delta-commit path
+ * as any other edit (rawMode.ts's `computeDelta` already turns a new untagged line into an `Add`). */
+class AddLinePlaceholderWidget extends WidgetType {
+	eq(): boolean {
+		return true;
+	}
+
+	toDOM(): HTMLElement {
+		const span = document.createElement("span");
+		span.className = "cm-todotxt-add-line-placeholder";
+		span.textContent = "Add a line…";
+		return span;
+	}
+
+	ignoreEvent(): boolean {
+		return true; // let the click fall through to CM6's own "place the cursor here"
+	}
+}
+
+function buildAddLinePlaceholder(view: EditorView): DecorationSet {
+	const lastLine = view.state.doc.line(view.state.doc.lines);
+	if (lastLine.length !== 0) return Decoration.none;
+	const builder = new RangeSetBuilder<Decoration>();
+	builder.add(lastLine.from, lastLine.from, Decoration.widget({ widget: new AddLinePlaceholderWidget(), side: 1 }));
+	return builder.finish();
+}
+
+export const addLinePlaceholder: Extension = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+		constructor(view: EditorView) {
+			this.decorations = buildAddLinePlaceholder(view);
+		}
+		update(update: ViewUpdate) {
+			if (update.docChanged) this.decorations = buildAddLinePlaceholder(update.view);
+		}
+	},
+	{ decorations: (v) => v.decorations }
+);
+
 /** Renders `n/m` (open/total) or a notes icon at the end of a `ref:` line. */
 class RefIndicatorWidget extends WidgetType {
 	constructor(private readonly indicator: RefIndicator) {
@@ -140,6 +183,7 @@ export const mainViewBaseTheme = EditorView.baseTheme({
 	".cm-todotxt-done": { opacity: "0.55" },
 	".cm-todotxt-strike": { textDecoration: "line-through" },
 	".cm-todotxt-hover": { backgroundColor: "rgba(15, 23, 42, 0.05)" },
+	".cm-todotxt-add-line-placeholder": { color: "#9ca3af", fontStyle: "italic", pointerEvents: "none" },
 	".cm-todotxt-ref-indicator": {
 		marginLeft: "0.5em",
 		fontSize: "0.85em",

@@ -76,7 +76,7 @@ test("blur commits an in-progress edit", async ({ page }) => {
 	await page.keyboard.type(" +errand");
 
 	// Focus something outside the CM6 editor entirely.
-	await page.locator(".add-line-row input").click();
+	await page.locator(".top-nav h1").click();
 
 	await expect.poll(() => readFileSync(todoPath, "utf8")).toContain("+errand");
 });

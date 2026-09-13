@@ -61,3 +61,4 @@ x 2026-09-13 2026-09-13 Answer Q8: one sync group per device-set, or one per wor
 x 2026-09-13 2026-09-13 Answer Q9: pull txtodo-query (design §8 subset) forward from M10 into M11 +questions @human ref:open-questions — yes, full §8 grammar not a subset; ADR 0022 id:01M2CJC4X6HZKXM0PP11WE07Y9
 x 2026-09-13 2026-09-13 Answer Q10: is no-two-txtodod-processes-per-agent-session a standing rule +questions @human ref:open-questions — no, per-session only; ADR 0023 id:01M2CJC4XGN8304Z9RJ0QJXKWX
 x 2026-09-13 2026-09-13 Answer Q11: wire LAN transport into txtodod for a two-host run, or skip to M8 relay +questions @human ref:open-questions — dropped LAN transport entirely, relay-only; ADR 0024 id:01M2CJC4XW38MBQ2MAVAJ1JXYD
+2026-09-13 Move mutation: relocate a task's line (e.g. completed items to the bottom) without minting a new id, so ref: notes/sub-lists survive +daemon @daemon @desktop

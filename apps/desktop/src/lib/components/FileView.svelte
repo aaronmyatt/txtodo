@@ -17,7 +17,7 @@
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { applyMutations, getFile, listFiles, onDaemonChange, watchPaths, type FileInfo } from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
-	import { idTagsHidden, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
+	import { addLinePlaceholder, idTagsHidden, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
 	import { computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import type { DetailParams } from "$lib/types";
@@ -47,7 +47,6 @@
 	let containerEl: HTMLDivElement | undefined = $state();
 	let view: EditorView | undefined;
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
-	let addLineValue = $state("");
 	let loadError = $state("");
 	// Testability hook only (tasks/desktop-visual-regression): the perf test waits on
 	// `[data-line-count='10000']` to know the 10k-line fixture has actually reached the editor,
@@ -112,6 +111,7 @@
 			todotxtLanguage,
 			mainViewBaseTheme,
 			idTagsHidden, // always hidden — §3.1
+			addLinePlaceholder,
 			lineDecoCompartment.of(lineDecorations(dirOf(path), filesByPath)),
 			hoverLineCompartment.of([]),
 			EditorView.domEventHandlers({
@@ -270,14 +270,6 @@
 		}
 	}
 
-	async function addLine() {
-		const line = addLineValue.trim();
-		if (!line) return;
-		addLineValue = "";
-		await applyMutations(path, [{ kind: "add", line }]);
-		// The daemon stamps the creation date/id: and its Change repaints us — see refreshDoc.
-	}
-
 	let unlistenChange: (() => void) | undefined;
 
 	onMount(() => {
@@ -361,16 +353,6 @@
 	{/if}
 
 	<div class="editor-shell" bind:this={containerEl}></div>
-
-	<div class="add-line-row">
-		<span class="add-line-affordance">+</span>
-		<input
-			type="text"
-			placeholder="Add a line…"
-			bind:value={addLineValue}
-			onkeydown={(e) => e.key === "Enter" && addLine()}
-		/>
-	</div>
 </div>
 
 <style>
@@ -415,24 +397,5 @@
 
 	.file-view.fill .editor-shell :global(.cm-editor) {
 		height: 100%;
-	}
-
-	.add-line-row {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0.35rem 0.6rem;
-		opacity: 0.7;
-	}
-
-	.add-line-row input {
-		flex: 1;
-		border: none;
-		font: inherit;
-		background: transparent;
-	}
-
-	.add-line-row input:focus {
-		outline: none;
 	}
 </style>
