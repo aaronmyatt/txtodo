@@ -23,6 +23,7 @@
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import { idTagsHidden, idTagsVisible, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
 	import type { EditRequest } from "$lib/todotxt/editRequest";
+	import type { DetailParams } from "$lib/types";
 	import EditPopover from "./EditPopover.svelte";
 
 	interface Props {
@@ -30,9 +31,15 @@
 		depth: number;
 		/** Optional: lets a parent (MainView) host the popover instead. Falls back to a local one. */
 		onEditRequest?: (req: EditRequest) => void;
+		/** Double-click (or Cmd/Ctrl+Enter) on a line (tasks/desktop-detail-view, plan §3.2): opens
+		 * the detail view for that line, whether or not it has a `ref:` tag yet — a task with none
+		 * still lazily creates one on the first notes/sub-list edit (plan §3.2.4). Optional so a
+		 * `FileView` used somewhere that never wants a detail view (there is none today, but the
+		 * component itself shouldn't assume one always exists) doesn't have to pass a no-op. */
+		onDetailRequest?: (params: DetailParams) => void;
 	}
 
-	let { path, depth, onEditRequest }: Props = $props();
+	let { path, depth, onEditRequest, onDetailRequest }: Props = $props();
 
 	let containerEl: HTMLDivElement | undefined = $state();
 	let view: EditorView | undefined;
@@ -55,7 +62,10 @@
 			EditorView.lineWrapping,
 			EditorView.editable.of(false),
 			EditorState.readOnly.of(true),
-			keymap.of(defaultKeymap),
+			// `Mod-Enter` (Cmd+Enter on macOS, Ctrl+Enter elsewhere — CM6's own convention:
+			// https://codemirror.net/docs/ref/#commands) is the keyboard equivalent of a
+			// double-click, both opening the detail view for the line under the caret (plan §3.2).
+			keymap.of([{ key: "Mod-Enter", run: openDetailAtSelection }, ...defaultKeymap]),
 			todotxtLanguage,
 			mainViewBaseTheme,
 			idTagsCompartment.of(idTagsHidden), // hidden by default — §3.1
@@ -64,9 +74,28 @@
 				mousemove: handleMouseMove,
 				mouseleave: () => {
 					hoveredLine = null;
-				}
+				},
+				dblclick: handleDblClick
 			})
 		];
+	}
+
+	function requestDetail(lineNumber: number) {
+		onDetailRequest?.({ file: path, line: lineNumber });
+	}
+
+	function openDetailAtSelection(editorView: EditorView): boolean {
+		if (!onDetailRequest) return false;
+		const line = editorView.state.doc.lineAt(editorView.state.selection.main.head);
+		requestDetail(line.number);
+		return true;
+	}
+
+	function handleDblClick(event: MouseEvent, editorView: EditorView): boolean {
+		const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
+		if (pos == null) return false;
+		requestDetail(editorView.state.doc.lineAt(pos).number);
+		return true;
 	}
 
 	function handleMouseMove(event: MouseEvent, editorView: EditorView): boolean {

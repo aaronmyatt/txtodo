@@ -58,6 +58,25 @@ pub async fn daemon_status(state: State<'_, AppState>) -> Result<DaemonStatus, S
     Ok(*state.status.lock().await)
 }
 
+/// Absolute workspace root, for the detail view's footer (tasks/desktop-detail-view/notes.md:
+/// "footer: absolute directory path + sync status") — display only. The frontend never uses this
+/// to open a file itself (design §7: every read/write still crosses the `DaemonClient`); it only
+/// joins this with a workspace-relative directory to show the human where they are on disk.
+#[tauri::command]
+pub fn workspace_root(state: State<'_, AppState>) -> String {
+    state.config.workspace.display().to_string()
+}
+
+/// Records whether the main window's edit popover currently has an unsaved edit; the quick-add
+/// global hotkey's handler reads this to decide whether to open quick-add or refocus the main
+/// window instead (tasks/desktop-quick-add/notes.md).
+#[tauri::command]
+pub fn set_main_popover_dirty(state: State<'_, AppState>, dirty: bool) {
+    state
+        .main_popover_dirty
+        .store(dirty, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Retries the connect/spawn sequence; wired to the reconnect banner's retry button.
 #[tauri::command]
 pub async fn retry_connect(

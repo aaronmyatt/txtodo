@@ -69,3 +69,48 @@ function paintChange(change: Change): void;                    // rebuild from G
 
 - plan M7 and §3.1–3.2 (txtodo-implementation-plan.md), design §7 (txtodo-design.md)
 - CodeMirror 6: https://codemirror.net/ · decorations https://codemirror.net/docs/ref/#view.Decoration
+
+## As built (2026-09-13, agent)
+
+Found already built from an earlier session — `apps/desktop/src/lib/components/{MainView,FileView}.svelte`,
+`$lib/todotxt/{decorations,lineInfo,editRequest}.ts` implement everything in this file's Design
+section: real CM6 read-only `EditorView` per `FileView` instance, hidden `id:` tags via a
+`MatchDecorator` zero-width `Decoration.replace`, completed-line muting/strike via a viewport-bounded
+`ViewPlugin`, `ref:` trailing `n/m`/notes-icon widgets sourced from `ListFiles`'s own
+`FileInfo.progress` (never recomputed), a hover-revealed pencil, and an always-present "Add a line"
+row. `MainView` hosts the popover (per this file's own contract) and the root `ConflictBanner`.
+`$lib/lib/components/__tests__/lineInfo.test.ts` covers the pure decoration-placement logic.
+
+Extended this session, for `desktop-detail-view`'s benefit (kept in `apps/desktop/src/lib/components/FileView.svelte`,
+not a new file — this component is explicitly designed to be reused recursively):
+
+- `onDetailRequest?: (params: DetailParams) => void` prop plus a `dblclick` DOM handler and a
+  `Mod-Enter` (Cmd+Enter macOS / Ctrl+Enter elsewhere — CM6's own binding convention) keymap entry,
+  both resolving the line under the pointer/caret and calling `onDetailRequest({file: path, line})`.
+  Fires for any line, `ref:` tag or not — a task with none still lazily gets one on its first notes
+  edit (plan §3.2.4), so gating the double-click on an existing tag would just make that flow
+  undiscoverable.
+- No change to the file's other contracts: `onEditRequest` still works exactly as before,
+  `depth`/`path` are unchanged, and the 10 k-line/500 ms budget claim wasn't touched (still
+  viewport-bounded decorations only).
+
+Bug found and fixed while wiring `desktop-edit-popover`'s reuse for `desktop-detail-view`/
+`desktop-quick-add` — recorded on that task's own "As built", not duplicated here, because the
+fix lives in `EditPopover.svelte` — but it directly affects this file's hosted popover: `FileView`'s
+own `saveLocalEdit` (used when a caller passes no `onEditRequest`, unaffected by the fix — it was
+already the *sole* place that path applies) was fine; `MainView`'s hosted case was double-applying
+every edit before the fix (see desktop-edit-popover's notes for detail).
+
+## What to open and look at
+
+- `npm run tauri dev` from `apps/desktop` in a workspace with a `todo.txt` of a dozen or so lines,
+  some completed (`x <date> ...`), one with a `ref:<slug>` tag pointing at a real
+  `<slug>/todo.txt`. Check: line numbers include blanks; completed lines are muted with the
+  description struck through (not the `x`/dates); the `ref:` line shows `n/m` at its right edge;
+  toggling "Show `id:` tags" reveals/hides the tag inline.
+- Hover a line: a pencil (✎) appears at its right edge; click it — the edit popover opens
+  (`desktop-edit-popover`'s own "what to look at" covers verifying that popover itself).
+- Double-click a line (or click into it and press Cmd/Ctrl+Enter): the detail view opens
+  (`desktop-detail-view`'s "what to look at" covers that screen).
+- Edit the same `todo.txt` from a second terminal (`echo "new task" >> todo.txt` or via the CLI)
+  while the app is open: the line appears/repaints without a manual reload.

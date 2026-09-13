@@ -84,3 +84,116 @@ does. Pick **one**; the acceptance requires real reconciliation either way, not 
 
 - Plan M7 acceptance · plan §3.2 interactions · plan §3.2.4 lazy creation.
 - https://playwright.dev/ · https://v2.tauri.app/develop/tests/webdriver/
+
+## As built (2026-09-13, agent)
+
+Built from scratch this session. Chose neither of the notes' two named options outright
+(`tauri-driver`/WebDriver, or "a thin test bridge that calls the daemon's gRPC the same way
+`commands.rs` does") but a variant of the second, adapted for what a browser can actually do:
+
+### Harness: a real daemon behind a real HTTP bridge, driven by a plain browser
+
+`tauri-driver` was ruled out deliberately: it launches an actual native OS window, which is exactly
+the "don't launch/drive the app to look at it" activity this repo's CLAUDE.md reserves for a human,
+even without a screenshot involved — and it needs `safaridriver`/a real GUI session, which isn't
+something to spin up unprompted. A **plain browser calling the daemon's gRPC the way `commands.rs`
+does** was the other option, but a browser cannot speak tonic/gRPC directly (no unix sockets, no
+HTTP/2 trailers) — so this reuses `commands.rs`'s exact logic (not a second implementation of it)
+restated over plain JSON/HTTP:
+
+- `apps/desktop/src-tauri/src/bin/e2e_bridge.rs` (new binary, feature-gated) — calls
+  `desktop_lib::daemon::{ensure_daemon, DaemonClient}` exactly like `lib.rs::run()` does, and reuses
+  `desktop_lib::dto::*`'s existing `From<pb::...>` conversions directly (made `dto` `pub` for
+  this), for `list_files`/`get_file`/`apply`/`history`/`list_conflicts`/`resolve`/`get_notes`/
+  `edit_notes` plus one test-only `debug_raise_conflict` (see conflict.spec.ts below). **Guarded so
+  it can never ship enabled to production**: it only exists behind the `e2e-bridge` Cargo feature
+  (`required-features` on its `[[bin]]`), which a plain `cargo build -p desktop` never enables —
+  confirmed by grep-diffing `cargo build -p desktop`'s output with and without the feature.
+- `apps/desktop/e2e/shim/{core,event,window}.ts` — stand-ins for `@tauri-apps/api/{core,event,
+  window}`, active only under `vite dev --mode e2e` (`vite.config.ts`'s new mode-conditional
+  alias). `core.ts` forwards `invoke()` to the bridge over `fetch`; `window.ts` reports the main
+  window's label (quick-add isn't one of these six scenarios); `event.ts` is the one genuine
+  compromise — see below.
+- `apps/desktop/e2e/fixtures.ts` — `spawnDaemon(fixture)` builds `e2e_bridge`+`txtodod` once,
+  seeds a fresh tempdir per named fixture, spawns the bridge (with `target/debug` prepended to
+  `PATH` so `DesktopConfig.daemon_bin`'s default PATH-resolution finds `txtodod`), and waits on
+  `/health`. `dispose()` kills the bridge and reads the daemon's own pidfile
+  (`.txtodo/txtodod.pid`, the same file `apps/desktop/src-tauri/tests/support::wait_for_pid` reads)
+  to kill it too, since killing the bridge alone doesn't reap its child.
+
+**Why `Watch` isn't real here**: `e2e_bridge` intentionally doesn't implement the `Watch` stream —
+`event.ts`'s `listen("daemon-change", ...)` instead polls `get_file`/`list_conflicts` for whatever
+paths the app called `watch()` on and synthesizes a `Change` event when a hash or the conflict-id
+set changes. This is still every byte and every flag coming from a real `txtodod` acting on a real
+file — only the daemon→browser *transport* is polling instead of a push stream, invisible to
+`$lib/daemon.ts`'s `onDaemonChange` callback either way. Building the real stream over HTTP (SSE)
+was judged not worth it for six scenarios that already poll-and-retry via Playwright's own
+`expect.poll`/auto-waiting assertions.
+
+### The six scenarios
+
+All in `apps/desktop/e2e/*.spec.ts`, `npm run test:e2e` (`playwright test`) to run, all currently
+green (`14 passed` under `--repeat-each=2`, no observed flakiness after fixing two real bugs this
+session's own dogfooding surfaced — see below):
+
+| File | What it proves |
+|---|---|
+| `popover.spec.ts` | click → popover has the raw line, `id:` included, hidden in the main view |
+| `save.spec.ts` | Enter saves; a byte-diff of the tempdir file shows **exactly one** changed line |
+| `detail.spec.ts` | double-click → pinned parent + working notes editor + rendered sub-list |
+| `notes-create.spec.ts` | opening detail alone writes nothing; the first keystroke creates the `ref:` dir + `notes.md`, and the parent line gains a `ref:` tag, in one op |
+| `breadcrumb.spec.ts` | double-clicking a sub-list line nests the breadcrumb and re-pins the parent |
+| `conflict.spec.ts` | the banner + sheet appear and all three resolutions are reachable; "keep mine" clears the flag and writes the text back |
+
+### Two real bugs this harness itself found (not injected, not hypothetical)
+
+1. **Hover-then-click races the pencil out from under itself.** `FileView.svelte`'s hover pencil
+   only exists while `hoveredLine` is truthy, which CM6's own `mousemove` handler recomputes on
+   every real pointer move — including the intermediate moves Playwright's `locator.click()`
+   synthesizes while walking the mouse to the target, which can (and reproducibly did) make the
+   pencil vanish mid-click. Worked around on the *test* side, not the app: `openPopoverFor` in
+   `e2e/helpers.ts` does `hover()` then `pencil.dispatchEvent("click")` — a direct DOM click with no
+   further synthetic pointer movement. Not a change to the shipped app; flagging in case a future
+   redesign wants to make the pencil itself more click-robust (e.g. a wider hit target, or hover
+   state that doesn't recompute for sub-pixel moves).
+2. **`ReviewFlagDto.mine`/`.theirs` must carry the task's `id:` tag, not just its words** —
+   discovered by hitting the daemon's own "inserted line does not carry id ..." refusal, then
+   confirmed against `crates/txtodo-daemon/tests/grpc.rs::raise_flag`'s fixture shape. Recorded on
+   `desktop-conflict-review`'s "As built"; `e2e/fixtures.ts::CONFLICT_MINE`/`CONFLICT_THEIRS` follow
+   it.
+
+### conflict.spec.ts's flag: raised directly in the store, not via a second daemon
+
+The notes' acceptance wording ("spawn a second daemon... pair over loopback... apply a concurrent
+op") is **not reachable today**: real daemon-to-daemon sync has no transport wired up at all yet.
+Confirmed by research, not assumption — `crates/txtodo-daemon/src/pairing_grpc.rs`'s own doc
+comment says outright "the leg that actually crosses between two daemons... has no transport yet";
+`todo.txt` already tracks the acceptance test this would need as blocked
+(`ref:sync-loopback-converge`); and the daemon's *own* integration tests hit the same wall and use
+the identical substitute this suite uses:
+`crates/txtodo-daemon/tests/grpc.rs::raise_flag` raises a `needs_review` flag by opening a second
+connection to `.txtodo/oplog.db` directly ("what an import merge would do... no actual sync is
+needed"). `e2e_bridge.rs::cmd_debug_raise_conflict` does the same thing, reusing `txtodo-store`'s
+own `Store::open`/`ReviewRow`/`raise_flag` (new optional workspace-member dependencies, gated
+behind the same `e2e-bridge` feature — not new external crates). Everything downstream of the flag
+(`ListConflicts`, the banner, the sheet, `ResolveConflict`, the on-disk write) is the real
+production path; only "how the flag got raised" is substituted, by the same mechanism the daemon
+team already relies on. Flagged here rather than silently claiming full acceptance-criteria
+coverage: **the real second-daemon scenario the notes describe cannot be tested until
+`sync-loopback-converge` lands**, which is squarely a `crdt`/`sync` milestone concern, not a gap in
+this Playwright suite.
+
+### CI
+
+Not wired into `.github/workflows/ci.yml` this session — same frozen-path/"ask, never silent" call
+as `desktop-lezer-grammar`'s CI gate; see that task's notes for the proposed job shape (a Node
+setup step is the shared prerequisite for both). `npm run test:e2e` is the manual/local entry point
+until a human signs off on adding Node to CI.
+
+## What to open and look at
+
+- `cd apps/desktop && npx playwright install chromium` (once), then `npm run test:e2e` — expect
+  `7 passed` (or `14 passed` with `--repeat-each=2`). This *is* the verification for this task; the
+  six scenarios above are exactly what a human would otherwise click through by hand.
+- If a test fails, `npx playwright test <file> --reporter=line` and read the printed DOM/error
+  context (no screenshots are captured or needed — every assertion here is text/attribute-based).

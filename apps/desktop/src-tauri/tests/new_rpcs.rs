@@ -3,11 +3,13 @@
 //! `OpLogStream`: each reaches a real `txtodod` and gets back a real response, never a transport
 //! failure. Spirit of `tests/daemon_spawn.rs`; spawn/build helpers shared via `tests/support/mod.rs`.
 //!
-//! `GetNotes`/`EditNotes` are wired end to end (`server.rs` delegates to `notes.rs`), but
-//! `notes.md` itself is not implemented yet (plan M5): both RPCs answer with a documented
-//! `Status::unimplemented` today. This file asserts exactly that — a real, typed RPC error, not a
-//! connect/transport failure — so the plumbing keeps coverage now and the assertion simply flips
-//! to success once M5 lands.
+//! `notes.md` itself is implemented (plan M5 landed: `crates/txtodo-daemon/src/notes.rs` +
+//! `refdir_ops.rs::ensure_ref_dir`; see `crates/txtodo-daemon/tests/notes_grpc.rs` for the
+//! real-behavior coverage, including lazy `ref:` creation). The RPC error this test asserts below
+//! comes from a *different* cause: the bare `TaskRef{line_number: 1, task_id: ""}` below doesn't
+//! resolve to any real task in the seeded workspace, so `locate_task` refuses it — this file only
+//! asserts that a bad `TaskRef` comes back as a real, typed RPC error, never a connect/transport
+//! failure, not that the feature is unimplemented.
 
 mod support;
 
@@ -50,9 +52,13 @@ async fn list_conflicts_reaches_the_daemon_with_none_open() {
 }
 
 #[tokio::test]
-async fn get_notes_and_edit_notes_reach_the_daemon_as_unimplemented() {
+async fn get_notes_and_edit_notes_refuse_a_taskref_matching_no_real_task() {
     let dir = temp_workspace();
     let (mut client, pid) = connected_client(dir.path()).await;
+    // Doesn't resolve to any task in the seeded workspace (empty `task_id`, and `line_number: 1`
+    // is whatever `temp_workspace`'s fixture line is, not this task's own id) — a real RPC-level
+    // refusal from `locate_task`, exercised here as smoke coverage of the bridge, not of
+    // `notes.md`'s own storage behavior (that's `crates/txtodo-daemon/tests/notes_grpc.rs`).
     let task = pb::TaskRef {
         line_number: 1,
         task_id: String::new(),
@@ -72,6 +78,84 @@ async fn get_notes_and_edit_notes_reach_the_daemon_as_unimplemented() {
         .await
         .expect_err("edit_notes should reach the daemon and come back refused, not transport-fail");
     assert!(matches!(edit_err, DaemonError::Rpc(_)), "{edit_err}");
+
+    kill(pid);
+}
+
+/// Full happy path through the bridge for a *real* task (tasks/desktop-detail-view depends on
+/// this): `edit_notes` on a task with no `ref:` tag yet lazily mints the tag/directory/`notes.md`
+/// server-side (`crates/txtodo-daemon/src/refdir_ops.rs::ensure_ref_dir`) and `get_notes`
+/// afterwards sees the saved text — exercised here at the `DaemonClient` layer the desktop's
+/// `commands_notes.rs` sits on, complementing the daemon-side coverage in
+/// `crates/txtodo-daemon/tests/notes_grpc.rs`.
+#[tokio::test]
+async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge() {
+    let dir = temp_workspace();
+    let (mut client, pid) = connected_client(dir.path()).await;
+
+    client
+        .apply(pb::ApplyRequest {
+            path: "todo.txt".into(),
+            mutations: vec![pb::Mutation {
+                kind: Some(pb::mutation::Kind::Add(pb::Add {
+                    line: "plan the roadmap".into(),
+                })),
+            }],
+            agent: None,
+        })
+        .await
+        .expect("apply should reach the daemon");
+
+    // `History`'s `OpSummary.task_id`, not a regex over the file text: whether the daemon renders
+    // an `id:` tag into the file at all is an `identity_mode` config (tagged vs. sidecar, now
+    // defaulting to sidecar — `tasks/sidecar-identity`), and this test only needs a real task_id,
+    // not to assert which mode is active.
+    let history = client
+        .history(pb::HistoryRequest {
+            path: "todo.txt".into(),
+            task_id: String::new(),
+            limit: 1,
+            before_seq: 0,
+        })
+        .await
+        .expect("history should reach the daemon");
+    let task_id = history
+        .ops
+        .first()
+        .expect("the just-applied Add op is in history")
+        .task_id
+        .clone();
+    assert!(
+        !task_id.is_empty(),
+        "Add always assigns a task_id internally, tag or not"
+    );
+    let task = pb::TaskRef {
+        line_number: 0, // ignored by `locate_task`, which resolves purely by task_id
+        task_id: task_id.clone(),
+    };
+
+    let before = client
+        .get_notes(task.clone())
+        .await
+        .expect("get_notes should succeed even with no ref: tag yet");
+    assert!(
+        before.bytes.is_empty(),
+        "no ref: tag yet, so no notes.md yet: {before:?}"
+    );
+
+    client
+        .edit_notes(pb::NotesEditRequest {
+            task: Some(task.clone()),
+            new_text: "first note".into(),
+        })
+        .await
+        .expect("edit_notes should lazily create the ref: tag, directory and notes.md");
+
+    let after = client
+        .get_notes(task)
+        .await
+        .expect("get_notes should now see the saved text");
+    assert_eq!(String::from_utf8(after.bytes).unwrap(), "first note");
 
     kill(pid);
 }

@@ -4,6 +4,16 @@
 	// decoration, this popover shows everything), a token-chip row, inline strict-mode validation,
 	// and a footer sourced from the daemon's `History`. Save/Cancel go through the Tauri command
 	// bridge only (`$lib/daemon`) — never `fs`/raw sockets (design §7).
+	//
+	// This component performs NO `Apply` call itself — `onSave` is the single place the actual RPC
+	// happens (see tasks/desktop-quick-add/notes.md's shared-`Popover` design: "the component knows
+	// nothing about which window hosts it"). That is also a deliberate bugfix: an earlier revision
+	// called `applyEdit` here AND relied on the host's `onSave` to call `applyMutations` again,
+	// which double-applied every edit (two identical `edit_text` ops per save). Inverting control so
+	// the host alone performs the write is what lets this same component serve both the main
+	// view/detail view (`taskRef` set, host calls `applyEdit`) and quick-add (`taskRef` null — no
+	// existing line yet, host calls `applyMutations(.., [{kind:"add", ...}])`) without either
+	// duplicating writes or forking into two components.
 	import { onDestroy, onMount } from "svelte";
 	import { EditorState, Prec, type Extension } from "@codemirror/state";
 	import { EditorView, keymap } from "@codemirror/view";
@@ -11,7 +21,7 @@
 	// Ref: https://codemirror.net/docs/ref/ (EditorState, EditorView, keymap, Prec)
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { parseLineStrict, type StrictCheckResult } from "$lib/wasmCore";
-	import { applyEdit, history as fetchHistory, type TaskRef } from "$lib/daemon";
+	import { history as fetchHistory, type TaskRef } from "$lib/daemon";
 	import {
 		applyChip,
 		decodeUlidTimestampMs,
@@ -28,14 +38,24 @@
 		anchor,
 		path,
 		onSave,
-		onCancel
+		onCancel,
+		onDirtyChange
 	}: {
 		initialLine: string;
-		taskRef: TaskRef;
+		/** `null` for quick-add: there is no existing line yet, so no `Line N` footer and no
+		 * `History` lookup (design: "no Line N footer — there is no line yet"). */
+		taskRef: TaskRef | null;
 		anchor: HTMLElement | null;
 		path: string;
-		onSave: (newLine: string) => void;
+		/** Performs the actual write (the daemon's `Apply`) and resolves/rejects accordingly; this
+		 * component only calls it, never `applyMutations`/`applyEdit` directly (see module doc). */
+		onSave: (newLine: string) => void | Promise<void>;
 		onCancel: () => void;
+		/** Optional: fires on every keystroke with whether the text differs from `initialLine`.
+		 * Wired by `MainView` to the quick-add hotkey's guard (tasks/desktop-quick-add/notes.md:
+		 * "if the main popover is open and dirty, the hotkey focuses the main window instead") —
+		 * unused by any other host, so it's optional rather than forcing one on every caller. */
+		onDirtyChange?: (dirty: boolean) => void;
 	} = $props();
 
 	// The chips the popover renders, in plan §3.2's order: priority replace/remove, completion
@@ -61,9 +81,11 @@
 	// derived from the (fixed, for this popover's lifetime) `taskRef` prop rather than captured
 	// once into `$state`, so it can't go stale relative to a changed prop.
 	let historySuffix = $state("");
-	let footer = $derived(
-		historySuffix ? `Line ${taskRef.line_number} · ${historySuffix}` : `Line ${taskRef.line_number}`
-	);
+	// Empty (no footer text at all) when there's no existing line yet — quick-add's case.
+	let footer = $derived.by(() => {
+		if (!taskRef) return "";
+		return historySuffix ? `Line ${taskRef.line_number} · ${historySuffix}` : `Line ${taskRef.line_number}`;
+	});
 	let saveError = $state("");
 	let validateHandle: ReturnType<typeof setTimeout> | undefined;
 
@@ -121,18 +143,18 @@
 		);
 	}
 
-	function saveAndClose() {
+	async function saveAndClose() {
 		const next = currentText();
 		if (isNoOpEdit(initialLine, next)) {
 			onCancel();
 			return;
 		}
 		saveError = "";
-		applyEdit(path, { kind: "edit", task: taskRef, new_line: next })
-			.then(() => onSave(next))
-			.catch((e) => {
-				saveError = String(e);
-			});
+		try {
+			await onSave(next);
+		} catch (e) {
+			saveError = String(e);
+		}
 	}
 
 	function clickChip(chip: Chip) {
@@ -148,7 +170,7 @@
 	}
 
 	async function loadFooter() {
-		if (!taskRef.task_id) return;
+		if (!taskRef?.task_id) return;
 		try {
 			const { ops } = await fetchHistory(path, taskRef.task_id, 1);
 			const last = ops[0];
@@ -177,7 +199,11 @@
 					saveCancelKeymap(),
 					keymap.of([...historyKeymap, ...defaultKeymap]),
 					EditorView.updateListener.of((u) => {
-						if (u.docChanged) scheduleValidate(u.state.doc.toString());
+						if (u.docChanged) {
+							const text = u.state.doc.toString();
+							scheduleValidate(text);
+							onDirtyChange?.(text !== initialLine);
+						}
 					})
 				]
 			}),
@@ -191,6 +217,7 @@
 	onDestroy(() => {
 		if (validateHandle) clearTimeout(validateHandle);
 		view?.destroy();
+		onDirtyChange?.(false); // this instance is gone (saved/cancelled) — nothing left to guard
 	});
 </script>
 

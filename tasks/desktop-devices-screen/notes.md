@@ -99,3 +99,43 @@ type Scope = "read" | "write:add" | "write:complete" | "write:edit" | "write:del
 - Design §6.2 tokens · plan M4 pairing · plan M6 token RPC · ADR 0004 (`oplog.db`).
 - https://docs.rs/tonic · https://v2.tauri.app/develop/calling-rust/
 - https://github.com/soldair/node-qrcode · https://github.com/cozmo/jsQR
+
+## As built (2026-09-13, agent)
+
+Found fully built from an earlier session, matching this file's design closely enough that no
+changes were needed — verified, not rebuilt:
+
+- `apps/desktop/src-tauri/src/{commands_pairing,commands_tokens,commands_activity}.rs` +
+  `dto_{pairing,tokens,activity}.rs` — the exact six commands this file specifies
+  (`pair_offer`/`pair_accept`/`pair_confirm_sas`/`token_create`/`token_list`/`token_revoke`) plus
+  `op_log` for the activity pane, each a thin `ensure_connected` + one RPC + DTO conversion, same
+  pattern as every other `commands_*.rs` file.
+- `apps/desktop/src/devices/{Devices,Tokens,ActivityFeed}.svelte` + `{api,camera,qr,pairing,time,types}.ts`
+  — QR render via `qrcode`, scan via `getUserMedia` + `jsqr`, mutual-confirm-only SAS (two distinct
+  taps, `armConfirm`→`confirmMatch`, never an automatic confirm), the closed `Scope` union with a
+  runtime `isValidScope` guard so the create-token form can't fabricate a scope string, and a
+  bounded one-shot `op_log()` fetch (refresh button + refetch-on-focus, not a live stream — that's
+  a fair reading of ADR 0004's `oplog.db` as a queryable table, not itself a push source).
+- `apps/desktop/src-tauri/tests/new_rpcs.rs` already covers `pair_offer`/`pair_accept`/
+  `pair_confirm_sas`/token create-list-revoke-round-trip/`op_log` against a real daemon; `apps/desktop/src/devices/{pairing,qr,time,types}.test.ts`
+  cover the pure logic (pairing-window math, the QR payload's security invariant — no field beyond
+  `PairOffer`'s own five — relative-time formatting, the scope union guard).
+
+No gaps found worth flagging here beyond the two already-known, already-out-of-scope ones this
+session ran into elsewhere: pairing's RPCs are real but daemon-to-daemon sync itself has no
+transport yet (see `desktop-conflict-review`/`desktop-playwright-tests`'s notes — unrelated to this
+screen's own correctness, since it only exercises the *local* pairing bookkeeping, not a completed
+cross-device handshake), and plan M6's richer macaroon/scope layer is explicitly deferred per this
+task's own brief.
+
+## What to open and look at
+
+- `npm run tauri dev`, open `/devices`. "Show my code" should render a QR within ~1s and count down
+  from the pairing window; "Scan a peer's code" should request camera access and, on a valid scan,
+  show a 6-word SAS requiring an explicit tap on **this** device before confirming.
+- Create a token with a couple of scopes and an expiry; confirm the secret is shown exactly once,
+  the token appears in the list with its scopes (never the secret again), and revoking it removes
+  it from the list.
+- The activity pane should show recent ops with a principal and relative time, newest first; click
+  Refresh and confirm it re-fetches (a `network` tab check on `op_log` is enough — no fabricated
+  rows should appear while a fetch is pending or the log is empty).

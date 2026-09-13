@@ -5,9 +5,18 @@
 	// hosting the popover here (rather than inside `FileView`) is what the task notes mean by
 	// "MainView... is where you mount the edit popover once a line is clicked."
 	import { onMount } from "svelte";
-	import { applyMutations, daemonStatus, onDaemonStatus, retryConnect, type DaemonStatus } from "$lib/daemon";
+	import {
+		applyMutations,
+		daemonStatus,
+		onDaemonStatus,
+		retryConnect,
+		setMainPopoverDirty,
+		type DaemonStatus
+	} from "$lib/daemon";
 	import type { EditRequest } from "$lib/todotxt/editRequest";
+	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
+	import DetailView from "./DetailView.svelte";
 	import EditPopover from "./EditPopover.svelte";
 	import FileView from "./FileView.svelte";
 
@@ -18,6 +27,22 @@
 	let status = $state<DaemonStatus>("connecting");
 	let popover = $state<EditRequest | null>(null);
 	let saveError = $state("");
+
+	// Detail-view navigation (tasks/desktop-detail-view, plan §3.2): a stack of open levels, empty
+	// meaning "show the root file view" — the detail view replaces this screen's content, it never
+	// overlays it (plan §3.3: "a page, not a modal"). `MainView` is the sole owner of this stack;
+	// `DetailView`/`Breadcrumb` only ever report navigation intent upward.
+	let detail = $state<DetailParams[]>([]);
+
+	function openDetail(params: DetailParams) {
+		detail = [...detail, params];
+	}
+
+	/** `0` = home/root; `n` = truncate to the first `n` levels (re-showing level `n - 1`). Matches
+	 * `Breadcrumb`'s `onNavigate` contract exactly, so both it and the back button share this. */
+	function navigateToLevel(stackLength: number) {
+		detail = detail.slice(0, stackLength);
+	}
 
 	async function retry() {
 		status = await retryConnect();
@@ -37,6 +62,13 @@
 
 	function cancelPopover() {
 		popover = null;
+	}
+
+	/** Wired to `EditPopover`'s `onDirtyChange` — see `$lib/daemon.ts::setMainPopoverDirty`'s doc
+	 * comment. Best-effort: a failed update here only affects which window the hotkey focuses
+	 * next, never whether a save/cancel works. */
+	function handlePopoverDirtyChange(dirty: boolean) {
+		setMainPopoverDirty(dirty).catch(() => {});
 	}
 
 	onMount(() => {
@@ -69,19 +101,29 @@
 		<a href="/devices">Devices &amp; agents</a>
 	</div>
 
-	<ConflictBanner path={ROOT_PATH} />
+	{#if detail.length === 0}
+		<ConflictBanner path={ROOT_PATH} />
 
-	<FileView path={ROOT_PATH} depth={0} onEditRequest={(req) => (popover = req)} />
-
-	{#if popover}
-		<EditPopover
-			path={popover.path}
-			initialLine={popover.initialLine}
-			taskRef={popover.taskRef}
-			anchor={popover.anchor}
-			onSave={savePopover}
-			onCancel={cancelPopover}
+		<FileView
+			path={ROOT_PATH}
+			depth={0}
+			onEditRequest={(req) => (popover = req)}
+			onDetailRequest={openDetail}
 		/>
+
+		{#if popover}
+			<EditPopover
+				path={popover.path}
+				initialLine={popover.initialLine}
+				taskRef={popover.taskRef}
+				anchor={popover.anchor}
+				onSave={savePopover}
+				onCancel={cancelPopover}
+				onDirtyChange={handlePopoverDirtyChange}
+			/>
+		{/if}
+	{:else}
+		<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
 	{/if}
 </main>
 
