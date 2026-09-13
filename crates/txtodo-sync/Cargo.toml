@@ -52,6 +52,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "
 [dev-dependencies]
 # https://docs.rs/proptest — want(local, remote) requests exactly the missing ops
 proptest = "1"
+# https://docs.rs/tempfile — a real, self-cleaning directory for the file-carrier tests (a shared
+# sync folder is the whole point of `carrier.rs`, so its tests need a real filesystem, not a mock)
+tempfile = "3"
 # iroh's own `test-utils` feature (not a new dependency — same crate as above): `run_relay_server()`
 # spins up a real local relay for `holepunch.rs`'s rendezvous test (plan M8 `sync-relay-enable`),
 # so that test proves against a real relay handshake instead of a fake. Test-only: cargo does not

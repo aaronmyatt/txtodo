@@ -1,13 +1,13 @@
-2026-09-12 carrier.rs in txtodo-sync: file carrier as a Link impl; send appends a frame to our own file, recv polls the folder for other devices' files +m8 @sync id:01M2B4ZWK4JTJ7BJJCNN726KA4
-2026-09-12 Write path: assert the target path's device id equals our own before any write, so one device can never write another device's file +m8 @sync id:01M2B4ZWK4TSFM44AYE43D7D5F
-2026-09-12 frame.rs: length-prefixed append framing; ingest skips an incomplete trailing frame and re-reads when more bytes land +m8 @sync id:01M2B4ZWK448SMDCGJ37GPQGQ6
-2026-09-12 Ingest only other devices' files (skip our own device-id), validated as external input — error, not assert +m8 @sync id:01M2B4ZWK4D3YYTA3CVRWFDG2B
 2026-09-12 Wire the user-chosen folder through config.toml and --sync-dir; validate it is a writable directory with real error handling +m8 @sync @cli id:01M2B4ZWK4DST2GF9XC8XNHV4Y
-2026-09-12 Rotate the ops file at MAX_OPS_FILE_BYTES to sync/<device-id>-<n>.ops; readers scan all files in order, no manifest needed +m8 @sync id:01M2B4ZWK544KZKC77F89X1QJF
 2026-09-12 Import dedupes on op_id via the existing ops.op_id UNIQUE constraint, so re-reading a file or a duplicated chunk is idempotent +m8 @sync @store id:01M2B4ZWK50BVTN6ET65QGC2R4
-2026-09-12 Ciphertext on disk: file holds the encrypted Ops frames from sync-crypto-envelope; the folder learns only "this device wrote N bytes" +m8 @sync id:01M2B4ZWK5V1XXCFXMM4MNZ0R4
-2026-09-12 Test: two in-process carriers over one temp dir converge with no network, each writing only its own file +m8 @sync @test id:01M2B4ZWK56AX871X1RR1GKRCC
-2026-09-12 Test: re-reading the same .ops file imports nothing twice; a truncated trailing frame is skipped then completed on the next read +m8 @sync @test id:01M2B4ZWK5X153DQ9AVHX8C08A
-2026-09-12 Test: a device's write to another device's file is refused +m8 @sync @test id:01M2B4ZWK5WGJ0EMKS12JH40YK
-2026-09-12 Test: rotation at MAX_OPS_FILE_BYTES; a reader scanning all files sees the complete stream across files in order +m8 @sync @test id:01M2B4ZWK5RB4BMYKXV4AZRVVT
 2026-09-12 Complete the parent line in ./todo.txt +m8 @sync id:01M2B4ZWK5ZTG87116MSJVQBFF
+x 2026-09-14 2026-09-12 carrier.rs in txtodo-sync: file carrier as a Link impl; send appends a frame to our own file, recv polls the folder for other devices' files +m8 @sync id:01M2B4ZWK4JTJ7BJJCNN726KA4
+x 2026-09-14 2026-09-12 Write path: assert the target path's device id equals our own before any write, so one device can never write another device's file +m8 @sync id:01M2B4ZWK4TSFM44AYE43D7D5F
+x 2026-09-14 2026-09-12 frame.rs: length-prefixed append framing; ingest skips an incomplete trailing frame and re-reads when more bytes land +m8 @sync id:01M2B4ZWK448SMDCGJ37GPQGQ6
+x 2026-09-14 2026-09-12 Ingest only other devices' files (skip our own device-id), validated as external input — error, not assert +m8 @sync id:01M2B4ZWK4D3YYTA3CVRWFDG2B
+x 2026-09-14 2026-09-12 Rotate the ops file at MAX_OPS_FILE_BYTES to sync/<device-id>-<n>.ops; readers scan all files in order, no manifest needed +m8 @sync id:01M2B4ZWK544KZKC77F89X1QJF
+x 2026-09-14 2026-09-12 Ciphertext on disk: file holds the encrypted Ops frames from sync-crypto-envelope; the folder learns only "this device wrote N bytes" +m8 @sync id:01M2B4ZWK5V1XXCFXMM4MNZ0R4
+x 2026-09-14 2026-09-12 Test: two in-process carriers over one temp dir converge with no network, each writing only its own file +m8 @sync @test id:01M2B4ZWK56AX871X1RR1GKRCC
+x 2026-09-14 2026-09-12 Test: re-reading the same .ops file imports nothing twice; a truncated trailing frame is skipped then completed on the next read +m8 @sync @test id:01M2B4ZWK5X153DQ9AVHX8C08A
+x 2026-09-14 2026-09-12 Test: a device's write to another device's file is refused +m8 @sync @test id:01M2B4ZWK5WGJ0EMKS12JH40YK
+x 2026-09-14 2026-09-12 Test: rotation at MAX_OPS_FILE_BYTES; a reader scanning all files sees the complete stream across files in order +m8 @sync @test id:01M2B4ZWK5RB4BMYKXV4AZRVVT
