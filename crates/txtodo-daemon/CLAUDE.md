@@ -83,6 +83,14 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   `tests/idle_rss.rs` (the same task's other number — `#[ignore]`d: idle RSS at 10k lines measures
   ~1.7 GB against a 50 MB budget, a real and apparently super-linear memory issue in the adoption/
   mirror pipeline, flagged to the human, not root-caused or fixed by this pass),
+  `tests/nested_ref_sync.rs` (`test-nested-ref-sync`: two real `txtodod` processes, a parent → child
+  → grandchild `ref:` fixture on device A, a totally empty device B — the whole tree, at every
+  depth, reaches B's real disk in 390-590 ms; needed no new sync-engine code, only a harness
+  addition (`start_with_seeded_group_tree`) to seed A with a multi-file tree before spawn; `child/
+  notes.md` is in the fixture but deliberately excluded from the convergence assertion — a real,
+  pre-existing gap this test's own module doc traces: `notes.md` written straight to disk never
+  becomes an `Op` at all, and even a `notes.md` op would be silently dropped by `lan_apply.rs` on a
+  fresh receiver, since `Workspace::register()` refuses to build an actor for a notes document),
   `tests/grpc.rs` (in-process server on a temp socket),
   `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),

@@ -237,3 +237,51 @@ constructor) was "not shown to hit" the connect bug. That claim turned out to be
     group key (confidentiality + tamper-evidence for the batch as a unit) but does not verify
     individual authorship — flagged as a real gap for `sync-reject-tests`/`sync-crypto-envelope` to
     close, not silently treated as done.
+
+## As built (2026-09-13, agent, pass 5) — correction: pass 4's "genuinely blocked" was wrong; two
+## real daemon processes on one host do connect, converge, and are now tested end to end
+
+Pass 4 concluded the upstream bug fires for "same-host connections, full stop" and declared the
+`sync-loopback-converge`/`sync-bench-m4`/`test-nested-ref-sync` convergence tests genuinely
+unexercisable on one machine. That conclusion does not survive contact with a real two-*process*
+test and is corrected here rather than left standing.
+
+- **The bug is same-*process*-only, not same-host.** Pass 4's probe ran both `iroh::Endpoint`s
+  inside one Tokio runtime in one test binary. Spawning two real, separate `txtodod` OS processes
+  (`crates/txtodo-daemon/tests/lan_discovery.rs`) and letting them dial each other's real,
+  all-interfaces `bind_local_endpoint()` address over real mDNS-discovered addresses on this same
+  sandbox machine connects cleanly — no refusal, no workaround, no forced `127.0.0.1`. Two
+  independent `noq_proto::Endpoint`s in two independent processes are, apparently, exactly what the
+  upstream refusal logic does not trip on; two in one process is. `crates/txtodo-sync/src/
+  endpoint_tests.rs` and both `CLAUDE.md` files already carry this corrected, narrower diagnosis
+  (renamed test: `two_real_bind_local_endpoints_in_the_same_process_hit_the_same_bug`); this entry
+  exists so `sync-lan-transport`'s own notes don't keep telling the pass-4 story after the later
+  passes disproved its scope.
+- **Consequence**: the three convergence tests pass 4 called blocked are not blocked and are built
+  and passing — see `sync-loopback-converge`, `sync-bench-m4`, and `test-nested-ref-sync`'s own "As
+  built" entries for what was measured. `crates/txtodo-daemon/tests/lan_discovery.rs` (discovery
+  only, ~2.5-3 s, no flakes across ~15 runs) and `lan_loopback_converge.rs` (full pairing + sync
+  round trip, sub-2 ms convergence, both directions) are the direct evidence.
+- **A second real gap found and closed in this pass: sync was one-shot per connection.** A session
+  that finished its initial Hello/Want/Ops/Ack round sat blocked in `recv()` forever — correct for
+  "sync once on connect", wrong for "stay converged while paired", since neither daemon watches the
+  other's store between connections. Fixed with two coordinated, small pieces rather than a
+  bigger redesign: `IrohLink` closes a session after `IDLE_TIMEOUT` (750 ms) of silence
+  (`crates/txtodo-sync/src/lan_link.rs`), and `crates/txtodo-daemon/src/lan.rs` redials every known
+  peer on a `RESYNC_INTERVAL` (1 s) independent of mDNS re-announcement. Together: an edit made at
+  any point after initial pairing still propagates, at the cost of a QUIC handshake roughly once a
+  second per paired peer for as long as both daemons are up — flagged below for a human to weigh
+  against a "only reconnect on a real reason" design (store-change watch, exponential backoff) that
+  this pass judged out of scope for an M4 wiring task.
+  - **Flagged for human sanity check**: continuous ~1 s-interval reconnect churn while paired is a
+    real, deliberate tradeoff (simplicity now, some wasted handshake CPU/radio use later), not an
+    oversight — but it is the kind of default that should not survive past M4 unexamined.
+- **Real pairing is still not wired over this transport** (unchanged from pass 4): all three
+  convergence tests set the group key directly via the test-only, env-var-guarded
+  `DebugSetGroupKey` RPC (`crates/txtodo-daemon/src/debug_hooks.rs`), immediately after each daemon
+  reports ready. `crates/txtodo-sync` already has a real SAS/offer/transcript pairing protocol
+  (`pairing.rs`/`offer.rs`/`sas.rs`/`transcript.rs`), and `txtodo-daemon` already exposes it over
+  gRPC (`pairing_grpc.rs`) — but nothing carries that protocol's bytes over the `Link`/LAN
+  transport this task built. Building that wire-up was judged out of scope for wiring the sync
+  engine itself; flagged for a human to schedule as its own task rather than done implicitly by
+  reusing the debug seam.

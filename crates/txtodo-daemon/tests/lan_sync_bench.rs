@@ -19,6 +19,10 @@
 //! 1 000 `Insert` ops in one commit, which is both the realistic shape (a device catching up after
 //! being offline) and exactly `MAX_OPS_PER_BATCH` (`txtodo-sync`), so this measurement already
 //! exercises the batching boundary the task notes call out, in one run.
+//!
+//! **This is a loopback regression guard on our own code, not a network performance claim.** A
+//! number measured over `iroh`'s loopback path says nothing about wifi, cellular, or a congested
+//! LAN — it exists to catch a regression in this crate's own encode/seal/apply path, nothing more.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stderr)]
 #![cfg(unix)]
 

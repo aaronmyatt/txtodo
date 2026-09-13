@@ -89,8 +89,22 @@ impl Daemon {
     /// changes the *keystore* key, not a live-updated advertisement (`tests/lan_discovery.rs`'s
     /// module doc has the full reasoning).
     pub async fn start_with_seeded_group(todo: &str, mode: &str, group_id: u128) -> Daemon {
+        Self::start_with_seeded_group_tree(&[("todo.txt", todo)], mode, group_id).await
+    }
+
+    /// `start_with_seeded_group`, for a whole pre-existing directory tree instead of one root
+    /// `todo.txt` — `test-nested-ref-sync`'s fixture (parent/child/grandchild `ref:` directories)
+    /// needs device A to start already holding files at depth. `start_in`'s `SOCKET_WAIT` doc
+    /// already establishes that adoption (the walk in `Workspace::open_with_default_mode`) finishes
+    /// before the socket binds, so every file passed here is registered and has ops by the time
+    /// this returns — pairing can start immediately, no extra per-file settle needed on this side.
+    pub async fn start_with_seeded_group_tree(
+        files: &[(&str, &str)],
+        mode: &str,
+        group_id: u128,
+    ) -> Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        std::fs::write(dir.path().join("todo.txt"), todo).unwrap_or_else(|e| panic!("{e}"));
+        write_tree(dir.path(), files);
         seed_group_id(dir.path(), group_id);
         Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
     }
@@ -101,7 +115,7 @@ impl Daemon {
     /// it — noted there too).
     pub async fn start_full(todo: &str, mode: &str, envs: &[(&str, &str)]) -> Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        std::fs::write(dir.path().join("todo.txt"), todo).unwrap_or_else(|e| panic!("{e}"));
+        write_tree(dir.path(), &[("todo.txt", todo)]);
         Self::start_in(dir, mode, envs).await
     }
 
@@ -296,6 +310,20 @@ impl Drop for Daemon {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+/// Writes each `(relative path, contents)` pair under `dir`, creating parent directories as
+/// needed. The general form both `start_full`'s single `todo.txt` and
+/// `start_with_seeded_group_tree`'s whole nested-ref fixture go through, so a multi-file workspace
+/// is one call site, not a second copy of the write loop.
+fn write_tree(dir: &Path, files: &[(&str, &str)]) {
+    for (rel, contents) in files {
+        let path = dir.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap_or_else(|e| panic!("create_dir_all: {e}"));
+        }
+        std::fs::write(&path, contents).unwrap_or_else(|e| panic!("write {rel}: {e}"));
     }
 }
 

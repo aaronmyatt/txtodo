@@ -55,3 +55,62 @@ Two specific ways this bench can quietly become useless:
 - A separate `idleRssMb` check with its own script, skipping where unsupported.
 - The measured numbers recorded in `./notes.md` at the time they first pass, so later drift has a
   baseline to be compared against rather than just a pass/fail.
+
+## As built (2026-09-13, agent)
+
+Two separate tests, as the notes require ("do not put them in one harness").
+
+### Throughput: `crates/txtodo-daemon/tests/lan_sync_bench.rs`, `thousand_ops_converge_within_budget`
+
+- **Measured: 0-2 ms** for 1 000 ops from A committed to B holding all 1 000 committed, against the
+  500 ms budget. Clock starts from A's already-committed bytes (pairing/discovery excluded, per the
+  notes' own definition) to B matching; printed on success.
+- **Deviation — not criterion, not `budgets.json`/`check-bench.sh`.** `.claude/budgets.json` and
+  `.claude/scripts/**` are frozen paths; this session has no sign-off to edit them. Criterion is
+  also a poor fit regardless of the freeze: it re-runs a closure hundreds of times for statistical
+  stability, which here would mean spawning hundreds of real `txtodod` process pairs. A plain
+  `THROUGHPUT_BUDGET_MS` constant plus one real, bounded measurement is used instead — flagged for
+  a human with sign-off to wire a real `syncMs` budgets.json key.
+- **Deviation — "both shapes" (one big frame vs. `MAX_OPS_PER_BATCH`-sized frames) collapse to one
+  shape here.** `txtodo_sync::MAX_OPS_PER_BATCH` is exactly 1 000, and the task's own acceptance
+  number is exactly 1 000 ops — so "one `Ops` frame" and "`MAX_OPS_PER_BATCH`-sized frames" are the
+  same run at this op count; there is no second, larger measurement showing multi-batch chunking
+  cost (e.g. 5 000 ops as five batches). Not built — flagged, since the notes call this out
+  specifically as a way the bench can quietly measure the wrong thing.
+- **Deviation — signatures are not in the measured path, because they are not in the protocol.**
+  The notes ask to keep "AEAD and signature verification" in the measured path since "signatures at
+  1 000 ops are the plausible bottleneck". `Message::Ops` carries `Op` with no `Signature` field —
+  per-op signing was never wired onto the wire protocol (`sync-lan-transport` pass 4/5, a
+  deliberate, separately-flagged gap) — so there is nothing to measure. AEAD sealing of the whole
+  message *is* in the measured path (`lan_session.rs`'s `send_message`/`recv_message`, used
+  unconditionally). The 0-2 ms number therefore does not yet include the cost signatures would add
+  once `sync-crypto-envelope`/`sync-reject-tests` land them.
+- Fixture (`thousand_lines()`) uses `TaskId::new(Ulid::from_u128(...))` for well-formed `id:` tags,
+  matching `benches/reconcile.rs`'s own fixture shape (an earlier version used a hand-rolled hex
+  string that was not a valid Crockford-base32 ULID — fixed before measuring).
+
+### Idle RSS: `crates/txtodo-daemon/tests/idle_rss.rs`, `idle_daemon_rss_is_under_budget`
+
+- **Measured: ~1.7 GB (1688-1729 MB across runs) for a 10 000-line tagged-mode workspace**, against
+  the 50 MB budget — **not met, by roughly 34x**. Reproduced identically in both debug and
+  `--release` builds (ruling out a debug-build artifact) and with both the malformed and corrected
+  `id:` fixture (ruling out that as the cause). A 1 000-line workspace measures ~47 MB — linear
+  extrapolation from that predicts ~470 MB at 10 000 lines, not 1.7 GB, so the growth is
+  super-linear, not merely "more per-task overhead".
+- **Not root-caused.** It was traced only as far as "somewhere in the initial adopt/mirror-build
+  pipeline (`workspace.rs`/`actor.rs`/`txtodo-crdt`'s `Mirror::from_state`)" — none of which this
+  task (`sync-lan-transport`/`sync-bench-m4`) touches or owns. Root-causing a Loro CRDT memory
+  characteristic is real, separate work, out of scope here.
+  - **Flagged for a human**: spawned as its own follow-up
+    (task `task_29692ab9`, "Investigate 1.7 GB idle RSS for 10k-line workspace").
+  - Left `#[ignore]`d rather than deleted or weakened — the measurement and the budget are both
+    still correct; the daemon just does not meet the budget yet, for reasons outside this task's
+    ends of the wiring. Per this task's own instruction ("document precisely why and leave tests
+    appropriately `#[ignore]`d rather than deleting them").
+- **Deviation — not a separate script, plain constant instead**, same frozen-path reasoning as the
+  throughput number (`IDLE_RSS_BUDGET_MB`, `.claude/**` unsigned-off). `rss_kib()` shells out to
+  `ps -o rss=`, portable across macOS and Linux; degrades to a skip (`eprintln!` + early return, not
+  a failure) where `ps` is unavailable, matching the notes' "skip on unsupported platforms" ask.
+- "Idle" definition matches the notes exactly: daemon started, workspace walked, watcher armed, a
+  fresh random sync group that never finds a peer (same isolation `sync-loopback-converge` uses),
+  1.5 s settle with no edits before reading RSS.

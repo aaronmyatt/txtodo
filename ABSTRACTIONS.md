@@ -60,6 +60,12 @@ Never edit or delete a prior entry.
   `start_with_test_hooks` (sets `TXTODO_TEST_HOOKS=1` for `DebugSetGroupKey`) is one more call
   site on the same harness, used by `tests/lan_discovery.rs`. This is the "two more" the
   `sync-loopback-converge` task notes predicted; still one shared file, no new duplication.
+- 2026-09-13 (`test-nested-ref-sync` pass): grown again, same file — `start_with_seeded_group` and
+  `start_full` now both go through a new private `write_tree(dir, files)`, and a new
+  `start_with_seeded_group_tree(files, mode, group_id)` reuses it to start a daemon on a whole
+  pre-existing multi-file/nested-directory tree instead of one root `todo.txt` (needed to seed
+  device A's nested-ref fixture before spawn). `tests/nested_ref_sync.rs` is the one call site so
+  far; `test-m5-acceptance` is the next likely consumer of the same fixture shape.
 
 ## 2026-09-12 — "nearest task id before index i" idiom, four copies in the daemon
 
