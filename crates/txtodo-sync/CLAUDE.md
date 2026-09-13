@@ -75,7 +75,20 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `PAIRING_ALPN` (M4 `sync-pairing`'s LAN wiring pass — a second ALPN registered on the same
   endpoint so one bound `LanEndpoint` accepts both a group-keyed sync connection and a pairing
   relay connection, told apart by `IrohLink::alpn()` rather than frame content). See Invariants for
-  a known upstream connect/accept blocker, now confirmed to hit this constructor too.
+  a known upstream connect/accept blocker, now confirmed to hit this constructor too. Kept only as
+  the historical/test-only LAN-disabled shape — ADR 0024 dropped LAN transport entirely, so no real
+  caller binds through here any more; see `relay.rs`.
+- `relay.rs` (M8 `sync-relay-enable`, design §4.5): the relay-on twin of `endpoint.rs`. `RelayConfig
+  { url, max_peers }` (`url` required — ADR 0024 removed the relay-off mode, so an empty url is
+  `RelayError::EmptyUrl`, not a fallback to LAN), `MAX_RELAY_PEERS`, `RelayError` (`EmptyUrl` /
+  `InvalidUrl` / `TooManyPeers` / `Bind`, validated never asserted — the config is external input).
+  `build_endpoint(&RelayConfig) -> Result<Endpoint, RelayError>` binds `presets::Minimal` with
+  `RelayMode::Custom(RelayMap::try_from_iter([url]))` (never iroh's own `Default`/`Staging`
+  presets) and `PortmapperConfig::Disabled`, same `ALPN`/`PAIRING_ALPN` pair as `endpoint.rs`.
+  `iroh` appears in this file, `endpoint.rs` and `lan_link.rs` only (`.claude/budgets.json`'s
+  `allowedDeps`). Not yet wired into `txtodo-daemon`'s background sync loop (`lan.rs`'s relay
+  counterpart) or exposed via `config.toml`/`--relay`/`txtodo doctor` — those are `sync-relay-enable`'s
+  remaining todo items, plus `holepunch.rs`'s hole-punch-with-relay-fallback `Link` impl.
 - `discovery.rs` (M4 `sync-lan-transport`): `SERVICE_TYPE` (`_txtodo._udp.local.`), TXT keys
   `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO`/`TXT_NODE` (never the group key; `TXT_NODE` is the
   advertiser's iroh `EndpointId`, opaque `[u8; 32]` here — this module still never names `iroh`),

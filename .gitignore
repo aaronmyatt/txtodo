@@ -9,3 +9,8 @@
 
 # Human-owned unfreeze switch for the fence (.claude/budgets.json.unfreezeSentinel)
 .claude/UNFROZEN
+
+# Per-workspace daemon runtime state (socket, pid, oplog, logs) — never source, and a `txtodod`
+# run against this repo's own root (dogfooding) must not turn into an accidental commit.
+.txtodo/
+

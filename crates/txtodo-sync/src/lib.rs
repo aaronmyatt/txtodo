@@ -27,6 +27,7 @@ mod pairing;
 mod pairing_error;
 mod pairing_grant;
 mod pairing_relay;
+mod relay;
 mod rotation;
 mod rotation_error;
 mod sas;
@@ -72,6 +73,7 @@ pub use pairing::{MAX_FAILED_SAS_CONFIRMATIONS, PairingSession};
 pub use pairing_error::PairingError;
 pub use pairing_grant::{PairingGrant, PairingGrantError};
 pub use pairing_relay::{InitiatorReply, JoinerHello, PairingRelayError};
+pub use relay::{MAX_RELAY_PEERS, RelayConfig, RelayError, build_endpoint as build_relay_endpoint};
 pub use rotation::{
     GRANT_INFO, WrappedGrant, open_grant, plan_rotation, validate_removal, wrap_grant_for,
 };
@@ -127,6 +129,8 @@ mod pairing_grant_tests;
 mod pairing_relay_tests;
 #[cfg(test)]
 mod pairing_tests;
+#[cfg(test)]
+mod relay_tests;
 #[cfg(test)]
 mod rotation_tests;
 #[cfg(test)]
