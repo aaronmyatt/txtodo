@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use txtodo_model::{DeviceId, Op};
 
 use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
+use crate::sign::Signature;
 
 /// Most ops one `Ops` message carries; a longer batch is split, never grown.
 pub const MAX_OPS_PER_BATCH: usize = 1_000;
@@ -62,10 +63,16 @@ pub enum Message {
         /// Runs to send.
         ranges: Vec<OriginRange>,
     },
-    /// A batch of ops and the runs it covers.
+    /// A batch of ops and the runs it covers. `signatures` is parallel to `ops` — each op's
+    /// Ed25519 signature over `Op::signing_bytes` (see `sign::verify_batch`), so a receiver can
+    /// authenticate authorship before ever inserting a row. This batch travels sealed with the
+    /// group key (`sealed_ops::seal_ops`/`open_ops`); confidentiality is a wire property, the
+    /// signature is a durable one that outlives the seal.
     Ops {
         /// The ops, in a total order the receiver may apply as-is.
         ops: Vec<Op>,
+        /// `signatures[i]` authenticates `ops[i]`; same length as `ops`, checked in `check_caps`.
+        signatures: Vec<Signature>,
         /// Which runs this batch completes.
         ranges: Vec<OriginRange>,
     },
@@ -93,6 +100,13 @@ pub enum MessageError {
     },
     /// A range runs backwards (`last < first`).
     BackwardsRange(OriginRange),
+    /// `Ops.signatures` and `Ops.ops` are different lengths; never verified partially.
+    SignatureCount {
+        /// Ops supplied.
+        ops: usize,
+        /// Signatures supplied.
+        signatures: usize,
+    },
     /// postcard could not decode the body as this version's `Message`.
     Codec(postcard::Error),
     /// The body decoded but bytes were left over — a struct edit or a foreign message.
@@ -113,6 +127,10 @@ impl fmt::Display for MessageError {
                     r.first, r.last, r.device
                 )
             }
+            MessageError::SignatureCount { ops, signatures } => write!(
+                f,
+                "ops batch has {ops} ops but {signatures} signatures; refusing to decode partially"
+            ),
             MessageError::Codec(e) => write!(f, "postcard: {e}"),
             MessageError::TrailingBytes(n) => write!(f, "{n} bytes left after the message"),
         }
@@ -162,8 +180,18 @@ impl Message {
         match self {
             Message::Hello { heads, .. } => cap("heads", heads.len(), MAX_HEADS),
             Message::Want { ranges } => ranges_ok("want ranges", ranges),
-            Message::Ops { ops, ranges } => {
+            Message::Ops {
+                ops,
+                signatures,
+                ranges,
+            } => {
                 cap("ops", ops.len(), MAX_OPS_PER_BATCH)?;
+                if ops.len() != signatures.len() {
+                    return Err(MessageError::SignatureCount {
+                        ops: ops.len(),
+                        signatures: signatures.len(),
+                    });
+                }
                 ranges_ok("ops ranges", ranges)
             }
             Message::Ack { committed } => ranges_ok("ack ranges", committed),

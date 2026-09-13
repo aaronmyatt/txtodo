@@ -1,12 +1,23 @@
 //! Session: the happy path end to end, every out-of-order message refused, the skew guard on
-//! Hello, and Ack carrying committed runs only.
+//! Hello, and Ack carrying committed runs only. `on_ops` also verifies signatures now
+//! (`sync-reject-tests`); these tests pass empty ops/signatures and an empty key map throughout —
+//! `sign_tests.rs`/`sealed_ops_tests.rs` own the crypto behaviour itself.
+
+use std::collections::BTreeMap;
 
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Heads, Message, OriginRange};
 use crate::session::{Session, SessionState};
 use crate::session_error::SessionError;
+use crate::sign::DevicePublicKey;
 use crate::want::Gap;
 use txtodo_model::{DeviceId, MAX_PEER_SKEW_AHEAD_MS, Skew, Ulid};
+
+/// No device keys known; every test here carries zero ops, so `verify_batch` trivially passes
+/// regardless of what this map holds.
+fn no_keys() -> BTreeMap<DeviceId, DevicePublicKey> {
+    BTreeMap::new()
+}
 
 const NOW_MS: u64 = 1_700_000_000_000;
 
@@ -67,9 +78,10 @@ fn happy_path_hello_want_ops_ack_in_two_batches() {
     assert_eq!(s.state(), SessionState::Wanting);
     let first = Message::Ops {
         ops: Vec::new(),
+        signatures: Vec::new(),
         ranges: vec![range(2, 1, 2)],
     };
-    assert!(s.on_ops(&first).unwrap().is_empty());
+    assert!(s.on_ops(&first, &no_keys()).unwrap().is_empty());
     assert_eq!(s.state(), SessionState::Importing);
     let ack = s.committed(&[range(2, 1, 2)]).unwrap();
     assert_eq!(
@@ -87,17 +99,22 @@ fn the_second_batch_drains_the_want_and_returns_to_idle() {
     let mut s = greeted();
     s.on_hello(&peer_hello(heads(&[(1, 5), (2, 4)]), NOW_MS), NOW_MS)
         .unwrap();
-    s.on_ops(&Message::Ops {
-        ops: Vec::new(),
-        ranges: vec![range(2, 1, 2)],
-    })
+    s.on_ops(
+        &Message::Ops {
+            ops: Vec::new(),
+            signatures: Vec::new(),
+            ranges: vec![range(2, 1, 2)],
+        },
+        &no_keys(),
+    )
     .unwrap();
     s.committed(&[range(2, 1, 2)]).unwrap();
     let second = Message::Ops {
         ops: Vec::new(),
+        signatures: Vec::new(),
         ranges: vec![range(2, 3, 4)],
     };
-    s.on_ops(&second).unwrap();
+    s.on_ops(&second, &no_keys()).unwrap();
     s.committed(&[range(2, 3, 4)]).unwrap();
     assert_eq!(s.state(), SessionState::Idle, "nothing left: back to Idle");
     assert_eq!(s.heads(), &heads(&[(1, 5), (2, 4)]));
@@ -118,10 +135,11 @@ fn every_message_out_of_order_is_refused_and_changes_nothing() {
     let mut s = Session::new(dev(1), GroupId(7), heads(&[]));
     let ops = Message::Ops {
         ops: Vec::new(),
+        signatures: Vec::new(),
         ranges: Vec::new(),
     };
     assert_eq!(
-        s.on_ops(&ops),
+        s.on_ops(&ops, &no_keys()),
         Err(SessionError::Unexpected {
             state: SessionState::Idle,
             what: "Ops"
@@ -218,18 +236,20 @@ fn ops_outside_the_want_and_commits_outside_the_batch_are_refused() {
         .unwrap();
     let stray = Message::Ops {
         ops: Vec::new(),
+        signatures: Vec::new(),
         ranges: vec![range(2, 1, 2), range(3, 1, 1)],
     };
     assert_eq!(
-        s.on_ops(&stray),
+        s.on_ops(&stray, &no_keys()),
         Err(SessionError::Unrequested(range(3, 1, 1)))
     );
     assert_eq!(s.state(), SessionState::Wanting);
     let batch = Message::Ops {
         ops: Vec::new(),
+        signatures: Vec::new(),
         ranges: vec![range(2, 1, 2)],
     };
-    s.on_ops(&batch).unwrap();
+    s.on_ops(&batch, &no_keys()).unwrap();
     assert_eq!(
         s.committed(&[range(2, 1, 4)]),
         Err(SessionError::NotInBatch(range(2, 1, 4))),
