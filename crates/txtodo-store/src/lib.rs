@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod commit;
+mod devices;
 mod error;
 mod flags;
 mod heads;
@@ -14,6 +15,7 @@ mod projections;
 mod tokens;
 
 pub use commit::{CommitExtras, prev_hash_key};
+pub use devices::{DEVICE_STATIC_KEY_BYTES, DeviceRow, MAX_DEVICES_PER_READ, NewDevice};
 pub use error::StoreError;
 pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;
@@ -26,14 +28,15 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 /// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
-const MIGRATIONS: [(i64, &str); 5] = [
+const MIGRATIONS: [(i64, &str); 6] = [
     (1, include_str!("../migrations/0001.sql")),
     (2, include_str!("../migrations/0002.sql")),
     (3, include_str!("../migrations/0003.sql")),
     (4, include_str!("../migrations/0004.sql")),
     (5, include_str!("../migrations/0005.sql")),
+    (6, include_str!("../migrations/0006.sql")),
 ];
 
 /// One open op-log database.
