@@ -107,6 +107,7 @@
 		<FileView
 			path={ROOT_PATH}
 			depth={0}
+			fill
 			onEditRequest={(req) => (popover = req)}
 			onDetailRequest={openDetail}
 		/>
@@ -132,10 +133,13 @@
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
+		padding: 0.75rem 1rem 0;
 	}
 
 	.main-view {
-		padding: 2rem;
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
 		font-family:
 			Inter,
 			Avenir,
@@ -153,7 +157,7 @@
 		color: #1f2937;
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
-		margin-bottom: 1rem;
+		margin: 0.75rem 1rem 0;
 	}
 
 	.banner.error {

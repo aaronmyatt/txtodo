@@ -7,6 +7,8 @@
 // call.
 import {
 	applyMutations,
+	mockEditNotes,
+	mockGetNotes,
 	mockPairAccept,
 	mockPairConfirm,
 	mockPairOffer,
@@ -15,7 +17,7 @@ import {
 	type Mutation,
 	type TaskRef
 } from "./logic";
-import { conflicts, delay, files, hashOf, listFilesDto, opLog, setConflicts, tokens } from "./state";
+import { conflicts, delay, files, hashOf, listFilesDto, opLog, setConflicts, tokens, WORKSPACE_ROOT } from "./state";
 
 export { mockListen } from "./state";
 
@@ -63,6 +65,14 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockTokenRevoke(args) as unknown as T;
 		case "op_log":
 			return opLog.map((e) => ({ principal: e.principal, op: e.summary, at_ms: e.at_ms })) as T;
+		case "get_notes":
+			return mockGetNotes((args?.task as TaskRef).task_id) as T;
+		case "edit_notes":
+			return mockEditNotes((args?.task as TaskRef).task_id, args?.newText as string) as unknown as T;
+		case "workspace_root":
+			return WORKSPACE_ROOT as T;
+		case "set_main_popover_dirty":
+			return undefined as T;
 		default:
 			throw new Error(`mock Tauri bridge: unhandled command "${cmd}"`);
 	}

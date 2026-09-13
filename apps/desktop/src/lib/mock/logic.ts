@@ -1,7 +1,21 @@
 // Pure(ish) mock-daemon behaviour, split out of `./tauriMock.ts` so no single file carries both the
 // seeded data (`./state.ts`) and the command logic. Mirrors the real daemon's `Apply`/pairing/token
 // semantics closely enough for UI iteration — never a source of truth (see `./state.ts`'s header).
-import { emit, fakeUlid, files, hashOf, lastSas, nextHlcCounter, NOW_MS, opLog, setLastSas, TODAY, tokens, type StoredToken } from "./state";
+import {
+	emit,
+	fakeUlid,
+	files,
+	hashOf,
+	lastSas,
+	nextHlcCounter,
+	notesByTaskId,
+	NOW_MS,
+	opLog,
+	setLastSas,
+	TODAY,
+	tokens,
+	type StoredToken
+} from "./state";
 
 export interface TaskRef {
 	line_number: number;
@@ -120,6 +134,21 @@ export function mockPairAccept() {
 export function mockPairConfirm() {
 	if (!lastSas) setLastSas(SAS_WORDS.join(" "));
 	return { sas: lastSas };
+}
+
+// ---- notes (`get_notes`/`edit_notes`) ----
+
+export function mockGetNotes(taskId: string) {
+	const n = notesByTaskId.get(taskId);
+	return n ? { path: `${taskId}/notes.md`, text: n.text, hash: `mockhash-notes-${taskId}-${n.hashSeq}` } : { path: "", text: "", hash: "" };
+}
+
+export function mockEditNotes(taskId: string, newText: string): ApplyResult {
+	const existing = notesByTaskId.get(taskId);
+	const hashSeq = (existing?.hashSeq ?? -1) + 1;
+	notesByTaskId.set(taskId, { path: `${taskId}/notes.md`, text: newText, hashSeq });
+	const hlcCounter = nextHlcCounter();
+	return { applied: 1, hash: `mockhash-notes-${taskId}-${hashSeq}`, hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
 }
 
 // ---- capability tokens ----

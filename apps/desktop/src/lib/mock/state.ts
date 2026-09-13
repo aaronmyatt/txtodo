@@ -108,6 +108,18 @@ export function listFilesDto() {
 	});
 }
 
+// ---- notes (one per task_id, lazily created on first `edit_notes` — mirrors the daemon) ----
+
+export const WORKSPACE_ROOT = "/Users/mock/workspace";
+
+interface StoredNotes {
+	path: string;
+	text: string;
+	hashSeq: number;
+}
+
+export const notesByTaskId = new Map<string, StoredNotes>();
+
 // ---- conflicts (one seeded `needs_review` flag on the root file, for the banner/sheet design) ----
 
 export let conflicts = [

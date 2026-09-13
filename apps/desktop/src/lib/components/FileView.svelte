@@ -29,6 +29,11 @@
 	interface Props {
 		path: string;
 		depth: number;
+		/** Stretches the editor to fill its container's height instead of the default capped
+		 * card (see `.editor-shell` below) — the root view (`MainView`) wants the editor to occupy
+		 * all remaining space; a nested detail-view sub-list sits among other sections on a normal
+		 * scrolling page and keeps the capped look. */
+		fill?: boolean;
 		/** Optional: lets a parent (MainView) host the popover instead. Falls back to a local one. */
 		onEditRequest?: (req: EditRequest) => void;
 		/** Double-click (or Cmd/Ctrl+Enter) on a line (tasks/desktop-detail-view, plan §3.2): opens
@@ -39,7 +44,7 @@
 		onDetailRequest?: (params: DetailParams) => void;
 	}
 
-	let { path, depth, onEditRequest, onDetailRequest }: Props = $props();
+	let { path, depth, fill = false, onEditRequest, onDetailRequest }: Props = $props();
 
 	let containerEl: HTMLDivElement | undefined = $state();
 	let view: EditorView | undefined;
@@ -226,7 +231,7 @@
 	});
 </script>
 
-<div class="file-view" style={`--depth: ${depth};`}>
+<div class="file-view" class:fill style={`--depth: ${depth};`}>
 	<header class="file-view-header">
 		<label>
 			<input type="checkbox" checked={showIdTags} onchange={toggleIdTags} />
@@ -280,12 +285,21 @@
 		padding-left: calc(var(--depth, 0) * 1rem);
 	}
 
+	.file-view.fill {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		height: 100%;
+	}
+
 	.file-view-header {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
 		font-size: 0.85rem;
 		margin-bottom: 0.4rem;
+		padding: 0 0.5rem;
 	}
 
 	.error {
@@ -296,11 +310,28 @@
 		position: relative;
 	}
 
+	.file-view.fill .editor-wrap {
+		flex: 1;
+		min-height: 0;
+	}
+
 	.editor-shell {
 		border: 1px solid #e5e7eb;
 		border-radius: 6px;
 		max-height: 70vh;
 		overflow: auto;
+	}
+
+	/* Filling mode: no card chrome, no cap — the editor itself is the whole available area. */
+	.file-view.fill .editor-shell {
+		border: none;
+		border-radius: 0;
+		max-height: none;
+		height: 100%;
+	}
+
+	.file-view.fill .editor-shell :global(.cm-editor) {
+		height: 100%;
 	}
 
 	.pencil {

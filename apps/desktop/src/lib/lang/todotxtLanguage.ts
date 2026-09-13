@@ -16,10 +16,15 @@
 // tag-key, tag-value, id-tag, text) gets its own `@lezer/highlight` Tag, distinct from the generic
 // tags in `@lezer/highlight`'s default set — todo.txt's categories aren't "a string" or "a keyword",
 // they're domain-specific, so a custom tag per name is more honest than reaching for a
-// similarly-shaped generic one. `todotxtHighlightStyle` maps each to a `tok-<name>` CSS class so a
-// theme can color them later (colors are deliberately not picked here — that's a UI-task decision).
+// similarly-shaped generic one. `todotxtHighlightStyle` maps each to a `tok-<name>` CSS class (kept
+// as a stable, overridable hook — a consumer can replace `todotxtColorTheme` with its own theme
+// over the same classes); `todotxtColorTheme` supplies this file's own default colors for them.
+// (`HighlightStyle.define` ignores any style properties given alongside an explicit `class` on the
+// same spec entry — https://github.com/codemirror/language/blob/main/src/highlight.ts — so the
+// colors have to live in a separate theme keyed to the class names, not inline in the spec.)
 import { parser } from "../../lang/todotxt.parser.js";
 import { LRLanguage, LanguageSupport, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 import { styleTags, Tag } from "@lezer/highlight";
 
 // Grammar node name -> plan §3.1 token name. Node names are PascalCase because Lezer identifiers
@@ -59,16 +64,31 @@ export const todotxtLanguageObj = LRLanguage.define({
 });
 
 // A neutral default: one CSS class per token name (`tok-completion-marker`, `tok-priority`, ...),
-// no colors. A real theme replaces this with its own HighlightStyle over the same `todotxtTags` (or
-// just styles the `tok-*` classes directly); this is here so the language is usable/addressable out
-// of the box without every consumer having to invent the node-name-to-class wiring themselves.
+// colors supplied separately by `todotxtColorTheme` below.
 export const todotxtHighlightStyle = HighlightStyle.define(
   Object.entries(todotxtTags).map(([name, tag]) => ({ tag, class: `tok-${name}` })),
 );
+
+// This file's own default palette. Every color sits at the same Tailwind 500/700 lightness band so
+// no one category reads "louder" than another by weight alone — only hue tells them apart. `text`
+// (the plain description) is the one deliberately near-black entry: everything else is markup
+// *about* the line, so it earns a color; the words a human actually wrote don't compete with them.
+export const todotxtColorTheme = EditorView.baseTheme({
+  ".tok-completion-marker": { color: "#15803d", fontWeight: "600" },
+  ".tok-priority": { color: "#b45309", fontWeight: "700" },
+  ".tok-date": { color: "#6d28d9" },
+  ".tok-project": { color: "#1d4ed8" },
+  ".tok-context": { color: "#be185d" },
+  ".tok-tag-key": { color: "#57534e", fontWeight: "600" },
+  ".tok-tag-value": { color: "#78716c" },
+  ".tok-id-tag": { color: "#9ca3af" },
+  ".tok-text": { color: "#111827" },
+});
 
 // The single export desktop-main-view / desktop-edit-popover import. A LanguageSupport is
 // structurally an Extension (`{extension: Extension}` — https://codemirror.net/docs/ref/#state.Extension),
 // so `extensions: [todotxtLanguage]` in an EditorState works directly.
 export const todotxtLanguage = new LanguageSupport(todotxtLanguageObj, [
   syntaxHighlighting(todotxtHighlightStyle),
+  todotxtColorTheme,
 ]);

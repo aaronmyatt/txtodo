@@ -85,7 +85,7 @@
 		color: #78350f;
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
-		margin-bottom: 1rem;
+		margin: 0.75rem 1rem;
 	}
 
 	.banner span {
