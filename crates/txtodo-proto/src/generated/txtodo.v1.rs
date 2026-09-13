@@ -413,6 +413,8 @@ pub struct PairResult {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairConfirmRequest {}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PairAwaitPeerRequest {}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TokenCreateRequest {
     #[prost(string, tag = "1")]
@@ -1068,6 +1070,8 @@ pub mod txtodo_client {
             self.inner.unary(req, path, codec).await
         }
         /// Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
+        /// The daemon also starts dialing the initiator over the real LAN transport in the background
+        /// (plan M4 sync-pairing's LAN wiring pass) — this call itself never blocks on that.
         pub async fn pair_accept(
             &mut self,
             request: impl tonic::IntoRequest<super::PairAcceptRequest>,
@@ -1110,6 +1114,32 @@ pub mod txtodo_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "PairConfirmSas"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Initiator only: polls whether a joiner's PairAccept has reached this device yet over the LAN
+        /// transport (plan M4 sync-pairing's LAN wiring pass). PairResult.sas is empty while still
+        /// waiting (call again); non-empty once the peer's public key has arrived and this device can
+        /// show a real SAS derived from it. The CLI loops this call rather than the daemon blocking, so
+        /// the RPC itself always returns promptly.
+        pub async fn pair_await_peer(
+            &mut self,
+            request: impl tonic::IntoRequest<super::PairAwaitPeerRequest>,
+        ) -> std::result::Result<tonic::Response<super::PairResult>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/PairAwaitPeer",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "PairAwaitPeer"));
             self.inner.unary(req, path, codec).await
         }
         /// Mints a new capability token from the design §6.2 scope/caveat grammar.
@@ -1408,6 +1438,8 @@ pub mod txtodo_server {
             tonic::Status,
         >;
         /// Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
+        /// The daemon also starts dialing the initiator over the real LAN transport in the background
+        /// (plan M4 sync-pairing's LAN wiring pass) — this call itself never blocks on that.
         async fn pair_accept(
             &self,
             request: tonic::Request<super::PairAcceptRequest>,
@@ -1417,6 +1449,15 @@ pub mod txtodo_server {
         async fn pair_confirm_sas(
             &self,
             request: tonic::Request<super::PairConfirmRequest>,
+        ) -> std::result::Result<tonic::Response<super::PairResult>, tonic::Status>;
+        /// Initiator only: polls whether a joiner's PairAccept has reached this device yet over the LAN
+        /// transport (plan M4 sync-pairing's LAN wiring pass). PairResult.sas is empty while still
+        /// waiting (call again); non-empty once the peer's public key has arrived and this device can
+        /// show a real SAS derived from it. The CLI loops this call rather than the daemon blocking, so
+        /// the RPC itself always returns promptly.
+        async fn pair_await_peer(
+            &self,
+            request: tonic::Request<super::PairAwaitPeerRequest>,
         ) -> std::result::Result<tonic::Response<super::PairResult>, tonic::Status>;
         /// Mints a new capability token from the design §6.2 scope/caveat grammar.
         async fn token_create(
@@ -2284,6 +2325,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = PairConfirmSasSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/PairAwaitPeer" => {
+                    #[allow(non_camel_case_types)]
+                    struct PairAwaitPeerSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::PairAwaitPeerRequest>
+                    for PairAwaitPeerSvc<T> {
+                        type Response = super::PairResult;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::PairAwaitPeerRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::pair_await_peer(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = PairAwaitPeerSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
