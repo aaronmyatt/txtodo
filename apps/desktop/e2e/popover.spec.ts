@@ -1,8 +1,9 @@
-// tasks/desktop-playwright-tests, plan M7 acceptance: "click a line → popover pre-filled with the
-// raw line including the hidden id: tag." DOM-structural only — see playwright.config.ts's header.
+// tasks/desktop-playwright-tests, plan M7 acceptance (superseded): a line edits directly, like a
+// plain text file — click it to drop a cursor, type, and the hidden id: tag stays hidden
+// throughout (no separate popover reveals it — FileView.svelte's own module doc).
 import { expect, test } from "@playwright/test";
 import { type DaemonHandle, spawnDaemon } from "./fixtures";
-import { gotoWithDaemon, openPopoverFor } from "./helpers";
+import { gotoWithDaemon } from "./helpers";
 
 let daemon: DaemonHandle;
 
@@ -15,7 +16,7 @@ test.afterEach(() => {
 	daemon.dispose();
 });
 
-test("click a line opens the popover pre-filled with the raw line, hidden id: tag included", async ({
+test("clicking a line drops a cursor and edits it in place, id: staying hidden throughout", async ({
 	page
 }) => {
 	const line = page.locator(".cm-line", { hasText: "call mum" }).first();
@@ -23,11 +24,12 @@ test("click a line opens the popover pre-filled with the raw line, hidden id: ta
 	// Main view hides id: tags by default (§3.1) — confirm it is not in the visible line text.
 	await expect(line).not.toContainText("id:");
 
-	await openPopoverFor(page, line);
+	await line.click();
+	await page.keyboard.press("End");
+	await page.keyboard.type(" +home");
 
-	// ...but the popover shows the RAW line, id: included (notes.md: "unlike the main view's
-	// decoration, this popover shows everything").
-	const popoverLine = page.locator(".popover .cm-content");
-	await expect(popoverLine).toContainText("call mum");
-	await expect(popoverLine).toContainText("id:01ARZ3NDEKTSV4RRFFQ69G5FAV");
+	await expect(line).toContainText("call mum +home");
+	// The decoration hides the tag in the document CM6 renders, not just in a separate read-only
+	// projection — it stays hidden while the same line is being typed into.
+	await expect(line).not.toContainText("id:");
 });
