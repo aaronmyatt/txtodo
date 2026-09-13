@@ -315,14 +315,18 @@ fn two_task_doc() -> (LoroDocument, LoroDocument) {
     (a, b)
 }
 
-/// Fingerprint re-identification (design §4.7's row, M10 `sidecar-identity`) is content-based
-/// matching in the *reconciler* — diffing bytes on disk against the previous projection to decide
-/// which stripped line is which pre-existing task — not a Loro-merge property, so it has no
-/// meaningful form as a `LoroDocument` test. The M4 expectation this row names is already
-/// covered: `crates/txtodo-daemon/src/reconcile.rs`'s
-/// `stripped_ids_are_recovered_by_content_and_unknown_lines_are_minted`.
+/// Fingerprint re-identification (design §4.7's row, `sidecar-identity` — shipped 2026-09-13 as
+/// the *default* identity mode, `docs/questions.md` Q2) is content-based matching in the
+/// *reconciler* — diffing bytes on disk against the previous projection to decide which line is
+/// which pre-existing task — not a Loro-merge property, so it has no meaningful form as a
+/// `LoroDocument` test. Tagged mode's slice of this row is covered by
+/// `crates/txtodo-daemon/src/reconcile.rs`'s
+/// `stripped_ids_are_recovered_by_content_and_unknown_lines_are_minted`; sidecar mode's by
+/// `crates/txtodo-daemon/src/reconcile_sidecar_tests.rs` and
+/// `crates/txtodo-daemon/tests/external_edits_sidecar.rs` (a real daemon, no `id:` tag at any
+/// point).
 #[test]
-#[ignore = "covered by txtodo-daemon::reconcile_tests, not expressible as a pure CRDT-merge test"]
+#[ignore = "covered by txtodo-daemon's reconcile_tests/reconcile_sidecar_tests, not expressible as a pure CRDT-merge test"]
 fn stripped_ids_are_rematched_by_content_m4_expectation() {}
 
 #[test]

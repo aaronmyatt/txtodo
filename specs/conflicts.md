@@ -20,7 +20,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | delete | edit | edit wins, task resurrected (default; configurable) |
 | delete | complete | completed, not deleted (default; configurable) |
 | move up | move down | both moves apply deterministically; same result on every device |
-| strip all `id:` tags in vim | anything | fingerprint re-identification (§4.1); M10 sidecar. Until then (M4): tagged-mode re-match by content where possible, else a fresh id |
+| strip all `id:` tags in vim (tagged mode) or any external edit (sidecar mode, the default since 2026-09-13, `docs/questions.md` Q2) | anything | fingerprint re-identification (§4.1); a full description rewrite becomes a visible duplicate (delete+insert), never a silent merge |
 | archive to `done.txt` | edit | the edit lands in `done.txt` |
 
 ## Row-to-test mapping
@@ -38,10 +38,16 @@ Row order above is fixed and matches `crates/txtodo-daemon/tests/conflicts.rs` t
 9. `stripped_ids_are_rematched_by_content_m4_expectation`
 10. `archive_vs_edit_lands_the_edit_in_done_txt`
 
-Row 9 is the one row whose M4 behavior is deliberately weaker than the final (M10) design: fingerprint
-re-identification is M10 (`sidecar-identity`, Hungarian-algorithm matching). At M4 the test asserts
-the *tagged-mode* fallback the row's Result column names, not the eventual M10 behavior — this file
-says so explicitly so a future reader does not assume M10 already works.
+Row 9's fingerprint re-identification (`sidecar-identity`, Hungarian-algorithm matching,
+`crates/txtodo-model/src/identity.rs` + `crates/txtodo-daemon/src/identity_*.rs`/
+`reconcile_sidecar.rs`) shipped 2026-09-13 as the *default* identity mode (`docs/questions.md`
+Q2 reverses the plan's original "M10, tagged-only until then" decision). Its test coverage is not
+row 9's own CRDT-merge test (fingerprint matching happens in the reconciler, diffing bytes on disk
+against the previous projection — not a Loro-merge property, so it has no meaningful form as a
+pure CRDT test; row 9 stays `#[ignore]`d for that reason, unchanged by this default flip) but
+`crates/txtodo-daemon/src/reconcile_sidecar_tests.rs` and `crates/txtodo-daemon/tests/
+external_edits_sidecar.rs` (a real daemon, the same eight external-edit scenarios `tests/
+external_edits.rs` runs for tagged mode, with zero `id:` tags at any point).
 
 ## Configurability
 
