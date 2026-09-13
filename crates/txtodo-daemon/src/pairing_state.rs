@@ -14,9 +14,9 @@ use std::sync::Mutex;
 
 use txtodo_model::DeviceId;
 use txtodo_sync::{
-    GroupId, KEY_BYTES, KeyId, KeyStore, KeyStoreError, MAX_CONCURRENT_PAIRINGS, NonceRegistry,
-    PAIRING_WINDOW_MS, PairingError, PairingOffer, PairingSession, SAS_WORD_COUNT, Secret,
-    X25519_PUBLIC_KEY_BYTES,
+    DeviceStaticPublic, GroupId, KEY_BYTES, KeyId, KeyStore, KeyStoreError,
+    MAX_CONCURRENT_PAIRINGS, NonceRegistry, PAIRING_WINDOW_MS, PairingError, PairingGrant,
+    PairingOffer, PairingSession, SAS_WORD_COUNT, Secret, X25519_PUBLIC_KEY_BYTES,
 };
 
 /// The group-key epoch pairing establishes. Rotation (`txtodo device remove`) is future work.
@@ -61,6 +61,8 @@ pub(crate) enum PairingStateError {
     KeyStore(KeyStoreError),
     /// Persisting the adopted group id to the store's `meta` table failed.
     Store(txtodo_store::StoreError),
+    /// The stored group key is not `KEY_BYTES` long (the keystore was edited or corrupted by hand).
+    CorruptGroupKey(usize),
 }
 
 impl std::fmt::Display for PairingStateError {
@@ -82,6 +84,9 @@ impl std::fmt::Display for PairingStateError {
             PairingStateError::Session(e) => write!(f, "{e}"),
             PairingStateError::KeyStore(e) => write!(f, "{e}"),
             PairingStateError::Store(e) => write!(f, "{e}"),
+            PairingStateError::CorruptGroupKey(len) => {
+                write!(f, "stored group key is {len} bytes, not {KEY_BYTES}")
+            }
         }
     }
 }
@@ -151,9 +156,13 @@ fn ensure_capacity(active: &mut Option<Active>, now_ms: u64) -> Result<(), Pairi
 /// Only called by [`PairingRegistry::try_finalize_initiator`] (see its own doc on why that is
 /// itself only exercised by `pairing_grpc_tests.rs` today).
 #[allow(dead_code)]
-fn fetch_or_mint_group_key(key_store: &dyn KeyStore) -> Result<Vec<u8>, PairingStateError> {
+fn fetch_or_mint_group_key(key_store: &dyn KeyStore) -> Result<[u8; KEY_BYTES], PairingStateError> {
     if let Some(secret) = key_store.get(KeyId::Group(INITIAL_GROUP_EPOCH))? {
-        return Ok(secret.expose().to_vec());
+        let bytes: [u8; KEY_BYTES] = secret
+            .expose()
+            .try_into()
+            .map_err(|_| PairingStateError::CorruptGroupKey(secret.expose().len()))?;
+        return Ok(bytes);
     }
     let mut bytes = [0u8; KEY_BYTES];
     if getrandom::fill(&mut bytes).is_err() {
@@ -163,7 +172,7 @@ fn fetch_or_mint_group_key(key_store: &dyn KeyStore) -> Result<Vec<u8>, PairingS
         KeyId::Group(INITIAL_GROUP_EPOCH),
         &Secret::new(bytes.to_vec()),
     )?;
-    Ok(bytes.to_vec())
+    Ok(bytes)
 }
 
 /// This daemon's pairing bookkeeping: at most [`MAX_CONCURRENT_PAIRINGS`] session, its own nonces.
@@ -286,13 +295,17 @@ impl PairingRegistry {
     }
 
     /// Relay seam: once both sides have confirmed, the initiator wraps its group key (minting one
-    /// first if this is a brand-new group) and this side's pairing finishes. Returns `None` when
-    /// not yet ready, or when this daemon is not the initiator — the joiner has nothing to send.
-    /// See the module doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
+    /// first if this is a brand-new group) **and** `own_static_public` — its own long-term X25519
+    /// static key (plan M4 `sync-device-remove`), bundled via [`PairingGrant`]/`wrap_grant` rather
+    /// than the bare `wrap_group_key`, so the joiner learns a static key it can be handed a
+    /// rotation grant to later, registered nowhere before this call. Returns `None` when not yet
+    /// ready, or when this daemon is not the initiator — the joiner has nothing to send. See the
+    /// module doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
     #[allow(dead_code)]
     pub(crate) fn try_finalize_initiator(
         &self,
         key_store: &dyn KeyStore,
+        own_static_public: DeviceStaticPublic,
         now_ms: u64,
     ) -> Result<Option<Vec<u8>>, PairingStateError> {
         let mut inner = self.lock();
@@ -303,27 +316,36 @@ impl PairingRegistry {
         if !ready {
             return Ok(None);
         }
-        let key_bytes = fetch_or_mint_group_key(key_store)?;
+        let group_key = fetch_or_mint_group_key(key_store)?;
+        let grant = PairingGrant {
+            group_key,
+            static_public: own_static_public.to_bytes(),
+        };
         let sealed = {
             let active = active_mut(&mut inner.active, now_ms)?;
-            active.session.wrap_group_key(&key_bytes)?
+            active.session.wrap_grant(&grant)?
         };
         inner.active = None;
         Ok(Some(sealed))
     }
 
-    /// Relay seam: the joiner's side of the same finish — unwraps the initiator's sealed key,
-    /// stores it, and this side's pairing finishes too. See the module doc — no transport calls
-    /// this yet, only `pairing_grpc_tests.rs` (via `Workspace::adopt_group_key`).
+    /// Relay seam: the joiner's side of the same finish — unwraps the initiator's
+    /// [`PairingGrant`], stores the group key, and this side's pairing finishes too. Returns the
+    /// initiator's `DeviceId` and long-term static public key so the caller
+    /// ([`crate::workspace::Workspace::adopt_group_key`]) can register it in the `devices` table —
+    /// this is the only leg of the static-key exchange this daemon wires today; the reverse
+    /// direction (the initiator learning the joiner's static key) needs a real transport to carry
+    /// a second grant back, which does not exist yet (`sync-lan-transport`, separate work). See the
+    /// module doc — no transport calls this yet, only `pairing_grpc_tests.rs`.
     #[allow(dead_code)]
     pub(crate) fn adopt_group_key(
         &self,
         key_store: &dyn KeyStore,
         sealed: &[u8],
         now_ms: u64,
-    ) -> Result<(), PairingStateError> {
+    ) -> Result<(DeviceId, DeviceStaticPublic), PairingStateError> {
         let mut inner = self.lock();
-        let bytes = {
+        let (group_key, peer_device, peer_static) = {
             let active = active_mut(&mut inner.active, now_ms)?;
             if active.role != Role::Joiner {
                 return Err(PairingStateError::WrongRole);
@@ -331,10 +353,22 @@ impl PairingRegistry {
             if !active.session.is_ready_to_send_key() {
                 return Err(PairingError::NotConfirmed.into());
             }
-            active.session.unwrap_group_key(sealed)?
+            let grant = active.session.unwrap_grant(sealed)?;
+            let peer_device = active
+                .session
+                .peer_device()
+                .ok_or(PairingStateError::NotActive)?;
+            (
+                grant.group_key,
+                peer_device,
+                DeviceStaticPublic::from_bytes(grant.static_public),
+            )
         };
-        key_store.put(KeyId::Group(INITIAL_GROUP_EPOCH), &Secret::new(bytes))?;
+        key_store.put(
+            KeyId::Group(INITIAL_GROUP_EPOCH),
+            &Secret::new(group_key.to_vec()),
+        )?;
         inner.active = None;
-        Ok(())
+        Ok((peer_device, peer_static))
     }
 }

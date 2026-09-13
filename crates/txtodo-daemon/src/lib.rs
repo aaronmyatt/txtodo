@@ -9,6 +9,8 @@ mod apply_route;
 pub mod clock;
 pub mod convert;
 pub mod debounce;
+mod device_remove;
+mod devices_grpc;
 pub mod expected;
 mod external;
 pub mod fastid;
@@ -19,6 +21,7 @@ mod identity_assign;
 mod identity_fingerprint;
 mod identity_levenshtein;
 mod import;
+mod keystore_setup;
 pub mod mirror;
 mod mirror_converge;
 mod move_coordinator;
@@ -52,10 +55,14 @@ pub mod walker;
 pub mod watch_task;
 pub mod watcher;
 pub mod workspace;
+mod workspace_error;
+mod workspace_mint;
 pub mod write;
 
 #[cfg(test)]
 mod actor_tests;
+#[cfg(test)]
+mod device_remove_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]

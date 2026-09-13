@@ -10,59 +10,21 @@ use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_state::{PairingRegistry, PairingStateError};
 use crate::stats::Stats;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
+use crate::workspace_error::WorkspaceError;
+use crate::workspace_mint::{
+    GROUP_ID_KEY, basename, load_or_mint_device, load_or_mint_group, load_or_mint_identity_mode,
+};
 use std::collections::BTreeMap;
-use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid};
-use txtodo_store::{Store, StoreError};
-use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
+use std::sync::{Arc, Mutex, PoisonError};
+use txtodo_model::{DeviceId, FilePath, IdentityMode};
+use txtodo_store::{NewDevice, Store};
+use txtodo_sync::{
+    DeviceStaticPublic, DeviceStaticSecret, GroupId, KeyStore, KeyStoreMode, MemoryKeyStore, Secret,
+};
 
-/// The `meta` key holding this install's device id.
-pub const DEVICE_ID_KEY: &str = "device_id";
-/// The `meta` key holding this workspace's sync group id (plan M4 pairing).
-pub const GROUP_ID_KEY: &str = "group_id";
-/// The `meta` key holding this workspace's identity mode (docs/questions.md Q2).
-pub const IDENTITY_MODE_KEY: &str = "identity_mode";
 /// Where the store lives under the workspace root (ADR 0010).
 pub const STORE_FILE: &str = "oplog.db";
-
-/// Why the workspace could not open.
-#[derive(Debug)]
-pub enum WorkspaceError {
-    /// The store failed.
-    Store(StoreError),
-    /// Discovery failed.
-    Walk(WalkError),
-    /// An actor failed to open.
-    Actor(FilePath, Box<ActorError>),
-    /// More documents than `WALK_MAX_FILES`.
-    TooMany(usize),
-}
-
-impl fmt::Display for WorkspaceError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            WorkspaceError::Store(e) => write!(f, "store: {e}"),
-            WorkspaceError::Walk(e) => write!(f, "discover documents: {e}"),
-            WorkspaceError::Actor(p, e) => write!(f, "open {p}: {e}"),
-            WorkspaceError::TooMany(n) => write!(f, "{n} documents, max {WALK_MAX_FILES}"),
-        }
-    }
-}
-
-impl std::error::Error for WorkspaceError {}
-
-impl From<StoreError> for WorkspaceError {
-    fn from(e: StoreError) -> WorkspaceError {
-        WorkspaceError::Store(e)
-    }
-}
-impl From<WalkError> for WorkspaceError {
-    fn from(e: WalkError) -> WorkspaceError {
-        WorkspaceError::Walk(e)
-    }
-}
 
 /// One workspace: root, shared store, device id, Health counters and the live actors.
 pub struct Workspace {
@@ -79,10 +41,21 @@ pub struct Workspace {
     /// This workspace's sync group (plan M4 pairing): minted once, like the device id, and
     /// replaced with a peer's group once this device joins theirs — see [`Workspace::adopt_group_key`].
     group: Mutex<GroupId>,
-    /// Where this workspace's sync keys live (device/group). Plan M4 gRPC exposure's own new
-    /// plumbing: nothing wired a live `KeyStore` into the daemon before this. Placeholder backend —
-    /// see the module doc on [`load_or_mint_group`] and this crate's `pairing_grpc.rs` module doc.
+    /// Where this workspace's sync keys live (device/group/device-static). `Workspace::open`/
+    /// `open_with_default_mode` (every test in this crate) use an in-memory placeholder, not
+    /// persisted across restarts; `Workspace::open_with_key_store` (production, `txtodod`) resolves
+    /// a real OS/file-backed store (plan M4 `sync-keystore`).
     key_store: Arc<dyn KeyStore + Send + Sync>,
+    /// The resolved backend's name (`"memory"`/`"os"`/`"file"`), so `txtodo doctor` can report it
+    /// without reading code (plan M4 `sync-keystore`).
+    key_store_backend: &'static str,
+    /// This device's long-term X25519 static keypair (plan M4 `sync-device-remove`): minted once,
+    /// like the device/group id, and stored via the keystore under `KeyId::DeviceStatic` so a
+    /// future rotation can be handed to a remaining device even while it is offline.
+    device_static: DeviceStaticSecret,
+    /// The group key epoch this workspace currently seals ops under: 0 until the first `device
+    /// remove` rotates it. Persisted in `meta` so a rotation survives a restart.
+    group_epoch: Mutex<u32>,
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pairing: PairingRegistry,
     /// Live `notes.md` actors, one per `ref:` directory, opened lazily (plan M5).
@@ -111,10 +84,70 @@ impl Workspace {
             path: state_dir.clone(),
             source,
         })?;
+        let store = Store::open(&state_dir.join(STORE_FILE))?;
+        // Placeholder backend: not persisted across restarts. Every test in this crate uses this
+        // constructor (or `open`) precisely so none of them starts depending on OS keychain
+        // reachability; `open_with_key_store` is the real, persisted path (plan M4 `sync-keystore`).
+        Self::finish_open(
+            root,
+            clock,
+            store,
+            default_identity_mode,
+            (Arc::new(MemoryKeyStore::default()), "memory"),
+        )
+    }
+
+    /// Production entry point (plan M4 `sync-keystore`): resolves a real OS- or file-backed
+    /// keystore per `key_store_mode` instead of the in-memory placeholder `open`/
+    /// `open_with_default_mode` use. Kept as its own constructor rather than a change to those two:
+    /// dozens of existing tests call them and must not start depending on OS keychain reachability
+    /// in CI/sandboxes. `file_passphrase` is required (and used) only when `key_store_mode`
+    /// resolves to `File` — the human-facing prompt for it lives in `txtodo-cli`/`main.rs`, never
+    /// here (this module has no notion of a terminal).
+    pub fn open_with_key_store(
+        root: &Path,
+        clock: Arc<dyn Clock>,
+        default_identity_mode: IdentityMode,
+        key_store_mode: KeyStoreMode,
+        file_passphrase: Option<Secret>,
+    ) -> Result<Workspace, WorkspaceError> {
+        let state_dir = root.join(walker::STATE_DIR);
+        std::fs::create_dir_all(&state_dir).map_err(|source| WalkError::Io {
+            path: state_dir.clone(),
+            source,
+        })?;
         let mut store = Store::open(&state_dir.join(STORE_FILE))?;
+        // The group id scopes the OS-keystore entries so two groups on one machine never collide;
+        // `finish_open` below loads it again (idempotent) once it also has the device/identity ids.
+        let scope = load_or_mint_group(&mut store)?.0.to_string();
+        let resolved = crate::keystore_setup::resolve_key_store(
+            &state_dir,
+            &scope,
+            key_store_mode,
+            file_passphrase,
+        )?;
+        Self::finish_open(root, clock, store, default_identity_mode, resolved)
+    }
+
+    /// Shared tail of every constructor: loads or mints every workspace-lifetime id, walks the
+    /// tree and spawns one actor per document. Must run inside a tokio runtime (actors are tasks).
+    /// `default_identity_mode` decides a brand-new workspace's mode when nothing on disk already
+    /// carries an `id:` tag (`txtodod --identity-mode`); one already tagged is always `Tagged`
+    /// regardless (plan decision 3). `key_store` bundles the backend and its reported name so this
+    /// function stays under the arg-count budget.
+    fn finish_open(
+        root: &Path,
+        clock: Arc<dyn Clock>,
+        mut store: Store,
+        default_identity_mode: IdentityMode,
+        key_store: (Arc<dyn KeyStore + Send + Sync>, &'static str),
+    ) -> Result<Workspace, WorkspaceError> {
+        let (key_store, key_store_backend) = key_store;
         let device = load_or_mint_device(&mut store, clock.as_ref())?;
         let group = load_or_mint_group(&mut store)?;
         let identity_mode = load_or_mint_identity_mode(&mut store, root, default_identity_mode)?;
+        let device_static = crate::keystore_setup::load_or_mint_device_static(key_store.as_ref())?;
+        let group_epoch = crate::keystore_setup::load_group_epoch(&store)?;
         let started_at_ms = clock.now_ms();
         let mut ws = Workspace {
             root: root.to_path_buf(),
@@ -126,8 +159,10 @@ impl Workspace {
             started_at_ms,
             stats: Arc::new(Stats::default()),
             group: Mutex::new(group),
-            // Placeholder backend: not yet persisted across restarts. See module doc.
-            key_store: Arc::new(MemoryKeyStore::default()),
+            key_store,
+            key_store_backend,
+            device_static,
+            group_epoch: Mutex::new(group_epoch),
             pairing: PairingRegistry::new(),
             notes: NotesRegistry::new(),
         };
@@ -236,6 +271,37 @@ impl Workspace {
     pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {
         &self.key_store
     }
+    /// The resolved sync keystore backend's name (plan M4 `sync-keystore`): `"memory"` for every
+    /// test and the `open`/`open_with_default_mode` convenience constructors, `"os"`/`"file"` for
+    /// a real backend resolved by `open_with_key_store`. `txtodo doctor` reports this by name.
+    pub fn key_store_backend_name(&self) -> &'static str {
+        self.key_store_backend
+    }
+    /// This device's long-term X25519 static public key (plan M4 `sync-device-remove`), safe to
+    /// hand to a peer during pairing.
+    pub fn device_static_public(&self) -> DeviceStaticPublic {
+        self.device_static.public_key()
+    }
+    /// The group key epoch this workspace currently seals ops under (plan M4
+    /// `sync-device-remove`); 0 until the first `device remove` rotates it.
+    pub(crate) fn group_epoch(&self) -> u32 {
+        *self
+            .group_epoch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+    /// Updates only the in-memory epoch; the caller (`device_remove.rs`, which already holds the
+    /// store locked for the rest of the removal) is responsible for persisting `new_epoch` to
+    /// `meta` itself under `keystore_setup::GROUP_EPOCH_KEY` first. Not a `StoreError`-returning
+    /// method that re-locks `self.store()` on its own: `Mutex` is not reentrant, and this is
+    /// always called while `device_remove::remove_device` already holds that same lock — a
+    /// prior version of this method deadlocked exactly that way.
+    pub(crate) fn set_group_epoch(&self, new_epoch: u32) {
+        *self
+            .group_epoch
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = new_epoch;
+    }
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pub(crate) fn pairing(&self) -> &PairingRegistry {
         &self.pairing
@@ -250,11 +316,14 @@ impl Workspace {
         };
         self.notes.get_or_open(cfg, &self.store, &self.clock)
     }
-    /// Finishes a pairing on the joiner's side: unwraps the sealed group key the initiator sent
-    /// (see `pairing_grpc.rs`'s module doc — there is no transport yet, so this is driven directly
-    /// by whoever stands in for one today), stores it under this workspace's keystore, and adopts
-    /// `group` as this workspace's own — atomically from the caller's point of view, so this
-    /// workspace never claims a group it does not also hold the key for. Only called by
+    /// Finishes a pairing on the joiner's side: unwraps the sealed [`txtodo_sync::PairingGrant`]
+    /// the initiator sent (see `pairing_grpc.rs`'s module doc — there is no transport yet, so this
+    /// is driven directly by whoever stands in for one today), stores the group key under this
+    /// workspace's keystore, registers the initiator's long-term static public key in the
+    /// `devices` table (plan M4 `sync-device-remove` — this is the leg of the exchange this daemon
+    /// wires; see `pairing_state.rs::adopt_group_key`'s doc for the direction it does not), and
+    /// adopts `group` as this workspace's own — atomically from the caller's point of view, so
+    /// this workspace never claims a group it does not also hold the key for. Only called by
     /// `pairing_grpc_tests.rs` today (no transport exists to call it in production yet).
     #[allow(dead_code)]
     pub(crate) fn adopt_group_key(
@@ -263,13 +332,22 @@ impl Workspace {
         sealed: &[u8],
         now_ms: u64,
     ) -> Result<(), PairingStateError> {
-        self.pairing
-            .adopt_group_key(self.key_store.as_ref(), sealed, now_ms)?;
+        let (peer_device, peer_static) =
+            self.pairing
+                .adopt_group_key(self.key_store.as_ref(), sealed, now_ms)?;
         let mut store = self
             .store
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.meta_set(GROUP_ID_KEY, &group.0.to_be_bytes())?;
+        store.register_device(&NewDevice {
+            device: peer_device,
+            name: String::new(),
+            static_public: peer_static.to_bytes(),
+            paired_at_ms: now_ms,
+            last_known_wall_ms: None,
+            key_epoch: 0,
+        })?;
         drop(store);
         *self
             .group
@@ -277,100 +355,4 @@ impl Workspace {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = group;
         Ok(())
     }
-}
-
-/// The last `/`-separated segment of a workspace-relative path.
-fn basename(path: &FilePath) -> &str {
-    path.as_str().rsplit('/').next().unwrap_or(path.as_str())
-}
-
-fn load_or_mint_device(store: &mut Store, clock: &dyn Clock) -> Result<DeviceId, StoreError> {
-    if let Some(bytes) = store.meta_get(DEVICE_ID_KEY)?
-        && let Ok(raw) = <[u8; 16]>::try_from(bytes.as_slice())
-    {
-        return Ok(DeviceId::new(Ulid::from_u128(u128::from_be_bytes(raw))));
-    }
-    let id = DeviceId::new(clock.new_ulid());
-    store.meta_set(DEVICE_ID_KEY, &id.ulid().to_u128().to_be_bytes())?;
-    debug_assert!(store.meta_get(DEVICE_ID_KEY)?.is_some());
-    Ok(id)
-}
-
-/// Loads this workspace's sync group id from `meta`, or mints a fresh one (128 random bits; unlike
-/// the device id, nothing needs to sort on it) and persists it. `getrandom` failure is not
-/// recoverable in a meaningful way — `clock.rs`'s `SystemClock::new_ulid` takes the same stance for
-/// a ULID's random half — so a fixed fallback pattern still yields a usable, if less unique, id.
-fn load_or_mint_group(store: &mut Store) -> Result<GroupId, StoreError> {
-    if let Some(bytes) = store.meta_get(GROUP_ID_KEY)?
-        && let Ok(raw) = <[u8; 16]>::try_from(bytes.as_slice())
-    {
-        return Ok(GroupId(u128::from_be_bytes(raw)));
-    }
-    let mut raw = [0u8; 16];
-    if getrandom::fill(&mut raw).is_err() {
-        raw = [0xA5; 16];
-    }
-    store.meta_set(GROUP_ID_KEY, &raw)?;
-    Ok(GroupId(u128::from_be_bytes(raw)))
-}
-
-/// Loads this workspace's identity mode from `meta`, or mints one: `Tagged` if any discovered
-/// document already carries an `id:` tag (no silent mode flip on upgrade, plan decision 3), else
-/// `default` (`txtodod --identity-mode`, itself `Sidecar` by default — docs/questions.md Q2, a
-/// plain todo.txt needs no `id:` tags written into it). Fixed for the workspace's lifetime once
-/// minted, like the device/group id.
-fn load_or_mint_identity_mode(
-    store: &mut Store,
-    root: &Path,
-    default: IdentityMode,
-) -> Result<IdentityMode, WorkspaceError> {
-    if let Some(bytes) = store.meta_get(IDENTITY_MODE_KEY)?
-        && let Some(mode) = decode_identity_mode(&bytes)
-    {
-        return Ok(mode);
-    }
-    let mode = if any_document_is_tagged(root)? {
-        IdentityMode::Tagged
-    } else {
-        default
-    };
-    store.meta_set(IDENTITY_MODE_KEY, &encode_identity_mode(mode))?;
-    Ok(mode)
-}
-
-fn encode_identity_mode(mode: IdentityMode) -> [u8; 1] {
-    match mode {
-        IdentityMode::Tagged => [0],
-        IdentityMode::Sidecar => [1],
-    }
-}
-
-fn decode_identity_mode(bytes: &[u8]) -> Option<IdentityMode> {
-    match bytes {
-        [0] => Some(IdentityMode::Tagged),
-        [1] => Some(IdentityMode::Sidecar),
-        _ => None,
-    }
-}
-
-/// Whether any already-discoverable document in `root` carries at least one `id:` tag — decides a
-/// brand-new workspace's identity mode (never re-checked once minted).
-fn any_document_is_tagged(root: &Path) -> Result<bool, WorkspaceError> {
-    for rel in walker::walk(root)? {
-        if walker::is_notes_document(basename(&rel)) {
-            continue;
-        }
-        let Ok(bytes) = std::fs::read(root.join(rel.as_str())) else {
-            continue;
-        };
-        let file = txtodo_core::parse_file(&bytes);
-        if file
-            .lines
-            .iter()
-            .any(|l| crate::fastid::fast_id_of(l).is_some())
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
