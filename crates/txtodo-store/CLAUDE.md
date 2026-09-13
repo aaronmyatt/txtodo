@@ -4,7 +4,10 @@
 SQLite op log, snapshots, projection cache at `<workspace>/.txtodo/oplog.db`. Plan M3, ADR 0004
 (rusqlite bundled, WAL). As built 2026-09-12 (capability tokens, plan M6 data layer). Sidecar
 identity fingerprints (docs/questions.md Q2, now the default identity mode) added 2026-09-13.
-Known-devices table (plan M4 tasks/sync-device-remove) added 2026-09-13.
+Known-devices table (plan M4 tasks/sync-device-remove) added 2026-09-13. The device-global
+workspace registry's raw rows (ADR 0025, task `daemon-workspace-registry`) added the same day —
+its own separate database file, not `oplog.db`; see `registry.rs`'s own doc and Public interface
+entry below.
 
 ## Public interface
 - `Store::open(path)` — creates, switches to WAL, applies `migrations/000N.sql` in order by
@@ -41,15 +44,40 @@ Known-devices table (plan M4 tasks/sync-device-remove) added 2026-09-13.
   array (this crate cannot depend on txtodo-sync's `DeviceStaticPublic`); the daemon converts at
   its own boundary. `last_known_wall_ms` is `None` until a real peer clock sample is observed —
   `txtodo doctor` reports "no clock sample yet" rather than guess one.
+- Workspace registry (ADR 0025, task `daemon-workspace-registry`): `registry.rs`'s `Registry` — a
+  **separate** SQLite database from `Store`'s own `oplog.db` (a different file, its own
+  `PRAGMA user_version` sequence starting at 1, embedded from `registry_migrations/0001.sql` next
+  to this crate's existing `migrations/`), because it is device-global, not per-workspace, and has
+  no natural single `<workspace>/.txtodo/` to live under — `txtodo-daemon`'s
+  `workspace_registry.rs` resolves where its file actually goes on disk (device-global, not this
+  crate's concern) and owns id minting; this crate only stores the rows. `Registry::open(path)`,
+  `insert(&NewWorkspaceEntry)` (a unique partial index on `(root) WHERE removed_at IS NULL` is the
+  actual backstop against two active rows for the same root — the caller is expected to check
+  `find_active_by_root` first), `find_active_by_root(root)`, `get(id)`, `list_active()` (≤
+  `MAX_WORKSPACES_PER_READ`, oldest-registered first), `remove(id, at_ms)` (idempotent tombstone,
+  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id). `WorkspaceId` is
+  a ULID newtype, minted (never derived from the path) the same way `DeviceId` is — kept in this
+  crate rather than promoted to `txtodo-model` for now, since only this crate and `txtodo-daemon`
+  need it (`tasks/daemon-workspace-registry/notes.md` has the reasoning). `root` is stored as the
+  canonicalized absolute path (a plain TEXT column) purely to detect "already registered"; it is
+  never read back as identity, and this table never opens, reads or even constructs a path under
+  it — the workspace's own `.txtodo/oplog.db` is untouched by every operation here, by construction
+  (this module has no code path that names it).
 
 ## Invariants
 - Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/oplog.rs greps).
   Projections, snapshots, meta, tokens, fingerprints and devices are upserts and carry no history
-  of their own; a removed device row is kept, never deleted.
+  of their own; a removed device row is kept, never deleted. `registry.rs` is exempt from
+  `tests/oplog.rs`'s grep (scoped to `lib.rs`/`ops.rs`/`error.rs` only, same as `devices.rs`) and
+  uses a real `UPDATE`-shaped upsert (`INSERT ... ON CONFLICT(id) DO UPDATE SET removed_at =
+  ...`) for the same tombstone reason `devices.rs` does — never a bare `UPDATE`/`DELETE`.
 - Everything here is rebuildable from the files **except sidecar fingerprints**: a tagged
   workspace can always re-derive ids by re-reading `id:` tags, but a sidecar workspace's identity
   lives only here — deleting `.txtodo/` loses task-identity continuity for it (known tradeoff,
-  plan `floofy-swinging-brooks.md`).
+  plan `floofy-swinging-brooks.md`). The workspace registry is different again: losing it loses no
+  task data at all (every workspace's own `.txtodo/oplog.db` is untouched either way), only the
+  device's memory of which directories to manage — re-registering a still-intact directory finds
+  its op log exactly where it was.
 - Every read has an upper bound; every error names the operation and, when known, the path.
 - Ids are stored as 16-byte big-endian BLOBs; wall times as i64 milliseconds.
 - A device's ops are dense by construction (own ops always land; sync commits contiguous runs

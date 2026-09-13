@@ -57,6 +57,9 @@ pub enum StoreError {
     /// A stored device static public key is not 32 bytes (the database was edited by hand); the
     /// length found.
     BadStaticPublic(usize),
+    /// A stored workspace registry id is not 16 bytes (the database was edited by hand); the
+    /// length found.
+    BadWorkspaceId(usize),
 }
 
 impl StoreError {
@@ -126,6 +129,9 @@ impl fmt::Display for StoreError {
             StoreError::BadStaticPublic(len) => {
                 write!(f, "stored device static public key is {len} bytes, not 32")
             }
+            StoreError::BadWorkspaceId(len) => {
+                write!(f, "stored workspace registry id is {len} bytes, not 16")
+            }
         }
     }
 }
@@ -146,7 +152,8 @@ impl std::error::Error for StoreError {
             | StoreError::ProjectionTooLarge(_)
             | StoreError::BadHash(_)
             | StoreError::BadTokenId(_)
-            | StoreError::BadStaticPublic(_) => None,
+            | StoreError::BadStaticPublic(_)
+            | StoreError::BadWorkspaceId(_) => None,
         }
     }
 }

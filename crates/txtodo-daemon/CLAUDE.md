@@ -12,6 +12,13 @@ Devices table wiring, keystore resolution and `DeviceList`/`DeviceRemove` (plan 
 tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added 2026-09-13.
 Real cross-device pairing over the LAN transport (plan M4 `sync-pairing`'s LAN wiring pass —
 `pairing_lan.rs`, `pairing_lan_state.rs`, the `PairAwaitPeer` RPC) added the same day.
+ADR 0025 (2026-09-13) supersedes the "one process per workspace" framing above with "one
+`txtodod` per device, with a workspace registry, `WorkspaceActor`s nested inside it" — not yet
+true of this binary (`main.rs` still runs one workspace per process via `--dir`), but task
+`daemon-workspace-registry` (the same day) adds the device-global catalog
+(`workspace_registry.rs`/`workspace_registry_paths.rs`) that `daemon-global-socket`/
+`daemon-workspace-actor` will wire the actual binary onto; see those modules' own docs and
+`tasks/daemon-workspace-registry/notes.md` for exactly what is and isn't done yet.
 
 ## Public interface
 - `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
@@ -35,7 +42,24 @@ Real cross-device pairing over the LAN transport (plan M4 `sync-pairing`'s LAN w
   (`OpLogStream`, plan M7, ADR 0004) — both delegated to from `server.rs`, owned end to end here.
 - `workspace_error` (`WorkspaceError`) and `workspace_mint` (device/group/identity-mode load-or-
   mint helpers) are split out of `workspace.rs` for its line budget, the same pattern as
-  `txtodo-sync`'s `*_error.rs` files. `keystore_setup` resolves the real OS/file sync-keystore
+  `txtodo-sync`'s `*_error.rs` files.
+- `workspace_registry` (ADR 0025, task `daemon-workspace-registry`, 2026-09-13): `WorkspaceRegistry`
+  — the device-global catalog of every todo directory this device's *one* `txtodod` will (once
+  `daemon-workspace-actor` lands) manage, distinct from `workspace.rs`'s own per-directory registry
+  of documents/actors above. `open(path)`, `add(root, clock) -> WorkspaceId` (mints a fresh id the
+  first time, idempotent no-op on an already-active root — never touches `root/.txtodo/` in any
+  way, the migration invariant this task exists for: a pre-existing op log is left exactly where it
+  is), `remove(id, clock)` (un-registers only; never deletes `root/.txtodo/` either), `list()`
+  (every active entry plus a cheap `root_exists`/`has_state` existence check, no store opened).
+  Wraps `txtodo_store::Registry`'s raw rows (a separate SQLite database from any workspace's own
+  `oplog.db` — see that crate's `registry.rs`). `workspace_registry_error` (`WorkspaceRegistryError`)
+  and `workspace_registry_paths` (`RegistryEnv`/`registry_db_path`, mirroring `txtodo-cli`'s
+  `config.rs` env-injection idiom so tests never touch the real machine's data directory) are split
+  out for the file-length budget, the same `*_error.rs`/env-injection patterns as above. **Not**
+  wired into `main.rs`/`txtodod` yet — today's binary still runs one workspace per process; see
+  `tasks/daemon-workspace-registry/notes.md` for exactly what `daemon-global-socket`/
+  `daemon-workspace-actor` still need to do.
+- `keystore_setup` resolves the real OS/file sync-keystore
   backend for `Workspace::open_with_key_store` (plan M4 `sync-keystore`) — `resolve`/
   `open`/`open_with_default_mode` (every test in this crate) still use an in-memory placeholder,
   never OS-keychain-reachability-dependent. `device_remove` (plan M4 `tasks/sync-device-remove`):

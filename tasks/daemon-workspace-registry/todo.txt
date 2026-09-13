@@ -1,0 +1,11 @@
+x 2026-09-13 2026-09-13 Decide and document the registry's device-global location per ADR 0010's spirit, without editing ADR 0010 itself +m11 @daemon @docs id:01M2D7TX7YWKZYS82QSPKWJKYH
+x 2026-09-13 2026-09-13 Data model: WorkspaceId (minted ULID, never the path), root, added_at, enough to locate existing .txtodo/ state +m11 @store id:01M2D7TX7YK9ZR6698YJWE04WR
+x 2026-09-13 2026-09-13 Registry storage: separate SQLite database from oplog.db, matching txtodo-store's own migration/WAL pattern +m11 @store id:01M2D7TX7YRJF3WY7CVS6JG1CA
+x 2026-09-13 2026-09-13 add/remove/list operations, add idempotent on a repeat call with the same path +m11 @daemon @store id:01M2D7TX7YJJEWYCAVB8DRJMJV
+x 2026-09-13 2026-09-13 Migration invariant: registering a directory with pre-existing op history never touches it — test with before/after Store comparison +m11 @daemon @test id:01M2D7TX7YAD55JSK735DRT45R
+x 2026-09-13 2026-09-13 Removal never deletes .txtodo/ state — catalog change only, tombstone in the registry, test explicitly +m11 @daemon @test id:01M2D7TX7YZ28YEV62J89HSV9X
+x 2026-09-13 2026-09-13 Registry persists across a fresh open (restart durability), needed by the later test-global-daemon-acceptance task +m11 @test id:01M2D7TX7Y24CPYZ6VP0NCYE1R
+x 2026-09-13 2026-09-13 Update crates/txtodo-daemon/CLAUDE.md and crates/txtodo-store/CLAUDE.md with the new module's purpose/interface/invariants +m11 @docs id:01M2D7TX7YNPJHGTGXWX4G7103
+x 2026-09-13 2026-09-13 Gates: cargo build --workspace, crate test suites, clippy -D warnings, fmt --check, check-boundaries.sh, check-file-length.sh +m11 @test id:01M2D7TX7YAS1NQ0E248VGK7RK
+2026-09-13 Not this task: wire main.rs/txtodod to actually use the registry (daemon-global-socket, daemon-workspace-actor) +m11 @daemon ref:daemon-global-socket — deliberately deferred, see notes.md id:01M2D7TX7YRGQ0D1NVWSYR4NCQ
+2026-09-13 Not this task: txtodo workspace add|remove|list CLI surface +m11 @cli ref:cli-workspace-commands — deliberately deferred, see notes.md id:01M2D7TX7Y65FQPK0FTMD8KMZY
