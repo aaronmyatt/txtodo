@@ -18,8 +18,8 @@ x 2026-09-13 2026-09-11 Move line between files moves the ref directory with rol
 2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon ref:proto-tree-progress id:01M2B4ZWQDRFPEXXQGGS266WEQ
 2026-09-11 Tests: one op batch on first notes write, progress on a 3-level fixture, archive and delete keep the dir, prune finds the orphan +m5 @test ref:test-m5-acceptance id:01M2B4ZWQDCD9N2KF2JVADWVAZ
 2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test ref:test-nested-ref-sync id:01M2B4ZWQD543EWGT4CG3WE4MD
-2026-09-11 rmcp server with tools resources prompts from design §6.3-6.4 plus todo_notes_get and todo_notes_set +m6 @mcp id:01M2B4ZWQDKT5HCCNP0ZA6VTK5
-2026-09-11 Transports txtodo mcp --stdio and Streamable HTTP on 127.0.0.1:8636/mcp with --lan advertising _txtodo-mcp._tcp +m6 @mcp id:01M2B4ZWQDM61JTH05CJ1Q66VV
+x 2026-09-13 2026-09-11 rmcp server with tools resources prompts from design §6.3-6.4 plus todo_notes_get and todo_notes_set +m6 @mcp — 15 tools+resources+prompts built on txtodo-daemon gRPC; todo_search substring-only (no query index yet), todo_move has no daemon reorder RPC (documented, not built) id:01M2B4ZWQDKT5HCCNP0ZA6VTK5
+x 2026-09-13 2026-09-11 Transports txtodo mcp --stdio and Streamable HTTP on 127.0.0.1:8636/mcp with --lan advertising _txtodo-mcp._tcp +m6 @mcp — both live-verified against a real txtodod id:01M2B4ZWQDM61JTH05CJ1Q66VV
 2026-09-11 Macaroon-style tokens with scope project context file expires quarantine caveats and txtodo token create|list|revoke|attenuate +m6 @mcp @cli id:01M2B4ZWQDBF6VH9XNX5P1MWE0
 2026-09-11 Bearer auth on HTTP and stdio token from --token or config default_stdio_token +m6 @mcp id:01M2B4ZWQD2PGXGGYJ1HRS0J7E
 2026-09-11 Every mutation through daemon Apply as Principal::Agent with quarantine appending the context +m6 @mcp @daemon id:01M2B4ZWQDDCEZGE3TQ1CPKZC9
