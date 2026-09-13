@@ -115,6 +115,82 @@ before any code lands. `txtodo-daemon` wires the `McpBackend` impl in its `serve
 - A handler error for `(a) task` carries `spec_rule` pointing at the paren/priority rule.
 - `todo_add` with a hand-written `created:` tag is rejected, not re-stamped.
 
+## As built (2026-09-13, agent)
+
+Crate layout matches the plan closely, plus two files it didn't anticipate:
+`backend.rs` (`McpBackend` trait + every arg/result type — `TaskRow`, `ListArgs`, `GetTarget`,
+`FieldPatch`, `MoveArgs`/`MoveAnchor`, `TodoOp`, `Hlc`, `ApplyOutcome`, `OpSummary`, `FileMeta`, plus
+one tool-args struct per tool), `error.rs` (`McpError`), `schema.rs` (`McpServer`, the `rmcp`
+`ServerHandler`: `#[tool_router]` for all 15 tools, manual overrides for resources/prompts — no
+macro exists for those), `tools_read.rs`/`tools_write.rs` (one function per tool, called one-line
+each from `schema.rs` so its `#[tool_router]`/`#[tool_handler]` block stays readable),
+`resources.rs`, `prompts.rs`, `grpc_backend.rs`/`grpc_read.rs`/`grpc_write.rs`/`grpc_convert.rs`
+(`GrpcMcpBackend`, the one `McpBackend` impl — a gRPC client of `txtodod`), `parse.rs` (see
+deviation below), `main.rs` (the `txtodo-mcp` binary — see mcp-transports' As-built). Tests:
+`tools.rs`'s `json_result` unit-tested implicitly via every module's own tests (21 unit tests
+across `parse`/`error`/`grpc_convert`/`grpc_read`/`grpc_write`/`transport`/`resources`/`prompts`)
+plus `tests/smoke.rs` (in-process client/server over a duplex pipe, 3 tests: exact tool-set,
+one real tool-call round trip, resources+prompts). Verified again live against a real `txtodod`
+(see mcp-transports' As-built) — `todo_list` over real stdio and real HTTP both returned the
+actual parsed task from a real `todo.txt`.
+
+Registered set (exact match, verified by `tests/smoke.rs`): `todo_list`, `todo_search`, `todo_get`,
+`todo_add`, `todo_complete`, `todo_uncomplete`, `todo_edit`, `todo_move`, `todo_delete`,
+`todo_archive`, `todo_batch`, `todo_history`, `todo_raw`, `todo_notes_get`, `todo_notes_set`.
+Resources: `todotxt://todo.txt`, `todotxt://<any synced todo/done path>` (listed), plus templates
+`todotxt://task/{id}`, `todotxt://project/{name}`, `todotxt://context/{name}`,
+`todotxt://history{?since}` (read-only; no subscription push — that's
+[mcp-resource-subs](../mcp-resource-subs/notes.md)). Prompts: `plan_today`, `weekly_review`,
+`triage_inbox`, each embedding real backend data.
+
+### Deviations, with reasons
+
+- **`parse.rs` replaces `txtodo-query`.** The design's query language (§8) isn't built yet —
+  `txtodo-query` is still the empty stub from scaffolding, a separate task. `txtodo-mcp` also may
+  not depend on `txtodo-core` (`budgets.json.slices.allowedDeps`), so `TaskRow`'s parsed fields
+  (priority/dates/projects/contexts/kv) can't come from the real parser either. `parse.rs` is a
+  minimal, self-contained todo.txt line parser/editor (tested) that fills both gaps: `todo_list`'s
+  `query` supports `+project`, `@context`, `done`/`not done`, and bare substrings (conjunction
+  only); `todo_search` is a case-insensitive substring match, not the tantivy full-text index §6.3
+  describes as "owned by the daemon backend" (no such index exists anywhere in the daemon yet).
+  Replace this module wholesale once `txtodo-query` lands.
+- **`todo_move` has no daemon equivalent.** The design wants a same-file reorder by anchor task
+  (`before`/`after`). The only `Move` mutation the daemon exposes relocates a task *across files*
+  (plan M7) via a destination path, not a position — `apply_route.rs` also refuses a `Move` next to
+  any other mutation in one `Apply` call. The tool is registered with the right schema (satisfies
+  "every tool registered"), but its handler returns a clear `McpError` naming the gap rather than
+  faking a reorder. This is the one place the task's "add an RPC only if genuinely needed, and note
+  it" applied: a proper fix needs a new daemon op (e.g. a `Reorder` mutation with a same-document
+  anchor), out of scope for a tools-wrapper task.
+- **`todo_archive` is not atomic and doesn't blank-collapse.** One `Apply(Move)` per completed
+  task (highest line first, so earlier line numbers never shift out from under a still-pending
+  call) — `apply_route.rs` refuses more than one `Move` per batch, so there is no single atomic
+  call available. It also doesn't collapse the blank lines a completed-and-moved line leaves
+  behind, unlike the CLI's local `archive`; `daemon_mode.rs`'s own comment already flags that
+  specific cleanup as inexpressible via intent-level mutations today.
+- **`todo_batch` executes sequentially, not atomically.** Each op reuses its single-tool
+  counterpart (`todo_add`, `todo_edit`, ...); `ApplyOutcome` reports only a count, not a real
+  per-op hash/hlc. `dry_run: true` never calls `Apply` at all (returns `applied: 0`, no diff) —
+  diff rendering is [mcp-batch-dry-run](../mcp-batch-dry-run/notes.md)'s job, not this task's.
+- **`todo_notes_set` still attributes to the local user.** `notes.rs::edit_notes_impl` hardcodes
+  `Principal::User` (a pre-existing M5 gap, confirmed by reading it, not introduced here) — an
+  agent's notes edits aren't yet attributed to the agent. Presumably fixed by
+  [mcp-agent-principal](../mcp-agent-principal/notes.md).
+- **`GrpcMcpBackend` is a gRPC client everywhere**, including the daemon-hosted HTTP transport
+  (mcp-transports' As-built explains why): one `McpBackend` implementation, reusing only RPCs
+  `txtodo-cli`'s `client.rs` already proves out, instead of a second copy of daemon-internal state
+  access living in this crate.
+
+Acceptance checked: the tool/resource set is an exact match (`tests/smoke.rs`); `file:
+"q4-roadmap/todo.txt"` vs `"todo.txt"` both pass straight through to the daemon's own path
+resolution (never resolved client-side, per the design above); `todo_add` rejects a leading date or
+`id:` tag (`grpc_write_tests::validate_add_text_rejects_a_leading_date_or_id_tag`); `todo_delete`
+asserts `confirm` before ever calling the backend. Not separately re-verified: a handler error for
+`(a) task` carrying `spec_rule` — no tool currently rejects malformed priority syntax itself (the
+daemon's own line parser would reject it inside `Apply`, surfaced as `McpError::daemon`, not yet
+carrying a `spec_rule`); a real gap worth a follow-up unit test once `todo_edit`/`todo_add`
+validation grows spec-rule-aware error mapping.
+
 ## References
 
 - Design §6.3 (tools table), §6.4 (resources/prompts), §6.1 (daemon behind the surface).
