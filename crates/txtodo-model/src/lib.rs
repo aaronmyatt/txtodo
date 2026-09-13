@@ -7,11 +7,16 @@ mod hlc;
 mod identity;
 mod ids;
 mod op;
+mod tree;
 
 pub use hlc::{Hlc, HlcError, MAX_PEER_SKEW_AHEAD_MS, MAX_PEER_SKEW_BEHIND_MS, Skew};
 pub use identity::{CostWeights, Fingerprint, IdentityMode};
 pub use ids::{DeviceId, FILE_PATH_MAX_BYTES, FilePath, FilePathError, OpId, TaskId, TokenId};
 pub use op::{Field, FieldMismatch, FieldValue, Op, OpKind, Principal, TextEdit, set_field};
+pub use tree::{
+    Invalidation, MAX_TRACKED_REFS, MAX_TREE_DEPTH, NodeId, Progress, RefTag, TreeError,
+    WorkspaceTree, invalidates,
+};
 /// Re-exported so id-only consumers (store, daemon tests) need not depend on `txtodo-core`.
 pub use txtodo_core::Ulid;
 
