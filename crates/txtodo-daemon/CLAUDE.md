@@ -42,7 +42,13 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
   crate; only `txtodo_sync`'s own types do. See Invariants for this pass's real scope limits
   (single convergence pass per connection, no per-op signature verification, pairing not wired
-  over this transport) and the confirmed same-host connect blocker.
+  over this transport) and the confirmed same-host connect blocker. `lan_status.rs`: `LanStatus`
+  (endpoint-bound/discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and
+  updated by `lan.rs`; `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/
+  `lan_discovery_active`/`lan_group_key_present`. `debug_hooks.rs`: `DebugSetGroupKey`'s handler
+  and `Workspace::debug_set_group_key`/`has_group_key` — the test-only seam a real two-daemon test
+  pairs through (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`, refused with `UNIMPLEMENTED` unless
+  set to `"1"`).
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

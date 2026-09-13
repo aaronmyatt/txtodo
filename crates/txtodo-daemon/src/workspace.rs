@@ -5,6 +5,7 @@
 use crate::actor::{ActorConfig, FileActor, SharedStore};
 use crate::clock::Clock;
 use crate::handle::{ActorError, ActorHandle};
+use crate::lan_status::LanStatus;
 use crate::notes_actor::NotesActorConfig;
 use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_state::{PairingRegistry, PairingStateError};
@@ -16,7 +17,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid};
 use txtodo_store::{Store, StoreError};
-use txtodo_sync::{GroupId, KeyStore, MemoryKeyStore};
+use txtodo_sync::{GroupId, KeyStore, KeyStoreError, MemoryKeyStore};
 
 /// The `meta` key holding this install's device id.
 pub const DEVICE_ID_KEY: &str = "device_id";
@@ -38,6 +39,8 @@ pub enum WorkspaceError {
     Actor(FilePath, Box<ActorError>),
     /// More documents than `WALK_MAX_FILES`.
     TooMany(usize),
+    /// The keystore refused a read or write (`debug_set_group_key`, plan M4 `sync-lan-transport`).
+    KeyStore(KeyStoreError),
 }
 
 impl fmt::Display for WorkspaceError {
@@ -47,6 +50,7 @@ impl fmt::Display for WorkspaceError {
             WorkspaceError::Walk(e) => write!(f, "discover documents: {e}"),
             WorkspaceError::Actor(p, e) => write!(f, "open {p}: {e}"),
             WorkspaceError::TooMany(n) => write!(f, "{n} documents, max {WALK_MAX_FILES}"),
+            WorkspaceError::KeyStore(e) => write!(f, "keystore: {e}"),
         }
     }
 }
@@ -61,6 +65,11 @@ impl From<StoreError> for WorkspaceError {
 impl From<WalkError> for WorkspaceError {
     fn from(e: WalkError) -> WorkspaceError {
         WorkspaceError::Walk(e)
+    }
+}
+impl From<KeyStoreError> for WorkspaceError {
+    fn from(e: KeyStoreError) -> WorkspaceError {
+        WorkspaceError::KeyStore(e)
     }
 }
 
@@ -87,6 +96,9 @@ pub struct Workspace {
     pairing: PairingRegistry,
     /// Live `notes.md` actors, one per `ref:` directory, opened lazily (plan M5).
     notes: NotesRegistry,
+    /// Live LAN transport status (plan M4 `sync-lan-transport`), updated by `lan.rs`, read by
+    /// `Health`/`txtodo doctor`.
+    lan_status: LanStatus,
 }
 
 impl Workspace {
@@ -130,6 +142,7 @@ impl Workspace {
             key_store: Arc::new(MemoryKeyStore::default()),
             pairing: PairingRegistry::new(),
             notes: NotesRegistry::new(),
+            lan_status: LanStatus::default(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -271,11 +284,21 @@ impl Workspace {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.meta_set(GROUP_ID_KEY, &group.0.to_be_bytes())?;
         drop(store);
+        self.set_group(group);
+        Ok(())
+    }
+    /// Live LAN transport status (plan M4 `sync-lan-transport`), for `Health`/`txtodo doctor`.
+    pub fn lan_status(&self) -> &LanStatus {
+        &self.lan_status
+    }
+    /// Replaces this workspace's sync group id in memory (its persistence is the caller's job —
+    /// `adopt_group_key`/`debug_hooks.rs`'s `debug_set_group_key` both write `meta` themselves
+    /// first). Never called with the store not already updated to match.
+    pub(crate) fn set_group(&self, group: GroupId) {
         *self
             .group
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = group;
-        Ok(())
     }
 }
 

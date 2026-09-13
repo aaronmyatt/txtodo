@@ -107,12 +107,14 @@ struct LanSetup {
 
 async fn setup(ws: SharedWorkspace) -> Option<LanSetup> {
     let endpoint = Arc::new(bind_endpoint().await?);
-    let (device, group) = {
+    let (device, group, status) = {
         let ws = read(&ws);
-        (ws.device(), ws.group())
+        (ws.device(), ws.group(), ws.lan_status().clone())
     };
+    status.set_endpoint_bound(true);
     let discovery = start_discovery(device, group, &endpoint)?;
     let browse = browse(&discovery)?;
+    status.set_discovery_active(true);
     Some(LanSetup {
         endpoint,
         discovery,
