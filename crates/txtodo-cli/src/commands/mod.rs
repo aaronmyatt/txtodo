@@ -10,5 +10,6 @@ pub mod fileops;
 pub mod history;
 pub mod hygiene;
 pub mod list;
+pub mod mcp;
 pub mod service;
 pub mod text;
