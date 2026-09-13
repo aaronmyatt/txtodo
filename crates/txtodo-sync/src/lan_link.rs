@@ -26,7 +26,7 @@ use std::net::SocketAddr;
 use iroh::endpoint::{BindError, ConnectError, ConnectingError, WriteError};
 use iroh::{Endpoint, EndpointAddr};
 
-use crate::endpoint::{ALPN, bind_local_endpoint};
+use crate::endpoint::{ALPN, PAIRING_ALPN, bind_local_endpoint};
 use crate::frame::{Frame, FrameError};
 use crate::link::{Link, LinkError};
 
@@ -110,6 +110,27 @@ impl LanEndpoint {
         node: [u8; 32],
         addrs: &[SocketAddr],
     ) -> Result<IrohLink, LanError> {
+        self.connect_with_alpn(node, addrs, ALPN).await
+    }
+
+    /// [`LanEndpoint::connect`], but negotiates [`PAIRING_ALPN`] instead of [`ALPN`] — plan M4
+    /// `sync-pairing`'s LAN wiring pass. The accepting side (`txtodo-daemon`'s `lan.rs`) tells the
+    /// two connection kinds apart by [`IrohLink::alpn`], never by frame content: a pairing
+    /// connection has no group key to seal anything with in the first place.
+    pub async fn connect_pairing(
+        &self,
+        node: [u8; 32],
+        addrs: &[SocketAddr],
+    ) -> Result<IrohLink, LanError> {
+        self.connect_with_alpn(node, addrs, PAIRING_ALPN).await
+    }
+
+    async fn connect_with_alpn(
+        &self,
+        node: [u8; 32],
+        addrs: &[SocketAddr],
+        alpn: &[u8],
+    ) -> Result<IrohLink, LanError> {
         let has_real_address = addrs.iter().any(|a| !a.ip().is_loopback());
         let dialable: Vec<SocketAddr> = addrs
             .iter()
@@ -126,7 +147,7 @@ impl LanEndpoint {
         }
         let connection = self
             .endpoint
-            .connect(target, ALPN)
+            .connect(target, alpn)
             .await
             .map_err(LanError::Connect)?;
         let (send, recv) = connection
@@ -137,7 +158,10 @@ impl LanEndpoint {
     }
 
     /// Waits for one incoming connection, accepts its one bidirectional stream, and wraps it as a
-    /// [`Link`]. Bounded by the caller's own timeout/select — this never loops internally.
+    /// [`Link`]. Bounded by the caller's own timeout/select — this never loops internally. The
+    /// caller reads [`IrohLink::alpn`] to tell a sync connection from a pairing one (both are
+    /// accepted here, since [`bind_local_endpoint`](crate::bind_local_endpoint) registers both
+    /// ALPNs on the same endpoint).
     pub async fn accept(&self) -> Result<IrohLink, LanError> {
         let incoming = self.endpoint.accept().await.ok_or(LanError::NoIncoming)?;
         let connection = incoming.await.map_err(LanError::Connection)?;
@@ -166,6 +190,10 @@ pub struct IrohLink {
     handle: tokio::runtime::Handle,
     /// Bytes read from the stream but not yet decoded into a whole `Frame`.
     inbox: Vec<u8>,
+    /// The ALPN this connection negotiated (`ALPN` or `PAIRING_ALPN`), captured once at
+    /// construction so a caller accepting on one shared endpoint can route the connection without
+    /// ever naming an `iroh` type itself (see [`IrohLink::alpn`]).
+    alpn: Vec<u8>,
 }
 
 /// Largest chunk read from the stream at once; bounds `inbox`'s growth between frame boundaries
@@ -185,6 +213,7 @@ impl IrohLink {
         send: iroh::endpoint::SendStream,
         recv: iroh::endpoint::RecvStream,
     ) -> IrohLink {
+        let alpn = connection.alpn().to_vec();
         IrohLink {
             _connection: connection,
             send,
@@ -193,7 +222,15 @@ impl IrohLink {
             // `LanEndpoint::connect`/`accept` (themselves `async fn`s) satisfies by construction.
             handle: tokio::runtime::Handle::current(),
             inbox: Vec::new(),
+            alpn,
         }
+    }
+
+    /// Which protocol this connection negotiated: [`crate::endpoint::ALPN`] for a group-keyed sync
+    /// session, [`crate::endpoint::PAIRING_ALPN`] for a pairing relay connection. `txtodo-daemon`'s
+    /// `lan.rs` accept loop reads this to route an incoming connection to the right driver.
+    pub fn alpn(&self) -> &[u8] {
+        &self.alpn
     }
 }
 
