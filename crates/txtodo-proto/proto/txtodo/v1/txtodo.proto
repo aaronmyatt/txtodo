@@ -85,6 +85,20 @@ service Txtodo {
   // link yet, so a real two-daemon test needs a scripted seam instead of a TTY SAS prompt; this
   // is that seam, guarded so it can never run in production.
   rpc DebugSetGroupKey(DebugSetGroupKeyRequest) returns (DebugSetGroupKeyResponse);
+
+  // --- bundle export/import (plan M8, design §4.5): the air-gapped sneakernet carrier ---
+
+  // Streams one self-contained bundle: a clear header frame, a clear manifest frame, then a run
+  // of encrypted frames (design §4.5's Argon2id -> XChaCha20-Poly1305 wrap). `passphrase` is
+  // loopback-only KDF input, never stored or logged.
+  rpc BundleExport(BundleExportRequest) returns (stream BundleChunk);
+  // Streams a bundle produced by `BundleExport` back in: version/schema checked from the clear
+  // manifest before any key is derived, then every per-file hash and per-op signature is verified
+  // before a single row lands (all-or-nothing). The passphrase cannot travel in a request field
+  // here (a client-streaming RPC's request type is fixed to the streamed item, `BundleChunk`) —
+  // it rides in this call's own request metadata instead (`x-txtodo-bundle-passphrase-bin`), the
+  // same loopback-only, never-logged rule as `BundleExportRequest.passphrase`.
+  rpc BundleImport(stream BundleChunk) returns (BundleImportResponse);
 }
 
 message ListFilesRequest {}
@@ -425,3 +439,41 @@ message DebugSetGroupKeyRequest {
 }
 
 message DebugSetGroupKeyResponse {}
+
+// --- bundle export/import (plan M8, design §4.5): the air-gapped sneakernet carrier ---
+
+// One document's integrity check, re-verified against the actual stream on import — never trusted
+// on the manifest's word alone (design §4.5's "reject before allocating, but re-check everything").
+message FileHash {
+  string path = 1;   // workspace-relative, `/` separators, same shape as FileInfo.path
+  bytes blake3 = 2;  // blake3 of the exact bytes this file held at export time, 32 bytes
+}
+
+// Sent in the clear, as the very first frame of the stream, before any byte that needs the
+// passphrase to read — so a wrong version or schema is refused before the Argon2 KDF even runs.
+// Never carries the group key or any other secret: plan M8's key-free decision (2026-09-13) means
+// a bundle moves op/file state only; group membership is granted exclusively through design §4.6
+// QR/SAS pairing. `device_signing_public_key` is a *public* key (as public as `PairOfferResponse`'s
+// `x25519_pub`) — it lets the importer verify each op's signature, never admits a group.
+message BundleManifest {
+  uint32 version = 1;                   // bundle wire/format version, from day one
+  string schema_version = 2;            // txtodo_store::Store::user_version(), as text
+  bytes device_id = 3;                  // 32-byte DeviceId of the exporting device
+  bytes device_signing_public_key = 4;  // that device's Ed25519 op-signing public key
+  repeated FileHash files = 5;          // every todo.txt/notes.md under the workspace root
+  uint64 op_count = 6;                  // exact number of op rows the encrypted tail carries
+}
+
+// One bounded frame (<= 64 KiB of plaintext before sealing; never one giant blob). The header and
+// the manifest travel as the first two frames, in the clear; every frame after that is one
+// XChaCha20-Poly1305 STREAM chunk of the encrypted body (file snapshots, then the op tail).
+message BundleChunk { bytes data = 1; }
+
+// Loopback only; KDF input for the export's Argon2id -> XChaCha20-Poly1305 wrap. Never stored,
+// never logged.
+message BundleExportRequest { bytes passphrase = 1; }
+
+message BundleImportResponse {
+  uint64 ops_imported = 1;   // newly inserted rows; a duplicate op_id from a re-import is skipped
+  repeated string files = 2; // every workspace-relative path written
+}

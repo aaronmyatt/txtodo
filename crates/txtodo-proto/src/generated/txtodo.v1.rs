@@ -549,6 +549,68 @@ pub struct DebugSetGroupKeyRequest {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyResponse {}
+/// One document's integrity check, re-verified against the actual stream on import — never trusted
+/// on the manifest's word alone (design §4.5's "reject before allocating, but re-check everything").
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FileHash {
+    /// workspace-relative, `/` separators, same shape as FileInfo.path
+    #[prost(string, tag = "1")]
+    pub path: ::prost::alloc::string::String,
+    /// blake3 of the exact bytes this file held at export time, 32 bytes
+    #[prost(bytes = "vec", tag = "2")]
+    pub blake3: ::prost::alloc::vec::Vec<u8>,
+}
+/// Sent in the clear, as the very first frame of the stream, before any byte that needs the
+/// passphrase to read — so a wrong version or schema is refused before the Argon2 KDF even runs.
+/// Never carries the group key or any other secret: plan M8's key-free decision (2026-09-13) means
+/// a bundle moves op/file state only; group membership is granted exclusively through design §4.6
+/// QR/SAS pairing. `device_signing_public_key` is a *public* key (as public as `PairOfferResponse`'s
+/// `x25519_pub`) — it lets the importer verify each op's signature, never admits a group.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BundleManifest {
+    /// bundle wire/format version, from day one
+    #[prost(uint32, tag = "1")]
+    pub version: u32,
+    /// txtodo_store::Store::user_version(), as text
+    #[prost(string, tag = "2")]
+    pub schema_version: ::prost::alloc::string::String,
+    /// 32-byte DeviceId of the exporting device
+    #[prost(bytes = "vec", tag = "3")]
+    pub device_id: ::prost::alloc::vec::Vec<u8>,
+    /// that device's Ed25519 op-signing public key
+    #[prost(bytes = "vec", tag = "4")]
+    pub device_signing_public_key: ::prost::alloc::vec::Vec<u8>,
+    /// every todo.txt/notes.md under the workspace root
+    #[prost(message, repeated, tag = "5")]
+    pub files: ::prost::alloc::vec::Vec<FileHash>,
+    /// exact number of op rows the encrypted tail carries
+    #[prost(uint64, tag = "6")]
+    pub op_count: u64,
+}
+/// One bounded frame (\<= 64 KiB of plaintext before sealing; never one giant blob). The header and
+/// the manifest travel as the first two frames, in the clear; every frame after that is one
+/// XChaCha20-Poly1305 STREAM chunk of the encrypted body (file snapshots, then the op tail).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BundleChunk {
+    #[prost(bytes = "vec", tag = "1")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Loopback only; KDF input for the export's Argon2id -> XChaCha20-Poly1305 wrap. Never stored,
+/// never logged.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BundleExportRequest {
+    #[prost(bytes = "vec", tag = "1")]
+    pub passphrase: ::prost::alloc::vec::Vec<u8>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BundleImportResponse {
+    /// newly inserted rows; a duplicate op_id from a re-import is skipped
+    #[prost(uint64, tag = "1")]
+    pub ops_imported: u64,
+    /// every workspace-relative path written
+    #[prost(string, repeated, tag = "2")]
+    pub files: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum FileKind {
@@ -1327,6 +1389,63 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DebugSetGroupKey"));
             self.inner.unary(req, path, codec).await
         }
+        /// Streams one self-contained bundle: a clear header frame, a clear manifest frame, then a run
+        /// of encrypted frames (design §4.5's Argon2id -> XChaCha20-Poly1305 wrap). `passphrase` is
+        /// loopback-only KDF input, never stored or logged.
+        pub async fn bundle_export(
+            &mut self,
+            request: impl tonic::IntoRequest<super::BundleExportRequest>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::BundleChunk>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/BundleExport",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "BundleExport"));
+            self.inner.server_streaming(req, path, codec).await
+        }
+        /// Streams a bundle produced by `BundleExport` back in: version/schema checked from the clear
+        /// manifest before any key is derived, then every per-file hash and per-op signature is verified
+        /// before a single row lands (all-or-nothing). The passphrase cannot travel in a request field
+        /// here (a client-streaming RPC's request type is fixed to the streamed item, `BundleChunk`) —
+        /// it rides in this call's own request metadata instead (`x-txtodo-bundle-passphrase-bin`), the
+        /// same loopback-only, never-logged rule as `BundleExportRequest.passphrase`.
+        pub async fn bundle_import(
+            &mut self,
+            request: impl tonic::IntoStreamingRequest<Message = super::BundleChunk>,
+        ) -> std::result::Result<
+            tonic::Response<super::BundleImportResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/BundleImport",
+            );
+            let mut req = request.into_streaming_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "BundleImport"));
+            self.inner.client_streaming(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1529,6 +1648,35 @@ pub mod txtodo_server {
             request: tonic::Request<super::DebugSetGroupKeyRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DebugSetGroupKeyResponse>,
+            tonic::Status,
+        >;
+        /// Server streaming response type for the BundleExport method.
+        type BundleExportStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::BundleChunk, tonic::Status>,
+            >
+            + std::marker::Send
+            + 'static;
+        /// Streams one self-contained bundle: a clear header frame, a clear manifest frame, then a run
+        /// of encrypted frames (design §4.5's Argon2id -> XChaCha20-Poly1305 wrap). `passphrase` is
+        /// loopback-only KDF input, never stored or logged.
+        async fn bundle_export(
+            &self,
+            request: tonic::Request<super::BundleExportRequest>,
+        ) -> std::result::Result<
+            tonic::Response<Self::BundleExportStream>,
+            tonic::Status,
+        >;
+        /// Streams a bundle produced by `BundleExport` back in: version/schema checked from the clear
+        /// manifest before any key is derived, then every per-file hash and per-op signature is verified
+        /// before a single row lands (all-or-nothing). The passphrase cannot travel in a request field
+        /// here (a client-streaming RPC's request type is fixed to the streamed item, `BundleChunk`) —
+        /// it rides in this call's own request metadata instead (`x-txtodo-bundle-passphrase-bin`), the
+        /// same loopback-only, never-logged rule as `BundleExportRequest.passphrase`.
+        async fn bundle_import(
+            &self,
+            request: tonic::Request<tonic::Streaming<super::BundleChunk>>,
+        ) -> std::result::Result<
+            tonic::Response<super::BundleImportResponse>,
             tonic::Status,
         >;
     }
@@ -2699,6 +2847,97 @@ pub mod txtodo_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/BundleExport" => {
+                    #[allow(non_camel_case_types)]
+                    struct BundleExportSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::ServerStreamingService<super::BundleExportRequest>
+                    for BundleExportSvc<T> {
+                        type Response = super::BundleChunk;
+                        type ResponseStream = T::BundleExportStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::BundleExportRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::bundle_export(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = BundleExportSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/BundleImport" => {
+                    #[allow(non_camel_case_types)]
+                    struct BundleImportSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::ClientStreamingService<super::BundleChunk>
+                    for BundleImportSvc<T> {
+                        type Response = super::BundleImportResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<tonic::Streaming<super::BundleChunk>>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::bundle_import(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = BundleImportSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.client_streaming(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
