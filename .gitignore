@@ -14,3 +14,21 @@
 # run against this repo's own root (dogfooding) must not turn into an accidental commit.
 .txtodo/
 
+# Nix build result symlinks (`nix build -o <name>`) — point into /nix/store, never source.
+/result
+/result-*
+
+# release-engineering local smoke output (justfile's `release` recipe): cross-built binaries,
+# the merged SBOM and its per-crate inputs, and cosign key material/signatures — all regenerable,
+# never committed (the local cosign key pair in particular must never land in git history).
+/dist/
+/bom.json
+/*.cdx.json
+/crates/*/*.cdx.json
+/apps/desktop/src-tauri/*.cdx.json
+/relay/*.cdx.json
+cosign.key
+cosign.pub
+*.bundle
+*.sig
+

@@ -1,0 +1,12 @@
+#!/bin/sh
+# `zig dlltool` is zig's drop-in replacement for mingw's dlltool.exe (`zig dlltool --help` prints
+# "llvm-dlltool"): some *-pc-windows-gnu build scripts (confirmed locally: windows-sys, pulled in
+# transitively via tonic/hyper) shell out to a PATH-discoverable `x86_64-w64-mingw32-dlltool`
+# rather than accepting a linker override, so unlike the zigcc-*.sh wrapper scripts next to this
+# file this one is named for PATH lookup, not for .cargo/config.toml's `linker` key. `cargo
+# zigbuild` sets this up internally already; a plain `cargo build --target x86_64-pc-windows-gnu`
+# needs this script's directory (.cargo/zig) added to PATH first — that one extra manual step is
+# a documented, non-blocking gap (see the comment above [target.x86_64-pc-windows-gnu] in
+# .cargo/config.toml): cargo's own config has no declarative way to prepend PATH for a build
+# script subprocess. zig docs: https://ziglang.org/documentation/master/#Zig-Build-System
+exec zig dlltool "$@"

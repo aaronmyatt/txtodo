@@ -1,0 +1,47 @@
+# .cargo/config.toml — zig (https://ziglang.org/) as the linker for cross targets, so a plain
+# `cargo build --target <triple>` (and rust-analyzer's own per-target checks) cross-link without
+# a per-target sysroot, the same way the release workflow's `cargo zigbuild` does. Cargo's
+# `linker` config key must name one executable with no arguments
+# (https://doc.rust-lang.org/cargo/reference/config.html#target), but zig's own CLI needs
+# `zig cc -target <zig-target>` — so each entry below points at a wrapper script in .cargo/zig/
+# that supplies the right `-target`. See .cargo/zig/*.sh for the exact zig target string per
+# triple (cargo-zigbuild target mapping: https://github.com/rust-cross/cargo-zigbuild#specify-glibc-version).
+#
+# This is deliberately independent of the release CI matrix, which invokes `cargo zigbuild`
+# directly (it manages its own linker wrapper per invocation) — this file exists for local
+# cross-target checks/builds and IDE tooling that call plain `cargo`/`rustc`.
+
+[target.x86_64-unknown-linux-gnu]
+linker = ".cargo/zig/zigcc-x86_64-linux-gnu.sh"
+
+# musl targets: rustc's own musl target defaults to *self-contained* linking (its own bundled
+# rcrt1.o/crti.o/crtbeginS.o CRT objects and musl libc.a), and zig's `cc` driver ALSO supplies a
+# full musl sysroot (its own crt1.o + libc) for the target it's given — together that's two
+# competing `_start` definitions and a link failure (confirmed locally: "ld.lld: error: duplicate
+# symbol: _start"). `-C link-self-contained=no` turns rustc's own copy off entirely so zig's
+# bundled musl sysroot is the only one in the link line (the fine-grained `-crto`-only component
+# list exists but is a `-Z unstable-options` nightly feature, confirmed locally, so `no` is the
+# stable equivalent here). -C link-self-contained: https://doc.rust-lang.org/rustc/codegen-options/index.html#link-self-contained
+[target.x86_64-unknown-linux-musl]
+linker = ".cargo/zig/zigcc-x86_64-linux-musl.sh"
+rustflags = ["-C", "link-self-contained=no"]
+
+[target.aarch64-unknown-linux-musl]
+linker = ".cargo/zig/zigcc-aarch64-linux-musl.sh"
+rustflags = ["-C", "link-self-contained=no"]
+
+# KNOWN GAP (verified, not swept under the rug): `cargo zigbuild --target x86_64-pc-windows-gnu`
+# works end to end (confirmed locally — the release pipeline's actual mechanism, see
+# RELEASE_CI.patch.md), but a *plain* `cargo build --target x86_64-pc-windows-gnu` through only
+# this file still fails past the linker step: rustc's windows-gnu target resolves some mingw
+# import libs (msvcrt et al.) via its own self-contained sysroot logic, and that resolution
+# doesn't hand off to zig's bundled mingw-w64 sysroot the way the musl case above does — it needs
+# more than a linker override and a `link-self-contained` flag to fix (`cargo zigbuild` solves
+# this by generating its own per-invocation wrapper scripts + env, which is more than a static
+# .cargo/config.toml entry can express). A plain `cargo build --target x86_64-pc-windows-gnu` for
+# txtodo-tui also needs .cargo/zig/x86_64-w64-mingw32-dlltool's directory on PATH (windows-sys'
+# build script shells out to that exact name) — that part alone is fixed and confirmed working;
+# it's the mingw import-lib linking after that which still needs `cargo zigbuild`. Left as a
+# flagged gap for a human rather than guessed at further.
+[target.x86_64-pc-windows-gnu]
+linker = ".cargo/zig/zigcc-x86_64-windows-gnu.sh"
