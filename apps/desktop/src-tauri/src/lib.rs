@@ -9,11 +9,17 @@ mod commands_activity;
 mod commands_notes;
 mod commands_pairing;
 mod commands_tokens;
-mod dto;
+// `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
+// target that only sees this library's public surface, and it reuses these DTOs and their
+// `From<pb::...>` conversions directly rather than re-deriving them (tasks/desktop-playwright-
+// tests/notes.md's harness). Every type here was already effectively public — it's exactly what
+// crosses the Tauri IPC bridge to the frontend — so this doesn't newly expose anything.
+pub mod dto;
 mod dto_activity;
 mod dto_notes;
 mod dto_pairing;
 mod dto_tokens;
+mod quick_add;
 mod state;
 mod status;
 
@@ -34,8 +40,12 @@ use tauri::Manager;
 pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             app.manage(AppState::new(DesktopConfig::new(workspace_dir())));
+            quick_add::create_window(app.handle())?;
+            quick_add::register_shortcut(app.handle())?;
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<AppState>();
@@ -46,6 +56,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::daemon_status,
             commands::retry_connect,
+            commands::workspace_root,
+            commands::set_main_popover_dirty,
             commands::list_files,
             commands::get_file,
             commands::watch,

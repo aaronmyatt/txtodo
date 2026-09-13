@@ -5,6 +5,7 @@
 use crate::config::DesktopConfig;
 use crate::daemon::DaemonClient;
 use crate::status::DaemonStatus;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::Mutex;
 
 /// State handed to every Tauri command via `tauri::State`.
@@ -15,6 +16,12 @@ pub struct AppState {
     pub status: Mutex<DaemonStatus>,
     /// The connected client once `Connected`; `None` while `Spawning`/`Connecting`/`Dead`.
     pub client: Mutex<Option<DaemonClient>>,
+    /// Whether the main window's edit popover currently has an unsaved edit
+    /// (tasks/desktop-quick-add/notes.md: the global hotkey focuses the main window instead of
+    /// opening quick-add while this is true). A plain `AtomicBool`, not a `tokio::sync::Mutex`:
+    /// the global-shortcut handler that reads it is a synchronous, non-async callback
+    /// (`tauri_plugin_global_shortcut`'s `on_shortcut`), so it needs a lock-free read.
+    pub main_popover_dirty: AtomicBool,
 }
 
 impl AppState {
@@ -24,6 +31,7 @@ impl AppState {
             config,
             status: Mutex::new(DaemonStatus::Connecting),
             client: Mutex::new(None),
+            main_popover_dirty: AtomicBool::new(false),
         }
     }
 }
