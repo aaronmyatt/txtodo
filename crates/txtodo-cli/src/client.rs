@@ -254,6 +254,17 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
+    /// Initiator only (`txtodo pair`): polls whether a joiner's `PairAccept` has reached this
+    /// device yet over the LAN transport. Never blocks on the daemon side; `PairResult.sas` empty
+    /// means "not yet, call again".
+    pub fn pair_await_peer(&mut self) -> Result<pb::PairResult, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.pair_await_peer(pb::PairAwaitPeerRequest {}))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Resolves (`ensure = false`) or lazily creates (`ensure = true`) one line's `ref:`
     /// directory (plan M5, `open`/`notes`/`sub`).
     pub fn ref_dir(

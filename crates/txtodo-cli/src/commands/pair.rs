@@ -2,27 +2,35 @@
 //! handshake on this device's own daemon and shows a QR/text code; the joiner (`txtodo pair
 //! <code>`) decodes it and shows the six-word SAS to compare by eye
 //! (`tasks/sync-pairing/notes.md`). Needs the daemon, like `log`/`blame`/`undo` — pairing lives
-//! entirely in `PairOffer`/`PairAccept`/`PairConfirmSas`
+//! entirely in `PairOffer`/`PairAccept`/`PairConfirmSas`/`PairAwaitPeer`
 //! (`crates/txtodo-daemon/src/pairing_grpc.rs`).
 //!
 //! Both sides must explicitly confirm before the group key ever moves: `tasks/sync-pairing/
 //! notes.md`'s "Confirmation must be mutual" rule. A "no" or a garbled compare aborts without
 //! ever calling `PairConfirmSas` — a false confirmation is worse than a failed pairing.
 //!
-//! **The cross-device leg is not built yet.** `PairOffer`/`PairAccept`/`PairConfirmSas` are calls
-//! to *this device's own* daemon only (`pairing_grpc.rs`'s module doc): nothing yet carries the
-//! joiner's public key back to the initiator, or the sealed group key back to the joiner — that
-//! is `sync-lan-transport`, separate and not landed, and the proto messages themselves have no
-//! field to carry either today. So `txtodo pair` (initiator) can show its offer but cannot yet
-//! learn a peer's key or display a SAS; `txtodo pair <code>` (joiner) computes and confirms its
-//! own SAS for real, but the group key and the snapshot it unlocks wait on the same missing leg.
-//! Both paths say so plainly below rather than hang or fabricate progress.
+//! **The cross-device leg is real now** (plan M4 `sync-pairing`'s LAN wiring pass,
+//! `crates/txtodo-daemon/src/pairing_lan.rs`): the joiner's daemon finds the initiator over the
+//! real LAN transport and carries this device's key and confirmation to it in the background, so
+//! `run_offer` polls `PairAwaitPeer` for the real SAS once a joiner connects, and `run_join` polls
+//! `Health.lan_group_key_present` for the real group key once the initiator also confirms. Both
+//! polls are bounded (see `AWAIT_PEER_TIMEOUT`) rather than hanging forever if the other device
+//! never shows up.
 
 use crate::client::Daemon;
 use crate::config::IdentityMode;
 use crate::{CliError, Ctx};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
+use std::time::{Duration, Instant};
+
+/// How long the CLI keeps polling `PairAwaitPeer`/`Health` before giving up — a little past the
+/// daemon's own `PAIRING_WINDOW_MS` (120 000 ms, `txtodo_sync::PAIRING_WINDOW_MS`; this crate may
+/// not depend on `txtodo-sync`, slice rule, so the value is duplicated here as a plain constant)
+/// so the daemon's own window-expiry is what actually ends a stuck wait, not a shorter client one.
+const AWAIT_PEER_TIMEOUT: Duration = Duration::from_millis(125_000);
+/// Gap between polls — frequent enough to feel responsive, far below the poll's own RPC cost.
+const AWAIT_PEER_POLL: Duration = Duration::from_millis(500);
 
 /// The JSON `code` a QR encodes and `txtodo pair <code>` accepts: field-for-field the same shape
 /// `crates/txtodo-daemon/src/pairing_wire.rs` parses (`device`, `group_id`, `x25519_pub`,
@@ -64,8 +72,10 @@ pub fn run(ctx: &Ctx, daemon: &mut Daemon, code: Option<&str>) -> Result<(), Cli
     }
 }
 
-/// `txtodo pair`: starts the handshake, renders the QR and the text fallback, and explains the
-/// current limit (see the module doc) instead of hanging.
+/// `txtodo pair`: starts the handshake, renders the QR and the text fallback, waits for a real
+/// joiner to connect over the LAN transport (`PairAwaitPeer`), then shows and confirms the real
+/// SAS. The joiner's own confirmation and the group key delivery happen in the background on both
+/// daemons (`pairing_lan.rs`) — this command's own job ends once this device has confirmed.
 fn run_offer(daemon: &mut Daemon) -> Result<(), CliError> {
     let offer = daemon.pair_offer()?;
     let code = PairingCode::from(&offer);
@@ -75,19 +85,53 @@ fn run_offer(daemon: &mut Daemon) -> Result<(), CliError> {
     println!("Code (no camera? paste this into `txtodo pair <code>` on the other device):");
     println!("{text}");
     println!();
+    println!("txtodo: waiting for a device to scan or enter this code...");
+    let sas = await_peer_sas(daemon)?;
+    println!();
+    println!("Six words from the joining device — compare them by eye:");
+    println!();
+    println!("  {sas}");
+    println!();
+    if !confirm("Do the six words match exactly on both devices? [y/N] ")? {
+        return Err(CliError::Message(
+            "txtodo: pairing aborted — the words were not confirmed as matching. A mismatch can \
+             mean an active attacker; do not retry blindly, start a fresh pairing instead."
+                .to_owned(),
+        ));
+    }
+    daemon.pair_confirm_sas()?;
     println!(
-        "txtodo: waiting for a device to scan or enter this code. This build cannot yet finish \
-         the handshake or show this device's own six words automatically — the network transport \
-         between two txtodo daemons has not landed (tracked separately), so nothing carries the \
-         joining device's key back here. This is a known limitation, not a hang: the command has \
-         nothing left to do until that transport exists."
+        "Confirmed on this device. Once the joining device also confirms, it receives the group \
+         key and syncs this workspace over the LAN automatically."
     );
     Ok(())
 }
 
+/// Polls `PairAwaitPeer` (empty `sas` means "still waiting") until a joiner's handshake reaches
+/// this device, or [`AWAIT_PEER_TIMEOUT`] passes.
+fn await_peer_sas(daemon: &mut Daemon) -> Result<String, CliError> {
+    let start = Instant::now();
+    loop {
+        let result = daemon.pair_await_peer()?;
+        if !result.sas.is_empty() {
+            return Ok(result.sas);
+        }
+        if start.elapsed() >= AWAIT_PEER_TIMEOUT {
+            return Err(CliError::Message(
+                "txtodo: no device joined this pairing within the window. Run `txtodo pair` \
+                 again for a fresh code."
+                    .to_owned(),
+            ));
+        }
+        std::thread::sleep(AWAIT_PEER_POLL);
+    }
+}
+
 /// `txtodo pair <code>`: decodes the offer, refuses a detected `identity_mode` mismatch (Q6),
-/// shows the real SAS, requires an explicit match confirmation, then confirms and reports the
-/// current workspace snapshot.
+/// shows the real SAS, requires an explicit match confirmation, confirms, then waits for the real
+/// group key to land (the daemon's background relay carries this device's confirmation to the
+/// initiator and the initiator's sealed grant back — `pairing_lan.rs`) before reporting a
+/// snapshot of what actually synced.
 fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> {
     let parsed: PairingCode = from_json(code)?;
     refuse_on_identity_mismatch(ctx, daemon, &parsed.identity_mode)?;
@@ -104,14 +148,53 @@ fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> 
         ));
     }
     daemon.pair_confirm_sas()?;
-    println!("Confirmed on this device.");
+    println!("Confirmed on this device. Waiting for the initiator to confirm...");
+    await_group_key(daemon)?;
+    println!("Paired. Syncing this workspace with the initiator over the LAN...");
+    wait_for_convergence(daemon)?;
     print_workspace_snapshot(daemon)?;
-    println!(
-        "txtodo: still waiting on the initiator's own confirmation and the group key — the \
-         daemon-to-daemon transport has not landed yet (see this command's own doc comment), so \
-         that leg cannot complete today."
-    );
     Ok(())
+}
+
+/// Polls `Health.lan_group_key_present` until the real group key this device's background relay
+/// task adopted (`Workspace::adopt_group_key`) shows up, or [`AWAIT_PEER_TIMEOUT`] passes.
+fn await_group_key(daemon: &mut Daemon) -> Result<(), CliError> {
+    let start = Instant::now();
+    loop {
+        if daemon.health()?.lan_group_key_present {
+            return Ok(());
+        }
+        if start.elapsed() >= AWAIT_PEER_TIMEOUT {
+            return Err(CliError::Message(
+                "txtodo: the initiator never confirmed within the pairing window. Nothing was \
+                 adopted on this device; run `txtodo pair <code>` again with a fresh code."
+                    .to_owned(),
+            ));
+        }
+        std::thread::sleep(AWAIT_PEER_POLL);
+    }
+}
+
+/// How long to give the LAN sync engine (`lan.rs`, unchanged by this task — its own periodic
+/// redial is what actually pulls the initiator's ops once the group key and id match) a bounded
+/// moment to converge before printing the snapshot. Real convergence measured sub-second in
+/// `lan_loopback_converge.rs`; this is a courtesy wait, not a guarantee — `txtodo listfile` always
+/// shows the latest state afterward regardless.
+const CONVERGE_GRACE: Duration = Duration::from_secs(5);
+const CONVERGE_POLL: Duration = Duration::from_millis(250);
+
+fn wait_for_convergence(daemon: &mut Daemon) -> Result<(), CliError> {
+    let start = Instant::now();
+    loop {
+        let files = daemon.list_files()?;
+        let has_content = files
+            .iter()
+            .any(|f| f.progress.as_ref().is_some_and(|p| p.total > 0));
+        if has_content || start.elapsed() >= CONVERGE_GRACE {
+            return Ok(());
+        }
+        std::thread::sleep(CONVERGE_POLL);
+    }
 }
 
 /// Refuses a detected `identity_mode` mismatch unless this workspace has no tasks yet (nothing to
@@ -155,9 +238,11 @@ fn workspace_is_empty(daemon: &mut Daemon) -> Result<bool, CliError> {
 }
 
 /// The "then a snapshot" half of "snapshot then ops" (`tasks/sync-pairing/notes.md`): what
-/// `ListFiles`/`GetFile` say this workspace holds right now, the same pull a freshly paired
-/// device performs to catch up. There is no dedicated pairing-snapshot RPC (checked
-/// `pairing_grpc.rs`), so this reuses the two RPCs every other listing command already does.
+/// `ListFiles`/`GetFile` say this workspace holds right now. There is no dedicated
+/// pairing-snapshot RPC — once the group id/key match, `lan.rs`'s existing group-keyed sync
+/// engine is the real vehicle that delivers the initiator's files (a full op-log replay from
+/// genesis, the same mechanism `nested_ref_sync.rs` proved for a fresh device), so this reuses
+/// the two RPCs every other listing command already does rather than a bespoke transfer.
 fn print_workspace_snapshot(daemon: &mut Daemon) -> Result<(), CliError> {
     let files = daemon.list_files()?;
     println!("Workspace snapshot ({} file(s)):", files.len());
