@@ -28,7 +28,7 @@ fn node_id_of_file_is_the_dirname_or_the_root() {
         NodeId::dir(path("buy-ducks"))
     );
     assert_eq!(
-        NodeId::of_file(&path("buy-ducks/sync/done.txt")),
+        NodeId::of_file(&path("buy-ducks/sync/todo.txt")),
         NodeId::dir(path("buy-ducks/sync"))
     );
     assert_eq!(NodeId::root().depth(), 0);

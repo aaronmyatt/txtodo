@@ -5,7 +5,7 @@
 - Deciders: project owner (docs/questions.md Q1)
 
 ## Context
-Design plan §3.2.11 syncs only `todo.txt`, `done.txt`, `notes.md` within a workspace or `ref:`
+Design plan §3.2.11 syncs only `todo.txt`, `notes.md` within a workspace or `ref:`
 directory. Other non-managed files sitting alongside them (attachments) were left undecided —
 question was whether they sync at all.
 

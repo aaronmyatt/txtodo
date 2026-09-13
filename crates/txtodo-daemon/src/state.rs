@@ -314,10 +314,8 @@ impl DocState {
     }
 
     /// A same-file reorder moves the entry to its new position; a cross-file move (`to_file !=
-    /// self.path`) only removes it here — this document is the *source*, and `after` names a
-    /// position in `to_file`, which is meaningless in this one. The destination actor never
-    /// replays this op: `crate::move_coordinator` inserts the line there as its own `Insert`
-    /// (plan §3.2.8, root todo.txt task 16).
+    /// self.path`) only removes it here — the destination actor gets its own `Insert` instead
+    /// (`crate::move_coordinator`, plan §3.2.8).
     fn move_task(
         &mut self,
         task: TaskId,

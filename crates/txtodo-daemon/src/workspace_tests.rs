@@ -64,7 +64,7 @@ async fn register_is_idempotent_and_discover_picks_up_a_new_directory() {
     let mut ws = open(dir.path());
     assert!(!ws.register(FilePath::new("todo.txt").unwrap()).unwrap());
     touch(&dir.path().join("later/todo.txt"), "three\n");
-    touch(&dir.path().join("later/deep/done.txt"), "");
+    touch(&dir.path().join("later/deep/todo.txt"), "");
     assert_eq!(ws.discover(&dir.path().join("later")).unwrap(), 2);
     assert_eq!(
         ws.discover(&dir.path().join("later")).unwrap(),

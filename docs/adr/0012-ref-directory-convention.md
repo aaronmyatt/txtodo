@@ -8,7 +8,7 @@
 A task that needs more than one line must not get a richer line (design §2.6). Notes and sub-lists must sync, nest, and stay usable by todo.sh.
 
 ## Decision
-We will use the `ref:<slug>` tag naming a directory beside the file, holding optional `todo.txt`, `done.txt`, `notes.md`, created lazily, synced by walking the tree. The normative rules are `specs/ref-directories.md` (mirror of plan §3.2).
+We will use the `ref:<slug>` tag naming a directory beside the file, holding optional `todo.txt`, `notes.md`, created lazily, synced by walking the tree. The normative rules are `specs/ref-directories.md` (mirror of plan §3.2).
 
 ## Consequences
 - Good: still plain files; recursion for free; other tools see an inert tag.

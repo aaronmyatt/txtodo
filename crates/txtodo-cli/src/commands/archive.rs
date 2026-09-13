@@ -1,5 +1,5 @@
-//! `archive`: todo.sh order — drop every blank line, append the `x ` lines to done.txt, delete them
-//! from todo.txt. done.txt is written first so a crash in between duplicates rather than loses.
+//! `archive`: drop every blank line, then move the `x ` lines to the bottom of the same file, in
+//! their original relative order.
 
 use crate::{CliError, Ctx, store};
 use txtodo_core::{File, OwnedLine};
@@ -28,7 +28,6 @@ pub fn split(todo: &mut File) -> Vec<OwnedLine> {
 /// `txtodo archive`.
 pub fn run(ctx: &Ctx) -> Result<(), CliError> {
     let mut todo = store::read(&ctx.paths.todo)?;
-    let mut done = store::read(&ctx.paths.done)?;
     let moved = split(&mut todo);
     if moved.is_empty() {
         store::write(&ctx.paths.todo, &todo)?;
@@ -40,10 +39,8 @@ pub fn run(ctx: &Ctx) -> Result<(), CliError> {
     }
     for line in &moved {
         println!("{}", String::from_utf8_lossy(line.bytes()));
-        store::append_line(&mut done, line.bytes().to_vec());
+        store::append_line(&mut todo, line.bytes().to_vec());
     }
-    debug_assert!(done.lines.len() >= moved.len(), "every moved line landed");
-    store::write(&ctx.paths.done, &done)?;
     store::write(&ctx.paths.todo, &todo)?;
     println!("TODO: {} archived.", ctx.paths.todo.display());
     Ok(())

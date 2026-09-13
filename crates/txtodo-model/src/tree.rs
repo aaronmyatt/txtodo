@@ -35,9 +35,8 @@ pub const MAX_TREE_DEPTH: usize = 32;
 /// `txtodo-daemon::walker::WALK_MAX_FILES`, the walker's own document cap.
 pub const MAX_TRACKED_REFS: usize = 10_000;
 
-/// Rule 5's counters for one node: `done` = completed lines in its own `todo.txt` + task lines in
-/// its sibling `done.txt`; `total` = task lines in both, blanks excluded. Never recursive (see the
-/// module doc).
+/// Rule 5's counters for one node: `done` = completed lines in its own `todo.txt`; `total` = task
+/// lines, blanks excluded. Never recursive (see the module doc).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Progress {
     /// Completed and archived task lines.
@@ -81,7 +80,7 @@ impl NodeId {
             .map_or(0, |d| d.as_str().matches('/').count() + 1)
     }
 
-    /// The node that owns `file` (a `todo.txt`/`done.txt`/`notes.md` path): the directory `file`
+    /// The node that owns `file` (a `todo.txt`/`notes.md` path): the directory `file`
     /// sits in, or the root when `file` has no `/`.
     pub fn of_file(file: &FilePath) -> NodeId {
         match file.as_str().rsplit_once('/') {
@@ -104,7 +103,7 @@ impl NodeId {
     }
 }
 
-/// One `ref:` tag found in a node's own `todo.txt`/`done.txt` (rule 7: an archived line keeps its
+/// One `ref:` tag found in a node's own `todo.txt` (rule 7: an archived line keeps its
 /// tag), as the caller — the daemon, which owns parsing and the filesystem — already found it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RefTag {
@@ -124,7 +123,7 @@ pub struct NodeInput {
     pub id: NodeId,
     /// Its own rule-5 progress.
     pub progress: Progress,
-    /// `ref:` tags found in its own `todo.txt`/`done.txt`.
+    /// `ref:` tags found in its own `todo.txt`.
     pub ref_tags: Vec<RefTag>,
 }
 

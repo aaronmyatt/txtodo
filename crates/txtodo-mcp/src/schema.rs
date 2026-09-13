@@ -129,7 +129,7 @@ impl McpServer {
     }
 
     /// `todo_archive`.
-    #[tool(description = "Move completed tasks in file to done.txt.")]
+    #[tool(description = "Move completed tasks in file to the bottom, same file.")]
     pub async fn todo_archive(
         &self,
         Parameters(args): Parameters<ArchiveArgs>,

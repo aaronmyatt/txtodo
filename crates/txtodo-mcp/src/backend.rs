@@ -4,9 +4,9 @@
 //! `Apply`/`GetFile`/`ListFiles`/`History`/`GetNotes`/`EditNotes` daemon RPCs.
 //!
 //! Two methods here — `list_files`/`get_file` — are not in the notes.md sketch of this trait: they
-//! back the `todotxt://todo.txt`/`todotxt://done.txt` resources and the file list, both needing a
-//! whole file's bytes rather than a single task. Both are thin wrappers over the daemon's existing
-//! `ListFiles`/`GetFile` RPCs (no new daemon surface), so they stay in scope for this task.
+//! back the `todotxt://todo.txt` resource and the file list, both needing a whole file's bytes
+//! rather than a single task. Both are thin wrappers over the daemon's existing `ListFiles`/
+//! `GetFile` RPCs (no new daemon surface), so they stay in scope for this task.
 
 use serde::{Deserialize, Serialize};
 
@@ -345,10 +345,11 @@ pub trait McpBackend: Send + Sync {
     async fn move_task(&self, id: TaskId, anchor: MoveAnchor) -> Result<TaskRow, McpError>;
     /// `todo_delete`. `confirm` is asserted by the caller (`tools.rs`) before this is reached.
     async fn delete(&self, id: TaskId, confirm: bool) -> Result<(), McpError>;
-    /// `todo_archive`: moves every completed task in `file` to `done.txt` via one `Apply(Move×N)`
-    /// call. Unlike the CLI's local `archive` (which also collapses the blank lines left behind —
-    /// see `daemon_mode.rs`'s own comment on why that specific cleanup has no clean intent-level
-    /// mutation), this does not additionally blank-collapse; see the crate's "As built" notes.
+    /// `todo_archive`: moves every completed task in `file` to the bottom of the same file, via
+    /// one `Apply(MoveToEnd×N)` call. Unlike the CLI's local `archive` (which also collapses the
+    /// blank lines left behind — see `daemon_mode.rs`'s own comment on why that specific cleanup
+    /// has no clean intent-level mutation), this does not additionally blank-collapse; see the
+    /// crate's "As built" notes.
     async fn archive(&self, file: RefPath) -> Result<ApplyOutcome, McpError>;
     /// `todo_batch`. `dry_run: true` is accepted but never calls `Apply` — [mcp-batch-dry-run]
     /// (../../../tasks/mcp-batch-dry-run/notes.md) owns diff rendering, so a dry run here reports
@@ -372,6 +373,6 @@ pub trait McpBackend: Send + Sync {
     /// Every synced document (the `todotxt://` resource list; not in notes.md's trait sketch, see
     /// the module doc).
     async fn list_files(&self) -> Result<Vec<FileMeta>, McpError>;
-    /// A whole file's bytes as text (`todotxt://todo.txt`/`todotxt://done.txt`; see module doc).
+    /// A whole file's bytes as text (`todotxt://todo.txt`; see module doc).
     async fn get_file(&self, file: RefPath) -> Result<String, McpError>;
 }

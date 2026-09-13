@@ -18,7 +18,7 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 
 **Stop and ask before** doing any of the following. Open a question in `docs/questions.md` and continue on other work:
 
-- Changing anything that is written to `todo.txt`, `done.txt`, or `notes.md`.
+- Changing anything that is written to `todo.txt` or `notes.md`.
 - Adding a new `key:value` tag or changing the meaning of an existing one.
 - Adding a dependency with a native/C build step, or any dependency over 1 MB compiled into `txtodo-core`.
 - Moving code across crate boundaries defined in §2.
@@ -141,15 +141,15 @@ txtodo/
 
 1. **Tag.** Key `ref`, value = a *slug*: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, not `.` or `..`. Absolute paths and parent traversal are rejected by the parser as a quirk `invalid_ref` and treated as no ref.
 2. **Resolution.** The slug names a directory in the same directory as the file containing the line. `~/todo/todo.txt` line with `ref:q4-roadmap` → `~/todo/q4-roadmap/`. Nesting follows naturally: a line in `~/todo/q4-roadmap/todo.txt` with `ref:sync-section` → `~/todo/q4-roadmap/sync-section/`.
-3. **Contents.** Any of `todo.txt`, `done.txt`, `notes.md`. All optional. Nothing else is managed or synced by txtodo (other files are left alone).
+3. **Contents.** Any of `todo.txt`, `notes.md`. All optional. Nothing else is managed or synced by txtodo (other files are left alone).
 4. **Creation is lazy.** The tag is added and the directory created on the first write into the detail view's notes or sub-list. Slug = kebab-case of the description's plain words, truncated to 40 chars; on collision append `-2`, `-3`. The user can rename the slug in the edit popover; the daemon renames the directory atomically and rewrites the tag in the same op.
-5. **Progress.** `done = completed lines in <ref>/todo.txt + task lines in <ref>/done.txt`; `total = task lines in <ref>/todo.txt + task lines in <ref>/done.txt`; blank lines excluded. Displayed as `open/total` on the parent line's indicator and `done of total` in the detail header.
+5. **Progress.** `done = completed lines in <ref>/todo.txt`; `total = task lines in <ref>/todo.txt`; blank lines excluded. Displayed as `open/total` on the parent line's indicator and `done of total` in the detail header.
 6. **Parent completion is never automatic.** When `open == 0 && total > 0`, the UI offers "Mark parent done"; the daemon does nothing on its own. Completing the parent does not touch the sub-list.
-7. **Archiving the parent** to `done.txt` keeps the `ref:` tag on the archived line and leaves the directory in place.
+7. **Archiving the parent** keeps the `ref:` tag on the archived line — it moves to the bottom of the same `todo.txt`, never to a second file — and leaves the directory in place.
 8. **Moving a line between files** (e.g. `txtodo mv`, or drag on desktop) moves its directory to sit beside the destination file, applying the collision rule. If the move fails mid-way, the op is rolled back and the user is told.
 9. **Dangling refs** (tag present, directory missing) are not errors: the detail view opens empty and lazy creation applies.
 10. **Deleting a line** with a `ref:` never deletes the directory. `txtodo prune --orphans` lists directories no line points to and deletes them only with `--yes`.
-11. **Sync scope.** Every `todo.txt`, `done.txt`, and `notes.md` under the workspace root, at any depth, is a synced document. Discovery is by walking the tree, not by following tags, so a directory created by hand is picked up too.
+11. **Sync scope.** Every `todo.txt` and `notes.md` under the workspace root, at any depth, is a synced document. Discovery is by walking the tree, not by following tags, so a directory created by hand is picked up too.
 12. **Other tools** see an inert tag. `todo.sh -d <ref-dir>/todo.cfg` works on a sub-list like any other file.
 
 ### 3.3 Keyboard and accessibility floor (desktop)
@@ -261,7 +261,7 @@ pub fn diff_text(a: &str, b: &str) -> Vec<TextEdit>;             // char-level, 
 
 **Acceptance.**
 
-- Differential harness `tests/todosh_parity.rs`: for each scripted scenario (≥ 25, covering every command), run the same commands through `todo.sh` (vendored at a pinned commit under `tests/vendor/`) and through `txtodo --no-id`, then assert the resulting `todo.txt` and `done.txt` are byte-identical. Skip on Windows CI if `todo.sh` can't run there; must pass on Linux and macOS.
+- Differential harness `tests/todosh_parity.rs`: for each scripted scenario (≥ 25, covering every command), run the same commands through `todo.sh` (vendored at a pinned commit under `tests/vendor/`) and through `txtodo --no-id`, then assert the resulting `todo.txt` is byte-identical (auto-archive-after-`do` suppressed on both sides: this app's own `archive` no longer matches todo.sh's done.txt convention, so it is covered by this crate's own tests instead). Skip on Windows CI if `todo.sh` can't run there; must pass on Linux and macOS.
 - `txtodo add` on a CRLF file keeps CRLF; on a file without trailing newline, behaves like todo.sh.
 
 **Out of scope.** Daemon, history, sync.
@@ -299,7 +299,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Daemon (`txtodo-daemon`).**
 
-- One `FileActor` per synced document (todo.txt / done.txt / notes.md), single writer, owning: in-memory state, projection bytes, projection hash.
+- One `FileActor` per synced document (todo.txt / notes.md), single writer, owning: in-memory state, projection bytes, projection hash.
 - `Watcher` (`notify` crate) with 150 ms debounce; ignore list `*.swp *~ *.tmp .#*`; on event, send `ExternalChange` to the actor.
 - Reconciler in the actor (design doc §4.3), implemented without the CRDT for now: state = ordered `Vec<TaskState>`; external edit → `diff_lines` by `id:` → ops → apply → write projection. Lines that arrive without `id:` get one assigned and written back (tagged mode). Our own writes are recognised by projection hash *and* by a short-lived "expected write" token, because some filesystems coalesce events.
 - Workspace walker: discover documents per §3.2.11 at startup and on directory create events.
@@ -360,7 +360,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 **Acceptance.**
 
 - Creating notes on a line with no `ref:` produces exactly one op batch that adds the tag and creates the directory; the parent file changes only on that one line.
-- Progress numbers match §3.2.5 for a fixture tree three levels deep, including lines in `done.txt`.
+- Progress numbers match §3.2.5 for a fixture tree three levels deep.
 - Archiving a parent keeps the tag and the directory; deleting keeps the directory; `prune --orphans` finds it.
 - Syncing a workspace with nested refs to a fresh device reproduces the whole tree.
 - `todo.sh -d <ref>/todo.cfg ls` lists the sub-list.

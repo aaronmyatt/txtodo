@@ -112,16 +112,14 @@ impl TxtodoService {
         Ok(tree)
     }
 
-    /// Every directory holding a `todo.txt`/`done.txt` (from the registered actors) or a bare
-    /// `notes.md` (from one bounded walk — the only document kind with no `FileActor` of its own,
-    /// see `workspace.rs`'s module doc), each with its own rule-5 progress and `ref:` tags.
+    /// Every directory holding a `todo.txt` (from the registered actors) or a bare `notes.md`
+    /// (from one bounded walk — the only document kind with no `FileActor` of its own, see
+    /// `workspace.rs`'s module doc), each with its own rule-5 progress and `ref:` tags.
     async fn rebuild_workspace_tree(&self) -> Result<WorkspaceTree, Status> {
         let handles = self.all_actors();
         let mut inputs = Vec::with_capacity(handles.len() + 1);
         for h in &handles {
-            if file_kind_of(h.path()) != pb::FileKind::Todo {
-                continue; // done.txt folds into its sibling todo.txt's node below
-            }
+            debug_assert_eq!(file_kind_of(h.path()), pb::FileKind::Todo, "no other actor kind");
             inputs.push(self.node_input_for(h).await?);
         }
         for dir in notes_only_dirs(self.workspace().root(), &handles) {
@@ -134,16 +132,11 @@ impl TxtodoService {
         WorkspaceTree::build(inputs).map_err(|e| Status::internal(format!("{e:?}")))
     }
 
-    /// One `todo.txt`'s node: its own counters folded with its sibling `done.txt`'s (rule 5), and
-    /// the union of both documents' `ref:` tags (rule 7: an archived line keeps its tag).
+    /// One `todo.txt`'s node: its own counters (rule 5) and its own `ref:` tags (rule 7: an
+    /// archived line keeps its tag).
     async fn node_input_for(&self, todo: &ActorHandle) -> Result<txtodo_model::NodeInput, Status> {
         let pb_progress = self.progress_for(todo).await?;
-        let mut ref_tags: Vec<RefTag> = todo.ref_tags().await.map_err(status_of)?;
-        let sibling_path = crate::convert::sibling_done_path(todo.path());
-        let sibling = self.workspace().actor(&sibling_path).cloned();
-        if let Some(done) = sibling {
-            ref_tags.extend(done.ref_tags().await.map_err(status_of)?);
-        }
+        let ref_tags: Vec<RefTag> = todo.ref_tags().await.map_err(status_of)?;
         Ok(txtodo_model::NodeInput {
             id: NodeId::of_file(todo.path()),
             progress: Progress {
@@ -155,7 +148,7 @@ impl TxtodoService {
     }
 }
 
-/// Directories that hold a `notes.md` but no registered `todo.txt`/`done.txt` actor of their own —
+/// Directories that hold a `notes.md` but no registered `todo.txt` actor of their own —
 /// otherwise invisible to `rebuild_workspace_tree`, which only sees registered actors. A bounded
 /// walk from `root`, run only while the tree is dirty (never per op).
 fn notes_only_dirs(root: &Path, handles: &[ActorHandle]) -> Vec<NodeId> {
@@ -207,11 +200,9 @@ mod tests {
         std::fs::create_dir_all(root.join("q4-roadmap")).unwrap_or_else(|e| panic!("{e}"));
         std::fs::write(
             root.join("q4-roadmap/todo.txt"),
-            "buy ducks\nx 2020-01-01 completed thing\n",
+            "buy ducks\nx 2020-01-01 completed thing\nx 2020-01-01 archived thing\n",
         )
         .unwrap_or_else(|e| panic!("{e}"));
-        std::fs::write(root.join("q4-roadmap/done.txt"), "archived thing\n")
-            .unwrap_or_else(|e| panic!("{e}"));
     }
 
     #[tokio::test]

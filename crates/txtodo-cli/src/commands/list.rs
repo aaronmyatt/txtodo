@@ -8,7 +8,7 @@ use txtodo_core::{File, LineKind, Mode, parse_line};
 /// One listed line: its 1-based number and its text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Item {
-    /// Line number in the file (0 for done.txt lines under `listall`, as todo.sh prints them).
+    /// Line number in the file.
     pub number: usize,
     /// The line without its ending.
     pub raw: String,
@@ -128,33 +128,11 @@ pub fn list_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     Ok(())
 }
 
-/// `listall [TERMS]`: todo.txt then done.txt; done lines are numbered 0 like todo.sh's awk step.
+/// `listall [TERMS]`: every line in todo.txt, done tasks included — they never leave the file any
+/// more, so this is `list` in every way that matters (todo.sh drew this distinction only because
+/// it split done tasks into a second file).
 pub fn list_all(ctx: &Ctx, terms: &[String]) -> Result<(), CliError> {
-    let todo = store::read(&ctx.paths.todo)?;
-    let done = store::read(&ctx.paths.done)?;
-    let width = padding(todo.lines.len());
-    let shown = items(&todo, terms);
-    let shown_done: Vec<Item> = items(&done, terms)
-        .into_iter()
-        .map(|it| Item {
-            number: 0,
-            raw: it.raw,
-        })
-        .collect();
-    print_items(ctx, &shown, width);
-    print_items(ctx, &shown_done, width);
-    separator(ctx);
-    footer(ctx, &ctx.paths.todo, shown.len(), todo.lines.len());
-    footer(ctx, &ctx.paths.done, shown_done.len(), done.lines.len());
-    let (n, m) = (
-        shown.len() + shown_done.len(),
-        todo.lines.len() + done.lines.len(),
-    );
-    debug_assert!(n <= m, "shown within total");
-    if !ctx.json {
-        println!("total {n} of {m} tasks shown");
-    }
-    Ok(())
+    list_file(ctx, &ctx.paths.todo, terms)
 }
 
 /// `listproj` (`+`) / `listcon` (`@`): the unique projects or contexts of matching lines, sorted.
@@ -245,6 +223,6 @@ mod tests {
         let got: Vec<(usize, &str)> = listed.iter().map(|i| (i.number, i.raw.as_str())).collect();
         assert_eq!(got, [(3, "(A) alpha"), (4, "Alpha"), (1, "beta")]);
         assert_eq!((padding(9), padding(10), padding(0)), (1, 2, 1));
-        assert_eq!(prefix(Path::new("/x/done.txt")), "DONE");
+        assert_eq!(prefix(Path::new("/x/report.txt")), "REPORT");
     }
 }

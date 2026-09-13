@@ -75,12 +75,12 @@ async fn move_relocates_the_line_and_its_ref_directory() {
     let store = shared_store(root);
     let clock = fake_clock();
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
-    let dest = open_at(root, "sub/done.txt", &store, &clock).spawn();
+    let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
     move_task_across_files(&source, &dest, task_ref(), user(), root)
         .await
         .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(read(root, "todo.txt"), "", "the line left the source");
-    let moved = read(root, "sub/done.txt");
+    let moved = read(root, "sub/other.txt");
     assert!(
         moved.contains("ref:project") && moved.contains(ID),
         "{moved}"
@@ -107,11 +107,11 @@ async fn a_slug_collision_at_the_destination_gets_dash_2() {
     let store = shared_store(root);
     let clock = fake_clock();
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
-    let dest = open_at(root, "sub/done.txt", &store, &clock).spawn();
+    let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
     move_task_across_files(&source, &dest, task_ref(), user(), root)
         .await
         .unwrap_or_else(|e| panic!("{e}"));
-    assert!(read(root, "sub/done.txt").contains("ref:project-2"));
+    assert!(read(root, "sub/other.txt").contains("ref:project-2"));
     assert!(root.join("sub/project-2").is_dir());
     assert!(root.join("sub/project").is_dir(), "left alone, not ours");
 }
@@ -130,11 +130,11 @@ async fn a_failed_move_rolls_back_and_the_source_is_byte_identical() {
     std::fs::write(root.join("todo.txt"), &before).unwrap();
     std::fs::create_dir(root.join("project")).unwrap();
     std::fs::create_dir(root.join("sub")).unwrap();
-    std::fs::write(root.join("sub/done.txt"), "").unwrap();
+    std::fs::write(root.join("sub/other.txt"), "").unwrap();
     let store = shared_store(root);
     let clock = fake_clock();
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
-    let dest = open_at(root, "sub/done.txt", &store, &clock).spawn();
+    let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
     std::fs::set_permissions(root.join("sub"), std::fs::Permissions::from_mode(0o555)).unwrap();
     let result = move_task_across_files(&source, &dest, task_ref(), user(), root).await;
     std::fs::set_permissions(root.join("sub"), std::fs::Permissions::from_mode(0o755)).unwrap();

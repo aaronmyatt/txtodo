@@ -230,7 +230,9 @@ fn golden_same_content_with_crlf_yields_no_ops() {
 
 #[test]
 fn golden_todo_sh_do_marks_done_then_archives() {
-    // `todo.sh do 3` rewrites line 3 as done (one save), then archive removes it (a second save).
+    // `todo.sh do 3` rewrites line 3 as done (one save); an external tool with its own archiving
+    // convention (this app's own `archive` moves the line within todo.txt instead) then removes
+    // it from the file entirely (a second save) — the daemon reconciles that as a plain delete.
     let before = todo_with_ids();
     let done = before.replacen(
         &format!("walk the dog @home id:{B}"),

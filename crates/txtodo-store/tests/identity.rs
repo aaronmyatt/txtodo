@@ -141,7 +141,7 @@ fn distinct_files_do_not_see_each_others_fingerprints() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = open(dir.path());
     let a = todo();
-    let b = FilePath::new("done.txt").unwrap();
+    let b = FilePath::new("other.txt").unwrap();
     let t = task(1);
 
     store

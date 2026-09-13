@@ -116,7 +116,7 @@ mod tests {
         ] {
             assert!(is_ignored(Path::new(p)), "{p}");
         }
-        for p in ["todo.txt", "q4/done.txt", "notes.md", "swp", "~"] {
+        for p in ["todo.txt", "q4/other.txt", "notes.md", "swp", "~"] {
             assert!(!is_ignored(Path::new(p)), "{p}");
         }
     }

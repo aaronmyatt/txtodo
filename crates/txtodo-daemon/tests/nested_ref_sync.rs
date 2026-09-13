@@ -1,6 +1,6 @@
 //! `test-nested-ref-sync` (plan M5 acceptance, `specs/ref-directories.md` rule 11): syncing a
 //! workspace with nested `ref:` directories to a fresh device reproduces the whole tree — same
-//! directories at every depth, same `todo.txt`/`done.txt` bytes, same ids. Built on the M4 real
+//! directories at every depth, same `todo.txt` bytes, same ids. Built on the M4 real
 //! two-daemon harness (`sync-loopback-converge`), a nested-ref fixture instead of a flat file.
 //!
 //! **Scope: only the whole-tree-sync half of this task.** The other half of this task's own notes
@@ -8,7 +8,7 @@
 //! deliberately not touched here, per this session's own brief.
 //!
 //! **Fixture, per the task notes' own shape**: parent (root `todo.txt`) → `child/` (`todo.txt`,
-//! `done.txt`, `notes.md`) → `child/grandchild/` (`todo.txt`). Copied inline rather than shared
+//! `notes.md`) → `child/grandchild/` (`todo.txt`). Copied inline rather than shared
 //! (constitution §7, and the task notes' own "do not create a shared fixture module").
 //!
 //! **`notes.md` is deliberately excluded from the convergence assertions — a real, pre-existing gap,
@@ -17,7 +17,7 @@
 //!    txtodo's own `EditNotes` RPC would) never becomes an `Op` at all — `NotesActor`/
 //!    `NotesRegistry` are opened lazily, only on a `GetNotes`/`EditNotes` call
 //!    (`crates/txtodo-daemon/src/notes_registry.rs`), and nothing at startup diffs a pre-existing
-//!    on-disk `notes.md` into a seed op the way `FileActor::recover` does for `todo.txt`/`done.txt`.
+//!    on-disk `notes.md` into a seed op the way `FileActor::recover` does for `todo.txt`.
 //!    Device A itself has nothing to transmit for it, regardless of LAN sync.
 //! 2. Even if it did: `Workspace::register()` (`crates/txtodo-daemon/src/workspace.rs`) refuses to
 //!    build an actor for a notes document, returning `Ok(false)` with no error — so
@@ -58,9 +58,9 @@ fn task_id(n: u128) -> TaskId {
     TaskId::new(Ulid::from_u128(0x0C00_0000 + n))
 }
 
-/// Parent → child → grandchild, `done.txt` and `notes.md` in the middle level, every task line
-/// pre-tagged with a valid `id:` so tagged-mode adoption mints nothing extra (no rewrite on adopt,
-/// same reasoning `lan_sync_bench.rs`'s fixture doc gives).
+/// Parent → child → grandchild, `notes.md` in the middle level, every task line pre-tagged with a
+/// valid `id:` so tagged-mode adoption mints nothing extra (no rewrite on adopt, same reasoning
+/// `lan_sync_bench.rs`'s fixture doc gives).
 fn nested_ref_fixture() -> Vec<(&'static str, String)> {
     vec![
         (
@@ -69,12 +69,9 @@ fn nested_ref_fixture() -> Vec<(&'static str, String)> {
         ),
         (
             "child/todo.txt",
-            format!("Child task ref:grandchild id:{}\n", task_id(2)),
-        ),
-        (
-            "child/done.txt",
             format!(
-                "x 2026-09-10 2026-09-01 Child done task id:{}\n",
+                "Child task ref:grandchild id:{}\nx 2026-09-10 2026-09-01 Child done task id:{}\n",
+                task_id(2),
                 task_id(3)
             ),
         ),

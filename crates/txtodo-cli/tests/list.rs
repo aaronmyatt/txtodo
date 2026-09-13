@@ -25,7 +25,6 @@ const TODO: &str = "(B) 2026-09-11 beta +work @desk\n\n2026-09-11 Alpha +home\nx
 fn list_numbers_sorts_filters_and_counts_every_line() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), TODO).unwrap();
-    std::fs::write(dir.path().join("done.txt"), "x 2026-09-01 old\n").unwrap();
     let (_, out) = run(dir.path(), &["ls"]);
     assert_eq!(
         out,
@@ -41,18 +40,13 @@ fn list_numbers_sorts_filters_and_counts_every_line() {
         out.starts_with("1 (B) ") && out.ends_with("TODO: 1 of 5 tasks shown\n"),
         "{out}"
     );
-    let (_, out) = run(dir.path(), &["lsa"]);
-    assert!(out.contains("\n0 x 2026-09-01 old\n--\nTODO: 4 of 5 tasks shown\nDONE: 1 of 1 tasks shown\ntotal 5 of 6 tasks shown\n"), "{out}");
+    // `lsa` is `ls` now that done tasks never leave todo.txt.
+    assert_eq!(run(dir.path(), &["lsa"]).1, run(dir.path(), &["ls"]).1);
     assert_eq!(run(dir.path(), &["lsprj"]).1, "+home\n+work\n");
     assert_eq!(run(dir.path(), &["lsc", "beta"]).1, "@desk\n");
     assert_eq!(
         run(dir.path(), &["lf"]).1,
-        "Files in the todo.txt directory:\ndone.txt\ntodo.txt\n"
-    );
-    assert!(
-        run(dir.path(), &["lf", "done"])
-            .1
-            .starts_with("1 x 2026-09-01 old\n--\nDONE: 1 of 1")
+        "Files in the todo.txt directory:\ntodo.txt\n"
     );
     assert!(!run(dir.path(), &["lf", "nope"]).0);
 }

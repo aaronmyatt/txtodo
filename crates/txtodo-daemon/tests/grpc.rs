@@ -139,16 +139,10 @@ async fn list_apply_watch_and_get_over_the_socket() {
 #[tokio::test]
 async fn list_files_reports_progress_for_todo_kind_files_only() {
     let dir = tempfile::tempdir().unwrap();
-    // todo.txt: 3 task lines (1 already `x` done) + 1 blank, blank excluded from both counts.
+    // 4 task lines (2 already `x` done) + 1 blank, blank excluded from both counts.
     std::fs::write(
         dir.path().join("todo.txt"),
-        "line one\nline two\n\nx 2026-09-11 already done\n",
-    )
-    .unwrap();
-    // done.txt: every task line counts toward done/total regardless of its own `x` marker.
-    std::fs::write(
-        dir.path().join("done.txt"),
-        "x archived one\narchived without a marker\n",
+        "line one\nline two\n\nx 2026-09-11 already done\nx 2026-09-11 archived one\n",
     )
     .unwrap();
     // notes.md is prose, not a managed document (walker.rs): it never reaches ListFiles.
@@ -161,22 +155,16 @@ async fn list_files_reports_progress_for_todo_kind_files_only() {
         .unwrap()
         .into_inner()
         .files;
-    assert_eq!(files.len(), 2);
-    let by_path = |p: &str| files.iter().find(|f| f.path == p).unwrap();
-
-    let todo = by_path("todo.txt");
+    assert_eq!(files.len(), 1);
+    let todo = files.iter().find(|f| f.path == "todo.txt").unwrap();
     assert_eq!(todo.kind, pb::FileKind::Todo as i32);
     let progress = todo.progress.expect("todo.txt carries progress");
-    assert_eq!((progress.done, progress.total), (1 + 2, 3 + 2));
-
-    let done = by_path("done.txt");
-    assert_eq!(done.kind, pb::FileKind::Done as i32);
-    assert!(done.progress.is_none(), "done.txt itself is unset");
+    assert_eq!((progress.done, progress.total), (2, 4));
 }
 
 #[tokio::test]
-async fn list_files_scopes_progress_to_each_directorys_own_sibling() {
-    // A nested `ref:` directory's todo.txt pairs with its own done.txt, not the root's.
+async fn list_files_scopes_progress_to_each_directorys_own_todo() {
+    // A nested `ref:` directory's todo.txt has its own progress, independent of the root's.
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "root task\n").unwrap();
     std::fs::create_dir_all(dir.path().join("q4")).unwrap();
@@ -185,7 +173,6 @@ async fn list_files_scopes_progress_to_each_directorys_own_sibling() {
         "nested undone\nx nested done\n",
     )
     .unwrap();
-    std::fs::write(dir.path().join("q4/done.txt"), "nested archived\n").unwrap();
     let (mut client, _stop) = serve(dir.path()).await;
 
     let files = client
@@ -197,13 +184,13 @@ async fn list_files_scopes_progress_to_each_directorys_own_sibling() {
     let by_path = |p: &str| files.iter().find(|f| f.path == p).unwrap();
 
     let root = by_path("todo.txt").progress.expect("has progress");
-    assert_eq!((root.done, root.total), (0, 1), "no done.txt at root");
+    assert_eq!((root.done, root.total), (0, 1));
 
     let nested = by_path("q4/todo.txt").progress.expect("has progress");
     assert_eq!(
         (nested.done, nested.total),
-        (1 + 1, 2 + 1),
-        "q4/todo.txt pairs with q4/done.txt, not the root's"
+        (1, 2),
+        "q4/todo.txt counts only its own lines"
     );
 }
 

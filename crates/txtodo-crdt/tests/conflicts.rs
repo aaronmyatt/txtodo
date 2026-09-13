@@ -32,10 +32,6 @@ fn todo_file() -> FilePath {
     FilePath::new("todo.txt").unwrap()
 }
 
-fn done_file() -> FilePath {
-    FilePath::new("done.txt").unwrap()
-}
-
 fn op_on(file: FilePath, device: u128, n: u64, kind: OpKind) -> Op {
     Op {
         id: OpId::new(Ulid::from_u128(u128::from(n) + device * 1_000_000)),
@@ -322,9 +318,9 @@ fn two_task_doc() -> (LoroDocument, LoroDocument) {
 fn stripped_ids_are_rematched_by_content_m4_expectation() {}
 
 #[test]
-fn archive_vs_edit_lands_the_edit_in_done_txt() {
+fn archive_vs_edit_lands_the_edit_and_keeps_the_task_in_todo_txt() {
     let (mut a, mut b) = paired();
-    // A archives: the task moves from todo.txt's list to done.txt's, same document.
+    // A archives: the task moves within todo.txt's own list, to the bottom — not to a second file.
     let archive = op_on(
         todo_file(),
         1,
@@ -332,19 +328,18 @@ fn archive_vs_edit_lands_the_edit_in_done_txt() {
         OpKind::Move {
             task: task(TASK),
             after: None,
-            to_file: done_file(),
+            to_file: todo_file(),
         },
     );
     apply(&mut a, &archive).unwrap();
-    // B, unaware of the archive, edits the description believing the task is still in todo.txt.
+    // B, unaware of the archive, edits the description believing the task hasn't moved.
     apply(&mut b, &replace(2, 11, DESC, "ducks", "geese")).unwrap();
     converge(&mut a, &mut b);
     for doc in [&a, &b] {
-        assert!(doc.list_ids(&done_file()).contains(&task(TASK)), "archived");
-        assert!(!doc.list_ids(&todo_file()).contains(&task(TASK)));
+        assert!(doc.list_ids(&todo_file()).contains(&task(TASK)), "still in todo.txt");
         assert!(
             doc.description(task(TASK)).unwrap().contains("geese"),
-            "the edit lands in done.txt"
+            "the edit lands"
         );
     }
 }

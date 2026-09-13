@@ -60,6 +60,13 @@ pub enum Mutation {
         /// Keep line numbers stable with a blank.
         leave_blank: bool,
     },
+    /// Moves the line within its own file to sit after the last other task (archiving: a
+    /// completed task stays in its file, pushed to the bottom, instead of moving to a second
+    /// one). A no-op when the task is already last.
+    MoveToEnd {
+        /// The line.
+        task: TaskRef,
+    },
 }
 
 /// Why a mutation was refused. All are client errors except `TooMany`, which is a limit.
@@ -165,6 +172,7 @@ pub fn mutation_ops(
         }
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),
+        Mutation::MoveToEnd { task } => move_to_end_ops(state, task),
         Mutation::Delete { task, leave_blank } => {
             let (i, id) = resolve(state, task)?;
             let after = state.task_before(i);
@@ -241,6 +249,21 @@ fn move_ops(state: &DocState, task: &TaskRef, to: &FilePath) -> Result<Vec<OpKin
         task: id,
         after: None,
         to_file: to.clone(),
+    }])
+}
+
+/// The archive half of `Mutation::MoveToEnd`: appends the task after whichever other task is
+/// currently last, so archiving several tasks in original relative order lands them at the bottom
+/// in that same order (`DocState::move_task`'s same-file branch does the actual reorder).
+fn move_to_end_ops(state: &DocState, task: &TaskRef) -> Result<Vec<OpKind>, MutationError> {
+    let (i, id) = resolve(state, task)?;
+    let last = state.task_before(state.len());
+    // Already last: anchor to its own predecessor instead, so the reorder is a true no-op.
+    let after = if last == Some(id) { state.task_before(i) } else { last };
+    Ok(vec![OpKind::Move {
+        task: id,
+        after,
+        to_file: state.path().clone(),
     }])
 }
 

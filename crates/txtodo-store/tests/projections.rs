@@ -47,7 +47,7 @@ fn latest_snapshot_is_the_highest_seq_and_meta_round_trips() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
     let todo = FilePath::new("todo.txt").unwrap();
-    let done = FilePath::new("done.txt").unwrap();
+    let other = FilePath::new("other.txt").unwrap();
     assert_eq!(store.latest_snapshot(&todo).unwrap(), None);
     store
         .put_snapshot(
@@ -69,7 +69,7 @@ fn latest_snapshot_is_the_highest_seq_and_meta_round_trips() {
         .unwrap();
     store
         .put_snapshot(
-            &done,
+            &other,
             &Snapshot {
                 seq: Seq(99),
                 state: b"other file".to_vec(),

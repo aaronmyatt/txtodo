@@ -164,10 +164,9 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     std::fs::create_dir_all(root.join("q4-roadmap")).unwrap();
     std::fs::write(
         root.join("q4-roadmap/todo.txt"),
-        "(A) sync section ref:sync-section\nbuy ducks\n",
+        "(A) sync section ref:sync-section\nbuy ducks\nx 2020-01-01 old task\n",
     )
     .unwrap();
-    std::fs::write(root.join("q4-roadmap/done.txt"), "x 2020-01-01 old task\n").unwrap();
     std::fs::create_dir_all(root.join("q4-roadmap/sync-section")).unwrap();
     std::fs::write(
         root.join("q4-roadmap/sync-section/todo.txt"),
@@ -197,7 +196,7 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     assert_eq!(
         q4.progress.as_ref().map(|p| (p.done, p.total)),
         Some((1, 3)),
-        "own todo.txt (2 total, 0 done) + done.txt (1 archived task, rule 5)"
+        "its own todo.txt: 3 task lines, 1 already done"
     );
 
     let sync = q4
@@ -208,7 +207,7 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     assert_eq!(
         sync.progress.as_ref().map(|p| (p.done, p.total)),
         Some((1, 2)),
-        "its own two leaf lines only, no done.txt here"
+        "its own two leaf lines only"
     );
 }
 
@@ -219,11 +218,10 @@ fn task_ref(line_number: u32, task_id: TaskId) -> pb::TaskRef {
     }
 }
 
-/// Archive (rule 7): the completed line moves to done.txt, its `ref:` tag intact — this daemon's
-/// own archiving mechanics are exactly Complete + Delete-from-todo + Add-to-done (see
-/// `daemon_mode.rs` on the CLI side); no code path here ever touches the directory, because
-/// done.txt already sits beside it, in the same directory as todo.txt. Returns the archived line's
-/// task id in done.txt.
+/// Archive (rule 7): the completed line moves to the bottom of the same file, its `ref:` tag
+/// intact — this daemon's archiving mechanics are exactly Complete + MoveToEnd (see
+/// `daemon_mode.rs` on the CLI side); no code path here ever touches the directory, since the line
+/// never leaves todo.txt. Returns the archived line's task id (unchanged).
 async fn archive_line_one(client: &mut Client, line: TaskId) -> TaskId {
     apply(
         client,
@@ -239,21 +237,12 @@ async fn archive_line_one(client: &mut Client, line: TaskId) -> TaskId {
     apply(
         client,
         "todo.txt",
-        mutation::Kind::Delete(pb::Delete {
+        mutation::Kind::MoveToEnd(pb::MoveToEnd {
             task: Some(task_ref(1, line)),
-            leave_blank: false,
         }),
     )
     .await;
-    apply(
-        client,
-        "done.txt",
-        mutation::Kind::Add(pb::Add {
-            line: completed_line.trim_end().to_owned(),
-        }),
-    )
-    .await;
-    task_id_of(get(client, "done.txt").await.lines().next().unwrap())
+    line
 }
 
 #[tokio::test]
@@ -261,15 +250,20 @@ async fn archiving_and_deleting_keep_the_directory_and_prune_finds_the_orphan() 
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("todo.txt"), "").unwrap();
-    // done.txt must exist at startup so the walker registers it — this test appends to it over
-    // gRPC (never a direct write), and only a registered actor answers `Apply`.
-    std::fs::write(root.join("done.txt"), "").unwrap();
     let (mut client, _stop) = serve(root).await;
     apply(
         &mut client,
         "todo.txt",
         mutation::Kind::Add(pb::Add {
             line: "(A) roadmap".into(),
+        }),
+    )
+    .await;
+    apply(
+        &mut client,
+        "todo.txt",
+        mutation::Kind::Add(pb::Add {
+            line: "unrelated line".into(),
         }),
     )
     .await;
@@ -289,27 +283,33 @@ async fn archiving_and_deleting_keep_the_directory_and_prune_finds_the_orphan() 
     // `FileActor` and no `notes.md` for the walker to find), not what this test is checking.
     std::fs::write(ref_dir_path.join("notes.md"), "remember the ducks\n").unwrap();
 
-    let done_id = archive_line_one(&mut client, line).await;
+    let archived_id = archive_line_one(&mut client, line).await;
     assert!(
         ref_dir_path.is_dir(),
         "rule 7: archiving keeps the directory"
     );
     assert!(
-        get(&mut client, "done.txt").await.contains("ref:roadmap"),
+        get(&mut client, "todo.txt").await.contains("ref:roadmap"),
         "the archived line keeps its ref: tag"
     );
 
-    delete_last_pointer(&mut client, done_id, &ref_dir_path).await;
+    delete_last_pointer(&mut client, archived_id, &ref_dir_path).await;
     prune_finds_and_only_execute_deletes(&mut client, &ref_dir_path).await;
 }
 
 /// Delete (rule 10): removing the last line pointing at `dir` never touches the directory itself.
-async fn delete_last_pointer(client: &mut Client, done_id: TaskId, dir: &Path) {
+async fn delete_last_pointer(client: &mut Client, archived_id: TaskId, dir: &Path) {
+    let line_number = get(client, "todo.txt")
+        .await
+        .lines()
+        .position(|l| l.contains(&format!("id:{archived_id}")))
+        .map(|i| u32::try_from(i + 1).unwrap_or(u32::MAX))
+        .expect("archived line is still in todo.txt");
     apply(
         client,
-        "done.txt",
+        "todo.txt",
         mutation::Kind::Delete(pb::Delete {
-            task: Some(task_ref(1, done_id)),
+            task: Some(task_ref(line_number, archived_id)),
             leave_blank: false,
         }),
     )

@@ -39,10 +39,3 @@ fn apply_patch_sets_clears_appends_and_replaces() {
     );
     assert_eq!(appended, "(A) 2026-09-11 Draft +work please");
 }
-
-#[test]
-fn sibling_done_path_requires_a_todo_txt_suffix() {
-    assert_eq!(sibling_done_path("todo.txt").unwrap(), "done.txt");
-    assert_eq!(sibling_done_path("q4/todo.txt").unwrap(), "q4/done.txt");
-    assert!(sibling_done_path("notes.md").is_err());
-}

@@ -1,4 +1,4 @@
-//! `todotxt://` resources (design §6.4). Static resources (`todo.txt`, `done.txt`) are listed;
+//! `todotxt://` resources (design §6.4). The static `todo.txt` resource is listed;
 //! parameterised ones (`task/{id}`, `project/{name}`, `context/{name}`, `history`) are resource
 //! *templates* — `list_resources` never enumerates every task/project/context, only
 //! `read_resource` resolves one. No subscription support here: `notifications/resources/updated`
@@ -15,13 +15,13 @@ use crate::error::McpError;
 
 const SCHEME: &str = "todotxt";
 
-/// `list_resources`: the two always-present files. Every synced ref path also gets a resource
+/// `list_resources`: the always-present root file. Every synced ref path also gets a resource
 /// entry, so a workspace with sub-lists (`q4-roadmap/todo.txt`) is fully discoverable.
 pub async fn list(backend: &dyn McpBackend) -> Result<ListResourcesResult, ErrorData> {
     let files = backend.list_files().await?;
     let resources = files
         .into_iter()
-        .filter(|f| f.kind == "todo" || f.kind == "done")
+        .filter(|f| f.kind == "todo")
         .map(|f| {
             Resource::new(format!("{SCHEME}://{}", f.path), f.path).with_mime_type("text/plain")
         })

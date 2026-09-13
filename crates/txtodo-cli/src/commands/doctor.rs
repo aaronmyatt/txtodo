@@ -127,14 +127,12 @@ fn health_checks(d: &mut client::Daemon) -> (Vec<Check>, Option<pb::HealthRespon
     (vec![socket_ok, watcher], Some(h))
 }
 
-/// Opens each document for append without writing; a missing done.txt is normal.
+/// Opens todo.txt for append without writing.
 fn files_check(ctx: &Ctx) -> Check {
     let mut problems = Vec::new();
-    for (name, path) in [("todo.txt", &ctx.paths.todo), ("done.txt", &ctx.paths.done)] {
+    for (name, path) in [("todo.txt", &ctx.paths.todo)] {
         if !path.exists() {
-            if name == "todo.txt" {
-                problems.push(format!("{name} missing (created on first add)"));
-            }
+            problems.push(format!("{name} missing (created on first add)"));
             continue;
         }
         if let Err(e) = std::fs::OpenOptions::new().append(true).open(path) {

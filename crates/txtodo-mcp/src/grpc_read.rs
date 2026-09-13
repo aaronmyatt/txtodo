@@ -109,7 +109,7 @@ fn row_at_line(text: &str, line: u32) -> Result<TaskRow, McpError> {
         .ok_or_else(|| McpError::not_found(format!("no line {line}")).with_line(line))
 }
 
-/// Finds the task across every `todo`/`done` document. An `id` lookup has no path to start from —
+/// Finds the task across every `todo` document. An `id` lookup has no path to start from —
 /// unlike `GetNotes`/`EditNotes`'s wire `TaskRef`, which the daemon itself resolves by id
 /// (`notes_lookup.rs`), the general `Apply`/`GetFile` RPCs need a real `path` + `line_number`, so
 /// the client scans (bounded: workspace document counts are already capped at 10 000).
@@ -118,10 +118,7 @@ pub async fn locate_by_id(
     id: &TaskId,
 ) -> Result<(RefPath, u32, TaskRow), McpError> {
     let files = list_files(client.clone()).await?;
-    for f in files
-        .iter()
-        .filter(|f| f.kind == "todo" || f.kind == "done")
-    {
+    for f in files.iter().filter(|f| f.kind == "todo") {
         let text = get_file_text(client.clone(), &f.path).await?;
         if let Some((line, raw)) = parse::find_by_id(&text, id) {
             return Ok((f.path.clone(), line, parse::parse_row(line, raw)));

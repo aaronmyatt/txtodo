@@ -27,7 +27,7 @@ pub(crate) enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
-    /// Move completed lines to done.txt and drop blank lines.
+    /// Move completed lines to the bottom of the file and drop blank lines.
     Archive,
     /// Remove a task's priority.
     #[command(visible_alias = "dp")]
@@ -65,7 +65,7 @@ pub(crate) enum Command {
         #[arg(allow_hyphen_values = true)]
         terms: Vec<String>,
     },
-    /// List tasks from todo.txt and done.txt.
+    /// List every task in todo.txt, done tasks included.
     #[command(visible_alias = "lsa")]
     Listall {
         /// Search terms; `-term` excludes.
@@ -138,7 +138,7 @@ pub(crate) enum Command {
     },
     /// Show the op log, newest first (daemon mode).
     Log {
-        /// Only this document (workspace-relative), e.g. done.txt.
+        /// Only this document (workspace-relative), e.g. q4/todo.txt.
         #[arg(long)]
         file: Option<String>,
         /// How many ops.

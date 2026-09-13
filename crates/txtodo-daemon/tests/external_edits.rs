@@ -154,9 +154,11 @@ async fn same_content_with_crlf_is_not_a_change() {
 }
 
 #[tokio::test]
-async fn todo_sh_do_marks_done_and_archives() {
+async fn todo_sh_do_marks_done_in_place() {
+    // `-a`: the vendored todo.sh's own auto-archive (a separate done.txt, its long-standing
+    // convention) is not this app's model any more — a completed task stays in todo.txt.
     let mut d = Daemon::start(TODO).await;
-    let out = d.todo_sh(&["do", "3"]);
+    let out = d.todo_sh(&["-a", "do", "3"]);
     assert!(
         out.status.success(),
         "{}",
@@ -164,13 +166,12 @@ async fn todo_sh_do_marks_done_and_archives() {
     );
     let after = d.settle().await;
     assert!(
-        !after.contains("walk the dog"),
-        "archived out of todo.txt: {after}"
+        after.contains("x ") && after.contains("walk the dog"),
+        "marked done in place: {after}"
     );
-    let done = d.disk_file("done.txt");
     assert!(
-        done.contains("x ") && done.contains("walk the dog"),
-        "{done}"
+        d.disk_file("done.txt").is_empty(),
+        "no separate done.txt is created"
     );
     let k = kinds(&d.history().await);
     assert!(k.contains(&"set_field".to_owned()), "{k:?}");

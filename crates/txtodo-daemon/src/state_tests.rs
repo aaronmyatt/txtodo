@@ -114,7 +114,7 @@ fn insert_move_and_blank_ops_reorder_the_document() {
 fn cross_file_move_only_removes_on_the_source() {
     let mut state = doc(&two_lines_crlf());
     let a = task_id(ulid_bits(A));
-    let other = FilePath::new("done.txt").unwrap();
+    let other = FilePath::new("other.txt").unwrap();
     assert!(state.index_of(a).is_some());
     state
         .apply_kind(&OpKind::Move {

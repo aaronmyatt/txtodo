@@ -36,7 +36,7 @@ txtodo [--dir DIR] [--json] [--no-id] [-A|--no-archive] [--no-daemon] <COMMAND>
 | `pri ITEM# PRIORITY...` | `p` | Set task priorities (A-Z), as `ITEM# PRIORITY` pairs. |
 | `depri ITEM#...` | `dp` | Remove a task's priority. |
 | `move ITEM# DEST [SRC]` | `mv` | Move a task to another file in the todo directory. |
-| `archive` | | Move completed lines to `done.txt`, drop blank lines. |
+| `archive` | | Move completed lines to the bottom of `todo.txt`, drop blank lines. |
 | `deduplicate` | | Blank every later repeat of an identical line. |
 | `fmt` | | Canonicalise quirks in `todo.txt`. |
 | `lint` | | Report quirks and file hygiene in `todo.txt`. |
@@ -47,7 +47,7 @@ txtodo [--dir DIR] [--json] [--no-id] [-A|--no-archive] [--no-daemon] <COMMAND>
 | Command | Alias | Description |
 |---|---|---|
 | `list [TERM...]` | `ls` | List tasks matching every TERM (`-term` excludes), sorted. |
-| `listall [TERM...]` | `lsa` | List tasks from `todo.txt` and `done.txt`. |
+| `listall [TERM...]` | `lsa` | List every task in `todo.txt`, done tasks included. |
 | `listpri [PRI\|A-C] [TERM...]` | `lsp` | List tasks with a priority, optionally filtered to one or a range. |
 | `listproj [TERM...]` | `lsprj` | List the `+project` tags of matching tasks. |
 | `listcon [TERM...]` | `lsc` | List the `@context` tags of matching tasks. |

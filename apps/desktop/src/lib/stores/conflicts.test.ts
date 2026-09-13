@@ -51,7 +51,7 @@ describe("pendingConflicts store", () => {
 	it("addFlags keeps flags scoped to their own path", () => {
 		pendingConflicts.clear();
 		pendingConflicts.addFlags("todo.txt", [flag({ task_id: "a" })]);
-		pendingConflicts.addFlags("done.txt", [flag({ task_id: "b" })]);
+		pendingConflicts.addFlags("other.txt", [flag({ task_id: "b" })]);
 		expect(flagsForPath(get(pendingConflicts), "todo.txt").map((f) => f.task_id)).toEqual(["a"]);
 		expect(get(pendingConflictCount)).toBe(2);
 	});

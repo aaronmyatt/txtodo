@@ -33,7 +33,7 @@ true of this binary (`main.rs` still runs one workspace per process via `--dir`)
   `refdir` + `refdir_ops` (slug generation, collision-safe filesystem moves, lazy `ref:` creation
   and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
   two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers
-  `todo.txt`/`done.txt`/`notes.md`; only the first two get a `FileActor`), `watcher`, `debounce`,
+  `todo.txt`/`notes.md`; only the first gets a `FileActor`), `watcher`, `debounce`,
   `watch_task` · `server` + `serve` + `convert` (tonic service, socket, proto boundary) ·
   `progress` (`ListFiles` done/total, plan §3.2.5; an `impl TxtodoService` extension kept out of
   `server.rs` for its line budget, same pattern as `notes.rs`) · `write` (temp + fsync + rename) ·

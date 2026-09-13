@@ -1,4 +1,4 @@
-//! Workspace discovery (plan §3.2.11): every `todo.txt`, `done.txt` and `notes.md` under the
+//! Workspace discovery (plan §3.2.11): every `todo.txt` and `notes.md` under the
 //! root, at any depth. Walks the tree, never follows `ref:` tags, so a hand-made directory is
 //! found too. Iterative with an explicit stack — no recursion (constitution §3) and no walkdir
 //! dependency. https://doc.rust-lang.org/std/fs/fn.read_dir.html
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use txtodo_model::FilePath;
 
 /// The basenames the walker discovers under a workspace: task documents plus `notes.md`.
-pub const DOCUMENT_NAMES: [&str; 3] = ["todo.txt", "done.txt", "notes.md"];
+pub const DOCUMENT_NAMES: [&str; 2] = ["todo.txt", "notes.md"];
 /// `notes.md` specifically — a synced document (plan §3.2 rule 11) that is Loro-text prose, not
 /// task lines. See the module doc for why this is discovered but not actor-registered.
 pub const NOTES_DOCUMENT_NAME: &str = "notes.md";
@@ -164,7 +164,6 @@ mod tests {
         let r = dir.path();
         for p in [
             "todo.txt",
-            "done.txt",
             "q4/todo.txt",
             "q4/notes.md",
             "q4/sync/todo.txt",
@@ -184,7 +183,6 @@ mod tests {
             found,
             vec![
                 ".hidden/todo.txt",
-                "done.txt",
                 "q4/notes.md",
                 "q4/sync/todo.txt",
                 "q4/todo.txt",

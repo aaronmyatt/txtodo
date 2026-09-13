@@ -14,7 +14,7 @@ A note on the brief: "MVP server" is read here as **MCP** (Model Context Protoco
 
 | Goal | What it means in practice |
 |---|---|
-| **The file is the truth** | `todo.txt` (and `done.txt`) is the canonical state. Every other structure in this document is a cache, index, or projection of it. If txtodo vanished tomorrow, you'd lose nothing. |
+| **The file is the truth** | `todo.txt` is the canonical state. Every other structure in this document is a cache, index, or projection of it. If txtodo vanished tomorrow, you'd lose nothing. |
 | **Faithful to the one-line standard** | The app never writes a line that isn't valid todo.txt. App metadata lives only in `key:value` tags, which the spec explicitly permits, and the app still works if those tags are stripped. |
 | **Cross-platform** | One Rust core, compiled to native, WASM, Swift, Kotlin, C, Python and Node. Thin native shells per platform. |
 | **Cross-device, no server required** | Devices form an encrypted peer group. Sync works over LAN, over the internet with hole-punching, through an optional dumb relay, over Bluetooth, over your existing Dropbox/Syncthing folder, or over a USB stick. |
@@ -41,7 +41,7 @@ A note on the brief: "MVP server" is read here as **MCP** (Model Context Protoco
                                └───┬───────────────────┬──────────┘
                                    │                   │
                      ┌─────────────┴────────┐    ┌─────┴──────────────────────┐
-                     │  todo.txt / done.txt │    │  peers (other devices)     │
+                     │       todo.txt       │    │  peers (other devices)     │
                      │  THE SOURCE OF TRUTH │    │  mDNS+QUIC · hole-punch ·  │
                      │                      │    │  relay · BLE · file-carrier│
                      └──────────────────────┘    └────────────────────────────┘
@@ -67,13 +67,15 @@ x 2026-09-11 2026-09-01 Renew passport +admin
 - **Projects** `+word` and **contexts** `@word` anywhere in the description, preceded by a space.
 - **Metadata** as `key:value`, no spaces.
 - The spec notes many clients drop priority on completion, and suggests `pri:A` to preserve it.
-- Convention (from todo.sh): completed tasks are archived to `done.txt`.
+- Convention (from todo.sh): completed tasks are archived to `done.txt`. txtodo deliberately does
+  not follow this one — `archive` moves a completed task within `todo.txt`, to the bottom, rather
+  than to a second file (§2.2 rule 1's "canonical file" is singular for exactly this reason).
 
 That's it. The rest of this document exists to serve those eight bullets.
 
 ### 2.2 The contract (seven rules the codebase is not allowed to break)
 
-1. **Canonical file.** All state is derived from `todo.txt` + `done.txt`. Indexes, CRDT state, history and caches can be deleted and rebuilt from the files. The reverse is never true.
+1. **Canonical file.** All state is derived from `todo.txt`. Indexes, CRDT state, history and caches can be deleted and rebuilt from the files. The reverse is never true.
 2. **Byte-preserving round trip.** A line txtodo didn't change is written back byte-for-byte: same whitespace, same tag order, same quirks. `parse ∘ format = id` and `format ∘ parse = id` are property tests over every line in the compatibility corpus.
 3. **Spec-only output.** txtodo never emits a construct the spec doesn't define. It writes `pri:A` on completion rather than inventing its own priority placement.
 4. **Metadata only in tags.** Every app-specific datum is a `key:value` tag, documented in Appendix A. The app degrades gracefully, never breaks, when tags are absent.
@@ -146,11 +148,11 @@ Nothing else. Attribution ("which agent added this"), history, and sync state li
 A task that needs more than one line gets a directory, not a richer line.
 
 - `ref:<slug>` names a directory beside the file containing the line (`~/todo/todo.txt` + `ref:q4-roadmap` → `~/todo/q4-roadmap/`). Slug: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, no traversal.
-- The directory may hold `todo.txt`, `done.txt` and `notes.md`. All optional; the sub-list is a full todo.txt file, so it highlights, archives, syncs and nests exactly like the top level.
+- The directory may hold `todo.txt` and `notes.md`. All optional; the sub-list is a full todo.txt file, so it highlights, archives, syncs and nests exactly like the top level.
 - Creation is lazy: the tag is added and the directory created on the first keystroke into either notes or sub-list. Slug defaults to kebab-case of the description; collisions get `-2`, `-3`.
-- Progress on the parent line = open/total across `<ref>/todo.txt` and `<ref>/done.txt`. Completing the parent is never automatic; the UI offers it when nothing is open.
+- Progress on the parent line = open/total across `<ref>/todo.txt`. Completing the parent is never automatic; the UI offers it when nothing is open.
 - Archiving or deleting the parent leaves the directory alone. `txtodo prune --orphans` is the only thing that removes one.
-- Every `todo.txt`, `done.txt` and `notes.md` under the workspace root, at any depth, is a synced document, discovered by walking the tree rather than by following tags.
+- Every `todo.txt` and `notes.md` under the workspace root, at any depth, is a synced document, discovered by walking the tree rather than by following tags.
 - Other tools see an inert tag; `todo.sh` pointed at the sub-directory works on the sub-list.
 
 The full normative version, including the rename and move-between-files rules, is §3.2 of `txtodo-implementation-plan.md`.
@@ -209,7 +211,7 @@ Built on a Rust CRDT library with map, list and text types (Loro or Automerge; L
 
 ```
 Doc
-├── files: Map<"todo.txt" | "done.txt" | …, MovableList<TaskId>>   line order per file
+├── files: Map<"todo.txt" | …, MovableList<TaskId>>   line order per file
 └── tasks: Map<TaskId, Task>
       ├── completed        LWW<bool>
       ├── completion_date  LWW<Option<Date>>
@@ -222,7 +224,7 @@ Doc
 
 - LWW registers use **hybrid logical clocks** (wall clock + counter + device id), so "last" is meaningful across devices with skewed clocks and ties resolve deterministically.
 - `description` is a text CRDT: two devices editing different words of the same task both win. Editing the *same* word produces a character-level interleave; the reconciler flags it and clients show a one-tap "keep mine / keep theirs / keep merged".
-- Archiving to `done.txt` is a move between lists plus `completed = true`.
+- Archiving is a move within the same file's list (to the bottom), on top of `completed = true` — never a move between lists.
 - Multiple todo files ("workspaces": `work.txt`, `home.txt`) are just more entries in `files`.
 
 ### 4.3 File ⇄ CRDT reconciliation (the hard part)
@@ -287,7 +289,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | delete | complete | completed, not deleted (default; configurable) |
 | move up | move down | both moves apply deterministically; same result on every device |
 | strip all `id:` tags in vim (tagged mode) or any external edit (sidecar mode, the default since 2026-09-13, `docs/questions.md` Q2) | anything | fingerprint re-identification (§4.1); a full description rewrite becomes a visible duplicate (delete+insert), never a silent merge |
-| archive to `done.txt` | edit | the edit lands in `done.txt` |
+| archive (move to bottom, same file) | edit | the edit lands, task stays in `todo.txt` |
 
 ### 4.8 History
 
@@ -360,7 +362,7 @@ Every mutation is recorded in the op log with the token's principal, so `txtodo 
 | `todo_edit` | `id`, `patch` | field-level patch (`priority`, `due`, `append`, `replace`) so agents don't have to reproduce whole lines |
 | `todo_move` | `id`, `before` / `after` | reorder |
 | `todo_delete` | `id`, `confirm` | tombstone |
-| `todo_archive` | `file` | move completed tasks to `done.txt` |
+| `todo_archive` | `file` | move completed tasks to the bottom of `file` |
 | `todo_batch` | `ops[]`, `dry_run` | atomic; `dry_run` returns the unified diff of the file without applying |
 | `todo_history` | `since`, `id` | reads the op log |
 | `todo_raw` | `file`, `lines[]` (read) / `line`, `text` (write) | needs the `raw` scope |
@@ -371,7 +373,7 @@ Structured errors carry the offending line and a pointer to the spec rule, so an
 
 Resources (subscribable; the daemon pushes `notifications/resources/updated` on change):
 
-- `todotxt://todo.txt`, `todotxt://done.txt` — the files, as text
+- `todotxt://todo.txt` — the files, as text
 - `todotxt://task/{id}`
 - `todotxt://project/{name}`, `todotxt://context/{name}` — filtered views
 - `todotxt://history?since=…`

@@ -188,7 +188,7 @@ fn move_records_the_source_departure_to_the_named_destination() {
     let s = state();
     let mv = Mutation::Move {
         task: line(1, Some(A)),
-        to: FilePath::new("done.txt").unwrap(),
+        to: FilePath::new("other.txt").unwrap(),
     };
     let ops = mutation_ops(&s, &mv, &mut mint()).unwrap();
     assert_eq!(
@@ -196,18 +196,45 @@ fn move_records_the_source_departure_to_the_named_destination() {
         vec![OpKind::Move {
             task: id(A),
             after: None,
-            to_file: FilePath::new("done.txt").unwrap(),
+            to_file: FilePath::new("other.txt").unwrap(),
         }]
     );
     // A stale id is still refused, exactly like every other mutation.
     let stale = Mutation::Move {
         task: line(1, Some(B)),
-        to: FilePath::new("done.txt").unwrap(),
+        to: FilePath::new("other.txt").unwrap(),
     };
     assert!(matches!(
         mutation_ops(&s, &stale, &mut mint()),
         Err(MutationError::Stale { .. })
     ));
+}
+
+#[test]
+fn move_to_end_anchors_after_the_last_other_task_and_is_a_no_op_when_already_last() {
+    let s = state();
+    // Task A (line 1) moves after the last other task, B (line 3).
+    let ops = mutation_ops(&s, &Mutation::MoveToEnd { task: line(1, Some(A)) }, &mut mint())
+        .unwrap();
+    assert_eq!(
+        ops,
+        vec![OpKind::Move {
+            task: id(A),
+            after: Some(id(B)),
+            to_file: FilePath::new("todo.txt").unwrap(),
+        }]
+    );
+    // Task B (line 3) is already last: anchors to its own predecessor, A, a true no-op.
+    let ops = mutation_ops(&s, &Mutation::MoveToEnd { task: line(3, Some(B)) }, &mut mint())
+        .unwrap();
+    assert_eq!(
+        ops,
+        vec![OpKind::Move {
+            task: id(B),
+            after: Some(id(A)),
+            to_file: FilePath::new("todo.txt").unwrap(),
+        }]
+    );
 }
 
 #[test]

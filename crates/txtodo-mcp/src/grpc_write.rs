@@ -210,13 +210,11 @@ pub async fn delete(ctx: GrpcCtx, id: TaskId, confirm: bool) -> Result<(), McpEr
     Ok(())
 }
 
-/// `todo_archive`: one `Apply(Move)` per completed task, highest line number first so an
-/// already-issued line number for an earlier (lower) row never shifts under it — `Move` removes
-/// only the one line it targets, so descending order is enough (no full re-fetch between calls).
-/// Does not additionally collapse the blank lines left behind, unlike the CLI's local `archive`;
-/// see the crate's As-built notes.
+/// `todo_archive`: one `Apply(MoveToEnd)` per completed task, in original file order, so a task
+/// already pushed to the bottom never has to move again — the daemon computes each task's new
+/// position live (after the current last other task in the file), so only the line number for the
+/// `TaskRef` needs tracking here as earlier moves close up the gap they leave behind.
 pub async fn archive(ctx: GrpcCtx, file: RefPath) -> Result<ApplyOutcome, McpError> {
-    let dest = sibling_done_path(&file)?;
     let text = get_file_text(ctx.client.clone(), &file).await?;
     let mut completed: Vec<(u32, String)> = parse::lines(&text)
         .into_iter()
@@ -224,33 +222,31 @@ pub async fn archive(ctx: GrpcCtx, file: RefPath) -> Result<ApplyOutcome, McpErr
         .filter(|(_, r)| r.done)
         .map(|(n, r)| (n, r.id.unwrap_or_default()))
         .collect();
-    completed.sort_by_key(|(line, _)| std::cmp::Reverse(*line));
+    completed.sort_by_key(|(line, _)| *line);
     let mut applied = 0u32;
     let mut last: Option<pb::ApplyResponse> = None;
-    for (line, task_id) in completed {
+    for i in 0..completed.len() {
+        let (line, task_id) = completed[i].clone();
         let task_ref = pb::TaskRef {
             line_number: line,
             task_id,
         };
         let mutation = pb::Mutation {
-            kind: Some(pb::mutation::Kind::Move(pb::Move {
+            kind: Some(pb::mutation::Kind::MoveToEnd(pb::MoveToEnd {
                 task: Some(task_ref),
-                to_path: dest.clone(),
             })),
         };
         let resp = apply_one(ctx.clone(), &file, mutation).await?;
         applied += resp.applied;
         last = Some(resp);
+        // The moved line's old slot closes up: every not-yet-processed line after it shifts back one.
+        for later in completed.iter_mut().skip(i + 1) {
+            if later.0 > line {
+                later.0 -= 1;
+            }
+        }
     }
     Ok(outcome_from(applied, last))
-}
-
-pub(crate) fn sibling_done_path(file: &str) -> Result<RefPath, McpError> {
-    file.strip_suffix("todo.txt")
-        .map(|prefix| format!("{prefix}done.txt"))
-        .ok_or_else(|| {
-            McpError::invalid_params(format!("todo_archive: {file} does not end with todo.txt"))
-        })
 }
 
 fn outcome_from(applied: u32, last: Option<pb::ApplyResponse>) -> ApplyOutcome {

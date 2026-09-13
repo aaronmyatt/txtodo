@@ -78,8 +78,13 @@ pub fn run_dedup(ctx: &Ctx) -> Result<(), CliError> {
 /// last report's. `now` is `YYYY-MM-DDTHH:MM:SS` local time (todo.sh `date +%Y-%m-%dT%T`).
 pub fn run_report(ctx: &Ctx, now: &str) -> Result<(), CliError> {
     archive::run(ctx)?;
-    let total = store::read(&ctx.paths.todo)?.lines.len();
-    let done = store::read(&ctx.paths.done)?.lines.len();
+    let todo = store::read(&ctx.paths.todo)?;
+    let total = todo.lines.len();
+    let done = todo
+        .lines
+        .iter()
+        .filter(|l| l.bytes().starts_with(b"x "))
+        .count();
     let data = format!("{total} {done}");
     let mut report = store::read(&ctx.paths.report)?;
     let last = report

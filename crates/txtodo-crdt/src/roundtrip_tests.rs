@@ -34,8 +34,8 @@ fn todo_file() -> FilePath {
     FilePath::new("todo.txt").unwrap()
 }
 
-fn done_file() -> FilePath {
-    FilePath::new("done.txt").unwrap()
+fn other_file() -> FilePath {
+    FilePath::new("other.txt").unwrap()
 }
 
 fn mint() -> impl FnMut() -> OpId {
@@ -262,7 +262,7 @@ fn move_cross_file_round_trips() -> Result<(), Box<dyn Error>> {
         OpKind::Move {
             task: a,
             after: None,
-            to_file: done_file(),
+            to_file: other_file(),
         },
     );
     let ops = capture(&mut doc, &mov, &mut m)?;
@@ -273,7 +273,7 @@ fn move_cross_file_round_trips() -> Result<(), Box<dyn Error>> {
         OpKind::Move {
             task: a,
             after: None,
-            to_file: done_file(),
+            to_file: other_file(),
         }
     );
     Ok(())

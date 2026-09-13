@@ -24,7 +24,6 @@ pub fn hlc(wall_ms: u64, counter: u32) -> Hlc {
 pub fn file_meta(info: &pb::FileInfo) -> Option<FileMeta> {
     let kind = match pb::FileKind::try_from(info.kind).ok()? {
         pb::FileKind::Todo => "todo",
-        pb::FileKind::Done => "done",
         pb::FileKind::Notes => "notes",
         pb::FileKind::Unspecified => return None,
     };

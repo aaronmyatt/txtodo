@@ -11,8 +11,8 @@ use std::path::Path;
 use txtodo_core::{File, LineDiff, LineKind, OwnedLine, diff_lines, parse_file};
 use txtodo_proto::v1::{self as pb, mutation};
 
-/// The documents the CLI edits; both live at the workspace root.
-pub const DOCS: [&str; 2] = ["todo.txt", "done.txt"];
+/// The documents the CLI edits, at the workspace root.
+pub const DOCS: [&str; 1] = ["todo.txt"];
 
 /// A document as the daemon held it before the command ran.
 struct Original {
@@ -42,7 +42,6 @@ pub fn run_via_daemon(
         paths: Paths {
             dir: scratch.path().to_path_buf(),
             todo: scratch.path().join("todo.txt"),
-            done: scratch.path().join("done.txt"),
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),
         },

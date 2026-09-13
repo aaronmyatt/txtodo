@@ -21,7 +21,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | delete | complete | completed, not deleted (default; configurable) |
 | move up | move down | both moves apply deterministically; same result on every device |
 | strip all `id:` tags in vim (tagged mode) or any external edit (sidecar mode, the default since 2026-09-13, `docs/questions.md` Q2) | anything | fingerprint re-identification (§4.1); a full description rewrite becomes a visible duplicate (delete+insert), never a silent merge |
-| archive to `done.txt` | edit | the edit lands in `done.txt` |
+| archive (move to bottom, same file) | edit | the edit lands, task stays in `todo.txt` |
 
 ## Row-to-test mapping
 
@@ -36,7 +36,7 @@ Row order above is fixed and matches `crates/txtodo-daemon/tests/conflicts.rs` t
 7. `delete_vs_complete_keeps_it_completed`
 8. `move_up_vs_move_down_both_apply_deterministically`
 9. `stripped_ids_are_rematched_by_content_m4_expectation`
-10. `archive_vs_edit_lands_the_edit_in_done_txt`
+10. `archive_vs_edit_lands_the_edit_and_keeps_the_task_in_todo_txt`
 
 Row 9's fingerprint re-identification (`sidecar-identity`, Hungarian-algorithm matching,
 `crates/txtodo-model/src/identity.rs` + `crates/txtodo-daemon/src/identity_*.rs`/

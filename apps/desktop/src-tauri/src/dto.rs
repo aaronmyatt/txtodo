@@ -30,11 +30,11 @@ pub struct FileInfoDto {
     pub path: String,
     /// Hex blake3 of the projection.
     pub hash: String,
-    /// `"FILE_KIND_TODO"` / `"FILE_KIND_DONE"` / `"FILE_KIND_NOTES"` / `"FILE_KIND_UNSPECIFIED"`.
+    /// `"FILE_KIND_TODO"` / `"FILE_KIND_NOTES"` / `"FILE_KIND_UNSPECIFIED"`.
     pub kind: String,
-    /// Completed task lines; 0 for done.txt/notes.md.
+    /// Completed task lines; 0 for notes.md.
     pub done: u32,
-    /// Total task lines; 0 for done.txt/notes.md.
+    /// Total task lines; 0 for notes.md.
     pub total: u32,
 }
 

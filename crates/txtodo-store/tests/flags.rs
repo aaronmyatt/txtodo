@@ -45,7 +45,7 @@ fn raise_lists_the_flag_oldest_first_and_clear_removes_it_idempotently() {
     assert_eq!(open[0].mine, b"a mine");
     assert!(
         store
-            .open_flags(&FilePath::new("done.txt").unwrap())
+            .open_flags(&FilePath::new("other.txt").unwrap())
             .unwrap()
             .is_empty()
     );
@@ -92,7 +92,7 @@ fn mirror_snapshot_round_trips_with_its_seq_and_replaces_the_previous_one() {
     );
     assert_eq!(
         store
-            .get_mirror(&FilePath::new("done.txt").unwrap())
+            .get_mirror(&FilePath::new("other.txt").unwrap())
             .unwrap(),
         None
     );

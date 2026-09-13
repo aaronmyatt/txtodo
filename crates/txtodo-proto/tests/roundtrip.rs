@@ -8,8 +8,8 @@ use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
-    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, SkewStatus, TaskRef,
-    TreeNode, UndoRequest, WatchRequest, mutation,
+    HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, SkewStatus,
+    TaskRef, TreeNode, UndoRequest, WatchRequest, mutation,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -47,6 +47,7 @@ fn every_mutation_variant_survives_encode_decode() {
             task: task(),
             leave_blank: true,
         }),
+        mutation::Kind::MoveToEnd(MoveToEnd { task: task() }),
     ];
     for kind in kinds {
         let req = ApplyRequest {
@@ -131,10 +132,10 @@ fn responses_and_streams_round_trip() {
 #[test]
 fn requests_round_trip() {
     round_trip(&GetFileRequest {
-        path: "done.txt".into(),
+        path: "todo.txt".into(),
     });
     round_trip(&WatchRequest {
-        paths: vec!["todo.txt".into(), "done.txt".into()],
+        paths: vec!["todo.txt".into(), "q4/todo.txt".into()],
     });
     round_trip(&HistoryRequest {
         path: String::new(),

@@ -280,7 +280,7 @@ pub(crate) fn task_view(line: &txtodo_core::OwnedLine) -> Option<txtodo_core::Ta
 /// Every valid `ref:` tag in `state`'s task lines, with its owning task's *resolved* id (the
 /// daemon's own identity, sidecar or tagged — never re-parsed off the text, which carries no `id:`
 /// tag at all in sidecar mode). Feeds `tree.rs`'s workspace-tree rebuild (plan M5); an archived
-/// line in `done.txt` still counts (rule 7: archiving keeps the tag).
+/// line still counts (rule 7: archiving keeps the tag).
 pub(crate) fn ref_tags_of(state: &crate::state::DocState) -> Vec<RefTag> {
     state
         .task_lines()

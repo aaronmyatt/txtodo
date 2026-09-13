@@ -80,7 +80,7 @@ fn reads_filter_by_file_and_order_by_seq_or_hlc() {
         .append(&[
             op(1, 30, 0, "todo.txt"),
             op(2, 10, 1, "todo.txt"),
-            op(3, 10, 0, "done.txt"),
+            op(3, 10, 0, "other.txt"),
             op(4, 10, 0, "todo.txt"),
         ])
         .unwrap();

@@ -6,7 +6,7 @@ Append only. Never edit a prior answer; add a dated follow-up.
 
 ## Q1 — Do non-managed files inside a `ref:` directory ever sync (attachments)?
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.1) · Blocks: M5 sync scope, M8 relay payloads
-- Default until answered: **no**. Only `todo.txt`, `done.txt`, `notes.md` are synced (plan §3.2.11).
+- Default until answered: **no**. Only `todo.txt`, `notes.md` are synced (plan §3.2.11).
 - Answer: Let's limit it to only images, assuming they might be used in the markdown tasks write ups
 - ADR: 0014
 

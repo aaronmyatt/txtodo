@@ -73,11 +73,9 @@ fn do_keeps_the_priority_as_a_pri_tag_unlike_todo_sh() {
     )
     .unwrap();
     assert!(txtodo(dir.path(), &["do", "1"]));
-    assert_eq!(todo_bytes(dir.path()), b"plain\n");
-    let done = std::fs::read_to_string(dir.path().join("done.txt")).unwrap();
     assert_eq!(
-        done,
-        format!("x {} 2026-09-01 urgent +work pri:B\n", today())
+        todo_bytes(dir.path()),
+        format!("plain\nx {} 2026-09-01 urgent +work pri:B\n", today()).into_bytes()
     );
 }
 

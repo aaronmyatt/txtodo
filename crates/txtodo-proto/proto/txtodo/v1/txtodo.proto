@@ -89,7 +89,7 @@ service Txtodo {
 
 message ListFilesRequest {}
 
-// done/total task-line counts for a todo.txt (plan §3.2.5). Unset (both 0) for done.txt/notes.md.
+// done/total task-line counts for a todo.txt (plan §3.2.5). Unset (both 0) for notes.md.
 message Progress {
   uint32 done = 1;
   uint32 total = 2;
@@ -98,7 +98,7 @@ message Progress {
 enum FileKind {
   FILE_KIND_UNSPECIFIED = 0;
   FILE_KIND_TODO = 1;
-  FILE_KIND_DONE = 2;
+  reserved 2; // was FILE_KIND_DONE; done items live in todo.txt now, moved to the bottom
   FILE_KIND_NOTES = 3;
 }
 
@@ -106,8 +106,8 @@ message FileInfo {
   string path = 1;      // workspace-relative, `/` separators
   bytes hash = 2;       // blake3 of the projection, 32 bytes
   FileKind kind = 3;
-  // done = completed lines in this todo.txt + task lines in the sibling done.txt; total = task
-  // lines in both, blanks excluded (plan §3.2.5). Unset for done.txt/notes.md rows.
+  // done = completed lines in this todo.txt; total = task lines, blanks excluded (plan §3.2.5).
+  // Unset for notes.md rows.
   Progress progress = 4;
 }
 
@@ -120,9 +120,9 @@ message ListFilesResponse {
 
 // One node of the workspace tree (plan M5, specs/ref-directories.md rule 2): the workspace root
 // (dir = "") or a ref: directory. `progress` is rule 5's non-recursive done/total for this node's
-// own todo.txt + sibling done.txt. `owner_task_id` is the task whose ref: tag points here; empty
+// own todo.txt. `owner_task_id` is the task whose ref: tag points here; empty
 // for the root and for an orphan (rule 10, `PruneOrphans`). `files` are this node's own rows
-// (whichever of todo.txt/done.txt/notes.md exist); `children` are its ref: sub-directories.
+// (whichever of todo.txt/notes.md exist); `children` are its ref: sub-directories.
 message TreeNode {
   string dir = 1;
   Progress progress = 2;
@@ -202,6 +202,9 @@ message Complete { TaskRef task = 1; string today = 2; }  // YYYY-MM-DD in the c
 message Edit { TaskRef task = 1; string new_line = 2; }  // whole-line replacement; the daemon derives field ops
 message Move { TaskRef task = 1; string to_path = 2; }
 message Delete { TaskRef task = 1; bool leave_blank = 2; } // todo.sh leaves a blank line by default
+// Moves a task within its own file to sit after the last other task (archiving: a completed task
+// stays in todo.txt, pushed to the bottom, instead of moving to a second file).
+message MoveToEnd { TaskRef task = 1; }
 
 message Mutation {
   oneof kind {
@@ -210,6 +213,7 @@ message Mutation {
     Edit edit = 3;
     Move move = 4;
     Delete delete = 5;
+    MoveToEnd move_to_end = 6;
   }
 }
 

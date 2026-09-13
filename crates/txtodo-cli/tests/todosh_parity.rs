@@ -1,7 +1,10 @@
 //! Differential parity (plan M2 acceptance): every scenario runs through the vendored todo.sh
 //! (v2.14.0, `-f -t -p`, default config) and through `txtodo --no-id`; afterwards todo.txt, done.txt
-//! and other.txt must be byte-identical and both runs must agree on success. Needs bash, sed and
-//! date, so it is compiled out on Windows.
+//! and other.txt must be byte-identical and both runs must agree on success. Auto-archive-after-
+//! `do` is suppressed for both tools (`run_todo_sh`'s own doc comment): this app's `archive` moves
+//! a completed task within todo.txt, never to a second done.txt, so it is no longer comparable
+//! byte-for-byte with real todo.sh's archiving — done.txt only ever holds each scenario's seed
+//! here, unchanged by either tool. Needs bash, sed and date, so it is compiled out on Windows.
 #![cfg(not(windows))]
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -56,16 +59,11 @@ const SCENARIOS: &[Scenario] = &[
     s("do-multiple-comma", "a\nb\nc\n", &[&["do", "1,3"]]),
     s("do-multiple-args", "a\nb\nc\n", &[&["do", "2", "3"]]),
     s("do-already-done", "x 2026-01-01 a\nb\n", &[&["do", "1"]]),
-    s("do-defragments-blank-lines", "a\n\nb\n", &[&["do", "3"]]),
+    s("do-leaves-a-blank-line-alone", "a\n\nb\n", &[&["do", "3"]]),
     s(
         "do-then-add",
         "a\n",
         &[&["add", "b"], &["do", "1"], &["add", "c"]],
-    ),
-    s(
-        "archive",
-        "x 2026-01-01 a\n\nb\nx 2026-01-02 c\n",
-        &[&["archive"]],
     ),
     s("archive-nothing-done", "a\n\nb\n", &[&["archive"]]),
     s("del-line", "a\nb\nc\n", &[&["del", "2"]]),
@@ -123,13 +121,6 @@ const SCENARIOS: &[Scenario] = &[
     s("deduplicate", "a\nb\na\n\nb\n", &[&["deduplicate"]]),
     s("deduplicate-none", "a\nb\n", &[&["deduplicate"]]),
     Scenario {
-        name: "report-archives",
-        todo: "x 2026-01-01 a\nb\n",
-        done: "x 2025-12-31 z\n",
-        other: "",
-        steps: &[&["report"]],
-    },
-    Scenario {
         name: "listings-change-nothing",
         todo: "(A) a +work @desk\n\nb +home\nx 2026-01-01 c\n",
         done: "x 2025-12-31 z\n",
@@ -171,10 +162,15 @@ fn command(program: &str, dir: &Path) -> Command {
     cmd
 }
 
+// `-a`/`-A` suppress each tool's own auto-archive-after-`do` (opposite spellings: real todo.sh's
+// `-a` disables it, this app's `-A`/`--no-archive` does). Archiving itself now diverges by design
+// (this app moves a completed task within todo.txt; todo.sh moves it to a second done.txt), so
+// `do` scenarios below stay comparable only with archiving out of the picture; `archive`/`report`
+// invoked directly are covered by this crate's own tests instead of this differential harness.
 fn run_todo_sh(dir: &Path, step: &[&str]) -> bool {
     let cfg = dir.join("todo.cfg");
     let out = command(TODO_SH, dir)
-        .args(["-d", cfg.to_str().unwrap(), "-f", "-t", "-p"])
+        .args(["-d", cfg.to_str().unwrap(), "-f", "-t", "-p", "-a"])
         .args(step)
         .output()
         .unwrap();
@@ -184,7 +180,7 @@ fn run_todo_sh(dir: &Path, step: &[&str]) -> bool {
 fn run_txtodo(dir: &Path, step: &[&str]) -> bool {
     let out = command(env!("CARGO_BIN_EXE_txtodo"), dir)
         .env("TXTODO_CONFIG", dir.join("none.toml"))
-        .args(["--no-id", "--dir", dir.to_str().unwrap()])
+        .args(["--no-id", "--dir", dir.to_str().unwrap(), "-A"])
         .args(step)
         .output()
         .unwrap();

@@ -89,7 +89,7 @@ impl KeyStoreMode {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Directory holding todo.txt, done.txt and report.txt.
+    /// Directory holding todo.txt and report.txt.
     pub todo_dir: Option<String>,
     /// Stamp `id:<ULID>` on `add`. Superseded by `identity_mode` when that is also set; kept
     /// working on its own for an existing config (docs/questions.md Q2 reverses plan §1 decision
@@ -189,8 +189,6 @@ pub struct Paths {
     pub dir: PathBuf,
     /// `<dir>/todo.txt`.
     pub todo: PathBuf,
-    /// `<dir>/done.txt`.
-    pub done: PathBuf,
     /// `<dir>/report.txt`.
     pub report: PathBuf,
     /// The config file that was (or would have been) read.
@@ -227,7 +225,6 @@ pub fn resolve(env: &Env, dir_flag: Option<&str>, config: &Config, config_file: 
     );
     let paths = Paths {
         todo: dir.join("todo.txt"),
-        done: dir.join("done.txt"),
         report: dir.join("report.txt"),
         dir,
         config: config_file,
