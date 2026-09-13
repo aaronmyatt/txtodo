@@ -73,6 +73,9 @@ pub mod watcher;
 pub mod workspace;
 mod workspace_error;
 mod workspace_mint;
+pub mod workspace_registry;
+mod workspace_registry_error;
+pub mod workspace_registry_paths;
 pub mod write;
 
 #[cfg(test)]
@@ -107,5 +110,7 @@ mod state_goldens;
 mod state_tests;
 #[cfg(test)]
 mod sync_ops_tests;
+#[cfg(test)]
+mod workspace_registry_tests;
 #[cfg(test)]
 mod workspace_tests;
