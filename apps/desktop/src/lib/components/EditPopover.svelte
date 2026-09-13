@@ -20,6 +20,7 @@
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	// Ref: https://codemirror.net/docs/ref/ (EditorState, EditorView, keymap, Prec)
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
+	import { singleLineFilter } from "$lib/todotxt/singleLineFilter";
 	import { parseLineStrict, type StrictCheckResult } from "$lib/wasmCore";
 	import { history as fetchHistory, type TaskRef } from "$lib/daemon";
 	import {
@@ -99,22 +100,6 @@
 			const result = await parseLineStrict(text);
 			strictError = result.ok ? null : result;
 		}, VALIDATE_DEBOUNCE_MS);
-	}
-
-	/** Keeps the popover single-line: strips any "\n" a paste/IME could otherwise introduce.
-	 * Ref: https://codemirror.net/docs/ref/#state.EditorState^transactionFilter */
-	function singleLineFilter(): Extension {
-		return EditorState.transactionFilter.of((tr) => {
-			if (!tr.docChanged) return tr;
-			const text = tr.newDoc.toString();
-			if (!text.includes("\n")) return tr;
-			return [
-				{
-					changes: { from: 0, to: tr.startState.doc.length, insert: text.replace(/\n/g, "") },
-					selection: tr.selection
-				}
-			];
-		});
 	}
 
 	/** Enter saves, Esc cancels; `Prec.highest` so these win over `defaultKeymap`/`historyKeymap`

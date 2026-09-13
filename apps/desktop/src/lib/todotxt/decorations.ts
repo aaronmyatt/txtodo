@@ -139,6 +139,7 @@ export function lineDecorations(containingPath: string, filesByPath: ReadonlyMap
 export const mainViewBaseTheme = EditorView.baseTheme({
 	".cm-todotxt-done": { opacity: "0.55" },
 	".cm-todotxt-strike": { textDecoration: "line-through" },
+	".cm-todotxt-hover": { backgroundColor: "rgba(15, 23, 42, 0.05)" },
 	".cm-todotxt-ref-indicator": {
 		marginLeft: "0.5em",
 		fontSize: "0.85em",

@@ -10,6 +10,12 @@
 	// parent line's *own* `ref:` tag (via the same `findRefTag` the main view's decorations use) to
 	// know where the sub-list/notes for THIS task already live, if they do.
 	import { onDestroy, onMount } from "svelte";
+	import { EditorState } from "@codemirror/state";
+	import { EditorView, keymap } from "@codemirror/view";
+	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
+	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
+	import { idTagsHidden } from "$lib/todotxt/decorations";
+	import { singleLineFilter } from "$lib/todotxt/singleLineFilter";
 	import {
 		applyMutations,
 		getFile,
@@ -25,7 +31,6 @@
 	import type { DetailParams } from "$lib/types";
 	import Breadcrumb from "./Breadcrumb.svelte";
 	import ConflictBanner from "./ConflictBanner.svelte";
-	import EditPopover from "./EditPopover.svelte";
 	import FileView from "./FileView.svelte";
 	import NotesEditor from "./NotesEditor.svelte";
 
@@ -47,11 +52,18 @@
 
 	let parentLine = $state("");
 	let parentTaskId = $state("");
-	let popoverOpen = $state(false);
 	let saveError = $state("");
 	let loadError = $state("");
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let workspaceRootPath = $state("");
+
+	// The pinned parent line edits directly, the same as FileView's own document (click, type,
+	// blur/Enter commits) — no popover. `parentDirty`/`parentBaseline` mirror FileView.svelte's
+	// `dirty`/`baseline` pair, scoped to this one line instead of a whole file.
+	let parentEditorEl: HTMLDivElement | undefined;
+	let parentView: EditorView | undefined;
+	let parentDirty = $state(false);
+	let parentBaseline = "";
 
 	const parentTaskRef = $derived<TaskRef>({ line_number: current.line, task_id: parentTaskId });
 	const refTag = $derived(findRefTag(parentLine));
@@ -83,17 +95,38 @@
 		filesByPath = new Map((await listFiles()).map((f) => [f.path, f]));
 	}
 
-	function openPopover() {
-		popoverOpen = true;
+	/** Pushes fresh `parentLine` content into the CM6 doc, unless a local edit is in progress
+	 * (mirrors FileView.svelte's `refreshDoc` guard: a concurrent `Watch` change must never
+	 * silently overwrite the human's in-progress edit). Always updates `parentBaseline`, even
+	 * while dirty, so a later commit diffs against the true last-known-good text. */
+	function syncParentDoc(text: string) {
+		parentBaseline = text;
+		if (!parentView || parentDirty) return;
+		if (parentView.state.doc.toString() !== text) {
+			parentView.dispatch({ changes: { from: 0, to: parentView.state.doc.length, insert: text } });
+		}
 	}
 
-	function closePopover() {
-		popoverOpen = false;
+	async function commitParentEdit() {
+		if (!parentView || !parentDirty) return;
+		const next = parentView.state.doc.toString();
+		const base = parentBaseline;
+		parentDirty = false;
+		if (next === base) return;
+		saveError = "";
+		try {
+			await applyMutations(current.file, [{ kind: "edit", task: parentTaskRef, new_line: next }]);
+			// The daemon's own `Change` repaints `parentLine` (loadParentLine), which flows back
+			// through `syncParentDoc` above — no manual repaint here.
+		} catch (e) {
+			saveError = String(e);
+		}
 	}
 
-	async function saveParentEdit(newLine: string) {
-		await applyMutations(current.file, [{ kind: "edit", task: parentTaskRef, new_line: newLine }]);
-		popoverOpen = false;
+	function discardParentEdit() {
+		if (!parentView || !parentDirty) return;
+		parentView.dispatch({ changes: { from: 0, to: parentView.state.doc.length, insert: parentBaseline } });
+		parentDirty = false;
 	}
 
 	async function markParentDone() {
@@ -128,8 +161,68 @@
 		};
 	});
 
+	onMount(() => {
+		parentView = new EditorView({
+			state: EditorState.create({
+				doc: parentLine,
+				extensions: [
+					todotxtLanguage,
+					idTagsHidden,
+					singleLineFilter(),
+					cmHistory(),
+					// `Prec.highest` isn't needed here since these are the only Enter/Escape bindings —
+					// `defaultKeymap`'s own Enter (insert newline) never gets a chance to run first as
+					// long as this array comes before it (CM6 keymaps are tried in extension order).
+					keymap.of([
+						{
+							key: "Enter",
+							preventDefault: true,
+							run: () => {
+								commitParentEdit();
+								return true;
+							}
+						},
+						{
+							key: "Escape",
+							preventDefault: true,
+							run: () => {
+								discardParentEdit();
+								return true;
+							}
+						},
+						...historyKeymap,
+						...defaultKeymap
+					]),
+					EditorView.domEventHandlers({
+						blur: () => {
+							if (parentDirty) commitParentEdit();
+							return false;
+						}
+					}),
+					EditorView.updateListener.of((u) => {
+						if (u.docChanged) parentDirty = u.state.doc.toString() !== parentBaseline;
+					})
+				]
+			}),
+			parent: parentEditorEl
+		});
+		return () => {
+			parentView?.destroy();
+		};
+	});
+
 	onDestroy(() => {
 		unlistenChange?.();
+		// Best-effort, fire-and-forget commit (same pattern FileView.svelte's own onDestroy
+		// follows): a dirty parent-line edit must never just vanish with the component.
+		if (parentDirty && parentView) {
+			const next = parentView.state.doc.toString();
+			applyMutations(current.file, [{ kind: "edit", task: parentTaskRef, new_line: next }]).catch(() => {});
+		}
+	});
+
+	$effect(() => {
+		syncParentDoc(parentLine);
 	});
 
 	// Re-baseline when the human navigates to a different level of an already-mounted DetailView
@@ -161,20 +254,7 @@
 	<ConflictBanner path={current.file} />
 
 	<section class="parent" aria-label="Parent task">
-		{#if popoverOpen}
-			<EditPopover
-				path={current.file}
-				initialLine={parentLine}
-				taskRef={parentTaskRef}
-				anchor={null}
-				onSave={saveParentEdit}
-				onCancel={closePopover}
-			/>
-		{:else}
-			<button type="button" class="parent-line" onclick={openPopover}>
-				<code>{parentLine}</code>
-			</button>
-		{/if}
+		<div class="parent-line" bind:this={parentEditorEl}></div>
 		{#if saveError}
 			<p class="error" role="alert">{saveError}</p>
 		{/if}
@@ -188,8 +268,6 @@
 	{#if subListInfo && subListInfo.total > 0}
 		<section class="sublist" aria-label="Sub-list">
 			<h2>{subListInfo.done} of {subListInfo.total} done</h2>
-			<!-- No `onEditRequest`: the sub-list hosts its own popover locally (FileView's built-in
-			     fallback), the same as the root view would if MainView didn't host one either. -->
 			<FileView path={subListPath ?? ""} {depth} onDetailRequest={onNavigateInto} />
 		</section>
 	{:else}
@@ -261,12 +339,12 @@
 	}
 
 	.parent-line {
-		background: transparent;
-		border: none;
-		text-align: left;
-		cursor: pointer;
-		font-size: 1rem;
 		width: 100%;
+		font-size: 1rem;
+	}
+
+	.parent-line :global(.cm-editor) {
+		outline: none;
 	}
 
 	.mark-done-offer {

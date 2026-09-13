@@ -1,23 +1,12 @@
 <script lang="ts">
 	// The app's top-level screen (tasks/desktop-main-view): the daemon connectivity banner (moved
-	// here from the old proof-of-pipeline +page.svelte), the root `todo.txt` file view, and the
-	// edit popover host. `FileView` reports a click-to-edit via its optional `onEditRequest` prop;
-	// hosting the popover here (rather than inside `FileView`) is what the task notes mean by
-	// "MainView... is where you mount the edit popover once a line is clicked."
+	// here from the old proof-of-pipeline +page.svelte) and the root `todo.txt` file view, which
+	// edits directly (click a line, type — no popover; see FileView.svelte's own module doc).
 	import { onMount } from "svelte";
-	import {
-		applyMutations,
-		daemonStatus,
-		onDaemonStatus,
-		retryConnect,
-		setMainPopoverDirty,
-		type DaemonStatus
-	} from "$lib/daemon";
-	import type { EditRequest } from "$lib/todotxt/editRequest";
+	import { daemonStatus, onDaemonStatus, retryConnect, setMainPopoverDirty, type DaemonStatus } from "$lib/daemon";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
-	import EditPopover from "./EditPopover.svelte";
 	import FileView from "./FileView.svelte";
 
 	// Component contract says `<FileView path="todo.txt" depth={0}/>` explicitly; we take that at
@@ -25,8 +14,6 @@
 	const ROOT_PATH = "todo.txt";
 
 	let status = $state<DaemonStatus>("connecting");
-	let popover = $state<EditRequest | null>(null);
-	let saveError = $state("");
 
 	// Detail-view navigation (tasks/desktop-detail-view, plan §3.2): a stack of open levels, empty
 	// meaning "show the root file view" — the detail view replaces this screen's content, it never
@@ -48,26 +35,10 @@
 		status = await retryConnect();
 	}
 
-	async function savePopover(newLine: string) {
-		if (!popover) return;
-		const { path, taskRef } = popover;
-		popover = null;
-		saveError = "";
-		try {
-			await applyMutations(path, [{ kind: "edit", task: taskRef, new_line: newLine }]);
-		} catch (e) {
-			saveError = String(e);
-		}
-	}
-
-	function cancelPopover() {
-		popover = null;
-	}
-
-	/** Wired to `EditPopover`'s `onDirtyChange` — see `$lib/daemon.ts::setMainPopoverDirty`'s doc
-	 * comment. Best-effort: a failed update here only affects which window the hotkey focuses
-	 * next, never whether a save/cancel works. */
-	function handlePopoverDirtyChange(dirty: boolean) {
+	/** Wired to the root `FileView`'s `onDirtyChange` — see `$lib/daemon.ts::setMainPopoverDirty`'s
+	 * doc comment. Best-effort: a failed update here only affects which window the hotkey focuses
+	 * next, never whether an edit commits. */
+	function handleDirtyChange(dirty: boolean) {
 		setMainPopoverDirty(dirty).catch(() => {});
 	}
 
@@ -90,12 +61,6 @@
 		</div>
 	{/if}
 
-	{#if saveError}
-		<div class="banner error" role="alert">
-			<span>Save failed: {saveError}</span>
-		</div>
-	{/if}
-
 	<div class="top-nav">
 		<h1>txtodo</h1>
 		<a href="/devices">Devices &amp; agents</a>
@@ -104,25 +69,7 @@
 	{#if detail.length === 0}
 		<ConflictBanner path={ROOT_PATH} />
 
-		<FileView
-			path={ROOT_PATH}
-			depth={0}
-			fill
-			onEditRequest={(req) => (popover = req)}
-			onDetailRequest={openDetail}
-		/>
-
-		{#if popover}
-			<EditPopover
-				path={popover.path}
-				initialLine={popover.initialLine}
-				taskRef={popover.taskRef}
-				anchor={popover.anchor}
-				onSave={savePopover}
-				onCancel={cancelPopover}
-				onDirtyChange={handlePopoverDirtyChange}
-			/>
-		{/if}
+		<FileView path={ROOT_PATH} depth={0} fill onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
 	{:else}
 		<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
 	{/if}
@@ -160,7 +107,4 @@
 		margin: 0.75rem 1rem 0;
 	}
 
-	.banner.error {
-		background: #fecaca;
-	}
 </style>
