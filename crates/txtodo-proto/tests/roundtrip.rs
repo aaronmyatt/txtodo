@@ -110,6 +110,10 @@ fn responses_and_streams_round_trip() {
         started_at_ms: 20,
         writes_total: 30,
         version: "0.0.0".into(),
+        lan_relay_disabled: true,
+        lan_endpoint_bound: true,
+        lan_discovery_active: true,
+        lan_group_key_present: false,
     });
 }
 
