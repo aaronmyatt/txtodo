@@ -23,8 +23,13 @@ struct Args {
     /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3);
     /// `Sidecar` when the flag is omitted (docs/questions.md Q2).
     identity_mode: IdentityMode,
-    /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `Auto` when omitted.
-    key_store_mode: KeyStoreMode,
+    /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `None` when the flag is
+    /// omitted entirely — deliberately distinct from `Some(KeyStoreMode::Auto)`. Omitted keeps
+    /// the pre-existing in-memory placeholder (`Workspace::open_with_default_mode`), so every
+    /// script or test that spawns this binary without knowing about the flag is unaffected;
+    /// `auto` (like `os`) touches the real OS keychain, which most CI/headless environments do
+    /// not have reachable, and must never become what a plain `txtodod --dir X` does on its own.
+    key_store_mode: Option<KeyStoreMode>,
 }
 
 fn parse_identity_mode(raw: &std::ffi::OsStr) -> Result<IdentityMode, String> {
@@ -50,7 +55,7 @@ fn parse_args() -> Result<Args, String> {
     let mut args = std::env::args_os().skip(1);
     let mut dir: Option<PathBuf> = None;
     let mut identity_mode = IdentityMode::Sidecar;
-    let mut key_store_mode = KeyStoreMode::Auto;
+    let mut key_store_mode = None;
     // Bounded by the argv length; four flags are all this binary knows.
     while let Some(a) = args.next() {
         match a.to_str() {
@@ -61,7 +66,7 @@ fn parse_args() -> Result<Args, String> {
             }
             Some("--key-store") => {
                 let raw = args.next().ok_or("--key-store needs a value")?;
-                key_store_mode = parse_key_store_mode(&raw)?;
+                key_store_mode = Some(parse_key_store_mode(&raw)?);
             }
             Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
             _ => {
@@ -130,9 +135,17 @@ fn main() -> ExitCode {
 
 /// `file` needs a passphrase (prompted here, on this binary's own stdin — never a CLI argument or
 /// environment variable, CLAUDE.md §3.1); `auto`/`os` never do (the OS keychain manages its own
-/// unlock via the login session).
+/// unlock via the login session). `--key-store` omitted entirely keeps the pre-existing in-memory
+/// placeholder (see the field doc on `Args::key_store_mode` for why that must stay the default).
 fn open_workspace(args: &Args) -> Result<Workspace, Box<dyn std::error::Error>> {
-    let file_passphrase = if args.key_store_mode == KeyStoreMode::File {
+    let Some(key_store_mode) = args.key_store_mode else {
+        return Ok(Workspace::open_with_default_mode(
+            &args.dir,
+            Arc::new(SystemClock),
+            args.identity_mode,
+        )?);
+    };
+    let file_passphrase = if key_store_mode == KeyStoreMode::File {
         Some(prompt_file_passphrase()?)
     } else {
         None
@@ -141,7 +154,7 @@ fn open_workspace(args: &Args) -> Result<Workspace, Box<dyn std::error::Error>> 
         &args.dir,
         Arc::new(SystemClock),
         args.identity_mode,
-        args.key_store_mode,
+        key_store_mode,
         file_passphrase,
     )?)
 }
