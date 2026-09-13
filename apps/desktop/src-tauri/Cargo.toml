@@ -16,6 +16,18 @@ description = "Tauri 2 desktop shell: thin gRPC bridge to txtodod (plan M7, desi
 name = "desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+# Test-only HTTP bridge for tasks/desktop-playwright-tests (see src/bin/e2e_bridge.rs's module
+# doc). `required-features` keeps this out of a plain `cargo build -p desktop` entirely — the
+# "guarded so it can never ship enabled to production" rule — so its `axum` dependency below is
+# also `optional`, only pulled in when a caller explicitly opts into the `e2e-bridge` feature.
+name = "e2e_bridge"
+path = "src/bin/e2e_bridge.rs"
+required-features = ["e2e-bridge"]
+
+[features]
+e2e-bridge = ["dep:axum", "dep:txtodo-store", "dep:txtodo-model"]
+
 [build-dependencies]
 # https://docs.rs/tauri-build — embeds tauri.conf.json and generates capability schemas
 tauri-build = { version = "2", features = [] }
@@ -27,6 +39,9 @@ txtodo-proto = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+# https://docs.rs/tauri-plugin-global-shortcut — menu-bar quick-add's global hotkey
+# (tasks/desktop-quick-add/notes.md). New dependency: needs human sign-off + a `cargo deny` pass.
+tauri-plugin-global-shortcut = "2"
 # https://docs.rs/serde — DTOs that cross the Tauri IPC bridge (prost types aren't Serialize)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -34,6 +49,17 @@ serde_json = "1"
 tonic = "0.14"
 # https://docs.rs/tokio — async runtime backing the Tauri commands and the spawn/probe logic
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net", "time", "process"] }
+# https://docs.rs/axum — `e2e_bridge`'s HTTP surface only (see the `e2e-bridge` feature above);
+# already an existing transitive dependency of `tauri` at the same major version, so this doesn't
+# add a second copy to the dependency tree. New dependency: needs human sign-off + `cargo deny`.
+axum = { version = "0.8", optional = true }
+# `e2e_bridge`'s `debug_raise_conflict` only (conflict.spec.ts): raises a needs_review flag the
+# same way `crates/txtodo-daemon/tests/grpc.rs::raise_flag` does for the daemon's own tests — real
+# daemon-to-daemon sync isn't wired up yet (see tasks/desktop-playwright-tests/notes.md's "As
+# built" for why), so this is the same already-established substitute the daemon team itself uses.
+# Workspace members, not new external dependencies.
+txtodo-store = { workspace = true, optional = true }
+txtodo-model = { workspace = true, optional = true }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — every test gets its own workspace dir, like crates/txtodo-daemon/tests

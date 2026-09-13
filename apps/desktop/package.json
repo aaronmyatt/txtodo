@@ -11,12 +11,14 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "tauri": "tauri",
     "build:wasm-core": "bash scripts/build-wasm-core.sh"
   },
   "license": "MIT",
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language": "^6.12.4",
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
@@ -29,6 +31,7 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.65.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

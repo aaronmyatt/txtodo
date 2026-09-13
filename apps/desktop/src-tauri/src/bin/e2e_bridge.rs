@@ -1,0 +1,337 @@
+//! Test-only HTTP bridge standing in for the Tauri IPC layer, so Playwright (a plain browser, no
+//! Tauri runtime) can drive the real frontend against a real `txtodod`
+//! (tasks/desktop-playwright-tests/notes.md: "the harness runs the real daemon on a tempdir
+//! workspace ... the code under test is the real reconciler, real file bytes, real op log").
+//!
+//! This reuses `desktop_lib`'s own `DaemonClient` and `dto` conversions directly — it is
+//! deliberately NOT a second gRPC client or a re-implementation of `commands.rs`'s logic, just
+//! that same logic restated over plain JSON/HTTP instead of Tauri's IPC, for the handful of
+//! commands the e2e suite's scenarios need (`apps/desktop/e2e/shim/core.ts` is the frontend half).
+//!
+//! Guarded so it can never ship enabled to production: this binary only exists behind the
+//! `e2e-bridge` Cargo feature (`Cargo.toml`'s `required-features` on this `[[bin]]`), which a
+//! plain `cargo build -p desktop` never enables.
+//!
+//! Run: `TXTODO_WORKSPACE=<dir> E2E_BRIDGE_PORT=<port> cargo run -p desktop --features
+//! e2e-bridge --bin e2e_bridge` — `apps/desktop/e2e/fixtures.ts` does exactly this.
+//! Ref: <https://docs.rs/axum>
+
+use axum::extract::{Request, State};
+use axum::http::{HeaderValue, StatusCode};
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use desktop_lib::config::DesktopConfig;
+use desktop_lib::daemon::{self, DaemonClient, DaemonError};
+use desktop_lib::dto::{
+    ApplyResultDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto, NotesDocDto,
+    ResolutionDto, ReviewFlagDto, TaskRefDto,
+};
+use serde::Deserialize;
+use serde_json::Value;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use txtodo_model::{FilePath, TaskId, Ulid};
+use txtodo_proto::v1 as pb;
+use txtodo_store::{ReviewRow, Store};
+
+/// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
+/// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
+/// `crates/txtodo-daemon/tests/grpc.rs::raise_flag`).
+struct BridgeState {
+    client: Mutex<DaemonClient>,
+    workspace: PathBuf,
+}
+
+type Shared = Arc<BridgeState>;
+
+#[tokio::main]
+async fn main() {
+    let workspace = std::env::var("TXTODO_WORKSPACE")
+        .unwrap_or_else(|_| panic!("e2e_bridge: TXTODO_WORKSPACE must be set"));
+    let port: u16 = std::env::var("E2E_BRIDGE_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4567);
+
+    let cfg = DesktopConfig::new(workspace.clone());
+    let sock = daemon::ensure_daemon(&cfg)
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: ensure_daemon: {e}"));
+    let mut client = DaemonClient::connect(&sock)
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: connect: {e}"));
+    client
+        .wait_until_ready()
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: wait_until_ready: {e}"));
+    let shared: Shared = Arc::new(BridgeState {
+        client: Mutex::new(client),
+        workspace: PathBuf::from(workspace),
+    });
+
+    // No auth, no TLS: binds to loopback only and only ever runs for the lifetime of one
+    // Playwright test process on a throwaway tempdir workspace. CORS is wide open (`*`) for the
+    // same reason: the page under test is served by Vite on a *different* port
+    // (playwright.config.ts), so every `/invoke` call is cross-origin from the browser's
+    // perspective, and a JSON POST body triggers a preflight `OPTIONS` — both need an explicit
+    // answer here since this binary talks to nothing but a loopback-only Playwright browser.
+    let app = Router::new()
+        .route("/health", get(|| async { "ok" }))
+        .route("/invoke", post(invoke).options(preflight))
+        .layer(middleware::from_fn(add_cors_headers))
+        .with_state(shared);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: bind {addr}: {e}"));
+    axum::serve(listener, app)
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: serve: {e}"));
+}
+
+/// Answers a CORS preflight `OPTIONS /invoke`; `add_cors_headers` below fills in the actual
+/// headers a browser checks (this handler only needs to return a success status).
+async fn preflight() -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+/// Adds permissive CORS headers to every response — see the `Router` construction in `main` for
+/// why this loopback-only, test-only binary needs them at all.
+async fn add_cors_headers(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert("access-control-allow-origin", HeaderValue::from_static("*"));
+    headers.insert(
+        "access-control-allow-methods",
+        HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    headers.insert(
+        "access-control-allow-headers",
+        HeaderValue::from_static("content-type"),
+    );
+    response
+}
+
+/// Mirrors `@tauri-apps/api/core`'s `invoke(cmd, args)` shape exactly, so
+/// `apps/desktop/e2e/shim/core.ts` can be a nearly-transparent stand-in for the real thing.
+#[derive(Deserialize)]
+struct InvokeReq {
+    cmd: String,
+    #[serde(default)]
+    args: Value,
+}
+
+/// Every failure here becomes a `400` whose body is the error's `Display` text — matching how a
+/// rejected Tauri `invoke()` surfaces a plain string to the frontend's `catch (e) { String(e) }`.
+struct ApiError(String);
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (StatusCode::BAD_REQUEST, self.0).into_response()
+    }
+}
+
+impl From<DaemonError> for ApiError {
+    fn from(e: DaemonError) -> ApiError {
+        ApiError(e.to_string())
+    }
+}
+
+impl From<serde_json::Error> for ApiError {
+    fn from(e: serde_json::Error) -> ApiError {
+        ApiError(format!("e2e_bridge: bad args/response: {e}"))
+    }
+}
+
+fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
+    serde_json::from_value(args).map_err(ApiError::from)
+}
+
+/// The handful of commands the six Playwright scenarios need (tasks/desktop-playwright-tests):
+/// `list_files`, `get_file`, `apply`, `history`, `list_conflicts`, `resolve`, `get_notes`,
+/// `edit_notes`, plus the test-only `debug_raise_conflict` (conflict.spec.ts — see that
+/// function's doc comment). `watch`/`daemon_status`/pairing/tokens/activity are unused by those
+/// scenarios and intentionally not wired here — `e2e/shim/event.ts` polls the commands above
+/// instead of using a real `Watch` stream (see that file's module doc for why that's still "real
+/// reconciliation"). Dispatches to one `cmd_*` function per command (kept separate, not inlined,
+/// so no single match arm grows past this crate's line-count lint).
+async fn invoke(
+    State(state): State<Shared>,
+    Json(req): Json<InvokeReq>,
+) -> Result<Response, ApiError> {
+    if req.cmd == "debug_raise_conflict" {
+        let value = cmd_debug_raise_conflict(&state.workspace, req.args)?;
+        return Ok(Json(value).into_response());
+    }
+    let mut client = state.client.lock().await;
+    let value: Value = match req.cmd.as_str() {
+        "list_files" => cmd_list_files(&mut client).await?,
+        "get_file" => cmd_get_file(&mut client, req.args).await?,
+        "apply" => cmd_apply(&mut client, req.args).await?,
+        "history" => cmd_history(&mut client, req.args).await?,
+        "list_conflicts" => cmd_list_conflicts(&mut client, req.args).await?,
+        "resolve" => cmd_resolve(&mut client, req.args).await?,
+        "get_notes" => cmd_get_notes(&mut client, req.args).await?,
+        "edit_notes" => cmd_edit_notes(&mut client, req.args).await?,
+        other => {
+            return Err(ApiError(format!(
+                "e2e_bridge: unsupported command {other:?}"
+            )));
+        }
+    };
+    Ok(Json(value).into_response())
+}
+
+/// Raises a `needs_review` flag directly in `.txtodo/oplog.db`, the same way
+/// `crates/txtodo-daemon/tests/grpc.rs::raise_flag` does for the daemon's own tests: "what an
+/// import merge would do... no actual sync is needed." Real daemon-to-daemon sync has no
+/// transport wired up yet at all (`crates/txtodo-daemon/src/pairing_grpc.rs`'s own doc comment;
+/// see `todo.txt`'s `sync-loopback-converge` entry) — this is not a workaround invented for this
+/// harness, it's the same substitute the daemon team already uses to test `ListConflicts`/
+/// `ResolveConflict` without it. WAL mode lets this connection share the file safely with the
+/// live daemon's own connection to the same database.
+fn cmd_debug_raise_conflict(workspace: &std::path::Path, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Req {
+        path: String,
+        task_id: String,
+        mine: String,
+        theirs: String,
+    }
+    let r: Req = parse(args)?;
+    let file = FilePath::new(&r.path)
+        .map_err(|e| ApiError(format!("e2e_bridge: invalid path {:?}: {e}", r.path)))?;
+    let ulid = Ulid::parse(&r.task_id)
+        .ok_or_else(|| ApiError(format!("e2e_bridge: invalid task_id {:?}", r.task_id)))?;
+    let raised_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(1);
+
+    let mut store = Store::open(&workspace.join(".txtodo").join("oplog.db"))
+        .map_err(|e| ApiError(format!("e2e_bridge: Store::open: {e}")))?;
+    store
+        .raise_flag(&ReviewRow {
+            file,
+            task: TaskId::new(ulid),
+            raised_at_ms,
+            mine: r.mine.into_bytes(),
+            theirs: r.theirs.into_bytes(),
+        })
+        .map_err(|e| ApiError(format!("e2e_bridge: raise_flag: {e}")))?;
+    Ok(Value::Null)
+}
+
+async fn cmd_list_files(client: &mut DaemonClient) -> Result<Value, ApiError> {
+    let resp = client.list_files().await?;
+    let dtos: Vec<FileInfoDto> = resp.files.into_iter().map(FileInfoDto::from).collect();
+    Ok(serde_json::to_value(dtos)?)
+}
+
+async fn cmd_get_file(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        path: String,
+    }
+    let r: Req = parse(args)?;
+    let resp = client.get_file(&r.path).await?;
+    Ok(serde_json::to_value(FileContentsDto::from(resp))?)
+}
+
+async fn cmd_apply(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        path: String,
+        mutations: Vec<MutationDto>,
+    }
+    let r: Req = parse(args)?;
+    let pb_req = pb::ApplyRequest {
+        path: r.path,
+        mutations: r.mutations.into_iter().map(pb::Mutation::from).collect(),
+        agent: None,
+    };
+    let resp = client.apply(pb_req).await?;
+    Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
+}
+
+async fn cmd_history(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Req {
+        path: String,
+        task_id: String,
+        limit: u32,
+    }
+    let r: Req = parse(args)?;
+    let resp = client
+        .history(pb::HistoryRequest {
+            path: r.path,
+            task_id: r.task_id,
+            limit: r.limit,
+            before_seq: 0,
+        })
+        .await?;
+    Ok(serde_json::to_value(HistoryDto::from(resp))?)
+}
+
+async fn cmd_list_conflicts(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        path: String,
+    }
+    let r: Req = parse(args)?;
+    let resp = client.list_conflicts(&r.path).await?;
+    let dtos: Vec<ReviewFlagDto> = resp.flags.into_iter().map(ReviewFlagDto::from).collect();
+    Ok(serde_json::to_value(dtos)?)
+}
+
+async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        path: String,
+        task: TaskRefDto,
+        resolution: ResolutionDto,
+    }
+    let r: Req = parse(args)?;
+    let resp = client
+        .resolve(pb::ResolveRequest {
+            path: r.path,
+            task: Some(r.task.into()),
+            resolution: pb::Resolution::from(r.resolution) as i32,
+        })
+        .await?;
+    Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
+}
+
+async fn cmd_get_notes(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        task: TaskRefDto,
+    }
+    let r: Req = parse(args)?;
+    let resp = client.get_notes(r.task.into()).await?;
+    Ok(serde_json::to_value(NotesDocDto::from(resp))?)
+}
+
+async fn cmd_edit_notes(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Req {
+        task: TaskRefDto,
+        new_text: String,
+    }
+    let r: Req = parse(args)?;
+    let resp = client
+        .edit_notes(pb::NotesEditRequest {
+            task: Some(r.task.into()),
+            new_text: r.new_text,
+        })
+        .await?;
+    Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
+}

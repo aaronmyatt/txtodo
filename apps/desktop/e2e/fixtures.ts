@@ -1,0 +1,195 @@
+// Playwright harness: spawns a REAL `txtodod` on a seeded tempdir workspace, fronted by the
+// test-only `e2e_bridge` HTTP bridge (apps/desktop/src-tauri/src/bin/e2e_bridge.rs), so the app
+// under test drives real reconciliation/real file bytes/real op log, not a stubbed reducer
+// (tasks/desktop-playwright-tests/notes.md). Each spec calls `spawnDaemon(fixture)` for its own
+// fresh workspace — "no test may depend on another's side effects" (that file's own rule).
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+// apps/desktop/e2e -> apps/desktop -> apps -> repo root
+const REPO_ROOT = join(HERE, "..", "..", "..");
+const TARGET_DEBUG = join(REPO_ROOT, "target", "debug");
+
+let builtOnce = false;
+
+/** Builds `e2e_bridge` (behind its `e2e-bridge` feature — see that file's module doc for why it's
+ * feature-gated) and `txtodod` once per Playwright run, not once per spec file. */
+function ensureBuilt(): void {
+	if (builtOnce) return;
+	execFileSync(
+		"cargo",
+		["build", "-p", "desktop", "--features", "e2e-bridge", "--bin", "e2e_bridge"],
+		{ cwd: REPO_ROOT, stdio: "inherit" }
+	);
+	execFileSync("cargo", ["build", "-p", "txtodo-daemon", "--bin", "txtodod"], {
+		cwd: REPO_ROOT,
+		stdio: "inherit"
+	});
+	builtOnce = true;
+}
+
+/** Playwright runs each test file in its own worker *process* by default, so a plain incrementing
+ * counter here would restart at the same value in every worker and collide across parallel specs
+ * — pick from a wide random range instead (fullyParallel: true in playwright.config.ts). */
+function pickPort(): number {
+	return 20_000 + Math.floor(Math.random() * 20_000);
+}
+
+export interface DaemonHandle {
+	/** `e2e_bridge`'s HTTP port; pass this to `installBridgeUrl` for the page under test. */
+	port: number;
+	/** The tempdir workspace root — read files directly from here for a byte-diff assertion. */
+	dir: string;
+	/** Kills the bridge and the `txtodod` it spawned, then removes the tempdir. */
+	dispose(): void;
+}
+
+/**
+ * A named workspace layout each spec starts from. Fixtures that need a task to have a real,
+ * client-resolvable `task_id` (e.g. to open the notes editor — see
+ * `$lib/components/DetailView.svelte`'s guard) write a hand-authored `id:` tag: a workspace with
+ * any `id:` tag on disk auto-detects `identity_mode = tagged`
+ * (`crates/txtodo-daemon/src/workspace.rs`), which is what makes that resolvable at all under the
+ * new sidecar-by-default identity mode (see tasks/desktop-detail-view/notes.md's "As built" for
+ * the full explanation).
+ */
+export type FixtureName = "todo" | "popover" | "nested" | "notes-create" | "conflict";
+
+function seed(dir: string, fixture: FixtureName): void {
+	switch (fixture) {
+		case "todo":
+			writeFileSync(join(dir, "todo.txt"), "(A) buy milk +home @errand\ncall mum @phone\n");
+			return;
+		case "popover":
+			writeFileSync(join(dir, "todo.txt"), "(A) call mum id:01ARZ3NDEKTSV4RRFFQ69G5FAV\n");
+			return;
+		case "nested": {
+			writeFileSync(
+				join(dir, "todo.txt"),
+				"(A) plan the roadmap ref:q4-roadmap id:01ARZ3NDEKTSV4RRFFQ69G5FA2\n"
+			);
+			mkdirSync(join(dir, "q4-roadmap"));
+			writeFileSync(join(dir, "q4-roadmap", "todo.txt"), "(B) draft the outline\n");
+			return;
+		}
+		case "notes-create":
+			writeFileSync(
+				join(dir, "todo.txt"),
+				"(A) plan the roadmap id:01ARZ3NDEKTSV4RRFFQ69G5FA3\n"
+			);
+			return;
+		case "conflict":
+			// No priority prefix, matching `crates/txtodo-daemon/tests/grpc.rs`'s own
+			// `resolve_merged_keeps_bytes_and_mine_writes_the_side_back` fixture exactly — see
+			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
+			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
+			return;
+	}
+}
+
+/** The ULID `id:` tag hand-seeded by the `"conflict"` fixture above — `conflict.spec.ts` needs it
+ * to address `debugRaiseConflict`/`resolve`. */
+export const CONFLICT_TASK_ID = "01ARZ3NDEKTSV4RRFFQ69G5FA4";
+const CONFLICT_ID_TAG = `id:${CONFLICT_TASK_ID}`;
+
+/**
+ * `mine`/`theirs` for the `"conflict"` fixture, each the *whole description field including its
+ * `id:` tag* — not just the human-readable words. `ReviewFlagDto`'s own doc comment says "this
+ * device's description," which reads like it should exclude tags, but
+ * `crates/txtodo-daemon/tests/grpc.rs`'s own `raise_flag` helper embeds the id tag inside `mine`/
+ * `theirs` too (`format!("first task (mine) {id_text}")`) and resolving `mine`/`theirs` without it
+ * fails server-side ("inserted line does not carry id ..." — confirmed by hand while writing this
+ * spec). Match that exact shape rather than the doc comment's wording.
+ */
+export const CONFLICT_MINE = `buy milk ${CONFLICT_ID_TAG}`;
+export const CONFLICT_THEIRS = `buy oat milk ${CONFLICT_ID_TAG}`;
+
+/**
+ * Raises a `needs_review` flag directly in the workspace's op-log store, standing in for the
+ * daemon-to-daemon sync this scenario would otherwise need (see conflict.spec.ts's module doc and
+ * `e2e_bridge.rs::cmd_debug_raise_conflict`'s doc comment for why: that transport isn't wired up
+ * yet at all, tracked separately as `sync-loopback-converge`). Calls the bridge directly rather
+ * than through the page, since this is test *setup*, not something the desktop UI itself does.
+ */
+export async function debugRaiseConflict(
+	daemon: DaemonHandle,
+	opts: { path: string; taskId: string; mine: string; theirs: string }
+): Promise<void> {
+	const res = await fetch(`http://127.0.0.1:${daemon.port}/invoke`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ cmd: "debug_raise_conflict", args: opts })
+	});
+	if (!res.ok) {
+		throw new Error(`debug_raise_conflict failed: ${await res.text()}`);
+	}
+}
+
+/** Spawns a fresh `e2e_bridge` (and, through it, a fresh `txtodod`) on a new tempdir seeded per
+ * `fixture`. Waits for `/health` before returning, so the caller's first `page.goto` never races
+ * the daemon's startup adoption of the seeded file. */
+export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
+	ensureBuilt();
+	const dir = mkdtempSync(join(tmpdir(), "txtodo-e2e-"));
+	seed(dir, fixture);
+	const port = pickPort();
+
+	const proc: ChildProcess = spawn(join(TARGET_DEBUG, "e2e_bridge"), [], {
+		env: {
+			...process.env,
+			// `DesktopConfig.daemon_bin` defaults to `None` -> resolve `txtodod` on PATH
+			// (apps/desktop/src-tauri/src/config.rs) — prepending target/debug here is simpler
+			// than adding a bridge-only env override for a binary that already resolves via PATH.
+			PATH: `${TARGET_DEBUG}:${process.env.PATH ?? ""}`,
+			TXTODO_WORKSPACE: dir,
+			E2E_BRIDGE_PORT: String(port)
+		},
+		stdio: "ignore"
+	});
+
+	await waitForHealth(port);
+
+	return {
+		port,
+		dir,
+		dispose() {
+			killDaemon(dir);
+			proc.kill("SIGKILL");
+			try {
+				rmSync(dir, { recursive: true, force: true });
+			} catch {
+				// best-effort cleanup only
+			}
+		}
+	};
+}
+
+async function waitForHealth(port: number, timeoutMs = 30_000): Promise<void> {
+	const start = Date.now();
+	while (Date.now() - start < timeoutMs) {
+		try {
+			const res = await fetch(`http://127.0.0.1:${port}/health`);
+			if (res.ok) return;
+		} catch {
+			// bridge/daemon not listening yet
+		}
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	throw new Error(`e2e_bridge on port ${port} never became healthy within ${timeoutMs}ms`);
+}
+
+/** Best-effort: reads the daemon's own pidfile (the same one
+ * `apps/desktop/src-tauri/tests/support::wait_for_pid` reads) and SIGKILLs it, since killing the
+ * bridge process alone does not reap the `txtodod` child it spawned. */
+function killDaemon(dir: string): void {
+	try {
+		const pid = readFileSync(join(dir, ".txtodo", "txtodod.pid"), "utf8").trim();
+		if (pid) process.kill(Number(pid), "SIGKILL");
+	} catch {
+		// no pidfile yet, or the process is already gone
+	}
+}
