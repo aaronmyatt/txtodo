@@ -87,21 +87,61 @@ these tests exist to catch, and one-sided assertions miss the asymmetric ones en
   the test file: "the loser is visible in txtodo log" (row 5, a store/op-log property) and the
   id-stripping row (row 9, `#[ignore]`, reconciler-level, already covered by
   `txtodo-daemon::reconcile_tests`).
-- **Real finding, not a test-writing mistake**: rows 6 and 7 ("delete vs edit resurrects" / "delete
-  vs complete keeps it completed") are **not implemented anywhere**. Grepped the whole workspace
-  for "resurrect": nothing outside this test file. `Deleted`, the description text, and `Completed`
-  are independent CRDT registers (`crates/txtodo-crdt/src/to_loro.rs`) that merge independently on
-  `LoroDocument::import` — nothing clears `Deleted` in response to a concurrent edit or completion.
-  `delete_vs_edit_resurrects_the_task` and `delete_vs_complete_keeps_it_completed` assert today's
-  real behaviour (still deleted, with the other side's change present underneath) with a doc
+- **Real finding, not a test-writing mistake** (superseded 2026-09-13, see below): rows 6 and 7
+  ("delete vs edit resurrects" / "delete vs complete keeps it completed") were **not implemented
+  anywhere** as of this entry. Grepped the whole workspace for "resurrect": nothing outside this
+  test file. `Deleted`, the description text, and `Completed` are independent CRDT registers
+  (`crates/txtodo-crdt/src/to_loro.rs`) that merge independently on `LoroDocument::import` —
+  nothing cleared `Deleted` in response to a concurrent edit or completion.
+  `delete_vs_edit_resurrects_the_task` and `delete_vs_complete_keeps_it_completed` asserted the
+  then-real behaviour (still deleted, with the other side's change present underneath) with a doc
   comment explaining the gap, per CLAUDE.md §3 ("never assert something weaker under the same
-  name" — silently, anyway; here it is named explicitly). Flagged as a follow-up task
+  name" — silently, anyway; here it was named explicitly). Flagged as a follow-up task
   (task_4704d157) rather than implemented in this pass: real conflict-resolution policy is a
   meaningfully-sized, correctness-sensitive change, and rushing it under time pressure in the same
   pass as everything else this session touched felt like the wrong trade.
 - `cargo test -p txtodo-crdt`, `cargo clippy -p txtodo-crdt --all-targets -D warnings`,
-  `check-boundaries.sh`, `check-file-length.sh` all clean.
-- Not in this slice: the `conflict.delete_vs_edit`/`conflict.delete_vs_complete` config keys
-  (unimplemented; `specs/conflicts.md`'s own "Configurability" section says so) — bundled into the
-  same follow-up task as the resurrection-policy gap, since implementing the policy is a
-  prerequisite to deciding whether it needs to be configurable at all.
+  `check-boundaries.sh`, `check-file-length.sh` all clean (as of the 2026-09-12 entry above).
+
+## As built (2026-09-13, agent) — rows 6-7 implemented; all 11 rows now built and tested
+
+- **Decision, made by the human, not left to the agent**: implement the *fixed* delete-vs-edit /
+  delete-vs-complete policy the spec rows already describe — a concurrent delete always loses to a
+  concurrent edit or completion — **without** a `conflict.delete_vs_edit` /
+  `conflict.delete_vs_complete` config key. Dropping the configurability was judged an equally
+  good answer and less code (this file's own "default; configurable" section, above, said as
+  much); a human can revisit that call and add the config keys later if a real need for the other
+  branch shows up. `specs/conflicts.md`'s "Configurability" section is left as written — it already
+  says the config keys are not implemented and the default is normative regardless — so no spec
+  edit was needed for this decision.
+- `crates/txtodo-crdt/src/resurrect.rs` (new, 146 lines): `resolve(doc, imported)` runs on every
+  `LoroDocument::import` (wired in `doc/sync.rs`, right before `Imported::after` is captured).
+  Concurrency comes from `Imported`'s frontiers exactly like `crate::review::detect` does — `mine`
+  is `diff(ancestor, before)`, `theirs` is `diff(ancestor, remote)` — never the HLC, which is a
+  total order and cannot say whether two writes saw each other. When one side's diff sets
+  `Deleted` and the other side's concurrently sets `Completed` or touches the description text,
+  `Deleted` is force-written back to `false` through the existing `write_if_newer` (`crate::lww`)
+  register primitive, keyed on the register's own current HLC stamp so the write always lands
+  (`Lww::wins_over`'s documented tie case) with no fabricated timestamp. No coordination between
+  devices is needed for convergence: both sides run the same deterministic resolution
+  independently, and Loro's own causal order (the correcting write commits strictly after the
+  import it corrects) makes it win over the original `true` regardless of how the two devices' own
+  corrections tie-break against each other — proven by `tests/sim.rs`'s convergence assertions,
+  which check every device agrees, not any particular resolution.
+- `crates/txtodo-crdt/tests/conflicts.rs`: `delete_vs_edit_resurrects_the_task` and
+  `delete_vs_complete_keeps_it_completed` rewritten to assert the row's actual wording (resurrected
+  / kept completed, `Deleted` false on both devices after `converge()`) instead of the old gap
+  behaviour. All 11 spec rows now have a test that asserts the real, built behaviour; only row 9
+  (fingerprint re-identification) stays `#[ignore]`d, for the reason already documented on that
+  test (no meaningful form as a pure CRDT-merge test, covered instead by
+  `txtodo-daemon::reconcile_tests`/`reconcile_sidecar_tests`).
+- No config keys added anywhere (`txtodo-model`, `txtodo-cli`, `txtodo-daemon` untouched); the
+  policy is hardcoded in `resurrect.rs`, per the decision above.
+- Verified: `cargo test -p txtodo-crdt` (all 10 non-ignored `tests/conflicts.rs` rows pass, plus
+  the crate's unit tests), `cargo test -p txtodo-daemon` (124 unit tests + every integration suite,
+  unaffected — `Mirror::import` calls the crate's `LoroDocument::import` directly, so the fix
+  reaches it with no daemon-side change), `just sim` (the full 1000-random-seed convergence sweep,
+  `crates/txtodo-crdt/tests/sim.rs`, plan `crdt-sync-simulator`) and the default 20-fixed-seed
+  `cargo test` run of the same file — all still converge. `cargo fmt --all --check`,
+  `cargo clippy --workspace --all-targets -D warnings`, `check-boundaries.sh`,
+  `check-file-length.sh` all clean.

@@ -3,10 +3,10 @@
 //!
 //! Each row is two devices, offline, one op each, then heal — reusing the same fork/apply/sync
 //! pattern `txtodo-crdt`'s own `review_tests.rs` already uses (that module is crate-private, so
-//! this external test file keeps its own copy against the crate's public API only). Three rows
-//! reveal that the design's promise is not yet built anywhere in the codebase (grepped for
-//! "resurrect": nothing) — those tests assert what actually happens today, with a doc comment
-//! explaining the gap, rather than the row's wording.
+//! this external test file keeps its own copy against the crate's public API only). Row 9
+//! (fingerprint re-identification) is `#[ignore]`d with its own doc comment explaining why it has
+//! no meaningful form as a pure CRDT-merge test; every other row, including 6-7's delete-vs-edit/
+//! delete-vs-complete resolution (`crate::resurrect`), asserts the row's real, built behaviour.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their
 // helpers (paired/sync/op/replace/insert/set below).
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -231,12 +231,9 @@ fn conflicting_priority_is_last_write_wins_loser_visible_in_log() {
     // log/history tests for that half.
 }
 
-/// The design table promises "edit wins, task resurrected". Grepping the codebase for
-/// "resurrect" finds nothing: `Deleted` and the description text are independent CRDT registers
-/// that merge independently, so nothing clears `Deleted` just because a concurrent edit landed.
-/// This asserts today's real behaviour — the task stays deleted even though the edited text is
-/// present underneath it — rather than the row's wording, which describes a policy that has not
-/// been built yet (flagged for the human as a follow-up).
+/// The design table promises "edit wins, task resurrected" (fixed policy, not configurable —
+/// `tasks/crdt-conflict-table/notes.md` "As built"): `crate::resurrect` runs after every
+/// `LoroDocument::import` and clears a concurrently-lost `Deleted` register.
 #[test]
 fn delete_vs_edit_resurrects_the_task() {
     let (mut a, mut b) = paired();
@@ -244,15 +241,13 @@ fn delete_vs_edit_resurrects_the_task() {
     apply(&mut b, &replace(2, 11, DESC, "ducks", "geese")).unwrap();
     converge(&mut a, &mut b);
     for doc in [&a, &b] {
-        assert!(
-            doc.is_deleted(task(TASK)),
-            "not resurrected today (see doc comment)"
-        );
+        assert!(!doc.is_deleted(task(TASK)), "resurrected");
         assert!(doc.description(task(TASK)).unwrap().contains("geese"));
     }
 }
 
-/// Same gap as above, the other direction: nothing makes `Completed = true` clear `Deleted`.
+/// Same policy, the other direction: a concurrent `Completed = true` also clears a concurrent
+/// `Deleted`, keeping the task completed rather than deleted.
 #[test]
 fn delete_vs_complete_keeps_it_completed() {
     let (mut a, mut b) = paired();
@@ -264,12 +259,9 @@ fn delete_vs_complete_keeps_it_completed() {
     .unwrap();
     converge(&mut a, &mut b);
     for doc in [&a, &b] {
-        assert!(
-            doc.is_deleted(task(TASK)),
-            "not resurrected today (see doc comment)"
-        );
-        let map = rebuild_line(doc, task(TASK)).unwrap();
-        assert!(map.starts_with("x "), "completed still lands: {map}");
+        assert!(!doc.is_deleted(task(TASK)), "not deleted");
+        let line = rebuild_line(doc, task(TASK)).unwrap();
+        assert!(line.starts_with("x "), "completed lands: {line}");
     }
 }
 
