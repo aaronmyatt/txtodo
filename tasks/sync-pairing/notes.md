@@ -236,3 +236,119 @@ in `pairing_grpc_tests.rs`. That blocker was stale; this slice is the actual CLI
   todo.txt`'s "Complete the parent line in `./todo.txt`" is deliberately left undone — this
   session's own instructions said not to touch the root `todo.txt`, and the transport gap above
   means it would be premature regardless.
+
+## As built (2026-09-13, agent) — real cross-device pairing over the LAN transport
+
+Closes the gap the `@cli` pass above named: `PairOffer`/`PairAccept`/`PairConfirmSas` now
+genuinely cross the network between two real `txtodod` processes, over `sync-lan-transport`'s own
+`Link`/`iroh` machinery, not a test-only seam. `txtodo pair` (initiator) shows a real SAS derived
+from a real joiner's public key; `txtodo pair <code>` (joiner) receives the real sealed group key
+and the initiator's real files.
+
+- **A second iroh ALPN, not a new frame version** (`crates/txtodo-sync/src/endpoint.rs`,
+  `lan_link.rs`): `PAIRING_ALPN` (`"txtodo/pairing/1"`) registered alongside the existing sync ALPN
+  on the same bound `LanEndpoint`, so one endpoint accepts both a group-keyed sync connection and a
+  pairing connection, told apart by `IrohLink::alpn()` — never by frame content, since a pairing
+  connection has no group key to seal anything with in the first place. `frame.rs`'s frozen
+  envelope (`Frame`, `PROTOCOL_VERSION`) is untouched; pairing frames use it as-is on a physically
+  separate connection. `LanEndpoint::connect_pairing` dials with the new ALPN.
+- **`pairing_relay.rs`** (`txtodo-sync`, transport-agnostic like the rest of the crate): `JoinerHello`
+  (device/group/nonce/ephemeral pubkey/static pubkey/confirmed) and `InitiatorReply`
+  (`Pending`/`Rejected`/`Grant(sealed)`), postcard-encoded inside `Frame`. New read-only
+  `PairingSession` accessors (`group`/`nonce`/`is_handshaken`/`is_locally_confirmed`) let a network
+  driver validate and drive a session without exposing its private fields to `txtodo-daemon`.
+- **`pairing_lan.rs`** (`txtodo-daemon`, new): the actual relay driver.
+  - Joiner: `spawn_joiner` (started by `pair_accept_impl` right after the local handshake) finds
+    the initiator via `lan.rs`'s now-unfiltered sighting book (`pairing_lan_state.rs`'s
+    `PairingLan` — pairing needs a peer by device id regardless of group, since groups deliberately
+    differ pre-pairing), dials it on `PAIRING_ALPN`, and retries a short `JoinerHello`/
+    `InitiatorReply` request-response burst every 500 ms — never one held-open connection, matching
+    `IrohLink::recv`'s own idle-timeout design (`sync-lan-transport`'s "short bursts, not one
+    held-open connection" pattern) — until a grant lands, is rejected, or `PAIRING_WINDOW_MS`
+    elapses.
+  - Initiator: `handle_incoming` (dispatched from `lan.rs`'s accept loop by ALPN) validates an
+    incoming `JoinerHello`'s group/nonce against a read-only `PairingRegistry::snapshot` *before*
+    touching any crypto state (a security fix beyond the original design: without this, any stray
+    connection on the pairing ALPN during the window could burn the one-shot handshake slot), then
+    drives `complete_as_initiator`/`mark_remote_confirmed`/`try_finalize_initiator` — the same
+    relay-seam methods the prior pass built and only `pairing_grpc_tests.rs` drove.
+  - `PairingLan::cache_grant`/`cached_grant`: the initiator's sealed grant is cached at the network
+    layer once produced, because `try_finalize_initiator` clears `PairingRegistry`'s active session
+    on success (by design, unit-tested behavior left unchanged) — a retried `JoinerHello` after a
+    dropped reply still gets the same grant resent instead of hitting `NotActive`.
+- **New `PairAwaitPeer` RPC** (`txtodo-proto`, regenerated bindings): the initiator's `txtodo pair`
+  can't block the daemon on a real network wait, so this RPC never blocks either —
+  `PairResult.sas` empty means "no peer yet", non-empty means the real handshake completed. The CLI
+  loops it.
+- **CLI** (`crates/txtodo-cli/src/commands/pair.rs`): `run_offer` polls `PairAwaitPeer` (bounded,
+  ~125 s to match `PAIRING_WINDOW_MS`) before showing the real SAS; `run_join` polls
+  `Health.lan_group_key_present` after confirming, then gives the LAN sync engine a short bounded
+  courtesy wait before printing the snapshot. Both replace the previous "the transport hasn't
+  landed" messaging.
+- **Snapshot delivery: the existing sync engine, not a new RPC.** Once `Workspace::adopt_group_key`
+  lands the group key, it also updates this workspace's own group id to the initiator's
+  (already-built behavior, previously only exercised by `pairing_grpc_tests.rs`) — from there,
+  `lan.rs`'s existing group-keyed `Session`/`Want`/`Ops` engine (unchanged) discovers the
+  now-matching peer and replays its ops from genesis, the same whole-tree-from-empty mechanism
+  `nested_ref_sync.rs` already proved. This matches the task's own "OR determine if
+  `sync-lan-transport`'s own sync mechanism is the right vehicle" framing — it is; no dedicated
+  pairing-snapshot RPC was built.
+- **A real architectural gap this pass found and fixed**: `lan.rs`'s background task captures the
+  workspace's group id *once* at startup into an immutable `Discovery` mDNS advertisement and
+  `PeerTable`. `adopt_group_key` changing the workspace's group afterward went unnoticed by the
+  already-running task — the joiner would hold the right group key but keep advertising (and
+  filtering) under its old, pre-pairing group forever, so it could never be found by the initiator
+  for ordinary sync. Fixed with a group-change check on the existing `RESYNC_INTERVAL` tick
+  (`rebuild_on_group_change`): re-registers `Discovery` under the current group and rebuilds
+  `PeerTable` when it differs from what was last advertised.
+- **Two real bugs found only by actually driving the handshake** (manual two-process repro, then
+  confirmed by the new tests below): `process_hello` checked the cached grant *after* requiring an
+  active `PairingRegistry` session (backwards — fixed by checking the cache first), and
+  `finish_joiner` never called `mark_remote_confirmed` on the *joiner's own* session before
+  `adopt_group_key`'s `is_ready_to_send_key` check, so that check's `remote_confirmed` flag was
+  always false on the joiner's side and `unwrap_grant` always refused with `NotConfirmed`.
+  Receiving a non-empty `Grant` at all is itself proof the initiator's session was ready to send
+  one, so it now doubles as that signal for the joiner.
+- **Tests**:
+  - `crates/txtodo-sync/src/pairing_relay_tests.rs`: wire round-trips for `JoinerHello`/
+    `InitiatorReply`, a wrong-shape decode, an unknown frame version.
+  - `crates/txtodo-daemon/tests/pairing_lan.rs` (the task's own required shape): two real `txtodod`
+    processes, `PairOffer` -> `PairAccept` -> `PairConfirmSas` on both sides, no
+    `DebugSetGroupKey`. Asserts identical SAS words on both real devices, `Health.
+    lan_group_key_present` flips true on the joiner, and the joiner's real file converges to the
+    initiator's real content (bounded polling, 30 s deadline — observed 5-17 s in practice; the
+    existing MITM guarantee in `txtodo-sync`'s `pairing_tests.rs` is untouched and still passes).
+  - `crates/txtodo-cli/tests/pairing.rs` rewritten: `txtodo pair` (initiator) now blocks on a real
+    peer, so every test spawns it in the background (reading stdout progressively for the code
+    line) instead of `.output()`. The main test seeds the initiator's workspace with a real task
+    line and polls the joiner's own disk file until it matches — the real acceptance bar, exercised
+    through the actual user-facing commands, not just RPCs.
+  - `cargo build --workspace`, `cargo test -p txtodo-sync -p txtodo-daemon -p txtodo-cli
+    -p txtodo-proto`, `cargo clippy --workspace --all-targets -- -D warnings`,
+    `cargo fmt --all --check`, and the file-length/boundaries scripts all pass (2026-09-13).
+- Judgement calls, flagged for the human:
+  - The pairing relay's request/response burst carries no encryption of its own beyond what
+    `PairingSession` already provides (an ephemeral/static public key is no more secret than the
+    QR's own `x25519_pub`; the grant is already AEAD-sealed) — matches `lan_session.rs`'s own
+    stance for the group-sync `Message` protocol, not a new judgement call, but worth restating
+    since this is the first time that reasoning applies to key material crossing pre-pairing.
+  - `rebuild_on_group_change` re-advertises by calling `Discovery::start` again (a fresh
+    `mdns_sd::ServiceDaemon`) rather than mutating the existing one in place — `Discovery` exposes
+    no "update my TXT record" method, and this is a one-time event per pairing, not a hot path.
+  - The reverse leg of the static-key exchange (initiator learning the joiner's static key,
+    flagged as unbuilt by the `sync-device-remove` pass) is now built too: `JoinerHello` carries
+    the joiner's static public key in the clear (safe by the same reasoning as its ephemeral key),
+    and the initiator registers it in its own `devices` table once both sides confirm
+    (`pairing_lan.rs::register_joiner_device`) — not asked for explicitly by this task's brief, but
+    a small, natural extension now that a real transport exists to carry it, and it makes the two
+    sides' `devices` tables symmetric.
+  - `PAIR_DEADLINE`/`AWAIT_PEER_TIMEOUT`/`CONVERGE_GRACE` are all generous, bounded constants (not
+    guesses at a tight number) — real completion measured in single-digit seconds in this sandbox
+    (mDNS discovery + the pairing burst's own retry cadence + one group-sync round), but a shared
+    CI runner can be slower, and none of these ever hang indefinitely on a peer that never shows.
+- Not in this slice, flagged as follow-up: a `PairReject`/cancel RPC still doesn't exist (unchanged
+  from the `@cli` pass); a lost/dropped final `InitiatorReply::Grant` beyond the cache's lifetime
+  (bounded only by the next `begin_offer` overwriting it, not an explicit TTL) has no separate
+  retry path other than the joiner's own window expiring and the human retrying; `txtodo doctor`
+  does not yet report "pairing in progress" as its own state (it already reports `paired`/
+  `lan_group_key_present` before and after, which is the state that matters).

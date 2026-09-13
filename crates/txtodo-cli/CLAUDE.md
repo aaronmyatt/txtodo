@@ -16,14 +16,16 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   per known sync peer, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
   list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
   human type the id back unless `--yes`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
-  handshake as the initiator (renders the QR and text code from `PairOffer`); `CODE` joins as the
-  joiner (`PairAccept`, real SAS, an explicit typed "yes" before `PairConfirmSas` — never a default
-  yes). Refuses a detected `identity_mode` mismatch against a non-empty joining workspace
-  (docs/questions.md Q6, still open) instead of guessing a merge. Real device-to-device pairing
-  now has a transport (plan M4 `sync-lan-transport`'s LAN wiring), but this command itself still
-  drives it through the `DebugSetGroupKey` test-only seam rather than the real SAS-confirmed
-  handoff — see `txtodo-daemon/CLAUDE.md`'s `lan_session.rs` entry for exactly what is and isn't
-  wired yet (`commands::pair`'s own module doc has the CLI-level detail). `open`/`notes`/`sub`/
+  handshake as the initiator (renders the QR and text code from `PairOffer`, polls the new
+  `PairAwaitPeer` RPC for a real joiner, shows and confirms the real SAS once one arrives); `CODE`
+  joins as the joiner (`PairAccept`, real SAS, an explicit typed "yes" before `PairConfirmSas` —
+  never a default yes — then polls `Health.lan_group_key_present` and reports a real workspace
+  snapshot). Refuses a detected `identity_mode` mismatch against a non-empty joining workspace
+  (docs/questions.md Q6, still open) instead of guessing a merge. Real device-to-device pairing now
+  crosses the network for real (plan M4 `sync-pairing`'s LAN wiring pass,
+  `txtodo-daemon/CLAUDE.md`'s `pairing_lan.rs` entry) — both `run_offer` and `run_join` block on a
+  bounded poll rather than a known-gap message; `commands::pair`'s own module doc has the CLI-level
+  detail. `open`/`notes`/`sub`/
   `prune --orphans` (plan M5, `specs/ref-directories.md`): a line's `ref:` directory, its
   `notes.md` in `$EDITOR`, a scoped `todo.sh -d`, and orphaned `ref:` directories no line points to
   (`--yes` to actually delete).

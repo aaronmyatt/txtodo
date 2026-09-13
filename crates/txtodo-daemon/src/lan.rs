@@ -30,7 +30,9 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
-use txtodo_sync::{DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, Sighting};
+use txtodo_sync::{
+    DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, PAIRING_ALPN, Sighting,
+};
 
 use crate::clock::Clock;
 use crate::lan_peers::{
@@ -94,6 +96,7 @@ async fn setup(ws: SharedWorkspace) -> Option<LanSetup> {
     let endpoint = Arc::new(bind_endpoint().await?);
     let (device, group, status) = {
         let ws = read(&ws);
+        ws.pairing_lan().set_endpoint(Arc::clone(&endpoint));
         (ws.device(), ws.group(), ws.lan_status().clone())
     };
     status.set_endpoint_bound(true);
@@ -111,9 +114,9 @@ async fn setup(ws: SharedWorkspace) -> Option<LanSetup> {
 async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
     let Some(LanSetup {
         endpoint,
-        discovery: _discovery,
-        browse,
-        ctx,
+        mut discovery,
+        mut browse,
+        mut ctx,
     }) = setup(ws).await
     else {
         return;
@@ -139,12 +142,48 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                 }
             }
             _ = resync.tick() => {
+                if let Some(rebuilt) = rebuild_on_group_change(&ctx, &endpoint).await {
+                    discovery.shutdown();
+                    discovery = rebuilt.discovery;
+                    browse = rebuilt.browse;
+                    ctx.group = rebuilt.group;
+                    table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
+                }
                 for peer in peers_to_resync(&known_peers, ctx.device) {
                     spawn_resync_dial(Arc::clone(&sessions), ctx.clone(), Arc::clone(&endpoint), peer);
                 }
             }
         }
     }
+}
+
+/// What `rebuild_on_group_change` produces when the workspace's group changed.
+struct Rebuilt {
+    discovery: Discovery,
+    browse: txtodo_sync::BrowseEvents,
+    group: GroupId,
+}
+
+/// Pairing (`pairing_lan.rs`'s joiner path, `Workspace::adopt_group_key`) can change this
+/// workspace's own sync group *after* this task's `setup()` already bound `Discovery` to the old
+/// one — `Discovery::start` bakes the group into the mDNS TXT record it registers once, and
+/// `PeerTable::own_group` is likewise fixed at construction, so neither notices a later change on
+/// their own. Checked once per `RESYNC_INTERVAL` tick (the same cadence that already re-dials
+/// known peers): re-advertises under the current group and returns a fresh `Discovery`/browse
+/// stream for `run`'s loop to swap in, or `None` when the group has not changed since `ctx.group`.
+async fn rebuild_on_group_change(ctx: &LanCtx, endpoint: &LanEndpoint) -> Option<Rebuilt> {
+    let current = read(&ctx.ws).group();
+    if current == ctx.group {
+        return None;
+    }
+    let discovery = start_discovery(ctx.device, current, endpoint)?;
+    let browse = browse(&discovery)?;
+    tracing::info!(old = ?ctx.group, new = ?current, "lan_group_changed_readvertising");
+    Some(Rebuilt {
+        discovery,
+        browse,
+        group: current,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -162,6 +201,10 @@ fn handle_sighting(
         tracing::warn!("lan_discovery_channel_closed");
         return false;
     };
+    // Remembered regardless of group, *before* the group-filtered dial decision below: pairing
+    // (`pairing_lan.rs`) looks a peer up by device id alone, since the whole point of pairing is
+    // that the two devices do not share a group yet (see `pairing_lan_state.rs`'s module doc).
+    remember_any_sighting(&ctx.ws, &sighting);
     let now_ms = clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         remember_peer(known_peers, &peer);
@@ -174,6 +217,17 @@ fn handle_sighting(
         );
     }
     true
+}
+
+/// Records `sighting` in `pairing_lan()`'s unfiltered address book, regardless of which group it
+/// claims — see `handle_sighting`'s call site and `pairing_lan_state.rs`'s module doc.
+fn remember_any_sighting(ws: &SharedWorkspace, sighting: &Sighting) {
+    let peer = DiscoveredPeer {
+        device: sighting.announcement.device,
+        node: sighting.announcement.node,
+        addresses: sighting.addresses.clone(),
+    };
+    read(ws).pairing_lan().remember(&peer);
 }
 
 async fn bind_endpoint() -> Option<LanEndpoint> {
@@ -222,6 +276,22 @@ fn spawn_driver(
     });
 }
 
+/// One accepted pairing connection (this device as initiator) — same "blocking thread, one permit"
+/// shape as [`spawn_driver`], since `Link::send`/`recv` block (`lan_link.rs`'s own doc). Unlike a
+/// sync session, a pairing connection needs no `device`/`group` of its own: `pairing_lan.rs`'s
+/// handler reads whatever this daemon's own active `PairingRegistry` session says.
+fn spawn_pairing_driver(
+    ws: SharedWorkspace,
+    link: IrohLink,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let mut link = link;
+        crate::pairing_lan::handle_incoming(&ws, &mut link);
+    });
+}
+
 fn log_accept_failed(e: &txtodo_sync::LanError) {
     tracing::debug!(error = %e, "lan_accept_failed");
 }
@@ -235,7 +305,9 @@ fn log_session_cap_reached_dropping_incoming() {
 
 /// One accepted connection: spawns a driver if the session cap allows it, otherwise the link is
 /// simply dropped (closing it) and logged — the same "bounded, drop with a reason" shape
-/// `MAX_LAN_PEERS` already uses for the peer table.
+/// `MAX_LAN_PEERS` already uses for the peer table. Which driver depends on `link.alpn()`: the one
+/// bound endpoint accepts both the group-keyed sync protocol and a pairing relay connection (plan
+/// M4 `sync-pairing`'s LAN wiring pass), told apart here rather than by any frame content.
 fn accept_one(
     incoming: Result<IrohLink, txtodo_sync::LanError>,
     sessions: &Arc<Semaphore>,
@@ -248,7 +320,11 @@ fn accept_one(
         log_session_cap_reached_dropping_incoming();
         return;
     };
-    spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+    if link.alpn() == PAIRING_ALPN {
+        spawn_pairing_driver(ctx.ws.clone(), link, permit);
+    } else {
+        spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+    }
 }
 
 fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {

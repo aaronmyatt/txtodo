@@ -28,14 +28,23 @@ use iroh::{Endpoint, RelayMode};
 /// machine can never accidentally accept (or be mistaken for) a txtodo connection.
 pub const ALPN: &[u8] = b"txtodo/sync/1";
 
+/// Identifies the pairing handshake's daemon-to-daemon relay (plan M4 `sync-pairing`, LAN wiring
+/// pass) on the same endpoint as [`ALPN`], so one bound `LanEndpoint` can accept both a group-keyed
+/// sync connection and a pairing connection and tell them apart by ALPN alone
+/// (`Connection::alpn()`, surfaced as [`crate::lan_link::IrohLink::alpn`]) — never by frame content,
+/// since a pairing connection carries no group key to seal anything with in the first place.
+pub const PAIRING_ALPN: &[u8] = b"txtodo/pairing/1";
+
 /// Binds the one endpoint shape this crate ever constructs: LAN-only, no relay, no port mapping,
-/// no third-party address lookup. Picks an ephemeral local UDP port on every interface.
+/// no third-party address lookup. Picks an ephemeral local UDP port on every interface. Accepts
+/// both [`ALPN`] and [`PAIRING_ALPN`] — one endpoint, one bound port, two protocols told apart by
+/// which ALPN a connection negotiates.
 pub async fn bind_local_endpoint() -> Result<Endpoint, BindError> {
     let endpoint = Endpoint::builder(Minimal)
         .relay_mode(RelayMode::Disabled)
         .portmapper_config(PortmapperConfig::Disabled)
         .bind()
         .await?;
-    endpoint.set_alpns(vec![ALPN.to_vec()]);
+    endpoint.set_alpns(vec![ALPN.to_vec(), PAIRING_ALPN.to_vec()]);
     Ok(endpoint)
 }

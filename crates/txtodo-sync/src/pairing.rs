@@ -338,4 +338,28 @@ impl PairingSession {
     pub fn peer_device(&self) -> Option<DeviceId> {
         self.peer_device
     }
+
+    /// The sync group this handshake is for (plan M4 `sync-pairing`, LAN wiring pass) — a real
+    /// daemon-to-daemon relay (`txtodo-daemon`'s `pairing_lan.rs`) validates an incoming peer's
+    /// claimed group against this before ever touching handshake state.
+    pub fn group(&self) -> GroupId {
+        self.group
+    }
+
+    /// The offer's one-time pairing nonce this handshake is bound to, so a relay can confirm an
+    /// incoming attempt is answering *this* offer and not a stale or foreign one.
+    pub fn nonce(&self) -> Nonce {
+        self.nonce
+    }
+
+    /// Whether the ECDH has completed: always true for the joiner (immediately, in
+    /// [`PairingSession::accept`]); only after [`PairingSession::complete`] for the initiator.
+    pub fn is_handshaken(&self) -> bool {
+        self.handshake.is_some()
+    }
+
+    /// Whether this device's own human has confirmed the SAS.
+    pub fn is_locally_confirmed(&self) -> bool {
+        self.local_confirmed
+    }
 }

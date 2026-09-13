@@ -6,7 +6,10 @@ Protobuf definitions and generated gRPC types.
 ## Public interface
 `ListFiles`, `GetFile`, `Watch`, `Apply`, `History`, `Undo`, `Checkout`, `Health`,
 `ListConflicts`, `ResolveConflict`, `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
-`PairConfirmSas`, `TokenCreate`, `TokenList`, `TokenRevoke`, `OpLogStream` (plan M7),
+`PairConfirmSas`, `PairAwaitPeer` (plan M4 `sync-pairing`'s LAN wiring pass: the initiator polls
+this — `PairResult.sas` empty means "still waiting" — to learn a joiner's `PairAccept` has reached
+it over the real LAN transport and show a real SAS, without the RPC itself ever blocking),
+`TokenCreate`, `TokenList`, `TokenRevoke`, `OpLogStream` (plan M7),
 `DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).

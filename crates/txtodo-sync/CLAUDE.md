@@ -46,8 +46,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   (`issue`+`consume` for the initiator's own offer, `witness` for the joiner's replay/window check
   against the offer's own `issued_at_ms`), `PAIRING_WINDOW_MS`, `MAX_CONCURRENT_PAIRINGS` (= 1);
   `PairingSession::{offer, accept, complete, sas_words, confirm_local, confirm_remote, reject,
-  is_ready_to_send_key, wrap_group_key, unwrap_group_key, wrap_grant, unwrap_grant, peer_device}`,
-  `MAX_FAILED_SAS_CONFIRMATIONS`, `PairingError`. `PairingGrant { group_key, static_public }` is the
+  is_ready_to_send_key, wrap_group_key, unwrap_group_key, wrap_grant, unwrap_grant, peer_device,
+  group, nonce, is_handshaken, is_locally_confirmed}` (the last four, M4 `sync-pairing`'s LAN wiring
+  pass, are read-only accessors a network relay driver needs to validate and drive a session
+  without touching its private fields), `MAX_FAILED_SAS_CONFIRMATIONS`, `PairingError`.
+  `PairingGrant { group_key, static_public }` is the
   normative confirmed-exchange payload — bundles the group key with the sender's long-term static
   public key so a caller cannot register one without the other; hand-written `Debug` redacts
   `group_key` only (`static_public` is not secret).
@@ -68,8 +71,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `channel_link_pair()` is the in-process implementation the loopback tests and the simulator use;
   `MAX_QUEUED_FRAMES` bounds each direction rather than growing without limit.
 - `endpoint.rs` (M4 `sync-lan-transport`): `bind_local_endpoint()` — the one iroh `Endpoint`
-  constructor (`presets::Minimal`, `RelayMode::Disabled`, `PortmapperConfig::Disabled`), `ALPN`. See
-  Invariants for a known upstream connect/accept blocker, now confirmed to hit this constructor too.
+  constructor (`presets::Minimal`, `RelayMode::Disabled`, `PortmapperConfig::Disabled`), `ALPN` and
+  `PAIRING_ALPN` (M4 `sync-pairing`'s LAN wiring pass — a second ALPN registered on the same
+  endpoint so one bound `LanEndpoint` accepts both a group-keyed sync connection and a pairing
+  relay connection, told apart by `IrohLink::alpn()` rather than frame content). See Invariants for
+  a known upstream connect/accept blocker, now confirmed to hit this constructor too.
 - `discovery.rs` (M4 `sync-lan-transport`): `SERVICE_TYPE` (`_txtodo._udp.local.`), TXT keys
   `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO`/`TXT_NODE` (never the group key; `TXT_NODE` is the
   advertiser's iroh `EndpointId`, opaque `[u8; 32]` here — this module still never names `iroh`),
@@ -87,16 +93,23 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `Discovery::start`; `connect(node, addrs)` (prefers non-loopback candidates, falling back to
   loopback only when nothing else was advertised — see Invariants; builds an `EndpointAddr`,
   opens the one bidirectional stream this protocol runs over) and `accept()` (waits one incoming
-  connection, accepts that same stream) both return `IrohLink`. `IrohLink` implements `Link`
+  connection, accepts that same stream) both return `IrohLink`. `connect_pairing(node, addrs)` (M4
+  `sync-pairing`'s LAN wiring pass) is `connect`'s pairing-ALPN twin. `IrohLink` implements `Link`
   synchronously by `block_on`-ing the async stream ops on a captured `tokio::runtime::Handle` — it
   must run on a dedicated driver thread (`spawn_blocking`, never a plain tokio task), matching
-  `Link`'s own "one link, one driver" contract. `recv()` reports `LinkError::Closed` after
-  `IDLE_TIMEOUT` (750 ms) of silence too, not only on a real close — by design, so a caller (the
-  daemon) is expected to run short-lived sessions and redial periodically rather than hold one
-  connection open for a whole pairing's lifetime; see Invariants. `LanError` names what failed.
-  `iroh` appears only in
-  this file and `endpoint.rs`; `txtodo-daemon` never names an `iroh` type (check
-  `.claude/budgets.json`'s `allowedDeps`).
+  `Link`'s own "one link, one driver" contract. `alpn()` reports which of `ALPN`/`PAIRING_ALPN` the
+  connection negotiated, so an accept loop can route it without ever naming an `iroh` type. `recv()`
+  reports `LinkError::Closed` after `IDLE_TIMEOUT` (750 ms) of silence too, not only on a real close
+  — by design, so a caller (the daemon) is expected to run short-lived sessions and redial
+  periodically rather than hold one connection open for a whole pairing's lifetime; see Invariants.
+  `LanError` names what failed. `iroh` appears only in this file and `endpoint.rs`; `txtodo-daemon`
+  never names an `iroh` type (check `.claude/budgets.json`'s `allowedDeps`).
+- `pairing_relay.rs` (M4 `sync-pairing`'s LAN wiring pass): the daemon-to-daemon relay's own wire
+  messages, moved over `Link` on `PAIRING_ALPN` rather than the group-keyed `Message`/`Session`
+  protocol (no group key exists between the two devices yet — that is the whole point of pairing).
+  `JoinerHello` (device/group/nonce/ephemeral pubkey/static pubkey/confirmed) and `InitiatorReply`
+  (`Pending`/`Rejected`/`Grant(sealed)`), postcard-encoded inside the same frozen `Frame` envelope
+  `Message` uses — the separation is the ALPN, not a new frame version. `PairingRelayError`.
 - `lan_op_signing.rs` (M4 `sync-lan-transport`): `derive_group_op_signing_key(&GroupKey) ->
   DeviceSigningKey`, `LAN_OP_SIGN_INFO`. HKDF-derives the LAN path's per-op signing keypair from
   the group key itself, so `Session::on_ops`'s signature check has *something* real to verify
@@ -106,11 +119,13 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   pairing and stored in the devices table — neither exists yet, see below.
 - Not here yet: the `devices` table storing each peer's `DevicePublicKey` (only `DeviceStaticPublic`,
   the X25519 pairing key, is stored today — `lan_op_signing.rs`'s stand-in exists because of this
-  gap), the daemon-level rotation sequencing ("close the epoch before announcing the removal"),
-  snapshot-then-ops transfer to a newly paired device, real pairing over the LAN transport (the
-  daemon's own `sync-loopback-converge` test pairs through a guarded test-only seam instead — see
-  `txtodo-daemon/CLAUDE.md`), and `ops.signature` in `txtodo-store` (still an unpopulated column —
-  the LAN pass signs on the wire, not at rest).
+  gap), the daemon-level rotation sequencing ("close the epoch before announcing the removal"), and
+  `ops.signature` in `txtodo-store` (still an unpopulated column — the LAN pass signs on the wire,
+  not at rest). Real pairing *does* now cross the LAN transport (M4 `sync-pairing`'s LAN wiring
+  pass, `pairing_relay.rs` here plus `txtodo-daemon`'s `pairing_lan.rs`) — snapshot-then-ops
+  transfer to a newly paired device is real too, via `lan.rs`'s existing group-keyed sync engine
+  once pairing adopts a shared group id/key, not a dedicated transfer RPC; see
+  `txtodo-daemon/CLAUDE.md`.
 
 ## Invariants
 - Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact;

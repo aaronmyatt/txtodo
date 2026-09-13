@@ -8,7 +8,9 @@ use crate::handle::{ActorError, ActorHandle};
 use crate::lan_status::LanStatus;
 use crate::notes_actor::NotesActorConfig;
 use crate::notes_registry::{NotesCell, NotesRegistry};
-use crate::pairing_state::{PairingRegistry, PairingStateError};
+use crate::pairing_lan_state::PairingLan;
+use crate::pairing_state::PairingRegistry;
+use crate::pairing_state_error::PairingStateError;
 use crate::stats::Stats;
 use crate::tree_dirty::TreeDirty;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
@@ -73,6 +75,11 @@ pub struct Workspace {
     /// Live LAN transport status (plan M4 `sync-lan-transport`), updated by `lan.rs`, read by
     /// `Health`/`txtodo doctor`.
     lan_status: LanStatus,
+    /// Shared state connecting `lan.rs`'s background task to the pairing relay (`pairing_lan.rs`,
+    /// plan M4 `sync-pairing`'s LAN wiring pass): the bound `LanEndpoint` and every raw mDNS
+    /// sighting, regardless of sync group (see `pairing_lan_state.rs`'s module doc on why pairing
+    /// cannot reuse `lan.rs`'s own group-filtered peer table).
+    pairing_lan: PairingLan,
 }
 
 impl Workspace {
@@ -181,6 +188,7 @@ impl Workspace {
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
             lan_status: LanStatus::default(),
+            pairing_lan: PairingLan::default(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -368,6 +376,11 @@ impl Workspace {
         drop(store);
         self.set_group(group);
         Ok(())
+    }
+    /// Shared LAN-endpoint/sighting state the pairing relay driver (`pairing_lan.rs`) and `lan.rs`
+    /// both need (plan M4 `sync-pairing`'s LAN wiring pass).
+    pub(crate) fn pairing_lan(&self) -> &PairingLan {
+        &self.pairing_lan
     }
     /// Live LAN transport status (plan M4 `sync-lan-transport`), for `Health`/`txtodo doctor`.
     pub fn lan_status(&self) -> &LanStatus {

@@ -26,6 +26,7 @@ mod offer;
 mod pairing;
 mod pairing_error;
 mod pairing_grant;
+mod pairing_relay;
 mod rotation;
 mod rotation_error;
 mod sas;
@@ -48,7 +49,7 @@ pub use discovery::{
     Sighting, TXT_DEVICE, TXT_GROUP, TXT_NODE, TXT_PROTO, backoff_ms, parse_announcement,
 };
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
-pub use endpoint::{ALPN, bind_local_endpoint};
+pub use endpoint::{ALPN, PAIRING_ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
 pub use keystore_error::KeyStoreError;
@@ -70,6 +71,7 @@ pub use offer::{OfferError, PairingOffer, from_code, from_qr_bytes, to_code, to_
 pub use pairing::{MAX_FAILED_SAS_CONFIRMATIONS, PairingSession};
 pub use pairing_error::PairingError;
 pub use pairing_grant::{PairingGrant, PairingGrantError};
+pub use pairing_relay::{InitiatorReply, JoinerHello, PairingRelayError};
 pub use rotation::{
     GRANT_INFO, WrappedGrant, open_grant, plan_rotation, validate_removal, wrap_grant_for,
 };
@@ -121,6 +123,8 @@ mod nonce_registry_tests;
 mod offer_tests;
 #[cfg(test)]
 mod pairing_grant_tests;
+#[cfg(test)]
+mod pairing_relay_tests;
 #[cfg(test)]
 mod pairing_tests;
 #[cfg(test)]

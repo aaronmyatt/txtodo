@@ -48,10 +48,18 @@ service Txtodo {
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
+  // The daemon also starts dialing the initiator over the real LAN transport in the background
+  // (plan M4 sync-pairing's LAN wiring pass) — this call itself never blocks on that.
   rpc PairAccept(PairAcceptRequest) returns (PairResult);
   // Confirms the SAS shown to the human on this device. The group key lands only once both
   // sides have confirmed (never on one-sided trust).
   rpc PairConfirmSas(PairConfirmRequest) returns (PairResult);
+  // Initiator only: polls whether a joiner's PairAccept has reached this device yet over the LAN
+  // transport (plan M4 sync-pairing's LAN wiring pass). PairResult.sas is empty while still
+  // waiting (call again); non-empty once the peer's public key has arrived and this device can
+  // show a real SAS derived from it. The CLI loops this call rather than the daemon blocking, so
+  // the RPC itself always returns promptly.
+  rpc PairAwaitPeer(PairAwaitPeerRequest) returns (PairResult);
 
   // Mints a new capability token from the design §6.2 scope/caveat grammar.
   rpc TokenCreate(TokenCreateRequest) returns (Token);
@@ -321,6 +329,8 @@ message PairAcceptRequest { string code = 1; }   // the scanned/decoded PairOffe
 message PairResult { string sas = 1; }           // 6-word SAS (EFF short list); no key material
 
 message PairConfirmRequest {}
+
+message PairAwaitPeerRequest {}
 
 // --- capability tokens (plan M6, design §6.2) ---
 
