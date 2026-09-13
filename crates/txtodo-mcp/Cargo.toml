@@ -10,6 +10,59 @@ description = "MCP tools, resources, prompts, tokens."
 [dependencies]
 txtodo-proto.workspace = true
 txtodo-query.workspace = true
+# https://docs.rs/rmcp — Rust SDK for the Model Context Protocol: server, stdio + Streamable HTTP
+# transports (design §6.1). "macros" (default) gives tool_router/tool/tool_handler.
+rmcp = { version = "3.3", default-features = false, features = [
+  "macros",
+  "server",
+  "transport-io",
+  "transport-streamable-http-server",
+  # "client" is only exercised by tests/smoke.rs (an in-process reference client over an
+  # in-memory duplex pipe) but Cargo unifies features across dep/dev-dep, so it's listed here.
+  "client",
+] }
+# https://docs.rs/schemars — JSON Schema derive for tool argument structs (rmcp's #[tool] macro
+# reads `JsonSchema` to build each tool's input schema).
+schemars = "1"
+# https://docs.rs/axum — nests rmcp's StreamableHttpService at the exact `/mcp` path (design §6.1).
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+# https://docs.rs/tokio — async runtime for both transports; the `txtodo-mcp` binary (main.rs)
+# runs #[tokio::main], and "signal" catches SIGTERM/SIGINT for the HTTP transport's graceful stop.
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "net",
+  "sync",
+  "io-util",
+  "io-std",
+  "signal",
+] }
+# https://docs.rs/tokio-util — CancellationToken for graceful Streamable HTTP shutdown.
+tokio-util = "0.7"
+# https://docs.rs/serde — tool/resource/prompt argument (de)serialization.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# https://docs.rs/tonic — the gRPC client dialing txtodod, same shape as txtodo-cli's client.rs.
+tonic = "0.14"
+# https://docs.rs/hyper-util — TokioIo adapter for the unix-socket connector (mirrors txtodo-cli).
+hyper-util = "0.1"
+# https://docs.rs/tower — service_fn for the custom unix-socket connector.
+tower = { version = "0.5", features = ["util"] }
+# https://docs.rs/jiff — today's local date for `todo_complete`'s stamp (ADR 0011: local date,
+# never a time zone), same crate txtodo-cli's clock.rs uses for the same purpose.
+jiff = "0.2"
+# https://docs.rs/async-trait — McpBackend is a trait object (`Arc<dyn McpBackend>`), so its async
+# fns need boxing; rmcp itself uses this crate for the same reason under its "auth" feature.
+async-trait = "0.1"
+# https://docs.rs/tracing — structured logs for the MCP surface (matches txtodo-daemon's setup).
+tracing = "0.1"
+# https://docs.rs/mdns-sd — advertises `_txtodo-mcp._tcp` for `--lan` (design §6.1). Same crate
+# crates/txtodo-sync's discovery.rs uses for `_txtodo._udp`, so the workspace has one mDNS library.
+mdns-sd = "0.21"
+
+[dev-dependencies]
+# https://docs.rs/tempfile — scratch unix sockets for the in-process transport smoke test.
+tempfile = "3"
 
 [lints]
 workspace = true

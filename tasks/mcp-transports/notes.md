@@ -86,6 +86,67 @@ impl, never into a second copy of state.
 - `--lan --stdio` is rejected as a usage error.
 - Port-conflict start fails with a message naming `8636` and the likely cause.
 
+## As built (2026-09-13, agent)
+
+`transport.rs` matches the plan: `serve_stdio`/`serve_http` (both taking the one `McpServer` from
+`schema.rs`), the constants (`MCP_PORT` = 8636, `MCP_PATH` = "/mcp", `MCP_SERVICE` =
+"_txtodo-mcp._tcp", `MCP_LOOPBACK`/`MCP_LAN`), and `advertise_lan` via `mdns-sd` (the same crate
+`sync-lan-transport`'s `discovery.rs` uses, so one mDNS library in the workspace).
+
+### Deviations, with reasons
+
+- **The daemon does not host the HTTP transport itself.** The plan says
+  "`txtodo-daemon/src/serve.rs` starts the HTTP server on `MCP_PORT`". Instead, `txtodo-mcp` ships
+  its own binary (`main.rs`, `--dir --stdio|--http [--lan] [--token]`) that dials `txtodod`'s
+  existing unix socket via `GrpcMcpBackend` and hosts *both* transports itself — `txtodo mcp --http`
+  starts the HTTP listener, `txtodo mcp --stdio` the stdio one, both as their own process, both
+  reusing the exact same gRPC path. Reasons: (1) `txtodo-daemon`'s `serve.rs`/`main.rs` are already
+  a fair amount of surface (socket lifecycle, pidfile, watcher, SIGTERM draining) and this task is
+  meant to be additive, not a daemon-internals change; (2) it means exactly one `McpBackend`
+  implementation (`GrpcMcpBackend`) instead of a second, direct, in-process one living inside
+  `txtodo-daemon` that duplicates actor-state access; (3) design §6.1's actual invariant — "the
+  daemon is the only thing behind them" — holds either way, since every tool call still ends at
+  `txtodod` over gRPC. The tradeoff: HTTP isn't automatically available whenever `txtodod` is
+  running; a human/agent must separately run `txtodo mcp --http` (or a service manager entry, not
+  built here) to expose it. Revisit if that manual step turns out to matter in practice.
+- **`txtodo-cli` execs a sibling binary instead of linking `txtodo-mcp`.** `budgets.json`'s
+  `allowedDeps` grants the `txtodo-mcp` dependency edge only to `txtodo-daemon`, not `txtodo-cli`.
+  `crates/txtodo-cli/src/commands/mcp.rs` is therefore a thin process launcher — the same
+  "binary beside this one, else PATH" pattern `commands::service::txtodod_path` already uses for
+  `txtodod` — that execs the `txtodo-mcp` binary (`src/main.rs`, alongside `src/lib.rs` in the same
+  crate) and inherits stdio, so `--stdio`'s JSON-RPC framing passes through untouched. `--lan
+  --stdio` is rejected by the CLI before spawning anything; `--lan` without `--token` is refused by
+  the `txtodo-mcp` binary itself (closer to the actual bind).
+- **`--token` is not a verified bearer token.** Real token verification is
+  [mcp-auth](../mcp-auth/notes.md)/[mcp-tokens](../mcp-tokens/notes.md)'s job — out of scope here.
+  `--token <id>` is currently just an opaque string attached to `ApplyRequest.agent.token_id`
+  (`name` fixed to `"mcp"`) for op-log attribution; the `--lan`-needs-`--token` check is a cheap,
+  meaningful guard against the worst case (an unauthenticated LAN-reachable daemon) but is not a
+  substitute for real auth.
+
+### Verified live (not just unit-tested)
+
+Ran a real `txtodod` against a scratch workspace and drove `txtodo mcp` directly (not the fake
+in-process backend `tests/smoke.rs` uses):
+
+- `txtodo mcp --stdio`, piped a real `initialize` → `notifications/initialized` →
+  `tools/list` → `tools/call todo_list` session: got back the workspace's actual task, correctly
+  parsed (priority, dates, `+work` project), then a clean exit on stdin EOF.
+- `txtodo mcp --http`: `curl -X POST http://127.0.0.1:8636/mcp` (SSE response) round-tripped the
+  same `initialize`; `curl GET /mcp` returned 200 (session-ready stream); `curl GET /other`
+  returned 404.
+- `txtodo mcp --http --lan` without `--token`: refused with the documented message, exit 1.
+- `txtodo mcp --stdio --lan`: rejected as a usage error, exit 1.
+- A second `txtodo mcp --http` while one was already bound: failed naming port 8636 and asking
+  "is another txtodod already serving MCP on port 8636?", exit 1.
+
+Not built/verified here (explicitly out of scope): the MCP SDK reference client smoke test
+(`tests/smoke.rs` uses a bare `()` `ClientHandler` over an in-memory duplex pipe, not the real SDK
+client, per this task's "a lightweight self-test is fine" note) — that is
+[mcp-smoke-test](../mcp-smoke-test/notes.md); the mDNS TXT record's port field and
+`_txtodo-mcp._tcp.local.` resolution were exercised by `transport::tests::constants_match_the_design`
+and code review only, not a live two-machine LAN discovery (no second machine available here).
+
 ## References
 
 - Design §6.1 (transports, 8636, `_txtodo-mcp._tcp`, LAN option).

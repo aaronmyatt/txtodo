@@ -1,2 +1,24 @@
-//! MCP tools, resources, prompts, tokens.
+//! MCP tools, resources, prompts (plan M6, design §6.3-6.4). `McpBackend` (`backend.rs`) is the
+//! seam: schemas (`schema.rs`) and transports (`transport.rs`) never touch the daemon directly,
+//! only through it. `grpc_backend.rs` is the one implementation, a gRPC client of `txtodod` —
+//! see its module doc for why even the daemon-hosted HTTP transport dials itself rather than
+//! reaching into actor state directly.
 #![forbid(unsafe_code)]
+
+pub mod backend;
+pub mod error;
+pub mod grpc_backend;
+mod grpc_convert;
+mod grpc_read;
+mod grpc_write;
+mod parse;
+mod prompts;
+mod resources;
+pub mod schema;
+mod tools;
+mod tools_read;
+mod tools_write;
+pub mod transport;
+
+#[cfg(test)]
+mod grpc_write_tests;
