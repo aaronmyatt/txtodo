@@ -49,7 +49,7 @@ Append only. Never edit a prior answer; add a dated follow-up.
 - Answer: The relay will be a hosted SaaS that I will grant users access to manually
 
 ## Q6 — Pairing: what happens when the initiator's and joiner's identity_mode disagree?
-- Status: open · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·
+- Status: answered 2026-09-13 · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·
   Blocks: pairing inheriting identity_mode (a joining device otherwise decides its own, from
   whatever `id:` tags its own files already have — plan decision 3)
 - Default until answered: **no propagation yet**. `load_or_mint_identity_mode` runs unconditionally
@@ -77,9 +77,17 @@ Append only. Never edit a prior answer; add a dated follow-up.
   detected mismatch whenever the joiner's workspace already has tasks, proceeding unmodified (never
   adopting the initiator's mode) when modes match or the joiner is empty. The actual policy — what
   a real, non-empty mismatch should eventually do instead of just refusing — is still unanswered.
+- Answer 2026-09-13: drop `Tagged` entirely. `Sidecar` becomes the only `identity_mode`. This
+  question dissolves rather than resolves — with one mode, an initiator/joiner mismatch is no
+  longer representable, so the mismatch-policy decision, the wire field, and the refusal check
+  the 2026-09-13 follow-up added are all now dead code to remove, not logic to extend. Reverses
+  Q2's "`Tagged` iff a document already carries an `id:` tag" framing — needs an ADR (line 129) and
+  a pass over `load_or_mint_identity_mode`/`DocState`/`reconcile` (`workspace.rs`) plus
+  `PairOfferResponse.identity_mode` (`txtodo-proto`) and the `txtodo pair` refusal path
+  (`pairing_grpc.rs`) to remove the now-dead `Tagged` branch and mismatch check.
 
 ## Q7 — Is priority one global scale across workspaces, or per workspace?
-- Status: open · Raised: 2026-09-13 (board review; todo `desktop-universal-view`, `adr-global-daemon`)
+- Status: answered 2026-09-13 · Raised: 2026-09-13 (board review; todo `desktop-universal-view`, `adr-global-daemon`)
   · Blocks: M11 universal view sort order, the `pri` operand in `txtodo-query`, ordering in the
   multi-workspace MCP gateway
 - Default until answered: **global** — `(A)` in `+home` ranks with `(A)` in `+work`; the universal
@@ -91,8 +99,15 @@ Append only. Never edit a prior answer; add a dated follow-up.
   outranks `+home` on weekdays), which needs a saved-view or plugin concept (design §8 saved views,
   §9). Recommend (a) for v1, (b) later as a saved view over the query language, never as a core
   rule.
-
-## Q8 — Global daemon: one sync group per set of devices, or one per workspace?
+- Answer 2026-09-13: (a), global flat scale, as recommended. `(A)` ties within a single list are
+  fine and expected — same-priority tasks across different projects/contexts in one workspace just
+  sort equal, no forced tiebreak needed beyond (priority, created, workspace). Explicitly rejects
+  any implicit cross-workspace weighting (e.g. "+work matters more on weekdays") as a core rule —
+  workspaces stay separate entities the user switches between explicitly (GUI/TUI/CLI), so what's
+  "high priority" is always relative to whichever workspace currently has the user's attention, not
+  a computed global ranking. A future aggregation feature (surface top priorities across
+  workspaces/lists/projects) is plausible but out of scope now — if built, it should be additive
+  (a view over multiple workspaces the user opts into), not a change to how priority is scored. — Global daemon: one sync group per set of devices, or one per workspace?
 - Status: open · Raised: 2026-09-13 · Blocks: `daemon-workspace-registry` (todo 130),
   `daemon-workspace-actor` (132: "each with its own store, op log, CRDT and sync Link"), the
   `sync-pairing` second-device handoff

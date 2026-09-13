@@ -112,6 +112,7 @@ mod stub {
     use crate::daemon::DaemonError;
     use std::path::PathBuf;
 
+    /// Always fails: no transport is wired up for this platform yet (see the module doc).
     pub async fn ensure_daemon(_cfg: &DesktopConfig) -> Result<PathBuf, DaemonError> {
         Err(DaemonError::UnsupportedPlatform)
     }
