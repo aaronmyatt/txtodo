@@ -47,6 +47,31 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   `DeviceList` also carries each peer's `SkewStatus` (`txtodo_model::Skew::check` against
   `last_known_wall_ms`) so `txtodo doctor`'s per-peer clock line (plan M4
   `tasks/model-hlc-skew-guard`) and `txtodo device list` share one RPC and one classification.
+- `lan.rs`/`lan_peers.rs`/`lan_session.rs`/`lan_apply.rs`/`sync_ops.rs` (plan M4
+  `sync-lan-transport`, daemon-wiring pass): `lan::start(ws, clock)` spawns the background LAN
+  transport task — binds `txtodo_sync::LanEndpoint`, starts `Discovery` advertising this device,
+  browses for peers in the same group, dials a newly found peer (lower `DeviceId` dials, tie-break;
+  `lan_peers.rs` owns this decision and its `backoff_ms`-paced retry bookkeeping) and accepts
+  incoming connections, both bounded by `MAX_CONCURRENT_LAN_SESSIONS`. Never fatal: a bind/
+  discovery failure is logged and the daemon runs without LAN sync. Each connection is driven by
+  `lan_session::drive_session` on a `spawn_blocking` thread (the real, synchronous `Link` trait),
+  sealing/opening every message with the workspace's epoch-0 group key and serving/committing
+  through `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
+  `FileActor::on_sync_ops` (`sync_ops.rs`), the verbatim-apply path for a peer's already-signed ops
+  (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
+  crate; only `txtodo_sync`'s own types do. Sessions are short-lived by design (`IrohLink`'s own
+  idle timeout in `txtodo-sync`) and `lan.rs` redials every known peer every `RESYNC_INTERVAL`, so
+  a local edit made after an earlier sync round still converges quickly without this module
+  watching the store for changes — the cost (a QUIC handshake roughly every second while paired) is
+  a known, flagged tradeoff; see Invariants for the rest of this pass's real scope limits (per-op
+  signatures are a stand-in derived key, not real per-device attribution; pairing not wired over
+  this transport) and the corrected same-*process* (not same-host) connect finding. `lan_status.rs`:
+  `LanStatus` (endpoint-bound/
+  discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and updated by `lan.rs`;
+  `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/
+  `lan_group_key_present`. `debug_hooks.rs`: `DebugSetGroupKey`'s handler and `Workspace::
+  debug_set_group_key`/`has_group_key` — the test-only seam a real two-daemon test pairs through
+  (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`, refused with `UNIMPLEMENTED` unless set to `"1"`).
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
@@ -61,7 +86,31 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's
   default privacy does not extend to sibling modules, only descendants, so this was a required
   compiler fix, not a style choice.
-- Tests: unit (`*_tests.rs`), `tests/grpc.rs` (in-process server on a temp socket),
+- Tests: unit (`*_tests.rs`, including `sync_ops_tests.rs` and `lan_session_tests.rs` — the latter
+  drives a real `drive_session` over a real `ChannelLink`), `tests/lan_discovery.rs` (two real
+  `txtodod` processes, real mDNS, seeded to share a group before either starts — see its module
+  doc for why `DebugSetGroupKey` can't do that instead — proving real discovery at the full daemon
+  level, discovery only), `tests/lan_loopback_converge.rs` (the fuller proof: two real `txtodod`
+  processes pair through `DebugSetGroupKey`, find each other over real mDNS, and converge a real
+  external edit in both directions through a real `iroh` QUIC connection — repeatable sub-2-second,
+  in practice sub-2-millisecond, convergence; see its module doc and `lan.rs`'s for the corrected
+  same-*process* (not same-host) connect finding this test's own investigation produced),
+  `tests/debug_hooks.rs` (`DebugSetGroupKey` refused/allowed by the env var, over a real socket),
+  `tests/lan_sync_bench.rs` (plan M4 `sync-bench-m4`: 1 000 real ops between two real, paired
+  daemons converge in single-digit milliseconds, budget 500 ms — not wired into `check-bench.sh`/
+  `budgets.json`, both frozen paths this session had no sign-off to touch; see its module doc),
+  `tests/idle_rss.rs` (the same task's other number — `#[ignore]`d: idle RSS at 10k lines measures
+  ~1.7 GB against a 50 MB budget, a real and apparently super-linear memory issue in the adoption/
+  mirror pipeline, flagged to the human, not root-caused or fixed by this pass),
+  `tests/nested_ref_sync.rs` (`test-nested-ref-sync`: two real `txtodod` processes, a parent → child
+  → grandchild `ref:` fixture on device A, a totally empty device B — the whole tree, at every
+  depth, reaches B's real disk in 390-590 ms; needed no new sync-engine code, only a harness
+  addition (`start_with_seeded_group_tree`) to seed A with a multi-file tree before spawn; `child/
+  notes.md` is in the fixture but deliberately excluded from the convergence assertion — a real,
+  pre-existing gap this test's own module doc traces: `notes.md` written straight to disk never
+  becomes an `Op` at all, and even a `notes.md` op would be silently dropped by `lan_apply.rs` on a
+  fresh receiver, since `Workspace::register()` refuses to build an actor for a notes document),
+  `tests/grpc.rs` (in-process server on a temp socket),
   `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
@@ -108,5 +157,27 @@ tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added
   periodic snapshot does, so pairing can seed a second device from it the same way.
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
+- LAN sync (this pass): every wire message is sealed whole with the group key (confidentiality and
+  tamper-evidence for the batch), and every op in a `Message::Ops` batch also carries a per-op
+  `Signature` (`sync-reject-tests`'s wire shape, merged into this pass), verified via
+  `Session::on_ops`. The signing key is `txtodo_sync::lan_op_signing::derive_group_op_signing_key`
+  — an Ed25519 keypair HKDF-derived from the group key itself, **not** a real per-device identity
+  key: every device holding the group key derives the identical keypair, so this only re-proves
+  "the sender holds the group key" (what the AEAD seal already proved), not "which specific device
+  wrote this op". Real per-device attribution needs a `DevicePublicKey` distributed through pairing
+  and stored in the devices table — neither exists yet (the devices table only has
+  `static_public`, the X25519 pairing key) — flagged as the actual follow-up, not silently treated
+  as done. `txtodo-store`'s `ops.signature` column is still unpopulated; this signs on the wire
+  only, not at rest. Each connection is one short-lived convergence burst
+  (`IrohLink`'s idle timeout in `txtodo-sync`), and `lan.rs`'s periodic redial is what makes that
+  keep converging new local edits — see `lan.rs`'s own doc for why, and the tradeoff it accepts.
+  Real pairing has no transport over the LAN link yet (`pairing_grpc.rs`'s own module doc) — a real
+  two-daemon test pairs through the test-only `DebugSetGroupKey` RPC instead (refused unless
+  `TXTODO_TEST_HOOKS=1`), never a production path. **Corrected finding (this pass's own step-3
+  investigation):** a real QUIC connect between two `iroh` endpoints *does* work between two real
+  `txtodod` processes on the same host — the earlier belief that same-host connects are blocked
+  outright was wrong; the actual upstream `noq-proto`/`iroh` bug fires only when both endpoints
+  live in the *same process* (`txtodo-sync`'s `endpoint_tests.rs` has the corrected, evidenced
+  diagnosis). `tests/lan_loopback_converge.rs` is the real, repeatable, cross-process proof.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
   txtodo-sync, txtodo-proto, txtodo-mcp.

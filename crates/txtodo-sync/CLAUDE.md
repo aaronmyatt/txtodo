@@ -68,37 +68,64 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `channel_link_pair()` is the in-process implementation the loopback tests and the simulator use;
   `MAX_QUEUED_FRAMES` bounds each direction rather than growing without limit.
 - `endpoint.rs` (M4 `sync-lan-transport`): `bind_local_endpoint()` — the one iroh `Endpoint`
-  constructor (`presets::Minimal`, `RelayMode::Disabled`), `ALPN`. Not yet wired to `Link`; see
-  Invariants for a known upstream connect/accept blocker on this crate's own loopback test.
+  constructor (`presets::Minimal`, `RelayMode::Disabled`, `PortmapperConfig::Disabled`), `ALPN`. See
+  Invariants for a known upstream connect/accept blocker, now confirmed to hit this constructor too.
 - `discovery.rs` (M4 `sync-lan-transport`): `SERVICE_TYPE` (`_txtodo._udp.local.`), TXT keys
-  `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO` (never the group key), `Announcement`,
-  `parse_announcement(&TxtProperties) -> Result<Announcement, AnnouncementError>`. `PeerTable` — the
-  pure decision core, no sockets, no clock (`now_ms` injected): `new`/`with_limits`, `observe(
-  announcement, addresses, now_ms) -> PeerEvent` (self/foreign-group/protocol filter, then debounce
-  `DEBOUNCE_MS`, then `MAX_LAN_PEERS`, in that order), `remove(device)`, `len`/`is_empty`.
-  `backoff_ms(attempt) -> u64` (`250ms * 2^attempt`, capped at `MAX_BACKOFF_MS`) — pure, not yet
-  called by anything since there is no live retry loop until `endpoint.rs`'s connect works.
-  `Discovery::start(device, group, host_name, port)` owns the `mdns-sd` daemon and registers our
-  advertisement (`enable_addr_auto`), `browse()` hands back the raw event receiver — turning events
-  into `PeerTable` calls is the future daemon wiring's job, same seam as `Link`.
-- Not here yet: the real iroh `Link` implementation (needs the endpoint blocker below resolved, or a
-  real LAN to test against), anything that drives `Discovery`'s events into `PeerTable` or dials a
-  found peer, the `devices` table (persisting each peer's `DeviceStaticPublic` — this crate only
-  produces/consumes the bytes, never stores them), the daemon-level rotation sequencing ("close the
-  epoch before announcing the removal"), snapshot-then-ops transfer to a newly paired device, and
-  the `txtodo pair`/`txtodo device` CLI/daemon wiring (separate M4 subtasks/slices). `sealed_ops`'s
-  `seal_ops`/`open_ops` are proven at the unit level (`sealed_ops_tests.rs`) but nothing in
-  `txtodo-daemon` calls them yet, and there is no two-daemon integration test — that needs a real
-  `Link` MITM and the daemon import path, tracked as the still-open half of `sync-reject-tests`.
+  `TXT_DEVICE`/`TXT_GROUP`/`TXT_PROTO`/`TXT_NODE` (never the group key; `TXT_NODE` is the
+  advertiser's iroh `EndpointId`, opaque `[u8; 32]` here — this module still never names `iroh`),
+  `Announcement`, `parse_announcement(&TxtProperties) -> Result<Announcement, AnnouncementError>`.
+  `PeerTable` — the pure decision core, no sockets, no clock (`now_ms` injected): `new`/
+  `with_limits`, `observe(announcement, addresses, now_ms) -> PeerEvent` (self/foreign-group/
+  protocol filter, then debounce `DEBOUNCE_MS`, then `MAX_LAN_PEERS`, in that order), `remove
+  (device)`, `len`/`is_empty`. `backoff_ms(attempt) -> u64` (`250ms * 2^attempt`, capped at
+  `MAX_BACKOFF_MS`). `Discovery::start(device, group, node, host_name, port)` owns the `mdns-sd`
+  daemon and registers our advertisement (`enable_addr_auto`); `browse()` returns `BrowseEvents`,
+  an async `recv() -> Option<Sighting>` that filters raw `ServiceEvent`s down to resolved,
+  parseable sightings — no caller outside this module ever names `mdns_sd::ServiceEvent`.
+- `lan_link.rs` (M4 `sync-lan-transport`, daemon-wiring pass): the real `iroh`-backed `Link`.
+  `LanEndpoint::bind()` wraps `bind_local_endpoint`; `node_id_bytes()`/`advertise_port()` feed
+  `Discovery::start`; `connect(node, addrs)` (prefers non-loopback candidates, falling back to
+  loopback only when nothing else was advertised — see Invariants; builds an `EndpointAddr`,
+  opens the one bidirectional stream this protocol runs over) and `accept()` (waits one incoming
+  connection, accepts that same stream) both return `IrohLink`. `IrohLink` implements `Link`
+  synchronously by `block_on`-ing the async stream ops on a captured `tokio::runtime::Handle` — it
+  must run on a dedicated driver thread (`spawn_blocking`, never a plain tokio task), matching
+  `Link`'s own "one link, one driver" contract. `recv()` reports `LinkError::Closed` after
+  `IDLE_TIMEOUT` (750 ms) of silence too, not only on a real close — by design, so a caller (the
+  daemon) is expected to run short-lived sessions and redial periodically rather than hold one
+  connection open for a whole pairing's lifetime; see Invariants. `LanError` names what failed.
+  `iroh` appears only in
+  this file and `endpoint.rs`; `txtodo-daemon` never names an `iroh` type (check
+  `.claude/budgets.json`'s `allowedDeps`).
+- `lan_op_signing.rs` (M4 `sync-lan-transport`): `derive_group_op_signing_key(&GroupKey) ->
+  DeviceSigningKey`, `LAN_OP_SIGN_INFO`. HKDF-derives the LAN path's per-op signing keypair from
+  the group key itself, so `Session::on_ops`'s signature check has *something* real to verify
+  against — but every device sharing the group key derives the identical keypair, so this is
+  **not** per-device attribution, only a second proof of "holds the group key" (the AEAD seal
+  already proves that). Real per-device attribution needs a `DevicePublicKey` distributed through
+  pairing and stored in the devices table — neither exists yet, see below.
+- Not here yet: the `devices` table storing each peer's `DevicePublicKey` (only `DeviceStaticPublic`,
+  the X25519 pairing key, is stored today — `lan_op_signing.rs`'s stand-in exists because of this
+  gap), the daemon-level rotation sequencing ("close the epoch before announcing the removal"),
+  snapshot-then-ops transfer to a newly paired device, real pairing over the LAN transport (the
+  daemon's own `sync-loopback-converge` test pairs through a guarded test-only seam instead — see
+  `txtodo-daemon/CLAUDE.md`), and `ops.signature` in `txtodo-store` (still an unpopulated column —
+  the LAN pass signs on the wire, not at rest).
 
 ## Invariants
-- Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact):
-  `noq-proto` 1.3.0 (vendored by `iroh` 1.2.0, latest published) refuses a real QUIC connect/accept
-  between two endpoints both bound to literal `127.0.0.1` — logs `network_path=(local: 127.0.0.1,
-  remote: [::ffff:127.0.0.1]:_)` and calls `refuse()`. `endpoint_tests::
-  two_loopback_endpoints_exchange_one_frame` is `#[ignore]`d with this reason rather than deleted or
-  worked around; `bind_local_endpoint` (production, binds all interfaces) is not shown to hit this
-  path. Re-test once iroh/noq-proto ships a fix or a real LAN is available.
+- Known upstream blocker (2026-09-12, confirmed on macOS and Linux, not a sandbox artifact;
+  **corrected 2026-09-13, corrected again the same day**): `noq-proto` 1.3.0 (vendored by `iroh`
+  1.2.0) refuses a QUIC connection between two `Endpoint`s that live in the **same process** —
+  logged as `network_path=(local: X, remote: [::ffff:X]:_)` and a `refuse()`, regardless of
+  whether `X` is `127.0.0.1` or a real interface address (both were tried; both fail identically),
+  and regardless of portmapper/dual-stack settings (also ruled out). Two intermediate, now-
+  superseded theories are recorded and corrected in `endpoint_tests.rs`'s doc comments for anyone
+  re-deriving this: first "both ends bind literally to `127.0.0.1`", then "any same-host
+  connection" — both wrong. The actual precondition is same-*process*, confirmed by
+  `txtodo-daemon`'s `tests/lan_loopback_converge.rs`: two real, separate `txtodod` processes on
+  this same host connect and sync for real, repeatedly, with sub-millisecond measured convergence.
+  `endpoint_tests.rs`'s two single-process tests stay `#[ignore]`d as same-process regression
+  checks rather than deleted; nothing about real LAN sync is blocked on fixing them.
 - Discovery never leaks the group key, only its id (`TXT_GROUP`); `PeerTable::observe` checks
   self-advertisement, then group, then protocol version, before debounce or the peer-table bound —
   a foreign-group peer can never consume a `MAX_LAN_PEERS` slot. `parse_announcement` never panics on
@@ -142,7 +169,21 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   offer's own `issued_at_ms` instead.
 - `Link` is the only place a real transport may ever be wired in; `Session`/`Message`/`Frame` never
   see a socket directly. `ChannelLink` closes its outbox on `Drop`, so a peer blocked in `recv`
-  learns the other side is gone rather than blocking forever.
+  learns the other side is gone rather than blocking forever. `IrohLink::send`/`recv` block a
+  dedicated driver thread on a captured `tokio::runtime::Handle`; calling either from a plain tokio
+  task (rather than `spawn_blocking`) would starve the runtime, not just this one link.
+- `IrohLink::recv`'s `IDLE_TIMEOUT` (750 ms) makes every LAN session short-lived by design: once
+  both sides go quiet the link reports `Closed` and the daemon's periodic redial opens a fresh one,
+  which is what lets a local edit made *after* an earlier sync round still converge quickly without
+  this crate needing any "watch the store for changes" plumbing of its own. The tradeoff — a new
+  QUIC handshake roughly every second for as long as two daemons stay paired and on the same LAN —
+  is a known cost of this M4-scoped design, flagged for a human: a push/notify model would avoid it
+  but is real additional work, not attempted this pass.
+- `LanEndpoint::connect` prefers non-loopback candidate addresses, falling back to loopback only
+  when nothing else was advertised (real two-process testing on one host sometimes resolves only a
+  loopback address for a peer before its real interface address is known — refusing it outright
+  made LAN sync flaky in exactly that situation). This is unrelated to the same-process bug above,
+  which is about which process the two `Endpoint`s live in, not which address family is dialed.
 - A rotation grant is sealed with a fresh ephemeral keypair per recipient, never the recipient's
   static key as an AEAD key directly (`GRANT_INFO` is a distinct `HKDF-Expand` label from
   `SAS_INFO`/`PAIR_KEY_INFO`); the epoch is bound as AEAD associated data, so a grant for one epoch

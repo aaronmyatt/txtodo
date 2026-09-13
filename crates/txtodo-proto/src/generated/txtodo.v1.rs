@@ -302,6 +302,21 @@ pub struct HealthResponse {
     /// should be able to answer "where are my keys?" from `txtodo doctor` without reading code.
     #[prost(string, tag = "7")]
     pub key_store_backend: ::prost::alloc::string::String,
+    /// LAN transport (plan M4 `sync-lan-transport`), for `txtodo doctor` — a human should see
+    /// whether sync is even possible without reading code.
+    ///
+    /// always true today (M8 turns this on deliberately)
+    #[prost(bool, tag = "8")]
+    pub lan_relay_disabled: bool,
+    /// the iroh endpoint bound and is accepting connections
+    #[prost(bool, tag = "9")]
+    pub lan_endpoint_bound: bool,
+    /// mDNS is advertising and browsing for this group
+    #[prost(bool, tag = "10")]
+    pub lan_discovery_active: bool,
+    /// this workspace has a group key to sync with (paired)
+    #[prost(bool, tag = "11")]
+    pub lan_group_key_present: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -512,6 +527,17 @@ pub struct DeviceRemoveResponse {
     #[prost(string, tag = "4")]
     pub message: ::prost::alloc::string::String,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DebugSetGroupKeyRequest {
+    /// decimal u128, same encoding pairing_wire.rs's group_id already uses
+    #[prost(string, tag = "1")]
+    pub group_id: ::prost::alloc::string::String,
+    /// lowercase hex, 32 bytes (XChaCha20-Poly1305 group key)
+    #[prost(string, tag = "2")]
+    pub key_hex: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DebugSetGroupKeyResponse {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum FileKind {
@@ -1236,6 +1262,35 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DeviceRemove"));
             self.inner.unary(req, path, codec).await
         }
+        /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
+        /// group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
+        /// daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
+        /// link yet, so a real two-daemon test needs a scripted seam instead of a TTY SAS prompt; this
+        /// is that seam, guarded so it can never run in production.
+        pub async fn debug_set_group_key(
+            &mut self,
+            request: impl tonic::IntoRequest<super::DebugSetGroupKeyRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DebugSetGroupKeyResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/DebugSetGroupKey",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DebugSetGroupKey"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1415,6 +1470,18 @@ pub mod txtodo_server {
             request: tonic::Request<super::DeviceRemoveRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DeviceRemoveResponse>,
+            tonic::Status,
+        >;
+        /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
+        /// group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
+        /// daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
+        /// link yet, so a real two-daemon test needs a scripted seam instead of a TTY SAS prompt; this
+        /// is that seam, guarded so it can never run in production.
+        async fn debug_set_group_key(
+            &self,
+            request: tonic::Request<super::DebugSetGroupKeyRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::DebugSetGroupKeyResponse>,
             tonic::Status,
         >;
     }
@@ -2484,6 +2551,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = DeviceRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/DebugSetGroupKey" => {
+                    #[allow(non_camel_case_types)]
+                    struct DebugSetGroupKeySvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::DebugSetGroupKeyRequest>
+                    for DebugSetGroupKeySvc<T> {
+                        type Response = super::DebugSetGroupKeyResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::DebugSetGroupKeyRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::debug_set_group_key(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = DebugSetGroupKeySvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

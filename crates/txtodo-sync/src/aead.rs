@@ -49,6 +49,12 @@ impl GroupKey {
         GroupKey(bytes)
     }
 
+    /// Raw bytes, for `lan_op_signing`'s HKDF derivation. `pub(crate)`, not `pub`: nothing outside
+    /// this crate ever sees a group key's bytes directly.
+    pub(crate) fn as_bytes(&self) -> &[u8; KEY_BYTES] {
+        &self.0
+    }
+
     fn cipher(&self) -> XChaCha20Poly1305 {
         XChaCha20Poly1305::new((&self.0).into())
     }

@@ -11,19 +11,22 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
-  `doctor [--verbose]` (six fixed checks plus one row per known sync peer, exit 1 on any FAIL);
-  `daemon install|start|stop|status [--force]`; `device list|remove <id> [--yes]` (plan M4
-  tasks/sync-device-remove — removal confirms by making the human type the id back unless `--yes`);
-  `pair [CODE]` (plan M4, design §4): no `CODE` starts a handshake as the initiator (renders the QR
-  and text code from `PairOffer`); `CODE` joins as the joiner (`PairAccept`, real SAS, an explicit
-  typed "yes" before `PairConfirmSas` — never a default yes). Refuses a detected `identity_mode`
-  mismatch against a non-empty joining workspace (docs/questions.md Q6, still open) instead of
-  guessing a merge. The daemon-to-daemon leg (a joiner's key reaching the initiator, the sealed
-  group key reaching the joiner back) has no transport yet, so the initiator cannot show a
-  completed SAS and the joiner's confirmed pairing cannot receive the real group key today — both
-  say so plainly (`commands::pair`'s own module doc). `open`/`notes`/`sub`/`prune --orphans` (plan
-  M5, `specs/ref-directories.md`): a line's `ref:` directory, its `notes.md` in `$EDITOR`, a scoped
-  `todo.sh -d`, and orphaned `ref:` directories no line points to (`--yes` to actually delete).
+  `doctor [--verbose]` (seven fixed checks — including `keystore` and `transport`, the latter
+  plan M4 `sync-lan-transport`: relay off, endpoint bound, discovery active, paired — plus one row
+  per known sync peer, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
+  list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
+  human type the id back unless `--yes`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
+  handshake as the initiator (renders the QR and text code from `PairOffer`); `CODE` joins as the
+  joiner (`PairAccept`, real SAS, an explicit typed "yes" before `PairConfirmSas` — never a default
+  yes). Refuses a detected `identity_mode` mismatch against a non-empty joining workspace
+  (docs/questions.md Q6, still open) instead of guessing a merge. Real device-to-device pairing
+  now has a transport (plan M4 `sync-lan-transport`'s LAN wiring), but this command itself still
+  drives it through the `DebugSetGroupKey` test-only seam rather than the real SAS-confirmed
+  handoff — see `txtodo-daemon/CLAUDE.md`'s `lan_session.rs` entry for exactly what is and isn't
+  wired yet (`commands::pair`'s own module doc has the CLI-level detail). `open`/`notes`/`sub`/
+  `prune --orphans` (plan M5, `specs/ref-directories.md`): a line's `ref:` directory, its
+  `notes.md` in `$EDITOR`, a scoped `todo.sh -d`, and orphaned `ref:` directories no line points to
+  (`--yes` to actually delete).
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `url_schemes`) at

@@ -274,6 +274,7 @@ impl Txtodo for TxtodoService {
         } else {
             now_ms.saturating_sub(last_event_ms)
         };
+        let lan = ws.lan_status();
         Ok(Response::new(pb::HealthResponse {
             watcher_alive,
             documents: u32::try_from(ws.paths().count()).unwrap_or(u32::MAX),
@@ -282,6 +283,10 @@ impl Txtodo for TxtodoService {
             writes_total,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             key_store_backend: ws.key_store_backend_name().to_owned(),
+            lan_relay_disabled: crate::lan_status::LanStatus::RELAY_DISABLED,
+            lan_endpoint_bound: lan.endpoint_bound(),
+            lan_discovery_active: lan.discovery_active(),
+            lan_group_key_present: ws.has_group_key(),
         }))
     }
 
@@ -373,5 +378,12 @@ impl Txtodo for TxtodoService {
         r: Request<pb::DeviceRemoveRequest>,
     ) -> Result<Response<pb::DeviceRemoveResponse>, Status> {
         self.device_remove_impl(r).await
+    }
+
+    async fn debug_set_group_key(
+        &self,
+        r: Request<pb::DebugSetGroupKeyRequest>,
+    ) -> Result<Response<pb::DebugSetGroupKeyResponse>, Status> {
+        self.debug_set_group_key_impl(r).await
     }
 }

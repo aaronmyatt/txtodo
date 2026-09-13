@@ -12,7 +12,7 @@ use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::watch_task;
 use txtodo_daemon::workspace::Workspace;
-use txtodo_daemon::{serve, server};
+use txtodo_daemon::{lan, serve, server};
 use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
@@ -175,6 +175,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let key_store_backend = ws.key_store_backend_name();
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let (_watcher, watch_handle) = watch_task::start(Arc::clone(&ws), Arc::new(SystemClock))?;
+    let lan_transport = lan::start(Arc::clone(&ws), Arc::new(SystemClock));
     eprintln!(
         "txtodod ready: {documents} document(s), socket {}, key_store={key_store_backend}",
         socket.display()
@@ -200,6 +201,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     };
     serve::serve(ws, &socket, shutdown).await?;
     watch_handle.abort();
+    lan_transport.abort();
     eprintln!("txtodod stopped");
     Ok(())
 }

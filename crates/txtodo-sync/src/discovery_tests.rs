@@ -7,7 +7,7 @@ use txtodo_model::{DeviceId, Ulid};
 use crate::discovery::{
     Announcement, AnnouncementError, DEBOUNCE_MS, DiscoveredPeer, Discovery, Ignored,
     MAX_BACKOFF_MS, MAX_LAN_PEERS, PeerEvent, PeerTable, SERVICE_TYPE, TXT_DEVICE, TXT_GROUP,
-    TXT_PROTO, backoff_ms, parse_announcement,
+    TXT_NODE, TXT_PROTO, backoff_ms, parse_announcement,
 };
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::GroupId;
@@ -16,15 +16,22 @@ fn device(n: u128) -> DeviceId {
     DeviceId::new(Ulid::from_u128(n))
 }
 
+/// A throwaway node id byte pattern; only `n`'s low byte varies, which is all these tests need to
+/// tell two nodes apart.
+fn node(n: u8) -> [u8; 32] {
+    [n; 32]
+}
+
 fn addr() -> Vec<SocketAddr> {
     vec![SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4242)]
 }
 
-fn txt(device: DeviceId, group: GroupId, proto: u16) -> mdns_sd::TxtProperties {
-    let props: [(&str, String); 3] = [
+fn txt(device: DeviceId, group: GroupId, proto: u16, node: [u8; 32]) -> mdns_sd::TxtProperties {
+    let props: [(&str, String); 4] = [
         (TXT_DEVICE, device.to_string()),
         (TXT_GROUP, format!("{:032x}", group.0)),
         (TXT_PROTO, proto.to_string()),
+        (TXT_NODE, data_encoding::HEXLOWER.encode(&node)),
     ];
     (&props[..]).into_txt_properties()
 }
@@ -33,10 +40,12 @@ fn txt(device: DeviceId, group: GroupId, proto: u16) -> mdns_sd::TxtProperties {
 fn a_well_formed_txt_record_round_trips_through_parse_announcement() {
     let d = device(7);
     let g = GroupId(99);
-    let announcement = parse_announcement(&txt(d, g, PROTOCOL_VERSION)).unwrap();
+    let n = node(7);
+    let announcement = parse_announcement(&txt(d, g, PROTOCOL_VERSION, n)).unwrap();
     assert_eq!(announcement.device, d);
     assert_eq!(announcement.group, g);
     assert_eq!(announcement.proto, PROTOCOL_VERSION);
+    assert_eq!(announcement.node, n);
 }
 
 #[test]
@@ -50,35 +59,50 @@ fn each_missing_field_is_named_not_a_generic_error() {
 }
 
 #[test]
-fn a_malformed_device_group_or_proto_field_is_a_typed_error() {
-    let bad_device: [(&str, String); 3] = [
+fn a_malformed_device_group_proto_or_node_field_is_a_typed_error() {
+    let good_node = data_encoding::HEXLOWER.encode(&node(1));
+    let bad_device: [(&str, String); 4] = [
         (TXT_DEVICE, "not-a-ulid".to_string()),
         (TXT_GROUP, "0".repeat(32)),
         (TXT_PROTO, "1".to_string()),
+        (TXT_NODE, good_node.clone()),
     ];
     assert!(matches!(
         parse_announcement(&(&bad_device[..]).into_txt_properties()),
         Err(AnnouncementError::MalformedDevice(_))
     ));
 
-    let bad_group: [(&str, String); 3] = [
+    let bad_group: [(&str, String); 4] = [
         (TXT_DEVICE, device(1).to_string()),
         (TXT_GROUP, "not-hex".to_string()),
         (TXT_PROTO, "1".to_string()),
+        (TXT_NODE, good_node.clone()),
     ];
     assert!(matches!(
         parse_announcement(&(&bad_group[..]).into_txt_properties()),
         Err(AnnouncementError::MalformedGroup(_))
     ));
 
-    let bad_proto: [(&str, String); 3] = [
+    let bad_proto: [(&str, String); 4] = [
         (TXT_DEVICE, device(1).to_string()),
         (TXT_GROUP, "0".repeat(32)),
         (TXT_PROTO, "not-a-number".to_string()),
+        (TXT_NODE, good_node.clone()),
     ];
     assert!(matches!(
         parse_announcement(&(&bad_proto[..]).into_txt_properties()),
         Err(AnnouncementError::MalformedProto(_))
+    ));
+
+    let bad_node: [(&str, String); 4] = [
+        (TXT_DEVICE, device(1).to_string()),
+        (TXT_GROUP, "0".repeat(32)),
+        (TXT_PROTO, "1".to_string()),
+        (TXT_NODE, "not-hex-and-wrong-length".to_string()),
+    ];
+    assert!(matches!(
+        parse_announcement(&(&bad_node[..]).into_txt_properties()),
+        Err(AnnouncementError::MalformedNode(_))
     ));
 }
 
@@ -92,6 +116,7 @@ fn our_own_advertisement_is_ignored() {
             device: me,
             group,
             proto: PROTOCOL_VERSION,
+            node: node(1),
         },
         addr(),
         1_000,
@@ -110,6 +135,7 @@ fn a_peer_in_another_group_is_never_connected_to() {
             device: device(2),
             group: foreign,
             proto: PROTOCOL_VERSION,
+            node: node(2),
         },
         addr(),
         1_000,
@@ -128,6 +154,7 @@ fn a_peer_speaking_a_different_protocol_version_is_ignored() {
             device: device(2),
             group,
             proto: PROTOCOL_VERSION + 1,
+            node: node(2),
         },
         addr(),
         1_000,
@@ -144,11 +171,13 @@ fn a_new_peer_in_our_group_is_found() {
     let group = GroupId(1);
     let peer = device(2);
     let mut table = PeerTable::new(me, group);
+    let peer_node = node(2);
     let event = table.observe(
         Announcement {
             device: peer,
             group,
             proto: PROTOCOL_VERSION,
+            node: peer_node,
         },
         addr(),
         1_000,
@@ -157,6 +186,7 @@ fn a_new_peer_in_our_group_is_found() {
         event,
         PeerEvent::Found(DiscoveredPeer {
             device: peer,
+            node: peer_node,
             addresses: addr(),
         })
     );
@@ -173,6 +203,7 @@ fn a_reannouncement_inside_the_debounce_window_is_debounced() {
         device: peer,
         group,
         proto: PROTOCOL_VERSION,
+        node: node(2),
     };
     assert!(matches!(
         table.observe(announcement, addr(), 1_000),
@@ -199,6 +230,7 @@ fn the_peer_past_max_lan_peers_is_dropped_with_a_named_reason_not_pushed() {
                 device: device(n),
                 group,
                 proto: PROTOCOL_VERSION,
+                node: node(n as u8),
             },
             addr(),
             1_000,
@@ -210,6 +242,7 @@ fn the_peer_past_max_lan_peers_is_dropped_with_a_named_reason_not_pushed() {
             device: device(3),
             group,
             proto: PROTOCOL_VERSION,
+            node: node(3),
         },
         addr(),
         1_000,
@@ -228,6 +261,7 @@ fn a_removed_peer_can_be_found_again_without_waiting_out_the_debounce() {
         device: peer,
         group,
         proto: PROTOCOL_VERSION,
+        node: node(1),
     };
     assert!(matches!(
         table.observe(announcement, addr(), 1_000),
@@ -257,8 +291,15 @@ fn backoff_grows_exponentially_and_never_exceeds_the_cap() {
 fn two_real_daemons_discover_each_other_on_the_lan() {
     let advertiser_device = device(1000);
     let group = GroupId(42);
-    let advertiser = Discovery::start(advertiser_device, group, "discovery-test.local.", 4242)
-        .expect("advertiser starts");
+    let advertiser_node = node(200);
+    let advertiser = Discovery::start(
+        advertiser_device,
+        group,
+        advertiser_node,
+        "discovery-test.local.",
+        4242,
+    )
+    .expect("advertiser starts");
 
     let browser = ServiceDaemon::new().expect("browser daemon");
     let events = browser.browse(SERVICE_TYPE).expect("browse");
@@ -281,4 +322,50 @@ fn two_real_daemons_discover_each_other_on_the_lan() {
     let announcement = found.expect("the advertiser is resolved within the timeout");
     assert_eq!(announcement.group, group);
     assert_eq!(announcement.proto, PROTOCOL_VERSION);
+}
+
+/// The daemon-facing half of the same proof: `Discovery::browse()`'s own wrapped `BrowseEvents`,
+/// not a raw `mdns_sd::ServiceDaemon` standing in for a foreign browser. Exercises the exact seam
+/// `lan.rs` drives in production.
+#[tokio::test]
+async fn discovery_browse_finds_a_real_advertiser_through_the_wrapped_event_stream() {
+    let advertiser_device = device(2000);
+    let group = GroupId(43);
+    let advertiser_node = node(201);
+    let advertiser = Discovery::start(
+        advertiser_device,
+        group,
+        advertiser_node,
+        "discovery-test-2.local.",
+        4243,
+    )
+    .expect("advertiser starts");
+
+    let browser = Discovery::start(
+        device(2001),
+        group,
+        node(202),
+        "discovery-test-3.local.",
+        4244,
+    )
+    .expect("browser starts");
+    let events = browser.browse().expect("browse");
+
+    let found = tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let sighting = events.recv().await.expect("the mDNS daemon stays up");
+            if sighting.announcement.device == advertiser_device {
+                return sighting;
+            }
+        }
+    })
+    .await
+    .expect("the advertiser is resolved within the timeout");
+
+    advertiser.shutdown();
+    browser.shutdown();
+
+    assert_eq!(found.announcement.group, group);
+    assert_eq!(found.announcement.node, advertiser_node);
+    assert!(!found.addresses.is_empty());
 }

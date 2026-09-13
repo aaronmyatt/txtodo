@@ -17,6 +17,8 @@ mod keystore_file;
 mod keystore_memory;
 mod keystore_os;
 mod keystore_resolve;
+mod lan_link;
+mod lan_op_signing;
 mod link;
 mod message;
 mod nonce_registry;
@@ -41,9 +43,9 @@ pub use aead::{
 pub use crypto_error::CryptoError;
 pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
 pub use discovery::{
-    Announcement, AnnouncementError, DEBOUNCE_MS, DiscoveredPeer, Discovery, DiscoveryError,
-    Ignored, MAX_BACKOFF_MS, MAX_LAN_PEERS, PeerEvent, PeerTable, SERVICE_TYPE, TXT_DEVICE,
-    TXT_GROUP, TXT_PROTO, backoff_ms, parse_announcement,
+    Announcement, AnnouncementError, BrowseEvents, DEBOUNCE_MS, DiscoveredPeer, Discovery,
+    DiscoveryError, Ignored, MAX_BACKOFF_MS, MAX_LAN_PEERS, PeerEvent, PeerTable, SERVICE_TYPE,
+    Sighting, TXT_DEVICE, TXT_GROUP, TXT_NODE, TXT_PROTO, backoff_ms, parse_announcement,
 };
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use endpoint::{ALPN, bind_local_endpoint};
@@ -54,6 +56,8 @@ pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM
 pub use keystore_memory::MemoryKeyStore;
 pub use keystore_os::OsKeyStore;
 pub use keystore_resolve::{KeyStoreMode, ResolvedBackend, resolve};
+pub use lan_link::{IrohLink, LanEndpoint, LanError};
+pub use lan_op_signing::{LAN_OP_SIGN_INFO, derive_group_op_signing_key};
 pub use link::{ChannelLink, Link, LinkError, MAX_QUEUED_FRAMES, channel_link_pair};
 pub use message::{
     GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,

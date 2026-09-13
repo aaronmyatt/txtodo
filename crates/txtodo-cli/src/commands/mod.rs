@@ -6,6 +6,7 @@ pub mod archive;
 pub mod conflicts;
 pub mod device;
 pub mod doctor;
+mod doctor_transport;
 pub mod edit;
 pub mod env;
 pub mod fileops;

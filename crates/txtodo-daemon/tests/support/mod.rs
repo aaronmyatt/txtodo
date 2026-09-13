@@ -71,8 +71,55 @@ impl Daemon {
     /// Writes `todo` as todo.txt, starts txtodod under `--identity-mode <mode>`, waits for the
     /// socket and for adoption to settle.
     pub async fn start_with_mode(todo: &str, mode: &str) -> Daemon {
+        Self::start_full(todo, mode, &[]).await
+    }
+
+    /// `start_with_mode`, but with `TXTODO_TEST_HOOKS=1` set so `DebugSetGroupKey` (plan M4
+    /// `sync-lan-transport`) is reachable — the seam a real two-daemon test pairs through, since
+    /// real pairing has no transport over the LAN link yet.
+    pub async fn start_with_test_hooks(todo: &str, mode: &str) -> Daemon {
+        Self::start_full(todo, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
+    }
+
+    /// `start_with_test_hooks`, but the sync group id is chosen rather than randomly minted:
+    /// `Workspace::open`'s `load_or_mint_group` only mints one when `meta` has none yet, so seeding
+    /// it into a fresh `oplog.db` *before* the daemon (and its `lan.rs` task, which registers the
+    /// mDNS advertisement once at startup off whatever `Workspace::group()` says right then) ever
+    /// starts is the only way to get two real daemons advertising the same group — `DebugSetGroupKey`
+    /// changes the *keystore* key, not a live-updated advertisement (`tests/lan_discovery.rs`'s
+    /// module doc has the full reasoning).
+    pub async fn start_with_seeded_group(todo: &str, mode: &str, group_id: u128) -> Daemon {
+        Self::start_with_seeded_group_tree(&[("todo.txt", todo)], mode, group_id).await
+    }
+
+    /// `start_with_seeded_group`, for a whole pre-existing directory tree instead of one root
+    /// `todo.txt` — `test-nested-ref-sync`'s fixture (parent/child/grandchild `ref:` directories)
+    /// needs device A to start already holding files at depth. `start_in`'s `SOCKET_WAIT` doc
+    /// already establishes that adoption (the walk in `Workspace::open_with_default_mode`) finishes
+    /// before the socket binds, so every file passed here is registered and has ops by the time
+    /// this returns — pairing can start immediately, no extra per-file settle needed on this side.
+    pub async fn start_with_seeded_group_tree(
+        files: &[(&str, &str)],
+        mode: &str,
+        group_id: u128,
+    ) -> Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        std::fs::write(dir.path().join("todo.txt"), todo).unwrap_or_else(|e| panic!("{e}"));
+        write_tree(dir.path(), files);
+        seed_group_id(dir.path(), group_id);
+        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
+    }
+
+    /// `start_with_mode`, with extra environment variables set on the spawned process. Reuse
+    /// within this slice (`ABSTRACTIONS.md`'s "real-daemon test harness" entry already tracks this
+    /// harness as shared across `tests/support/mod.rs`/`crash.rs`; this grows it, not duplicates
+    /// it — noted there too).
+    pub async fn start_full(todo: &str, mode: &str, envs: &[(&str, &str)]) -> Daemon {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        write_tree(dir.path(), &[("todo.txt", todo)]);
+        Self::start_in(dir, mode, envs).await
+    }
+
+    async fn start_in(dir: tempfile::TempDir, mode: &str, envs: &[(&str, &str)]) -> Daemon {
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
             .args([
                 "--dir",
@@ -80,6 +127,7 @@ impl Daemon {
                 "--identity-mode",
                 mode,
             ])
+            .envs(envs.iter().copied())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
@@ -103,6 +151,24 @@ impl Daemon {
         d.writes_baseline = health.writes_total;
         d.seq_baseline = d.raw_history().await.first().map_or(0, |o| o.seq);
         d
+    }
+
+    /// Plan M4 `sync-lan-transport`'s test-only pairing seam: requires `start_with_test_hooks`.
+    pub async fn debug_set_group_key(&mut self, group_id: &str, key_hex: &str) {
+        let req = pb::DebugSetGroupKeyRequest {
+            group_id: group_id.to_string(),
+            key_hex: key_hex.to_string(),
+        };
+        self.client
+            .debug_set_group_key(req)
+            .await
+            .unwrap_or_else(|e| panic!("debug_set_group_key: {e}"));
+    }
+
+    /// The real OS pid of the spawned `txtodod` — for out-of-band inspection (`ps`, `/proc`) that
+    /// no RPC exposes, e.g. `tests/idle_rss.rs`'s memory reading.
+    pub fn pid(&self) -> u32 {
+        self.child.id()
     }
 
     pub async fn health(&mut self) -> pb::HealthResponse {
@@ -245,6 +311,36 @@ impl Drop for Daemon {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+/// Writes each `(relative path, contents)` pair under `dir`, creating parent directories as
+/// needed. The general form both `start_full`'s single `todo.txt` and
+/// `start_with_seeded_group_tree`'s whole nested-ref fixture go through, so a multi-file workspace
+/// is one call site, not a second copy of the write loop.
+fn write_tree(dir: &Path, files: &[(&str, &str)]) {
+    for (rel, contents) in files {
+        let path = dir.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap_or_else(|e| panic!("create_dir_all: {e}"));
+        }
+        std::fs::write(&path, contents).unwrap_or_else(|e| panic!("write {rel}: {e}"));
+    }
+}
+
+/// Opens (creating) `<root>/.txtodo/oplog.db` and seeds the sync group id `Workspace::open` will
+/// load instead of minting one. See `Daemon::start_with_seeded_group`'s doc for why this has to
+/// happen before the daemon process exists at all.
+pub fn seed_group_id(root: &Path, group_id: u128) {
+    let state_dir = root.join(".txtodo");
+    std::fs::create_dir_all(&state_dir).unwrap_or_else(|e| panic!("{e}"));
+    let mut store = txtodo_store::Store::open(&state_dir.join("oplog.db"))
+        .unwrap_or_else(|e| panic!("open store: {e}"));
+    store
+        .meta_set(
+            txtodo_daemon::workspace::GROUP_ID_KEY,
+            &group_id.to_be_bytes(),
+        )
+        .unwrap_or_else(|e| panic!("seed group id: {e}"));
 }
 
 /// The `kind` column of each op, in order.

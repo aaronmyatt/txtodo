@@ -11,6 +11,7 @@ mod commit;
 mod conflict_row;
 pub mod convert;
 pub mod debounce;
+pub mod debug_hooks;
 mod device_remove;
 mod devices_grpc;
 pub mod expected;
@@ -24,6 +25,11 @@ mod identity_fingerprint;
 mod identity_levenshtein;
 mod import;
 mod keystore_setup;
+pub mod lan;
+mod lan_apply;
+mod lan_peers;
+mod lan_session;
+pub mod lan_status;
 pub mod mirror;
 mod mirror_converge;
 mod move_coordinator;
@@ -51,6 +57,7 @@ pub mod serve;
 pub mod server;
 pub mod state;
 pub mod stats;
+mod sync_ops;
 pub mod telemetry;
 pub mod textedit;
 mod tokens;
@@ -74,6 +81,8 @@ mod history_tests;
 #[cfg(test)]
 mod import_tests;
 #[cfg(test)]
+mod lan_session_tests;
+#[cfg(test)]
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;
@@ -91,5 +100,7 @@ mod refdir_tests;
 mod state_goldens;
 #[cfg(test)]
 mod state_tests;
+#[cfg(test)]
+mod sync_ops_tests;
 #[cfg(test)]
 mod workspace_tests;

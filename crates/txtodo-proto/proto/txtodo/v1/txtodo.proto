@@ -70,6 +70,13 @@ service Txtodo {
   // tasks/sync-device-remove). Refuses removing this device itself or the last device; removing
   // an already-removed device rotates nothing and says so.
   rpc DeviceRemove(DeviceRemoveRequest) returns (DeviceRemoveResponse);
+
+  // TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
+  // group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
+  // daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
+  // link yet, so a real two-daemon test needs a scripted seam instead of a TTY SAS prompt; this
+  // is that seam, guarded so it can never run in production.
+  rpc DebugSetGroupKey(DebugSetGroupKeyRequest) returns (DebugSetGroupKeyResponse);
 }
 
 message ListFilesRequest {}
@@ -248,6 +255,12 @@ message HealthResponse {
   // The resolved sync keystore backend (plan M4 tasks/sync-keystore): "os" or "file". A human
   // should be able to answer "where are my keys?" from `txtodo doctor` without reading code.
   string key_store_backend = 7;
+  // LAN transport (plan M4 `sync-lan-transport`), for `txtodo doctor` — a human should see
+  // whether sync is even possible without reading code.
+  bool lan_relay_disabled = 8;    // always true today (M8 turns this on deliberately)
+  bool lan_endpoint_bound = 9;    // the iroh endpoint bound and is accepting connections
+  bool lan_discovery_active = 10;  // mDNS is advertising and browsing for this group
+  bool lan_group_key_present = 11; // this workspace has a group key to sync with (paired)
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -389,3 +402,12 @@ message DeviceRemoveResponse {
   // it does is worse than no feature).
   string message = 4;
 }
+
+// --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---
+
+message DebugSetGroupKeyRequest {
+  string group_id = 1;   // decimal u128, same encoding pairing_wire.rs's group_id already uses
+  string key_hex = 2;    // lowercase hex, 32 bytes (XChaCha20-Poly1305 group key)
+}
+
+message DebugSetGroupKeyResponse {}

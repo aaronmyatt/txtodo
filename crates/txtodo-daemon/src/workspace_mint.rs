@@ -11,8 +11,10 @@ use txtodo_sync::GroupId;
 
 /// The `meta` key holding this install's device id.
 pub(crate) const DEVICE_ID_KEY: &str = "device_id";
-/// The `meta` key holding this workspace's sync group id (plan M4 pairing).
-pub(crate) const GROUP_ID_KEY: &str = "group_id";
+/// The `meta` key holding this workspace's sync group id (plan M4 pairing). `pub`, not
+/// `pub(crate)`: `tests/support/mod.rs` (a separate integration-test crate) seeds a shared group
+/// id directly into a fresh workspace's store for the real two-daemon LAN tests.
+pub const GROUP_ID_KEY: &str = "group_id";
 /// The `meta` key holding this workspace's identity mode (docs/questions.md Q2).
 pub(crate) const IDENTITY_MODE_KEY: &str = "identity_mode";
 

@@ -5,6 +5,7 @@
 use crate::actor::{ActorConfig, FileActor, SharedStore};
 use crate::clock::Clock;
 use crate::handle::{ActorError, ActorHandle};
+use crate::lan_status::LanStatus;
 use crate::notes_actor::NotesActorConfig;
 use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_state::{PairingRegistry, PairingStateError};
@@ -12,8 +13,10 @@ use crate::stats::Stats;
 use crate::tree_dirty::TreeDirty;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
 use crate::workspace_error::WorkspaceError;
+/// Re-exported for `tests/support/mod.rs` (see that constant's own doc).
+pub use crate::workspace_mint::GROUP_ID_KEY;
 use crate::workspace_mint::{
-    GROUP_ID_KEY, basename, load_or_mint_device, load_or_mint_group, load_or_mint_identity_mode,
+    basename, load_or_mint_device, load_or_mint_group, load_or_mint_identity_mode,
 };
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -67,6 +70,9 @@ pub struct Workspace {
     pub(crate) tree_dirty: Arc<TreeDirty>,
     /// The last full rebuild of the workspace tree; stale exactly when `tree_dirty` is set.
     pub(crate) cached_tree: Mutex<WorkspaceTree>,
+    /// Live LAN transport status (plan M4 `sync-lan-transport`), updated by `lan.rs`, read by
+    /// `Health`/`txtodo doctor`.
+    lan_status: LanStatus,
 }
 
 impl Workspace {
@@ -174,6 +180,7 @@ impl Workspace {
             notes: NotesRegistry::new(),
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
+            lan_status: LanStatus::default(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -359,10 +366,20 @@ impl Workspace {
             key_epoch: 0,
         })?;
         drop(store);
+        self.set_group(group);
+        Ok(())
+    }
+    /// Live LAN transport status (plan M4 `sync-lan-transport`), for `Health`/`txtodo doctor`.
+    pub fn lan_status(&self) -> &LanStatus {
+        &self.lan_status
+    }
+    /// Replaces this workspace's sync group id in memory (its persistence is the caller's job —
+    /// `adopt_group_key`/`debug_hooks.rs`'s `debug_set_group_key` both write `meta` themselves
+    /// first). Never called with the store not already updated to match.
+    pub(crate) fn set_group(&self, group: GroupId) {
         *self
             .group
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = group;
-        Ok(())
     }
 }

@@ -1,9 +1,11 @@
-//! `txtodo doctor` (plan M3, design §5): socket, watcher, files, clock, config, keystore. Six
-//! fixed checks in a fixed order so scripts can index them, plus one row per known sync peer
-//! (plan M4 tasks/model-hlc-skew-guard) — each carries the command that fixes it. Exit status 1
-//! when any check fails. `--verbose` tails the daemon's JSON log when one exists.
+//! `txtodo doctor` (plan M3, design §5; `keystore` added plan M4 `sync-keystore`, `transport`
+//! added plan M4 `sync-lan-transport`): socket, watcher, files, clock, config, keystore,
+//! transport. Seven fixed checks in a fixed order so scripts can index them, plus one row per
+//! known sync peer (plan M4 tasks/model-hlc-skew-guard) — each carries the command that fixes it.
+//! Exit status 1 when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
+use crate::commands::doctor_transport::transport_check;
 use crate::{CliError, Ctx, json};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -46,7 +48,7 @@ pub struct Check {
     pub detail: String,
 }
 
-fn check(name: &'static str, status: Status, detail: impl Into<String>) -> Check {
+pub(super) fn check(name: &'static str, status: Status, detail: impl Into<String>) -> Check {
     Check {
         name,
         status,
@@ -251,7 +253,8 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(clock_check(health.as_ref()));
     checks.push(config_check(ctx));
     checks.push(keystore_check(health.as_ref()));
-    debug_assert_eq!(checks.len(), 6, "six fixed checks in a fixed order");
+    checks.push(transport_check(health.as_ref()));
+    debug_assert_eq!(checks.len(), 7, "seven fixed checks in a fixed order");
     checks.extend(peer_checks(&devices));
     if ctx.json {
         let rows: Vec<String> = checks

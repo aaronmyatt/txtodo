@@ -130,6 +130,9 @@ impl FileActor {
             } => {
                 let _ = reply.send(self.on_resolve(task, resolution, principal));
             }
+            ActorMsg::SyncOps { ops, reply } => {
+                let _ = reply.send(self.on_sync_ops(ops));
+            }
             _ => {}
         }
     }
