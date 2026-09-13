@@ -12,6 +12,7 @@ mod heads;
 mod identity;
 mod ops;
 mod projections;
+mod registry;
 mod tokens;
 
 pub use commit::{CommitExtras, prev_hash_key};
@@ -22,6 +23,9 @@ pub use heads::MAX_DEVICES_PER_HEADS;
 pub use identity::{FingerprintRow, MAX_FINGERPRINTS_PER_READ};
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
+pub use registry::{
+    MAX_WORKSPACES_PER_READ, NewWorkspaceEntry, Registry, WorkspaceId, WorkspaceRow,
+};
 pub use tokens::{MAX_TOKENS_PER_READ, NewToken, TokenError, TokenRecord};
 
 use rusqlite::Connection;
