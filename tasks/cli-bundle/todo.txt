@@ -1,7 +1,6 @@
 2026-09-12 Add BundleManifest/FileHash/BundleChunk messages + BundleExport/BundleImport streaming RPCs to crates/txtodo-proto/proto/txtodo/v1/txtodo.proto; version field from day one +m8 @cli @proto id:01M2B4ZVQHGSAK0392ED5PS8R6
 2026-09-12 crates/txtodo-daemon/src/bundle.rs: BundleExporter streams snapshot + op tail in seq order with the manifest written first, via txtodo_store reads +m8 @cli @daemon id:01M2B4ZVQHZTS6V5T52E4BJA47
 2026-09-12 Wrap the export stream in Argon2id -> XChaCha20-Poly1305 (passphrase from the CLI over loopback); never log or store the passphrase +m8 @cli @daemon id:01M2B4ZVQH6VD20BJ58EXVA8E4
-2026-09-12 Decide key material: default key-free (QR/SAS pairing per design §4.6), confirm with the human whether the bundle ever carries the group key +m8 @cli @human id:01M2B4ZVQH55THJBSDCGDP5BT3
 2026-09-12 crates/txtodo-cli/src/bundle.rs: `txtodo bundle export [--out FILE] [--passphrase-file -]` streams daemon chunks to disk in a bounded 64 KiB copy, never buffers the workspace +m8 @cli id:01M2B4ZVQHSTED5NPVQY2EJPPT
 2026-09-12 crates/txtodo-cli/src/bundle.rs: `txtodo bundle import FILE` streams to the daemon; verifies version, schema, per-op Ed25519 signature and per-file blake3 hashes before any insert +m8 @cli id:01M2B4ZVQH15CJRYZR51K9ZZP6
 2026-09-12 Import is all-or-nothing: any failure (version/sig/hash/truncation/wrong passphrase) is a typed error with zero ops and no projection write +m8 @cli @daemon id:01M2B4ZVQHX3X1R9MZSVYEBYBY
@@ -13,3 +12,4 @@
 2026-09-12 Test: export of a large op tail streams in bounded chunks and stays within a fixed memory budget +m8 @cli @test id:01M2B4ZVQJMZM6XRTBS2WXSMTN
 2026-09-12 Get human sign-off and a cargo deny pass for argon2 and chacha20poly1305 before the code lands +m8 @cli id:01M2B4ZVQJ3XJTTEXJ0F74VC9N
 2026-09-12 Complete the parent line in ./todo.txt +m8 @cli id:01M2B4ZVQJS8FWKV774ZBMPYWP
+x 2026-09-13 2026-09-12 Decide key material: default key-free (QR/SAS pairing per design §4.6), confirm with the human whether the bundle ever carries the group key +m8 @cli @human — decided: key-free, no key-carrying path at all; the bundle never carries the group key, BundleManifest gets no key field, group membership stays QR/SAS-pairing-only id:01M2B4ZVQH55THJBSDCGDP5BT3

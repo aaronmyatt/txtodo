@@ -101,3 +101,11 @@ the bundle from being a key-escrow artifact. Flag once to the human; default key
 - git-bundle: https://git-scm.com/docs/git-bundle
 - https://docs.rs/argon2 · https://docs.rs/chacha20poly1305 · https://docs.rs/blake3
 - Sibling: [sync-crypto-envelope](../sync-crypto-envelope/notes.md), [security-m8-review](../security-m8-review/notes.md)
+
+## Decision (2026-09-13)
+
+Key-free, confirmed. The bundle never carries the group key — it moves op/file state only,
+wrapped for confidentiality-at-rest (Argon2id -> XChaCha20-Poly1305, passphrase-derived).
+Group membership is granted exclusively through QR/SAS pairing (design §4.6). Do not add a
+key field to `BundleManifest` or any bundle message — this is a closed decision, not a
+default to revisit per-implementation.
