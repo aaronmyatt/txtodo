@@ -30,17 +30,25 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `notes.md` in `$EDITOR`, a scoped `todo.sh -d`, and orphaned `ref:` directories no line points to
   (`--yes` to actually delete).
 - Line numbers are the ids: 1-based over every line, blanks included.
-- Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
-- Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `url_schemes`) at
-  `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` + `txtodo/config.toml`; env
-  `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd. `identity_mode =
-  "tagged"|"sidecar"` (docs/questions.md Q2) is the name to reach for going forward; `id_tags`
-  still works alone for an existing config, but an unset config is `Sidecar` now, not `Tagged`
-  (plan §1 decision 9, reversed). `key_store = "auto"|"os"|"file"` (plan M4 `sync-keystore`,
-  `Config::key_store_mode()`) mirrors the daemon's own `--key-store` flag by name; like
-  `identity_mode`, nothing in this crate threads it through the service install templates yet
+- Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
+- Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
+  `url_schemes`) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
+  `txtodo/config.toml`; env `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd.
+  `identity_mode = "tagged"|"sidecar"` (docs/questions.md Q2) is the name to reach for going
+  forward; `id_tags` still works alone for an existing config, but an unset config is `Sidecar`
+  now, not `Tagged` (plan §1 decision 9, reversed). `key_store = "auto"|"os"|"file"` (plan M4
+  `sync-keystore`, `Config::key_store_mode()`) mirrors the daemon's own `--key-store` flag by name;
+  like `identity_mode`, nothing in this crate threads it through the service install templates yet
   (a pre-existing gap for that flag, not new here) — set it directly on `txtodod --key-store`
-  for now. `txtodo env` reports the effective value.
+  for now. `sync_dir` (plan M8 `sync-file-carrier`, design §4.5) is the file-carrier's shared
+  folder — `--sync-dir` > `$TXTODO_SYNC_DIR` > config `sync_dir` > `None` (opt-in, unlike `dir`
+  there is no cwd fallback), resolved into `Paths::sync_dir`; `validate_sync_dir` checks it is a
+  real, writable directory (a probe file created then removed — the only portable way to check
+  writability, `metadata().permissions()` alone misses ACLs/read-only mounts) with a typed
+  `SyncDirError`, external input validated never asserted. This crate may not depend on
+  `txtodo-sync` (`check-boundaries.sh`), so it only resolves/validates the path with plain
+  `std::fs`; wiring a real `FileCarrier` to it is the daemon's job. `txtodo env` reports the
+  resolved path and, when set, whether it currently validates (`sync_dir_problem` in JSON).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `commands::{add, list, edit, archive, text, fileops, hygiene,

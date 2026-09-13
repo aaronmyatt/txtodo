@@ -44,6 +44,10 @@ pub fn run_via_daemon(
             todo: scratch.path().join("todo.txt"),
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),
+            // Sync is a separate, device-global folder, unrelated to this scratch todo-dir copy —
+            // carried through unchanged rather than cleared, so a command run in daemon mode sees
+            // the same configured sync folder direct mode would.
+            sync_dir: ctx.paths.sync_dir.clone(),
         },
         config: ctx.config.clone(),
         json: ctx.json,

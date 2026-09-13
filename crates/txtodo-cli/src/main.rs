@@ -48,7 +48,13 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
     let config = Config::load(&config_file).map_err(CliError::Config)?;
-    let paths = config::resolve(&env, cli.dir.as_deref(), &config, config_file);
+    let paths = config::resolve(
+        &env,
+        cli.dir.as_deref(),
+        cli.sync_dir.as_deref(),
+        &config,
+        config_file,
+    );
     debug_assert!(
         paths.todo.ends_with("todo.txt"),
         "resolve names the todo file"

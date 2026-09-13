@@ -105,6 +105,13 @@ pub struct Config {
     /// to `--identity-mode` (see that flag's own known gap: the service templates do not pass
     /// either through yet — a pre-existing limitation, not something this field introduces).
     pub key_store: Option<String>,
+    /// The shared folder a file-carrier sync (plan M8 `sync-file-carrier`, design §4.5) reads and
+    /// writes `sync/<device-id>[-<n>].ops` files under. Unset means file-carrier sync is not
+    /// configured; mirrors `key_store`'s own field shape (a raw, unresolved string — `--sync-dir`
+    /// and `$TXTODO_SYNC_DIR` take precedence over it the same way `--dir` takes precedence over
+    /// `todo_dir`, see `resolve`). This crate never depends on `txtodo-sync` (`check-boundaries.sh`),
+    /// so it only resolves and validates the path; a real `FileCarrier` is the daemon's job.
+    pub sync_dir: Option<String>,
 }
 
 /// A config file that exists but cannot be used.
@@ -193,6 +200,10 @@ pub struct Paths {
     pub report: PathBuf,
     /// The config file that was (or would have been) read.
     pub config: PathBuf,
+    /// The resolved file-carrier sync folder (plan M8 `sync-file-carrier`), if configured at all —
+    /// `--sync-dir`, `$TXTODO_SYNC_DIR` or config `sync_dir`. Unlike `dir`, absence stays `None`
+    /// rather than defaulting to the cwd: sync is opt-in, todo-file editing is not.
+    pub sync_dir: Option<PathBuf>,
 }
 
 /// `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME`, `%APPDATA%` or `~/.config`, then `txtodo/config.toml`.
@@ -214,7 +225,13 @@ pub fn config_path(env: &Env) -> PathBuf {
 }
 
 /// `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > cwd.
-pub fn resolve(env: &Env, dir_flag: Option<&str>, config: &Config, config_file: PathBuf) -> Paths {
+pub fn resolve(
+    env: &Env,
+    dir_flag: Option<&str>,
+    sync_dir_flag: Option<&str>,
+    config: &Config,
+    config_file: PathBuf,
+) -> Paths {
     let dir = dir_flag
         .or_else(|| env.var("TXTODO_TODO_DIR"))
         .or(config.todo_dir.as_deref())
@@ -223,12 +240,73 @@ pub fn resolve(env: &Env, dir_flag: Option<&str>, config: &Config, config_file: 
         dir.is_absolute() || env.cwd.as_os_str().is_empty(),
         "dir is absolute"
     );
+    let sync_dir = resolve_sync_dir(env, sync_dir_flag, config);
     let paths = Paths {
         todo: dir.join("todo.txt"),
         report: dir.join("report.txt"),
         dir,
         config: config_file,
+        sync_dir,
     };
     debug_assert!(paths.todo.starts_with(&paths.dir), "files live in dir");
     paths
+}
+
+/// `--sync-dir` > `$TXTODO_SYNC_DIR` > config `sync_dir` > `None` (sync is opt-in, so absence is
+/// not a default like `resolve`'s own `dir` falling back to the cwd).
+fn resolve_sync_dir(env: &Env, sync_dir_flag: Option<&str>, config: &Config) -> Option<PathBuf> {
+    let raw = sync_dir_flag
+        .or_else(|| env.var("TXTODO_SYNC_DIR"))
+        .or(config.sync_dir.as_deref())?;
+    Some(env.absolute(raw))
+}
+
+/// A configured sync folder that cannot actually be used.
+#[derive(Debug)]
+pub struct SyncDirError {
+    path: PathBuf,
+    message: String,
+}
+
+impl fmt::Display for SyncDirError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "sync directory {}: {}",
+            self.path.display(),
+            self.message
+        )
+    }
+}
+
+impl std::error::Error for SyncDirError {}
+
+/// Validates `path` as a real, writable directory — external input (a human-typed flag or config
+/// value), so this is checked and reported, never assumed or asserted. A missing path is reported
+/// with the fix (create it) rather than a bare `NotFound`.
+pub fn validate_sync_dir(path: &Path) -> Result<(), SyncDirError> {
+    let meta = std::fs::metadata(path).map_err(|e| SyncDirError {
+        path: path.to_path_buf(),
+        message: if e.kind() == std::io::ErrorKind::NotFound {
+            "does not exist; create it first".to_string()
+        } else {
+            e.to_string()
+        },
+    })?;
+    if !meta.is_dir() {
+        return Err(SyncDirError {
+            path: path.to_path_buf(),
+            message: "not a directory".to_string(),
+        });
+    }
+    // https://doc.rust-lang.org/std/fs/struct.File.html#method.create — the one portable way to
+    // check "writable" is to actually try a write; a permission-bit check alone misses ACLs,
+    // read-only mounts, and platform quirks `metadata().permissions()` does not model uniformly.
+    let probe = path.join(".txtodo-sync-write-probe");
+    std::fs::File::create(&probe)
+        .and_then(|_| std::fs::remove_file(&probe))
+        .map_err(|e| SyncDirError {
+            path: path.to_path_buf(),
+            message: format!("not writable: {e}"),
+        })
 }

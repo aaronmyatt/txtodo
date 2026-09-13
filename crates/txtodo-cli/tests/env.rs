@@ -12,6 +12,7 @@ fn txtodo(cwd: &Path) -> Command {
     for var in [
         "TXTODO_CONFIG",
         "TXTODO_TODO_DIR",
+        "TXTODO_SYNC_DIR",
         "XDG_CONFIG_HOME",
         "APPDATA",
         "HOME",
@@ -57,7 +58,73 @@ fn defaults_to_cwd_and_reports_missing_config() {
         "false",
         "sidecar is the default now, docs/questions.md Q2"
     );
+    assert_eq!(
+        line(&out, "sync_dir"),
+        "(not set)",
+        "sync is opt-in, unlike todo_dir there is no cwd fallback"
+    );
     assert!(line(&out, "url_schemes").starts_with("http"));
+}
+
+#[test]
+fn sync_dir_precedence_flag_env_config_and_validation() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = dir.path().join("config.toml");
+    let from_config = dir.path().join("from-config-sync");
+    std::fs::create_dir(&from_config).expect("mkdir");
+    std::fs::write(
+        &cfg,
+        format!("sync_dir = {:?}\n", from_config.to_string_lossy()),
+    )
+    .expect("write config");
+    let cfg_s = cfg.to_string_lossy().to_string();
+
+    // config `sync_dir` alone: resolved and valid (a real, writable directory).
+    let out = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_CONFIG", &cfg_s)
+            .args(["env"]),
+    );
+    assert!(
+        line(&out, "sync_dir").ends_with("from-config-sync"),
+        "{out}"
+    );
+
+    // $TXTODO_SYNC_DIR overrides config, but this directory does not exist: reported as invalid,
+    // not silently ignored (validated, never asserted — CLAUDE.md §3).
+    let out = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_CONFIG", &cfg_s)
+            .env("TXTODO_SYNC_DIR", "from-env-missing")
+            .args(["env"]),
+    );
+    assert!(line(&out, "sync_dir").contains("from-env-missing"), "{out}");
+    assert!(line(&out, "sync_dir").contains("(invalid:"), "{out}");
+
+    // --sync-dir overrides both, and a real directory validates clean.
+    let from_flag = dir.path().join("from-flag-sync");
+    std::fs::create_dir(&from_flag).expect("mkdir");
+    let out = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_CONFIG", &cfg_s)
+            .env("TXTODO_SYNC_DIR", "from-env-missing")
+            .args(["--sync-dir", "from-flag-sync", "env"]),
+    );
+    assert_eq!(
+        Path::new(&line(&out, "sync_dir"))
+            .canonicalize()
+            .expect("dir"),
+        from_flag.canonicalize().expect("canonical")
+    );
+
+    // JSON mirrors the same value plus a null-when-fine `sync_dir_problem`.
+    let out = stdout(txtodo(dir.path()).env("TXTODO_CONFIG", &cfg_s).args([
+        "--sync-dir",
+        "from-flag-sync",
+        "--json",
+        "env",
+    ]));
+    assert!(out.contains("\"sync_dir_problem\":null"), "{out}");
 }
 
 #[test]

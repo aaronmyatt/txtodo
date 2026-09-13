@@ -11,6 +11,10 @@ pub struct Cli {
     /// Todo directory (overrides $TXTODO_TODO_DIR and config `todo_dir`).
     #[arg(long, global = true, value_name = "DIR")]
     pub dir: Option<String>,
+    /// File-carrier sync folder (overrides $TXTODO_SYNC_DIR and config `sync_dir`; plan M8
+    /// `sync-file-carrier`). Unset means file-carrier sync is not configured.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub sync_dir: Option<String>,
     /// Emit one JSON object per line on listing commands.
     #[arg(long, global = true)]
     pub json: bool,
