@@ -23,6 +23,13 @@ pub const TXT_DEVICE: &str = "device";
 pub const TXT_GROUP: &str = "group";
 /// TXT record key for the protocol version ([`PROTOCOL_VERSION`](crate::PROTOCOL_VERSION)).
 pub const TXT_PROTO: &str = "proto";
+/// TXT record key for this device's iroh `EndpointId` (32 bytes, lowercase hex): the identity a
+/// discovering peer must present to [`Endpoint::connect`](iroh::Endpoint::connect) — mDNS gives
+/// addresses, but iroh dials by identity first and address second (`daemon-wiring` pass,
+/// `sync-lan-transport`). This module never depends on `iroh` itself (see the module doc on
+/// keeping the crate transport-agnostic); the id travels as opaque bytes, decoded by whichever
+/// caller does own `iroh` (`lan_link.rs`).
+pub const TXT_NODE: &str = "node";
 
 /// A peer table larger than this means something worth investigating on this LAN, not silent
 /// unbounded growth.
@@ -43,6 +50,8 @@ pub struct Announcement {
     pub group: GroupId,
     /// The protocol version it speaks.
     pub proto: u16,
+    /// Its iroh `EndpointId`, opaque bytes (see [`TXT_NODE`]).
+    pub node: [u8; 32],
 }
 
 /// Why a resolved service's TXT record was not a usable [`Announcement`] — some other program
@@ -57,6 +66,8 @@ pub enum AnnouncementError {
     MalformedGroup(String),
     /// The `proto` field was not a `u16`.
     MalformedProto(String),
+    /// The `node` field was not exactly 32 bytes of hex.
+    MalformedNode(String),
 }
 
 impl fmt::Display for AnnouncementError {
@@ -68,6 +79,9 @@ impl fmt::Display for AnnouncementError {
                 write!(f, "TXT group {v:?} is not 32 hex digits")
             }
             AnnouncementError::MalformedProto(v) => write!(f, "TXT proto {v:?} is not a u16"),
+            AnnouncementError::MalformedNode(v) => {
+                write!(f, "TXT node {v:?} is not 32 bytes of hex")
+            }
         }
     }
 }
@@ -86,6 +100,9 @@ pub fn parse_announcement(txt: &TxtProperties) -> Result<Announcement, Announcem
     let proto_str = txt
         .get_property_val_str(TXT_PROTO)
         .ok_or(AnnouncementError::MissingField(TXT_PROTO))?;
+    let node_str = txt
+        .get_property_val_str(TXT_NODE)
+        .ok_or(AnnouncementError::MissingField(TXT_NODE))?;
 
     let device = Ulid::parse(device_str)
         .map(DeviceId::new)
@@ -96,12 +113,29 @@ pub fn parse_announcement(txt: &TxtProperties) -> Result<Announcement, Announcem
     let proto = proto_str
         .parse::<u16>()
         .map_err(|_| AnnouncementError::MalformedProto(proto_str.to_string()))?;
+    let node = decode_node(node_str)
+        .ok_or_else(|| AnnouncementError::MalformedNode(node_str.to_string()))?;
 
     Ok(Announcement {
         device,
         group,
         proto,
+        node,
     })
+}
+
+/// Lowercase hex, exactly 32 bytes; anything else (wrong length, non-hex, wrong case tolerated by
+/// `data_encoding::HEXLOWER_PERMISSIVE`) is `None` rather than a panic.
+fn decode_node(hex: &str) -> Option<[u8; 32]> {
+    let bytes = data_encoding::HEXLOWER_PERMISSIVE
+        .decode(hex.as_bytes())
+        .ok()?;
+    bytes.try_into().ok()
+}
+
+/// The inverse of [`decode_node`], for [`Discovery::start`].
+fn encode_node(node: [u8; 32]) -> String {
+    data_encoding::HEXLOWER.encode(&node)
 }
 
 /// A peer discovered on the LAN, already filtered to our own group and protocol.
@@ -109,6 +143,8 @@ pub fn parse_announcement(txt: &TxtProperties) -> Result<Announcement, Announcem
 pub struct DiscoveredPeer {
     /// The peer's device id.
     pub device: DeviceId,
+    /// The peer's iroh `EndpointId`, to dial it (`lan_link.rs`).
+    pub node: [u8; 32],
     /// Every address it advertised, in the order mDNS returned them.
     pub addresses: Vec<SocketAddr>,
 }
@@ -205,6 +241,7 @@ impl PeerTable {
                 self.last_seen_ms.insert(announcement.device, now_ms);
                 PeerEvent::Found(DiscoveredPeer {
                     device: announcement.device,
+                    node: announcement.node,
                     addresses,
                 })
             }
@@ -215,6 +252,7 @@ impl PeerTable {
                 self.last_seen_ms.insert(announcement.device, now_ms);
                 PeerEvent::Found(DiscoveredPeer {
                     device: announcement.device,
+                    node: announcement.node,
                     addresses,
                 })
             }
@@ -260,18 +298,22 @@ pub struct Discovery {
 impl Discovery {
     /// Starts the local daemon and registers this device's advertisement. `host_name` is a label
     /// only (mDNS requires one) — `ServiceInfo::enable_addr_auto` fills in every real interface
-    /// address rather than us guessing which one a LAN peer can actually reach.
+    /// address rather than us guessing which one a LAN peer can actually reach. `node` is this
+    /// device's iroh `EndpointId` bytes (opaque here — see [`TXT_NODE`]'s doc on why this module
+    /// never names `iroh` itself).
     pub fn start(
         device: DeviceId,
         group: GroupId,
+        node: [u8; 32],
         host_name: &str,
         port: u16,
     ) -> Result<Discovery, DiscoveryError> {
         let daemon = ServiceDaemon::new().map_err(DiscoveryError)?;
-        let props: [(&str, String); 3] = [
+        let props: [(&str, String); 4] = [
             (TXT_DEVICE, device.to_string()),
             (TXT_GROUP, format!("{:032x}", group.0)),
             (TXT_PROTO, PROTOCOL_VERSION.to_string()),
+            (TXT_NODE, encode_node(node)),
         ];
         let instance_name = device.to_string();
         let info = ServiceInfo::new(
@@ -295,16 +337,64 @@ impl Discovery {
         &self.fullname
     }
 
-    /// Starts browsing for other `_txtodo._udp` advertisers; each event is a raw [`ServiceEvent`],
-    /// unfiltered — feed [`ServiceEvent::ServiceResolved`] payloads through [`parse_announcement`]
-    /// and [`PeerTable::observe`].
-    pub fn browse(&self) -> Result<Receiver<ServiceEvent>, DiscoveryError> {
-        self.daemon.browse(SERVICE_TYPE).map_err(DiscoveryError)
+    /// Starts browsing for other `_txtodo._udp` advertisers, wrapped as [`BrowseEvents`] so nothing
+    /// outside this module ever names `mdns_sd::ServiceEvent` — the same transport-agnostic promise
+    /// `Link`'s module doc makes for `iroh`, extended to discovery.
+    pub fn browse(&self) -> Result<BrowseEvents, DiscoveryError> {
+        Ok(BrowseEvents {
+            rx: self.daemon.browse(SERVICE_TYPE).map_err(DiscoveryError)?,
+        })
     }
 
     /// Stops advertising and browsing; best-effort, since a daemon already gone has nothing to
     /// clean up.
     pub fn shutdown(self) {
         let _ = self.daemon.shutdown();
+    }
+}
+
+/// One real, already-parsed sighting worth handing to a [`PeerTable`]. Ready to
+/// [`PeerTable::observe`](PeerTable::observe) as-is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Sighting {
+    /// The advertisement.
+    pub announcement: Announcement,
+    /// Every address it resolved to.
+    pub addresses: Vec<SocketAddr>,
+}
+
+/// [`Discovery::browse`]'s event stream, wrapping the raw `mdns_sd` channel so no caller outside
+/// this module ever names `ServiceEvent`.
+pub struct BrowseEvents {
+    rx: Receiver<ServiceEvent>,
+}
+
+impl BrowseEvents {
+    /// Waits for the next resolved sighting. Every other raw mDNS event this crate has no use for
+    /// (`SearchStarted`, `ServiceFound`, `ServiceRemoved`, `SearchStopped`) and every malformed
+    /// announcement (a foreign program advertising under our service type) is skipped rather than
+    /// surfaced as an error the caller must special-case — `parse_announcement`'s own doc already
+    /// covers why a foreign program's TXT record is never a panic; here it is simply not a
+    /// sighting. `None` only when the local mDNS daemon itself is gone (browsing can never resume).
+    pub async fn recv(&self) -> Option<Sighting> {
+        loop {
+            let event = self.rx.recv_async().await.ok()?;
+            let ServiceEvent::ServiceResolved(info) = event else {
+                continue;
+            };
+            let Ok(announcement) = parse_announcement(info.get_properties()) else {
+                continue;
+            };
+            let port = info.get_port();
+            let addresses = info
+                .get_addresses()
+                .iter()
+                .map(|a| SocketAddr::new(a.to_ip_addr(), port))
+                .collect();
+            return Some(Sighting {
+                announcement,
+                addresses,
+            });
+        }
     }
 }

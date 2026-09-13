@@ -166,3 +166,74 @@ hand back their addresses; dialing them is `endpoint.rs`'s job, still blocked.
 - Not attempted: wiring `Discovery`/`PeerTable` into anything that calls `endpoint.rs`'s connect (no
   point retrying a connect that's known to fail) or into `txtodo-daemon` (out of scope for this
   session — another session is actively working in that crate).
+
+## As built (2026-09-13, agent, pass 4) — `lan_link.rs` (real `Link` over iroh); the "127.0.0.1
+## only" diagnosis in pass 2 was wrong, corrected here with new evidence
+
+This pass's brief was to wire `txtodo-daemon` to the LAN transport. Before touching the daemon, it
+re-ran step 3 of that brief — "test whether the upstream bug is actually avoidable for a real
+two-daemon test" — since pass 2's notes claimed `bind_local_endpoint` (the real, all-interfaces
+constructor) was "not shown to hit" the connect bug. That claim turned out to be false.
+
+- **The bug is not about `127.0.0.1`. It is about same-host connections, full stop.** Reproduced
+  with a throwaway probe (later formalised as `endpoint_tests::
+  two_real_bind_local_endpoints_on_the_same_host_hit_the_same_bug`, `#[ignore]`d): two unmodified
+  `bind_local_endpoint()` endpoints, dialed via this sandbox's real LAN address
+  (`192.168.100.24`, not `127.0.0.1`), hit the identical `noq_proto::endpoint: refusing incoming
+  incoming.network_path=(local: 192.168.100.24, remote: [::ffff:192.168.100.24]:_)` trace line
+  pass 2 found for literal loopback. Also ruled out as alternative causes, each tested in
+  isolation: `PortmapperConfig` left at its default `Enabled` (a real, separate stray-default bug —
+  fixed regardless, see below — but not the cause: still refused with it disabled), dual-stack
+  binding (an IPv4-only bind via `clear_ip_transports()` hits the identical refusal), and a missing
+  `set_alpns` call in the probe itself (fixed, did not change the outcome). The one thing that
+  reliably triggers it, in every configuration tried: the connecting side's source IP being
+  numerically the same as the accepting side's own bound IP — true for any same-host pair,
+  loopback or real interface, and NOT expected to be true for two genuinely distinct machines on a
+  real LAN.
+  - `crates/txtodo-sync/src/endpoint_tests.rs`'s existing `#[ignore]`d test's doc comment is
+    corrected in place (rather than left standing as a now-wrong claim) and a second `#[ignore]`d
+    test added reproducing the broader finding with the real constructor. Both crate `CLAUDE.md`
+    files touched by this pass (`txtodo-sync`) are corrected the same way.
+  - **Consequence for step 3 of this session's brief**: a real two-`txtodod`-process test on one
+    machine cannot exercise a real `iroh` connection at all in this sandbox — not "harder than
+    expected", genuinely blocked, for the reason above. Per this task's own instruction ("if this
+    genuinely still hits the same upstream bug for some other reason, STOP, don't force it") the
+    daemon wiring below is built to be correct and ready for a real two-machine LAN, but the
+    two-real-daemon *convergence* tests in `sync-loopback-converge`/`sync-bench-m4`/
+    `test-nested-ref-sync` could not be exercised end-to-end here — see those tasks' own "As built"
+    entries for exactly what was and wasn't verified as a result.
+- **A real, independent fix found along the way**: `presets::Minimal` leaves `PortmapperConfig` at
+  its crate-wide default (`Enabled`), which sends UPnP/SSDP multicast asking the LAN's router to
+  open an external port — the same class of stray default `RelayMode::Disabled` was already
+  guarding against, and iroh's own doc on `PortmapperConfig::Disabled` names the same cost pattern
+  ("can trigger firewall prompts on some networks"). `bind_local_endpoint()` now disables it
+  explicitly, with the reasoning in its doc comment next to the relay-off one.
+- `crates/txtodo-sync/src/lan_link.rs`: `LanEndpoint` (`bind`/`node_id_bytes`/`advertise_port`/
+  `connect`/`accept`) and `IrohLink` (`Link` over one QUIC connection's one bidirectional stream,
+  synchronous via a captured `tokio::runtime::Handle::block_on`, meant to run on a `spawn_blocking`
+  driver thread — never a plain tokio task, or it would starve the runtime). `iroh` still appears
+  in exactly two files (`endpoint.rs`, `lan_link.rs`) and nowhere else in this crate, and nowhere
+  in `txtodo-daemon` — confirmed via `.claude/budgets.json`'s `allowedDeps` (unchanged: `txtodo-
+  daemon`'s own `Cargo.toml` has no `iroh`/`mdns-sd` line) before wiring the daemon to this module.
+- `discovery.rs` extended: `TXT_NODE` (the advertiser's iroh `EndpointId`, opaque `[u8; 32]` bytes —
+  this module still never imports `iroh`), threaded through `Announcement`/`DiscoveredPeer`/
+  `Discovery::start`/`parse_announcement` (a new `AnnouncementError::MalformedNode`). `Discovery::
+  browse()` now returns `BrowseEvents` (an async `recv() -> Option<Sighting>`) instead of a raw
+  `mdns_sd::Receiver<ServiceEvent>` — filtering `ServiceResolved`-and-parseable events internally
+  so no caller (the daemon included) ever names `mdns_sd::ServiceEvent`, the same transport-hiding
+  promise this crate already makes for `iroh` via `Link`. New real test (not mocked): `discovery_
+  browse_finds_a_real_advertiser_through_the_wrapped_event_stream`, run 3x with no flakes.
+- Judgement calls, flagged for the human:
+  - Real pairing over this LAN transport (the leg `pairing_grpc.rs`'s module doc calls out as
+    depending on `sync-lan-transport`) is still not built — this pass's own two-daemon test would
+    have needed it, but building a whole second wire protocol (offer/accept/SAS/grant bytes, none
+    of which are `txtodo_sync::Message` variants) for a connect path already known to be untestable
+    same-host felt like solving the wrong problem this session. `sync-loopback-converge`'s own task
+    notes explicitly call for "a test seam, not a TTY prompt" for pairing, which this pass reads as
+    permission to keep pairing test-scripted rather than transport-real for now — see
+    `txtodo-daemon/CLAUDE.md` for the guarded seam it adds.
+  - Per-op signatures are still not on the wire (`Message::Ops` carries `Op`, no `Signature`); this
+    pass's daemon-side sync engine (see `txtodo-daemon/CLAUDE.md`) seals whole messages with the
+    group key (confidentiality + tamper-evidence for the batch as a unit) but does not verify
+    individual authorship — flagged as a real gap for `sync-reject-tests`/`sync-crypto-envelope` to
+    close, not silently treated as done.
