@@ -36,7 +36,7 @@ const hit=(list,rel)=>(list||[]).some(g=>glob(g).test(rel));
 const sliceOf=p=>{const m=p.match(new RegExp("^"+b.slices.root+"/([^/]+)/"));return m?m[1]:null};
 const sentinel=b.unfreezeSentinel||null;
 // Lease store lives in the shared git-common-dir so every worktree of this repo sees the same locks.
-const LEASE_TTL_MS=4*60*60*1000; // 4h abandoned-session cutoff, matching the gate loop guard's spirit
+const LEASE_TTL_MS=4*60*60*1000; // 4h abandoned-session cutoff, same spirit as the gate loop guard
 const leaseDir=()=>{ let common; try{ common=cp.execSync("git rev-parse --git-common-dir",{cwd:root,encoding:"utf8"}).trim(); }catch{ common=".git"; }
   return path.join(path.resolve(root,common),"txtodo-leases"); };
 const LDIR=leaseDir();
