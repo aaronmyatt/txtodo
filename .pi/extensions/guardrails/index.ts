@@ -3,16 +3,23 @@
  * against Pi's own events; both read .claude/budgets.json and must stay in lockstep (drift audit diffs them).
  *   fence    tool_call      every outcome is machine-facing: allow, or block with a reason the agent acts on.
  *                           frozen path → block unless the human created budgets.unfreezeSentinel;
- *                           baseline path → block; non-append write to a ledger → block; other slice dirty → block.
+ *                           baseline path → block; non-append write to a ledger → block; slice leased by
+ *                           another session, or this session already leases a different slice → block.
  *   feedback tool_result    format/lint/file-length findings appended to the result; never blocks.
  *   gate     agent_settled  dirty tree must pass format, lint, typecheck, test, boundaries, file length, diff size;
  *                           failure → pi.sendUserMessage forces another turn. Three identical failures in a row →
- *                           notify and stop re-triggering (loop guard; the human decides).
+ *                           notify and stop re-triggering (loop guard; the human decides). Clean tree also
+ *                           releases this session's slice leases.
+ *
+ * Slice leases: one crate, one session, across every worktree of this repo — git status alone can't tell
+ * two sessions apart. A lease file lives under the repo's shared git-common-dir (same path for the main
+ * checkout and every linked worktree): <git-common-dir>/txtodo-leases/<crate>.lock = {sessionId, ts, cwd}.
+ * Older than LEASE_TTL_MS → abandoned, stops blocking (same spirit as the gate's 3-strike loop guard).
  * Pi extension API: https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 type Budgets = {
@@ -37,8 +44,34 @@ const sh = (cmd: string, cwd: string): { ok: boolean; out: string } => {
   catch (e) { const err = e as { stdout?: string; stderr?: string }; return { ok: false, out: `${err.stdout ?? ""}${err.stderr ?? ""}` }; }
 };
 const sliceOf = (b: Budgets, rel: string): string | null => rel.match(new RegExp(`^${b.slices.root}/([^/]+)/`))?.[1] ?? null;
-const dirtySlices = (b: Budgets, root: string): Set<string> =>
-  new Set(sh("git status --porcelain", root).out.split("\n").filter(Boolean).map((l) => sliceOf(b, l.slice(3).trim())).filter((s): s is string => s !== null));
+
+// ---- slice leases: one crate, one session, shared across every worktree of this repo ------------
+const LEASE_TTL_MS = 4 * 60 * 60 * 1000; // 4h abandoned-session cutoff, matching the gate loop guard
+type Lease = { sessionId: string; ts: number; cwd: string };
+const leaseDir = (root: string): string => {
+  const common = sh("git rev-parse --git-common-dir", root);
+  return join(resolve(root, common.ok ? common.out.trim() : ".git"), "txtodo-leases");
+};
+const leasePath = (dir: string, crate: string): string => join(dir, `${crate}.lock`);
+const readLease = (p: string): Lease | null => { try { return JSON.parse(readFileSync(p, "utf8")) as Lease; } catch { return null; } };
+const freshLease = (l: Lease | null): boolean => l !== null && Date.now() - l.ts < LEASE_TTL_MS;
+const writeLease = (dir: string, crate: string, sessionId: string, root: string): void => {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(leasePath(dir, crate), JSON.stringify({ sessionId, ts: Date.now(), cwd: root }));
+};
+const myOtherLease = (dir: string, crate: string, sessionId: string): string | null => {
+  let files: string[]; try { files = readdirSync(dir); } catch { return null; }
+  for (const f of files) {
+    if (!f.endsWith(".lock")) continue;
+    const other = f.slice(0, -5); if (other === crate) continue;
+    const l = readLease(join(dir, f)); if (l && l.sessionId === sessionId && freshLease(l)) return other;
+  }
+  return null;
+};
+const releaseSessionLeases = (root: string, sessionId: string): void => {
+  const dir = leaseDir(root); let files: string[]; try { files = readdirSync(dir); } catch { return; }
+  for (const f of files) { if (!f.endsWith(".lock")) continue; const p = join(dir, f); const l = readLease(p); if (l && l.sessionId === sessionId) { try { unlinkSync(p); } catch { /* already gone */ } } }
+};
 
 export default function (pi: ExtensionAPI) {
   // ---- fence -------------------------------------------------------------------------------
@@ -54,7 +87,15 @@ export default function (pi: ExtensionAPI) {
     if (sentinel !== null && rel === sentinel) return { block: true, reason: `${sentinel} is the human-owned unfreeze switch; an agent never creates it. Stop and ask the human to run: touch ${sentinel}` };
     if (hit(b.baselinePaths, rel)) return { block: true, reason: `${rel} is a baseline file: tool-only. Shrink it with the prune command in .claude/stack.md, never by hand.` };
     const target = sliceOf(b, rel);
-    if (target) { const dirty = dirtySlices(b, root); if (dirty.size && !dirty.has(target)) return { block: true, reason: `Slice fence: ${target} is not the active slice (dirty: ${[...dirty].join(", ")}). One slice per session: commit or stash first, or propose a separate task.` }; }
+    if (target) {
+      const sessionId = ctx.sessionManager.getSessionId();
+      const dir = leaseDir(root);
+      const theirs = readLease(leasePath(dir, target));
+      if (theirs && theirs.sessionId !== sessionId && freshLease(theirs)) return { block: true, reason: `Slice fence: ${target} is leased by another session (claimed ${new Date(theirs.ts).toISOString()}, worktree ${theirs.cwd}). One slice per session, across every worktree of this repo: wait for it to commit and stop, or ask the human to delete ${leasePath(dir, target)} if abandoned.` };
+      const mine = myOtherLease(dir, target, sessionId);
+      if (mine) return { block: true, reason: `Slice fence: you already lease ${mine}. One slice per session: finish and commit ${mine} first, then start ${target} as its own task.` };
+      writeLease(dir, target, sessionId, root);
+    }
     if (hit(b.slices.appendOnly, rel)) {
       const cur = existsSync(join(root, rel)) ? readFileSync(join(root, rel), "utf8") : "";
       const pureAppend = event.toolName === "write" ? (input.content ?? "").startsWith(cur) : (input.edits ?? []).every((e) => e.newText.startsWith(e.oldText));
@@ -83,7 +124,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     if (!ctx.isIdle()) return;
     const root = ctx.cwd; const b = loadBudgets(root);
-    if (!sh("git status --porcelain", root).out.trim()) return; // clean tree: nothing to gate
+    if (!sh("git status --porcelain", root).out.trim()) { releaseSessionLeases(root, ctx.sessionManager.getSessionId()); return; } // clean tree: nothing to gate, and this session's slices are free
     const failures: string[] = [];
     for (const k of GATE_KEYS) { const cmd = b.commands[k]; if (!cmd) continue; const r = sh(cmd, root); if (!r.ok) failures.push(`[${k}] \`${cmd}\`\n${r.out.trim().split("\n").slice(-15).join("\n")}`); }
     const changed = diffLines(root, [...(b.generatedPaths ?? GENERATED_FALLBACK), ...b.baselinePaths]);

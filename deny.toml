@@ -3,7 +3,12 @@
 # loro (ADR 0002) pulls im/sized-chunks/bitmaps, all unmaintained with no safe upgrade (repos
 # archived 2026-05-03). atomic-polyfill is pre-existing via postcard → heapless 0.7. None has a
 # known vulnerability. Narrowest scope: these four IDs only. Recorded in RATCHET.md (2026-09-12).
-ignore = ["RUSTSEC-2026-0247", "RUSTSEC-2026-0248", "RUSTSEC-2026-0251", "RUSTSEC-2023-0089"]
+# paste, proc-macro-error, and the whole rust-unic stack (unic-common/char-range/char-property/
+# ucd-ident/ucd-version) are unmaintained, no safe upgrade, pulled in via tauri-utils → urlpattern.
+# No known vulnerability. Added 2026-09-13.
+ignore = ["RUSTSEC-2026-0247", "RUSTSEC-2026-0248", "RUSTSEC-2026-0251", "RUSTSEC-2023-0089",
+          "RUSTSEC-2024-0436", "RUSTSEC-2024-0370", "RUSTSEC-2025-0081", "RUSTSEC-2025-0075",
+          "RUSTSEC-2025-0080", "RUSTSEC-2025-0100", "RUSTSEC-2025-0098"]
 
 [licenses]
 allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause",
