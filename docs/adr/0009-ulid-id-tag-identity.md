@@ -1,6 +1,6 @@
 # 0009 — Task identity is an id:<ULID> tag; sidecar mode is deferred to M10
 
-- Status: accepted
+- Status: superseded by 0015
 - Date: 2026-09-11
 - Deciders: project owner (plan §1, decision 009; do not relitigate)
 
