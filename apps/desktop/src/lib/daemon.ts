@@ -174,3 +174,39 @@ export function resolveConflict(
 ): Promise<ApplyResult> {
 	return invoke("resolve", { path, task, resolution });
 }
+
+/** `notes.md` for one task's `ref:` directory (plan M5). Mirrors `desktop_lib::dto::NotesDocDto`.
+ * `text`/`path` are empty until the first `editNotes` call — the daemon lazily mints the `ref:`
+ * tag and directory on that first write (`crates/txtodo-daemon/src/refdir_ops.rs::ensure_ref_dir`),
+ * never the client (design §7). */
+export interface NotesDoc {
+	path: string;
+	text: string;
+	hash: string;
+}
+
+/** `notes.md` for one task's `ref:` directory; the daemon resolves the task to its directory by
+ * `task.task_id` alone — no slug is ever computed or sent by this client. */
+export function getNotes(task: TaskRef): Promise<NotesDoc> {
+	return invoke("get_notes", { task });
+}
+
+/** Whole-document replacement of one task's `notes.md`; lazily creates the `ref:` tag and
+ * directory on the first call for a task that doesn't have one yet (plan §3.2.4). */
+export function editNotes(task: TaskRef, newText: string): Promise<ApplyResult> {
+	return invoke("edit_notes", { task, newText });
+}
+
+/** Absolute workspace root, for the detail view's footer (display only — see
+ * `src-tauri/src/commands.rs::workspace_root`'s doc comment for why this is still design-§7-safe). */
+export function workspaceRoot(): Promise<string> {
+	return invoke("workspace_root");
+}
+
+/** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved
+ * edit right now (tasks/desktop-quick-add/notes.md: "if the main popover is open and dirty, the
+ * hotkey focuses the main window instead"). Best-effort: callers swallow the rejection rather than
+ * surfacing it, since a missed update here only affects which window the hotkey focuses next. */
+export function setMainPopoverDirty(dirty: boolean): Promise<void> {
+	return invoke("set_main_popover_dirty", { dirty });
+}
