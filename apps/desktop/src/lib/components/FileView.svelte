@@ -1,14 +1,14 @@
 <script lang="ts">
 	// THE reusable file-rendering component (tasks/desktop-main-view). Binds to `watch([path])`,
 	// rebuilds from `get_file(path)` on each matching `Change`, and renders a read-only CM6
-	// `EditorView` with real line numbers (blanks included — design §2.6: blanks are entries).
+	// `EditorView` (blanks included — design §2.6: blanks are entries).
 	// `depth` is a hint only (nested indentation); nothing here assumes `depth === 0` — a future
 	// detail-view task mounts this again at `depth + 1` for a `ref:` directory's todo.txt.
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
 	import { onDestroy, onMount } from "svelte";
 	import { Compartment, EditorState } from "@codemirror/state";
-	import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import {
@@ -21,7 +21,7 @@
 		type TaskRef
 	} from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
-	import { idTagsHidden, idTagsVisible, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
+	import { idTagsHidden, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
 	import type { EditRequest } from "$lib/todotxt/editRequest";
 	import { canEnterRawMode, computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
@@ -50,7 +50,6 @@
 
 	let containerEl: HTMLDivElement | undefined = $state();
 	let view: EditorView | undefined;
-	let showIdTags = $state(false);
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let hoveredLine = $state<{ number: number; top: number } | null>(null);
 	let localPopover = $state<EditRequest | null>(null);
@@ -77,9 +76,8 @@
 	const hasPendingReview = $derived(flagsForPath($pendingConflicts, path).length > 0);
 
 	// Per-instance reconfigurable slots (never shared across FileView instances — see
-	// $lib/todotxt/decorations.ts) so toggling "show id: tags" or refreshing ref: progress is a
-	// cheap dispatch, not a full document rebuild.
-	const idTagsCompartment = new Compartment();
+	// $lib/todotxt/decorations.ts) so refreshing ref: progress is a cheap dispatch, not a full
+	// document rebuild.
 	const lineDecoCompartment = new Compartment();
 	const editableCompartment = new Compartment();
 	// `EditorView.editorAttributes` (not `contentAttributes`) so `data-raw` lands on the whole
@@ -88,7 +86,6 @@
 
 	function initialExtensions() {
 		return [
-			lineNumbers(),
 			EditorView.lineWrapping,
 			editableCompartment.of([EditorView.editable.of(false), EditorState.readOnly.of(true)]),
 			rawAttrCompartment.of(EditorView.editorAttributes.of({})),
@@ -123,7 +120,7 @@
 			]),
 			todotxtLanguage,
 			mainViewBaseTheme,
-			idTagsCompartment.of(idTagsHidden), // hidden by default — §3.1
+			idTagsHidden, // always hidden — §3.1
 			lineDecoCompartment.of(lineDecorations(dirOf(path), filesByPath)),
 			EditorView.domEventHandlers({
 				mousemove: handleMouseMove,
@@ -327,13 +324,6 @@
 		// The daemon stamps the creation date/id: and its Change repaints us — see refreshDoc.
 	}
 
-	function toggleIdTags() {
-		showIdTags = !showIdTags;
-		if (view) {
-			view.dispatch({ effects: idTagsCompartment.reconfigure(showIdTags ? idTagsVisible : idTagsHidden) });
-		}
-	}
-
 	let unlistenChange: (() => void) | undefined;
 
 	onMount(() => {
@@ -411,10 +401,6 @@
 
 <div class="file-view" class:fill style={`--depth: ${depth};`} data-line-count={docLineCount}>
 	<header class="file-view-header">
-		<label>
-			<input type="checkbox" checked={showIdTags} onchange={toggleIdTags} />
-			Show <code>id:</code> tags
-		</label>
 		<!-- Raw mode badge (plan §3.3 accessibility floor: colour is never the only signal — see
 		     the `[data-raw]` border/background rule below for the other half of that). `aria-pressed`
 		     mirrors `raw` for a screen reader; the button is a second, pointer-reachable way to

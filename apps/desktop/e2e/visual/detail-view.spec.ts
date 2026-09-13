@@ -1,7 +1,8 @@
 // tasks/desktop-visual-regression, plan M7 acceptance / plan §3.2: light/dark goldens for the
-// detail view — pinned parent, notes editor, breadcrumb, footer with the directory path. Reuses
+// detail view — pinned parent, sub-list, breadcrumb, footer with the directory path. Reuses
 // the "nested" fixture (../fixtures.ts) exactly as ../detail.spec.ts does, so both suites describe
-// the same real, resolvable-id, has-a-sub-list document.
+// the same real, resolvable-id, has-a-sub-list document (sub-list wins over notes here — mutual
+// exclusivity, see DetailView.svelte).
 import { expect, test } from "@playwright/test";
 import { type DaemonHandle, spawnDaemon } from "../fixtures";
 import { gotoWithDaemon } from "../helpers";
@@ -15,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 	const line = page.locator(".cm-line", { hasText: "plan the roadmap" }).first();
 	await line.dblclick();
 	await expect(page.locator("section.parent")).toContainText("plan the roadmap");
-	await expect(page.locator("section.notes .notes-editor")).toBeVisible();
+	await expect(page.locator("section.notes")).toHaveCount(0);
 	await expect(page.locator("section.sublist")).toContainText("of");
 });
 
@@ -23,7 +24,7 @@ test.afterEach(() => {
 	daemon.dispose();
 });
 
-test("detail view: pinned parent, notes editor, breadcrumb, footer directory path", async ({
+test("detail view: pinned parent, sub-list, breadcrumb, footer directory path", async ({
 	page
 }) => {
 	await expect(page.locator("nav.breadcrumb")).toContainText("Home");

@@ -1,7 +1,9 @@
 <script lang="ts">
-	// Detail view (tasks/desktop-detail-view, plan §3.2, design §7): pinned parent line, notes
-	// editor, recursive sub-list, breadcrumb, footer. A page, not a modal — `MainView.svelte`
-	// swaps this in for its whole content area rather than overlaying it (plan §3.3).
+	// Detail view (tasks/desktop-detail-view, plan §3.2, design §7): pinned parent line, breadcrumb,
+	// footer, and exactly one of {notes editor, recursive sub-list} — a task either has sub-tasks or
+	// is summed up in a note, never both at once (whichever the sub-list already has tasks wins;
+	// notes is the default otherwise). A page, not a modal — `MainView.svelte` swaps this in for its
+	// whole content area rather than overlaying it (plan §3.3).
 	//
 	// Everything shown here comes from the daemon's tree/`Watch` (design §2.6, plan §3.2 rule 2):
 	// this component never resolves a `ref:` slug or creates a directory itself. It only reads the
@@ -183,47 +185,37 @@
 		{/if}
 	</section>
 
-	<section class="notes" aria-label="Notes">
-		<h2>Notes</h2>
-		{#if !parentLine}
-			<!-- still loading -->
-		{:else if !parentTaskId}
-			<!-- `GetNotes`/`EditNotes` resolve a task by task_id alone
-			     (crates/txtodo-daemon/src/notes.rs::locate_task), never by line_number — unlike
-			     Edit/Complete/Delete, which resolve by line_number and treat an absent task_id as
-			     harmless (crates/txtodo-daemon/src/mutation.rs::resolve). Under this workspace's
-			     `identity_mode` (plan: sidecar is now the default, tasks/sidecar-identity/notes.md),
-			     an existing task's id isn't written into the file, and the desktop has no RPC today
-			     that resolves an arbitrary existing line to its task_id without one already visible
-			     — so notes genuinely aren't reachable here yet, not a bug in this view. -->
-			<p class="empty-state">
-				Notes aren't available for this task yet: it has no id this app can resolve in the
-				workspace's current identity mode. A task created with a hand-written
-				<code>id:</code> tag (or in "tagged" mode) can use notes normally.
-			</p>
-		{:else}
-			<NotesEditor task={parentTaskRef} />
-		{/if}
-	</section>
-
-	<section class="sublist" aria-label="Sub-list">
-		{#if !refDir}
-			<p class="empty-state">
-				No sub-list yet. Add a note above first — this task's own to-do list can only be
-				created once it has a <code>ref:</code> directory (today that's minted by the first
-				notes edit).
-			</p>
-		{:else if !subListInfo}
-			<p class="empty-state">
-				This task's folder exists but its own to-do list hasn't been created there yet.
-			</p>
-		{:else}
+	{#if subListInfo && subListInfo.total > 0}
+		<section class="sublist" aria-label="Sub-list">
 			<h2>{subListInfo.done} of {subListInfo.total} done</h2>
 			<!-- No `onEditRequest`: the sub-list hosts its own popover locally (FileView's built-in
 			     fallback), the same as the root view would if MainView didn't host one either. -->
 			<FileView path={subListPath ?? ""} {depth} onDetailRequest={onNavigateInto} />
-		{/if}
-	</section>
+		</section>
+	{:else}
+		<section class="notes" aria-label="Notes">
+			<h2>Notes</h2>
+			{#if !parentLine}
+				<!-- still loading -->
+			{:else if !parentTaskId}
+				<!-- `GetNotes`/`EditNotes` resolve a task by task_id alone
+				     (crates/txtodo-daemon/src/notes.rs::locate_task), never by line_number — unlike
+				     Edit/Complete/Delete, which resolve by line_number and treat an absent task_id as
+				     harmless (crates/txtodo-daemon/src/mutation.rs::resolve). Under this workspace's
+				     `identity_mode` (plan: sidecar is now the default, tasks/sidecar-identity/notes.md),
+				     an existing task's id isn't written into the file, and the desktop has no RPC today
+				     that resolves an arbitrary existing line to its task_id without one already visible
+				     — so notes genuinely aren't reachable here yet, not a bug in this view. -->
+				<p class="empty-state">
+					Notes aren't available for this task yet: it has no id this app can resolve in the
+					workspace's current identity mode. A task created with a hand-written
+					<code>id:</code> tag (or in "tagged" mode) can use notes normally.
+				</p>
+			{:else}
+				<NotesEditor task={parentTaskRef} />
+			{/if}
+		</section>
+	{/if}
 
 	<footer class="detail-footer">
 		<span class="dir">{absoluteRefDir}</span>

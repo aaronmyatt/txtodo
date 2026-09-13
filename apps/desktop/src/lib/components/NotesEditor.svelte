@@ -12,7 +12,7 @@
 	// CM6 markdown language: https://codemirror.net/docs/ref/#lang-markdown
 	import { onDestroy, onMount } from "svelte";
 	import { EditorState } from "@codemirror/state";
-	import { EditorView, keymap, lineNumbers } from "@codemirror/view";
+	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { markdown } from "@codemirror/lang-markdown";
 	import { editNotes, getNotes, type TaskRef } from "$lib/daemon";
@@ -60,7 +60,6 @@
 			state: EditorState.create({
 				doc: "",
 				extensions: [
-					lineNumbers(),
 					EditorView.lineWrapping,
 					markdown(),
 					cmHistory(),

@@ -1,6 +1,6 @@
 // tasks/desktop-visual-regression, plan M7 acceptance: light/dark goldens for the main view on
 // the shared 10k-line fixture (../tenKFixture.ts) — id: tags hidden, ref: + n/m progress
-// decorations visible, line numbers on, the "Add a line" trailing row present (plan §3.1).
+// decorations visible, the "Add a line" trailing row present (plan §3.1).
 // Runs under both the "light" and "dark" projects (playwright.config.ts); the default snapshot
 // path template already segregates goldens by project name, so this one spec produces both.
 import { expect, test } from "@playwright/test";
@@ -37,7 +37,7 @@ test("main view: 10k-line fixture shows id-hidden, ref/progress, and add-a-line 
 	await expect(page.locator(".cm-todotxt-ref-indicator").first()).toContainText("1/2");
 	await expect(page.locator(".cm-todotxt-strike").first()).toBeVisible();
 	await expect(page.locator(".add-line-row input")).toHaveAttribute("placeholder", "Add a line…");
-	await expect(page.locator(".cm-lineNumbers")).toBeVisible();
+	await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
 
 	await expect(page).toHaveScreenshot("main-view.png");
 });

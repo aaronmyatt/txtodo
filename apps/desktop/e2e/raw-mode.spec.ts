@@ -91,8 +91,8 @@ test("blur commits the raw buffer", async ({ page }) => {
 	await page.keyboard.press("End");
 	await page.keyboard.type(" +errand");
 
-	// Focus something outside the CM6 editor entirely (the "show id: tags" checkbox's label).
-	await page.locator(".file-view-header label").click();
+	// Focus something outside the CM6 editor entirely (the header bar itself).
+	await page.locator(".file-view-header").click();
 
 	await expect(rawBadge(page)).toHaveAttribute("aria-pressed", "false");
 	await expect.poll(() => readFileSync(todoPath, "utf8")).toContain("+errand");

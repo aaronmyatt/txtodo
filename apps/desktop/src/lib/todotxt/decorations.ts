@@ -1,5 +1,5 @@
-// CodeMirror 6 decorations for the main view (plan §3.1): hidden `id:` tags (toggleable), muted
-// + struck completed lines, and trailing `ref:` progress/notes indicators. Token *colours* are
+// CodeMirror 6 decorations for the main view (plan §3.1): hidden `id:` tags, muted + struck
+// completed lines, and trailing `ref:` progress/notes indicators. Token *colours* are
 // NOT this module's concern — those come from `todotxtLanguage`'s own theme/`styleTags`
 // (tasks/desktop-main-view/notes.md: "don't hardcode colours yourself, that's the grammar task's
 // concern"). Everything here is viewport-bounded (only `view.visibleRanges`) to hold the
@@ -30,7 +30,7 @@ const idTagMatcher = new MatchDecorator({
 	decoration: () => Decoration.replace({})
 });
 
-/** Hides `id:` tags inline. They stay in the document and in the (future) edit popover — §3.1. */
+/** Hides `id:` tags inline. They stay in the document and in the edit popover — §3.1. */
 export const idTagsHidden: Extension = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
@@ -43,9 +43,6 @@ export const idTagsHidden: Extension = ViewPlugin.fromClass(
 	},
 	{ decorations: (v) => v.decorations }
 );
-
-/** Shown when the header toggle reveals `id:` tags again. */
-export const idTagsVisible: Extension = [];
 
 /** Renders `n/m` (open/total) or a notes icon at the end of a `ref:` line. */
 class RefIndicatorWidget extends WidgetType {
