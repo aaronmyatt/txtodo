@@ -225,4 +225,32 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
+
+    /// Starts a pairing handshake on this device (`txtodo pair`, initiator): the QR/code payload,
+    /// no SAS yet (plan M4, design §4; `crates/txtodo-daemon/src/pairing_grpc.rs`).
+    pub fn pair_offer(&mut self) -> Result<pb::PairOfferResponse, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.pair_offer(pb::PairOfferRequest {}))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// Accepts a peer's offer (`txtodo pair <code>`, joiner) and returns the six-word SAS.
+    pub fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.pair_accept(pb::PairAcceptRequest { code }))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// Confirms the SAS shown on this device; the group key moves only once the peer has too.
+    pub fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.pair_confirm_sas(pb::PairConfirmRequest {}))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
 }
