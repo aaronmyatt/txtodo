@@ -1,32 +1,12 @@
-x 2026-09-12 2026-09-11 Encrypt Ops with the group key XChaCha20-Poly1305 and sign with the device Ed25519 key +m4 @sync ref:sync-crypto-envelope id:01M2B4ZWQC7WEPFYBQPZ51VTZ2
 2026-09-11 LAN transport via mdns-sd discovery and iroh QUIC local endpoint with relay off +m4 @sync ref:sync-lan-transport — Link, endpoint.rs, discovery.rs, and the txtodo doctor peer-skew line all built and tested; the only remaining gap is the upstream iroh/noq-proto same-machine-loopback connect bug (see notes.md) id:01M2B4ZWQCMJ95M9PAW7411199
 2026-09-11 Pairing: txtodo pair shows QR and 6-word SAS from an X25519 handshake then snapshot plus ops +m4 @sync @cli ref:sync-pairing — crypto/protocol/gRPC/CLI all built and tested (txtodo pair + pair <code>, Q6 mismatch refused not guessed); still open: no wire field carries key material peer-to-peer yet, so a real second-device handoff needs sync-lan-transport id:01M2B4ZWQC1T4A400EQDQ5DSR2
-x 2026-09-13 2026-09-11 txtodo device remove rotates the group key +m4 @sync @cli ref:sync-device-remove — devices table, CLI/daemon wiring, and rotation all built and tested; grant delivery to an offline device still needs sync-lan-transport (documented gap) id:01M2B4ZWQCYPX540W57HR173V6
-x 2026-09-13 2026-09-11 Keys in the OS keystore via keyring with an encrypted-file passphrase fallback on headless Linux +m4 @sync ref:sync-keystore — backends, resolve(), and CLI/daemon --key-store wiring all built and tested id:01M2B4ZWQCPMTH0E8J530AMJS1
 2026-09-11 Sync simulator tests/sim.rs: N devices, seeded PRNG, partitions, external edits, assert convergence and no loss +m4 @crdt @test ref:crdt-sync-simulator — built and passing (1000/1000 seeds via `just sim`); scoped Loro-native per a human decision, so byte-identical-file assertion, the shrinker, and Session/Link-driven sync are still open (see notes.md) id:01M2B4ZWQC9PB7AKMX6PHE4B2B
-x 2026-09-13 2026-09-11 specs/conflicts.md rows as tests/conflicts.rs including delete-vs-edit resurrect and delete-vs-complete +m4 @crdt @test ref:crdt-conflict-table — all 11/11 rows implemented and converging; resolution hardcoded, not configurable (human can revisit) id:01M2B4ZWQD53VPETJY9CMSPXGW
 2026-09-11 Test two daemons on loopback pair and converge within 2 s +m4 @sync @test ref:sync-loopback-converge — blocked: needs two real txtodod processes, off-limits this session id:01M2B4ZWQD48446KP9P8J7HAMW
-x 2026-09-13 2026-09-11 Tests: peer without the group key is rejected and a tampered op is rejected +m4 @sync @test ref:sync-reject-tests — unit-level done (Session now calls sign/verify/seal/open); two-daemon integration half still needs live daemons id:01M2B4ZWQDDMYSGQZ088RK2NM8
 2026-09-11 Security checklist review before M4 close +m4 @security ref:security-m4-review — meant to run last per its own notes; several items need a real daemon run (off-limits this session) id:01M2B4ZWQD5VY8A9K9NHZ2AQSR
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4 — blocked: needs two real txtodod processes, off-limits this session id:01M2B4ZWQDY3MXJMW0164D3RB4
-x 2026-09-13 2026-09-12 txtodo doctor shows one line per known peer from Skew::check, warn Behind, fail Ahead +m4 @cli ref:model-hlc-skew-guard — devices table plus DeviceList gRPC built; doctor prints one line per peer with SkewStatus id:01M2B4ZWQD893GFBC48KH73FJC
-x 2026-09-13 2026-09-11 Workspace tree model with progress computation cached and invalidated on ops +m5 @model ref:model-workspace-tree id:01M2B4ZWQD2KKGH94DT2N52CKN
-x 2026-09-13 2026-09-11 Lazy ref creation, kebab slug truncated to 40, collision -2 -3, rename as one op batch +m5 @daemon ref:daemon-ref-creation id:01M2B4ZWQDQYF1V9KYAWQ78JNE
-x 2026-09-13 2026-09-11 notes.md as a Loro text doc with NotesEdit ops and gRPC GetNotes EditNotes +m5 @crdt @proto ref:crdt-notes-doc id:01M2B4ZWQDEW5231YM2BPGY5ZR
-x 2026-09-13 2026-09-11 Move line between files moves the ref directory with rollback +m5 @daemon ref:daemon-ref-move id:01M2B4ZWQDQ8FCWYHWSEHBY1G4
-x 2026-09-13 2026-09-11 txtodo open, notes, sub, prune --orphans commands +m5 @cli ref:cli-ref-commands id:01M2B4ZWQDKB3QVZPQ85JGMRAR
-x 2026-09-13 2026-09-11 gRPC ListFiles returns the tree with progress and Watch emits progress changes +m5 @proto @daemon ref:proto-tree-progress id:01M2B4ZWQDRFPEXXQGGS266WEQ
-x 2026-09-13 2026-09-11 Tests: one op batch on first notes write, progress on a 3-level fixture, archive and delete keep the dir, prune finds the orphan +m5 @test ref:test-m5-acceptance id:01M2B4ZWQDCD9N2KF2JVADWVAZ
 2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test ref:test-nested-ref-sync — todo.sh -d half done and tested; fresh-device sync half blocked by the upstream iroh/noq-proto loopback bug id:01M2B4ZWQD543EWGT4CG3WE4MD
-x 2026-09-13 2026-09-11 rmcp server with tools resources prompts from design §6.3-6.4 plus todo_notes_get and todo_notes_set +m6 @mcp — 15 tools+resources+prompts built on txtodo-daemon gRPC; todo_search substring-only (no query index yet), todo_move has no daemon reorder RPC (documented, not built) id:01M2B4ZWQDKT5HCCNP0ZA6VTK5
-x 2026-09-13 2026-09-11 Transports txtodo mcp --stdio and Streamable HTTP on 127.0.0.1:8636/mcp with --lan advertising _txtodo-mcp._tcp +m6 @mcp — both live-verified against a real txtodod id:01M2B4ZWQDM61JTH05CJ1Q66VV
-x 2026-09-12 2026-09-11 Tauri 2 shell talking gRPC to txtodod and spawning it if absent +m7 @desktop ref:desktop-tauri-shell id:01M2B4ZWQDD80Q228HATVGBV8Q
 2026-09-11 abnf-to-lezer.mjs generates the Lezer grammar with a CI step failing if regeneration differs +m7 @desktop id:01M2B4ZWQDSHP5PJM3GG6241KZ
-2026-09-11 Main view read-only CM6 bound to Watch with decorations for hidden id:01M2B4ZWQDVMAA0WC10TK0HZR7 ref indicators, hover pencil, Add-a-line row +m7 @desktop
-2026-09-11 Edit popover single-line CM6 with token chips and strict validation via the WASM core +m7 @desktop @ffi id:01M2B4ZWQD1PQZ01JKK35G4YWG
 2026-09-11 Detail view with pinned parent, notes editor, recursive file view, breadcrumb, footer +m7 @desktop id:01M2B4ZWQDBE5XQ9X0HDRKKRZN
-2026-09-11 Conflict banner and review sheet for needs_review +m7 @desktop id:01M2B4ZWQDG4CFTMQDDBJKJYDV
-2026-09-11 Devices and agents screen with QR pair, token create and revoke, activity feed +m7 @desktop id:01M2B4ZWQD1Y7TJX05J0Y5SV5H
 2026-09-11 Menu-bar quick-add with a global hotkey +m7 @desktop id:01M2B4ZWQDB9C6SM3T08DVVHKT
 2026-09-11 Stretch: raw mode Cmd/Ctrl+E through the reconciler +m7 @desktop id:01M2B4ZWQDKE2P7F13FX2A6WRB
 2026-09-11 Playwright tests for popover, detail, notes creation, nested breadcrumb, conflict sheet +m7 @desktop @test id:01M2B4ZWQD1S5WKFAJ3AV1WNKT
@@ -44,7 +24,6 @@ x 2026-09-12 2026-09-11 Tauri 2 shell talking gRPC to txtodod and spawning it if
 2026-09-11 iOS SwiftUI over UITextView, embedded daemon, BGAppRefresh, silent push, App Intents, share sheet +m9 @ios id:01M2B4ZWQECMG9EXADD6NCC248
 2026-09-11 QR pairing and widgets on both mobile platforms +m9 @android @ios id:01M2B4ZWQERCK78RGP1VXFP0EF
 2026-09-11 Maestro UI test mirroring the M7 Playwright scenario with LAN ≤ 2 s and relay ≤ 30 s convergence +m9 @test id:01M2B4ZWQECTYGQTBZZAQFWRH6
-x 2026-09-13 2026-09-11 Sidecar identity mode with fingerprint assignment via the Hungarian algorithm +m10 @crdt ref:sidecar-identity id:01M2B4ZWQEG3DC3PG7GRC4WNGD
 2026-09-11 Web PWA with the WASM core in a Web Worker, OPFS storage, WebSocket sync +m10 @web id:01M2B4ZWQEP86DYWFNK64BJN4B
 2026-09-11 ratatui TUI with vim keys, sync indicator, conflict review +m10 @tui id:01M2B4ZWQE9P391C3B1E380S15
 2026-09-11 Editor plugins Neovim VS Code Obsidian using tokenize over the socket +m10 @editors id:01M2B4ZWQESCHPR1519KS1MNN7
@@ -52,80 +31,7 @@ x 2026-09-13 2026-09-11 Sidecar identity mode with fingerprint assignment via th
 2026-09-11 Prometheus /metrics on 8637, OTel traces, Grafana dashboard in deploy/grafana +m10 @observability id:01M2B4ZWQEHV4MPYJTBRZN5DEZ
 2026-09-11 TLA+ spec specs/sync.tla with TLC run in CI +m10 @specs id:01M2B4ZWQE2APE8DZWTWAPRVZP
 2026-09-11 Nix flake, cargo-zigbuild cross builds, Sigstore signing, SBOM +m10 @release id:01M2B4ZWQETBMJCHRJ8GQT32C9
-2026-09-11 Answer plan Q1 in docs/questions.md: do non-managed files inside a ref dir ever sync +questions @human ref:open-questions id:01M2B4ZWQE19FDAE9KG71G7658
-x 2026-09-13 2026-09-11 Answer plan Q2: sidecar confidence threshold and cost weights +questions @human ref:open-questions id:01M2B4ZWQED0FZHY4HT8EFZDTA
-2026-09-11 Answer plan Q3: rec: recurrence in core or plugin +questions @human ref:open-questions id:01M2B4ZWQE16RPHK1ZSRFWJ2AC
-2026-09-11 Answer plan Q4: iOS Local Network prompt vs relay-only MCP +questions @human ref:open-questions id:01M2B4ZWQEWXQCRYYH9CH6VC3H
 2026-09-11 Answer plan Q5: public relay or self-host only +questions @human ref:open-questions id:01M2B4ZWQE4N0SQ4K92K2A8EZR
-x 2026-09-11 2026-09-11 Create the Cargo workspace with 12 empty crates per plan §2 +m0 @setup id:01M2B4ZWQET1JCQFD9VJ4JKV4S
-x 2026-09-11 2026-09-11 Add justfile with check test bench release recipes +m0 @setup id:01M2B4ZWQEXPTJYBDT645XTKGJ
-x 2026-09-11 2026-09-11 Add GitHub Actions matrix ubuntu macos windows running the check commands and cargo deny +m0 @setup id:01M2B4ZWQE1DBNWCHH0SJ08NXR
-x 2026-09-11 2026-09-11 Update plan §1 decision 10 names to txtodod txtodo .txtodo/ _txtodo._udp _txtodo-mcp._tcp +m0 @docs ref:rename-plan-names id:01M2B4ZWQE6ATF6FD8W5JQYRYV
-x 2026-09-11 2026-09-11 Write docs/adr/0000-template.md +m0 @docs ref:adr-template id:01M2B4ZWQEJJG96XZRW7SKZ6V9
-x 2026-09-11 2026-09-11 Write specs/todotxt.abnf from design §2.3 plus the ref slug grammar from plan §3.2.1 +m0 @specs ref:abnf-spec id:01M2B4ZWQEWVQY8KKYG5QPJM4V
-x 2026-09-11 2026-09-11 Seed corpus/ with 30+ lines covering every design §2.4 edge case and the ref cases +m0 @corpus ref:corpus-seed id:01M2B4ZWQEJAVQ7PM1S3VA4D61
-x 2026-09-11 2026-09-11 Create docs/questions.md holding the 5 open questions from plan §6 +m0 @docs ref:open-questions id:01M2B4ZWQER9XZYN5C171EACKB
-x 2026-09-11 2026-09-11 Write ADRs 0001-0012 from plan §1 decisions +m0 @docs ref:adr-decisions id:01M2B4ZWQEGYW675VQY61C06RD
-x 2026-09-11 2026-09-11 Mirror plan §3.2 to specs/ref-directories.md +m0 @specs ref:ref-directories-spec id:01M2B4ZWQE8ESKY0QKM4VCG92N
-x 2026-09-11 2026-09-11 Hand-write a .tokens.json oracle beside each corpus file +m0 @corpus ref:corpus-token-oracle id:01M2B4ZWQE8P0P2YTXHJ0EFH37
-x 2026-09-11 2026-09-11 Add fuzz/ with a stub parse_line target so just fuzz runs +m0 @core ref:fuzz-stub-target id:01M2B4ZWQED9BM3YWV4EJAQVVX
-x 2026-09-11 2026-09-11 Add a 60s cargo-fuzz smoke job on Linux to ci.yml +m0 @ci ref:fuzz-ci-smoke id:01M2B4ZWQETCVC1MPZXAYVG22C
-x 2026-09-11 2026-09-11 Define the frozen public API types Mode Span TokenKind Line LineKind Task File Edit +m1 @core ref:core-api-types id:01M2B4ZWQE230DQQ1PJNE6Y1GC
-x 2026-09-11 2026-09-11 URL detection before tag detection with configurable schemes and core::urls::DEFAULT_SCHEMES +m1 @core ref:core-url-detection id:01M2B4ZWQE1G1QZAB1A9S2DD10
-x 2026-09-11 2026-09-11 tokenize sharing the parser scanner with tokens covering every byte including Whitespace +m1 @core ref:core-scanner-tokenize id:01M2B4ZWQEATEZ5MTTETESF17Z
-x 2026-09-11 2026-09-11 Hand-written recursive-descent parser for strict mode per specs/todotxt.abnf +m1 @core ref:core-parser-strict id:01M2B4ZWQEPAR8NADYXYN2QJP4
-x 2026-09-11 2026-09-11 Lenient mode with a Quirks enum no_completion_date priority_after_x priority_after_date tabs trailing_ws invalid_ref +m1 @core ref:core-parser-lenient id:01M2B4ZWQFP1NTF1QTN8QCGG20
-x 2026-09-11 2026-09-11 Task views projects contexts tags tag id ref_slug with slug validation +m1 @core ref:core-task-views id:01M2B4ZWQFZ3SK4Q1HNSDQPHF4
-x 2026-09-11 2026-09-11 parse_file handles BOM, LF/CRLF per file, mixed endings as per-line quirk, missing trailing newline +m1 @core ref:core-parse-file id:01M2B4ZWQF8APMHQW27QTHA0EA
-x 2026-09-11 2026-09-11 just corpus: every corpus line round-trips byte-for-byte and matches its .tokens.json +m1 @core @test ref:core-corpus-test id:01M2B4ZWQFV5E8GEZ2NSZET2RM
-x 2026-09-11 2026-09-11 Named unit test for every row of the design §2.4 edge-case table +m1 @core @test ref:core-edge-case-tests id:01M2B4ZWQFQG8T9XTT82J6DJQA
-x 2026-09-11 2026-09-11 Byte-preserving formatter with field-level dirtiness +m1 @core ref:core-formatter id:01M2B4ZWQF2B3WTAXVA8EP3DAE
-x 2026-09-11 2026-09-11 Edit builder and apply: set/clear priority, set_tag, remove_tag, append, prepend, set_description +m1 @core ref:core-edit-apply id:01M2B4ZWQFS39BG9A2AF1YGZJG
-x 2026-09-11 2026-09-11 complete() writes pri: per spec and uncomplete() restores priority and removes pri: +m1 @core ref:core-complete-pri id:01M2B4ZWQF506Q0VWP9XSPC9VB
-x 2026-09-11 2026-09-11 diff_lines (Myers, by id else content) and diff_text (char-level) +m1 @core ref:core-diff id:01M2B4ZWQF2PAYXXTMWPZH1Q33
-x 2026-09-11 2026-09-11 proptest strategies and the four properties: format∘parse, parse∘format, tokenize coverage, apply inverse +m1 @core @test ref:core-proptest id:01M2B4ZWQFBW7624T1ZSES2G64
-x 2026-09-11 2026-09-11 ABNF-generated second parser (pest) in tests only, differential on corpus plus 10000 generated lines +m1 @core @test ref:core-pest-differential id:01M2B4ZWQFM0KVDVB9BBA6JYNJ
-x 2026-09-11 2026-09-11 cargo-fuzz targets parse_line (both modes) and parse_file; one 3600s local run each +m1 @core @test ref:core-fuzz-targets id:01M2B4ZWQFJG3K19T74X4AZ5YD
-x 2026-09-11 2026-09-11 criterion bench parse 100k lines ≤ 150 ms and fail CI if exceeded +m1 @core @perf ref:core-bench id:01M2B4ZWQFXCKN20JFTWQMN72H
-x 2026-09-11 2026-09-11 no_std + alloc feature flag builds +m1 @core ref:core-no-std id:01M2B4ZWQF7XC4XKJH6ZJ2B18D
-x 2026-09-11 2026-09-11 Raise budgets.json coveragePercent from 0 to 80 once core tests land +m1 @ratchet ref:ratchet-coverage-80 id:01M2B4ZWQF3G0DCB3XTJNQEM17
-x 2026-09-11 2026-09-11 Push main and confirm all six CI jobs are green +m1 @ci id:01M2B4ZWQFWS98EPS6GBYEC8KC
-x 2026-09-11 2026-09-11 clap CLI with every todo.sh command and alias listed in plan M2 +m2 @cli ref:cli-m2 id:01M2B4ZWQF3HNN1CTXQ2BX940V
-x 2026-09-11 2026-09-11 config.toml with todo_dir id_tags url_schemes; TXTODO_TODO_DIR env; --dir flag +m2 @cli ref:cli-m2 id:01M2B4ZWQFDWKY8R6CJ9P8VK40
-x 2026-09-11 2026-09-11 Direct-file mode: read, core::apply, atomic temp+rename write +m2 @cli ref:cli-m2 id:01M2B4ZWQFT9PXWW04V4RN6SJZ
-x 2026-09-11 2026-09-11 add stamps creation date and id: tag; --no-id flag; id_tags config +m2 @cli ref:cli-m2 id:01M2B4ZWQFFAYFJ24FBACXEYGJ
-x 2026-09-11 2026-09-11 Line numbers as identifiers and --json on every listing command +m2 @cli ref:cli-m2 id:01M2B4ZWQFWGTMMHYQE6WQSC11
-x 2026-09-11 2026-09-11 txtodo fmt, txtodo lint, txtodo env commands +m2 @cli ref:cli-m2 id:01M2B4ZWQFDSE16PJ0WQCD8004
-x 2026-09-11 2026-09-11 Vendor todo.sh at a pinned commit under tests/vendor/ +m2 @cli @test ref:cli-m2 id:01M2B4ZWQFA4GK0ZE46SPK16VG
-x 2026-09-11 2026-09-11 Differential parity harness tests/todosh_parity.rs with 25+ scenarios and byte-identical files +m2 @cli @test ref:cli-m2 id:01M2B4ZWQFC1R5F64QHZQR5NGV
-x 2026-09-11 2026-09-11 Test add on a CRLF file keeps CRLF and no-trailing-newline behaves like todo.sh +m2 @cli @test ref:cli-m2 id:01M2B4ZWQFG8BH6VVJ63S3CM4X
-x 2026-09-11 2026-09-11 Op model in txtodo-model: Hlc Op OpKind Principal per plan M3 +m3 @model ref:model-op-types id:01M2B4ZWQF3RSWSMPYAY1YEKTT
-x 2026-09-11 2026-09-11 SQLite schema migrations/0001.sql with ops projections snapshots meta in WAL mode +m3 @store ref:store-schema id:01M2B4ZWQFH22P59VKENAC3VSJ
-x 2026-09-11 2026-09-11 Protobuf and tonic gRPC on the socket: ListFiles GetFile Watch Apply History Undo Checkout +m3 @proto @daemon ref:proto-grpc id:01M2B4ZWQFBDV55VKC90C9761B
-x 2026-09-11 2026-09-11 FileActor per synced document, single writer, owning state and projection hash +m3 @daemon ref:daemon-file-actor id:01M2B4ZWQFDNJBYTTXJPMX1673
-x 2026-09-11 2026-09-11 Watcher with notify, 150 ms debounce, ignore list *.swp *~ *.tmp .#* +m3 @daemon ref:daemon-watcher id:01M2B4ZWQFX9Y2JZASPQDHF9GG
-x 2026-09-11 2026-09-11 Reconciler without CRDT: diff_lines by id, derive ops, write projection, assign id: to new lines +m3 @daemon ref:daemon-reconciler id:01M2B4ZWQF1PYQKXWF9TDP7BN3
-x 2026-09-11 2026-09-11 Recognise own writes by projection hash and a short-lived expected-write token +m3 @daemon ref:daemon-own-writes id:01M2B4ZWQF3MH9HAJ93C81YV8P
-x 2026-09-11 2026-09-11 Workspace walker discovering todo.txt done.txt notes.md at any depth and on dir create +m3 @daemon ref:daemon-workspace-walker id:01M2B4ZWQFSK0ZVEAB73ECNDH7
-x 2026-09-12 2026-09-11 CLI switches to daemon mode when the socket exists with --no-daemon fallback +m3 @cli ref:cli-daemon-mode id:01M2B4ZWQFZ60XNCBEFFS090KC
-x 2026-09-12 2026-09-11 txtodo log, blame <line>, undo, checkout <iso-datetime> --stdout +m3 @cli ref:cli-history id:01M2B4ZWQFNFGJV1A7821TV26K
-x 2026-09-12 2026-09-11 txtodo doctor checks socket watcher file-writable clock config +m3 @cli ref:cli-doctor id:01M2B4ZWQFSRY7N2Q56SCE8454
-x 2026-09-12 2026-09-11 tracing span reconcile{file} and JSON logs to .txtodo/logs/ with rotation +m3 @daemon ref:daemon-tracing-logs id:01M2B4ZWQF0GPQVMDCP3B1PPFE
-x 2026-09-12 2026-09-11 deploy/launchd and deploy/systemd files and txtodo daemon install|start|stop|status +m3 @daemon ref:daemon-service-files id:01M2B4ZWQF1DZQAAJFTPPV765B
-x 2026-09-12 2026-09-11 Integration tests for the 8 external-edit scenarios with exactly-one-write and byte-identical unrelated lines +m3 @daemon @test ref:daemon-external-edit-tests id:01M2B4ZWQFA3P6ZQGZ7HPV6723
-x 2026-09-12 2026-09-11 Integration tests for vim, VS Code and sed -i save patterns +m3 @daemon @test ref:daemon-editor-save-tests id:01M2B4ZWQFAEAB7KJTJ29BQ032
-x 2026-09-12 2026-09-11 Tests: undo restores bytes exactly and checkout renders the intermediate state +m3 @daemon @test ref:daemon-undo-checkout-tests id:01M2B4ZWQFG34R305XHYD7QB8H
-x 2026-09-12 2026-09-11 Crash-safety test kill -9 mid-write leaves old or new projection and a consistent op log +m3 @daemon @test ref:daemon-crash-safety-test id:01M2B4ZWQG98Q3HGTRPFGSCGG8
-x 2026-09-12 2026-09-12 Bug: txtodod stamps id: tags into notes.md prose; the walker yields it and the actor builds a DocState for it +m3 @daemon @bug ref:crdt-notes-doc id:01M28Q73KEJ60TFF9QGJKWWPZQ
-x 2026-09-11 2026-09-11 invalid_ref quirk and slug validation in core with the slug validator fuzzed +m5 @core id:01M2B4ZWQGQCBY790M1JE74FKW
-x 2026-09-12 2026-09-11 criterion bench reconcile one edit in 10k lines ≤ 20 ms and fail CI +m3 @daemon @perf ref:daemon-reconcile-bench id:01M2B4ZWQG185MRHEX7EBDWCM9
-x 2026-09-12 2026-09-11 Run just fuzz parse_line 3600 and just fuzz parse_file 3600 once locally and record the results in tasks/core-fuzz-targets/notes.md +m1 @core @test ref:core-fuzz-targets id:01M2B4ZWQG9NW5N227W80PE7TY
-x 2026-09-12 2026-09-11 Loro document per file with the design §4.2 shape and OpKind mapped to and from Loro ops +m4 @crdt ref:crdt-loro-doc id:01M2B4ZWQGWW21NQMT1HD28WRM
-x 2026-09-12 2026-09-11 HLC with clock-skew guard warning or rejecting over 5 min drift +m4 @model ref:model-hlc-skew-guard id:01M2B4ZWQGM4M6VQ0JJRVQR2YF
-x 2026-09-12 2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a version field from day one +m4 @sync ref:sync-protocol-frames id:01M2B4ZWQG4YN7H697SXE1Y2CZ
-x 2026-09-12 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state id:01M2B4ZWQGJVMW0F7FKXFSGXSP
-x 2026-09-12 2026-09-12 migrations/0003.sql ops.origin_seq UNIQUE(device, origin_seq) backfilled in hlc order, Store next_origin_seq heads ops_for +m4 @store ref:sync-protocol-frames id:01M2B4ZWQGT92QR7TQK8SX4680
-x 2026-09-12 2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli ref:crdt-needs-review id:01M2B4ZWQGR07FHF23M0CEQX0X
 2026-09-13 ADR: global daemon — one txtodod per device with a workspace registry, superseding the per-directory daemon from plan M3/design §5 +m11 @adr @daemon ref:adr-global-daemon id:01M2CE1ZXFXFXH2S8KCM1E8G2E
 2026-09-13 Workspace registry: catalog of known todo dirs (add/remove/list), migrates existing per-workspace .txtodo/ state without losing op history +m11 @daemon @store ref:daemon-workspace-registry id:01M2CE1ZXJ9P0GAWT4Z0X5VPAA
 2026-09-13 One global socket per user, not per-dir; every gRPC call carries a workspace selector +m11 @daemon @proto ref:daemon-global-socket id:01M2CE1ZXMVS7XETDFJJG20CJZ
@@ -150,3 +56,8 @@ x 2026-09-12 2026-09-11 Same-word edit detection sets needs_review; txtodo confl
 2026-09-11 Security checklist review before M6 close and re-justify the payloadKB budget +m6 @security — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQD90N6M6Q7HH4JACWP
 2026-09-13 MCP gateway serves every registered workspace; every tool/resource call takes a project selector, plus a todo_list_workspaces resource +m11 @mcp ref:mcp-multi-workspace-gateway — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY1D52GNJ755NFQSDZM
 2026-09-13 Extend token scope grammar so a capability token can be scoped to one workspace, a set, or all — today's project:/context:/file: restrictors only reach inside one +m11 @mcp @cli ref:mcp-workspace-scoped-tokens — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY3BNCDMRME4QKH1AP4
+2026-09-13 Answer Q7: one global priority scale across workspaces, or per workspace +questions @human ref:open-questions id:01M2CJC4W81XAB7TJ0HMESTMWP
+2026-09-13 Answer Q8: one sync group per device-set, or one per workspace +questions @human ref:open-questions id:01M2CJC4WMHVAZ5EN2V1VE168P
+2026-09-13 Answer Q9: pull txtodo-query (design §8 subset) forward from M10 into M11 +questions @human ref:open-questions id:01M2CJC4X6HZKXM0PP11WE07Y9
+2026-09-13 Answer Q10: is no-two-txtodod-processes-per-agent-session a standing rule +questions @human ref:open-questions id:01M2CJC4XGN8304Z9RJ0QJXKWX
+2026-09-13 Answer Q11: wire LAN transport into txtodod for a two-host run, or skip to M8 relay +questions @human ref:open-questions id:01M2CJC4XW38MBQ2MAVAJ1JXYD
