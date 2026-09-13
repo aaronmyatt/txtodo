@@ -171,6 +171,43 @@ impl Daemon {
         self.child.id()
     }
 
+    /// Plan M4 `sync-pairing`'s real (non-test-hook) pairing RPCs, for `tests/pairing_lan.rs`'s
+    /// real two-daemon handshake — unlike `debug_set_group_key` above, these drive the actual
+    /// production path (`pairing_grpc.rs`, `pairing_lan.rs`), no `TXTODO_TEST_HOOKS` needed.
+    pub async fn pair_offer(&mut self) -> pb::PairOfferResponse {
+        self.client
+            .pair_offer(pb::PairOfferRequest {})
+            .await
+            .unwrap_or_else(|e| panic!("pair_offer: {e}"))
+            .into_inner()
+    }
+
+    /// Accepts a peer's offer (JSON `code`, same shape `pairing_wire.rs` parses); returns the SAS.
+    pub async fn pair_accept(&mut self, code: String) -> pb::PairResult {
+        self.client
+            .pair_accept(pb::PairAcceptRequest { code })
+            .await
+            .unwrap_or_else(|e| panic!("pair_accept: {e}"))
+            .into_inner()
+    }
+
+    pub async fn pair_confirm_sas(&mut self) -> pb::PairResult {
+        self.client
+            .pair_confirm_sas(pb::PairConfirmRequest {})
+            .await
+            .unwrap_or_else(|e| panic!("pair_confirm_sas: {e}"))
+            .into_inner()
+    }
+
+    /// Initiator only: empty `sas` means "no peer yet" — `tests/pairing_lan.rs` polls this itself.
+    pub async fn pair_await_peer(&mut self) -> pb::PairResult {
+        self.client
+            .pair_await_peer(pb::PairAwaitPeerRequest {})
+            .await
+            .unwrap_or_else(|e| panic!("pair_await_peer: {e}"))
+            .into_inner()
+    }
+
     pub async fn health(&mut self) -> pb::HealthResponse {
         self.client
             .health(pb::HealthRequest {})

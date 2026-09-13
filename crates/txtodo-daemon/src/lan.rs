@@ -114,9 +114,9 @@ async fn setup(ws: SharedWorkspace) -> Option<LanSetup> {
 async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
     let Some(LanSetup {
         endpoint,
-        discovery: _discovery,
-        browse,
-        ctx,
+        mut discovery,
+        mut browse,
+        mut ctx,
     }) = setup(ws).await
     else {
         return;
@@ -142,12 +142,48 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                 }
             }
             _ = resync.tick() => {
+                if let Some(rebuilt) = rebuild_on_group_change(&ctx, &endpoint).await {
+                    discovery.shutdown();
+                    discovery = rebuilt.discovery;
+                    browse = rebuilt.browse;
+                    ctx.group = rebuilt.group;
+                    table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
+                }
                 for peer in peers_to_resync(&known_peers, ctx.device) {
                     spawn_resync_dial(Arc::clone(&sessions), ctx.clone(), Arc::clone(&endpoint), peer);
                 }
             }
         }
     }
+}
+
+/// What `rebuild_on_group_change` produces when the workspace's group changed.
+struct Rebuilt {
+    discovery: Discovery,
+    browse: txtodo_sync::BrowseEvents,
+    group: GroupId,
+}
+
+/// Pairing (`pairing_lan.rs`'s joiner path, `Workspace::adopt_group_key`) can change this
+/// workspace's own sync group *after* this task's `setup()` already bound `Discovery` to the old
+/// one — `Discovery::start` bakes the group into the mDNS TXT record it registers once, and
+/// `PeerTable::own_group` is likewise fixed at construction, so neither notices a later change on
+/// their own. Checked once per `RESYNC_INTERVAL` tick (the same cadence that already re-dials
+/// known peers): re-advertises under the current group and returns a fresh `Discovery`/browse
+/// stream for `run`'s loop to swap in, or `None` when the group has not changed since `ctx.group`.
+async fn rebuild_on_group_change(ctx: &LanCtx, endpoint: &LanEndpoint) -> Option<Rebuilt> {
+    let current = read(&ctx.ws).group();
+    if current == ctx.group {
+        return None;
+    }
+    let discovery = start_discovery(ctx.device, current, endpoint)?;
+    let browse = browse(&discovery)?;
+    tracing::info!(old = ?ctx.group, new = ?current, "lan_group_changed_readvertising");
+    Some(Rebuilt {
+        discovery,
+        browse,
+        group: current,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]

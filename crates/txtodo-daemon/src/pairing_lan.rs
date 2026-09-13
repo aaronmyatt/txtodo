@@ -158,6 +158,12 @@ fn log_joiner_rejected(peer: DeviceId) {
 
 fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: &[u8]) {
     let now_ms = read(ws).clock().now_ms();
+    // `is_ready_to_send_key` (which `adopt_group_key` requires) reads *this* device's own
+    // `PairingSession`, which has no way to observe the initiator's local confirmation except
+    // through this very message: receiving a non-empty `Grant` at all is only possible once the
+    // initiator's own session was ready to send one (`process_hello`/`finalize_or_pending`'s own
+    // gate), so it doubles as that proof for the joiner's side.
+    let _ = read(ws).pairing().mark_remote_confirmed(now_ms);
     match read(ws).adopt_group_key(offer.group, sealed, now_ms) {
         Ok(()) => log_joiner_adopted(offer.device),
         Err(e) => log_joiner_adopt_failed(offer.device, &e),
@@ -230,6 +236,12 @@ pub(crate) fn handle_incoming(ws: &SharedWorkspace, link: &mut dyn Link) {
 
 fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> InitiatorReply {
     let ws = read(ws);
+    // Checked *before* requiring an active `PairingRegistry` session: a successful finalize
+    // clears that session (see `finalize_or_pending`'s doc), so a retry arriving after it would
+    // otherwise see `NotActive` and be rejected despite a perfectly valid cached grant.
+    if let Some(sealed) = ws.pairing_lan().cached_grant(hello.device, hello.nonce) {
+        return InitiatorReply::Grant(sealed);
+    }
     let now_ms = ws.clock().now_ms();
     let pairing = ws.pairing();
     let Ok(snapshot) = pairing.snapshot(now_ms) else {
