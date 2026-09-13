@@ -72,7 +72,8 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   parseable sightings — no caller outside this module ever names `mdns_sd::ServiceEvent`.
 - `lan_link.rs` (M4 `sync-lan-transport`, daemon-wiring pass): the real `iroh`-backed `Link`.
   `LanEndpoint::bind()` wraps `bind_local_endpoint`; `node_id_bytes()`/`advertise_port()` feed
-  `Discovery::start`; `connect(node, addrs)` (drops loopback candidates, builds an `EndpointAddr`,
+  `Discovery::start`; `connect(node, addrs)` (prefers non-loopback candidates, falling back to
+  loopback only when nothing else was advertised — see Invariants; builds an `EndpointAddr`,
   opens the one bidirectional stream this protocol runs over) and `accept()` (waits one incoming
   connection, accepts that same stream) both return `IrohLink`. `IrohLink` implements `Link`
   synchronously by `block_on`-ing the async stream ops on a captured `tokio::runtime::Handle` — it
@@ -147,9 +148,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   learns the other side is gone rather than blocking forever. `IrohLink::send`/`recv` block a
   dedicated driver thread on a captured `tokio::runtime::Handle`; calling either from a plain tokio
   task (rather than `spawn_blocking`) would starve the runtime, not just this one link.
-- `LanEndpoint::connect` drops loopback candidate addresses before dialing (never useful on a real
-  LAN); this is defence in depth, not a fix for the upstream same-host bug above, which also fires
-  on non-loopback addresses when both ends are one machine.
+- `LanEndpoint::connect` prefers non-loopback candidate addresses, falling back to loopback only
+  when nothing else was advertised (real two-process testing on one host sometimes resolves only a
+  loopback address for a peer before its real interface address is known — refusing it outright
+  made LAN sync flaky in exactly that situation). This is not a fix for the same-host bug above,
+  which is about which process the two `Endpoint`s live in, not which address family is dialed.
 - A rotation grant is sealed with a fresh ephemeral keypair per recipient, never the recipient's
   static key as an AEAD key directly (`GRANT_INFO` is a distinct `HKDF-Expand` label from
   `SAS_INFO`/`PAIR_KEY_INFO`); the epoch is bound as AEAD associated data, so a grant for one epoch

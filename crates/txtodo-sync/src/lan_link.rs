@@ -98,19 +98,23 @@ impl LanEndpoint {
     }
 
     /// Dials `node` at one of `addrs`, opens the one bidirectional stream this crate's protocol
-    /// runs over, and wraps it as a [`Link`]. Loopback candidates are dropped before dialing: they
-    /// are never useful on a real LAN and are exactly the shape of address that the module doc's
-    /// upstream bug was first found on, so refusing them here is cheap defence in depth even though
-    /// it does not fully avoid the bug (see the module doc).
+    /// runs over, and wraps it as a [`Link`]. Loopback candidates are deprioritised, not refused:
+    /// a real multi-host LAN never advertises one in the first place, but `enable_addr_auto()`
+    /// occasionally resolves *only* a loopback address for a same-host peer before its real
+    /// interface address is known (observed in `txtodo-daemon`'s real two-process discovery test)
+    /// — refusing that outright would make LAN sync flaky in exactly the same-host situation this
+    /// module already documents extensively. Real non-loopback addresses are preferred whenever
+    /// any are present; loopback is used only when it is all there is.
     pub async fn connect(
         &self,
         node: [u8; 32],
         addrs: &[SocketAddr],
     ) -> Result<IrohLink, LanError> {
+        let has_real_address = addrs.iter().any(|a| !a.ip().is_loopback());
         let dialable: Vec<SocketAddr> = addrs
             .iter()
             .copied()
-            .filter(|a| !a.ip().is_loopback())
+            .filter(|a| !has_real_address || !a.ip().is_loopback())
             .collect();
         if dialable.is_empty() {
             return Err(LanError::NoDialableAddress);
