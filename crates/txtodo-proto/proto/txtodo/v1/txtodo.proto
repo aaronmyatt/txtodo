@@ -231,6 +231,9 @@ message PairOfferResponse {
   string x25519_pub = 3;
   string endpoint = 4;
   string nonce = 5;
+  // "tagged" or "sidecar" (docs/questions.md Q2), this device's own. Carried so a joiner can
+  // detect a mismatch against its own mode and refuse rather than guess a merge (Q6, open).
+  string identity_mode = 6;
 }
 
 message PairAcceptRequest { string code = 1; }   // the scanned/decoded PairOffer, re-encoded

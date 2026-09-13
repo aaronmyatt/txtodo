@@ -5561,6 +5561,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7741,7 +7747,9 @@ dependencies = [
  "getrandom 0.3.4",
  "hyper-util",
  "jiff",
+ "qrcode",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml 1.1.6+spec-1.1.0",

@@ -1,5 +1,5 @@
 //! Pairing DTOs (plan M4, design §4): mirror `PairOfferResponse`/`PairResult` field for field. The
-//! QR-payload invariant ("exactly five fields, never key material") is enforced server-side
+//! QR-payload invariant ("exactly six fields, never key material") is enforced server-side
 //! (`crates/txtodo-daemon/src/pairing_grpc.rs`); this bridge only carries what's already there.
 //! Split out of `dto.rs`; see that file's module doc.
 
@@ -20,6 +20,9 @@ pub struct PairOfferDto {
     pub endpoint: String,
     /// Hex-encoded handshake nonce.
     pub nonce: String,
+    /// `"tagged"` or `"sidecar"` (docs/questions.md Q2/Q6) — this device's own, so a joining
+    /// screen can detect a mismatch the same way `txtodo-cli`'s `pair` command does.
+    pub identity_mode: String,
 }
 
 impl From<pb::PairOfferResponse> for PairOfferDto {
@@ -30,6 +33,7 @@ impl From<pb::PairOfferResponse> for PairOfferDto {
             x25519_pub: o.x25519_pub,
             endpoint: o.endpoint,
             nonce: o.nonce,
+            identity_mode: o.identity_mode,
         }
     }
 }

@@ -43,7 +43,7 @@ async fn confirm(svc: &TxtodoService) -> Result<pb::PairResult, tonic::Status> {
 }
 
 #[tokio::test]
-async fn qr_payload_has_no_field_beyond_the_documented_five() {
+async fn qr_payload_has_no_field_beyond_the_documented_six() {
     let dir = tempfile::tempdir().unwrap();
     let svc = service(dir.path(), Arc::new(FakeClock::new(1_000)));
     let response = offer(&svc).await;
@@ -59,10 +59,19 @@ async fn qr_payload_has_no_field_beyond_the_documented_five() {
     keys.sort_unstable();
     assert_eq!(
         keys,
-        ["device", "endpoint", "group_id", "nonce", "x25519_pub"]
+        [
+            "device",
+            "endpoint",
+            "group_id",
+            "identity_mode",
+            "nonce",
+            "x25519_pub"
+        ]
     );
     assert!(!response.x25519_pub.is_empty());
     assert!(!response.nonce.is_empty());
+    // Sidecar is the daemon's own default (docs/questions.md Q2) for a brand-new workspace.
+    assert_eq!(response.identity_mode, "sidecar");
 }
 
 #[tokio::test]

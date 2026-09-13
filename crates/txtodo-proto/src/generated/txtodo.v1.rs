@@ -307,6 +307,10 @@ pub struct PairOfferResponse {
     pub endpoint: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub nonce: ::prost::alloc::string::String,
+    /// "tagged" or "sidecar" (docs/questions.md Q2), this device's own. Carried so a joiner can
+    /// detect a mismatch against its own mode and refuse rather than guess a merge (Q6, open).
+    #[prost(string, tag = "6")]
+    pub identity_mode: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairAcceptRequest {

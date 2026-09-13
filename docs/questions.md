@@ -71,3 +71,9 @@ Append only. Never edit a prior answer; add a dated follow-up.
   (with what message), does the joiner defer to the initiator only when the joiner's own workspace
   has zero tasks yet (so there is nothing on disk to desync), or something else? Once decided, the
   wire part is small — a new field on `PairOfferResponse`, the same shape as `group_id`'s.
+- Follow-up 2026-09-13 (agent, `tasks/sync-pairing`, `@cli` slice): built the wire part this
+  question already named — `PairOfferResponse.identity_mode` (`crates/txtodo-proto/proto/txtodo/
+  v1/txtodo.proto`) — and, without guessing the policy above, made `txtodo pair <code>` refuse a
+  detected mismatch whenever the joiner's workspace already has tasks, proceeding unmodified (never
+  adopting the initiator's mode) when modes match or the joiner is empty. The actual policy — what
+  a real, non-empty mismatch should eventually do instead of just refusing — is still unanswered.
