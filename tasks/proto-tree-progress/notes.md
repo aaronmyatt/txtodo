@@ -97,6 +97,19 @@ have a latent correctness bug. If a human disagrees with this tradeoff for a lar
 per-node surgery is still possible on top of `WorkspaceTree` as it stands (its fields are already
 structured to support it); it just wasn't built this pass.
 
+## Known gap: `PruneOrphans --execute` can delete a directory a live actor still serves
+
+`refdir_grpc.rs::delete_orphans` calls `fs::remove_dir_all` directly; it does not check whether the
+orphan directory holds a still-registered `todo.txt`/`done.txt` actor first. `Workspace` has no
+"unregister/stop this actor" API at all today (nothing needed one before), so there is no clean way
+to tear one down from inside this RPC without adding that lifecycle machinery — a bigger change
+than this task, and outside what `daemon-ref-creation`/`daemon-ref-move` built. In practice this
+needs an unusual sequence (something removes the last pointer to a directory that still holds a
+live todo/done file the daemon has open) and the daemon's own on-disk state stays consistent
+(SQLite is unaffected, only the now-stale in-memory actor keeps answering with what it last knew);
+flagged here for a human to decide whether `Workspace` should grow actor teardown, or whether
+`PruneOrphans` should instead refuse to delete a directory with a live actor until one exists.
+
 ## Known gap: a still-empty `ref:` directory is invisible to the tree
 
 A directory `ensure_ref_dir`/`RefDir{ensure:true}` created but that has not yet gained a
