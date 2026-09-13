@@ -33,3 +33,10 @@ path = "fuzz_targets/slug.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "slug_windows_safe"
+path = "fuzz_targets/slug_windows_safe.rs"
+test = false
+doc = false
+bench = false

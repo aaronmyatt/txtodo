@@ -23,7 +23,9 @@ use txtodo_sync::{
 
 const GROUP_EPOCH: u32 = 0;
 
-fn peer_device() -> DeviceId {
+/// `pub(crate)`: reused by `lan_session_security_tests` (`security-m4-review`'s "no secrets in
+/// logs" check), which needs the exact same scripted peer identity.
+pub(crate) fn peer_device() -> DeviceId {
     DeviceId::new(Ulid::from_u128(9_999))
 }
 
@@ -63,7 +65,8 @@ fn recv(link: &mut dyn Link, group: GroupId, keys: &GroupKeys) -> Message {
     .unwrap_or_else(|e| panic!("decode: {e}"))
 }
 
-fn one_peer_op(task: TaskId) -> Op {
+/// `pub(crate)`: see [`peer_device`]'s doc for why.
+pub(crate) fn one_peer_op(task: TaskId) -> Op {
     Op {
         id: OpId::new(Ulid::from_u128(2)),
         hlc: Hlc {
@@ -84,16 +87,17 @@ fn one_peer_op(task: TaskId) -> Op {
 }
 
 /// The group crypto context both sides of the test need — bundled so `run_peer_script` stays
-/// under `maxParams`.
-struct PeerCrypto {
-    group: GroupId,
-    key: GroupKey,
-    keys: GroupKeys,
+/// under `maxParams`. `pub(crate)`: see [`peer_device`]'s doc for why.
+pub(crate) struct PeerCrypto {
+    pub(crate) group: GroupId,
+    pub(crate) key: GroupKey,
+    pub(crate) keys: GroupKeys,
 }
 
 /// The scripted peer's whole side of the exchange: offer one op, serve it once wanted, check the
-/// ack. Runs on its own blocking thread since `send`/`recv` block.
-fn run_peer_script(
+/// ack. Runs on its own blocking thread since `send`/`recv` block. `pub(crate)`: see
+/// [`peer_device`]'s doc for why.
+pub(crate) fn run_peer_script(
     mut peer_link: txtodo_sync::ChannelLink,
     crypto: PeerCrypto,
     op: Op,

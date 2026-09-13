@@ -81,6 +81,8 @@ mod history_tests;
 #[cfg(test)]
 mod import_tests;
 #[cfg(test)]
+mod lan_session_security_tests;
+#[cfg(test)]
 mod lan_session_tests;
 #[cfg(test)]
 mod mirror_tests;

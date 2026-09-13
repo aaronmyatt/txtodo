@@ -117,3 +117,83 @@ Acted on the rest of item 8 the same day: closed the four shipped `@desktop` lin
 popover, conflict review, devices) and the answered Q1/Q3/Q4 lines, archived to `done.txt`, and added
 todo lines for Q7–Q11. Detail view, quick-add, raw mode, Playwright, visual regression and the
 stack mapping are genuinely unbuilt and stay open; the Lezer line stays open for its missing CI step.
+
+---
+2026-09-13 · `security-m4-review`: M4 security checklist, item by item (plan §5's one-line
+checklist: "no secrets in logs; keys only in keystore; every network message versioned,
+authenticated, encrypted; MCP HTTP refuses non-loopback unless `--lan`; tokens never logged; path
+traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types.").
+Full task in `tasks/security-m4-review/`.
+
+- **No secrets in logs — pass.**
+  `crates/txtodo-daemon/src/lan_session_security_tests.rs::no_secrets_appear_in_logs_across_a_real_pair_and_sync`:
+  a real pairing round trip (mints/wraps the group key and each side's device static key) plus two
+  real LAN sync rounds (one happy, one a peer sealing under a key nobody holds, so
+  `lan_session.rs`'s own `tracing::debug!`/`warn!` sites actually fire) captured through a scoped
+  subscriber shaped like `telemetry.rs`'s production JSON layer; neither the group key nor either
+  device's static key ever appears in the captured text, hex or raw.
+- **Keys only in keystore — pass.** `crates/txtodo-daemon/tests/security_keys_only_in_keystore.rs`,
+  two tests: no `env::var`/`env::var_os`/`.var()` call anywhere in `crates/`/`apps/` reads a name
+  suggesting key material, and no field on the actual argv/config surface (`txtodod`'s and
+  `txtodo`'s CLI arg structs, both configs) is named or typed like it could carry raw key bytes.
+  Scoped deliberately to that surface rather than a whole-workspace field scan — the test's own doc
+  names the three false positives (a SQLite meta row `key`, a `key_epoch` rotation counter, the
+  keystore's own legitimate internal `passphrase`/`Secret` fields) a broader scan produced first.
+- **Every network message versioned, authenticated, encrypted, including `Hello` — pass.**
+  `crates/txtodo-sync/src/hello_wire_tests.rs`, six tests. `Hello` is not a special case in this
+  codebase: `txtodo-daemon`'s one production send path (`lan_session.rs::send_message`) seals every
+  `Message` whole under the group key before it reaches a `Link`, so `Hello` is never sent in the
+  clear and — contrary to the concern in `tasks/security-m4-review/notes.md` — never before a
+  shared key exists at all (`drive_session` fetches the group key first and does nothing if there
+  isn't one). Confirmed: a sealed `Hello` never happens to decode as plaintext; it cannot be opened
+  with the wrong group, wrong key, or no key; a captured `Hello` replayed at the same session once
+  past `Greeted` is refused outright and changes no state; replayed to a fresh session it yields
+  only the same public `Want` a legitimate peer would get and never advances heads; a tampered or
+  foreign-protocol sealed `Hello` fails the same way `sealed_ops_tests.rs` already proves for `Ops`.
+  - **Open, `@human`-tagged, not closed by this pass** (`tasks/security-m4-review/todo.txt` line 4):
+    `Hello.heads` is still a privacy leak *within* the group — any paired device learns how much
+    every other device has written, inherent to a diff-based sync protocol, not a bug this session
+    can fix. It is never visible outside the group (AEAD-sealed), so the real question is narrower
+    than the task notes framed it: "is it acceptable that group members see each other's heads,"
+    not "is it acceptable that anyone does." Left for the human to decide and record.
+- **Path traversal impossible via `ref:` (fuzz the slug validator) — fail, real gap found.** New
+  fuzz target `crates/txtodo-core/fuzz/fuzz_targets/slug_windows_safe.rs`, run `cargo fuzz run
+  slug_windows_safe -- -max_total_time=30` (nightly toolchain + `cargo-fuzz` installed for this
+  pass; neither is present by default in this sandbox). It crashed on the first seed:
+  **`is_valid_slug("con")` is `true`.** `is_valid_slug` (`crates/txtodo-core/src/task.rs:13`)
+  already rejects `/`, `\`, `..`, a bare `.`, a leading `.`/`-`/`_`, and anything outside
+  ASCII-lowercase/digit/`.`/`_`/`-` — which also makes a NUL byte and a leading dot structurally
+  unreachable (both asserted and passing in the new target) — but never checks for a
+  Windows-reserved device name (`CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`), which
+  Windows reserves regardless of any extension (`con.txt` still names the `CON` device, not a file
+  called that). `txtodo-core` is a frozen path this session was not asked to edit, so
+  `is_valid_slug` is unchanged; this is not classic path traversal (it cannot escape the `ref:`
+  directory) but it is a real, fuzzer-confirmed, cross-platform filesystem-safety gap that M5's
+  real directory-building work will hit on Windows (ADR 0007 already promises Windows desktop
+  support). **Follow-up needed**: extend `is_valid_slug` (or add a second check M5 calls before
+  creating a directory) to reject the reserved-name list. Crash artifact (gitignored, reproduced
+  above for the record): `crates/txtodo-core/fuzz/artifacts/slug_windows_safe/crash-b1f6e510eb0f015b9d2bd5b22764cd95ae00d908`.
+- **MCP HTTP refuses non-loopback unless `--lan` — deferred to M6.** No MCP HTTP surface exists
+  before M6 (`txtodo-daemon/CLAUDE.md`'s own `payloadKB` note: "N/A until M6: no HTTP surface in
+  M0-M5"). Not buildable yet; noted per the task's own scope, not silently dropped.
+- **Tokens never logged — deferred to M6.** The M6 token data layer (`crates/txtodo-daemon/src/tokens.rs`,
+  `TokenCreate`/`List`/`Revoke`) landed early (M4 pass, design §6.2), but request-time bearer
+  enforcement — the part where a token could plausibly end up in a log line — is explicitly M6's
+  larger MCP-auth-server milestone (`crates/txtodo-daemon/CLAUDE.md`'s own invariant). In passing:
+  `tokens.rs` has zero `tracing::` calls today, so nothing logs a token now either — observed, not
+  asserted by a dedicated test this pass, since the request-time surface that would need one
+  doesn't exist yet.
+- **Relay cannot distinguish op types — deferred to M8, known gap recorded now.** No relay exists
+  yet. The M4-relevant half, recorded so it is not discovered late: every sealed frame's on-wire
+  length is visible to anyone forwarding it (no padding scheme exists), and `Hello`/`Want`/`Ack`/`Ops`
+  have different, characteristic size distributions — a small few-head `Hello` or an empty `Ack`
+  looks nothing like a multi-op `Ops` batch. A future relay that cannot read the group key could
+  still often guess message *type* by ciphertext length alone, short of the checklist's actual goal
+  even though today's design already keeps the *content* (op payloads, ids, heads) fully opaque.
+
+Follow-ups this pass could not take, since editing the root `todo.txt` was this session's
+orchestrating task's job, not this one's:
+- `is_valid_slug`'s Windows-reserved-name gap, above (an `@core` or `@sync-ref-slug`-tagged line).
+- M6 todo line(s): MCP HTTP loopback-only unless `--lan`; tokens never logged, request-time.
+- M8 todo line: relay op-type leakage via frame length, recorded above.
+- The `@human` `Hello`-heads privacy decision (`tasks/security-m4-review/todo.txt` line 4).

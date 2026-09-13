@@ -102,6 +102,8 @@ mod endpoint_tests;
 #[cfg(test)]
 mod frame_tests;
 #[cfg(test)]
+mod hello_wire_tests;
+#[cfg(test)]
 mod keystore_file_tests;
 #[cfg(test)]
 mod keystore_memory_tests;

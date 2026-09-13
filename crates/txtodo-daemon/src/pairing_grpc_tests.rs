@@ -121,7 +121,9 @@ async fn handshake(a: &TxtodoService, b: &TxtodoService, now_ms: u64) {
 
 /// [`handshake`], then both sides call `pair_confirm_sas` for real and are asserted to derive the
 /// same SAS — but neither has *learned* of the other's confirmation yet (see `mark_remote_confirmed`).
-async fn handshake_and_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64) {
+/// `pub(crate)`: reused by `lan_session_tests`'s `no_secrets_appear_in_logs_across_a_real_pair_and_sync`,
+/// which needs a real pairing round rather than a hand-seeded group key (`security-m4-review`).
+pub(crate) async fn handshake_and_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64) {
     handshake(a, b, now_ms).await;
     let sas_a = confirm(a).await.unwrap().sas;
     let sas_b = confirm(b).await.unwrap().sas;
@@ -131,7 +133,12 @@ async fn handshake_and_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64
 /// Both sides have called `pair_confirm_sas` but neither has learned of the other's confirmation
 /// (no transport): `try_finalize_initiator` reports not-ready. Then relays both confirmations and
 /// finishes the exchange for real, returning the group id both sides now hold.
-async fn finalize_after_both_confirm(a: &TxtodoService, b: &TxtodoService, now_ms: u64) -> GroupId {
+/// `pub(crate)`: see [`handshake_and_confirm`]'s doc for why.
+pub(crate) async fn finalize_after_both_confirm(
+    a: &TxtodoService,
+    b: &TxtodoService,
+    now_ms: u64,
+) -> GroupId {
     let group = a.workspace().group();
     let ready = |ws: &TxtodoService| {
         ws.workspace()
