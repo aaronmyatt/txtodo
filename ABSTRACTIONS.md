@@ -55,6 +55,11 @@ Never edit or delete a prior entry.
   crates/txtodo-daemon/tests/support/mod.rs (`Daemon::start`, `CARGO_BIN_EXE_txtodod`),
   crates/txtodo-daemon/tests/crash.rs (`spawn`). Constitution §7 forbids cross-slice helpers, so
   the CLI copy stays; the two daemon copies could share `tests/support`.
+- 2026-09-13 (`sync-lan-transport` daemon-wiring pass): grown, not duplicated — `tests/support/
+  mod.rs`'s `Daemon::start_with_mode` now delegates to a new `start_full(todo, mode, envs)` so
+  `start_with_test_hooks` (sets `TXTODO_TEST_HOOKS=1` for `DebugSetGroupKey`) is one more call
+  site on the same harness, used by `tests/lan_discovery.rs`. This is the "two more" the
+  `sync-loopback-converge` task notes predicted; still one shared file, no new duplication.
 
 ## 2026-09-12 — "nearest task id before index i" idiom, four copies in the daemon
 

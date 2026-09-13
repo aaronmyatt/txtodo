@@ -267,6 +267,7 @@ fn worth_dialing(
     else {
         return None;
     };
+    log_peer_found(&peer);
     let mut dial_state = dial_state
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -277,6 +278,13 @@ fn worth_dialing(
     }
     dial_state.record_attempt(peer.device, now_ms);
     Some(peer)
+}
+
+/// Logged for every real sighting, dialed or not — the only externally observable (via the JSON
+/// log) proof that discovery itself worked, independent of whether the connect step that follows
+/// succeeds (`lan.rs`'s module doc on the confirmed same-host connect blocker).
+fn log_peer_found(peer: &DiscoveredPeer) {
+    tracing::info!(peer = %peer.device, addresses = ?peer.addresses, "lan_peer_found");
 }
 
 fn record_dial_outcome(dial_state: &Arc<std::sync::Mutex<DialState>>, peer: DeviceId, ok: bool) {

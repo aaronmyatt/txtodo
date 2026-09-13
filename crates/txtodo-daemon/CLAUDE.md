@@ -65,8 +65,12 @@ field, no `--identity-mode` flag): every workspace still runs tagged mode today.
   compiler fix, not a style choice.
 - Tests: unit (`*_tests.rs`, including `sync_ops_tests.rs` and `lan_session_tests.rs` — the latter
   drives a real `drive_session` over a real `ChannelLink`, the only place this codebase can
-  currently exercise the LAN sync protocol end to end), `tests/grpc.rs` (in-process server on a
-  temp socket),
+  currently exercise the LAN sync protocol end to end), `tests/lan_discovery.rs` (two real
+  `txtodod` processes, real mDNS, seeded to share a group before either starts — see its module
+  doc for why `DebugSetGroupKey` can't do that instead — proving real discovery at the full daemon
+  level; deliberately does not wait on a real sync connection, the confirmed same-host blocker),
+  `tests/debug_hooks.rs` (`DebugSetGroupKey` refused/allowed by the env var, over a real socket),
+  `tests/grpc.rs` (in-process server on a temp socket),
   `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
   `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
   `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
