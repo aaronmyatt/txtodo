@@ -8,6 +8,7 @@ Append only. Never edit a prior answer; add a dated follow-up.
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.1) · Blocks: M5 sync scope, M8 relay payloads
 - Default until answered: **no**. Only `todo.txt`, `done.txt`, `notes.md` are synced (plan §3.2.11).
 - Answer: Let's limit it to only images, assuming they might be used in the markdown tasks write ups
+- ADR: 0014
 
 ## Q2 — Sidecar mode: confidence threshold and cost weights for fingerprint re-identification?
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.2) · Blocks: sidecar identity mode,
@@ -31,22 +32,27 @@ Append only. Never edit a prior answer; add a dated follow-up.
   design section's own stated preference for "resurrect as duplicate" over a bad merge. Lives as
   named constants in `crates/txtodo-model/src/identity.rs`; retune there directly, no ADR needed
   for a weight change alone.
+- ADR: 0015 (records the mode-default reversal, not the weights — superseded 2026-09-13 by 0019,
+  see Q6, which drops `Tagged` mode entirely)
 
 ## Q3 — Is `rec:` recurrence a core feature or a plugin?
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.3) · Blocks: M10 plugin host scope
 - Default until answered: **plugin** (design §9). The tag still parses in core (specs/todotxt.abnf `rec-tag`).
 - Answer: plugin
+- ADR: 0016 (confirms design §9's default; no decision changed)
 
 ## Q4 — iOS: accept a Local Network permission prompt for LAN MCP, or make iOS relay-only for agents?
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.4) · Blocks: M9 iOS MCP transport
 - Default until answered: undecided. LAN MCP on iOS needs `NSLocalNetworkUsageDescription` and Bonjour
   service declarations. Ref: https://developer.apple.com/documentation/bundleresources/information-property-list/nslocalnetworkusagedescription
 - Answer: scope MCP to only the desktop versions (macOS, Linux, Windows). iOS relay-only for agents. The iOS agent will not be able to use MCP on LAN.
+- ADR: 0017
 
 ## Q5 — Relay hosting: does the project run a public relay, or self-host only?
-- Status: open · Raised: 2026-09-11 (plan §6.5) · Blocks: M8 self-hosting docs, M9 push registration
+- Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.5) · Blocks: M8 self-hosting docs, M9 push registration
 - Default until answered: **self-host only**; docs describe running `relay/` yourself.
 - Answer: The relay will be a hosted SaaS that I will grant users access to manually
+- ADR: 0018
 
 ## Q6 — Pairing: what happens when the initiator's and joiner's identity_mode disagree?
 - Status: answered 2026-09-13 · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·
@@ -85,6 +91,7 @@ Append only. Never edit a prior answer; add a dated follow-up.
   a pass over `load_or_mint_identity_mode`/`DocState`/`reconcile` (`workspace.rs`) plus
   `PairOfferResponse.identity_mode` (`txtodo-proto`) and the `txtodo pair` refusal path
   (`pairing_grpc.rs`) to remove the now-dead `Tagged` branch and mismatch check.
+- ADR: 0019 (supersedes 0015, which superseded 0009)
 
 ## Q7 — Is priority one global scale across workspaces, or per workspace?
 - Status: answered 2026-09-13 · Raised: 2026-09-13 (board review; todo `desktop-universal-view`, `adr-global-daemon`)
@@ -107,8 +114,11 @@ Append only. Never edit a prior answer; add a dated follow-up.
   "high priority" is always relative to whichever workspace currently has the user's attention, not
   a computed global ranking. A future aggregation feature (surface top priorities across
   workspaces/lists/projects) is plausible but out of scope now — if built, it should be additive
-  (a view over multiple workspaces the user opts into), not a change to how priority is scored. — Global daemon: one sync group per set of devices, or one per workspace?
-- Status: open · Raised: 2026-09-13 · Blocks: `daemon-workspace-registry` (todo 130),
+  (a view over multiple workspaces the user opts into), not a change to how priority is scored.
+- ADR: 0020
+
+## Q8 — Global daemon: one sync group per set of devices, or one per workspace?
+- Status: answered 2026-09-13 · Raised: 2026-09-13 · Blocks: `daemon-workspace-registry` (todo 130),
   `daemon-workspace-actor` (132: "each with its own store, op log, CRDT and sync Link"), the
   `sync-pairing` second-device handoff
 - Default until answered: **per workspace**, as line 132 is written. Pairing N projects then means
@@ -120,9 +130,19 @@ Append only. Never edit a prior answer; add a dated follow-up.
   the group, ops carry a workspace id, one `Link` multiplexes; (b) per-workspace groups, pair each.
   Recommend (a): it is what "universal" means, and it is cheaper before M11's actor nesting than
   after. Either answer wants an ADR — line 129 is the place.
+- Answer 2026-09-13: (a), pair once per device-set. One device identity and one sync group covers
+  all of a user's workspaces on that device pair; a workspace is a namespace inside the group, not
+  its own pairing/keystore boundary. `txtodo pair` run once between two devices, not once per
+  workspace. Needs the ADR at line 129, plus reworking `Workspace` (currently owns its own device
+  id, keystore, group key — `workspace.rs:35-54`, `adopt_group_key` at :339) and ADR 0010's
+  `<workspace>/.txtodo/`-scoped state to move device identity/group key up to the device-set level
+  and add a `workspace_id` on ops so one `Link` multiplexes every workspace. Blocks
+  `daemon-workspace-registry` (todo 130) and `daemon-workspace-actor` (132) — those need to be
+  designed against a device-set-scoped group, not a per-workspace one, from the start.
+- ADR: 0021
 
 ## Q9 — Pull `txtodo-query` (design §8) forward from M10 into M11?
-- Status: open · Raised: 2026-09-13 · Blocks: the universal view's filter bar (todo 140), MCP
+- Status: answered 2026-09-13 · Raised: 2026-09-13 · Blocks: the universal view's filter bar (todo 140), MCP
   `todo_search` (line 21: "substring-only, no query index yet"), a cross-workspace `txtodo ls`
 - Default until answered: three ad-hoc filters keep growing (ABSTRACTIONS.md 2026-09-13, third
   entry); `crates/txtodo-query/src/lib.rs` stays two lines.
@@ -130,18 +150,29 @@ Append only. Never edit a prior answer; add a dated follow-up.
   `and or not`, no relative dates — behind `Query::parse` / `Query::matches(&Task)` / one
   `SortKey`, called by CLI, MCP and desktop; (b) wait for M10. Recommend (a). Sub-question: may
   v1 be a strict subset of the §8 grammar, or is §8 frozen as written (relative dates, `--explain`)?
+- Answer 2026-09-13: (a), build v1 now. `Query::parse` / `Query::matches(&Task)` / `SortKey` land in
+  `crates/txtodo-query`, called by CLI, MCP, and desktop instead of each growing its own filter.
+  Sub-question (strict subset vs. frozen §8 grammar) not addressed by this answer — still open.
+- Follow-up 2026-09-13: sub-question answered — §8 frozen as written. v1 must match the design §8
+  grammar in full, including relative dates and `--explain`, not a pared-down subset.
+- ADR: 0022
 
 ## Q10 — Is "no two real txtodod processes in an agent session" a standing rule?
-- Status: open · Raised: 2026-09-13 · Blocks: todo lines 8, 9 (integration half), 10, 11, 20 — each
+- Status: answered 2026-09-13 · Raised: 2026-09-13 · Blocks: todo lines 8, 9 (integration half), 10, 11, 20 — each
   says "off-limits this session"
 - Default until answered: agents keep skipping them; those five lines never close.
 - Decide: (a) standing rule — then add a human-run `just sync-e2e` recipe and retag the five lines
   `@human`; (b) per-session — say so, and the `TwoDaemons` fixture (ABSTRACTIONS.md 2026-09-13,
   last entry) gets built with a bounded timeout and kill-on-drop. Recommend (b); (a) only if the
   worry is stray sockets or ports on your machine.
+- Answer 2026-09-13: (b), per-session only — not a standing rule. Agents may run two real `txtodod`
+  processes in a session, via a `TwoDaemons` test fixture with a bounded timeout and kill-on-drop
+  cleanup (no leaked processes/ports). Todo lines 8, 9 (integration half), 10, 11, 20 stay agent
+  work, not retagged `@human`; they should close once the fixture exists.
+- ADR: 0023
 
 ## Q11 — LAN transport: wire it into the daemon now for a two-host test, or skip to M8 relay?
-- Status: open · Raised: 2026-09-13 · Blocks: `sync-lan-transport` (todo 2), the `sync-pairing`
+- Status: answered 2026-09-13 · Raised: 2026-09-13 · Blocks: `sync-lan-transport` (todo 2), the `sync-pairing`
   handoff (3), `test-nested-ref-sync` fresh-device half (20)
 - Context: the M4 blocker is one `#[ignore]`d test (`crates/txtodo-sync/src/endpoint_tests.rs:74`)
   that forces both ends onto `127.0.0.1`; the production constructor `bind_local_endpoint` binds
@@ -160,3 +191,13 @@ Append only. Never edit a prior answer; add a dated follow-up.
   txtodo --dir ~/todo pair <code>
   txtodo --dir ~/todo doctor   # expect one peer line, skew Ok
   ```
+- Answer 2026-09-13: stronger than Scenario 2 as written — drop LAN transport entirely, not just
+  defer it. All sync always goes through the hosted relay (the SaaS from Q5's answer); no local
+  QUIC/mDNS path, ever, on any device count or network topology. Simplifies the transport surface to
+  one path instead of two. Downstream: `sync-lan-transport` (todo 2) is no longer "wire this in
+  later" but dead — `Discovery`/`PeerTable`/`bind_local_endpoint`/the ignored
+  `endpoint_tests.rs:74` test become removal candidates, not future work, same as `Tagged` in Q6's
+  answer. `sync-pairing`'s handoff (todo 3) and `test-nested-ref-sync`'s fresh-device half (todo 20)
+  need re-scoping to the relay path only. Needs an ADR (line 129) since it reverses the two-path
+  (LAN + relay) shape the plan assumed.
+- ADR: 0024 (supersedes the LAN-discovery half of 0003)

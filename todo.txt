@@ -31,7 +31,7 @@ x 2026-09-13 2026-09-11 Playwright tests for popover, detail, notes creation, ne
 2026-09-11 Prometheus /metrics on 8637, OTel traces, Grafana dashboard in deploy/grafana +m10 @observability id:01M2B4ZWQEHV4MPYJTBRZN5DEZ
 2026-09-11 TLA+ spec specs/sync.tla with TLC run in CI +m10 @specs id:01M2B4ZWQE2APE8DZWTWAPRVZP
 2026-09-11 Nix flake, cargo-zigbuild cross builds, Sigstore signing, SBOM +m10 @release id:01M2B4ZWQETBMJCHRJ8GQT32C9
-2026-09-11 Answer plan Q5: public relay or self-host only +questions @human ref:open-questions id:01M2B4ZWQE4N0SQ4K92K2A8EZR
+x 2026-09-13 2026-09-11 Answer plan Q5: public relay or self-host only +questions @human ref:open-questions — hosted SaaS, manually granted access; ADR 0018 id:01M2B4ZWQE4N0SQ4K92K2A8EZR
 (A) 2026-09-13 ADR: global daemon — one txtodod per device with a workspace registry, superseding the per-directory daemon from plan M3/design §5 +m11 @adr @daemon ref:adr-global-daemon id:01M2CE1ZXFXFXH2S8KCM1E8G2E
 (A) 2026-09-13 Workspace registry: catalog of known todo dirs (add/remove/list), migrates existing per-workspace .txtodo/ state without losing op history +m11 @daemon @store ref:daemon-workspace-registry id:01M2CE1ZXJ9P0GAWT4Z0X5VPAA
 (A) 2026-09-13 One global socket per user, not per-dir; every gRPC call carries a workspace selector +m11 @daemon @proto ref:daemon-global-socket id:01M2CE1ZXMVS7XETDFJJG20CJZ
@@ -56,8 +56,8 @@ x 2026-09-13 2026-09-11 Playwright tests for popover, detail, notes creation, ne
 2026-09-11 Security checklist review before M6 close and re-justify the payloadKB budget +m6 @security — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQD90N6M6Q7HH4JACWP
 2026-09-13 MCP gateway serves every registered workspace; every tool/resource call takes a project selector, plus a todo_list_workspaces resource +m11 @mcp ref:mcp-multi-workspace-gateway — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY1D52GNJ755NFQSDZM
 2026-09-13 Extend token scope grammar so a capability token can be scoped to one workspace, a set, or all — today's project:/context:/file: restrictors only reach inside one +m11 @mcp @cli ref:mcp-workspace-scoped-tokens — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY3BNCDMRME4QKH1AP4
-2026-09-13 Answer Q7: one global priority scale across workspaces, or per workspace +questions @human ref:open-questions id:01M2CJC4W81XAB7TJ0HMESTMWP
-2026-09-13 Answer Q8: one sync group per device-set, or one per workspace +questions @human ref:open-questions id:01M2CJC4WMHVAZ5EN2V1VE168P
-2026-09-13 Answer Q9: pull txtodo-query (design §8 subset) forward from M10 into M11 +questions @human ref:open-questions id:01M2CJC4X6HZKXM0PP11WE07Y9
-2026-09-13 Answer Q10: is no-two-txtodod-processes-per-agent-session a standing rule +questions @human ref:open-questions id:01M2CJC4XGN8304Z9RJ0QJXKWX
-2026-09-13 Answer Q11: wire LAN transport into txtodod for a two-host run, or skip to M8 relay +questions @human ref:open-questions id:01M2CJC4XW38MBQ2MAVAJ1JXYD
+x 2026-09-13 2026-09-13 Answer Q7: one global priority scale across workspaces, or per workspace +questions @human ref:open-questions — global flat scale; ADR 0020 id:01M2CJC4W81XAB7TJ0HMESTMWP
+x 2026-09-13 2026-09-13 Answer Q8: one sync group per device-set, or one per workspace +questions @human ref:open-questions — per device-set; ADR 0021 id:01M2CJC4WMHVAZ5EN2V1VE168P
+x 2026-09-13 2026-09-13 Answer Q9: pull txtodo-query (design §8 subset) forward from M10 into M11 +questions @human ref:open-questions — yes, full §8 grammar not a subset; ADR 0022 id:01M2CJC4X6HZKXM0PP11WE07Y9
+x 2026-09-13 2026-09-13 Answer Q10: is no-two-txtodod-processes-per-agent-session a standing rule +questions @human ref:open-questions — no, per-session only; ADR 0023 id:01M2CJC4XGN8304Z9RJ0QJXKWX
+x 2026-09-13 2026-09-13 Answer Q11: wire LAN transport into txtodod for a two-host run, or skip to M8 relay +questions @human ref:open-questions — dropped LAN transport entirely, relay-only; ADR 0024 id:01M2CJC4XW38MBQ2MAVAJ1JXYD
