@@ -20,16 +20,6 @@ x 2026-09-13 2026-09-11 Tests: one op batch on first notes write, progress on a 
 2026-09-11 Tests: nested-ref workspace syncs the whole tree to a fresh device and todo.sh -d works on a sub-list +m5 @test ref:test-nested-ref-sync — todo.sh -d half done and tested; fresh-device sync half blocked by the upstream iroh/noq-proto loopback bug id:01M2B4ZWQD543EWGT4CG3WE4MD
 x 2026-09-13 2026-09-11 rmcp server with tools resources prompts from design §6.3-6.4 plus todo_notes_get and todo_notes_set +m6 @mcp — 15 tools+resources+prompts built on txtodo-daemon gRPC; todo_search substring-only (no query index yet), todo_move has no daemon reorder RPC (documented, not built) id:01M2B4ZWQDKT5HCCNP0ZA6VTK5
 x 2026-09-13 2026-09-11 Transports txtodo mcp --stdio and Streamable HTTP on 127.0.0.1:8636/mcp with --lan advertising _txtodo-mcp._tcp +m6 @mcp — both live-verified against a real txtodod id:01M2B4ZWQDM61JTH05CJ1Q66VV
-2026-09-11 Macaroon-style tokens with scope project context file expires quarantine caveats and txtodo token create|list|revoke|attenuate +m6 @mcp @cli id:01M2B4ZWQDBF6VH9XNX5P1MWE0
-2026-09-11 Bearer auth on HTTP and stdio token from --token or config default_stdio_token +m6 @mcp id:01M2B4ZWQD2PGXGGYJ1HRS0J7E
-2026-09-11 Every mutation through daemon Apply as Principal::Agent with quarantine appending the context +m6 @mcp @daemon id:01M2B4ZWQDDCEZGE3TQ1CPKZC9
-2026-09-11 Rate limits 60 mutations/min and 10 deletes/min per token with pause and notification event +m6 @mcp id:01M2B4ZWQDE8DMKRGA0HRTKFKY
-2026-09-11 todo_batch dry_run returns a unified diff and structured errors carry line and spec_rule +m6 @mcp id:01M2B4ZWQDW0QWQ790VNJ12PY7
-2026-09-11 Resource subscriptions wired to the daemon Watch stream +m6 @mcp id:01M2B4ZWQDN12F3KK6KZE8F6YB
-2026-09-11 Scope matrix test and attenuated tokens cannot widen +m6 @mcp @test id:01M2B4ZWQDJTB2R93F58JTNMGJ
-2026-09-11 Tests: quarantine line and blame show the agent, dry run leaves the hash unchanged, rate limit pauses the token +m6 @mcp @test id:01M2B4ZWQDH20SS2N1S48CPERX
-2026-09-11 Smoke test with the SDK reference MCP client over both transports +m6 @mcp @test id:01M2B4ZWQDR4D3DEW8BY76QHGT
-2026-09-11 Security checklist review before M6 close and re-justify the payloadKB budget +m6 @security id:01M2B4ZWQD90N6M6Q7HH4JACWP
 x 2026-09-12 2026-09-11 Tauri 2 shell talking gRPC to txtodod and spawning it if absent +m7 @desktop ref:desktop-tauri-shell id:01M2B4ZWQDD80Q228HATVGBV8Q
 2026-09-11 abnf-to-lezer.mjs generates the Lezer grammar with a CI step failing if regeneration differs +m7 @desktop id:01M2B4ZWQDSHP5PJM3GG6241KZ
 2026-09-11 Main view read-only CM6 bound to Watch with decorations for hidden id:01M2B4ZWQDVMAA0WC10TK0HZR7 ref indicators, hover pencil, Add-a-line row +m7 @desktop
@@ -136,3 +126,27 @@ x 2026-09-12 2026-09-11 Sync protocol Hello Want Ops Ack in postcard with a vers
 x 2026-09-12 2026-09-11 Replace Vec<TaskState> with the Loro-backed state keeping the reconciler interface unchanged +m4 @crdt @daemon ref:crdt-loro-state id:01M2B4ZWQGJVMW0F7FKXFSGXSP
 x 2026-09-12 2026-09-12 migrations/0003.sql ops.origin_seq UNIQUE(device, origin_seq) backfilled in hlc order, Store next_origin_seq heads ops_for +m4 @store ref:sync-protocol-frames id:01M2B4ZWQGT92QR7TQK8SX4680
 x 2026-09-12 2026-09-11 Same-word edit detection sets needs_review; txtodo conflicts list and resolve mine|theirs|merged +m4 @crdt @cli ref:crdt-needs-review id:01M2B4ZWQGR07FHF23M0CEQX0X
+2026-09-13 ADR: global daemon — one txtodod per device with a workspace registry, superseding the per-directory daemon from plan M3/design §5 +m11 @adr @daemon ref:adr-global-daemon id:01M2CE1ZXFXFXH2S8KCM1E8G2E
+2026-09-13 Workspace registry: catalog of known todo dirs (add/remove/list), migrates existing per-workspace .txtodo/ state without losing op history +m11 @daemon @store ref:daemon-workspace-registry id:01M2CE1ZXJ9P0GAWT4Z0X5VPAA
+2026-09-13 One global socket per user, not per-dir; every gRPC call carries a workspace selector +m11 @daemon @proto ref:daemon-global-socket id:01M2CE1ZXMVS7XETDFJJG20CJZ
+2026-09-13 Nest today's FileActor set under a WorkspaceActor keyed by workspace id, each with its own store, op log, CRDT and sync Link +m11 @daemon @crdt ref:daemon-workspace-actor id:01M2CE1ZXQY715RD9G9GC8P9EA
+2026-09-13 txtodo workspace add|remove|list; --dir and cwd resolve which registered workspace the CLI targets on the global daemon +m11 @cli ref:cli-workspace-commands id:01M2CE1ZXSFK69MJY81H64TY2Q
+2026-09-13 First add/init in a directory with a todo.txt auto-registers it as a workspace, no separate onboarding step +m11 @cli ref:cli-workspace-autoregister id:01M2CE1ZXWRVFQDYMWEXSB345G
+2026-09-13 One launchd/systemd --user unit total for the whole device, not one per workspace hash; txtodo daemon install migrates any existing per-workspace units +m11 @service ref:service-single-global-unit id:01M2CE1ZXYK5VVN2N60E9PG286
+2026-09-13 txtodo doctor reports every registered workspace's health in one run instead of one per cwd +m11 @cli ref:cli-doctor-multi-workspace id:01M2CE1ZY6QYAT32KV1KQE6RYC
+2026-09-13 Tests: N-workspace daemon isolation (crash in one doesn't affect others), registry survives restart, clean-machine systemd/launchd single-unit install +m11 @test ref:test-global-daemon-acceptance id:01M2CE1ZY804NKAKR88DNRGNJ7
+2026-09-13 Update design §5/§6 and plan M3 notes for the global-daemon supersession, with the migration story for existing per-workspace installs +m11 @docs ref:docs-global-daemon-update id:01M2CE1ZYBY8FR6KXMZ3AXERCP
+2026-09-13 Desktop: workspace switcher — talk to the one global daemon instead of spawning/dialing a per-cwd daemon +m11 @desktop ref:desktop-workspace-switcher id:01M2CE1ZYDXAHBB9AXFGEVK43H
+2026-09-13 Desktop: universal view aggregating tasks (and their ref: sub-lists/notes) by priority and @context across every registered workspace, breadcrumb shows the owning project +m11 @desktop ref:desktop-universal-view id:01M2CE1ZYG1YQ1ECTCPYX42EZY
+2026-09-11 Macaroon-style tokens with scope project context file expires quarantine caveats and txtodo token create|list|revoke|attenuate +m6 @mcp @cli — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDBF6VH9XNX5P1MWE0
+2026-09-11 Bearer auth on HTTP and stdio token from --token or config default_stdio_token +m6 @mcp — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQD2PGXGGYJ1HRS0J7E
+2026-09-11 Every mutation through daemon Apply as Principal::Agent with quarantine appending the context +m6 @mcp @daemon — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDDCEZGE3TQ1CPKZC9
+2026-09-11 Rate limits 60 mutations/min and 10 deletes/min per token with pause and notification event +m6 @mcp — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDE8DMKRGA0HRTKFKY
+2026-09-11 todo_batch dry_run returns a unified diff and structured errors carry line and spec_rule +m6 @mcp — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDW0QWQ790VNJ12PY7
+2026-09-11 Resource subscriptions wired to the daemon Watch stream +m6 @mcp — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDN12F3KK6KZE8F6YB
+2026-09-11 Scope matrix test and attenuated tokens cannot widen +m6 @mcp @test — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDJTB2R93F58JTNMGJ
+2026-09-11 Tests: quarantine line and blame show the agent, dry run leaves the hash unchanged, rate limit pauses the token +m6 @mcp @test — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDH20SS2N1S48CPERX
+2026-09-11 Smoke test with the SDK reference MCP client over both transports +m6 @mcp @test — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQDR4D3DEW8BY76QHGT
+2026-09-11 Security checklist review before M6 close and re-justify the payloadKB budget +m6 @security — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2B4ZWQD90N6M6Q7HH4JACWP
+2026-09-13 MCP gateway serves every registered workspace; every tool/resource call takes a project selector, plus a todo_list_workspaces resource +m11 @mcp ref:mcp-multi-workspace-gateway — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY1D52GNJ755NFQSDZM
+2026-09-13 Extend token scope grammar so a capability token can be scoped to one workspace, a set, or all — today's project:/context:/file: restrictors only reach inside one +m11 @mcp @cli ref:mcp-workspace-scoped-tokens — deferred 2026-09-13 (core app + desktop prioritized first) id:01M2CE1ZY3BNCDMRME4QKH1AP4
