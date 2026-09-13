@@ -32,6 +32,11 @@ hyper-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 # https://docs.rs/tempfile — daemon mode runs each command against a scratch copy, then sends the diff
 tempfile = "3"
+# https://docs.rs/qrcode — `txtodo pair`'s terminal QR; default features pull in `image`/`svg`/`pic`
+# render backends this CLI never uses (it only prints Unicode block glyphs), so they're off.
+qrcode = { version = "0.14", default-features = false }
+# https://docs.rs/serde_json — the `txtodo pair` code/QR payload text (plan M4, design §4)
+serde_json = "1"
 
 [dev-dependencies]
 
