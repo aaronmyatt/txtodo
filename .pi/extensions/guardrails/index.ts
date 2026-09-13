@@ -6,8 +6,11 @@
  *                           baseline path → block; non-append write to a ledger → block; slice leased by
  *                           another session, or this session already leases a different slice → block.
  *   feedback tool_result    format/lint/file-length findings appended to the result; never blocks.
- *   gate     agent_settled  dirty tree must pass format, lint, typecheck, test, boundaries, file length, diff size;
- *                           failure → pi.sendUserMessage forces another turn. Three identical failures in a row →
+ *   gate     agent_settled  dirty tree: boundaries/file length run whole-tree (cheap, non-compiling); format,
+ *                           lint, typecheck, test run scoped to this session's own leased crates only (-p
+ *                           <crate> in place of --all/--workspace) and are skipped if it leases none; diff
+ *                           size excludes files under another session's leased crates. Failure →
+ *                           pi.sendUserMessage forces another turn. Three identical failures in a row →
  *                           notify and stop re-triggering (loop guard; the human decides). Clean tree also
  *                           releases this session's slice leases.
  *
@@ -72,6 +75,17 @@ const releaseSessionLeases = (root: string, sessionId: string): void => {
   const dir = leaseDir(root); let files: string[]; try { files = readdirSync(dir); } catch { return; }
   for (const f of files) { if (!f.endsWith(".lock")) continue; const p = join(dir, f); const l = readLease(p); if (l && l.sessionId === sessionId) { try { unlinkSync(p); } catch { /* already gone */ } } }
 };
+/** This session's own fresh leases, and everyone else's — for scoping the gate to what's actually yours. */
+const splitLeases = (root: string, sessionId: string): { mine: string[]; others: string[] } => {
+  const dir = leaseDir(root); const mine: string[] = []; const others: string[] = [];
+  let files: string[]; try { files = readdirSync(dir); } catch { return { mine, others }; }
+  for (const f of files) {
+    if (!f.endsWith(".lock")) continue;
+    const l = readLease(join(dir, f)); if (!freshLease(l)) continue;
+    (l!.sessionId === sessionId ? mine : others).push(f.slice(0, -5));
+  }
+  return { mine, others };
+};
 
 export default function (pi: ExtensionAPI) {
   // ---- fence -------------------------------------------------------------------------------
@@ -124,10 +138,21 @@ export default function (pi: ExtensionAPI) {
   pi.on("agent_settled", async (_event, ctx) => {
     if (!ctx.isIdle()) return;
     const root = ctx.cwd; const b = loadBudgets(root);
-    if (!sh("git status --porcelain", root).out.trim()) { releaseSessionLeases(root, ctx.sessionManager.getSessionId()); return; } // clean tree: nothing to gate, and this session's slices are free
+    const sessionId = ctx.sessionManager.getSessionId();
+    if (!sh("git status --porcelain", root).out.trim()) { releaseSessionLeases(root, sessionId); return; } // clean tree: nothing to gate, and this session's slices are free
+    const { mine, others } = splitLeases(root, sessionId);
+    const pkgArgs = mine.map((c) => `-p ${c}`).join(" ");
     const failures: string[] = [];
-    for (const k of GATE_KEYS) { const cmd = b.commands[k]; if (!cmd) continue; const r = sh(cmd, root); if (!r.ok) failures.push(`[${k}] \`${cmd}\`\n${r.out.trim().split("\n").slice(-15).join("\n")}`); }
-    const changed = diffLines(root, [...(b.generatedPaths ?? GENERATED_FALLBACK), ...b.baselinePaths]);
+    for (const k of GATE_KEYS) {
+      let cmd = b.commands[k]; if (!cmd) continue;
+      // format/lint/typecheck/test are scoped to this session's own leased crates (a crate leased by
+      // another session can't fail your Stop just because it's mid-edit); boundaries/fileLength stay
+      // whole-tree (cheap, non-compiling, structural). No leased crate → those four are skipped.
+      if (k === "format") { if (!pkgArgs) continue; cmd = cmd.replace("--all", pkgArgs); }
+      else if (k === "lint" || k === "typecheck" || k === "test") { if (!pkgArgs) continue; cmd = cmd.replace("--workspace", pkgArgs); }
+      const r = sh(cmd, root); if (!r.ok) failures.push(`[${k}] \`${cmd}\`\n${r.out.trim().split("\n").slice(-15).join("\n")}`);
+    }
+    const changed = diffLines(root, [...(b.generatedPaths ?? GENERATED_FALLBACK), ...b.baselinePaths], others);
     if (changed > b.diffLines) failures.push(`[diff] ${changed} changed lines > budget ${b.diffLines}. Split the change and say so.`);
     const strikesFile = join(root, ".git", "setup-gate-strikes");
     if (!failures.length) { if (existsSync(strikesFile)) writeFileSync(strikesFile, ""); return; }
@@ -140,9 +165,10 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
-/** Changed lines vs HEAD (tracked) plus whole untracked files, minus generated/baseline paths. */
-function diffLines(root: string, exempt: string[]): number {
-  const isExempt = (p: string) => exempt.some((g) => globToRegExp(g).test(p));
+/** Changed lines vs HEAD (tracked) plus whole untracked files, minus generated/baseline paths and
+ *  anything under a crate another session currently leases (not yours to gate on). */
+function diffLines(root: string, exempt: string[], otherCrates: string[] = []): number {
+  const isExempt = (p: string) => exempt.some((g) => globToRegExp(g).test(p)) || otherCrates.some((c) => p.startsWith(`crates/${c}/`));
   let n = 0;
   for (const l of sh("git diff HEAD --numstat", root).out.split("\n").filter(Boolean)) { const [a, d, p] = l.split("\t"); if (!isExempt(p)) n += (Number(a) || 0) + (Number(d) || 0); }
   for (const p of sh("git ls-files --others --exclude-standard", root).out.split("\n").filter(Boolean)) { if (!isExempt(p)) n += readFileSync(join(root, p), "utf8").split("\n").length; }

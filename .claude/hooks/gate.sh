@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# txtodo gate — Claude Code Stop hook. On a dirty tree, every whole-tree command in budgets.json.commands
-# (format, lint, typecheck, test, boundaries, fileLength) must exit 0 and the change must be ≤ diffLines
-# (Cargo.lock and baselinePaths exempt). Failure → {"decision":"block"} so the run cannot end.
+# txtodo gate — Claude Code Stop hook. On a dirty tree, boundaries/fileLength run whole-tree (cheap,
+# non-compiling, structural); format/lint/typecheck/test run scoped to this session's own leased
+# crates only (`-p <crate>` in place of `--all`/`--workspace`) — a crate leased by another session
+# can't fail your Stop just because it's mid-edit. No leased crate → those four are skipped, nothing
+# Rust is "yours" to gate. The diff-line budget likewise excludes files under another session's
+# leased crates. All of it must exit 0/within budget or {"decision":"block"} so the run cannot end.
 # Loop guard: after 3 identical failing rounds (.git/setup-gate-strikes) it stops blocking and says so —
 # the human decides. Lockstep twin: guardrails/index.ts agent_settled.
 # Clean tree also releases this session's slice leases (see fence.sh) so the next session on that
@@ -21,14 +24,35 @@ if [ -z "$(git status --porcelain)" ]; then
   exit 0
 fi
 B=.claude/budgets.json; fail=""
+LEASES=$(node -e '
+  const fs=require("fs"),cp=require("child_process"),path=require("path");
+  const root=process.argv[1], sid=process.argv[2];
+  let common; try{ common=cp.execSync("git rev-parse --git-common-dir",{cwd:root,encoding:"utf8"}).trim(); }catch{ console.log(""); console.log(""); process.exit(0); }
+  const dir=path.join(path.resolve(root,common),"txtodo-leases");
+  let files; try{ files=fs.readdirSync(dir); }catch{ console.log(""); console.log(""); process.exit(0); }
+  const TTL=4*60*60*1000, mine=[], others=[];
+  for(const f of files){ if(!f.endsWith(".lock")) continue;
+    try{ const l=JSON.parse(fs.readFileSync(path.join(dir,f),"utf8"));
+      if((Date.now()-l.ts)>=TTL) continue;
+      (l.sessionId===sid?mine:others).push(f.slice(0,-5)); }catch{} }
+  console.log(mine.join(" ")); console.log(others.join(" "));
+' "$ROOT" "$SID")
+MYCRATES=$(echo "$LEASES" | sed -n 1p); OTHERCRATES=$(echo "$LEASES" | sed -n 2p)
+PKGARGS=""; for c in $MYCRATES; do PKGARGS="$PKGARGS -p $c"; done
 for k in format lint typecheck test boundaries fileLength; do
   cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands[process.argv[2]]||""' $B "$k"); [ -z "$cmd" ] && continue
+  case "$k" in
+    format) [ -z "$PKGARGS" ] && continue; cmd=${cmd/--all/$PKGARGS} ;;
+    lint|typecheck|test) [ -z "$PKGARGS" ] && continue; cmd=${cmd/--workspace/$PKGARGS} ;;
+  esac
   out=$(bash -c "$cmd" 2>&1) || fail+="[$k] \`$cmd\`"$'\n'"$(echo "$out" | tail -15)"$'\n\n'
 done
 MAX=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).diffLines' $B)
 EXEMPT=$(node -pe 'const b=JSON.parse(require("fs").readFileSync(process.argv[1]));[...(b.generatedPaths||["Cargo.lock"]),...b.baselinePaths].map(g=>"^"+g.replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*\*/g,".*").replace(/(?<!\.)\*/g,"[^/]*")+"$").join("|")' $B)
-n=$(git diff HEAD --numstat | grep -Ev $'\t('"$EXEMPT"')$' | awk '{a+=$1+$2} END{print a+0}')
-u=$(git ls-files --others --exclude-standard | grep -Ev "^($EXEMPT)$" | xargs -I{} wc -l "{}" 2>/dev/null | awk '{a+=$1} END{print a+0}')
+OTHERNUMSTATRE=""; for c in $OTHERCRATES; do OTHERNUMSTATRE="${OTHERNUMSTATRE:+$OTHERNUMSTATRE|}"$'\t'"crates/$c/"; done
+OTHERPATHRE=""; [ -n "$OTHERCRATES" ] && OTHERPATHRE="^crates/($(echo "$OTHERCRATES" | tr ' ' '|'))/"
+n=$(git diff HEAD --numstat | grep -Ev $'\t('"$EXEMPT"')$' | { [ -n "$OTHERNUMSTATRE" ] && grep -Ev "$OTHERNUMSTATRE" || cat; } | awk '{a+=$1+$2} END{print a+0}')
+u=$(git ls-files --others --exclude-standard | grep -Ev "^($EXEMPT)$" | { [ -n "$OTHERPATHRE" ] && grep -Ev "$OTHERPATHRE" || cat; } | xargs -I{} wc -l "{}" 2>/dev/null | awk '{a+=$1} END{print a+0}')
 [ $((n+u)) -gt "$MAX" ] && fail+="[diff] $((n+u)) changed lines > budget $MAX. Split the change and say so."$'\n'
 [ -z "$fail" ] && { : > .git/setup-gate-strikes; exit 0; }
 sig=${#fail}; prev=$(sed -n 1p .git/setup-gate-strikes 2>/dev/null); cnt=$(sed -n 2p .git/setup-gate-strikes 2>/dev/null)
