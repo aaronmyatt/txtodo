@@ -32,6 +32,10 @@ pub struct Stored {
 pub const MAX_APPEND_BATCH: usize = 50_000;
 /// Most rows one read returns; callers page with `since`.
 pub const MAX_OPS_PER_READ: usize = 10_000;
+/// Most `op_id`s one `existing_op_ids` call loads into memory (`txtodo bundle import`'s dedupe
+/// set against the UNIQUE `ops.op_id` index); a real workspace's history stays far below this —
+/// a memory bound, not a feature limit.
+pub const MAX_OP_IDS_FOR_DEDUPE: usize = 500_000;
 
 const INSERT_OP: &str = "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload) \
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)";
@@ -40,6 +44,9 @@ const SELECT_SINCE: &str =
 const SELECT_BETWEEN: &str = "SELECT seq, payload FROM ops WHERE file = ?1 \
                               AND (hlc_wall, hlc_counter) >= (?2, ?3) AND (hlc_wall, hlc_counter) <= (?4, ?5) \
                               ORDER BY hlc_wall, hlc_counter, device LIMIT ?6";
+const SELECT_PAGE_GLOBAL: &str =
+    "SELECT seq, payload FROM ops WHERE seq > ?1 ORDER BY seq LIMIT ?2";
+const SELECT_ALL_OP_IDS: &str = "SELECT op_id FROM ops LIMIT ?1";
 
 fn principal_tag(p: &Principal) -> &'static str {
     match p {
@@ -180,6 +187,60 @@ impl Store {
             .optional()
             .map(|o| o.flatten().map(Seq))
             .map_err(StoreError::query("last seq"))
+    }
+
+    /// Every op across every file with `seq > since`, oldest first, at most `MAX_OPS_PER_READ` —
+    /// the cross-file analogue of `for_file` (`txtodo bundle export` pages the whole log this
+    /// way, one bounded page at a time, never all of it in memory at once).
+    pub fn ops_page(&self, since: Seq, limit: usize) -> Result<Vec<Stored>, StoreError> {
+        let limit = limit.min(MAX_OPS_PER_READ);
+        let mut stmt = self
+            .conn
+            .prepare_cached(SELECT_PAGE_GLOBAL)
+            .map_err(StoreError::query("prepare ops_page"))?;
+        let rows = stmt
+            .query_map(params![since.0, limit as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .map_err(StoreError::query("query ops_page"))?;
+        collect(rows)
+    }
+
+    /// Every row in the op log, regardless of file (`txtodo bundle export`'s manifest `op_count`).
+    pub fn total_ops(&self) -> Result<u64, StoreError> {
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM ops", [], |r| r.get(0))
+            .map_err(StoreError::query("count ops"))?;
+        Ok(u64::try_from(n).unwrap_or(0))
+    }
+
+    /// Every `op_id` currently in the log, as its raw 16-byte form (`txtodo bundle import`'s
+    /// dedupe set against the UNIQUE `ops.op_id` index — a duplicate from a re-import is skipped,
+    /// never re-inserted). Bounded by `MAX_OP_IDS_FOR_DEDUPE`.
+    pub fn existing_op_ids(&self) -> Result<std::collections::BTreeSet<[u8; 16]>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(SELECT_ALL_OP_IDS)
+            .map_err(StoreError::query("prepare existing_op_ids"))?;
+        let rows = stmt
+            .query_map(params![MAX_OP_IDS_FOR_DEDUPE as i64], |r| {
+                r.get::<_, Vec<u8>>(0)
+            })
+            .map_err(StoreError::query("query existing_op_ids"))?;
+        let mut out = std::collections::BTreeSet::new();
+        for row in rows {
+            let bytes = row.map_err(StoreError::query("read op_id"))?;
+            let id: [u8; 16] = bytes
+                .try_into()
+                .map_err(|v: Vec<u8>| StoreError::BadDevice(v.len()))?;
+            out.insert(id);
+        }
+        debug_assert!(
+            out.len() < MAX_OP_IDS_FOR_DEDUPE,
+            "hit the dedupe read bound"
+        );
+        Ok(out)
     }
 }
 

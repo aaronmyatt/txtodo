@@ -126,6 +126,45 @@ fn reads_filter_by_file_and_order_by_seq_or_hlc() {
 }
 
 #[test]
+fn ops_page_reads_across_files_in_seq_order() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    store
+        .append(&[op(1, 10, 0, "todo.txt"), op(2, 10, 1, "q4/todo.txt")])
+        .unwrap();
+    store.append(&[op(3, 11, 0, "todo.txt")]).unwrap();
+    let page = store.ops_page(Seq(0), 10).unwrap();
+    assert_eq!(
+        page.iter().map(|s| s.seq).collect::<Vec<_>>(),
+        vec![Seq(1), Seq(2), Seq(3)],
+        "every file, seq order"
+    );
+    let rest = store.ops_page(Seq(1), 10).unwrap();
+    assert_eq!(
+        rest.iter().map(|s| s.seq).collect::<Vec<_>>(),
+        vec![Seq(2), Seq(3)]
+    );
+    let bounded = store.ops_page(Seq(0), 1).unwrap();
+    assert_eq!(bounded.len(), 1, "limit is respected");
+}
+
+#[test]
+fn total_ops_and_existing_op_ids_count_every_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    assert_eq!(store.total_ops().unwrap(), 0);
+    assert!(store.existing_op_ids().unwrap().is_empty());
+    store
+        .append(&[op(1, 10, 0, "todo.txt"), op(2, 10, 1, "q4/todo.txt")])
+        .unwrap();
+    assert_eq!(store.total_ops().unwrap(), 2);
+    let ids = store.existing_op_ids().unwrap();
+    assert_eq!(ids.len(), 2);
+    let want: [u8; 16] = Ulid::from_u128(1).to_u128().to_be_bytes();
+    assert!(ids.contains(&want), "op_id 1 is present in its raw form");
+}
+
+#[test]
 fn the_crate_has_no_update_or_delete_statement() {
     let sources = [
         include_str!("../src/lib.rs"),
