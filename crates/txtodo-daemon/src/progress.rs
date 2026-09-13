@@ -24,3 +24,16 @@ impl TxtodoService {
         Ok(progress_of(todo, done))
     }
 }
+
+/// This ref's fresh rule-5 progress for `h`, `None` for a `done.txt`/`notes.md` path (plan M5,
+/// tasks/proto-tree-progress — the same field `ListFiles` carries, used by `server.rs`'s
+/// `forward_changes` to attach it to a `Watch` `Change`).
+pub(crate) async fn watch_progress_of(
+    svc: &TxtodoService,
+    h: &ActorHandle,
+) -> Option<pb::Progress> {
+    if crate::convert::file_kind_of(h.path()) != pb::FileKind::Todo {
+        return None;
+    }
+    svc.progress_for(h).await.ok()
+}

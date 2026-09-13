@@ -15,6 +15,7 @@ use crate::handle::{
 use crate::mirror::Mirror;
 use crate::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
 use crate::state::DocState;
+use crate::tree_dirty::TreeDirty;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
@@ -46,40 +47,11 @@ pub struct ActorConfig {
     pub stats: Arc<crate::stats::Stats>,
     /// How this document establishes task identity (fixed for the workspace's lifetime).
     pub identity_mode: IdentityMode,
+    /// Shared workspace-tree staleness flag (plan M5, `tree.rs`).
+    pub tree_dirty: Arc<TreeDirty>,
 }
 
-/// One persisted change, ready to commit.
-pub(crate) struct Commit {
-    pub(crate) ops: Vec<Op>,
-    pub(crate) next: DocState,
-    pub(crate) bytes: Vec<u8>,
-    pub(crate) write: bool,
-    pub(crate) snapshot: bool,
-    pub(crate) tail: CommitTail,
-}
-
-/// What a commit does besides landing ops and bytes (plan M4 sync paths).
-pub(crate) struct CommitTail {
-    /// needs_review flags to raise with this change.
-    pub(crate) review: Vec<ReviewRow>,
-    /// Feed the ops to the mirror afterwards (false when the mirror already holds them: import).
-    pub(crate) flush: bool,
-    /// Clear this flag in the store transaction (a resolution).
-    pub(crate) clear: Option<(TaskId, u64)>,
-    /// Store the mirror snapshot in the store transaction (an import).
-    pub(crate) persist_mirror: bool,
-}
-
-impl Default for CommitTail {
-    fn default() -> CommitTail {
-        CommitTail {
-            review: Vec::new(),
-            flush: true,
-            clear: None,
-            persist_mirror: false,
-        }
-    }
-}
+pub(crate) use crate::commit::{Commit, CommitTail};
 
 /// The actor.
 pub struct FileActor {
@@ -328,6 +300,7 @@ impl FileActor {
         if write {
             self.write_projection_and_log(new_hash)?;
         }
+        crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
         self.update_mirror_after_commit(snapshot, tail.flush, &ops);
         self.raise_flags(&tail.review);
         let change = self.stored_change(new_hash, range, ops, tail.review);

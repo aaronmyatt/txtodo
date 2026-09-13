@@ -6,12 +6,12 @@ use crate::expected::Hash;
 use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::notes_lookup::TaskLineInfo;
 use crate::notes_state::NotesStateError;
-use crate::refdir::{RefDirError, RefDirInfo};
+use crate::refdir::{RefDirError, RefDirInfo, RefDirQuery};
 use crate::state::{StateError, TaskCounts};
 use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use txtodo_model::{DeviceId, FilePath, Hlc, HlcError, Principal, TaskId};
+use txtodo_model::{DeviceId, FilePath, Hlc, HlcError, Principal, RefTag, TaskId};
 use txtodo_store::{ReviewRow, StoreError, Stored};
 
 /// Mailbox depth per document.
@@ -52,25 +52,7 @@ pub struct Change {
     pub review: Vec<ReviewRow>,
 }
 
-/// Which side a resolution keeps. Closed set; mirrors the wire enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resolution {
-    /// This device's text at flag time.
-    Mine,
-    /// The peer's text at flag time.
-    Theirs,
-    /// What is in the file now; only the flag is cleared.
-    Merged,
-}
-
-/// An open flag with the line its task sits on now (0 when it left the file).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ConflictRow {
-    /// The stored flag.
-    pub row: ReviewRow,
-    /// 1-based line, 0 when the task is no longer in the file.
-    pub line_number: usize,
-}
+pub use crate::conflict_row::{ConflictRow, Resolution};
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
 /// FailedPrecondition; the rest are Internal.
@@ -170,6 +152,11 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<TaskCounts>,
     },
+    /// Every valid `ref:` tag in this document, resolved-id owner included (plan M5, `tree.rs`).
+    RefTags {
+        /// Result channel.
+        reply: oneshot::Sender<Vec<RefTag>>,
+    },
     /// A stream of future changes.
     Subscribe {
         /// Result channel.
@@ -247,6 +234,13 @@ pub enum ActorMsg {
         principal: Principal,
         /// Result channel.
         reply: oneshot::Sender<Result<RefDirInfo, ActorError>>,
+    },
+    /// Read-only `EnsureRefDir`: never writes a tag or directory (`txtodo open`, plan M5).
+    ResolveRefDir {
+        /// The line.
+        task: TaskRef,
+        /// Result channel.
+        reply: oneshot::Sender<Result<RefDirQuery, ActorError>>,
     },
     /// Whether this document currently holds `task_id`, and if so where (plan M5's notes lookup).
     TaskLine {
@@ -385,7 +379,7 @@ impl ActorHandle {
         .await?
     }
 
-    // ensure_ref_dir/rename_ref_dir live in refdir.rs, task_line in notes_lookup.rs (both `impl
-    // ActorHandle` extensions) — moved out purely to keep this file within its line budget;
-    // `ask`/`send` are `pub(crate)` for exactly this sibling-module use.
+    // ensure_ref_dir/rename_ref_dir/resolve_ref_dir/ref_tags (refdir.rs) and task_line
+    // (notes_lookup.rs) are `impl ActorHandle` extensions moved out for the file budget; `ask`/
+    // `send` are `pub(crate)` for exactly that sibling-module use.
 }

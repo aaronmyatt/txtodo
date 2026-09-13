@@ -18,7 +18,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use txtodo_core::{Edit, LineKind};
-use txtodo_model::{Principal, TaskId};
+use txtodo_model::{Principal, RefTag, TaskId};
 
 impl ActorHandle {
     /// Lazy `ref:` creation: the tag and directory in one op batch. Moved out of `handle.rs`
@@ -51,6 +51,13 @@ impl ActorHandle {
             reply,
         })
         .await?
+    }
+
+    /// Read-only counterpart to `ensure_ref_dir`: never writes a tag or a directory
+    /// (`txtodo open`, plan M5).
+    pub async fn resolve_ref_dir(&self, task: TaskRef) -> Result<RefDirQuery, ActorError> {
+        self.ask(|reply| ActorMsg::ResolveRefDir { task, reply })
+            .await?
     }
 }
 
@@ -116,6 +123,20 @@ pub struct RefDirInfo {
     pub slug: String,
     /// Its absolute path on disk.
     pub dir: PathBuf,
+}
+
+/// The read-only answer `resolve_ref_dir` (`refdir_ops.rs`) gives: a line's *existing* `ref:`
+/// slug, or the slug lazy creation would use, and its resolved task id (authoritative even in
+/// sidecar mode, where the text carries no `id:` tag at all — see `txtodo open`,
+/// tasks/cli-ref-commands/notes.md).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefDirQuery {
+    /// The line's resolved id.
+    pub task_id: TaskId,
+    /// The existing or would-be slug.
+    pub slug: String,
+    /// True when the line already carries a `ref:` tag (even a dangling one, rule 9).
+    pub has_ref_tag: bool,
 }
 
 /// Kebab-case slug from a task's plain words (`Task::plain_words`), generate-truncated. Falls
@@ -253,5 +274,31 @@ pub(crate) fn task_view(line: &txtodo_core::OwnedLine) -> Option<txtodo_core::Ta
     match line.parse()?.kind {
         LineKind::Task(t) => Some(t),
         LineKind::Blank => None,
+    }
+}
+
+/// Every valid `ref:` tag in `state`'s task lines, with its owning task's *resolved* id (the
+/// daemon's own identity, sidecar or tagged — never re-parsed off the text, which carries no `id:`
+/// tag at all in sidecar mode). Feeds `tree.rs`'s workspace-tree rebuild (plan M5); an archived
+/// line in `done.txt` still counts (rule 7: archiving keeps the tag).
+pub(crate) fn ref_tags_of(state: &crate::state::DocState) -> Vec<RefTag> {
+    state
+        .task_lines()
+        .filter_map(|(id, line)| {
+            task_view(line)
+                .and_then(|t| t.ref_slug())
+                .map(|slug| RefTag {
+                    owner: id,
+                    slug: slug.to_owned(),
+                })
+        })
+        .collect()
+}
+
+impl ActorHandle {
+    /// Every valid `ref:` tag in this document, with its owning task's resolved id (plan M5's
+    /// workspace tree, `tree.rs`).
+    pub async fn ref_tags(&self) -> Result<Vec<RefTag>, ActorError> {
+        self.ask(|reply| ActorMsg::RefTags { reply }).await
     }
 }

@@ -7,7 +7,7 @@ use crate::handle::{ActorError, ActorMsg};
 use crate::mutation::{self, TaskRef};
 use crate::reconcile::change_ops;
 use crate::refdir::{
-    Claim, MAX_SLUG_COLLISIONS, RefDirError, RefDirInfo, fallback_slug, generate_slug,
+    Claim, MAX_SLUG_COLLISIONS, RefDirError, RefDirInfo, RefDirQuery, fallback_slug, generate_slug,
     ref_tag_edit, slug_taken_in_doc, suffixed, task_view, try_create_dir,
 };
 use crate::state::StateError;
@@ -36,6 +36,14 @@ impl FileActor {
                 reply,
             } => {
                 let _ = reply.send(self.rename_ref_dir(task, new_slug, principal));
+                None
+            }
+            ActorMsg::RefTags { reply } => {
+                let _ = reply.send(crate::refdir::ref_tags_of(&self.state));
+                None
+            }
+            ActorMsg::ResolveRefDir { task, reply } => {
+                let _ = reply.send(self.resolve_ref_dir(task));
                 None
             }
             other => Some(other),
@@ -109,6 +117,35 @@ impl FileActor {
             .map(|t| generate_slug(t.plain_words(), id))
             .unwrap_or_else(|| fallback_slug(id));
         self.claim_new_ref_dir(id, &line, &base, &principal)
+    }
+
+    /// Read-only counterpart to `ensure_ref_dir`: the line's existing `ref:` slug, or the slug
+    /// lazy creation would use — computed the same way, but never committing a tag or touching the
+    /// filesystem (`txtodo open`'s negative-space requirement, tasks/cli-ref-commands/notes.md).
+    pub(crate) fn resolve_ref_dir(&self, task: TaskRef) -> Result<RefDirQuery, ActorError> {
+        let (_, id) = mutation::resolve(&self.state, &task)?;
+        let line = self.state.line_of(id).ok_or(StateError::UnknownTask(id))?;
+        if let Some(slug) = task_view(&line).and_then(|t| t.ref_slug().map(str::to_owned)) {
+            return Ok(RefDirQuery {
+                task_id: id,
+                slug,
+                has_ref_tag: true,
+            });
+        }
+        let base = task_view(&line)
+            .map(|t| generate_slug(t.plain_words(), id))
+            .unwrap_or_else(|| fallback_slug(id));
+        for attempt in 0..=MAX_SLUG_COLLISIONS {
+            let candidate = suffixed(&base, attempt);
+            if !slug_taken_in_doc(&self.state, &candidate, id) {
+                return Ok(RefDirQuery {
+                    task_id: id,
+                    slug: candidate,
+                    has_ref_tag: false,
+                });
+            }
+        }
+        Err(RefDirError::CollisionsExhausted.into())
     }
 
     /// The collision loop `ensure_ref_dir` runs once a slug base is known.

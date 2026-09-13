@@ -99,6 +99,12 @@ fn dispatch_daemon(
             commands::conflicts::run(daemon, action.as_ref(), ctx.json)
         }
         Command::Pair { code } => commands::pair::run(ctx, daemon, code.as_deref()),
+        Command::Open { item } => commands::refdir::run_open(ctx, daemon, item),
+        Command::Notes { item } => commands::refdir::run_notes(daemon, item),
+        Command::Sub { item, cmd } => commands::refdir::run_sub(ctx, daemon, item, cmd),
+        Command::Prune { orphans, yes } => {
+            commands::refdir::run_prune(daemon, *orphans, *yes, ctx.json)
+        }
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -115,7 +121,11 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Undo { .. }
         | Command::Checkout { .. }
         | Command::Conflicts { .. }
-        | Command::Pair { .. } => Err(CliError::Message(format!(
+        | Command::Pair { .. }
+        | Command::Open { .. }
+        | Command::Notes { .. }
+        | Command::Sub { .. }
+        | Command::Prune { .. } => Err(CliError::Message(format!(
             "txtodo: {}",
             commands::history::NEEDS_DAEMON
         ))),

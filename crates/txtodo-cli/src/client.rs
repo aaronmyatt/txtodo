@@ -253,4 +253,61 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
+
+    /// Resolves (`ensure = false`) or lazily creates (`ensure = true`) one line's `ref:`
+    /// directory (plan M5, `open`/`notes`/`sub`).
+    pub fn ref_dir(
+        &mut self,
+        path: &str,
+        task: pb::TaskRef,
+        ensure: bool,
+    ) -> Result<pb::RefDirInfo, ClientError> {
+        let req = pb::RefDirRequest {
+            path: path.to_owned(),
+            task: Some(task),
+            ensure,
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.ref_dir(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// The current `notes.md` bytes for a task's `ref:` directory (plan M5, `notes`).
+    pub fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.get_notes(task))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// Replaces a task's `notes.md` with new text (plan M5, `notes`).
+    pub fn edit_notes(
+        &mut self,
+        req: pb::NotesEditRequest,
+    ) -> Result<pb::ApplyResponse, ClientError> {
+        let rep = self
+            .rt
+            .block_on(self.client.edit_notes(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// Lists `ref:` directories no line points to; deletes them only when `execute` (plan M5,
+    /// `prune --orphans`).
+    pub fn prune_orphans(
+        &mut self,
+        execute: bool,
+    ) -> Result<pb::PruneOrphansResponse, ClientError> {
+        let rep = self
+            .rt
+            .block_on(
+                self.client
+                    .prune_orphans(pb::PruneOrphansRequest { execute }),
+            )
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
 }

@@ -13,5 +13,6 @@ pub mod hygiene;
 pub mod list;
 pub mod mcp;
 pub mod pair;
+pub mod refdir;
 pub mod service;
 pub mod text;

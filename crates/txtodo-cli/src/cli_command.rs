@@ -1,34 +1,10 @@
-//! The `clap` argument grammar: `Cli` (global flags) and `Command` (every subcommand). Split out
-//! of `main.rs` for the file budget; `main.rs` keeps `run`/`dispatch`/`dispatch_daemon`.
+//! The `Command` subcommand enum. Split out of `main.rs` purely to keep that file within its line
+//! budget as commands grow; `main.rs`'s `dispatch`/`dispatch_daemon` still match over it directly.
 
-use crate::commands;
-use clap::{Parser, Subcommand};
-
-/// todo.sh-compatible todo.txt tool. Commands and aliases match todo.sh; line numbers are the ids.
-#[derive(Debug, Parser)]
-#[command(name = "txtodo", version, about)]
-pub struct Cli {
-    /// Todo directory (overrides $TXTODO_TODO_DIR and config `todo_dir`).
-    #[arg(long, global = true, value_name = "DIR")]
-    pub dir: Option<String>,
-    /// Emit one JSON object per line on listing commands.
-    #[arg(long, global = true)]
-    pub json: bool,
-    /// Do not stamp `id:` on added tasks (overrides config `id_tags`).
-    #[arg(long, global = true)]
-    pub no_id: bool,
-    /// Do not archive after `do` (todo.sh -A).
-    #[arg(short = 'A', long, global = true)]
-    pub no_archive: bool,
-    /// Ignore a running daemon and edit the files directly (M2 behaviour).
-    #[arg(long, global = true)]
-    pub no_daemon: bool,
-    #[command(subcommand)]
-    pub command: Command,
-}
+use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
-pub enum Command {
+pub(crate) enum Command {
     /// Add a task: today's date after the priority, then an `id:` tag.
     #[command(visible_alias = "a")]
     Add {
@@ -194,14 +170,7 @@ pub enum Command {
     /// Open needs_review flags and resolve them (daemon mode): `list` (default) or `resolve`.
     Conflicts {
         #[command(subcommand)]
-        action: Option<commands::conflicts::Action>,
-    },
-    /// Pair with another device: no CODE starts a handshake and shows a QR/code; CODE (scanned or
-    /// pasted from the other device) joins it and shows the six-word SAS to compare (daemon mode,
-    /// plan M4, design §4).
-    Pair {
-        /// The other device's offer (from its QR or `txtodo pair`'s own printed text).
-        code: Option<String>,
+        action: Option<crate::commands::conflicts::Action>,
     },
     /// Check socket, watcher, files, clock and config; exit 1 on any failure.
     Doctor {
@@ -212,25 +181,10 @@ pub enum Command {
     /// Manage the txtodod service for this workspace (launchd on macOS, systemd --user on Linux).
     Daemon {
         /// What to do.
-        action: commands::service::Action,
+        action: crate::commands::service::Action,
         /// Overwrite an existing service file on install.
         #[arg(long)]
         force: bool,
-    },
-    /// Serve the Model Context Protocol surface for this workspace (design §6.1).
-    Mcp {
-        /// Serve over stdin/stdout.
-        #[arg(long)]
-        stdio: bool,
-        /// Serve Streamable HTTP on 127.0.0.1:8636/mcp (or 0.0.0.0 with --lan).
-        #[arg(long)]
-        http: bool,
-        /// With --http: bind every interface and advertise _txtodo-mcp._tcp via mDNS.
-        #[arg(long)]
-        lan: bool,
-        /// Attached to every mutation as the agent principal; required with --lan.
-        #[arg(long)]
-        token: Option<String>,
     },
     /// Prints the resolved `ref:` directory for a line; never creates it (daemon mode, rules 2, 9).
     Open {

@@ -28,6 +28,28 @@ pub struct FileInfo {
 pub struct ListFilesResponse {
     #[prost(message, repeated, tag = "1")]
     pub files: ::prost::alloc::vec::Vec<FileInfo>,
+    /// The same files, shaped as a tree of ref: directories with rule-5 progress per node (plan M5,
+    /// tasks/proto-tree-progress). A projection of `files`, not a second source of truth.
+    #[prost(message, optional, tag = "2")]
+    pub tree: ::core::option::Option<TreeNode>,
+}
+/// One node of the workspace tree (plan M5, specs/ref-directories.md rule 2): the workspace root
+/// (dir = "") or a ref: directory. `progress` is rule 5's non-recursive done/total for this node's
+/// own todo.txt + sibling done.txt. `owner_task_id` is the task whose ref: tag points here; empty
+/// for the root and for an orphan (rule 10, `PruneOrphans`). `files` are this node's own rows
+/// (whichever of todo.txt/done.txt/notes.md exist); `children` are its ref: sub-directories.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TreeNode {
+    #[prost(string, tag = "1")]
+    pub dir: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub progress: ::core::option::Option<Progress>,
+    #[prost(string, tag = "3")]
+    pub owner_task_id: ::prost::alloc::string::String,
+    #[prost(message, repeated, tag = "4")]
+    pub files: ::prost::alloc::vec::Vec<FileInfo>,
+    #[prost(message, repeated, tag = "5")]
+    pub children: ::prost::alloc::vec::Vec<TreeNode>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetFileRequest {
@@ -104,6 +126,11 @@ pub struct Change {
     /// flags raised by this change (an import), if any
     #[prost(message, repeated, tag = "4")]
     pub review: ::prost::alloc::vec::Vec<ReviewFlag>,
+    /// This ref's fresh rule-5 progress when `path` is a todo.txt the change could have affected
+    /// (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
+    /// same number `ListFiles` would return for this node right now.
+    #[prost(message, optional, tag = "5")]
+    pub progress: ::core::option::Option<Progress>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ConflictsRequest {
@@ -291,6 +318,49 @@ pub struct NotesEditRequest {
     /// whole-document replacement; the daemon derives the Loro text ops
     #[prost(string, tag = "2")]
     pub new_text: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefDirRequest {
+    #[prost(string, tag = "1")]
+    pub path: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub task: ::core::option::Option<TaskRef>,
+    /// false = read-only resolve; true = lazily create like the first write would
+    #[prost(bool, tag = "3")]
+    pub ensure: bool,
+}
+/// A line's ref: directory, resolved or (with `ensure`) created.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefDirInfo {
+    /// resolved ULID, authoritative even in sidecar mode (no id: tag in text)
+    #[prost(string, tag = "1")]
+    pub task_id: ::prost::alloc::string::String,
+    /// the existing tag's slug, or the slug creation would/did use
+    #[prost(string, tag = "2")]
+    pub slug: ::prost::alloc::string::String,
+    /// workspace-relative directory path for that slug
+    #[prost(string, tag = "3")]
+    pub dir: ::prost::alloc::string::String,
+    /// true when the line already carries a ref: tag (even if dangling)
+    #[prost(bool, tag = "4")]
+    pub has_ref_tag: bool,
+    /// true when `dir` is present on disk (after this call, if `ensure`)
+    #[prost(bool, tag = "5")]
+    pub dir_exists: bool,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PruneOrphansRequest {
+    #[prost(bool, tag = "1")]
+    pub execute: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PruneOrphansResponse {
+    /// workspace-relative orphan directories found
+    #[prost(string, repeated, tag = "1")]
+    pub dirs: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// true when `dirs` were actually deleted (echoes the request)
+    #[prost(bool, tag = "2")]
+    pub executed: bool,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairOfferRequest {}
@@ -796,6 +866,55 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "EditNotes"));
             self.inner.unary(req, path, codec).await
         }
+        /// Resolves (or, with `ensure`, lazily creates) one line's ref: directory (plan M5, specs
+        /// rules 2, 4, 9). Read-only when `ensure` is false — never creates a tag or a directory
+        /// (`txtodo open`'s negative-space requirement); with `ensure` true, mints a tag+directory on
+        /// a ref-less line exactly like the first notes.md/sub-list write would. Also resolves the
+        /// line's authoritative task id, which sidecar-mode text never carries.
+        pub async fn ref_dir(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RefDirRequest>,
+        ) -> std::result::Result<tonic::Response<super::RefDirInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/txtodo.v1.Txtodo/RefDir");
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "RefDir"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Lists workspace directories no `ref:` tag points to (rule 10); deletes them only when
+        /// `execute` is set. `txtodo prune --orphans` (list) / `--orphans --yes` (execute).
+        pub async fn prune_orphans(
+            &mut self,
+            request: impl tonic::IntoRequest<super::PruneOrphansRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PruneOrphansResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/PruneOrphans",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "PruneOrphans"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -1053,6 +1172,24 @@ pub mod txtodo_server {
             &self,
             request: tonic::Request<super::NotesEditRequest>,
         ) -> std::result::Result<tonic::Response<super::ApplyResponse>, tonic::Status>;
+        /// Resolves (or, with `ensure`, lazily creates) one line's ref: directory (plan M5, specs
+        /// rules 2, 4, 9). Read-only when `ensure` is false — never creates a tag or a directory
+        /// (`txtodo open`'s negative-space requirement); with `ensure` true, mints a tag+directory on
+        /// a ref-less line exactly like the first notes.md/sub-list write would. Also resolves the
+        /// line's authoritative task id, which sidecar-mode text never carries.
+        async fn ref_dir(
+            &self,
+            request: tonic::Request<super::RefDirRequest>,
+        ) -> std::result::Result<tonic::Response<super::RefDirInfo>, tonic::Status>;
+        /// Lists workspace directories no `ref:` tag points to (rule 10); deletes them only when
+        /// `execute` is set. `txtodo prune --orphans` (list) / `--orphans --yes` (execute).
+        async fn prune_orphans(
+            &self,
+            request: tonic::Request<super::PruneOrphansRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::PruneOrphansResponse>,
+            tonic::Status,
+        >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         async fn pair_offer(
             &self,
@@ -1688,6 +1825,94 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = EditNotesSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/RefDir" => {
+                    #[allow(non_camel_case_types)]
+                    struct RefDirSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::RefDirRequest>
+                    for RefDirSvc<T> {
+                        type Response = super::RefDirInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RefDirRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::ref_dir(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = RefDirSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/PruneOrphans" => {
+                    #[allow(non_camel_case_types)]
+                    struct PruneOrphansSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::PruneOrphansRequest>
+                    for PruneOrphansSvc<T> {
+                        type Response = super::PruneOrphansResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::PruneOrphansRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::prune_orphans(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = PruneOrphansSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

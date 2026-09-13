@@ -7,8 +7,8 @@ use prost::Message;
 use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
     Edit, FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
-    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, TaskRef, UndoRequest,
-    WatchRequest, mutation,
+    HistoryResponse, ListFilesResponse, Move, Mutation, OpSummary, Progress, TaskRef, TreeNode,
+    UndoRequest, WatchRequest, mutation,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -77,13 +77,21 @@ fn responses_and_streams_round_trip() {
         task_id: String::new(),
         summary: "buy ducks".into(),
     };
+    let file = FileInfo {
+        path: "todo.txt".into(),
+        hash: vec![1; 32],
+        kind: FileKind::Todo as i32,
+        progress: Some(Progress { done: 1, total: 3 }),
+    };
     round_trip(&ListFilesResponse {
-        files: vec![FileInfo {
-            path: "todo.txt".into(),
-            hash: vec![1; 32],
-            kind: FileKind::Todo as i32,
+        files: vec![file.clone()],
+        tree: Some(TreeNode {
+            dir: String::new(),
             progress: Some(Progress { done: 1, total: 3 }),
-        }],
+            owner_task_id: String::new(),
+            files: vec![file],
+            children: Vec::new(),
+        }),
     });
     round_trip(&FileContents {
         path: "todo.txt".into(),
@@ -95,6 +103,7 @@ fn responses_and_streams_round_trip() {
         hash: vec![3; 32],
         ops: vec![op.clone()],
         review: Vec::new(),
+        progress: Some(Progress { done: 1, total: 3 }),
     });
     round_trip(&HistoryResponse { ops: vec![op] });
     round_trip(&ApplyResponse {

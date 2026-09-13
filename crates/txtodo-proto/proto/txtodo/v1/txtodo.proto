@@ -35,6 +35,16 @@ service Txtodo {
   // the task's `ref:` tag) on the first edit when neither exists yet (plan §3.2.4).
   rpc EditNotes(NotesEditRequest) returns (ApplyResponse);
 
+  // Resolves (or, with `ensure`, lazily creates) one line's ref: directory (plan M5, specs
+  // rules 2, 4, 9). Read-only when `ensure` is false — never creates a tag or a directory
+  // (`txtodo open`'s negative-space requirement); with `ensure` true, mints a tag+directory on
+  // a ref-less line exactly like the first notes.md/sub-list write would. Also resolves the
+  // line's authoritative task id, which sidecar-mode text never carries.
+  rpc RefDir(RefDirRequest) returns (RefDirInfo);
+  // Lists workspace directories no `ref:` tag points to (rule 10); deletes them only when
+  // `execute` is set. `txtodo prune --orphans` (list) / `--orphans --yes` (execute).
+  rpc PruneOrphans(PruneOrphansRequest) returns (PruneOrphansResponse);
+
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
@@ -78,7 +88,25 @@ message FileInfo {
   Progress progress = 4;
 }
 
-message ListFilesResponse { repeated FileInfo files = 1; }
+message ListFilesResponse {
+  repeated FileInfo files = 1;
+  // The same files, shaped as a tree of ref: directories with rule-5 progress per node (plan M5,
+  // tasks/proto-tree-progress). A projection of `files`, not a second source of truth.
+  TreeNode tree = 2;
+}
+
+// One node of the workspace tree (plan M5, specs/ref-directories.md rule 2): the workspace root
+// (dir = "") or a ref: directory. `progress` is rule 5's non-recursive done/total for this node's
+// own todo.txt + sibling done.txt. `owner_task_id` is the task whose ref: tag points here; empty
+// for the root and for an orphan (rule 10, `PruneOrphans`). `files` are this node's own rows
+// (whichever of todo.txt/done.txt/notes.md exist); `children` are its ref: sub-directories.
+message TreeNode {
+  string dir = 1;
+  Progress progress = 2;
+  string owner_task_id = 3;
+  repeated FileInfo files = 4;
+  repeated TreeNode children = 5;
+}
 
 message GetFileRequest { string path = 1; }
 
@@ -116,6 +144,10 @@ message Change {
   bytes hash = 2;
   repeated OpSummary ops = 3;
   repeated ReviewFlag review = 4;   // flags raised by this change (an import), if any
+  // This ref's fresh rule-5 progress when `path` is a todo.txt the change could have affected
+  // (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
+  // same number `ListFiles` would return for this node right now.
+  Progress progress = 5;
 }
 
 message ConflictsRequest { string path = 1; }
@@ -218,6 +250,30 @@ message NotesDoc {
 message NotesEditRequest {
   TaskRef task = 1;        // the line whose ref: directory owns the notes.md
   string new_text = 2;     // whole-document replacement; the daemon derives the Loro text ops
+}
+
+// --- ref: directories (plan M5, specs/ref-directories.md) ---
+
+message RefDirRequest {
+  string path = 1;
+  TaskRef task = 2;
+  bool ensure = 3;   // false = read-only resolve; true = lazily create like the first write would
+}
+
+// A line's ref: directory, resolved or (with `ensure`) created.
+message RefDirInfo {
+  string task_id = 1;     // resolved ULID, authoritative even in sidecar mode (no id: tag in text)
+  string slug = 2;        // the existing tag's slug, or the slug creation would/did use
+  string dir = 3;         // workspace-relative directory path for that slug
+  bool has_ref_tag = 4;   // true when the line already carries a ref: tag (even if dangling)
+  bool dir_exists = 5;    // true when `dir` is present on disk (after this call, if `ensure`)
+}
+
+message PruneOrphansRequest { bool execute = 1; }
+
+message PruneOrphansResponse {
+  repeated string dirs = 1;   // workspace-relative orphan directories found
+  bool executed = 2;          // true when `dirs` were actually deleted (echoes the request)
 }
 
 // --- pairing (plan M4, design §4) ---
