@@ -41,18 +41,14 @@ impl TxtodoService {
         TxtodoService { ws }
     }
 
-    // pub(crate), not private: sibling modules (pairing_grpc.rs, tokens.rs, activity.rs, progress.rs)
-    // need read access to the workspace. Every RPC body in this file's trait impl is untouched.
+    // pub(crate): sibling modules (pairing_grpc, tokens, activity, progress) read the workspace.
     pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
         self.ws
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// The raw `SharedWorkspace` handle, for a sibling module that needs to hand it to a spawned
-    /// background task rather than a bounded-lifetime read guard — `pairing_grpc.rs`'s
-    /// `pair_accept_impl` hands this to `pairing_lan::spawn_joiner`, the same way
-    /// `forward_changes`'s own spawned tasks already do from inside this file.
+    /// The raw `SharedWorkspace`, for a spawned task (`pairing_lan::spawn_joiner`).
     pub(crate) fn shared_workspace(&self) -> SharedWorkspace {
         Arc::clone(&self.ws)
     }
@@ -342,6 +338,13 @@ impl Txtodo for TxtodoService {
         r: Request<pb::PairConfirmRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
         self.pair_confirm_sas_impl(r).await
+    }
+
+    async fn pair_await_peer(
+        &self,
+        r: Request<pb::PairAwaitPeerRequest>,
+    ) -> Result<Response<pb::PairResult>, Status> {
+        self.pair_await_peer_impl(r).await
     }
 
     async fn token_create(

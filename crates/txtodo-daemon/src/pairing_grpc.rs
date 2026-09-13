@@ -88,6 +88,22 @@ impl TxtodoService {
         let sas = ws.pairing().confirm_local(now_ms).map_err(pairing_status)?;
         Ok(Response::new(pb::PairResult { sas: words(&sas) }))
     }
+
+    /// Initiator only: polls whether a joiner's `PairAccept` has reached this device yet over the
+    /// real LAN transport (`pairing_lan.rs`, plan M4 `sync-pairing`'s LAN wiring pass). Never
+    /// blocks: `PairResult.sas` empty means "no peer yet, call again"; non-empty means the
+    /// handshake completed and this is the real SAS to show and confirm.
+    pub(crate) async fn pair_await_peer_impl(
+        &self,
+        _r: Request<pb::PairAwaitPeerRequest>,
+    ) -> Result<Response<pb::PairResult>, Status> {
+        let ws = self.workspace();
+        let now_ms = ws.clock().now_ms();
+        let sas = ws.pairing().sas_if_ready(now_ms).map_err(pairing_status)?;
+        Ok(Response::new(pb::PairResult {
+            sas: sas.map(|s| words(&s)).unwrap_or_default(),
+        }))
+    }
 }
 
 /// The SAS as the space-joined text `PairResult.sas` carries.

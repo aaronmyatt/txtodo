@@ -365,6 +365,26 @@ impl PairingRegistry {
         active_mut(&mut inner.active, now_ms).ok()?.peer_static
     }
 
+    /// The SAS once this device's active pairing (as initiator) has handshaken with a peer, or
+    /// `None` while still waiting for one to arrive over the network (`pairing_lan.rs`). Any other
+    /// pairing state (no pairing active, window expired, wrong role) is a real error —
+    /// `pair_await_peer_impl` only wants "still waiting" to be silent, not "nothing is happening
+    /// at all".
+    pub(crate) fn sas_if_ready(
+        &self,
+        now_ms: u64,
+    ) -> Result<Option<[&'static str; SAS_WORD_COUNT]>, PairingStateError> {
+        let mut inner = self.lock();
+        let active = active_mut(&mut inner.active, now_ms)?;
+        if active.role != Role::Initiator {
+            return Err(PairingStateError::WrongRole);
+        }
+        if !active.session.is_handshaken() {
+            return Ok(None);
+        }
+        Ok(Some(active.session.sas_words()?))
+    }
+
     /// Whether *this* device's own human has confirmed the SAS yet — read by the joiner's
     /// background relay task (`pairing_lan.rs`) on every retry so a `JoinerHello.confirmed` always
     /// reflects the current, real state rather than a value captured once at the start of pairing.
