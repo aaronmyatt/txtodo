@@ -78,7 +78,11 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   connection, accepts that same stream) both return `IrohLink`. `IrohLink` implements `Link`
   synchronously by `block_on`-ing the async stream ops on a captured `tokio::runtime::Handle` — it
   must run on a dedicated driver thread (`spawn_blocking`, never a plain tokio task), matching
-  `Link`'s own "one link, one driver" contract. `LanError` names what failed. `iroh` appears only in
+  `Link`'s own "one link, one driver" contract. `recv()` reports `LinkError::Closed` after
+  `IDLE_TIMEOUT` (750 ms) of silence too, not only on a real close — by design, so a caller (the
+  daemon) is expected to run short-lived sessions and redial periodically rather than hold one
+  connection open for a whole pairing's lifetime; see Invariants. `LanError` names what failed.
+  `iroh` appears only in
   this file and `endpoint.rs`; `txtodo-daemon` never names an `iroh` type (check
   `.claude/budgets.json`'s `allowedDeps`).
 - Not here yet: the `devices` table (persisting each peer's `DeviceStaticPublic` — this crate only
@@ -148,6 +152,13 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   learns the other side is gone rather than blocking forever. `IrohLink::send`/`recv` block a
   dedicated driver thread on a captured `tokio::runtime::Handle`; calling either from a plain tokio
   task (rather than `spawn_blocking`) would starve the runtime, not just this one link.
+- `IrohLink::recv`'s `IDLE_TIMEOUT` (750 ms) makes every LAN session short-lived by design: once
+  both sides go quiet the link reports `Closed` and the daemon's periodic redial opens a fresh one,
+  which is what lets a local edit made *after* an earlier sync round still converge quickly without
+  this crate needing any "watch the store for changes" plumbing of its own. The tradeoff — a new
+  QUIC handshake roughly every second for as long as two daemons stay paired and on the same LAN —
+  is a known cost of this M4-scoped design, flagged for a human: a push/notify model would avoid it
+  but is real additional work, not attempted this pass.
 - `LanEndpoint::connect` prefers non-loopback candidate addresses, falling back to loopback only
   when nothing else was advertised (real two-process testing on one host sometimes resolves only a
   loopback address for a peer before its real interface address is known — refusing it outright

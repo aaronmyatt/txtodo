@@ -153,7 +153,10 @@ impl LanEndpoint {
 /// synchronous (the `Link` trait's own shape — see `link.rs`'s module doc on why: `Session` stays
 /// testable without an executor), so this struct blocks a dedicated driver thread on the tokio
 /// `Handle` it was built with; nothing here may run on a tokio worker thread directly, or blocking
-/// would starve the runtime's other tasks.
+/// would starve the runtime's other tasks. `recv` reports [`LinkError::Closed`] after
+/// [`IDLE_TIMEOUT`] of silence, not just on a real close — see its doc for why a caller should
+/// expect (and periodically redial through) short-lived sessions rather than one connection
+/// staying open for a whole pairing's lifetime.
 pub struct IrohLink {
     /// Kept alive so the stream's in-flight data is not torn down early (same reasoning as
     /// `endpoint_tests.rs`'s comment on why both connection handles must outlive the exchange).
@@ -168,6 +171,13 @@ pub struct IrohLink {
 /// Largest chunk read from the stream at once; bounds `inbox`'s growth between frame boundaries
 /// the same way every other wire buffer in this crate is capped.
 const READ_CHUNK_BYTES: usize = 64 * 1024;
+
+/// How long `recv` waits for new bytes before treating the link as idle and reporting
+/// [`LinkError::Closed`] — the same outcome as a real close, so a caller driving a session over
+/// this link ends it the same way either way. This bounds a session's lifetime once both sides go
+/// quiet, so a periodic redial can open a fresh connection and pick up state that changed locally
+/// after this one went idle, instead of one connection holding its slot forever.
+const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(750);
 
 impl IrohLink {
     fn new(
@@ -206,10 +216,12 @@ impl Link for IrohLink {
                 Err(other) => return Err(LinkError::Frame(other)),
             }
             let mut chunk = [0u8; READ_CHUNK_BYTES];
-            match self.handle.block_on(self.recv.read(&mut chunk)) {
-                Ok(Some(n)) => self.inbox.extend_from_slice(&chunk[..n]),
-                Ok(None) => return Err(LinkError::Closed),
-                Err(e) => return Err(LinkError::Io(e.to_string())),
+            let read = tokio::time::timeout(IDLE_TIMEOUT, self.recv.read(&mut chunk));
+            match self.handle.block_on(read) {
+                Ok(Ok(Some(n))) => self.inbox.extend_from_slice(&chunk[..n]),
+                Ok(Ok(None)) => return Err(LinkError::Closed),
+                Ok(Err(e)) => return Err(LinkError::Io(e.to_string())),
+                Err(_elapsed) => return Err(LinkError::Closed),
             }
         }
     }
