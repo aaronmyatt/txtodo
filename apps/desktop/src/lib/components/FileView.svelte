@@ -23,6 +23,8 @@
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import { idTagsHidden, idTagsVisible, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
 	import type { EditRequest } from "$lib/todotxt/editRequest";
+	import { canEnterRawMode, computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
+	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import type { DetailParams } from "$lib/types";
 	import EditPopover from "./EditPopover.svelte";
 
@@ -55,22 +57,65 @@
 	let addLineValue = $state("");
 	let loadError = $state("");
 
+	// Raw mode (tasks/desktop-raw-mode, plan §3.2/§7): the whole document becomes an editable
+	// buffer on Cmd/Ctrl+E; see rawMode.ts for why exit submits a line-level delta rather than a
+	// whole-string replace. `raw` is per-`FileView`-instance state, never carried across a `path`
+	// swap (breadcrumb nav re-renders this same instance with a new `path` — see the `$effect`
+	// below) or across an unmount — both are handled explicitly rather than left to fall out of
+	// Svelte's own component teardown, per notes.md's "never carry an unsaved raw buffer across
+	// file switches" invariant.
+	let raw = $state(false);
+	let rawBaseline = "";
+	// Pending needs_review flags for this instance's own `path` (design §4.7's store, already fed
+	// by `ConflictBanner`'s `Watch` subscription) — read here only to refuse *entering* raw mode
+	// while one is showing (notes.md: "the document in raw mode is the reconciled projection").
+	const hasPendingReview = $derived(flagsForPath($pendingConflicts, path).length > 0);
+
 	// Per-instance reconfigurable slots (never shared across FileView instances — see
 	// $lib/todotxt/decorations.ts) so toggling "show id: tags" or refreshing ref: progress is a
 	// cheap dispatch, not a full document rebuild.
 	const idTagsCompartment = new Compartment();
 	const lineDecoCompartment = new Compartment();
+	const editableCompartment = new Compartment();
+	// `EditorView.editorAttributes` (not `contentAttributes`) so `data-raw` lands on the whole
+	// `.cm-editor` box — the element the visible border/background style below targets.
+	const rawAttrCompartment = new Compartment();
 
 	function initialExtensions() {
 		return [
 			lineNumbers(),
 			EditorView.lineWrapping,
-			EditorView.editable.of(false),
-			EditorState.readOnly.of(true),
+			editableCompartment.of([EditorView.editable.of(false), EditorState.readOnly.of(true)]),
+			rawAttrCompartment.of(EditorView.editorAttributes.of({})),
 			// `Mod-Enter` (Cmd+Enter on macOS, Ctrl+Enter elsewhere — CM6's own convention:
 			// https://codemirror.net/docs/ref/#commands) is the keyboard equivalent of a
 			// double-click, both opening the detail view for the line under the caret (plan §3.2).
-			keymap.of([{ key: "Mod-Enter", run: openDetailAtSelection }, ...defaultKeymap]),
+			// `Mod-e` toggles raw mode (https://codemirror.net/docs/ref/#view.keymap); `Mod-s`
+			// commits it (`e.preventDefault` happens implicitly — a bound key returning `true`
+			// stops CM6 from letting the browser's own Save dialog see it, per `keymap`'s docs).
+			// `Escape` discards it — everywhere else Escape is unbound today, so this never shadows
+			// another command.
+			keymap.of([
+				{ key: "Mod-Enter", run: openDetailAtSelection },
+				{ key: "Mod-e", run: toggleRaw },
+				{
+					key: "Mod-s",
+					run: () => {
+						if (!raw) return false;
+						commitRaw();
+						return true;
+					}
+				},
+				{
+					key: "Escape",
+					run: () => {
+						if (!raw) return false;
+						discardRaw();
+						return true;
+					}
+				},
+				...defaultKeymap
+			]),
 			todotxtLanguage,
 			mainViewBaseTheme,
 			idTagsCompartment.of(idTagsHidden), // hidden by default — §3.1
@@ -80,7 +125,15 @@
 				mouseleave: () => {
 					hoveredLine = null;
 				},
-				dblclick: handleDblClick
+				dblclick: handleDblClick,
+				// Blur commits (notes.md: "on blur or Cmd/Ctrl+S the buffer goes through the
+				// reconciler"). CM6's `blur` domEventHandler fires on the real DOM blur of the
+				// content element, i.e. focus actually left the editor — not on the transient focus
+				// shuffles a single click within it can cause.
+				blur: () => {
+					if (raw) commitRaw();
+					return false;
+				}
 			})
 		];
 	}
@@ -114,6 +167,80 @@
 		const containerTop = containerEl?.getBoundingClientRect().top ?? 0;
 		hoveredLine = { number: line.number, top: (coords?.top ?? 0) - containerTop };
 		return false;
+	}
+
+	/** Reconfigures the CM6 compartments only — never touches `raw` itself, so both `enterRaw` and
+	 * the two exit paths (`commitRaw`/`discardRaw`) can share it. */
+	function setRawVisuals(on: boolean) {
+		if (!view) return;
+		view.dispatch({
+			effects: [
+				editableCompartment.reconfigure([EditorView.editable.of(on), EditorState.readOnly.of(!on)]),
+				rawAttrCompartment.reconfigure(EditorView.editorAttributes.of(on ? { "data-raw": "true" } : {}))
+			]
+		});
+	}
+
+	function enterRaw() {
+		if (!view) return;
+		rawBaseline = view.state.doc.toString();
+		raw = true;
+		setRawVisuals(true);
+		view.focus();
+	}
+
+	/** `Mod-e`'s keymap `run`: refuses to enter while a conflict is pending (notes.md); toggling
+	 * off is exactly a commit, so pressing `Mod-e` again is equivalent to blur/Cmd-S. */
+	function toggleRaw(): boolean {
+		if (!view) return false;
+		if (raw) {
+			commitRaw();
+		} else {
+			if (!canEnterRawMode(hasPendingReview)) return true; // refuse; swallow the keystroke
+			enterRaw();
+		}
+		return true;
+	}
+
+	/** Esc: discards (notes.md — no `Apply`, no op-log entry), reverting the buffer to the
+	 * baseline it started from. */
+	function discardRaw() {
+		if (!view || !raw) return;
+		if (view.state.doc.toString() !== rawBaseline) {
+			view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: rawBaseline } });
+		}
+		setRawVisuals(false);
+		raw = false;
+	}
+
+	/** Computes the delta and applies it via the exact same `Apply` path every other edit in this
+	 * app uses (see rawMode.ts's module doc) — never a whole-string write, never a second write
+	 * path. A no-op save short-circuits before even building a delta. */
+	async function submitRawEdit(targetPath: string, baseline: string, next: string): Promise<void> {
+		if (isNoOpSave(baseline, next)) return;
+		const mutations = computeDelta(baseline, next);
+		if (mutations.length === 0) return;
+		await applyMutations(targetPath, mutations);
+		// The daemon's own `Change` for `targetPath` repaints the (now read-only) view via
+		// `refreshDoc` below — no manual repaint here, same convention `saveLocalEdit` follows.
+	}
+
+	/** Blur/Cmd-S/toggle-off: commits raw mode's buffer against *this* instance's current `path`.
+	 * (The file-switch `$effect` below calls `submitRawEdit` directly instead, against the path
+	 * being left, since by the time it runs `path` already holds the destination.) */
+	async function commitRaw(): Promise<void> {
+		if (!view || !raw) return;
+		const targetPath = path;
+		const baseline = rawBaseline;
+		const next = view.state.doc.toString();
+		setRawVisuals(false);
+		raw = false;
+		try {
+			await submitRawEdit(targetPath, baseline, next);
+		} catch (e) {
+			loadError = String(e);
+			await refreshDoc(); // re-sync from the daemon rather than leave a possibly-stale view
+		}
 	}
 
 	/** The raw line text and a `TaskRef` for the currently hovered line, or `null`. */
@@ -162,6 +289,13 @@
 	 */
 	async function refreshDoc() {
 		if (!view) return;
+		// Raw mode owns the buffer while it's open — a concurrent `Watch` change (another device,
+		// or the file watcher) must never silently overwrite the human's in-progress edit
+		// (notes.md: "never silently overwritten"). The conflict banner (a sibling component, fed
+		// by the same `Watch` stream) still shows any `needs_review` flag the change raised; this
+		// guard only holds off the *document* repaint until the raw buffer itself has been
+		// committed or discarded.
+		if (raw) return;
 		try {
 			const contents = await getFile(path);
 			loadError = "";
@@ -213,6 +347,14 @@
 
 	onDestroy(() => {
 		unlistenChange?.();
+		// Best-effort, fire-and-forget commit (same pattern `setMainPopoverDirty`'s doc comment
+		// describes): a raw buffer must never just vanish with the component (notes.md "never
+		// carry an unsaved raw buffer across file switches" — an unmount going back to the root
+		// view is a switch too). The `Apply` call outlives the component; nothing here awaits it,
+		// since `onDestroy` can't block teardown.
+		if (raw && view) {
+			submitRawEdit(path, rawBaseline, view.state.doc.toString()).catch(() => {});
+		}
 		view?.destroy();
 	});
 
@@ -223,10 +365,35 @@
 	let mountedPath = path;
 	$effect(() => {
 		if (path !== mountedPath && view) {
+			const oldPath = mountedPath;
+			const newPath = path;
 			mountedPath = path;
-			view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(path), filesByPath)) });
-			refreshDoc();
-			watchPaths([path]);
+
+			// Raw mode is per-instance, per-file state — commit (or, if unchanged, no-op) the
+			// outgoing file's buffer *before* this instance starts showing `newPath`, so it is
+			// never carried across the switch (notes.md's explicit invariant). This mirrors
+			// `commitRaw` but targets `oldPath`, since by the time this effect runs `path` (and
+			// hence a plain `commitRaw()` call) already means the destination, not the file the
+			// buffer belongs to.
+			const wasRaw = raw;
+			const baseline = rawBaseline;
+			const bufferAtSwitch = wasRaw && view ? view.state.doc.toString() : "";
+			if (wasRaw) {
+				setRawVisuals(false);
+				raw = false;
+			}
+			const settle = wasRaw
+				? submitRawEdit(oldPath, baseline, bufferAtSwitch).catch((e) => {
+						loadError = String(e);
+					})
+				: Promise.resolve();
+
+			settle.then(() => {
+				if (!view) return;
+				view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(newPath), filesByPath)) });
+				refreshDoc();
+				watchPaths([newPath]);
+			});
 		}
 	});
 </script>
@@ -237,6 +404,21 @@
 			<input type="checkbox" checked={showIdTags} onchange={toggleIdTags} />
 			Show <code>id:</code> tags
 		</label>
+		<!-- Raw mode badge (plan §3.3 accessibility floor: colour is never the only signal — see
+		     the `[data-raw]` border/background rule below for the other half of that). `aria-pressed`
+		     mirrors `raw` for a screen reader; the button is a second, pointer-reachable way to
+		     toggle raw mode alongside `Mod-e`, disabled while a conflict must be resolved first. -->
+		<button
+			type="button"
+			class="raw-toggle"
+			class:active={raw}
+			aria-pressed={raw}
+			disabled={!raw && hasPendingReview}
+			title={!raw && hasPendingReview ? "Resolve the pending conflict before editing raw" : "Toggle raw mode (Mod-E)"}
+			onclick={toggleRaw}
+		>
+			{raw ? "Raw mode: on" : "Raw mode"}
+		</button>
 		{#if loadError}
 			<span class="error" role="alert">{loadError}</span>
 		{/if}
@@ -304,6 +486,35 @@
 
 	.error {
 		color: #b91c1c;
+	}
+
+	.raw-toggle {
+		font-size: 0.8rem;
+		border: 1px solid #d1d5db;
+		border-radius: 999px;
+		background: transparent;
+		padding: 0.15rem 0.6rem;
+		cursor: pointer;
+	}
+
+	.raw-toggle.active {
+		border-color: #b45309;
+		background: #fef3c7;
+		font-weight: 600;
+	}
+
+	.raw-toggle:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	/* Raw mode's visible state (plan §3.3: colour is never the only signal) — border *and*
+	   background change together, matched by `.raw-toggle.active` above and the `aria-pressed`
+	   badge for anyone not relying on colour/shape at all. `:global` since CM6 owns this element's
+	   markup, not this component's own template. */
+	.editor-wrap :global(.cm-editor[data-raw]) {
+		border: 2px solid #b45309;
+		background: #fffbeb;
 	}
 
 	.editor-wrap {
