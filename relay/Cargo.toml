@@ -1,0 +1,18 @@
+[package]
+name = "relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Reference relay: stores ciphertext blobs it can't read, forwards push wake-ups (M8, design §4.5)."
+
+[[bin]]
+name = "relay"
+path = "src/main.rs"
+
+# Deliberately zero `txtodo-*` dependencies — see tests/no_txtodo_deps.rs. The relay is
+# untrusted (design §4.6): it must never be able to parse or decrypt what it stores.
+
+[lints]
+workspace = true
