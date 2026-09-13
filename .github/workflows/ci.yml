@@ -25,6 +25,14 @@ jobs:
       # https://github.com/dtolnay/rust-toolchain
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      # Install system packages needed to build glib-sys on Linux runners
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev pkg-config
+
       - name: format
         run: cargo fmt --all --check
       # Windows has no unix-domain sockets (ADR 0010), so the CLI's daemon client and the whole
@@ -64,14 +72,18 @@ jobs:
           echo "changed lines: $N (max $MAX)"; [ "$N" -le "$MAX" ]
 
   daemon:
-    # The daemon owns real unix sockets and spawns txtodod. Its integration tests are slow and
-    # timing-sensitive (a debug txtodod adopts and stamps 10k lines before it binds), so they run
-    # alone on Linux with room to breathe instead of inside the 3-OS matrix.
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+
+      # Install system packages needed to build glib-sys on the daemon job too
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev pkg-config
+
       - uses: Swatinem/rust-cache@v2
       - name: daemon tests
         run: cargo test -p txtodo-daemon
