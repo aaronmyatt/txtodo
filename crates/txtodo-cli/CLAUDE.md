@@ -11,7 +11,15 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
-  `doctor [--verbose]` (five checks, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`.
+  `doctor [--verbose]` (five checks, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`;
+  `pair [CODE]` (plan M4, design §4): no `CODE` starts a handshake as the initiator (renders the QR
+  and text code from `PairOffer`); `CODE` joins as the joiner (`PairAccept`, real SAS, an explicit
+  typed "yes" before `PairConfirmSas` — never a default yes). Refuses a detected `identity_mode`
+  mismatch against a non-empty joining workspace (docs/questions.md Q6, still open) instead of
+  guessing a merge. The daemon-to-daemon leg (a joiner's key reaching the initiator, the sealed
+  group key reaching the joiner back) has no transport yet, so the initiator cannot show a
+  completed SAS and the joiner's confirmed pairing cannot receive the real group key today — both
+  say so plainly (`commands::pair`'s own module doc).
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `url_schemes`) at `$TXTODO_CONFIG`,
@@ -22,7 +30,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `commands::{add, list, edit, archive, text, fileops, hygiene,
-  history, doctor, service}`; `main` = `dispatch` (direct) and `dispatch_daemon`.
+  history, doctor, service, conflicts, env, pair}`; `main` = `dispatch` (direct) and
+  `dispatch_daemon`. `commands::env` and `commands::pair` are split out of `main.rs` (rather than
+  left inline, like every other dispatched command) purely for `main.rs`'s own file-length budget.
 
 ## Invariants
 - Writes are atomic: temp file beside the target, fsync, rename. Untouched lines round-trip
@@ -41,4 +51,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   mode reuses this same direct-mode `add` against its scratch copy, so the same default applies
   there too; the daemon mints its own id regardless of what the text does or doesn't carry).
   `Env`, today and ULIDs enter at `main`; command logic takes values.
+- `pair`'s SAS confirmation reads one stdin line and requires an explicit "y"/"yes"
+  (case-insensitive); anything else, including EOF, is a refusal — it never defaults to yes
+  (`tasks/sync-pairing/notes.md`'s "Confirmation must be mutual").
 - May depend only on: txtodo-core, txtodo-proto.
