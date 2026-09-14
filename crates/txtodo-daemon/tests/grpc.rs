@@ -74,6 +74,7 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
         path: "todo.txt".into(),
         mutations: vec![add(line)],
         agent: None,
+        workspace: None,
     };
     client
         .apply(req)
@@ -86,6 +87,7 @@ async fn get_todo(client: &mut Client) -> Vec<u8> {
     client
         .get_file(pb::GetFileRequest {
             path: "todo.txt".into(),
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("get: {e}"))
@@ -100,7 +102,7 @@ async fn list_apply_watch_and_get_over_the_socket() {
     let (mut client, _stop) = serve(dir.path()).await;
 
     let files = client
-        .list_files(pb::ListFilesRequest {})
+        .list_files(pb::ListFilesRequest { workspace: None })
         .await
         .unwrap()
         .into_inner()
@@ -112,6 +114,7 @@ async fn list_apply_watch_and_get_over_the_socket() {
     let mut watch = client
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
+            workspace: None,
         })
         .await
         .unwrap()
@@ -150,7 +153,7 @@ async fn list_files_reports_progress_for_todo_kind_files_only() {
     let (mut client, _stop) = serve(dir.path()).await;
 
     let files = client
-        .list_files(pb::ListFilesRequest {})
+        .list_files(pb::ListFilesRequest { workspace: None })
         .await
         .unwrap()
         .into_inner()
@@ -176,7 +179,7 @@ async fn list_files_scopes_progress_to_each_directorys_own_todo() {
     let (mut client, _stop) = serve(dir.path()).await;
 
     let files = client
-        .list_files(pb::ListFilesRequest {})
+        .list_files(pb::ListFilesRequest { workspace: None })
         .await
         .unwrap()
         .into_inner()
@@ -206,6 +209,7 @@ async fn history_health_and_error_codes_over_the_socket() {
         task_id: String::new(),
         limit: 0,
         before_seq: 0,
+        workspace: None,
     };
     let history = client.history(req).await.unwrap().into_inner().ops;
     assert_eq!(history.len(), 2, "adoption insert + apply insert");
@@ -213,7 +217,7 @@ async fn history_health_and_error_codes_over_the_socket() {
     assert!(history[1].principal.starts_with("external@"));
 
     let health = client
-        .health(pb::HealthRequest {})
+        .health(pb::HealthRequest { workspace: None })
         .await
         .unwrap()
         .into_inner();
@@ -224,6 +228,7 @@ async fn history_health_and_error_codes_over_the_socket() {
     let missing = client
         .get_file(pb::GetFileRequest {
             path: "nope.txt".into(),
+            workspace: None,
         })
         .await
         .unwrap_err();
@@ -231,6 +236,7 @@ async fn history_health_and_error_codes_over_the_socket() {
     let bad = client
         .get_file(pb::GetFileRequest {
             path: "../x".into(),
+            workspace: None,
         })
         .await
         .unwrap_err();
@@ -249,6 +255,7 @@ async fn undo_and_checkout_over_the_socket() {
         .undo(pb::UndoRequest {
             path: "todo.txt".into(),
             steps: 1,
+            workspace: None,
         })
         .await
         .unwrap()
@@ -263,6 +270,7 @@ async fn undo_and_checkout_over_the_socket() {
         .checkout(pb::CheckoutRequest {
             path: "todo.txt".into(),
             at_wall_ms: 1,
+            workspace: None,
         })
         .await
         .unwrap()
@@ -306,6 +314,7 @@ async fn conflicts(client: &mut Client) -> Vec<pb::ReviewFlag> {
     client
         .list_conflicts(pb::ConflictsRequest {
             path: "todo.txt".into(),
+            workspace: None,
         })
         .await
         .unwrap()
@@ -326,6 +335,7 @@ async fn resolve(
                 task_id: task.to_string(),
             }),
             resolution,
+            workspace: None,
         })
         .await
         .map(|r| r.into_inner())

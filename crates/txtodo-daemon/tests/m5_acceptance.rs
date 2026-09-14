@@ -63,6 +63,7 @@ async fn apply(client: &mut Client, path: &str, kind: mutation::Kind) -> pb::App
         path: path.into(),
         mutations: vec![pb::Mutation { kind: Some(kind) }],
         agent: None,
+        workspace: None,
     };
     client
         .apply(req)
@@ -73,7 +74,10 @@ async fn apply(client: &mut Client, path: &str, kind: mutation::Kind) -> pb::App
 
 async fn get(client: &mut Client, path: &str) -> String {
     let bytes = client
-        .get_file(pb::GetFileRequest { path: path.into() })
+        .get_file(pb::GetFileRequest {
+            path: path.into(),
+            workspace: None,
+        })
         .await
         .unwrap_or_else(|e| panic!("get {path}: {e}"))
         .into_inner()
@@ -98,6 +102,7 @@ async fn history_len(client: &mut Client, path: &str) -> usize {
             task_id: String::new(),
             limit: 1_000,
             before_seq: 0,
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("history: {e}"))
@@ -138,6 +143,7 @@ async fn first_notes_write_on_a_ref_less_line_is_one_op_batch_and_touches_only_t
                 task_id: task_id.to_string(),
             }),
             new_text: "remember the ducks\n".into(),
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("edit_notes: {e}"));
@@ -176,7 +182,7 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
 
     let (mut client, _stop) = serve(root).await;
     let resp = client
-        .list_files(pb::ListFilesRequest {})
+        .list_files(pb::ListFilesRequest { workspace: None })
         .await
         .unwrap_or_else(|e| panic!("list_files: {e}"))
         .into_inner();
@@ -273,6 +279,7 @@ async fn archiving_and_deleting_keep_the_directory_and_prune_finds_the_orphan() 
             path: "todo.txt".into(),
             task: Some(task_ref(1, line)),
             ensure: true,
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("ref_dir: {e}"));
@@ -321,7 +328,10 @@ async fn delete_last_pointer(client: &mut Client, archived_id: TaskId, dir: &Pat
 /// (`--yes`).
 async fn prune_finds_and_only_execute_deletes(client: &mut Client, dir: &Path) {
     let listed = client
-        .prune_orphans(pb::PruneOrphansRequest { execute: false })
+        .prune_orphans(pb::PruneOrphansRequest {
+            execute: false,
+            workspace: None,
+        })
         .await
         .unwrap_or_else(|e| panic!("prune (list): {e}"))
         .into_inner();
@@ -330,7 +340,10 @@ async fn prune_finds_and_only_execute_deletes(client: &mut Client, dir: &Path) {
     assert!(dir.is_dir(), "listing alone never deletes");
 
     let executed = client
-        .prune_orphans(pb::PruneOrphansRequest { execute: true })
+        .prune_orphans(pb::PruneOrphansRequest {
+            execute: true,
+            workspace: None,
+        })
         .await
         .unwrap_or_else(|e| panic!("prune (execute): {e}"))
         .into_inner();

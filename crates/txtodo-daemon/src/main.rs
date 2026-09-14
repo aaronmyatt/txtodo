@@ -1,50 +1,51 @@
-//! txtodod: one process per workspace owning the files, the op log and the IPC socket (plan M3).
-//! Startup order: pid lock → store → walk → actors → watcher → gRPC → "ready". SIGTERM/SIGINT
-//! stop accepting, drain, and remove the socket and pid file.
+//! txtodod: one process per device, owning every registered workspace's files, op log and the one
+//! IPC socket (ADR 0025, task `daemon-global-socket`). Startup order: registry → catalog → open
+//! workspace(s) → pid lock → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain, and remove the
+//! socket and pid file.
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::pidfile::PidFile;
-use txtodo_daemon::watch_task;
-use txtodo_daemon::workspace::Workspace;
-use txtodo_daemon::{file_carrier, lan, relay, serve, server};
+use txtodo_daemon::serve;
+use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
+use txtodo_daemon::workspace_registry::WorkspaceRegistry;
+use txtodo_daemon::workspace_registry_paths::{self, RegistryEnv};
 use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
-/// `txtodod --dir <workspace> [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
-/// [--relay <url>]`; nothing is guessed from the cwd in a service.
+/// `txtodod [--dir <workspace>] [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
+/// [--relay <url>]`; nothing is guessed from the cwd in a service. `--dir` is the legacy
+/// single-workspace bridge (`tasks/daemon-global-socket/notes.md`) — omit it to run this device's
+/// one true global daemon over every workspace the registry already knows about.
 struct Args {
-    dir: PathBuf,
+    /// `Some` is the legacy `--dir <workspace>` bridge; `None` is the true global mode.
+    dir: Option<PathBuf>,
     /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3);
     /// `Sidecar` when the flag is omitted (docs/questions.md Q2).
     identity_mode: IdentityMode,
     /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `None` when the flag is
     /// omitted entirely — deliberately distinct from `Some(KeyStoreMode::Auto)`. Omitted keeps
-    /// the pre-existing in-memory placeholder (`Workspace::open_with_default_mode`), so every
-    /// script or test that spawns this binary without knowing about the flag is unaffected;
-    /// `auto` (like `os`) touches the real OS keychain, which most CI/headless environments do
-    /// not have reachable, and must never become what a plain `txtodod --dir X` does on its own.
+    /// the pre-existing in-memory placeholder, so every script or test that spawns this binary
+    /// without knowing about the flag is unaffected; `auto` (like `os`) touches the real OS
+    /// keychain, which most CI/headless environments do not have reachable.
     key_store_mode: Option<KeyStoreMode>,
     /// The relay URL (plan M8 `sync-relay-enable`, ADR 0026); `None` when `--relay` is omitted,
     /// meaning relay stays off (LAN-only, unchanged M4 behaviour) — additive, never required.
     relay_url: Option<String>,
     /// `--relay-dial-peer <hex node id>` (plan M8 `relay-converge-test`): a peer's *relay* node id
     /// to actively dial once this daemon's relay endpoint is bound, bypassing LAN discovery
-    /// entirely — `relay.rs`'s module doc explains why this exists (no pairing-over-relay yet, so
-    /// nothing else ever tells this daemon who to reach across a real network boundary). Test/
-    /// manual-pairing-substitute only; `None` when the flag is omitted, the ordinary case.
+    /// entirely. Test/manual-pairing-substitute only; `None` when the flag is omitted.
     relay_dial_peer: Option<[u8; 32]>,
-    /// `--no-lan` (plan M8 `relay-converge-test`): skips `lan::start` entirely so this daemon has
-    /// no LAN path at all — proves a convergence test actually exercised the relay, not LAN
-    /// discovering the same peer on a shared interface underneath it.
+    /// `--no-lan` (plan M8 `relay-converge-test`): skips LAN entirely for every workspace this
+    /// daemon opens — proves a convergence test actually exercised the relay.
     no_lan: bool,
-    /// `--sync-dir <path>` (plan M8 `sync-file-carrier`): the shared folder `file_carrier::start`
-    /// watches; `None` when omitted, meaning the file carrier stays off — additive, like relay.
+    /// `--sync-dir <path>` (plan M8 `sync-file-carrier`): the shared folder every opened
+    /// workspace's file-carrier watches; `None` when omitted, meaning it stays off.
     sync_dir: Option<PathBuf>,
 }
 
@@ -121,16 +122,18 @@ fn parse_args() -> Result<Args, String> {
             Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
             _ => {
                 return Err(format!(
-                    "unknown argument {a:?}; usage: txtodod --dir <workspace>"
+                    "unknown argument {a:?}; usage: txtodod [--dir <workspace>]"
                 ));
             }
         }
     }
-    let dir = dir.ok_or_else(|| "usage: txtodod --dir <workspace>".to_owned())?;
     let dir = dir
-        .canonicalize()
-        .map_err(|e| format!("cannot open workspace {}: {e}", dir.display()))?;
-    debug_assert!(dir.is_absolute());
+        .map(|d| {
+            d.canonicalize()
+                .map_err(|e| format!("cannot open workspace {}: {e}", d.display()))
+        })
+        .transpose()?;
+    debug_assert!(dir.as_ref().is_none_or(|d| d.is_absolute()));
     Ok(Args {
         dir,
         identity_mode,
@@ -187,92 +190,139 @@ fn main() -> ExitCode {
     }
 }
 
-/// `file` needs a passphrase (prompted here, on this binary's own stdin — never a CLI argument or
-/// environment variable, CLAUDE.md §3.1); `auto`/`os` never do (the OS keychain manages its own
-/// unlock via the login session). `--key-store` omitted entirely keeps the pre-existing in-memory
-/// placeholder (see the field doc on `Args::key_store_mode` for why that must stay the default).
-fn open_workspace(args: &Args) -> Result<Workspace, Box<dyn std::error::Error>> {
-    let Some(key_store_mode) = args.key_store_mode else {
-        return Ok(Workspace::open_with_default_mode(
-            &args.dir,
-            Arc::new(SystemClock),
-            args.identity_mode,
-        )?);
-    };
-    let file_passphrase = if key_store_mode == KeyStoreMode::File {
+/// `WorkspaceOpenArgs` from the CLI flags, prompting once for a `file`-keystore passphrase
+/// (`--key-store` omitted entirely keeps the pre-existing in-memory placeholder — see
+/// `Args::key_store_mode`'s doc for why that must stay the default).
+fn open_args(args: &Args) -> Result<OpenArgs, Box<dyn std::error::Error>> {
+    let file_passphrase = if args.key_store_mode == Some(KeyStoreMode::File) {
         Some(prompt_file_passphrase()?)
     } else {
         None
     };
-    Ok(Workspace::open_with_key_store(
-        &args.dir,
-        Arc::new(SystemClock),
-        args.identity_mode,
-        key_store_mode,
+    Ok(OpenArgs {
+        identity_mode: args.identity_mode,
+        key_store_mode: args.key_store_mode,
         file_passphrase,
-    )?)
+        relay_url: args.relay_url.clone(),
+        relay_dial_peer: args.relay_dial_peer,
+        no_lan: args.no_lan,
+        sync_dir: args.sync_dir.clone(),
+    })
 }
 
-/// `--no-lan` (plan M8 `relay-converge-test`): skip LAN entirely so a forced-relay test proves the
-/// relay path actually carried convergence, rather than LAN quietly doing it underneath.
-fn start_lan(args: &Args, ws: &server::SharedWorkspace) -> Option<lan::LanTransport> {
-    if args.no_lan {
-        return None;
+/// The `--dir` bridge: registers/opens that one directory, plus (best-effort) anything else
+/// already registered — covers a human who has pointed `$TXTODO_REGISTRY_DB` at a real shared
+/// registry even while still invoking `--dir`. Returns `(state_dir, socket)`, both at their
+/// pre-existing `<dir>/.txtodo/...` locations so today's whole test suite keeps working unmodified.
+fn start_dir_bridge(
+    dir: &std::path::Path,
+    env: &RegistryEnv,
+    catalog: &WorkspaceCatalog,
+) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
+    eprintln!(
+        "txtodod: --dir is the legacy single-workspace bridge (see \
+         tasks/daemon-global-socket/notes.md); omit --dir to run this device's one global daemon"
+    );
+    let state_dir = dir.join(txtodo_daemon::walker::STATE_DIR);
+    std::fs::create_dir_all(&state_dir)?;
+    catalog.open_dir_bridge(dir)?;
+    catalog.open_all_registered();
+    let socket = workspace_registry_paths::global_socket_path(env, Some(dir));
+    Ok((state_dir, socket))
+}
+
+/// True global mode (`--dir` omitted): opens every already-registered workspace and resolves the
+/// device-global socket/state paths. Returns `(state_dir, socket)`.
+fn start_global(
+    env: &RegistryEnv,
+    catalog: &WorkspaceCatalog,
+) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
+    let state_dir = workspace_registry_paths::global_pid_path(env)
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .ok_or("cannot resolve the device-global data directory")?;
+    std::fs::create_dir_all(&state_dir)?;
+    let opened = catalog.open_all_registered();
+    eprintln!("txtodod: opened {opened} registered workspace(s)");
+    let socket = workspace_registry_paths::global_socket_path(env, None);
+    Ok((state_dir, socket))
+}
+
+/// Resolves until either a ctrl-c or (unix only) SIGTERM.
+async fn shutdown_signal() {
+    let ctrl_c = tokio::signal::ctrl_c();
+    #[cfg(unix)]
+    {
+        let mut term =
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(s) => s,
+                Err(_) => {
+                    let _ = ctrl_c.await;
+                    return;
+                }
+            };
+        tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
     }
-    Some(lan::start(Arc::clone(ws), Arc::new(SystemClock)))
+    #[cfg(not(unix))]
+    {
+        let _ = ctrl_c.await;
+    }
+}
+
+/// Pid lock + log init + the "starting"/stale-socket-removal/"ready" sequence — split out of
+/// `run` purely to keep that function's cognitive complexity within budget. Returns the guards
+/// `run` must keep alive for its own duration.
+///
+/// Logs go under `state_dir/logs` — **not** `workspace_registry_paths::global_log_dir(env)`
+/// called directly, a real regression this task's own daemon-slice pass introduced and its own
+/// full test run caught: that always resolves the *true-global* location regardless of mode, so a
+/// `--dir`-bridge-started daemon (every pre-existing test in this crate) silently wrote its logs
+/// to this machine's real `$XDG_DATA_HOME/txtodo/logs/` instead of `<dir>/.txtodo/logs` — breaking
+/// `tests/lan_discovery.rs`'s log-tailing assertion, which found no log at the location it
+/// (correctly) expected. `state_dir` is already resolved correctly per mode by `start_dir_bridge`/
+/// `start_global`, so deriving logs from it keeps both modes hermetic and in one place.
+fn prepare_and_announce(
+    args: &Args,
+    state_dir: &std::path::Path,
+    socket: &std::path::Path,
+    registry_path: &std::path::Path,
+) -> Result<(PidFile, txtodo_daemon::telemetry::LogGuard), Box<dyn std::error::Error>> {
+    let pid = PidFile::acquire(&state_dir.join("txtodod.pid"))?;
+    let logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
+    tracing::info!(
+        dir = ?args.dir.as_ref().map(|d| d.display().to_string()),
+        version = env!("CARGO_PKG_VERSION"),
+        "starting"
+    );
+    if socket.exists() {
+        // The pid lock says no other instance runs, so this is a stale socket from a crash.
+        std::fs::remove_file(socket)?;
+    }
+    eprintln!(
+        "txtodod ready: socket {}, registry {}",
+        socket.display(),
+        registry_path.display()
+    );
+    Ok((pid, logs))
 }
 
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let state_dir = args.dir.join(txtodo_daemon::walker::STATE_DIR);
-    std::fs::create_dir_all(&state_dir)?;
-    let _pid = PidFile::acquire(&state_dir.join("txtodod.pid"))?;
-    let _logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
-    tracing::info!(workspace = %args.dir.display(), version = env!("CARGO_PKG_VERSION"), "starting");
-    let socket = state_dir.join("txtodod.sock");
-    if socket.exists() {
-        // The pid lock says no other instance runs, so this is a stale socket from a crash.
-        std::fs::remove_file(&socket)?;
-    }
-    let ws = open_workspace(&args)?;
-    let documents = ws.paths().count();
-    let key_store_backend = ws.key_store_backend_name();
-    let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
-    let (_watcher, watch_handle) = watch_task::start(Arc::clone(&ws), Arc::new(SystemClock))?;
-    let lan_transport = start_lan(&args, &ws);
-    let relay_transport = relay::start(
-        Arc::clone(&ws),
-        args.relay_url.clone(),
-        args.relay_dial_peer,
-    );
-    let file_carrier_transport = file_carrier::start(Arc::clone(&ws), args.sync_dir.clone());
-    eprintln!(
-        "txtodod ready: {documents} document(s), socket {}, key_store={key_store_backend}",
-        socket.display()
-    );
-    let shutdown = async {
-        let ctrl_c = tokio::signal::ctrl_c();
-        #[cfg(unix)]
-        {
-            let mut term =
-                match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                    Ok(s) => s,
-                    Err(_) => {
-                        let _ = ctrl_c.await;
-                        return;
-                    }
-                };
-            tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = ctrl_c.await;
-        }
+    let env = RegistryEnv::from_process()?;
+    let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
+    let registry = WorkspaceRegistry::open(&registry_path)?;
+    let catalog = Arc::new(WorkspaceCatalog::new(
+        registry,
+        open_args(&args)?,
+        Arc::new(SystemClock),
+    ));
+
+    let (state_dir, socket) = match &args.dir {
+        Some(dir) => start_dir_bridge(dir, &env, &catalog)?,
+        None => start_global(&env, &catalog)?,
     };
-    serve::serve(ws, &socket, shutdown).await?;
-    watch_handle.abort();
-    lan_transport.as_ref().inspect(|l| l.abort());
-    relay_transport.as_ref().inspect(|r| r.abort());
-    file_carrier_transport.as_ref().inspect(|f| f.abort());
+    let (_pid, _logs) = prepare_and_announce(&args, &state_dir, &socket, &registry_path)?;
+
+    serve::serve_global(catalog, &socket, shutdown_signal()).await?;
     eprintln!("txtodod stopped");
     Ok(())
 }

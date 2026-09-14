@@ -206,6 +206,17 @@ pub fn parse_resolution(raw: i32) -> Result<Resolution, Status> {
     }
 }
 
+/// A completed mutation/undo/resolve as the wire sees it. Lives here, not `server.rs`, purely to
+/// keep that file within its line budget, the same reason `status_of` does.
+pub(crate) fn applied_of(a: crate::handle::Applied) -> pb::ApplyResponse {
+    pb::ApplyResponse {
+        applied: a.applied,
+        hash: a.hash.to_vec(),
+        hlc_wall_ms: a.hlc.wall_ms,
+        hlc_counter: u32::from(a.hlc.counter),
+    }
+}
+
 /// A stored op as the wire sees it.
 pub fn to_summary(s: &Stored) -> pb::OpSummary {
     pb::OpSummary {

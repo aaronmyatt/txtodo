@@ -6,7 +6,7 @@ use crate::convert::{
     file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
     parse_ulid_opt, task_of, to_flag, to_summary,
 };
-use crate::handle::{ActorHandle, Applied, WATCH_CAP};
+use crate::handle::{ActorHandle, WATCH_CAP};
 use crate::workspace::Workspace;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
@@ -54,18 +54,10 @@ impl TxtodoService {
 }
 
 // `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` in progress.rs,
-// `status_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for the line budget.
-use crate::convert::status_of;
+// `status_of`/`applied_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for
+// the line budget.
+use crate::convert::{applied_of, status_of};
 use crate::watch_forward::forward_changes;
-
-fn applied_of(a: Applied) -> pb::ApplyResponse {
-    pb::ApplyResponse {
-        applied: a.applied,
-        hash: a.hash.to_vec(),
-        hlc_wall_ms: a.hlc.wall_ms,
-        hlc_counter: u32::from(a.hlc.counter),
-    }
-}
 
 #[tonic::async_trait]
 impl Txtodo for TxtodoService {
@@ -278,7 +270,10 @@ impl Txtodo for TxtodoService {
         }))
     }
 
-    async fn get_notes(&self, r: Request<pb::TaskRef>) -> Result<Response<pb::NotesDoc>, Status> {
+    async fn get_notes(
+        &self,
+        r: Request<pb::GetNotesRequest>,
+    ) -> Result<Response<pb::NotesDoc>, Status> {
         self.get_notes_impl(r).await
     }
 

@@ -64,6 +64,7 @@ fn create_req(name: &str, scopes: &[&str]) -> pb::TokenCreateRequest {
         name: name.into(),
         scopes: scopes.iter().map(|s| (*s).to_owned()).collect(),
         expires: String::new(),
+        workspace: None,
     }
 }
 
@@ -89,7 +90,7 @@ async fn create_list_and_revoke_round_trip_over_the_socket() {
     assert_eq!(created.scopes, vec!["read", "write:add", "project:+work"]);
 
     let listed = client
-        .token_list(pb::TokenListRequest {})
+        .token_list(pb::TokenListRequest { workspace: None })
         .await
         .unwrap_or_else(|e| panic!("list: {e}"))
         .into_inner()
@@ -108,6 +109,7 @@ async fn create_list_and_revoke_round_trip_over_the_socket() {
     let revoked = client
         .token_revoke(pb::TokenRevokeRequest {
             id: created.id.clone(),
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("revoke: {e}"))
@@ -115,7 +117,7 @@ async fn create_list_and_revoke_round_trip_over_the_socket() {
     assert!(revoked.revoked);
 
     let after = client
-        .token_list(pb::TokenListRequest {})
+        .token_list(pb::TokenListRequest { workspace: None })
         .await
         .unwrap()
         .into_inner()
@@ -144,7 +146,7 @@ async fn an_unrecognized_scope_is_refused_at_create_time() {
     assert_eq!(err.code(), tonic::Code::InvalidArgument);
 
     let listed = client
-        .token_list(pb::TokenListRequest {})
+        .token_list(pb::TokenListRequest { workspace: None })
         .await
         .unwrap()
         .into_inner()

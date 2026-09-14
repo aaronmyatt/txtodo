@@ -204,3 +204,54 @@ land.
   a directory, never a real `WorkspaceId`, and still dials a per-directory socket rather than the
   true global one.
 - `service-single-global-unit` (todo 22): no launchd/systemd unit migration.
+
+### Update 2026-09-14: unblocked, daemon slice built and gated
+
+The fence resolved as expected: the user authorized committing per-slice for this whole backlog
+run (proto slice committed as `48885e7`), which cleared the `txtodo-proto` lease, and the daemon
+slice landed in a follow-up session continuation — `workspace_catalog.rs`, `workspace_catalog_open.rs`,
+`workspace_catalog_tests.rs`, `global_service.rs`, `tests/global_socket.rs`, `main.rs` rewired,
+`workspace_registry_paths.rs` filled in, `CLAUDE.md` updated — matching the design above.
+
+Two real bugs surfaced only by actually running the gates, not by writing the code:
+
+1. **Pid-lock collision across isolated daemons.** `global_pid_path`/`global_log_dir` called
+   `data_dir(env)` directly, never checking `$TXTODO_SOCKET`. Reproduced outside the test harness
+   entirely: three `txtodod --no-lan` processes, each with its own `$TXTODO_SOCKET`/
+   `$TXTODO_REGISTRY_DB` tempdir override, spawned concurrently — two of three refused to start
+   ("txtodod already running, lock /Users/.../txtodo/txtodod.pid") because all three still raced
+   for the *same real* pid file on this machine. This is exactly what made `tests/global_socket.rs`
+   flaky (2 of 3 sub-tests failing with a 120s "global socket never appeared" hang, a different
+   sub-test surviving each run depending on lock-acquisition order). Fixed by adding
+   `global_state_dir(env)` — derives from `global_socket_path(env, None)`'s own parent, so pid/log
+   placement always follows wherever the socket actually resolved, override included. Regression
+   test: `global_pid_and_log_paths_follow_the_socket_override_not_just_xdg_data_home`.
+2. **`--dir`-bridge logs silently escaped their tempdir.** `prepare_and_announce` called
+   `workspace_registry_paths::global_log_dir(env)` unconditionally — correct for true global mode,
+   wrong for every pre-existing `--dir`-bridge daemon (every test in this crate before today), which
+   started writing its JSON logs to this machine's real `$XDG_DATA_HOME/txtodo/logs/` instead of
+   `<dir>/.txtodo/logs`. Never asserted directly, but `tests/lan_discovery.rs` tails the daemon's
+   log file for a `lan_peer_found` line and timed out finding none at the (correct) tempdir path it
+   was looking in — that failure on a full-suite run is what surfaced this. Fixed by deriving the
+   log directory from `state_dir` (already resolved correctly per mode by `start_dir_bridge`/
+   `start_global`) instead of calling `global_log_dir(env)` directly; `env` dropped from
+   `prepare_and_announce`'s signature since nothing else in it needed the parameter.
+
+Full `txtodo-daemon` test suite (177 lib tests + every integration `tests/*.rs` file) is green
+after both fixes, **except** two relay-pairing tests (`tests/pairing_relay.rs`) that flake on live
+public-relay (`n0.iroh.link`) QUIC connectivity in this sandbox — a different one fails each rerun,
+neither file this task touches, HTTPS reachability to the relay confirmed fine (`curl` 200 in 1s),
+and the failure reproduces identically running that one test in total isolation. Judged
+environment/network, not a regression — not root-caused further, matching this crate's own existing
+precedent for flagging-not-fixing unrelated flakes (`idle_rss.rs`, `lan_sync_bench.rs`).
+`cargo clippy -p txtodo-daemon --all-targets -- -D warnings`, `cargo fmt -p txtodo-daemon --check`,
+`check-boundaries.sh`, `check-file-length.sh` all clean.
+
+**Still open, a real cross-crate consequence of the proto slice**: `cargo build --workspace` fails
+— `txtodo-cli` (client.rs and every command that builds a request message) and `txtodo-mcp`
+(`grpc_write.rs`'s `get_notes`/`edit_notes` calls) were never updated for the new `workspace` field
+or `GetNotesRequest` wrapper. `txtodo-mcp` wasn't named in this task's original brief (only CLI
+call sites were flagged) — a real gap in scoping, found only by running the full-workspace build.
+Both are their own fenced slices, next up. Root `todo.txt` line 18 stays un-x'd until the CLI slice
+(at minimum) lands, since "every gRPC call carries a workspace selector" isn't true end-to-end
+until a real client can supply one.

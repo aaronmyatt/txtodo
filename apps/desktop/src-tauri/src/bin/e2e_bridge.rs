@@ -265,6 +265,7 @@ async fn cmd_apply(client: &mut DaemonClient, args: Value) -> Result<Value, ApiE
         path: r.path,
         mutations: r.mutations.into_iter().map(pb::Mutation::from).collect(),
         agent: None,
+        workspace: None,
     };
     let resp = client.apply(pb_req).await?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
@@ -285,6 +286,7 @@ async fn cmd_history(client: &mut DaemonClient, args: Value) -> Result<Value, Ap
             task_id: r.task_id,
             limit: r.limit,
             before_seq: 0,
+            workspace: None,
         })
         .await?;
     Ok(serde_json::to_value(HistoryDto::from(resp))?)
@@ -314,6 +316,7 @@ async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, Ap
             path: r.path,
             task: Some(r.task.into()),
             resolution: pb::Resolution::from(r.resolution) as i32,
+            workspace: None,
         })
         .await?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
@@ -341,6 +344,7 @@ async fn cmd_edit_notes(client: &mut DaemonClient, args: Value) -> Result<Value,
         .edit_notes(pb::NotesEditRequest {
             task: Some(r.task.into()),
             new_text: r.new_text,
+            workspace: None,
         })
         .await?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)

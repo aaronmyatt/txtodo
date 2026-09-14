@@ -95,6 +95,17 @@ impl WorkspaceRegistry {
         Ok(self.registry.remove(id, clock.now_ms())?)
     }
 
+    /// One active entry by id, for a wire selector that already names one
+    /// (`WorkspaceSelector.workspace_id` resolution, task `daemon-global-socket`). `None` for an
+    /// unknown or already-removed id — resolution treats those the same as "never heard of it".
+    pub fn get(&self, id: WorkspaceId) -> Result<Option<WorkspaceEntry>, WorkspaceRegistryError> {
+        Ok(self
+            .registry
+            .get(id)?
+            .filter(|row| row.removed_at_ms.is_none())
+            .map(entry_of))
+    }
+
     /// Every active workspace, with a cheap existence check per entry.
     pub fn list(&self) -> Result<Vec<WorkspaceEntry>, WorkspaceRegistryError> {
         Ok(self

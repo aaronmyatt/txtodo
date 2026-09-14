@@ -63,6 +63,7 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
             kind: Some(mutation::Kind::Add(pb::Add { line: line.into() })),
         }],
         agent: None,
+        workspace: None,
     };
     client
         .apply(req)
@@ -75,6 +76,7 @@ async fn get_todo(client: &mut Client) -> String {
     let bytes = client
         .get_file(pb::GetFileRequest {
             path: "todo.txt".into(),
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("get: {e}"))
@@ -104,7 +106,10 @@ async fn edit_notes_lazily_creates_the_ref_dir_and_get_notes_returns_it() {
 
     // No `ref:` directory yet: empty doc, no path.
     let empty = client
-        .get_notes(task_ref.clone())
+        .get_notes(pb::GetNotesRequest {
+            task: Some(task_ref.clone()),
+            workspace: None,
+        })
         .await
         .unwrap()
         .into_inner();
@@ -116,6 +121,7 @@ async fn edit_notes_lazily_creates_the_ref_dir_and_get_notes_returns_it() {
         .edit_notes(pb::NotesEditRequest {
             task: Some(task_ref.clone()),
             new_text: "# Notes\n\nremember the ducks\n".into(),
+            workspace: None,
         })
         .await
         .unwrap()
@@ -126,7 +132,10 @@ async fn edit_notes_lazily_creates_the_ref_dir_and_get_notes_returns_it() {
     assert!(after.contains("ref:"), "{after}");
 
     let doc = client
-        .get_notes(task_ref.clone())
+        .get_notes(pb::GetNotesRequest {
+            task: Some(task_ref.clone()),
+            workspace: None,
+        })
         .await
         .unwrap()
         .into_inner();
@@ -143,6 +152,7 @@ async fn edit_notes_lazily_creates_the_ref_dir_and_get_notes_returns_it() {
         .edit_notes(pb::NotesEditRequest {
             task: Some(task_ref),
             new_text: "# Notes\n\nremember the ducks and the geese\n".into(),
+            workspace: None,
         })
         .await
         .unwrap();
@@ -163,9 +173,12 @@ async fn get_notes_before_any_edit_is_not_an_error() {
     let task = task_id_of(&get_todo(&mut client).await);
 
     let doc = client
-        .get_notes(pb::TaskRef {
-            line_number: 1,
-            task_id: task.to_string(),
+        .get_notes(pb::GetNotesRequest {
+            task: Some(pb::TaskRef {
+                line_number: 1,
+                task_id: task.to_string(),
+            }),
+            workspace: None,
         })
         .await
         .unwrap()
@@ -175,9 +188,12 @@ async fn get_notes_before_any_edit_is_not_an_error() {
 
     let unknown = TaskId::new(Ulid::from_u128(999));
     let err = client
-        .get_notes(pb::TaskRef {
-            line_number: 1,
-            task_id: unknown.to_string(),
+        .get_notes(pb::GetNotesRequest {
+            task: Some(pb::TaskRef {
+                line_number: 1,
+                task_id: unknown.to_string(),
+            }),
+            workspace: None,
         })
         .await
         .unwrap_err();

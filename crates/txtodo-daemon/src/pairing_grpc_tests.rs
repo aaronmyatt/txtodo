@@ -23,21 +23,24 @@ fn service(dir: &Path, clock: Arc<FakeClock>) -> TxtodoService {
 }
 
 async fn offer(svc: &TxtodoService) -> pb::PairOfferResponse {
-    svc.pair_offer(Request::new(pb::PairOfferRequest {}))
+    svc.pair_offer(Request::new(pb::PairOfferRequest { workspace: None }))
         .await
         .unwrap()
         .into_inner()
 }
 
 async fn accept(svc: &TxtodoService, code: String) -> pb::PairResult {
-    svc.pair_accept(Request::new(pb::PairAcceptRequest { code }))
-        .await
-        .unwrap()
-        .into_inner()
+    svc.pair_accept(Request::new(pb::PairAcceptRequest {
+        code,
+        workspace: None,
+    }))
+    .await
+    .unwrap()
+    .into_inner()
 }
 
 async fn confirm(svc: &TxtodoService) -> Result<pb::PairResult, tonic::Status> {
-    svc.pair_confirm_sas(Request::new(pb::PairConfirmRequest {}))
+    svc.pair_confirm_sas(Request::new(pb::PairConfirmRequest { workspace: None }))
         .await
         .map(tonic::Response::into_inner)
 }
@@ -87,7 +90,7 @@ async fn pair_offer_refuses_a_second_concurrent_pairing() {
     offer(&svc).await;
 
     let err = svc
-        .pair_offer(Request::new(pb::PairOfferRequest {}))
+        .pair_offer(Request::new(pb::PairOfferRequest { workspace: None }))
         .await
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::ResourceExhausted);
@@ -104,7 +107,7 @@ async fn pairing_window_expiry_surfaces_and_then_frees_the_slot() {
     let err = confirm(&svc).await.unwrap_err();
     assert_eq!(err.code(), tonic::Code::FailedPrecondition);
     // The stale slot was let go, not left jammed forever: a fresh offer now succeeds.
-    svc.pair_offer(Request::new(pb::PairOfferRequest {}))
+    svc.pair_offer(Request::new(pb::PairOfferRequest { workspace: None }))
         .await
         .unwrap();
 }

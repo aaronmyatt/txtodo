@@ -114,12 +114,16 @@ impl DaemonClient {
 
     /// Liveness only; used by [`DaemonClient::wait_until_ready`].
     async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
-        Ok(self.inner.health(pb::HealthRequest {}).await?.into_inner())
+        Ok(self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner())
     }
 
     /// Every synced document with its current projection hash.
     pub async fn list_files(&mut self) -> Result<pb::ListFilesResponse, DaemonError> {
-        let req = pb::ListFilesRequest {};
+        let req = pb::ListFilesRequest { workspace: None };
         Ok(self.inner.list_files(req).await?.into_inner())
     }
 
@@ -127,6 +131,7 @@ impl DaemonClient {
     pub async fn get_file(&mut self, path: &str) -> Result<pb::FileContents, DaemonError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         Ok(self.inner.get_file(req).await?.into_inner())
     }
@@ -136,7 +141,10 @@ impl DaemonClient {
         &mut self,
         paths: Vec<String>,
     ) -> Result<tonic::Streaming<pb::Change>, DaemonError> {
-        let req = pb::WatchRequest { paths };
+        let req = pb::WatchRequest {
+            paths,
+            workspace: None,
+        };
         Ok(self.inner.watch(req).await?.into_inner())
     }
 
@@ -168,6 +176,7 @@ impl DaemonClient {
     ) -> Result<pb::ConflictsResponse, DaemonError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         Ok(self.inner.list_conflicts(req).await?.into_inner())
     }
@@ -175,7 +184,11 @@ impl DaemonClient {
     /// `notes.md` for one task's `ref:` directory (plan M5); the daemon resolves the task to its
     /// directory, this client never touches the filesystem itself.
     pub async fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, DaemonError> {
-        Ok(self.inner.get_notes(task).await?.into_inner())
+        let req = pb::GetNotesRequest {
+            task: Some(task),
+            workspace: None,
+        };
+        Ok(self.inner.get_notes(req).await?.into_inner())
     }
 
     /// One whole-document edit to `notes.md`; the daemon derives the Loro text ops and lazily
@@ -191,7 +204,7 @@ impl DaemonClient {
     pub async fn pair_offer(&mut self) -> Result<pb::PairOfferResponse, DaemonError> {
         Ok(self
             .inner
-            .pair_offer(pb::PairOfferRequest {})
+            .pair_offer(pb::PairOfferRequest { workspace: None })
             .await?
             .into_inner())
     }
@@ -199,7 +212,10 @@ impl DaemonClient {
     /// Accepts a peer's scanned `PairOffer` (`code`) and begins the X25519 handshake; returns the
     /// 6-word SAS.
     pub async fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, DaemonError> {
-        let req = pb::PairAcceptRequest { code };
+        let req = pb::PairAcceptRequest {
+            code,
+            workspace: None,
+        };
         Ok(self.inner.pair_accept(req).await?.into_inner())
     }
 
@@ -208,7 +224,7 @@ impl DaemonClient {
     pub async fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, DaemonError> {
         Ok(self
             .inner
-            .pair_confirm_sas(pb::PairConfirmRequest {})
+            .pair_confirm_sas(pb::PairConfirmRequest { workspace: None })
             .await?
             .into_inner())
     }
@@ -225,7 +241,7 @@ impl DaemonClient {
     pub async fn token_list(&mut self) -> Result<pb::TokenListResponse, DaemonError> {
         Ok(self
             .inner
-            .token_list(pb::TokenListRequest {})
+            .token_list(pb::TokenListRequest { workspace: None })
             .await?
             .into_inner())
     }
@@ -235,7 +251,10 @@ impl DaemonClient {
         &mut self,
         id: String,
     ) -> Result<pb::TokenRevokeResponse, DaemonError> {
-        let req = pb::TokenRevokeRequest { id };
+        let req = pb::TokenRevokeRequest {
+            id,
+            workspace: None,
+        };
         Ok(self.inner.token_revoke(req).await?.into_inner())
     }
 
@@ -245,7 +264,7 @@ impl DaemonClient {
     pub async fn op_log(&mut self) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
         let mut stream = self
             .inner
-            .op_log_stream(pb::OpLogRequest {})
+            .op_log_stream(pb::OpLogRequest { workspace: None })
             .await?
             .into_inner();
         let mut entries = Vec::new();

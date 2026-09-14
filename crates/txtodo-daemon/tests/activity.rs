@@ -59,7 +59,7 @@ async fn serve(root: &Path) -> (Client, tokio::sync::oneshot::Sender<()>) {
 
 async fn drain(client: &mut Client) -> Vec<pb::OpLogEntry> {
     let stream = client
-        .op_log_stream(pb::OpLogRequest {})
+        .op_log_stream(pb::OpLogRequest { workspace: None })
         .await
         .unwrap_or_else(|e| panic!("op_log_stream: {e}"))
         .into_inner();
@@ -94,6 +94,7 @@ async fn a_mutation_appears_with_its_principal_and_a_real_timestamp() {
                 })),
             }],
             agent: None,
+            workspace: None,
         })
         .await
         .unwrap_or_else(|e| panic!("apply: {e}"));

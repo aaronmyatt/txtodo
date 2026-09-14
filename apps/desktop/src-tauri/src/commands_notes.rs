@@ -41,6 +41,7 @@ pub async fn edit_notes(
     let req = pb::NotesEditRequest {
         task: Some(task.into()),
         new_text,
+        workspace: None,
     };
     let resp = client.edit_notes(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))

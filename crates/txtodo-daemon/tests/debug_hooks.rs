@@ -68,7 +68,7 @@ async fn refused_without_the_env_var_then_works_once_set() {
     let (mut client, _stop) = serve(dir.path()).await;
 
     let health_before = client
-        .health(pb::HealthRequest {})
+        .health(pb::HealthRequest { workspace: None })
         .await
         .unwrap()
         .into_inner();
@@ -77,6 +77,7 @@ async fn refused_without_the_env_var_then_works_once_set() {
     let req = pb::DebugSetGroupKeyRequest {
         group_id: "42".to_string(),
         key_hex: "11".repeat(32),
+        workspace: None,
     };
     let refused = client.debug_set_group_key(req.clone()).await;
     assert_eq!(
@@ -99,7 +100,7 @@ async fn refused_without_the_env_var_then_works_once_set() {
     }
 
     let health_after = client
-        .health(pb::HealthRequest {})
+        .health(pb::HealthRequest { workspace: None })
         .await
         .unwrap()
         .into_inner();

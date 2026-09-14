@@ -1,10 +1,13 @@
 //! Binding the unix socket and running the tonic server until shutdown. Split from `server.rs`
 //! (the service impl) for the file budget.
 
+use crate::global_service::GlobalService;
 use crate::server::{MAX_INFLIGHT_RPCS, SharedWorkspace, TxtodoService};
+use crate::workspace_catalog::WorkspaceCatalog;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio_stream::wrappers::UnixListenerStream;
-use txtodo_proto::v1::txtodo_server::TxtodoServer;
+use txtodo_proto::v1::txtodo_server::{Txtodo, TxtodoServer};
 
 /// Why serving stopped early.
 #[derive(Debug)]
@@ -26,9 +29,10 @@ impl std::fmt::Display for ServeError {
 
 impl std::error::Error for ServeError {}
 
-/// Serves until `shutdown` resolves. The socket file is created here and removed on return.
-pub async fn serve(
-    ws: SharedWorkspace,
+/// Binds `socket`, serves `svc` until `shutdown` resolves, then removes the socket file. Shared
+/// tail of [`serve`] and [`serve_global`] — one bind/serve/cleanup path, not two that could drift.
+async fn serve_with<S: Txtodo>(
+    svc: S,
     socket: &Path,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), ServeError> {
@@ -37,10 +41,32 @@ pub async fn serve(
     let incoming = UnixListenerStream::new(listener);
     let result = tonic::transport::Server::builder()
         .concurrency_limit_per_connection(MAX_INFLIGHT_RPCS)
-        .add_service(TxtodoServer::new(TxtodoService::new(ws)))
+        .add_service(TxtodoServer::new(svc))
         .serve_with_incoming_shutdown(incoming, shutdown)
         .await;
     let _removed = std::fs::remove_file(socket);
     debug_assert!(!socket.exists(), "socket file removed on shutdown");
     result.map_err(ServeError::Transport)
+}
+
+/// Serves a single, already-open workspace until `shutdown` resolves. The socket file is created
+/// here and removed on return. Kept exactly as-is for whitebox tests that construct one
+/// `Workspace` directly and bypass the registry/catalog entirely; production (`main.rs`) always
+/// uses [`serve_global`] instead.
+pub async fn serve(
+    ws: SharedWorkspace,
+    socket: &Path,
+    shutdown: impl Future<Output = ()>,
+) -> Result<(), ServeError> {
+    serve_with(TxtodoService::new(ws), socket, shutdown).await
+}
+
+/// The real production entry point (`main.rs`): the one global socket, every call routed by
+/// `WorkspaceSelector` through [`GlobalService`] (ADR 0025, task `daemon-global-socket`).
+pub async fn serve_global(
+    catalog: Arc<WorkspaceCatalog>,
+    socket: &Path,
+    shutdown: impl Future<Output = ()>,
+) -> Result<(), ServeError> {
+    serve_with(GlobalService::new(catalog), socket, shutdown).await
 }

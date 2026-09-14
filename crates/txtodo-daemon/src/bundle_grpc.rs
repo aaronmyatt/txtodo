@@ -24,6 +24,29 @@ use crate::server::TxtodoService;
 /// the passphrase travels as raw bytes, not a header restricted to ASCII.
 const PASSPHRASE_METADATA_KEY: &str = "x-txtodo-bundle-passphrase-bin";
 
+/// gRPC request metadata key carrying `BundleImport`'s `WorkspaceSelector` (ADR 0025, task
+/// `daemon-global-socket`) — the same reason the passphrase above rides in metadata: a
+/// client-streaming RPC's request type is fixed to the streamed item, so there is no per-call
+/// field for it.
+const WORKSPACE_METADATA_KEY: &str = "x-txtodo-workspace-selector-bin";
+
+/// `None` when the metadata key is absent — an unset selector, same as every other RPC's omitted
+/// `.workspace` field (`WorkspaceCatalog::resolve` applies its usual single-open-workspace
+/// bridge). `Err` only for present-but-malformed bytes, never a silent default.
+pub(crate) fn workspace_selector_from_metadata<T>(
+    r: &Request<T>,
+) -> Result<Option<pb::WorkspaceSelector>, Status> {
+    let Some(value) = r.metadata().get_bin(WORKSPACE_METADATA_KEY) else {
+        return Ok(None);
+    };
+    let bytes = value
+        .to_bytes()
+        .map_err(|_| Status::invalid_argument("bad workspace selector metadata"))?;
+    <pb::WorkspaceSelector as prost::Message>::decode(bytes.as_ref())
+        .map(Some)
+        .map_err(|_| Status::invalid_argument("bad workspace selector metadata"))
+}
+
 /// Response stream type for `BundleExport`.
 pub(crate) type BundleExportStream =
     Pin<Box<dyn tokio_stream::Stream<Item = Result<pb::BundleChunk, Status>> + Send>>;

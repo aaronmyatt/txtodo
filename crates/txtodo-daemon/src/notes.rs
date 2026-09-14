@@ -24,9 +24,13 @@ impl TxtodoService {
     /// empty bytes, the empty hash) when the task has no `ref:` directory yet.
     pub(crate) async fn get_notes_impl(
         &self,
-        r: Request<pb::TaskRef>,
+        r: Request<pb::GetNotesRequest>,
     ) -> Result<Response<pb::NotesDoc>, Status> {
-        let task_id = parse_required_task_id(&r.into_inner())?;
+        let task = r
+            .into_inner()
+            .task
+            .ok_or_else(|| Status::invalid_argument("a task ref is required"))?;
+        let task_id = parse_required_task_id(&task)?;
         let Some((owner, info)) = self.locate_task(task_id).await? else {
             return Err(Status::not_found(format!("no task {task_id}")));
         };

@@ -153,6 +153,7 @@ pub async fn apply(
         path,
         mutations: mutations.into_iter().map(pb::Mutation::from).collect(),
         agent: None, // unset = the user on this device
+        workspace: None,
     };
     let resp = client.apply(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))
@@ -175,6 +176,7 @@ pub async fn history(
         task_id,
         limit,
         before_seq: 0,
+        workspace: None,
     };
     let resp = client.history(req).await.map_err(|e| e.to_string())?;
     Ok(HistoryDto::from(resp))
@@ -196,6 +198,7 @@ pub async fn resolve(
         path,
         task: Some(task.into()),
         resolution: pb::Resolution::from(resolution) as i32,
+        workspace: None,
     };
     let resp = client.resolve(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))

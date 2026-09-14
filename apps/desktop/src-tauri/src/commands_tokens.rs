@@ -25,6 +25,7 @@ pub async fn token_create(
         name,
         scopes,
         expires,
+        workspace: None,
     };
     let resp = client.token_create(req).await.map_err(|e| e.to_string())?;
     Ok(TokenDto::from(resp))

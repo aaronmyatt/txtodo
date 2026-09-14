@@ -1,29 +1,65 @@
 # txtodo-daemon
 
 ## Purpose
-The `txtodod` binary: one process per workspace owning the files, the op log and the IPC socket.
-Plan M3, as built 2026-09-12; token data layer (plan M6), the activity feed (plan M7) and
-`notes.md` as a Loro text doc (plan M5) added the same day. Sidecar identity mode (no `id:` tag in
-the file, docs/questions.md Q2) under construction 2026-09-13 — `DocState`/`reconcile` are mode-
-aware and `reconcile_sidecar`/`identity_fingerprint`/`identity_assign`/`identity_levenshtein` exist
-and are unit-tested, but nothing wires a real workspace to sidecar mode yet (no `ActorConfig`
-field, no `--identity-mode` flag): every workspace still runs tagged mode today.
+The `txtodod` binary: one process **per device** (ADR 0025, task `daemon-global-socket`,
+2026-09-14), owning every registered workspace's files, op log and the one IPC socket. Plan M3, as
+built 2026-09-12; token data layer (plan M6), the activity feed (plan M7) and `notes.md` as a Loro
+text doc (plan M5) added the same day. Sidecar identity mode (no `id:` tag in the file,
+docs/questions.md Q2) under construction 2026-09-13 — `DocState`/`reconcile` are mode-aware and
+`reconcile_sidecar`/`identity_fingerprint`/`identity_assign`/`identity_levenshtein` exist and are
+unit-tested, but nothing wires a real workspace to sidecar mode yet (no `ActorConfig` field, no
+`--identity-mode` flag): every workspace still runs tagged mode today.
 Devices table wiring, keystore resolution and `DeviceList`/`DeviceRemove` (plan M4
 tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added 2026-09-13.
 Real cross-device pairing over the LAN transport (plan M4 `sync-pairing`'s LAN wiring pass —
 `pairing_lan.rs`, `pairing_lan_state.rs`, the `PairAwaitPeer` RPC) added the same day.
-ADR 0025 (2026-09-13) supersedes the "one process per workspace" framing above with "one
-`txtodod` per device, with a workspace registry, `WorkspaceActor`s nested inside it" — not yet
-true of this binary (`main.rs` still runs one workspace per process via `--dir`), but task
-`daemon-workspace-registry` (the same day) adds the device-global catalog
-(`workspace_registry.rs`/`workspace_registry_paths.rs`) that `daemon-global-socket`/
-`daemon-workspace-actor` will wire the actual binary onto; see those modules' own docs and
-`tasks/daemon-workspace-registry/notes.md` for exactly what is and isn't done yet.
+ADR 0025 (2026-09-13) called for "one `txtodod` per device, with a workspace registry,
+`WorkspaceActor`s nested inside it" — task `daemon-workspace-registry` (2026-09-13) built the
+device-global catalog (`workspace_registry.rs`/`workspace_registry_paths.rs`); task
+`daemon-global-socket` (2026-09-14) wired the binary onto it for real: `main.rs` now binds one
+global socket and routes every RPC by a wire `WorkspaceSelector` (`workspace_catalog.rs`,
+`global_service.rs`) instead of running one workspace per process. **Still not done**: real
+per-workspace isolation under one `WorkspaceActor` with a device-set-scoped sync `Link` — every
+open workspace today is still a wholly separate `Workspace` (own store/actors/watcher/LAN/relay/
+file-carrier), just now possibly several of them in one process (`daemon-workspace-actor`, todo
+19, is what actually nests them). The CLI also still only knows a directory, not a real
+`WorkspaceId`, and still dials a per-directory socket rather than the true global one
+(`cli-workspace-commands`, todo 20). See `tasks/daemon-global-socket/notes.md` for the full design
+and what's deliberately deferred.
 
 ## Public interface
-- `txtodod --dir <workspace>`: pid lock at `.txtodo/txtodod.pid`, gRPC (`txtodo.v1.Txtodo`) on
-  `.txtodo/txtodod.sock`, JSON logs under `.txtodo/logs/txtodod.log.YYYY-MM-DD` (7 kept,
-  `TXTODO_LOG` filter). SIGTERM/SIGINT drain and remove the socket.
+- `txtodod [--dir <workspace>]`. **True global mode** (`--dir` omitted, the new default): binds
+  the one device-global socket (`$TXTODO_SOCKET` override, else `$XDG_DATA_HOME/txtodo/
+  txtodod.sock`/platform equivalent — see `workspace_registry_paths.rs`), pid lock and JSON logs
+  alongside it, and opens every workspace the registry (`$TXTODO_REGISTRY_DB` override, else
+  `$XDG_DATA_HOME/txtodo/registry.db`) already knows about — 0 opened is normal until a human has
+  a way to register one (`cli-workspace-commands`, not built yet). **`--dir <workspace>` bridge**
+  (legacy, kept so the huge pre-existing single-workspace test suite and today's CLI need no
+  changes): binds the *pre-existing* per-workspace locations instead — pid lock at
+  `.txtodo/txtodod.pid`, socket at `.txtodo/txtodod.sock`, logs under `.txtodo/logs/
+  txtodod.log.YYYY-MM-DD` (7 kept, `TXTODO_LOG` filter) — and auto-registers/opens that one
+  directory (plus, best-effort, anything else already in whatever registry is in effect). Either
+  way, every RPC's wire `WorkspaceSelector` (`workspace_id` or `path`) picks which open workspace
+  it targets; omitted resolves to "the sole open workspace" (ambiguous, refused with a clear error,
+  when 0 or 2+ are open) — see `workspace_catalog.rs::resolve`. SIGTERM/SIGINT drain and remove the
+  socket.
+- `workspace_catalog.rs` (+ `workspace_catalog_open.rs`, split for the line budget):
+  `WorkspaceCatalog` — wraps `workspace_registry::WorkspaceRegistry` (the catalog of known
+  directories) with the live `Workspace`s this process has actually opened.
+  `open_dir_bridge(dir)`/`open_all_registered()` (startup), `resolve(selector) ->
+  Result<SharedWorkspace, Status>` (every RPC handler's routing call, never panics on an unknown
+  selector — `NotFound`/`InvalidArgument`/`FailedPrecondition` as appropriate). `WorkspaceOpenArgs`
+  bundles the daemon-wide flags (identity mode, keystore, relay, `--sync-dir`) applied uniformly to
+  every workspace this catalog opens — deliberately not per-workspace yet, `daemon-workspace-actor`'s
+  job once sync moves to a device-set-scoped `Link` per ADR 0025. `OpenedWorkspace` holds
+  everything that must stay alive for one open workspace's background work (watcher, LAN, relay,
+  file-carrier tasks) and stops them all on `Drop`.
+- `global_service.rs`: `GlobalService`, the `Txtodo` impl actually bound to the socket in
+  production — every method resolves `req.workspace` via the catalog, then delegates to a freshly
+  scoped `TxtodoService` (unchanged; see below). `TxtodoService` itself still implements `Txtodo`
+  directly too, unmodified, specifically so whitebox tests that construct one against a single
+  already-open `Workspace` (bypassing the catalog, via `serve::serve` rather than
+  `serve::serve_global`) need zero changes.
 - Module map: `workspace` (registry, device id, discovery) → `actor` + `external` (FileActor:
   open/recover, apply, external change, commit, undo, checkout) ← `handle` (messages, replies) ·
   `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every

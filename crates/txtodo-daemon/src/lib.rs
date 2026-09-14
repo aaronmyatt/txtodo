@@ -25,6 +25,7 @@ mod external;
 pub mod fastid;
 mod fields;
 pub mod file_carrier;
+pub mod global_service;
 pub mod handle;
 pub mod history;
 mod identity_assign;
@@ -85,6 +86,8 @@ mod watch_forward;
 pub mod watch_task;
 pub mod watcher;
 pub mod workspace;
+pub mod workspace_catalog;
+mod workspace_catalog_open;
 mod workspace_error;
 mod workspace_mint;
 pub mod workspace_registry;
@@ -128,6 +131,8 @@ mod state_goldens;
 mod state_tests;
 #[cfg(test)]
 mod sync_ops_tests;
+#[cfg(test)]
+mod workspace_catalog_tests;
 #[cfg(test)]
 mod workspace_registry_tests;
 #[cfg(test)]
