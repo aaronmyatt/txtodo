@@ -70,6 +70,11 @@ hyper-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 # https://docs.rs/tempfile — every test gets its own workspace dir
 tempfile = "3"
+# The reference relay's own opaque blob store (plan M8 `relay-converge-test`, item 8): a real
+# `relay::store::Store`, so `relay_converge.rs`'s opacity assertion stores real sealed ciphertext
+# in the real relay crate rather than re-deriving its guarantees by inspection. Dev-only — never a
+# production dependency (the two binaries never talk to each other; see that test's module doc).
+relay = { path = "../../relay" }
 
 [[bench]]
 name = "reconcile"

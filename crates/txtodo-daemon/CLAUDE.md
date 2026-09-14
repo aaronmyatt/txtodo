@@ -152,6 +152,39 @@ true of this binary (`main.rs` still runs one workspace per process via `--dir`)
   connects once both ends share one identity across carriers, which is `relay-converge-test`'s job;
   this pass proves the LAN→relay *selection* logic end to end via simulation, the same spirit as
   `lan_loopback_converge.rs` proving LAN for real versus `endpoint_tests.rs`'s same-process caveat.
+- `--relay-dial-peer`/`--no-lan` (plan M8 `relay-converge-test`, `relay.rs`): investigating the
+  identity gap above for a real two-daemon test surfaced a deeper one — `relay_fallback_dial` only
+  ever runs for a peer `lan.rs::handle_sighting` already learned about via mDNS, which by
+  construction never crosses a real network boundary, so the relay fallback path was never actually
+  reachable for two daemons that never shared a LAN. `--relay-dial-peer <hex relay node id>` is a
+  test/manual-pairing-substitute seam (real pairing-over-relay is still `sync-pairing-relay`'s own
+  not-yet-built task): `relay.rs::dial_known_peer` connects directly to a peer's *relay* identity
+  (never conflated with a LAN one, sidestepping the identity gap too) once this daemon's own
+  endpoint is online, retrying on `DIAL_KNOWN_PEER_INTERVAL` the same way `lan.rs`'s resync does.
+  `relay.rs::bind` also now records the bound node id in `Health.relay_last_outcome`
+  (`"bound as <hex>; awaiting connections"`) so a peer (or a test) can learn it without a new RPC.
+  `--no-lan` (`main.rs::start_lan`) skips `lan::start` entirely, for a forced-relay test that must
+  prove no LAN path exists to converge through instead. `crates/txtodo-daemon/tests/
+  relay_converge.rs` is the real two-daemon proof; see its own module doc for what it does and does
+  not establish in this sandbox (no Linux/root — no real network-namespace boundary).
+- `file_carrier.rs` (plan M8 `relay-converge-test`, wiring `sync-file-carrier`'s
+  `txtodo_sync::FileCarrier` into the daemon for the first time — `--sync-dir` has existed in
+  `txtodo-cli`'s config since that task, but nothing on the daemon side ever opened a carrier):
+  `file_carrier::start(ws, sync_dir)` spawns a background broadcast-and-poll loop, not a `Session`
+  handshake (`lan.rs`/`relay.rs` have a live peer to `Hello`/`Want` with over a QUIC connection; a
+  shared folder does not). Every `FILE_CARRIER_POLL_INTERVAL` tick, `send_new_ops` seals whatever
+  local ops the carrier has not yet been told about (tracked via `last_sent: Heads`, diffed against
+  the real heads with `txtodo_sync::want`/`advance` — the identical head-diffing primitive
+  `Session`/`lan.rs` use, driven by "what did I last write" instead of a peer's `Want`) into its own
+  `sync/<device-id>.ops` file; `recv_new_ops` polls every *other* device's file (own-file-only is
+  `FileCarrier::poll`'s own property, not reimplemented here), opens+decodes+verifies each frame,
+  and commits via `lan_apply.rs`'s existing `commit_incoming_ops`/`device_keys_for` — reused as-is.
+  One real bug found wiring this: `commit_incoming_ops` calls `rt.block_on` internally, safe from
+  `lan.rs`'s call site only because `drive_session` always runs on a dedicated `spawn_blocking`
+  thread; `file_carrier.rs` has no per-connection thread to dedicate (a periodic tick, not a
+  connection), so its own call site wraps it in `tokio::task::block_in_place` instead — without
+  that it panics ("cannot start a runtime from within a runtime").
+  `crates/txtodo-daemon/tests/file_carrier_converge.rs` is the real two-daemon, no-network proof.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

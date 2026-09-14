@@ -12,7 +12,7 @@ use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::watch_task;
 use txtodo_daemon::workspace::Workspace;
-use txtodo_daemon::{lan, relay, serve, server};
+use txtodo_daemon::{file_carrier, lan, relay, serve, server};
 use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
@@ -33,6 +33,36 @@ struct Args {
     /// The relay URL (plan M8 `sync-relay-enable`, ADR 0026); `None` when `--relay` is omitted,
     /// meaning relay stays off (LAN-only, unchanged M4 behaviour) — additive, never required.
     relay_url: Option<String>,
+    /// `--relay-dial-peer <hex node id>` (plan M8 `relay-converge-test`): a peer's *relay* node id
+    /// to actively dial once this daemon's relay endpoint is bound, bypassing LAN discovery
+    /// entirely — `relay.rs`'s module doc explains why this exists (no pairing-over-relay yet, so
+    /// nothing else ever tells this daemon who to reach across a real network boundary). Test/
+    /// manual-pairing-substitute only; `None` when the flag is omitted, the ordinary case.
+    relay_dial_peer: Option<[u8; 32]>,
+    /// `--no-lan` (plan M8 `relay-converge-test`): skips `lan::start` entirely so this daemon has
+    /// no LAN path at all — proves a convergence test actually exercised the relay, not LAN
+    /// discovering the same peer on a shared interface underneath it.
+    no_lan: bool,
+    /// `--sync-dir <path>` (plan M8 `sync-file-carrier`): the shared folder `file_carrier::start`
+    /// watches; `None` when omitted, meaning the file carrier stays off — additive, like relay.
+    sync_dir: Option<PathBuf>,
+}
+
+/// Lowercase (or uppercase) hex to exactly 32 bytes; `None` on anything else — `--relay-dial-peer`
+/// is external input (a human or a test harness typed it), never assumed well-formed.
+fn parse_relay_dial_peer(raw: &std::ffi::OsStr) -> Result<[u8; 32], String> {
+    let s = raw
+        .to_str()
+        .ok_or_else(|| "--relay-dial-peer must be valid UTF-8 hex".to_owned())?;
+    let bad = || format!("--relay-dial-peer must be 64 hex chars (32 bytes), got {s:?}");
+    if s.len() != 64 {
+        return Err(bad());
+    }
+    let mut out = [0u8; 32];
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).map_err(|_| bad())?;
+    }
+    Ok(out)
 }
 
 fn parse_identity_mode(raw: &std::ffi::OsStr) -> Result<IdentityMode, String> {
@@ -60,7 +90,10 @@ fn parse_args() -> Result<Args, String> {
     let mut identity_mode = IdentityMode::Sidecar;
     let mut key_store_mode = None;
     let mut relay_url = None;
-    // Bounded by the argv length; five flags are all this binary knows.
+    let mut relay_dial_peer = None;
+    let mut no_lan = false;
+    let mut sync_dir = None;
+    // Bounded by the argv length; this binary's flags are all it knows.
     while let Some(a) = args.next() {
         match a.to_str() {
             Some("--dir") => dir = args.next().map(PathBuf::from),
@@ -75,6 +108,15 @@ fn parse_args() -> Result<Args, String> {
             Some("--relay") => {
                 let raw = args.next().ok_or("--relay needs a value")?;
                 relay_url = Some(raw.to_string_lossy().into_owned());
+            }
+            Some("--relay-dial-peer") => {
+                let raw = args.next().ok_or("--relay-dial-peer needs a value")?;
+                relay_dial_peer = Some(parse_relay_dial_peer(&raw)?);
+            }
+            Some("--no-lan") => no_lan = true,
+            Some("--sync-dir") => {
+                let raw = args.next().ok_or("--sync-dir needs a value")?;
+                sync_dir = Some(PathBuf::from(raw));
             }
             Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
             _ => {
@@ -94,6 +136,9 @@ fn parse_args() -> Result<Args, String> {
         identity_mode,
         key_store_mode,
         relay_url,
+        relay_dial_peer,
+        no_lan,
+        sync_dir,
     })
 }
 
@@ -168,6 +213,15 @@ fn open_workspace(args: &Args) -> Result<Workspace, Box<dyn std::error::Error>> 
     )?)
 }
 
+/// `--no-lan` (plan M8 `relay-converge-test`): skip LAN entirely so a forced-relay test proves the
+/// relay path actually carried convergence, rather than LAN quietly doing it underneath.
+fn start_lan(args: &Args, ws: &server::SharedWorkspace) -> Option<lan::LanTransport> {
+    if args.no_lan {
+        return None;
+    }
+    Some(lan::start(Arc::clone(ws), Arc::new(SystemClock)))
+}
+
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let state_dir = args.dir.join(txtodo_daemon::walker::STATE_DIR);
     std::fs::create_dir_all(&state_dir)?;
@@ -184,8 +238,13 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let key_store_backend = ws.key_store_backend_name();
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let (_watcher, watch_handle) = watch_task::start(Arc::clone(&ws), Arc::new(SystemClock))?;
-    let lan_transport = lan::start(Arc::clone(&ws), Arc::new(SystemClock));
-    let relay_transport = relay::start(Arc::clone(&ws), args.relay_url.clone());
+    let lan_transport = start_lan(&args, &ws);
+    let relay_transport = relay::start(
+        Arc::clone(&ws),
+        args.relay_url.clone(),
+        args.relay_dial_peer,
+    );
+    let file_carrier_transport = file_carrier::start(Arc::clone(&ws), args.sync_dir.clone());
     eprintln!(
         "txtodod ready: {documents} document(s), socket {}, key_store={key_store_backend}",
         socket.display()
@@ -211,8 +270,9 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     };
     serve::serve(ws, &socket, shutdown).await?;
     watch_handle.abort();
-    lan_transport.abort();
+    lan_transport.as_ref().inspect(|l| l.abort());
     relay_transport.as_ref().inspect(|r| r.abort());
+    file_carrier_transport.as_ref().inspect(|f| f.abort());
     eprintln!("txtodod stopped");
     Ok(())
 }
