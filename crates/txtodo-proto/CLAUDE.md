@@ -16,6 +16,11 @@ started with `TXTODO_TEST_HOOKS=1`).
 `HealthResponse` carries `key_store_backend` (plan M4 tasks/sync-keystore) and four LAN-transport
 fields (`lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/`lan_group_key_present`,
 fields 8-11 — `key_store_backend` already held field 7) so `txtodo doctor` can report both.
+`lan_relay_disabled` is a real runtime flag as of plan M8 `sync-relay-enable`/ADR 0026 (true iff no
+relay is configured), not the field-8-era hardcoded `true`. Fields 12-13, added the same task:
+`relay_url` (the configured relay, empty when off) and `relay_last_outcome` (human-readable result
+of the most recent relay bind/accept/connect attempt, empty until one has happened) — design §5's
+"doctor: relay reachability".
 
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).

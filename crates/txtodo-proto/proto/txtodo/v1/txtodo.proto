@@ -283,10 +283,21 @@ message HealthResponse {
   string key_store_backend = 7;
   // LAN transport (plan M4 `sync-lan-transport`), for `txtodo doctor` — a human should see
   // whether sync is even possible without reading code.
-  bool lan_relay_disabled = 8;    // always true today (M8 turns this on deliberately)
+  // Real runtime flag as of plan M8 `sync-relay-enable` / ADR 0026: true iff no relay_url is
+  // configured for this workspace. LAN stays the primary path either way (ADR 0026 reinstates
+  // it); relay is an additive fallback, never a replacement, so this being false is normal and
+  // expected once a human configures `--relay`/`relay_url`, not a failure the way it would have
+  // been under ADR 0024's now-reversed LAN-only decision.
+  bool lan_relay_disabled = 8;
   bool lan_endpoint_bound = 9;    // the iroh endpoint bound and is accepting connections
   bool lan_discovery_active = 10;  // mDNS is advertising and browsing for this group
   bool lan_group_key_present = 11; // this workspace has a group key to sync with (paired)
+  // The configured relay URL (plan M8 `sync-relay-enable`, design §5 doctor: relay reachability);
+  // empty when relay is off, matching `lan_relay_disabled`.
+  string relay_url = 12;
+  // Human-readable outcome of the most recent relay bind/accept/connect attempt; empty until one
+  // has actually happened (relay off, or on but never yet exercised).
+  string relay_last_outcome = 13;
 }
 
 // --- notes.md (plan M5, design §7) ---
