@@ -74,12 +74,54 @@ async fn get_notes_and_edit_notes_refuse_a_taskref_matching_no_real_task() {
         .edit_notes(pb::NotesEditRequest {
             task: Some(task),
             new_text: "hi".into(),
+            workspace: None,
         })
         .await
         .expect_err("edit_notes should reach the daemon and come back refused, not transport-fail");
     assert!(matches!(edit_err, DaemonError::Rpc(_)), "{edit_err}");
 
     kill(pid);
+}
+
+/// Applies a single `Add` and returns the `task_id` `History` reports for it — shared plumbing
+/// for a test that needs a real task, not a regex over the file text: whether the daemon renders
+/// an `id:` tag into the file at all is an `identity_mode` config (tagged vs. sidecar, now
+/// defaulting to sidecar — `tasks/sidecar-identity`), and callers only need a real task_id, not
+/// to assert which mode is active. Not itself a `#[test]` fn, so `clippy::unwrap_used`/
+/// `expect_used` still apply — same reason `connected_client` above uses `unwrap_or_else`.
+async fn add_task_and_get_id(client: &mut DaemonClient, line: &str) -> String {
+    client
+        .apply(pb::ApplyRequest {
+            path: "todo.txt".into(),
+            mutations: vec![pb::Mutation {
+                kind: Some(pb::mutation::Kind::Add(pb::Add { line: line.into() })),
+            }],
+            agent: None,
+            workspace: None,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("apply: {e}"));
+    let history = client
+        .history(pb::HistoryRequest {
+            path: "todo.txt".into(),
+            task_id: String::new(),
+            limit: 1,
+            before_seq: 0,
+            workspace: None,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("history: {e}"));
+    let task_id = history
+        .ops
+        .first()
+        .unwrap_or_else(|| panic!("the just-applied Add op is in history"))
+        .task_id
+        .clone();
+    assert!(
+        !task_id.is_empty(),
+        "Add always assigns a task_id internally, tag or not"
+    );
+    task_id
 }
 
 /// Full happy path through the bridge for a *real* task (tasks/desktop-detail-view depends on
@@ -93,47 +135,11 @@ async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge()
     let dir = temp_workspace();
     let (mut client, pid) = connected_client(dir.path()).await;
 
-    client
-        .apply(pb::ApplyRequest {
-            path: "todo.txt".into(),
-            mutations: vec![pb::Mutation {
-                kind: Some(pb::mutation::Kind::Add(pb::Add {
-                    line: "plan the roadmap".into(),
-                })),
-            }],
-            agent: None,
-        })
-        .await
-        .expect("apply should reach the daemon");
-
-    // `History`'s `OpSummary.task_id`, not a regex over the file text: whether the daemon renders
-    // an `id:` tag into the file at all is an `identity_mode` config (tagged vs. sidecar, now
-    // defaulting to sidecar — `tasks/sidecar-identity`), and this test only needs a real task_id,
-    // not to assert which mode is active.
-    let history = client
-        .history(pb::HistoryRequest {
-            path: "todo.txt".into(),
-            task_id: String::new(),
-            limit: 1,
-            before_seq: 0,
-        })
-        .await
-        .expect("history should reach the daemon");
-    let task_id = history
-        .ops
-        .first()
-        .expect("the just-applied Add op is in history")
-        .task_id
-        .clone();
-    assert!(
-        !task_id.is_empty(),
-        "Add always assigns a task_id internally, tag or not"
-    );
+    let task_id = add_task_and_get_id(&mut client, "plan the roadmap").await;
     let task = pb::TaskRef {
         line_number: 0, // ignored by `locate_task`, which resolves purely by task_id
         task_id: task_id.clone(),
     };
-
     let before = client
         .get_notes(task.clone())
         .await
@@ -147,6 +153,7 @@ async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge()
         .edit_notes(pb::NotesEditRequest {
             task: Some(task.clone()),
             new_text: "first note".into(),
+            workspace: None,
         })
         .await
         .expect("edit_notes should lazily create the ref: tag, directory and notes.md");
@@ -209,6 +216,7 @@ async fn tokens_create_list_and_revoke_round_trip_through_the_bridge() {
             name: "smoke".into(),
             scopes: vec!["read".into()],
             expires: String::new(),
+            workspace: None,
         })
         .await
         .expect("token_create should reach the daemon");
@@ -269,6 +277,7 @@ async fn op_log_drains_the_stream_into_a_vec() {
                 })),
             }],
             agent: None,
+            workspace: None,
         })
         .await
         .expect("apply should reach the daemon");
