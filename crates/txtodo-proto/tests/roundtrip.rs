@@ -82,6 +82,7 @@ fn every_mutation_variant_survives_encode_decode() {
                 token_id: "t".into(),
                 name: "claude".into(),
             }),
+            workspace: None,
         };
         round_trip(&req);
         let decoded = ApplyRequest::decode(req.encode_to_vec().as_slice()).unwrap();
@@ -144,26 +145,34 @@ fn responses_and_streams_round_trip() {
 fn requests_round_trip() {
     round_trip(&GetFileRequest {
         path: "todo.txt".into(),
+        workspace: None,
     });
     round_trip(&WatchRequest {
         paths: vec!["todo.txt".into(), "q4/todo.txt".into()],
+        workspace: None,
     });
     round_trip(&HistoryRequest {
         path: String::new(),
         task_id: "x".into(),
         limit: 50,
         before_seq: 0,
+        workspace: None,
     });
     round_trip(&UndoRequest {
         path: "todo.txt".into(),
         steps: 2,
+        workspace: None,
     });
     round_trip(&CheckoutRequest {
         path: "todo.txt".into(),
         at_wall_ms: 99,
+        workspace: None,
     });
-    round_trip(&DeviceListRequest {});
-    round_trip(&DeviceRemoveRequest { id: "x".into() });
+    round_trip(&DeviceListRequest { workspace: None });
+    round_trip(&DeviceRemoveRequest {
+        id: "x".into(),
+        workspace: None,
+    });
 }
 
 #[test]
