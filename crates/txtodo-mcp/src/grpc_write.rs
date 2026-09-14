@@ -48,6 +48,7 @@ async fn apply_one(
         path: path.to_owned(),
         mutations: vec![mutation],
         agent: ctx.agent,
+        workspace: None,
     };
     let rep = client.apply(req).await.map_err(status)?;
     Ok(rep.into_inner())
@@ -337,9 +338,12 @@ pub async fn raw_write(
 /// `parse_required_task_id` (`notes.rs`) resolves purely by `task_id`, unlike every other RPC's
 /// `TaskRef`, which needs a real line number.
 pub async fn notes_get(mut client: TxtodoClient<Channel>, id: TaskId) -> Result<String, McpError> {
-    let req = pb::TaskRef {
-        line_number: 0,
-        task_id: id,
+    let req = pb::GetNotesRequest {
+        task: Some(pb::TaskRef {
+            line_number: 0,
+            task_id: id,
+        }),
+        workspace: None,
     };
     let rep = client.get_notes(req).await.map_err(status)?;
     Ok(String::from_utf8_lossy(&rep.into_inner().bytes).into_owned())
@@ -359,6 +363,7 @@ pub async fn notes_set(
             task_id: id,
         }),
         new_text: text,
+        workspace: None,
     };
     client.edit_notes(req).await.map_err(status)?;
     Ok(())

@@ -26,6 +26,7 @@ pub async fn get_file_text(
 ) -> Result<String, McpError> {
     let req = pb::GetFileRequest {
         path: path.to_owned(),
+        workspace: None,
     };
     let rep = client.get_file(req).await.map_err(status)?;
     Ok(String::from_utf8_lossy(&rep.into_inner().bytes).into_owned())
@@ -34,7 +35,7 @@ pub async fn get_file_text(
 /// Every synced document (`ListFiles`).
 pub async fn list_files(mut client: TxtodoClient<Channel>) -> Result<Vec<FileMeta>, McpError> {
     let rep = client
-        .list_files(pb::ListFilesRequest {})
+        .list_files(pb::ListFilesRequest { workspace: None })
         .await
         .map_err(status)?;
     Ok(rep
@@ -139,6 +140,7 @@ pub async fn history(
         task_id: id.unwrap_or_default(),
         limit: 0,
         before_seq: 0,
+        workspace: None,
     };
     let rep = client.history(req).await.map_err(status)?;
     let mut ops: Vec<OpSummary> = rep.into_inner().ops.into_iter().map(op_summary).collect();
