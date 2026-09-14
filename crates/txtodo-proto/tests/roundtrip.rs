@@ -128,6 +128,7 @@ fn responses_and_streams_round_trip() {
         lan_group_key_present: false,
         relay_url: String::new(),
         relay_last_outcome: String::new(),
+        pairing_last_carrier: String::new(),
     });
 }
 
