@@ -126,6 +126,8 @@ fn responses_and_streams_round_trip() {
         lan_endpoint_bound: true,
         lan_discovery_active: true,
         lan_group_key_present: false,
+        relay_url: String::new(),
+        relay_last_outcome: String::new(),
     });
 }
 

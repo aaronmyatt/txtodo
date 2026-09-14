@@ -313,8 +313,11 @@ pub struct HealthResponse {
     pub key_store_backend: ::prost::alloc::string::String,
     /// LAN transport (plan M4 `sync-lan-transport`), for `txtodo doctor` — a human should see
     /// whether sync is even possible without reading code.
-    ///
-    /// always true today (M8 turns this on deliberately)
+    /// Real runtime flag as of plan M8 `sync-relay-enable` / ADR 0026: true iff no relay_url is
+    /// configured for this workspace. LAN stays the primary path either way (ADR 0026 reinstates
+    /// it); relay is an additive fallback, never a replacement, so this being false is normal and
+    /// expected once a human configures `--relay`/`relay_url`, not a failure the way it would have
+    /// been under ADR 0024's now-reversed LAN-only decision.
     #[prost(bool, tag = "8")]
     pub lan_relay_disabled: bool,
     /// the iroh endpoint bound and is accepting connections
@@ -326,6 +329,14 @@ pub struct HealthResponse {
     /// this workspace has a group key to sync with (paired)
     #[prost(bool, tag = "11")]
     pub lan_group_key_present: bool,
+    /// The configured relay URL (plan M8 `sync-relay-enable`, design §5 doctor: relay reachability);
+    /// empty when relay is off, matching `lan_relay_disabled`.
+    #[prost(string, tag = "12")]
+    pub relay_url: ::prost::alloc::string::String,
+    /// Human-readable outcome of the most recent relay bind/accept/connect attempt; empty until one
+    /// has actually happened (relay off, or on but never yet exercised).
+    #[prost(string, tag = "13")]
+    pub relay_last_outcome: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
