@@ -1,11 +1,11 @@
-2026-09-12 Re-run the tracing-capture test across relay, file-carrier and bundle log paths; assert no key or passphrase bytes appear in any JSON log (item 1) +m8 @security @test id:01M2B4ZWHAT6BZBY2JT289VYCZ
 2026-09-12 Test: the bundle manifest contains no group-key bytes in the clear; the key only ever sits inside the passphrase wrap (item 2) +m8 @security @test id:01M2B4ZWHA9BGPX2190Q30NV7M
 2026-09-12 Test: a wrong-passphrase bundle import fails without writing any state (item 3) +m8 @security @test id:01M2B4ZWHA4E9SQ3MXX211J9CM
-2026-09-12 Test: --sync-dir validates as external input — refuses a symlink escape and .. outside the chosen folder (item 6) +m8 @security @test id:01M2B4ZWHAC14XBHWYFTNZ2W0Z
-2026-09-12 Test: ops on the file-carrier disk are ciphertext only, never the group key or plaintext ops (item 3) +m8 @security @test id:01M2B4ZWHA5TA5EDEEGZBSQ02J
 2026-09-12 Verify every network message across relay and file carrier is versioned, authenticated, encrypted; re-check Hello as the likely gap (item 3) +m8 @security id:01M2B4ZWHATCJ9XJKB45Q5XCN8
 2026-09-12 Confirm the relay stores only opaque Vec<u8> blobs and logs routing metadata, never payload; close the M4-deferred op-type item (item 7) +m8 @security id:01M2B4ZWHBESDEMYET0MPXQRDM
 2026-09-12 Re-run the M4/M6 inherited tests (MCP loopback, tokens never logged, ref: slug fuzz) in the M8 job and assert green (items 4/5) +m8 @security @test id:01M2B4ZWHBHF6NX4KEDFCZDAR1
 2026-09-12 Append the dated RATCHET.md findings section: 7 rows, each pass/fail/deferred to M<n>, each naming its test — frozen + append-only, ask +m8 @security @docs id:01M2B4ZWHBEQQV5T1TY2N08JRD
 2026-09-12 For anything deferred, add a todo.txt line in the owning milestone, never a prose note nobody reads +m8 @security id:01M2B4ZWHB4KHDSXXZYGF1DSN4
 2026-09-12 Complete the parent line in ./todo.txt +m8 @security id:01M2B4ZWHB7CQNPN0TXMC1SS4S
+x 2026-09-14 2026-09-12 Re-run the tracing-capture test across relay, file-carrier and bundle log paths; assert no key or passphrase bytes appear in any JSON log (item 1) +m8 @security @test — crates/txtodo-daemon/src/security_m8_tests.rs, real relay/file-carrier/bundle cycles moving real secrets, none leak id:01M2B4ZWHAT6BZBY2JT289VYCZ
+x 2026-09-14 2026-09-12 Test: --sync-dir validates as external input — refuses a symlink escape and .. outside the chosen folder (item 6) +m8 @security @test — real bug found and fixed: carrier.rs's read_dir followed symlinks; regression-confirmed (reverting the fix made the new test read a sentinel through a planted symlink) id:01M2B4ZWHAC14XBHWYFTNZ2W0Z
+x 2026-09-14 2026-09-12 Test: ops on the file-carrier disk are ciphertext only, never the group key or plaintext ops (item 3) +m8 @security @test — carrier_tests.rs::ops_on_disk_are_ciphertext_only_never_plaintext_or_the_group_key, true by construction, now proven id:01M2B4ZWHA5TA5EDEEGZBSQ02J
