@@ -34,10 +34,13 @@ const AWAIT_PEER_POLL: Duration = Duration::from_millis(500);
 
 /// The JSON `code` a QR encodes and `txtodo pair <code>` accepts: field-for-field the same shape
 /// `crates/txtodo-daemon/src/pairing_wire.rs` parses (`device`, `group_id`, `x25519_pub`,
-/// `endpoint`, `nonce`, `identity_mode`) — this crate may not depend on txtodo-daemon or
-/// txtodo-sync (slice rule: `May depend only on: txtodo-core, txtodo-proto`), so this JSON shape,
-/// built straight from `pb::PairOfferResponse`'s own already-encoded string fields, is the only
-/// contract the two crates share.
+/// `endpoint`, `nonce`, `identity_mode`, `relay_node_id`, `relay_url`) — this crate may not depend
+/// on txtodo-daemon or txtodo-sync (slice rule: `May depend only on: txtodo-core, txtodo-proto`),
+/// so this JSON shape, built straight from `pb::PairOfferResponse`'s own already-encoded string
+/// fields, is the only contract the two crates share. `relay_node_id`/`relay_url` (plan M8
+/// `sync-pairing-relay`) are empty strings, not absent, when the initiator has no relay configured
+/// — `#[serde(default)]` so an *older* code (encoded before this task) without these fields at all
+/// still decodes, since this struct is also what `txtodo pair <code>` parses back.
 #[derive(Debug, Serialize, Deserialize)]
 struct PairingCode {
     device: String,
@@ -48,6 +51,12 @@ struct PairingCode {
     /// `"tagged"` or `"sidecar"` (docs/questions.md Q2), the initiator's own — carried so the
     /// joiner can detect a mismatch and refuse rather than guess a merge (Q6, open).
     identity_mode: String,
+    /// The initiator's relay node id, hex-encoded; empty when it has no relay configured/bound.
+    #[serde(default)]
+    relay_node_id: String,
+    /// The relay URL `relay_node_id` is reachable through; empty exactly when it is.
+    #[serde(default)]
+    relay_url: String,
 }
 
 impl From<&txtodo_proto::v1::PairOfferResponse> for PairingCode {
@@ -59,6 +68,8 @@ impl From<&txtodo_proto::v1::PairOfferResponse> for PairingCode {
             endpoint: r.endpoint.clone(),
             nonce: r.nonce.clone(),
             identity_mode: r.identity_mode.clone(),
+            relay_node_id: r.relay_node_id.clone(),
+            relay_url: r.relay_url.clone(),
         }
     }
 }

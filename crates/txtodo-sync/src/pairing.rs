@@ -102,6 +102,11 @@ impl PairingSession {
             endpoint,
             nonce,
             issued_at_ms: now_ms,
+            // Filled in later by the daemon crate's pair_offer_impl (plan M8
+            // sync-pairing-relay) when a relay is configured/bound; this crate's own crypto
+            // core has no relay endpoint to read.
+            relay_node_id: None,
+            relay_url: None,
         };
         let session = PairingSession {
             own_device,

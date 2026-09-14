@@ -24,16 +24,45 @@ group key, so it cannot reuse `sync-relay-enable`'s group-keyed relay routing as
   (`HolepunchError::ForeignGroup`), refusing to dial a peer outside the caller's group. Pairing has
   no group yet, so this gate cannot apply to the pairing dial as written.
 
-### Open design question (resolve first, before writing code)
+### Open design question — RESOLVED 2026-09-14: option (a)
 `holepunch.rs`'s group gate exists to stop an already-paired device from being tricked into dialing
 a stranger over the relay. Pairing needs *some* replacement guard, since "no gate at all" would let
-any relay client dial any other client's pairing endpoint. Two directions, pick one and update this
-file before implementing:
+any relay client dial any other client's pairing endpoint. Two directions were on the table:
 - (a) A pairing-specific relay dial that gates on the pairing offer's one-time `nonce`/code instead
   of `GroupId` — the joiner must already know the nonce (from the QR/text code), so this is no
   weaker than the LAN path's guarantee.
 - (b) Extend `holepunch::connect` to accept an alternate gate predicate instead of only `GroupId`,
   so both the sync path and the pairing path share one dial implementation.
+
+**Decision: (a).** Investigating the actual LAN pairing path (`pairing_lan.rs`) before writing any
+relay code found that the LAN path's *real* security boundary was never `GroupId` in the first
+place: `LanEndpoint::connect_pairing` (the method the LAN joiner already dials through) has no
+group check at all — it dials by node id alone, over a dedicated `PAIRING_ALPN`. The actual gate is
+`pairing_lan.rs::process_hello`, which refuses any `JoinerHello` whose `nonce`/`group` do not match
+this daemon's own active offer, checked *after* the connection exists but *before* any crypto state
+advances. That check is already carrier-agnostic (it reads the decoded `JoinerHello`, not the
+`Link` it arrived over) — a relay-carried pairing connection gets the identical protection for
+free, so option (a) needs no new "gate" abstraction at all, only a new relay-specific *dial*:
+- `RelayEndpoint::connect_pairing(node)` (txtodo-sync `holepunch.rs`), the relay twin of
+  `LanEndpoint::connect_pairing` — dials by node id over `PAIRING_ALPN`, no `GroupId` parameter,
+  no `ForeignGroup` check. Mirrors the LAN method exactly; `holepunch::connect`'s own `GroupId` gate
+  (used by the already-merged, tested ongoing-sync relay path, `sync-relay-enable`/
+  `relay-converge-test`) is untouched — a second method, not a modified one.
+- The daemon's relay accept loop (`relay.rs`) dispatches an incoming connection by ALPN, exactly
+  the way `lan.rs::accept_one` already does: `PAIRING_ALPN` routes to `pairing_lan::handle_incoming`
+  (unchanged — same `JoinerHello`/`InitiatorReply` state machine, whichever carrier delivered the
+  frame). No crypto or SAS-flow code changes anywhere; only a second way to reach the same handler.
+- Option (b) was rejected: it would have required touching `holepunch::connect`'s existing
+  group-gated logic (or at minimum its call sites) that `relay-converge-test`'s already-merged,
+  tested ongoing-sync path depends on — real risk for no benefit, since (a) reuses the existing
+  nonce gate for free and touches zero pre-existing sync-path code.
+
+**Known limitation, flagged, not fixed this pass**: `RelayEndpoint::connect_pairing` dials through
+`self.relay_url` — the *dialing* device's own configured relay, not necessarily the initiator's
+(carried separately in the offer's `relay_url` field for a human/future multi-relay routing layer
+to use). M8's own scope is one relay (design §4.5); this only actually rendezvous when both devices
+share the same relay URL, the same limitation `relay_fallback_dial`'s doc already names for
+ongoing sync. Not re-solved here — a multi-relay directory is out of scope.
 
 ### Wire format extension
 `PairingCode`/`PairOfferResponse` (`crates/txtodo-cli/src/commands/pair.rs`,

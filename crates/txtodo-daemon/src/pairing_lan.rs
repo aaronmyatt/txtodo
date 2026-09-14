@@ -70,10 +70,15 @@ async fn run_joiner(
     offer: PairingOffer,
     own_public: [u8; X25519_PUBLIC_KEY_BYTES],
 ) {
-    let Some(endpoint) = wait_for_endpoint(&ws).await else {
+    // No LAN endpoint at all is only a hard stop when the offer has no relay rendezvous either
+    // (plan M8 `sync-pairing-relay`) — under `--no-lan` (or any device that never bound one), a
+    // relay-only offer must still reach `joiner_loop` instead of bailing out here as it did before
+    // this task, which would make the relay path unreachable no matter what the offer carries.
+    let endpoint = wait_for_endpoint(&ws).await;
+    if endpoint.is_none() && offer.relay_node_id.is_none() {
         log_no_endpoint(offer.device);
         return;
-    };
+    }
     let (own_device, static_public) = {
         let ws = read(&ws);
         (ws.device(), ws.device_static_public().to_bytes())
@@ -86,45 +91,37 @@ async fn run_joiner(
         own_public,
         static_public,
     };
-    joiner_loop(&ctx, &endpoint, deadline_ms).await;
+    joiner_loop(&ctx, endpoint.as_deref(), deadline_ms).await;
 }
 
-async fn joiner_loop(ctx: &JoinerCtx, endpoint: &LanEndpoint, deadline_ms: u64) {
+async fn joiner_loop(ctx: &JoinerCtx, endpoint: Option<&LanEndpoint>, deadline_ms: u64) {
     loop {
         if read(&ctx.ws).clock().now_ms() >= deadline_ms {
             log_window_expired(ctx.offer.device);
             return;
         }
-        let Some(peer) = read(&ctx.ws).pairing_lan().find(ctx.offer.device) else {
+        // Unlike before plan M8 `sync-pairing-relay`, a missing LAN sighting no longer stalls
+        // this loop outright: an offer carrying a relay rendezvous still has something to try
+        // (`pairing_relay_dial::joiner_round`'s own relay half) — only "neither carrier has
+        // anything to dial yet" still sleeps and retries the LAN lookup.
+        let peer = read(&ctx.ws).pairing_lan().find(ctx.offer.device);
+        if peer.is_none() && ctx.offer.relay_node_id.is_none() {
             tokio::time::sleep(DISCOVER_POLL_INTERVAL).await;
             continue;
-        };
+        }
         let hello = build_hello(ctx);
-        if joiner_round(ctx, endpoint, &peer, hello).await {
+        let stop = crate::pairing_relay_dial::joiner_round(
+            &ctx.ws,
+            &ctx.offer,
+            endpoint,
+            peer.as_ref(),
+            hello,
+        )
+        .await;
+        if stop {
             return;
         }
         tokio::time::sleep(RETRY_INTERVAL).await;
-    }
-}
-
-/// One connection attempt and the reaction to it. Returns `true` when the loop should stop (a
-/// grant landed, or the attempt was rejected outright), `false` to sleep and retry.
-async fn joiner_round(
-    ctx: &JoinerCtx,
-    endpoint: &LanEndpoint,
-    peer: &DiscoveredPeer,
-    hello: JoinerHello,
-) -> bool {
-    match attempt(endpoint, peer, hello).await {
-        Some(InitiatorReply::Grant(sealed)) => {
-            finish_joiner(&ctx.ws, &ctx.offer, &sealed);
-            true
-        }
-        Some(InitiatorReply::Rejected) => {
-            log_joiner_rejected(ctx.offer.device);
-            true
-        }
-        Some(InitiatorReply::Pending) | None => false,
     }
 }
 
@@ -152,11 +149,13 @@ fn log_window_expired(peer: DeviceId) {
     tracing::warn!(%peer, "pairing_joiner_window_expired");
 }
 
-fn log_joiner_rejected(peer: DeviceId) {
+pub(crate) fn log_joiner_rejected(peer: DeviceId) {
     tracing::warn!(%peer, "pairing_joiner_rejected");
 }
 
-fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: &[u8]) {
+/// `pub(crate)`: `pairing_relay_dial.rs`'s racing joiner round calls this on a `Grant` reply,
+/// whichever carrier (LAN or relay) actually delivered it.
+pub(crate) fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: &[u8]) {
     let now_ms = read(ws).clock().now_ms();
     // `is_ready_to_send_key` (which `adopt_group_key` requires) reads *this* device's own
     // `PairingSession`, which has no way to observe the initiator's local confirmation except
@@ -188,10 +187,11 @@ async fn wait_for_endpoint(ws: &SharedWorkspace) -> Option<Arc<LanEndpoint>> {
     None
 }
 
-/// One connection attempt: dial, send `hello`, read one reply. `None` on any failure worth a retry
-/// (dial refused, link closed, a frame that didn't decode) — never a hard error, since the peer
-/// may simply not be reachable yet.
-async fn attempt(
+/// One connection attempt over LAN: dial, send `hello`, read one reply. `None` on any failure
+/// worth a retry (dial refused, link closed, a frame that didn't decode) — never a hard error,
+/// since the peer may simply not be reachable yet. `pub(crate)`: `pairing_relay_dial.rs`'s racing
+/// joiner round drives this as its LAN half.
+pub(crate) async fn attempt(
     endpoint: &LanEndpoint,
     peer: &DiscoveredPeer,
     hello: JoinerHello,
@@ -207,19 +207,35 @@ async fn attempt(
 }
 
 /// Blocks a dedicated thread on `link`'s synchronous `send`/`recv` (`Link`'s own contract — see
-/// `lan_link.rs`'s module doc on why this must never run on a plain tokio task).
-fn send_and_receive(mut link: IrohLink, hello: &JoinerHello) -> Option<InitiatorReply> {
+/// `lan_link.rs`'s module doc on why this must never run on a plain tokio task). `pub(crate)`:
+/// `pairing_relay_dial.rs`'s relay half drives the identical burst over a relay-backed `IrohLink`.
+pub(crate) fn send_and_receive(mut link: IrohLink, hello: &JoinerHello) -> Option<InitiatorReply> {
     let frame = hello.encode().ok()?;
     link.send(frame).ok()?;
     let reply_frame = link.recv().ok()?;
     InitiatorReply::decode(&reply_frame).ok()
 }
 
-/// Handles one incoming pairing connection (this device as initiator): reads one `JoinerHello`,
-/// advances this daemon's `PairingRegistry` as far as it will go, and replies once. Spawned by
-/// `lan.rs`'s accept loop on a `spawn_blocking` thread, same as `lan_session::drive_session` for a
-/// normal sync connection — `Link::send`/`recv` block, so this must never run on a plain tokio task.
+/// Handles one incoming pairing connection over the LAN carrier (this device as initiator) —
+/// [`handle_incoming_over`]'s `"lan"` twin, unchanged behaviour from before plan M8
+/// `sync-pairing-relay`. Spawned by `lan.rs`'s accept loop on a `spawn_blocking` thread, same as
+/// `lan_session::drive_session` for a normal sync connection — `Link::send`/`recv` block, so this
+/// must never run on a plain tokio task.
 pub(crate) fn handle_incoming(ws: &SharedWorkspace, link: &mut dyn Link) {
+    handle_incoming_over(ws, link, "lan");
+}
+
+/// [`handle_incoming`], naming which carrier this connection arrived over (plan M8
+/// `sync-pairing-relay`) — `relay.rs`'s own accept loop calls this directly with `"relay"`, since
+/// one `JoinerHello`/`InitiatorReply` handler now serves both carriers unchanged (notes.md's
+/// design decision, option (a): no crypto or SAS-flow changes, only the carrier changes). Records
+/// the carrier (`PairingLan::record_carrier`, for `txtodo doctor`) only when this round actually
+/// finalizes the pairing (`InitiatorReply::Grant`) — never optimistically on `Pending`/`Rejected`.
+pub(crate) fn handle_incoming_over(
+    ws: &SharedWorkspace,
+    link: &mut dyn Link,
+    carrier: &'static str,
+) {
     let Ok(frame) = link.recv() else {
         return;
     };
@@ -228,6 +244,9 @@ pub(crate) fn handle_incoming(ws: &SharedWorkspace, link: &mut dyn Link) {
         return;
     };
     let reply = process_hello(ws, hello);
+    if matches!(reply, InitiatorReply::Grant(_)) {
+        read(ws).pairing_lan().record_carrier(carrier);
+    }
     let Ok(reply_frame) = reply.encode() else {
         return;
     };

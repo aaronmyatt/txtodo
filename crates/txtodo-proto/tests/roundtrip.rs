@@ -25,6 +25,29 @@ fn task() -> Option<TaskRef> {
     })
 }
 
+fn sample_op() -> OpSummary {
+    OpSummary {
+        seq: 42,
+        op_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        hlc_wall_ms: 1_700_000_000_000,
+        hlc_counter: 7,
+        device: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        principal: "you@01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        kind: "edit_text".into(),
+        task_id: String::new(),
+        summary: "buy ducks".into(),
+    }
+}
+
+fn sample_file() -> FileInfo {
+    FileInfo {
+        path: "todo.txt".into(),
+        hash: vec![1; 32],
+        kind: FileKind::Todo as i32,
+        progress: Some(Progress { done: 1, total: 3 }),
+    }
+}
+
 #[test]
 fn every_mutation_variant_survives_encode_decode() {
     let kinds = [
@@ -68,23 +91,8 @@ fn every_mutation_variant_survives_encode_decode() {
 
 #[test]
 fn responses_and_streams_round_trip() {
-    let op = OpSummary {
-        seq: 42,
-        op_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
-        hlc_wall_ms: 1_700_000_000_000,
-        hlc_counter: 7,
-        device: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
-        principal: "you@01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
-        kind: "edit_text".into(),
-        task_id: String::new(),
-        summary: "buy ducks".into(),
-    };
-    let file = FileInfo {
-        path: "todo.txt".into(),
-        hash: vec![1; 32],
-        kind: FileKind::Todo as i32,
-        progress: Some(Progress { done: 1, total: 3 }),
-    };
+    let op = sample_op();
+    let file = sample_file();
     round_trip(&ListFilesResponse {
         files: vec![file.clone()],
         tree: Some(TreeNode {
@@ -128,6 +136,7 @@ fn responses_and_streams_round_trip() {
         lan_group_key_present: false,
         relay_url: String::new(),
         relay_last_outcome: String::new(),
+        pairing_last_carrier: String::new(),
     });
 }
 
