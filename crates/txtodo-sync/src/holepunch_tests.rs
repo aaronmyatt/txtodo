@@ -14,6 +14,27 @@ use crate::relay::RelayConfig;
 /// Bounded: a hung connect/accept/exchange fails the test rather than the CI job.
 const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// `connect_pairing` (plan M8 `sync-pairing-relay`, notes.md's design decision option (a)) takes
+/// no `GroupId` at all — unlike `connect` above, a foreign/mismatched group can never refuse a
+/// pairing dial, because pairing has no shared group to compare against yet. Two endpoints bound
+/// to *different* groups still fail today (no live relay server to actually rendezvous through in
+/// this sandbox — see the `#[ignore]`d test below for why), but the point this test asserts is
+/// structural and needs no network at all: the call compiles and runs with only a node id, proving
+/// the method signature itself carries no group gate for a caller to accidentally rely on.
+#[tokio::test]
+async fn connect_pairing_has_no_group_parameter_to_gate_on() {
+    let cfg_a = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let cfg_b = cfg_a.clone();
+    let a = RelayEndpoint::bind(&cfg_a, GroupId(1)).await.unwrap();
+    let b = RelayEndpoint::bind(&cfg_b, GroupId(2)).await.unwrap();
+    // Not actually dialable (relay.example.org resolves to nothing this test can reach) — the
+    // assertion is that this call needed no group argument, not that it connects.
+    assert!(a.connect_pairing(b.node_id_bytes()).await.is_err());
+}
+
 #[tokio::test]
 async fn foreign_group_is_refused_before_dialing() {
     let cfg = RelayConfig {

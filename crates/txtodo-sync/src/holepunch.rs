@@ -139,6 +139,31 @@ impl RelayEndpoint {
         Ok(IrohLink::new(connection, send, recv))
     }
 
+    /// Dials `node` for a pairing connection — the relay twin of `LanEndpoint::connect_pairing`
+    /// (`lan_link.rs`), and this endpoint's own [`RelayEndpoint::connect`] minus its `GroupId`
+    /// gate: pairing has no shared group yet (the whole point of pairing), so nothing here can
+    /// check one. The actual security boundary is downstream, unchanged by this method: the
+    /// daemon's `pairing_lan.rs::process_hello` refuses any `JoinerHello` whose `nonce`/`group`
+    /// do not match its own active offer — carrier-agnostic already, so this dial needs no gate
+    /// of its own (`tasks/sync-pairing-relay/notes.md`'s design decision, option (a)). Uses
+    /// [`crate::endpoint::PAIRING_ALPN`] instead of [`crate::endpoint::ALPN`] so a pairing
+    /// connection is never mistaken for the group-keyed sync protocol, same ALPN-based
+    /// separation `endpoint.rs`'s module doc already established for LAN.
+    pub async fn connect_pairing(&self, node: [u8; 32]) -> Result<IrohLink, HolepunchError> {
+        let id = iroh::PublicKey::from_bytes(&node).map_err(|_| HolepunchError::InvalidPeerId)?;
+        let target = EndpointAddr::new(id).with_relay_url(self.relay_url.clone());
+        let connection = self
+            .endpoint
+            .connect(target, crate::endpoint::PAIRING_ALPN)
+            .await
+            .map_err(HolepunchError::Connect)?;
+        let (send, recv) = connection
+            .open_bi()
+            .await
+            .map_err(|e| HolepunchError::Stream(e.to_string()))?;
+        Ok(IrohLink::new(connection, send, recv))
+    }
+
     /// Waits for one incoming connection and wraps it as a [`crate::link::Link`]. Cannot gate on
     /// group before accepting — the accepting side has no way to know who is dialing until the
     /// connection exists; `Session::on_hello`'s own group check is what actually protects it once

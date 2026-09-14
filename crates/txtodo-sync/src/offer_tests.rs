@@ -14,7 +14,24 @@ fn sample() -> PairingOffer {
         endpoint: "192.168.1.5:4242".to_string(),
         nonce: [7u8; 16],
         issued_at_ms: 1_000,
+        relay_node_id: None,
+        relay_url: None,
     }
+}
+
+/// A LAN-only `sample()` offer must round-trip its `None`/`None` relay fields unchanged (checked
+/// separately from `relay_rendezvous_fields_round_trip` below, which covers the `Some`/`Some` case).
+#[test]
+fn relay_rendezvous_fields_round_trip() {
+    let offer = PairingOffer {
+        relay_node_id: Some([0xCD; 32]),
+        relay_url: Some("https://relay.example.org".to_string()),
+        ..sample()
+    };
+    let bytes = to_qr_bytes(&offer).unwrap();
+    assert_eq!(from_qr_bytes(&bytes).unwrap(), offer);
+    let code = to_code(&offer).unwrap();
+    assert_eq!(from_code(&code).unwrap(), offer);
 }
 
 #[test]
@@ -61,6 +78,8 @@ fn decoded_offer_contains_no_key_material_field_by_field() {
         endpoint,
         nonce,
         issued_at_ms,
+        relay_node_id,
+        relay_url,
     } = offer;
     let _: DeviceId = device; // a public identifier
     let _: u64 = issued_at_ms; // a timestamp, not a secret
@@ -68,4 +87,6 @@ fn decoded_offer_contains_no_key_material_field_by_field() {
     assert_eq!(public_key.len(), 32); // a public key, not a secret scalar
     assert!(!endpoint.is_empty()); // an address hint
     assert_eq!(nonce.len(), 16); // single-use, not confidential
+    let _: Option<[u8; 32]> = relay_node_id; // routing info, not a secret
+    let _: Option<String> = relay_url; // routing info, not a secret
 }

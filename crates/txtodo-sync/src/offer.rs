@@ -33,6 +33,16 @@ pub struct PairingOffer {
     /// `PAIRING_WINDOW_MS`. Not secret: an attacker forging it can only make an offer look newer or
     /// older than it is, not extend its own already-consumed, transcript-bound nonce.
     pub issued_at_ms: u64,
+    /// The initiator's relay node id (plan M8 `sync-pairing-relay`, ADR 0026 follow-up), when a
+    /// relay is configured and bound on that device — `None` for a LAN-only offer, exactly as
+    /// before this field existed. As public as `endpoint` above: a relay node id is routing
+    /// information, not a secret, and this crate's transcript binding
+    /// (`crate::transcript::transcript`) never reads it — the actual security boundary here is
+    /// the offer's `nonce`, not this field (see `holepunch.rs::connect_pairing`'s own doc).
+    pub relay_node_id: Option<[u8; 32]>,
+    /// The relay URL `relay_node_id` above is reachable through; `Some` exactly when
+    /// `relay_node_id` is.
+    pub relay_url: Option<String>,
 }
 
 /// Why an offer could not be encoded or decoded.
