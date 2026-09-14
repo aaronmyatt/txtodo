@@ -82,3 +82,60 @@ the M4-deferred "relay cannot distinguish op types" checklist item.
 - plan M8 (txtodo-implementation-plan.md), design §4.5/§4.6/§10 (txtodo-design.md)
 - Sibling: [relay-reference](../relay-reference/notes.md), [sync-loopback-converge](../sync-loopback-converge/notes.md), [security-m8-review](../security-m8-review/notes.md)
 - network namespaces: https://man7.org/linux/man-pages/man8/ip-netns.8.html
+
+## As built (2026-09-14)
+
+**Sandbox constraint, upfront.** This pass ran on macOS with no root — Linux network namespaces do
+not exist on this OS at all, and `sudo` needed a password this session did not have (so not even a
+`pfctl`-firewalled fallback was available). `tests/support/netns.sh` is written and `bash -n`
+syntax-checked but never actually executed; `RELAY_CONVERGE_CI.patch.md` (repo root — `.github/**`
+is frozen) gives a human the exact CI job to run it for real. The two Rust test files run two real,
+separate `txtodod` processes on one host instead — real daemons, real transport, not a loopback
+simulation, but not a real network-namespace boundary either. See `relay_converge.rs`'s own module
+doc for the full reasoning.
+
+**A rendezvous gap `sync-relay-enable` left open, found and fixed.** Investigating why the
+already-landed relay fallback never reached a genuinely separate peer surfaced two real gaps:
+`relay_fallback_dial` only ever runs for a peer LAN's mDNS already found (never true across a real
+network boundary, by construction — mDNS does not cross one), and even when it did run, it dialed
+the peer's *LAN* node id rather than a shared relay identity (`relay_fallback.rs`'s own documented
+limitation). `crates/txtodo-daemon/src/relay.rs`'s new `--relay-dial-peer <hex node id>` sidesteps
+both: it dials a peer's actual *relay* node id directly (learned via `Health.relay_last_outcome`,
+`tests/support/relay.rs::parse_relay_node_id`), no LAN discovery involved at any point. This is a
+deliberate, narrowly-scoped substitute for real pairing-over-relay (`sync-pairing-relay`, still not
+built) — a test/manual-pairing seam, not a production rendezvous protocol.
+
+**File carrier: daemon-side wiring never existed before this pass.** `sync-file-carrier` built
+`txtodo_sync::FileCarrier` and `txtodo-cli`'s `--sync-dir` plumbing, but nothing in `txtodod` ever
+opened a `FileCarrier` — `carrier.rs`'s own module doc names this as a deliberately left seam
+("[i]mporting decoded ops into the store... is a different layer's job"). `crates/txtodo-daemon/src/
+file_carrier.rs` is that layer: a broadcast-and-poll loop (not `Session`'s Hello/Want/Ack — a shared
+folder has no live peer to negotiate with), reusing `lan_apply.rs`'s `serve_want`/
+`commit_incoming_ops`/`device_keys_for` as-is. Found and fixed one real bug while wiring it: calling
+the shared `commit_incoming_ops` (which itself does `rt.block_on`) directly from a plain
+`tokio::spawn`ed task panics ("cannot block_on inside a runtime") — `lan.rs` avoids this because
+`drive_session` always runs on a dedicated `spawn_blocking` thread; `file_carrier.rs` has no
+per-connection thread to dedicate (it is a periodic tick), so the fix is `tokio::task::block_in_place`
+around that one call.
+
+**The relay blob-store test (todo.txt items 8/9) uses a different "relay" than the one wired
+above.** There are two unrelated things named "relay" in this codebase: `txtodo_sync::RelayEndpoint`
+(iroh's own QUIC/DERP relay, wired into `relay.rs` and what the convergence tests actually use), and
+the top-level `relay/` crate (a bespoke HTTP put/get/list opaque-blob store, design §4.5's Appendix-B
+"Relay" row) — which nothing in this codebase talks to as a `Link` yet. `relay_converge.rs`'s
+`relay_store_holds_only_opaque_ciphertext` seals real production ciphertext (`txtodo_sync::seal`,
+the same primitive the wire path uses) into a real `relay::store::Store` and asserts opacity — a
+real proof of the opacity property using the real store, honestly flagged as not being in the live
+convergence path.
+
+**Verified for real** (see the top-level PR/worktree report for exact commands): `cargo test -p
+txtodo-daemon --test relay_converge --test file_carrier_converge` — 9 tests, all passing, relay
+convergence in ~2.5s and file-carrier convergence in ~0.5s, both well under the 30s SLO; `cargo
+clippy -p txtodo-daemon --all-targets -- -D warnings` clean; full `cargo test -p txtodo-daemon --lib`
+(165 tests) plus `lan_loopback_converge`/`pairing_lan` re-run clean (no regressions from the
+`lan_session.rs` visibility bump or the new modules).
+
+**Not done, left open** (see the root `todo.txt` parent line's own note for the precise remaining
+scope): a real network-namespace run; hole-punch-vs-relay-forwarding path introspection (todo.txt
+item 4 — needs an iroh-facing signal `txtodo-sync` does not currently expose); wiring real `txtodod`
+processes to actually run *inside* the netns `netns.sh` creates, in CI.
