@@ -5,6 +5,26 @@ syntax = "proto3";
 
 package txtodo.v1;
 
+// Selects which registered workspace an RPC targets (ADR 0025, task `daemon-global-socket`, M11:
+// one `txtodod` per device, not one per directory, with every call carrying this selector). An
+// interim shape, deliberately: `cli-workspace-commands` (a later task) still needs to thread a
+// real `WorkspaceId` everywhere a human/agent names a workspace, but nothing on the CLI side
+// resolves one yet, so `path` lets a client that only knows a directory keep working — the daemon
+// resolves it against the `WorkspaceRegistry`, auto-registering an unknown root exactly the way a
+// future `txtodo add`/`init` would. Every RPC below either carries this as a request field, or (for
+// `BundleImport`, whose request type is fixed to the streamed `BundleChunk`) the same encoded
+// message rides in request metadata, mirroring how that RPC already carries its passphrase.
+// Omitted (the oneof unset) resolves to "the sole open workspace" when the daemon has exactly one
+// open — the single-workspace bridge every `--dir`-started daemon (and today's whole test suite)
+// relies on; ambiguous with zero or several open workspaces, which the daemon refuses with a clear
+// error instead of guessing.
+message WorkspaceSelector {
+  oneof selector {
+    string workspace_id = 1;   // WorkspaceId ULID text, once a client has resolved one
+    string path = 2;           // filesystem path; daemon resolves/auto-registers via the registry
+  }
+}
+
 service Txtodo {
   // Every synced document with its current projection hash.
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
@@ -30,7 +50,7 @@ service Txtodo {
 
   // notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
   // to its ref dir; the client never resolves a slug or touches the filesystem itself.
-  rpc GetNotes(TaskRef) returns (NotesDoc);
+  rpc GetNotes(GetNotesRequest) returns (NotesDoc);
   // Applies one edit to notes.md as a Loro NotesEdit op; lazily creates the ref: directory (and
   // the task's `ref:` tag) on the first edit when neither exists yet (plan §3.2.4).
   rpc EditNotes(NotesEditRequest) returns (ApplyResponse);
@@ -97,11 +117,15 @@ service Txtodo {
   // before a single row lands (all-or-nothing). The passphrase cannot travel in a request field
   // here (a client-streaming RPC's request type is fixed to the streamed item, `BundleChunk`) —
   // it rides in this call's own request metadata instead (`x-txtodo-bundle-passphrase-bin`), the
-  // same loopback-only, never-logged rule as `BundleExportRequest.passphrase`.
+  // same loopback-only, never-logged rule as `BundleExportRequest.passphrase`. The workspace
+  // selector (M11) rides the same way, in `x-txtodo-workspace-selector-bin` — the encoded
+  // `WorkspaceSelector` bytes, absent exactly when the selector is unset.
   rpc BundleImport(stream BundleChunk) returns (BundleImportResponse);
 }
 
-message ListFilesRequest {}
+message ListFilesRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 // done/total task-line counts for a todo.txt (plan §3.2.5). Unset (both 0) for notes.md.
 message Progress {
@@ -145,7 +169,10 @@ message TreeNode {
   repeated TreeNode children = 5;
 }
 
-message GetFileRequest { string path = 1; }
+message GetFileRequest {
+  string path = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message FileContents {
   string path = 1;
@@ -153,7 +180,10 @@ message FileContents {
   bytes hash = 3;
 }
 
-message WatchRequest { repeated string paths = 1; }
+message WatchRequest {
+  repeated string paths = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message OpSummary {
   int64 seq = 1;
@@ -187,7 +217,10 @@ message Change {
   Progress progress = 5;
 }
 
-message ConflictsRequest { string path = 1; }
+message ConflictsRequest {
+  string path = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message ConflictsResponse { repeated ReviewFlag flags = 1; }
 
@@ -203,6 +236,7 @@ message ResolveRequest {
   string path = 1;
   TaskRef task = 2;
   Resolution resolution = 3;
+  WorkspaceSelector workspace = 4;
 }
 
 // A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
@@ -241,6 +275,7 @@ message ApplyRequest {
   string path = 1;
   repeated Mutation mutations = 2;
   AgentPrincipal agent = 3;   // unset = the user on this device
+  WorkspaceSelector workspace = 4;
 }
 
 message ApplyResponse {
@@ -255,6 +290,7 @@ message HistoryRequest {
   string task_id = 2;         // empty = every task
   uint32 limit = 3;           // 0 = daemon default
   int64 before_seq = 4;       // 0 = newest
+  WorkspaceSelector workspace = 5;
 }
 
 message HistoryResponse { repeated OpSummary ops = 1; }
@@ -262,14 +298,18 @@ message HistoryResponse { repeated OpSummary ops = 1; }
 message UndoRequest {
   string path = 1;
   uint32 steps = 2;           // 0 = 1
+  WorkspaceSelector workspace = 3;
 }
 
 message CheckoutRequest {
   string path = 1;
   uint64 at_wall_ms = 2;      // inclusive upper bound on hlc wall time
+  WorkspaceSelector workspace = 3;
 }
 
-message HealthRequest {}
+message HealthRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 message HealthResponse {
   bool watcher_alive = 1;
@@ -311,9 +351,20 @@ message NotesDoc {
   bytes hash = 3;
 }
 
+// `GetNotes`'s own request: a bare `TaskRef` carries no workspace selector, and every nested use
+// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/`ResolveRequest`/
+// `NotesEditRequest`/`RefDirRequest`) would carry a meaningless unused one if the field lived on
+// `TaskRef` itself — so `GetNotes` gets its own wrapper, the same shape `ResolveRequest` already
+// uses to pair a `TaskRef` with call-specific fields.
+message GetNotesRequest {
+  TaskRef task = 1;
+  WorkspaceSelector workspace = 2;
+}
+
 message NotesEditRequest {
   TaskRef task = 1;        // the line whose ref: directory owns the notes.md
   string new_text = 2;     // whole-document replacement; the daemon derives the Loro text ops
+  WorkspaceSelector workspace = 3;
 }
 
 // --- ref: directories (plan M5, specs/ref-directories.md) ---
@@ -322,6 +373,7 @@ message RefDirRequest {
   string path = 1;
   TaskRef task = 2;
   bool ensure = 3;   // false = read-only resolve; true = lazily create like the first write would
+  WorkspaceSelector workspace = 4;
 }
 
 // A line's ref: directory, resolved or (with `ensure`) created.
@@ -333,7 +385,10 @@ message RefDirInfo {
   bool dir_exists = 5;    // true when `dir` is present on disk (after this call, if `ensure`)
 }
 
-message PruneOrphansRequest { bool execute = 1; }
+message PruneOrphansRequest {
+  bool execute = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message PruneOrphansResponse {
   repeated string dirs = 1;   // workspace-relative orphan directories found
@@ -342,7 +397,9 @@ message PruneOrphansResponse {
 
 // --- pairing (plan M4, design §4) ---
 
-message PairOfferRequest {}
+message PairOfferRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 // QR payload: identity + handshake material only, never the group key or a private key.
 message PairOfferResponse {
@@ -363,13 +420,20 @@ message PairOfferResponse {
   string relay_url = 8;
 }
 
-message PairAcceptRequest { string code = 1; }   // the scanned/decoded PairOffer, re-encoded
+message PairAcceptRequest {
+  string code = 1;   // the scanned/decoded PairOffer, re-encoded
+  WorkspaceSelector workspace = 2;
+}
 
 message PairResult { string sas = 1; }           // 6-word SAS (EFF short list); no key material
 
-message PairConfirmRequest {}
+message PairConfirmRequest {
+  WorkspaceSelector workspace = 1;
+}
 
-message PairAwaitPeerRequest {}
+message PairAwaitPeerRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 // --- capability tokens (plan M6, design §6.2) ---
 
@@ -377,6 +441,7 @@ message TokenCreateRequest {
   string name = 1;
   repeated string scopes = 2;   // closed union: read/write:*/raw/project:*/context:*/file:*
   string expires = 3;           // RFC 3339; empty = no expiry
+  WorkspaceSelector workspace = 4;
 }
 
 message Token {
@@ -389,17 +454,24 @@ message Token {
   string secret = 6;
 }
 
-message TokenListRequest {}
+message TokenListRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 message TokenListResponse { repeated Token tokens = 1; }
 
-message TokenRevokeRequest { string id = 1; }
+message TokenRevokeRequest {
+  string id = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message TokenRevokeResponse { bool revoked = 1; }
 
 // --- activity feed (ADR 0004 oplog.db) ---
 
-message OpLogRequest {}
+message OpLogRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 message OpLogEntry {
   string principal = 1;    // "you@dev" / "agent:name@dev" / "external@dev" — same as OpSummary
@@ -436,11 +508,16 @@ message Device {
   uint64 skew_ms = 9;            // magnitude for BEHIND/AHEAD; 0 for OK/UNKNOWN
 }
 
-message DeviceListRequest {}
+message DeviceListRequest {
+  WorkspaceSelector workspace = 1;
+}
 
 message DeviceListResponse { repeated Device devices = 1; }
 
-message DeviceRemoveRequest { string id = 1; }   // ULID text
+message DeviceRemoveRequest {
+  string id = 1;   // ULID text
+  WorkspaceSelector workspace = 2;
+}
 
 message DeviceRemoveResponse {
   bool removed = 1;              // false when the device was unknown
@@ -457,6 +534,7 @@ message DeviceRemoveResponse {
 message DebugSetGroupKeyRequest {
   string group_id = 1;   // decimal u128, same encoding pairing_wire.rs's group_id already uses
   string key_hex = 2;    // lowercase hex, 32 bytes (XChaCha20-Poly1305 group key)
+  WorkspaceSelector workspace = 3;
 }
 
 message DebugSetGroupKeyResponse {}
@@ -492,7 +570,10 @@ message BundleChunk { bytes data = 1; }
 
 // Loopback only; KDF input for the export's Argon2id -> XChaCha20-Poly1305 wrap. Never stored,
 // never logged.
-message BundleExportRequest { bytes passphrase = 1; }
+message BundleExportRequest {
+  bytes passphrase = 1;
+  WorkspaceSelector workspace = 2;
+}
 
 message BundleImportResponse {
   uint64 ops_imported = 1;   // newly inserted rows; a duplicate op_id from a re-import is skipped

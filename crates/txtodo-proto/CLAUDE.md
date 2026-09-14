@@ -13,6 +13,15 @@ it over the real LAN transport and show a real SAS, without the RPC itself ever 
 `DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).
+`WorkspaceSelector` (ADR 0025, task `daemon-global-socket`, M11): a `oneof workspace_id/path`
+carried by every RPC request message (added as their last field, `workspace`) so the one global
+`txtodod` knows which registered workspace to route a call to. `GetNotes` changed shape from a
+bare `TaskRef` request to `GetNotesRequest { task, workspace }` so the selector has somewhere to
+live without polluting `TaskRef`'s many nested uses (`Complete`/`Edit`/`Move`/`Delete`/
+`MoveToEnd`/`ResolveRequest`/`NotesEditRequest`/`RefDirRequest` all still carry a bare `TaskRef`).
+`BundleImport`'s request type is fixed to the streamed `BundleChunk`, so its selector rides in
+request metadata (`x-txtodo-workspace-selector-bin`, the encoded `WorkspaceSelector` bytes) the
+same way its passphrase already does.
 `HealthResponse` carries `key_store_backend` (plan M4 tasks/sync-keystore) and four LAN-transport
 fields (`lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/`lan_group_key_present`,
 fields 8-11 — `key_store_backend` already held field 7) so `txtodo doctor` can report both.
