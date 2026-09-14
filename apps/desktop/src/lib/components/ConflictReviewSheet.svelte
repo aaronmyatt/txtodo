@@ -174,7 +174,7 @@
 	.scrim {
 		position: fixed;
 		inset: 0;
-		background: rgb(0 0 0 / 40%);
+		background: var(--color-overlay);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -182,8 +182,8 @@
 	}
 
 	.sheet {
-		background: white;
-		color: #1f2937;
+		background: var(--color-bg-elevated);
+		color: var(--color-text);
 		border-radius: 8px;
 		padding: 1.5rem;
 		max-width: 32rem;
@@ -194,13 +194,13 @@
 
 	.merged-preview {
 		font-family: ui-monospace, Menlo, monospace;
-		background: #f3f4f6;
+		background: var(--color-surface-muted);
 		padding: 0.5rem;
 		border-radius: 4px;
 	}
 
 	.resurrect-note {
-		color: #92400e;
+		color: var(--color-warning-text);
 		font-weight: 600;
 	}
 
@@ -211,18 +211,18 @@
 	}
 
 	.error {
-		color: #b91c1c;
+		color: var(--color-danger);
 	}
 
 	.remaining {
 		font-size: 0.85rem;
-		color: #6b7280;
+		color: var(--color-text-muted);
 	}
 
 	.close {
 		margin-top: 1rem;
 		background: transparent;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--color-border);
 		border-radius: 4px;
 		padding: 0.25rem 0.75rem;
 	}

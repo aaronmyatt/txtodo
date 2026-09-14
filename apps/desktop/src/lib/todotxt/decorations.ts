@@ -178,12 +178,22 @@ export function lineDecorations(containingPath: string, filesByPath: ReadonlyMap
 	);
 }
 
-/** Structural (non-token) styling this view owns directly; token colours live in `todotxtLanguage`. */
+/** Structural (non-token) styling this view owns directly; token colours live in `todotxtLanguage`.
+ * CM6's own default theme hardcodes the editor background/caret to white/black
+ * (https://github.com/codemirror/view/blob/main/src/theme.ts), so `&` (the `.cm-editor` root —
+ * https://codemirror.net/docs/ref/#view.EditorView^baseTheme) and `.cm-cursor` here override those
+ * with app.css's tokens; everything else in this theme was already color-scheme-agnostic. */
 export const mainViewBaseTheme = EditorView.baseTheme({
+	"&": { backgroundColor: "var(--color-bg)", color: "var(--color-text)" },
+	"&.cm-focused .cm-cursor": { borderLeftColor: "var(--color-text)" },
 	".cm-todotxt-done": { opacity: "0.55" },
 	".cm-todotxt-strike": { textDecoration: "line-through" },
-	".cm-todotxt-hover": { backgroundColor: "rgba(15, 23, 42, 0.05)" },
-	".cm-todotxt-add-line-placeholder": { color: "#9ca3af", fontStyle: "italic", pointerEvents: "none" },
+	".cm-todotxt-hover": { backgroundColor: "var(--color-hover-overlay)" },
+	".cm-todotxt-add-line-placeholder": {
+		color: "var(--color-text-faint)",
+		fontStyle: "italic",
+		pointerEvents: "none"
+	},
 	".cm-todotxt-ref-indicator": {
 		marginLeft: "0.5em",
 		fontSize: "0.85em",

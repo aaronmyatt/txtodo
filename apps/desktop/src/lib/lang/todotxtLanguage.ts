@@ -69,20 +69,25 @@ export const todotxtHighlightStyle = HighlightStyle.define(
   Object.entries(todotxtTags).map(([name, tag]) => ({ tag, class: `tok-${name}` })),
 );
 
-// This file's own default palette. Every color sits at the same Tailwind 500/700 lightness band so
-// no one category reads "louder" than another by weight alone — only hue tells them apart. `text`
-// (the plain description) is the one deliberately near-black entry: everything else is markup
-// *about* the line, so it earns a color; the words a human actually wrote don't compete with them.
+// This file's own default palette. Every color sits at the same Tailwind lightness band (500/700
+// in light mode, 400 in dark — see src/app.css's `--tok-*` custom properties) so no one category
+// reads "louder" than another by weight alone — only hue tells them apart. `text` (the plain
+// description) is the one deliberately near-body-color entry: everything else is markup *about*
+// the line, so it earns a color; the words a human actually wrote don't compete with them.
+// Values are CSS custom properties, not literal hex: CM6's `baseTheme` compiles this object to a
+// real stylesheet via style-mod (https://github.com/marijnh/style-mod), so a `var(--tok-priority)`
+// string here is exactly as valid a CSS value as a hex literal, and picks up app.css's
+// `[data-theme="dark"]` override with no CM6-side reconfiguration needed.
 export const todotxtColorTheme = EditorView.baseTheme({
-  ".tok-completion-marker": { color: "#15803d", fontWeight: "600" },
-  ".tok-priority": { color: "#b45309", fontWeight: "700" },
-  ".tok-date": { color: "#6d28d9" },
-  ".tok-project": { color: "#1d4ed8" },
-  ".tok-context": { color: "#be185d" },
-  ".tok-tag-key": { color: "#57534e", fontWeight: "600" },
-  ".tok-tag-value": { color: "#78716c" },
-  ".tok-id-tag": { color: "#9ca3af" },
-  ".tok-text": { color: "#111827" },
+  ".tok-completion-marker": { color: "var(--tok-completion-marker)", fontWeight: "600" },
+  ".tok-priority": { color: "var(--tok-priority)", fontWeight: "700" },
+  ".tok-date": { color: "var(--tok-date)" },
+  ".tok-project": { color: "var(--tok-project)" },
+  ".tok-context": { color: "var(--tok-context)" },
+  ".tok-tag-key": { color: "var(--tok-tag-key)", fontWeight: "600" },
+  ".tok-tag-value": { color: "var(--tok-tag-value)" },
+  ".tok-id-tag": { color: "var(--tok-id-tag)" },
+  ".tok-text": { color: "var(--color-text)" },
 });
 
 // The single export desktop-main-view / desktop-edit-popover import. A LanguageSupport is

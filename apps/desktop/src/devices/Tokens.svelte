@@ -212,7 +212,7 @@
 		max-width: 28rem;
 	}
 	fieldset {
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
 	}
 	.checkbox {
@@ -222,12 +222,12 @@
 		margin-right: 0.75rem;
 	}
 	.hint {
-		color: #6b7280;
+		color: var(--color-text-muted);
 		font-size: 0.85rem;
 	}
 	.secret-reveal {
-		border: 1px solid #b45309;
-		background: #fffbeb;
+		border: 1px solid var(--color-warning-border);
+		background: var(--color-warning-bg);
 		border-radius: 8px;
 		padding: 0.75rem;
 		display: flex;
@@ -249,7 +249,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		border: 1px solid #e5e7eb;
+		border: 1px solid var(--color-border-subtle);
 		border-radius: 6px;
 		padding: 0.5rem 0.75rem;
 	}
@@ -258,11 +258,11 @@
 		font-size: 0.85rem;
 	}
 	.state-error {
-		color: #b91c1c;
+		color: var(--color-danger);
 		font-weight: 600;
 	}
 	.state-warning {
-		color: #92400e;
+		color: var(--color-warning-text);
 		font-weight: 600;
 	}
 </style>

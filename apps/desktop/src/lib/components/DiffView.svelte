@@ -77,6 +77,6 @@
 	}
 
 	.error {
-		color: #b91c1c;
+		color: var(--color-danger);
 	}
 </style>

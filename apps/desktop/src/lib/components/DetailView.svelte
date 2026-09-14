@@ -332,10 +332,10 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.5rem;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--color-border);
 		border-radius: 8px;
 		padding: 0.75rem 1rem;
-		background: #f9fafb;
+		background: var(--color-surface);
 	}
 
 	.parent-line {
@@ -352,18 +352,18 @@
 	}
 
 	.empty-state {
-		color: #6b7280;
+		color: var(--color-text-muted);
 		font-style: italic;
 	}
 
 	.error {
-		color: #b91c1c;
+		color: var(--color-danger);
 	}
 
 	.detail-footer {
 		font-size: 0.8rem;
-		color: #6b7280;
-		border-top: 1px solid #e5e7eb;
+		color: var(--color-text-muted);
+		border-top: 1px solid var(--color-border-subtle);
 		padding-top: 0.5rem;
 	}
 </style>

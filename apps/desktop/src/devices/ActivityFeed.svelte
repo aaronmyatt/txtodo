@@ -78,7 +78,7 @@
 		gap: 0.75rem;
 	}
 	.hint {
-		color: #6b7280;
+		color: var(--color-text-muted);
 		font-size: 0.85rem;
 	}
 	ul {
@@ -91,22 +91,22 @@
 	li {
 		display: flex;
 		gap: 0.75rem;
-		border-bottom: 1px solid #e5e7eb;
+		border-bottom: 1px solid var(--color-border-subtle);
 		padding: 0.35rem 0;
 	}
 	.principal {
 		font-family: monospace;
-		color: #374151;
+		color: var(--color-text-secondary);
 	}
 	.op {
 		flex: 1;
 	}
 	.time {
-		color: #6b7280;
+		color: var(--color-text-muted);
 		white-space: nowrap;
 	}
 	.state-error {
-		color: #b91c1c;
+		color: var(--color-danger);
 		font-weight: 600;
 	}
 </style>

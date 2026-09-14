@@ -242,12 +242,12 @@
 		max-width: calc(100vw - 2rem);
 		padding: 0.75rem;
 		border-radius: 8px;
-		background: var(--popover-bg, #fff);
+		background: var(--popover-bg, var(--color-bg-elevated));
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 	}
 
 	.editor {
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
 		padding: 0.25rem 0.5rem;
 	}
@@ -255,7 +255,7 @@
 	.error {
 		margin: 0;
 		font-size: 13px;
-		color: #b91c1c;
+		color: var(--color-danger);
 	}
 
 	.chips {
@@ -268,8 +268,8 @@
 		font-size: 12px;
 		padding: 0.15rem 0.5rem;
 		border-radius: 999px;
-		border: 1px solid #d1d5db;
-		background: #f3f4f6;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface-muted);
 		cursor: pointer;
 	}
 
@@ -278,7 +278,7 @@
 		align-items: center;
 		justify-content: space-between;
 		font-size: 12px;
-		color: #6b7280;
+		color: var(--color-text-muted);
 	}
 
 	.actions {

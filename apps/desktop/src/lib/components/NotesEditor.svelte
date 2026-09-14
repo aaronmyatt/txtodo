@@ -114,7 +114,7 @@
 	}
 
 	.editor-shell {
-		border: 1px solid #e5e7eb;
+		border: 1px solid var(--color-border-subtle);
 		border-radius: 6px;
 		min-height: 6rem;
 		max-height: 40vh;
@@ -124,6 +124,6 @@
 	.error {
 		margin: 0;
 		font-size: 0.85rem;
-		color: #b91c1c;
+		color: var(--color-danger);
 	}
 </style>

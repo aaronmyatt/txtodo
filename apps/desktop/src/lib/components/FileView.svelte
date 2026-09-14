@@ -370,7 +370,7 @@
 	}
 
 	.error {
-		color: #b91c1c;
+		color: var(--color-danger);
 		margin: 0 0.5rem 0.4rem;
 		font-size: 0.85rem;
 	}
@@ -381,7 +381,7 @@
 	}
 
 	.editor-shell {
-		border: 1px solid #e5e7eb;
+		border: 1px solid var(--color-border-subtle);
 		border-radius: 6px;
 		max-height: 70vh;
 		overflow: auto;

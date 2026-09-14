@@ -289,7 +289,7 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.5rem;
-		border: 1px solid #d1d5db;
+		border: 1px solid var(--color-border);
 		border-radius: 8px;
 		padding: 1rem;
 	}
@@ -297,10 +297,12 @@
 		width: 100%;
 		max-width: 320px;
 		border-radius: 6px;
+		/* Deliberately a fixed dark viewfinder background (not a themed surface) — this is what
+		   shows before the camera feed paints, regardless of light/dark mode. */
 		background: #111827;
 	}
 	.hint {
-		color: #6b7280;
+		color: var(--color-text-muted);
 		font-size: 0.9rem;
 	}
 	.sas {
@@ -317,14 +319,14 @@
 	.state-expired,
 	.state-blocked,
 	.state-error {
-		color: #b91c1c;
+		color: var(--color-danger);
 		font-weight: 600;
 	}
 	.state-warning {
-		color: #92400e;
+		color: var(--color-warning-text);
 	}
 	.state-ok {
-		color: #15803d;
+		color: var(--color-success);
 		font-weight: 600;
 	}
 	.countdown {
