@@ -121,6 +121,8 @@ mod reconcile_tests;
 #[cfg(test)]
 mod refdir_tests;
 #[cfg(test)]
+mod security_m8_tests;
+#[cfg(test)]
 mod state_goldens;
 #[cfg(test)]
 mod state_tests;

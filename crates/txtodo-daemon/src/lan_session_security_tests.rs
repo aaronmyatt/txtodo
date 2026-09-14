@@ -26,7 +26,7 @@ use crate::workspace::Workspace;
 /// the bytes a real JSON log line would carry without touching disk or the process-global
 /// subscriber (`tracing_subscriber::registry().try_init()`) another test may already hold.
 #[derive(Clone, Default)]
-struct LogSink(Arc<Mutex<Vec<u8>>>);
+pub(crate) struct LogSink(Arc<Mutex<Vec<u8>>>);
 
 impl std::io::Write for LogSink {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
@@ -52,14 +52,14 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogSink {
 
 /// Same shape as `telemetry::init`'s subscriber (JSON `fmt` layer, `EnvFilter`) but scoped to one
 /// dispatch this test holds, rather than the process-global one `try_init` installs.
-fn capturing_dispatch(sink: LogSink) -> tracing::Dispatch {
+pub(crate) fn capturing_dispatch(sink: LogSink) -> tracing::Dispatch {
     let subscriber = tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new("trace"))
         .with(tracing_subscriber::fmt::layer().json().with_writer(sink));
     tracing::Dispatch::new(subscriber)
 }
 
-fn captured_text(sink: &LogSink) -> String {
+pub(crate) fn captured_text(sink: &LogSink) -> String {
     let bytes = sink
         .0
         .lock()
@@ -67,7 +67,7 @@ fn captured_text(sink: &LogSink) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
