@@ -10,10 +10,30 @@
 
 use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
+use crate::workspace_registry::WorkspaceEntry;
+use std::path::Path;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
+use txtodo_model::Ulid;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
+use txtodo_store::WorkspaceId;
+
+fn to_workspace_info(e: WorkspaceEntry) -> pb::WorkspaceInfo {
+    pb::WorkspaceInfo {
+        workspace_id: e.id.to_string(),
+        root: e.root.display().to_string(),
+        added_at_ms: e.added_at_ms,
+        root_exists: e.root_exists,
+        has_state: e.has_state,
+    }
+}
+
+fn parse_workspace_id(text: &str) -> Result<WorkspaceId, Status> {
+    let ulid = Ulid::parse(text)
+        .ok_or_else(|| Status::invalid_argument(format!("{text:?} is not a ULID")))?;
+    Ok(WorkspaceId::new(ulid))
+}
 
 /// The service actually bound to the one global socket. `Clone` is a cheap `Arc` clone.
 #[derive(Clone)]
@@ -251,5 +271,37 @@ impl Txtodo for GlobalService {
         let selector = crate::bundle_grpc::workspace_selector_from_metadata(&r)?;
         let ws = self.catalog.resolve(selector.as_ref())?;
         TxtodoService::new(ws).bundle_import(r).await
+    }
+
+    async fn workspace_add(
+        &self,
+        r: Request<pb::WorkspaceAddRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        let entry = self
+            .catalog
+            .add_registered(Path::new(&r.into_inner().root))?;
+        Ok(Response::new(to_workspace_info(entry)))
+    }
+
+    async fn workspace_remove(
+        &self,
+        r: Request<pb::WorkspaceRemoveRequest>,
+    ) -> Result<Response<pb::WorkspaceRemoveResponse>, Status> {
+        let id = parse_workspace_id(&r.into_inner().workspace_id)?;
+        let removed = self.catalog.remove_registered(id)?;
+        Ok(Response::new(pb::WorkspaceRemoveResponse { removed }))
+    }
+
+    async fn workspace_list(
+        &self,
+        _r: Request<pb::WorkspaceListRequest>,
+    ) -> Result<Response<pb::WorkspaceListResponse>, Status> {
+        let workspaces = self
+            .catalog
+            .list_registered_entries()?
+            .into_iter()
+            .map(to_workspace_info)
+            .collect();
+        Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
     }
 }

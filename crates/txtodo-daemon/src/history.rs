@@ -210,3 +210,52 @@ pub fn undo_ops(
     debug_assert!(out.len() <= steps);
     Ok(out)
 }
+
+/// History defaults/caps (design §4.8): unset page size, and the hard cap per call.
+pub(crate) const HISTORY_DEFAULT_LIMIT: usize = 50;
+pub(crate) const HISTORY_MAX_LIMIT: usize = 1_000;
+
+impl crate::server::TxtodoService {
+    /// `History` RPC (design §4.8): ops newest first, filtered by path and/or task. Split out of
+    /// `server.rs` for its line budget — the same `*_impl` pattern as `tokens.rs`/`pairing_grpc.rs`.
+    pub(crate) async fn history_impl(
+        &self,
+        r: tonic::Request<txtodo_proto::v1::HistoryRequest>,
+    ) -> Result<tonic::Response<txtodo_proto::v1::HistoryResponse>, tonic::Status> {
+        let req = r.get_ref();
+        let limit = if req.limit == 0 {
+            HISTORY_DEFAULT_LIMIT
+        } else {
+            (req.limit as usize).min(HISTORY_MAX_LIMIT)
+        };
+        let task = crate::convert::parse_ulid_opt(&req.task_id)?.map(TaskId::new);
+        let paths: Vec<FilePath> = if req.path.is_empty() {
+            self.workspace().paths().cloned().collect()
+        } else {
+            vec![crate::convert::parse_path(&req.path)?]
+        };
+        let ws = self.workspace();
+        let store = ws
+            .store()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut rows = Vec::new();
+        for p in &paths {
+            let newest = store
+                .newest(p, txtodo_store::MAX_OPS_PER_READ)
+                .map_err(|e| tonic::Status::internal(e.to_string()))?;
+            rows.extend(
+                newest
+                    .into_iter()
+                    .filter(|s| req.before_seq == 0 || s.seq.0 < req.before_seq),
+            );
+        }
+        rows.retain(|s| task.is_none_or(|t| crate::convert::task_of(&s.op.kind) == Some(t)));
+        rows.sort_by_key(|s| std::cmp::Reverse(s.seq));
+        rows.truncate(limit);
+        debug_assert!(rows.len() <= limit);
+        Ok(tonic::Response::new(txtodo_proto::v1::HistoryResponse {
+            ops: rows.iter().map(crate::convert::to_summary).collect(),
+        }))
+    }
+}

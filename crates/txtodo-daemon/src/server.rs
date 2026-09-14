@@ -4,7 +4,7 @@
 
 use crate::convert::{
     file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
-    parse_ulid_opt, task_of, to_flag, to_summary,
+    to_flag,
 };
 use crate::handle::{ActorHandle, WATCH_CAP};
 use crate::workspace::Workspace;
@@ -13,14 +13,10 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
-use txtodo_model::{FilePath, Principal, TaskId};
+use txtodo_model::Principal;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
 
-/// History default page.
-pub const HISTORY_DEFAULT_LIMIT: usize = 50;
-/// History hard cap per call.
-pub const HISTORY_MAX_LIMIT: usize = 1_000;
 /// Concurrent RPCs per connection.
 pub const MAX_INFLIGHT_RPCS: usize = 64;
 
@@ -145,41 +141,7 @@ impl Txtodo for TxtodoService {
         &self,
         r: Request<pb::HistoryRequest>,
     ) -> Result<Response<pb::HistoryResponse>, Status> {
-        let req = r.get_ref();
-        let limit = if req.limit == 0 {
-            HISTORY_DEFAULT_LIMIT
-        } else {
-            (req.limit as usize).min(HISTORY_MAX_LIMIT)
-        };
-        let task = parse_ulid_opt(&req.task_id)?.map(TaskId::new);
-        let paths: Vec<FilePath> = if req.path.is_empty() {
-            self.workspace().paths().cloned().collect()
-        } else {
-            vec![parse_path(&req.path)?]
-        };
-        let ws = self.workspace();
-        let store = ws
-            .store()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut rows = Vec::new();
-        for p in &paths {
-            let newest = store
-                .newest(p, txtodo_store::MAX_OPS_PER_READ)
-                .map_err(|e| Status::internal(e.to_string()))?;
-            rows.extend(
-                newest
-                    .into_iter()
-                    .filter(|s| req.before_seq == 0 || s.seq.0 < req.before_seq),
-            );
-        }
-        rows.retain(|s| task.is_none_or(|t| task_of(&s.op.kind) == Some(t)));
-        rows.sort_by_key(|s| std::cmp::Reverse(s.seq));
-        rows.truncate(limit);
-        debug_assert!(rows.len() <= limit);
-        Ok(Response::new(pb::HistoryResponse {
-            ops: rows.iter().map(to_summary).collect(),
-        }))
+        self.history_impl(r).await
     }
 
     async fn undo(
@@ -392,4 +354,31 @@ impl Txtodo for TxtodoService {
     ) -> Result<Response<pb::BundleImportResponse>, Status> {
         self.bundle_import_impl(r).await
     }
+
+    async fn workspace_add(
+        &self,
+        _r: Request<pb::WorkspaceAddRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        Err(no_registry())
+    }
+
+    async fn workspace_remove(
+        &self,
+        _r: Request<pb::WorkspaceRemoveRequest>,
+    ) -> Result<Response<pb::WorkspaceRemoveResponse>, Status> {
+        Err(no_registry())
+    }
+
+    async fn workspace_list(
+        &self,
+        _r: Request<pb::WorkspaceListRequest>,
+    ) -> Result<Response<pb::WorkspaceListResponse>, Status> {
+        Err(no_registry())
+    }
+}
+
+/// This bare, single-workspace `TxtodoService` (whitebox tests only — production always goes
+/// through `GlobalService`) has no registry to answer the workspace-management RPCs with.
+fn no_registry() -> Status {
+    Status::unimplemented("workspace management needs the global daemon's registry")
 }

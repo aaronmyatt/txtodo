@@ -172,3 +172,81 @@ async fn open_all_registered_opens_every_entry_a_prior_catalog_registered() {
     let restarted = WorkspaceCatalog::new(registry, open_args(), Arc::new(FakeClock::new(2_000)));
     assert_eq!(restarted.open_all_registered(), 2);
 }
+
+#[tokio::test]
+async fn add_registered_is_idempotent_and_never_opens_the_workspace() {
+    let (_registry_dir, catalog) = catalog();
+    let dir = new_workspace_dir();
+
+    let first = catalog
+        .add_registered(dir.path())
+        .unwrap_or_else(|e| panic!("add: {e}"));
+    let second = catalog
+        .add_registered(dir.path())
+        .unwrap_or_else(|e| panic!("add again: {e}"));
+    assert_eq!(first.id, second.id, "registering twice returns the same id");
+    assert!(first.root_exists);
+    assert!(!first.has_state, "add never opens/creates .txtodo/");
+
+    // Listing again afterward still shows no state: add_registered created no .txtodo/ as a
+    // side effect (unlike resolve()'s path selector, which lazily opens and would create one).
+    let relisted = catalog
+        .list_registered_entries()
+        .unwrap_or_else(|e| panic!("list: {e}"));
+    assert!(!relisted[0].has_state);
+}
+
+#[tokio::test]
+async fn list_registered_entries_reports_every_add_and_remove_drops_from_open() {
+    let (_registry_dir, catalog) = catalog();
+    let dir = new_workspace_dir();
+
+    assert!(catalog.list_registered_entries().unwrap().is_empty());
+    let entry = catalog
+        .add_registered(dir.path())
+        .unwrap_or_else(|e| panic!("add: {e}"));
+    assert_eq!(
+        catalog
+            .list_registered_entries()
+            .unwrap()
+            .into_iter()
+            .map(|e| e.id)
+            .collect::<Vec<_>>(),
+        vec![entry.id]
+    );
+
+    // Opening it via a path selector, then removing it by id, must drop it from `open` too —
+    // otherwise a stale handle would keep serving a workspace the registry no longer knows about.
+    catalog
+        .resolve(Some(&selector_path(dir.path())))
+        .unwrap_or_else(|e| panic!("resolve by path: {e}"));
+    assert!(
+        catalog
+            .remove_registered(entry.id)
+            .unwrap_or_else(|e| panic!("remove: {e}"))
+    );
+    assert!(catalog.list_registered_entries().unwrap().is_empty());
+    let err = catalog
+        .resolve(Some(&pb::WorkspaceSelector {
+            selector: Some(Selector::WorkspaceId(entry.id.to_string())),
+        }))
+        .err()
+        .unwrap_or_else(|| panic!("expected NotFound: removed id, not registered, not open"));
+    assert_eq!(err.code(), Code::NotFound);
+
+    // Registry::remove is an idempotent upsert-tombstone: an already-removed (but once-known) id
+    // still returns true. `false` is reserved for an id this registry never heard of at all.
+    assert!(
+        catalog
+            .remove_registered(entry.id)
+            .unwrap_or_else(|e| panic!("remove again: {e}")),
+        "removing an already-removed id is idempotent, not an error"
+    );
+    let never_registered = txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(999));
+    assert!(
+        !catalog
+            .remove_registered(never_registered)
+            .unwrap_or_else(|e| panic!("remove unknown: {e}")),
+        "an id this registry never heard of returns false"
+    );
+}

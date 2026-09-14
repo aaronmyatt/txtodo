@@ -76,6 +76,52 @@ impl WorkspaceCatalog {
         }
     }
 
+    /// `WorkspaceAdd` RPC: registers `root` (idempotent) without opening it — never touches
+    /// `root/.txtodo/` beyond the canonicalization `WorkspaceRegistry::add` already does.
+    pub fn add_registered(
+        &self,
+        root: &Path,
+    ) -> Result<crate::workspace_registry::WorkspaceEntry, Status> {
+        let id = {
+            let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+            registry.add(root, self.clock.as_ref()).map_err(|e| {
+                Status::invalid_argument(format!("register {}: {e}", root.display()))
+            })?
+        };
+        let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        registry
+            .get(id)
+            .map_err(|e| Status::internal(format!("look up workspace {id}: {e}")))?
+            .ok_or_else(|| Status::internal(format!("workspace {id} vanished after registering")))
+    }
+
+    /// `WorkspaceRemove` RPC: un-registers `id` and drops it from `open` if this process had it
+    /// open (stopping its watcher/LAN/relay/file-carrier tasks via `OpenedWorkspace`'s `Drop`) —
+    /// never touches `root/.txtodo/` on disk. `false` for an unknown id.
+    pub fn remove_registered(&self, id: WorkspaceId) -> Result<bool, Status> {
+        let removed = {
+            let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+            registry
+                .remove(id, self.clock.as_ref())
+                .map_err(|e| Status::internal(format!("remove workspace {id}: {e}")))?
+        };
+        self.open
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&id);
+        Ok(removed)
+    }
+
+    /// `WorkspaceList` RPC: every registered workspace, oldest first.
+    pub fn list_registered_entries(
+        &self,
+    ) -> Result<Vec<crate::workspace_registry::WorkspaceEntry>, Status> {
+        let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        registry
+            .list()
+            .map_err(|e| Status::internal(format!("list workspace registry: {e}")))
+    }
+
     /// One `open_all_registered` step: `true` on success, logged-and-`false` on failure — a bad
     /// workspace is skipped, never fatal to the whole daemon.
     fn open_registered_entry(&self, root: &Path) -> bool {
