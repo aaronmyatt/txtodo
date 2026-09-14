@@ -34,9 +34,11 @@ pub const MAX_OPS_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const RECV_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
 /// A `.ops` file name, parsed: which device it belongs to and its rotation index (`0` = the
-/// unsuffixed base file, matching [`ops_file_name`]).
+/// unsuffixed base file, matching [`ops_file_name`]). `pub(crate)` only because it is
+/// [`parse_ops_file_name`]'s return type, which `carrier_tests.rs` needs to call; its fields stay
+/// private, so it carries no API promise beyond "parsing succeeded or it didn't".
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct OpsFileName {
+pub(crate) struct OpsFileName {
     device: DeviceId,
     rotation: u32,
 }
@@ -54,7 +56,10 @@ fn ops_file_name(device: DeviceId, rotation: u32) -> String {
 /// Parses a file name as `<device-id>[-<n>].ops`. `None` for anything else — a foreign program's
 /// file in the same folder, a temp file a sync client left behind, and so on; never a panic on
 /// unrecognised input, since every name in this directory that we did not just write is external.
-fn parse_ops_file_name(name: &str) -> Option<OpsFileName> {
+/// `pub(crate)` rather than private so `carrier_tests.rs` can assert directly that a `..`- or
+/// `/`-bearing candidate name is already rejected by the `Ulid::parse` call below, without a
+/// public API promise beyond `FileCarrier` itself (same reasoning as `write_frame_to`).
+pub(crate) fn parse_ops_file_name(name: &str) -> Option<OpsFileName> {
     let stem = name.strip_suffix(".ops")?;
     match stem.split_once('-') {
         // A ULID's own text never contains `-` (Crockford base32), so the first `-` is always the
@@ -249,6 +254,23 @@ fn other_device_files(sync_dir: &Path, us: DeviceId) -> Result<Vec<PathBuf>, Car
     Ok(found.into_iter().map(|(_, path)| path).collect())
 }
 
+/// Every plain-file name directly under `dir` — never a symlink's name, even one that would
+/// otherwise parse as a valid `<device-id>[-<n>].ops` file. This directory is an untrusted shared
+/// folder by design (Syncthing / Dropbox / iCloud Drive — see `tasks/sync-file-carrier/notes.md`),
+/// so a malicious peer sharing it could plant a symlink named like a real other-device `.ops` file
+/// pointing at an arbitrary local path (e.g. `~/.ssh/id_rsa`). `std::fs::read_dir`'s `DirEntry`
+/// does not itself follow a symlink, but nothing downstream of this function did either:
+/// `other_device_files`/`highest_rotation` would have handed the name straight back, and
+/// `read_tail` opens the resulting path with `std::fs::File::open`, which *does* follow it.
+/// `std::fs::symlink_metadata` (never `entry.metadata()`/`std::fs::metadata`, both of which follow
+/// the link) is the only way to see "this name is a symlink" before that read happens.
+/// <https://doc.rust-lang.org/std/fs/fn.symlink_metadata.html>
+///
+/// A symlink is skipped, not a hard `CarrierError`: it is not necessarily hostile (a user's own
+/// tooling could plant one in the sync folder), this directory is rescanned on every poll, and a
+/// hard failure here would let one symlink — malicious or not — wedge every future scan rather
+/// than just being invisible to it. This is the same silent-skip stance `parse_ops_file_name`
+/// already takes on any other name in this folder that isn't a recognized `.ops` file.
 fn read_dir(dir: &Path) -> Result<Vec<String>, CarrierError> {
     let entries = std::fs::read_dir(dir).map_err(|e| CarrierError::Dir {
         path: dir.to_path_buf(),
@@ -260,6 +282,16 @@ fn read_dir(dir: &Path) -> Result<Vec<String>, CarrierError> {
             path: dir.to_path_buf(),
             message: e.to_string(),
         })?;
+        let path = dir.join(entry.file_name());
+        // Gone between the readdir and this stat (a racing delete): treat it as "not a symlink we
+        // need to skip" either way — the next step (opening it) will hit its own real error if it
+        // still matters.
+        let is_symlink = std::fs::symlink_metadata(&path)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false);
+        if is_symlink {
+            continue;
+        }
         if let Some(name) = entry.file_name().to_str() {
             names.push(name.to_string());
         }
