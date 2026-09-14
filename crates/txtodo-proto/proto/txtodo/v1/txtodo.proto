@@ -65,6 +65,22 @@ service Txtodo {
   // `execute` is set. `txtodo prune --orphans` (list) / `--orphans --yes` (execute).
   rpc PruneOrphans(PruneOrphansRequest) returns (PruneOrphansResponse);
 
+  // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
+  // These three target the device-global registry itself, not an already-open workspace, so
+  // unlike every RPC above they never carry a `WorkspaceSelector` — `WorkspaceAdd`'s `root` and
+  // `WorkspaceRemove`'s `workspace_id` name it directly. Refused with UNIMPLEMENTED against a
+  // bare (non-global, single-workspace whitebox test) `TxtodoService`, which has no registry.
+
+  // Registers `root` (idempotent: an already-active root returns its existing id, never a
+  // duplicate row) without opening or touching it beyond a path canonicalization.
+  rpc WorkspaceAdd(WorkspaceAddRequest) returns (WorkspaceInfo);
+  // Un-registers a workspace id; never deletes `root/.txtodo/` (plan `daemon-workspace-registry`'s
+  // migration invariant — the directory and any prior op log are left exactly where they are).
+  rpc WorkspaceRemove(WorkspaceRemoveRequest) returns (WorkspaceRemoveResponse);
+  // Every registered workspace, oldest first, with cheap existence/state-present flags for
+  // `txtodo doctor` and `workspace list` — no store opened just to answer this.
+  rpc WorkspaceList(WorkspaceListRequest) returns (WorkspaceListResponse);
+
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
@@ -527,6 +543,35 @@ message DeviceRemoveResponse {
   // tasks/sync-device-remove's own notes — a security feature the human believes does more than
   // it does is worse than no feature).
   string message = 4;
+}
+
+// --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
+
+// One entry in the device-global workspace registry.
+message WorkspaceInfo {
+  string workspace_id = 1;   // ULID text, same form as WorkspaceSelector.workspace_id
+  string root = 2;           // canonicalized absolute path
+  uint64 added_at_ms = 3;
+  bool root_exists = 4;      // cheap fs::exists; false = the directory moved or was deleted
+  bool has_state = 5;        // whether root/.txtodo/oplog.db exists; false = never opened yet
+}
+
+message WorkspaceAddRequest {
+  string root = 1;   // filesystem path; the daemon canonicalizes it
+}
+
+message WorkspaceRemoveRequest {
+  string workspace_id = 1;   // ULID text
+}
+
+message WorkspaceRemoveResponse {
+  bool removed = 1;   // false when the id was unknown
+}
+
+message WorkspaceListRequest {}
+
+message WorkspaceListResponse {
+  repeated WorkspaceInfo workspaces = 1;
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---

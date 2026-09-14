@@ -660,6 +660,49 @@ pub struct DeviceRemoveResponse {
     #[prost(string, tag = "4")]
     pub message: ::prost::alloc::string::String,
 }
+/// One entry in the device-global workspace registry.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceInfo {
+    /// ULID text, same form as WorkspaceSelector.workspace_id
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// canonicalized absolute path
+    #[prost(string, tag = "2")]
+    pub root: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub added_at_ms: u64,
+    /// cheap fs::exists; false = the directory moved or was deleted
+    #[prost(bool, tag = "4")]
+    pub root_exists: bool,
+    /// whether root/.txtodo/oplog.db exists; false = never opened yet
+    #[prost(bool, tag = "5")]
+    pub has_state: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceAddRequest {
+    /// filesystem path; the daemon canonicalizes it
+    #[prost(string, tag = "1")]
+    pub root: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceRemoveRequest {
+    /// ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceRemoveResponse {
+    /// false when the id was unknown
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceListRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WorkspaceListResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub workspaces: ::prost::alloc::vec::Vec<WorkspaceInfo>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
     /// decimal u128, same encoding pairing_wire.rs's group_id already uses
@@ -1238,6 +1281,81 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "PruneOrphans"));
             self.inner.unary(req, path, codec).await
         }
+        /// Registers `root` (idempotent: an already-active root returns its existing id, never a
+        /// duplicate row) without opening or touching it beyond a path canonicalization.
+        pub async fn workspace_add(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceAddRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceAdd",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceAdd"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Un-registers a workspace id; never deletes `root/.txtodo/` (plan `daemon-workspace-registry`'s
+        /// migration invariant — the directory and any prior op log are left exactly where they are).
+        pub async fn workspace_remove(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceRemoveResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceRemove",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRemove"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Every registered workspace, oldest first, with cheap existence/state-present flags for
+        /// `txtodo doctor` and `workspace list` — no store opened just to answer this.
+        pub async fn workspace_list(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceListRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceListResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceList",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceList"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -1680,6 +1798,30 @@ pub mod txtodo_server {
             request: tonic::Request<super::PruneOrphansRequest>,
         ) -> std::result::Result<
             tonic::Response<super::PruneOrphansResponse>,
+            tonic::Status,
+        >;
+        /// Registers `root` (idempotent: an already-active root returns its existing id, never a
+        /// duplicate row) without opening or touching it beyond a path canonicalization.
+        async fn workspace_add(
+            &self,
+            request: tonic::Request<super::WorkspaceAddRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Un-registers a workspace id; never deletes `root/.txtodo/` (plan `daemon-workspace-registry`'s
+        /// migration invariant — the directory and any prior op log are left exactly where they are).
+        async fn workspace_remove(
+            &self,
+            request: tonic::Request<super::WorkspaceRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceRemoveResponse>,
+            tonic::Status,
+        >;
+        /// Every registered workspace, oldest first, with cheap existence/state-present flags for
+        /// `txtodo doctor` and `workspace list` — no store opened just to answer this.
+        async fn workspace_list(
+            &self,
+            request: tonic::Request<super::WorkspaceListRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceListResponse>,
             tonic::Status,
         >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
@@ -2478,6 +2620,141 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = PruneOrphansSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceAdd" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceAddSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceAddRequest>
+                    for WorkspaceAddSvc<T> {
+                        type Response = super::WorkspaceInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceAddRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_add(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceAddSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceRemove" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceRemoveSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceRemoveRequest>
+                    for WorkspaceRemoveSvc<T> {
+                        type Response = super::WorkspaceRemoveResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceRemoveRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_remove(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceList" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceListSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceListRequest>
+                    for WorkspaceListSvc<T> {
+                        type Response = super::WorkspaceListResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceListRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_list(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceListSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
