@@ -48,6 +48,7 @@ pub fn run_via_daemon(
             // carried through unchanged rather than cleared, so a command run in daemon mode sees
             // the same configured sync folder direct mode would.
             sync_dir: ctx.paths.sync_dir.clone(),
+            relay_url: ctx.paths.relay_url.clone(),
         },
         config: ctx.config.clone(),
         json: ctx.json,

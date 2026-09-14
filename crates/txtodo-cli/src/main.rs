@@ -51,8 +51,11 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     let config = Config::load(&config_file).map_err(CliError::Config)?;
     let paths = config::resolve(
         &env,
-        cli.dir.as_deref(),
-        cli.sync_dir.as_deref(),
+        config::ResolveFlags {
+            dir: cli.dir.as_deref(),
+            sync_dir: cli.sync_dir.as_deref(),
+            relay: cli.relay.as_deref(),
+        },
         &config,
         config_file,
     );

@@ -28,9 +28,10 @@ pub fn run(ctx: &Ctx) {
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
     let sync_dir_problem = sync_dir_problem(ctx).flatten();
+    let relay_url = ctx.paths.relay_url.as_deref();
     if ctx.json {
         let object = format!(
-            r#"{{"todo_dir":{},"todo_file":{},"report_file":{},"config_file":{},"config_exists":{},"id_tags":{},"key_store":{},"sync_dir":{},"sync_dir_problem":{},"url_schemes":[{}]}}"#,
+            r#"{{"todo_dir":{},"todo_file":{},"report_file":{},"config_file":{},"config_exists":{},"id_tags":{},"key_store":{},"sync_dir":{},"sync_dir_problem":{},"relay_url":{},"url_schemes":[{}]}}"#,
             json::str(&ctx.paths.dir.to_string_lossy()),
             json::str(&ctx.paths.todo.to_string_lossy()),
             json::str(&ctx.paths.report.to_string_lossy()),
@@ -44,6 +45,7 @@ pub fn run(ctx: &Ctx) {
             sync_dir_problem
                 .as_deref()
                 .map_or_else(|| "null".to_string(), json::str),
+            relay_url.map_or_else(|| "null".to_string(), json::str),
             schemes
                 .iter()
                 .map(|s| json::str(s))
@@ -67,6 +69,10 @@ pub fn run(ctx: &Ctx) {
         (None, _) => println!("sync_dir=(not set)"),
         (Some(p), None) => println!("sync_dir={p}"),
         (Some(p), Some(problem)) => println!("sync_dir={p} (invalid: {problem})"),
+    }
+    match &ctx.paths.relay_url {
+        None => println!("relay_url=(not set)"),
+        Some(u) => println!("relay_url={u}"),
     }
     println!("url_schemes={}", schemes.join(","));
 }

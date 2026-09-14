@@ -112,6 +112,13 @@ pub struct Config {
     /// `todo_dir`, see `resolve`). This crate never depends on `txtodo-sync` (`check-boundaries.sh`),
     /// so it only resolves and validates the path; a real `FileCarrier` is the daemon's job.
     pub sync_dir: Option<String>,
+    /// The relay URL (plan M8 `sync-relay-enable`, ADR 0026: relay is an additive fallback
+    /// carrier alongside LAN, never a replacement). Unset means relay is off, mirroring
+    /// `sync_dir`'s own "absence is a real state, not a default" shape; resolved the same
+    /// precedence way in `resolve` (`--relay` > `$TXTODO_RELAY_URL` > config `relay_url` >
+    /// `None`). This crate never depends on `txtodo-sync` (`check-boundaries.sh`), so this is a
+    /// raw, unvalidated string — the daemon's own `--relay` flag parses and dials it.
+    pub relay_url: Option<String>,
 }
 
 /// A config file that exists but cannot be used.
@@ -204,6 +211,10 @@ pub struct Paths {
     /// `--sync-dir`, `$TXTODO_SYNC_DIR` or config `sync_dir`. Unlike `dir`, absence stays `None`
     /// rather than defaulting to the cwd: sync is opt-in, todo-file editing is not.
     pub sync_dir: Option<PathBuf>,
+    /// The resolved relay URL (plan M8 `sync-relay-enable`), if configured at all — `--relay`,
+    /// `$TXTODO_RELAY_URL` or config `relay_url`. Unlike `sync_dir` this is never resolved
+    /// against a filesystem path (`Env::absolute`): a relay URL is not a path.
+    pub relay_url: Option<String>,
 }
 
 /// `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME`, `%APPDATA%` or `~/.config`, then `txtodo/config.toml`.
@@ -224,15 +235,18 @@ pub fn config_path(env: &Env) -> PathBuf {
     base.join("txtodo").join("config.toml")
 }
 
+/// The raw CLI flag values `resolve` takes together, bundled to stay within `maxParams` (plan M8
+/// `sync-relay-enable` added a third alongside `dir`/`sync_dir`).
+pub struct ResolveFlags<'a> {
+    pub dir: Option<&'a str>,
+    pub sync_dir: Option<&'a str>,
+    pub relay: Option<&'a str>,
+}
+
 /// `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > cwd.
-pub fn resolve(
-    env: &Env,
-    dir_flag: Option<&str>,
-    sync_dir_flag: Option<&str>,
-    config: &Config,
-    config_file: PathBuf,
-) -> Paths {
-    let dir = dir_flag
+pub fn resolve(env: &Env, flags: ResolveFlags<'_>, config: &Config, config_file: PathBuf) -> Paths {
+    let dir = flags
+        .dir
         .or_else(|| env.var("TXTODO_TODO_DIR"))
         .or(config.todo_dir.as_deref())
         .map_or_else(|| env.cwd.clone(), |d| env.absolute(d));
@@ -240,13 +254,15 @@ pub fn resolve(
         dir.is_absolute() || env.cwd.as_os_str().is_empty(),
         "dir is absolute"
     );
-    let sync_dir = resolve_sync_dir(env, sync_dir_flag, config);
+    let sync_dir = resolve_sync_dir(env, flags.sync_dir, config);
+    let relay_url = resolve_relay_url(env, flags.relay, config);
     let paths = Paths {
         todo: dir.join("todo.txt"),
         report: dir.join("report.txt"),
         dir,
         config: config_file,
         sync_dir,
+        relay_url,
     };
     debug_assert!(paths.todo.starts_with(&paths.dir), "files live in dir");
     paths
@@ -259,6 +275,15 @@ fn resolve_sync_dir(env: &Env, sync_dir_flag: Option<&str>, config: &Config) -> 
         .or_else(|| env.var("TXTODO_SYNC_DIR"))
         .or(config.sync_dir.as_deref())?;
     Some(env.absolute(raw))
+}
+
+/// `--relay` > `$TXTODO_RELAY_URL` > config `relay_url` > `None` (relay is opt-in, like
+/// `sync_dir` — no cwd-style default).
+fn resolve_relay_url(env: &Env, relay_flag: Option<&str>, config: &Config) -> Option<String> {
+    relay_flag
+        .or_else(|| env.var("TXTODO_RELAY_URL"))
+        .or(config.relay_url.as_deref())
+        .map(str::to_owned)
 }
 
 /// A configured sync folder that cannot actually be used.
