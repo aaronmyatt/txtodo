@@ -220,7 +220,8 @@ fn status(ctx: &Ctx, r: &Rendered) -> Result<(), CliError> {
         "not installed"
     };
     let socket = ctx.paths.dir.join(SOCKET_REL);
-    let answers = match client::select(&ctx.paths.dir, false) {
+    let env = crate::config::Env::from_process().map_err(CliError::Io)?;
+    let answers = match client::select(&ctx.paths.dir, false, &env) {
         Ok(Mode::Daemon(mut d)) => d
             .health()
             .map(|h| format!("answers ({} document(s), v{})", h.documents, h.version))

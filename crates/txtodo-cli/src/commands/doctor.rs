@@ -62,7 +62,8 @@ pub(super) fn check(name: &'static str, status: Status, detail: impl Into<String
 fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>, Vec<pb::Device>) {
     let socket = ctx.paths.dir.join(SOCKET_REL);
     let unknown = check("watcher", Status::Warn, "unknown: no daemon");
-    match client::select(&ctx.paths.dir, false) {
+    let env = crate::config::Env::from_process().unwrap_or_default();
+    match client::select(&ctx.paths.dir, false, &env) {
         Ok(Mode::Direct) => {
             let fix = format!(
                 "no socket at {}; run `txtodo daemon start`",

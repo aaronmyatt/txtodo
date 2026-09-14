@@ -18,3 +18,4 @@ pub mod pair;
 pub mod refdir;
 pub mod service;
 pub mod text;
+pub mod workspace;

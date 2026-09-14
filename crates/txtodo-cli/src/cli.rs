@@ -274,6 +274,12 @@ pub enum Command {
         #[command(subcommand)]
         action: bundle::Action,
     },
+    /// Manages the device-global daemon's workspace registry (ADR 0025): `list` (default),
+    /// `add [DIR]`, `remove <id>`.
+    Workspace {
+        #[command(subcommand)]
+        action: Option<commands::workspace::Action>,
+    },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).
     Prune {

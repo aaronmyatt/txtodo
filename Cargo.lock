@@ -8736,6 +8736,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hyper-util",
  "jiff",
+ "prost",
  "qrcode",
  "serde",
  "serde_json",

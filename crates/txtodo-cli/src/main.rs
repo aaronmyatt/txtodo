@@ -5,7 +5,9 @@
 mod bundle;
 mod cli;
 mod client;
+mod client_bundle;
 mod client_pairing;
+mod client_workspace;
 mod clock;
 mod commands;
 mod config;
@@ -83,7 +85,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         } => return commands::mcp::run(&ctx, *stdio, *http, *lan, token.as_deref()),
         _ => {}
     }
-    match client::select(&ctx.paths.dir, cli.no_daemon)? {
+    match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => dispatch_daemon(&ctx, &mut daemon, &cli.command),
     }
@@ -117,6 +119,9 @@ fn dispatch_daemon(
             commands::refdir::run_prune(daemon, *orphans, *yes, ctx.json)
         }
         Command::Device { action } => commands::device::run(daemon, action.as_ref(), ctx.json),
+        Command::Workspace { action } => {
+            commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
+        }
         Command::Bundle { action } => bundle::run(daemon, action),
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
@@ -140,6 +145,7 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Sub { .. }
         | Command::Prune { .. }
         | Command::Device { .. }
+        | Command::Workspace { .. }
         | Command::Bundle { .. } => Err(CliError::Message(format!(
             "txtodo: {}",
             commands::history::NEEDS_DAEMON

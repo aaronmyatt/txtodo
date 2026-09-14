@@ -28,6 +28,10 @@ const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
 /// `txtodo-daemon/src/bundle_grpc.rs`'s own constant of the same name exactly.
 const PASSPHRASE_METADATA_KEY: &str = "x-txtodo-bundle-passphrase-bin";
 
+/// gRPC request metadata key carrying `BundleImport`'s `WorkspaceSelector` — must match
+/// `txtodo-daemon/src/bundle_grpc.rs`'s own constant of the same name exactly.
+const WORKSPACE_METADATA_KEY: &str = "x-txtodo-workspace-selector-bin";
+
 /// The `txtodo bundle` subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Action {
@@ -153,6 +157,22 @@ pub(crate) fn insert_passphrase<T>(req: &mut tonic::Request<T>, passphrase: &[u8
     let value = tonic::metadata::MetadataValue::from_bytes(passphrase);
     req.metadata_mut()
         .insert_bin(PASSPHRASE_METADATA_KEY, value);
+}
+
+/// Sets `BundleImport`'s request metadata to the resolved `WorkspaceSelector`, the same
+/// metadata-riding trick as `insert_passphrase` above (`BundleImport`'s request type is fixed to
+/// the streamed `BundleChunk`, so there's no per-call field for it) — mirrors
+/// `bundle_grpc.rs::workspace_selector_from_metadata`'s key on the daemon side exactly. `None`
+/// (no daemon-known selector, e.g. a legacy `--dir`-bridge daemon) inserts nothing, same as an
+/// absent metadata key always meant: the daemon's own "sole open workspace" bridge.
+pub(crate) fn insert_workspace<T>(
+    req: &mut tonic::Request<T>,
+    selector: Option<&pb::WorkspaceSelector>,
+) {
+    let Some(selector) = selector else { return };
+    let value =
+        tonic::metadata::MetadataValue::from_bytes(&prost::Message::encode_to_vec(selector));
+    req.metadata_mut().insert_bin(WORKSPACE_METADATA_KEY, value);
 }
 
 /// Reads frames off `next_frame` and sends each into `tx`, until end of file or the server hangs

@@ -50,6 +50,24 @@ impl Env {
     }
 }
 
+/// The one global daemon socket's path (ADR 0025, task `cli-workspace-commands`; mirrors
+/// `txtodo-daemon`'s `workspace_registry_paths::global_socket_path` with `legacy_dir: None`, the
+/// true-global case — this crate may not depend on `txtodo-daemon` to share that function
+/// directly): `$TXTODO_SOCKET` if set, else `$XDG_DATA_HOME`/`%LOCALAPPDATA%`/`~/.local/share` +
+/// `txtodo/txtodod.sock`, falling back to the cwd when none of those resolve.
+pub fn global_socket_path(env: &Env) -> PathBuf {
+    if let Some(p) = env.var("TXTODO_SOCKET") {
+        return PathBuf::from(p);
+    }
+    let base = env
+        .var("XDG_DATA_HOME")
+        .or_else(|| env.var("LOCALAPPDATA"))
+        .map(PathBuf::from)
+        .or_else(|| env.home().map(|h| PathBuf::from(h).join(".local/share")))
+        .unwrap_or_else(|| env.cwd.clone());
+    base.join("txtodo").join("txtodod.sock")
+}
+
 /// How a workspace establishes task identity (docs/questions.md Q2). This crate's own copy —
 /// `txtodo-model::IdentityMode` isn't a dependency this crate may take — but the same two values,
 /// spelled the same way as the daemon's own `--identity-mode` flag.

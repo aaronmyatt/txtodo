@@ -35,6 +35,11 @@ pub enum Mode {
 pub struct Daemon {
     pub(crate) rt: tokio::runtime::Runtime,
     pub(crate) client: TxtodoClient<Channel>,
+    /// Attached to every request below. `None` against a legacy `--dir`-bridge daemon (which
+    /// only ever has one workspace open, the same "sole open workspace" bridge `workspace: None`
+    /// always meant); `Some(Path(dir))` against the true global daemon, resolved once at
+    /// `select()` time rather than re-resolved per call.
+    pub(crate) selector: Option<pb::WorkspaceSelector>,
 }
 
 /// Why daemon mode failed.
@@ -72,18 +77,37 @@ impl fmt::Display for ClientError {
 
 impl std::error::Error for ClientError {}
 
-/// Picks the mode for this invocation.
-pub fn select(dir: &Path, no_daemon: bool) -> Result<Mode, ClientError> {
-    let socket = dir.join(SOCKET_REL);
-    if no_daemon || !socket.exists() {
+/// Picks the mode for this invocation. A per-directory socket (`--dir`-bridge daemon, or a
+/// legacy install) wins when present — every existing test/harness that expects one there keeps
+/// working unmodified, and the daemon behind it only ever has one workspace open anyway. Else the
+/// true global daemon (ADR 0025), targeted with a `Path` selector so it knows which of its
+/// possibly-several open workspaces `dir` names.
+pub fn select(dir: &Path, no_daemon: bool, env: &crate::config::Env) -> Result<Mode, ClientError> {
+    if no_daemon {
         return Ok(Mode::Direct);
     }
-    Daemon::connect(socket).map(|d| Mode::Daemon(Box::new(d)))
+    let per_dir_socket = dir.join(SOCKET_REL);
+    if per_dir_socket.exists() {
+        return Daemon::connect(per_dir_socket, None).map(|d| Mode::Daemon(Box::new(d)));
+    }
+    let global_socket = crate::config::global_socket_path(env);
+    if global_socket.exists() {
+        let selector = pb::WorkspaceSelector {
+            selector: Some(pb::workspace_selector::Selector::Path(
+                dir.display().to_string(),
+            )),
+        };
+        return Daemon::connect(global_socket, Some(selector)).map(|d| Mode::Daemon(Box::new(d)));
+    }
+    Ok(Mode::Direct)
 }
 
 impl Daemon {
     #[cfg(unix)]
-    fn connect(socket: PathBuf) -> Result<Daemon, ClientError> {
+    fn connect(
+        socket: PathBuf,
+        selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<Daemon, ClientError> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -108,12 +132,16 @@ impl Daemon {
         Ok(Daemon {
             rt,
             client: TxtodoClient::new(channel),
+            selector,
         })
     }
 
     /// Windows has no unix-domain sockets, so only direct-file mode exists there.
     #[cfg(not(unix))]
-    fn connect(socket: PathBuf) -> Result<Daemon, ClientError> {
+    fn connect(
+        socket: PathBuf,
+        _selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<Daemon, ClientError> {
         Err(ClientError::SocketRefused {
             socket,
             detail: "unix domain sockets are unavailable on this platform".to_owned(),
@@ -124,7 +152,7 @@ impl Daemon {
     pub fn get(&mut self, path: &str) -> Result<Vec<u8>, ClientError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -135,12 +163,10 @@ impl Daemon {
 
     /// Every synced document.
     pub fn list_files(&mut self) -> Result<Vec<pb::FileInfo>, ClientError> {
+        let workspace = self.selector.clone();
         let rep = self
             .rt
-            .block_on(
-                self.client
-                    .list_files(pb::ListFilesRequest { workspace: None }),
-            )
+            .block_on(self.client.list_files(pb::ListFilesRequest { workspace }))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().files)
     }
@@ -156,7 +182,7 @@ impl Daemon {
             path: path.to_owned(),
             mutations,
             agent: None,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -166,7 +192,11 @@ impl Daemon {
     }
 
     /// Ops newest first.
-    pub fn history(&mut self, req: pb::HistoryRequest) -> Result<Vec<pb::OpSummary>, ClientError> {
+    pub fn history(
+        &mut self,
+        mut req: pb::HistoryRequest,
+    ) -> Result<Vec<pb::OpSummary>, ClientError> {
+        req.workspace = self.selector.clone();
         let rep = self
             .rt
             .block_on(self.client.history(req))
@@ -179,7 +209,7 @@ impl Daemon {
         let req = pb::UndoRequest {
             path: path.to_owned(),
             steps,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -193,7 +223,7 @@ impl Daemon {
         let req = pb::CheckoutRequest {
             path: path.to_owned(),
             at_wall_ms,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -204,9 +234,10 @@ impl Daemon {
 
     /// Liveness for `txtodo doctor`.
     pub fn health(&mut self) -> Result<pb::HealthResponse, ClientError> {
+        let workspace = self.selector.clone();
         let rep = self
             .rt
-            .block_on(self.client.health(pb::HealthRequest { workspace: None }))
+            .block_on(self.client.health(pb::HealthRequest { workspace }))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
@@ -215,7 +246,7 @@ impl Daemon {
     pub fn conflicts(&mut self, path: &str) -> Result<Vec<pb::ReviewFlag>, ClientError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -228,8 +259,9 @@ impl Daemon {
     /// clears the flag — both or neither (daemon `ResolveConflict`).
     pub fn resolve_conflict(
         &mut self,
-        req: pb::ResolveRequest,
+        mut req: pb::ResolveRequest,
     ) -> Result<pb::ApplyResponse, ClientError> {
+        req.workspace = self.selector.clone();
         let rep = self
             .rt
             .block_on(self.client.resolve_conflict(req))
@@ -249,7 +281,7 @@ impl Daemon {
             path: path.to_owned(),
             task: Some(task),
             ensure,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -262,7 +294,7 @@ impl Daemon {
     pub fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, ClientError> {
         let req = pb::GetNotesRequest {
             task: Some(task),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
@@ -274,8 +306,9 @@ impl Daemon {
     /// Replaces a task's `notes.md` with new text (plan M5, `notes`).
     pub fn edit_notes(
         &mut self,
-        req: pb::NotesEditRequest,
+        mut req: pb::NotesEditRequest,
     ) -> Result<pb::ApplyResponse, ClientError> {
+        req.workspace = self.selector.clone();
         let rep = self
             .rt
             .block_on(self.client.edit_notes(req))
@@ -289,12 +322,13 @@ impl Daemon {
         &mut self,
         execute: bool,
     ) -> Result<pb::PruneOrphansResponse, ClientError> {
+        let workspace = self.selector.clone();
         let rep = self
             .rt
-            .block_on(self.client.prune_orphans(pb::PruneOrphansRequest {
-                execute,
-                workspace: None,
-            }))
+            .block_on(
+                self.client
+                    .prune_orphans(pb::PruneOrphansRequest { execute, workspace }),
+            )
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
@@ -303,12 +337,10 @@ impl Daemon {
     /// and a `SkewStatus` already computed — `txtodo device list` and `txtodo doctor`'s per-peer
     /// clock line both read this.
     pub fn device_list(&mut self) -> Result<Vec<pb::Device>, ClientError> {
+        let workspace = self.selector.clone();
         let rep = self
             .rt
-            .block_on(
-                self.client
-                    .device_list(pb::DeviceListRequest { workspace: None }),
-            )
+            .block_on(self.client.device_list(pb::DeviceListRequest { workspace }))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().devices)
     }
@@ -317,67 +349,12 @@ impl Daemon {
     pub fn device_remove(&mut self, id: &str) -> Result<pb::DeviceRemoveResponse, ClientError> {
         let req = pb::DeviceRemoveRequest {
             id: id.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         let rep = self
             .rt
             .block_on(self.client.device_remove(req))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
-    }
-
-    /// Streams one bundle out of the daemon (plan M8 `cli-bundle`), handing each raw chunk to
-    /// `on_chunk` as it arrives (`bundle.rs`'s own length-prefixed framing owns what it becomes
-    /// on disk). `passphrase` is loopback-only KDF input for the daemon's own wrap; this crate
-    /// never derives a key itself (it may not depend on txtodo-sync/txtodo-store).
-    pub fn bundle_export(
-        &mut self,
-        passphrase: Vec<u8>,
-        mut on_chunk: impl FnMut(&[u8]) -> std::io::Result<()>,
-    ) -> Result<(), ClientError> {
-        let req = pb::BundleExportRequest {
-            passphrase,
-            workspace: None,
-        };
-        self.rt.block_on(async {
-            let mut stream = self
-                .client
-                .bundle_export(req)
-                .await
-                .map_err(ClientError::Rpc)?
-                .into_inner();
-            while let Some(chunk) = stream.message().await.map_err(ClientError::Rpc)? {
-                on_chunk(&chunk.data).map_err(ClientError::Io)?;
-            }
-            Ok(())
-        })
-    }
-
-    /// Streams one bundle into the daemon: `next_frame` pulls one raw frame at a time (`Ok(None)`
-    /// at EOF) while a concurrent task drives the RPC, so this never buffers the whole bundle.
-    /// The passphrase rides in request metadata (a client-streaming RPC's request type is fixed
-    /// to the streamed item, so there is no per-call field for it).
-    pub fn bundle_import(
-        &mut self,
-        passphrase: Vec<u8>,
-        next_frame: impl FnMut() -> std::io::Result<Option<Vec<u8>>> + Send + 'static,
-    ) -> Result<pb::BundleImportResponse, ClientError> {
-        let (tx, rx) = tokio::sync::mpsc::channel::<pb::BundleChunk>(4);
-        let mut req = tonic::Request::new(tokio_stream::wrappers::ReceiverStream::new(rx));
-        crate::bundle::insert_passphrase(&mut req, &passphrase);
-        self.rt.block_on(async {
-            let producer = tokio::spawn(crate::bundle::drain_frames(next_frame, tx));
-            let rep = self
-                .client
-                .bundle_import(req)
-                .await
-                .map_err(ClientError::Rpc)?;
-            match producer.await {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => return Err(ClientError::Io(e)),
-                Err(_) => {} // panicked; the RPC's own result already tells the story
-            }
-            Ok(rep.into_inner())
-        })
     }
 }

@@ -25,6 +25,9 @@ jiff = "0.2"
 getrandom = "0.3"
 # https://docs.rs/tonic — gRPC client to txtodod over the unix socket (ADR 0006); current-thread runtime
 tonic = "0.14"
+# https://docs.rs/prost — encodes the WorkspaceSelector carried in BundleImport's request metadata
+# (its request type is fixed to the streamed BundleChunk, so there's no per-call field for it)
+prost = "0.14"
 tokio = { version = "1", features = ["rt", "net", "sync"] }
 # https://docs.rs/tokio-stream — ReceiverStream, the client-streaming request body for
 # `txtodo bundle import` (plan M8 `cli-bundle`)
