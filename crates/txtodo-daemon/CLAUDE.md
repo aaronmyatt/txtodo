@@ -120,9 +120,10 @@ true of this binary (`main.rs` still runs one workspace per process via `--dir`)
   later change on its own; without this, a freshly paired joiner would hold the right group key but
   never actually be found by (or find) its peer. `lan_status.rs`:
   `LanStatus` (endpoint-bound/
-  discovery-active flags, `RELAY_DISABLED` constant), owned by `Workspace` and updated by `lan.rs`;
-  `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/
-  `lan_group_key_present`. `pairing_lan_state.rs`'s `PairingLan` (plan M4 `sync-pairing`'s LAN
+  discovery-active flags, plus the relay fields below), owned by `Workspace` and updated by
+  `lan.rs`/`relay.rs`; `Health` reads it for `lan_relay_disabled`/`lan_endpoint_bound`/
+  `lan_discovery_active`/`lan_group_key_present`/`relay_url`/`relay_last_outcome`.
+  `pairing_lan_state.rs`'s `PairingLan` (plan M4 `sync-pairing`'s LAN
   wiring pass) is `lan.rs`'s other piece of shared state: the bound `LanEndpoint` (so the pairing
   relay driver can reuse it rather than binding a second one) and every raw mDNS sighting
   regardless of group (`lan.rs`'s own `KnownPeers`/`PeerTable` are group-filtered by design and
@@ -131,6 +132,26 @@ true of this binary (`main.rs` still runs one workspace per process via `--dir`)
   seam still used by `lan_loopback_converge.rs`/`nested_ref_sync.rs` for tests that seed a shared
   group up front rather than exercise pairing itself (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`,
   refused with `UNIMPLEMENTED` unless set to `"1"`); `tests/pairing_lan.rs` pairs for real instead.
+- `relay.rs`/`relay_state.rs`/`relay_fallback.rs` (plan M8 `sync-relay-enable`, ADR 0026 — reverses
+  ADR 0024: LAN is reinstated as primary, relay becomes an *additive* fallback carrier, not a
+  replacement): `relay::start(ws, relay_url)` binds `txtodo_sync::RelayEndpoint` when `--relay
+  <url>` names one (`LanStatus::set_relay_configured("")` and no task spawned at all when it
+  doesn't) and runs an accept loop reusing `lan::spawn_driver` (now `pub(crate)`, since
+  `RelayEndpoint::connect`/`accept` return the same `IrohLink` type LAN uses) — deliberately does
+  **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does;
+  pairing-over-relay is `sync-pairing-relay`'s separate, not-yet-built task. `relay_state.rs`'s
+  `RelayState` (same `Arc<Mutex<Option<Arc<_>>>>` shape as `pairing_lan_state.rs`'s endpoint half)
+  is how `relay.rs`'s bound endpoint reaches `lan.rs`'s dial path. `relay_fallback.rs`'s generic
+  `lan_then_relay(timeout, primary, fallback)` is the actual selection logic — tries `primary`
+  (LAN) within `timeout`, else awaits `fallback` (relay) — shared by production
+  (`lan.rs::dial_and_spawn`, `L = IrohLink`) and `relay_fallback_tests.rs` (`L = ChannelLink`, a
+  simulated relay half) so there is exactly one fallback code path, not two that could drift.
+  `relay_fallback.rs`'s own `relay_fallback_dial` dials a peer's LAN identity over the relay
+  endpoint — a known, flagged limitation: the relay endpoint is a separately-generated iroh
+  identity per daemon run (no shared/persisted key across LAN and relay yet), so this only really
+  connects once both ends share one identity across carriers, which is `relay-converge-test`'s job;
+  this pass proves the LAN→relay *selection* logic end to end via simulation, the same spirit as
+  `lan_loopback_converge.rs` proving LAN for real versus `endpoint_tests.rs`'s same-process caveat.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

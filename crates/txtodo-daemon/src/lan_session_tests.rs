@@ -31,7 +31,11 @@ pub(crate) fn peer_device() -> DeviceId {
 
 /// A fresh, real `Workspace` seeded with a group key so `drive_session` has something to seal
 /// with — everything else (device id, group id) is whatever the workspace mints on its own.
-fn make_workspace(dir: &std::path::Path, key: [u8; 32]) -> (SharedWorkspace, DeviceId, GroupId) {
+/// `pub(crate)`: reused by `relay_fallback_tests` (same reasons as [`peer_device`]'s doc).
+pub(crate) fn make_workspace(
+    dir: &std::path::Path,
+    key: [u8; 32],
+) -> (SharedWorkspace, DeviceId, GroupId) {
     let clock: Arc<dyn crate::clock::Clock> = Arc::new(FakeClock::new(1_000));
     let ws = Workspace::open_with_default_mode(dir, clock, IdentityMode::Tagged)
         .unwrap_or_else(|e| panic!("open workspace: {e}"));
@@ -152,7 +156,8 @@ pub(crate) fn run_peer_script(
     // returns `LinkError::Closed` and it returns cleanly instead of blocking forever.
 }
 
-async fn assert_todo_txt_has(ws: &SharedWorkspace, needle: &str) {
+/// `pub(crate)`: reused by `relay_fallback_tests` (same reasons as [`peer_device`]'s doc).
+pub(crate) async fn assert_todo_txt_has(ws: &SharedWorkspace, needle: &str) {
     let handle = {
         let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard

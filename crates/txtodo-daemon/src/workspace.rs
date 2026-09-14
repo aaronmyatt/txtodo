@@ -11,6 +11,7 @@ use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_lan_state::PairingLan;
 use crate::pairing_state::PairingRegistry;
 use crate::pairing_state_error::PairingStateError;
+use crate::relay_state::RelayState;
 use crate::stats::Stats;
 use crate::tree_dirty::TreeDirty;
 use crate::walker::{self, WALK_MAX_FILES, WalkError};
@@ -44,31 +45,26 @@ pub struct Workspace {
     actors: BTreeMap<FilePath, ActorHandle>,
     started_at_ms: u64,
     stats: Arc<Stats>,
-    /// This workspace's sync group (plan M4 pairing): minted once, like the device id, and
-    /// replaced with a peer's group once this device joins theirs — see [`Workspace::adopt_group_key`].
+    /// This workspace's sync group: minted once, replaced with a peer's group once this device
+    /// joins theirs (see [`Workspace::adopt_group_key`]).
     group: Mutex<GroupId>,
     /// Where this workspace's sync keys live (device/group/device-static). `Workspace::open`/
-    /// `open_with_default_mode` (every test in this crate) use an in-memory placeholder, not
-    /// persisted across restarts; `Workspace::open_with_key_store` (production, `txtodod`) resolves
-    /// a real OS/file-backed store (plan M4 `sync-keystore`).
+    /// `open_with_default_mode` use an in-memory placeholder, not persisted; `open_with_key_store`
+    /// (production, `txtodod`) resolves a real OS/file-backed store (plan M4 `sync-keystore`).
     key_store: Arc<dyn KeyStore + Send + Sync>,
-    /// The resolved backend's name (`"memory"`/`"os"`/`"file"`), so `txtodo doctor` can report it
-    /// without reading code (plan M4 `sync-keystore`).
+    /// The resolved backend's name (`"memory"`/`"os"`/`"file"`), so `txtodo doctor` can report it.
     key_store_backend: &'static str,
-    /// This device's long-term X25519 static keypair (plan M4 `sync-device-remove`): minted once,
-    /// like the device/group id, and stored via the keystore under `KeyId::DeviceStatic` so a
-    /// future rotation can be handed to a remaining device even while it is offline.
+    /// This device's long-term X25519 static keypair (plan M4 `sync-device-remove`): minted once
+    /// and stored via the keystore under `KeyId::DeviceStatic` for a future offline rotation.
     device_static: DeviceStaticSecret,
-    /// The group key epoch this workspace currently seals ops under: 0 until the first `device
-    /// remove` rotates it. Persisted in `meta` so a rotation survives a restart.
+    /// The group key epoch ops are sealed under: 0 until `device remove` rotates it (persisted).
     group_epoch: Mutex<u32>,
     /// This daemon's in-flight pairing bookkeeping (`pairing_grpc.rs`).
     pairing: PairingRegistry,
     /// Live `notes.md` actors, one per `ref:` directory, opened lazily (plan M5).
     notes: NotesRegistry,
     /// Marked by any actor whose commit could change the workspace tree; cleared by `tree.rs`'s
-    /// `TxtodoService::workspace_tree` after a rebuild (plan M5). `pub(crate)`, like `notes` above,
-    /// so that sibling module can reach it directly without an accessor pair.
+    /// `workspace_tree` after a rebuild (plan M5). `pub(crate)`: no accessor pair needed.
     pub(crate) tree_dirty: Arc<TreeDirty>,
     /// The last full rebuild of the workspace tree; stale exactly when `tree_dirty` is set.
     pub(crate) cached_tree: Mutex<WorkspaceTree>,
@@ -77,9 +73,11 @@ pub struct Workspace {
     lan_status: LanStatus,
     /// Shared state connecting `lan.rs`'s background task to the pairing relay (`pairing_lan.rs`,
     /// plan M4 `sync-pairing`'s LAN wiring pass): the bound `LanEndpoint` and every raw mDNS
-    /// sighting, regardless of sync group (see `pairing_lan_state.rs`'s module doc on why pairing
-    /// cannot reuse `lan.rs`'s own group-filtered peer table).
+    /// sighting, regardless of sync group (see `pairing_lan_state.rs`'s module doc for why).
     pairing_lan: PairingLan,
+    /// The bound relay endpoint, if any (plan M8 `sync-relay-enable`): set by `relay.rs`, read by
+    /// `lan.rs`'s relay-fallback dial.
+    relay_state: RelayState,
 }
 
 impl Workspace {
@@ -189,6 +187,7 @@ impl Workspace {
             cached_tree: Mutex::new(WorkspaceTree::default()),
             lan_status: LanStatus::default(),
             pairing_lan: PairingLan::default(),
+            relay_state: RelayState::default(),
         };
         ws.discover(root)?;
         debug_assert!(ws.actors.len() <= WALK_MAX_FILES);
@@ -344,14 +343,11 @@ impl Workspace {
         self.notes.get_or_open(cfg, &self.store, &self.clock)
     }
     /// Finishes a pairing on the joiner's side: unwraps the sealed [`txtodo_sync::PairingGrant`]
-    /// the initiator sent (see `pairing_grpc.rs`'s module doc — there is no transport yet, so this
-    /// is driven directly by whoever stands in for one today), stores the group key under this
-    /// workspace's keystore, registers the initiator's long-term static public key in the
-    /// `devices` table (plan M4 `sync-device-remove` — this is the leg of the exchange this daemon
-    /// wires; see `pairing_state.rs::adopt_group_key`'s doc for the direction it does not), and
-    /// adopts `group` as this workspace's own — atomically from the caller's point of view, so
-    /// this workspace never claims a group it does not also hold the key for. Only called by
-    /// `pairing_grpc_tests.rs` today (no transport exists to call it in production yet).
+    /// the initiator sent, stores the group key under this workspace's keystore, registers the
+    /// initiator's static public key in the `devices` table (plan M4 `sync-device-remove`; see
+    /// `pairing_state.rs::adopt_group_key`'s doc for the leg it does not), and adopts `group` as
+    /// this workspace's own — atomically, so it never claims a group without also holding its key.
+    /// Only called by `pairing_grpc_tests.rs` today (no transport calls it in production yet).
     #[allow(dead_code)]
     pub(crate) fn adopt_group_key(
         &self,
@@ -387,6 +383,10 @@ impl Workspace {
     /// Live LAN transport status (plan M4 `sync-lan-transport`), for `Health`/`txtodo doctor`.
     pub fn lan_status(&self) -> &LanStatus {
         &self.lan_status
+    }
+    /// The bound relay endpoint, if any (plan M8 `sync-relay-enable`).
+    pub(crate) fn relay_state(&self) -> &RelayState {
+        &self.relay_state
     }
     /// Replaces this workspace's sync group id in memory (its persistence is the caller's job —
     /// `adopt_group_key`/`debug_hooks.rs`'s `debug_set_group_key` both write `meta` themselves
