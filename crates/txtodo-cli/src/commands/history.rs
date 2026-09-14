@@ -71,6 +71,7 @@ pub fn run_log(
         task_id: String::new(),
         limit: limit.unwrap_or(LOG_DEFAULT_LIMIT),
         before_seq: 0,
+        workspace: None,
     };
     let ops = daemon.history(req)?;
     debug_assert!(ops.windows(2).all(|w| w[0].seq > w[1].seq), "newest first");
@@ -99,6 +100,7 @@ pub fn run_blame(daemon: &mut Daemon, item: &str, as_json: bool) -> Result<(), C
         task_id,
         limit: 1_000,
         before_seq: 0,
+        workspace: None,
     })?;
     // Newest op per kind is the "who last touched this field" view.
     let mut seen: Vec<&str> = Vec::new();

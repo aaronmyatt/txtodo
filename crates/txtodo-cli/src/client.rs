@@ -33,8 +33,8 @@ pub enum Mode {
 
 /// A connected client with its own current-thread runtime; direct mode never builds one.
 pub struct Daemon {
-    rt: tokio::runtime::Runtime,
-    client: TxtodoClient<Channel>,
+    pub(crate) rt: tokio::runtime::Runtime,
+    pub(crate) client: TxtodoClient<Channel>,
 }
 
 /// Why daemon mode failed.
@@ -124,6 +124,7 @@ impl Daemon {
     pub fn get(&mut self, path: &str) -> Result<Vec<u8>, ClientError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         let rep = self
             .rt
@@ -136,7 +137,10 @@ impl Daemon {
     pub fn list_files(&mut self) -> Result<Vec<pb::FileInfo>, ClientError> {
         let rep = self
             .rt
-            .block_on(self.client.list_files(pb::ListFilesRequest {}))
+            .block_on(
+                self.client
+                    .list_files(pb::ListFilesRequest { workspace: None }),
+            )
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().files)
     }
@@ -152,6 +156,7 @@ impl Daemon {
             path: path.to_owned(),
             mutations,
             agent: None,
+            workspace: None,
         };
         let rep = self
             .rt
@@ -174,6 +179,7 @@ impl Daemon {
         let req = pb::UndoRequest {
             path: path.to_owned(),
             steps,
+            workspace: None,
         };
         let rep = self
             .rt
@@ -187,6 +193,7 @@ impl Daemon {
         let req = pb::CheckoutRequest {
             path: path.to_owned(),
             at_wall_ms,
+            workspace: None,
         };
         let rep = self
             .rt
@@ -199,7 +206,7 @@ impl Daemon {
     pub fn health(&mut self) -> Result<pb::HealthResponse, ClientError> {
         let rep = self
             .rt
-            .block_on(self.client.health(pb::HealthRequest {}))
+            .block_on(self.client.health(pb::HealthRequest { workspace: None }))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
@@ -208,6 +215,7 @@ impl Daemon {
     pub fn conflicts(&mut self, path: &str) -> Result<Vec<pb::ReviewFlag>, ClientError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         let rep = self
             .rt
@@ -229,45 +237,6 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
-    /// Starts a pairing handshake on this device (`txtodo pair`, initiator): the QR/code payload,
-    /// no SAS yet (plan M4, design §4; `crates/txtodo-daemon/src/pairing_grpc.rs`).
-    pub fn pair_offer(&mut self) -> Result<pb::PairOfferResponse, ClientError> {
-        let rep = self
-            .rt
-            .block_on(self.client.pair_offer(pb::PairOfferRequest {}))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner())
-    }
-
-    /// Accepts a peer's offer (`txtodo pair <code>`, joiner) and returns the six-word SAS.
-    pub fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, ClientError> {
-        let rep = self
-            .rt
-            .block_on(self.client.pair_accept(pb::PairAcceptRequest { code }))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner())
-    }
-
-    /// Confirms the SAS shown on this device; the group key moves only once the peer has too.
-    pub fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, ClientError> {
-        let rep = self
-            .rt
-            .block_on(self.client.pair_confirm_sas(pb::PairConfirmRequest {}))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner())
-    }
-
-    /// Initiator only (`txtodo pair`): polls whether a joiner's `PairAccept` has reached this
-    /// device yet over the LAN transport. Never blocks on the daemon side; `PairResult.sas` empty
-    /// means "not yet, call again".
-    pub fn pair_await_peer(&mut self) -> Result<pb::PairResult, ClientError> {
-        let rep = self
-            .rt
-            .block_on(self.client.pair_await_peer(pb::PairAwaitPeerRequest {}))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner())
-    }
-
     /// Resolves (`ensure = false`) or lazily creates (`ensure = true`) one line's `ref:`
     /// directory (plan M5, `open`/`notes`/`sub`).
     pub fn ref_dir(
@@ -280,6 +249,7 @@ impl Daemon {
             path: path.to_owned(),
             task: Some(task),
             ensure,
+            workspace: None,
         };
         let rep = self
             .rt
@@ -290,9 +260,13 @@ impl Daemon {
 
     /// The current `notes.md` bytes for a task's `ref:` directory (plan M5, `notes`).
     pub fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, ClientError> {
+        let req = pb::GetNotesRequest {
+            task: Some(task),
+            workspace: None,
+        };
         let rep = self
             .rt
-            .block_on(self.client.get_notes(task))
+            .block_on(self.client.get_notes(req))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
@@ -317,10 +291,10 @@ impl Daemon {
     ) -> Result<pb::PruneOrphansResponse, ClientError> {
         let rep = self
             .rt
-            .block_on(
-                self.client
-                    .prune_orphans(pb::PruneOrphansRequest { execute }),
-            )
+            .block_on(self.client.prune_orphans(pb::PruneOrphansRequest {
+                execute,
+                workspace: None,
+            }))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
@@ -331,14 +305,20 @@ impl Daemon {
     pub fn device_list(&mut self) -> Result<Vec<pb::Device>, ClientError> {
         let rep = self
             .rt
-            .block_on(self.client.device_list(pb::DeviceListRequest {}))
+            .block_on(
+                self.client
+                    .device_list(pb::DeviceListRequest { workspace: None }),
+            )
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().devices)
     }
 
     /// Removes a device and rotates the group key to the remaining devices (plan M4).
     pub fn device_remove(&mut self, id: &str) -> Result<pb::DeviceRemoveResponse, ClientError> {
-        let req = pb::DeviceRemoveRequest { id: id.to_owned() };
+        let req = pb::DeviceRemoveRequest {
+            id: id.to_owned(),
+            workspace: None,
+        };
         let rep = self
             .rt
             .block_on(self.client.device_remove(req))
@@ -355,7 +335,10 @@ impl Daemon {
         passphrase: Vec<u8>,
         mut on_chunk: impl FnMut(&[u8]) -> std::io::Result<()>,
     ) -> Result<(), ClientError> {
-        let req = pb::BundleExportRequest { passphrase };
+        let req = pb::BundleExportRequest {
+            passphrase,
+            workspace: None,
+        };
         self.rt.block_on(async {
             let mut stream = self
                 .client

@@ -5,6 +5,7 @@
 mod bundle;
 mod cli;
 mod client;
+mod client_pairing;
 mod clock;
 mod commands;
 mod config;

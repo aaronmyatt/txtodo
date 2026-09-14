@@ -136,6 +136,7 @@ pub fn run_resolve(daemon: &mut Daemon, line: u32, side: Side, file: &str) -> Re
             task_id,
         }),
         resolution: wire(side).into(),
+        workspace: None,
     })?;
     // `merged` writes no op, so a non-zero count here means the daemon did the wrong thing.
     debug_assert!(

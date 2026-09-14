@@ -47,6 +47,7 @@ pub fn run_notes(daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
     daemon.edit_notes(pb::NotesEditRequest {
         task: Some(bare),
         new_text,
+        workspace: None,
     })?;
     Ok(())
 }
