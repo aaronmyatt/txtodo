@@ -1,7 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import "../app.css";
+	import { resolvedTheme } from "$lib/stores/theme";
 
 	let { children }: { children: Snippet } = $props();
+
+	// `<html data-theme>` is what app.css's `[data-theme="dark"]` overrides key off — set here
+	// (rather than in app.html before hydration) since the resolved value depends on
+	// localStorage/matchMedia, neither available at prerender time under adapter-static.
+	$effect(() => {
+		document.documentElement.dataset.theme = $resolvedTheme;
+	});
 </script>
 
 <svelte:head>

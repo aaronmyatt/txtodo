@@ -1,0 +1,98 @@
+/* Design tokens: every component reads color through one of these custom properties instead of a
+   literal hex value, so a single attribute swap (`data-theme` on <html>, set by
+   $lib/stores/theme.ts) re-themes the whole app. `:root` holds the light palette (today's
+   original hardcoded values, unchanged); `[data-theme="dark"]` overrides them. Semantic names
+   (e.g. `--color-danger`, not `--color-red-700`) so a component never has to know which literal
+   color its role maps to in either theme.
+   Ref (CSS custom properties): https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties
+   Ref (color-scheme, native form control theming): https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme */
+:root {
+	color-scheme: light;
+
+	--color-bg: #ffffff;
+	--color-surface: #f9fafb;
+	--color-surface-muted: #f3f4f6;
+	--color-bg-elevated: #ffffff;
+	--color-overlay: rgb(0 0 0 / 40%);
+	--color-hover-overlay: rgba(15, 23, 42, 0.05);
+
+	--color-text: #1f2937;
+	--color-text-secondary: #374151;
+	--color-text-muted: #6b7280;
+	--color-text-faint: #9ca3af;
+
+	--color-border: #d1d5db;
+	--color-border-subtle: #e5e7eb;
+
+	--color-danger: #b91c1c;
+	--color-success: #15803d;
+	--color-warning-text: #92400e;
+	--color-warning-bg: #fffbeb;
+	--color-warning-border: #b45309;
+	--color-attention-bg: #fef3c7;
+	--color-attention-text: #78350f;
+	--color-banner-bg: #fde68a;
+	--color-banner-text: #1f2937;
+
+	/* todo.txt syntax palette (todotxtLanguage.ts) — Tailwind 500/700 band, per that file's own doc. */
+	--tok-completion-marker: #15803d;
+	--tok-priority: #b45309;
+	--tok-date: #6d28d9;
+	--tok-project: #1d4ed8;
+	--tok-context: #be185d;
+	--tok-tag-key: #57534e;
+	--tok-tag-value: #78716c;
+	--tok-id-tag: #9ca3af;
+}
+
+[data-theme="dark"] {
+	color-scheme: dark;
+
+	--color-bg: #111827;
+	--color-surface: #1f2937;
+	--color-surface-muted: #374151;
+	--color-bg-elevated: #1f2937;
+	--color-overlay: rgb(0 0 0 / 60%);
+	--color-hover-overlay: rgba(255, 255, 255, 0.08);
+
+	--color-text: #f3f4f6;
+	--color-text-secondary: #d1d5db;
+	--color-text-muted: #9ca3af;
+	--color-text-faint: #6b7280;
+
+	--color-border: #4b5563;
+	--color-border-subtle: #374151;
+
+	--color-danger: #f87171;
+	--color-success: #4ade80;
+	--color-warning-text: #fbbf24;
+	--color-warning-bg: #3f2f10;
+	--color-warning-border: #b45309;
+	--color-attention-bg: #3a2f14;
+	--color-attention-text: #fcd34d;
+	--color-banner-bg: #4a3b12;
+	--color-banner-text: #fde68a;
+
+	/* Shifted one band brighter (Tailwind 400) than light's 500/700 — readable against a dark bg. */
+	--tok-completion-marker: #4ade80;
+	--tok-priority: #fbbf24;
+	--tok-date: #a78bfa;
+	--tok-project: #60a5fa;
+	--tok-context: #f472b6;
+	--tok-tag-key: #d6d3d1;
+	--tok-tag-value: #a8a29e;
+	--tok-id-tag: #6b7280;
+}
+
+body {
+	background: var(--color-bg);
+	color: var(--color-text);
+}
+
+/* Browsers default a <button>'s text color to the platform's `buttontext` keyword, not the
+   inherited `color` — every component here relies on inheriting `--color-text` instead, so
+   without this reset every button in the app would stay black-on-dark once dark mode is on. */
+button {
+	color: inherit;
+	font: inherit;
+}

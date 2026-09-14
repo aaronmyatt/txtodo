@@ -8,6 +8,7 @@
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
+	import ThemeToggle from "./ThemeToggle.svelte";
 
 	// Component contract says `<FileView path="todo.txt" depth={0}/>` explicitly; we take that at
 	// face value rather than round-tripping through `list_files` just to confirm the obvious.
@@ -63,7 +64,10 @@
 
 	<div class="top-nav">
 		<h1>txtodo</h1>
-		<a href="/devices">Devices &amp; agents</a>
+		<div class="top-nav-actions">
+			<ThemeToggle />
+			<a href="/devices">Devices &amp; agents</a>
+		</div>
 	</div>
 
 	{#if detail.length === 0}
@@ -83,10 +87,18 @@
 		padding: 0.75rem 1rem 0;
 	}
 
+	.top-nav-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
 	.main-view {
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
+		background: var(--color-bg);
+		color: var(--color-text);
 		font-family:
 			Inter,
 			Avenir,
@@ -100,8 +112,8 @@
 		justify-content: space-between;
 		align-items: center;
 		gap: 1rem;
-		background: #fde68a;
-		color: #1f2937;
+		background: var(--color-banner-bg);
+		color: var(--color-banner-text);
 		padding: 0.5rem 1rem;
 		border-radius: 6px;
 		margin: 0.75rem 1rem 0;
