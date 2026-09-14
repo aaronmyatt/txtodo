@@ -1,7 +1,9 @@
-//! Shared harness for the real-daemon integration tests: spawn `txtodod` on a temp workspace,
-//! dial its socket, write files "from outside", and wait for the daemon to settle. Slice-local by
-//! design (constitution §7: no cross-slice helpers).
+//! Shared harness for the real-daemon integration tests: spawn `txtodod` on a temp workspace, dial
+//! its socket, write files "from outside", wait for it to settle. Slice-local (constitution §7).
 #![allow(dead_code)] // each test file uses a different subset of the helpers
+
+/// Relay/forced-relay helpers, split out for this file's own line budget — see its own doc.
+pub mod relay;
 
 use hyper_util::rt::TokioIo;
 use std::path::{Path, PathBuf};
@@ -68,15 +70,13 @@ impl Daemon {
         Self::start_with_mode(todo, "tagged").await
     }
 
-    /// Writes `todo` as todo.txt, starts txtodod under `--identity-mode <mode>`, waits for the
-    /// socket and for adoption to settle.
+    /// Writes `todo`, starts txtodod under `--identity-mode <mode>`, waits for socket+adoption.
     pub async fn start_with_mode(todo: &str, mode: &str) -> Daemon {
         Self::start_full(todo, mode, &[]).await
     }
 
     /// `start_with_mode`, but with `TXTODO_TEST_HOOKS=1` set so `DebugSetGroupKey` (plan M4
-    /// `sync-lan-transport`) is reachable — the seam a real two-daemon test pairs through, since
-    /// real pairing has no transport over the LAN link yet.
+    /// `sync-lan-transport`) is reachable — the seam a real two-daemon test pairs through.
     pub async fn start_with_test_hooks(todo: &str, mode: &str) -> Daemon {
         Self::start_full(todo, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
     }
@@ -106,7 +106,7 @@ impl Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
         write_tree(dir.path(), files);
         seed_group_id(dir.path(), group_id);
-        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")]).await
+        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], &[]).await
     }
 
     /// `start_with_mode`, with extra environment variables set on the spawned process. Reuse
@@ -116,10 +116,15 @@ impl Daemon {
     pub async fn start_full(todo: &str, mode: &str, envs: &[(&str, &str)]) -> Daemon {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
         write_tree(dir.path(), &[("todo.txt", todo)]);
-        Self::start_in(dir, mode, envs).await
+        Self::start_in(dir, mode, envs, &[]).await
     }
 
-    async fn start_in(dir: tempfile::TempDir, mode: &str, envs: &[(&str, &str)]) -> Daemon {
+    async fn start_in(
+        dir: tempfile::TempDir,
+        mode: &str,
+        envs: &[(&str, &str)],
+        extra_args: &[String],
+    ) -> Daemon {
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
             .args([
                 "--dir",
@@ -127,6 +132,7 @@ impl Daemon {
                 "--identity-mode",
                 mode,
             ])
+            .args(extra_args)
             .envs(envs.iter().copied())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -171,9 +177,8 @@ impl Daemon {
         self.child.id()
     }
 
-    /// Plan M4 `sync-pairing`'s real (non-test-hook) pairing RPCs, for `tests/pairing_lan.rs`'s
-    /// real two-daemon handshake — unlike `debug_set_group_key` above, these drive the actual
-    /// production path (`pairing_grpc.rs`, `pairing_lan.rs`), no `TXTODO_TEST_HOOKS` needed.
+    /// Plan M4 `sync-pairing`'s real (non-test-hook) pairing RPCs — unlike `debug_set_group_key`
+    /// above, these drive the actual production path (`pairing_grpc.rs`, `pairing_lan.rs`).
     pub async fn pair_offer(&mut self) -> pb::PairOfferResponse {
         self.client
             .pair_offer(pb::PairOfferRequest {})
@@ -199,7 +204,7 @@ impl Daemon {
             .into_inner()
     }
 
-    /// Initiator only: empty `sas` means "no peer yet" — `tests/pairing_lan.rs` polls this itself.
+    /// Initiator only: empty `sas` means "no peer yet".
     pub async fn pair_await_peer(&mut self) -> pb::PairResult {
         self.client
             .pair_await_peer(pb::PairAwaitPeerRequest {})
@@ -328,11 +333,10 @@ impl Daemon {
         assert!(script.exists(), "vendored todo.sh at {}", script.display());
         let cfg = self.dir.path().join("todo.cfg");
         let dir = self.dir.path().to_string_lossy().into_owned();
-        std::fs::write(
-            &cfg,
-            format!("export TODO_DIR=\"{dir}\"\nexport TODO_FILE=\"$TODO_DIR/todo.txt\"\nexport DONE_FILE=\"$TODO_DIR/done.txt\"\nexport REPORT_FILE=\"$TODO_DIR/report.txt\"\n"),
-        )
-        .unwrap_or_else(|e| panic!("{e}"));
+        let cfg_body = format!(
+            "export TODO_DIR=\"{dir}\"\nexport TODO_FILE=\"$TODO_DIR/todo.txt\"\nexport DONE_FILE=\"$TODO_DIR/done.txt\"\nexport REPORT_FILE=\"$TODO_DIR/report.txt\"\n"
+        );
+        std::fs::write(&cfg, cfg_body).unwrap_or_else(|e| panic!("{e}"));
         Command::new("bash")
             .arg(script)
             .args(["-d", &cfg.to_string_lossy(), "-f", "-p"])

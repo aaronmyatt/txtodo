@@ -8789,6 +8789,7 @@ dependencies = [
  "postcard",
  "proptest",
  "prost",
+ "relay",
  "serde",
  "serde_json",
  "strsim",

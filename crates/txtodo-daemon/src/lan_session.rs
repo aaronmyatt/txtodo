@@ -77,19 +77,24 @@ pub(crate) fn write(ws: &SharedWorkspace) -> std::sync::RwLockWriteGuard<'_, Wor
     ws.write().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn fetch_group_key(ws: &SharedWorkspace) -> Option<GroupKey> {
+/// `pub(crate)`: `file_carrier.rs` (plan M8 `relay-converge-test`) reuses this too — the file
+/// carrier's send/receive path needs the same group key `drive_session` does, with no `Session` of
+/// its own (see that module's doc for why it does not reuse `drive_session` wholesale).
+pub(crate) fn fetch_group_key(ws: &SharedWorkspace) -> Option<GroupKey> {
     let bytes = read(ws).key_store().get(KeyId::Group(GROUP_EPOCH)).ok()??;
     let array: [u8; txtodo_sync::KEY_BYTES] = bytes.expose().try_into().ok()?;
     Some(GroupKey::from_bytes(array))
 }
 
-fn single_epoch_keys(key: GroupKey) -> Option<GroupKeys> {
+/// `pub(crate)`: see [`fetch_group_key`]'s doc.
+pub(crate) fn single_epoch_keys(key: GroupKey) -> Option<GroupKeys> {
     let mut keys = GroupKeys::new();
     keys.insert(GROUP_EPOCH, key).ok()?;
     Some(keys)
 }
 
-fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
+/// `pub(crate)`: see [`fetch_group_key`]'s doc.
+pub(crate) fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
     let store = read(ws).store().clone();
     store
         .lock()
