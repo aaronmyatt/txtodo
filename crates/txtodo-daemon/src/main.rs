@@ -12,12 +12,12 @@ use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::watch_task;
 use txtodo_daemon::workspace::Workspace;
-use txtodo_daemon::{lan, serve, server};
+use txtodo_daemon::{lan, relay, serve, server};
 use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
-/// `txtodod --dir <workspace> [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]`;
-/// nothing is guessed from the cwd in a service.
+/// `txtodod --dir <workspace> [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
+/// [--relay <url>]`; nothing is guessed from the cwd in a service.
 struct Args {
     dir: PathBuf,
     /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3);
@@ -30,6 +30,9 @@ struct Args {
     /// `auto` (like `os`) touches the real OS keychain, which most CI/headless environments do
     /// not have reachable, and must never become what a plain `txtodod --dir X` does on its own.
     key_store_mode: Option<KeyStoreMode>,
+    /// The relay URL (plan M8 `sync-relay-enable`, ADR 0026); `None` when `--relay` is omitted,
+    /// meaning relay stays off (LAN-only, unchanged M4 behaviour) — additive, never required.
+    relay_url: Option<String>,
 }
 
 fn parse_identity_mode(raw: &std::ffi::OsStr) -> Result<IdentityMode, String> {
@@ -56,7 +59,8 @@ fn parse_args() -> Result<Args, String> {
     let mut dir: Option<PathBuf> = None;
     let mut identity_mode = IdentityMode::Sidecar;
     let mut key_store_mode = None;
-    // Bounded by the argv length; four flags are all this binary knows.
+    let mut relay_url = None;
+    // Bounded by the argv length; five flags are all this binary knows.
     while let Some(a) = args.next() {
         match a.to_str() {
             Some("--dir") => dir = args.next().map(PathBuf::from),
@@ -67,6 +71,10 @@ fn parse_args() -> Result<Args, String> {
             Some("--key-store") => {
                 let raw = args.next().ok_or("--key-store needs a value")?;
                 key_store_mode = Some(parse_key_store_mode(&raw)?);
+            }
+            Some("--relay") => {
+                let raw = args.next().ok_or("--relay needs a value")?;
+                relay_url = Some(raw.to_string_lossy().into_owned());
             }
             Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
             _ => {
@@ -85,6 +93,7 @@ fn parse_args() -> Result<Args, String> {
         dir,
         identity_mode,
         key_store_mode,
+        relay_url,
     })
 }
 
@@ -176,6 +185,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let ws: server::SharedWorkspace = Arc::new(RwLock::new(ws));
     let (_watcher, watch_handle) = watch_task::start(Arc::clone(&ws), Arc::new(SystemClock))?;
     let lan_transport = lan::start(Arc::clone(&ws), Arc::new(SystemClock));
+    let relay_transport = relay::start(Arc::clone(&ws), args.relay_url.clone());
     eprintln!(
         "txtodod ready: {documents} document(s), socket {}, key_store={key_store_backend}",
         socket.display()
@@ -202,6 +212,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     serve::serve(ws, &socket, shutdown).await?;
     watch_handle.abort();
     lan_transport.abort();
+    relay_transport.as_ref().inspect(|r| r.abort());
     eprintln!("txtodod stopped");
     Ok(())
 }

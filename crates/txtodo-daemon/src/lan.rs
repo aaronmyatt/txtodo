@@ -6,23 +6,17 @@
 //! crate; only `txtodo_sync`'s own types do (`.claude/budgets.json`'s `allowedDeps`).
 //!
 //! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
-//! closed after `IDLE_TIMEOUT` (750 ms) of silence, not only on a real close, so
-//! `lan_session::drive_session` naturally returns once a connection has caught the peer up and
-//! gone quiet. The periodic resync below (`spawn_resync_dial`, driven from `run`'s own timer) is
-//! the other half: every known peer is redialed every `RESYNC_INTERVAL`, so a local edit made
-//! after an earlier round still converges quickly, without this module needing to watch the store
-//! for changes. The cost — a new QUIC handshake roughly every second for as long as two daemons
-//! stay paired and on the LAN — is a known, flagged tradeoff of this M4-scoped design; a
-//! push/notify model would avoid it.
+//! closed after `IDLE_TIMEOUT` (750 ms) of silence, so `lan_session::drive_session` naturally
+//! returns once a connection has caught the peer up and gone quiet. The periodic resync below
+//! (`spawn_resync_dial`) is the other half: every known peer is redialed every `RESYNC_INTERVAL`,
+//! so a later local edit still converges quickly without this module watching the store — a new
+//! QUIC handshake roughly every second while paired is a known, flagged tradeoff (a push/notify
+//! model would avoid it).
 //!
-//! **Real same-host, cross-process connect works.** An earlier pass of this task believed a real
-//! `iroh` QUIC connect could never complete between two endpoints on the same host at all — true
-//! only when both endpoints live in the *same process* (confirmed with hard evidence in
-//! `txtodo-sync`'s `endpoint_tests.rs`). Two real `txtodod` *processes* on one machine connect and
-//! sync for real: `tests/lan_loopback_converge.rs` measures real, repeatable sub-2-second
-//! convergence in both directions. `LanEndpoint::connect` still prefers non-loopback addresses
-//! (falling back to loopback only when nothing else was advertised) since a real LAN would never
-//! offer only loopback in the first place — see `txtodo-sync`'s `CLAUDE.md`.
+//! **Real same-host, cross-process connect works.** A real `iroh` QUIC connect only ever fails
+//! between two endpoints in the *same process* (`txtodo-sync`'s `endpoint_tests.rs`); two real
+//! `txtodod` processes on one host connect and sync for real (`tests/lan_loopback_converge.rs`).
+//! `LanEndpoint::connect` prefers non-loopback addresses, loopback only as a last resort.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -47,7 +41,8 @@ use crate::server::SharedWorkspace;
 pub const MAX_CONCURRENT_LAN_SESSIONS: usize = 16;
 
 /// Bounded: a real connect that never resolves (a black-holed peer) cannot hang this forever.
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// `pub(crate)`: `relay_fallback.rs`'s relay dial reuses the same bound.
+pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often already-known peers are redialed — see the module doc on why this, together with
 /// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Longer than `IDLE_TIMEOUT` so the
@@ -77,11 +72,12 @@ pub fn start(ws: SharedWorkspace, clock: Arc<dyn Clock>) -> LanTransport {
 
 /// This device's identity for the sync group, plus the workspace — bundled so no function below
 /// needs more than `maxParams` arguments, and cheap to clone (an `Arc` and two `Copy` ids).
+/// Fields are `pub(crate)`: `relay_fallback.rs`'s own dial function needs them too.
 #[derive(Clone)]
-struct LanCtx {
-    ws: SharedWorkspace,
-    device: DeviceId,
-    group: GroupId,
+pub(crate) struct LanCtx {
+    pub(crate) ws: SharedWorkspace,
+    pub(crate) device: DeviceId,
+    pub(crate) group: GroupId,
 }
 
 /// Everything a bind/discover/browse setup produces, kept alive for the run loop's whole life.
@@ -262,7 +258,8 @@ fn browse(discovery: &Discovery) -> Option<txtodo_sync::BrowseEvents> {
     }
 }
 
-fn spawn_driver(
+/// `pub(crate)`: `relay.rs` reuses this too — `RelayEndpoint` returns the same `IrohLink` type.
+pub(crate) fn spawn_driver(
     ws: SharedWorkspace,
     device: DeviceId,
     group: GroupId,
@@ -331,26 +328,37 @@ fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
     tracing::debug!(peer = %peer, error = %e, "lan_connect_failed");
 }
 
-/// Connects to `peer` and, on success, spawns its session driver; `permit` is dropped on every
-/// path either way (held onward by the driver only after a successful connect).
+/// The LAN half of the fallback: `None` on any failure, already logged via `log_connect_failed`.
+async fn lan_only_dial(endpoint: Arc<LanEndpoint>, peer: DiscoveredPeer) -> Option<IrohLink> {
+    match endpoint.connect(peer.node, &peer.addresses).await {
+        Ok(link) => Some(link),
+        Err(e) => {
+            log_connect_failed(peer.device, &e);
+            None
+        }
+    }
+}
+
+/// Connects to `peer`, spawning its session driver on success (`permit` drops either way). Tries
+/// LAN first, falling back to relay (`crate::relay_fallback`) only when LAN doesn't produce a link
+/// within `CONNECT_TIMEOUT` — ADR 0026: LAN stays primary, relay is additive.
 async fn dial_and_spawn(
     ctx: LanCtx,
     endpoint: Arc<LanEndpoint>,
     peer: DiscoveredPeer,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) -> bool {
-    let dial = endpoint.connect(peer.node, &peer.addresses);
-    match tokio::time::timeout(CONNECT_TIMEOUT, dial).await {
-        Ok(Ok(link)) => {
+    let node = peer.node;
+    let device = peer.device;
+    let lan_dial = lan_only_dial(endpoint, peer);
+    let relay_dial = crate::relay_fallback::relay_fallback_dial(ctx.clone(), node);
+    match crate::relay_fallback::lan_then_relay(CONNECT_TIMEOUT, lan_dial, relay_dial).await {
+        Some(link) => {
             spawn_driver(ctx.ws, ctx.device, ctx.group, link, permit);
             true
         }
-        Ok(Err(e)) => {
-            log_connect_failed(peer.device, &e);
-            false
-        }
-        Err(_) => {
-            tracing::debug!(peer = %peer.device, "lan_connect_timed_out");
+        None => {
+            tracing::debug!(peer = %device, "lan_and_relay_dial_both_failed");
             false
         }
     }

@@ -1,7 +1,6 @@
 //! The gRPC service on the unix socket (ADR 0006). Handlers are thin: parse the request into
 //! typed values (`convert.rs`), send one message to the right actor, map the reply. No file or
-//! store access happens here except the read-only History query.
-//! https://docs.rs/tonic/latest/tonic/transport/server/struct.Server.html#method.serve_with_incoming
+//! store access here except History. Ref: <https://docs.rs/tonic/latest/tonic/transport/server/>.
 
 use crate::convert::{
     file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
@@ -54,9 +53,8 @@ impl TxtodoService {
     }
 }
 
-// `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` (ListFiles
-// progress, plan §3.2.5) in progress.rs, `status_of` in convert.rs, and `forward_changes` in
-// watch_forward.rs, all split out to keep this file within its line budget.
+// `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` in progress.rs,
+// `status_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for the line budget.
 use crate::convert::status_of;
 use crate::watch_forward::forward_changes;
 
@@ -270,10 +268,12 @@ impl Txtodo for TxtodoService {
             writes_total,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             key_store_backend: ws.key_store_backend_name().to_owned(),
-            lan_relay_disabled: crate::lan_status::LanStatus::RELAY_DISABLED,
+            lan_relay_disabled: lan.relay_disabled(),
             lan_endpoint_bound: lan.endpoint_bound(),
             lan_discovery_active: lan.discovery_active(),
             lan_group_key_present: ws.has_group_key(),
+            relay_url: lan.relay_url(),
+            relay_last_outcome: lan.relay_last_outcome(),
         }))
     }
 
