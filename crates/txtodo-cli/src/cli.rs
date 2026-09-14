@@ -16,6 +16,10 @@ pub struct Cli {
     /// `sync-file-carrier`). Unset means file-carrier sync is not configured.
     #[arg(long, global = true, value_name = "DIR")]
     pub sync_dir: Option<String>,
+    /// Relay URL (overrides $TXTODO_RELAY_URL and config `relay_url`; plan M8
+    /// `sync-relay-enable`, ADR 0026). Unset means relay stays off — LAN-only, unchanged.
+    #[arg(long, global = true, value_name = "URL")]
+    pub relay: Option<String>,
     /// Emit one JSON object per line on listing commands.
     #[arg(long, global = true)]
     pub json: bool,

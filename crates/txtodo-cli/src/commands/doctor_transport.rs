@@ -4,22 +4,14 @@
 use super::doctor::{Check, Status, check};
 use txtodo_proto::v1 as pb;
 
-/// LAN transport mode (plan M4 `sync-lan-transport`): relay off, endpoint bound, discovery
-/// active, and whether this workspace has paired — a human should see all four without reading
-/// code. `Unknown` (no daemon) mirrors `watcher`'s own "unknown: no daemon" convention. Relay
-/// enabled is a `Fail`, not a `Warn`: this crate's whole LAN-only promise depends on it staying
-/// off until M8 turns it on deliberately.
+/// LAN transport mode (plan M4 `sync-lan-transport`; relay semantics flipped under plan M8
+/// `sync-relay-enable` / ADR 0026 — relay is now an additive fallback carrier alongside LAN, not
+/// a failure state to guard against). `Unknown` (no daemon) mirrors `watcher`'s own convention.
 pub(super) fn transport_check(health: Option<&pb::HealthResponse>) -> Check {
     let Some(h) = health else {
         return check("transport", Status::Warn, "unknown: no daemon");
     };
-    if !h.lan_relay_disabled {
-        return check(
-            "transport",
-            Status::Fail,
-            "relay is NOT disabled; LAN sync may leave this network — this should never happen",
-        );
-    }
+    let relay = relay_summary(h);
     let paired = if h.lan_group_key_present {
         "paired"
     } else {
@@ -36,15 +28,29 @@ pub(super) fn transport_check(health: Option<&pb::HealthResponse>) -> Check {
         check(
             "transport",
             Status::Ok,
-            format!("relay off, endpoint bound, discovery active, {paired}"),
+            format!("{relay}, endpoint bound, discovery active, {paired}"),
         )
     } else {
         check(
             "transport",
             Status::Warn,
-            format!("relay off, {}, {paired}", problems.join(", ")),
+            format!("{relay}, {}, {paired}", problems.join(", ")),
         )
     }
+}
+
+/// `"relay off"` when unconfigured (`lan_relay_disabled`), else `"relay <url> (<outcome>)"` —
+/// `relay_last_outcome` empty means configured but never yet exercised.
+fn relay_summary(h: &pb::HealthResponse) -> String {
+    if h.lan_relay_disabled {
+        return "relay off".to_string();
+    }
+    let outcome = if h.relay_last_outcome.is_empty() {
+        "no attempts yet"
+    } else {
+        h.relay_last_outcome.as_str()
+    };
+    format!("relay {} ({outcome})", h.relay_url)
 }
 
 #[cfg(test)]
@@ -64,6 +70,8 @@ mod tests {
             lan_endpoint_bound: true,
             lan_discovery_active: true,
             lan_group_key_present: true,
+            relay_url: String::new(),
+            relay_last_outcome: String::new(),
         }
     }
 
@@ -75,13 +83,31 @@ mod tests {
     }
 
     #[test]
-    fn relay_enabled_is_always_a_failure() {
+    fn relay_configured_reports_url_and_outcome_not_a_failure() {
         let h = pb::HealthResponse {
             lan_relay_disabled: false,
+            relay_url: "https://relay.example.org".into(),
+            relay_last_outcome: "connected".into(),
             ..healthy()
         };
         let c = transport_check(Some(&h));
-        assert_eq!(c.status, Status::Fail);
+        assert_ne!(c.status, Status::Fail);
+        assert!(
+            c.detail
+                .contains("relay https://relay.example.org (connected)")
+        );
+    }
+
+    #[test]
+    fn relay_configured_with_no_attempts_yet_says_so() {
+        let h = pb::HealthResponse {
+            lan_relay_disabled: false,
+            relay_url: "https://relay.example.org".into(),
+            relay_last_outcome: String::new(),
+            ..healthy()
+        };
+        let c = transport_check(Some(&h));
+        assert!(c.detail.contains("no attempts yet"));
     }
 
     #[test]
