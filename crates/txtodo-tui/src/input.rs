@@ -156,6 +156,7 @@ fn delete_selected(state: &AppState) -> Option<pb::Mutation> {
 /// Wraps one mutation as a single-mutation `ApplyRequest` against the open document.
 pub(crate) fn apply_of(state: &AppState, mutation: pb::Mutation) -> pb::ApplyRequest {
     pb::ApplyRequest {
+        workspace: None,
         path: state.path.clone(),
         mutations: vec![mutation],
         agent: None,

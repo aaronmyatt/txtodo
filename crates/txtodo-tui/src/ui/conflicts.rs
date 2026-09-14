@@ -50,6 +50,7 @@ pub fn on_key(state: &mut AppState, key: KeyEvent) -> bool {
 pub fn resolve_request(state: &AppState, resolution: Resolution) -> Option<pb::ResolveRequest> {
     let flag = state.needs_review.get(state.conflict_cursor)?;
     Some(pb::ResolveRequest {
+        workspace: None,
         path: state.path.clone(),
         task: Some(pb::TaskRef {
             line_number: flag.line_number,

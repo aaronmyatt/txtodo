@@ -115,7 +115,11 @@ impl Daemon {
 
     /// Liveness only; used by [`Daemon::wait_until_ready`].
     async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
-        Ok(self.inner.health(pb::HealthRequest {}).await?.into_inner())
+        Ok(self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner())
     }
 
     /// The exact bytes the daemon holds for one workspace-relative document path. The TUI paints
@@ -123,6 +127,7 @@ impl Daemon {
     pub async fn get_file(&mut self, path: &str) -> Result<pb::FileContents, DaemonError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         Ok(self.inner.get_file(req).await?.into_inner())
     }
@@ -132,7 +137,10 @@ impl Daemon {
         &mut self,
         paths: Vec<String>,
     ) -> Result<tonic::Streaming<pb::Change>, DaemonError> {
-        let req = pb::WatchRequest { paths };
+        let req = pb::WatchRequest {
+            paths,
+            workspace: None,
+        };
         Ok(self.inner.watch(req).await?.into_inner())
     }
 
@@ -148,6 +156,7 @@ impl Daemon {
     ) -> Result<pb::ConflictsResponse, DaemonError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
+            workspace: None,
         };
         Ok(self.inner.list_conflicts(req).await?.into_inner())
     }
