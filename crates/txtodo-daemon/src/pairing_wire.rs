@@ -1,10 +1,14 @@
-//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s six fields —
-//! `device`, `group_id`, `x25519_pub`, `endpoint`, `nonce`, `identity_mode` — the same text a
-//! frontend's `JSON.stringify(pair_offer_response)` produces for the QR, so scanning it back needs
-//! no field this daemon didn't already return from `pair_offer`. Binary fields are lowercase hex;
-//! `device` is a ULID; `group_id` is decimal; `identity_mode` is `"tagged"`/`"sidecar"` and is not
-//! part of the decoded [`PairingOffer`] — it is daemon/workspace metadata (docs/questions.md Q6),
-//! read directly off the JSON by the CLI, not by [`code_to_offer`]. Ref: <https://docs.rs/serde_json>.
+//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s eight fields —
+//! `device`, `group_id`, `x25519_pub`, `endpoint`, `nonce`, `identity_mode`, `relay_node_id`,
+//! `relay_url` — the same text a frontend's `JSON.stringify(pair_offer_response)` produces for the
+//! QR, so scanning it back needs no field this daemon didn't already return from `pair_offer`.
+//! Binary fields are lowercase hex; `device` is a ULID; `group_id` is decimal; `identity_mode` is
+//! `"tagged"`/`"sidecar"` and is not part of the decoded [`PairingOffer`] — it is daemon/workspace
+//! metadata (docs/questions.md Q6), read directly off the JSON by the CLI, not by [`code_to_offer`].
+//! `relay_node_id`/`relay_url` (plan M8 `sync-pairing-relay`) are read as *optional* — empty or
+//! absent both decode to `None` on [`PairingOffer`], so a code produced before this field existed,
+//! or by a device with no relay configured, still decodes exactly as it did before. Ref:
+//! <https://docs.rs/serde_json>.
 
 use serde_json::Value;
 use txtodo_model::{DeviceId, Ulid};
@@ -70,6 +74,28 @@ fn str_field<'a>(v: &'a Value, name: &'static str) -> Result<&'a str, WireError>
         .ok_or(WireError::MissingField(name))
 }
 
+/// A field that may be absent or empty — both mean the same `None` (plan M8
+/// `sync-pairing-relay`: a code produced with no relay configured, or before this field existed).
+fn optional_str_field<'a>(v: &'a Value, name: &'static str) -> Option<&'a str> {
+    v.get(name)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+}
+
+/// [`optional_str_field`], hex-decoded to exactly 32 bytes. `Ok(None)` when absent/empty; a typed
+/// error (never a silent `None`) when present but malformed — external input, validated not
+/// asserted.
+fn optional_hex32_field(v: &Value, name: &'static str) -> Result<Option<[u8; 32]>, WireError> {
+    let Some(s) = optional_str_field(v, name) else {
+        return Ok(None);
+    };
+    let bytes = hex_decode(name, s)?;
+    bytes
+        .try_into()
+        .map(Some)
+        .map_err(|_| WireError::BadHex(name))
+}
+
 /// Builds the JSON `code`/QR text for a `pair_offer` response: exactly its own six fields, byte
 /// for byte what a frontend's `JSON.stringify(pair_offer_response)` would produce. Used by
 /// `pairing_grpc_tests.rs` to drive `pair_accept` the way a real QR scan will — production code
@@ -84,6 +110,8 @@ pub(crate) fn response_to_code(r: &pb::PairOfferResponse) -> String {
         "endpoint": r.endpoint,
         "nonce": r.nonce,
         "identity_mode": r.identity_mode,
+        "relay_node_id": r.relay_node_id,
+        "relay_url": r.relay_url,
     })
     .to_string()
 }
@@ -106,6 +134,8 @@ pub(crate) fn code_to_offer(code: &str, now_ms: u64) -> Result<PairingOffer, Wir
         .try_into()
         .map_err(|_| WireError::BadHex("nonce"))?;
     let endpoint = str_field(&v, "endpoint")?.to_owned();
+    let relay_node_id = optional_hex32_field(&v, "relay_node_id")?;
+    let relay_url = optional_str_field(&v, "relay_url").map(str::to_owned);
     Ok(PairingOffer {
         device: DeviceId::new(device),
         group: GroupId(group),
@@ -113,5 +143,7 @@ pub(crate) fn code_to_offer(code: &str, now_ms: u64) -> Result<PairingOffer, Wir
         endpoint,
         nonce,
         issued_at_ms: now_ms,
+        relay_node_id,
+        relay_url,
     })
 }

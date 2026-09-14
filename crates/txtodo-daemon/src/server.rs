@@ -274,6 +274,7 @@ impl Txtodo for TxtodoService {
             lan_group_key_present: ws.has_group_key(),
             relay_url: lan.relay_url(),
             relay_last_outcome: lan.relay_last_outcome(),
+            pairing_last_carrier: ws.pairing_lan().carrier(),
         }))
     }
 

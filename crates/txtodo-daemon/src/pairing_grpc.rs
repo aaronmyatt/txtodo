@@ -26,6 +26,7 @@
 use crate::pairing_state::PairingStateError;
 use crate::pairing_wire::{WireError, code_to_offer, hex_encode};
 use crate::server::TxtodoService;
+use crate::workspace::Workspace;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
 use txtodo_sync::{PairingOffer, SAS_WORD_COUNT};
@@ -42,10 +43,14 @@ impl TxtodoService {
         let now_ms = ws.clock().now_ms();
         // No LAN transport yet (see module doc): there is nothing real to put here today.
         let endpoint = String::new();
-        let offer = ws
+        let mut offer = ws
             .pairing()
             .begin_offer(ws.device(), ws.group(), endpoint, now_ms)
             .map_err(pairing_status)?;
+        if let Some((node_id, url)) = relay_rendezvous(&ws) {
+            offer.relay_node_id = Some(node_id);
+            offer.relay_url = Some(url);
+        }
         Ok(Response::new(response_of(&offer, ws.identity_mode())))
     }
 
@@ -111,9 +116,11 @@ fn words(sas: &[&'static str; SAS_WORD_COUNT]) -> String {
     sas.join(" ")
 }
 
-/// `PairOfferResponse` from an offer: exactly its six documented fields, nothing else — the
-/// QR-payload invariant `pairing_grpc_tests.rs` asserts. `identity_mode` is this daemon's own
-/// (docs/questions.md Q2/Q6), not part of the crypto offer itself.
+/// `PairOfferResponse` from an offer: exactly its eight documented fields, nothing else — the
+/// QR-payload invariant `pairing_grpc_tests.rs` asserts (updated the same task for the two relay
+/// rendezvous fields below). `identity_mode` is this daemon's own (docs/questions.md Q2/Q6), not
+/// part of the crypto offer itself; `relay_node_id`/`relay_url` are hex/plain strings, empty
+/// exactly when the offer's own `Option` fields are `None` (plan M8 `sync-pairing-relay`).
 fn response_of(
     offer: &PairingOffer,
     identity_mode: txtodo_model::IdentityMode,
@@ -125,7 +132,22 @@ fn response_of(
         endpoint: offer.endpoint.clone(),
         nonce: hex_encode(&offer.nonce),
         identity_mode: identity_mode_str(identity_mode).to_owned(),
+        relay_node_id: offer
+            .relay_node_id
+            .map(|n| hex_encode(&n))
+            .unwrap_or_default(),
+        relay_url: offer.relay_url.clone().unwrap_or_default(),
     }
+}
+
+/// This device's relay rendezvous, if a relay is configured and bound (plan M8
+/// `sync-pairing-relay`, ADR 0026 follow-up, `tasks/sync-pairing-relay/notes.md`'s design decision
+/// option (a)) — `None` when relay isn't configured, or `relay.rs` hasn't finished binding yet; an
+/// offer built from `None` simply carries no relay fields, exactly like today's LAN-only offer.
+fn relay_rendezvous(ws: &Workspace) -> Option<([u8; 32], String)> {
+    let endpoint = ws.relay_state().get()?;
+    let url = ws.lan_status().relay_url();
+    (!url.is_empty()).then(|| (endpoint.node_id_bytes(), url))
 }
 
 /// `"tagged"` or `"sidecar"` — the same spelling as the daemon's own `--identity-mode` flag and

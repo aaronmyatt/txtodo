@@ -35,7 +35,9 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
-use txtodo_sync::{GroupId, HolepunchError, MAX_RELAY_PEERS, RelayConfig, RelayEndpoint};
+use txtodo_sync::{
+    GroupId, HolepunchError, MAX_RELAY_PEERS, PAIRING_ALPN, RelayConfig, RelayEndpoint,
+};
 
 use crate::lan::{MAX_CONCURRENT_LAN_SESSIONS, spawn_driver};
 use crate::lan_session::read;
@@ -197,15 +199,38 @@ async fn dial_known_peer(
 }
 
 /// Bounded the same way `lan.rs::accept_one` is: a relay endpoint flooded with connections must
-/// not spawn unbounded tasks either. Pairing-over-relay does not exist yet (module doc), so every
-/// accepted connection here is a sync session — no ALPN dispatch to a pairing driver.
+/// not spawn unbounded tasks either. Dispatches by ALPN exactly like `lan.rs::accept_one` (plan M8
+/// `sync-pairing-relay` — pairing-over-relay did not exist when this module's doc above was
+/// written; it does now): `PAIRING_ALPN` routes to the pairing handler, everything else to a sync
+/// session.
 fn on_accepted(link: txtodo_sync::IrohLink, sessions: &Arc<Semaphore>, ctx: &RelayCtx) {
     ctx.status.set_relay_last_outcome("accepted a connection");
     let Ok(permit) = Arc::clone(sessions).try_acquire_owned() else {
         tracing::warn!("relay_session_cap_reached_dropping_incoming");
         return;
     };
-    spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+    if link.alpn() == PAIRING_ALPN {
+        spawn_pairing_driver(ctx.ws.clone(), link, permit);
+    } else {
+        spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+    }
+}
+
+/// One accepted relay pairing connection (this device as initiator) — the relay twin of
+/// `lan.rs`'s own private `spawn_pairing_driver`, calling `handle_incoming_over` with `"relay"`
+/// instead of `lan.rs`'s `"lan"` so `txtodo doctor` can tell which carrier a completed pairing
+/// actually used. Same "blocking thread, one permit" shape as [`spawn_driver`]: `Link::send`/
+/// `recv` block (`lan_link.rs`'s own doc).
+fn spawn_pairing_driver(
+    ws: SharedWorkspace,
+    link: txtodo_sync::IrohLink,
+    permit: tokio::sync::OwnedSemaphorePermit,
+) {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let mut link = link;
+        crate::pairing_lan::handle_incoming_over(&ws, &mut link, "relay");
+    });
 }
 
 fn on_no_incoming(ctx: &RelayCtx) {

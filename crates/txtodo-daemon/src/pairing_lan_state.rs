@@ -32,6 +32,10 @@ pub(crate) struct PairingLan {
     endpoint: Arc<Mutex<Option<Arc<LanEndpoint>>>>,
     sightings: Arc<Mutex<BTreeMap<DeviceId, DiscoveredPeer>>>,
     finalized: Arc<Mutex<Option<FinalizedGrant>>>,
+    /// Which carrier ("lan" or "relay") the most recently *completed* pairing actually used (plan
+    /// M8 `sync-pairing-relay`), for `Health.pairing_last_carrier`/`txtodo doctor` — empty until a
+    /// pairing has finished on this device at all, never optimistic.
+    carrier: Arc<Mutex<String>>,
 }
 
 impl PairingLan {
@@ -91,5 +95,21 @@ impl PairingLan {
             .unwrap_or_else(PoisonError::into_inner);
         let cached = guard.as_ref()?;
         (cached.device == device && cached.nonce == nonce).then(|| cached.sealed.clone())
+    }
+
+    /// Records `carrier` ("lan" or "relay") as the carrier the most recently completed pairing
+    /// used — called only when a round actually finalizes (an `InitiatorReply::Grant`), never on
+    /// `Pending`/`Rejected`, by both the initiator's `handle_incoming_over` and the joiner's
+    /// `pairing_relay_dial::joiner_round`.
+    pub(crate) fn record_carrier(&self, carrier: &'static str) {
+        *self.carrier.lock().unwrap_or_else(PoisonError::into_inner) = carrier.to_owned();
+    }
+
+    /// The carrier the most recently completed pairing used; empty until one has finished.
+    pub(crate) fn carrier(&self) -> String {
+        self.carrier
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 }
