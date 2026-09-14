@@ -197,3 +197,73 @@ orchestrating task's job, not this one's:
 - M6 todo line(s): MCP HTTP loopback-only unless `--lan`; tokens never logged, request-time.
 - M8 todo line: relay op-type leakage via frame length, recorded above.
 - The `@human` `Hello`-heads privacy decision (`tasks/security-m4-review/todo.txt` line 4).
+
+---
+2026-09-14 · `security-m8-review`: M8 security checklist, the three carriers that did not exist at
+M4 — relay, file carrier, bundle. Same plan §5 checklist as the M4 pass above. Full task in
+`tasks/security-m8-review/`.
+
+- **No secrets in logs — pass.**
+  `crates/txtodo-daemon/src/security_m8_tests.rs::no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle`:
+  a real relay put/get cycle (`relay::store::Store`, wake-up drained through `relay::push::NoopPush`),
+  a real `FileCarrier` send/recv cycle, and a real bundle export/import cycle (real workspace, a
+  freshly minted device signing key, a real passphrase) — all under one capturing `tracing::Dispatch`.
+  Every cycle moves a real, distinctive plaintext line sealed under a real group key with the actual
+  production `seal_ops` path, so a leak would show up as exactly the bytes an attacker would want.
+  None of the group key, either device signing key, the bundle passphrase, or the plaintext line
+  appear in captured log text. Reuses `lan_session_security_tests.rs`'s M4 `LogSink`/
+  `capturing_dispatch`/`captured_text`/`hex` helpers rather than duplicating them.
+- **Keys only in keystore — pass.**
+  `crates/txtodo-daemon/src/bundle_tests.rs::wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material`:
+  the group key never leaves the passphrase wrap; the bundle manifest carries no key bytes in the
+  clear. M4's own keystore-argv/env static check is unchanged and still green.
+- **Every network message versioned, authenticated, encrypted, including `Hello` — pass.**
+  Relay: `crates/txtodo-daemon/tests/relay_converge.rs` asserts the relay run moves the same sealed,
+  versioned, authenticated frames as LAN (`sync-crypto-envelope`), not a shortcut. File carrier: no
+  `Hello`/handshake message exists there at all — it is append-and-poll against a shared folder, not
+  a live connection — and it only ever moves the identical sealed `Frame` format, now also proven
+  ciphertext-only on disk by
+  `crates/txtodo-sync/src/carrier_tests.rs::ops_on_disk_are_ciphertext_only_never_plaintext_or_the_group_key`.
+  `Hello` itself was already closed at M4, above; unchanged.
+- **Path traversal impossible via `ref:` (fuzz the slug validator) — pass, plus a new real gap found
+  and fixed.** M4's `ref:`-slug fuzz target is unchanged. New for M8: `--sync-dir`'s entire threat
+  model is an untrusted shared folder (Syncthing/Dropbox/iCloud Drive), and `carrier.rs`'s directory
+  scan (`read_dir`, backing `highest_rotation`/`other_device_files`) collected every entry's name
+  with no check on entry type — a malicious peer sharing that folder could plant a symlink named like
+  a valid other-device `<ulid>[-<n>].ops` file, pointing at an arbitrary local path (e.g.
+  `~/.ssh/id_rsa`), and `read_tail`'s `std::fs::File::open` would follow it. Confirmed real by
+  regression: with the fix reverted, the new test read a planted sentinel straight through the
+  symlink. Fixed: `read_dir` now checks `std::fs::symlink_metadata` (never the symlink-following
+  `metadata()`) and skips any symlink before it is treated as a candidate `.ops` file — silently, not
+  a hard error, since a symlink there is not necessarily hostile and the directory is rescanned every
+  poll. Tests:
+  `crates/txtodo-sync/src/carrier_tests.rs::a_symlink_planted_by_a_malicious_peer_in_sync_dir_is_never_followed`
+  and `::parse_ops_file_name_rejects_dot_dot_and_slash_bearing_candidates` (the latter proves, does
+  not change, that a `..`- or `/`-bearing candidate already fails `Ulid::parse`).
+  - **Flagged, not fixed this pass** (out of scope, filed separately): `FileCarrier::write_frame_to`'s
+    own-file write path also does not check `symlink_metadata` — a peer could pre-plant a symlink at
+    *our own* device's filename before we ever write, corrupting whatever it points to. Read-side
+    only was this pass's scope; the write side needs its own task.
+- **Relay cannot distinguish op types — split: content pass, frame-length deferred, not
+  milestone-scheduled.** Content: `crates/txtodo-daemon/tests/relay_converge.rs::relay_store_holds_only_opaque_ciphertext`
+  confirms the relay's own store holds only opaque `Vec<u8>` blobs and its logs carry routing
+  metadata only, never payload — the M4-deferred half of this item closes here. Frame length does
+  not: every sealed frame's on-wire length is still visible to anyone forwarding it (no padding
+  scheme exists), and `Hello`/`Want`/`Ack`/`Ops` still have distinct, characteristic size
+  distributions — unchanged since the M4 entry above first recorded it. Deferred again, this time
+  with a tracked line rather than only a RATCHET.md paragraph: root `todo.txt`
+  id `06G9ZV2JPBJ8P829RA634BE8KG`. Fixing it for real needs a padding scheme, a protocol change, not
+  a test — a human design call this pass was not asked to make.
+- **MCP HTTP refuses non-loopback unless `--lan` — still deferred to M6.** Unchanged from the M4
+  entry: no MCP HTTP surface exists before M6, and M6 itself is still deferred (root `todo.txt`,
+  "core app + desktop prioritized first," reaffirmed 2026-09-13). Not buildable yet.
+- **Tokens never logged — still deferred to M6.** Unchanged from the M4 entry, same reason: request-
+  time bearer enforcement is M6's larger MCP-auth-server milestone, which has not landed. `tokens.rs`
+  still has zero `tracing::` calls, so nothing logs a token now either — still observed, not asserted
+  by a dedicated test, since the surface that would need one still does not exist.
+  - Both M6 deferrals are now tracked from the milestone that owns them, not just here: the existing
+    M6 `security checklist review` line in root `todo.txt` (id `01M2B4ZWQD90N6M6Q7HH4JACWP`) was
+    amended to name this M8 dependency explicitly, rather than adding a duplicate line.
+
+`security-m8-review`'s parent line closes with this entry — every item above is `pass` or carries
+its own tracked `deferred` line; none is a silent gap.
