@@ -1,7 +1,8 @@
 2026-09-11 bench sync 1000 ops between loopback daemons ≤ 500 ms and daemon idle RSS ≤ 50 MB +m4 @perf ref:sync-bench-m4 — throughput done and tested (0-2ms, well under budget, 6+ runs 0 flakes); idle RSS fails badly (~1.7GB at 10k lines vs the 50MB budget, superlinear) — real bug in adopt/mirror-build, not this task's scope, flagged as its own follow-up id:01M2B4ZWQDY3MXJMW0164D3RB4
 2026-09-11 Add a stack.md mapping for the TS/Svelte second stack under apps/desktop +m7 @setup id:01M2B4ZWQEYA2BSN8NH5JVHDBG
-2026-09-11 Enable iroh relay and hole-punching +m8 @sync id:01M2B4ZWQEYNJJ4J7WB192Q5ZM
-2026-09-11 Tests: daemons on separate network namespaces converge via relay ≤ 30 s and file-carrier converges +m8 @test id:01M2B4ZWQEM6BCAK9BHBB3SSAS
+(A) 2026-09-11 Enable iroh relay and hole-punching +m8 @sync ref:sync-relay-enable — scoped 2026-09-14 as a relay-additive fallback alongside LAN (ADR 0026 reinstates LAN, reverses ADR 0024's drop-LAN call); daemon currently hardcodes RELAY_DISABLED=true, this wires the real carrier in id:01M2B4ZWQEYNJJ4J7WB192Q5ZM
+(A) 2026-09-11 Tests: daemons on separate network namespaces converge via relay ≤ 30 s and file-carrier converges +m8 @test ref:relay-converge-test — blocked on the line above landing first id:01M2B4ZWQEM6BCAK9BHBB3SSAS
+(A) 2026-09-14 Pairing works across networks, not just same-LAN: txtodo pair/pair CODE falls back to a relay-carried handshake when LAN discovery can't reach the peer +m8 @sync ref:sync-pairing-relay — new gap found 2026-09-14, no existing task covered it; see tasks/sync-pairing-relay/ id:06G9TNVQFSNMFB1F668PTYEZ2M
 2026-09-11 Security checklist review before M8 close +m8 @security id:01M2B4ZWQESP5SHPPGVJFGBMGY
 2026-09-11 uniffi bindings for core and a DaemonHandle embedding txtodod in-process +m9 @ffi id:01M2B4ZWQEHBR3HH04WPQZNSSJ
 2026-09-11 Android foreground-service daemon, Compose UI with AnnotatedString from tokenize, LAN MCP, FCM +m9 @android id:01M2B4ZWQETWYZA7R5TF3VW1WC

@@ -1,6 +1,6 @@
 # 0003 — Use iroh for QUIC, hole-punching and relay; mdns-sd for LAN discovery
 
-- Status: superseded by 0024 (LAN discovery half only — iroh's QUIC/relay role for the relay path stands)
+- Status: accepted — briefly superseded by 0024 (LAN discovery half), reinstated in full by 0026
 - Date: 2026-09-11
 - Deciders: project owner (plan §1, decision 003; do not relitigate)
 

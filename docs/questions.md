@@ -201,3 +201,10 @@ Append only. Never edit a prior answer; add a dated follow-up.
   need re-scoping to the relay path only. Needs an ADR (line 129) since it reverses the two-path
   (LAN + relay) shape the plan assumed.
 - ADR: 0024 (supersedes the LAN-discovery half of 0003)
+- Correction 2026-09-14: this answer's own context was wrong — `Discovery`/`PeerTable`/`Link` were
+  already wired into `crates/txtodo-daemon/src` by commit `b099180`, which predates this answer, and
+  `crates/txtodo-daemon/tests/pairing_lan.rs` passes today against two real daemons, a real
+  SAS-confirmed handshake, and real group-key delivery. Reversed: LAN transport is reinstated as
+  the primary path; relay becomes an additive fallback for when devices can't reach each other
+  directly, not a replacement. See ADR 0026.
+- ADR: 0026 (reinstates 0003 in full, supersedes 0024)

@@ -1,0 +1,9 @@
+2026-09-14 Resolve the open design question in notes.md: how the relay-carried pairing dial gates access without a shared GroupId (nonce-gated dial vs a generalized holepunch::connect predicate) +m8 @sync id:06G9TNVQFTV8P3TVKT2PP3Y71W
+2026-09-14 Extend PairingCode/PairOfferResponse and pairing_wire.rs with an optional relay rendezvous field (offering device's iroh NodeId + its configured relay URL); absent when no relay is configured, no regression to LAN-only offers +m8 @sync @proto id:06G9TNVQFRFENKD5FW96D2GPA8
+2026-09-14 crates/txtodo-daemon/src/pairing_lan.rs (or a new sibling module): race LAN discovery against the relay dial for the joiner leg, use whichever connects first within a bounded timeout +m8 @daemon id:06G9TNVQFRME3W8BFJKJBG38ZC
+2026-09-14 Reuse pairing_relay.rs's existing JoinerHello/wire messages unchanged over the new relay-backed Link — no crypto or SAS-flow changes, only the carrier changes +m8 @sync id:06G9TNVQFSRVKEAFHMCZE7SWA0
+2026-09-14 Extend txtodo doctor to report which carrier a completed pairing actually used (LAN vs relay) +m8 @cli id:06G9TNVQFVV8P2KCDQP3FP4H6R
+2026-09-14 Test: two daemons in separate network namespaces (no shared L2/L3 path, mirroring relay-converge-test's topology) complete pair/pair-code over the relay path alone +m8 @test id:06G9TNVQFTS5FM26JM8X36HVE0
+2026-09-14 Test: an offer made with no relay configured still pairs over LAN exactly as today (no regression) +m8 @test id:06G9TNVQFSX6NCJT14SCC6BYDW
+2026-09-14 Test: a relay client that doesn't know the offer's nonce/code cannot complete a pairing dial, even against a live offer +m8 @test @security id:06G9TNVQFS7NFJV8Y12JS09QCG
+2026-09-14 Complete the parent line in ./todo.txt +m8 @sync id:06G9TNVQFVT3GCEHW79S2X8QFG

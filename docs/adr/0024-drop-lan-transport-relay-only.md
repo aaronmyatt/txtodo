@@ -1,6 +1,7 @@
 # 0024 — Drop LAN transport entirely; sync always goes through the relay
 
-- Status: accepted
+- Status: superseded by 0026 — its premise (LAN was never wired into the daemon) was false at the
+  time this was written; see 0026.
 - Date: 2026-09-13
 - Deciders: project owner (docs/questions.md Q11)
 
