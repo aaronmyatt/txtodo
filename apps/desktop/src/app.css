@@ -9,6 +9,15 @@
 :root {
 	color-scheme: light;
 
+	/* Every todo.txt CM6 surface (FileView, EditPopover, DetailView's pinned parent line) shares
+	   this — see todotxtLanguage.ts's `todotxtColorTheme`. Not theme-dependent, so it lives only
+	   here, not duplicated under `[data-theme="dark"]`. Chosen over CM6's default generic
+	   `monospace` after comparing it against Courier New, JetBrains Mono/Fira Code, Georgia, and
+	   Verdana on the real task list: it's the system-native mono (crisp, no extra weight to load)
+	   and keeps dates/tags/priorities aligned in columns, unlike the two non-monospace options.
+	   Ref (`ui-monospace` generic family): https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#monospace_fonts */
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
 	--color-bg: #ffffff;
 	--color-surface: #f9fafb;
 	--color-surface-muted: #f3f4f6;

@@ -79,6 +79,11 @@ export const todotxtHighlightStyle = HighlightStyle.define(
 // string here is exactly as valid a CSS value as a hex literal, and picks up app.css's
 // `[data-theme="dark"]` override with no CM6-side reconfiguration needed.
 export const todotxtColorTheme = EditorView.baseTheme({
+  // CM6's own default theme sets `font-family: monospace` directly on `.cm-content`/`.cm-line`
+  // (github.com/codemirror/view/blob/main/src/theme.ts), so overriding only the editor root (`&`)
+  // is not enough — a same-element rule always beats an inherited value from an ancestor,
+  // `!important` or not. `--font-mono` is app.css's one definition (src/app.css).
+  ".cm-editor, .cm-content, .cm-line, .cm-scroller": { fontFamily: "var(--font-mono)" },
   ".tok-completion-marker": { color: "var(--tok-completion-marker)", fontWeight: "600" },
   ".tok-priority": { color: "var(--tok-priority)", fontWeight: "700" },
   ".tok-date": { color: "var(--tok-date)" },
