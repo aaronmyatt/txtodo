@@ -14,6 +14,8 @@ fn sample_code() -> PairingCode {
         endpoint: String::new(),
         nonce: "ab".repeat(16),
         identity_mode: "sidecar".to_owned(),
+        relay_node_id: String::new(),
+        relay_url: String::new(),
     }
 }
 
@@ -28,10 +30,12 @@ fn pairing_code_round_trips_through_json() {
     assert_eq!(code.endpoint, back.endpoint);
     assert_eq!(code.nonce, back.nonce);
     assert_eq!(code.identity_mode, back.identity_mode);
+    assert_eq!(code.relay_node_id, back.relay_node_id);
+    assert_eq!(code.relay_url, back.relay_url);
 }
 
 #[test]
-fn pairing_code_json_carries_no_field_beyond_the_documented_six() {
+fn pairing_code_json_carries_no_field_beyond_the_documented_eight() {
     let text = to_json(&sample_code()).unwrap();
     let value: serde_json::Value = serde_json::from_str(&text).unwrap();
     let mut keys: Vec<&str> = value
@@ -49,6 +53,8 @@ fn pairing_code_json_carries_no_field_beyond_the_documented_six() {
             "group_id",
             "identity_mode",
             "nonce",
+            "relay_node_id",
+            "relay_url",
             "x25519_pub"
         ]
     );
@@ -58,6 +64,18 @@ fn pairing_code_json_carries_no_field_beyond_the_documented_six() {
 fn from_json_rejects_garbage_instead_of_panicking() {
     assert!(from_json("not json").is_err());
     assert!(from_json(r#"{"device":"x"}"#).is_err(), "missing fields");
+}
+
+/// A code encoded before this task's relay fields existed (todo item 2's no-regression case,
+/// CLI-facing twin of `pairing_wire.rs`'s own `optional_*_field` decode helpers) still parses,
+/// with both new fields defaulting to empty.
+#[test]
+fn a_code_with_no_relay_fields_at_all_still_decodes() {
+    let old_code = r#"{"device":"01M2B4ZWMEBKHPPP6V960V7DK6","group_id":"12345",
+        "x25519_pub":"0f","endpoint":"","nonce":"ab","identity_mode":"sidecar"}"#;
+    let parsed = from_json(old_code).unwrap();
+    assert_eq!(parsed.relay_node_id, "");
+    assert_eq!(parsed.relay_url, "");
 }
 
 #[test]

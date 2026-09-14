@@ -12,11 +12,7 @@ pub(super) fn transport_check(health: Option<&pb::HealthResponse>) -> Check {
         return check("transport", Status::Warn, "unknown: no daemon");
     };
     let relay = relay_summary(h);
-    let paired = if h.lan_group_key_present {
-        "paired"
-    } else {
-        "not yet paired (no group key)"
-    };
+    let paired = paired_summary(h);
     let mut problems = Vec::new();
     if !h.lan_endpoint_bound {
         problems.push("endpoint not bound");
@@ -36,6 +32,22 @@ pub(super) fn transport_check(health: Option<&pb::HealthResponse>) -> Check {
             Status::Warn,
             format!("{relay}, {}, {paired}", problems.join(", ")),
         )
+    }
+}
+
+/// `"not yet paired (no group key)"`, or `"paired"`/`"paired via <carrier>"` (plan M8
+/// `sync-pairing-relay`, todo item 5) — `pairing_last_carrier` is empty whenever the group key
+/// arrived some other way than a completed `txtodo pair`/`pair <code>` round (e.g. the
+/// `DebugSetGroupKey` test-only seam), so that case still just says "paired", never a fabricated
+/// carrier.
+fn paired_summary(h: &pb::HealthResponse) -> String {
+    if !h.lan_group_key_present {
+        return "not yet paired (no group key)".to_owned();
+    }
+    if h.pairing_last_carrier.is_empty() {
+        "paired".to_owned()
+    } else {
+        format!("paired via {}", h.pairing_last_carrier)
     }
 }
 
@@ -72,6 +84,7 @@ mod tests {
             lan_group_key_present: true,
             relay_url: String::new(),
             relay_last_outcome: String::new(),
+            pairing_last_carrier: String::new(),
         }
     }
 
@@ -118,6 +131,28 @@ mod tests {
             c.detail,
             "relay off, endpoint bound, discovery active, paired"
         );
+    }
+
+    /// Plan M8 `sync-pairing-relay`, todo item 5: `txtodo doctor` names which carrier a completed
+    /// pairing actually used.
+    #[test]
+    fn paired_via_a_carrier_names_it() {
+        let h = pb::HealthResponse {
+            pairing_last_carrier: "relay".into(),
+            ..healthy()
+        };
+        let c = transport_check(Some(&h));
+        assert!(c.detail.contains("paired via relay"));
+    }
+
+    /// A group key that landed some other way than a completed pairing (e.g. the
+    /// `DebugSetGroupKey` test-only seam) never fabricates a carrier — plain "paired" like before
+    /// this field existed.
+    #[test]
+    fn paired_with_no_recorded_carrier_says_so_plainly() {
+        let c = transport_check(Some(&healthy()));
+        assert!(c.detail.contains(", paired"));
+        assert!(!c.detail.contains("paired via"));
     }
 
     #[test]
