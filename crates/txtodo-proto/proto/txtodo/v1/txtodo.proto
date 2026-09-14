@@ -298,6 +298,9 @@ message HealthResponse {
   // Human-readable outcome of the most recent relay bind/accept/connect attempt; empty until one
   // has actually happened (relay off, or on but never yet exercised).
   string relay_last_outcome = 13;
+  // Which carrier the most recently *completed* pairing actually used ("lan" or "relay", plan M8
+  // sync-pairing-relay); empty until a pairing has finished on this device at all.
+  string pairing_last_carrier = 14;
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -351,6 +354,13 @@ message PairOfferResponse {
   // "tagged" or "sidecar" (docs/questions.md Q2), this device's own. Carried so a joiner can
   // detect a mismatch against its own mode and refuse rather than guess a merge (Q6, open).
   string identity_mode = 6;
+  // Relay rendezvous (plan M8 sync-pairing-relay, ADR 0026 follow-up): this device's relay node
+  // id, hex-encoded, present only when a relay is configured *and* bound at offer time. Empty
+  // means the offer is LAN-only, exactly as before this field existed — no regression.
+  string relay_node_id = 7;
+  // The relay URL that relay_node_id above is reachable through; empty exactly when
+  // relay_node_id is empty.
+  string relay_url = 8;
 }
 
 message PairAcceptRequest { string code = 1; }   // the scanned/decoded PairOffer, re-encoded

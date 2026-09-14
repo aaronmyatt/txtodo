@@ -337,6 +337,10 @@ pub struct HealthResponse {
     /// has actually happened (relay off, or on but never yet exercised).
     #[prost(string, tag = "13")]
     pub relay_last_outcome: ::prost::alloc::string::String,
+    /// Which carrier the most recently *completed* pairing actually used ("lan" or "relay", plan M8
+    /// sync-pairing-relay); empty until a pairing has finished on this device at all.
+    #[prost(string, tag = "14")]
+    pub pairing_last_carrier: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -420,6 +424,15 @@ pub struct PairOfferResponse {
     /// detect a mismatch against its own mode and refuse rather than guess a merge (Q6, open).
     #[prost(string, tag = "6")]
     pub identity_mode: ::prost::alloc::string::String,
+    /// Relay rendezvous (plan M8 sync-pairing-relay, ADR 0026 follow-up): this device's relay node
+    /// id, hex-encoded, present only when a relay is configured *and* bound at offer time. Empty
+    /// means the offer is LAN-only, exactly as before this field existed — no regression.
+    #[prost(string, tag = "7")]
+    pub relay_node_id: ::prost::alloc::string::String,
+    /// The relay URL that relay_node_id above is reachable through; empty exactly when
+    /// relay_node_id is empty.
+    #[prost(string, tag = "8")]
+    pub relay_url: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairAcceptRequest {
