@@ -1,33 +1,44 @@
-//! Wires `txtodo_sync::RelayEndpoint` into a running `txtodod` (plan M8 `sync-relay-enable`,
-//! ADR 0026): binds the relay-configured endpoint when `--relay <url>` is set and runs an accept
-//! loop, updating `LanStatus`'s relay fields on every bind/accept outcome. Twin of `lan.rs`, but
-//! relay is optional and, per ADR 0026, purely additive — LAN stays the primary path. This module
-//! only binds the endpoint and accepts incoming relay connections; the *dialing* half of the
-//! fallback (this device reaching a peer over relay when LAN can't) is `lan.rs::dial_and_spawn`,
-//! via `relay_fallback.rs` and `RelayState` — for a peer LAN *discovered* but could not reach.
+//! Wires this device's one shared relay endpoint (task `daemon-shared-sync-link` stage 5,
+//! `DeviceRelay::bind` in `main.rs::run`) into a running workspace: registers the endpoint against
+//! this workspace's own [`crate::relay_state::RelayState`] (so `lan.rs`'s relay-fallback dial and
+//! `pairing_grpc.rs`'s offer rendezvous can reuse it) and, when `--relay-dial-peer` names one,
+//! spawns the outbound dial/redial loop that reaches it. ADR 0026: relay is additive, LAN stays
+//! primary.
+//!
+//! **No longer this module's job**: binding the endpoint at all, and accepting/dispatching
+//! incoming relay connections. Before task `daemon-shared-sync-link`, every open workspace bound
+//! its *own* `RelayEndpoint` under this device's one persisted relay identity and ran its own
+//! accept loop — which is exactly the bug that task exists to fix (two or more `iroh::Endpoint`s
+//! sharing one identity make a real relay server refuse the second connection outright). The one
+//! shared endpoint is bound once, in `main.rs`, before any workspace opens; accepting and
+//! dispatching every connection it receives (by ALPN, then — for a sync connection — by peeked
+//! `workspace_id`) is `control_dispatch.rs`'s job now. This module's remaining job, the *dialing*
+//! half of the LAN→relay fallback (this device reaching a peer over relay when LAN can't), is
+//! unchanged: `lan.rs::dial_and_spawn`, via `relay_fallback.rs` and `RelayState`, for a peer LAN
+//! *discovered* but could not reach.
 //!
 //! **`--relay-dial-peer` (plan M8 `relay-converge-test`): the rendezvous gap that pass left open.**
 //! `relay_fallback_dial`'s own doc names a real limitation — it dials a peer's *LAN* node id over
 //! relay, reachable only once both carriers share one identity, not built yet. Investigating it for
-//! this task surfaced a second, deeper gap: `lan.rs::dial_and_spawn` (and therefore
+//! that task surfaced a second, deeper gap: `lan.rs::dial_and_spawn` (and therefore
 //! `relay_fallback_dial`) only ever runs for a peer `handle_sighting` already learned about via
 //! **mDNS**, which by construction never crosses a real network boundary — two daemons that were
 //! never on the same LAN never populate each other's `PeerTable` at all, so the relay fallback path
 //! is simply never reached for them, identity-sharing aside. Real pairing-over-relay (a rendezvous
 //! protocol that works with no shared LAN) is `sync-pairing-relay`'s own not-yet-built task per ADR
 //! 0026's follow-up list — out of scope here to build in full. `--relay-dial-peer <hex node id>`
-//! is this task's minimal, honestly-scoped substitute: a caller who already knows a peer's *relay*
+//! is that task's minimal, honestly-scoped substitute: a caller who already knows a peer's *relay*
 //! node id (e.g. read off that peer's own `Health.relay_last_outcome`, or a test harness that
 //! seeded it) can hand it to this daemon at startup, and [`dial_known_peer`] below drives the
-//! connect/sync loop directly over the bound `RelayEndpoint` — no LAN discovery, no shared LAN,
+//! connect/sync loop directly over the shared `RelayEndpoint` — no LAN discovery, no shared LAN,
 //! ever required. This sidesteps the identity-sharing gap too: it dials the peer's *actual* relay
 //! identity, never conflates it with a LAN one.
 //!
 //! **Known scope limit, deliberate**: unlike `lan.rs::rebuild_on_group_change`, this module never
-//! rebinds anything when the workspace's sync group changes (e.g. mid-run pairing). Pairing-over-
-//! relay is a separate, not-yet-built task (`sync-pairing-relay`, scoped by ADR 0026's own
-//! follow-up list) — out of scope here. A relay endpoint bound before a pairing completes will
-//! simply keep gating `connect`/`accept` on the group it was bound with.
+//! rebinds anything when the workspace's sync group changes (e.g. mid-run pairing) — nor could it
+//! now, since binding is a device-level concern this module no longer performs at all. Pairing-
+//! over-relay is a separate, not-yet-built task (`sync-pairing-relay`, scoped by ADR 0026's own
+//! follow-up list) — out of scope here.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -35,9 +46,7 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
-use txtodo_sync::{
-    GroupId, HolepunchError, MAX_RELAY_PEERS, PAIRING_ALPN, RelayConfig, RelayEndpoint,
-};
+use txtodo_sync::{GroupId, HolepunchError, RelayEndpoint};
 
 use crate::lan::{MAX_CONCURRENT_LAN_SESSIONS, spawn_driver};
 use crate::lan_session::read;
@@ -57,76 +66,73 @@ struct RelayCtx {
     device: DeviceId,
     group: GroupId,
     status: LanStatus,
-    relay_identity: [u8; 32],
 }
 
 /// `--relay-dial-peer`'s parsed value: the peer's relay node id, known out of band (module doc).
 type DialPeer = [u8; 32];
 
-/// The background relay transport task; `abort()` on daemon shutdown, same pattern as
-/// `LanTransport`.
+/// The background relay dial task; `abort()` on daemon shutdown, same pattern as `LanTransport`.
+/// `None` from [`start`] (no dial peer configured) means there is nothing to abort at all —
+/// registering the shared endpoint against this workspace happens synchronously, not as a task.
 pub struct RelayTransport {
     task: JoinHandle<()>,
 }
 
 impl RelayTransport {
-    /// Stops the relay transport. Best-effort: the task may already have exited (bind failed).
+    /// Stops the dial loop. Best-effort: the task may already have exited.
     pub fn abort(&self) {
         self.task.abort();
     }
 }
 
-/// Starts the relay endpoint as a background task when `relay_url` names one; `None` (or empty)
-/// means relay stays off, matching M4/ADR-0024-era behaviour with no fallback carrier at all —
-/// `LanStatus::set_relay_configured("")` records that fact for `Health` without spawning anything.
-/// `dial_peer` is `--relay-dial-peer` (module doc): when set, this daemon also actively dials that
-/// peer over the relay once bound, rather than only accepting incoming connections.
+/// Registers this workspace against the device's one shared relay endpoint (`None` when `--relay`
+/// was never configured for this device, or its bind failed — either way there is nothing to
+/// register or dial through). `relay_url` is reporting-only (`Health.relay_url`): the endpoint
+/// itself was already bound once in `main.rs`, not from this call, so this function's only job
+/// with it is recording what was configured, matching `LanStatus::set_relay_configured`'s existing
+/// contract. `dial_peer` (`--relay-dial-peer`) is this workspace's own active half; registration
+/// itself needs no background task, so `None` dial-peer with a present endpoint returns `None`
+/// (nothing to abort) after registering synchronously.
 pub fn start(
     ws: SharedWorkspace,
     relay_url: Option<String>,
+    endpoint: Option<Arc<RelayEndpoint>>,
     dial_peer: Option<DialPeer>,
 ) -> Option<RelayTransport> {
-    let url = relay_url.unwrap_or_default();
-    let ctx = {
-        let guard = read(&ws);
-        RelayCtx {
-            ws: ws.clone(),
-            device: guard.device(),
-            group: guard.group(),
-            status: guard.lan_status().clone(),
-            relay_identity: guard.relay_identity(),
-        }
-    };
-    ctx.status.set_relay_configured(&url);
-    if url.is_empty() {
-        return None;
-    }
+    let ctx = build_ctx(&ws);
+    ctx.status
+        .set_relay_configured(relay_url.as_deref().unwrap_or_default());
+    let endpoint = endpoint?;
+    register(&ctx, &endpoint);
+    let peer = dial_peer?;
     Some(RelayTransport {
-        task: tokio::spawn(run(ctx, url, dial_peer)),
+        task: tokio::spawn(dial_known_peer(
+            ctx,
+            endpoint,
+            peer,
+            Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS)),
+        )),
     })
 }
 
-async fn bind(ctx: &RelayCtx, url: String) -> Option<Arc<RelayEndpoint>> {
-    let cfg = RelayConfig {
-        url,
-        max_peers: MAX_RELAY_PEERS,
-    };
-    match RelayEndpoint::bind_with_secret_key(&cfg, ctx.group, ctx.relay_identity).await {
-        Ok(e) => {
-            let node_id = crate::pairing_wire::hex_encode(&e.node_id_bytes());
-            ctx.status
-                .set_relay_last_outcome(format!("bound as {node_id}; awaiting connections"));
-            let endpoint = Arc::new(e);
-            read(&ctx.ws).relay_state().set(Arc::clone(&endpoint));
-            Some(endpoint)
-        }
-        Err(e) => {
-            tracing::warn!(error = %e, "relay_bind_failed_running_without_relay_fallback");
-            ctx.status
-                .set_relay_last_outcome(format!("bind failed: {e}"));
-            None
-        }
+fn build_ctx(ws: &SharedWorkspace) -> RelayCtx {
+    let guard = read(ws);
+    RelayCtx {
+        ws: ws.clone(),
+        device: guard.device(),
+        group: guard.group(),
+        status: guard.lan_status().clone(),
     }
+}
+
+/// Records the shared endpoint's identity for `Health`/`txtodo doctor` and makes it reachable
+/// from `ws.relay_state()` — same outcome string `bind()` used to log here before this task, since
+/// `support::relay::parse_relay_node_id` (this crate's own test harness) still parses it.
+fn register(ctx: &RelayCtx, endpoint: &Arc<RelayEndpoint>) {
+    let node_id = crate::pairing_wire::hex_encode(&endpoint.node_id_bytes());
+    ctx.status
+        .set_relay_last_outcome(format!("bound as {node_id}; awaiting connections"));
+    read(&ctx.ws).relay_state().set(Arc::clone(endpoint));
 }
 
 fn on_dial_connected(
@@ -198,84 +204,4 @@ async fn dial_known_peer(
             dial_once(&ctx, &endpoint, peer, permit).await;
         }
     }
-}
-
-/// Bounded the same way `lan.rs::accept_one` is: a relay endpoint flooded with connections must
-/// not spawn unbounded tasks either. Dispatches by ALPN exactly like `lan.rs::accept_one` (plan M8
-/// `sync-pairing-relay` — pairing-over-relay did not exist when this module's doc above was
-/// written; it does now): `PAIRING_ALPN` routes to the pairing handler, everything else to a sync
-/// session.
-fn on_accepted(link: txtodo_sync::IrohLink, sessions: &Arc<Semaphore>, ctx: &RelayCtx) {
-    ctx.status.set_relay_last_outcome("accepted a connection");
-    let Ok(permit) = Arc::clone(sessions).try_acquire_owned() else {
-        tracing::warn!("relay_session_cap_reached_dropping_incoming");
-        return;
-    };
-    if link.alpn() == PAIRING_ALPN {
-        spawn_pairing_driver(ctx.ws.clone(), link, permit);
-    } else {
-        spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
-    }
-}
-
-/// One accepted relay pairing connection (this device as initiator) — the relay twin of
-/// `lan.rs`'s own private `spawn_pairing_driver`, calling `handle_incoming_over` with `"relay"`
-/// instead of `lan.rs`'s `"lan"` so `txtodo doctor` can tell which carrier a completed pairing
-/// actually used. Same "blocking thread, one permit" shape as [`spawn_driver`]: `Link::send`/
-/// `recv` block (`lan_link.rs`'s own doc).
-fn spawn_pairing_driver(
-    ws: SharedWorkspace,
-    link: txtodo_sync::IrohLink,
-    permit: tokio::sync::OwnedSemaphorePermit,
-) {
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let mut link = link;
-        crate::pairing_lan::handle_incoming_over(&ws, &mut link, "relay");
-    });
-}
-
-fn on_no_incoming(ctx: &RelayCtx) {
-    tracing::warn!("relay_endpoint_closed");
-    ctx.status.set_relay_last_outcome("endpoint closed");
-}
-
-fn on_accept_err(e: &HolepunchError, ctx: &RelayCtx) {
-    tracing::debug!(error = %e, "relay_accept_failed");
-    ctx.status
-        .set_relay_last_outcome(format!("accept failed: {e}"));
-}
-
-/// One accept iteration; `false` means the endpoint is done and `run`'s loop should stop.
-async fn accept_once(endpoint: &RelayEndpoint, sessions: &Arc<Semaphore>, ctx: &RelayCtx) -> bool {
-    match endpoint.accept().await {
-        Ok(link) => {
-            on_accepted(link, sessions, ctx);
-            true
-        }
-        Err(HolepunchError::NoIncoming) => {
-            on_no_incoming(ctx);
-            false
-        }
-        Err(e) => {
-            on_accept_err(&e, ctx);
-            true
-        }
-    }
-}
-
-async fn run(ctx: RelayCtx, url: String, dial_peer: Option<DialPeer>) {
-    let Some(endpoint) = bind(&ctx, url).await else {
-        return;
-    };
-    let sessions = Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS));
-    if let Some(peer) = dial_peer {
-        tokio::spawn(dial_known_peer(
-            ctx.clone(),
-            Arc::clone(&endpoint),
-            peer,
-            Arc::clone(&sessions),
-        ));
-    }
-    while accept_once(&endpoint, &sessions, &ctx).await {}
 }

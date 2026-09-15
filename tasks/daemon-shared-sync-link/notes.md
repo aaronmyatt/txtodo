@@ -82,3 +82,54 @@ received." Both tests are `#[ignore]`d with this finding recorded in their own d
 
 This sequencing mirrors `daemon-workspace-identity-agreement`'s own discipline: each stage its own
 reviewable, testable, independently-safe-to-merge commit, given this is a comparably-sized change.
+
+## Stages 4-5, as actually landed (2026-09-15)
+
+- **`relay.rs`'s new shape**: `start` now takes `relay_url` (kept, reporting-only —
+  `Health.relay_url` needs to know what was configured even though the endpoint that actually
+  carries traffic is bound elsewhere) and `endpoint: Option<Arc<RelayEndpoint>>` (the real,
+  shared one). `register()` reproduces the exact `"bound as <id>; awaiting connections"` outcome
+  string the old `bind()` used to log, so `support::relay::parse_relay_node_id` — this crate's own
+  test harness — needed no changes. `run`/`accept_once`/`on_accepted`/`spawn_pairing_driver` are
+  gone entirely; only the outbound dial/redial loop remains.
+- **`main.rs`'s new shape**: `DeviceRelay::bind` is awaited once in `run()`, before
+  `control_channel::start` and before `WorkspaceCatalog::new` — the exact ordering the plan called
+  for. The resulting `Option<Arc<DeviceRelay>>` is cloned into both `control_channel::start`
+  (which no longer binds anything itself — a real, if small, signature change to that function
+  beyond stage 3's own scope, necessary because the bind point moved) and `WorkspaceOpenArgs`.
+  `workspace_catalog_open.rs::open_workspace_full` registers a route before any background task
+  spawns (same ordering invariant `set_workspace_id` established); `OpenedWorkspace::Drop`
+  unregisters it.
+- **The acceptance bar, confirmed for real**: `relay_converge.rs`'s and `pairing_relay.rs`'s
+  previously-`#[ignore]`d real-relay tests both un-ignored and green against n0's real public
+  relay — the "Another endpoint connected with the same endpoint id" collision this whole task
+  exists to fix does not recur across any run (relay-converge: 2/2; pairing-over-relay: 4/4).
+- **A genuine, narrower finding surfaced while re-verifying, not fixed this pass**:
+  `pairing_relay.rs`'s `a_relay_dial_with_the_wrong_nonce_cannot_complete_a_pairing` stays
+  `#[ignore]`d, but for a *different* reason than before. `RUST_LOG=debug` on the accepting side
+  showed the attacker's connection completing its QUIC handshake and negotiating `PAIRING_ALPN`
+  cleanly every single retry, then closing (`"LocallyClosed"`) inside well under a second — with
+  none of this crate's own `tracing::debug!` sites (`control_dispatch.rs`, `pairing_lan.rs`) ever
+  firing. That points at `txtodo_sync::IrohLink::recv()`'s fixed 750 ms idle timeout
+  (`crates/txtodo-sync/src/link.rs`) being too tight for this specific round trip over a real
+  relay: this device's own production dial path (`pairing_relay_dial.rs::LAN_RACE_TIMEOUT`)
+  deliberately budgets a full 3 s for a comparable round trip, precisely because a bare 750 ms
+  default is not generous enough for real relay latency — this test's raw, hand-rolled
+  `dial_and_send` helper has no such margin. Whether the shared accept loop's own extra
+  dispatch/scheduling hop nudges an already-marginal round trip over that fixed line, or this was
+  always this close and simply never got exercised with `#[ignore]` blocking it on the *other*
+  (now-fixed) bug first, is not resolved here. A real fix needs either a configurable idle timeout
+  on `IrohLink` (a `txtodo-sync` change, out of this crate's own slice) or a steadier test-side
+  workaround — flagged as a follow-up, not attempted this pass. The security property under test
+  (`process_hello`'s nonce/group check) is itself untouched and not in doubt.
+- **Real-network variance, observed and documented, not chased**: one of four
+  `two_real_daemons_pair_over_relay_with_lan_disabled` runs took ~109 s against a real relay
+  server instead of its usual few seconds — still well inside the test's own generous deadline,
+  and never showing the collision error. Documented in that test's own doc comment as the same
+  class of external-dependency variance `relay_converge.rs`'s module doc already accepts for this
+  relay, not a regression this task's change caused.
+- **Not built this pass**: the "two workspaces open in one daemon process, both `--relay`-enabled"
+  test the plan called for. The acceptance runs above already prove the collision is gone for the
+  single-workspace case every existing test exercises; the genuinely-multi-workspace scenario is
+  real, additional coverage still worth having, left as a named follow-up rather than blocking
+  this stage's close given the real-network verification above already consumed significant time.

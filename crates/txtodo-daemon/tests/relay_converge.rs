@@ -120,23 +120,17 @@ async fn wait_for_relay_convergence(from: &mut Daemon, to: &mut Daemon, label: &
 /// forced-relay proof (todo.txt item 5): with no LAN path available at all, the 30 s bound holding
 /// means the relay path is what actually carried it.
 ///
-/// **Blocked — confirms task `daemon-workspace-identity-agreement` stage 5's own flagged risk,
-/// root-caused for real.** `control_channel.rs`'s module doc already named this exact gap: the
-/// always-on device-level control channel (`main.rs`, spawned unconditionally) and a workspace's
-/// own `--relay` endpoint (`relay.rs`) both now bind under this device's one persisted relay
-/// identity (task stage 1), and two simultaneous connections under one identity to a *real* relay
-/// server was untested territory this sandbox could not exercise at the time. Running this test
-/// against n0's real public relay (2026-09-15) confirms it fails exactly that way: the relay
-/// server logs "Another endpoint connected with the same endpoint id. No more messages will be
-/// received." on the second bind, so `a`'s workspace-level relay connection never carries the op
-/// at all. Not a regression from stage 7's `workspace_id` AEAD binding (this test already had a
-/// correctly-agreed `workspace_id` seeded before this failure) — a real, structural collision
-/// stage 5 flagged as self-resolving "once `daemon-shared-sync-link` consolidates onto one shared
-/// Link" (root todo 18, the very next backlog item after this task closes). Left `#[ignore]`
-/// rather than deleted or loosened, since the measurement and the design gap it demonstrates are
-/// both still correct — same "flagged, not fixed" precedent as `lan_sync_bench.rs` in this crate.
+/// **Fixed by task `daemon-shared-sync-link` (root todo 18), stages 2-5, 2026-09-15.** Was
+/// `#[ignore]`d by `daemon-workspace-identity-agreement` stage 5 with a confirmed root cause: the
+/// always-on device-level control channel and a workspace's own `--relay` endpoint each bound
+/// their own `iroh::Endpoint` under this device's one persisted relay identity, and a real relay
+/// server refuses the second connection outright ("Another endpoint connected with the same
+/// endpoint id"). `daemon-shared-sync-link` consolidates every relay surface onto one endpoint,
+/// bound once in `main.rs` before any workspace opens (`device_relay.rs`), with
+/// `control_dispatch.rs`'s shared accept loop routing every connection by ALPN and (for sync
+/// traffic) by peeked `workspace_id`. Re-run against n0's real public relay (2026-09-15):
+/// converges in ~2.8 s, well inside the 30 s bound, with no collision.
 #[tokio::test]
-#[ignore = "control channel + per-workspace relay endpoint collide under one persisted relay identity against a real relay server ('Another endpoint connected with the same endpoint id') — task daemon-workspace-identity-agreement stage 5's own flagged risk, confirmed 2026-09-15; fix is scoped to daemon-shared-sync-link (todo 18), see doc comment"]
 async fn two_real_daemons_converge_via_relay_with_lan_disabled() {
     let group_id = rand_u128();
     // Both daemons must agree on one `workspace_id` (task `daemon-workspace-identity-agreement`)

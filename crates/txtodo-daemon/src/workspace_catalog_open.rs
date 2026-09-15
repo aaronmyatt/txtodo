@@ -6,6 +6,7 @@
 
 use crate::clock::Clock;
 use crate::device_identity::DeviceIdentity;
+use crate::device_relay::{DeviceRelay, WorkspaceRoute};
 use crate::file_carrier::{self, FileCarrierTransport};
 use crate::lan::{self, LanTransport};
 use crate::relay::{self, RelayTransport};
@@ -14,7 +15,7 @@ use crate::watch_task;
 use crate::workspace::Workspace;
 use crate::workspace_error::WorkspaceError;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, PoisonError, RwLock};
 use tokio::task::JoinHandle;
 use txtodo_model::IdentityMode;
 
@@ -32,8 +33,16 @@ pub struct WorkspaceOpenArgs {
     /// catalog opens (ADR 0021) — constructed once, before any workspace opens (`main.rs::run`),
     /// never minted per workspace.
     pub identity: Arc<DeviceIdentity>,
-    /// `--relay <url>` (plan M8); `None` means relay stays off for every workspace.
+    /// `--relay <url>` (plan M8); `None` means relay stays off for every workspace. Reporting-only
+    /// now (`Health.relay_url`) — `device_relay` below is what actually carries relay traffic
+    /// (task `daemon-shared-sync-link` stage 5: this device's one shared endpoint, bound once in
+    /// `main.rs::run` before any workspace opens, not per workspace).
     pub relay_url: Option<String>,
+    /// This device's one shared relay endpoint plus its workspace routing table, when `--relay`
+    /// was configured and bound successfully; `None` either way relay stays off for every
+    /// workspace, same as `relay_url` being `None` used to mean before this device bound its own
+    /// endpoint per workspace.
+    pub device_relay: Option<Arc<DeviceRelay>>,
     /// `--relay-dial-peer` (plan M8 `relay-converge-test`); test/manual-pairing-substitute only.
     pub relay_dial_peer: Option<[u8; 32]>,
     /// `--no-lan`: skip `lan::start` entirely for every workspace.
@@ -49,6 +58,8 @@ pub struct WorkspaceOpenArgs {
 pub struct OpenedWorkspace {
     /// The live workspace, cloned out to callers by `WorkspaceCatalog::resolve`.
     pub ws: SharedWorkspace,
+    id: txtodo_store::WorkspaceId,
+    device_relay: Option<Arc<DeviceRelay>>,
     _watcher: notify::RecommendedWatcher,
     watch_task: JoinHandle<()>,
     lan: Option<LanTransport>,
@@ -68,6 +79,12 @@ impl Drop for OpenedWorkspace {
         if let Some(f) = &self.file_carrier {
             f.abort();
         }
+        // Unregisters this workspace's route so a connection accepted afterward for this id is
+        // dropped rather than routed to a handle whose background tasks just stopped (task
+        // `daemon-shared-sync-link` stage 5).
+        if let Some(device_relay) = &self.device_relay {
+            device_relay.routes().unregister(self.id);
+        }
     }
 }
 
@@ -86,6 +103,7 @@ pub fn open_workspace_full(
     // invariant — see `Workspace::set_workspace_id`'s doc).
     ws.set_workspace_id(id);
     let ws: SharedWorkspace = Arc::new(RwLock::new(ws));
+    register_route(&ws, id, args.device_relay.as_deref());
     let (watcher, watch_task) =
         watch_task::start(Arc::clone(&ws), Arc::clone(&clock)).map_err(|source| {
             WorkspaceError::Walk(crate::walker::WalkError::Io {
@@ -101,17 +119,48 @@ pub fn open_workspace_full(
     let relay = relay::start(
         Arc::clone(&ws),
         args.relay_url.clone(),
+        args.device_relay.as_ref().map(|dr| dr.endpoint()),
         args.relay_dial_peer,
     );
     let file_carrier = file_carrier::start(Arc::clone(&ws), args.sync_dir.clone());
     Ok(OpenedWorkspace {
         ws,
+        id,
+        device_relay: args.device_relay.clone(),
         _watcher: watcher,
         watch_task,
         lan,
         relay,
         file_carrier,
     })
+}
+
+/// Registers `ws`'s route on the device's shared relay endpoint (task `daemon-shared-sync-link`
+/// stage 5), before any background task below spawns — same ordering invariant as
+/// `set_workspace_id`'s own doc: an inbound connection for this workspace must never arrive before
+/// there is a route for it. A no-op when relay is not configured at all. Refusal past the routing
+/// table's cap is logged, never fatal — this workspace still opens, it just cannot yet receive an
+/// inbound relay connection until some other workspace's route frees a slot.
+fn register_route(
+    ws: &SharedWorkspace,
+    id: txtodo_store::WorkspaceId,
+    device_relay: Option<&DeviceRelay>,
+) {
+    let Some(device_relay) = device_relay else {
+        return;
+    };
+    let (device, group) = {
+        let guard = ws.read().unwrap_or_else(PoisonError::into_inner);
+        (guard.device(), guard.group())
+    };
+    let route = WorkspaceRoute {
+        ws: Arc::clone(ws),
+        device,
+        group,
+    };
+    if let Err(e) = device_relay.routes().register(id, route) {
+        tracing::warn!(error = %e, %id, "workspace_relay_route_registration_failed");
+    }
 }
 
 /// Always `Workspace::open_with_key_store`, threading `args.identity` (this catalog's one shared

@@ -23,6 +23,7 @@ fn open_args() -> OpenArgs {
         identity_mode: IdentityMode::Sidecar,
         identity,
         relay_url: None,
+        device_relay: None,
         relay_dial_peer: None,
         no_lan: true,
         sync_dir: None,

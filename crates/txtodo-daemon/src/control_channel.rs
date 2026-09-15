@@ -1,9 +1,11 @@
 //! The always-on, per-device-set control channel (task `daemon-workspace-identity-agreement`
-//! stage 5): the first non-per-workspace background task in this codebase. Binds one
-//! `RelayEndpoint` per *device*, using `DeviceIdentity`'s persisted relay identity (stage 1), so a
-//! peer's durably-stored `relay_node_id` (stage 2) reaches this device regardless of which, if
-//! any, workspace is open — the spawn point in `main.rs` is deliberately before
-//! `WorkspaceCatalog::new`.
+//! stage 5): the first non-per-workspace background task in this codebase. Runs over this
+//! device's one shared `RelayEndpoint`, bound once in `main.rs::run` (task `daemon-shared-sync-
+//! link` stage 5, [`DeviceRelay::bind`]) *before* this module or `WorkspaceCatalog::new` ever
+//! runs, so a peer's durably-stored `relay_node_id` (stage 2 of the prerequisite task) reaches
+//! this device regardless of which, if any, workspace is open. This module no longer binds
+//! anything itself — it receives the already-bound [`DeviceRelay`] as a plain argument, the same
+//! one every open workspace's own `relay::start` shares.
 //!
 //! Every control session (whether accepted or dialed) does the same symmetric thing: send this
 //! device's currently-registered workspaces as `ControlMessage::Offer`s, then read whatever the
@@ -13,12 +15,12 @@
 //! `Decline` are logged only (stage 6's own bookkeeping, not built here). A workspace already
 //! adopted or actively registered under this device's own id is skipped, not re-offered forever.
 //!
-//! Bound via [`DeviceRelay::bind`] (task `daemon-shared-sync-link` stage 2), which also moved this
-//! module's own former identity-sharing gap onto stage 2/3's shoulders: the accept loop no longer
-//! silently drops a connection that did not negotiate `CONTROL_ALPN` — [`control_dispatch`]
-//! dispatches all three ALPNs this device's one endpoint accepts, routing a sync connection to the
-//! right open workspace by peeking its first frame's clear `workspace_id` (`txtodo_sync::
-//! peek_workspace`). See `control_dispatch.rs`'s own module doc for the full routing story.
+//! The accept loop no longer silently drops a connection that did not negotiate `CONTROL_ALPN` —
+//! [`control_dispatch`] dispatches all three ALPNs this device's one endpoint accepts, routing a
+//! sync connection to the right open workspace by peeking its first frame's clear `workspace_id`
+//! (`txtodo_sync::peek_workspace`). See `control_dispatch.rs`'s own module doc for the full
+//! routing story — this is what actually resolves the identity-sharing collision this module used
+//! to flag as its own known, deliberately-not-solved gap.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -57,29 +59,30 @@ impl ControlChannelTransport {
     }
 }
 
-/// Starts the control channel as a background task when `relay_url` names one — no relay
-/// configured means no device-level control surface either, matching `relay.rs::start`'s own
-/// "relay is opt-in" behaviour. `registry_path` is opened as its own, independent
-/// `WorkspaceRegistry` handle (SQLite WAL mode already supports concurrent readers/writers safely,
-/// the same property every restart-durability test in this crate already relies on) — this task
-/// never shares the catalog's own handle, avoiding any restructuring of `WorkspaceCatalog` to
-/// thread one through.
+/// Starts the control channel as a background task when `device_relay` names an already-bound
+/// one — no relay configured (or a failed bind) means no device-level control surface either,
+/// matching `relay.rs::start`'s own "relay is opt-in" behaviour. `registry_path` is opened as its
+/// own, independent `WorkspaceRegistry` handle (SQLite WAL mode already supports concurrent
+/// readers/writers safely, the same property every restart-durability test in this crate already
+/// relies on) — this task never shares the catalog's own handle, avoiding any restructuring of
+/// `WorkspaceCatalog` to thread one through.
 pub fn start(
     identity: Arc<DeviceIdentity>,
-    relay_url: Option<String>,
+    device_relay: Option<Arc<DeviceRelay>>,
     registry_path: PathBuf,
 ) -> Option<ControlChannelTransport> {
-    let url = relay_url.filter(|u| !u.is_empty())?;
+    let device_relay = device_relay?;
     Some(ControlChannelTransport {
-        task: tokio::spawn(run(identity, url, registry_path)),
+        task: tokio::spawn(run(identity, device_relay, registry_path)),
     })
 }
 
-async fn run(identity: Arc<DeviceIdentity>, url: String, registry_path: PathBuf) {
+async fn run(
+    identity: Arc<DeviceIdentity>,
+    device_relay: Arc<DeviceRelay>,
+    registry_path: PathBuf,
+) {
     let Some(registry) = open_registry(&registry_path) else {
-        return;
-    };
-    let Some(device_relay) = DeviceRelay::bind(&identity, url).await else {
         return;
     };
     let ctx = DispatchCtx {

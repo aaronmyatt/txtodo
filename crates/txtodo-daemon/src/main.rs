@@ -11,6 +11,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use txtodo_daemon::clock::{Clock, SystemClock};
 use txtodo_daemon::device_identity::DeviceIdentity;
+use txtodo_daemon::device_relay::DeviceRelay;
 use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::serve;
 use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
@@ -234,12 +235,20 @@ fn build_identity(
     )?)
 }
 
-/// `WorkspaceOpenArgs` from the CLI flags plus the identity `build_identity` already resolved.
-fn open_args(args: &Args, identity: Arc<DeviceIdentity>) -> OpenArgs {
+/// `WorkspaceOpenArgs` from the CLI flags plus the identity `build_identity` already resolved and
+/// the device relay `run` already bound (task `daemon-shared-sync-link` stage 5) — `device_relay`
+/// is `None` exactly when `relay_url` is, or its bind failed; either way every workspace this
+/// catalog opens shares the identical `Option`, never mints its own.
+fn open_args(
+    args: &Args,
+    identity: Arc<DeviceIdentity>,
+    device_relay: Option<Arc<DeviceRelay>>,
+) -> OpenArgs {
     OpenArgs {
         identity_mode: args.identity_mode,
         identity,
         relay_url: args.relay_url.clone(),
+        device_relay,
         relay_dial_peer: args.relay_dial_peer,
         no_lan: args.no_lan,
         sync_dir: args.sync_dir.clone(),
@@ -342,14 +351,24 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 
     let state_dir = resolve_state_dir(&args, &env)?;
     let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
+    // One shared relay endpoint per device (task `daemon-shared-sync-link` stage 5), bound before
+    // the control channel or any workspace opens — the fix for the identity-sharing collision a
+    // real relay server refuses ("Another endpoint connected with the same endpoint id") once two
+    // or more `iroh::Endpoint`s share this device's one persisted relay identity. `None` when
+    // `--relay` was never given or the bind failed; every consumer below shares this identical
+    // `Option`, never binds its own.
+    let device_relay = match args.relay_url.clone().filter(|u| !u.is_empty()) {
+        Some(url) => DeviceRelay::bind(&identity, url).await,
+        None => None,
+    };
     let _control_channel = txtodo_daemon::control_channel::start(
         Arc::clone(&identity),
-        args.relay_url.clone(),
+        device_relay.clone(),
         registry_path.clone(),
     );
     let catalog = Arc::new(WorkspaceCatalog::new(
         registry,
-        open_args(&args, identity),
+        open_args(&args, identity, device_relay),
         clock,
     ));
 
