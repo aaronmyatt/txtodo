@@ -8,6 +8,7 @@ mod aead;
 mod append_frame;
 mod carrier;
 mod carrier_error;
+mod control;
 mod crypto_error;
 mod device_static;
 mod discovery;
@@ -49,6 +50,10 @@ pub use aead::{
 pub use append_frame::{APPEND_HEADER_BYTES, AppendFrame, MAX_APPEND_FRAME_BYTES};
 pub use carrier::{FileCarrier, MAX_OPS_FILE_BYTES};
 pub use carrier_error::CarrierError;
+pub use control::{
+    ControlMessage, ControlMessageError, ControlSealError, MAX_WORKSPACE_NAME_BYTES, open_control,
+    seal_control,
+};
 pub use crypto_error::CryptoError;
 pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
 pub use discovery::{
@@ -103,6 +108,8 @@ pub use want::{Gap, advance, want};
 mod aead_tests;
 #[cfg(test)]
 mod carrier_tests;
+#[cfg(test)]
+mod control_tests;
 #[cfg(test)]
 mod crypto_error_tests;
 #[cfg(test)]
