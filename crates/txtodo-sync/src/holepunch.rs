@@ -182,6 +182,30 @@ impl RelayEndpoint {
         Ok(IrohLink::new(connection, send, recv))
     }
 
+    /// Dials `node` for the always-on control channel (task
+    /// `daemon-workspace-identity-agreement` stage 5) — the third sibling of
+    /// [`RelayEndpoint::connect`]/[`RelayEndpoint::connect_pairing`], same shape as
+    /// `connect_pairing`: no `GroupId` gate of its own. Unlike pairing, a control connection *is*
+    /// between two already-paired devices sharing a group key — but the gate that matters here is
+    /// "does this device even want to redial `node`", decided by the caller against its own known-
+    /// peers roster (`IdentityStore::list_devices()`'s `relay_node_id` column) before ever calling
+    /// this, not by the dial itself. Uses [`crate::endpoint::CONTROL_ALPN`] so a control connection
+    /// is never mistaken for the group-keyed sync protocol or a pairing handshake.
+    pub async fn connect_control(&self, node: [u8; 32]) -> Result<IrohLink, HolepunchError> {
+        let id = iroh::PublicKey::from_bytes(&node).map_err(|_| HolepunchError::InvalidPeerId)?;
+        let target = EndpointAddr::new(id).with_relay_url(self.relay_url.clone());
+        let connection = self
+            .endpoint
+            .connect(target, crate::endpoint::CONTROL_ALPN)
+            .await
+            .map_err(HolepunchError::Connect)?;
+        let (send, recv) = connection
+            .open_bi()
+            .await
+            .map_err(|e| HolepunchError::Stream(e.to_string()))?;
+        Ok(IrohLink::new(connection, send, recv))
+    }
+
     /// Waits for one incoming connection and wraps it as a [`crate::link::Link`]. Cannot gate on
     /// group before accepting — the accepting side has no way to know who is dialing until the
     /// connection exists; `Session::on_hello`'s own group check is what actually protects it once

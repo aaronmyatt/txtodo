@@ -35,6 +35,22 @@ async fn connect_pairing_has_no_group_parameter_to_gate_on() {
     assert!(a.connect_pairing(b.node_id_bytes()).await.is_err());
 }
 
+/// `connect_control` (task `daemon-workspace-identity-agreement` stage 5), same structural proof
+/// as `connect_pairing_has_no_group_parameter_to_gate_on` above: the call signature carries no
+/// group argument, so a caller cannot accidentally rely on one being checked here — the actual
+/// gate is the caller's own known-peers roster, decided before ever dialing (see the method's doc).
+#[tokio::test]
+async fn connect_control_has_no_group_parameter_to_gate_on() {
+    let cfg_a = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let cfg_b = cfg_a.clone();
+    let a = RelayEndpoint::bind(&cfg_a, GroupId(1)).await.unwrap();
+    let b = RelayEndpoint::bind(&cfg_b, GroupId(2)).await.unwrap();
+    assert!(a.connect_control(b.node_id_bytes()).await.is_err());
+}
+
 /// Task `daemon-workspace-identity-agreement` stage 1: binding with the same injected seed twice
 /// must yield the same relay node id — otherwise a persisted seed (`DeviceIdentity`'s job) buys a
 /// daemon restart nothing, and a peer's durably-stored `relay_node_id` (stage 2) would go stale the

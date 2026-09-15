@@ -62,7 +62,7 @@ pub use discovery::{
     Sighting, TXT_DEVICE, TXT_GROUP, TXT_NODE, TXT_PROTO, backoff_ms, parse_announcement,
 };
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
-pub use endpoint::{ALPN, PAIRING_ALPN, bind_local_endpoint};
+pub use endpoint::{ALPN, CONTROL_ALPN, PAIRING_ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
 pub use holepunch::{HolepunchError, RelayEndpoint};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};

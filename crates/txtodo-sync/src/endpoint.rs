@@ -35,6 +35,15 @@ pub const ALPN: &[u8] = b"txtodo/sync/1";
 /// since a pairing connection carries no group key to seal anything with in the first place.
 pub const PAIRING_ALPN: &[u8] = b"txtodo/pairing/1";
 
+/// Identifies the always-on, per-device-set control channel (task
+/// `daemon-workspace-identity-agreement` stage 5) — carries `crate::control::ControlMessage`
+/// (workspace offer/accept), sealed with the group key, over its own connection distinct from a
+/// group-keyed sync connection or a pairing handshake. Relay-only: unlike [`ALPN`]/[`PAIRING_ALPN`],
+/// this is registered on the relay endpoint (`relay.rs::build`), not the LAN one — the control
+/// channel's redial loop dials a peer's durably-stored relay node id (stage 2), which has no LAN
+/// equivalent to redial by.
+pub const CONTROL_ALPN: &[u8] = b"txtodo/control/1";
+
 /// Binds the one endpoint shape this crate ever constructs: LAN-only, no relay, no port mapping,
 /// no third-party address lookup. Picks an ephemeral local UDP port on every interface. Accepts
 /// both [`ALPN`] and [`PAIRING_ALPN`] — one endpoint, one bound port, two protocols told apart by

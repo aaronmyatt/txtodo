@@ -10,7 +10,7 @@ use iroh::endpoint::presets::Minimal;
 use iroh::endpoint::{BindError, PortmapperConfig};
 use iroh::{Endpoint, RelayMap, RelayMode, RelayUrlParseError};
 
-use crate::endpoint::{ALPN, PAIRING_ALPN};
+use crate::endpoint::{ALPN, CONTROL_ALPN, PAIRING_ALPN};
 
 /// Most relay peers this endpoint's home-relay status tracks at once. A relay map is small by
 /// construction (one URL configured today) but the cap exists so a future multi-relay config
@@ -89,7 +89,11 @@ async fn build(
             .portmapper_config(PortmapperConfig::Disabled),
     );
     let endpoint = builder.bind().await.map_err(RelayError::Bind)?;
-    endpoint.set_alpns(vec![ALPN.to_vec(), PAIRING_ALPN.to_vec()]);
+    endpoint.set_alpns(vec![
+        ALPN.to_vec(),
+        PAIRING_ALPN.to_vec(),
+        CONTROL_ALPN.to_vec(),
+    ]);
     Ok(endpoint)
 }
 
@@ -97,9 +101,10 @@ async fn build(
 /// presets, which would silently route this device's traffic through n0's servers instead of the
 /// relay this device was told to use. Port mapping stays disabled: routing through a configured
 /// relay is not a reason to also ask the LAN router to open an external port (same reasoning as
-/// `endpoint.rs`). Accepts both [`ALPN`] and [`PAIRING_ALPN`], same as the LAN endpoint, so a
-/// caller can tell a sync connection from a pairing one purely by which ALPN it negotiated. This
-/// crate's one production constructor: certificate verification is never skipped.
+/// `endpoint.rs`). Accepts [`ALPN`] and [`PAIRING_ALPN`] like the LAN endpoint, plus
+/// [`CONTROL_ALPN`] (relay-only, task `daemon-workspace-identity-agreement` stage 5) — a caller
+/// tells all three apart purely by which ALPN a connection negotiated. This crate's one production
+/// constructor: certificate verification is never skipped.
 pub async fn build_endpoint(cfg: &RelayConfig) -> Result<Endpoint, RelayError> {
     build(cfg, |b| b).await
 }
