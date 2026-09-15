@@ -17,9 +17,10 @@ use std::sync::PoisonError;
 
 use tokio::runtime::Handle;
 use txtodo_model::{DeviceId, Op};
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     CryptoError, DeviceSigningKey, GroupId, GroupKey, GroupKeys, KeyId, Link, LinkError, Message,
-    MessageError, OriginRange, Session, derive_group_op_signing_key, open, seal,
+    MessageError, OriginRange, SealFor, Session, derive_group_op_signing_key, open, seal,
 };
 
 use crate::lan_apply::{commit_incoming_ops, serve_want};
@@ -103,16 +104,22 @@ pub(crate) fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
         .unwrap_or_default()
 }
 
-/// Seals `msg` whole under the group key and sends it. The AEAD header carries `group`/`epoch` in
-/// the clear (`seal`'s own doc); the sealed bytes become the outer `Frame`'s body.
+/// Seals `msg` whole under the group key and sends it. The AEAD header carries `group`/`epoch`/
+/// `workspace` in the clear (`seal`'s own doc); the sealed bytes become the outer `Frame`'s body.
 fn send_message(
     link: &mut dyn Link,
     group: GroupId,
+    workspace: WorkspaceId,
     key: &GroupKey,
     msg: Message,
 ) -> Result<(), SyncError> {
     let plain = msg.encode()?;
-    let sealed = seal(plain.version, group, GROUP_EPOCH, key, &plain.body)?;
+    let for_ = SealFor {
+        group,
+        epoch: GROUP_EPOCH,
+        workspace,
+    };
+    let sealed = seal(plain.version, for_, key, &plain.body)?;
     link.send(txtodo_sync::Frame {
         version: plain.version,
         body: sealed,
@@ -124,10 +131,11 @@ fn send_message(
 fn recv_message(
     link: &mut dyn Link,
     group: GroupId,
+    workspace: WorkspaceId,
     keys: &GroupKeys,
 ) -> Result<Message, SyncError> {
     let frame = link.recv()?;
-    let plain = open(frame.version, group, keys, &frame.body)?;
+    let plain = open(frame.version, group, workspace, keys, &frame.body)?;
     Ok(Message::decode(&txtodo_sync::Frame {
         version: frame.version,
         body: plain,
@@ -135,8 +143,13 @@ fn recv_message(
 }
 
 /// `None` on any failure worth ending the connection over — already logged.
-fn recv_next(link: &mut dyn Link, group: GroupId, keys: &GroupKeys) -> Option<Message> {
-    match recv_message(link, group, keys) {
+fn recv_next(
+    link: &mut dyn Link,
+    group: GroupId,
+    workspace: WorkspaceId,
+    keys: &GroupKeys,
+) -> Option<Message> {
+    match recv_message(link, group, workspace, keys) {
         Ok(msg) => Some(msg),
         Err(SyncError::Link(LinkError::Closed)) => None,
         Err(e) => {
@@ -152,6 +165,9 @@ struct SessionCtx<'a> {
     ws: &'a SharedWorkspace,
     rt: &'a Handle,
     group: GroupId,
+    /// This workspace's catalog identity (task `daemon-workspace-identity-agreement` stage 7),
+    /// bound into every sealed message's AEAD alongside `group`/`epoch`.
+    workspace: WorkspaceId,
     key: &'a GroupKey,
     /// Stand-in op-signing key derived from `key` — see the module doc's "Scope of this pass" and
     /// `txtodo_sync::lan_op_signing` for exactly what it does and does not prove.
@@ -160,7 +176,7 @@ struct SessionCtx<'a> {
 
 impl SessionCtx<'_> {
     fn send(&self, link: &mut dyn Link, msg: Message) -> Result<(), SyncError> {
-        send_message(link, self.group, self.key, msg)
+        send_message(link, self.group, self.workspace, self.key, msg)
     }
 }
 
@@ -281,7 +297,7 @@ fn run_message_loop(
     session: &mut Session,
 ) {
     for _ in 0..MAX_MESSAGES_PER_SESSION {
-        let Some(msg) = recv_next(link, ctx.group, keys) else {
+        let Some(msg) = recv_next(link, ctx.group, ctx.workspace, keys) else {
             return;
         };
         if !handle_message(link, ctx, session, msg) {
@@ -315,10 +331,12 @@ pub(crate) fn drive_session(
     };
     let rt = Handle::current();
     let signing_key = derive_group_op_signing_key(&key);
+    let workspace = read(&ws).workspace_id();
     let ctx = SessionCtx {
         ws: &ws,
         rt: &rt,
         group,
+        workspace,
         key: &key,
         signing_key,
     };

@@ -28,9 +28,9 @@ use crate::workspace_error::WorkspaceError;
 use crate::workspace_mint::{basename, load_or_mint_identity_mode};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 use txtodo_model::{DeviceId, FilePath, IdentityMode, WorkspaceTree};
-use txtodo_store::{NewDevice, Store};
+use txtodo_store::{NewDevice, Store, WorkspaceId};
 use txtodo_sync::{DeviceStaticPublic, GroupId, KeyStore};
 
 /// Where the store lives under the workspace root (ADR 0010).
@@ -67,6 +67,10 @@ pub struct Workspace {
     /// The bound relay endpoint, if any (plan M8 `sync-relay-enable`): set by `relay.rs`, read by
     /// `lan.rs`'s relay-fallback dial.
     relay_state: RelayState,
+    /// This workspace's catalog identity, bound into every sealed batch's AEAD (stage 7 — see
+    /// `set_workspace_id`'s doc). Freshly minted as a placeholder here since most tests in this
+    /// crate open a `Workspace` with no registry at all.
+    workspace_id: Mutex<WorkspaceId>,
 }
 
 impl Workspace {
@@ -133,6 +137,7 @@ impl Workspace {
     ) -> Result<Workspace, WorkspaceError> {
         let identity_mode = load_or_mint_identity_mode(&mut store, root, default_identity_mode)?;
         let started_at_ms = clock.now_ms();
+        let placeholder_workspace_id = WorkspaceId::new(clock.new_ulid());
         let mut ws = Workspace {
             root: root.to_path_buf(),
             store: Arc::new(Mutex::new(store)),
@@ -143,6 +148,7 @@ impl Workspace {
             started_at_ms,
             stats: Arc::new(Stats::default()),
             notes: NotesRegistry::new(),
+            workspace_id: Mutex::new(placeholder_workspace_id),
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
             lan_status: LanStatus::default(),
@@ -372,5 +378,22 @@ impl Workspace {
     /// first). Never called with the identity store not already updated to match.
     pub(crate) fn set_group(&self, group: GroupId) {
         self.identity.set_group(group);
+    }
+    /// This workspace's catalog identity, bound into every sealed batch's AEAD (stage 7). See the
+    /// field's own doc: meaningful only once `set_workspace_id` replaces the placeholder.
+    pub fn workspace_id(&self) -> WorkspaceId {
+        *self
+            .workspace_id
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+    /// Replaces the placeholder `finish_open` minted with the real, catalog-assigned id. Called
+    /// exactly once by `workspace_catalog_open.rs`, right after registering/opening — see the
+    /// field's own doc for why the placeholder must never reach a peer before this runs.
+    pub(crate) fn set_workspace_id(&self, id: WorkspaceId) {
+        *self
+            .workspace_id
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = id;
     }
 }

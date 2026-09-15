@@ -76,10 +76,15 @@ impl Drop for OpenedWorkspace {
 /// inside a tokio runtime (actors and the background tasks below are all spawned).
 pub fn open_workspace_full(
     root: &Path,
+    id: txtodo_store::WorkspaceId,
     args: &WorkspaceOpenArgs,
     clock: Arc<dyn Clock>,
 ) -> Result<OpenedWorkspace, WorkspaceError> {
     let ws = open_workspace(root, args, Arc::clone(&clock))?;
+    // Before anything below spawns a single background task: the placeholder `finish_open` minted
+    // must never reach the wire (task `daemon-workspace-identity-agreement` stage 7's own
+    // invariant — see `Workspace::set_workspace_id`'s doc).
+    ws.set_workspace_id(id);
     let ws: SharedWorkspace = Arc::new(RwLock::new(ws));
     let (watcher, watch_task) =
         watch_task::start(Arc::clone(&ws), Arc::clone(&clock)).map_err(|source| {

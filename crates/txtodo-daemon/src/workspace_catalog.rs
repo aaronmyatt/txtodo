@@ -208,7 +208,7 @@ impl WorkspaceCatalog {
         if open.contains_key(&id) {
             return Ok(id);
         }
-        let opened = open_workspace_full(root, &self.open_args, Arc::clone(&self.clock))
+        let opened = open_workspace_full(root, id, &self.open_args, Arc::clone(&self.clock))
             .map_err(|e| Status::internal(format!("open {}: {e}", root.display())))?;
         open.insert(id, opened);
         Ok(id)

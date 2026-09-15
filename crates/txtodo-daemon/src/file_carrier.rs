@@ -29,9 +29,10 @@ use std::time::Duration;
 
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    FileCarrier, GroupId, GroupKey, Heads, Link, Message, advance, derive_group_op_signing_key,
-    open as aead_open, seal as aead_seal, verify_batch, want,
+    FileCarrier, GroupId, GroupKey, Heads, Link, Message, SealFor, advance,
+    derive_group_op_signing_key, open as aead_open, seal as aead_seal, verify_batch, want,
 };
 
 use crate::lan_apply::{commit_incoming_ops, device_keys_for, serve_want};
@@ -82,9 +83,19 @@ async fn open_carrier(ws: &SharedWorkspace, dir: PathBuf) -> Option<FileCarrier>
 /// counterpart of `lan_session.rs::send_message`, duplicated rather than shared because that
 /// function takes a live `&mut dyn Link` argument shape this module's own call site does not have
 /// at the same point (this module seals before it knows whether the carrier write will succeed).
-fn seal_message(group: GroupId, key: &GroupKey, msg: &Message) -> Option<txtodo_sync::Frame> {
+fn seal_message(
+    group: GroupId,
+    workspace: WorkspaceId,
+    key: &GroupKey,
+    msg: &Message,
+) -> Option<txtodo_sync::Frame> {
     let plain = msg.encode().ok()?;
-    let sealed = aead_seal(plain.version, group, GROUP_EPOCH, key, &plain.body).ok()?;
+    let for_ = SealFor {
+        group,
+        epoch: GROUP_EPOCH,
+        workspace,
+    };
+    let sealed = aead_seal(plain.version, for_, key, &plain.body).ok()?;
     Some(txtodo_sync::Frame {
         version: plain.version,
         body: sealed,
@@ -100,6 +111,7 @@ fn send_new_ops(ws: &SharedWorkspace, carrier: &mut FileCarrier, last_sent: &mut
         return;
     };
     let group = read(ws).group();
+    let workspace = read(ws).workspace_id();
     let ranges = want(last_sent, &read_heads(ws));
     if ranges.is_empty() {
         return;
@@ -115,7 +127,7 @@ fn send_new_ops(ws: &SharedWorkspace, carrier: &mut FileCarrier, last_sent: &mut
         else {
             continue;
         };
-        let Some(frame) = seal_message(group, &key, msg) else {
+        let Some(frame) = seal_message(group, workspace, &key, msg) else {
             continue;
         };
         if carrier.send(frame).is_err() {
@@ -133,9 +145,10 @@ fn send_new_ops(ws: &SharedWorkspace, carrier: &mut FileCarrier, last_sent: &mut
 fn open_and_decode(
     frame: &txtodo_sync::Frame,
     group: GroupId,
+    workspace: WorkspaceId,
     keys: &txtodo_sync::GroupKeys,
 ) -> Option<Message> {
-    let plain = aead_open(frame.version, group, keys, &frame.body)
+    let plain = aead_open(frame.version, group, workspace, keys, &frame.body)
         .inspect_err(|e| tracing::warn!(error = %e, "file_carrier_open_failed"))
         .ok()?;
     Message::decode(&txtodo_sync::Frame {
@@ -154,12 +167,13 @@ fn open_and_decode(
 fn open_and_verify(
     frame: &txtodo_sync::Frame,
     group: GroupId,
+    workspace: WorkspaceId,
     keys: &txtodo_sync::GroupKeys,
     verify_key: txtodo_sync::DevicePublicKey,
 ) -> Option<Vec<txtodo_model::Op>> {
     let Message::Ops {
         ops, signatures, ..
-    } = open_and_decode(frame, group, keys)?
+    } = open_and_decode(frame, group, workspace, keys)?
     else {
         return None;
     };
@@ -181,6 +195,7 @@ fn recv_new_ops(ws: &SharedWorkspace, carrier: &mut FileCarrier, rt: &Handle) {
         return;
     };
     let group = read(ws).group();
+    let workspace = read(ws).workspace_id();
     let verify_key = derive_group_op_signing_key(&key).public_key();
     loop {
         let frame = match carrier.poll() {
@@ -191,7 +206,7 @@ fn recv_new_ops(ws: &SharedWorkspace, carrier: &mut FileCarrier, rt: &Handle) {
                 return;
             }
         };
-        if let Some(ops) = open_and_verify(&frame, group, &keys, verify_key) {
+        if let Some(ops) = open_and_verify(&frame, group, workspace, &keys, verify_key) {
             commit_ops(ws, rt, ops);
         }
     }
