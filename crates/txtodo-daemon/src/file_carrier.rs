@@ -158,7 +158,7 @@ fn send_route(
         return;
     }
     let signing_key = derive_group_op_signing_key(key);
-    let Ok(messages) = serve_want(&route.ws, &ranges, &signing_key) else {
+    let Ok(messages) = serve_want(&route.ws, &ranges, workspace, &signing_key) else {
         return;
     };
     for msg in &messages {

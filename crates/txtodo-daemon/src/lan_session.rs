@@ -187,7 +187,7 @@ fn handle_hello(
     msg: &Message,
 ) -> bool {
     let now_ms = read(ctx.ws).clock().now_ms();
-    let greeting = match session.on_hello(msg, now_ms) {
+    let greeting = match session.on_hello(ctx.workspace, msg, now_ms) {
         Ok(g) => g,
         Err(e) => {
             tracing::warn!(error = %e, "lan_hello_refused");
@@ -198,7 +198,7 @@ fn handle_hello(
 }
 
 fn handle_want(link: &mut dyn Link, ctx: &SessionCtx<'_>, ranges: &[OriginRange]) -> bool {
-    let batches = match serve_want(ctx.ws, ranges, &ctx.signing_key) {
+    let batches = match serve_want(ctx.ws, ranges, ctx.workspace, &ctx.signing_key) {
         Ok(b) => b,
         Err(e) => {
             tracing::warn!(error = %e, "lan_serve_want_failed");
@@ -222,7 +222,7 @@ fn ops_or_refuse(ctx: &SessionCtx<'_>, session: &mut Session, msg: &Message) -> 
         }
         _ => std::collections::BTreeMap::new(),
     };
-    match session.on_ops(msg, &device_keys) {
+    match session.on_ops(ctx.workspace, msg, &device_keys) {
         Ok(ops) => Some(ops),
         Err(e) => {
             tracing::warn!(error = %e, "lan_ops_refused");
@@ -242,7 +242,7 @@ fn commit_and_ack(
     } else {
         Vec::new()
     };
-    match session.committed(&committed_ranges) {
+    match session.committed(ctx.workspace, &committed_ranges) {
         Ok(ack) => Some(ack),
         Err(e) => {
             tracing::warn!(error = %e, "lan_ack_refused");
@@ -276,18 +276,22 @@ fn handle_message(
 ) -> bool {
     match &msg {
         Message::Hello { .. } => handle_hello(link, ctx, session, &msg),
-        Message::Want { ranges } => handle_want(link, ctx, ranges),
+        Message::Want { ranges, .. } => handle_want(link, ctx, ranges),
         Message::Ops { ranges, .. } => handle_ops(link, ctx, session, &msg, ranges.clone()),
-        Message::Ack { committed } => {
+        Message::Ack { committed, .. } => {
             tracing::debug!(runs = committed.len(), "lan_peer_acked");
             true
         }
     }
 }
 
-fn initial_hello(session: &mut Session, ws: &SharedWorkspace) -> Option<Message> {
+fn initial_hello(
+    session: &mut Session,
+    ws: &SharedWorkspace,
+    workspace: WorkspaceId,
+) -> Option<Message> {
     let now_ms = read(ws).clock().now_ms();
-    session.hello(now_ms).ok()
+    session.hello(workspace, now_ms).ok()
 }
 
 fn run_message_loop(
@@ -340,12 +344,34 @@ pub(crate) fn drive_session(
         key: &key,
         signing_key,
     };
-    let mut session = Session::new(device, group, read_heads(&ws));
-    let Some(hello) = initial_hello(&mut session, &ws) else {
+    let Some(mut session) = single_workspace_session(device, group, &ws, workspace) else {
+        return;
+    };
+    let Some(hello) = initial_hello(&mut session, &ws, workspace) else {
         return;
     };
     if ctx.send(link, hello).is_err() {
         return;
     }
     run_message_loop(link, &ctx, &keys, &mut session);
+}
+
+/// Stage 2 (task `daemon-workspace-session-multiplex`, not started) is the real multi-workspace
+/// wiring: today `Session` can multiplex several workspaces, but this connection is still routed
+/// to exactly one before it ever reaches here (`control_dispatch.rs`), so it opens and drives only
+/// that one — unchanged single-workspace-per-connection behaviour. `None` (logged) only if the
+/// session's own open-workspace cap were somehow already exceeded, which a fresh `Session` here
+/// never hits in practice.
+fn single_workspace_session(
+    device: DeviceId,
+    group: GroupId,
+    ws: &SharedWorkspace,
+    workspace: WorkspaceId,
+) -> Option<Session> {
+    let mut session = Session::new(device, group);
+    if session.open_workspace(workspace, read_heads(ws)).is_err() {
+        tracing::warn!("lan_session_open_workspace_failed");
+        return None;
+    }
+    Some(session)
 }
