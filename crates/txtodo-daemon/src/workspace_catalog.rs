@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use tonic::Status;
-use txtodo_model::Ulid;
+use txtodo_model::{DeviceId, Ulid};
 use txtodo_proto::v1 as pb;
 use txtodo_store::WorkspaceId;
 
@@ -120,6 +120,58 @@ impl WorkspaceCatalog {
         registry
             .list()
             .map_err(|e| Status::internal(format!("list workspace registry: {e}")))
+    }
+
+    /// `WorkspacePendingOffers` RPC (task `daemon-workspace-identity-agreement`, stage 6): every
+    /// workspace a peer has offered over the control channel (stage 5) that this device has not
+    /// yet accepted or declined.
+    pub fn pending_offers(&self) -> Vec<crate::workspace_offer_registry::PendingOffer> {
+        self.open_args.identity.workspace_offers().list()
+    }
+
+    /// `WorkspaceAcceptOffer` RPC: adopts the pending offer's workspace id verbatim into the local
+    /// registry at `local_dir` (`WorkspaceRegistry::adopt`'s own collision guards apply). Consumes
+    /// the pending offer whether adoption succeeds or fails — a human who explicitly acted on an
+    /// offer should never see it silently reappear as still-pending.
+    pub fn accept_offer(
+        &self,
+        offering_device: DeviceId,
+        workspace_id: WorkspaceId,
+        local_dir: &Path,
+    ) -> Result<crate::workspace_registry::WorkspaceEntry, Status> {
+        let offer = self
+            .open_args
+            .identity
+            .workspace_offers()
+            .take(offering_device, workspace_id);
+        if offer.is_none() {
+            return Err(Status::not_found(format!(
+                "no pending offer for workspace {workspace_id} from device {offering_device}"
+            )));
+        }
+        {
+            let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+            registry
+                .adopt(workspace_id, local_dir, self.clock.as_ref())
+                .map_err(|e| Status::invalid_argument(format!("accept {workspace_id}: {e}")))?;
+        }
+        let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        registry
+            .get(workspace_id)
+            .map_err(|e| Status::internal(format!("look up workspace {workspace_id}: {e}")))?
+            .ok_or_else(|| {
+                Status::internal(format!("workspace {workspace_id} vanished after adopting"))
+            })
+    }
+
+    /// `WorkspaceDeclineOffer` RPC: discards a pending offer without adopting it. `false` when no
+    /// such pending offer was found.
+    pub fn decline_offer(&self, offering_device: DeviceId, workspace_id: WorkspaceId) -> bool {
+        self.open_args
+            .identity
+            .workspace_offers()
+            .take(offering_device, workspace_id)
+            .is_some()
     }
 
     /// One `open_all_registered` step: `true` on success, logged-and-`false` on failure — a bad

@@ -19,7 +19,7 @@ use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
 use txtodo_store::WorkspaceId;
 
-fn to_workspace_info(e: WorkspaceEntry) -> pb::WorkspaceInfo {
+pub(crate) fn to_workspace_info(e: WorkspaceEntry) -> pb::WorkspaceInfo {
     pb::WorkspaceInfo {
         workspace_id: e.id.to_string(),
         root: e.root.display().to_string(),
@@ -45,6 +45,12 @@ impl GlobalService {
     /// Wraps a catalog.
     pub fn new(catalog: Arc<WorkspaceCatalog>) -> GlobalService {
         GlobalService { catalog }
+    }
+    /// `pub(crate)`: `workspace_offer_grpc.rs`'s own `impl Txtodo for GlobalService` extension
+    /// (split out for `server.rs`'s file budget, same pattern as `progress.rs`/`notes.rs`'s
+    /// `impl TxtodoService` extensions) needs the catalog too.
+    pub(crate) fn catalog(&self) -> &Arc<WorkspaceCatalog> {
+        &self.catalog
     }
 }
 
@@ -303,5 +309,26 @@ impl Txtodo for GlobalService {
             .map(to_workspace_info)
             .collect();
         Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
+    }
+
+    async fn workspace_pending_offers(
+        &self,
+        r: Request<pb::WorkspacePendingOffersRequest>,
+    ) -> Result<Response<pb::WorkspacePendingOffersResponse>, Status> {
+        crate::workspace_offer_grpc::pending_offers(self, r).await
+    }
+
+    async fn workspace_accept_offer(
+        &self,
+        r: Request<pb::WorkspaceAcceptOfferRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        crate::workspace_offer_grpc::accept_offer(self, r).await
+    }
+
+    async fn workspace_decline_offer(
+        &self,
+        r: Request<pb::WorkspaceDeclineOfferRequest>,
+    ) -> Result<Response<pb::WorkspaceDeclineOfferResponse>, Status> {
+        crate::workspace_offer_grpc::decline_offer(self, r).await
     }
 }
