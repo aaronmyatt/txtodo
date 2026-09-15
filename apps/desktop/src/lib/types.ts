@@ -11,6 +11,11 @@
 export interface DetailParams {
 	file: string;
 	line: number;
+	/** Set only when this detail level was opened from the universal view (ADR 0025, task
+	 * desktop-universal-view) rather than by navigating within the currently open workspace: the
+	 * absolute root of the workspace this level belongs to, so `Breadcrumb` can show which
+	 * project owns it. Undefined for ordinary same-workspace navigation. */
+	workspaceRoot?: string;
 }
 
 /** One rendered breadcrumb segment; today this is exactly a `DetailParams`, but it's named and

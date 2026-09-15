@@ -12,9 +12,29 @@
 
 	let { steps, onNavigate }: { steps: BreadcrumbStep[]; onNavigate: (stackLength: number) => void } =
 		$props();
+
+	// Only the entry level ever carries `workspaceRoot` (MainView's own `$currentWorkspaceRoot`
+	// effect sets it exclusively on `steps[0]` when the universal view opened this stack) — every
+	// deeper level belongs to that same workspace, so one leading crumb covers the whole stack.
+	const project = $derived(steps[0]?.workspaceRoot);
+
+	/** Last path segment of an absolute root, for a compact crumb; falls back to the full path for
+	 * a bare name with no separator. */
+	function projectLabel(root: string): string {
+		return (
+			root
+				.split(/[/\\]/)
+				.filter(Boolean)
+				.pop() ?? root
+		);
+	}
 </script>
 
 <nav aria-label="Breadcrumb" class="breadcrumb">
+	{#if project}
+		<span class="crumb project" title={project}>{projectLabel(project)}</span>
+		<span class="sep" aria-hidden="true">&rsaquo;</span>
+	{/if}
 	<button type="button" class="crumb" onclick={() => onNavigate(0)}>Home</button>
 	{#each steps as step, i (i)}
 		<span class="sep" aria-hidden="true">&rsaquo;</span>
@@ -57,6 +77,12 @@
 
 	.crumb-line {
 		opacity: 0.75;
+	}
+
+	.crumb.project {
+		font-weight: 600;
+		text-decoration: none;
+		cursor: default;
 	}
 
 	.sep {

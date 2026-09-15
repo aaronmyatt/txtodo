@@ -30,6 +30,7 @@ import {
 	setConflicts,
 	setCurrentWorkspaceRoot,
 	tokens,
+	universalTasksDto,
 	workspaces
 } from "./state";
 
@@ -108,6 +109,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "switch_workspace":
 			setCurrentWorkspaceRoot(args?.root as string);
 			return undefined as T;
+		case "universal_tasks":
+			return universalTasksDto() as T;
 		case "set_main_popover_dirty":
 			return undefined as T;
 		default:

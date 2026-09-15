@@ -3,6 +3,7 @@
 	// here from the old proof-of-pipeline +page.svelte) and the root `todo.txt` file view, which
 	// edits directly (click a line, type — no popover; see FileView.svelte's own module doc).
 	import { onMount } from "svelte";
+	import { get } from "svelte/store";
 	import {
 		daemonStatus,
 		onDaemonStatus,
@@ -11,7 +12,7 @@
 		workspaceRoot,
 		type DaemonStatus
 	} from "$lib/daemon";
-	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
+	import { currentWorkspaceRoot, pendingUniversalNav } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
@@ -55,9 +56,24 @@
 	// Detail levels are pinned to whichever workspace was open when they were pushed (a `{file,
 	// line}` pair meaningless in another workspace's file tree) — drop the stack on every switch
 	// so `{#key}` below never remounts `DetailView` with steps that don't resolve in the new root.
+	// The one exception is a switch the universal view itself just triggered (WorkspaceSwitcher's
+	// own `pick()` never sets `pendingUniversalNav`): then this effect opens exactly the level the
+	// universal view asked for instead of dropping back to root, tagged with `workspaceRoot` so
+	// `Breadcrumb` shows the owning project. `get()` (not `$pendingUniversalNav`) is deliberate: a
+	// one-shot read on the root change that triggered it, not a second reactive dependency that
+	// would re-run this effect on every unrelated store write.
+	let lastRoot = "";
 	$effect(() => {
-		$currentWorkspaceRoot;
-		detail = [];
+		const root = $currentWorkspaceRoot;
+		if (!root || root === lastRoot) return;
+		lastRoot = root;
+		const pending = get(pendingUniversalNav);
+		if (pending && pending.workspaceRoot === root) {
+			detail = [{ file: pending.file, line: pending.line, workspaceRoot: pending.workspaceRoot }];
+			pendingUniversalNav.set(null);
+		} else {
+			detail = [];
+		}
 	});
 
 	onMount(() => {
@@ -85,6 +101,7 @@
 		<div class="top-nav-actions">
 			<WorkspaceSwitcher />
 			<ThemeToggle />
+			<a href="/universal">Universal view</a>
 			<a href="/devices">Devices &amp; agents</a>
 		</div>
 	</div>

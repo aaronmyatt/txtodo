@@ -238,6 +238,27 @@ export function switchWorkspace(root: string): Promise<void> {
 	return invoke("switch_workspace", { root });
 }
 
+/** One open (`!completed`) task line from some workspace's root `todo.txt`, tagged with enough
+ * workspace identity to switch to it and label it. Mirrors
+ * `desktop_lib::dto_universal::UniversalTaskDto`. */
+export interface UniversalTask {
+	workspace_id: string;
+	workspace_root: string;
+	line_number: number;
+	priority: string | null;
+	contexts: string[];
+	description: string;
+}
+
+/** Every open task across every registered workspace's root `todo.txt` (ADR 0025, task
+ * desktop-universal-view), unsorted — grouping by priority and filtering by `@context` are the
+ * caller's job, over this flat list. Nested `ref:` sub-lists/notes aren't included (deliberate
+ * scope cut, see todo.txt's `desktop-universal-view` entry); a workspace whose fetch fails is
+ * silently absent from the result rather than failing the whole call. */
+export function universalTasks(): Promise<UniversalTask[]> {
+	return invoke("universal_tasks");
+}
+
 /** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved
  * edit right now (tasks/desktop-quick-add/notes.md: "if the main popover is open and dirty, the
  * hotkey focuses the main window instead"). Best-effort: callers swallow the rejection rather than

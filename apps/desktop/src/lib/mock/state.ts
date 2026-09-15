@@ -131,6 +131,33 @@ export function setCurrentWorkspaceRoot(root: string): void {
 	currentWorkspaceRoot = root;
 }
 
+// ---- universal view (ADR 0025) ----
+
+/** Mock-only, lenient `todo.txt` line scan (priority, `@context` tags, description) — not
+ * `txtodo-core`'s real byte-preserving parser, which only exists in Rust. Doesn't reproduce real
+ * per-workspace differentiation either: every registered mock workspace shares this same seeded
+ * `todo.txt`, tagged with whichever workspace is registered first — good enough to iterate on the
+ * universal view's grouping/filtering UI, not a fixture for testing cross-workspace behavior. */
+export function universalTasksDto() {
+	const owner = workspaces[0];
+	if (!owner) return [];
+	const text = files.get("todo.txt")?.text ?? "";
+	return text
+		.split("\n")
+		.filter((line) => line.trim().length > 0 && !line.startsWith("x "))
+		.map((line) => {
+			const priorityMatch = /^\(([A-Z])\)\s+/.exec(line);
+			return {
+				workspace_id: owner.id,
+				workspace_root: owner.root,
+				line_number: 0, // not meaningful in this mock: same seeded doc for every workspace
+				priority: priorityMatch?.[1] ?? null,
+				contexts: [...line.matchAll(/@\S+/g)].map((m) => m[0]),
+				description: line.replace(/^\([A-Z]\)\s+/, "").replace(/^\d{4}-\d{2}-\d{2}\s+/, "")
+			};
+		});
+}
+
 interface StoredNotes {
 	path: string;
 	text: string;
