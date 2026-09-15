@@ -83,6 +83,7 @@ pub fn seal_ops(
         .map(|op| sign(op, signing_key))
         .collect::<Result<Vec<_>, _>>()?;
     let frame = Message::Ops {
+        workspace: ctx.workspace.ulid().to_u128(),
         ops,
         signatures,
         ranges,

@@ -42,6 +42,7 @@ mod session_error;
 mod sign;
 mod transcript;
 mod want;
+mod workspace_session;
 
 pub use aead::{
     AAD_BYTES, GroupKey, GroupKeys, KEY_BYTES, MAX_RETAINED_KEY_EPOCHS, NONCE_BYTES,
@@ -156,6 +157,8 @@ mod rotation_tests;
 mod sas_tests;
 #[cfg(test)]
 mod sealed_ops_tests;
+#[cfg(test)]
+mod session_multiplex_tests;
 #[cfg(test)]
 mod session_tests;
 #[cfg(test)]

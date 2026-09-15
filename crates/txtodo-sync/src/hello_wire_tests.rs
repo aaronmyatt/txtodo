@@ -148,26 +148,33 @@ fn replaying_a_captured_hello_after_the_handshake_moved_on_is_refused_and_change
         &a_hello(BTreeMap::from([(dev(1), 5)])),
     );
 
-    let mut session = Session::new(dev(2), group, BTreeMap::new());
-    session.hello(0).unwrap_or_else(|e| panic!("{e:?}"));
-    let first = session
-        .on_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
+    let mut session = Session::new(dev(2), group);
+    session
+        .open_workspace(ws(), BTreeMap::new())
         .unwrap_or_else(|e| panic!("{e:?}"));
-    let heads_after_first = session.heads().clone();
+    session.hello(ws(), 0).unwrap_or_else(|e| panic!("{e:?}"));
+    let first = session
+        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    let heads_after_first = session
+        .heads(ws())
+        .unwrap_or_else(|e| panic!("{e:?}"))
+        .clone();
 
-    let replay = session.on_hello(&open_and_decode(&sealed_frame, group, &keys), 0);
+    let replay = session.on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0);
     assert!(
         matches!(replay, Err(SessionError::Unexpected { .. })),
         "a second Hello once past Greeted is refused, not silently reapplied: {replay:?}"
     );
     assert_eq!(
-        session.heads(),
+        session.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
         &heads_after_first,
         "a refused replay changes nothing"
     );
     assert_eq!(
         first.want,
         Message::Want {
+            workspace: ws().ulid().to_u128(),
             ranges: crate::want::want(&BTreeMap::new(), &BTreeMap::from([(dev(1), 5)]))
         },
         "sanity: the first Hello did produce the expected Want"
@@ -191,16 +198,26 @@ fn replaying_a_captured_hello_to_a_fresh_session_reveals_nothing_new() {
     );
 
     let local_heads: BTreeMap<DeviceId, u64> = BTreeMap::from([(dev(1), 2)]);
-    let mut victim_one = Session::new(dev(2), group, local_heads.clone());
-    victim_one.hello(0).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut victim_one = Session::new(dev(2), group);
+    victim_one
+        .open_workspace(ws(), local_heads.clone())
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    victim_one
+        .hello(ws(), 0)
+        .unwrap_or_else(|e| panic!("{e:?}"));
     let reply_one = victim_one
-        .on_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
+        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
 
-    let mut victim_two = Session::new(dev(3), group, local_heads.clone());
-    victim_two.hello(0).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut victim_two = Session::new(dev(3), group);
+    victim_two
+        .open_workspace(ws(), local_heads.clone())
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    victim_two
+        .hello(ws(), 0)
+        .unwrap_or_else(|e| panic!("{e:?}"));
     let reply_two = victim_two
-        .on_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
+        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
 
     assert_eq!(
@@ -208,12 +225,12 @@ fn replaying_a_captured_hello_to_a_fresh_session_reveals_nothing_new() {
         "replaying the same Hello to an equally-caught-up session yields the same public Want"
     );
     assert_eq!(
-        victim_one.heads(),
+        victim_one.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
         &local_heads,
         "Hello never advances heads"
     );
     assert_eq!(
-        victim_two.heads(),
+        victim_two.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
         &local_heads,
         "Hello never advances heads"
     );

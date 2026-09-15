@@ -6,12 +6,26 @@
 //! New messages go at the end; removed ones keep their slot as a tombstone. Every collection on
 //! the wire has a named cap, checked before encode and after decode; the body itself is already
 //! bounded by `MAX_FRAME_BYTES`, so a hostile count can never allocate past that.
+//!
+//! `Want`/`Ops`/`Ack` each carry a `workspace` field (task `daemon-workspace-session-multiplex`,
+//! root todo, stage 1; `PROTOCOL_VERSION` bumped 1 -> 2 for it): one `Session` now multiplexes
+//! several workspaces' Want/Ack bookkeeping over one wire session (`session.rs`'s own doc), so a
+//! demuxing read loop needs to know which open workspace each `Want`/`Ops`/`Ack` belongs to.
+//! `Hello` deliberately does **not** gain one — it negotiates device+group once per link
+//! (unchanged; `GroupId` stays one shared id per device-set per ADR 0021, not per-workspace).
+//! The field is a bare `u128` (`txtodo_store::WorkspaceId::ulid().to_u128()`), not the typed
+//! `WorkspaceId` itself — the same wire idiom `control.rs`'s `ControlMessage` already established
+//! for its own `workspace_id` fields, for the same reason stated in that module's doc:
+//! `txtodo-store` carries no `serde` dependency, and adding one so a single field can derive
+//! `Serialize` is not worth it. [`Message::workspace`] converts back to the typed id for a caller
+//! that wants it (e.g. a demuxing read loop, or `Session` itself internally).
 
 use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use txtodo_model::{DeviceId, Op};
+use txtodo_model::{DeviceId, Op, Ulid};
+use txtodo_store::WorkspaceId;
 
 use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
 use crate::sign::Signature;
@@ -60,6 +74,8 @@ pub enum Message {
     },
     /// The ops the sender is missing, derived by diffing heads. Empty means "in sync".
     Want {
+        /// Which open workspace this `Want` is for — see the module doc.
+        workspace: u128,
         /// Runs to send.
         ranges: Vec<OriginRange>,
     },
@@ -69,6 +85,8 @@ pub enum Message {
     /// group key (`sealed_ops::seal_ops`/`open_ops`); confidentiality is a wire property, the
     /// signature is a durable one that outlives the seal.
     Ops {
+        /// Which open workspace every op in this batch belongs to — see the module doc.
+        workspace: u128,
         /// The ops, in a total order the receiver may apply as-is.
         ops: Vec<Op>,
         /// `signatures[i]` authenticates `ops[i]`; same length as `ops`, checked in `check_caps`.
@@ -79,6 +97,8 @@ pub enum Message {
     /// The runs the receiver has *committed* (not merely received), so a crash mid-import is
     /// re-requested rather than lost.
     Ack {
+        /// Which open workspace this `Ack` is for — see the module doc.
+        workspace: u128,
         /// Runs durably stored.
         committed: Vec<OriginRange>,
     },
@@ -146,6 +166,18 @@ impl From<FrameError> for MessageError {
 }
 
 impl Message {
+    /// This message's workspace, converted from the wire's bare `u128` back to the typed id —
+    /// `None` for `Hello`, which negotiates device+group once per link and names no workspace at
+    /// all (see the module doc).
+    pub fn workspace(&self) -> Option<WorkspaceId> {
+        match self {
+            Message::Hello { .. } => None,
+            Message::Want { workspace, .. }
+            | Message::Ops { workspace, .. }
+            | Message::Ack { workspace, .. } => Some(WorkspaceId::new(Ulid::from_u128(*workspace))),
+        }
+    }
+
     /// Encodes into a `Frame` for `PROTOCOL_VERSION`, after checking every cap.
     pub fn encode(&self) -> Result<Frame, MessageError> {
         self.check_caps()?;
@@ -179,11 +211,12 @@ impl Message {
     pub fn check_caps(&self) -> Result<(), MessageError> {
         match self {
             Message::Hello { heads, .. } => cap("heads", heads.len(), MAX_HEADS),
-            Message::Want { ranges } => ranges_ok("want ranges", ranges),
+            Message::Want { ranges, .. } => ranges_ok("want ranges", ranges),
             Message::Ops {
                 ops,
                 signatures,
                 ranges,
+                ..
             } => {
                 cap("ops", ops.len(), MAX_OPS_PER_BATCH)?;
                 if ops.len() != signatures.len() {
@@ -194,7 +227,7 @@ impl Message {
                 }
                 ranges_ok("ops ranges", ranges)
             }
-            Message::Ack { committed } => ranges_ok("ack ranges", committed),
+            Message::Ack { committed, .. } => ranges_ok("ack ranges", committed),
         }
     }
 }

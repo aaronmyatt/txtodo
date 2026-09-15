@@ -7,6 +7,7 @@ use std::sync::PoisonError;
 
 use tokio::runtime::Handle;
 use txtodo_model::{DeviceId, FilePath, Op};
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{DevicePublicKey, DeviceSigningKey, Message, OriginRange, sign};
 
 use crate::handle::{ActorError, ActorHandle};
@@ -20,13 +21,14 @@ use crate::server::SharedWorkspace;
 pub(crate) fn serve_want(
     ws: &SharedWorkspace,
     ranges: &[OriginRange],
+    workspace: WorkspaceId,
     signing_key: &DeviceSigningKey,
 ) -> Result<Vec<Message>, txtodo_store::StoreError> {
     let store = read(ws).store().clone();
     let store = store.lock().unwrap_or_else(PoisonError::into_inner);
     let mut out = Vec::new();
     for r in ranges {
-        out.extend(serve_range(&store, r, signing_key)?);
+        out.extend(serve_range(&store, r, workspace, signing_key)?);
     }
     Ok(out)
 }
@@ -47,6 +49,7 @@ fn sign_ops(ops: &[Op], signing_key: &DeviceSigningKey) -> Option<Vec<txtodo_syn
 fn serve_range(
     store: &txtodo_store::Store,
     r: &OriginRange,
+    workspace: WorkspaceId,
     signing_key: &DeviceSigningKey,
 ) -> Result<Vec<Message>, txtodo_store::StoreError> {
     let width = u64::try_from(txtodo_sync::MAX_OPS_PER_BATCH).unwrap_or(u64::MAX);
@@ -61,6 +64,7 @@ fn serve_range(
             continue;
         };
         out.push(Message::Ops {
+            workspace: workspace.ulid().to_u128(),
             ops,
             signatures,
             ranges: vec![OriginRange {

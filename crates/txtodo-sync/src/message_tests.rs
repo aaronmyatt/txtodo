@@ -25,6 +25,11 @@ fn range(device: u128, first: u64, last: u64) -> OriginRange {
     }
 }
 
+/// A fixed, non-zero workspace bits fixture — these tests exercise `Message`'s shape, not the
+/// typed `WorkspaceId`/`u128` conversion itself (`session_tests.rs`/`workspace_session.rs` own
+/// that).
+const WS: u128 = 0x5EED;
+
 /// A deterministic, non-zero fixture signature; these tests exercise `Message`'s shape, not the
 /// crypto — `sign_tests.rs`/`sealed_ops_tests.rs` own real signing.
 fn sig(n: u8) -> Signature {
@@ -92,12 +97,14 @@ fn every_message_matches_its_checked_in_golden() {
     golden(
         "want",
         &Message::Want {
+            workspace: WS,
             ranges: vec![range(2, 8, 12), range(3, 1, 1)],
         },
     );
     golden(
         "ops",
         &Message::Ops {
+            workspace: WS,
             ops: vec![op(1), op(2)],
             signatures: vec![sig(1), sig(2)],
             ranges: vec![range(1, 43, 44)],
@@ -106,23 +113,35 @@ fn every_message_matches_its_checked_in_golden() {
     golden(
         "ack",
         &Message::Ack {
+            workspace: WS,
             committed: vec![range(1, 43, 44)],
         },
     );
-    golden("want_empty", &Message::Want { ranges: Vec::new() });
+    golden(
+        "want_empty",
+        &Message::Want {
+            workspace: WS,
+            ranges: Vec::new(),
+        },
+    );
 }
 
 #[test]
 fn variant_tags_are_frozen_in_declaration_order() {
     let tags: Vec<u8> = [
         hello(),
-        Message::Want { ranges: Vec::new() },
+        Message::Want {
+            workspace: WS,
+            ranges: Vec::new(),
+        },
         Message::Ops {
+            workspace: WS,
             ops: Vec::new(),
             signatures: Vec::new(),
             ranges: Vec::new(),
         },
         Message::Ack {
+            workspace: WS,
             committed: Vec::new(),
         },
     ]
@@ -133,13 +152,14 @@ fn variant_tags_are_frozen_in_declaration_order() {
     assert_eq!(tags, vec![0, 1, 2, 3]);
     assert_eq!(
         Message::Ack {
+            workspace: 0,
             committed: Vec::new()
         }
         .encode()
         .unwrap()
         .body,
-        vec![3, 0],
-        "tag then an empty vec length"
+        vec![3, 0, 0],
+        "tag, then workspace 0's varint, then an empty vec length"
     );
 }
 
@@ -164,6 +184,7 @@ fn caps_are_checked_before_encode() {
     );
     let too_many_ops: Vec<Op> = (0..=MAX_OPS_PER_BATCH as u128).map(op).collect();
     let ops = Message::Ops {
+        workspace: WS,
         signatures: too_many_ops.iter().map(|_| sig(0)).collect(),
         ops: too_many_ops,
         ranges: Vec::new(),
@@ -173,6 +194,7 @@ fn caps_are_checked_before_encode() {
         Err(MessageError::TooMany { what: "ops", .. })
     ));
     let mismatched = Message::Ops {
+        workspace: WS,
         ops: vec![op(1)],
         signatures: Vec::new(),
         ranges: Vec::new(),
@@ -185,6 +207,7 @@ fn caps_are_checked_before_encode() {
         }
     );
     let backwards = Message::Ack {
+        workspace: WS,
         committed: vec![range(1, 5, 4)],
     };
     assert_eq!(
@@ -197,6 +220,7 @@ fn caps_are_checked_before_encode() {
 fn caps_are_checked_after_decode_too() {
     // Bypass encode()'s check the way a hostile peer would: raw postcard into a frame.
     let oversized = Message::Want {
+        workspace: WS,
         ranges: (0..=MAX_WANT_RANGES as u64)
             .map(|n| range(9, n, n))
             .collect(),
@@ -211,6 +235,7 @@ fn caps_are_checked_after_decode_too() {
         }
     );
     let backwards = Message::Want {
+        workspace: WS,
         ranges: vec![range(1, 2, 1)],
     };
     let frame = Frame::new(postcard::to_allocvec(&backwards).unwrap()).unwrap();
@@ -233,13 +258,13 @@ fn trailing_bytes_garbage_and_other_versions_are_refused() {
         Message::decode(&garbage).unwrap_err(),
         MessageError::Codec(_)
     ));
-    let mut v2 = hello().encode().unwrap();
-    v2.version = PROTOCOL_VERSION + 1;
+    let mut next = hello().encode().unwrap();
+    next.version = PROTOCOL_VERSION + 1;
     assert_eq!(
-        Message::decode(&v2).unwrap_err(),
+        Message::decode(&next).unwrap_err(),
         MessageError::Frame(FrameError::UnknownVersion {
-            got: 2,
-            supported: 1
+            got: PROTOCOL_VERSION + 1,
+            supported: PROTOCOL_VERSION
         })
     );
 }

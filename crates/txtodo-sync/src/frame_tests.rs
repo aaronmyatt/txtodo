@@ -7,10 +7,11 @@ use crate::frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROT
 fn header_layout_is_magic_version_le_len_le_then_body() {
     let frame = Frame::new(vec![0xAA, 0xBB, 0xCC]).unwrap();
     let bytes = frame.encode().unwrap();
-    // Frozen forever: any change here is a wire break, not a refactor.
+    // Frozen forever: any change here is a wire break, not a refactor. `2, 0` is
+    // `PROTOCOL_VERSION` LE (bumped 1 -> 2, task `daemon-workspace-session-multiplex`).
     assert_eq!(
         bytes,
-        [b'T', b'X', b'T', b'O', 1, 0, 3, 0, 0, 0, 0xAA, 0xBB, 0xCC]
+        [b'T', b'X', b'T', b'O', 2, 0, 3, 0, 0, 0, 0xAA, 0xBB, 0xCC]
     );
     assert_eq!(bytes.len(), HEADER_BYTES + 3);
     let (back, used) = Frame::decode(&bytes).unwrap();
@@ -33,19 +34,19 @@ fn decode_takes_one_frame_and_reports_how_much_it_used() {
 }
 
 #[test]
-fn a_v1_decoder_reading_a_v2_frame_returns_unknown_version_and_consumes_nothing() {
-    let mut v2 = Frame::new(vec![1, 2, 3]).unwrap();
-    v2.version = PROTOCOL_VERSION + 1;
-    let bytes = v2.encode().unwrap();
+fn a_decoder_speaking_the_current_version_refuses_the_next_version_and_consumes_nothing() {
+    let mut next = Frame::new(vec![1, 2, 3]).unwrap();
+    next.version = PROTOCOL_VERSION + 1;
+    let bytes = next.encode().unwrap();
     assert_eq!(
         Frame::decode(&bytes),
         Err(FrameError::UnknownVersion {
-            got: 2,
-            supported: 1
+            got: PROTOCOL_VERSION + 1,
+            supported: PROTOCOL_VERSION
         })
     );
     // The header still parses, so a caller can skip exactly this frame and carry on.
-    assert_eq!(Frame::peek(&bytes), Ok((2, bytes.len())));
+    assert_eq!(Frame::peek(&bytes), Ok((PROTOCOL_VERSION + 1, bytes.len())));
 }
 
 #[test]

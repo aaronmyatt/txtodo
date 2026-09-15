@@ -144,6 +144,7 @@ pub(crate) fn run_peer_script(
     assert_eq!(
         want,
         Message::Want {
+            workspace: workspace.ulid().to_u128(),
             ranges: vec![range]
         }
     );
@@ -155,6 +156,7 @@ pub(crate) fn run_peer_script(
         workspace,
         &key,
         Message::Ops {
+            workspace: workspace.ulid().to_u128(),
             ops: vec![op],
             signatures: vec![signature],
             ranges: vec![range],
@@ -164,6 +166,7 @@ pub(crate) fn run_peer_script(
     assert_eq!(
         ack,
         Message::Ack {
+            workspace: workspace.ulid().to_u128(),
             committed: vec![range]
         }
     );
