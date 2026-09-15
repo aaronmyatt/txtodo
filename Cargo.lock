@@ -1772,6 +1772,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tonic",
+ "txtodo-core",
  "txtodo-model",
  "txtodo-proto",
  "txtodo-store",

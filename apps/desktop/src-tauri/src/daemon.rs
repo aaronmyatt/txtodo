@@ -166,6 +166,22 @@ impl DaemonClient {
         Ok(self.inner.get_file(req).await?.into_inner())
     }
 
+    /// `get_file`, but against `selector` regardless of what this client's own `selector` field
+    /// currently targets — never mutates it. The universal view's only caller: aggregating every
+    /// registered workspace's `todo.txt` must not disturb whichever workspace the rest of the app
+    /// (and this same connection) already has open.
+    pub async fn get_file_for(
+        &mut self,
+        selector: pb::WorkspaceSelector,
+        path: &str,
+    ) -> Result<pb::FileContents, DaemonError> {
+        let req = pb::GetFileRequest {
+            path: path.to_owned(),
+            workspace: Some(selector),
+        };
+        Ok(self.inner.get_file(req).await?.into_inner())
+    }
+
     /// A change per reconcile or apply for `paths` (every document when empty).
     pub async fn watch(
         &mut self,

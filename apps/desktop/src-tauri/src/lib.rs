@@ -9,6 +9,7 @@ mod commands_activity;
 mod commands_notes;
 mod commands_pairing;
 mod commands_tokens;
+mod commands_universal;
 mod commands_workspace;
 // `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
 // target that only sees this library's public surface, and it reuses these DTOs and their
@@ -20,6 +21,7 @@ mod dto_activity;
 mod dto_notes;
 mod dto_pairing;
 mod dto_tokens;
+mod dto_universal;
 mod dto_workspace;
 mod quick_add;
 mod state;
@@ -71,6 +73,7 @@ pub fn run() {
             commands_workspace::add_workspace,
             commands_workspace::remove_workspace,
             commands_workspace::switch_workspace,
+            commands_universal::universal_tasks,
             commands_notes::get_notes,
             commands_notes::edit_notes,
             commands_pairing::pair_offer,

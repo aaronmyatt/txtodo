@@ -37,6 +37,10 @@ tauri-build = { version = "2", features = [] }
 # Reused, not copied: the same generated gRPC client the daemon and CLI use (ADR 0006). Never
 # hand-rolled — one schema, no drift.
 txtodo-proto = { workspace = true }
+# The same byte-preserving parser the WASM editor core uses (M1, frozen API) — the universal
+# view's aggregation (commands_universal.rs) parses each workspace's todo.txt with this, never a
+# hand-rolled substring scan. Workspace member, not a new external dependency.
+txtodo-core = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
