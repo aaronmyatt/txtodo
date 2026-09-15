@@ -14,8 +14,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use txtodo_model::{DeviceId, Op};
+use txtodo_store::WorkspaceId;
 
-use crate::aead::{GroupKey, GroupKeys, open as aead_open, seal as aead_seal};
+use crate::aead::{GroupKey, GroupKeys, SealFor, open as aead_open, seal as aead_seal};
 use crate::crypto_error::CryptoError;
 use crate::frame::{Frame, PROTOCOL_VERSION};
 use crate::message::{GroupId, Message, MessageError, OriginRange};
@@ -54,13 +55,16 @@ impl From<MessageError> for SealedOpsError {
     }
 }
 
-/// Which group and key epoch to seal for, bundled so `seal_ops` stays inside the workspace's
-/// five-parameter cap (`clippy::too_many_arguments`).
+/// Which group, key epoch and workspace to seal for, bundled so `seal_ops` stays inside the
+/// workspace's five-parameter cap (`clippy::too_many_arguments`).
 pub struct SealContext<'a> {
     /// The sync group this batch belongs to; bound into the AEAD associated data.
     pub group: GroupId,
     /// Which of the group's retained key generations to seal under.
     pub epoch: u32,
+    /// Which workspace this batch's ops belong to (ADR 0021); bound into the AEAD associated
+    /// data so a mislabelled batch is refused, not silently routed to the wrong workspace.
+    pub workspace: WorkspaceId,
     /// The key for `epoch`.
     pub key: &'a GroupKey,
 }
@@ -84,24 +88,31 @@ pub fn seal_ops(
         ranges,
     }
     .encode()?;
-    let sealed = aead_seal(PROTOCOL_VERSION, ctx.group, ctx.epoch, ctx.key, &frame.body)?;
+    let for_ = SealFor {
+        group: ctx.group,
+        epoch: ctx.epoch,
+        workspace: ctx.workspace,
+    };
+    let sealed = aead_seal(PROTOCOL_VERSION, for_, ctx.key, &frame.body)?;
     Ok(Frame {
         version: PROTOCOL_VERSION,
         body: sealed,
     })
 }
 
-/// The op-receiving path. Opens `frame`'s sealed body with `group_keys` — a wrong or unretained
-/// group key is refused here, before a single byte of `Message` is parsed — decodes it, then
-/// verifies every op's signature against `device_keys`. All-or-nothing, like `verify_batch`
-/// itself: one bad signature or one unrecognised device and `Ok` is never returned.
+/// The op-receiving path. Opens `frame`'s sealed body with `group_keys` — a wrong/unretained
+/// group key or mislabelled workspace is refused here, before a single byte of `Message` is
+/// parsed — decodes it, then verifies every op's signature against `device_keys`. All-or-nothing,
+/// like `verify_batch` itself: one bad signature or one unrecognised device and `Ok` is never
+/// returned.
 pub fn open_ops(
     frame: &Frame,
     group: GroupId,
+    workspace: WorkspaceId,
     group_keys: &GroupKeys,
     device_keys: &BTreeMap<DeviceId, DevicePublicKey>,
 ) -> Result<Message, SealedOpsError> {
-    let plaintext = aead_open(PROTOCOL_VERSION, group, group_keys, &frame.body)?;
+    let plaintext = aead_open(PROTOCOL_VERSION, group, workspace, group_keys, &frame.body)?;
     let msg = Message::decode(&Frame {
         version: PROTOCOL_VERSION,
         body: plaintext,
