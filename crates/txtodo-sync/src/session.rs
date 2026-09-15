@@ -1,21 +1,44 @@
-//! One receiving session: `Idle → Greeted → Wanting → Importing → (Wanting | Idle)`. Transport-
-//! agnostic and store-agnostic — the caller moves frames and commits ops; the session only decides
-//! what is legal next and what to send. Every transition matches the state exhaustively with no
-//! default arm, so a new state cannot be silently ignored. The skew guard runs on `Hello`
-//! (`txtodo_model::Skew`), before a single op is accepted, and `Ack` carries only runs the caller
-//! reports as *committed* — never merely received — so a crash mid-import re-requests them.
+//! `Session`: a container of one sub-session per open workspace, multiplexing several workspaces'
+//! Want/Ack bookkeeping over one `(device, group)` peer relationship (task
+//! `daemon-workspace-session-multiplex`, root todo, stage 1 — split off `daemon-shared-sync-link`,
+//! whose own notes deferred exactly this and made a binding design decision this task honors:
+//! `Op`'s wire shape stays frozen, so the workspace dimension lives on `Message::Want`/`Ops`/`Ack`
+//! only, never on `Op` itself).
+//!
+//! **One `Hello`, per-workspace sub-sessions.** A link negotiates device+group exactly once
+//! (`GroupId` stays one shared id per device-set per ADR 0021, not per-workspace) — but at this
+//! library's level, `hello`/`on_hello`/`on_ops`/`committed` are all keyed by an explicit
+//! `WorkspaceId` parameter, so a caller (the read/write loop `daemon-workspace-session-multiplex`
+//! stage 2 will build) can drive several workspaces' handshakes over the same `Session`,
+//! interleaved in any order, without their bookkeeping crossing. Each workspace's own state
+//! machine (`Idle → Greeted → Wanting → Importing → (Wanting | Idle)`) is unchanged from the
+//! pre-multiplex design — see `workspace_session.rs`, where it now lives. This `Session` owns only
+//! what is genuinely shared across every workspace on one link: this device's own id, the group,
+//! and the peer's device id once learned from its `Hello`.
+//!
+//! Every transition matches state exhaustively with no default arm, so a new state cannot be
+//! silently ignored. The skew guard runs on `Hello` (`txtodo_model::Skew`), before a single op is
+//! accepted, and `Ack` carries only runs the caller reports as *committed* — never merely
+//! received — so a crash mid-import re-requests them. Naming an unopened or unknown workspace is a
+//! typed error (`SessionError::UnknownWorkspace`), never a panic — exactly as routine as any other
+//! malformed caller input this crate refuses rather than asserts.
 
 use std::collections::BTreeMap;
 
 use txtodo_model::{DeviceId, Op, Skew};
+use txtodo_store::WorkspaceId;
 
-use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Heads, Message, OriginRange};
 use crate::session_error::SessionError;
-use crate::sign::{DevicePublicKey, verify_batch};
-use crate::want::{advance, want};
+use crate::sign::DevicePublicKey;
+use crate::workspace_session::WorkspaceSession;
 
-/// Where the session is. Closed set.
+/// Most workspaces one `Session` multiplexes at once — a device realistically opens far fewer
+/// than this; the cap exists so nothing here can grow without limit (every collection in this
+/// crate has a named, checked cap), mirroring `txtodo-daemon`'s own `MAX_ROUTED_WORKSPACES`.
+pub const MAX_OPEN_WORKSPACES: usize = 256;
+
+/// Where one workspace's sub-session is. Closed set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionState {
     /// Nothing sent yet.
@@ -28,7 +51,7 @@ pub enum SessionState {
     Importing,
 }
 
-/// The outcome of a valid peer `Hello`.
+/// The outcome of a valid peer `Hello`, for one workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Greeting {
     /// The `Want` to send back (possibly empty: in sync).
@@ -37,225 +60,146 @@ pub struct Greeting {
     pub skew: Skew,
 }
 
-/// The receiving half of one sync with one peer.
+/// One peer relationship, multiplexing every open workspace's own sub-session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
-    state: SessionState,
     device: DeviceId,
     group: GroupId,
-    heads: Heads,
+    /// The peer's device id, learned from its `Hello` — shared across every workspace on this
+    /// link, set at most once per real handshake (a later `on_hello` call just re-confirms it).
     peer: Option<DeviceId>,
-    /// Runs still to receive, in device order.
-    wanted: Vec<OriginRange>,
-    /// Runs in the batch the caller is committing.
-    inflight: Vec<OriginRange>,
+    workspaces: BTreeMap<WorkspaceId, WorkspaceSession>,
 }
 
 impl Session {
-    /// A fresh `Idle` session for this device, group and what we already hold.
-    pub fn new(device: DeviceId, group: GroupId, heads: Heads) -> Session {
+    /// A fresh session for this device and group, with no workspace open yet.
+    pub fn new(device: DeviceId, group: GroupId) -> Session {
         Session {
-            state: SessionState::Idle,
             device,
             group,
-            heads,
             peer: None,
-            wanted: Vec::new(),
-            inflight: Vec::new(),
+            workspaces: BTreeMap::new(),
         }
     }
 
-    /// Current state.
-    pub fn state(&self) -> SessionState {
-        self.state
+    /// This device's own id.
+    pub fn device(&self) -> DeviceId {
+        self.device
     }
 
-    /// Our heads, advanced as runs commit.
-    pub fn heads(&self) -> &Heads {
-        &self.heads
+    /// The shared sync group.
+    pub fn group(&self) -> GroupId {
+        self.group
     }
 
-    /// Runs still outstanding.
-    pub fn wanted(&self) -> &[OriginRange] {
-        &self.wanted
+    /// The peer's device id, once learned from its `Hello`.
+    pub fn peer(&self) -> Option<DeviceId> {
+        self.peer
     }
 
-    /// `Idle → Greeted`: the `Hello` to send.
-    pub fn hello(&mut self, now_ms: u64) -> Result<Message, SessionError> {
-        match self.state {
-            SessionState::Idle => {}
-            SessionState::Greeted | SessionState::Wanting | SessionState::Importing => {
-                return Err(self.unexpected("hello()"));
-            }
-        }
-        self.state = SessionState::Greeted;
-        debug_assert!(self.peer.is_none() && self.wanted.is_empty());
-        Ok(Message::Hello {
-            device: self.device,
-            group: self.group,
-            heads: self.heads.clone(),
-            protocol: PROTOCOL_VERSION,
-            wall_ms: now_ms,
-        })
+    /// Whether `workspace` is currently open on this session.
+    pub fn is_open(&self, workspace: WorkspaceId) -> bool {
+        self.workspaces.contains_key(&workspace)
     }
 
-    /// `Greeted → Wanting` (or `Idle` when nothing is wanted): checks group, protocol and clock
-    /// skew, then derives the `Want`.
-    pub fn on_hello(&mut self, msg: &Message, now_ms: u64) -> Result<Greeting, SessionError> {
-        match self.state {
-            SessionState::Greeted => {}
-            SessionState::Idle | SessionState::Wanting | SessionState::Importing => {
-                return Err(self.unexpected("Hello"));
-            }
-        }
-        let Message::Hello {
-            device,
-            group,
-            heads,
-            protocol,
-            wall_ms,
-        } = msg
-        else {
-            return Err(self.unexpected(name_of(msg)));
-        };
-        if *group != self.group {
-            return Err(SessionError::GroupMismatch {
-                ours: self.group,
-                theirs: *group,
+    /// Opens `workspace` in a fresh `Idle` sub-session seeded with `heads` — what this device
+    /// already holds for it. Idempotent-in-place for an id already open (a workspace reopened, or
+    /// a redundant open call): only a genuinely new id counts against `MAX_OPEN_WORKSPACES`, and
+    /// re-opening one discards whatever sub-session state it held (a caller that wants to keep an
+    /// open workspace's bookkeeping should not call this again for it).
+    pub fn open_workspace(
+        &mut self,
+        workspace: WorkspaceId,
+        heads: Heads,
+    ) -> Result<(), SessionError> {
+        if !self.workspaces.contains_key(&workspace) && self.workspaces.len() >= MAX_OPEN_WORKSPACES
+        {
+            return Err(SessionError::TooManyWorkspaces {
+                len: self.workspaces.len() + 1,
+                max: MAX_OPEN_WORKSPACES,
             });
         }
-        if *protocol != PROTOCOL_VERSION {
-            return Err(SessionError::ProtocolMismatch {
-                ours: PROTOCOL_VERSION,
-                theirs: *protocol,
-            });
-        }
-        let skew = Skew::check(*wall_ms, now_ms);
-        if let Skew::Ahead(lead_ms) = skew {
-            return Err(SessionError::PeerAhead {
-                peer_ms: *wall_ms,
-                local_ms: now_ms,
-                lead_ms,
-            });
-        }
-        self.peer = Some(*device);
-        self.wanted = want(&self.heads, heads);
-        self.state = if self.wanted.is_empty() {
-            SessionState::Idle
-        } else {
-            SessionState::Wanting
-        };
-        debug_assert!(self.inflight.is_empty());
-        debug_assert!(!matches!(skew, Skew::Ahead(_)));
-        Ok(Greeting {
-            want: Message::Want {
-                ranges: self.wanted.clone(),
-            },
-            skew,
-        })
+        self.workspaces
+            .insert(workspace, WorkspaceSession::new(heads));
+        debug_assert!(self.workspaces.len() <= MAX_OPEN_WORKSPACES);
+        Ok(())
     }
 
-    /// `Wanting → Importing`: hands the batch to the caller to commit. Every op's signature is
-    /// verified against `device_keys` before anything else runs — a batch with one bad signature
-    /// or one unrecognised device is refused whole, never partially accepted (`sign::verify_batch`
-    /// is all-or-nothing). Only once authorship checks out does a run outside our `Want` get
-    /// checked. `msg` must already be opened (see `sealed_ops::open_ops`) — `Session` never touches
-    /// the group-key AEAD, only per-op signatures.
+    /// `workspace`'s current state.
+    pub fn state(&self, workspace: WorkspaceId) -> Result<SessionState, SessionError> {
+        Ok(self.workspace(workspace)?.state())
+    }
+
+    /// `workspace`'s own heads, advanced as its runs commit.
+    pub fn heads(&self, workspace: WorkspaceId) -> Result<&Heads, SessionError> {
+        Ok(self.workspace(workspace)?.heads())
+    }
+
+    /// `workspace`'s runs still outstanding.
+    pub fn wanted(&self, workspace: WorkspaceId) -> Result<&[OriginRange], SessionError> {
+        Ok(self.workspace(workspace)?.wanted())
+    }
+
+    /// `workspace`'s `Idle → Greeted`: the `Hello` to send. `Hello` itself carries no workspace
+    /// (module doc) — `workspace` only selects which sub-session advances.
+    pub fn hello(&mut self, workspace: WorkspaceId, now_ms: u64) -> Result<Message, SessionError> {
+        let (device, group) = (self.device, self.group);
+        self.workspace_mut(workspace)?.hello(device, group, now_ms)
+    }
+
+    /// `workspace`'s `Greeted → Wanting` (or `Idle`): checks group, protocol and clock skew, then
+    /// derives that workspace's own `Want`. Records the peer's device id (shared across every
+    /// workspace on this link) once learned.
+    pub fn on_hello(
+        &mut self,
+        workspace: WorkspaceId,
+        msg: &Message,
+        now_ms: u64,
+    ) -> Result<Greeting, SessionError> {
+        let group = self.group;
+        let (greeting, peer) = self
+            .workspace_mut(workspace)?
+            .on_hello(group, msg, now_ms, workspace)?;
+        self.peer = Some(peer);
+        Ok(greeting)
+    }
+
+    /// `workspace`'s `Wanting → Importing`. `msg` must be a `Message::Ops` whose own `workspace`
+    /// field matches `workspace` (`SessionError::WorkspaceMismatch` otherwise) and must already be
+    /// opened (see `sealed_ops::open_ops`) — `Session` never touches the group-key AEAD, only
+    /// per-op signatures via `device_keys`.
     pub fn on_ops(
         &mut self,
+        workspace: WorkspaceId,
         msg: &Message,
         device_keys: &BTreeMap<DeviceId, DevicePublicKey>,
     ) -> Result<Vec<Op>, SessionError> {
-        match self.state {
-            SessionState::Wanting => {}
-            SessionState::Idle | SessionState::Greeted | SessionState::Importing => {
-                return Err(self.unexpected("Ops"));
-            }
-        }
-        let Message::Ops {
-            ops,
-            signatures,
-            ranges,
-        } = msg
-        else {
-            return Err(self.unexpected(name_of(msg)));
-        };
-        verify_batch(ops, signatures, device_keys).map_err(SessionError::Crypto)?;
-        if let Some(stray) = ranges.iter().find(|r| !covered(&self.wanted, r)) {
-            return Err(SessionError::Unrequested(*stray));
-        }
-        self.inflight = ranges.clone();
-        self.state = SessionState::Importing;
-        debug_assert!(self.inflight.iter().all(|r| covered(&self.wanted, r)));
-        debug_assert_eq!(self.state, SessionState::Importing);
-        Ok(ops.clone())
+        self.workspace_mut(workspace)?
+            .on_ops(workspace, msg, device_keys)
     }
 
-    /// `Importing → Wanting | Idle`: the caller reports what it durably committed; heads advance
-    /// and the `Ack` to send carries exactly those runs. A run outside the batch is refused.
-    pub fn committed(&mut self, ranges: &[OriginRange]) -> Result<Message, SessionError> {
-        match self.state {
-            SessionState::Importing => {}
-            SessionState::Idle | SessionState::Greeted | SessionState::Wanting => {
-                return Err(self.unexpected("committed()"));
-            }
-        }
-        if let Some(stray) = ranges.iter().find(|r| !covered(&self.inflight, r)) {
-            return Err(SessionError::NotInBatch(*stray));
-        }
-        let mut heads = self.heads.clone();
-        for r in ranges {
-            advance(&mut heads, r).map_err(SessionError::Gap)?;
-        }
-        self.heads = heads;
-        consume(&mut self.wanted, ranges);
-        self.inflight.clear();
-        self.state = if self.wanted.is_empty() {
-            SessionState::Idle
-        } else {
-            SessionState::Wanting
-        };
-        debug_assert!(self.wanted.iter().all(|r| r.first <= r.last));
-        debug_assert!(self.inflight.is_empty());
-        Ok(Message::Ack {
-            committed: ranges.to_vec(),
-        })
+    /// `workspace`'s `Importing → Wanting | Idle`: the caller reports what it durably committed;
+    /// that workspace's heads advance and the `Ack` to send carries exactly those runs.
+    pub fn committed(
+        &mut self,
+        workspace: WorkspaceId,
+        ranges: &[OriginRange],
+    ) -> Result<Message, SessionError> {
+        self.workspace_mut(workspace)?.committed(workspace, ranges)
     }
 
-    fn unexpected(&self, what: &'static str) -> SessionError {
-        SessionError::Unexpected {
-            state: self.state,
-            what,
-        }
+    fn workspace(&self, workspace: WorkspaceId) -> Result<&WorkspaceSession, SessionError> {
+        self.workspaces
+            .get(&workspace)
+            .ok_or(SessionError::UnknownWorkspace(workspace))
     }
-}
 
-/// True when `r` lies within one of `runs` (same device, inside its bounds).
-fn covered(runs: &[OriginRange], r: &OriginRange) -> bool {
-    runs.iter()
-        .any(|w| w.device == r.device && w.first <= r.first && r.last <= w.last)
-}
-
-/// Drops the committed prefix of each wanted run; a run fully covered disappears.
-fn consume(wanted: &mut Vec<OriginRange>, committed: &[OriginRange]) {
-    let before = wanted.len();
-    for c in committed {
-        for w in wanted.iter_mut() {
-            if w.device == c.device && c.last >= w.first {
-                w.first = c.last + 1;
-            }
-        }
-    }
-    wanted.retain(|w| w.first <= w.last);
-    debug_assert!(wanted.len() <= before, "consume never adds a run");
-    debug_assert!(wanted.iter().all(|w| w.first <= w.last));
-}
-
-fn name_of(msg: &Message) -> &'static str {
-    match msg {
-        Message::Hello { .. } => "Hello",
-        Message::Want { .. } => "Want",
-        Message::Ops { .. } => "Ops",
-        Message::Ack { .. } => "Ack",
+    fn workspace_mut(
+        &mut self,
+        workspace: WorkspaceId,
+    ) -> Result<&mut WorkspaceSession, SessionError> {
+        self.workspaces
+            .get_mut(&workspace)
+            .ok_or(SessionError::UnknownWorkspace(workspace))
     }
 }

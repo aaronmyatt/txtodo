@@ -10,7 +10,10 @@ use std::fmt;
 /// First four bytes of every frame; a foreign or truncated stream fails here, not in a message.
 pub const MAGIC: [u8; 4] = *b"TXTO";
 /// The one protocol version this build speaks. Bump only with a new `Message` decoder beside it.
-pub const PROTOCOL_VERSION: u16 = 1;
+/// Bumped 1 -> 2 (task `daemon-workspace-session-multiplex`, root todo, stage 1): `Want`/`Ops`/
+/// `Ack` gained a `workspace` field, a wire break (postcard is not self-describing — an old peer
+/// decoding a new-shape struct gets garbage, not an error — see the module doc).
+pub const PROTOCOL_VERSION: u16 = 2;
 /// Largest body we will decode. Checked against the header *before* any allocation.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Header size in bytes: magic (4) + version (2) + len (4).

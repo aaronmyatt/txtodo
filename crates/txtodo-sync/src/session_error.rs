@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+use txtodo_store::WorkspaceId;
+
 use crate::crypto_error::CryptoError;
 use crate::message::{GroupId, OriginRange};
 use crate::session::SessionState;
@@ -17,6 +19,27 @@ pub enum SessionError {
         state: SessionState,
         /// What arrived.
         what: &'static str,
+    },
+    /// A caller named a workspace this `Session` never opened (`Session::open_workspace`) — or
+    /// one already closed. Never a panic: an unopened workspace is exactly as routine as a stray
+    /// wire message, since a peer or a caller can name one this session simply does not know.
+    UnknownWorkspace(WorkspaceId),
+    /// `Session::open_workspace` would exceed `MAX_OPEN_WORKSPACES`; re-opening an
+    /// already-open id never hits this (see that method's doc).
+    TooManyWorkspaces {
+        /// How many would be open, including the new one.
+        len: usize,
+        /// The cap.
+        max: usize,
+    },
+    /// A `Want`/`Ops`/`Ack`'s own embedded `workspace` field does not match the workspace the
+    /// caller named when calling `Session::on_ops` — never silently routed to the wrong
+    /// sub-session.
+    WorkspaceMismatch {
+        /// What the caller asked to route to.
+        called: WorkspaceId,
+        /// What the message itself carries.
+        message: WorkspaceId,
     },
     /// The peer is in another sync group.
     GroupMismatch {
@@ -58,6 +81,19 @@ impl fmt::Display for SessionError {
             SessionError::Unexpected { state, what } => {
                 write!(f, "{what} is not expected while {state:?}")
             }
+            SessionError::UnknownWorkspace(id) => {
+                write!(f, "workspace {id} is not open on this session")
+            }
+            SessionError::TooManyWorkspaces { len, max } => {
+                write!(
+                    f,
+                    "opening this workspace would hold {len} open, over the cap of {max}"
+                )
+            }
+            SessionError::WorkspaceMismatch { called, message } => write!(
+                f,
+                "message is for workspace {message} but {called} was asked for"
+            ),
             SessionError::GroupMismatch { ours, theirs } => {
                 write!(f, "peer group {theirs:?} is not our group {ours:?}")
             }

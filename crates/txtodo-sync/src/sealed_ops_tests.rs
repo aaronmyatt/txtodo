@@ -90,10 +90,12 @@ fn a_genuine_sealed_batch_opens_and_flows_straight_into_session_on_ops() {
 
     let msg = open_ops(&frame, GroupId(42), ws(), &v.group_keys, &v.device_keys).unwrap();
 
-    let mut session = Session::new(dev(2), GroupId(42), BTreeMap::new());
-    session.hello(0).unwrap();
+    let mut session = Session::new(dev(2), GroupId(42));
+    session.open_workspace(ws(), BTreeMap::new()).unwrap();
+    session.hello(ws(), 0).unwrap();
     session
         .on_hello(
+            ws(),
             &Message::Hello {
                 device: sender,
                 group: GroupId(42),
@@ -104,9 +106,9 @@ fn a_genuine_sealed_batch_opens_and_flows_straight_into_session_on_ops() {
             0,
         )
         .unwrap();
-    let ops = session.on_ops(&msg, &v.device_keys).unwrap();
+    let ops = session.on_ops(ws(), &msg, &v.device_keys).unwrap();
     assert_eq!(ops.len(), 1, "the genuine op reaches the session");
-    assert_eq!(session.state(), SessionState::Importing);
+    assert_eq!(session.state(ws()).unwrap(), SessionState::Importing);
 }
 
 #[test]
@@ -199,6 +201,7 @@ fn session_on_ops_rejects_a_signed_batch_tampered_after_signing() {
     let sender_key = signing_key(7);
     let signature = crate::sign::sign(&op(sender, "buy milk"), &sender_key).unwrap();
     let tampered = Message::Ops {
+        workspace: ws().ulid().to_u128(),
         ops: vec![op(sender, "buy SILK")],
         signatures: vec![signature],
         ranges: vec![OriginRange {
@@ -210,10 +213,12 @@ fn session_on_ops_rejects_a_signed_batch_tampered_after_signing() {
     let mut device_keys = BTreeMap::new();
     device_keys.insert(sender, sender_key.public_key());
 
-    let mut session = Session::new(dev(2), GroupId(42), BTreeMap::new());
-    session.hello(0).unwrap();
+    let mut session = Session::new(dev(2), GroupId(42));
+    session.open_workspace(ws(), BTreeMap::new()).unwrap();
+    session.hello(ws(), 0).unwrap();
     session
         .on_hello(
+            ws(),
             &Message::Hello {
                 device: sender,
                 group: GroupId(42),
@@ -225,13 +230,13 @@ fn session_on_ops_rejects_a_signed_batch_tampered_after_signing() {
         )
         .unwrap();
     assert_eq!(
-        session.on_ops(&tampered, &device_keys),
+        session.on_ops(ws(), &tampered, &device_keys),
         Err(SessionError::Crypto(CryptoError::SignatureInvalid {
             device: sender
         })),
     );
     assert_eq!(
-        session.state(),
+        session.state(ws()).unwrap(),
         SessionState::Wanting,
         "a rejected batch never enters Importing"
     );
@@ -243,6 +248,7 @@ fn session_on_ops_rejects_a_batch_from_a_device_with_no_known_key() {
     let unsigned_by = signing_key(9);
     let signature = crate::sign::sign(&op(sender, "buy milk"), &unsigned_by).unwrap();
     let msg = Message::Ops {
+        workspace: ws().ulid().to_u128(),
         ops: vec![op(sender, "buy milk")],
         signatures: vec![signature],
         ranges: vec![OriginRange {
@@ -252,10 +258,12 @@ fn session_on_ops_rejects_a_batch_from_a_device_with_no_known_key() {
         }],
     };
 
-    let mut session = Session::new(dev(2), GroupId(42), BTreeMap::new());
-    session.hello(0).unwrap();
+    let mut session = Session::new(dev(2), GroupId(42));
+    session.open_workspace(ws(), BTreeMap::new()).unwrap();
+    session.hello(ws(), 0).unwrap();
     session
         .on_hello(
+            ws(),
             &Message::Hello {
                 device: sender,
                 group: GroupId(42),
@@ -268,7 +276,7 @@ fn session_on_ops_rejects_a_batch_from_a_device_with_no_known_key() {
         .unwrap();
     // No entry at all for `sender`: a missing key is refused, never skipped.
     assert_eq!(
-        session.on_ops(&msg, &BTreeMap::new()),
+        session.on_ops(ws(), &msg, &BTreeMap::new()),
         Err(SessionError::Crypto(CryptoError::UnknownDevice {
             device: sender
         })),
