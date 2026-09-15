@@ -3,12 +3,21 @@
 	// here from the old proof-of-pipeline +page.svelte) and the root `todo.txt` file view, which
 	// edits directly (click a line, type — no popover; see FileView.svelte's own module doc).
 	import { onMount } from "svelte";
-	import { daemonStatus, onDaemonStatus, retryConnect, setMainPopoverDirty, type DaemonStatus } from "$lib/daemon";
+	import {
+		daemonStatus,
+		onDaemonStatus,
+		retryConnect,
+		setMainPopoverDirty,
+		workspaceRoot,
+		type DaemonStatus
+	} from "$lib/daemon";
+	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
+	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
 	// Component contract says `<FileView path="todo.txt" depth={0}/>` explicitly; we take that at
 	// face value rather than round-tripping through `list_files` just to confirm the obvious.
@@ -43,8 +52,17 @@
 		setMainPopoverDirty(dirty).catch(() => {});
 	}
 
+	// Detail levels are pinned to whichever workspace was open when they were pushed (a `{file,
+	// line}` pair meaningless in another workspace's file tree) — drop the stack on every switch
+	// so `{#key}` below never remounts `DetailView` with steps that don't resolve in the new root.
+	$effect(() => {
+		$currentWorkspaceRoot;
+		detail = [];
+	});
+
 	onMount(() => {
 		daemonStatus().then((s) => (status = s));
+		workspaceRoot().then((r) => ($currentWorkspaceRoot = r));
 		const unlisten = onDaemonStatus((s) => {
 			status = s;
 		});
@@ -65,18 +83,21 @@
 	<div class="top-nav">
 		<h1>txtodo</h1>
 		<div class="top-nav-actions">
+			<WorkspaceSwitcher />
 			<ThemeToggle />
 			<a href="/devices">Devices &amp; agents</a>
 		</div>
 	</div>
 
-	{#if detail.length === 0}
-		<ConflictBanner path={ROOT_PATH} />
+	{#key $currentWorkspaceRoot}
+		{#if detail.length === 0}
+			<ConflictBanner path={ROOT_PATH} />
 
-		<FileView path={ROOT_PATH} depth={0} fill onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
-	{:else}
-		<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
-	{/if}
+			<FileView path={ROOT_PATH} depth={0} fill onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
+		{:else}
+			<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
+		{/if}
+	{/key}
 </main>
 
 <style>

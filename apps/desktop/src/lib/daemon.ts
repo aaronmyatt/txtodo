@@ -197,9 +197,45 @@ export function editNotes(task: TaskRef, newText: string): Promise<ApplyResult> 
 }
 
 /** Absolute workspace root, for the detail view's footer (display only — see
- * `src-tauri/src/commands.rs::workspace_root`'s doc comment for why this is still design-§7-safe). */
+ * `src-tauri/src/commands.rs::workspace_root`'s doc comment for why this is still design-§7-safe).
+ * Reflects whichever workspace `switchWorkspace` last selected, not a fixed startup value. */
 export function workspaceRoot(): Promise<string> {
 	return invoke("workspace_root");
+}
+
+/** One entry in the device-global workspace registry (ADR 0025). Mirrors
+ * `desktop_lib::dto::WorkspaceInfoDto`. */
+export interface WorkspaceInfo {
+	id: string;
+	root: string;
+	added_at_ms: number;
+	root_exists: boolean;
+	has_state: boolean;
+}
+
+/** Every registered workspace, oldest first. */
+export function listWorkspaces(): Promise<WorkspaceInfo[]> {
+	return invoke("list_workspaces");
+}
+
+/** Registers `root` (idempotent) without switching to it or opening it. */
+export function addWorkspace(root: string): Promise<WorkspaceInfo> {
+	return invoke("add_workspace", { root });
+}
+
+/** Un-registers a workspace id; never touches its `.txtodo/` state on disk. The daemon refuses
+ * this for whichever workspace `root` names as the currently switched-to one — switch away
+ * first. `false` means `id` was never a known workspace; `true` covers both a fresh removal and
+ * removing an already-removed id (`Registry::remove` is an idempotent upsert-tombstone). */
+export function removeWorkspace(id: string, root: string): Promise<boolean> {
+	return invoke("remove_workspace", { id, root });
+}
+
+/** Points every future daemon call at `root` instead — no reconnect. Callers must also re-fetch
+ * (and re-`watch`) anything already loaded against the old workspace: this only changes the
+ * selector attached to calls made *after* it resolves, not any stream already open. */
+export function switchWorkspace(root: string): Promise<void> {
+	return invoke("switch_workspace", { root });
 }
 
 /** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved

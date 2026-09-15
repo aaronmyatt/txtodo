@@ -17,7 +17,21 @@ import {
 	type Mutation,
 	type TaskRef
 } from "./logic";
-import { conflicts, delay, files, hashOf, listFilesDto, opLog, setConflicts, tokens, WORKSPACE_ROOT } from "./state";
+import {
+	conflicts,
+	currentWorkspaceRoot,
+	delay,
+	fakeUlid,
+	files,
+	hashOf,
+	listFilesDto,
+	NOW_MS,
+	opLog,
+	setConflicts,
+	setCurrentWorkspaceRoot,
+	tokens,
+	workspaces
+} from "./state";
 
 export { mockListen } from "./state";
 
@@ -70,7 +84,30 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "edit_notes":
 			return mockEditNotes((args?.task as TaskRef).task_id, args?.newText as string) as unknown as T;
 		case "workspace_root":
-			return WORKSPACE_ROOT as T;
+			return currentWorkspaceRoot as T;
+		case "list_workspaces":
+			return workspaces.map((w) => ({ ...w })) as T;
+		case "add_workspace": {
+			const root = (args?.root as string).trim();
+			let ws = workspaces.find((w) => w.root === root);
+			if (!ws) {
+				ws = { id: fakeUlid(), root, added_at_ms: NOW_MS, root_exists: true, has_state: false };
+				workspaces.push(ws);
+			}
+			return { ...ws } as T;
+		}
+		case "remove_workspace": {
+			const id = args?.id as string;
+			const idx = workspaces.findIndex((w) => w.id === id);
+			if (idx >= 0) workspaces.splice(idx, 1);
+			// Doesn't reproduce the real daemon's idempotent-upsert semantics (an already-removed
+			// but once-known id there still returns true) — this mock only backs GUI iteration, not
+			// a fixture for testing that distinction.
+			return (idx >= 0) as T;
+		}
+		case "switch_workspace":
+			setCurrentWorkspaceRoot(args?.root as string);
+			return undefined as T;
 		case "set_main_popover_dirty":
 			return undefined as T;
 		default:

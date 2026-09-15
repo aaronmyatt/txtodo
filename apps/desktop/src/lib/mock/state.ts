@@ -112,6 +112,25 @@ export function listFilesDto() {
 
 export const WORKSPACE_ROOT = "/Users/mock/workspace";
 
+// ---- workspace registry (ADR 0025) ----
+
+export interface StoredWorkspace {
+	id: string;
+	root: string;
+	added_at_ms: number;
+	root_exists: boolean;
+	has_state: boolean;
+}
+
+export const workspaces: StoredWorkspace[] = [
+	{ id: fakeUlid(), root: WORKSPACE_ROOT, added_at_ms: NOW_MS - 7 * 86_400_000, root_exists: true, has_state: true }
+];
+
+export let currentWorkspaceRoot = WORKSPACE_ROOT;
+export function setCurrentWorkspaceRoot(root: string): void {
+	currentWorkspaceRoot = root;
+}
+
 interface StoredNotes {
 	path: string;
 	text: string;
