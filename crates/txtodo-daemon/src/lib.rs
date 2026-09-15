@@ -21,6 +21,7 @@ pub mod convert;
 pub mod debounce;
 pub mod debug_hooks;
 pub mod device_identity;
+pub mod device_relay;
 mod device_remove;
 mod devices_grpc;
 pub mod expected;
@@ -107,6 +108,8 @@ mod actor_tests;
 mod bundle_tests;
 #[cfg(test)]
 mod control_session_tests;
+#[cfg(test)]
+mod device_relay_tests;
 #[cfg(test)]
 mod device_remove_tests;
 #[cfg(test)]

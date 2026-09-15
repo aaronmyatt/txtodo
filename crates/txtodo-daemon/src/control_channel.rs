@@ -28,10 +28,10 @@ use std::time::Duration;
 
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use txtodo_sync::{MAX_RELAY_PEERS, RelayConfig, RelayEndpoint};
+use txtodo_sync::RelayEndpoint;
 
 use crate::device_identity::DeviceIdentity;
-use crate::pairing_wire::hex_encode;
+use crate::device_relay::DeviceRelay;
 use crate::workspace_registry::WorkspaceRegistry;
 
 /// How often the redial loop retries a known peer while unreachable, and — once reachable —
@@ -77,9 +77,10 @@ async fn run(identity: Arc<DeviceIdentity>, url: String, registry_path: PathBuf)
     let Some(registry) = open_registry(&registry_path) else {
         return;
     };
-    let Some(endpoint) = bind_endpoint(&identity, url).await else {
+    let Some(device_relay) = DeviceRelay::bind(&identity, url).await else {
         return;
     };
+    let endpoint = device_relay.endpoint();
     let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_CONTROL_SESSIONS));
     tokio::join!(
         accept_loop(
@@ -100,39 +101,6 @@ fn open_registry(registry_path: &std::path::Path) -> Option<Arc<Mutex<WorkspaceR
             None
         }
     }
-}
-
-async fn bind_endpoint(identity: &DeviceIdentity, url: String) -> Option<Arc<RelayEndpoint>> {
-    let cfg = RelayConfig {
-        url,
-        max_peers: MAX_RELAY_PEERS,
-    };
-    let bound =
-        RelayEndpoint::bind_with_secret_key(&cfg, identity.group(), identity.relay_identity())
-            .await;
-    on_bind_result(bound)
-}
-
-fn on_bind_result(
-    bound: Result<RelayEndpoint, txtodo_sync::RelayError>,
-) -> Option<Arc<RelayEndpoint>> {
-    let endpoint = match bound {
-        Ok(e) => e,
-        Err(e) => {
-            log_bind_failed(&e);
-            return None;
-        }
-    };
-    log_bound(&hex_encode(&endpoint.node_id_bytes()));
-    Some(Arc::new(endpoint))
-}
-
-fn log_bind_failed(e: &txtodo_sync::RelayError) {
-    tracing::warn!(error = %e, "control_channel_bind_failed");
-}
-
-fn log_bound(node_id: &str) {
-    tracing::info!(node_id, "control_channel_bound");
 }
 
 async fn accept_loop(
