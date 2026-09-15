@@ -164,8 +164,27 @@ pub(crate) fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: 
     // gate), so it doubles as that proof for the joiner's side.
     let _ = read(ws).pairing().mark_remote_confirmed(now_ms);
     match read(ws).adopt_group_key(offer.group, sealed, now_ms) {
-        Ok(()) => log_joiner_adopted(offer.device),
+        Ok(()) => {
+            log_joiner_adopted(offer.device);
+            record_offer_relay_reachability(ws, offer);
+        }
         Err(e) => log_joiner_adopt_failed(offer.device, &e),
+    }
+}
+
+/// Best-effort, logged only (same discipline as `register_joiner_device`): the initiator's relay
+/// node id and URL, if its `PairingOffer` carried one, is durably recorded against its device row
+/// (task `daemon-workspace-identity-agreement` stage 2) — previously discarded once the handshake
+/// finished. Only ever the initiator's own reachability: `JoinerHello` carries no relay fields of
+/// its own, so the reverse direction (this device's relay identity reaching the initiator) is not
+/// captured by this pairing exchange at all — a documented gap, not a bug.
+pub(crate) fn record_offer_relay_reachability(ws: &SharedWorkspace, offer: &PairingOffer) {
+    let (Some(relay_node_id), Some(relay_url)) = (offer.relay_node_id, &offer.relay_url) else {
+        return;
+    };
+    if let Err(e) = read(ws).record_peer_relay_reachability(offer.device, relay_node_id, relay_url)
+    {
+        tracing::warn!(peer = %offer.device, error = %e, "pairing_joiner_record_relay_reachability_failed");
     }
 }
 

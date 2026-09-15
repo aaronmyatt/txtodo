@@ -338,6 +338,22 @@ impl Workspace {
         self.set_group(group);
         Ok(())
     }
+    /// Records `device`'s relay reachability, learned from its `PairingOffer` (task
+    /// `daemon-workspace-identity-agreement` stage 2) — a separate call from
+    /// [`Workspace::adopt_group_key`] rather than a parameter on it, both to stay under the
+    /// argument-count budget and because `Store::set_relay_reachability`'s own doc already makes
+    /// relay reachability a distinct concern from registering a device at all.
+    pub(crate) fn record_peer_relay_reachability(
+        &self,
+        device: DeviceId,
+        relay_node_id: [u8; 32],
+        relay_url: &str,
+    ) -> Result<bool, txtodo_store::StoreError> {
+        self.identity_store()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_relay_reachability(device, relay_node_id, relay_url)
+    }
     /// Shared LAN-endpoint/sighting state the pairing relay driver (`pairing_lan.rs`) and `lan.rs`
     /// both need (plan M4 `sync-pairing`'s LAN wiring pass).
     pub(crate) fn pairing_lan(&self) -> &PairingLan {
