@@ -8,16 +8,21 @@
 
 use std::collections::BTreeMap;
 
-use crate::aead::{GroupKey, GroupKeys, open, seal};
+use crate::aead::{GroupKey, GroupKeys, SealFor, open, seal};
 use crate::crypto_error::CryptoError;
 use crate::frame::{Frame, PROTOCOL_VERSION};
 use crate::message::{GroupId, Message, MessageError};
 use crate::session::Session;
 use crate::session_error::SessionError;
 use txtodo_model::{DeviceId, Ulid};
+use txtodo_store::WorkspaceId;
 
 fn dev(n: u128) -> DeviceId {
     DeviceId::new(Ulid::from_u128(n))
+}
+
+fn ws() -> WorkspaceId {
+    WorkspaceId::new(Ulid::from_u128(0x5EED))
 }
 
 fn a_hello(heads: BTreeMap<DeviceId, u64>) -> Message {
@@ -32,8 +37,13 @@ fn a_hello(heads: BTreeMap<DeviceId, u64>) -> Message {
 
 fn seal_message(group: GroupId, key: &GroupKey, msg: &Message) -> Frame {
     let plain = msg.encode().unwrap_or_else(|e| panic!("encode: {e}"));
+    let for_ = SealFor {
+        group,
+        epoch: 0,
+        workspace: ws(),
+    };
     let sealed =
-        seal(plain.version, group, 0, key, &plain.body).unwrap_or_else(|e| panic!("seal: {e}"));
+        seal(plain.version, for_, key, &plain.body).unwrap_or_else(|e| panic!("seal: {e}"));
     Frame {
         version: plain.version,
         body: sealed,
@@ -48,7 +58,8 @@ fn one_key(byte: u8) -> GroupKeys {
 }
 
 fn open_and_decode(frame: &Frame, group: GroupId, keys: &GroupKeys) -> Message {
-    let plain = open(frame.version, group, keys, &frame.body).unwrap_or_else(|e| panic!("{e:?}"));
+    let plain =
+        open(frame.version, group, ws(), keys, &frame.body).unwrap_or_else(|e| panic!("{e:?}"));
     Message::decode(&Frame {
         version: frame.version,
         body: plain,
@@ -95,6 +106,7 @@ fn a_hello_sealed_for_one_group_cannot_be_opened_with_another_key_group_or_no_ke
         open(
             PROTOCOL_VERSION,
             GroupId(43),
+            ws(),
             &one_key(7),
             &sealed_frame.body
         )
@@ -104,12 +116,22 @@ fn a_hello_sealed_for_one_group_cannot_be_opened_with_another_key_group_or_no_ke
         open(
             PROTOCOL_VERSION,
             group,
+            ws(),
             &GroupKeys::new(),
             &sealed_frame.body
         )
         .is_err()
     );
-    assert!(open(PROTOCOL_VERSION, group, &one_key(8), &sealed_frame.body).is_err());
+    assert!(
+        open(
+            PROTOCOL_VERSION,
+            group,
+            ws(),
+            &one_key(8),
+            &sealed_frame.body
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -214,7 +236,7 @@ fn a_frame_tampered_after_sealing_a_hello_is_rejected_before_it_becomes_a_messag
     sealed_frame.body[last] ^= 0x01;
 
     assert_eq!(
-        open(PROTOCOL_VERSION, group, &keys, &sealed_frame.body),
+        open(PROTOCOL_VERSION, group, ws(), &keys, &sealed_frame.body),
         Err(CryptoError::Decrypt { epoch: 0 })
     );
 }
@@ -229,13 +251,17 @@ fn a_foreign_protocol_under_the_right_key_is_a_message_error_not_a_crypto_one() 
     let keys = one_key(7);
     let sealed = seal(
         PROTOCOL_VERSION,
-        group,
-        0,
+        SealFor {
+            group,
+            epoch: 0,
+            workspace: ws(),
+        },
         keys.get(0).unwrap_or_else(|| panic!("seeded")),
         b"not a postcard message",
     )
     .unwrap_or_else(|e| panic!("seal: {e}"));
-    let plain = open(PROTOCOL_VERSION, group, &keys, &sealed).unwrap_or_else(|e| panic!("{e:?}"));
+    let plain =
+        open(PROTOCOL_VERSION, group, ws(), &keys, &sealed).unwrap_or_else(|e| panic!("{e:?}"));
     let frame = Frame {
         version: PROTOCOL_VERSION,
         body: plain,

@@ -6,6 +6,7 @@
 use std::fmt;
 
 use txtodo_model::DeviceId;
+use txtodo_store::WorkspaceId;
 
 use crate::message::GroupId;
 
@@ -49,6 +50,15 @@ pub enum CryptoError {
         got: GroupId,
         /// Group this session is for.
         expected: GroupId,
+    },
+    /// The sealed batch is labelled for another workspace (ADR 0021, task
+    /// `daemon-shared-sync-link`): refused before decrypting, the same discipline `WrongGroup`
+    /// already gets, so a mislabelled batch can never land in the wrong workspace's oplog.
+    WrongWorkspace {
+        /// Workspace found in the clear header.
+        got: WorkspaceId,
+        /// Workspace this session is for.
+        expected: WorkspaceId,
     },
     /// The sealed blob is shorter than a header plus an AEAD tag.
     Truncated {
@@ -110,6 +120,12 @@ impl fmt::Display for CryptoError {
                     f,
                     "sealed batch is for group {}, expected {}",
                     got.0, expected.0
+                )
+            }
+            CryptoError::WrongWorkspace { got, expected } => {
+                write!(
+                    f,
+                    "sealed batch is for workspace {got}, expected {expected}"
                 )
             }
             CryptoError::Truncated { needed, got } => {

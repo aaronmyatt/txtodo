@@ -21,14 +21,24 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,
   `verify_batch(&[Op], &[Signature], &BTreeMap<DeviceId, DevicePublicKey>)` (all-or-nothing);
   `DeviceSigningKey`/`DevicePublicKey`/`Signature` with `from_bytes`/`to_bytes`.
-- `seal(version, group, epoch, &GroupKey, plaintext)` / `open(version, group, &GroupKeys, sealed)`,
-  `GroupKey`, `GroupKeys`, `CryptoError`, `MAX_RETAINED_KEY_EPOCHS`, header/AAD/nonce/tag byte consts.
-- `sealed_ops.rs` (`sync-reject-tests`, M4): the actual op send/receive path, wiring the crypto above
-  into real `Frame`s instead of leaving `Session` to call it. `seal_ops(ops, ranges,
-  &DeviceSigningKey, &SealContext)` signs then seals (`SealContext { group, epoch, key }` bundles the
-  three so the function stays under the 5-argument cap); `open_ops(&Frame, GroupId, &GroupKeys,
-  &BTreeMap<DeviceId, DevicePublicKey>)` opens then verifies, all-or-nothing, and its `Ok(Message)` is
-  ready to hand to `Session::on_ops`. `SealedOpsError` wraps `CryptoError`/`MessageError`.
+- `seal(version, SealFor, &GroupKey, plaintext)` / `open(version, group, workspace, &GroupKeys,
+  sealed)` (`SealFor { group, epoch, workspace }` bundles the three so `seal` stays under the
+  5-argument cap), `GroupKey`, `GroupKeys`, `CryptoError`, `MAX_RETAINED_KEY_EPOCHS`, header/AAD/
+  nonce/tag byte consts. The clear header/AAD is `version || group || epoch || workspace` (ADR
+  0021, task `daemon-shared-sync-link`, 2026-09-15): every workspace a device opens now shares one
+  group key (`daemon-device-set-identity`), so once traffic for several workspaces is multiplexed
+  over one shared `Link`, `workspace` is what a receiver demuxes on and the AEAD tag is what stops
+  a mislabelled batch (bug or active relay) from being silently routed into the wrong workspace's
+  oplog — `CryptoError::WrongWorkspace` mirrors `WrongGroup`'s shape exactly, checked the same way,
+  before the ciphertext is touched.
+- `sealed_ops.rs` (`sync-reject-tests`, M4; `workspace` field added by `daemon-shared-sync-link`):
+  the actual op send/receive path, wiring the crypto above into real `Frame`s instead of leaving
+  `Session` to call it. `seal_ops(ops, ranges, &DeviceSigningKey, &SealContext)` signs then seals
+  (`SealContext { group, epoch, workspace, key }` bundles the four so the function stays under the
+  5-argument cap, building an `aead::SealFor` from its own `group`/`epoch`/`workspace` to call
+  `seal`); `open_ops(&Frame, GroupId, WorkspaceId, &GroupKeys, &BTreeMap<DeviceId,
+  DevicePublicKey>)` opens then verifies, all-or-nothing, and its `Ok(Message)` is ready to hand to
+  `Session::on_ops`. `SealedOpsError` wraps `CryptoError`/`MessageError`.
 - Keystore (M4 `sync-keystore`): `KeyStore` trait (`get`/`put`/`delete`), `KeyId`
   (`DeviceSigning`/`DeviceStatic`/`Group(epoch)`), `Secret` (redacted `Debug`, zeroized on drop),
   `KeyStoreError`, `MAX_STORED_EPOCHS`. Backends: `MemoryKeyStore` (tests only), `FileKeyStore`

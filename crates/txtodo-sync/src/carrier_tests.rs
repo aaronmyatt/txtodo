@@ -8,6 +8,7 @@ use std::io::Write;
 
 use tempfile::tempdir;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
+use txtodo_store::WorkspaceId;
 
 use crate::aead::GroupKey;
 use crate::append_frame::AppendFrame;
@@ -181,6 +182,7 @@ fn sealed_frame_with_plaintext(device: DeviceId, plaintext_line: &str, key: &Gro
     let ctx = SealContext {
         group: GroupId(7),
         epoch: 0,
+        workspace: WorkspaceId::new(Ulid::from_u128(0x5EED)),
         key,
     };
     seal_ops(vec![op], vec![range], &signing_key, &ctx).unwrap_or_else(|e| panic!("seal_ops: {e}"))

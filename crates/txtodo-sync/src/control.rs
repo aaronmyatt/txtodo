@@ -22,12 +22,26 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use txtodo_model::DeviceId;
+use txtodo_model::{DeviceId, Ulid};
+use txtodo_store::WorkspaceId;
 
-use crate::aead::{GroupKey, GroupKeys, open as aead_open, seal as aead_seal};
+use crate::aead::{GroupKey, GroupKeys, SealFor, open as aead_open, seal as aead_seal};
 use crate::crypto_error::CryptoError;
 use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
 use crate::message::GroupId;
+
+/// The AEAD's clear header now binds `version || group || epoch || workspace` (ADR 0021, task
+/// `daemon-workspace-identity-agreement` stage 7) — a real, meaningful field for `Message::Ops`,
+/// which always belongs to one specific workspace. A `ControlMessage` never does: an `Offer`
+/// proposes a workspace id the receiver may not even know yet, so there is no real value to bind.
+/// Rather than skip the check (and duplicate `aead::seal`/`open`'s header/AAD logic to do it), the
+/// control channel seals under this fixed, reserved id — never a real `WorkspaceId` a
+/// `WorkspaceRegistry` could mint (`Ulid::from_u128(0)` predates this codebase's clock). Harmless
+/// side effect, not the point: a `ControlMessage` frame can never be mistaken for an `Ops` batch
+/// sealed for a real workspace, or vice versa, even though both already travel on distinct ALPNs.
+fn control_workspace() -> WorkspaceId {
+    WorkspaceId::new(Ulid::from_u128(0))
+}
 
 /// Most bytes a workspace's display name may carry — plenty for any real directory name, small
 /// enough that a hostile peer cannot use it to smuggle an oversized allocation (every wire
@@ -205,7 +219,12 @@ pub fn seal_control(
     key: &GroupKey,
 ) -> Result<Frame, ControlSealError> {
     let frame = msg.encode()?;
-    let sealed = aead_seal(PROTOCOL_VERSION, group, epoch, key, &frame.body)?;
+    let for_ = SealFor {
+        group,
+        epoch,
+        workspace: control_workspace(),
+    };
+    let sealed = aead_seal(PROTOCOL_VERSION, for_, key, &frame.body)?;
     Ok(Frame {
         version: PROTOCOL_VERSION,
         body: sealed,
@@ -219,7 +238,13 @@ pub fn open_control(
     group: GroupId,
     group_keys: &GroupKeys,
 ) -> Result<ControlMessage, ControlSealError> {
-    let plaintext = aead_open(PROTOCOL_VERSION, group, group_keys, &frame.body)?;
+    let plaintext = aead_open(
+        PROTOCOL_VERSION,
+        group,
+        control_workspace(),
+        group_keys,
+        &frame.body,
+    )?;
     Ok(ControlMessage::decode(&Frame {
         version: PROTOCOL_VERSION,
         body: plaintext,
