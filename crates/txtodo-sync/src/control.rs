@@ -22,6 +22,7 @@
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+use txtodo_model::DeviceId;
 
 use crate::aead::{GroupKey, GroupKeys, open as aead_open, seal as aead_seal};
 use crate::crypto_error::CryptoError;
@@ -42,6 +43,12 @@ pub enum ControlMessage {
     /// `notes.md`): the receiver either already knows this id (nothing to do) or offers it to its
     /// own human as a pending accept (`workspace_offer_registry.rs`, stage 4).
     Offer {
+        /// The offering device — every control message self-declares its sender (the same
+        /// solved problem `Message::Hello.device` already has, since a device-level control
+        /// channel talks to potentially many peers and an accepted connection has no other way
+        /// to attribute who sent it without exposing `iroh` connection identity across the
+        /// crate boundary).
+        sender: DeviceId,
         /// The offering device's own `WorkspaceId`, as `Ulid::to_u128()` — see the module doc for
         /// why this is a bare integer rather than the typed `txtodo_store::WorkspaceId`.
         workspace_id: u128,
@@ -53,12 +60,17 @@ pub enum ControlMessage {
     /// The receiver adopted `workspace_id` verbatim (`WorkspaceRegistry::adopt`, stage 4) into its
     /// own registry.
     OfferAck {
+        /// The accepting device — see `Offer.sender`'s doc; here it's whoever is acknowledging,
+        /// not whoever originally offered.
+        sender: DeviceId,
         /// Echoes the offer's id.
         workspace_id: u128,
     },
     /// The receiver declined the offer. What the offering device does with this (e.g. stop
     /// re-announcing to this peer) is stage 5's bookkeeping, not this type's concern.
     Decline {
+        /// The accepting device — see `OfferAck.sender`'s doc.
+        sender: DeviceId,
         /// Echoes the offer's id.
         workspace_id: u128,
     },

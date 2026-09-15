@@ -2,6 +2,8 @@
 //! encode/decode for every variant, the name-length cap, and a seal/open round trip reusing
 //! `aead_tests.rs`'s own fixture shape.
 
+use txtodo_model::{DeviceId, Ulid};
+
 use crate::aead::{GroupKey, GroupKeys};
 use crate::control::{
     ControlMessage, ControlMessageError, MAX_WORKSPACE_NAME_BYTES, open_control, seal_control,
@@ -18,8 +20,13 @@ fn one_epoch(epoch: u32, key_byte: u8) -> GroupKeys {
     keys
 }
 
+fn device(n: u128) -> DeviceId {
+    DeviceId::new(Ulid::from_u128(n))
+}
+
 fn offer() -> ControlMessage {
     ControlMessage::Offer {
+        sender: device(1),
         workspace_id: 0x1234_5678_9ABC_DEF0,
         name: "my-project".to_string(),
         offered_at_ms: 1_000,
@@ -30,8 +37,14 @@ fn offer() -> ControlMessage {
 fn every_variant_round_trips_through_encode_decode() {
     let variants = [
         offer(),
-        ControlMessage::OfferAck { workspace_id: 42 },
-        ControlMessage::Decline { workspace_id: 42 },
+        ControlMessage::OfferAck {
+            sender: device(2),
+            workspace_id: 42,
+        },
+        ControlMessage::Decline {
+            sender: device(2),
+            workspace_id: 42,
+        },
     ];
     for msg in variants {
         let frame = msg.encode().unwrap();
@@ -42,6 +55,7 @@ fn every_variant_round_trips_through_encode_decode() {
 #[test]
 fn a_name_over_the_cap_is_refused_before_encoding_grows_unbounded() {
     let msg = ControlMessage::Offer {
+        sender: device(1),
         workspace_id: 1,
         name: "x".repeat(MAX_WORKSPACE_NAME_BYTES + 1),
         offered_at_ms: 0,
@@ -58,6 +72,7 @@ fn a_name_over_the_cap_is_refused_before_encoding_grows_unbounded() {
 #[test]
 fn a_name_at_the_cap_is_accepted() {
     let msg = ControlMessage::Offer {
+        sender: device(1),
         workspace_id: 1,
         name: "x".repeat(MAX_WORKSPACE_NAME_BYTES),
         offered_at_ms: 0,
