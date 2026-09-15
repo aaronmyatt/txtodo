@@ -44,7 +44,7 @@ mod want;
 
 pub use aead::{
     AAD_BYTES, GroupKey, GroupKeys, KEY_BYTES, MAX_RETAINED_KEY_EPOCHS, NONCE_BYTES,
-    SEALED_HEADER_BYTES, SealFor, TAG_BYTES, open, seal,
+    SEALED_HEADER_BYTES, TAG_BYTES, open, seal,
 };
 pub use append_frame::{APPEND_HEADER_BYTES, AppendFrame, MAX_APPEND_FRAME_BYTES};
 pub use carrier::{FileCarrier, MAX_OPS_FILE_BYTES};
