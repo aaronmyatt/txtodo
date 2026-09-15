@@ -1,6 +1,8 @@
 # 0018 — The relay is a hosted SaaS, not self-host only
 
-- Status: accepted
+- Status: accepted; justification superseded by 0027 — "the relay is now the only sync path" below
+  was voided by 0026 reinstating LAN the next day, and 0027 supplies the access mechanism this ADR
+  left unspecified. The decision itself (hosted, manually granted) stands.
 - Date: 2026-09-13
 - Deciders: project owner (docs/questions.md Q5)
 

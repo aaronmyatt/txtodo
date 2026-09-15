@@ -52,7 +52,8 @@ Append only. Never edit a prior answer; add a dated follow-up.
 - Status: answered 2026-09-13 · Raised: 2026-09-11 (plan §6.5) · Blocks: M8 self-hosting docs, M9 push registration
 - Default until answered: **self-host only**; docs describe running `relay/` yourself.
 - Answer: The relay will be a hosted SaaS that I will grant users access to manually
-- ADR: 0018
+- ADR: 0018; mechanism settled 2026-09-15 in 0027 (the hosted service is an **iroh relay**, gated by
+  a node-id allowlist backed by OTP-verified emails — not `relay/`, which stays self-host-only)
 
 ## Q6 — Pairing: what happens when the initiator's and joiner's identity_mode disagree?
 - Status: answered 2026-09-13 · Raised: 2026-09-13 (plan `floofy-swinging-brooks.md`, sidecar-identity Phase 2) ·

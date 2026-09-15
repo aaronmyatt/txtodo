@@ -1,11 +1,16 @@
 # Self-hosting the relay
 
-The relay (`relay/`, plan M8, design §4.5) is one carrier among several the sync engine tries —
-LAN, direct QUIC hole-punching, the relay, Bluetooth LE, a file carrier, sneakernet (design
-§4.5). **It is optional**: LAN alone is a complete system, and this project does not run a
-public relay — self-hosting is the only option (docs/questions.md Q5's default). Run it only if
-you want sync to keep working when your devices can't reach each other directly (e.g. a phone
-asleep on cellular, or two networks that hole-punching can't traverse).
+This page is about **`relay/`, the blob mailbox in this repository** (plan M8, design §4.5) — not
+about the iroh relay that the daemon's own relay-URL option points at. They are different servers
+with different jobs; see ADR 0027 for the split, and note that nothing in the client talks to
+`relay/` yet.
+
+`relay/` is one carrier among several the sync engine tries — LAN, direct QUIC hole-punching, the
+relay, Bluetooth LE, a file carrier, sneakernet (design §4.5). **It is optional**: LAN alone is a
+complete system. Self-hosting is the only option for this one; the hosted service the project runs
+(ADR 0018, ADR 0027) is an iroh relay, which this page does not cover. Run `relay/` only if you want
+store-and-forward sync when your devices can't reach each other directly (e.g. a phone asleep on
+cellular).
 
 ## What it stores, exactly
 

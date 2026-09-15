@@ -99,8 +99,14 @@ is optional**: LAN alone is a complete system. Reach for it only when your devic
 each other directly (a phone asleep on cellular, or two networks that hole-punching can't
 traverse).
 
-The relay is a self-host-only mailbox for encrypted sync data: it stores ciphertext blobs keyed
-by device and forwards push wake-ups, and **it cannot read your list** — every blob it stores is
-already encrypted by your own devices before it ever arrives (design §4.6). This project does
-not run a public relay; if you want one, you (or someone you trust) run `relay/` yourself. See
-[`docs/relay.md`](docs/relay.md) for build, run flags, and deployment.
+"Relay" means two different servers, and it is worth keeping them apart:
+
+- **The iroh relay** — what `--relay <url>` points at. It carries QUIC traffic between devices that
+  can't reach each other directly and coordinates hole-punching. The project runs one, with access
+  restricted to an allowlist (ADR 0018, ADR 0027); you can also point `--relay` at your own.
+- **`relay/`** — the mailbox in this repository: it stores ciphertext blobs keyed by device and
+  forwards push wake-ups. Self-hosted, and nothing in the client talks to it yet.
+
+Neither **can read your list** — every blob and every frame is already encrypted by your own devices
+before it leaves them (design §4.6). See [`docs/relay.md`](docs/relay.md) for build, run flags, and
+deployment.
