@@ -57,6 +57,7 @@ struct RelayCtx {
     device: DeviceId,
     group: GroupId,
     status: LanStatus,
+    relay_identity: [u8; 32],
 }
 
 /// `--relay-dial-peer`'s parsed value: the peer's relay node id, known out of band (module doc).
@@ -93,6 +94,7 @@ pub fn start(
             device: guard.device(),
             group: guard.group(),
             status: guard.lan_status().clone(),
+            relay_identity: guard.relay_identity(),
         }
     };
     ctx.status.set_relay_configured(&url);
@@ -109,7 +111,7 @@ async fn bind(ctx: &RelayCtx, url: String) -> Option<Arc<RelayEndpoint>> {
         url,
         max_peers: MAX_RELAY_PEERS,
     };
-    match RelayEndpoint::bind(&cfg, ctx.group).await {
+    match RelayEndpoint::bind_with_secret_key(&cfg, ctx.group, ctx.relay_identity).await {
         Ok(e) => {
             let node_id = crate::pairing_wire::hex_encode(&e.node_id_bytes());
             ctx.status

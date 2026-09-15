@@ -261,6 +261,10 @@ impl Workspace {
     pub fn device_static_public(&self) -> DeviceStaticPublic {
         self.identity.device_static_public()
     }
+    /// This device's persisted relay-transport identity seed (`relay.rs::start`'s bind call).
+    pub fn relay_identity(&self) -> [u8; 32] {
+        self.identity.relay_identity()
+    }
     // This device's Ed25519 op-signing key is not a `Workspace` field: `bundle_grpc.rs` loads it
     // on demand from `key_store()` (plan M8 `cli-bundle`), the same "mint once, persist via the
     // keystore" idiom as `device_static_public` above but without adding a hot field for a code

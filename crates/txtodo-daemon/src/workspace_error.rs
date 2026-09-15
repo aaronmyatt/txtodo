@@ -28,6 +28,9 @@ pub enum WorkspaceError {
     /// A stored device signing seed is not `SIGNING_KEY_BYTES` long (the keystore was edited or
     /// corrupted by hand); the length found.
     CorruptDeviceSigning(usize),
+    /// A stored relay identity seed is not 32 bytes long (the keystore was edited or corrupted by
+    /// hand); the length found.
+    CorruptRelayIdentity(usize),
     /// The OS entropy source failed while minting a new device key.
     Entropy,
 }
@@ -48,6 +51,9 @@ impl fmt::Display for WorkspaceError {
                 f,
                 "stored device signing seed is {len} bytes, not {SIGNING_KEY_BYTES}"
             ),
+            WorkspaceError::CorruptRelayIdentity(len) => {
+                write!(f, "stored relay identity seed is {len} bytes, not 32")
+            }
             WorkspaceError::Entropy => write!(f, "entropy source failed"),
         }
     }

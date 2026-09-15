@@ -70,6 +70,7 @@ pub struct DeviceIdentity {
     key_store_backend: &'static str,
     pairing: PairingRegistry,
     store: Mutex<IdentityStore>,
+    relay_identity: [u8; 32],
 }
 
 impl DeviceIdentity {
@@ -117,6 +118,8 @@ impl DeviceIdentity {
         let group = load_or_mint_group(&mut store)?;
         let group_epoch = load_group_epoch(&store)?;
         let device_static = crate::keystore_setup::load_or_mint_device_static(key_store.as_ref())?;
+        let relay_identity =
+            crate::keystore_setup::load_or_mint_relay_identity(key_store.as_ref())?;
         Ok(DeviceIdentity {
             device,
             device_static,
@@ -126,6 +129,7 @@ impl DeviceIdentity {
             key_store_backend,
             pairing: PairingRegistry::new(),
             store: Mutex::new(store),
+            relay_identity,
         })
     }
 
@@ -136,6 +140,13 @@ impl DeviceIdentity {
     /// This device's long-term X25519 static public key, safe to hand to a peer during pairing.
     pub fn device_static_public(&self) -> DeviceStaticPublic {
         self.device_static.public_key()
+    }
+    /// This device's persisted relay-transport identity seed (task
+    /// `daemon-workspace-identity-agreement` stage 1), stable across restarts. Opaque bytes: only
+    /// `txtodo_sync::holepunch::RelayEndpoint::bind_with_secret_key` turns this into a real `iroh`
+    /// identity — this crate never names that type.
+    pub fn relay_identity(&self) -> [u8; 32] {
+        self.relay_identity
     }
     /// The keystore backing this device's sync keys (device signing/static, group key epochs).
     pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {

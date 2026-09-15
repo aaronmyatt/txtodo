@@ -99,6 +99,27 @@ pub(crate) fn load_or_mint_device_static(
     Ok(generated)
 }
 
+/// Loads this device's persisted relay-transport identity seed from the keystore, or mints and
+/// stores one — same "mint once, fixed for the process's lifetime" idiom as
+/// [`load_or_mint_device_static`], but the value is opaque bytes here: `txtodo_sync::holepunch`'s
+/// `RelayEndpoint::bind_with_secret_key` is the only place these bytes become a real `iroh`
+/// identity — this crate never names that type (`.claude/budgets.json`'s `allowedDeps`).
+pub(crate) fn load_or_mint_relay_identity(
+    key_store: &dyn KeyStore,
+) -> Result<[u8; 32], WorkspaceError> {
+    if let Some(secret) = key_store.get(KeyId::RelayIdentity)? {
+        let bytes: [u8; 32] = secret
+            .expose()
+            .try_into()
+            .map_err(|_| WorkspaceError::CorruptRelayIdentity(secret.expose().len()))?;
+        return Ok(bytes);
+    }
+    let mut seed = [0u8; 32];
+    getrandom::fill(&mut seed).map_err(|_| WorkspaceError::Entropy)?;
+    key_store.put(KeyId::RelayIdentity, &Secret::new(seed.to_vec()))?;
+    Ok(seed)
+}
+
 /// Loads this device's Ed25519 op-signing key from the keystore, or mints and stores one — same
 /// "mint once, fixed for the workspace's lifetime" idiom as [`load_or_mint_device_static`]. Unlike
 /// that one, `DeviceSigningKey` has no `to_bytes`/`generate` pair (it only wraps an existing
