@@ -26,7 +26,7 @@ fn open_args() -> OpenArgs {
         device_relay: None,
         relay_dial_peer: None,
         no_lan: true,
-        sync_dir: None,
+        device_file_carrier: None,
     }
 }
 

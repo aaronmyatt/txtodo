@@ -6,15 +6,15 @@
 
 use crate::clock::Clock;
 use crate::device_identity::DeviceIdentity;
-use crate::device_relay::{DeviceRelay, WorkspaceRoute};
-use crate::file_carrier::{self, FileCarrierTransport};
+use crate::device_relay::{DeviceRelay, WorkspaceRoute, WorkspaceRoutes};
+use crate::file_carrier::DeviceFileCarrier;
 use crate::lan::{self, LanTransport};
 use crate::relay::{self, RelayTransport};
 use crate::server::SharedWorkspace;
 use crate::watch_task;
 use crate::workspace::Workspace;
 use crate::workspace_error::WorkspaceError;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, PoisonError, RwLock};
 use tokio::task::JoinHandle;
 use txtodo_model::IdentityMode;
@@ -47,8 +47,11 @@ pub struct WorkspaceOpenArgs {
     pub relay_dial_peer: Option<[u8; 32]>,
     /// `--no-lan`: skip `lan::start` entirely for every workspace.
     pub no_lan: bool,
-    /// `--sync-dir <path>` (plan M8 `sync-file-carrier`).
-    pub sync_dir: Option<PathBuf>,
+    /// This device's one shared file-carrier surface (plan M8 `sync-file-carrier`; task
+    /// `daemon-shared-sync-link` stage 6), when `--sync-dir` was configured and opened
+    /// successfully; `None` means file-carrier sync stays off for every workspace, same as
+    /// `--sync-dir` being omitted meant before this device opened one carrier per workspace.
+    pub device_file_carrier: Option<Arc<DeviceFileCarrier>>,
 }
 
 /// One open workspace's live state: the shared `Workspace` plus everything that must stay alive
@@ -60,11 +63,11 @@ pub struct OpenedWorkspace {
     pub ws: SharedWorkspace,
     id: txtodo_store::WorkspaceId,
     device_relay: Option<Arc<DeviceRelay>>,
+    device_file_carrier: Option<Arc<DeviceFileCarrier>>,
     _watcher: notify::RecommendedWatcher,
     watch_task: JoinHandle<()>,
     lan: Option<LanTransport>,
     relay: Option<RelayTransport>,
-    file_carrier: Option<FileCarrierTransport>,
 }
 
 impl Drop for OpenedWorkspace {
@@ -76,21 +79,23 @@ impl Drop for OpenedWorkspace {
         if let Some(r) = &self.relay {
             r.abort();
         }
-        if let Some(f) = &self.file_carrier {
-            f.abort();
-        }
-        // Unregisters this workspace's route so a connection accepted afterward for this id is
-        // dropped rather than routed to a handle whose background tasks just stopped (task
-        // `daemon-shared-sync-link` stage 5).
+        // Unregisters this workspace's route on both shared, device-level tables so a connection
+        // or file-carrier frame accepted afterward for this id is dropped rather than routed to a
+        // handle whose background tasks just stopped (task `daemon-shared-sync-link` stages 5-6).
         if let Some(device_relay) = &self.device_relay {
             device_relay.routes().unregister(self.id);
+        }
+        if let Some(device_file_carrier) = &self.device_file_carrier {
+            device_file_carrier.routes().unregister(self.id);
         }
     }
 }
 
-/// Opens `root` under `args`, spawns its watcher and (unless disabled/unconfigured) LAN, relay and
-/// file-carrier tasks — the same sequence `main.rs::run` used to run once, per workspace. Must run
-/// inside a tokio runtime (actors and the background tasks below are all spawned).
+/// Opens `root` under `args`, spawns its watcher and (unless disabled) LAN — the same sequence
+/// `main.rs::run` used to run once, per workspace. Must run inside a tokio runtime (actors and the
+/// background tasks below are all spawned). Relay and file-carrier are no longer spawned here at
+/// all (task `daemon-shared-sync-link` stages 5-6): both are this device's own shared, single
+/// background tasks now, and this workspace only ever *registers* a route on each.
 pub fn open_workspace_full(
     root: &Path,
     id: txtodo_store::WorkspaceId,
@@ -103,7 +108,22 @@ pub fn open_workspace_full(
     // invariant — see `Workspace::set_workspace_id`'s doc).
     ws.set_workspace_id(id);
     let ws: SharedWorkspace = Arc::new(RwLock::new(ws));
-    register_route(&ws, id, args.device_relay.as_deref());
+    register_route(
+        &ws,
+        id,
+        args.device_relay
+            .as_ref()
+            .map(Arc::as_ref)
+            .map(DeviceRelay::routes),
+    );
+    register_route(
+        &ws,
+        id,
+        args.device_file_carrier
+            .as_ref()
+            .map(Arc::as_ref)
+            .map(DeviceFileCarrier::routes),
+    );
     let (watcher, watch_task) =
         watch_task::start(Arc::clone(&ws), Arc::clone(&clock)).map_err(|source| {
             WorkspaceError::Walk(crate::walker::WalkError::Io {
@@ -122,31 +142,32 @@ pub fn open_workspace_full(
         args.device_relay.as_ref().map(|dr| dr.endpoint()),
         args.relay_dial_peer,
     );
-    let file_carrier = file_carrier::start(Arc::clone(&ws), args.sync_dir.clone());
     Ok(OpenedWorkspace {
         ws,
         id,
         device_relay: args.device_relay.clone(),
+        device_file_carrier: args.device_file_carrier.clone(),
         _watcher: watcher,
         watch_task,
         lan,
         relay,
-        file_carrier,
     })
 }
 
-/// Registers `ws`'s route on the device's shared relay endpoint (task `daemon-shared-sync-link`
-/// stage 5), before any background task below spawns — same ordering invariant as
-/// `set_workspace_id`'s own doc: an inbound connection for this workspace must never arrive before
-/// there is a route for it. A no-op when relay is not configured at all. Refusal past the routing
-/// table's cap is logged, never fatal — this workspace still opens, it just cannot yet receive an
-/// inbound relay connection until some other workspace's route frees a slot.
+/// Registers `ws`'s route on `routes` (either the device's shared relay endpoint's table or its
+/// shared file-carrier's table — both `WorkspaceRoutes`, task `daemon-shared-sync-link` stages
+/// 5-6), before any background task below spawns — same ordering invariant as
+/// `set_workspace_id`'s own doc: an inbound connection or frame for this workspace must never
+/// arrive before there is a route for it. A no-op when `routes` is `None` (that surface is not
+/// configured at all). Refusal past the routing table's cap is logged, never fatal — this
+/// workspace still opens, it just cannot yet receive an inbound connection/frame on that surface
+/// until some other workspace's route frees a slot.
 fn register_route(
     ws: &SharedWorkspace,
     id: txtodo_store::WorkspaceId,
-    device_relay: Option<&DeviceRelay>,
+    routes: Option<&WorkspaceRoutes>,
 ) {
-    let Some(device_relay) = device_relay else {
+    let Some(routes) = routes else {
         return;
     };
     let (device, group) = {
@@ -158,8 +179,8 @@ fn register_route(
         device,
         group,
     };
-    if let Err(e) = device_relay.routes().register(id, route) {
-        tracing::warn!(error = %e, %id, "workspace_relay_route_registration_failed");
+    if let Err(e) = routes.register(id, route) {
+        tracing::warn!(error = %e, %id, "workspace_route_registration_failed");
     }
 }
 

@@ -31,7 +31,7 @@ fn service() -> (tempfile::TempDir, Arc<DeviceIdentity>, GlobalService) {
         device_relay: None,
         relay_dial_peer: None,
         no_lan: true,
-        sync_dir: None,
+        device_file_carrier: None,
     };
     let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))

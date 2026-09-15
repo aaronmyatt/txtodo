@@ -133,3 +133,54 @@ reviewable, testable, independently-safe-to-merge commit, given this is a compar
   single-workspace case every existing test exercises; the genuinely-multi-workspace scenario is
   real, additional coverage still worth having, left as a named follow-up rather than blocking
   this stage's close given the real-network verification above already consumed significant time.
+
+## Stage 6, as actually landed (2026-09-15)
+
+- **`DeviceFileCarrier`** (`file_carrier.rs`, rewritten): mirrors `DeviceRelay`'s shape exactly —
+  one `FileCarrier` plus one `WorkspaceRoutes` (`device_relay.rs`'s own table, reused verbatim,
+  gaining a `list()` method so the consolidated tick can iterate every registered workspace).
+  Bound once in `main.rs::run`, before any workspace opens. `open_workspace_full` registers each
+  opened workspace's route on it the same way it already does for `device_relay`'s table;
+  `OpenedWorkspace::Drop` unregisters from both. The one consolidated tick derives the group/
+  signing/verify keys once per tick from any one registered route (device-level per ADR 0021, so
+  any route gives the same answer), then hands the whole table to `send_new_ops` (per-workspace
+  `last_sent: HashMap<WorkspaceId, Heads>`) and `recv_new_ops` (peeks each incoming frame's
+  `workspace_id` via `aead::peek_workspace`, routes it to the matching workspace's
+  `commit_incoming_ops`). `workspace_catalog_open.rs`'s `register_route` was generalized to take
+  either table as a parameter, called twice per workspace open instead of once.
+- **The acceptance test**: `two_workspaces_one_device_share_a_file_carrier_without_cross_
+  contamination` (`file_carrier_converge.rs`) — one real global-mode `txtodod` holds two
+  pre-registered workspaces sharing one `--sync-dir`, each syncing with its own single-workspace
+  peer; asserts neither peer ever sees the other's content.
+- **Three real bugs found and fixed getting the new test green, all in the test harness, none in
+  `file_carrier.rs` itself** — worth recording since each one cost real debugging time:
+  1. The new global-mode daemon never seeded its own device group id before starting, so
+     `register_route` snapshotted a stale, randomly-minted group into every `WorkspaceRoute`
+     *before* a later `DebugSetGroupKey` RPC call could change it — `WorkspaceRoute.group` is
+     never re-read live, so the file carrier sealed/opened frames under the wrong group forever.
+     Fixed with a new `seed_group_id_at` (the global-mode counterpart of `support::seed_group_id`,
+     which only knows the `--dir`-bridge's `<dir>/.txtodo/identity.db` location), called before
+     the daemon spawns.
+  2. Once the group matched, peers still rejected the global daemon's ops ("inserted line does not
+     carry id") — the global-mode daemon defaults to `--identity-mode sidecar` while its
+     `--dir`-bridge peers ran `tagged`. Fixed by passing `--identity-mode tagged` explicitly.
+  3. Even with both bugs above fixed, one workspace never converged: the test's own
+     `wait_for_both` captured device A's "want" content once, before the poll loop started, but
+     that workspace starts *empty* on A and non-empty on its peer — it is A that needs to catch up
+     there, not the peer. A one-time snapshot could never observe A's later convergence. Fixed by
+     re-fetching both workspaces' content from A every poll iteration instead of once.
+- **`tests/support/multi.rs`** (new): the global-mode multi-workspace harness (`MultiWorkspaceDaemon`,
+  `seed_group_id_at`, `seed_workspace_at`, `debug_set_group_key`, `file_at`) was pulled out of
+  `file_carrier_converge.rs` into its own support module once the harness plus richer
+  `log_tail`-in-assertion diagnostics (mirroring `wait_for_convergence`'s own pattern) pushed that
+  file over the 400-line budget — same "split for the line budget" precedent as `support::relay`.
+- **Every existing test in the crate stays green**: full `--lib` suite (206 tests) and the full
+  `tests/*.rs` integration suite, including the real-relay tests from stages 4-5
+  (`relay_converge.rs`, `pairing_relay.rs`) — one `pairing_relay.rs` run hit the same documented
+  real-network variance already noted above (own retry, immediately green; no code change
+  involved, `device_relay.rs`'s only diff this stage is the additive `list()` method).
+
+This closes every item in this task's own `todo.txt`. The one deliberately-deferred item from
+stages 4-5 — a "two workspaces, one daemon, both relay" regression test (distinct from this
+stage's file-carrier one) — remains open as a named, non-blocking follow-up; nothing in stage 6
+touched relay routing.

@@ -115,6 +115,17 @@ impl WorkspaceRoutes {
         self.read().values().next().cloned()
     }
 
+    /// Every currently-registered route, `(WorkspaceId, WorkspaceRoute)` pairs — task
+    /// `daemon-shared-sync-link` stage 6: a consolidated file-carrier's own send tick iterates
+    /// every workspace sharing its `--sync-dir` this way, the same table `control_dispatch.rs`
+    /// already reads from for incoming relay connections.
+    pub fn list(&self) -> Vec<(WorkspaceId, WorkspaceRoute)> {
+        self.read()
+            .iter()
+            .map(|(id, route)| (*id, route.clone()))
+            .collect()
+    }
+
     fn read(&self) -> RwLockReadGuard<'_, HashMap<WorkspaceId, WorkspaceRoute>> {
         self.inner
             .read()

@@ -2,6 +2,9 @@
 //! its socket, write files "from outside", wait for it to settle. Slice-local (constitution §7).
 #![allow(dead_code)] // each test file uses a different subset of the helpers
 
+/// Global-mode multi-workspace daemon harness, split out for this file's own line budget — see
+/// its own doc.
+pub mod multi;
 /// Pairing helpers, split out for this file's own line budget — see its own doc.
 pub mod pairing;
 /// Relay/forced-relay helpers, split out for this file's own line budget — see its own doc.
