@@ -2,7 +2,8 @@
 //! wrong group, wrong epoch, wrong workspace) each giving their own typed error.
 
 use crate::aead::{
-    GroupKey, GroupKeys, MAX_RETAINED_KEY_EPOCHS, SEALED_HEADER_BYTES, SealFor, open, seal,
+    GroupKey, GroupKeys, MAX_RETAINED_KEY_EPOCHS, SEALED_HEADER_BYTES, SealFor, open,
+    peek_workspace, seal,
 };
 use crate::crypto_error::CryptoError;
 use crate::frame::PROTOCOL_VERSION;
@@ -222,6 +223,51 @@ fn retaining_more_than_the_cap_is_refused_and_replacing_is_allowed() {
     assert!(keys.get(0).is_some());
     assert!(keys.get(999).is_none());
     assert!(!keys.is_empty());
+}
+
+#[test]
+fn peek_workspace_reads_the_clear_header_without_a_key() {
+    let group = GroupId(1);
+    let ws = workspace(42);
+    let sealed = seal(PROTOCOL_VERSION, for_(group, 0, ws), &key(7), b"ops").unwrap();
+    assert_eq!(peek_workspace(&sealed), Some(ws));
+}
+
+#[test]
+fn peek_workspace_is_none_on_anything_shorter_than_the_header_not_a_panic() {
+    for len in 0..38 {
+        assert_eq!(peek_workspace(&vec![0u8; len]), None, "len {len}");
+    }
+}
+
+#[test]
+fn peek_workspace_is_routing_not_authentication() {
+    // A peeked id is exactly the bytes in the clear header — it is not proven correct the way
+    // `open`'s own `WrongWorkspace` check proves one. Flipping the clear header's workspace bytes
+    // (never touching the ciphertext or tag) changes what a peek reports; `open` against the real
+    // expected id still (correctly) refuses it, proving the peek alone was never the security
+    // boundary — see this function's own name for why that's the point being tested.
+    let group = GroupId(1);
+    let real_ws = workspace(1);
+    let claimed_ws = workspace(2);
+    let mut sealed = seal(PROTOCOL_VERSION, for_(group, 0, real_ws), &key(7), b"ops").unwrap();
+    sealed[22..38].copy_from_slice(&claimed_ws.ulid().to_u128().to_le_bytes());
+    assert_eq!(
+        peek_workspace(&sealed),
+        Some(claimed_ws),
+        "the peek trusts whatever bytes are there"
+    );
+    assert_eq!(
+        open(
+            PROTOCOL_VERSION,
+            group,
+            claimed_ws,
+            &one_epoch(0, 7),
+            &sealed
+        ),
+        Err(CryptoError::Decrypt { epoch: 0 }),
+        "but the real open() still fails the tag once the AAD no longer matches the ciphertext"
+    );
 }
 
 #[test]

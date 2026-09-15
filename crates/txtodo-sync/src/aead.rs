@@ -240,6 +240,22 @@ pub fn open(
     Ok(plaintext)
 }
 
+/// Reads a sealed batch's workspace id straight out of its clear header, without a key and without
+/// checking the AEAD tag — task `daemon-shared-sync-link`: an accept loop sharing one endpoint
+/// across every open workspace needs to know *which* workspace a fresh connection's first frame is
+/// probably for before it can even look up that workspace's group keys to call [`open`] for real.
+/// **This is routing, not authentication.** A peeked id is not proven correct the way [`open`]'s
+/// own `WrongWorkspace` check proves one: a caller must still route to the matching workspace and
+/// call [`open`] there, which re-validates the same bytes against the AEAD tag before a single
+/// byte of plaintext is trusted. `None` on anything shorter than the header — never a panic on a
+/// truncated or malicious first read.
+pub fn peek_workspace(sealed: &[u8]) -> Option<WorkspaceId> {
+    let bytes = sealed.get(22..38)?;
+    Some(WorkspaceId::new(txtodo_model::Ulid::from_u128(read_u128(
+        bytes,
+    ))))
+}
+
 /// Reads 16 little-endian bytes without `try_into`, so a length check earlier in `open` is the only
 /// precondition and there is no panic path here.
 fn read_u128(bytes: &[u8]) -> u128 {
