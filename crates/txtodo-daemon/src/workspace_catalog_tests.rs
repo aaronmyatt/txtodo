@@ -3,6 +3,7 @@
 //! whitebox spirit as `workspace_registry_tests.rs` one layer down.
 
 use crate::clock::FakeClock;
+use crate::device_identity::DeviceIdentity;
 use crate::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use crate::workspace_registry::WorkspaceRegistry;
 use std::sync::Arc;
@@ -10,11 +11,17 @@ use tonic::Code;
 use txtodo_model::IdentityMode;
 use txtodo_proto::v1::{self as pb, workspace_selector::Selector};
 
+/// A fresh in-memory-keystore identity, scoped to its own tempdir (never observed by these
+/// tests — only `WorkspaceCatalog::resolve`'s routing is under test here, not identity sharing).
 fn open_args() -> OpenArgs {
+    let identity_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let identity = Arc::new(
+        DeviceIdentity::open_in_memory(identity_dir.path(), &FakeClock::new(1_000))
+            .unwrap_or_else(|e| panic!("open identity: {e}")),
+    );
     OpenArgs {
         identity_mode: IdentityMode::Sidecar,
-        key_store_mode: None,
-        file_passphrase: None,
+        identity,
         relay_url: None,
         relay_dial_peer: None,
         no_lan: true,

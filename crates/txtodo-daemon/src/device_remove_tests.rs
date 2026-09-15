@@ -31,7 +31,7 @@ fn device(n: u128) -> DeviceId {
 }
 
 fn register_peer(ws: &Workspace, n: u128) {
-    let mut store = ws.store().lock().unwrap();
+    let mut store = ws.identity_store().lock().unwrap();
     store
         .register_device(&NewDevice {
             device: device(n),
@@ -90,7 +90,7 @@ fn removing_a_real_peer_rotates_the_epoch_and_tombstones_the_row() {
     assert_eq!(outcome.grants_minted, 1, "one grant for peer 2");
     assert_eq!(ws.group_epoch(), 1);
 
-    let store = ws.store().lock().unwrap();
+    let store = ws.identity_store().lock().unwrap();
     let removed = store.device(device(1)).unwrap().unwrap();
     assert_eq!(removed.removed_at_ms, Some(2_000));
     let remaining = store.device(device(2)).unwrap().unwrap();

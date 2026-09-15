@@ -225,10 +225,11 @@ async fn pairing_registers_the_initiators_static_public_key_in_the_joiners_devic
     handshake_and_confirm(&a, &b, now_ms).await;
     finalize_after_both_confirm(&a, &b, now_ms).await;
 
-    // Plan M4 tasks/sync-device-remove: the joiner registers the initiator's long-term static
-    // public key in its own `devices` table — the persistence rotation is gated on.
+    // Plan M4 tasks/sync-device-remove, ADR 0021: the joiner registers the initiator's long-term
+    // static public key in the shared device-global `devices` table — the persistence rotation
+    // is gated on.
     let b_ws = b.workspace();
-    let b_store = b_ws.store().lock().unwrap();
+    let b_store = b_ws.identity_store().lock().unwrap();
     let devices = b_store.list_devices().unwrap();
     assert_eq!(devices.len(), 1, "the joiner learned exactly one peer");
     assert_eq!(devices[0].device, a.workspace().device());

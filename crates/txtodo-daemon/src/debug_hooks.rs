@@ -9,10 +9,10 @@
 //! outside a test, so the footgun is in exposing it over gRPC unguarded, which that caller does
 //! not do.
 
+use crate::device_identity::GROUP_ID_KEY;
 use crate::server::TxtodoService;
 use crate::workspace::Workspace;
 use crate::workspace_error::WorkspaceError;
-use crate::workspace_mint::GROUP_ID_KEY;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
 use txtodo_sync::{GroupId, KeyId, Secret};
@@ -81,8 +81,9 @@ impl Workspace {
             .is_some()
     }
 
-    /// TEST-ONLY: forces this workspace's sync group id and epoch-0 group key directly, bypassing
-    /// the pairing handshake entirely. See the module doc for where the real guard lives.
+    /// TEST-ONLY: forces this device's sync group id and epoch-0 group key directly, bypassing the
+    /// pairing handshake entirely (ADR 0021: shared across every workspace this daemon has open,
+    /// same as a real pairing would be). See the module doc for where the real guard lives.
     pub(crate) fn debug_set_group_key(
         &self,
         group: GroupId,
@@ -91,7 +92,7 @@ impl Workspace {
         self.key_store()
             .put(KeyId::Group(0), &Secret::new(key_bytes))?;
         let mut store = self
-            .store()
+            .identity_store()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.meta_set(GROUP_ID_KEY, &group.0.to_be_bytes())?;

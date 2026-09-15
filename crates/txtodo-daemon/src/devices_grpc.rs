@@ -77,9 +77,10 @@ fn remove_status(e: RemoveDeviceError) -> Status {
 }
 
 impl TxtodoService {
-    /// Every known device, `is_self`/`removed`/skew computed here so neither the CLI nor a human
-    /// has to re-derive it. Includes removed rows — the wire boundary decides what a client is
-    /// shown (same idiom as `TokenList`).
+    /// Every known device (ADR 0021: the shared device-global list, not this one workspace's own
+    /// — every workspace this daemon has open sees the same peers), `is_self`/`removed`/skew
+    /// computed here so neither the CLI nor a human has to re-derive it. Includes removed rows —
+    /// the wire boundary decides what a client is shown (same idiom as `TokenList`).
     pub(crate) async fn device_list_impl(
         &self,
         _r: Request<pb::DeviceListRequest>,
@@ -88,7 +89,7 @@ impl TxtodoService {
         let now_ms = ws.clock().now_ms();
         let self_device = ws.device();
         let rows = ws
-            .store()
+            .identity_store()
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .list_devices()

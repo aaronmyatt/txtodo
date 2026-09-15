@@ -1,10 +1,13 @@
-//! Resolves this workspace's real sync-keystore backend (plan M4 `sync-keystore`): OS keychain,
-//! encrypted file, or the in-memory placeholder every test in this crate uses. Split out of
+//! Resolves the real sync-keystore backend (plan M4 `sync-keystore`): OS keychain, encrypted
+//! file, or the in-memory placeholder every test in this crate uses. Originally split out of
 //! `workspace.rs` to keep that file within its line budget, the same reason `pairing_state.rs` is
-//! split from `pairing_grpc.rs`.
+//! split from `pairing_grpc.rs`; since ADR 0021 (task `daemon-device-set-identity`) the caller is
+//! `device_identity.rs` — one device-global keystore, not one per workspace — but the resolution
+//! logic itself is unchanged, just no longer scoped by a per-workspace group id (see
+//! `resolve_key_store`'s doc).
 //!
 //! `txtodo_sync::resolve`'s own return type is `Box<dyn KeyStore>`, not `Send + Sync` — but
-//! `Workspace` must be (it lives behind `Arc<RwLock<_>>`, driven from async gRPC handlers), so this
+//! `DeviceIdentity` must be (it lives behind `Arc<_>`, driven from async gRPC handlers), so this
 //! module reimplements `resolve`'s three-way dispatch directly against the concrete
 //! `OsKeyStore`/`FileKeyStore` types (both real, unmodified `txtodo-sync` backends, not
 //! reimplemented) rather than going through the generic helper's trait-object erasure.
@@ -12,7 +15,6 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use txtodo_store::{Store, StoreError};
 use txtodo_sync::{
     DEVICE_STATIC_KEY_BYTES, DeviceSigningKey, DeviceStaticSecret, FileKeyStore, KeyId, KeyStore,
     KeyStoreError, KeyStoreMode, OsKeyStore, ResolvedBackend, SIGNING_KEY_BYTES, Secret,
@@ -20,16 +22,17 @@ use txtodo_sync::{
 
 use crate::workspace_error::WorkspaceError;
 
-/// The `meta` key holding the group key epoch this workspace currently seals ops under (plan M4
-/// `sync-device-remove`).
-pub(crate) const GROUP_EPOCH_KEY: &str = "group_key_epoch";
-/// File name of the encrypted-file keystore backend, under `<workspace>/.txtodo/` — never
-/// `$HOME` root (plan M4 `sync-keystore`'s own rule).
+/// File name of the encrypted-file keystore backend, under whichever `state_dir`
+/// `resolve_key_store` is called with (the device-global state dir since ADR 0021; only
+/// `DeviceIdentity::open` ever calls this — `open_in_memory`, every test in this crate's own
+/// entry point, never touches a real keystore backend at all) — never `$HOME` root (plan M4
+/// `sync-keystore`'s own rule).
 pub(crate) const KEYSTORE_FILE: &str = "keystore";
 
-/// Resolves `mode` against `scope` (this workspace's group id, so two groups on one machine never
-/// share an OS-keystore entry), using `state_dir/KEYSTORE_FILE` for the file backend and
-/// `file_passphrase` to open or create it. `auto` never falls back to a file on its own initiative
+/// Resolves `mode` against `scope` (a fixed device-level string since ADR 0021 — one group per
+/// device now, so no per-workspace-group scoping is needed to keep OS-keystore entries from
+/// colliding), using `state_dir/KEYSTORE_FILE` for the file backend and `file_passphrase` to open
+/// or create it. `auto` never falls back to a file on its own initiative
 /// (`KeyStoreError::AutoNeedsChoice`) — the one rule the task notes call out by name. The passphrase
 /// prompt itself lives in `txtodo-cli`; this function only consumes one if given.
 pub(crate) fn resolve_key_store(
@@ -115,15 +118,4 @@ pub(crate) fn load_or_mint_device_signing(
     getrandom::fill(&mut seed).map_err(|_| WorkspaceError::Entropy)?;
     key_store.put(KeyId::DeviceSigning, &Secret::new(seed.to_vec()))?;
     Ok(DeviceSigningKey::from_bytes(seed))
-}
-
-/// Loads the group key epoch from `meta`, defaulting to 0 (no rotation has happened yet). Unlike
-/// the device/group id, 0 is never persisted just for being read: `Workspace::advance_group_epoch`
-/// is the only writer, so an unrotated workspace's `meta` carries no `GROUP_EPOCH_KEY` at all.
-pub(crate) fn load_group_epoch(store: &Store) -> Result<u32, StoreError> {
-    let Some(bytes) = store.meta_get(GROUP_EPOCH_KEY)? else {
-        return Ok(0);
-    };
-    let raw: [u8; 4] = bytes.as_slice().try_into().unwrap_or([0; 4]);
-    Ok(u32::from_be_bytes(raw))
 }

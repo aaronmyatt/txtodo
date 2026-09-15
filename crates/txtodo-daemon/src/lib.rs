@@ -18,6 +18,7 @@ mod conflict_row;
 pub mod convert;
 pub mod debounce;
 pub mod debug_hooks;
+pub mod device_identity;
 mod device_remove;
 mod devices_grpc;
 pub mod expected;

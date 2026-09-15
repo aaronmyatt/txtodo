@@ -1,59 +1,20 @@
-//! Loads-or-mints every workspace-lifetime id that lives in `meta` (device, group, identity mode).
-//! Split out of `workspace.rs` to keep that file within its line budget.
+//! Loads-or-mints workspace-lifetime state that lives in this workspace's own `meta` table
+//! (identity mode only, since ADR 0021 — device id and sync group moved to a shared
+//! `DeviceIdentity`, `device_identity.rs`). Split out of `workspace.rs` to keep that file within
+//! its line budget.
 
-use crate::clock::Clock;
 use crate::walker;
 use crate::workspace_error::WorkspaceError;
 use std::path::Path;
-use txtodo_model::{DeviceId, FilePath, IdentityMode, Ulid};
-use txtodo_store::{Store, StoreError};
-use txtodo_sync::GroupId;
+use txtodo_model::{FilePath, IdentityMode};
+use txtodo_store::Store;
 
-/// The `meta` key holding this install's device id.
-pub(crate) const DEVICE_ID_KEY: &str = "device_id";
-/// The `meta` key holding this workspace's sync group id (plan M4 pairing). `pub`, not
-/// `pub(crate)`: `tests/support/mod.rs` (a separate integration-test crate) seeds a shared group
-/// id directly into a fresh workspace's store for the real two-daemon LAN tests.
-pub const GROUP_ID_KEY: &str = "group_id";
 /// The `meta` key holding this workspace's identity mode (docs/questions.md Q2).
 pub(crate) const IDENTITY_MODE_KEY: &str = "identity_mode";
 
 /// The last `/`-separated segment of a workspace-relative path.
 pub(crate) fn basename(path: &FilePath) -> &str {
     path.as_str().rsplit('/').next().unwrap_or(path.as_str())
-}
-
-pub(crate) fn load_or_mint_device(
-    store: &mut Store,
-    clock: &dyn Clock,
-) -> Result<DeviceId, StoreError> {
-    if let Some(bytes) = store.meta_get(DEVICE_ID_KEY)?
-        && let Ok(raw) = <[u8; 16]>::try_from(bytes.as_slice())
-    {
-        return Ok(DeviceId::new(Ulid::from_u128(u128::from_be_bytes(raw))));
-    }
-    let id = DeviceId::new(clock.new_ulid());
-    store.meta_set(DEVICE_ID_KEY, &id.ulid().to_u128().to_be_bytes())?;
-    debug_assert!(store.meta_get(DEVICE_ID_KEY)?.is_some());
-    Ok(id)
-}
-
-/// Loads this workspace's sync group id from `meta`, or mints a fresh one (128 random bits; unlike
-/// the device id, nothing needs to sort on it) and persists it. `getrandom` failure is not
-/// recoverable in a meaningful way — `clock.rs`'s `SystemClock::new_ulid` takes the same stance for
-/// a ULID's random half — so a fixed fallback pattern still yields a usable, if less unique, id.
-pub(crate) fn load_or_mint_group(store: &mut Store) -> Result<GroupId, StoreError> {
-    if let Some(bytes) = store.meta_get(GROUP_ID_KEY)?
-        && let Ok(raw) = <[u8; 16]>::try_from(bytes.as_slice())
-    {
-        return Ok(GroupId(u128::from_be_bytes(raw)));
-    }
-    let mut raw = [0u8; 16];
-    if getrandom::fill(&mut raw).is_err() {
-        raw = [0xA5; 16];
-    }
-    store.meta_set(GROUP_ID_KEY, &raw)?;
-    Ok(GroupId(u128::from_be_bytes(raw)))
 }
 
 /// Loads this workspace's identity mode from `meta`, or mints one: `Tagged` if any discovered

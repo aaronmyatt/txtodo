@@ -26,6 +26,23 @@ file-carrier), just now possibly several of them in one process (`daemon-workspa
 `WorkspaceId`, and still dials a per-directory socket rather than the true global one
 (`cli-workspace-commands`, todo 20). See `tasks/daemon-global-socket/notes.md` for the full design
 and what's deliberately deferred.
+ADR 0021 (task `daemon-device-set-identity`, 2026-09-15): device id, sync group, keystore and
+pairing registry moved out of `Workspace` (they used to be workspace.rs:35-54's own fields,
+minted once per workspace) into a new `device_identity.rs::DeviceIdentity`, constructed once per
+`txtodod` process and shared by every workspace it opens — see that module's doc for the on-disk
+location and its migration story (a fresh mint, no automatic adoption of a pre-existing
+workspace's own group/keystore). `Workspace` now borrows `identity: Arc<DeviceIdentity>` instead
+of minting its own; every existing accessor (`device()`/`group()`/`key_store()`/etc.) keeps its
+same signature, delegating underneath. `device_remove.rs`/`debug_hooks.rs`/`devices_grpc.rs` now
+read/write the device-global `devices`/`meta` rows via `Workspace::identity_store()`
+(`txtodo_store::IdentityStore`, its own database file — `identity.db`, alongside `registry.db`),
+not the workspace's own `store()`. Practical effect proven by the real two-daemon tests
+(`tests/pairing_lan.rs` et al., unmodified and still green): opening a *second* workspace on an
+already-paired device inherits the shared group key immediately, no second pairing ceremony
+needed — the sync `Link` itself is still one per open workspace (`daemon-shared-sync-link`, todo
+19's real successor, is the next, separate, larger slice: `workspace_id` on `Op`, a wire/signing
+format break, and a workspace dimension on `Heads`/`OriginRange` so one shared `Link` can
+multiplex every workspace's traffic — not done by this task).
 
 ## Public interface
 - `txtodod [--dir <workspace>]`. **True global mode** (`--dir` omitted, the new default): binds

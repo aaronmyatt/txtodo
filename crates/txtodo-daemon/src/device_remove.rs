@@ -100,12 +100,12 @@ impl Workspace {
         target: DeviceId,
         now_ms: u64,
     ) -> Result<RemovalOutcome, RemoveDeviceError> {
-        // The store's Mutex is not reentrant, and `advance_group_epoch` below takes it too — so
-        // every lock here is scoped to a block, never held across that call (a prior version held
-        // it for the whole function and deadlocked on the second lock attempt).
+        // The identity store's Mutex is not reentrant, and `advance_group_epoch` below takes it
+        // too — so every lock here is scoped to a block, never held across that call (a prior
+        // version held it for the whole function and deadlocked on the second lock attempt).
         let (active_peers, row) = {
             let store = self
-                .store()
+                .identity_store()
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let active_peers: Vec<_> = store
@@ -147,11 +147,11 @@ impl Workspace {
             .put(KeyId::Group(new_epoch), &Secret::new(new_key.to_vec()))?;
         {
             let mut store = self
-                .store()
+                .identity_store()
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             store.meta_set(
-                crate::keystore_setup::GROUP_EPOCH_KEY,
+                crate::device_identity::GROUP_EPOCH_KEY,
                 &new_epoch.to_be_bytes(),
             )?;
             store.remove_device(target, now_ms)?;

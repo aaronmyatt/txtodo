@@ -6,10 +6,11 @@
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
-use txtodo_daemon::clock::SystemClock;
+use txtodo_daemon::clock::{Clock, SystemClock};
+use txtodo_daemon::device_identity::DeviceIdentity;
 use txtodo_daemon::pidfile::PidFile;
 use txtodo_daemon::serve;
 use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
@@ -190,62 +191,89 @@ fn main() -> ExitCode {
     }
 }
 
-/// `WorkspaceOpenArgs` from the CLI flags, prompting once for a `file`-keystore passphrase
+/// The state dir this run resolves to before anything else — the same directory that already
+/// holds (or will hold) `registry.db`/`txtodod.sock`/`txtodod.pid` in whichever mode this process
+/// is running: `<dir>/.txtodo/` for the legacy `--dir` bridge, the device-global data dir for true
+/// global mode. Resolved *before* `WorkspaceCatalog` exists (ADR 0021: the shared `DeviceIdentity`
+/// it's built from needs this path, and nothing about identity depends on the registry/catalog).
+fn resolve_state_dir(
+    args: &Args,
+    env: &RegistryEnv,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(match &args.dir {
+        Some(dir) => dir.join(txtodo_daemon::walker::STATE_DIR),
+        None => workspace_registry_paths::global_pid_path(env)
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or("cannot resolve the device-global data directory")?,
+    })
+}
+
+/// Builds this process's one shared [`DeviceIdentity`] (ADR 0021, task
+/// `daemon-device-set-identity`) at `state_dir`, prompting once for a `file`-keystore passphrase
 /// (`--key-store` omitted entirely keeps the pre-existing in-memory placeholder — see
 /// `Args::key_store_mode`'s doc for why that must stay the default).
-fn open_args(args: &Args) -> Result<OpenArgs, Box<dyn std::error::Error>> {
-    let file_passphrase = if args.key_store_mode == Some(KeyStoreMode::File) {
+fn build_identity(
+    args: &Args,
+    state_dir: &Path,
+    clock: &dyn Clock,
+) -> Result<DeviceIdentity, Box<dyn std::error::Error>> {
+    let Some(key_store_mode) = args.key_store_mode else {
+        return Ok(DeviceIdentity::open_in_memory(state_dir, clock)?);
+    };
+    let file_passphrase = if key_store_mode == KeyStoreMode::File {
         Some(prompt_file_passphrase()?)
     } else {
         None
     };
-    Ok(OpenArgs {
-        identity_mode: args.identity_mode,
-        key_store_mode: args.key_store_mode,
+    Ok(DeviceIdentity::open(
+        state_dir,
+        clock,
+        key_store_mode,
         file_passphrase,
+    )?)
+}
+
+/// `WorkspaceOpenArgs` from the CLI flags plus the identity `build_identity` already resolved.
+fn open_args(args: &Args, identity: Arc<DeviceIdentity>) -> OpenArgs {
+    OpenArgs {
+        identity_mode: args.identity_mode,
+        identity,
         relay_url: args.relay_url.clone(),
         relay_dial_peer: args.relay_dial_peer,
         no_lan: args.no_lan,
         sync_dir: args.sync_dir.clone(),
-    })
+    }
 }
 
 /// The `--dir` bridge: registers/opens that one directory, plus (best-effort) anything else
 /// already registered — covers a human who has pointed `$TXTODO_REGISTRY_DB` at a real shared
-/// registry even while still invoking `--dir`. Returns `(state_dir, socket)`, both at their
-/// pre-existing `<dir>/.txtodo/...` locations so today's whole test suite keeps working unmodified.
+/// registry even while still invoking `--dir`. `state_dir` is already resolved (`resolve_state_dir`);
+/// returns the socket path, at its pre-existing `<dir>/.txtodo/...` location so today's whole test
+/// suite keeps working unmodified.
 fn start_dir_bridge(
-    dir: &std::path::Path,
+    dir: &Path,
     env: &RegistryEnv,
     catalog: &WorkspaceCatalog,
-) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     eprintln!(
         "txtodod: --dir is the legacy single-workspace bridge (see \
          tasks/daemon-global-socket/notes.md); omit --dir to run this device's one global daemon"
     );
-    let state_dir = dir.join(txtodo_daemon::walker::STATE_DIR);
-    std::fs::create_dir_all(&state_dir)?;
     catalog.open_dir_bridge(dir)?;
     catalog.open_all_registered();
-    let socket = workspace_registry_paths::global_socket_path(env, Some(dir));
-    Ok((state_dir, socket))
+    Ok(workspace_registry_paths::global_socket_path(env, Some(dir)))
 }
 
 /// True global mode (`--dir` omitted): opens every already-registered workspace and resolves the
-/// device-global socket/state paths. Returns `(state_dir, socket)`.
+/// device-global socket path.
 fn start_global(
     env: &RegistryEnv,
     catalog: &WorkspaceCatalog,
-) -> Result<(PathBuf, PathBuf), Box<dyn std::error::Error>> {
-    let state_dir = workspace_registry_paths::global_pid_path(env)
-        .parent()
-        .map(std::path::Path::to_path_buf)
-        .ok_or("cannot resolve the device-global data directory")?;
-    std::fs::create_dir_all(&state_dir)?;
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let opened = catalog.open_all_registered();
     eprintln!("txtodod: opened {opened} registered workspace(s)");
-    let socket = workspace_registry_paths::global_socket_path(env, None);
-    Ok((state_dir, socket))
+    Ok(workspace_registry_paths::global_socket_path(env, None))
 }
 
 /// Resolves until either a ctrl-c or (unix only) SIGTERM.
@@ -310,13 +338,17 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let env = RegistryEnv::from_process()?;
     let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
     let registry = WorkspaceRegistry::open(&registry_path)?;
+    let clock = Arc::new(SystemClock);
+
+    let state_dir = resolve_state_dir(&args, &env)?;
+    let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
     let catalog = Arc::new(WorkspaceCatalog::new(
         registry,
-        open_args(&args)?,
-        Arc::new(SystemClock),
+        open_args(&args, identity),
+        clock,
     ));
 
-    let (state_dir, socket) = match &args.dir {
+    let socket = match &args.dir {
         Some(dir) => start_dir_bridge(dir, &env, &catalog)?,
         None => start_global(&env, &catalog)?,
     };

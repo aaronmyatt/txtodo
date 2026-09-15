@@ -324,17 +324,19 @@ fn write_tree(dir: &Path, files: &[(&str, &str)]) {
     }
 }
 
-/// Opens (creating) `<root>/.txtodo/oplog.db` and seeds the sync group id `Workspace::open` will
-/// load instead of minting one. See `Daemon::start_with_seeded_group`'s doc for why this has to
-/// happen before the daemon process exists at all.
+/// Opens (creating) `<root>/.txtodo/identity.db` and seeds the sync group id `DeviceIdentity::open*`
+/// will load instead of minting one (ADR 0021: the `--dir` bridge resolves its one shared identity
+/// to this same `<root>/.txtodo/` state dir, exactly like `registry.db` already does in that mode
+/// — see `device_identity.rs`'s module doc). See `Daemon::start_with_seeded_group`'s doc for why
+/// this has to happen before the daemon process exists at all.
 pub fn seed_group_id(root: &Path, group_id: u128) {
     let state_dir = root.join(".txtodo");
     std::fs::create_dir_all(&state_dir).unwrap_or_else(|e| panic!("{e}"));
-    let mut store = txtodo_store::Store::open(&state_dir.join("oplog.db"))
-        .unwrap_or_else(|e| panic!("open store: {e}"));
-    store
+    let mut identity = txtodo_store::IdentityStore::open(&state_dir.join("identity.db"))
+        .unwrap_or_else(|e| panic!("open identity store: {e}"));
+    identity
         .meta_set(
-            txtodo_daemon::workspace::GROUP_ID_KEY,
+            txtodo_daemon::device_identity::GROUP_ID_KEY,
             &group_id.to_be_bytes(),
         )
         .unwrap_or_else(|e| panic!("seed group id: {e}"));

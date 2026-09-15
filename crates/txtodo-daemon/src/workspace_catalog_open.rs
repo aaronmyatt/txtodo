@@ -5,6 +5,7 @@
 //! budget, the same pattern as `workspace_registry_paths.rs` being split from `workspace_registry.rs`.
 
 use crate::clock::Clock;
+use crate::device_identity::DeviceIdentity;
 use crate::file_carrier::{self, FileCarrierTransport};
 use crate::lan::{self, LanTransport};
 use crate::relay::{self, RelayTransport};
@@ -16,7 +17,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::task::JoinHandle;
 use txtodo_model::IdentityMode;
-use txtodo_sync::{KeyStoreMode, Secret};
 
 /// Settings applied uniformly to every workspace this daemon opens. Interim (this task's own
 /// documented scope limit, `tasks/daemon-global-socket/notes.md`): per-workspace config is
@@ -28,12 +28,10 @@ use txtodo_sync::{KeyStoreMode, Secret};
 pub struct WorkspaceOpenArgs {
     /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3).
     pub identity_mode: IdentityMode,
-    /// `None` keeps the in-memory keystore placeholder every test in this crate uses; `Some` is
-    /// the production `txtodod` path (plan M4 `sync-keystore`).
-    pub key_store_mode: Option<KeyStoreMode>,
-    /// Only read when `key_store_mode == Some(KeyStoreMode::File)`; prompted once at daemon
-    /// startup and cloned into every workspace this catalog opens (`Secret` is `Clone`).
-    pub file_passphrase: Option<Secret>,
+    /// Device id, sync group, keystore and pairing registry shared by every workspace this
+    /// catalog opens (ADR 0021) — constructed once, before any workspace opens (`main.rs::run`),
+    /// never minted per workspace.
+    pub identity: Arc<DeviceIdentity>,
     /// `--relay <url>` (plan M8); `None` means relay stays off for every workspace.
     pub relay_url: Option<String>,
     /// `--relay-dial-peer` (plan M8 `relay-converge-test`); test/manual-pairing-substitute only.
@@ -111,21 +109,13 @@ pub fn open_workspace_full(
     })
 }
 
-/// `Workspace::open_with_key_store`/`open_with_default_mode`, chosen by `args.key_store_mode` —
-/// the same branch `main.rs`'s old `open_workspace` made for the single `--dir` workspace.
+/// Always `Workspace::open_with_key_store`, threading `args.identity` (this catalog's one shared
+/// [`DeviceIdentity`], ADR 0021) into it — the "in-memory placeholder vs real keystore" choice
+/// moved to how that identity itself was constructed (`main.rs::build_identity`), not here.
 fn open_workspace(
     root: &Path,
     args: &WorkspaceOpenArgs,
     clock: Arc<dyn Clock>,
 ) -> Result<Workspace, WorkspaceError> {
-    let Some(key_store_mode) = args.key_store_mode else {
-        return Workspace::open_with_default_mode(root, clock, args.identity_mode);
-    };
-    Workspace::open_with_key_store(
-        root,
-        clock,
-        args.identity_mode,
-        key_store_mode,
-        args.file_passphrase.clone(),
-    )
+    Workspace::open_with_key_store(root, clock, args.identity_mode, Arc::clone(&args.identity))
 }

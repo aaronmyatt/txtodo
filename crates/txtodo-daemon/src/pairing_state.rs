@@ -101,7 +101,7 @@ fn ensure_capacity(active: &mut Option<Active>, now_ms: u64) -> Result<(), Pairi
 
 /// Fetches this workspace's current group key bytes, minting and storing a fresh one if none has
 /// ever been created (the first-ever pairing for a brand-new group). `getrandom` failure is not
-/// recoverable in a meaningful way (`workspace.rs::load_or_mint_group` takes the same stance).
+/// recoverable in a meaningful way (`device_identity.rs::load_or_mint_group` takes the same stance).
 /// Only called by [`PairingRegistry::try_finalize_initiator`] (see its own doc on why that is
 /// itself only exercised by `pairing_grpc_tests.rs` today).
 #[allow(dead_code)]
