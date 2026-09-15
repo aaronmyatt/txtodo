@@ -33,6 +33,7 @@ use crate::clock::Clock;
 use crate::pairing_state::PairingRegistry;
 use crate::walker::WalkError;
 use crate::workspace_error::WorkspaceError;
+use crate::workspace_offer_registry::WorkspaceOfferRegistry;
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::{IdentityStore, StoreError};
 use txtodo_sync::{
@@ -71,6 +72,7 @@ pub struct DeviceIdentity {
     pairing: PairingRegistry,
     store: Mutex<IdentityStore>,
     relay_identity: [u8; 32],
+    workspace_offers: WorkspaceOfferRegistry,
 }
 
 impl DeviceIdentity {
@@ -130,6 +132,7 @@ impl DeviceIdentity {
             pairing: PairingRegistry::new(),
             store: Mutex::new(store),
             relay_identity,
+            workspace_offers: WorkspaceOfferRegistry::new(),
         })
     }
 
@@ -147,6 +150,12 @@ impl DeviceIdentity {
     /// identity — this crate never names that type.
     pub fn relay_identity(&self) -> [u8; 32] {
         self.relay_identity
+    }
+    /// Pending workspace offers this device has received but not yet accepted or declined (task
+    /// `daemon-workspace-identity-agreement` stage 5) — the always-on control channel records
+    /// into this; a gRPC surface (stage 6) lists and consumes from it.
+    pub fn workspace_offers(&self) -> &WorkspaceOfferRegistry {
+        &self.workspace_offers
     }
     /// The keystore backing this device's sync keys (device signing/static, group key epochs).
     pub fn key_store(&self) -> &Arc<dyn KeyStore + Send + Sync> {

@@ -15,6 +15,8 @@ mod bundle_wire;
 pub mod clock;
 mod commit;
 mod conflict_row;
+pub mod control_channel;
+mod control_session;
 pub mod convert;
 pub mod debounce;
 pub mod debug_hooks;
@@ -101,6 +103,8 @@ pub mod write;
 mod actor_tests;
 #[cfg(test)]
 mod bundle_tests;
+#[cfg(test)]
+mod control_session_tests;
 #[cfg(test)]
 mod device_remove_tests;
 #[cfg(test)]

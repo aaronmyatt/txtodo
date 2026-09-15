@@ -342,6 +342,11 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 
     let state_dir = resolve_state_dir(&args, &env)?;
     let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
+    let _control_channel = txtodo_daemon::control_channel::start(
+        Arc::clone(&identity),
+        args.relay_url.clone(),
+        registry_path.clone(),
+    );
     let catalog = Arc::new(WorkspaceCatalog::new(
         registry,
         open_args(&args, identity),
