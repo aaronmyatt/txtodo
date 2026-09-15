@@ -46,11 +46,14 @@ pub struct DeviceRow {
     pub removed_at_ms: Option<u64>,
 }
 
-fn device_blob(device: DeviceId) -> Vec<u8> {
+/// `pub(crate)`: reused as-is by `identity_store.rs`'s device-global `devices` table, which is
+/// the same schema (migrations/0006.sql / identity_migrations/0001.sql), so the encode/decode
+/// logic isn't duplicated for a second time.
+pub(crate) fn device_blob(device: DeviceId) -> Vec<u8> {
     device.ulid().to_u128().to_be_bytes().to_vec()
 }
 
-fn device_of(blob: &[u8]) -> Option<DeviceId> {
+pub(crate) fn device_of(blob: &[u8]) -> Option<DeviceId> {
     let bytes: [u8; 16] = blob.try_into().ok()?;
     Some(DeviceId::new(Ulid::from_u128(u128::from_be_bytes(bytes))))
 }
@@ -79,8 +82,9 @@ const UPSERT_EPOCH: &str = "INSERT INTO devices \
      ON CONFLICT(device) DO UPDATE SET key_epoch = excluded.key_epoch";
 
 /// One raw row exactly as every `SELECT` above returns it, bundled into a tuple so the decoder
-/// below stays under the arg-count budget.
-type RawRow = (
+/// below stays under the arg-count budget. `pub(crate)`: `identity_store.rs` reuses this shape
+/// too (see `device_blob`'s doc comment above).
+pub(crate) type RawRow = (
     Vec<u8>,
     String,
     Vec<u8>,
@@ -91,7 +95,7 @@ type RawRow = (
     Option<i64>,
 );
 
-fn row_of(raw: RawRow) -> Result<DeviceRow, StoreError> {
+pub(crate) fn row_of(raw: RawRow) -> Result<DeviceRow, StoreError> {
     let (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at) =
         raw;
     let static_public: [u8; DEVICE_STATIC_KEY_BYTES] = static_public

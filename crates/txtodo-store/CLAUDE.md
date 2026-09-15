@@ -7,7 +7,10 @@ identity fingerprints (docs/questions.md Q2, now the default identity mode) adde
 Known-devices table (plan M4 tasks/sync-device-remove) added 2026-09-13. The device-global
 workspace registry's raw rows (ADR 0025, task `daemon-workspace-registry`) added the same day —
 its own separate database file, not `oplog.db`; see `registry.rs`'s own doc and Public interface
-entry below.
+entry below. The device-set identity's raw rows (ADR 0021, task `daemon-device-set-identity`)
+added 2026-09-15 — a third separate database file (`identity_store.rs`), for the same "device-
+global, no single `<workspace>/.txtodo/` to live under" reason `registry.rs` already has one; see
+that entry below.
 
 ## Public interface
 - `Store::open(path)` — creates, switches to WAL, applies `migrations/000N.sql` in order by
@@ -63,6 +66,19 @@ entry below.
   never read back as identity, and this table never opens, reads or even constructs a path under
   it — the workspace's own `.txtodo/oplog.db` is untouched by every operation here, by construction
   (this module has no code path that names it).
+- Device-set identity (ADR 0021, task `daemon-device-set-identity`): `identity_store.rs`'s
+  `IdentityStore` — a third separate SQLite database (`identity_migrations/0001.sql`, its own
+  `PRAGMA user_version` sequence starting at 1), device-global for the same reason `Registry` is.
+  `IdentityStore::open(path)`, `meta_set(key, bytes)`/`meta_get(key)` (identical shape to `Store`'s
+  own meta table, so `txtodo-daemon`'s existing device/group load-or-mint helpers need no new
+  codec — only a different `Store`-like handle to call them against), `register_device`/
+  `list_devices`/`device`/`remove_device`/`set_device_key_epoch` (identical schema and semantics
+  to `devices.rs`'s own — reuses that module's `device_blob`/`device_of`/`row_of`/`RawRow`
+  directly, `pub(crate)`, rather than duplicating the encode/decode logic a second time). No op
+  log/projections/tokens/fingerprints tables at all — this store's only job is the identity a
+  device now shares across every workspace it opens; `txtodo-daemon`'s
+  `device_identity.rs` resolves where the file lives and owns id/group minting, the same split
+  `workspace_registry.rs` has with `Registry`.
 
 ## Invariants
 - Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/oplog.rs greps).

@@ -10,6 +10,7 @@ mod error;
 mod flags;
 mod heads;
 mod identity;
+mod identity_store;
 mod ops;
 mod projections;
 mod registry;
@@ -21,6 +22,7 @@ pub use error::StoreError;
 pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;
 pub use identity::{FingerprintRow, MAX_FINGERPRINTS_PER_READ};
+pub use identity_store::IdentityStore;
 pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 pub use registry::{
