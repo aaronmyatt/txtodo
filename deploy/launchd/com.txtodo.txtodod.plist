@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- txtodod launchd user agent (design §5). Rendered by `txtodo daemon install`:
-     {{LABEL}}, {{TXTODOD}} and {{WORKSPACE}} are replaced; logs go under the workspace's .txtodo/logs.
+<!-- txtodod launchd user agent (design §5, ADR 0025: one per device, not one per workspace).
+     Rendered by `txtodo daemon install`: {{LABEL}}, {{TXTODOD}} and {{LOGDIR}} are replaced.
+     No --dir argument: true global mode opens every workspace the registry already knows about.
      Reference: launchd.plist(5) https://keith.github.io/xcode-man-pages/launchd.plist.5.html -->
 <plist version="1.0">
 <dict>
@@ -10,16 +11,14 @@
     <key>ProgramArguments</key>
     <array>
         <string>{{TXTODOD}}</string>
-        <string>--dir</string>
-        <string>{{WORKSPACE}}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>{{WORKSPACE}}/.txtodo/logs/launchd.out.log</string>
+    <string>{{LOGDIR}}/launchd.out.log</string>
     <key>StandardErrorPath</key>
-    <string>{{WORKSPACE}}/.txtodo/logs/launchd.err.log</string>
+    <string>{{LOGDIR}}/launchd.err.log</string>
 </dict>
 </plist>

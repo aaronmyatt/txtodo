@@ -1,12 +1,17 @@
-# txtodod systemd user unit (design §5). Rendered by `txtodo daemon install` into
-# ~/.config/systemd/user/{{LABEL}}.service; {{TXTODOD}} and {{WORKSPACE}} are replaced.
+# txtodod systemd user unit (design §5, ADR 0025: one per device, not one per workspace).
+# Rendered by `txtodo daemon install` into ~/.config/systemd/user/{{LABEL}}.service;
+# {{TXTODOD}} is replaced. No --dir argument: true global mode opens every workspace the
+# registry already knows about; stdout/stderr land in the user journal (`journalctl --user -u
+# txtodod`) by systemd's own default — the daemon's own structured JSON logs are the durable
+# record (workspace_registry_paths::global_log_dir), same as launchd's redirect-to-file is there
+# only because launchd has no journal equivalent.
 # Reference: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
 [Unit]
-Description=txtodod for {{WORKSPACE}}
+Description=txtodod (one process per device, ADR 0025)
 After=default.target
 
 [Service]
-ExecStart={{TXTODOD}} --dir {{WORKSPACE}}
+ExecStart={{TXTODOD}}
 Restart=on-failure
 RestartSec=2
 
