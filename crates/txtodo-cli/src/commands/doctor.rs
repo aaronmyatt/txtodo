@@ -56,10 +56,20 @@ pub(super) fn check(name: &'static str, status: Status, detail: impl Into<String
     }
 }
 
+/// Everything the connected daemon (if any) contributed: the fixed checks, `Health` (feeds
+/// `clock`/`keystore`/`transport`), known sync peers, and the live connection itself — kept open
+/// so `other_workspace_checks` can probe the rest of the registry without reconnecting.
+struct DaemonState {
+    checks: Vec<Check>,
+    health: Option<pb::HealthResponse>,
+    devices: Vec<pb::Device>,
+    daemon: Option<Box<client::Daemon>>,
+}
+
 /// The daemon side: socket reachability and, through Health, the watcher; when connected, also
 /// the known sync peers `DeviceList` reports (best-effort — a failed list still leaves the health
 /// checks meaningful, so it degrades to an empty peer set rather than failing the whole command).
-fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>, Vec<pb::Device>) {
+fn daemon_checks(ctx: &Ctx) -> DaemonState {
     let socket = ctx.paths.dir.join(SOCKET_REL);
     let unknown = check("watcher", Status::Warn, "unknown: no daemon");
     let env = crate::config::Env::from_process().unwrap_or_default();
@@ -69,17 +79,19 @@ fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>, Vec<pb::
                 "no socket at {}; run `txtodo daemon start`",
                 socket.display()
             );
-            (
-                vec![check("socket", Status::Fail, fix), unknown],
-                None,
-                Vec::new(),
-            )
+            DaemonState {
+                checks: vec![check("socket", Status::Fail, fix), unknown],
+                health: None,
+                devices: Vec::new(),
+                daemon: None,
+            }
         }
-        Err(e) => (
-            vec![check("socket", Status::Fail, e.to_string()), unknown],
-            None,
-            Vec::new(),
-        ),
+        Err(e) => DaemonState {
+            checks: vec![check("socket", Status::Fail, e.to_string()), unknown],
+            health: None,
+            devices: Vec::new(),
+            daemon: None,
+        },
         Ok(Mode::Daemon(mut d)) => {
             let (checks, health) = health_checks(&mut d);
             let devices = if health.is_some() {
@@ -87,7 +99,12 @@ fn daemon_checks(ctx: &Ctx) -> (Vec<Check>, Option<pb::HealthResponse>, Vec<pb::
             } else {
                 Vec::new()
             };
-            (checks, health, devices)
+            DaemonState {
+                checks,
+                health,
+                devices,
+                daemon: Some(d),
+            }
         }
     }
 }
@@ -245,9 +262,45 @@ fn peer_checks(devices: &[pb::Device]) -> Vec<Check> {
         .collect()
 }
 
+/// One line per *other* registered workspace (ADR 0025, task `cli-doctor-multi-workspace`) — the
+/// seven fixed checks above already cover the current one in full depth, so this stays a cheap
+/// per-entry `Health` probe, not a second full battery of checks. Best-effort: a legacy
+/// `--dir`-bridge daemon has no registry, so `workspace_list` returning an error (`Unimplemented`)
+/// just means there is nothing more to report, not a doctor failure — `run`'s existing seven
+/// checks already told the human that story if it matters.
+fn other_workspace_checks(daemon: Option<&mut client::Daemon>, current: &Path) -> Vec<Check> {
+    let Some(daemon) = daemon else {
+        return Vec::new();
+    };
+    let Ok(workspaces) = daemon.workspace_list() else {
+        return Vec::new();
+    };
+    let current = current
+        .canonicalize()
+        .unwrap_or_else(|_| current.to_owned());
+    workspaces
+        .iter()
+        .filter(|w| Path::new(&w.root) != current)
+        .map(|w| {
+            let label = format!("{}  {}", w.workspace_id, w.root);
+            match daemon.health_for_id(&w.workspace_id) {
+                Ok(h) => check(
+                    "workspace",
+                    Status::Ok,
+                    format!("{label}: {} document(s)", h.documents),
+                ),
+                Err(e) => check("workspace", Status::Warn, format!("{label}: {e}")),
+            }
+        })
+        .collect()
+}
+
 /// Runs every check, prints the report, exits 1 on any failure.
 pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
-    let (mut checks, health, devices) = daemon_checks(ctx);
+    let mut state = daemon_checks(ctx);
+    let mut checks = std::mem::take(&mut state.checks);
+    let health = state.health.take();
+    let devices = std::mem::take(&mut state.devices);
     checks.push(files_check(ctx));
     checks.push(clock_check(health.as_ref()));
     checks.push(config_check(ctx));
@@ -255,6 +308,10 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(transport_check(health.as_ref()));
     debug_assert_eq!(checks.len(), 7, "seven fixed checks in a fixed order");
     checks.extend(peer_checks(&devices));
+    checks.extend(other_workspace_checks(
+        state.daemon.as_deref_mut(),
+        &ctx.paths.dir,
+    ));
     if ctx.json {
         let rows: Vec<String> = checks
             .iter()

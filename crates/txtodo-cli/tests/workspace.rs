@@ -213,3 +213,45 @@ fn first_add_in_a_brand_new_directory_auto_registers_it_with_no_separate_step() 
     );
     assert!(out.contains(&ws_dir.path().display().to_string()), "{out}");
 }
+
+/// todo `ref:cli-doctor-multi-workspace`: `txtodo doctor` from one workspace reports every *other*
+/// registered workspace too, not just the cwd's — one `workspace` row per entry, alongside the
+/// seven fixed checks the cwd's own workspace already gets in full depth.
+#[test]
+fn doctor_reports_every_other_registered_workspace() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    std::fs::write(dir_a.path().join("todo.txt"), "").unwrap();
+    std::fs::write(dir_b.path().join("todo.txt"), "").unwrap();
+
+    assert!(
+        txtodo(&daemon, dir_a.path(), &["add", "in a"])
+            .status
+            .success()
+    );
+    assert!(
+        txtodo(&daemon, dir_b.path(), &["add", "in b"])
+            .status
+            .success()
+    );
+
+    let doctor_a = txtodo(&daemon, dir_a.path(), &["doctor"]);
+    assert!(
+        doctor_a.status.success(),
+        "{}",
+        String::from_utf8_lossy(&doctor_a.stderr)
+    );
+    let out = stdout(&doctor_a);
+    let workspace_rows: Vec<&str> = out.lines().filter(|l| l.starts_with("workspace")).collect();
+    assert_eq!(
+        workspace_rows.len(),
+        1,
+        "exactly one other-workspace row (b, not a): {out}"
+    );
+    assert!(
+        workspace_rows[0].contains(&dir_b.path().display().to_string()),
+        "the row names b, not a: {workspace_rows:?}"
+    );
+}

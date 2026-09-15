@@ -38,4 +38,17 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().workspaces)
     }
+
+    /// Health for a specific registered workspace by id, regardless of this connection's own
+    /// resolved `self.selector` — `txtodo doctor`'s per-entry probe of every *other* registered
+    /// workspace. Temporarily swaps the selector rather than opening a second connection.
+    pub fn health_for_id(&mut self, id: &str) -> Result<pb::HealthResponse, ClientError> {
+        let saved = self.selector.take();
+        self.selector = Some(pb::WorkspaceSelector {
+            selector: Some(pb::workspace_selector::Selector::WorkspaceId(id.to_owned())),
+        });
+        let result = self.health();
+        self.selector = saved;
+        result
+    }
 }
