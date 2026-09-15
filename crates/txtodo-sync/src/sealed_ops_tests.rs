@@ -7,9 +7,8 @@
 use std::collections::BTreeMap;
 
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
-use txtodo_store::WorkspaceId;
 
-use crate::aead::{GroupKey, GroupKeys, SealFor};
+use crate::aead::{GroupKey, GroupKeys};
 use crate::crypto_error::CryptoError;
 use crate::frame::PROTOCOL_VERSION;
 use crate::message::{GroupId, Message, MessageError, OriginRange};
@@ -28,10 +27,6 @@ fn signing_key(seed: u8) -> DeviceSigningKey {
 
 fn group_key(byte: u8) -> GroupKey {
     GroupKey::from_bytes([byte; 32])
-}
-
-fn ws() -> WorkspaceId {
-    WorkspaceId::new(Ulid::from_u128(0x5EED))
 }
 
 fn op(device: DeviceId, line: &str) -> Op {
@@ -78,7 +73,6 @@ fn a_genuine_sealed_batch_opens_and_flows_straight_into_session_on_ops() {
     let ctx = SealContext {
         group: GroupId(42),
         epoch: 0,
-        workspace: ws(),
         key: v.group_keys.get(0).unwrap(),
     };
     let range = OriginRange {
@@ -88,7 +82,7 @@ fn a_genuine_sealed_batch_opens_and_flows_straight_into_session_on_ops() {
     };
     let frame = seal_ops(vec![op(sender, "buy milk")], vec![range], &sender_key, &ctx).unwrap();
 
-    let msg = open_ops(&frame, GroupId(42), ws(), &v.group_keys, &v.device_keys).unwrap();
+    let msg = open_ops(&frame, GroupId(42), &v.group_keys, &v.device_keys).unwrap();
 
     let mut session = Session::new(dev(2), GroupId(42), BTreeMap::new());
     session.hello(0).unwrap();
@@ -120,7 +114,6 @@ fn a_peer_sealing_with_the_wrong_group_key_is_rejected() {
     let ctx = SealContext {
         group: GroupId(42),
         epoch: 0,
-        workspace: ws(),
         key: &wrong_key,
     };
     let range = OriginRange {
@@ -131,7 +124,7 @@ fn a_peer_sealing_with_the_wrong_group_key_is_rejected() {
     let frame = seal_ops(vec![op(sender, "buy milk")], vec![range], &sender_key, &ctx).unwrap();
 
     assert_eq!(
-        open_ops(&frame, GroupId(42), ws(), &v.group_keys, &v.device_keys),
+        open_ops(&frame, GroupId(42), &v.group_keys, &v.device_keys),
         Err(SealedOpsError::Crypto(CryptoError::Decrypt { epoch: 0 })),
     );
 }
@@ -147,14 +140,13 @@ fn a_peer_with_no_group_key_at_all_is_rejected() {
     let ctx = SealContext {
         group: GroupId(42),
         epoch: 0,
-        workspace: ws(),
         key: &unrelated_key,
     };
     let frame = seal_ops(vec![op(sender, "buy milk")], vec![], &sender_key, &ctx).unwrap();
 
     let unkeyed_victim = GroupKeys::new();
     assert_eq!(
-        open_ops(&frame, GroupId(42), ws(), &unkeyed_victim, &v.device_keys),
+        open_ops(&frame, GroupId(42), &unkeyed_victim, &v.device_keys),
         Err(SealedOpsError::Crypto(CryptoError::UnknownEpoch {
             epoch: 0,
             held: 0
@@ -173,7 +165,6 @@ fn a_frame_tampered_after_sealing_is_rejected_before_any_op_is_read() {
     let ctx = SealContext {
         group: GroupId(42),
         epoch: 0,
-        workspace: ws(),
         key: v.group_keys.get(0).unwrap(),
     };
     let range = OriginRange {
@@ -186,7 +177,7 @@ fn a_frame_tampered_after_sealing_is_rejected_before_any_op_is_read() {
     frame.body[last] ^= 0x01;
 
     assert_eq!(
-        open_ops(&frame, GroupId(42), ws(), &v.group_keys, &v.device_keys),
+        open_ops(&frame, GroupId(42), &v.group_keys, &v.device_keys),
         Err(SealedOpsError::Crypto(CryptoError::Decrypt { epoch: 0 })),
     );
 }
@@ -287,11 +278,8 @@ fn open_ops_surfaces_a_message_error_when_the_sealed_plaintext_is_not_a_valid_me
     };
     let sealed = crate::aead::seal(
         PROTOCOL_VERSION,
-        SealFor {
-            group: GroupId(42),
-            epoch: 0,
-            workspace: ws(),
-        },
+        GroupId(42),
+        0,
         group_keys.get(0).unwrap(),
         b"not a postcard message",
     )
@@ -301,7 +289,7 @@ fn open_ops_surfaces_a_message_error_when_the_sealed_plaintext_is_not_a_valid_me
         body: sealed,
     };
     assert!(matches!(
-        open_ops(&frame, GroupId(42), ws(), &group_keys, &BTreeMap::new()),
+        open_ops(&frame, GroupId(42), &group_keys, &BTreeMap::new()),
         Err(SealedOpsError::Message(MessageError::Codec(_)))
     ));
 }
