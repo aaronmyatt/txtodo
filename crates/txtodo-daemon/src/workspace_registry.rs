@@ -83,6 +83,49 @@ impl WorkspaceRegistry {
         Ok(id)
     }
 
+    /// Registers `root` under a *caller-supplied* `id` rather than minting one — the accept side
+    /// of an offer/accept workspace-identity exchange (task
+    /// `daemon-workspace-identity-agreement`, stage 4): the offering device owns the id
+    /// (first-registrant-wins, see that task's `notes.md`), and this device must adopt it verbatim
+    /// rather than mint a fresh, unrelated one the way [`WorkspaceRegistry::add`] always does.
+    ///
+    /// Idempotent when `id` already names `root` locally (whether active or previously removed —
+    /// re-accepting the same offer is harmless). Refused, never silently substituted, in either
+    /// collision direction: `id` already names a *different* root locally
+    /// ([`crate::workspace_registry_error::WorkspaceRegistryError::IdCollision`]), or `root` is
+    /// already actively registered locally under a *different* id
+    /// ([`crate::workspace_registry_error::WorkspaceRegistryError::RootCollision`]). Same
+    /// migration invariant as `add`: never reads, creates or touches `root/.txtodo/`.
+    pub fn adopt(
+        &mut self,
+        id: WorkspaceId,
+        root: &Path,
+        clock: &dyn Clock,
+    ) -> Result<(), WorkspaceRegistryError> {
+        let canonical = canonical_root(root)?;
+        if let Some(by_id) = self.registry.get(id)? {
+            if by_id.root == canonical {
+                return Ok(());
+            }
+            return Err(WorkspaceRegistryError::IdCollision {
+                id,
+                existing_root: PathBuf::from(by_id.root),
+            });
+        }
+        if let Some(active) = self.registry.find_active_by_root(&canonical)? {
+            return Err(WorkspaceRegistryError::RootCollision {
+                root: PathBuf::from(canonical),
+                existing_id: active.id,
+            });
+        }
+        self.registry.insert(&NewWorkspaceEntry {
+            id,
+            root: canonical,
+            added_at_ms: clock.now_ms(),
+        })?;
+        Ok(())
+    }
+
     /// Un-registers `id`. Never touches `root/.txtodo/` on disk — this is a catalog change only
     /// (the removal-semantics invariant `tasks/daemon-workspace-registry/notes.md` documents).
     /// `false` for an unknown id; idempotent for an already-removed one (see

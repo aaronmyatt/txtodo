@@ -91,6 +91,7 @@ pub mod workspace_catalog;
 mod workspace_catalog_open;
 mod workspace_error;
 mod workspace_mint;
+pub mod workspace_offer_registry;
 pub mod workspace_registry;
 mod workspace_registry_error;
 pub mod workspace_registry_paths;
@@ -138,6 +139,8 @@ mod state_tests;
 mod sync_ops_tests;
 #[cfg(test)]
 mod workspace_catalog_tests;
+#[cfg(test)]
+mod workspace_offer_registry_tests;
 #[cfg(test)]
 mod workspace_registry_tests;
 #[cfg(test)]

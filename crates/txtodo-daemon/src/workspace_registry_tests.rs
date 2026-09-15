@@ -2,10 +2,11 @@
 //! (registering a directory with a pre-existing op log never touches it), restart durability, and
 //! that removal never touches `.txtodo/` on disk.
 
-use crate::clock::FakeClock;
+use crate::clock::{Clock, FakeClock};
 use crate::walker;
 use crate::workspace::STORE_FILE;
 use crate::workspace_registry::WorkspaceRegistry;
+use crate::workspace_registry_error::WorkspaceRegistryError;
 use std::path::Path;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 use txtodo_store::Store;
@@ -165,4 +166,126 @@ fn the_registry_survives_a_restart() {
     let listed = reopened.list().unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, id, "id survives a fresh open of the registry");
+}
+
+fn offered_id(clock: &FakeClock) -> txtodo_store::WorkspaceId {
+    // Stands in for "a peer device's own minted id" — adopt never mints its own, so any id works
+    // for these tests as long as it's stable across calls.
+    txtodo_store::WorkspaceId::new(clock.new_ulid())
+}
+
+#[test]
+fn adopt_registers_the_caller_supplied_id_verbatim() {
+    let registry_dir = tempfile::tempdir().unwrap();
+    let workspace_dir = tempfile::tempdir().unwrap();
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let clock = FakeClock::new(1_000);
+    let offered = offered_id(&clock);
+
+    registry
+        .adopt(offered, workspace_dir.path(), &clock)
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let listed = registry.list().unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(listed.len(), 1);
+    assert_eq!(
+        listed[0].id, offered,
+        "the offered id, not a freshly minted one"
+    );
+}
+
+#[test]
+fn adopting_the_same_offer_twice_is_idempotent() {
+    let registry_dir = tempfile::tempdir().unwrap();
+    let workspace_dir = tempfile::tempdir().unwrap();
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let clock = FakeClock::new(1_000);
+    let offered = offered_id(&clock);
+
+    registry
+        .adopt(offered, workspace_dir.path(), &clock)
+        .unwrap_or_else(|e| panic!("{e}"));
+    registry
+        .adopt(offered, workspace_dir.path(), &clock)
+        .unwrap_or_else(|e| panic!("second adopt should be a no-op, got {e}"));
+
+    assert_eq!(
+        registry.list().unwrap_or_else(|e| panic!("{e}")).len(),
+        1,
+        "still exactly one row, not a duplicate"
+    );
+}
+
+#[test]
+fn adopting_an_id_that_already_names_a_different_root_is_refused() {
+    let registry_dir = tempfile::tempdir().unwrap();
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let clock = FakeClock::new(1_000);
+    let offered = offered_id(&clock);
+    registry
+        .adopt(offered, dir_a.path(), &clock)
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let err = registry
+        .adopt(offered, dir_b.path(), &clock)
+        .expect_err("the same id already names dir_a locally");
+    assert!(matches!(err, WorkspaceRegistryError::IdCollision { .. }));
+
+    // Refused, not silently repointed: dir_a is still what the id names.
+    let listed = registry.list().unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(listed.len(), 1);
+}
+
+#[test]
+fn adopting_into_a_root_already_actively_registered_under_another_id_is_refused() {
+    let registry_dir = tempfile::tempdir().unwrap();
+    let workspace_dir = tempfile::tempdir().unwrap();
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let clock = FakeClock::new(1_000);
+    let local_id = registry
+        .add(workspace_dir.path(), &clock)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let offered = offered_id(&clock);
+    assert_ne!(local_id, offered);
+
+    let err = registry
+        .adopt(offered, workspace_dir.path(), &clock)
+        .expect_err("this root is already actively registered under a different id");
+    assert!(matches!(err, WorkspaceRegistryError::RootCollision { .. }));
+
+    // Refused, not silently duplicated: still exactly the one, locally-minted row.
+    let listed = registry.list().unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, local_id);
+}
+
+#[test]
+fn adopting_a_directory_with_existing_op_history_never_touches_it() {
+    let workspace_dir = tempfile::tempdir().unwrap();
+    let before = seed_existing_oplog(workspace_dir.path());
+    let before_seq = before.last_seq().unwrap_or_else(|e| panic!("{e}"));
+    drop(before);
+
+    let registry_dir = tempfile::tempdir().unwrap();
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let clock = FakeClock::new(2_000);
+    let offered = offered_id(&clock);
+    registry
+        .adopt(offered, workspace_dir.path(), &clock)
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let state = workspace_dir.path().join(walker::STATE_DIR);
+    let after = Store::open(&state.join(STORE_FILE)).unwrap_or_else(|e| panic!("reopen: {e}"));
+    assert_eq!(
+        after.last_seq().unwrap_or_else(|e| panic!("{e}")),
+        before_seq,
+        "op log untouched by adopt, same migration invariant as add"
+    );
 }

@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use txtodo_store::StoreError;
+use txtodo_store::{StoreError, WorkspaceId};
 
 /// Why an operation against the workspace registry failed.
 #[derive(Debug)]
@@ -27,6 +27,23 @@ pub enum WorkspaceRegistryError {
     },
     /// `root` canonicalizes to a path that is not valid UTF-8; this crate stores paths as TEXT.
     NonUtf8Root(PathBuf),
+    /// [`crate::workspace_registry::WorkspaceRegistry::adopt`] was asked to adopt `id` verbatim,
+    /// but that id already names a *different* root locally — refused rather than silently
+    /// repointing an existing workspace's identity at a new directory.
+    IdCollision {
+        /// The id an offer asked to adopt.
+        id: WorkspaceId,
+        /// The root that id already names locally.
+        existing_root: PathBuf,
+    },
+    /// `adopt`'s target root is already actively registered locally under a *different* id —
+    /// refused rather than creating a second catalog entry for the same directory.
+    RootCollision {
+        /// The root an offer asked to adopt into.
+        root: PathBuf,
+        /// The id that root is already registered under.
+        existing_id: WorkspaceId,
+    },
 }
 
 impl fmt::Display for WorkspaceRegistryError {
@@ -42,6 +59,16 @@ impl fmt::Display for WorkspaceRegistryError {
             WorkspaceRegistryError::NonUtf8Root(path) => {
                 write!(f, "workspace root {} is not valid UTF-8", path.display())
             }
+            WorkspaceRegistryError::IdCollision { id, existing_root } => write!(
+                f,
+                "workspace id {id} already names {} locally",
+                existing_root.display()
+            ),
+            WorkspaceRegistryError::RootCollision { root, existing_id } => write!(
+                f,
+                "{} is already registered locally under a different id ({existing_id})",
+                root.display()
+            ),
         }
     }
 }
