@@ -109,3 +109,28 @@ fn set_device_key_epoch_updates_only_the_epoch_and_reports_false_for_an_unknown_
 
     assert!(!identity.set_device_key_epoch(device(404), 1).unwrap());
 }
+
+#[test]
+fn set_relay_reachability_round_trips_and_reports_false_for_an_unknown_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut identity = open(dir.path());
+    identity
+        .register_device(&new_device(1, 0xAA, 1_000))
+        .unwrap();
+
+    let node_id = [7u8; 32];
+    assert!(
+        identity
+            .set_relay_reachability(device(1), node_id, "https://relay.example.org")
+            .unwrap()
+    );
+    let row = identity.device(device(1)).unwrap().unwrap();
+    assert_eq!(row.relay_node_id, Some(node_id));
+    assert_eq!(row.relay_url.as_deref(), Some("https://relay.example.org"));
+
+    assert!(
+        !identity
+            .set_relay_reachability(device(404), node_id, "https://relay.example.org")
+            .unwrap()
+    );
+}

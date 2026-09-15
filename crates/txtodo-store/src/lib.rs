@@ -6,6 +6,7 @@
 
 mod commit;
 mod devices;
+mod devices_relay;
 mod error;
 mod flags;
 mod heads;
@@ -34,15 +35,16 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 /// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
-const MIGRATIONS: [(i64, &str); 6] = [
+const MIGRATIONS: [(i64, &str); 7] = [
     (1, include_str!("../migrations/0001.sql")),
     (2, include_str!("../migrations/0002.sql")),
     (3, include_str!("../migrations/0003.sql")),
     (4, include_str!("../migrations/0004.sql")),
     (5, include_str!("../migrations/0005.sql")),
     (6, include_str!("../migrations/0006.sql")),
+    (7, include_str!("../migrations/0007.sql")),
 ];
 
 /// One open op-log database.

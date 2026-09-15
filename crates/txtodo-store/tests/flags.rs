@@ -28,7 +28,7 @@ fn row(n: u128, raised_at_ms: u64, mine: &str, theirs: &str) -> ReviewRow {
 fn raise_lists_the_flag_oldest_first_and_clear_removes_it_idempotently() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
-    assert_eq!(store.user_version().unwrap(), 6);
+    assert_eq!(store.user_version().unwrap(), 7);
     store
         .raise_flag(&row(2, 200, "b mine", "b theirs"))
         .unwrap();

@@ -26,7 +26,7 @@ fn new_token(n: u128, scopes: &[&str], secret: &str, expires_at_ms: Option<u64>)
 fn migrating_to_tokens_lands_the_schema_at_five() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(dir.path());
-    assert_eq!(store.user_version().unwrap(), 6);
+    assert_eq!(store.user_version().unwrap(), 7);
 }
 
 #[test]

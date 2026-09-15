@@ -60,6 +60,8 @@ pub enum StoreError {
     /// A stored workspace registry id is not 16 bytes (the database was edited by hand); the
     /// length found.
     BadWorkspaceId(usize),
+    /// A stored relay node id is not 32 bytes (the database was edited by hand); the length found.
+    BadRelayNodeId(usize),
 }
 
 impl StoreError {
@@ -132,6 +134,9 @@ impl fmt::Display for StoreError {
             StoreError::BadWorkspaceId(len) => {
                 write!(f, "stored workspace registry id is {len} bytes, not 16")
             }
+            StoreError::BadRelayNodeId(len) => {
+                write!(f, "stored relay node id is {len} bytes, not 32")
+            }
         }
     }
 }
@@ -153,7 +158,8 @@ impl std::error::Error for StoreError {
             | StoreError::BadHash(_)
             | StoreError::BadTokenId(_)
             | StoreError::BadStaticPublic(_)
-            | StoreError::BadWorkspaceId(_) => None,
+            | StoreError::BadWorkspaceId(_)
+            | StoreError::BadRelayNodeId(_) => None,
         }
     }
 }

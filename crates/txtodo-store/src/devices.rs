@@ -44,6 +44,13 @@ pub struct DeviceRow {
     pub key_epoch: u32,
     /// Unix milliseconds this device was removed, if it was. The row is kept, never deleted.
     pub removed_at_ms: Option<u64>,
+    /// This peer's relay-transport iroh node id, captured from a `PairingOffer` at pairing time
+    /// (task `daemon-workspace-identity-agreement` stage 2). `None` for a device paired before
+    /// this column existed, or paired with no relay configured on either side — such a peer simply
+    /// never appears in the always-on control channel's redial loop (stage 5), a documented gap.
+    pub relay_node_id: Option<[u8; 32]>,
+    /// The relay URL `relay_node_id` was observed under. `None` exactly when `relay_node_id` is.
+    pub relay_url: Option<String>,
 }
 
 /// `pub(crate)`: reused as-is by `identity_store.rs`'s device-global `devices` table, which is
@@ -59,27 +66,47 @@ pub(crate) fn device_of(blob: &[u8]) -> Option<DeviceId> {
 }
 
 const UPSERT_DEVICE: &str = "INSERT INTO devices \
-     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at) \
-     VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, NULL) \
+     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at, \
+      relay_node_id, relay_url) \
+     VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, NULL, NULL, NULL) \
      ON CONFLICT(device) DO UPDATE SET name = excluded.name, static_public = excluded.static_public, \
      paired_at = excluded.paired_at, last_seen = excluded.last_seen, \
      last_known_wall = excluded.last_known_wall, key_epoch = excluded.key_epoch, removed_at = NULL";
 const SELECT_ALL: &str = "SELECT device, name, static_public, paired_at, last_seen, last_known_wall, \
-     key_epoch, removed_at FROM devices ORDER BY paired_at, device LIMIT ?1";
+     key_epoch, removed_at, relay_node_id, relay_url FROM devices ORDER BY paired_at, device LIMIT ?1";
 const SELECT_ONE: &str = "SELECT device, name, static_public, paired_at, last_seen, last_known_wall, \
-     key_epoch, removed_at FROM devices WHERE device = ?1";
-const SELECT_FOR_REMOVE: &str = "SELECT name, static_public, paired_at, last_seen, last_known_wall, key_epoch FROM devices \
-     WHERE device = ?1";
+     key_epoch, removed_at, relay_node_id, relay_url FROM devices WHERE device = ?1";
+const SELECT_FOR_REMOVE: &str = "SELECT name, static_public, paired_at, last_seen, last_known_wall, \
+     key_epoch, relay_node_id, relay_url FROM devices WHERE device = ?1";
 const UPSERT_REMOVE: &str = "INSERT INTO devices \
-     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at, \
+      relay_node_id, relay_url) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
      ON CONFLICT(device) DO UPDATE SET removed_at = excluded.removed_at";
-const SELECT_FOR_EPOCH: &str = "SELECT name, static_public, paired_at, last_seen, last_known_wall, removed_at FROM devices \
-     WHERE device = ?1";
+const SELECT_FOR_EPOCH: &str = "SELECT name, static_public, paired_at, last_seen, last_known_wall, \
+     removed_at, relay_node_id, relay_url FROM devices WHERE device = ?1";
 const UPSERT_EPOCH: &str = "INSERT INTO devices \
-     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) \
+     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at, \
+      relay_node_id, relay_url) \
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
      ON CONFLICT(device) DO UPDATE SET key_epoch = excluded.key_epoch";
+
+/// Reads one row exactly as `SELECT_ALL`/`SELECT_ONE` project it, into a [`RawRow`].
+/// `pub(crate)`: `identity_store.rs` reuses this against its own, schema-identical table.
+pub(crate) fn read_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawRow> {
+    Ok((
+        r.get::<_, Vec<u8>>(0)?,
+        r.get::<_, String>(1)?,
+        r.get::<_, Vec<u8>>(2)?,
+        r.get::<_, i64>(3)?,
+        r.get::<_, Option<i64>>(4)?,
+        r.get::<_, Option<i64>>(5)?,
+        r.get::<_, i64>(6)?,
+        r.get::<_, Option<i64>>(7)?,
+        r.get::<_, Option<Vec<u8>>>(8)?,
+        r.get::<_, Option<String>>(9)?,
+    ))
+}
 
 /// One raw row exactly as every `SELECT` above returns it, bundled into a tuple so the decoder
 /// below stays under the arg-count budget. `pub(crate)`: `identity_store.rs` reuses this shape
@@ -93,15 +120,32 @@ pub(crate) type RawRow = (
     Option<i64>,
     i64,
     Option<i64>,
+    Option<Vec<u8>>,
+    Option<String>,
 );
 
 pub(crate) fn row_of(raw: RawRow) -> Result<DeviceRow, StoreError> {
-    let (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at) =
-        raw;
+    let (
+        device,
+        name,
+        static_public,
+        paired_at,
+        last_seen,
+        last_known_wall,
+        key_epoch,
+        removed_at,
+        relay_node_id,
+        relay_url,
+    ) = raw;
     let static_public: [u8; DEVICE_STATIC_KEY_BYTES] = static_public
         .as_slice()
         .try_into()
         .map_err(|_| StoreError::BadStaticPublic(static_public.len()))?;
+    let relay_node_id = relay_node_id
+        .map(|b| {
+            <[u8; 32]>::try_from(b.as_slice()).map_err(|_| StoreError::BadRelayNodeId(b.len()))
+        })
+        .transpose()?;
     Ok(DeviceRow {
         device: device_of(&device).ok_or(StoreError::BadDevice(device.len()))?,
         name,
@@ -111,6 +155,8 @@ pub(crate) fn row_of(raw: RawRow) -> Result<DeviceRow, StoreError> {
         last_known_wall_ms: last_known_wall.map(|v| u64::try_from(v).unwrap_or(0)),
         key_epoch: u32::try_from(key_epoch).unwrap_or(0),
         removed_at_ms: removed_at.map(|v| u64::try_from(v).unwrap_or(0)),
+        relay_node_id,
+        relay_url,
     })
 }
 
@@ -134,7 +180,11 @@ pub struct NewDevice {
 
 impl Store {
     /// Registers `new.device` (or re-registers a previously removed one, un-tombstoning it — the
-    /// same "rejoining revives the row" idiom as `upsert_fingerprint`).
+    /// same "rejoining revives the row" idiom as `upsert_fingerprint`). Never touches
+    /// `relay_node_id`/`relay_url` — those are set only by [`Store::set_relay_reachability`], a
+    /// deliberately separate call (task `daemon-workspace-identity-agreement` stage 2) so a
+    /// re-registration with nothing new to say about relay reachability can never accidentally
+    /// erase what was already known.
     pub fn register_device(&mut self, new: &NewDevice) -> Result<(), StoreError> {
         self.conn
             .execute(
@@ -160,18 +210,7 @@ impl Store {
             .prepare_cached(SELECT_ALL)
             .map_err(StoreError::query("prepare list devices"))?;
         let rows = stmt
-            .query_map(params![MAX_DEVICES_PER_READ as i64], |r| {
-                Ok((
-                    r.get::<_, Vec<u8>>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Vec<u8>>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, Option<i64>>(4)?,
-                    r.get::<_, Option<i64>>(5)?,
-                    r.get::<_, i64>(6)?,
-                    r.get::<_, Option<i64>>(7)?,
-                ))
-            })
+            .query_map(params![MAX_DEVICES_PER_READ as i64], read_row)
             .map_err(StoreError::query("query list devices"))?;
         let mut out = Vec::new();
         for row in rows {
@@ -184,18 +223,7 @@ impl Store {
     /// One device by id, if known (removed or not).
     pub fn device(&self, device: DeviceId) -> Result<Option<DeviceRow>, StoreError> {
         self.conn
-            .query_row(SELECT_ONE, params![device_blob(device)], |r| {
-                Ok((
-                    r.get::<_, Vec<u8>>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, Vec<u8>>(2)?,
-                    r.get::<_, i64>(3)?,
-                    r.get::<_, Option<i64>>(4)?,
-                    r.get::<_, Option<i64>>(5)?,
-                    r.get::<_, i64>(6)?,
-                    r.get::<_, Option<i64>>(7)?,
-                ))
-            })
+            .query_row(SELECT_ONE, params![device_blob(device)], read_row)
             .optional()
             .map_err(StoreError::query("select device"))?
             .map(row_of)
@@ -220,12 +248,22 @@ impl Store {
                     r.get::<_, Option<i64>>(3)?,
                     r.get::<_, Option<i64>>(4)?,
                     r.get::<_, i64>(5)?,
+                    r.get::<_, Option<Vec<u8>>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             })
             .optional()
             .map_err(StoreError::query("select device for remove"))?;
-        let Some((name, static_public, paired_at, last_seen, last_known_wall, key_epoch)) =
-            existing
+        let Some((
+            name,
+            static_public,
+            paired_at,
+            last_seen,
+            last_known_wall,
+            key_epoch,
+            relay_node_id,
+            relay_url,
+        )) = existing
         else {
             return Ok(false);
         };
@@ -240,6 +278,8 @@ impl Store {
                 last_known_wall,
                 key_epoch,
                 wall_i64(at_ms),
+                relay_node_id,
+                relay_url,
             ],
         )
         .map_err(StoreError::query("remove device"))?;
@@ -268,12 +308,22 @@ impl Store {
                     r.get::<_, Option<i64>>(3)?,
                     r.get::<_, Option<i64>>(4)?,
                     r.get::<_, Option<i64>>(5)?,
+                    r.get::<_, Option<Vec<u8>>>(6)?,
+                    r.get::<_, Option<String>>(7)?,
                 ))
             })
             .optional()
             .map_err(StoreError::query("select device for epoch"))?;
-        let Some((name, static_public, paired_at, last_seen, last_known_wall, removed_at)) =
-            existing
+        let Some((
+            name,
+            static_public,
+            paired_at,
+            last_seen,
+            last_known_wall,
+            removed_at,
+            relay_node_id,
+            relay_url,
+        )) = existing
         else {
             return Ok(false);
         };
@@ -288,6 +338,8 @@ impl Store {
                 last_known_wall,
                 epoch,
                 removed_at,
+                relay_node_id,
+                relay_url,
             ],
         )
         .map_err(StoreError::query("set device key epoch"))?;
