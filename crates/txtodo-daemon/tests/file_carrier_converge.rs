@@ -14,7 +14,7 @@ mod support;
 
 use std::time::{Duration, Instant};
 use support::Daemon;
-use support::relay::start_with_seeded_group_args;
+use support::relay::{start_with_seeded_group_and_workspace_args, start_with_seeded_group_args};
 
 const CONVERGE_DEADLINE: Duration = Duration::from_secs(30);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -73,20 +73,31 @@ fn distinct_device_files(sync_dir: &std::path::Path) -> Vec<String> {
 #[tokio::test]
 async fn two_real_daemons_converge_via_file_carrier_with_no_network() {
     let group_id = rand_u128();
+    // Both daemons must agree on one `workspace_id` (task `daemon-workspace-identity-agreement`)
+    // for the AEAD binding to let their sealed batches open at all — two independently-`--dir`-
+    // started daemons would otherwise each mint their own, unrelated id, which is exactly the
+    // disagreement that binding now correctly refuses to sync across. Real agreement is an
+    // offer/accept exchange over the always-on control channel; this sandbox has no real relay to
+    // drive that over from a test, so `start_with_seeded_group_and_workspace_args` pre-seeds both
+    // sides' own registries with the same id, the same stand-in `seed_group_id` already is for a
+    // real pairing ceremony.
+    let workspace_id = rand_u128();
     let sync_dir = tempfile::tempdir().expect("sync tempdir");
     let sync_dir_arg = sync_dir.path().to_string_lossy().into_owned();
 
-    let mut a = start_with_seeded_group_args(
+    let mut a = start_with_seeded_group_and_workspace_args(
         &[("todo.txt", "buy milk id:01M2CZ00000000000000000A\n")],
         "tagged",
         group_id,
+        workspace_id,
         &["--no-lan".into(), "--sync-dir".into(), sync_dir_arg.clone()],
     )
     .await;
-    let mut b = start_with_seeded_group_args(
+    let mut b = start_with_seeded_group_and_workspace_args(
         &[("todo.txt", "")],
         "tagged",
         group_id,
+        workspace_id,
         &["--no-lan".into(), "--sync-dir".into(), sync_dir_arg],
     )
     .await;

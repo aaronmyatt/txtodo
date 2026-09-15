@@ -16,6 +16,14 @@ use std::time::{Duration, Instant};
 use support::Daemon;
 use txtodo_proto::v1 as pb;
 
+fn rand_u128() -> u128 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    Instant::now().hash(&mut hasher);
+    std::process::id().hash(&mut hasher);
+    (u128::from(hasher.finish()) << 64) | u128::from(hasher.finish().wrapping_add(1))
+}
+
 /// Generous: real mDNS discovery, the pairing relay's own retry burst, and (once paired) the
 /// group-changed mDNS re-advertisement `lan.rs` now performs, can each take real wall-clock time
 /// on a shared CI runner (`crates/txtodo-cli/tests/pairing.rs`'s own end-to-end test uses the same
@@ -93,8 +101,17 @@ async fn wait_for_file_convergence(a: &mut Daemon, b: &mut Daemon) {
 
 #[tokio::test]
 async fn two_real_daemons_pair_for_real_and_the_joiner_receives_the_initiators_file() {
-    let mut a = Daemon::start("(A) buy milk id:01M2D3AAAAAAAAAAAAAAAAAAAA\n").await;
-    let mut b = Daemon::start("").await;
+    // Real pairing exchanges the group key for real, but workspace identity is a separate
+    // dimension pairing does not touch (task `daemon-workspace-identity-agreement`) — both sides
+    // still need to agree on one `workspace_id` before any post-pairing sync can open under the
+    // AEAD binding. See `Daemon::start_with_workspace_id`'s own doc.
+    let workspace_id = rand_u128();
+    let mut a = Daemon::start_with_workspace_id(
+        "(A) buy milk id:01M2D3AAAAAAAAAAAAAAAAAAAA\n",
+        workspace_id,
+    )
+    .await;
+    let mut b = Daemon::start_with_workspace_id("", workspace_id).await;
 
     let offer = a.pair_offer().await;
     assert_eq!(offer.identity_mode, "tagged");

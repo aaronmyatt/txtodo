@@ -16,9 +16,10 @@ use crate::workspace::Workspace;
 use txtodo_model::{
     DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal, TaskId, Ulid,
 };
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     Frame, GroupId, GroupKey, GroupKeys, KeyId, Link, Message, OriginRange, PROTOCOL_VERSION,
-    Secret, channel_link_pair, open, seal,
+    SealFor, Secret, channel_link_pair, open, seal,
 };
 
 const GROUP_EPOCH: u32 = 0;
@@ -35,7 +36,7 @@ pub(crate) fn peer_device() -> DeviceId {
 pub(crate) fn make_workspace(
     dir: &std::path::Path,
     key: [u8; 32],
-) -> (SharedWorkspace, DeviceId, GroupId) {
+) -> (SharedWorkspace, DeviceId, GroupId, WorkspaceId) {
     let clock: Arc<dyn crate::clock::Clock> = Arc::new(FakeClock::new(1_000));
     let ws = Workspace::open_with_default_mode(dir, clock, IdentityMode::Tagged)
         .unwrap_or_else(|e| panic!("open workspace: {e}"));
@@ -44,13 +45,19 @@ pub(crate) fn make_workspace(
         .unwrap_or_else(|e| panic!("seed group key: {e}"));
     let device = ws.device();
     let group = ws.group();
-    (Arc::new(RwLock::new(ws)), device, group)
+    let workspace = ws.workspace_id();
+    (Arc::new(RwLock::new(ws)), device, group, workspace)
 }
 
-fn send(link: &mut dyn Link, group: GroupId, key: &GroupKey, msg: Message) {
+fn send(link: &mut dyn Link, group: GroupId, workspace: WorkspaceId, key: &GroupKey, msg: Message) {
     let plain = msg.encode().unwrap_or_else(|e| panic!("encode: {e}"));
-    let sealed = seal(plain.version, group, GROUP_EPOCH, key, &plain.body)
-        .unwrap_or_else(|e| panic!("seal: {e}"));
+    let for_ = SealFor {
+        group,
+        epoch: GROUP_EPOCH,
+        workspace,
+    };
+    let sealed =
+        seal(plain.version, for_, key, &plain.body).unwrap_or_else(|e| panic!("seal: {e}"));
     link.send(Frame {
         version: plain.version,
         body: sealed,
@@ -58,10 +65,10 @@ fn send(link: &mut dyn Link, group: GroupId, key: &GroupKey, msg: Message) {
     .unwrap_or_else(|e| panic!("send: {e}"));
 }
 
-fn recv(link: &mut dyn Link, group: GroupId, keys: &GroupKeys) -> Message {
+fn recv(link: &mut dyn Link, group: GroupId, workspace: WorkspaceId, keys: &GroupKeys) -> Message {
     let frame = link.recv().unwrap_or_else(|e| panic!("recv: {e}"));
-    let plain =
-        open(frame.version, group, keys, &frame.body).unwrap_or_else(|e| panic!("open: {e}"));
+    let plain = open(frame.version, group, workspace, keys, &frame.body)
+        .unwrap_or_else(|e| panic!("open: {e}"));
     Message::decode(&Frame {
         version: frame.version,
         body: plain,
@@ -94,6 +101,7 @@ pub(crate) fn one_peer_op(task: TaskId) -> Op {
 /// under `maxParams`. `pub(crate)`: see [`peer_device`]'s doc for why.
 pub(crate) struct PeerCrypto {
     pub(crate) group: GroupId,
+    pub(crate) workspace: WorkspaceId,
     pub(crate) key: GroupKey,
     pub(crate) keys: GroupKeys,
 }
@@ -107,12 +115,18 @@ pub(crate) fn run_peer_script(
     op: Op,
     range: OriginRange,
 ) {
-    let PeerCrypto { group, key, keys } = crypto;
+    let PeerCrypto {
+        group,
+        workspace,
+        key,
+        keys,
+    } = crypto;
     let mut heads = BTreeMap::new();
     heads.insert(peer_device(), 1u64);
     send(
         &mut peer_link,
         group,
+        workspace,
         &key,
         Message::Hello {
             device: peer_device(),
@@ -123,10 +137,10 @@ pub(crate) fn run_peer_script(
         },
     );
     assert!(matches!(
-        recv(&mut peer_link, group, &keys),
+        recv(&mut peer_link, group, workspace, &keys),
         Message::Hello { .. }
     ));
-    let want = recv(&mut peer_link, group, &keys);
+    let want = recv(&mut peer_link, group, workspace, &keys);
     assert_eq!(
         want,
         Message::Want {
@@ -138,6 +152,7 @@ pub(crate) fn run_peer_script(
     send(
         &mut peer_link,
         group,
+        workspace,
         &key,
         Message::Ops {
             ops: vec![op],
@@ -145,7 +160,7 @@ pub(crate) fn run_peer_script(
             ranges: vec![range],
         },
     );
-    let ack = recv(&mut peer_link, group, &keys);
+    let ack = recv(&mut peer_link, group, workspace, &keys);
     assert_eq!(
         ack,
         Message::Ack {
@@ -179,7 +194,7 @@ async fn drive_session_pulls_a_peers_op_and_acks_what_it_committed() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let key_bytes = [7u8; 32];
     let key = GroupKey::from_bytes(key_bytes);
-    let (ws, device_b, group) = make_workspace(dir.path(), key_bytes);
+    let (ws, device_b, group, workspace) = make_workspace(dir.path(), key_bytes);
     let mut keys = GroupKeys::new();
     keys.insert(GROUP_EPOCH, key.clone())
         .unwrap_or_else(|e| panic!("{e:?}"));
@@ -199,6 +214,7 @@ async fn drive_session_pulls_a_peers_op_and_acks_what_it_committed() {
     });
     let crypto = PeerCrypto {
         group,
+        workspace,
         key,
         keys: keys.clone(),
     };

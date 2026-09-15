@@ -75,8 +75,14 @@ fn thousand_lines() -> String {
 #[ignore = "converges in low single-digit ms in isolation, but flaky under CPU contention: 831ms vs the 500ms budget locally under `cargo test --workspace`, and didn't converge within 10s on GitHub Actions CI run #29 (2026-09-13) — not root-caused this pass, see doc comment"]
 async fn thousand_ops_converge_within_budget() {
     let group_id = rand_u128();
-    let mut a = Daemon::start_with_seeded_group("", "tagged", group_id).await;
-    let mut b = Daemon::start_with_seeded_group("", "tagged", group_id).await;
+    // Both daemons must agree on one `workspace_id` (task `daemon-workspace-identity-agreement`)
+    // for the AEAD binding to let their sealed batches open at all — see
+    // `Daemon::start_with_seeded_group_and_workspace`'s own doc.
+    let workspace_id = rand_u128();
+    let mut a =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
+    let mut b =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
     let key_hex = "cd".repeat(32);
     a.debug_set_group_key(&group_id.to_string(), &key_hex).await;
     b.debug_set_group_key(&group_id.to_string(), &key_hex).await;

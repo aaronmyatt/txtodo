@@ -26,7 +26,7 @@ async fn lan_then_relay_falls_back_and_drive_session_still_commits_the_peers_op(
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let key_bytes = [11u8; 32];
     let key = GroupKey::from_bytes(key_bytes);
-    let (ws, device_b, group) = make_workspace(dir.path(), key_bytes);
+    let (ws, device_b, group, workspace) = make_workspace(dir.path(), key_bytes);
     let mut keys = GroupKeys::new();
     keys.insert(GROUP_EPOCH, key.clone())
         .unwrap_or_else(|e| panic!("{e:?}"));
@@ -56,6 +56,7 @@ async fn lan_then_relay_falls_back_and_drive_session_still_commits_the_peers_op(
     });
     let crypto = PeerCrypto {
         group,
+        workspace,
         key,
         keys: keys.clone(),
     };

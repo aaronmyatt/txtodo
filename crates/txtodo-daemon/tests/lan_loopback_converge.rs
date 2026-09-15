@@ -72,13 +72,19 @@ async fn wait_for_convergence(from: &mut Daemon, to: &mut Daemon, label: &str) {
 #[tokio::test]
 async fn two_real_daemons_converge_an_external_edit_in_both_directions() {
     let group_id = rand_u128();
-    let mut a = Daemon::start_with_seeded_group(
+    // Both daemons must agree on one `workspace_id` (task `daemon-workspace-identity-agreement`)
+    // for the AEAD binding to let their sealed batches open at all — see
+    // `Daemon::start_with_seeded_group_and_workspace`'s own doc.
+    let workspace_id = rand_u128();
+    let mut a = Daemon::start_with_seeded_group_and_workspace(
         "buy milk id:01M2CZ00000000000000000A\n",
         "tagged",
         group_id,
+        workspace_id,
     )
     .await;
-    let mut b = Daemon::start_with_seeded_group("", "tagged", group_id).await;
+    let mut b =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
     pair(&mut a, &mut b, group_id).await;
 
     // A -> B: an external write to A's file, through its own watcher/reconciler (a real Op, not a

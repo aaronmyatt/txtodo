@@ -4,7 +4,7 @@
 //! private fields and `start_in` the same way `mod.rs` itself does (Rust privacy: visible to the
 //! defining module and every descendant).
 
-use super::{Daemon, seed_group_id, write_tree};
+use super::{Daemon, seed_group_id, seed_workspace_id, write_tree};
 
 /// `start_with_seeded_group_tree`, plus extra `txtodod` CLI args appended after the standard
 /// `--dir`/`--identity-mode` ones — `--relay`, `--relay-dial-peer`, `--no-lan` (`relay.rs`'s own
@@ -20,6 +20,25 @@ pub async fn start_with_seeded_group_args(
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     write_tree(dir.path(), files);
     seed_group_id(dir.path(), group_id);
+    Daemon::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
+}
+
+/// `start_with_seeded_group_args`, plus a pre-agreed `workspace_id` (task
+/// `daemon-workspace-identity-agreement`): every caller wanting two daemons to converge under the
+/// AEAD `workspace_id` binding needs both sides registered under the *same* id, the way a real
+/// offer/accept exchange over the control channel would leave them — not two independently-minted
+/// ones, which is exactly the disagreement that binding now refuses to sync across.
+pub async fn start_with_seeded_group_and_workspace_args(
+    files: &[(&str, &str)],
+    mode: &str,
+    group_id: u128,
+    workspace_id: u128,
+    extra_args: &[String],
+) -> Daemon {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    write_tree(dir.path(), files);
+    seed_group_id(dir.path(), group_id);
+    seed_workspace_id(dir.path(), workspace_id);
     Daemon::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
 }
 

@@ -10,9 +10,10 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use tracing_subscriber::layer::SubscriberExt as _;
 use txtodo_model::{DeviceId, TaskId, Ulid};
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     Frame, GroupId, GroupKey, GroupKeys, KeyId, Link, Message, OriginRange, PROTOCOL_VERSION,
-    channel_link_pair, seal,
+    SealFor, channel_link_pair, seal,
 };
 
 use crate::clock::{Clock, FakeClock};
@@ -93,9 +94,12 @@ fn spawn_sync_round(
     dispatch: &tracing::Dispatch,
     ws_b: SharedWorkspace,
     device_b: DeviceId,
-    group: GroupId,
+    for_: SealFor,
     key: GroupKey,
 ) -> (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>) {
+    let SealFor {
+        group, workspace, ..
+    } = for_;
     let (peer_link, mut b_link) = channel_link_pair();
     let op = one_peer_op(TaskId::new(Ulid::from_u128(1)));
     let range = OriginRange {
@@ -114,7 +118,12 @@ fn spawn_sync_round(
         });
     });
     let peer_dispatch = dispatch.clone();
-    let crypto = PeerCrypto { group, key, keys };
+    let crypto = PeerCrypto {
+        group,
+        workspace,
+        key,
+        keys,
+    };
     let peer = tokio::task::spawn_blocking(move || {
         tracing::dispatcher::with_default(&peer_dispatch, || {
             run_peer_script(peer_link, crypto, op, range);
@@ -133,6 +142,7 @@ fn spawn_bad_frame_round(
     ws_b: SharedWorkspace,
     device_b: DeviceId,
     group: GroupId,
+    workspace: WorkspaceId,
 ) -> (tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>) {
     let (mut attacker_link, mut b_link) = channel_link_pair();
     let driver_dispatch = dispatch.clone();
@@ -155,7 +165,12 @@ fn spawn_bad_frame_round(
         }
         .encode()
         .unwrap_or_else(|e| panic!("encode: {e}"));
-        let sealed = seal(plain.version, group, 0, &wrong_key, &plain.body)
+        let for_ = SealFor {
+            group,
+            epoch: 0,
+            workspace,
+        };
+        let sealed = seal(plain.version, for_, &wrong_key, &plain.body)
             .unwrap_or_else(|e| panic!("seal: {e}"));
         let _ = attacker_link.send(Frame {
             version: plain.version,
@@ -220,6 +235,10 @@ async fn no_secrets_appear_in_logs_across_a_real_pair_and_sync() {
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .device();
+    let workspace = ws_b
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .workspace_id();
     let key_array: [u8; 32] = group_key_bytes
         .clone()
         .try_into()
@@ -232,14 +251,19 @@ async fn no_secrets_appear_in_logs_across_a_real_pair_and_sync() {
         &dispatch,
         Arc::clone(&ws_b),
         device_b,
-        group,
+        SealFor {
+            group,
+            epoch: 0,
+            workspace,
+        },
         GroupKey::from_bytes(key_array),
     );
     peer.await.unwrap_or_else(|e| panic!("peer panicked: {e}"));
     driver
         .await
         .unwrap_or_else(|e| panic!("driver panicked: {e}"));
-    let (driver, attacker) = spawn_bad_frame_round(&dispatch, Arc::clone(&ws_b), device_b, group);
+    let (driver, attacker) =
+        spawn_bad_frame_round(&dispatch, Arc::clone(&ws_b), device_b, group, workspace);
     attacker
         .await
         .unwrap_or_else(|e| panic!("attacker panicked: {e}"));

@@ -116,10 +116,21 @@ async fn wait_for_file(b: &Daemon, rel: &str, want: &str, deadline: Instant) {
 #[tokio::test]
 async fn fresh_device_reproduces_the_whole_nested_ref_tree() {
     let group_id = rand_u128();
+    // Both daemons must agree on one `workspace_id` (task `daemon-workspace-identity-agreement`)
+    // for the AEAD binding to let their sealed batches open at all — see
+    // `Daemon::start_with_seeded_group_and_workspace`'s own doc.
+    let workspace_id = rand_u128();
     let fixture = nested_ref_fixture();
     let files: Vec<(&str, &str)> = fixture.iter().map(|(p, c)| (*p, c.as_str())).collect();
-    let mut a = Daemon::start_with_seeded_group_tree(&files, "tagged", group_id).await;
-    let mut b = Daemon::start_with_seeded_group("", "tagged", group_id).await;
+    let mut a = Daemon::start_with_seeded_group_and_workspace_tree(
+        &files,
+        "tagged",
+        group_id,
+        workspace_id,
+    )
+    .await;
+    let mut b =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
     pair(&mut a, &mut b, group_id).await;
 
     // What A actually holds on disk after adoption — not the literal input strings — is the truth

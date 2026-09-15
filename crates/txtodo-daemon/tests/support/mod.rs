@@ -6,6 +6,13 @@
 pub mod pairing;
 /// Relay/forced-relay helpers, split out for this file's own line budget — see its own doc.
 pub mod relay;
+/// Fixture-writing and pre-daemon state-seeding helpers, split out for this file's own line
+/// budget — see its own doc.
+mod seed;
+
+use seed::write_tree;
+#[allow(unused_imports)] // each test file uses a different subset of these re-exports
+pub use seed::{kinds, lines_with_ids, seed_group_id, seed_workspace_id};
 
 use hyper_util::rt::TokioIo;
 use std::path::{Path, PathBuf};
@@ -109,6 +116,54 @@ impl Daemon {
         write_tree(dir.path(), files);
         seed_group_id(dir.path(), group_id);
         Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], &[]).await
+    }
+
+    /// `start_with_seeded_group_tree`, plus a pre-agreed `workspace_id` (task
+    /// `daemon-workspace-identity-agreement`): a real two-daemon convergence test needs both sides
+    /// registered under the *same* workspace id, the way a real offer/accept exchange over the
+    /// control channel would leave them — not two independently-minted ones, which the AEAD
+    /// `workspace_id` binding now correctly refuses to sync across. See [`seed_workspace_id`]'s
+    /// own doc for why this, not a live control channel, is what a test can actually drive.
+    pub async fn start_with_seeded_group_and_workspace_tree(
+        files: &[(&str, &str)],
+        mode: &str,
+        group_id: u128,
+        workspace_id: u128,
+    ) -> Daemon {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        write_tree(dir.path(), files);
+        seed_group_id(dir.path(), group_id);
+        seed_workspace_id(dir.path(), workspace_id);
+        Self::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], &[]).await
+    }
+
+    /// `start_with_seeded_group_and_workspace_tree`, for one root `todo.txt` — the common case,
+    /// mirroring `start_with_seeded_group`'s own relationship to `start_with_seeded_group_tree`.
+    pub async fn start_with_seeded_group_and_workspace(
+        todo: &str,
+        mode: &str,
+        group_id: u128,
+        workspace_id: u128,
+    ) -> Daemon {
+        Self::start_with_seeded_group_and_workspace_tree(
+            &[("todo.txt", todo)],
+            mode,
+            group_id,
+            workspace_id,
+        )
+        .await
+    }
+
+    /// `start`, plus a pre-agreed `workspace_id`: for a test that pairs two daemons for *real*
+    /// (the group key comes from a live pairing ceremony, never seeded), workspace identity is
+    /// still a separate dimension pairing does not touch — both sides need the same id before any
+    /// post-pairing sync can open, same reasoning as
+    /// [`start_with_seeded_group_and_workspace_tree`].
+    pub async fn start_with_workspace_id(todo: &str, workspace_id: u128) -> Daemon {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        write_tree(dir.path(), &[("todo.txt", todo)]);
+        seed_workspace_id(dir.path(), workspace_id);
+        Self::start_in(dir, "tagged", &[], &[]).await
     }
 
     /// `start_with_mode`, with extra environment variables set on the spawned process. Reuse
@@ -308,51 +363,4 @@ impl Drop for Daemon {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
-}
-
-/// Writes each `(relative path, contents)` pair under `dir`, creating parent directories as
-/// needed. The general form both `start_full`'s single `todo.txt` and
-/// `start_with_seeded_group_tree`'s whole nested-ref fixture go through, so a multi-file workspace
-/// is one call site, not a second copy of the write loop.
-fn write_tree(dir: &Path, files: &[(&str, &str)]) {
-    for (rel, contents) in files {
-        let path = dir.join(rel);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).unwrap_or_else(|e| panic!("create_dir_all: {e}"));
-        }
-        std::fs::write(&path, contents).unwrap_or_else(|e| panic!("write {rel}: {e}"));
-    }
-}
-
-/// Opens (creating) `<root>/.txtodo/identity.db` and seeds the sync group id `DeviceIdentity::open*`
-/// will load instead of minting one (ADR 0021: the `--dir` bridge resolves its one shared identity
-/// to this same `<root>/.txtodo/` state dir, exactly like `registry.db` already does in that mode
-/// — see `device_identity.rs`'s module doc). See `Daemon::start_with_seeded_group`'s doc for why
-/// this has to happen before the daemon process exists at all.
-pub fn seed_group_id(root: &Path, group_id: u128) {
-    let state_dir = root.join(".txtodo");
-    std::fs::create_dir_all(&state_dir).unwrap_or_else(|e| panic!("{e}"));
-    let mut identity = txtodo_store::IdentityStore::open(&state_dir.join("identity.db"))
-        .unwrap_or_else(|e| panic!("open identity store: {e}"));
-    identity
-        .meta_set(
-            txtodo_daemon::device_identity::GROUP_ID_KEY,
-            &group_id.to_be_bytes(),
-        )
-        .unwrap_or_else(|e| panic!("seed group id: {e}"));
-}
-
-/// The `kind` column of each op, in order.
-pub fn kinds(ops: &[pb::OpSummary]) -> Vec<String> {
-    ops.iter().map(|o| o.kind.clone()).collect()
-}
-
-/// The lines of a file as owned strings (so tests can splice), without endings.
-pub fn lines_with_ids(text: &str) -> Vec<String> {
-    let lines: Vec<String> = text.lines().map(str::to_owned).collect();
-    assert!(
-        lines.iter().all(|l| l.is_empty() || l.contains(" id:")),
-        "every task line carries an id after adoption"
-    );
-    lines
 }

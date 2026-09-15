@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use tempfile::tempdir;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     DeviceSigningKey, FileCarrier, Frame, GroupId, GroupKey, Link, OriginRange, SealContext,
     seal_ops,
@@ -66,6 +67,7 @@ fn sealed_frame(
     let ctx = SealContext {
         group: GroupId(7),
         epoch: 0,
+        workspace: WorkspaceId::new(Ulid::from_u128(0xAB)),
         key,
     };
     seal_ops(vec![op], vec![range], signing, &ctx).unwrap_or_else(|e| panic!("seal_ops: {e}"))
