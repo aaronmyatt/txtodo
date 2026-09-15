@@ -13,6 +13,13 @@ it over the real LAN transport and show a real SAS, without the RPC itself ever 
 `DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).
+`WorkspacePendingOffers`, `WorkspaceAcceptOffer`, `WorkspaceDeclineOffer` (task
+`daemon-workspace-identity-agreement`, M11): the human accept/decline surface for a peer's
+control-channel workspace offer (offer/accept, first-registrant-wins). Device-level like
+`WorkspaceAdd`/`WorkspaceRemove`/`WorkspaceList` — never a `WorkspaceSelector`. `PendingWorkspaceOffer`
+carries `offering_device`/`workspace_id` as ULID text (ADR 0025's existing convention) plus a
+human-readable `name` and `offered_at_ms`; `WorkspaceAcceptOffer` returns the same `WorkspaceInfo`
+message `WorkspaceAdd` does.
 `WorkspaceSelector` (ADR 0025, task `daemon-global-socket`, M11): a `oneof workspace_id/path`
 carried by every RPC request message (added as their last field, `workspace`) so the one global
 `txtodod` knows which registered workspace to route a call to. `GetNotes` changed shape from a

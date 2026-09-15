@@ -81,6 +81,23 @@ service Txtodo {
   // `txtodo doctor` and `workspace list` — no store opened just to answer this.
   rpc WorkspaceList(WorkspaceListRequest) returns (WorkspaceListResponse);
 
+  // --- workspace identity agreement (task `daemon-workspace-identity-agreement`, M11) ---
+  // Offer/accept, first-registrant-wins (see that task's notes.md): a peer's control-channel
+  // Offer lands in this device's own pending-offers bookkeeping; these three RPCs are the human's
+  // accept/decline surface for it. Device-level like WorkspaceAdd/Remove/List above — never a
+  // `WorkspaceSelector`, since a pending offer isn't scoped to any workspace this device has
+  // opened yet.
+
+  // Every workspace a peer has offered that this device has not yet accepted or declined.
+  rpc WorkspacePendingOffers(WorkspacePendingOffersRequest) returns (WorkspacePendingOffersResponse);
+  // Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+  // `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
+  // collision direction). Consumes the pending offer whether it succeeds or fails.
+  rpc WorkspaceAcceptOffer(WorkspaceAcceptOfferRequest) returns (WorkspaceInfo);
+  // Discards a pending offer without adopting it. What the offering device does with this (e.g.
+  // stop re-announcing to this peer) is the control channel's own bookkeeping, not built yet.
+  rpc WorkspaceDeclineOffer(WorkspaceDeclineOfferRequest) returns (WorkspaceDeclineOfferResponse);
+
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
@@ -572,6 +589,37 @@ message WorkspaceListRequest {}
 
 message WorkspaceListResponse {
   repeated WorkspaceInfo workspaces = 1;
+}
+
+// --- workspace identity agreement (task `daemon-workspace-identity-agreement`, M11) ---
+
+// One workspace a peer has offered, not yet accepted or declined.
+message PendingWorkspaceOffer {
+  string offering_device = 1;   // DeviceId ULID text
+  string workspace_id = 2;      // WorkspaceId ULID text, owned by offering_device
+  string name = 3;              // human-readable label only; never used as identity
+  uint64 offered_at_ms = 4;     // the offering device's own clock reading
+}
+
+message WorkspacePendingOffersRequest {}
+
+message WorkspacePendingOffersResponse {
+  repeated PendingWorkspaceOffer offers = 1;
+}
+
+message WorkspaceAcceptOfferRequest {
+  string offering_device = 1;   // DeviceId ULID text, identifies which pending offer
+  string workspace_id = 2;      // WorkspaceId ULID text, identifies which pending offer
+  string local_dir = 3;         // where to adopt it; the daemon canonicalizes it
+}
+
+message WorkspaceDeclineOfferRequest {
+  string offering_device = 1;
+  string workspace_id = 2;
+}
+
+message WorkspaceDeclineOfferResponse {
+  bool declined = 1;   // false when no such pending offer was found
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---

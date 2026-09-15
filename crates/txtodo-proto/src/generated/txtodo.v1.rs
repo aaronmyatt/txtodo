@@ -703,6 +703,54 @@ pub struct WorkspaceListResponse {
     #[prost(message, repeated, tag = "1")]
     pub workspaces: ::prost::alloc::vec::Vec<WorkspaceInfo>,
 }
+/// One workspace a peer has offered, not yet accepted or declined.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PendingWorkspaceOffer {
+    /// DeviceId ULID text
+    #[prost(string, tag = "1")]
+    pub offering_device: ::prost::alloc::string::String,
+    /// WorkspaceId ULID text, owned by offering_device
+    #[prost(string, tag = "2")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// human-readable label only; never used as identity
+    #[prost(string, tag = "3")]
+    pub name: ::prost::alloc::string::String,
+    /// the offering device's own clock reading
+    #[prost(uint64, tag = "4")]
+    pub offered_at_ms: u64,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspacePendingOffersRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WorkspacePendingOffersResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub offers: ::prost::alloc::vec::Vec<PendingWorkspaceOffer>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceAcceptOfferRequest {
+    /// DeviceId ULID text, identifies which pending offer
+    #[prost(string, tag = "1")]
+    pub offering_device: ::prost::alloc::string::String,
+    /// WorkspaceId ULID text, identifies which pending offer
+    #[prost(string, tag = "2")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// where to adopt it; the daemon canonicalizes it
+    #[prost(string, tag = "3")]
+    pub local_dir: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceDeclineOfferRequest {
+    #[prost(string, tag = "1")]
+    pub offering_device: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub workspace_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceDeclineOfferResponse {
+    /// false when no such pending offer was found
+    #[prost(bool, tag = "1")]
+    pub declined: bool,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
     /// decimal u128, same encoding pairing_wire.rs's group_id already uses
@@ -1356,6 +1404,81 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceList"));
             self.inner.unary(req, path, codec).await
         }
+        /// Every workspace a peer has offered that this device has not yet accepted or declined.
+        pub async fn workspace_pending_offers(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspacePendingOffersRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspacePendingOffersResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspacePendingOffers",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspacePendingOffers"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+        /// `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
+        /// collision direction). Consumes the pending offer whether it succeeds or fails.
+        pub async fn workspace_accept_offer(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceAcceptOfferRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceAcceptOffer",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceAcceptOffer"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Discards a pending offer without adopting it. What the offering device does with this (e.g.
+        /// stop re-announcing to this peer) is the control channel's own bookkeeping, not built yet.
+        pub async fn workspace_decline_offer(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceDeclineOfferRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceDeclineOfferResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceDeclineOffer",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceDeclineOffer"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -1822,6 +1945,30 @@ pub mod txtodo_server {
             request: tonic::Request<super::WorkspaceListRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WorkspaceListResponse>,
+            tonic::Status,
+        >;
+        /// Every workspace a peer has offered that this device has not yet accepted or declined.
+        async fn workspace_pending_offers(
+            &self,
+            request: tonic::Request<super::WorkspacePendingOffersRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspacePendingOffersResponse>,
+            tonic::Status,
+        >;
+        /// Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+        /// `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
+        /// collision direction). Consumes the pending offer whether it succeeds or fails.
+        async fn workspace_accept_offer(
+            &self,
+            request: tonic::Request<super::WorkspaceAcceptOfferRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Discards a pending offer without adopting it. What the offering device does with this (e.g.
+        /// stop re-announcing to this peer) is the control channel's own bookkeeping, not built yet.
+        async fn workspace_decline_offer(
+            &self,
+            request: tonic::Request<super::WorkspaceDeclineOfferRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceDeclineOfferResponse>,
             tonic::Status,
         >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
@@ -2755,6 +2902,143 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceListSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspacePendingOffers" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspacePendingOffersSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspacePendingOffersRequest>
+                    for WorkspacePendingOffersSvc<T> {
+                        type Response = super::WorkspacePendingOffersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspacePendingOffersRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_pending_offers(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspacePendingOffersSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceAcceptOffer" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceAcceptOfferSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceAcceptOfferRequest>
+                    for WorkspaceAcceptOfferSvc<T> {
+                        type Response = super::WorkspaceInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceAcceptOfferRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_accept_offer(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceAcceptOfferSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceDeclineOffer" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceDeclineOfferSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceDeclineOfferRequest>
+                    for WorkspaceDeclineOfferSvc<T> {
+                        type Response = super::WorkspaceDeclineOfferResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceDeclineOfferRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_decline_offer(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceDeclineOfferSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
