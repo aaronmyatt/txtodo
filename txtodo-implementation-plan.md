@@ -299,12 +299,22 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Daemon (`txtodo-daemon`).**
 
+> **Superseded by ADR 0025 (M11, 2026-09-13).** This section describes the per-directory daemon as
+> originally built (one `txtodod --dir <workspace>`, socket at `<workspace>/.txtodo/txtodod.sock`,
+> one service unit per workspace hash) — design §5's own text already called for one process *per
+> device*, and M11 realigns the build with it: one `txtodod` per device, a workspace registry
+> (`WorkspaceCatalog`/`WorkspaceRegistry`), one socket/service unit total, and every gRPC call
+> carrying a `WorkspaceSelector`. The `--dir <workspace>` flag is kept as a bridge — it binds the
+> exact locations below unmodified, so the existing single-workspace test suite and the bullets
+> here stay accurate for that mode. See design §5's own updated text for the current shape, and
+> `crates/txtodo-daemon/CLAUDE.md` for what is and isn't wired up yet.
+
 - One `FileActor` per synced document (todo.txt / notes.md), single writer, owning: in-memory state, projection bytes, projection hash.
 - `Watcher` (`notify` crate) with 150 ms debounce; ignore list `*.swp *~ *.tmp .#*`; on event, send `ExternalChange` to the actor.
 - Reconciler in the actor (design doc §4.3), implemented without the CRDT for now: state = ordered `Vec<TaskState>`; external edit → `diff_lines` by `id:` → ops → apply → write projection. Lines that arrive without `id:` get one assigned and written back (tagged mode). Our own writes are recognised by projection hash *and* by a short-lived "expected write" token, because some filesystems coalesce events.
 - Workspace walker: discover documents per §3.2.11 at startup and on directory create events.
 - gRPC server on the socket (`txtodo-proto`): `ListFiles`, `GetFile`, `Watch` (server-stream of changes), `Apply` (batch of intent-level mutations: add/complete/edit/move/delete; the daemon turns them into ops), `History`, `Undo`, `Checkout`. The CLI switches to daemon mode when the socket exists; direct-file mode remains as fallback and for `--no-daemon`.
-- Service files: `deploy/launchd/`, `deploy/systemd/`; `txtodo daemon install|start|stop|status`.
+- Service files: `deploy/launchd/`, `deploy/systemd/`; `txtodo daemon install|start|stop|status` (M11: one unit for the whole device, not one per workspace — `install` migrates any pre-M11 per-workspace units it finds).
 - `txtodo log`, `txtodo blame <line>`, `txtodo undo`, `txtodo checkout <iso-datetime> [--stdout]`.
 - `txtodo doctor`: socket reachable, watcher alive, file writable, clock sanity, config valid.
 

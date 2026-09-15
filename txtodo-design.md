@@ -305,7 +305,11 @@ Because the op log is append-only and signed:
 
 ## 5. Layer 3 — `txtodod`, the per-device daemon
 
-One process per device, owning the file(s), the CRDT, the op log, sync, and the API surfaces. Clients never touch the file directly.
+One process per device (ADR 0025, M11), owning every registered workspace's file(s), CRDT, op log, sync, and the API surfaces. Clients never touch the file directly.
+
+**Workspace registry.** The daemon owns a device-global registry (`WorkspaceRegistry`, its own SQLite database, never a single workspace's own store) — every todo directory the user has added, via `txtodo workspace add` or first-use auto-registration. `WorkspaceCatalog` layers the live, currently-open `Workspace`s on top of it. One unix-domain socket (or named pipe) per device, not one per workspace; every gRPC call carries a `WorkspaceSelector` (a resolved `WorkspaceId`, or a filesystem path the daemon resolves/auto-registers) so a request against a multi-workspace daemon still names which one it means. Omitted resolves to "the sole open workspace" — the bridge every single-workspace client and test relies on, refused with a clear error when zero or several are open. `txtodo workspace add|remove|list` manage the registry directly; `--dir <workspace>` remains a legacy bridge mode (binds the pre-existing per-workspace socket/pid/log locations) so the original single-workspace test suite needs no changes.
+
+**Migration.** An existing per-workspace install (one `txtodod --dir <workspace>` per project, one service unit per workspace hash) keeps working unmodified — `--dir` mode is not removed. Adopting the global daemon is opt-in: `txtodo daemon install` renders the one global service unit and migrates (stops, then deletes) any pre-M11 per-workspace unit files it finds, so a device never ends up running both the old per-workspace daemons and the new global one side by side. A pre-existing workspace's `<workspace>/.txtodo/oplog.db` is never touched, moved or re-created by registration — the registry only ever adds a catalog row pointing at the directory; the daemon opens whatever op log is already there the same way it always did.
 
 | Platform | How it runs | Caveats |
 |---|---|---|
@@ -323,6 +327,8 @@ Local IPC: unix domain socket or named pipe carrying gRPC (`tonic`), with a JSON
 ---
 
 ## 6. The agent surface — MCP on every device
+
+Single-workspace-scoped for now: the gateway and every token below target whichever one workspace the daemon has open, the same bridge §5's `WorkspaceSelector` omitted-case describes. Extending the gateway to take a workspace selector per call, and a token's scope grammar to name a workspace/set/all (rather than reaching inside only one), are tracked but deliberately deferred (`mcp-multi-workspace-gateway`, `mcp-workspace-scoped-tokens`) — the core app and desktop were prioritized first.
 
 ### 6.1 Transports
 
