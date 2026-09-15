@@ -179,3 +179,37 @@ fn a_todo_command_with_no_per_dir_socket_reaches_the_global_daemon() {
         stdout(&list)
     );
 }
+
+/// todo `ref:cli-workspace-autoregister`: a completely fresh directory — no `todo.txt`, no
+/// `.txtodo/`, nothing — with a global daemon reachable and no separate `workspace add` step.
+/// `daemon_mode::run_via_daemon`'s very first call (`list_files`) already carries the same Path
+/// selector every other RPC does (`client.rs::select`), so this needs no new production code —
+/// only this regression test, guarding the behavior `cli-workspace-commands` already delivered.
+#[test]
+fn first_add_in_a_brand_new_directory_auto_registers_it_with_no_separate_step() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let ws_dir = tempfile::tempdir().unwrap();
+    assert!(!ws_dir.path().join("todo.txt").exists());
+
+    let add = txtodo(&daemon, ws_dir.path(), &["add", "first", "task"]);
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    assert!(stdout(&add).contains("TODO: 1 added."), "{}", stdout(&add));
+    assert!(
+        ws_dir.path().join("todo.txt").exists(),
+        "add creates a missing todo.txt, same as todo.sh"
+    );
+
+    let list = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
+    let out = stdout(&list);
+    assert_eq!(
+        out.lines().count(),
+        1,
+        "auto-registered, no manual step: {out}"
+    );
+    assert!(out.contains(&ws_dir.path().display().to_string()), "{out}");
+}
