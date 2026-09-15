@@ -46,12 +46,17 @@ pub fn temp_workspace() -> tempfile::TempDir {
     dir
 }
 
-/// Waits for `<workspace>/.txtodo/txtodod.pid` to hold a number and returns it.
-pub fn wait_for_pid(workspace: &Path) -> u32 {
-    let path = workspace.join(".txtodo").join("txtodod.pid");
+/// Waits for the global daemon's pid file (`<state_dir>/txtodod.pid`, beside a hermetic test's
+/// own `global_socket_override`) to hold a number and returns it — the ADR 0025 analogue of
+/// `wait_for_pid` above, which is the pre-M11 per-workspace location.
+pub fn wait_for_global_pid(state_dir: &Path) -> u32 {
+    wait_for_pid_at(&state_dir.join("txtodod.pid"))
+}
+
+fn wait_for_pid_at(path: &Path) -> u32 {
     let start = Instant::now();
     loop {
-        if let Some(pid) = std::fs::read_to_string(&path)
+        if let Some(pid) = std::fs::read_to_string(path)
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok())
         {

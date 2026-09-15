@@ -14,26 +14,36 @@
 mod support;
 
 use desktop_lib::daemon::{DaemonClient, DaemonError};
-use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_pid};
+use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_global_pid};
 use txtodo_proto::v1 as pb;
 
-/// Spawns a fresh daemon for `dir` and returns a client past `wait_until_ready`, plus its pid for
-/// cleanup. Not itself a `#[test]` fn, so `clippy::unwrap_used`/`expect_used` still apply here —
-/// hence `unwrap_or_else(|e| panic!(...))` throughout, matching `tests/support/mod.rs`.
+/// Spawns a fresh, hermetic global daemon (own `global_socket_override`/`global_registry_override`
+/// beside `dir`, ADR 0025) and returns a client — already targeting `dir` via a `Path` selector,
+/// same auto-register bridge every other global-daemon caller relies on — past `wait_until_ready`,
+/// plus its pid for cleanup. Not itself a `#[test]` fn, so `clippy::unwrap_used`/`expect_used`
+/// still apply here — hence `unwrap_or_else(|e| panic!(...))` throughout, matching
+/// `tests/support/mod.rs`.
 async fn connected_client(dir: &std::path::Path) -> (DaemonClient, u32) {
     let mut cfg = desktop_lib::config::DesktopConfig::new(dir);
     cfg.daemon_bin = Some(TXTODOD_BIN.clone());
+    cfg.global_socket_override = Some(dir.join("txtodod.sock"));
+    cfg.global_registry_override = Some(dir.join("registry.db"));
     let sock = desktop_lib::daemon::ensure_daemon(&cfg)
         .await
         .unwrap_or_else(|e| panic!("ensure_daemon: {e}"));
-    let mut client = DaemonClient::connect(&sock)
+    let selector = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            dir.display().to_string(),
+        )),
+    };
+    let mut client = DaemonClient::connect(&sock, Some(selector))
         .await
         .unwrap_or_else(|e| panic!("connect: {e}"));
     client
         .wait_until_ready()
         .await
         .unwrap_or_else(|e| panic!("wait_until_ready: {e}"));
-    let pid = wait_for_pid(dir);
+    let pid = wait_for_global_pid(dir);
     (client, pid)
 }
 

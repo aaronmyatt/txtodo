@@ -15,6 +15,7 @@ pub use crate::dto_activity::OpLogEntryDto;
 pub use crate::dto_notes::NotesDocDto;
 pub use crate::dto_pairing::{PairOfferDto, PairResultDto};
 pub use crate::dto_tokens::TokenDto;
+pub use crate::dto_workspace::WorkspaceInfoDto;
 
 /// Lowercase-hex encoding of a byte slice (blake3 projection hashes are 32 bytes). `pub(crate)`
 /// (not private) so `dto_notes.rs` — a sibling module, not a descendant of this one — can reuse it

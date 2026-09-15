@@ -1,7 +1,11 @@
-//! Acceptance test for `tasks/desktop-tauri-shell`: a fresh install with no daemon running gets
-//! one spawned and can `list_files` within the spawn timeout, and a daemon already running (as
-//! if started by the CLI) is reused rather than duplicated — exactly one `txtodod` process per
-//! workspace. Spawn/build helpers live in `tests/support/mod.rs`, shared with `tests/new_rpcs.rs`.
+//! Acceptance test for `desktop-workspace-switcher` (ADR 0025, M11): a fresh install with no
+//! global daemon running gets one spawned (no `--dir`) and can `list_files` against a registered
+//! workspace within the spawn timeout, and a global daemon already running (as if started by the
+//! CLI, or another desktop window) is reused rather than duplicated — exactly one `txtodod`
+//! process for the whole device, not one per workspace. `global_socket_override`/
+//! `global_registry_override` give each test its own hermetic global socket/registry without
+//! mutating this process' shared environment (see `config.rs`'s own doc on why). Spawn/build
+//! helpers live in `tests/support/mod.rs`, shared with `tests/new_rpcs.rs`.
 
 mod support;
 
@@ -9,20 +13,36 @@ use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::{self, DaemonClient};
 use std::process::{Command, Stdio};
 use std::time::Instant;
-use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_pid};
+use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_global_pid};
+use txtodo_proto::v1 as pb;
+
+fn hermetic_config(state_dir: &std::path::Path) -> DesktopConfig {
+    let mut cfg = DesktopConfig::new(state_dir); // unused as a workspace by these tests
+    cfg.daemon_bin = Some(TXTODOD_BIN.clone());
+    cfg.global_socket_override = Some(state_dir.join("txtodod.sock"));
+    cfg.global_registry_override = Some(state_dir.join("registry.db"));
+    cfg
+}
+
+fn path_selector(path: &std::path::Path) -> pb::WorkspaceSelector {
+    pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            path.display().to_string(),
+        )),
+    }
+}
 
 #[tokio::test]
-async fn fresh_install_spawns_daemon_and_lists_files() {
-    let bin = TXTODOD_BIN.clone();
-    let dir = temp_workspace();
-    let mut cfg = DesktopConfig::new(dir.path());
-    cfg.daemon_bin = Some(bin);
+async fn fresh_install_spawns_the_global_daemon_and_lists_files() {
+    let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let cfg = hermetic_config(state_dir.path());
+    let ws = temp_workspace();
 
     let start = Instant::now();
     let sock = daemon::ensure_daemon(&cfg)
         .await
-        .expect("ensure_daemon should spawn a fresh txtodod");
-    let mut client = DaemonClient::connect(&sock)
+        .expect("ensure_daemon should spawn a fresh global txtodod");
+    let mut client = DaemonClient::connect(&sock, Some(path_selector(ws.path())))
         .await
         .expect("connect should build a lazy channel");
     client
@@ -39,52 +59,59 @@ async fn fresh_install_spawns_daemon_and_lists_files() {
     );
     assert!(
         files.files.iter().any(|f| f.path == "todo.txt"),
-        "todo.txt should be adopted: {files:?}"
+        "todo.txt should be adopted via the Path selector's auto-register: {files:?}"
     );
 
-    kill(wait_for_pid(dir.path()));
+    kill(wait_for_global_pid(state_dir.path()));
 }
 
 #[tokio::test]
-async fn already_running_daemon_is_reused_not_duplicated() {
-    let bin = TXTODOD_BIN.clone();
-    let dir = temp_workspace();
+async fn already_running_global_daemon_is_reused_not_duplicated() {
+    let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let cfg = hermetic_config(state_dir.path());
 
-    // Simulate "started by the CLI": spawn txtodod directly, outside of ensure_daemon.
-    let mut manual = Command::new(&bin)
-        .arg("--dir")
-        .arg(dir.path())
+    // Simulate "started by the CLI" (or another desktop window): spawn the global daemon
+    // directly, outside of ensure_daemon.
+    let mut manual = Command::new(&*TXTODOD_BIN)
+        .env(
+            "TXTODO_SOCKET",
+            cfg.global_socket_override.as_ref().unwrap(),
+        )
+        .env(
+            "TXTODO_REGISTRY_DB",
+            cfg.global_registry_override.as_ref().unwrap(),
+        )
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn txtodod directly");
-    let pid_before = wait_for_pid(dir.path());
+    let pid_before = wait_for_global_pid(state_dir.path());
     assert_eq!(
         pid_before,
         manual.id(),
         "pid file names the daemon we just spawned"
     );
 
-    // ensure_daemon on the same workspace must reuse it, never spawn a second one.
-    let mut cfg = DesktopConfig::new(dir.path());
-    cfg.daemon_bin = Some(bin);
+    // ensure_daemon must reuse it, never spawn a second one.
     let sock = daemon::ensure_daemon(&cfg)
         .await
-        .expect("ensure_daemon should reuse the already-running daemon");
-    let mut client = DaemonClient::connect(&sock).await.expect("connect");
+        .expect("ensure_daemon should reuse the already-running global daemon");
+    // No workspace is open yet on this freshly spawned daemon, so an unselected Health call
+    // would correctly fail FailedPrecondition ("no workspace is open") — the same "sole open
+    // workspace" bridge every other global-daemon caller relies on; name one via a Path selector.
+    let ws = temp_workspace();
+    let mut client = DaemonClient::connect(&sock, Some(path_selector(ws.path())))
+        .await
+        .expect("connect");
     client
         .wait_until_ready()
         .await
         .expect("the already-running daemon should already be ready");
-    client
-        .list_files()
-        .await
-        .expect("list_files should succeed against the reused daemon");
 
-    let pid_after = wait_for_pid(dir.path());
+    let pid_after = wait_for_global_pid(state_dir.path());
     assert_eq!(
         pid_before, pid_after,
-        "exactly one txtodod process per workspace"
+        "exactly one txtodod process for the whole device"
     );
 
     kill(pid_after);

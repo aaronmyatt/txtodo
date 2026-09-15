@@ -30,7 +30,13 @@ pub(crate) async fn connect_and_store(
     set_status(app, state, DaemonStatus::Spawning).await;
     let sock = daemon::ensure_daemon(&state.config).await?;
     set_status(app, state, DaemonStatus::Connecting).await;
-    let mut client = DaemonClient::connect(&sock).await?;
+    let workspace = state.current_workspace.lock().await.clone();
+    let selector = Some(pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            workspace.display().to_string(),
+        )),
+    });
+    let mut client = DaemonClient::connect(&sock, selector).await?;
     client.wait_until_ready().await?;
     *state.client.lock().await = Some(client);
     set_status(app, state, DaemonStatus::Connected).await;
@@ -62,9 +68,11 @@ pub async fn daemon_status(state: State<'_, AppState>) -> Result<DaemonStatus, S
 /// "footer: absolute directory path + sync status") — display only. The frontend never uses this
 /// to open a file itself (design §7: every read/write still crosses the `DaemonClient`); it only
 /// joins this with a workspace-relative directory to show the human where they are on disk.
+/// Reads `current_workspace` (ADR 0025, task `desktop-workspace-switcher`), not the fixed startup
+/// `config.workspace` — `switch_workspace` changes this without restarting the app.
 #[tauri::command]
-pub fn workspace_root(state: State<'_, AppState>) -> String {
-    state.config.workspace.display().to_string()
+pub async fn workspace_root(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.current_workspace.lock().await.display().to_string())
 }
 
 /// Records whether the main window's edit popover currently has an unsaved edit; the quick-add

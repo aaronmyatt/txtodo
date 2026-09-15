@@ -6,6 +6,7 @@
 //! return [`DaemonError::UnsupportedPlatform`] instead of assuming a `unix:` socket works.
 
 mod spawn;
+mod workspace;
 
 pub use spawn::ensure_daemon;
 
@@ -62,10 +63,15 @@ impl From<tonic::Status> for DaemonError {
     }
 }
 
-/// A client to one workspace's `txtodod`, dialed lazily over its ADR 0010 unix socket.
+/// A client to `txtodod` over its ADR 0010 unix socket, dialed lazily — against the true global
+/// daemon as of ADR 0025/M11 (task `desktop-workspace-switcher`), so one client now serves every
+/// registered workspace by varying [`DaemonClient::selector`], not a fixed one dialed per socket.
 pub struct DaemonClient {
     inner: pb::txtodo_client::TxtodoClient<tonic::transport::Channel>,
     sock: PathBuf,
+    /// Attached to every request below. `switch_workspace` is the only way to change it — every
+    /// in-flight and future RPC on this client targets whichever workspace it last named.
+    selector: Option<pb::WorkspaceSelector>,
 }
 
 impl DaemonClient {
@@ -74,11 +80,28 @@ impl DaemonClient {
         &self.sock
     }
 
-    /// Builds a lazily-dialed channel to `sock`. This never blocks: the first RPC drives the
+    /// Points every future RPC at `root` instead of whatever workspace this client targeted
+    /// before — no reconnect, since the global daemon is one process serving every registered
+    /// workspace already. `root` auto-registers via the same `Path` selector bridge
+    /// `WorkspaceCatalog::resolve` already proves at the daemon level.
+    pub fn switch_workspace(&mut self, root: &Path) {
+        self.selector = Some(pb::WorkspaceSelector {
+            selector: Some(pb::workspace_selector::Selector::Path(
+                root.display().to_string(),
+            )),
+        });
+    }
+
+    /// Builds a lazily-dialed channel to `sock`, targeting `selector` (`None` means "the sole
+    /// open workspace", the same bridge every other client of the global daemon relies on until
+    /// `switch_workspace` names one explicitly). This never blocks: the first RPC drives the
     /// actual unix-socket dial, bounded by [`CONNECT_TIMEOUT`].
     /// Ref: <https://docs.rs/tonic/latest/tonic/transport/struct.Endpoint.html#method.connect_lazy>
     #[cfg(unix)]
-    pub async fn connect(sock: &Path) -> Result<DaemonClient, DaemonError> {
+    pub async fn connect(
+        sock: &Path,
+        selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<DaemonClient, DaemonError> {
         let dst = format!("unix://{}", sock.display());
         let endpoint = tonic::transport::Endpoint::from_shared(dst)
             .map_err(DaemonError::Connect)?
@@ -87,12 +110,16 @@ impl DaemonClient {
         Ok(DaemonClient {
             inner: pb::txtodo_client::TxtodoClient::new(channel),
             sock: sock.to_path_buf(),
+            selector,
         })
     }
 
     /// Stub for non-unix targets; plan M10 adds the Windows named-pipe transport.
     #[cfg(not(unix))]
-    pub async fn connect(_sock: &Path) -> Result<DaemonClient, DaemonError> {
+    pub async fn connect(
+        _sock: &Path,
+        _selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<DaemonClient, DaemonError> {
         Err(DaemonError::UnsupportedPlatform)
     }
 
@@ -114,16 +141,19 @@ impl DaemonClient {
 
     /// Liveness only; used by [`DaemonClient::wait_until_ready`].
     async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
+        let workspace = self.selector.clone();
         Ok(self
             .inner
-            .health(pb::HealthRequest { workspace: None })
+            .health(pb::HealthRequest { workspace })
             .await?
             .into_inner())
     }
 
     /// Every synced document with its current projection hash.
     pub async fn list_files(&mut self) -> Result<pb::ListFilesResponse, DaemonError> {
-        let req = pb::ListFilesRequest { workspace: None };
+        let req = pb::ListFilesRequest {
+            workspace: self.selector.clone(),
+        };
         Ok(self.inner.list_files(req).await?.into_inner())
     }
 
@@ -131,7 +161,7 @@ impl DaemonClient {
     pub async fn get_file(&mut self, path: &str) -> Result<pb::FileContents, DaemonError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.get_file(req).await?.into_inner())
     }
@@ -143,29 +173,35 @@ impl DaemonClient {
     ) -> Result<tonic::Streaming<pb::Change>, DaemonError> {
         let req = pb::WatchRequest {
             paths,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
 
     /// Intent-level mutations; the daemon turns them into ops.
-    pub async fn apply(&mut self, req: pb::ApplyRequest) -> Result<pb::ApplyResponse, DaemonError> {
+    pub async fn apply(
+        &mut self,
+        mut req: pb::ApplyRequest,
+    ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.apply(req).await?.into_inner())
     }
 
     /// Ops newest first, filtered by path and/or task.
     pub async fn history(
         &mut self,
-        req: pb::HistoryRequest,
+        mut req: pb::HistoryRequest,
     ) -> Result<pb::HistoryResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.history(req).await?.into_inner())
     }
 
     /// Resolves one `needs_review` flag; maps to the daemon's `ResolveConflict` RPC.
     pub async fn resolve(
         &mut self,
-        req: pb::ResolveRequest,
+        mut req: pb::ResolveRequest,
     ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.resolve_conflict(req).await?.into_inner())
     }
 
@@ -176,7 +212,7 @@ impl DaemonClient {
     ) -> Result<pb::ConflictsResponse, DaemonError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.list_conflicts(req).await?.into_inner())
     }
@@ -186,7 +222,7 @@ impl DaemonClient {
     pub async fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, DaemonError> {
         let req = pb::GetNotesRequest {
             task: Some(task),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.get_notes(req).await?.into_inner())
     }
@@ -195,16 +231,18 @@ impl DaemonClient {
     /// creates the `ref:` directory on the first edit (plan §3.2.4).
     pub async fn edit_notes(
         &mut self,
-        req: pb::NotesEditRequest,
+        mut req: pb::NotesEditRequest,
     ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.edit_notes(req).await?.into_inner())
     }
 
     /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
     pub async fn pair_offer(&mut self) -> Result<pb::PairOfferResponse, DaemonError> {
+        let workspace = self.selector.clone();
         Ok(self
             .inner
-            .pair_offer(pb::PairOfferRequest { workspace: None })
+            .pair_offer(pb::PairOfferRequest { workspace })
             .await?
             .into_inner())
     }
@@ -214,7 +252,7 @@ impl DaemonClient {
     pub async fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, DaemonError> {
         let req = pb::PairAcceptRequest {
             code,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.pair_accept(req).await?.into_inner())
     }
@@ -222,9 +260,10 @@ impl DaemonClient {
     /// Confirms the SAS shown to the human on this device; the group key lands only once both
     /// sides have confirmed.
     pub async fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, DaemonError> {
+        let workspace = self.selector.clone();
         Ok(self
             .inner
-            .pair_confirm_sas(pb::PairConfirmRequest { workspace: None })
+            .pair_confirm_sas(pb::PairConfirmRequest { workspace })
             .await?
             .into_inner())
     }
@@ -232,16 +271,18 @@ impl DaemonClient {
     /// Mints a new capability token from the design §6.2 scope/caveat grammar.
     pub async fn token_create(
         &mut self,
-        req: pb::TokenCreateRequest,
+        mut req: pb::TokenCreateRequest,
     ) -> Result<pb::Token, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.token_create(req).await?.into_inner())
     }
 
     /// Tokens for this workspace, scopes included, secrets never returned.
     pub async fn token_list(&mut self) -> Result<pb::TokenListResponse, DaemonError> {
+        let workspace = self.selector.clone();
         Ok(self
             .inner
-            .token_list(pb::TokenListRequest { workspace: None })
+            .token_list(pb::TokenListRequest { workspace })
             .await?
             .into_inner())
     }
@@ -253,7 +294,7 @@ impl DaemonClient {
     ) -> Result<pb::TokenRevokeResponse, DaemonError> {
         let req = pb::TokenRevokeRequest {
             id,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.token_revoke(req).await?.into_inner())
     }
@@ -262,9 +303,10 @@ impl DaemonClient {
     /// live tail (unlike [`DaemonClient::watch`]) — so this drains the whole stream before
     /// returning instead of forwarding it as an event stream.
     pub async fn op_log(&mut self) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
+        let workspace = self.selector.clone();
         let mut stream = self
             .inner
-            .op_log_stream(pb::OpLogRequest { workspace: None })
+            .op_log_stream(pb::OpLogRequest { workspace })
             .await?
             .into_inner();
         let mut entries = Vec::new();
