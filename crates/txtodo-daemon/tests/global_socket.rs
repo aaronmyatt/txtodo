@@ -57,10 +57,21 @@ struct GlobalDaemon {
 }
 
 impl GlobalDaemon {
-    /// Spawns the daemon against `registry_db` (already seeded, if the caller wants pre-registered
-    /// workspaces) with no `--dir`, waits for the global socket to appear, and connects.
+    /// Spawns the daemon against `registry_dir`'s own `registry.db` (already seeded, if the caller
+    /// wants pre-registered workspaces) with no `--dir`, waits for the global socket to appear,
+    /// and connects.
     async fn start(registry_dir: tempfile::TempDir) -> (GlobalDaemon, Client) {
         let registry_db = registry_dir.path().join("registry.db");
+        GlobalDaemon::start_against(registry_dir, registry_db).await
+    }
+
+    /// As `start`, but against an explicit `registry_db` — a real second process pointed at
+    /// another process' (already exited) registry file, `the_registry_survives_a_real_process_
+    /// restart`'s own use case.
+    async fn start_against(
+        registry_dir: tempfile::TempDir,
+        registry_db: PathBuf,
+    ) -> (GlobalDaemon, Client) {
         let socket = registry_dir.path().join("txtodod.sock");
         // --no-lan: this suite only exercises selector routing, never sync — skipping LAN/mDNS
         // startup avoids real-network contention when several of these run concurrently.
@@ -211,4 +222,124 @@ async fn a_second_unregistered_directory_auto_registers_and_then_no_selector_is_
         2,
         "both the pre-registered and the auto-registered workspace persisted"
     );
+}
+
+/// todo `ref:test-global-daemon-acceptance`: a registered-but-broken workspace (its `oplog.db`
+/// replaced with garbage, so `Store::open` refuses it) must never take the whole process down or
+/// poison a healthy workspace's own resolve — `WorkspaceCatalog::open_all_registered` already
+/// logs-and-skips a per-entry open failure at startup (workspace_catalog.rs's own doc), and this
+/// proves the same isolation holds for a *lazy* open triggered by an in-flight RPC too, over a
+/// real socket, not just in-process.
+#[tokio::test]
+async fn a_broken_workspace_never_affects_resolving_a_healthy_one() {
+    let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let registry_db = registry_dir.path().join("registry.db");
+    let healthy = seed_workspace(&registry_db);
+
+    // A second workspace, registered but never opened by open_all_registered: its .txtodo/oplog.db
+    // is garbage, so Workspace::open (via Store::open) refuses it the first time anything asks for
+    // it by path — after the daemon has already started, exercising the lazy-open failure path.
+    let broken = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    std::fs::write(broken.path().join("todo.txt"), "broken\n").unwrap_or_else(|e| panic!("{e}"));
+    std::fs::create_dir_all(broken.path().join(".txtodo")).unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(
+        broken.path().join(".txtodo").join("oplog.db"),
+        b"not a sqlite file",
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    {
+        let mut registry =
+            WorkspaceRegistry::open(&registry_db).unwrap_or_else(|e| panic!("open registry: {e}"));
+        registry
+            .add(broken.path(), &SystemClock)
+            .unwrap_or_else(|e| panic!("register broken: {e}"));
+    }
+
+    let (_daemon, mut client) = GlobalDaemon::start(registry_dir).await;
+
+    let err = client
+        .health(pb::HealthRequest {
+            workspace: Some(path_selector(broken.path())),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err.code(),
+        tonic::Code::Internal,
+        "a clean error, not a hang or crash"
+    );
+
+    // The process is still alive and the healthy workspace resolves exactly as if the broken one
+    // did not exist — the failed open above touched no shared state the healthy path depends on.
+    let resp = client
+        .health(pb::HealthRequest {
+            workspace: Some(path_selector(healthy.path())),
+        })
+        .await
+        .unwrap_or_else(|e| panic!("healthy workspace should be unaffected: {e}"))
+        .into_inner();
+    assert_eq!(resp.documents, 1);
+}
+
+/// todo `ref:test-global-daemon-acceptance`: the registry survives a real process restart — not
+/// just the in-process `WorkspaceRegistry::open` round trip `workspace_registry_tests.rs` already
+/// covers, but a second, genuinely separate `txtodod` process pointed at the same `registry.db`
+/// reporting (over `WorkspaceList`) and actually re-opening (over `Health`) every workspace the
+/// first process's run had registered.
+#[tokio::test]
+async fn the_registry_survives_a_real_process_restart() {
+    // Owned by this function, not by either GlobalDaemon below: each one's own `registry_dir`
+    // field is a `tempfile::TempDir` that deletes its directory on drop, and registry_db must
+    // outlive the *first* daemon's drop — an earlier version of this test passed the first
+    // daemon's own tempdir path as registry_db and found 0 workspaces after "restart" because the
+    // first daemon's drop had already deleted the directory registry.db lived in.
+    let registry_holder = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let registry_db = registry_holder.path().join("registry.db");
+    let dir_a = seed_workspace(&registry_db);
+    let dir_b = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    std::fs::write(dir_b.path().join("todo.txt"), "b\n").unwrap_or_else(|e| panic!("{e}"));
+
+    {
+        let socket_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        let (_daemon, mut client) =
+            GlobalDaemon::start_against(socket_dir, registry_db.clone()).await;
+        // Auto-registers dir_b for real, into the on-disk registry this process' Drop will outlive.
+        client
+            .health(pb::HealthRequest {
+                workspace: Some(path_selector(dir_b.path())),
+            })
+            .await
+            .unwrap_or_else(|e| panic!("register b: {e}"));
+    } // daemon killed here (Drop) — a real process exit, not a graceful shutdown
+
+    let restarted_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (_restarted, mut client) = GlobalDaemon::start_against(restarted_dir, registry_db).await;
+
+    let listed = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .unwrap_or_else(|e| panic!("workspace_list on restart: {e}"))
+        .into_inner()
+        .workspaces;
+    assert_eq!(
+        listed.len(),
+        2,
+        "both workspaces survived the restart: {listed:?}"
+    );
+
+    for dir in [&dir_a, &dir_b] {
+        let resp = client
+            .health(pb::HealthRequest {
+                workspace: Some(path_selector(dir.path())),
+            })
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "restarted daemon should re-open {}: {e}",
+                    dir.path().display()
+                )
+            })
+            .into_inner();
+        assert_eq!(resp.documents, 1);
+    }
 }
