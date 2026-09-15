@@ -7,13 +7,16 @@
 //! n0's public relay by `relay_converge.rs`/`pairing_relay.rs`. `DeviceRelay::bind` absorbs what
 //! was `control_channel.rs`'s own private `bind_endpoint`, unchanged in behaviour.
 //!
-//! [`WorkspaceRoutes`] (`register`/`unregister`/`route`) is what a future accept loop (stage 3)
-//! will consult to tell an incoming sync-`ALPN` connection's peeked `workspace_id`
-//! (`txtodo_sync::peek_workspace`) apart from every other open workspace's — not wired into the
-//! accept loop yet, this stage only builds and tests the table itself. Split from `DeviceRelay`
-//! so the table's own logic is testable without a real network bind (`device_relay_tests.rs`);
-//! `DeviceRelay::bind`'s own networking is exercised indirectly by every real-daemon relay test
-//! in `tests/` instead.
+//! [`WorkspaceRoutes`] (`register`/`unregister`/`route`) is what `control_dispatch.rs`'s shared
+//! accept loop (stage 3) consults to tell an incoming sync-`ALPN` connection's peeked
+//! `workspace_id` (`txtodo_sync::peek_workspace`) apart from every other open workspace's, and to
+//! find *some* open workspace to hand a `PAIRING_ALPN` connection to (pairing only ever touches
+//! the shared `DeviceIdentity` underneath, ADR 0021, so any open workspace's handle will do). Kept
+//! as its own type, bundled into `DeviceRelay` rather than merged into its fields directly, so the
+//! table's own logic stays testable without a real network bind (`device_relay_tests.rs`);
+//! `DeviceRelay::bind`'s own networking is exercised indirectly by every real-daemon relay test in
+//! `tests/` instead. `register`/`unregister` gain their first production caller in stage 5, when
+//! `workspace_catalog_open.rs` starts keeping this table in sync with which workspaces are open.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -98,10 +101,18 @@ impl WorkspaceRoutes {
     }
 
     /// The route for `id`, if this device currently has that workspace open. `None` for an
-    /// unknown, not-yet-open, or already-closed workspace — the caller (stage 3's accept loop)
-    /// logs and drops the connection rather than treating this as fatal.
+    /// unknown, not-yet-open, or already-closed workspace — the caller (`control_dispatch.rs`'s
+    /// accept loop) logs and drops the connection rather than treating this as fatal.
     pub fn route(&self, id: WorkspaceId) -> Option<WorkspaceRoute> {
         self.read().get(&id).cloned()
+    }
+
+    /// Any one currently-open workspace's route, if at least one is open — `PAIRING_ALPN`'s own
+    /// handler (`pairing_lan::handle_incoming_over`) only ever reaches the shared `DeviceIdentity`
+    /// through its `&SharedWorkspace` argument (ADR 0021), so which specific one it gets does not
+    /// matter. `None` when no workspace is open at all; the caller logs and drops the connection.
+    pub fn any(&self) -> Option<WorkspaceRoute> {
+        self.read().values().next().cloned()
     }
 
     fn read(&self) -> RwLockReadGuard<'_, HashMap<WorkspaceId, WorkspaceRoute>> {
@@ -117,13 +128,12 @@ impl WorkspaceRoutes {
     }
 }
 
-/// This device's one relay endpoint. One per `txtodod` process, bound once, before any workspace
-/// opens — mirrors `DeviceIdentity`'s own device-level (not per-workspace) lifetime. Deliberately
-/// does not hold a [`WorkspaceRoutes`] itself yet: stage 3 is what actually wires an accept loop
-/// to consult one, and will decide then how the two are bundled for that call site — building that
-/// coupling now, before anything uses it, would be dead weight this stage doesn't need.
+/// This device's one relay endpoint plus the routing table its accept loop consults. One per
+/// `txtodod` process, bound once, before any workspace opens — mirrors `DeviceIdentity`'s own
+/// device-level (not per-workspace) lifetime.
 pub struct DeviceRelay {
     endpoint: Arc<RelayEndpoint>,
+    routes: WorkspaceRoutes,
 }
 
 impl DeviceRelay {
@@ -149,6 +159,12 @@ impl DeviceRelay {
     pub fn endpoint(&self) -> Arc<RelayEndpoint> {
         Arc::clone(&self.endpoint)
     }
+
+    /// The routing table an accept loop consults to dispatch an incoming sync or pairing
+    /// connection to the right open workspace.
+    pub fn routes(&self) -> &WorkspaceRoutes {
+        &self.routes
+    }
 }
 
 fn on_bind_result(
@@ -164,6 +180,7 @@ fn on_bind_result(
     log_bound(&hex_encode(&endpoint.node_id_bytes()));
     Some(Arc::new(DeviceRelay {
         endpoint: Arc::new(endpoint),
+        routes: WorkspaceRoutes::new(),
     }))
 }
 

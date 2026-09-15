@@ -52,6 +52,18 @@ fn an_unknown_id_is_none_not_a_panic() {
 }
 
 #[test]
+fn any_is_none_when_empty_and_some_registered_route_once_one_exists() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let routes = WorkspaceRoutes::new();
+    assert!(routes.any().is_none());
+    let id = WorkspaceId::new(Ulid::from_u128(1));
+    routes
+        .register(id, one_route(dir.path()))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert!(routes.any().is_some());
+}
+
+#[test]
 fn re_registering_the_same_id_never_counts_against_the_cap() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let routes = WorkspaceRoutes::new();

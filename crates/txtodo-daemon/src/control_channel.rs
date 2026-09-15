@@ -13,14 +13,12 @@
 //! `Decline` are logged only (stage 6's own bookkeeping, not built here). A workspace already
 //! adopted or actively registered under this device's own id is skipped, not re-offered forever.
 //!
-//! **Known, deliberately-not-solved gap this pass**: this endpoint shares its persisted identity
-//! with every per-workspace relay endpoint (`relay.rs::bind`, stage 1) that happens to be live at
-//! the same time — `relay.rs::build`'s ALPN set is identical on every relay endpoint this crate
-//! binds, so two simultaneously-live endpoints under one identity is real, untested territory this
-//! sandbox cannot exercise against a genuine relay server's routing behavior (no way to run one
-//! here). Flagged for a human, same spirit as `relay_fallback.rs`'s own already-documented
-//! identity-sharing gap; self-resolves once `daemon-shared-sync-link` consolidates every relay
-//! surface onto one shared `Link`, which is explicitly out of scope for this task.
+//! Bound via [`DeviceRelay::bind`] (task `daemon-shared-sync-link` stage 2), which also moved this
+//! module's own former identity-sharing gap onto stage 2/3's shoulders: the accept loop no longer
+//! silently drops a connection that did not negotiate `CONTROL_ALPN` — [`control_dispatch`]
+//! dispatches all three ALPNs this device's one endpoint accepts, routing a sync connection to the
+//! right open workspace by peeking its first frame's clear `workspace_id` (`txtodo_sync::
+//! peek_workspace`). See `control_dispatch.rs`'s own module doc for the full routing story.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -30,6 +28,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_sync::RelayEndpoint;
 
+use crate::control_dispatch::{self, DispatchCtx};
 use crate::device_identity::DeviceIdentity;
 use crate::device_relay::DeviceRelay;
 use crate::workspace_registry::WorkspaceRegistry;
@@ -38,9 +37,12 @@ use crate::workspace_registry::WorkspaceRegistry;
 /// redials to pick up a workspace registered since the previous round. Same reasoning as
 /// `relay.rs`'s `DIAL_KNOWN_PEER_INTERVAL`.
 const DIAL_KNOWN_PEER_INTERVAL: Duration = Duration::from_millis(1_000);
-/// Most control sessions (accepted or dialed) running at once — a hostile or buggy peer flooding
-/// connections must not spawn unboundedly many blocking threads.
-const MAX_CONCURRENT_CONTROL_SESSIONS: usize = 32;
+/// Most sessions of any kind (control, pairing or sync) this device's one shared endpoint accepts
+/// or dials at once — a hostile or buggy peer flooding connections must not spawn unboundedly many
+/// blocking threads. Named for what it now bounds (task `daemon-shared-sync-link` stage 3: this
+/// endpoint stopped being control-only the moment `control_dispatch.rs` started routing the other
+/// two ALPNs through it too).
+const MAX_CONCURRENT_ACCEPTED_SESSIONS: usize = 32;
 
 /// The background control-channel task; `abort()` on daemon shutdown, same pattern as
 /// `RelayTransport`/`LanTransport`.
@@ -80,15 +82,15 @@ async fn run(identity: Arc<DeviceIdentity>, url: String, registry_path: PathBuf)
     let Some(device_relay) = DeviceRelay::bind(&identity, url).await else {
         return;
     };
+    let ctx = DispatchCtx {
+        identity: Arc::clone(&identity),
+        registry: Arc::clone(&registry),
+        device_relay: Arc::clone(&device_relay),
+    };
     let endpoint = device_relay.endpoint();
-    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_CONTROL_SESSIONS));
+    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_ACCEPTED_SESSIONS));
     tokio::join!(
-        accept_loop(
-            Arc::clone(&endpoint),
-            Arc::clone(&identity),
-            Arc::clone(&registry),
-            Arc::clone(&sem)
-        ),
+        accept_loop(Arc::clone(&endpoint), ctx, Arc::clone(&sem)),
         redial_loop(endpoint, identity, registry, sem),
     );
 }
@@ -103,37 +105,15 @@ fn open_registry(registry_path: &std::path::Path) -> Option<Arc<Mutex<WorkspaceR
     }
 }
 
-async fn accept_loop(
-    endpoint: Arc<RelayEndpoint>,
-    identity: Arc<DeviceIdentity>,
-    registry: Arc<Mutex<WorkspaceRegistry>>,
-    sem: Arc<Semaphore>,
-) {
+async fn accept_loop(endpoint: Arc<RelayEndpoint>, ctx: DispatchCtx, sem: Arc<Semaphore>) {
     loop {
         match endpoint.accept().await {
-            Ok(link) => handle_accepted(link, Arc::clone(&identity), Arc::clone(&registry), &sem),
+            Ok(link) => {
+                control_dispatch::accept_one(link, &ctx, &sem, MAX_CONCURRENT_ACCEPTED_SESSIONS);
+            }
             Err(e) => tracing::debug!(error = %e, "control_channel_accept_failed"),
         }
     }
-}
-
-fn handle_accepted(
-    link: txtodo_sync::IrohLink,
-    identity: Arc<DeviceIdentity>,
-    registry: Arc<Mutex<WorkspaceRegistry>>,
-    sem: &Arc<Semaphore>,
-) {
-    if link.alpn() != txtodo_sync::CONTROL_ALPN {
-        return;
-    }
-    let Ok(permit) = Arc::clone(sem).try_acquire_owned() else {
-        tracing::warn!(
-            cap = MAX_CONCURRENT_CONTROL_SESSIONS,
-            "control_channel_session_cap_reached_dropping_incoming"
-        );
-        return;
-    };
-    spawn_session(link, identity, registry, permit);
 }
 
 /// Dials every known peer with a durably-stored relay node id (`IdentityStore::list_devices()`,
@@ -193,7 +173,9 @@ fn known_relay_peers(identity: &DeviceIdentity) -> Vec<[u8; 32]> {
         .collect()
 }
 
-fn spawn_session(
+/// `pub(crate)`: `control_dispatch.rs`'s `CONTROL_ALPN` branch calls this directly, the same
+/// session-driving code an accepted or a dialed control connection always ran.
+pub(crate) fn spawn_session(
     link: txtodo_sync::IrohLink,
     identity: Arc<DeviceIdentity>,
     registry: Arc<Mutex<WorkspaceRegistry>>,

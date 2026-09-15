@@ -16,6 +16,7 @@ pub mod clock;
 mod commit;
 mod conflict_row;
 pub mod control_channel;
+mod control_dispatch;
 mod control_session;
 pub mod convert;
 pub mod debounce;
@@ -106,6 +107,8 @@ pub mod write;
 mod actor_tests;
 #[cfg(test)]
 mod bundle_tests;
+#[cfg(test)]
+mod control_dispatch_tests;
 #[cfg(test)]
 mod control_session_tests;
 #[cfg(test)]
