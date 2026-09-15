@@ -95,6 +95,24 @@ impl RelayEndpoint {
         })
     }
 
+    /// Same as [`RelayEndpoint::bind`], but binds with a caller-supplied identity seed instead of a
+    /// fresh random one — task `daemon-workspace-identity-agreement` stage 1. The seed is opaque
+    /// bytes here on purpose: the caller (`txtodo-daemon`'s `DeviceIdentity`) never names an `iroh`
+    /// type, so this is the one crossing point where a persisted seed becomes a real relay identity.
+    pub async fn bind_with_secret_key(
+        cfg: &RelayConfig,
+        group: GroupId,
+        secret_key_bytes: [u8; 32],
+    ) -> Result<RelayEndpoint, RelayError> {
+        let relay_url: RelayUrl = cfg.url.parse().map_err(RelayError::InvalidUrl)?;
+        let endpoint = crate::relay::build_endpoint_with_secret_key(cfg, secret_key_bytes).await?;
+        Ok(RelayEndpoint {
+            endpoint,
+            relay_url,
+            group,
+        })
+    }
+
     /// Test-only twin of [`RelayEndpoint::bind`] that skips relay TLS certificate verification, so
     /// a test can dial `iroh::test_utils::run_relay_server`'s self-signed local relay.
     /// `#[cfg(test)]` compiles this out of every real build entirely.

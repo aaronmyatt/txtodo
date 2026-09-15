@@ -104,6 +104,20 @@ pub async fn build_endpoint(cfg: &RelayConfig) -> Result<Endpoint, RelayError> {
     build(cfg, |b| b).await
 }
 
+/// Same as [`build_endpoint`], but binds with a caller-supplied identity seed instead of iroh's own
+/// per-call random mint — task `daemon-workspace-identity-agreement` stage 1: a stable relay node
+/// id across daemon restarts, needed so a peer's durably-stored `relay_node_id` (stage 2) stays
+/// valid and a redial loop (stage 5) can keep reaching this device by the same identity.
+pub async fn build_endpoint_with_secret_key(
+    cfg: &RelayConfig,
+    secret_key_bytes: [u8; 32],
+) -> Result<Endpoint, RelayError> {
+    build(cfg, |b| {
+        b.secret_key(iroh::SecretKey::from_bytes(&secret_key_bytes))
+    })
+    .await
+}
+
 /// Test-only twin of [`build_endpoint`] that skips relay TLS certificate verification, so a test
 /// can dial `iroh::test_utils::run_relay_server`'s self-signed local relay. `#[cfg(test)]` compiles
 /// this out of every real build entirely — production code has no path to an insecure endpoint.

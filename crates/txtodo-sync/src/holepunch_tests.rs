@@ -35,6 +35,44 @@ async fn connect_pairing_has_no_group_parameter_to_gate_on() {
     assert!(a.connect_pairing(b.node_id_bytes()).await.is_err());
 }
 
+/// Task `daemon-workspace-identity-agreement` stage 1: binding with the same injected seed twice
+/// must yield the same relay node id — otherwise a persisted seed (`DeviceIdentity`'s job) buys a
+/// daemon restart nothing, and a peer's durably-stored `relay_node_id` (stage 2) would go stale the
+/// moment this device restarts.
+#[tokio::test]
+async fn bind_with_secret_key_is_stable_across_binds() {
+    let cfg = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let seed = [7u8; 32];
+    let a = RelayEndpoint::bind_with_secret_key(&cfg, GroupId(1), seed)
+        .await
+        .unwrap();
+    let b = RelayEndpoint::bind_with_secret_key(&cfg, GroupId(1), seed)
+        .await
+        .unwrap();
+    assert_eq!(a.node_id_bytes(), b.node_id_bytes());
+}
+
+/// The other half: two different seeds must not collide onto the same node id — a caller relying on
+/// `bind_with_secret_key` to give this device a *specific* identity needs that identity to actually
+/// depend on the seed it passed, not just to be stable.
+#[tokio::test]
+async fn bind_with_secret_key_differs_across_seeds() {
+    let cfg = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let a = RelayEndpoint::bind_with_secret_key(&cfg, GroupId(1), [1u8; 32])
+        .await
+        .unwrap();
+    let b = RelayEndpoint::bind_with_secret_key(&cfg, GroupId(1), [2u8; 32])
+        .await
+        .unwrap();
+    assert_ne!(a.node_id_bytes(), b.node_id_bytes());
+}
+
 #[tokio::test]
 async fn foreign_group_is_refused_before_dialing() {
     let cfg = RelayConfig {

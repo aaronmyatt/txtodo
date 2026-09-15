@@ -27,6 +27,10 @@ pub enum KeyId {
     DeviceStatic,
     /// The group key for one epoch.
     Group(u32),
+    /// This device's relay-transport iroh identity seed (task `daemon-workspace-identity-agreement`
+    /// stage 1) — stable across restarts, unlike the endpoint's previous per-run random mint, so a
+    /// peer can dial this device's relay node id durably instead of only during a live handshake.
+    RelayIdentity,
 }
 
 impl fmt::Display for KeyId {
@@ -35,6 +39,7 @@ impl fmt::Display for KeyId {
             KeyId::DeviceSigning => write!(f, "device-signing"),
             KeyId::DeviceStatic => write!(f, "device-static"),
             KeyId::Group(epoch) => write!(f, "group-epoch-{epoch}"),
+            KeyId::RelayIdentity => write!(f, "relay-identity"),
         }
     }
 }
