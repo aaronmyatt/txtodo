@@ -294,4 +294,5 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `SAS_INFO`/`PAIR_KEY_INFO`); the epoch is bound as AEAD associated data, so a grant for one epoch
   cannot be relabelled as another. `validate_removal` is checked before any crypto runs — a removal
   refusal never touches key material.
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-model, txtodo-store.
