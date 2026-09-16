@@ -1,0 +1,5 @@
+2026-09-16 write .claude/logging.md: event schema, span table, sink matrix, no-secrets rule, TXTODO_LOG=debug gap +m11 @docs id:01M2N3VZSVQ59525NV01WKC3BT
+2026-09-16 add no-secrets invariant line to 7 instrumented crates' CLAUDE.md (cli/crdt/mcp/model/store/sync/tui) +m11 @docs id:01M2N3VZTFR7KX61XEVMP8AD66
+2026-09-16 write docs/logging.md jq recipe, test against a real captured log file +m11 @docs id:01M2N3VZTYEN414MHTVT484R26
+2026-09-16 add daemon.log to .gitignore (file itself no longer exists, done as asked anyway) +m11 @docs id:01M2N3VZVCG40EBCEZ4C1JX1WH
+2026-09-16 mark root todo.txt line 36 done, closing the +m11 @observability epic +m11 @docs id:01M2N3VZVS23RPJFWTQ1KA78GA

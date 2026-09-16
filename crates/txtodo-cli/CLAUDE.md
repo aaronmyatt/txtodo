@@ -84,4 +84,5 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - `pair`'s SAS confirmation reads one stdin line and requires an explicit "y"/"yes"
   (case-insensitive); anything else, including EOF, is a refusal — it never defaults to yes
   (`tasks/sync-pairing/notes.md`'s "Confirmation must be mutual").
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-core, txtodo-proto.
