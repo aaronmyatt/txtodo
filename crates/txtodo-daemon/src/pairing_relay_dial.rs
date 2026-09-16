@@ -101,7 +101,10 @@ fn log_relay_round_no_reply() {
 /// cognitive complexity under this workspace's budget (`clippy.toml`) — logs (at `debug`, see
 /// [`relay_attempt`]'s doc) every reason a round produced nothing, the same discipline
 /// `pairing_lan.rs::attempt` now applies to its own LAN half.
-async fn relay_connect(ws: &SharedWorkspace, offer: &PairingOffer) -> Option<txtodo_sync::IrohLink> {
+async fn relay_connect(
+    ws: &SharedWorkspace,
+    offer: &PairingOffer,
+) -> Option<txtodo_sync::IrohLink> {
     let Some(node) = offer.relay_node_id else {
         log_relay_no_rendezvous();
         return None;
