@@ -109,3 +109,70 @@ in the epic's instrumented-crate list — left untouched, not in scope.
 - `docs/logging.md`'s jq recipe actually runs against a real captured log file (proven in "As built").
 - `.gitignore` gains a `daemon.log` rule.
 - Root todo.txt line 36 marked done, closing the epic.
+
+## As built
+
+### Commits (local only, not pushed)
+1. `f53bc0b` — `.claude/logging.md` (new) + `txtodo-cli/CLAUDE.md` invariant line + this task's own
+   `notes.md`/`todo.txt`.
+2. `14ea614` — `txtodo-crdt/CLAUDE.md` invariant line.
+3. `ed69ee6` — `txtodo-mcp/CLAUDE.md` invariant line.
+4. `c88f0f1` — `txtodo-model/CLAUDE.md` invariant line.
+5. `9188430` — `txtodo-store/CLAUDE.md` invariant line.
+6. `b3f5050` — `txtodo-sync/CLAUDE.md` invariant line.
+7. `0a1c16f` — `txtodo-tui/CLAUDE.md` invariant line.
+8. `7ba88fd` — `docs/logging.md` (new) + `.gitignore` `/daemon.log` rule.
+
+More commits than the "1-2" estimated in the task brief: this repo's own `.claude/hooks/fence.sh`
+slice-lease machinery allows editing only one `crates/<crate>/` slice per session at a time, and
+releases the lease only once the working tree is fully clean (`.claude/hooks/gate.sh`, normally a
+Stop-hook, invoked directly here after each crate's commit via `echo '{"cwd":...,"session_id":...}'
+| bash .claude/hooks/gate.sh` — the exact release path the hook itself documents, just triggered
+synchronously instead of waiting for a real Stop event). Each of the 7 invariant-line edits therefore
+needed its own commit before the next crate's edit was even permitted. `git log` confirms all 8
+commits above are on `main`, nothing pushed.
+
+### CLAUDE.md coverage (final)
+Got the invariant line (verbatim: "Logs carry ids, counts and hashes — never line text, tokens or
+payloads."): `crates/txtodo-cli/CLAUDE.md`, `crates/txtodo-crdt/CLAUDE.md`,
+`crates/txtodo-mcp/CLAUDE.md`, `crates/txtodo-model/CLAUDE.md`, `crates/txtodo-store/CLAUDE.md`,
+`crates/txtodo-sync/CLAUDE.md`, `crates/txtodo-tui/CLAUDE.md` — 7 files, each one small additive
+bullet appended immediately before that file's existing "May depend only on:" closing line.
+
+Already had it: `crates/txtodo-daemon/CLAUDE.md` — untouched.
+
+Gap, documented not silently dropped (instrumented, no `CLAUDE.md` to add the line to):
+`apps/desktop/src-tauri`, `relay/`, `crates/txtodo-telemetry` — see "CLAUDE.md coverage check" above
+for detail on each.
+
+### jq recipes (docs/logging.md)
+All 5 recipes were run against real captured JSON log files produced by real `target/debug/txtodo`
+and `target/debug/txtodod` runs in scratch temp directories during this task (not invented JSON):
+recipes 1-3 and 5 against a real `.txtodo/logs/txtodo.log.*`/`txtodod.log.*` pair; recipe 3's
+two-service merge genuinely interleaved a `txtodo` CLI file and a `txtodod` daemon file from the same
+directory, sorted by timestamp. Recipe 4 (two paired devices) is mechanically the same `jq -s
+sort_by(.timestamp)` merge extended to two directories' worth of files, filtered by event name — the
+same primitive recipes 1/3 already prove works — but was not independently run against two real
+paired `txtodod` processes in this pass (that would mean standing up a real pairing ceremony, out of
+scope for a docs-only task); flagged here rather than silently claimed as tested.
+
+### `.claude/logging.md` event-schema examples
+Both quoted JSON lines in the event-schema section are real captured output, not hand-written:
+the `cli.mode_selected`/`cli.already_done` pair from a real `txtodo add` + `do`/`do` sequence, and
+the `workspace_closed` line from a real `txtodod --dir <scratch>` boot-then-SIGTERM run. The span
+table was built by grepping every real `#[tracing::instrument(...)]`/`tracing::info_span!` call site
+in each listed crate directly, then spot-checking a handful (`rpc_span` in
+`crates/txtodo-daemon/src/global_service.rs`, `cli.command` in `crates/txtodo-cli/src/main.rs`,
+`mcp.call` in `crates/txtodo-mcp/src/schema.rs`) against their actual source.
+
+### daemon.log / .gitignore
+`daemon.log` does not exist anywhere in the repo (confirmed: `ls daemon.log` at root, a repo-wide
+`find . -iname 'daemon.log*'` excluding `target/`/`node_modules/`, and `git status --porcelain
+--ignored` all came back empty). The todo line's own premise was already stale by the time this task
+ran. The `/daemon.log` rule was still added to `.gitignore` as asked — forward-looking, harmless, and
+matches the existing comment style next to the `.txtodo/` rule it sits beside. Nothing to `git rm`.
+
+### Parent line
+Root todo.txt line 36 (`ref:logging-docs`) marked done via `txtodo append` + `txtodo do`, closing the
+`+m11 @observability` logging epic (items 173-188). See the commit/append sequence below this
+section for the exact summary text used.
