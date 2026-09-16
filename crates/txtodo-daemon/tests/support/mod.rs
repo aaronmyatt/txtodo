@@ -169,6 +169,22 @@ impl Daemon {
         Self::start_in(dir, "tagged", &[], &[]).await
     }
 
+    /// `start_with_workspace_id`, plus extra environment variables on the spawned process (e.g.
+    /// `TXTODO_LOG`, for a test that reads the real log file rather than only using `log_tail()`
+    /// as a diagnostic) — `tasks/logging-flow-test`'s flow test needs both, `pairing_lan.rs`'s
+    /// real pairing proof needs neither, so this is additive rather than a signature change to the
+    /// existing helper every other call site already uses.
+    pub async fn start_with_workspace_id_and_envs(
+        todo: &str,
+        workspace_id: u128,
+        envs: &[(&str, &str)],
+    ) -> Daemon {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+        write_tree(dir.path(), &[("todo.txt", todo)]);
+        seed_workspace_id(dir.path(), workspace_id);
+        Self::start_in(dir, "tagged", envs, &[]).await
+    }
+
     /// `start_with_mode`, with extra environment variables set on the spawned process. Reuse
     /// within this slice (`ABSTRACTIONS.md`'s "real-daemon test harness" entry already tracks this
     /// harness as shared across `tests/support/mod.rs`/`crash.rs`; this grows it, not duplicates
