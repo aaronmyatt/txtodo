@@ -50,8 +50,14 @@ tempfile = "3"
 # https://docs.rs/qrcode — `txtodo pair`'s terminal QR; default features pull in `image`/`svg`/`pic`
 # render backends this CLI never uses (it only prints Unicode block glyphs), so they're off.
 qrcode = { version = "0.14", default-features = false }
-# https://docs.rs/serde_json — the `txtodo pair` code/QR payload text (plan M4, design §4)
+# https://docs.rs/serde_json — the `txtodo pair` QR payload text (plan M4, design §4)
 serde_json = "1"
+# https://docs.rs/postcard — the compact `txtodo pair` text fallback (task `pairing-code-compact`);
+# same codec txtodo-daemon/txtodo-sync already use for their own wire framing.
+postcard = { version = "1", features = ["alloc"] }
+# https://docs.rs/data-encoding — base32 for the compact fallback text; same crate/version
+# txtodo-sync's own offer.rs and txtodo-daemon's pairing_wire.rs already use.
+data-encoding = "2"
 
 [dev-dependencies]
 

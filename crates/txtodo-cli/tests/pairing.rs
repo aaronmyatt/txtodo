@@ -201,15 +201,47 @@ fn wait_for_file_convergence(path: &Path, want: &[u8]) {
     }
 }
 
+/// The compact code's nine fields, in the exact order `commands::pair::PairingCode` declares them
+/// — postcard is not self-describing like JSON, so decoding this way only works when the field
+/// order matches exactly. Duplicated here rather than shared: `pair.rs`'s own struct is a private
+/// `fn`-module item, unreachable from this separate integration-test binary. `#[allow(dead_code)]`
+/// on the trailing fields: `serde` needs them declared to consume their bytes even though this
+/// test only reads `identity_mode`.
+#[derive(serde::Deserialize)]
+#[allow(dead_code)]
+struct DecodedCode {
+    device: String,
+    group_id: String,
+    x25519_pub: String,
+    endpoint: String,
+    nonce: String,
+    identity_mode: String,
+    relay_node_id: String,
+    relay_url: String,
+    workspace_id: String,
+}
+
+/// Decodes `commands::pair::to_compact`'s own postcard-then-base32 text.
+fn decode_compact_code(code: &str) -> DecodedCode {
+    let bytes = data_encoding::BASE32_NOPAD
+        .decode(code.trim().to_ascii_uppercase().as_bytes())
+        .unwrap_or_else(|e| panic!("code is not valid base32: {e}\n{code}"));
+    postcard::from_bytes(&bytes)
+        .unwrap_or_else(|e| panic!("code is not valid postcard: {e}\n{code}"))
+}
+
 /// Asserts the QR/code preamble an initiator's `txtodo pair` prints before it ever sees a peer.
+/// The printed text fallback is the compact code (task `pairing-code-compact`); the QR itself
+/// still renders JSON underneath (unchanged), which is why the glyph check below stays separate
+/// from decoding `code`.
 fn assert_offer_preamble(seen: &str, code: &str) {
     assert!(seen.contains("Code (no camera?"), "{seen}");
     assert!(
         seen.contains('\u{2588}') || seen.contains('\u{2584}'),
         "a QR must actually render: {seen}"
     );
-    let decoded: serde_json::Value = serde_json::from_str(code).unwrap();
-    assert_eq!(decoded["identity_mode"], "sidecar", "{code}");
+    let decoded = decode_compact_code(code);
+    assert_eq!(decoded.identity_mode, "sidecar", "{code}");
 }
 
 /// Asserts both sides confirmed for real once a handshake completes — same wording, one side

@@ -83,6 +83,52 @@ fn a_code_with_no_relay_fields_at_all_still_decodes() {
 }
 
 #[test]
+fn pairing_code_round_trips_through_compact() {
+    let code = sample_code();
+    let text = to_compact(&code).unwrap();
+    let back = from_compact(&text).unwrap();
+    assert_eq!(code.device, back.device);
+    assert_eq!(code.group_id, back.group_id);
+    assert_eq!(code.x25519_pub, back.x25519_pub);
+    assert_eq!(code.endpoint, back.endpoint);
+    assert_eq!(code.nonce, back.nonce);
+    assert_eq!(code.identity_mode, back.identity_mode);
+    assert_eq!(code.relay_node_id, back.relay_node_id);
+    assert_eq!(code.relay_url, back.relay_url);
+    assert_eq!(code.workspace_id, back.workspace_id);
+}
+
+/// The whole point: shorter than the JSON `pairing_code_json_carries_no_field_beyond_the_
+/// documented_nine` produces for the identical fields.
+#[test]
+fn compact_code_is_shorter_than_json() {
+    let code = sample_code();
+    let json = to_json(&code).unwrap();
+    let compact = to_compact(&code).unwrap();
+    assert!(
+        compact.len() < json.len(),
+        "compact ({}) should be shorter than json ({})",
+        compact.len(),
+        json.len()
+    );
+}
+
+#[test]
+fn from_compact_rejects_garbage_instead_of_panicking() {
+    assert!(from_compact("not base32 at all !!!").is_err());
+    assert!(from_compact("{}").is_err(), "JSON is not compact");
+}
+
+#[test]
+fn parse_code_detects_either_format() {
+    let code = sample_code();
+    let json = to_json(&code).unwrap();
+    let compact = to_compact(&code).unwrap();
+    assert_eq!(parse_code(&json).unwrap().device, code.device);
+    assert_eq!(parse_code(&compact).unwrap().device, code.device);
+}
+
+#[test]
 fn identity_mode_matches_only_the_same_named_mode() {
     assert!(identity_mode_matches(IdentityMode::Tagged, "tagged"));
     assert!(identity_mode_matches(IdentityMode::Sidecar, "sidecar"));

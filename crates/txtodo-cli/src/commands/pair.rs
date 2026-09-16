@@ -32,18 +32,23 @@ const AWAIT_PEER_TIMEOUT: Duration = Duration::from_millis(125_000);
 /// Gap between polls — frequent enough to feel responsive, far below the poll's own RPC cost.
 const AWAIT_PEER_POLL: Duration = Duration::from_millis(500);
 
-/// The JSON `code` a QR encodes and `txtodo pair <code>` accepts: field-for-field the same shape
-/// `crates/txtodo-daemon/src/pairing_wire.rs` parses (`device`, `group_id`, `x25519_pub`,
-/// `endpoint`, `nonce`, `identity_mode`, `relay_node_id`, `relay_url`, `workspace_id`) — this crate
-/// may not depend on txtodo-daemon or txtodo-sync (slice rule: `May depend only on: txtodo-core,
-/// txtodo-proto`), so this JSON shape, built straight from `pb::PairOfferResponse`'s own
-/// already-encoded string fields, is the only contract the two crates share. `relay_node_id`/
-/// `relay_url` (plan M8 `sync-pairing-relay`) are empty strings, not absent, when the initiator has
-/// no relay configured — `#[serde(default)]` so an *older* code (encoded before this task) without
-/// these fields at all still decodes, since this struct is also what `txtodo pair <code>` parses
-/// back. `workspace_id` (task `pairing-workspace-identity`) is the same way: this struct only needs
-/// to round-trip it into the outgoing code text (the daemon reads it back out of the raw `code`
-/// string itself, not through this struct — see `pairing_wire.rs::code_workspace_id`'s own doc).
+/// The pairing offer's nine fields, field-for-field the same shape
+/// `crates/txtodo-daemon/src/pairing_wire.rs`'s `RawCode` parses (`device`, `group_id`,
+/// `x25519_pub`, `endpoint`, `nonce`, `identity_mode`, `relay_node_id`, `relay_url`,
+/// `workspace_id`) — this crate may not depend on txtodo-daemon or txtodo-sync (slice rule: `May
+/// depend only on: txtodo-core, txtodo-proto`), so this shape, built straight from
+/// `pb::PairOfferResponse`'s own already-encoded string fields, is the only contract the two
+/// crates share. Two independent wire encodings ride this one struct (task `pairing-code-compact`):
+/// JSON for the QR ([`to_json`]/[`from_json`], unchanged since `pairing_wire.rs`'s own decode
+/// still needs to recognize an existing scanner's output byte-for-byte) and postcard-packed,
+/// base32-encoded text for the copy-paste fallback ([`to_compact`]/[`from_compact`]) — shorter,
+/// and doesn't read like source code. [`parse_code`] tries either, the same way the daemon's own
+/// `decode_wire` does. `relay_node_id`/`relay_url` (plan M8 `sync-pairing-relay`) are empty
+/// strings, not absent, when the initiator has no relay configured — `#[serde(default)]` so a code
+/// without these fields at all still decodes. `workspace_id` (task `pairing-workspace-identity`)
+/// is the same way: this struct only needs to round-trip it into the outgoing code text (the
+/// daemon reads it back out of the raw `code` string itself, not through this struct — see
+/// `pairing_wire.rs::code_workspace_id`'s own doc).
 #[derive(Debug, Serialize, Deserialize)]
 struct PairingCode {
     device: String,
@@ -98,11 +103,10 @@ pub fn run(ctx: &Ctx, daemon: &mut Daemon, code: Option<&str>) -> Result<(), Cli
 fn run_offer(daemon: &mut Daemon) -> Result<(), CliError> {
     let offer = daemon.pair_offer()?;
     let code = PairingCode::from(&offer);
-    let text = to_json(&code)?;
-    print_qr(&text)?;
+    print_qr(&to_json(&code)?)?;
     println!();
     println!("Code (no camera? paste this into `txtodo pair <code>` on the other device):");
-    println!("{text}");
+    println!("{}", to_compact(&code)?);
     println!();
     println!("txtodo: waiting for a device to scan or enter this code...");
     let sas = await_peer_sas(daemon)?;
@@ -152,7 +156,7 @@ fn await_peer_sas(daemon: &mut Daemon) -> Result<String, CliError> {
 /// initiator and the initiator's sealed grant back — `pairing_lan.rs`) before reporting a
 /// snapshot of what actually synced.
 fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> {
-    let parsed: PairingCode = from_json(code)?;
+    let parsed: PairingCode = parse_code(code)?;
     refuse_on_identity_mismatch(ctx, daemon, &parsed.identity_mode)?;
     let result = daemon.pair_accept(code.to_owned())?;
     println!("Six words from the initiator's device — compare them by eye:");
@@ -305,9 +309,39 @@ fn to_json(code: &PairingCode) -> Result<String, CliError> {
         .map_err(|e| CliError::Message(format!("txtodo: cannot encode the pairing code: {e}")))
 }
 
+/// The compact text fallback (task `pairing-code-compact`): postcard-packed, then base32 (RFC
+/// 4648, no padding) — shorter than JSON and doesn't read like source code, for the common
+/// desktop-to-desktop case where there's no camera to scan a QR with. Same codec
+/// `crates/txtodo-daemon/src/pairing_wire.rs`'s `decode_wire` accepts on the other end.
+fn to_compact(code: &PairingCode) -> Result<String, CliError> {
+    let bytes = postcard::to_allocvec(code)
+        .map_err(|e| CliError::Message(format!("txtodo: cannot encode the pairing code: {e}")))?;
+    Ok(data_encoding::BASE32_NOPAD.encode(&bytes))
+}
+
+/// Decodes a compact base32 code back into its fields.
+fn from_compact(text: &str) -> Result<PairingCode, CliError> {
+    let bytes = data_encoding::BASE32_NOPAD
+        .decode(text.trim().to_ascii_uppercase().as_bytes())
+        .map_err(|_| CliError::Message("txtodo: pairing code is not valid".to_owned()))?;
+    postcard::from_bytes(&bytes)
+        .map_err(|_| CliError::Message("txtodo: pairing code is not valid".to_owned()))
+}
+
 fn from_json(text: &str) -> Result<PairingCode, CliError> {
     serde_json::from_str(text)
         .map_err(|_| CliError::Message("txtodo: pairing code is not valid".to_owned()))
+}
+
+/// Tries either wire format a `code` might be in — JSON (a scanned QR) or the compact base32 form
+/// (typed or pasted from [`to_compact`]'s own output) — the same `{`-prefix test
+/// `pairing_wire.rs::decode_wire` uses on the daemon side, since the two alphabets never overlap.
+fn parse_code(text: &str) -> Result<PairingCode, CliError> {
+    if text.trim().starts_with('{') {
+        from_json(text)
+    } else {
+        from_compact(text)
+    }
 }
 
 #[cfg(test)]
