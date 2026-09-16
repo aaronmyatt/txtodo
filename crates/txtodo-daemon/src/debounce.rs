@@ -17,6 +17,12 @@ pub struct Debouncer {
     pending: BTreeMap<PathBuf, Instant>,
 }
 
+/// `drain_due`'s event, its own function so the macro's expansion doesn't count against its
+/// already-`#[instrument]`ed caller's cognitive-complexity budget.
+fn log_drain_due(drained: usize, remaining: usize) {
+    tracing::debug!(drained, remaining, "drain_due");
+}
+
 impl Debouncer {
     /// Records an event for `path` at `now`, resetting its deadline. Returns false (and drops the
     /// event) only when `WATCH_EVENT_CAP` distinct paths are already pending — a flood, not a save.
@@ -30,8 +36,14 @@ impl Debouncer {
         true
     }
 
-    /// Paths whose window has passed by `now`, removed from the pending set, in path order.
+    /// Paths whose window has passed by `now`, removed from the pending set, in path order. A
+    /// thin span wrapper around `drain_due_inner` (`#[instrument]` on the real body overflows).
+    #[tracing::instrument(skip_all, fields(pending = self.pending.len()))]
     pub fn drain_due(&mut self, now: Instant) -> Vec<PathBuf> {
+        self.drain_due_inner(now)
+    }
+
+    fn drain_due_inner(&mut self, now: Instant) -> Vec<PathBuf> {
         let due: Vec<PathBuf> = self
             .pending
             .iter()
@@ -45,6 +57,7 @@ impl Debouncer {
             self.pending.values().all(|at| *at > now),
             "nothing due is left pending"
         );
+        log_drain_due(due.len(), self.pending.len());
         due
     }
 

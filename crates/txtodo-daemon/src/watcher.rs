@@ -53,10 +53,19 @@ fn glob_match(glob: &str, name: &str) -> bool {
     }
 }
 
-/// Feeds one raw event into the debouncer or routes a directory at once. Pure.
+/// Feeds one raw event into the debouncer or routes a directory at once. Pure. A thin span
+/// wrapper around `ingest_inner`; the two events live in their own tiny functions since an
+/// inline `tracing::debug!` here pushes `#[instrument]`'s own expansion over budget.
+#[tracing::instrument(skip_all, fields(dir_created = ev.dir_created))]
 pub fn ingest(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Routed> {
+    ingest_inner(deb, ev, now)
+}
+
+fn ingest_inner(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Routed> {
     if ev.dir_created {
-        return (!is_ignored(&ev.path)).then_some(Routed::Directory(ev.path));
+        let routed = (!is_ignored(&ev.path)).then_some(Routed::Directory(ev.path));
+        log_directory_event(routed.is_some());
+        return routed;
     }
     let name = ev
         .path
@@ -67,8 +76,17 @@ pub fn ingest(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Routed>
         return None;
     }
     // A dropped event on overflow is a flood, not a save; the next event for the path repairs it.
-    let _accepted = deb.push(ev.path, now);
+    let accepted = deb.push(ev.path, now);
+    log_document_event(accepted, deb.pending());
     None
+}
+
+fn log_directory_event(routed: bool) {
+    tracing::debug!(routed, "directory_event");
+}
+
+fn log_document_event(accepted: bool, pending: usize) {
+    tracing::debug!(accepted, pending, "document_event_debounced");
 }
 
 /// Starts `notify` on `root` (recursive). Events arrive on the returned receiver as `RawEvent`s;

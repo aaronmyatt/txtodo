@@ -27,11 +27,36 @@ pub fn start(
     let root = read(&ws).root().to_path_buf();
     let (watcher, rx) = start_notify(&root)?;
     read(&ws).stats().saw_event(clock.now_ms());
-    let task = tokio::spawn(drain(ws, clock, rx));
+    let task = tokio::spawn(drain(ws, clock, rx, root));
     Ok((watcher, task))
 }
 
-async fn drain(ws: SharedWorkspace, clock: Arc<dyn Clock>, mut rx: mpsc::Receiver<RawEvent>) {
+/// One long-running loop per open workspace: no `#[instrument]` span here (it would hold across
+/// every `.await` below for as long as the workspace stays open, risking an unrelated task polled
+/// on the same runtime thread while this one is suspended picking it up as its parent span — the
+/// same hazard `main.rs`'s `daemon.boot` span design already documents and avoids). Two plain
+/// `info!` events (their own tiny function, `log_watch_drain`, to keep this wrapper's own
+/// complexity down) bracket `drain_loop`'s lifetime instead.
+async fn drain(
+    ws: SharedWorkspace,
+    clock: Arc<dyn Clock>,
+    mut rx: mpsc::Receiver<RawEvent>,
+    root: std::path::PathBuf,
+) {
+    log_watch_drain_started(&root);
+    drain_loop(ws, clock, &mut rx).await;
+    log_watch_drain_stopped(&root);
+}
+
+fn log_watch_drain_started(root: &Path) {
+    tracing::info!(root = %root.display(), "watch_drain_started");
+}
+
+fn log_watch_drain_stopped(root: &Path) {
+    tracing::info!(root = %root.display(), "watch_drain_stopped");
+}
+
+async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::Receiver<RawEvent>) {
     let mut deb = Debouncer::default();
     // Ends when the notify side drops its sender (the watcher handle was dropped).
     loop {

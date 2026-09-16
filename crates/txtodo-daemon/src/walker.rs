@@ -69,8 +69,14 @@ pub fn is_notes_document(name: &str) -> bool {
     name == NOTES_DOCUMENT_NAME
 }
 
-/// Every document under `root`, as workspace-relative paths, sorted. `root` itself is depth 0.
+/// Every document under `root`, as workspace-relative paths, sorted. `root` itself is depth 0. A
+/// thin span wrapper around `walk_inner` (`#[instrument]` on the real body overflows).
+#[tracing::instrument(skip_all, fields(root = %root.display()))]
 pub fn walk(root: &Path) -> Result<Vec<FilePath>, WalkError> {
+    walk_inner(root)
+}
+
+fn walk_inner(root: &Path) -> Result<Vec<FilePath>, WalkError> {
     let mut found = Vec::new();
     let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
     // Bounded: every directory is pushed once and popped once; the file cap bounds `found`.
@@ -93,7 +99,13 @@ pub fn walk(root: &Path) -> Result<Vec<FilePath>, WalkError> {
     found.sort();
     debug_assert!(found.len() <= WALK_MAX_FILES);
     debug_assert!(found.windows(2).all(|w| w[0] < w[1]), "sorted and unique");
+    log_walk_complete(found.len());
     Ok(found)
+}
+
+/// Split out so the event macro doesn't count against `walk`'s own `#[instrument]` budget.
+fn log_walk_complete(found: usize) {
+    tracing::debug!(found, "walk_complete");
 }
 
 fn visit(

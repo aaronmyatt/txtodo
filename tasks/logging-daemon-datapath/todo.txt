@@ -1,0 +1,3 @@
+2026-09-16 instrument write.rs write_atomic, mutation.rs mutation_ops, reconcile.rs reconcile, state.rs apply (commit 2) +m11 @daemon id:01M2MD624AN3QK7Q3ZH5WPKERC
+2026-09-16 add rpc{method,workspace} span in global_service.rs, doc note in server.rs, Drop instrumentation in workspace_catalog_open.rs, workspace field on external.rs reconcile span (commit 3) +m11 @daemon id:01M2MD624P6VAWWWTD9FSM8G9A
+x 2026-09-16 2026-09-16 instrument actor.rs handle_core/commit/persist_change, watcher.rs ingest, debounce.rs drain_due, watch_task.rs drain, walker.rs walk (commit 1) +m11 @daemon id:01M2MD623XNQSGM0FB3SV39GYS

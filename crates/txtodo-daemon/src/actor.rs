@@ -1,13 +1,9 @@
-//! One `FileActor` per synced document: the single writer (design §4.3). It owns the in-memory
-//! state, the projection bytes and their hash; every path to disk goes through `commit`. Clients
-//! talk to it through `ActorHandle`; the watcher sends `ExternalChange`.
-//!
-//! Startup (plan M3 crash safety): the store's projection and `prev_hash` say whether the file is
-//! ours, an interrupted write (disk == prev_hash → finish the write) or a foreign edit (reconcile).
+//! One `FileActor` per synced document: the single writer (design §4.3; M3 crash-recovery startup
+//! is `recover`'s own doc, `external.rs`).
 
 use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
-use crate::expected::{ExpectedWrites, Hash};
+use crate::expected::{ExpectedWrites, Hash, hex8};
 use crate::external::tracing_stub_error;
 use crate::handle::{
     ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Applied, Change, Contents, WATCH_CAP,
@@ -52,6 +48,28 @@ pub struct ActorConfig {
 }
 
 pub(crate) use crate::commit::{Commit, CommitTail};
+
+// Both split out so the event macro doesn't count against the `#[instrument]`ed caller's budget.
+fn log_commit_done(change: &Change) {
+    tracing::debug!(hash = %hex8(&change.hash), ops = change.ops.len(), "commit_done");
+}
+fn log_persisted(range: Option<txtodo_store::SeqRange>) {
+    tracing::debug!(seq = ?range.map(|r| r.last.0), "persisted");
+}
+
+/// `handle_core`'s span field: the variant's name, `"sync"` for `handle_sync`'s group — no payload.
+fn actor_msg_kind(msg: &ActorMsg) -> &'static str {
+    match msg {
+        ActorMsg::ExternalChange => "external_change",
+        ActorMsg::Apply { .. } => "apply",
+        ActorMsg::Get { .. } => "get",
+        ActorMsg::Progress { .. } => "progress",
+        ActorMsg::Subscribe { .. } => "subscribe",
+        ActorMsg::Undo { .. } => "undo",
+        ActorMsg::Import { .. } => "import",
+        _ => "sync",
+    }
+}
 
 /// The actor.
 pub struct FileActor {
@@ -137,7 +155,14 @@ impl FileActor {
         }
     }
 
+    /// One event per mailbox message, the whole state machine for free — a thin wrapper, since
+    /// `#[instrument]` on `handle_core_match` itself pushes that match over budget.
+    #[tracing::instrument(skip_all, fields(file = %self.cfg.path, msg = actor_msg_kind(&msg)))]
     fn handle_core(&mut self, msg: ActorMsg) {
+        self.handle_core_match(msg);
+    }
+
+    fn handle_core_match(&mut self, msg: ActorMsg) {
         match msg {
             ActorMsg::ExternalChange => {
                 if let Err(e) = self.on_external_change() {
@@ -149,6 +174,7 @@ impl FileActor {
                 principal,
                 reply,
             } => {
+                tracing::debug!(mutations = mutations.len(), "actor_apply");
                 let _ = reply.send(self.on_apply(mutations, principal));
             }
             ActorMsg::Get { reply } => {
@@ -179,8 +205,7 @@ impl FileActor {
             } => {
                 let _ = reply.send(self.on_import(updates, peer));
             }
-            // `handle_sync` (import.rs) takes the rest: Conflicts/Version/Export/Resolve plus
-            // every variant `handle`/this match already consumed (never actually reached there).
+            // `handle_sync` (import.rs) takes the rest: Conflicts/Version/Export/Resolve, etc.
             other => self.handle_sync(other),
         }
     }
@@ -191,8 +216,7 @@ impl FileActor {
     }
 
     pub(crate) fn lock_store(&self) -> std::sync::MutexGuard<'_, Store> {
-        // A poisoned lock means another actor panicked mid-write; the data is still consistent
-        // (SQLite transactions), so keep going with the inner value.
+        // A poisoned lock still has consistent data (SQLite transactions); keep going.
         self.store
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -236,9 +260,7 @@ impl FileActor {
         })
     }
 
-    /// One HLC tick per batch, taken before the batch is applied so every op carries its stamp
-    /// into the state (the M4 store arbitrates fields by it). A batch that then fails has spent a
-    /// tick; the clock only ever moves forward, so that is harmless.
+    /// One HLC tick per batch, before it applies; a failed batch has harmlessly spent a tick.
     pub(crate) fn tick(&mut self) -> Result<Hlc, ActorError> {
         let before = self.hlc;
         let hlc = self.hlc.tick(self.clock.now_ms())?;
@@ -279,9 +301,15 @@ impl FileActor {
         Ok(ops)
     }
 
-    /// Persists, then writes, then swaps the in-memory state. Store first so a crash between the
-    /// two leaves `prev_hash` pointing at the bytes still on disk (see `recover`).
+    #[tracing::instrument(skip_all, fields(file = %self.cfg.path, ops = plan.ops.len()))]
     pub(crate) fn commit(&mut self, plan: Commit) -> Result<Change, ActorError> {
+        let change = self.commit_inner(plan)?;
+        log_commit_done(&change);
+        Ok(change)
+    }
+
+    /// Store first (crash-safe: `prev_hash` then points at the still-on-disk bytes, see `recover`).
+    fn commit_inner(&mut self, plan: Commit) -> Result<Change, ActorError> {
         let Commit {
             ops,
             next,
@@ -295,8 +323,7 @@ impl FileActor {
         self.state = next;
         self.projection = bytes;
         self.hash = new_hash;
-        // Disk first: the file never waits on the mirror (a first flush after a restart
-        // materialises the whole Loro snapshot, seconds for 10k tasks in debug).
+        // Disk first: a first mirror flush after a restart materialises the whole Loro snapshot.
         if write {
             self.write_projection_and_log(new_hash)?;
         }
@@ -314,9 +341,8 @@ impl FileActor {
         Ok(change)
     }
 
-    /// Lands `ops` and the new projection in one store transaction; this is the durability point
-    /// (see the module doc) — everything after it (state swap, disk write, mirror) may still fail
-    /// without losing the change.
+    /// Lands `ops`/the projection in one store transaction: the durability point.
+    #[tracing::instrument(skip_all, fields(file = %self.cfg.path, ops = ops.len()))]
     fn persist_change(
         &mut self,
         ops: &[Op],
@@ -331,13 +357,14 @@ impl FileActor {
             written_at_ms: self.clock.now_ms(),
         };
         let extras = self.commit_extras(tail, next)?;
-        Ok(self
-            .lock_store()
-            .commit_change_with(ops, &projection, Some(self.hash), &extras)?)
+        let range =
+            self.lock_store()
+                .commit_change_with(ops, &projection, Some(self.hash), &extras)?;
+        log_persisted(range);
+        Ok(range)
     }
 
-    /// An adopted state (snapshot) is not the sum of its ops: converge the mirror instead of
-    /// feeding it ops it never actually replayed.
+    /// An adopted state (snapshot) isn't the sum of its ops: converge the mirror, don't feed it.
     fn update_mirror_after_commit(&mut self, snapshot: bool, flush: bool, ops: &[Op]) {
         if snapshot {
             self.converge_mirror();
