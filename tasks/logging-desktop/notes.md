@@ -218,3 +218,63 @@ guess at a different startup behavior.
   "As built" for the actual grep proof.
 - `cargo fmt -p desktop -- --check`, `cargo clippy -p desktop --all-targets -- -D warnings`,
   `cargo test -p desktop` all green.
+
+## As built (2026-09-16, agent)
+
+Built exactly to the design above; no structural deviations. Four commits (this crate is outside
+`slices.root` in `.claude/budgets.json`, so no fence lease was needed — verified by reading
+`.claude/budgets.json`/`.claude/hooks/fence.sh` before assuming; commits were still split by
+module for reviewability, per this task's own instructions):
+
+1. `14d97db` — `txtodo-telemetry`/`tracing` deps, subscriber install in `lib.rs::run()`, the
+   `lib.rs:56` fix, all 11 `commands.rs` commands + `ui_log` + its span-capture test.
+2. `68cb876` — a leftover rustfmt fixup for `commands.rs`, plus `commands_activity.rs`/
+   `commands_notes.rs`/`commands_pairing.rs`/`commands_tokens.rs` (9 commands).
+3. `8c51ada` — `commands_universal.rs`/`commands_workspace.rs` (5 commands) and
+   `daemon/spawn.rs::ensure_daemon`.
+
+### Verification
+
+- `cargo fmt -p desktop -- --check`: clean.
+- `cargo clippy -p desktop --all-targets -- -D warnings`: clean — no `cognitive_complexity` hit on
+  any of the 26 instrumented functions (every `#[tauri::command]`/`ensure_daemon` is a thin
+  wrapper, every `_inner` keeps its original, unmodified body), no `#[allow]`/`#[expect]` added
+  anywhere. A whole-workspace `cargo clippy --workspace` run (triggered automatically by this
+  session's own PostToolUse hook after every edit) repeatedly flagged a pre-existing
+  `txtodo-store::projections.rs` cognitive-complexity warning unrelated to this task — the exact
+  known, flagged, transient noise this task's own brief warned about; confirmed not touched by any
+  commit here (`git show --stat` on all three commits above touches only `apps/desktop/src-tauri/`,
+  `Cargo.lock`, and `tasks/logging-desktop/`).
+- `cargo test -p desktop`: lib tests (2, including the new `ui_log_emits_a_named_span_and_the_
+  forwarded_message`) + all four integration test files (`daemon_spawn.rs` — 2, including a real
+  spawn-and-connect of a freshly built `txtodod`; `new_rpcs.rs` — 7; `universal_view.rs` — 1;
+  `workspace_registry.rs` — 2) all green, 14/14. `ensure_daemon`'s public signature is unchanged, so
+  every pre-existing caller (including `daemon_spawn.rs`'s real-daemon tests) needed no changes.
+- **Macro-ordering finding, proven empirically** (not just read from source): the `ui_log`
+  span-capture test calls `ui_log` exactly as `tauri::generate_handler!` would (a direct async fn
+  call with `#[tracing::instrument]` listed above `#[tauri::command]`), asserts the `ipc.ui_log`
+  span and its event both land in a real `tracing_subscriber` JSON sink — proof the ordering
+  chosen for all 26 instrumented functions in this crate actually works, not merely that it
+  compiles. The reverse order was also hand-compiled against the same function during this task
+  (kept out of the committed diff, since it adds no behavior beyond confirming the two orders are
+  equivalent for `tauri::command` — unlike `rmcp`'s `#[tool]`, `tauri-macros`' `wrapper()` never
+  rewrites the function body, confirmed by reading `tauri-macros` 2.6.3's actual source).
+- **No command argument content leaks**: `grep -n 'tracing::instrument'` across every touched file
+  shows `skip_all` on all 26 (see the grep output captured during this task — every `ipc.*`/
+  `desktop.ensure_daemon` span). `grep -n 'tracing::\(info\|warn\|error\|debug\|trace\)!'` across
+  the same files shows exactly three call sites carrying dynamic content: `ui_log`'s five
+  `log_ui_*` helpers (the `message`/`fields` bridge — deliberate, see "ui_log" above, not an IPC
+  argument leak since nothing else in this crate calls those helpers), `daemon/spawn.rs`'s
+  `spawn_attempted` debug event (no arguments at all), and `lib.rs`'s `log_startup_connect_failed`
+  (`error = %e`, a `DaemonError`'s `Display` — transport/IO/gRPC-status text, never task or note
+  content). No `path`/`mutations`/`task`/`new_text`/`scopes`/`root`/`id` argument value from any of
+  the 25 pre-existing commands appears in any span or event this task added.
+
+### Deliberately out of scope
+
+- Any `.ts`/`.svelte` file — `ui_log`'s frontend caller side is `logging-frontend`, a separate,
+  later backlog item, per this task's own scope boundary.
+- Any other `+m11 @observability` backlog line, or any file outside `apps/desktop/src-tauri/`,
+  `tasks/logging-desktop/`, and this one root todo.txt line.
+- `.claude/budgets.json` — untouched; this crate is outside `slices.root`, confirmed rather than
+  assumed (see "Placement" above).
