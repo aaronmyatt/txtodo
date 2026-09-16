@@ -154,9 +154,51 @@ pub(crate) fn open_and_decode_logged(
     match open_and_decode(frame, group, workspace, keys) {
         Ok(msg) => Some(msg),
         Err(e) => {
-            tracing::debug!(error = %e, "lan_session_open_failed");
+            tracing::debug!(error = %e, kind = sync_error_kind(&e), "lan_session_open_failed");
             None
         }
+    }
+}
+
+/// A stable, queryable tag for `SyncError`'s own inner variant — previously only the free-text
+/// `Display` string distinguished a `WrongGroup`/`WrongWorkspace`/`UnknownEpoch`/`Decrypt`/etc.
+/// crypto refusal from a `MessageError`. Re-derives `CryptoError`'s own shape rather than calling
+/// `txtodo_sync::CryptoError::kind()` (that method is `pub(crate)` to that crate only).
+fn sync_error_kind(e: &SyncError) -> &'static str {
+    match e {
+        SyncError::Link(_) => "link",
+        SyncError::Message(m) => message_error_kind(m),
+        SyncError::Crypto(c) => crypto_error_kind(c),
+    }
+}
+
+fn message_error_kind(e: &MessageError) -> &'static str {
+    match e {
+        MessageError::Frame(_) => "frame",
+        MessageError::TooMany { .. } => "too_many",
+        MessageError::BackwardsRange(_) => "backwards_range",
+        MessageError::SignatureCount { .. } => "signature_count",
+        MessageError::Codec(_) => "codec",
+        MessageError::TrailingBytes(_) => "trailing_bytes",
+    }
+}
+
+fn crypto_error_kind(e: &CryptoError) -> &'static str {
+    match e {
+        CryptoError::Encode(_) => "encode",
+        CryptoError::BatchLength { .. } => "batch_length",
+        CryptoError::UnknownDevice { .. } => "unknown_device",
+        CryptoError::BadPublicKey { .. } => "bad_public_key",
+        CryptoError::SignatureInvalid { .. } => "signature_invalid",
+        CryptoError::WrongVersion { .. } => "wrong_version",
+        CryptoError::WrongGroup { .. } => "wrong_group",
+        CryptoError::WrongWorkspace { .. } => "wrong_workspace",
+        CryptoError::Truncated { .. } => "truncated",
+        CryptoError::UnknownEpoch { .. } => "unknown_epoch",
+        CryptoError::TooManyEpochs { .. } => "too_many_epochs",
+        CryptoError::Encrypt => "encrypt",
+        CryptoError::Decrypt { .. } => "decrypt",
+        CryptoError::Entropy => "entropy",
     }
 }
 
@@ -218,7 +260,15 @@ fn handle_greet(
             return true;
         }
     };
-    ctx.send(link, want).is_ok()
+    match ctx.send(link, want) {
+        Ok(()) => true,
+        Err(e) => log_want_send_failed(ctx.workspace, &e),
+    }
+}
+
+fn log_want_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
+    tracing::warn!(error = %e, %workspace, "lan_want_send_failed");
+    false
 }
 
 fn handle_want(link: &mut dyn Link, ctx: &SessionCtx<'_>, ranges: &[OriginRange]) -> bool {
@@ -230,11 +280,16 @@ fn handle_want(link: &mut dyn Link, ctx: &SessionCtx<'_>, ranges: &[OriginRange]
         }
     };
     for batch in batches {
-        if ctx.send(link, batch).is_err() {
-            return false;
+        if let Err(e) = ctx.send(link, batch) {
+            return log_ops_send_failed(ctx.workspace, &e);
         }
     }
     true
+}
+
+fn log_ops_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
+    tracing::warn!(error = %e, %workspace, "lan_ops_send_failed");
+    false
 }
 
 fn ops_or_refuse(ctx: &SessionCtx<'_>, session: &mut Session, msg: &Message) -> Option<Vec<Op>> {
@@ -288,7 +343,15 @@ fn handle_ops(
     let Some(ack) = commit_and_ack(ctx, session, ops, ranges) else {
         return true;
     };
-    ctx.send(link, ack).is_ok()
+    match ctx.send(link, ack) {
+        Ok(()) => true,
+        Err(e) => log_ack_send_failed(ctx.workspace, &e),
+    }
+}
+
+fn log_ack_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
+    tracing::warn!(error = %e, %workspace, "lan_ack_send_failed");
+    false
 }
 
 fn log_peer_acked(runs: usize, workspace: WorkspaceId) {

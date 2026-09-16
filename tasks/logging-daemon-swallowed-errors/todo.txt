@@ -1,5 +1,5 @@
-2026-09-16 lan_session_shared.rs: split open_and_decode_logged's debug event by variant, log the three silent Want/Ops/Ack send failures +m11 @daemon id:01M2MNWDTKKAQ9AS1JNEF4V60N
 2026-09-16 file_carrier.rs: log send_route's five silent drops (encode, seal, serve_want, carrier.send, advance gap) +m11 @daemon id:01M2MNWDTZ72HNEK1NP049951V
 2026-09-16 lan.rs + relay_fallback.rs: log spawn_resync_dial's discarded outcome and which carrier won lan_then_relay +m11 @daemon id:01M2MNWDVB7G96526PDS26AE98
+x 2026-09-16 2026-09-16 lan_session_shared.rs: split open_and_decode_logged's debug event by variant, log the three silent Want/Ops/Ack send failures +m11 @daemon id:01M2MNWDTKKAQ9AS1JNEF4V60N
 x 2026-09-16 2026-09-16 lan_session.rs + control_session.rs: split fetch_group_key/single_epoch_keys's collapsed skipped_no_group_key by real cause +m11 @daemon id:01M2MNWDT7NKVK4Y825J9GMXQM
 x 2026-09-16 2026-09-16 pairing_lan.rs: log process_hello's four Rejected reasons and try_finalize_initiator's swallowed Err +m11 @daemon id:01M2MNWDSRTHBM2D138T4B9M4H
