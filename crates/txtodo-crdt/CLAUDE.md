@@ -43,4 +43,5 @@ review flags out. As built 2026-09-12.
   load invalidates it. Concurrency is asked of Loro frontiers, never of the `Hlc`.
 - Two devices merge only if their documents share lineage (fork/snapshot at pairing, then
   updates); replaying our `Op`s into independent documents does not converge.
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-model, txtodo-store, txtodo-core.
