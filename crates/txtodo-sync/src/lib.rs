@@ -140,6 +140,8 @@ mod link_tests;
 #[cfg(test)]
 mod message_tests;
 #[cfg(test)]
+mod no_secrets_tests;
+#[cfg(test)]
 mod nonce_registry_tests;
 #[cfg(test)]
 mod offer_tests;

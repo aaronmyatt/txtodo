@@ -64,6 +64,11 @@ tempfile = "3"
 # so that test proves against a real relay handshake instead of a fake. Test-only: cargo does not
 # unify dev-dependency features into non-test builds.
 iroh = { version = "1", features = ["test-utils"] }
+# https://docs.rs/tracing-subscriber — test-only local JSON capture for `src/no_secrets_tests.rs`
+# (root todo.txt `logging-flow-test`); this crate may not depend on `txtodo-telemetry`
+# (`.claude/budgets.json`'s `allowedDeps` — see tasks/logging-flow-test/notes.md), so the same
+# LogSink/capturing_dispatch shape is reimplemented locally against the shared workspace pin.
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true
