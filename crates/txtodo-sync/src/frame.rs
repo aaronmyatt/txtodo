@@ -59,6 +59,19 @@ pub enum FrameError {
     },
 }
 
+impl FrameError {
+    /// Stable snake_case event tag, one per variant — for structured logs (task
+    /// `logging-sync-crate`, mirroring `SessionError::kind`/`CryptoError::kind`).
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            FrameError::BadMagic { .. } => "bad_magic",
+            FrameError::Truncated { .. } => "truncated",
+            FrameError::TooLarge { .. } => "too_large",
+            FrameError::UnknownVersion { .. } => "unknown_version",
+        }
+    }
+}
+
 impl fmt::Display for FrameError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -150,8 +163,17 @@ impl Frame {
     }
 
     /// Decodes one frame from the front of `bytes`: `(frame, bytes consumed)`. On `Err` nothing
-    /// is consumed and nothing was allocated.
+    /// is consumed and nothing was allocated. Thin span wrapper around `decode_inner`
+    /// (`#[instrument]` on the real body overflows `cognitive_complexity`,
+    /// `tasks/logging-sync-crate/notes.md`).
+    #[tracing::instrument(skip_all)]
     pub fn decode(bytes: &[u8]) -> Result<(Frame, usize), FrameError> {
+        let r = Frame::decode_inner(bytes);
+        log_decode(&r);
+        r
+    }
+
+    fn decode_inner(bytes: &[u8]) -> Result<(Frame, usize), FrameError> {
         let (version, total) = Frame::peek(bytes)?;
         if version != PROTOCOL_VERSION {
             return Err(FrameError::UnknownVersion {
@@ -170,6 +192,27 @@ impl Frame {
         debug_assert!(body.len() <= MAX_FRAME_BYTES);
         Ok((Frame { version, body }, total))
     }
+}
+
+/// Split out so the event macro doesn't count against `decode`'s own `#[instrument]` budget.
+/// `trace!`, not `debug!`, on success: a live link calls `decode` once per inbound chunk read
+/// (`lan_link.rs::recv`'s loop), the same hot-path reasoning `logging-daemon-datapath` used for
+/// `state.rs::apply`. Dispatches to single-call leaf functions (a `match` whose own arms hold no
+/// macro call stays cheap; nesting a `tracing` call directly inside a branch does not, per this
+/// task's own repeated finding — `tasks/logging-sync-crate/notes.md`).
+fn log_decode(r: &Result<(Frame, usize), FrameError>) {
+    match r {
+        Ok((_, used)) => log_decode_ok(*used),
+        Err(e) => log_decode_failed(e.kind()),
+    }
+}
+
+fn log_decode_ok(bytes: usize) {
+    tracing::trace!(bytes, "frame_decoded");
+}
+
+fn log_decode_failed(kind: &'static str) {
+    tracing::debug!(kind, "frame_decode_failed");
 }
 
 fn bad_magic(bytes: &[u8]) -> FrameError {

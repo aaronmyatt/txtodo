@@ -151,7 +151,21 @@ fn aad(version: u16, for_: SealFor) -> [u8; AAD_BYTES] {
 
 /// Seals `plaintext` for `for_.group`/`for_.workspace` under `for_.epoch`'s key, prefixing the
 /// clear header. A fresh OS nonce per call; two seals of the same bytes never share a ciphertext.
+/// Thin span wrapper around `seal_inner` (`#[instrument]` on the real body overflows
+/// `cognitive_complexity`, `tasks/logging-sync-crate/notes.md`).
+#[tracing::instrument(skip_all, fields(group = ?for_.group, workspace = %for_.workspace, epoch = for_.epoch))]
 pub fn seal(
+    version: u16,
+    for_: SealFor,
+    key: &GroupKey,
+    plaintext: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    let r = seal_inner(version, for_, key, plaintext);
+    log_seal(&r);
+    r
+}
+
+fn seal_inner(
     version: u16,
     for_: SealFor,
     key: &GroupKey,
@@ -181,8 +195,21 @@ pub fn seal(
 
 /// Opens a sealed batch whose header must match `version`, `group` and `workspace`, using `keys`
 /// to find the epoch's key. Every mismatch is its own typed error; the ciphertext is never
-/// touched on a header failure.
+/// touched on a header failure. Wrapper/inner split, same reason as `seal`.
+#[tracing::instrument(skip_all, fields(group = ?group, workspace = %workspace))]
 pub fn open(
+    version: u16,
+    group: GroupId,
+    workspace: WorkspaceId,
+    keys: &GroupKeys,
+    sealed: &[u8],
+) -> Result<Vec<u8>, CryptoError> {
+    let r = open_inner(version, group, workspace, keys, sealed);
+    log_open(&r);
+    r
+}
+
+fn open_inner(
     version: u16,
     group: GroupId,
     workspace: WorkspaceId,
@@ -254,6 +281,43 @@ pub fn peek_workspace(sealed: &[u8]) -> Option<WorkspaceId> {
     Some(WorkspaceId::new(txtodo_model::Ulid::from_u128(read_u128(
         bytes,
     ))))
+}
+
+/// Split out so the event macros don't count against `seal`'s own `#[instrument]` budget.
+/// **Byte counts only, never the plaintext or ciphertext.** `warn!` on failure, not `debug!`: a
+/// caller that cannot seal a batch at all is worth a human's attention immediately, matching
+/// `open`'s own failure level below.
+fn log_seal(r: &Result<Vec<u8>, CryptoError>) {
+    match r {
+        Ok(out) => log_seal_ok(out.len()),
+        Err(e) => log_seal_failed(e.kind()),
+    }
+}
+
+fn log_seal_ok(bytes: usize) {
+    tracing::debug!(bytes, "seal_ok");
+}
+
+fn log_seal_failed(kind: &'static str) {
+    tracing::warn!(kind, "seal_failed");
+}
+
+/// Split out so the event macros don't count against `open`'s own `#[instrument]` budget. `warn!`
+/// on failure: a batch that fails to open is either a bug or an adversary (foreign group, stale
+/// epoch, tampered tag), never routine traffic.
+fn log_open(r: &Result<Vec<u8>, CryptoError>) {
+    match r {
+        Ok(out) => log_open_ok(out.len()),
+        Err(e) => log_open_failed(e.kind()),
+    }
+}
+
+fn log_open_ok(bytes: usize) {
+    tracing::debug!(bytes, "open_ok");
+}
+
+fn log_open_failed(kind: &'static str) {
+    tracing::warn!(kind, "open_failed");
 }
 
 /// Reads 16 little-endian bytes without `try_into`, so a length check earlier in `open` is the only
