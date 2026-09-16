@@ -180,7 +180,7 @@ impl WorkspaceCatalog {
         match self.open_one(root) {
             Ok(_) => true,
             Err(status) => {
-                tracing::warn!(root = %root.display(), error = %status, "could not open registered workspace");
+                tracing::warn!(root = %root.display(), error = %status, "workspace_open_failed");
                 false
             }
         }

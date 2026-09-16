@@ -1,7 +1,6 @@
 //! txtodod: one process per device, owning every registered workspace's files, op log and the one
 //! IPC socket (ADR 0025, task `daemon-global-socket`). Startup order: registry → catalog → open
-//! workspace(s) → pid lock → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain, and remove the
-//! socket and pid file.
+//! workspace(s) → pid lock → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain, remove socket.
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 
@@ -22,33 +21,26 @@ use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
 /// `txtodod [--dir <workspace>] [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
-/// [--relay <url>]`; nothing is guessed from the cwd in a service. `--dir` is the legacy
-/// single-workspace bridge (`tasks/daemon-global-socket/notes.md`) — omit it to run this device's
-/// one true global daemon over every workspace the registry already knows about.
+/// [--relay <url>]`; nothing is guessed from the cwd. `--dir` is the legacy single-workspace
+/// bridge (`tasks/daemon-global-socket/notes.md`) — omit it for true global mode.
 struct Args {
     /// `Some` is the legacy `--dir <workspace>` bridge; `None` is the true global mode.
     dir: Option<PathBuf>,
-    /// A brand-new workspace's mode when nothing on disk is already tagged (plan decision 3);
-    /// `Sidecar` when the flag is omitted (docs/questions.md Q2).
+    /// A brand-new workspace's mode when nothing on disk is tagged; `Sidecar` if omitted.
     identity_mode: IdentityMode,
-    /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `None` when the flag is
-    /// omitted entirely — deliberately distinct from `Some(KeyStoreMode::Auto)`. Omitted keeps
-    /// the pre-existing in-memory placeholder, so every script or test that spawns this binary
-    /// without knowing about the flag is unaffected; `auto` (like `os`) touches the real OS
-    /// keychain, which most CI/headless environments do not have reachable.
+    /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `None` (flag omitted)
+    /// keeps the pre-existing in-memory placeholder — `auto`/`os` touch the real OS keychain,
+    /// which most CI/headless environments can't reach.
     key_store_mode: Option<KeyStoreMode>,
-    /// The relay URL (plan M8 `sync-relay-enable`, ADR 0026); `None` when `--relay` is omitted,
-    /// meaning relay stays off (LAN-only, unchanged M4 behaviour) — additive, never required.
+    /// The relay URL (ADR 0026); `None` (omitted) means relay stays off (LAN-only) — additive.
     relay_url: Option<String>,
-    /// `--relay-dial-peer <hex node id>` (plan M8 `relay-converge-test`): a peer's *relay* node id
-    /// to actively dial once this daemon's relay endpoint is bound, bypassing LAN discovery
-    /// entirely. Test/manual-pairing-substitute only; `None` when the flag is omitted.
+    /// `--relay-dial-peer <hex node id>`: a peer's *relay* node id to dial once this daemon's
+    /// relay endpoint is bound, bypassing LAN discovery. Test-only; `None` if omitted.
     relay_dial_peer: Option<[u8; 32]>,
-    /// `--no-lan` (plan M8 `relay-converge-test`): skips LAN entirely for every workspace this
-    /// daemon opens — proves a convergence test actually exercised the relay.
+    /// `--no-lan`: skips LAN entirely for every workspace this daemon opens (relay-only tests).
     no_lan: bool,
-    /// `--sync-dir <path>` (plan M8 `sync-file-carrier`): the shared folder every opened
-    /// workspace's file-carrier watches; `None` when omitted, meaning it stays off.
+    /// `--sync-dir <path>`: the shared folder every opened workspace's file-carrier watches;
+    /// `None` (omitted) keeps it off.
     sync_dir: Option<PathBuf>,
 }
 
@@ -151,11 +143,8 @@ fn parse_args() -> Result<Args, String> {
 /// Reads a passphrase for `--key-store file` as one line from stdin — never a CLI argument or
 /// environment variable (CLAUDE.md §3.1), so `ps`/shell history never carries it. The `String`'s
 /// buffer moves directly into `Secret` (zeroized on drop) via `into_bytes`, no extra copy.
-///
-/// **Known gap, flagged for the human**: this does not suppress terminal echo. Doing so needs a
-/// terminal-control dependency (e.g. `rpassword`) this pass did not add without sign-off — see
-/// tasks/sync-keystore/notes.md's "As built" section. The two properties CLAUDE.md §3.1 actually
-/// requires — never a CLI arg, never an env var, never logged — hold regardless.
+/// **Known gap**: does not suppress terminal echo (needs `rpassword`, not added without sign-off —
+/// see tasks/sync-keystore/notes.md's "As built"); the CLAUDE.md §3.1 properties still hold.
 fn prompt_file_passphrase() -> Result<Secret, Box<dyn std::error::Error>> {
     eprint!("txtodod: key_store = \"file\" passphrase: ");
     std::io::stderr().flush().ok();
@@ -193,11 +182,9 @@ fn main() -> ExitCode {
     }
 }
 
-/// The state dir this run resolves to before anything else — the same directory that already
-/// holds (or will hold) `registry.db`/`txtodod.sock`/`txtodod.pid` in whichever mode this process
-/// is running: `<dir>/.txtodo/` for the legacy `--dir` bridge, the device-global data dir for true
-/// global mode. Resolved *before* `WorkspaceCatalog` exists (ADR 0021: the shared `DeviceIdentity`
-/// it's built from needs this path, and nothing about identity depends on the registry/catalog).
+/// The state dir this run resolves to first: `<dir>/.txtodo/` for the legacy `--dir` bridge, the
+/// device-global data dir for true global mode. Resolved before `WorkspaceCatalog` exists (ADR
+/// 0021: the shared `DeviceIdentity` it's built from needs this path first).
 fn resolve_state_dir(
     args: &Args,
     env: &RegistryEnv,
@@ -211,10 +198,8 @@ fn resolve_state_dir(
     })
 }
 
-/// Builds this process's one shared [`DeviceIdentity`] (ADR 0021, task
-/// `daemon-device-set-identity`) at `state_dir`, prompting once for a `file`-keystore passphrase
-/// (`--key-store` omitted entirely keeps the pre-existing in-memory placeholder — see
-/// `Args::key_store_mode`'s doc for why that must stay the default).
+/// Builds this process's one shared [`DeviceIdentity`] (ADR 0021) at `state_dir`, prompting once
+/// for a `file`-keystore passphrase (`--key-store` omitted keeps the in-memory placeholder).
 fn build_identity(
     args: &Args,
     state_dir: &Path,
@@ -236,10 +221,8 @@ fn build_identity(
     )?)
 }
 
-/// `WorkspaceOpenArgs` from the CLI flags plus the identity `build_identity` already resolved and
-/// the device relay/file-carrier `run` already opened (task `daemon-shared-sync-link` stages
-/// 5-6) — each `Option` is `None` exactly when its CLI flag was, or its open/bind failed; either
-/// way every workspace this catalog opens shares the identical `Option`, never opens its own.
+/// `WorkspaceOpenArgs` from the CLI flags plus the identity/relay/file-carrier `run` already
+/// resolved — every workspace this catalog opens shares the identical `Option`s, never its own.
 fn open_args(
     args: &Args,
     identity: Arc<DeviceIdentity>,
@@ -258,10 +241,8 @@ fn open_args(
 }
 
 /// The `--dir` bridge: registers/opens that one directory, plus (best-effort) anything else
-/// already registered — covers a human who has pointed `$TXTODO_REGISTRY_DB` at a real shared
-/// registry even while still invoking `--dir`. `state_dir` is already resolved (`resolve_state_dir`);
-/// returns the socket path, at its pre-existing `<dir>/.txtodo/...` location so today's whole test
-/// suite keeps working unmodified.
+/// already registered. Returns the socket path at its pre-existing `<dir>/.txtodo/...` location so
+/// today's whole test suite keeps working unmodified.
 fn start_dir_bridge(
     dir: &Path,
     env: &RegistryEnv,
@@ -309,17 +290,14 @@ async fn shutdown_signal() {
 }
 
 /// Pid lock + log init + the "starting"/stale-socket-removal/"ready" sequence — split out of
-/// `run` purely to keep that function's cognitive complexity within budget. Returns the guards
-/// `run` must keep alive for its own duration.
+/// `run` for its cognitive-complexity budget. Returns the guards `run` must keep alive.
 ///
-/// Logs go under `state_dir/logs` — **not** `workspace_registry_paths::global_log_dir(env)`
-/// called directly, a real regression this task's own daemon-slice pass introduced and its own
-/// full test run caught: that always resolves the *true-global* location regardless of mode, so a
-/// `--dir`-bridge-started daemon (every pre-existing test in this crate) silently wrote its logs
-/// to this machine's real `$XDG_DATA_HOME/txtodo/logs/` instead of `<dir>/.txtodo/logs` — breaking
-/// `tests/lan_discovery.rs`'s log-tailing assertion, which found no log at the location it
-/// (correctly) expected. `state_dir` is already resolved correctly per mode by `start_dir_bridge`/
-/// `start_global`, so deriving logs from it keeps both modes hermetic and in one place.
+/// Logs go under `state_dir/logs`, **not** `workspace_registry_paths::global_log_dir(env)` called
+/// directly — that always resolves the true-global location regardless of mode, so a
+/// `--dir`-bridge-started daemon would silently write logs to the real machine's
+/// `$XDG_DATA_HOME/txtodo/logs/` instead of `<dir>/.txtodo/logs` (a real regression this crate's
+/// own daemon-slice pass caught via `tests/lan_discovery.rs`'s log-tailing assertion). `state_dir`
+/// is already resolved correctly per mode by `start_dir_bridge`/`start_global`.
 fn prepare_and_announce(
     args: &Args,
     state_dir: &std::path::Path,
@@ -337,15 +315,43 @@ fn prepare_and_announce(
         // The pid lock says no other instance runs, so this is a stale socket from a crash.
         std::fs::remove_file(socket)?;
     }
-    eprintln!(
-        "txtodod ready: socket {}, registry {}",
-        socket.display(),
-        registry_path.display()
-    );
+    log_ready(socket, registry_path);
     Ok((pid, logs))
 }
 
+/// Was a bare `eprintln!` (bypassed the subscriber). Split out for `prepare_and_announce`'s and
+/// `run`'s cognitive-complexity budgets. Sink matrix per `daemon.boot`'s own doc below. Records
+/// the enclosing `daemon.boot` span's `socket` field too (this runs while `run`'s guard is held).
+fn log_ready(socket: &std::path::Path, registry_path: &std::path::Path) {
+    tracing::Span::current().record("socket", socket.display().to_string().as_str());
+    tracing::info!(socket = %socket.display(), registry = %registry_path.display(), "daemon_ready");
+}
+
+/// Was a bare `eprintln!` (bypassed the subscriber) — split out, same reason as `log_ready`.
+fn log_stopped() {
+    tracing::info!("daemon_stopped");
+}
+
+/// `version`/`mode` for the `daemon.boot` span (`run`'s own doc); split out to keep the macro's
+/// expansion off `run`'s cognitive-complexity count.
+fn start_boot_span(args: &Args) -> tracing::Span {
+    let mode = args.dir.as_ref().map_or("global", |_| "dir-bridge");
+    tracing::info_span!(
+        "daemon.boot",
+        version = env!("CARGO_PKG_VERSION"),
+        mode,
+        socket = tracing::field::Empty
+    )
+}
+
+/// Boot (registry → identity → relay/file-carrier → catalog → socket → pid lock → log init) runs
+/// inside one `daemon.boot` span (`start_boot_span`), entered here and dropped before the
+/// long-running serve loop. JSON file always carries it; pretty stderr too in a foreground
+/// terminal — launchd/systemd capture stderr into their own separate log instead
+/// (`deploy/launchd/*.plist`, `deploy/systemd/txtodod.service`), no detection needed here.
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+    let boot_span = start_boot_span(&args);
+    let _boot = boot_span.enter();
     let env = RegistryEnv::from_process()?;
     let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
     let registry = WorkspaceRegistry::open(&registry_path)?;
@@ -353,12 +359,10 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 
     let state_dir = resolve_state_dir(&args, &env)?;
     let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
-    // One shared relay endpoint per device (task `daemon-shared-sync-link` stage 5), bound before
-    // the control channel or any workspace opens — the fix for the identity-sharing collision a
-    // real relay server refuses ("Another endpoint connected with the same endpoint id") once two
-    // or more `iroh::Endpoint`s share this device's one persisted relay identity. `None` when
-    // `--relay` was never given or the bind failed; every consumer below shares this identical
-    // `Option`, never binds its own.
+    // One shared relay endpoint per device (`daemon-shared-sync-link` stage 5), bound before the
+    // control channel or any workspace opens — avoids two `iroh::Endpoint`s sharing one persisted
+    // relay identity. `None` when `--relay` was never given or the bind failed; every consumer
+    // below shares this identical `Option`, never binds its own.
     let device_relay = match args.relay_url.clone().filter(|u| !u.is_empty()) {
         Some(url) => DeviceRelay::bind(&identity, url).await,
         None => None,
@@ -368,9 +372,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         device_relay.clone(),
         registry_path.clone(),
     );
-    // One shared file-carrier per device (task `daemon-shared-sync-link` stage 6), opened before
-    // any workspace opens — every workspace naming the same `--sync-dir` registers a route on it
-    // instead of opening its own, byte-identical carrier handle to the same file.
+    // One shared file-carrier per device (stage 6), opened before any workspace opens — every
+    // workspace naming the same `--sync-dir` shares this one carrier handle.
     let device_file_carrier = args
         .sync_dir
         .clone()
@@ -389,8 +392,9 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         None => start_global(&env, &catalog)?,
     };
     let (_pid, _logs) = prepare_and_announce(&args, &state_dir, &socket, &registry_path)?;
+    drop(_boot);
 
     serve::serve_global(catalog, &socket, shutdown_signal()).await?;
-    eprintln!("txtodod stopped");
+    log_stopped();
     Ok(())
 }

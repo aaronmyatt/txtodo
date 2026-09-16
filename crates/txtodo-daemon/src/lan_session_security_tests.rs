@@ -1,20 +1,21 @@
 //! security-m4-review, "no secrets in logs": a real pair (which mints and wraps the group key
 //! and each side's device static key) followed by two real sync rounds — one happy, one a peer
-//! sealing under a key nobody holds — captured through a scoped `tracing` subscriber shaped
-//! exactly like `telemetry.rs`'s production one (JSON `fmt` layer), then checked for key material.
+//! sealing under a key nobody holds — captured through `txtodo_telemetry::testing`'s shared
+//! `LogSink`/`capturing_dispatch` seam (shaped exactly like `txtodo_telemetry::init`'s production
+//! JSON `fmt` layer, `telemetry.rs`'s own upstream now), then checked for key material.
 //! See `tasks/security-m4-review/notes.md` and `RATCHET.md`'s dated entry. Split out of
 //! `lan_session_tests.rs` for that file's line budget; reuses its scripted-peer helpers.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
-use tracing_subscriber::layer::SubscriberExt as _;
 use txtodo_model::{DeviceId, TaskId, Ulid};
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     Frame, GroupId, GroupKey, GroupKeys, KeyId, Link, Message, OriginRange, PROTOCOL_VERSION,
     SealFor, channel_link_pair, seal,
 };
+use txtodo_telemetry::testing::{LogSink, capturing_dispatch};
 
 use crate::clock::{Clock, FakeClock};
 use crate::lan_session::drive_session;
@@ -23,50 +24,9 @@ use crate::pairing_grpc_tests::{finalize_after_both_confirm, handshake_and_confi
 use crate::server::{SharedWorkspace, TxtodoService};
 use crate::workspace::Workspace;
 
-/// An in-memory sink standing in for `telemetry.rs`'s log file, so this test can inspect exactly
-/// the bytes a real JSON log line would carry without touching disk or the process-global
-/// subscriber (`tracing_subscriber::registry().try_init()`) another test may already hold.
-#[derive(Clone, Default)]
-pub(crate) struct LogSink(Arc<Mutex<Vec<u8>>>);
-
-impl std::io::Write for LogSink {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .extend_from_slice(buf);
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogSink {
-    type Writer = LogSink;
-
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
-    }
-}
-
-/// Same shape as `telemetry::init`'s subscriber (JSON `fmt` layer, `EnvFilter`) but scoped to one
-/// dispatch this test holds, rather than the process-global one `try_init` installs.
-pub(crate) fn capturing_dispatch(sink: LogSink) -> tracing::Dispatch {
-    let subscriber = tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new("trace"))
-        .with(tracing_subscriber::fmt::layer().json().with_writer(sink));
-    tracing::Dispatch::new(subscriber)
-}
-
-pub(crate) fn captured_text(sink: &LogSink) -> String {
-    let bytes = sink
-        .0
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    String::from_utf8_lossy(&bytes).into_owned()
-}
+/// The `service` field every `capturing_dispatch` call below stamps — matches `telemetry.rs`'s own
+/// `init("txtodod", ...)` so this test's captured shape matches production exactly.
+pub(crate) const SERVICE: &str = "txtodod";
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -181,7 +141,7 @@ fn spawn_bad_frame_round(
 }
 
 fn assert_no_secret_leaked(sink: &LogSink, group_key: &[u8], device_statics: &[Vec<u8>]) {
-    let logs = captured_text(sink);
+    let logs = sink.captured_text();
     assert!(
         !logs.is_empty(),
         "sanity: the pair-and-sync round actually logged something"
@@ -205,8 +165,8 @@ fn assert_no_secret_leaked(sink: &LogSink, group_key: &[u8], device_statics: &[V
 
 #[tokio::test(flavor = "multi_thread")]
 async fn no_secrets_appear_in_logs_across_a_real_pair_and_sync() {
-    let sink = LogSink::default();
-    let dispatch = capturing_dispatch(sink.clone());
+    let sink = LogSink::new();
+    let dispatch = capturing_dispatch(sink.clone(), SERVICE);
     let clock = Arc::new(FakeClock::new(1_000));
     let dir_a = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let dir_b = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));

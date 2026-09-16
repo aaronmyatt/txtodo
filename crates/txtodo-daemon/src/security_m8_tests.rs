@@ -22,11 +22,13 @@ use txtodo_sync::{
     seal_ops,
 };
 
+use txtodo_telemetry::testing::{LogSink, capturing_dispatch};
+
 use crate::bundle_export::{ExportCtx, export_into};
 use crate::bundle_import::{ImportCtx, import_from_chunks};
 use crate::clock::FakeClock;
 use crate::keystore_setup::load_or_mint_device_signing;
-use crate::lan_session_security_tests::{LogSink, captured_text, capturing_dispatch, hex};
+use crate::lan_session_security_tests::{SERVICE, hex};
 use crate::mutation::Mutation;
 use crate::workspace::Workspace;
 
@@ -201,7 +203,7 @@ async fn bundle_export_import_cycle(passphrase: &[u8], plaintext_line: &str) -> 
 }
 
 fn assert_no_secret_leaked(sink: &LogSink, secrets: &[(&str, &[u8])]) {
-    let logs = captured_text(sink);
+    let logs = sink.captured_text();
     for (name, bytes) in secrets {
         assert!(
             !bytes.is_empty(),
@@ -218,8 +220,8 @@ fn assert_no_secret_leaked(sink: &LogSink, secrets: &[(&str, &[u8])]) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle() {
-    let sink = LogSink::default();
-    let dispatch = capturing_dispatch(sink.clone());
+    let sink = LogSink::new();
+    let dispatch = capturing_dispatch(sink.clone(), SERVICE);
     let _guard = tracing::dispatcher::set_default(&dispatch);
 
     let device_a = dev(1);

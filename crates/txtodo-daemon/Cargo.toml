@@ -20,6 +20,7 @@ txtodo-crdt.workspace = true
 txtodo-sync.workspace = true
 txtodo-proto.workspace = true
 txtodo-mcp.workspace = true
+txtodo-telemetry.workspace = true
 # https://docs.rs/getrandom — the 80 random bits of a ULID
 getrandom = "0.3"
 # https://docs.rs/tokio — one actor task per document, bounded channels, unix socket listener

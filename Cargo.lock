@@ -8812,6 +8812,7 @@ dependencies = [
  "txtodo-query",
  "txtodo-store",
  "txtodo-sync",
+ "txtodo-telemetry",
 ]
 
 [[package]]

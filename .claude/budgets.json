@@ -58,7 +58,8 @@
         "txtodo-crdt",
         "txtodo-sync",
         "txtodo-proto",
-        "txtodo-mcp"
+        "txtodo-mcp",
+        "txtodo-telemetry"
       ],
       "txtodo-tui": [
         "txtodo-core",
