@@ -31,17 +31,31 @@ mod unix_impl {
     /// `txtodod` (no `--dir`) if it is absent or unreachable (a stale socket file with no
     /// listener counts as absent — the daemon unlinks stale sockets itself on start, so this only
     /// retries, never unlinks). Returns the socket path once a live daemon answers on it.
+    #[tracing::instrument(name = "desktop.ensure_daemon", skip_all)]
     pub async fn ensure_daemon(cfg: &DesktopConfig) -> Result<PathBuf, DaemonError> {
+        ensure_daemon_inner(cfg).await
+    }
+
+    async fn ensure_daemon_inner(cfg: &DesktopConfig) -> Result<PathBuf, DaemonError> {
         let sock = cfg.resolved_global_socket();
         if probe_live(&sock).await {
             return Ok(sock);
         }
         let _guard = SpawnGuard::acquire(&sock).await?;
         if !probe_live(&sock).await {
+            log_spawn_attempted();
             spawn_txtodod(cfg)?;
             wait_until_live(&sock, cfg.spawn_timeout).await?;
         }
         Ok(sock)
+    }
+
+    /// Fires only on the branch that actually spawns `txtodod` — the common case (an already-live
+    /// daemon) logs nothing extra, keeping this quiet on the hot path. Its own function, not a
+    /// bare `tracing::debug!` inside `ensure_daemon_inner`'s `if`, the same
+    /// `log_mutation_ops`/`log_ready_attempt` pattern this whole `+m11` pass uses elsewhere.
+    fn log_spawn_attempted() {
+        tracing::debug!("spawn_attempted");
     }
 
     /// A live listener answers a bare connect; a missing or stale socket does not.

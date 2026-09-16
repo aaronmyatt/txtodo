@@ -17,8 +17,16 @@ use tauri::{AppHandle, State};
 use txtodo_proto::v1 as pb;
 
 /// Every open task across every registered workspace's root `todo.txt`, unsorted.
+#[tracing::instrument(name = "ipc.universal_tasks", skip_all)]
 #[tauri::command]
 pub async fn universal_tasks(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<UniversalTaskDto>, String> {
+    universal_tasks_inner(app, state).await
+}
+
+async fn universal_tasks_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<UniversalTaskDto>, String> {
