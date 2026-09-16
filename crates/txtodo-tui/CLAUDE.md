@@ -60,6 +60,7 @@ Invariants below for the exact gap and why.
   `allowedDeps`) and a real two-daemon LAN-sync convergence test for the `s` indicator (needs the
   same missing `SyncStatus` RPC) — both `ui::conflicts`/`ui::sync`'s own logic is unit tested
   against fixtures instead.
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-core, txtodo-proto (external: ratatui, crossterm, tonic, tokio,
   hyper-util, tower, jiff — same socket-dial set `txtodo-cli` already carries, `cargo deny check`
   clean as of 2026-09-13, human sign-off still outstanding).
