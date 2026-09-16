@@ -37,4 +37,5 @@ Identity mode (tagged vs. sidecar, `docs/questions.md` Q2) added 2026-09-13.
 - `OpKind` is append-only by **security**, not style: a variant insert/reorder changes every signed
   op's `signing_bytes`. No `HashMap`/`HashSet` anywhere reachable from `Op` — `BTreeMap` or sorted
   `Vec` only.
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-core.
