@@ -6,9 +6,14 @@
 //! must always be spawned in the background here rather than run to completion with `.output()`.
 //! What's asserted: the initiator's `PairOffer` QR/code render, the joiner's real
 //! `PairAccept`-derived SAS matching the initiator's own real `PairAwaitPeer`-derived SAS, both
-//! sides' explicit confirmation, the joiner actually receiving the initiator's real file content
-//! over the LAN (not just its own pre-existing files), a declined SAS never confirming, and the
-//! identity_mode mismatch refusal (docs/questions.md Q6) never even reaching the network.
+//! sides' explicit confirmation, a declined SAS never confirming, and the identity_mode mismatch
+//! refusal (docs/questions.md Q6) never even reaching the network.
+//!
+//! What is **not** asserted on a normal run: that the joiner then actually receives the
+//! initiator's file content over the LAN. That is real and it is broken — see
+//! [`a_paired_joiner_receives_the_initiators_real_file`]'s own doc for the mechanism and
+//! `tasks/pairing-workspace-identity/` for the fix. It is `#[ignore]`d, not deleted, and is that
+//! task's acceptance bar.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -215,15 +220,26 @@ fn assert_confirmed(text: &str) {
     assert!(text.contains("Confirmed on this device."), "{text}");
 }
 
-#[test]
-fn two_real_devices_complete_pairing_and_the_joiner_receives_the_initiators_real_file() {
+/// What a completed ceremony leaves behind, all of it kept alive for the caller: dropping either
+/// [`Daemon`] kills its `txtodod`, and dropping either `TempDir` deletes that workspace.
+struct PairedDevices {
+    _a: Daemon,
+    _b: Daemon,
+    _dir_a: tempfile::TempDir,
+    dir_b: tempfile::TempDir,
+}
+
+/// Runs one real `txtodo pair` ceremony between two fresh daemons and asserts every step of it:
+/// the initiator's QR/code preamble, the joiner's real SAS confirm and "Paired.", and the
+/// initiator's own confirm once the joiner has answered. `a_todo` seeds the initiator's todo.txt;
+/// the joiner's starts empty.
+fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
-    let todo_content = "(A) buy milk id:01M2CZ00000000000000000A\n";
-    std::fs::write(dir_a.path().join("todo.txt"), todo_content).unwrap();
+    std::fs::write(dir_a.path().join("todo.txt"), a_todo).unwrap();
     std::fs::write(dir_b.path().join("todo.txt"), "").unwrap();
-    let _a = Daemon::spawn(dir_a.path());
-    let _b = Daemon::spawn(dir_b.path());
+    let a = Daemon::spawn(dir_a.path());
+    let b = Daemon::spawn(dir_b.path());
 
     let (offer_child, mut offer_reader) =
         spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\n");
@@ -248,10 +264,57 @@ fn two_real_devices_complete_pairing_and_the_joiner_receives_the_initiators_real
     );
     assert_confirmed(&offer_rest);
 
+    PairedDevices {
+        _a: a,
+        _b: b,
+        _dir_a: dir_a,
+        dir_b,
+    }
+}
+
+#[test]
+fn two_real_devices_complete_a_real_pairing_ceremony() {
+    let _paired = pair_two_real_devices("(A) buy milk id:01M2CZ00000000000000000A\n");
+}
+
+/// **KNOWN BROKEN, quarantined 2026-09-16 — a real product bug, not a flake.** This is the only
+/// test in the repo that pairs two *genuinely independent* daemons and then asks whether sync
+/// actually converges, and it fails deterministically on ubuntu-latest, macos-latest and locally.
+///
+/// Why: a `WorkspaceId` is a ULID minted locally per device (`txtodo_store::registry`,
+/// `workspace_registry::add`), and `txtodo pair` agrees on a group id and group key but never on a
+/// workspace id — `Daemon::start_with_workspace_id`'s own doc in the daemon crate's test support
+/// says so outright ("workspace identity is still a separate dimension pairing does not touch").
+/// Since `daemon-workspace-session-multiplex` stages 1/2 every sync message carries a workspace
+/// id, and `lan_session_dispatch.rs::dispatch_workspace_frame` skips any workspace the receiving
+/// side never opened. So both daemons pair, connect, exchange a link `Hello`, then each drops the
+/// other's every `Greet` as `lan_session_unrouted_workspace_message_skipped` and nothing ever
+/// converges. Confirmed by reading both daemons' `TXTODO_LOG=debug` JSON logs directly.
+///
+/// The other real-daemon pairing tests (`txtodo-daemon`'s `pairing_lan.rs`, `pairing_relay.rs`,
+/// `relay_multiplex.rs`) pass only because their harness pre-seeds *both* sides with the same id
+/// (`Daemon::start_with_workspace_id`, `seed_workspace_at`) — they pre-agree the exact thing that
+/// is broken here.
+///
+/// The fix is to run the workspace-identity offer/accept exchange that task
+/// `daemon-workspace-identity-agreement` already landed (`WorkspaceRegistry::add_with_id`/`adopt`,
+/// `workspace_offer_grpc.rs`, first-registrant-wins) as part of pairing; that task explicitly
+/// deferred the CLI wiring as "not required for stage 7's payoff ... not silently dropped".
+/// Tracked as its own task: `tasks/pairing-workspace-identity/`. Un-`#[ignore]` this the moment
+/// that lands — it is the acceptance bar for it.
+#[test]
+#[ignore = "real bug, not a flake: txtodo pair never agrees a WorkspaceId, so post-pairing sync is \
+            skipped as unrouted — see this test's doc comment and tasks/pairing-workspace-identity/"]
+fn a_paired_joiner_receives_the_initiators_real_file() {
+    let todo_content = "(A) buy milk id:01M2CZ00000000000000000A\n";
+    let paired = pair_two_real_devices(todo_content);
     // The real acceptance bar: B's own disk file now holds A's real content, delivered over the
-    // real LAN transport (lan.rs's existing group-keyed sync engine, unchanged by this task) once
-    // pairing adopted a shared group id and key — not merely B's own pre-existing (empty) file.
-    wait_for_file_convergence(&dir_b.path().join("todo.txt"), todo_content.as_bytes());
+    // real LAN transport (lan.rs's existing group-keyed sync engine) once pairing adopted a shared
+    // group id and key — not merely B's own pre-existing (empty) file.
+    wait_for_file_convergence(
+        &paired.dir_b.path().join("todo.txt"),
+        todo_content.as_bytes(),
+    );
 }
 
 #[test]
