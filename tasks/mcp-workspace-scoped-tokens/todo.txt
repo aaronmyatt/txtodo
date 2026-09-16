@@ -1,0 +1,4 @@
+x 2026-09-16 2026-09-16 Confirm txtodo-cli has no token scope-string handling to update (checked: no Token subcommand exists yet) +m11 @cli id:01M2N6MDP9CJ5WG45X5YZ409YK
+x 2026-09-16 2026-09-16 Integration test over the real socket: workspace: set and explicit-all round-trip, bare workspace: refused at create time +m11 @mcp id:01M2N6MDNX0ACYSSR8N6PK4XH7
+x 2026-09-16 2026-09-16 Unit tests for is_valid_scope/first_invalid_scope covering workspace: id/path/star/set/bare-refused +m11 @mcp id:01M2N6MDNJPZDW70HRMKPQTNZ1
+x 2026-09-16 2026-09-16 Extend RESTRICTOR_PREFIXES with workspace: (id/path/*, set via repetition), doc comment, daemon CLAUDE.md invariant +m11 @mcp id:01M2N6MDN2K9A6HMJ1DAHNZVRP

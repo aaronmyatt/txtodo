@@ -134,6 +134,64 @@ async fn create_list_and_revoke_round_trip_over_the_socket() {
 }
 
 #[tokio::test]
+async fn a_workspace_restrictor_round_trips_including_a_set_and_the_explicit_all() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "(A) seed\n").unwrap();
+    let (mut client, _stop) = serve(dir.path()).await;
+
+    // One workspace (an id), a set (two ids, repeated), and the explicit "every workspace" — all
+    // three shapes task `mcp-workspace-scoped-tokens` added to the design §6.2 grammar.
+    let created = client
+        .token_create(create_req(
+            "claude-code",
+            &[
+                "read",
+                "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAW",
+            ],
+        ))
+        .await
+        .unwrap_or_else(|e| panic!("create with a workspace set: {e}"))
+        .into_inner();
+    assert_eq!(
+        created.scopes,
+        vec![
+            "read",
+            "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAW",
+        ]
+    );
+
+    let all = client
+        .token_create(create_req("desktop", &["read", "workspace:*"]))
+        .await
+        .unwrap_or_else(|e| panic!("create with explicit all: {e}"))
+        .into_inner();
+    assert_eq!(all.scopes, vec!["read", "workspace:*"]);
+}
+
+#[tokio::test]
+async fn a_bare_workspace_restrictor_is_refused_at_create_time() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "(A) seed\n").unwrap();
+    let (mut client, _stop) = serve(dir.path()).await;
+
+    let err = client
+        .token_create(create_req("claude-code", &["read", "workspace:"]))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+
+    let listed = client
+        .token_list(pb::TokenListRequest { workspace: None })
+        .await
+        .unwrap()
+        .into_inner()
+        .tokens;
+    assert!(listed.is_empty(), "the rejected create stored nothing");
+}
+
+#[tokio::test]
 async fn an_unrecognized_scope_is_refused_at_create_time() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "(A) seed\n").unwrap();

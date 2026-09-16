@@ -1,11 +1,36 @@
 //! Capability tokens (plan M6, design §6.2): `TokenCreate`/`TokenList`/`TokenRevoke`. Owned
 //! end-to-end by the token-system task; the RPCs delegate here from `server.rs` untouched.
 //!
-//! Scope grammar (design §6.2): five write scopes, `read`, `raw`, and three restrictor prefixes
-//! each needing a non-empty suffix (`project:+work`, not bare `project:`). Anything else is
-//! rejected at create time — a scope the daemon doesn't recognize must never silently succeed.
+//! Scope grammar (design §6.2, extended by task `mcp-workspace-scoped-tokens`): five write scopes,
+//! `read`, `raw`, and four restrictor prefixes each needing a non-empty suffix (`project:+work`,
+//! not bare `project:`). Anything else is rejected at create time — a scope the daemon doesn't
+//! recognize must never silently succeed.
 //! `expires` is RFC 3339 text on the wire (empty = never expires); parsed with `humantime`.
 //! https://docs.rs/humantime
+//!
+//! `workspace:<id-or-path>` (task `mcp-workspace-scoped-tokens`, following `WorkspaceId`/
+//! `WorkspaceSelector`'s own id-or-path convention — see `crates/txtodo-mcp/src/grpc_convert.rs`'s
+//! `workspace_selector` and `crates/txtodo-proto/proto/txtodo/v1/txtodo.proto`'s `WorkspaceSelector`
+//! doc, the same sniffing convention `mcp-multi-workspace-gateway` established): a `WorkspaceId`
+//! ULID (26-char Crockford base32, as returned by `WorkspaceList`) or a filesystem path, exactly
+//! like the wire `WorkspaceSelector` oneof's two variants collapsed into one string. Like every
+//! other restrictor here, the suffix is stored and validated for shape only (non-empty) — never
+//! resolved against the registry at create time, the same way `project:+x` is never checked
+//! against an actual project. A **set** is expressed the same way a human would naturally write
+//! more than one restrictor of the same kind: repeat the scope string once per workspace
+//! (`workspace:<id1>`, `workspace:<id2>`) — no new comma/list syntax, so the grammar stays exactly
+//! as closed as the other three restrictors. **All workspaces** is the explicit `workspace:*`
+//! (a literal `*`, itself just a non-empty suffix — no special-cased parsing) — chosen over
+//! *only* relying on "restrictor absent" so a token's scopes list is self-documenting: a human or
+//! `TokenList` reader sees `workspace:*` and knows unrestricted-workspace access was a deliberate
+//! choice, not an oversight from before this grammar existed. Omitting `workspace:` entirely keeps
+//! meaning exactly what it always meant for `project:`/`context:`/`file:`: unrestricted on that
+//! axis — so a pre-existing token minted before this task (no `workspace:` scope at all) is
+//! unaffected, matching design §6.2's original single-workspace-everything behavior generalized to
+//! "every workspace" now that one daemon/MCP surface can span many. No request-time enforcement of
+//! any restrictor (workspace or otherwise) exists yet anywhere in this crate — see this crate's own
+//! `CLAUDE.md` Invariants and this module's own note below; this task is grammar/storage/creation-
+//! time validation only, the same scope this module already had for the other three restrictors.
 //!
 //! The bearer secret is 32 bytes of OS entropy, returned in plaintext exactly once — this RPC's
 //! response — and never again; only its hash lands in `txtodo-store` (`create_token`).
@@ -30,8 +55,12 @@ const EXACT_SCOPES: [&str; 6] = [
     "write:delete",
     "raw",
 ];
-/// Restrictor caveat prefixes; each needs a non-empty suffix.
-const RESTRICTOR_PREFIXES: [&str; 3] = ["project:", "context:", "file:"];
+/// Restrictor caveat prefixes; each needs a non-empty suffix. `workspace:` (task
+/// `mcp-workspace-scoped-tokens`) takes a `WorkspaceId` ULID, a filesystem path, or the literal
+/// `*` for "every workspace" — all three are just non-empty suffixes here, same as the other
+/// three prefixes; see this module's doc comment for the full grammar and a set's repeat-the-
+/// scope convention.
+const RESTRICTOR_PREFIXES: [&str; 4] = ["project:", "context:", "file:", "workspace:"];
 
 /// True for a scope string in the design §6.2 closed union.
 fn is_valid_scope(scope: &str) -> bool {
@@ -183,5 +212,53 @@ impl TxtodoService {
             .revoke_token(id, now_ms)
             .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(pb::TokenRevokeResponse { revoked }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bare_project_context_file_or_workspace_prefix_is_refused() {
+        assert!(!is_valid_scope("project:"));
+        assert!(!is_valid_scope("context:"));
+        assert!(!is_valid_scope("file:"));
+        assert!(
+            !is_valid_scope("workspace:"),
+            "empty suffix, same rule as the other three"
+        );
+    }
+
+    #[test]
+    fn workspace_restrictor_accepts_an_id_a_path_or_the_explicit_all() {
+        // WorkspaceId ULID text, the same 26-char Crockford base32 shape `WorkspaceList` returns.
+        assert!(is_valid_scope("workspace:01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        // A filesystem path, mirroring `WorkspaceSelector`'s other oneof variant.
+        assert!(is_valid_scope("workspace:/Users/aaron/work"));
+        // The explicit "every workspace" spelling.
+        assert!(is_valid_scope("workspace:*"));
+    }
+
+    #[test]
+    fn a_workspace_set_is_expressed_by_repeating_the_restrictor() {
+        // No new comma/list syntax — a set is just more than one `workspace:` scope string,
+        // the same convention this grammar would use for `project:`/`context:`/`file:` too.
+        let scopes = [
+            "read".to_owned(),
+            "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned(),
+            "workspace:01ARZ3NDEKTSV4RRFFQ69G5FAW".to_owned(),
+        ];
+        assert!(first_invalid_scope(&scopes).is_none());
+    }
+
+    #[test]
+    fn an_unrecognized_scope_is_never_silently_accepted() {
+        assert!(!is_valid_scope("sudo"));
+        assert!(!is_valid_scope("workspace"), "missing the colon entirely");
+        assert_eq!(
+            first_invalid_scope(&["read".to_owned(), "sudo".to_owned()]),
+            Some("sudo")
+        );
     }
 }

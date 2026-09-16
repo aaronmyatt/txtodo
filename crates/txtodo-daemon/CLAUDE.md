@@ -353,8 +353,20 @@ multiplex every workspace's traffic — not done by this task).
 - Every loop is bounded: mailbox 256, watch 64, raw events 4096, pending paths 1024, walk depth
   32, documents 10 000, replay pages 1 000, mutations per apply 10 000, op log stream 200.
 - Token scopes are the design §6.2 closed union (`read`, `write:*`, `raw`, `project:`/`context:`/
-  `file:` restrictors with a non-empty suffix); an unrecognized scope is refused at create time,
-  never silently accepted. The bearer secret is returned in plaintext exactly once, at creation;
+  `file:`/`workspace:` restrictors with a non-empty suffix); an unrecognized scope is refused at
+  create time, never silently accepted. `workspace:` (task `mcp-workspace-scoped-tokens`,
+  2026-09-16 — the natural follow-up to `mcp-multi-workspace-gateway`'s daemon/MCP surface now
+  spanning many workspaces) takes a `WorkspaceId` ULID or a filesystem path, the same id-or-path
+  convention `WorkspaceSelector`/`grpc_convert::workspace_selector` already use; a **set** is
+  expressed by repeating the scope string once per workspace (no new comma/list syntax); the
+  explicit literal `workspace:*` means "every workspace", chosen over relying on restrictor-absence
+  alone so a token's scope list stays self-documenting. Omitting `workspace:` entirely keeps
+  meaning what it always meant for the other three restrictors — unrestricted on that axis — so
+  every token minted before this task is unaffected. Grammar/storage/creation-time validation
+  only, same as the pre-existing three restrictors: no request-time enforcement of any restrictor
+  exists yet (see below), so `workspace:` does not yet actually confine an MCP call to matching
+  workspaces — see `tasks/mcp-workspace-scoped-tokens/notes.md`. The bearer secret is returned in
+  plaintext exactly once, at creation;
   `TokenList` never carries it or the hash, and a revoked token simply drops out of the list (the
   wire message has no revoked marker). Request-time enforcement of a revoked/expired bearer is
   plan M6's larger MCP-auth-server milestone — out of scope here; `Store::verify_token` is the
