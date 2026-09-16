@@ -24,6 +24,11 @@ Written 2026-09-15 against `f74be41`. Machines are **A** and **B**.
   under one persisted relay identity; a real relay refuses the second ("Another endpoint connected
   with the same endpoint id"). `relay_converge.rs`/`pairing_relay.rs` are `#[ignore]`d. Fix is
   todo 18. **A cross-network trial is not runnable today.**
+  **2026-09-16 update (task `relay-default-public-url`):** the collision above and the
+  `workspace_id` bullet above it are both fixed since this was written — `txtodod` also now
+  defaults to a real public relay (`https://use1-1.relay.n0.iroh.link`) when `--relay` is omitted,
+  so self-hosting `relay/` (§6 below) is no longer required for a cross-network trial. This
+  section's "not runnable today" is stale; re-verify before relying on it.
 
 ## 3. Pre-flight (both machines)
 
@@ -152,9 +157,11 @@ runs at your file-sync provider's speed. SMB/NFS/Syncthing all work.
 
 ## 6. Path C — across networks
 
-Blocked (§2). Re-open once todo 18 lands its shared-accept-loop stage. Shape then: run `relay/`
-somewhere both machines reach (`docs/relay.md`), `--relay https://…` on both, `--no-lan` to force
-the carrier, re-run steps 5-7 with a 30 s budget.
+§2's "blocked" is stale (see its 2026-09-16 update): `txtodod` now defaults to a real public relay
+with zero flags, so this no longer needs self-hosting `relay/` first. Shape: just run `txtodod` on
+both machines with no `--relay` flag at all (the default applies), `--no-lan` to force the relay
+carrier for the trial, re-run steps 5-7 with a 30 s budget. Self-hosting `relay/`
+(`docs/relay.md`) or pointing `--relay` at your own iroh relay both remain available overrides.
 
 ## 7. What to record
 
