@@ -14,6 +14,10 @@
 # run against this repo's own root (dogfooding) must not turn into an accidental commit.
 .txtodo/
 
+# Stray stderr redirect from a manual `txtodod ... > daemon.log 2>&1` dev run at the repo root —
+# not the structured JSON logging under .txtodo/logs/ (already ignored above).
+/daemon.log
+
 # Nix build result symlinks (`nix build -o <name>`) — point into /nix/store, never source.
 /result
 /result-*
