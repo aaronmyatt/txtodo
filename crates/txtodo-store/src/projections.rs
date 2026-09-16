@@ -2,7 +2,7 @@
 //! is the SQLite idiom for "replace the row"; it is not the op log and carries no history.
 //! Ref: https://www.sqlite.org/lang_upsert.html
 
-use crate::{Seq, Store, StoreError};
+use crate::{Seq, Store, StoreError, hex8};
 use rusqlite::{OptionalExtension, params};
 use txtodo_model::FilePath;
 
@@ -43,6 +43,7 @@ const SELECT_META: &str = "SELECT value FROM meta WHERE key = ?1";
 
 impl Store {
     /// Records the bytes just written for `p.file`, replacing the previous projection.
+    #[tracing::instrument(skip_all, fields(file = %p.file))]
     pub fn put_projection(&mut self, p: &Projection) -> Result<(), StoreError> {
         upsert_projection(&self.conn, p)?;
         debug_assert!(
@@ -81,6 +82,7 @@ impl Store {
     }
 
     /// Stores a checkpoint at `seq` for `file`.
+    #[tracing::instrument(skip_all, fields(file = %file, seq = snap.seq.0))]
     pub fn put_snapshot(&mut self, file: &FilePath, snap: &Snapshot) -> Result<(), StoreError> {
         debug_assert!(snap.seq.0 >= 0, "seqs start at 1");
         self.conn
@@ -89,6 +91,7 @@ impl Store {
                 params![file.as_str(), snap.seq.0, snap.state],
             )
             .map_err(StoreError::query("upsert snapshot"))?;
+        log_snapshot_written(snap.state.len());
         Ok(())
     }
 
@@ -119,13 +122,32 @@ impl Store {
     }
 }
 
-/// Upserts a projection on `conn`; the caller owns the transaction.
+/// A projection over `MAX_PROJECTION_BYTES`; logs then builds the error, so the caller's `if`
+/// branch never contains a bare macro call.
+fn log_projection_too_large(file: &FilePath, len: usize) -> StoreError {
+    tracing::warn!(file = %file, bytes = len, limit = MAX_PROJECTION_BYTES, "store_projection_too_large");
+    StoreError::ProjectionTooLarge(len)
+}
+
+/// One `upsert_projection` call's outcome — never the bytes themselves, only their size and hash.
+fn log_projection_written(file: &FilePath, bytes: usize, hash: &[u8; 32]) {
+    tracing::debug!(file = %file, bytes, hash = %hex8(hash), "projection_written");
+}
+
+/// `put_snapshot`'s own outcome — the span already carries `file`/`seq`, this is the size.
+fn log_snapshot_written(bytes: usize) {
+    tracing::debug!(bytes, "snapshot_written");
+}
+
+/// Upserts a projection on `conn`; the caller owns the transaction. Shared by
+/// `Store::put_projection` and `commit.rs::commit_change_with_inner` — the one real write site
+/// for projection bytes, so the `projection_written` event covers both call paths from here.
 pub(crate) fn upsert_projection(
     conn: &rusqlite::Connection,
     p: &Projection,
 ) -> Result<(), StoreError> {
     if p.bytes.len() > MAX_PROJECTION_BYTES {
-        return Err(StoreError::ProjectionTooLarge(p.bytes.len()));
+        return Err(log_projection_too_large(&p.file, p.bytes.len()));
     }
     let written = i64::try_from(p.written_at_ms).unwrap_or(i64::MAX);
     conn.execute(
@@ -133,6 +155,7 @@ pub(crate) fn upsert_projection(
         params![p.file.as_str(), p.bytes, p.hash.to_vec(), written],
     )
     .map_err(StoreError::query("upsert projection"))?;
+    log_projection_written(&p.file, p.bytes.len(), &p.hash);
     Ok(())
 }
 
