@@ -47,6 +47,15 @@ async fn async_main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // File-only sink (root todo.txt logging-tui): `run` below enters raw mode + an alternate
+    // screen (`ratatui::init()`) and only leaves it on return, so any stderr write for the rest of
+    // this function's lifetime would corrupt the render — `init_file_only` never installs a
+    // stderr layer at all (see `txtodo-telemetry`'s own doc for why that's a distinct entry point
+    // from `init`, which every other txtodo binary uses). Logs land alongside the daemon's own,
+    // in the same `.txtodo/logs/` directory. Failure is swallowed: a dead logger must never stop
+    // the TUI from running.
+    let _log_guard =
+        txtodo_telemetry::init_file_only("txtodo-tui", &workspace.join(".txtodo/logs")).ok();
     let sock = socket_path(&workspace);
     let mut daemon = match Daemon::connect(&sock).await {
         Ok(d) => d,
@@ -99,7 +108,21 @@ fn spawn_input_reader() -> mpsc::UnboundedReceiver<io::Result<Event>> {
     rx
 }
 
+/// The real event loop: terminal input and daemon `Watch` events, raced with `tokio::select!`
+/// (root todo.txt `logging-tui`). A thin span wrapper around `run_loop_inner` — `#[instrument]`'s
+/// own macro expansion pushes the real body's `cognitive_complexity` over budget on its own, the
+/// same trap this workspace's `+m11 @observability` pass hit repeatedly elsewhere (see e.g.
+/// `crates/txtodo-daemon/src/mutation.rs::mutation_ops`).
+#[tracing::instrument(name = "tui.run_loop", skip_all)]
 async fn run_loop(
+    terminal: &mut ratatui::DefaultTerminal,
+    daemon: &mut Daemon,
+    state: &mut AppState,
+) -> Result<(), DaemonError> {
+    run_loop_inner(terminal, daemon, state).await
+}
+
+async fn run_loop_inner(
     terminal: &mut ratatui::DefaultTerminal,
     daemon: &mut Daemon,
     state: &mut AppState,
@@ -122,6 +145,7 @@ async fn run_loop(
                     apply_change(state, change);
                     reconnects = 0;
                 } else {
+                    log_watch_dropped();
                     watch = reconnect_watch(daemon, state, &mut reconnects).await?;
                 }
             }
@@ -130,6 +154,12 @@ async fn run_loop(
             return Ok(());
         }
     }
+}
+
+/// Split out so the event macro doesn't count against `run_loop`'s own `#[instrument]` budget —
+/// the same pattern `crates/txtodo-daemon/src/watcher.rs::log_directory_event` uses.
+fn log_watch_dropped() {
+    tracing::debug!("watch_dropped");
 }
 
 /// One terminal event: dispatches it and, if it produced an [`Action`], performs it. Returns
@@ -154,8 +184,18 @@ async fn handle_input(
 
 /// A dropped `Watch` stream: reconnects with a bounded retry, then re-`get_file`s to re-baseline
 /// (design edge case) — never looping forever ([`MAX_RECONNECT_ATTEMPTS`]). `pub` for the same
-/// reason as [`perform`]: integration tests drive this directly against a real `txtodod`.
+/// reason as [`perform`]: integration tests drive this directly against a real `txtodod`. A thin
+/// span wrapper around `reconnect_watch_inner` (`#[instrument]` on the real body overflows).
+#[tracing::instrument(name = "tui.reconnect_watch", skip_all, fields(attempt = *reconnects + 1))]
 pub async fn reconnect_watch(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    reconnects: &mut u32,
+) -> Result<tonic::Streaming<pb::Change>, DaemonError> {
+    reconnect_watch_inner(daemon, state, reconnects).await
+}
+
+async fn reconnect_watch_inner(
     daemon: &mut Daemon,
     state: &mut AppState,
     reconnects: &mut u32,
@@ -172,8 +212,29 @@ pub async fn reconnect_watch(
 
 /// Sends one [`Action`] to the daemon; returns `false` when the loop should exit. `pub`: this is
 /// also the seam integration tests drive directly against a real `txtodod` (recommended build
-/// order step 5) rather than a full terminal event loop.
+/// order step 5) rather than a full terminal event loop. This is the one place an [`Action`]
+/// becomes an RPC (root todo.txt `logging-tui`) — a thin span wrapper around `perform_inner`
+/// (`#[instrument]` on the real body overflows); the span field is the action's kind only, never
+/// `Debug`/`Display` on `Action` itself (would print the request's task line text).
+#[tracing::instrument(name = "tui.perform", skip_all, fields(action = action_kind(&action)))]
 pub async fn perform(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    action: Action,
+) -> Result<bool, DaemonError> {
+    perform_inner(daemon, state, action).await
+}
+
+/// `perform`'s span field — the variant's name only, never its request payload.
+fn action_kind(action: &Action) -> &'static str {
+    match action {
+        Action::Quit => "quit",
+        Action::Apply(_) => "apply",
+        Action::Resolve(_) => "resolve",
+    }
+}
+
+async fn perform_inner(
     daemon: &mut Daemon,
     state: &mut AppState,
     action: Action,

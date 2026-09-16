@@ -80,10 +80,17 @@ impl Daemon {
     }
 
     /// Builds a lazily-dialed channel to `sock`. This never blocks: the first RPC drives the
-    /// actual unix-socket dial, bounded by [`CONNECT_TIMEOUT`].
+    /// actual unix-socket dial, bounded by [`CONNECT_TIMEOUT`]. A thin span wrapper around
+    /// `connect_inner` (`#[instrument]` on the real body overflows) — root todo.txt `logging-tui`.
     /// Ref: <https://docs.rs/tonic/latest/tonic/transport/struct.Endpoint.html#method.connect_lazy>
     #[cfg(unix)]
+    #[tracing::instrument(name = "tui.daemon_connect", skip_all)]
     pub async fn connect(sock: &Path) -> Result<Daemon, DaemonError> {
+        Self::connect_inner(sock).await
+    }
+
+    #[cfg(unix)]
+    async fn connect_inner(sock: &Path) -> Result<Daemon, DaemonError> {
         let dst = format!("unix://{}", sock.display());
         let endpoint = tonic::transport::Endpoint::from_shared(dst)
             .map_err(DaemonError::Connect)?
@@ -102,13 +109,27 @@ impl Daemon {
     }
 
     /// Probes `Health` up to [`MAX_CONNECT_RETRIES`] times, [`RETRY_BACKOFF`] apart — the "daemon
-    /// absent" banner (design §7 edge cases) is what a caller shows when this returns `Err`.
+    /// absent" banner (design §7 edge cases) is what a caller shows when this returns `Err`. A
+    /// thin span wrapper around `wait_until_ready_inner` (`#[instrument]` on the real body
+    /// overflows) — root todo.txt `logging-tui`.
+    #[tracing::instrument(name = "tui.wait_until_ready", skip_all)]
     pub async fn wait_until_ready(&mut self) -> Result<(), DaemonError> {
+        self.wait_until_ready_inner().await
+    }
+
+    async fn wait_until_ready_inner(&mut self) -> Result<(), DaemonError> {
         let mut last: Option<DaemonError> = None;
         for attempt in 0..MAX_CONNECT_RETRIES {
-            match self.health().await {
-                Ok(_health) => return Ok(()),
-                Err(e) => last = Some(e),
+            let ok = match self.health().await {
+                Ok(_health) => true,
+                Err(e) => {
+                    last = Some(e);
+                    false
+                }
+            };
+            log_ready_attempt(attempt, ok);
+            if ok {
+                return Ok(());
             }
             if attempt + 1 < MAX_CONNECT_RETRIES {
                 tokio::time::sleep(RETRY_BACKOFF).await;
@@ -173,6 +194,13 @@ impl Daemon {
     ) -> Result<pb::ApplyResponse, DaemonError> {
         Ok(self.inner.resolve_conflict(req).await?.into_inner())
     }
+}
+
+/// Split out so the event macro doesn't count against `wait_until_ready`'s own `#[instrument]`
+/// budget — the same pattern `crates/txtodo-daemon/src/watcher.rs::log_directory_event` uses.
+/// Never logs the socket path or any RPC payload, only the bounded retry counter and outcome.
+fn log_ready_attempt(attempt: u32, ok: bool) {
+    tracing::debug!(attempt, ok, "ready_attempt");
 }
 
 /// Builds the ADR 0010 socket path for a workspace root: `<workspace>/.txtodo/txtodod.sock`.

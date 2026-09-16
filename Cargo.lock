@@ -8943,8 +8943,10 @@ dependencies = [
  "tokio",
  "tonic",
  "tower",
+ "tracing",
  "txtodo-core",
  "txtodo-proto",
+ "txtodo-telemetry",
 ]
 
 [[package]]

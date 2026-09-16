@@ -65,7 +65,8 @@
       ],
       "txtodo-tui": [
         "txtodo-core",
-        "txtodo-proto"
+        "txtodo-proto",
+        "txtodo-telemetry"
       ],
       "txtodo-ffi": [
         "txtodo-core",

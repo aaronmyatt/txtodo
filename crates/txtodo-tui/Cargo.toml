@@ -34,6 +34,14 @@ tower = { version = "0.5", features = ["util"] }
 # https://docs.rs/jiff — the local calendar date for `Space`'s Complete mutation (ADR 0011), same
 # dependency and rationale as `txtodo-cli`'s own use for creation/completion stamps.
 jiff = "0.2"
+# https://docs.rs/tracing — instrument/event macros for the four app.rs/daemon.rs sites (root
+# todo.txt logging-tui).
+tracing = "0.1"
+# File-only JSON-rolling-log sink (root todo.txt logging-tui): this binary owns the terminal in
+# raw mode with an alternate screen, so it uses init_file_only, never init (which also installs a
+# stderr layer). See crates/txtodo-telemetry/src/lib.rs's own doc for why the two entry points
+# exist.
+txtodo-telemetry = { path = "../txtodo-telemetry" }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own
