@@ -1,8 +1,7 @@
 //! The pairing handshake state machine: X25519 ephemeral keys in, a confirmed group-key transfer
 //! out. Transport-agnostic like the rest of this crate — nothing here opens a socket or shows a QR;
 //! the caller moves the [`crate::offer::PairingOffer`] bytes and the confirmation signals however
-//! it likes (in M4, over whatever `sync-lan-transport` lands as; today, direct function calls, which
-//! is also exactly how the tests drive it).
+//! it likes (direct function calls today, same as the tests).
 //!
 //! Two devices reach the same [`crate::sas::sas_words`] only if they agree on the same
 //! [`crate::transcript::transcript`], which is why an active machine-in-the-middle running two
@@ -23,10 +22,8 @@ use crate::pairing_grant::PairingGrant;
 use crate::sas::{PAIR_KEY_BYTES, SAS_WORD_COUNT, pair_key, sas_words};
 use crate::transcript::{Party, TRANSCRIPT_BYTES, X25519_PUBLIC_KEY_BYTES, transcript};
 
-/// Mismatched SAS confirmations tolerated before the window closes outright. The task's rule is
-/// "rate-limit, then close" rather than "close on the first mismatch" — a human can fat-finger the
-/// confirm/reject choice — but this stays small: a SAS that keeps not matching is far more likely a
-/// live attacker than a typo.
+/// Mismatched SAS confirmations tolerated before the window closes outright ("rate-limit, then
+/// close" rather than close-on-first-mismatch, since a human can fat-finger confirm/reject).
 pub const MAX_FAILED_SAS_CONFIRMATIONS: u32 = 3;
 
 /// Bytes prepended to a wrapped group key: a fresh 24-byte XChaCha nonce.
@@ -36,10 +33,9 @@ fn cipher(key: &[u8; PAIR_KEY_BYTES]) -> XChaCha20Poly1305 {
     XChaCha20Poly1305::new(key.into())
 }
 
-/// One pairing attempt, from either the initiator's or the joiner's side. The two sides hold
-/// different concrete data (only the initiator ever calls [`PairingSession::offer`]; only the
-/// joiner ever calls [`PairingSession::accept`]) but converge on the same shape once the handshake
-/// completes, so confirmation and key transfer are identical from here on.
+/// One pairing attempt, either side. Different concrete data going in (only the initiator calls
+/// [`PairingSession::offer`]; only the joiner calls [`PairingSession::accept`]) but the same shape
+/// once handshaken, so confirmation and key transfer are identical from here on.
 pub struct PairingSession {
     own_device: DeviceId,
     group: GroupId,
@@ -60,8 +56,7 @@ struct Handshake {
 }
 
 impl std::fmt::Debug for PairingSession {
-    /// Never prints the shared secret or the ephemeral private key; only state a human debugging a
-    /// stuck pairing needs.
+    /// Never the shared secret or the ephemeral private key; only debugging-relevant state.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PairingSession")
             .field("own_device", &self.own_device)
@@ -82,9 +77,22 @@ fn fresh_nonce() -> Result<Nonce, PairingError> {
 }
 
 impl PairingSession {
-    /// Starts a pairing as the initiator: generates an ephemeral keypair and a fresh nonce,
-    /// registers the nonce, and returns the offer to render as a QR / `txtodo pair` code.
+    /// Starts a pairing as the initiator: keypair + nonce, registered, returned as the offer to
+    /// render (`offer_inner` split out for the cognitive-complexity budget).
+    #[tracing::instrument(skip_all, fields(device = %own_device, group = ?group))]
     pub fn offer(
+        own_device: DeviceId,
+        group: GroupId,
+        endpoint: String,
+        now_ms: u64,
+        registry: &mut NonceRegistry,
+    ) -> Result<(PairingSession, PairingOffer), PairingError> {
+        let r = Self::offer_inner(own_device, group, endpoint, now_ms, registry);
+        log_pairing_result("offer", r.as_ref().err().copied());
+        r
+    }
+
+    fn offer_inner(
         own_device: DeviceId,
         group: GroupId,
         endpoint: String,
@@ -124,11 +132,22 @@ impl PairingSession {
         Ok((session, offer))
     }
 
-    /// Accepts an offer as the joiner: consumes the offer's nonce (single-use, whether or not the
-    /// rest of the handshake goes on to succeed), generates an ephemeral keypair, and completes the
-    /// ECDH immediately since the initiator's public key is already in hand. Returns this device's
-    /// own public key to send back to the initiator.
+    /// Accepts an offer as the joiner: consumes the offer's nonce (single-use either way),
+    /// completes the ECDH immediately, returns this device's own public key to send back.
+    /// Wrapper/inner split, same reason as `offer`.
+    #[tracing::instrument(skip_all, fields(device = %own_device, peer = %offer.device))]
     pub fn accept(
+        own_device: DeviceId,
+        offer: &PairingOffer,
+        now_ms: u64,
+        registry: &mut NonceRegistry,
+    ) -> Result<(PairingSession, [u8; X25519_PUBLIC_KEY_BYTES]), PairingError> {
+        let r = Self::accept_inner(own_device, offer, now_ms, registry);
+        log_pairing_result("accept", r.as_ref().err().copied());
+        r
+    }
+
+    fn accept_inner(
         own_device: DeviceId,
         offer: &PairingOffer,
         now_ms: u64,
@@ -170,9 +189,8 @@ impl PairingSession {
         Ok((session, own_public))
     }
 
-    /// Completes the handshake as the initiator, once the joiner's public key comes back. Consumes
-    /// this session's own nonce in `registry` — the initiator's single use of it, independent of
-    /// the joiner's own registry consuming the same nonce value on `accept`.
+    /// Completes the handshake as the initiator once the joiner's public key comes back; consumes
+    /// this session's own nonce in `registry`, independent of the joiner's own `accept` consume.
     pub fn complete(
         &mut self,
         peer_device: DeviceId,
@@ -211,8 +229,7 @@ impl PairingSession {
     }
 
     /// The six words this device should show for human comparison. `Err(NotHandshaken)` before
-    /// [`PairingSession::complete`] (initiator) or immediately after [`PairingSession::accept`]
-    /// (joiner, which always has a handshake by the time it returns).
+    /// [`PairingSession::complete`] (initiator) or immediately after [`PairingSession::accept`].
     pub fn sas_words(&self) -> Result<[&'static str; SAS_WORD_COUNT], PairingError> {
         if self.closed {
             return Err(PairingError::Closed);
@@ -245,10 +262,8 @@ impl PairingSession {
         Ok(())
     }
 
-    /// Records a failed/mismatched confirmation (human said "no", or the peer's confirmation never
-    /// arrived and the caller gave up). Closes the window outright once
-    /// [`MAX_FAILED_SAS_CONFIRMATIONS`] is reached, per the task: rate-limit, then stop allowing
-    /// retries rather than leaving the window open indefinitely.
+    /// Records a failed/mismatched confirmation (human said "no", or the peer's never arrived).
+    /// Closes the window outright at [`MAX_FAILED_SAS_CONFIRMATIONS`]: rate-limit, then stop.
     pub fn reject(&mut self) -> Result<(), PairingError> {
         if self.closed {
             return Err(PairingError::Closed);
@@ -268,9 +283,8 @@ impl PairingSession {
     }
 
     /// Seals `group_key_bytes` under the transcript-derived key-wrap key. Refuses outside
-    /// [`PairingSession::is_ready_to_send_key`] — a one-sided confirmation transfers nothing — with
-    /// [`PairingError::Closed`] taking precedence so a closed window is reported as closed rather
-    /// than merely unconfirmed.
+    /// [`PairingSession::is_ready_to_send_key`] (a one-sided confirmation transfers nothing), with
+    /// [`PairingError::Closed`] taking precedence over merely-unconfirmed.
     pub fn wrap_group_key(&self, group_key_bytes: &[u8]) -> Result<Vec<u8>, PairingError> {
         if self.closed {
             return Err(PairingError::Closed);
@@ -297,9 +311,8 @@ impl PairingSession {
         Ok(out)
     }
 
-    /// Opens a group key sealed by [`PairingSession::wrap_group_key`] on the peer's side. Refuses
-    /// outside [`PairingSession::is_ready_to_send_key`] for the same reason: a one-sided
-    /// confirmation must not let a key be accepted either.
+    /// Opens a group key sealed by [`PairingSession::wrap_group_key`]. Refuses outside
+    /// [`PairingSession::is_ready_to_send_key`]: a one-sided confirmation accepts nothing either.
     pub fn unwrap_group_key(&self, sealed: &[u8]) -> Result<Vec<u8>, PairingError> {
         if self.closed {
             return Err(PairingError::Closed);
@@ -325,9 +338,7 @@ impl PairingSession {
     }
 
     /// [`PairingSession::wrap_group_key`] for the normative payload: the group key **and** this
-    /// device's long-term static public key, so a caller cannot send one without the other
-    /// (`sync-device-remove` needs the static key registered here to have anything to wrap a
-    /// future rotation to).
+    /// device's long-term static public key, so a caller cannot send one without the other.
     pub fn wrap_grant(&self, grant: &PairingGrant) -> Result<Vec<u8>, PairingError> {
         let bytes = grant.to_bytes().map_err(|_| PairingError::Seal)?;
         self.wrap_group_key(&bytes)
@@ -344,9 +355,8 @@ impl PairingSession {
         self.peer_device
     }
 
-    /// The sync group this handshake is for (plan M4 `sync-pairing`, LAN wiring pass) — a real
-    /// daemon-to-daemon relay (`txtodo-daemon`'s `pairing_lan.rs`) validates an incoming peer's
-    /// claimed group against this before ever touching handshake state.
+    /// The sync group this handshake is for — a real relay (`pairing_lan.rs`) validates an
+    /// incoming peer's claimed group against this before ever touching handshake state.
     pub fn group(&self) -> GroupId {
         self.group
     }
@@ -367,4 +377,24 @@ impl PairingSession {
     pub fn is_locally_confirmed(&self) -> bool {
         self.local_confirmed
     }
+}
+
+/// Shared by `offer`/`accept`, split out so the event macro doesn't count against either
+/// `#[instrument]` budget. `warn!`, not `debug!`, on failure: pairing is a rare, human-paced
+/// ceremony, not routine traffic, so every refusal here is worth a human's attention
+/// (`tasks/logging-sync-crate/notes.md`). `PairingError` is `Copy` and its `Display` is confirmed
+/// payload-free, so logging it directly is safe.
+fn log_pairing_result(op: &'static str, err: Option<PairingError>) {
+    match err {
+        None => log_pairing_ok(op),
+        Some(e) => log_pairing_failed(op, e),
+    }
+}
+
+fn log_pairing_ok(op: &'static str) {
+    tracing::debug!(op, "pairing_step_ok");
+}
+
+fn log_pairing_failed(op: &'static str, e: PairingError) {
+    tracing::warn!(op, error = %e, "pairing_step_failed");
 }

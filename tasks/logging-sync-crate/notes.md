@@ -91,20 +91,24 @@ yet logged).
 ### `pairing.rs:87/131` — offer/accept
 
 Same wrapper + inner + log_* shape. `offer` gets `fields(device = %own_device, group = ?group)`;
-`accept` gets `fields(device = %own_device, peer = %offer.device)`. Both log `debug!` on success
-(`"pairing_offer_created"` / `"pairing_accepted"`) and `warn!(error = %e, "pairing_offer_failed"`
-/ `"pairing_accept_failed")` on failure — `PairingError`'s `Display` is confirmed payload-free (its
-`Nonce`/`Derive` arms wrap other already-audited error types, `Seal`/`Closed`/`NotHandshaken`/
-`NotConfirmed` are static strings), so `%e` is safe here unlike the raw-`Display` question in
-`SessionError` above; `warn!`, not `debug!`, because *every* pairing failure is worth a human's
-attention (a replayed/expired offer, a rejected SAS, a sealing failure) — pairing is a rare, human-
-paced ceremony, not routine traffic the way session state transitions are.
+`accept` gets `fields(device = %own_device, peer = %offer.device)`. Both funnel through one shared
+`log_pairing_result(op: &'static str, err: Option<PairingError>)` (`"offer"`/`"accept"` as the `op`
+field, `PairingError` is `Copy` so no borrow to thread through) — `debug!(op, "pairing_step_ok")` on
+success, `warn!(op, error = %e, "pairing_step_failed")` on failure. `PairingError`'s `Display` is
+confirmed payload-free (its `Nonce`/`Derive` arms wrap other already-audited error types,
+`Seal`/`Closed`/`NotHandshaken`/`NotConfirmed` are static strings), so `%e` is safe here unlike the
+raw-`Display` question in `SessionError` above; `warn!`, not `debug!`, because *every* pairing
+failure is worth a human's attention (a replayed/expired offer, a rejected SAS, a sealing failure)
+— pairing is a rare, human-paced ceremony, not routine traffic the way session state transitions
+are.
 
 **File-length budget**: `pairing.rs` was 370/400 lines before this task, only 30 lines of headroom
-for two wrapper+inner splits. Paid for by tightening prose in this file's *other* doc comments
-(`wrap_group_key`/`unwrap_group_key`/`wrap_grant`/`group`/`is_handshaken` and a few more — every
-fact kept, fewer words each) — the same move `logging-daemon-datapath` made for `actor.rs`/
-`state.rs`/`global_service.rs` when they hit the same wall.
+for two wrapper+inner splits (landed at 416/400 first pass). Paid for by tightening prose across
+this file's own doc comments (module doc, `PairingSession`'s struct doc, `Debug`'s doc,
+`MAX_FAILED_SAS_CONFIRMATIONS`, `complete`/`sas_words`/`reject`/`wrap_group_key`/
+`unwrap_group_key`/`wrap_grant`/`group`, and the two new wrapper docs themselves) down to exactly
+400/400 — every fact kept, fewer words each, the same move `logging-daemon-datapath` made for
+`actor.rs`/`state.rs`/`global_service.rs` when they hit the same wall.
 
 ### `frame.rs` — decode failures
 
