@@ -1,22 +1,20 @@
 //! Wires `txtodo-sync`'s `Discovery` and `LanEndpoint` into a running `txtodod` (plan M4
 //! `sync-lan-transport`): finds other daemons for the same sync group on the LAN and drives a
 //! `Session` over the real transport with each one. Never fatal to the daemon — a bind or
-//! discovery failure is logged and this device simply runs without LAN sync, the same as a fresh
-//! workspace with no group key yet. `iroh`/`mdns-sd` never appear here or anywhere else in this
-//! crate; only `txtodo_sync`'s own types do (`.claude/budgets.json`'s `allowedDeps`).
+//! discovery failure is logged and this device simply runs without LAN sync. `iroh`/`mdns-sd`
+//! never appear here or anywhere else in this crate; only `txtodo_sync`'s own types do.
 //!
 //! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
 //! closed after `IDLE_TIMEOUT` (750 ms) of silence, so `lan_session::drive_session` naturally
 //! returns once a connection has caught the peer up and gone quiet. The periodic resync below
 //! (`spawn_resync_dial`) is the other half: every known peer is redialed every `RESYNC_INTERVAL`,
 //! so a later local edit still converges quickly without this module watching the store — a new
-//! QUIC handshake roughly every second while paired is a known, flagged tradeoff (a push/notify
-//! model would avoid it).
+//! QUIC handshake roughly every second while paired is a known, flagged tradeoff.
 //!
 //! **Real same-host, cross-process connect works.** A real `iroh` QUIC connect only ever fails
-//! between two endpoints in the *same process* (`txtodo-sync`'s `endpoint_tests.rs`); two real
-//! `txtodod` processes on one host connect and sync for real (`tests/lan_loopback_converge.rs`).
-//! `LanEndpoint::connect` prefers non-loopback addresses, loopback only as a last resort.
+//! between two endpoints in the *same process*; two real `txtodod` processes on one host connect
+//! and sync for real (`tests/lan_loopback_converge.rs`). `LanEndpoint::connect` prefers
+//! non-loopback addresses, loopback only as a last resort.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -49,8 +47,7 @@ pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// common case is one live session per peer, not two briefly overlapping ones.
 const RESYNC_INTERVAL: Duration = Duration::from_millis(1_000);
 
-/// The background LAN transport task; `abort()` on daemon shutdown, same pattern as
-/// `watch_task`'s `JoinHandle`.
+/// The background LAN transport task; `abort()` on daemon shutdown.
 pub struct LanTransport {
     task: JoinHandle<()>,
 }
@@ -70,9 +67,8 @@ pub fn start(ws: SharedWorkspace, clock: Arc<dyn Clock>) -> LanTransport {
     }
 }
 
-/// This device's identity for the sync group, plus the workspace — bundled so no function below
-/// needs more than `maxParams` arguments, and cheap to clone (an `Arc` and two `Copy` ids).
-/// Fields are `pub(crate)`: `relay_fallback.rs`'s own dial function needs them too.
+/// This device's identity for the sync group, plus the workspace — bundled to stay under
+/// `maxParams`, cheap to clone. Fields are `pub(crate)`: `relay_fallback.rs` needs them too.
 #[derive(Clone)]
 pub(crate) struct LanCtx {
     pub(crate) ws: SharedWorkspace,
@@ -160,13 +156,10 @@ struct Rebuilt {
     group: GroupId,
 }
 
-/// Pairing (`pairing_lan.rs`'s joiner path, `Workspace::adopt_group_key`) can change this
-/// workspace's own sync group *after* this task's `setup()` already bound `Discovery` to the old
-/// one — `Discovery::start` bakes the group into the mDNS TXT record it registers once, and
-/// `PeerTable::own_group` is likewise fixed at construction, so neither notices a later change on
-/// their own. Checked once per `RESYNC_INTERVAL` tick (the same cadence that already re-dials
-/// known peers): re-advertises under the current group and returns a fresh `Discovery`/browse
-/// stream for `run`'s loop to swap in, or `None` when the group has not changed since `ctx.group`.
+/// Pairing can change this workspace's own sync group *after* `setup()` already bound `Discovery`
+/// to the old one, which neither notices on its own. Checked once per `RESYNC_INTERVAL` tick:
+/// re-advertises under the current group and returns a fresh `Discovery`/browse stream for `run`'s
+/// loop to swap in, or `None` when the group has not changed since `ctx.group`.
 async fn rebuild_on_group_change(ctx: &LanCtx, endpoint: &LanEndpoint) -> Option<Rebuilt> {
     let current = read(&ctx.ws).group();
     if current == ctx.group {
@@ -274,9 +267,8 @@ pub(crate) fn spawn_driver(
 }
 
 /// One accepted pairing connection (this device as initiator) — same "blocking thread, one permit"
-/// shape as [`spawn_driver`], since `Link::send`/`recv` block (`lan_link.rs`'s own doc). Unlike a
-/// sync session, a pairing connection needs no `device`/`group` of its own: `pairing_lan.rs`'s
-/// handler reads whatever this daemon's own active `PairingRegistry` session says.
+/// shape as [`spawn_driver`]. Unlike a sync session, this needs no `device`/`group` of its own:
+/// `pairing_lan.rs`'s handler reads whatever this daemon's own active `PairingRegistry` says.
 fn spawn_pairing_driver(
     ws: SharedWorkspace,
     link: IrohLink,
@@ -301,10 +293,9 @@ fn log_session_cap_reached_dropping_incoming() {
 }
 
 /// One accepted connection: spawns a driver if the session cap allows it, otherwise the link is
-/// simply dropped (closing it) and logged — the same "bounded, drop with a reason" shape
-/// `MAX_LAN_PEERS` already uses for the peer table. Which driver depends on `link.alpn()`: the one
-/// bound endpoint accepts both the group-keyed sync protocol and a pairing relay connection (plan
-/// M4 `sync-pairing`'s LAN wiring pass), told apart here rather than by any frame content.
+/// simply dropped (closing it) and logged. Which driver depends on `link.alpn()`: the one bound
+/// endpoint accepts both the group-keyed sync protocol and a pairing relay connection, told apart
+/// here rather than by any frame content.
 fn accept_one(
     incoming: Result<IrohLink, txtodo_sync::LanError>,
     sessions: &Arc<Semaphore>,
@@ -395,6 +386,15 @@ fn spawn_resync_dial(
         return;
     };
     tokio::spawn(async move {
-        let _ = dial_and_spawn(ctx, endpoint, peer, permit).await;
+        let device = peer.device;
+        let ok = dial_and_spawn(ctx, endpoint, peer, permit).await;
+        log_resync_dial_outcome(device, ok);
     });
+}
+
+/// Previously discarded outright (`let _ = dial_and_spawn(...).await;`) — no `DialState`
+/// bookkeeping added here on purpose (module doc: unconditional churn, not failure recovery), just
+/// visibility that a periodic resync dial happened and how it went.
+fn log_resync_dial_outcome(peer: DeviceId, ok: bool) {
+    tracing::debug!(%peer, ok, "lan_resync_dial_outcome");
 }

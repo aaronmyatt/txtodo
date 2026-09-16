@@ -23,8 +23,31 @@ pub(crate) async fn lan_then_relay<L>(
     fallback: impl Future<Output = Option<L>>,
 ) -> Option<L> {
     match tokio::time::timeout(timeout, primary).await {
-        Ok(Some(link)) => Some(link),
-        Ok(None) | Err(_) => fallback.await,
+        Ok(Some(link)) => {
+            log_carrier_won("lan");
+            Some(link)
+        }
+        Ok(None) | Err(_) => {
+            let link = fallback.await;
+            log_fallback_outcome(link.is_some());
+            link
+        }
+    }
+}
+
+/// Which carrier actually won the LAN-vs-relay race — previously not recorded anywhere at either
+/// of this function's two real call sites (`lan.rs::dial_and_spawn`,
+/// `pairing_relay_dial.rs::joiner_round`). Fixed once, here, since both always call this with LAN
+/// as `primary` and relay as `fallback` (the module doc), so this single spot covers both.
+fn log_carrier_won(carrier: &'static str) {
+    tracing::debug!(carrier, "lan_then_relay_carrier_won");
+}
+
+fn log_fallback_outcome(relay_won: bool) {
+    if relay_won {
+        log_carrier_won("relay");
+    } else {
+        tracing::debug!("lan_then_relay_both_carriers_failed");
     }
 }
 

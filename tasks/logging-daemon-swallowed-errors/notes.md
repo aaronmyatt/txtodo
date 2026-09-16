@@ -124,3 +124,91 @@ to a same-shaped leaf function, never adding a new branch.
   as well as unlogged) still return the right wire reply; every other site is proven by its existing
   test suite staying green with the new logging compiled in (this crate installs no in-process
   subscriber to assert on JSON lines directly — same stance `logging-sync-crate` took).
+
+## As built (2026-09-16, agent)
+
+Built exactly to the design above, five commits, one per subtask line:
+
+1. `3089bf8` — `pairing_lan.rs`: `process_hello` split into `reject_no_active_session`/
+   `reject_protocol_mismatch`/`reject_peer_conflict`/`reject_handshake_failed`;
+   `finalize_or_pending`'s `try_finalize_initiator(...).unwrap_or(None)` replaced with a `match`
+   that logs the `Err` at `error` before still falling through to `Pending`. Two new whitebox tests
+   in `pairing_lan_tests.rs` (`process_hello_rejects_when_no_pairing_is_active`,
+   `process_hello_rejects_a_group_or_nonce_mismatch`) — `process_hello` made `pub(crate)` so the
+   sibling `_tests.rs` module (a crate-root child, not a descendant of `pairing_lan`) can reach it,
+   the same visibility idiom every other test seam in this crate already uses.
+2. `0e3f572` — `lan_session.rs`/`control_session.rs`: both crates' own `fetch_group_key`/
+   `single_epoch_keys` pairs now log their specific internal failure (keystore error, missing key,
+   corrupt length, epoch-insert failure) before returning `None`/`Err`-derived `None`, so every
+   existing caller's flat `*_skipped_no_group_key` debug event is now preceded by the real cause.
+   `control_session.rs`'s own now-redundant `log_no_group_key` helper was removed (dead code once
+   its one call site stopped calling it).
+3. `1f09bf2` — `lan_session_shared.rs`: `open_and_decode_logged`'s one debug event now carries a
+   `kind` field from a local `sync_error_kind`/`message_error_kind`/`crypto_error_kind` (re-derived
+   rather than reached across the crate boundary, since `txtodo_sync::CryptoError::kind()` is
+   `pub(crate)` to that crate only); `handle_greet`/`handle_want`/`handle_ops`'s three outbound
+   `ctx.send` failures each now log (`lan_want_send_failed`/`lan_ops_send_failed`/
+   `lan_ack_send_failed`) via a one-macro-call leaf function — a bare `tracing::warn!` directly in
+   the `match` arm measured `17/10` on `handle_greet` the first time, confirming this crate's own
+   established rule still holds outside `pairing_lan.rs`/the sync crate.
+4. `8a255a8` — `file_carrier.rs`: `seal_message`'s two internal failures (`encode`, `aead_seal`) now
+   use this file's own pre-existing `.inspect_err` idiom (already used by `open_and_decode`/
+   `open_and_verify`); `send_route`'s `serve_want`/`carrier.send` failures and the `advance` gap each
+   log their own event. `tick`'s two `fetch_group_key`/`single_epoch_keys` call sites needed no
+   direct edit — commit 2's fix to the shared `lan_session.rs` helpers covers them transitively,
+   confirmed by `file_carrier_alone_is_a_quiet_no_op` staying green unchanged.
+5. (this commit) — `lan.rs`/`relay_fallback.rs`: `spawn_resync_dial`'s discarded `bool` now logs
+   `lan_resync_dial_outcome` at `debug` (no `DialState` bookkeeping added, per the module's own
+   "unconditional churn, not failure recovery" doc); `relay_fallback::lan_then_relay` now logs
+   `lan_then_relay_carrier_won`/`lan_then_relay_both_carriers_failed` once, fixed in the one shared
+   function both real callers (`lan.rs::dial_and_spawn`, `pairing_relay_dial.rs::joiner_round`, the
+   latter not a named file) go through — covering "either call site" without editing an unnamed one.
+
+### Deviations from the plan
+
+- **`lan_session.rs`/`control_session.rs`/`file_carrier.rs` (item 3 in Design): fixed at the source,
+  not by changing `Option` to `Result`.** The original read of the backlog line suggested giving
+  `fetch_group_key`/`single_epoch_keys` a real error type so every caller's log could name the exact
+  cause. That would have forced a signature change reaching into `lan_session_dispatch.rs` (not a
+  named file — importing/matching a new `Result` there) for no gain over logging inside the helper
+  itself, which achieves the same "the cause is now in the log stream" outcome with a strictly
+  smaller, better-scoped diff. Noted in the Design section before writing any code, not discovered
+  partway through.
+- **`relay_fallback.rs` "either call site" (item 7): fixed once, inside `lan_then_relay`,
+  not at each caller.** Same reasoning — `pairing_relay_dial.rs` (the second real caller) is not a
+  named file, and the shared function is the one place both callers' behavior can be fixed without
+  touching it.
+- No `#[instrument]` wrapper+inner split was needed anywhere in this task, unlike
+  `logging-sync-crate`'s pairing.rs/session.rs work — every site here was a leaf-function fix to an
+  already-low-complexity function, never a function already at or near the complexity budget.
+
+### Verification
+
+- `cargo fmt -p txtodo-daemon -- --check`: clean, every commit.
+- `cargo clippy -p txtodo-daemon --all-targets -- -D warnings`: clean, every commit — one real hit
+  during development (`handle_greet` at `17/10` from a bare macro call in a `match` arm), fixed by
+  extracting a leaf function, not suppressed.
+- `cargo test -p txtodo-daemon --lib`: 209 tests green after every commit.
+- Real two-daemon integration proof, run after every code commit (2-5): `tests/
+  lan_loopback_converge.rs`, `tests/relay_converge.rs`, `tests/relay_multiplex.rs`, `tests/
+  lan_discovery.rs`, `tests/file_carrier_converge.rs` — all green, unmodified, proving none of the
+  logging-only changes altered the real LAN/relay/file-carrier convergence paths.
+- `pairing_lan_tests.rs`'s two new tests are the one genuinely new case this task needed: the
+  `Rejected` paths had no prior test coverage at all (not just no logging) — `process_hello_rejects_
+  when_no_pairing_is_active` and `process_hello_rejects_a_group_or_nonce_mismatch` now assert the
+  wire reply is unchanged by the refactor. Every other site's proof is its existing suite staying
+  green with the new logging compiled in; this crate installs no in-process subscriber to assert on
+  JSON lines directly (same stance `logging-sync-crate` took, for the same reason: that is the
+  daemon's own `tracing_subscriber` init's job, orthogonal to any one module's correctness).
+- File-length budget: `pairing_lan.rs` and `lan.rs` both landed exactly at 400/400 after trimming
+  doc-comment prose — the same move `logging-sync-crate`'s own `pairing.rs` commit made.
+
+### Deliberately out of scope
+
+- `pairing_lan.rs::attempt`/`log_lan_connect_failed`/`log_lan_round_no_reply` — already fixed by
+  root todo 170; read for the pattern, not touched again.
+- `lan_session_dispatch.rs`, `pairing_relay_dial.rs`, `lan_peers.rs`, `lan_apply.rs` — not named by
+  the backlog line; their own generic downstream logging is now backed by a real cause thanks to
+  items 3 and 7 above, without editing them.
+- Any other `+m11 @observability` backlog line, `txtodo-sync` (already instrumented, commits noted
+  in the orchestrating brief), or any daemon file not named by this task's backlog line.
