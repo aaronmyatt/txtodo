@@ -41,6 +41,11 @@ txtodo-proto = { workspace = true }
 # view's aggregation (commands_universal.rs) parses each workspace's todo.txt with this, never a
 # hand-rolled substring scan. Workspace member, not a new external dependency.
 txtodo-core = { workspace = true }
+# Shared JSON-rolling-file + pretty-stderr tracing init (root todo.txt `logging-desktop`), the
+# same one every other txtodo binary (`txtodod`, `txtodo`, `tui`, `mcp`, `relay`) uses.
+txtodo-telemetry = { workspace = true }
+# https://docs.rs/tracing — event/span macros for the `ipc.<command>` spans and `ui_log` bridge.
+tracing = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
@@ -69,6 +74,9 @@ txtodo-model = { workspace = true, optional = true }
 [dev-dependencies]
 # https://docs.rs/tempfile — every test gets its own workspace dir, like crates/txtodo-daemon/tests
 tempfile = "3"
+# https://docs.rs/tracing-subscriber — only the `ipc.*`/`ui_log` span-capture tests need this,
+# same reason crates/txtodo-mcp/Cargo.toml pulls it in as a dev-dependency for its own span test.
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

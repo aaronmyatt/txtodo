@@ -1772,10 +1772,13 @@ dependencies = [
  "tempfile",
  "tokio",
  "tonic",
+ "tracing",
+ "tracing-subscriber",
  "txtodo-core",
  "txtodo-model",
  "txtodo-proto",
  "txtodo-store",
+ "txtodo-telemetry",
 ]
 
 [[package]]

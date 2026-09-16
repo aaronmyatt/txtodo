@@ -37,11 +37,23 @@ use state::AppState;
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// Builds and runs the Tauri application: manages [`AppState`], kicks off the first
-/// connect/spawn in the background so startup never blocks on the daemon, and registers every
-/// command in [`commands`].
+/// Builds and runs the Tauri application: installs the tracing subscriber, manages [`AppState`],
+/// kicks off the first connect/spawn in the background so startup never blocks on the daemon, and
+/// registers every command in [`commands`].
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Held for the rest of `run`, the same "own the process's human-output window" pattern
+    // `txtodo-cli`/`txtodo-mcp`'s own `main`s use for their own `_log_guard` — `tauri::Builder::
+    // run` blocks until the app exits, so dropping this at the end of `run` (not `.setup()`, which
+    // returns immediately) keeps the JSON writer's buffer alive for the app's whole lifetime.
+    // Plain `init` (JSON file + pretty stderr), not `init_file_only`: unlike `txtodo-tui`, this
+    // process never owns a raw-mode/alternate-screen terminal (it's a normal windowed GUI app,
+    // launched either via `tauri dev`'s own terminal or as a packaged bundle where stderr is
+    // simply discarded) — see `tasks/logging-desktop/notes.md` for the check against how this app
+    // is actually launched. `.ok()`: a dead logger must never stop the app from starting, matching
+    // `txtodo-tui`'s own `init_file_only().ok()` fallback-tolerant style.
+    let _log_guard =
+        txtodo_telemetry::init("desktop", &config::global_state_dir().join("logs")).ok();
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
@@ -53,7 +65,9 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<AppState>();
-                let _ = commands::connect_and_store(&handle, &state).await;
+                if let Err(e) = commands::connect_and_store(&handle, &state).await {
+                    log_startup_connect_failed(&e);
+                }
             });
             Ok(())
         })
@@ -69,6 +83,7 @@ pub fn run() {
             commands::history,
             commands::resolve,
             commands::list_conflicts,
+            commands::ui_log,
             commands_workspace::list_workspaces,
             commands_workspace::add_workspace,
             commands_workspace::remove_workspace,
@@ -89,6 +104,20 @@ pub fn run() {
         eprintln!("desktop: {e}");
         std::process::exit(1);
     }
+}
+
+/// The startup daemon-connect attempt (`.setup()`, above) used to discard its `Result` entirely
+/// (`let _ = commands::connect_and_store(...).await`) — a failed boot connect left no trace
+/// anywhere, not even a log line, since nothing else observes this background task. Logged, not
+/// otherwise acted on: `AppState::status` already reflects `Dead` via `connect_and_store`'s own
+/// `set_status` calls, and the reconnect banner's retry button (`commands::retry_connect`) is the
+/// existing, unchanged recovery path — this only makes the failure observable, it doesn't add a
+/// new one. Isolated in its own function, not a bare `tracing::warn!` inside the `if let` above,
+/// matching this pass's own `#[instrument]`-adjacent style (no span here to protect a budget
+/// against, but consistent with `crates/txtodo-daemon/src/mutation.rs`'s `log_mutation_ops`
+/// pattern regardless).
+fn log_startup_connect_failed(e: &daemon::DaemonError) {
+    tracing::warn!(error = %e, "startup_connect_failed");
 }
 
 /// The workspace to talk to: `TXTODO_WORKSPACE` if set (dev/test override), else the current
