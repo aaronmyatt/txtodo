@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
+use txtodo_mcp::global_socket;
 use txtodo_mcp::grpc_backend::{GrpcMcpBackend, SOCKET_REL};
 use txtodo_mcp::schema::McpServer;
 use txtodo_mcp::transport::{self, MCP_LAN, MCP_LOOPBACK, MCP_PORT};
@@ -27,19 +28,32 @@ enum Mode {
     },
 }
 
-/// `txtodo-mcp --dir <workspace> --stdio|--http [--lan] [--token <id>]`.
+/// Which daemon socket to dial (mcp-multi-workspace-gateway): the pre-existing per-workspace
+/// bridge (`--dir <workspace>`, unchanged — reaches only whatever workspace(s) that directory's
+/// own daemon has opened), or the device-global socket (`--global`, new — reaches every workspace
+/// the device's one `txtodod` already has open, the mode a `workspace` tool/resource arg is
+/// actually useful against). Mutually exclusive; exactly one is required.
+enum Target {
+    /// `--dir <workspace>`.
+    Dir(PathBuf),
+    /// `--global`.
+    Global,
+}
+
+/// `txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--lan] [--token <id>]`.
 struct Args {
-    dir: PathBuf,
+    target: Target,
     mode: Mode,
     token: Option<String>,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut args = std::env::args_os().skip(1);
-    let (mut dir, mut mode, mut token, mut lan) = (None, None, None, false);
+    let (mut dir, mut global, mut mode, mut token, mut lan) = (None, false, None, None, false);
     while let Some(a) = args.next() {
         match a.to_str() {
             Some("--dir") => dir = args.next().map(PathBuf::from),
+            Some("--global") => global = true,
             Some("--stdio") => mode = Some(Mode::Stdio),
             Some("--http") => mode = Some(Mode::Http { lan: false }),
             Some("--lan") => lan = true,
@@ -47,10 +61,12 @@ fn parse_args() -> Result<Args, String> {
             _ => return Err(format!("unknown argument {a:?}")),
         }
     }
-    let dir = dir
-        .ok_or_else(usage)?
-        .canonicalize()
-        .map_err(|e| e.to_string())?;
+    let target = match (dir, global) {
+        (Some(_), true) => return Err("--dir and --global are mutually exclusive".to_owned()),
+        (Some(dir), false) => Target::Dir(dir.canonicalize().map_err(|e| e.to_string())?),
+        (None, true) => Target::Global,
+        (None, false) => return Err(usage()),
+    };
     let mode = match (mode.ok_or_else(usage)?, lan, &token) {
         (Mode::Stdio, true, _) => {
             return Err("--lan --stdio is a usage error: stdio has no network".to_owned());
@@ -61,11 +77,16 @@ fn parse_args() -> Result<Args, String> {
         (Mode::Http { .. }, lan, _) => Mode::Http { lan },
         (stdio, false, _) => stdio,
     };
-    Ok(Args { dir, mode, token })
+    Ok(Args {
+        target,
+        mode,
+        token,
+    })
 }
 
 fn usage() -> String {
-    "usage: txtodo-mcp --dir <workspace> --stdio|--http [--lan] [--token <id>]".to_owned()
+    "usage: txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--lan] [--token <id>]"
+        .to_owned()
 }
 
 fn main() -> ExitCode {
@@ -93,14 +114,22 @@ fn main() -> ExitCode {
 }
 
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+    // `--dir`: the pre-existing per-workspace bridge socket/logs, unchanged. `--global`: the
+    // device-global socket (`global_socket::path`) and its own log directory
+    // (`global_socket::log_dir`) — a `--global`-started server has no single workspace directory
+    // to put `.txtodo/logs/` under.
+    let (socket, log_dir) = match &args.target {
+        Target::Dir(dir) => (dir.join(SOCKET_REL), dir.join(".txtodo/logs")),
+        Target::Global => (global_socket::path(), global_socket::log_dir()),
+    };
     // JSON rolling-file + pretty-stderr layer (never stdout — `transport::serve_stdio` owns
     // stdin/stdout for the MCP protocol itself, see `transport.rs`'s `rmcp::transport::io::stdio`
-    // call and this crate's As-built notes). Logs share the daemon's `.txtodo/logs/` directory
-    // (own `txtodo-mcp.log.YYYY-MM-DD` file family via the `service` name) so `txtodo doctor` and a
-    // human tailing the directory see every process's lines in one place. `_log_guard` must outlive
-    // every `tracing::` call below — held for `run`'s whole body, dropped only on return.
-    let _log_guard = txtodo_telemetry::init("txtodo-mcp", &args.dir.join(".txtodo/logs"))?;
-    let socket = args.dir.join(SOCKET_REL);
+    // call and this crate's As-built notes). `--dir` logs share the daemon's `.txtodo/logs/`
+    // directory (own `txtodo-mcp.log.YYYY-MM-DD` file family via the `service` name) so
+    // `txtodo doctor` and a human tailing the directory see every process's lines in one place;
+    // `--global` mirrors that placement beside the global socket instead. `_log_guard` must
+    // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
+    let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
     let server = McpServer::new(Arc::new(backend));

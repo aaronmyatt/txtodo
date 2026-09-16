@@ -8,6 +8,7 @@
 pub mod backend;
 mod backend_args;
 pub mod error;
+pub mod global_socket;
 pub mod grpc_backend;
 mod grpc_convert;
 mod grpc_notes;
