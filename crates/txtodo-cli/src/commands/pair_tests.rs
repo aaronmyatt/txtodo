@@ -16,6 +16,7 @@ fn sample_code() -> PairingCode {
         identity_mode: "sidecar".to_owned(),
         relay_node_id: String::new(),
         relay_url: String::new(),
+        workspace_id: "01M2CZ00000000000000000WS".to_owned(),
     }
 }
 
@@ -32,10 +33,11 @@ fn pairing_code_round_trips_through_json() {
     assert_eq!(code.identity_mode, back.identity_mode);
     assert_eq!(code.relay_node_id, back.relay_node_id);
     assert_eq!(code.relay_url, back.relay_url);
+    assert_eq!(code.workspace_id, back.workspace_id);
 }
 
 #[test]
-fn pairing_code_json_carries_no_field_beyond_the_documented_eight() {
+fn pairing_code_json_carries_no_field_beyond_the_documented_nine() {
     let text = to_json(&sample_code()).unwrap();
     let value: serde_json::Value = serde_json::from_str(&text).unwrap();
     let mut keys: Vec<&str> = value
@@ -55,6 +57,7 @@ fn pairing_code_json_carries_no_field_beyond_the_documented_eight() {
             "nonce",
             "relay_node_id",
             "relay_url",
+            "workspace_id",
             "x25519_pub"
         ]
     );
@@ -76,6 +79,7 @@ fn a_code_with_no_relay_fields_at_all_still_decodes() {
     let parsed = from_json(old_code).unwrap();
     assert_eq!(parsed.relay_node_id, "");
     assert_eq!(parsed.relay_url, "");
+    assert_eq!(parsed.workspace_id, "");
 }
 
 #[test]

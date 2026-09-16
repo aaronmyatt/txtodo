@@ -34,13 +34,16 @@ const AWAIT_PEER_POLL: Duration = Duration::from_millis(500);
 
 /// The JSON `code` a QR encodes and `txtodo pair <code>` accepts: field-for-field the same shape
 /// `crates/txtodo-daemon/src/pairing_wire.rs` parses (`device`, `group_id`, `x25519_pub`,
-/// `endpoint`, `nonce`, `identity_mode`, `relay_node_id`, `relay_url`) — this crate may not depend
-/// on txtodo-daemon or txtodo-sync (slice rule: `May depend only on: txtodo-core, txtodo-proto`),
-/// so this JSON shape, built straight from `pb::PairOfferResponse`'s own already-encoded string
-/// fields, is the only contract the two crates share. `relay_node_id`/`relay_url` (plan M8
-/// `sync-pairing-relay`) are empty strings, not absent, when the initiator has no relay configured
-/// — `#[serde(default)]` so an *older* code (encoded before this task) without these fields at all
-/// still decodes, since this struct is also what `txtodo pair <code>` parses back.
+/// `endpoint`, `nonce`, `identity_mode`, `relay_node_id`, `relay_url`, `workspace_id`) — this crate
+/// may not depend on txtodo-daemon or txtodo-sync (slice rule: `May depend only on: txtodo-core,
+/// txtodo-proto`), so this JSON shape, built straight from `pb::PairOfferResponse`'s own
+/// already-encoded string fields, is the only contract the two crates share. `relay_node_id`/
+/// `relay_url` (plan M8 `sync-pairing-relay`) are empty strings, not absent, when the initiator has
+/// no relay configured — `#[serde(default)]` so an *older* code (encoded before this task) without
+/// these fields at all still decodes, since this struct is also what `txtodo pair <code>` parses
+/// back. `workspace_id` (task `pairing-workspace-identity`) is the same way: this struct only needs
+/// to round-trip it into the outgoing code text (the daemon reads it back out of the raw `code`
+/// string itself, not through this struct — see `pairing_wire.rs::code_workspace_id`'s own doc).
 #[derive(Debug, Serialize, Deserialize)]
 struct PairingCode {
     device: String,
@@ -57,6 +60,10 @@ struct PairingCode {
     /// The relay URL `relay_node_id` is reachable through; empty exactly when it is.
     #[serde(default)]
     relay_url: String,
+    /// The initiator's real, catalog-assigned `WorkspaceId` (ULID text) for the workspace being
+    /// offered — the joiner's daemon adopts this verbatim so post-pairing sync routes correctly.
+    #[serde(default)]
+    workspace_id: String,
 }
 
 impl From<&txtodo_proto::v1::PairOfferResponse> for PairingCode {
@@ -70,6 +77,7 @@ impl From<&txtodo_proto::v1::PairOfferResponse> for PairingCode {
             identity_mode: r.identity_mode.clone(),
             relay_node_id: r.relay_node_id.clone(),
             relay_url: r.relay_url.clone(),
+            workspace_id: r.workspace_id.clone(),
         }
     }
 }
