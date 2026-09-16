@@ -123,3 +123,80 @@ code — the daemon-side infrastructure this task depends on was fully built by 
   pointed at a scratch dir) with two registered+open workspaces, `txtodo-mcp --global` connected to
   it, `todo_add`/`todo_list` with an explicit `workspace` selector routes to the right one, and
   `todotxt://workspaces` lists both — see "As built" for exactly what was actually run.
+
+## As built (2026-09-16)
+
+Shipped in three commits, each green (`cargo fmt`/`cargo clippy --all-targets -- -D warnings`/
+`cargo test`, scoped to `-p txtodo-mcp`) before the next started:
+
+1. **`5b063b1`** — the core plumbing. Every `McpBackend` trait method (`backend.rs`) and every tool
+   arg struct (`backend_args.rs`, split out of `backend.rs` for the 400-line file budget —
+   `backend.rs` was already 387 lines before this task, and the selector fields plus `WorkspaceInfo`
+   pushed it over) gained a `workspace: Option<String>` (aliased `WorkspaceArg`). `grpc_convert.rs`
+   grew `workspace_selector` (client-side ULID-vs-path sniff, 26-char Crockford base32 check — no
+   `txtodo_model` dependency available) and `workspace_info` (wire → model). Every `grpc_read.rs`/
+   `grpc_write.rs` request now sets `workspace: workspace_selector(workspace)` instead of a
+   hardcoded `None`; `grpc_write.rs` was split further into `grpc_notes.rs` (`notes_get`/`notes_set`)
+   to stay under the same file budget after threading the new parameter through. `resources.rs`
+   gained `todotxt://workspaces` (`todo_list_workspaces`) and a `?workspace=` query-string splitter
+   applied to every resource URI shape. `tests/smoke.rs`'s `FakeBackend` updated to match; all 4
+   pre-existing smoke tests plus 2 new `resources.rs` unit tests stayed green.
+2. **`4b3ccfb`** — `--global` mode. `global_socket.rs` (new): reimplements
+   `workspace_registry_paths::global_socket_path`/`global_log_dir`'s resolution
+   (`$TXTODO_SOCKET`/`$TXTODO_REGISTRY_DB`... actually just the socket+log half; the registry DB
+   path is the daemon's own concern) locally — this crate may not depend on `txtodo-daemon`
+   (`budgets.json`'s `allowedDeps`; the dependency direction runs the other way). `main.rs` gained a
+   `Target` enum (`Dir(PathBuf)` | `Global`), mutually exclusive with the pre-existing `--dir`; each
+   resolves its own socket and log directory. `#![forbid(unsafe_code)]` (crate-wide) meant
+   `global_socket.rs`'s tests inject an env-lookup closure rather than mutating `std::env` directly
+   (`std::env::set_var` needs `unsafe` since Rust's 2024 edition) — the same "inject the
+   environment" idiom `workspace_registry_paths::RegistryEnv` uses on the daemon side, adapted to a
+   plain closure since this crate's env surface is much smaller (2 variables, not a whole `Env`
+   struct).
+3. **`57ed18a`** — the real proof. `tests/global_workspace_routing.rs`, `#[ignore]`d (spawns a real,
+   separately-built `txtodod` this crate cannot link — same precedent as
+   `txtodo-daemon/tests/idle_rss.rs`/`lan_sync_bench.rs` for "real-process test, not in the
+   automated gate"). Spawns `txtodod` with `$TXTODO_SOCKET`/`$TXTODO_REGISTRY_DB` pointed at a fresh
+   tempdir (no `--dir` — true global mode), seeds two empty `wsA/todo.txt`/`wsB/todo.txt` (the
+   walker only builds a `FileActor` for a document that already exists on disk — an empty add
+   against a truly empty directory fails with `"no document todo.txt"`, a real thing this test
+   caught on its first run), then drives `GrpcMcpBackend` directly (the exact code `schema.rs`'s
+   tools call through) to: `add` a task into workspace A by naming its path as the selector
+   (auto-registers *and* opens it, per `workspace_catalog.rs::resolve`'s own doc — no separate
+   `WorkspaceAdd` step needed), `add` a different task into workspace B the same way, confirm
+   `list_workspaces` reports both roots, then confirm `list(workspace: A)` returns *only* A's task
+   and `list(workspace: B)` returns *only* B's — the actual routing claim, not just "both workspaces
+   exist". Ran green 3 times in a row locally (`cargo test -p txtodo-mcp --test
+   global_workspace_routing -- --ignored`) before being committed.
+
+### Deviations from the plan
+- **Selector shape**: one string, not the daemon's literal two-field oneof (see notes.md "Design"
+  above for the reasoning — this was a design decision made up front, not a mid-build discovery,
+  but flagged again here since it's the one place this task's shape differs from the wire message
+  it wraps).
+- **`list_resources` (resource *discovery*, not resource *reads*) has no selector**: `rmcp`'s
+  `ServerHandler::list_resources` signature takes only pagination params. Documented as a known
+  limitation in `resources.rs`'s own doc comment and this file's "Edge cases" section, not routed
+  around with something hacky (e.g. guessing a workspace from cwd, which the daemon itself
+  deliberately refuses to do when ambiguous).
+- **`todo_move`**: unchanged behavior — it already refused with `McpError::daemon(...)` before this
+  task (no daemon same-file-reorder RPC exists yet, a pre-existing gap unrelated to workspaces).
+  `MoveArgs` still gained a `workspace` field for schema consistency across every tool's arg shape,
+  even though this one tool's call always short-circuits before it would matter.
+- **Pre-existing flake found, not caused**: `tests/smoke.rs::mcp_call_span_names_tool_and_records_principal`
+  fails intermittently under the default parallel `cargo test` (a `tracing::subscriber::set_default`
+  thread-local guard racing another test thread's own dispatcher in the same binary) and passes
+  reliably under `--test-threads=1`. Confirmed pre-existing: the failure reproduces on a clean
+  `cargo test -p txtodo-mcp` run before and after this task's changes, and this task never touched
+  that test's span-capture logic (only its `FakeBackend` trait-method signatures, mechanically).
+  Not fixed here — out of scope for a workspace-routing feature task, flagged for whoever picks up
+  test-suite hygiene next.
+
+### What proves it
+- `cargo test -p txtodo-mcp` (unit + `tests/smoke.rs`, run serially to dodge the flake above): green.
+- `cargo test -p txtodo-mcp --test global_workspace_routing -- --ignored`: green, 3/3 runs, against
+  a real `txtodod` in true global mode with two real, independently-created workspaces.
+- `cargo clippy -p txtodo-mcp --all-targets -- -D warnings`: clean.
+- `.claude/scripts/check-file-length.sh` / `check-boundaries.sh`: clean (no `txtodo-mcp` findings;
+  `txtodo-store`'s two pre-existing `cognitive_complexity` clippy failures in `projections.rs` are
+  unrelated — untouched by this task, confirmed via `git diff --stat crates/txtodo-store`).
