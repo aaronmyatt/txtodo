@@ -8856,6 +8856,7 @@ dependencies = [
  "postcard",
  "proptest",
  "serde",
+ "tracing",
  "txtodo-core",
 ]
 

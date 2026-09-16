@@ -78,8 +78,18 @@ pub enum Skew {
 }
 
 impl Skew {
-    /// Classifies `peer_ms` against `local_ms`.
+    /// Classifies `peer_ms` against `local_ms`. Thin wrapper around `check_inner` for the tracing
+    /// span (`#[instrument]` on top of the existing three-way branch risks the
+    /// `cognitive_complexity` budget). Shared by `Hlc::merge`, the sync `Hello` handshake and
+    /// `txtodo doctor` (module doc above), so this one site's logging covers all three callers.
+    #[tracing::instrument(skip_all)]
     pub fn check(peer_ms: u64, local_ms: u64) -> Skew {
+        let skew = Skew::check_inner(peer_ms, local_ms);
+        log_skew_checked(peer_ms, local_ms, skew);
+        skew
+    }
+
+    fn check_inner(peer_ms: u64, local_ms: u64) -> Skew {
         let lead = peer_ms.saturating_sub(local_ms);
         let lag = local_ms.saturating_sub(peer_ms);
         debug_assert!(
@@ -101,6 +111,26 @@ impl Skew {
     }
 }
 
+/// Logs the skew-guard decision: the peer/local wall-clock ms, the classification, and the lead
+/// or lag amount when not `Ok`. This is the one place a peer's clock is judged against ours, so it
+/// is the site root todo.txt calls out as deciding silently today. Never logs anything beyond the
+/// clock fields themselves — no task, op, or file identity ever reaches `Skew::check`.
+fn log_skew_checked(peer_ms: u64, local_ms: u64, skew: Skew) {
+    let (label, lead_ms, lag_ms) = match skew {
+        Skew::Ok => ("ok", None, None),
+        Skew::Ahead(lead) => ("ahead", Some(lead), None),
+        Skew::Behind(lag) => ("behind", None, Some(lag)),
+    };
+    tracing::debug!(
+        peer_ms,
+        local_ms,
+        skew = label,
+        lead_ms,
+        lag_ms,
+        "hlc_skew_checked"
+    );
+}
+
 impl Hlc {
     /// The zero stamp for a device; every `tick` is greater than this.
     pub const fn zero(device: DeviceId) -> Hlc {
@@ -111,8 +141,17 @@ impl Hlc {
         }
     }
 
-    /// Send rule: advances to a stamp strictly greater than `self`, using `now_ms` when it is ahead.
+    /// Send rule: advances to a stamp strictly greater than `self`, using `now_ms` when it is
+    /// ahead. Thin wrapper around `tick_inner` for the tracing span (`#[instrument]` on top of the
+    /// existing branch risks the `cognitive_complexity` budget).
+    #[tracing::instrument(skip_all)]
     pub fn tick(&mut self, now_ms: u64) -> Result<Hlc, HlcError> {
+        let result = self.tick_inner(now_ms);
+        log_tick(now_ms, &result);
+        result
+    }
+
+    fn tick_inner(&mut self, now_ms: u64) -> Result<Hlc, HlcError> {
         let before = *self;
         if now_ms > self.wall_ms {
             self.wall_ms = now_ms;
@@ -129,8 +168,17 @@ impl Hlc {
 
     /// Receive rule (Kulkarni §3): folds `remote` in and returns a stamp greater than both `self`
     /// and `remote`. A peer more than `MAX_PEER_SKEW_AHEAD_MS` ahead of `now_ms` is refused with
-    /// `PeerAhead`; on any `Err` the clock is unchanged.
+    /// `PeerAhead`; on any `Err` the clock is unchanged. Thin wrapper around `merge_inner` for the
+    /// tracing span (`#[instrument]` on top of the existing skew-refusal branch and four-way
+    /// counter-selection `match` risks the `cognitive_complexity` budget).
+    #[tracing::instrument(skip_all)]
     pub fn merge(&mut self, remote: Hlc, now_ms: u64) -> Result<Hlc, HlcError> {
+        let result = self.merge_inner(remote, now_ms);
+        log_merge(&remote, now_ms, &result);
+        result
+    }
+
+    fn merge_inner(&mut self, remote: Hlc, now_ms: u64) -> Result<Hlc, HlcError> {
         if let Skew::Ahead(_) = Skew::check(remote.wall_ms, now_ms) {
             return Err(HlcError::PeerAhead {
                 peer_ms: remote.wall_ms,
@@ -158,4 +206,34 @@ impl Hlc {
         *self = next;
         Ok(next)
     }
+}
+
+/// Logs the send-rule outcome: `now_ms`, the resulting `wall_ms`/`counter` (`None` on `Overflow`),
+/// and whether the tick failed. Never logs the device beyond the caller's own span.
+fn log_tick(now_ms: u64, result: &Result<Hlc, HlcError>) {
+    let stamp = result.as_ref().ok().copied();
+    tracing::debug!(
+        now_ms,
+        wall_ms = stamp.map(|s| s.wall_ms),
+        counter = stamp.map(|s| s.counter),
+        overflow = result.is_err(),
+        "hlc_tick"
+    );
+}
+
+/// Logs the receive-rule outcome: the remote stamp's wall-clock ms and device, `now_ms`, the
+/// resulting `wall_ms`/`counter` (`None` on any `Err`), and whether the merge was refused. Does
+/// not re-decide or re-log the skew classification — `Skew::check`'s own event already fires
+/// inside `merge_inner` and covers whether the peer was within tolerance.
+fn log_merge(remote: &Hlc, now_ms: u64, result: &Result<Hlc, HlcError>) {
+    let stamp = result.as_ref().ok().copied();
+    tracing::debug!(
+        remote_wall_ms = remote.wall_ms,
+        remote_device = %remote.device,
+        now_ms,
+        wall_ms = stamp.map(|s| s.wall_ms),
+        counter = stamp.map(|s| s.counter),
+        refused = result.is_err(),
+        "hlc_merge"
+    );
 }

@@ -13,6 +13,8 @@ txtodo-core.workspace = true
 serde = { version = "1", features = ["derive"] }
 # https://docs.rs/postcard — compact, no_std-friendly serde format
 postcard = { version = "1", features = ["alloc"] }
+# https://docs.rs/tracing — event/span emission only; this low-level crate never wires a subscriber
+tracing = "0.1"
 
 [dev-dependencies]
 # https://docs.rs/proptest — Hlc total order and monotone tick
