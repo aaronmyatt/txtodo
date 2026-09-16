@@ -100,3 +100,75 @@ return).
 - `.claude/scripts/check-boundaries.sh` clean — `tracing` is an external crate.
 - No behaviour change: existing test suite (`tests/sim.rs`, `tests/conflicts.rs`, `*_tests.rs`)
   stays green with the instrumentation compiled in.
+
+## As built (2026-09-16, agent)
+
+Built exactly to the design above, six commits, one per subtask line/site:
+
+1. `77b8d74` — `Cargo.toml` (`tracing = "0.1"`), `Cargo.lock`, `lww.rs`: `write_if_newer`/
+   `write_if_newer_inner` wrapper split, span field `key` only, `log_lww_write` (debug:
+   `incoming_wall_ms`/`incoming_device`, `existing_wall_ms`/`existing_device` — `None` the first
+   time a key is written — and `wrote`).
+2. `5345f06` — `doc/sync.rs`: `import`/`import_inner` wrapper split (span `bytes`, event
+   `crdt_import_landed` with `applied`); `export_updates_since` got a span (`since_bytes`) plus one
+   `crdt_export_updates_since` event (`exported_bytes`), no split needed.
+3. `4e63528` — `review.rs`: `detect`/`detect_inner` wrapper split, `log_review_detected` (debug:
+   `flags`/`overflowed` counts only).
+4. `e12f159` — `resurrect.rs`: `resolve`/`resolve_inner` wrapper split; the old single `loses` bool
+   became `mine_loses`/`their_loses`; `log_task_resurrected` fires once per resurrected task
+   (`task`, `mine_delete_lost`, `their_delete_lost`, `winner_edited`, `winner_completed`).
+5. `9913cd0` — `to_loro.rs`: `apply`/`apply_inner` wrapper split, new `op_kind_name(&OpKind) ->
+   &'static str` leaf, span fields `file`/`kind`.
+6. `3d9d748` — `from_loro.rs`: `from_batch` got a span (`diffs = batch.iter().count()`, `DiffBatch`
+   has no `len()`) and one `crdt_ops_translated` event (`ops`), no split needed.
+
+### Deviations from the plan
+
+- **`DiffBatch::len()` does not exist.** The plan's `batch.len()` field expression does not compile
+  — `loro::event::DiffBatch` only exposes `iter()`. Used `batch.iter().count()` instead; confirmed
+  by reading `loro-1.16.0`'s own `event.rs` source (`~/.cargo/registry/src/.../loro-1.16.0/src/
+  event.rs`) rather than guessing at an API surface.
+- **`resurrect.rs`'s per-task log call sits inside the existing `if` branch**, not hoisted out
+  branch-free, per the "one-macro-call leaf function per branch" rule (`log_task_resurrected` is a
+  single function call inside the branch, and it makes exactly one `tracing::debug!` call) — this
+  was the plan's stated approach, not a deviation, but worth confirming it held: `resolve_inner`
+  passed clippy's `cognitive_complexity` (budget 10) without needing a second split.
+- No other deviations — every site landed exactly as designed, no signature of any `pub`/
+  `pub(crate)` function in this crate changed (`write_if_newer`, `import`, `export_updates_since`,
+  `detect`, `apply`, `from_batch` all keep their original signatures; only `write_if_newer_inner`'s
+  private return type grew a second element), so no caller anywhere in this crate or
+  `txtodo-daemon` needed a change.
+
+### Verification
+
+- `cargo fmt -p txtodo-crdt -- --check`: clean, every commit and on final reverification.
+- `cargo clippy -p txtodo-crdt --all-targets -- -D warnings`: clean, every commit and on final
+  reverification — no `#[allow]`/`#[expect]` anywhere, no `cognitive_complexity` hits on any
+  touched function.
+- `cargo test -p txtodo-crdt`: 26 unit/lib tests, 10 `tests/conflicts.rs` (1 `#[ignore]`d, expected
+  — row 9's fingerprint re-identification, see `specs/conflicts.md`), 3 `tests/sim.rs` (the 20
+  fixed-seed sweep + the diverged-device + same-seed-twice cases; the full 1000-seed sweep is
+  `just sim`, not part of `cargo test`), all green — including `delete_vs_edit_resurrects_the_task`
+  and `delete_vs_complete_keeps_it_completed` (`specs/conflicts.md` rows 6-7, the exact behaviour
+  `resurrect.rs`'s new logging observes) — on every commit and on final reverification.
+- `.claude/scripts/check-boundaries.sh`: clean — `tracing` is an external crate, never touched by
+  the `txtodo-*` edge check.
+- `cargo check -p txtodo-daemon`: clean on final reverification — every touched function's public
+  signature is unchanged, so no downstream call site needed an edit.
+- File-length budget: every touched file landed well under 400 (`lww.rs` 140, `doc/sync.rs` 136,
+  `review.rs` 215, `resurrect.rs` 176, `to_loro.rs` 315, `from_loro.rs` 365) — no prose trimming
+  needed.
+- No in-process subscriber assertion on captured JSON lines: same stance `logging-store`/
+  `logging-sync-crate`/`logging-daemon-swallowed-errors` took — this crate deliberately never
+  wires `txtodo_telemetry::init`, only the daemon binary does, so proof here is the existing test
+  suite staying green with the instrumentation compiled in, not a captured-output test.
+
+### Deliberately out of scope
+
+- Any other `+m11 @observability` backlog line, any `txtodo-daemon`/`txtodo-sync`/`txtodo-store`
+  file (all already instrumented by prior tasks), or any file outside `crates/txtodo-crdt/`,
+  `tasks/logging-crdt/` and this one root todo.txt line.
+- `hydrate.rs`, `notes.rs`, `doc/shadow.rs`, `doc/view.rs` — not named by the backlog line, and
+  none of them decides a merge outcome (hydration is a bulk load, the notes doc is a separate M5
+  text CRDT with no LWW/review/resurrect machinery, the shadow/view modules are read-side list
+  bookkeeping).
