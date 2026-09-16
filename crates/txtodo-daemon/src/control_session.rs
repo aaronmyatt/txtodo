@@ -32,7 +32,6 @@ pub(crate) fn drive_control_session(
     registry: &Mutex<WorkspaceRegistry>,
 ) {
     let Some(key) = fetch_group_key(identity) else {
-        log_no_group_key();
         return;
     };
     let epoch = identity.group_epoch();
@@ -53,23 +52,53 @@ pub(crate) fn drive_control_session(
     }
 }
 
-fn log_no_group_key() {
-    tracing::debug!("control_channel_session_skipped_no_group_key");
-}
-
+/// The three ways this can fail (keystore error, no key stored yet, corrupt length) used to
+/// collapse into one flat `control_channel_session_skipped_no_group_key` debug event at the call
+/// site — each now logs its own specific reason here instead, at the source.
 fn fetch_group_key(identity: &DeviceIdentity) -> Option<GroupKey> {
-    let bytes = identity
+    let stored = match identity
         .key_store()
         .get(KeyId::Group(identity.group_epoch()))
-        .ok()??;
-    let array: [u8; txtodo_sync::KEY_BYTES] = bytes.expose().try_into().ok()?;
-    Some(GroupKey::from_bytes(array))
+    {
+        Ok(v) => v,
+        Err(e) => return log_group_key_keystore_err(&e),
+    };
+    let Some(bytes) = stored else {
+        return log_group_key_missing();
+    };
+    let raw = bytes.expose();
+    match raw.try_into() {
+        Ok(array) => Some(GroupKey::from_bytes(array)),
+        Err(_) => log_group_key_corrupt(raw.len()),
+    }
+}
+
+fn log_group_key_keystore_err(e: &txtodo_sync::KeyStoreError) -> Option<GroupKey> {
+    tracing::warn!(error = %e, "control_channel_group_key_keystore_error");
+    None
+}
+
+fn log_group_key_missing() -> Option<GroupKey> {
+    tracing::debug!("control_channel_group_key_missing");
+    None
+}
+
+fn log_group_key_corrupt(len: usize) -> Option<GroupKey> {
+    tracing::warn!(len, "control_channel_group_key_corrupt_length");
+    None
 }
 
 fn single_epoch_keys(epoch: u32, key: GroupKey) -> Option<GroupKeys> {
     let mut keys = GroupKeys::new();
-    keys.insert(epoch, key).ok()?;
-    Some(keys)
+    match keys.insert(epoch, key) {
+        Ok(()) => Some(keys),
+        Err(e) => log_group_keys_insert_failed(&e),
+    }
+}
+
+fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKeys> {
+    tracing::warn!(error = %e, "control_channel_group_keys_insert_failed");
+    None
 }
 
 /// This device's currently-active workspaces, as `(id, display name)` pairs — the name is derived
