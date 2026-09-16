@@ -21,6 +21,8 @@ pub use tree::{
 pub use txtodo_core::Ulid;
 
 #[cfg(test)]
+mod hlc_no_secrets_tests;
+#[cfg(test)]
 mod hlc_tests;
 #[cfg(test)]
 mod op_tests;

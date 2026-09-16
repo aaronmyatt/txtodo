@@ -8865,7 +8865,9 @@ dependencies = [
  "postcard",
  "proptest",
  "serde",
+ "serde_json",
  "tracing",
+ "tracing-subscriber",
  "txtodo-core",
 ]
 
