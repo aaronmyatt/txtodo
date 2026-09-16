@@ -1,0 +1,5 @@
+2026-09-16 Design: where the auto-dial lives (new module vs relay.rs extension), redial cadence, and how it learns "no LAN sighting exists" without duplicating lan.rs's own PeerTable +m8 @daemon id:01M2N016AUTODIALDESIGN001
+2026-09-16 lan.rs (or new module) reads devices' recorded relay reachability and dials a peer with no LAN sighting via the relay, reusing relay.rs::dial_known_peer's shape +m8 @daemon id:01M2N016AUTODIALIMPL0001
+2026-09-16 Fix pair.rs::run_join's hardcoded "over the LAN" string to report the real carrier (pairing_lan()'s own record_carrier already knows) +m8 @cli id:01M2N016AUTODIALFIXMSG1
+2026-09-16 Test: two real txtodod processes, --no-lan on both, pair over relay with no --relay-dial-peer set on either side, converge a real file with no manual flag +m8 @test id:01M2N016AUTODIALTEST001
+2026-09-16 Complete the parent line in ./todo.txt +m8 @daemon id:01M2N016AUTODIALCLOSE01
