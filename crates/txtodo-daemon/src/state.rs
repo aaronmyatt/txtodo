@@ -1,6 +1,5 @@
 //! In-memory state of one document: the ordered entries the actor owns, materialised to the exact
-//! bytes on disk, mutated only through ops. M4 swaps the backing store for Loro behind this same
-//! shape (plan M4), so nothing outside this module touches `entries`.
+//! bytes on disk, mutated only through ops (plan M4 swaps the backing store, same shape).
 
 use crate::textedit::TextEditError;
 use std::fmt;
@@ -40,7 +39,7 @@ impl Entry {
     }
 }
 
-/// Task-line counts for one document: blanks are excluded (plan §3.2.5's progress rule).
+/// Task-line counts for one document, blanks excluded (plan §3.2.5).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TaskCounts {
     /// Task lines, blanks excluded.
@@ -49,8 +48,7 @@ pub struct TaskCounts {
     pub completed: usize,
 }
 
-/// Why an op or a file could not be applied. An op that fails here is a daemon bug or a stale
-/// client; the message says which task and what was attempted.
+/// Why an op or a file could not be applied — a daemon bug or a stale client.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StateError {
     /// A task line has no resolved id, tag or fingerprint match (line index).
@@ -91,6 +89,19 @@ impl fmt::Display for StateError {
 }
 
 impl std::error::Error for StateError {}
+/// `apply`'s span field: the op kind's name, never its payload; blank/notes group as `"other"`.
+fn op_kind_name(kind: &OpKind) -> &'static str {
+    match kind {
+        OpKind::Insert { .. } => "insert",
+        OpKind::SetField { .. } => "set_field",
+        OpKind::EditText { .. } => "edit_text",
+        OpKind::Move { .. } => "move",
+        _ => "other",
+    }
+}
+fn log_state_applied(entries: usize) {
+    tracing::trace!(entries, "state_applied");
+}
 
 /// The document.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -160,9 +171,7 @@ impl DocState {
         self.entries.is_empty()
     }
 
-    /// Counts task lines and how many are completed; blanks are excluded (plan §3.2.5, used by the
-    /// `ListFiles` RPC's progress field). Re-parses each task's stored bytes rather than the whole
-    /// file, since `Entry` keeps completion state in the line text, not as a cached flag.
+    /// Counts task lines and completions, blanks excluded (plan §3.2.5's `ListFiles` progress).
     pub fn task_counts(&self) -> TaskCounts {
         let mut counts = TaskCounts::default();
         for entry in &self.entries {
@@ -177,8 +186,7 @@ impl DocState {
         counts
     }
 
-    /// The entry at `i`, by value: the backing store is not a slice after M4 (plan M4), so no
-    /// borrowed `&[Entry]` is lent out.
+    /// The entry at `i`, by value: the backing store is not a slice after M4.
     pub fn entry_at(&self, i: usize) -> Option<Entry> {
         self.entries.get(i).cloned()
     }
@@ -190,8 +198,7 @@ impl DocState {
         Some(self.entries[i].line().clone())
     }
 
-    /// The nearest task id strictly before position `i` — the `after` anchor an op at `i` needs.
-    /// `i == len()` asks for the last task in the document.
+    /// The nearest task id before `i` — the `after` anchor an op needs (`i == len()`: the last).
     pub fn task_before(&self, i: usize) -> Option<TaskId> {
         debug_assert!(i <= self.entries.len(), "task_before index {i} in range");
         self.entries[..i.min(self.entries.len())]
@@ -237,9 +244,13 @@ impl DocState {
         file.to_bytes()
     }
 
-    /// Applies one op. On `Err` the state is unchanged. Takes the whole `Op` because the M4 store
-    /// arbitrates prefix fields by the op's HLC (ADR 0013); the caller stamps before applying.
+    /// Applies one op (unchanged on `Err`); a thin span wrapper (see `apply_inner`'s own doc).
+    #[tracing::instrument(skip_all, fields(kind = op_kind_name(&op.kind)))]
     pub fn apply(&mut self, op: &Op) -> Result<(), StateError> {
+        self.apply_inner(op)
+    }
+
+    fn apply_inner(&mut self, op: &Op) -> Result<(), StateError> {
         let before = self.entries.len();
         match &op.kind {
             OpKind::Insert { task, after, line } => self.insert(*task, *after, line)?,
@@ -261,6 +272,7 @@ impl DocState {
             self.entries.len() + 1 >= before,
             "an op removes at most one entry"
         );
+        log_state_applied(self.entries.len());
         Ok(())
     }
 
@@ -303,19 +315,15 @@ impl DocState {
                 return Err(StateError::IdMismatch(task));
             }
         }
-        self.entries.insert(
-            at,
-            Entry::Task {
-                id: task,
-                line: owned,
-            },
-        );
+        let entry = Entry::Task {
+            id: task,
+            line: owned,
+        };
+        self.entries.insert(at, entry);
         Ok(())
     }
 
-    /// A same-file reorder moves the entry to its new position; a cross-file move (`to_file !=
-    /// self.path`) only removes it here — the destination actor gets its own `Insert` instead
-    /// (`crate::move_coordinator`, plan §3.2.8).
+    /// Same-file: reorders. Cross-file: removes only — the destination gets its own `Insert`.
     fn move_task(
         &mut self,
         task: TaskId,
@@ -342,10 +350,8 @@ impl DocState {
             return Err(StateError::TooManyLines(self.entries.len() + 1));
         }
         let at = self.position_after(after)?;
-        self.entries.insert(
-            at,
-            Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending)),
-        );
+        let entry = Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending));
+        self.entries.insert(at, entry);
         Ok(())
     }
 
@@ -361,13 +367,9 @@ impl DocState {
     }
 }
 
-/// Whether a task line starts `x ` (todo.txt's completed marker); `false` for anything else,
-/// blanks included.
+/// Whether a task line starts `x ` (completed); `false` for anything else, blanks included.
 fn is_completed(line: &OwnedLine) -> bool {
-    matches!(
-        line.parse().map(|l| l.kind),
-        Some(LineKind::Task(t)) if t.completed
-    )
+    matches!(line.parse().map(|l| l.kind), Some(LineKind::Task(t)) if t.completed)
 }
 
 fn entry_of(index: usize, line: &OwnedLine, id: Option<TaskId>) -> Result<Entry, StateError> {

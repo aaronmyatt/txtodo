@@ -57,8 +57,14 @@ pub fn temp_path_for(path: &Path) -> PathBuf {
     tmp
 }
 
-/// Writes `bytes` atomically to `path`.
+/// Writes `bytes` atomically to `path`. A thin span wrapper around `write_atomic_inner`
+/// (`#[instrument]` on the real body overflows).
+#[tracing::instrument(skip_all, fields(path = %path.display(), bytes = bytes.len()))]
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
+    write_atomic_inner(path, bytes)
+}
+
+fn write_atomic_inner(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
     let tmp = temp_path_for(path);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(err("create directory", dir))?;
@@ -70,7 +76,13 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
     std::fs::rename(&tmp, path).map_err(err("rename over", path))?;
     debug_assert!(!tmp.exists(), "rename consumed the temp file");
     debug_assert!(path.exists(), "target exists after rename");
+    log_write_atomic_done();
     Ok(())
+}
+
+/// Split out so the event macro doesn't count against `write_atomic`'s own `#[instrument]` budget.
+fn log_write_atomic_done() {
+    tracing::debug!("write_atomic_done");
 }
 
 /// Reads a document; a missing file is empty bytes (the walker may register a path before the

@@ -32,8 +32,26 @@ pub struct Reconciled {
     pub ids: Vec<Option<TaskId>>,
 }
 
-/// Derives ops that turn `old` (our last projection) into `new` (the bytes on disk).
+/// Split out so the event macro doesn't count against `reconcile`'s own `#[instrument]` budget.
+fn log_reconcile_diff(ops: usize, minted: usize, reused: usize) {
+    tracing::debug!(ops, minted, reused, "reconcile_diff");
+}
+
+/// Derives ops that turn `old` (our last projection) into `new` (the bytes on disk). A thin span
+/// wrapper around `reconcile_inner` (`#[instrument]` on the real body overflows).
+#[tracing::instrument(skip_all, fields(path = %path))]
 pub fn reconcile(
+    old: &File,
+    new: &File,
+    path: &FilePath,
+    mint: &mut dyn FnMut() -> TaskId,
+) -> Reconciled {
+    let r = reconcile_inner(old, new, path, mint);
+    log_reconcile_diff(r.ops.len(), r.minted, r.reused);
+    r
+}
+
+fn reconcile_inner(
     old: &File,
     new: &File,
     path: &FilePath,

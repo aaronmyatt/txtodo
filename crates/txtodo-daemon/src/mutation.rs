@@ -154,8 +154,37 @@ pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), Muta
     Ok((i, found))
 }
 
-/// Turns one mutation into ops against `state`. `mint` supplies an id for an `Add` without one.
+/// `mutation_ops`'s span field — the variant's name only, never its line text.
+fn mutation_kind(m: &Mutation) -> &'static str {
+    match m {
+        Mutation::Add { .. } => "add",
+        Mutation::Complete { .. } => "complete",
+        Mutation::Edit { .. } => "edit",
+        Mutation::Move { .. } => "move",
+        Mutation::Delete { .. } => "delete",
+        Mutation::MoveToEnd { .. } => "move_to_end",
+    }
+}
+
+/// Split out so the event macro doesn't count against `mutation_ops`'s own `#[instrument]` budget.
+fn log_mutation_ops(ops: usize) {
+    tracing::debug!(ops, "mutation_ops");
+}
+
+/// Turns one mutation into ops against `state`. `mint` supplies an id for an `Add` without one. A
+/// thin span wrapper around `mutation_ops_inner` (`#[instrument]` on the real body overflows).
+#[tracing::instrument(skip_all, fields(kind = mutation_kind(mutation)))]
 pub fn mutation_ops(
+    state: &DocState,
+    mutation: &Mutation,
+    mint: &mut dyn FnMut() -> TaskId,
+) -> Result<Vec<OpKind>, MutationError> {
+    let ops = mutation_ops_inner(state, mutation, mint)?;
+    log_mutation_ops(ops.len());
+    Ok(ops)
+}
+
+fn mutation_ops_inner(
     state: &DocState,
     mutation: &Mutation,
     mint: &mut dyn FnMut() -> TaskId,
