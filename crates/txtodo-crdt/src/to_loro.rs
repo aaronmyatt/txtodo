@@ -50,8 +50,15 @@ impl From<loro::LoroError> for ToLoroError {
     }
 }
 
-/// Applies one op to the document, then commits once so the op is a single diff batch.
+/// Applies one op to the document, then commits once so the op is a single diff batch. Thin
+/// wrapper around `apply_inner` for the tracing span (`#[instrument]` on the real body overflows
+/// the `cognitive_complexity` budget).
+#[tracing::instrument(skip_all, fields(file = %op.file, kind = op_kind_name(&op.kind)))]
 pub fn apply(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
+    apply_inner(doc, op)
+}
+
+fn apply_inner(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
     doc.ensure_shadow(&op.file);
     match &op.kind {
         OpKind::Insert { task, after, line } => insert(doc, op, *task, *after, line)?,
@@ -72,6 +79,20 @@ pub fn apply(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
     }
     doc.commit();
     Ok(())
+}
+
+/// The op kind's name, for the tracing span — never the op's own payload (line text, edit spans,
+/// field values).
+fn op_kind_name(kind: &OpKind) -> &'static str {
+    match kind {
+        OpKind::Insert { .. } => "insert",
+        OpKind::SetField { .. } => "set_field",
+        OpKind::EditText { .. } => "edit_text",
+        OpKind::Move { .. } => "move",
+        OpKind::NotesEdit { .. } => "notes_edit",
+        OpKind::BlankInsert { .. } => "blank_insert",
+        OpKind::BlankRemove { .. } => "blank_remove",
+    }
 }
 
 /// Inserts the task into the file list and populates its task map from the parsed line. An id
