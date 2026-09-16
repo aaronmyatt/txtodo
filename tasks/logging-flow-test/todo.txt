@@ -1,5 +1,5 @@
-2026-09-16 daemon flow test: two-daemon pairing+converge ordered event-sequence assertion under TXTODO_LOG=debug +m11 @test id:01M2MZ7P8Y0R7XQ1XRVJ7PJGB5
 2026-09-16 notes.md As-built section + mark root todo.txt line 036 done +m11 @test id:01M2MZ7P9A5W62XX52ACY2GT7P
+x 2026-09-16 2026-09-16 daemon flow test: two-daemon pairing+converge ordered event-sequence assertion under TXTODO_LOG=debug +m11 @test id:01M2MZ7P8Y0R7XQ1XRVJ7PJGB5
 x 2026-09-16 2026-09-16 desktop: confirm existing commands.rs ui_log_emits_a_named_span_and_the_forwarded_message adequate +m11 @test id:01M2MZ7P8JWFJ7CVBRAPR23DKA
 x 2026-09-16 2026-09-16 mcp: confirm existing smoke.rs mcp_call_span_names_tool_and_records_principal adequate +m11 @test id:01M2MZ7P86PKVRZRAVE663JVSB
 x 2026-09-16 2026-09-16 daemon: confirm existing lan_session_security_tests.rs/security_m8_tests.rs adequate, no new test +m11 @test id:01M2MZ7P7VSVD8F77GA37G3E1Q

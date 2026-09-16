@@ -150,3 +150,90 @@ in the expected order. See "As built" below for the actual locked-in sequence on
 - The flow test asserts an ordered sequence, not a single `contains()`.
 - `cargo fmt --check` / `cargo clippy` / `cargo test` green, scoped per touched crate, before each
   commit.
+
+## As built
+
+### Final coverage table
+
+| Crate | Covered how | Test file |
+|---|---|---|
+| txtodo-model | New — structural field-whitelist test (deviation, see below) | `crates/txtodo-model/src/hlc_no_secrets_tests.rs` |
+| txtodo-store | New — sentinel-laden `Op::Insert`/`Projection` through `commit_change`/`heads`/`get_projection` | `crates/txtodo-store/tests/no_secrets_sentinel.rs` |
+| txtodo-crdt | New — sentinel description through `to_loro::apply`/`lww::write_if_newer` | `crates/txtodo-crdt/src/no_secrets_tests.rs` |
+| txtodo-sync | New — sentinel `Op` through `seal_ops`/`open_ops`/`Session::on_ops`/`committed`, plus a wrong-group-key rejected round | `crates/txtodo-sync/src/no_secrets_tests.rs` |
+| txtodo-cli | New — real `txtodo` binary, `TXTODO_LOG=debug`, real rotated JSON log file read back | `crates/txtodo-cli/tests/sentinel_no_secrets.rs` |
+| txtodo-tui | New — real `txtodod`, `app::perform` sentinel-laden `Apply`, shared `txtodo_telemetry::testing` seam | `crates/txtodo-tui/tests/sentinel_no_secrets.rs` |
+| relay | New — real HTTP PUT/GET/list with a sentinel blob body, plus a real `retention::sweep` for a guaranteed non-empty capture | `relay/tests/no_secrets_sentinel.rs` |
+| txtodo-daemon | Pre-existing, confirmed adequate — `lan_session_security_tests.rs` (real pair + 2 sync rounds), `security_m8_tests.rs` (relay/file-carrier/bundle) | (no new test) |
+| txtodo-mcp | Pre-existing, confirmed adequate | `tests/smoke.rs::mcp_call_span_names_tool_and_records_principal` |
+| apps/desktop/src-tauri | Pre-existing, confirmed adequate | `src/commands.rs::ui_log_emits_a_named_span_and_the_forwarded_message` |
+| txtodo-core / txtodo-query / txtodo-proto | Not instrumented this epic — no test needed | — |
+
+No sentinel test found a real secrets leak. Every one of the new tests above passed on its very
+first real run against the actual instrumentation — the crates' own "ids/counts/hashes only"
+discipline held.
+
+### The flow test's asserted sequence
+
+`crates/txtodo-daemon/tests/logging_flow_sequence.rs` reuses `pairing_lan.rs`'s real two-daemon
+pairing proof verbatim, adds `tests/support/mod.rs::start_with_workspace_id_and_envs` (additive,
+no existing call site touched) to set `TXTODO_LOG` on both daemons, and asserts the joiner's own
+JSON log carries this ordered subsequence (other events are allowed in between; the check is
+"these four appear, in this relative order", not exact adjacency):
+
+1. `pairing_joiner_group_key_adopted` — the real pairing ceremony lands the group key on the joiner.
+2. `lan_shared_session_started` — the post-pairing LAN connection is actually established (the same
+   event `relay_multiplex.rs` already greps for presence-only; this test locks in *where it sits*
+   relative to the rest of the story, not just that it exists).
+3. `lan_link_hello_accepted` — the link-level handshake on that connection completes.
+4. `commit_done` — the joiner's actor actually committed the initiator's ops (`FileActor::commit`,
+   reached from `on_sync_ops` for a real incoming batch) — the real proof of convergence, one layer
+   below "the bytes matched" (`wait_for_file_convergence`'s own check).
+
+This order is the right one to lock in because it is the causal order the design requires: no LAN
+session before a group key, no accepted handshake before the session starts, no commit before a
+handshake accepted real ops. A regression that silently reordered or dropped a step (e.g. a commit
+"succeeding" from stale/cached state before the handshake really completed) would show up here as
+a missing or misordered name, which `relay_multiplex.rs`'s presence-only grep could not catch.
+
+### Real findings (not secrets leaks, but real, flagged, not fixed)
+
+**Headline finding — `TXTODO_LOG=debug` makes a `--dir` bridge daemon's gRPC surface
+catastrophically slow.** Confirmed by direct, repeated measurement while building the flow test:
+`start_with_workspace_id_and_envs`, which normally makes a daemon ready in ~1.7s, took over 100s
+and never completed under a bare `TXTODO_LOG=debug`, and went back to ~1.7s the moment
+`hyper`/`h2`/`tower`/`tonic`/`mdns_sd`/`iroh` were pinned to `info` in the same filter string.
+Root cause: `debug` is a blanket `EnvFilter` default level — it does not only raise this
+workspace's own crates to debug, it raises *every dependency* to debug too, including the
+gRPC/networking stack the daemon's own health/settle polling rides on. `txtodo-telemetry`'s
+`build_filter()` (`crates/txtodo-telemetry/src/lib.rs`) already knows to default-quiet one noisy
+dependency this same way (`loro`/`loro_internal` → `warn`, with its own doc explaining why: "Loro
+logs diagnostics at info carrying payload sizes... a 10k-task snapshot emits thousands of lines")
+— it does not yet do the same for the gRPC/networking stack, which is at least as chatty at debug
+level (confirmed directly: a single pairing handshake round produces hundreds of `rustls`/
+`noq_proto`/`h2` trace-shaped debug lines per connection attempt). This is a real, reproducible gap
+in the shipped logging epic's `TXTODO_LOG` story — flagged here, not fixed (out of this task's
+scope: no production-code edits). The flow test works around it with an explicit filter directive
+(`"debug,hyper=info,h2=info,tower=info,tonic=info,mdns_sd=info,iroh=info"`), documented at its own
+call site.
+
+**Separate, pre-existing, environmental: real mDNS/LAN pairing flakiness under load.** While
+diagnosing the above, this environment briefly carried ~60 leftover `txtodod` test-daemon
+processes (some 3+ days old, unrelated to this task) that were starving real mDNS/LAN discovery —
+both `pairing_lan.rs` (completely unmodified) and the new flow test failed the identical way
+("the group key never landed on the joiner within 30s") while those were present, and both passed
+reliably (3/3 for the new flow test) once they were cleared. This is the same shape of real-network
+variance `pairing_relay.rs`'s own module doc already documents and one of its tests is quarantined
+for — not a regression from this task, not specific to this new test, and not something to
+quarantine here: `pairing_lan.rs` itself isn't quarantined for the same reason.
+
+### Deviations from the plan
+- `txtodo-model`'s sentinel test uses a field-whitelist assertion instead of a literal
+  `ZZ-SENTINEL-ZZ` injection, because `hlc.rs` (the one instrumented file) has no free-text data
+  path at all to inject a sentinel into — documented in the test file's own module doc.
+- `txtodo-crdt` and `txtodo-sync`'s sentinel tests each pin tracing's global max-level floor at
+  `TRACE` once per process (a small local helper, documented at its call site): both crates' other
+  in-crate unit tests call the same logging call sites with no subscriber installed, and tracing's
+  global fast-path level check is a single process-wide atomic a concurrent "no dispatch" thread
+  can race down, which silently dropped the sentinel test's own events under `cargo test`'s default
+  parallel execution until this fix.
