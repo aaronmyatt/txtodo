@@ -1,18 +1,23 @@
-//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s eight fields —
+//! The `pair_accept` `code` wire format: JSON carrying exactly `PairOfferResponse`'s nine fields —
 //! `device`, `group_id`, `x25519_pub`, `endpoint`, `nonce`, `identity_mode`, `relay_node_id`,
-//! `relay_url` — the same text a frontend's `JSON.stringify(pair_offer_response)` produces for the
-//! QR, so scanning it back needs no field this daemon didn't already return from `pair_offer`.
-//! Binary fields are lowercase hex; `device` is a ULID; `group_id` is decimal; `identity_mode` is
-//! `"tagged"`/`"sidecar"` and is not part of the decoded [`PairingOffer`] — it is daemon/workspace
-//! metadata (docs/questions.md Q6), read directly off the JSON by the CLI, not by [`code_to_offer`].
+//! `relay_url`, `workspace_id` — the same text a frontend's `JSON.stringify(pair_offer_response)`
+//! produces for the QR, so scanning it back needs no field this daemon didn't already return from
+//! `pair_offer`. Binary fields are lowercase hex; `device` is a ULID; `group_id` is decimal;
+//! `identity_mode` and `workspace_id` are both *not* part of the decoded [`PairingOffer`] —
+//! `identity_mode` is daemon/workspace metadata (docs/questions.md Q6), read directly off the JSON
+//! by the CLI, not by [`code_to_offer`]; `workspace_id` (task `pairing-workspace-identity`) is
+//! catalog/routing metadata read by [`code_workspace_id`], a separate decode the daemon runs
+//! before delegating to `pair_accept_impl` — neither belongs in the crypto offer/transcript.
 //! `relay_node_id`/`relay_url` (plan M8 `sync-pairing-relay`) are read as *optional* — empty or
 //! absent both decode to `None` on [`PairingOffer`], so a code produced before this field existed,
-//! or by a device with no relay configured, still decodes exactly as it did before. Ref:
+//! or by a device with no relay configured, still decodes exactly as it did before; `workspace_id`
+//! is optional the same way, so a code from before this field existed still decodes. Ref:
 //! <https://docs.rs/serde_json>.
 
 use serde_json::Value;
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_proto::v1 as pb;
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{GroupId, Nonce, PairingOffer, X25519_PUBLIC_KEY_BYTES};
 
 /// Why a `code` string could not be decoded into offer fields.
@@ -28,6 +33,8 @@ pub(crate) enum WireError {
     BadGroup,
     /// A hex field did not decode to the expected byte length.
     BadHex(&'static str),
+    /// `workspace_id` was present but not a valid ULID.
+    BadWorkspaceId,
 }
 
 impl std::fmt::Display for WireError {
@@ -38,6 +45,7 @@ impl std::fmt::Display for WireError {
             WireError::BadDevice => write!(f, "code's device is not a valid ULID"),
             WireError::BadGroup => write!(f, "code's group_id is not a valid u128"),
             WireError::BadHex(field) => write!(f, "code's {field} is not valid hex"),
+            WireError::BadWorkspaceId => write!(f, "code's workspace_id is not a valid ULID"),
         }
     }
 }
@@ -112,8 +120,24 @@ pub(crate) fn response_to_code(r: &pb::PairOfferResponse) -> String {
         "identity_mode": r.identity_mode,
         "relay_node_id": r.relay_node_id,
         "relay_url": r.relay_url,
+        "workspace_id": r.workspace_id,
     })
     .to_string()
+}
+
+/// Reads just `workspace_id` off a `code`'s JSON, independent of [`code_to_offer`] — workspace
+/// identity is catalog/routing metadata, not part of the crypto offer ([`PairingOffer`]), the same
+/// reason `identity_mode` is handled outside it too (see this module's doc). `Ok(None)` when the
+/// field is absent or empty (a code produced before this field existed) — pairing itself must
+/// still succeed even when workspace-id adoption can't happen, so this is never a hard failure on
+/// its own; `Err` only for genuinely malformed JSON or a present-but-invalid ULID.
+pub(crate) fn code_workspace_id(code: &str) -> Result<Option<WorkspaceId>, WireError> {
+    let v: Value = serde_json::from_str(code).map_err(WireError::Json)?;
+    let Some(text) = optional_str_field(&v, "workspace_id") else {
+        return Ok(None);
+    };
+    let ulid = Ulid::parse(text).ok_or(WireError::BadWorkspaceId)?;
+    Ok(Some(WorkspaceId::new(ulid)))
 }
 
 /// Parses a `code` string back into offer fields, using `now_ms` (this daemon's own clock) as
