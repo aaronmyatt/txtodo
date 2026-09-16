@@ -8897,6 +8897,7 @@ dependencies = [
  "rusqlite",
  "tempfile",
  "tracing",
+ "tracing-subscriber",
  "txtodo-model",
 ]
 

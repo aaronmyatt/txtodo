@@ -23,6 +23,12 @@ tracing = "0.1"
 [dev-dependencies]
 # https://docs.rs/tempfile — WAL needs a real file, so every test gets its own dir
 tempfile = "3"
+# https://docs.rs/tracing-subscriber — test-only local JSON capture for
+# `tests/no_secrets_sentinel.rs` (root todo.txt `logging-flow-test`); this crate may not depend
+# on `txtodo-telemetry` (`.claude/budgets.json`'s `allowedDeps` — see
+# tasks/logging-flow-test/notes.md), so the same LogSink/capturing_dispatch shape is
+# reimplemented locally against the shared workspace pin.
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true
