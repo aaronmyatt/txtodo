@@ -50,8 +50,17 @@ fn priority_prefix(raw: &str) -> Option<char> {
     }
 }
 
+/// Emits the already-done diagnostic — split into its own function so the tracing macro's own
+/// expansion doesn't push `run_do` over the cognitive-complexity budget (same pattern
+/// `txtodo-telemetry`'s `emit_info_event`/`emit_warn_event` tests use). `item` is the user's
+/// `ITEM#` argument (a line number), never task text.
+fn log_already_done(item: &str) {
+    tracing::warn!(item, "cli.already_done");
+}
+
 /// `do ITEM#...`: complete via the core (priority becomes `pri:P`), then archive unless disabled.
-/// An already-done item is reported on stderr and fails the run, like todo.sh 2.14.
+/// An already-done item is reported (todo.sh 2.14 prints it to stderr; here it becomes a tracing
+/// event, see root todo.txt `logging-cli`) and fails the run.
 pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     const USAGE: &str = "do ITEM#[, ITEM#, ITEM#, ...]";
     let items = split_items(args);
@@ -63,7 +72,7 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     for item in &items {
         let idx = get(&file, item, USAGE)?;
         if file.lines[idx].bytes().starts_with(b"x ") {
-            eprintln!("TODO: {item} is already marked done.");
+            log_already_done(item);
             failed = true;
             continue;
         }
@@ -83,8 +92,16 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     }
 }
 
+/// Emits the already-prioritized diagnostic — split out for the same cognitive-complexity reason
+/// as `log_already_done` above. `item` is the user's `ITEM#` argument, `priority` the single
+/// priority letter; neither is task text.
+fn log_already_prioritized(item: &str, priority: char) {
+    tracing::warn!(item, %priority, "cli.already_prioritized");
+}
+
 /// `pri ITEM# PRIORITY [ITEM# PRIORITY ...]`: todo.sh strips any `(X) ` prefix and prepends the new
-/// one. An item already at that priority is reported on stderr and fails the run.
+/// one. An item already at that priority is reported (a tracing event now, see `log_already_done`'s
+/// doc) and fails the run.
 pub fn run_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     const USAGE: &str =
         "pri ITEM# PRIORITY [ITEM# PRIORITY ...]\nnote: PRIORITY must be anywhere from A to Z.";
@@ -104,7 +121,7 @@ pub fn run_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         let old = priority_prefix(&raw);
         if old == Some(new) {
             println!("{item} {raw}");
-            eprintln!("TODO: {item} already prioritized ({new}).");
+            log_already_prioritized(item, new);
             failed = true;
             continue;
         }
@@ -130,7 +147,14 @@ pub fn run_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     }
 }
 
-/// `depri ITEM#...`: drop a `(X) ` prefix; an unprioritised item is reported and fails the run.
+/// Emits the not-prioritized diagnostic — split out for the same cognitive-complexity reason as
+/// `log_already_done` above.
+fn log_not_prioritized(item: &str) {
+    tracing::warn!(item, "cli.not_prioritized");
+}
+
+/// `depri ITEM#...`: drop a `(X) ` prefix; an unprioritised item is reported (a tracing event now,
+/// see `log_already_done`'s doc) and fails the run.
 pub fn run_depri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     const USAGE: &str = "depri ITEM#[, ITEM#, ITEM#, ...]";
     let items = split_items(args);
@@ -143,7 +167,7 @@ pub fn run_depri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         let idx = get(&file, item, USAGE)?;
         let raw = raw_of(&file.lines[idx]);
         if priority_prefix(&raw).is_none() {
-            eprintln!("TODO: {item} is not prioritized.");
+            log_not_prioritized(item);
             failed = true;
             continue;
         }

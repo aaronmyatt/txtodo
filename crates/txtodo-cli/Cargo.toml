@@ -14,6 +14,15 @@ path = "src/main.rs"
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true
+# JSON-rolling-file + pretty-stderr tracing init, shared with every other txtodo binary (root
+# todo.txt `logging-cli`; `.claude/budgets.json`'s `allowedDeps` lists this for the cli slice).
+# Used only when $TXTODO_LOG is set — see `main.rs::init_telemetry` for the CLI's own sink matrix.
+txtodo-telemetry = { path = "../txtodo-telemetry" }
+# https://docs.rs/tracing — the `cli.command` span and the mode-decision/mutation-plan events.
+tracing = "0.1"
+# https://docs.rs/tracing-subscriber — the CLI's own default-quiet, stderr-only, warn+ layer
+# (`main.rs::init_telemetry`); `txtodo_telemetry::init` builds the TXTODO_LOG-driven pair instead.
+tracing-subscriber = { workspace = true }
 # https://docs.rs/clap/latest/clap/_derive/index.html
 clap = { version = "4", features = ["derive"] }
 # https://docs.rs/toml/latest/toml/ — config.toml

@@ -20,6 +20,7 @@ use clap::Parser;
 use cli::{Cli, Command};
 use config::{Config, Env, Paths};
 use error::CliError;
+use std::path::Path;
 use std::process::ExitCode;
 use txtodo_core::Date;
 
@@ -74,6 +75,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         config,
         json: cli.json,
     };
+    let _log_guard = init_telemetry(&ctx.paths.dir);
     match &cli.command {
         Command::Doctor { verbose } => return commands::doctor::run(&ctx, *verbose),
         Command::Daemon { action, force } => return commands::service::run(&ctx, *action, *force),
@@ -91,9 +93,94 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     }
 }
 
+/// The CLI's own sink matrix (root todo.txt `logging-cli`), distinct from `txtodo-mcp`/`txtodod`'s
+/// always-on JSON+stderr pair (`txtodo_telemetry::init` unconditionally builds both): most
+/// invocations are one-shot and short-lived, so writing a rolling JSON log file nobody asked for on
+/// every `txtodo add` would be noise. Default (no `$TXTODO_LOG`): pretty stderr only, `warn`+, so
+/// an ordinary run stays quiet but still surfaces the three converted `commands/edit.rs`
+/// diagnostics. `$TXTODO_LOG` set: the shared JSON-rolling-file + pretty-stderr pair, filtered by
+/// its value, same as every other txtodo binary.
+///
+/// Reads `$TXTODO_LOG` directly rather than through `config::Env` (`config.rs`'s module doc: "the
+/// process environment ... never read below main"): this is telemetry bootstrap, not CLI business
+/// logic, and every other txtodo binary's own `tracing-subscriber::EnvFilter::try_from_env` reads
+/// the same variable directly, hidden inside `txtodo_telemetry::init` itself.
+fn init_telemetry(dir: &Path) -> Option<txtodo_telemetry::LogGuard> {
+    if std::env::var_os(txtodo_telemetry::LOG_FILTER_ENV).is_some() {
+        return txtodo_telemetry::init("txtodo", &dir.join(".txtodo/logs")).ok();
+    }
+    // https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/fn.fmt.html
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr as fn() -> std::io::Stderr)
+        .with_max_level(tracing::Level::WARN)
+        .try_init();
+    None
+}
+
+/// The command's declared name for the `cli.command` span — never `Debug`/`Display` on `Command`
+/// itself, which would leak text arguments (`add "buy milk"` etc.) into a span field.
+fn command_name(command: &Command) -> &'static str {
+    match command {
+        Command::Add { .. } => "add",
+        Command::Addm { .. } => "addm",
+        Command::Append { .. } => "append",
+        Command::Archive => "archive",
+        Command::Depri { .. } => "depri",
+        Command::Deduplicate => "deduplicate",
+        Command::Del { .. } => "del",
+        Command::Do { .. } => "do",
+        Command::Env => "env",
+        Command::Fmt => "fmt",
+        Command::Lint => "lint",
+        Command::List { .. } => "list",
+        Command::Listall { .. } => "listall",
+        Command::Listpri { .. } => "listpri",
+        Command::Listproj { .. } => "listproj",
+        Command::Listcon { .. } => "listcon",
+        Command::Prepend { .. } => "prepend",
+        Command::Move { .. } => "move",
+        Command::Pri { .. } => "pri",
+        Command::Report => "report",
+        Command::Replace { .. } => "replace",
+        Command::Listfile { .. } => "listfile",
+        Command::Log { .. } => "log",
+        Command::Blame { .. } => "blame",
+        Command::Undo { .. } => "undo",
+        Command::Checkout { .. } => "checkout",
+        Command::Conflicts { .. } => "conflicts",
+        Command::Device { .. } => "device",
+        Command::Pair { .. } => "pair",
+        Command::Doctor { .. } => "doctor",
+        Command::Daemon { .. } => "daemon",
+        Command::Mcp { .. } => "mcp",
+        Command::Open { .. } => "open",
+        Command::Notes { .. } => "notes",
+        Command::Sub { .. } => "sub",
+        Command::Bundle { .. } => "bundle",
+        Command::Workspace { .. } => "workspace",
+        Command::Prune { .. } => "prune",
+    }
+}
+
 /// Daemon mode: history commands talk to the daemon directly; every todo.sh command runs against a
 /// scratch copy and its diff is sent as mutations (`daemon_mode`). `env` reports the real paths.
+#[tracing::instrument(
+    name = "cli.command",
+    skip_all,
+    fields(name = command_name(command), mode = "daemon")
+)]
 fn dispatch_daemon(
+    ctx: &Ctx,
+    daemon: &mut client::Daemon,
+    command: &Command,
+) -> Result<(), CliError> {
+    dispatch_daemon_inner(ctx, daemon, command)
+}
+
+/// The actual daemon-mode dispatch, split out of `dispatch_daemon` so `#[instrument]` (which costs
+/// cognitive-complexity points on its own) never pushes this already-branchy match over the budget
+/// (root todo.txt `logging-cli`).
+fn dispatch_daemon_inner(
     ctx: &Ctx,
     daemon: &mut client::Daemon,
     command: &Command,
@@ -129,7 +216,18 @@ fn dispatch_daemon(
 }
 
 /// Direct-file mode (M2): one arm per command.
+#[tracing::instrument(
+    name = "cli.command",
+    skip_all,
+    fields(name = command_name(command), mode = "direct")
+)]
 fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
+    dispatch_inner(ctx, command)
+}
+
+/// The actual direct-mode dispatch, split out of `dispatch` for the same cognitive-complexity
+/// reason as `dispatch_daemon_inner` above.
+fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
     match command {
         Command::Doctor { .. } | Command::Daemon { .. } | Command::Mcp { .. } => {
             unreachable!("doctor, daemon and mcp are handled before mode selection")

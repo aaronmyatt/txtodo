@@ -84,14 +84,17 @@ impl std::error::Error for ClientError {}
 /// possibly-several open workspaces `dir` names.
 pub fn select(dir: &Path, no_daemon: bool, env: &crate::config::Env) -> Result<Mode, ClientError> {
     if no_daemon {
+        log_mode_selected("direct", "no_daemon_flag");
         return Ok(Mode::Direct);
     }
     let per_dir_socket = dir.join(SOCKET_REL);
     if per_dir_socket.exists() {
+        log_mode_selected("daemon", "per_dir_socket");
         return Daemon::connect(per_dir_socket, None).map(|d| Mode::Daemon(Box::new(d)));
     }
     let global_socket = crate::config::global_socket_path(env);
     if global_socket.exists() {
+        log_mode_selected("daemon", "global_socket");
         let selector = pb::WorkspaceSelector {
             selector: Some(pb::workspace_selector::Selector::Path(
                 dir.display().to_string(),
@@ -99,7 +102,16 @@ pub fn select(dir: &Path, no_daemon: bool, env: &crate::config::Env) -> Result<M
         };
         return Daemon::connect(global_socket, Some(selector)).map(|d| Mode::Daemon(Box::new(d)));
     }
+    log_mode_selected("direct", "no_socket_found");
     Ok(Mode::Direct)
+}
+
+/// Emits the daemon-vs-direct mode decision — split into its own function so the tracing macro's
+/// own expansion doesn't push `select`'s branches over the cognitive-complexity budget (same
+/// pattern `txtodo-telemetry`'s `emit_info_event`/`emit_warn_event` tests use, root todo.txt
+/// `logging-cli`). Neither argument is ever a path or other user text — fixed labels only.
+fn log_mode_selected(mode: &'static str, reason: &'static str) {
+    tracing::debug!(mode, reason, "cli.mode_selected");
 }
 
 impl Daemon {

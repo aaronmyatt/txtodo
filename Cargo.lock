@@ -8748,8 +8748,11 @@ dependencies = [
  "toml 1.1.6+spec-1.1.0",
  "tonic",
  "tower",
+ "tracing",
+ "tracing-subscriber",
  "txtodo-core",
  "txtodo-proto",
+ "txtodo-telemetry",
 ]
 
 [[package]]

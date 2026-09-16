@@ -184,9 +184,31 @@ fn classify(diffs: &[LineDiff], old: &File, new: &File) -> Option<Plan> {
     Some(plan)
 }
 
+/// Emits whether a diff was mutation-expressible or fell back to a whole-file write — split into
+/// its own function so the tracing macro's own expansion doesn't push `plan_mutations` over the
+/// cognitive-complexity budget (same pattern `client::select`'s `log_mode_selected` uses, root
+/// todo.txt `logging-cli`). `result` never carries line text, only counts.
+fn log_mutation_plan(result: Option<&Vec<pb::Mutation>>) {
+    let (expressible, mutation_count) = match result {
+        Some(mutations) => (true, mutations.len()),
+        None => (false, 0),
+    };
+    tracing::debug!(expressible, mutation_count, "cli.mutation_plan");
+}
+
 /// The diff `old → new` as mutations: edits first (no shifts), deletes bottom-up (each shift is
-/// below the next target), appends last. `None` when some step has no mutation.
+/// below the next target), appends last. `None` when some step has no mutation — the CLI falls
+/// back to writing the scratch bytes to the real file instead (`push_document` above).
 pub fn plan_mutations(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
+    let result = plan_mutations_inner(old, new);
+    log_mutation_plan(result.as_ref());
+    result
+}
+
+/// The actual diff-to-mutations logic, split out of `plan_mutations` so `#[instrument]`-style
+/// wrapping (here, the `log_mutation_plan` call) never pushes this already-branchy function over
+/// the cognitive-complexity budget.
+fn plan_mutations_inner(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
     let diffs = diff_lines(old, new);
     let first_task_insert = diffs
         .iter()
