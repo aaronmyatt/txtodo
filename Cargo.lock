@@ -8779,6 +8779,7 @@ version = "0.0.0"
 dependencies = [
  "loro",
  "tracing",
+ "tracing-subscriber",
  "txtodo-core",
  "txtodo-model",
  "txtodo-store",
