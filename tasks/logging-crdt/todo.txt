@@ -1,6 +1,6 @@
-2026-09-16 instrument resurrect.rs resolve (delete-vs-edit, specs/conflicts.md rows 6-7) +m11 @crdt id:01M2MRCKE66J8H62FM6RC912GN
 2026-09-16 instrument to_loro.rs apply (op to Loro entry point) +m11 @crdt id:01M2MRCKEJM8HQF3CZBCJGTPWN
 2026-09-16 instrument from_loro.rs from_batch (Loro diff to ops entry point) +m11 @crdt id:01M2MRCKEYW0AJTEAXXAVXRSFK
+x 2026-09-16 2026-09-16 instrument resurrect.rs resolve (delete-vs-edit, specs/conflicts.md rows 6-7) +m11 @crdt id:01M2MRCKE66J8H62FM6RC912GN
 x 2026-09-16 2026-09-16 instrument review.rs detect (same-word conflict flags) +m11 @crdt id:01M2MRCKDTSEN16DC95CJSGKDS
 x 2026-09-16 2026-09-16 instrument doc/sync.rs import and export_updates_since +m11 @crdt id:01M2MRCKDDNCZ47KTW036PFC9M
 x 2026-09-16 2026-09-16 add tracing dep + instrument lww.rs write_if_newer (ADR 0013 arbitration) +m11 @crdt id:01M2MRCKCXP6PNGT42RPKMPFDS

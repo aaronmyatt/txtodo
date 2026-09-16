@@ -37,8 +37,14 @@ struct TaskChange {
 /// independently: no coordination between devices is needed, since a resolved register is always
 /// `false`, and Loro's own causal order (this write commits strictly after the import it is
 /// correcting) makes it win regardless of how the two devices' own corrections tie-break against
-/// each other.
+/// each other. Thin wrapper around `resolve_inner` for the tracing span (`#[instrument]` on the
+/// real body overflows the `cognitive_complexity` budget).
+#[tracing::instrument(skip_all)]
 pub(crate) fn resolve(doc: &mut LoroDocument, imported: &Imported) -> LoroResult<()> {
+    resolve_inner(doc, imported)
+}
+
+fn resolve_inner(doc: &mut LoroDocument, imported: &Imported) -> LoroResult<()> {
     if !imported.applied {
         return Ok(());
     }
@@ -49,17 +55,41 @@ pub(crate) fn resolve(doc: &mut LoroDocument, imported: &Imported) -> LoroResult
         let Some(their_change) = theirs.get(task) else {
             continue;
         };
-        let loses =
-            delete_loses(mine_change, their_change) || delete_loses(their_change, mine_change);
-        if loses && doc.is_deleted(*task) {
+        let mine_loses = delete_loses(mine_change, their_change);
+        let their_loses = delete_loses(their_change, mine_change);
+        if (mine_loses || their_loses) && doc.is_deleted(*task) {
             clear_deleted(doc, *task)?;
             resurrected = true;
+            log_task_resurrected(*task, mine_loses, their_loses, mine_change, their_change);
         }
     }
     if resurrected {
         doc.commit();
     }
     Ok(())
+}
+
+/// One delete-vs-edit resolution landed (`specs/conflicts.md` rows 6-7): `task`'s concurrent
+/// delete lost to a concurrent edit or completion on the other side and was undone.
+/// `mine_delete_lost`/`their_delete_lost` name which side's proposed delete was the one overridden;
+/// `winner_edited`/`winner_completed` name whether the side that beat the delete did so with an
+/// edit (row 6) or a completion (row 7) — both may be true. `task` is an id, never content.
+fn log_task_resurrected(
+    task: TaskId,
+    mine_delete_lost: bool,
+    their_delete_lost: bool,
+    mine: &TaskChange,
+    their: &TaskChange,
+) {
+    let winner = if mine_delete_lost { their } else { mine };
+    tracing::debug!(
+        task = %task,
+        mine_delete_lost,
+        their_delete_lost,
+        winner_edited = winner.edited,
+        winner_completed = winner.completed,
+        "crdt_resurrect_task"
+    );
 }
 
 /// True when `deleter`'s concurrent delete must lose to `other`'s concurrent edit or completion.
