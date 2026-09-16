@@ -30,9 +30,25 @@ fn device_of(blob: &[u8]) -> Option<DeviceId> {
     Some(DeviceId::new(Ulid::from_u128(u128::from_be_bytes(bytes))))
 }
 
+/// `heads()`'s own outcome: how many devices this workspace has ever heard from.
+fn log_heads_read(device_count: usize) {
+    tracing::debug!(device_count, "heads_read");
+}
+
+/// `head_of()`'s own outcome: one device's current head.
+fn log_head_of(device: DeviceId, head: u64) {
+    tracing::debug!(%device, head, "head_of_read");
+}
+
+/// `next_origin_seq()`'s own outcome: the origin_seq a fresh op from `device` would take.
+fn log_next_origin_seq(device: DeviceId, next: u64) {
+    tracing::debug!(%device, next, "next_origin_seq_read");
+}
+
 impl Store {
     /// Every device that has ops here and how many, in device order, at most
     /// `MAX_DEVICES_PER_HEADS`.
+    #[tracing::instrument(skip_all)]
     pub fn heads(&self) -> Result<BTreeMap<DeviceId, u64>, StoreError> {
         let mut stmt = self
             .conn
@@ -54,10 +70,12 @@ impl Store {
             heads.values().all(|h| *h > 0),
             "a device with no ops has no head"
         );
+        log_heads_read(heads.len());
         Ok(heads)
     }
 
     /// How many of `device`'s ops we hold (0 for a device we have never heard from).
+    #[tracing::instrument(skip_all, fields(device = %device))]
     pub fn head_of(&self, device: DeviceId) -> Result<u64, StoreError> {
         let count: i64 = self
             .conn
@@ -66,13 +84,16 @@ impl Store {
         debug_assert!(count >= 0);
         let head = u64::try_from(count).unwrap_or(0);
         debug_assert_eq!(head == 0, count == 0);
+        log_head_of(device, head);
         Ok(head)
     }
 
     /// The `origin_seq` the next op from `device` will take: `head_of + 1`.
+    #[tracing::instrument(skip_all, fields(device = %device))]
     pub fn next_origin_seq(&self, device: DeviceId) -> Result<u64, StoreError> {
         let next = self.head_of(device)?.saturating_add(1);
         debug_assert!(next >= 1);
+        log_next_origin_seq(device, next);
         Ok(next)
     }
 
