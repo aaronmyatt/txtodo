@@ -1,0 +1,23 @@
+[package]
+name = "txtodo-telemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Shared tracing init (JSON rolling-file + pretty stderr layers, service-stamped) for every txtodo binary."
+
+[lints]
+workspace = true
+
+[dependencies]
+# https://docs.rs/tracing — event/span macros every layer below consumes.
+tracing = { workspace = true }
+# https://docs.rs/tracing-subscriber — JSON + pretty fmt layers, EnvFilter.
+tracing-subscriber = { workspace = true }
+# https://docs.rs/tracing-appender — daily rolling file writer, non-blocking.
+tracing-appender = { workspace = true }
+
+[dev-dependencies]
+# https://docs.rs/tempfile — prune()'s test gets its own on-disk log dir.
+tempfile = "3"
