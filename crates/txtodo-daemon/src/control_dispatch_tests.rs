@@ -118,14 +118,21 @@ async fn no_routes_at_all_is_dropped_without_panicking_or_hanging() {
     .unwrap_or_else(|e| panic!("driver task panicked: {e}"));
 }
 
-fn send_sealed(link: &mut dyn Link, group: txtodo_sync::GroupId, key: &GroupKey, msg: Message, workspace: txtodo_store::WorkspaceId) {
+fn send_sealed(
+    link: &mut dyn Link,
+    group: txtodo_sync::GroupId,
+    key: &GroupKey,
+    msg: Message,
+    workspace: txtodo_store::WorkspaceId,
+) {
     let plain = msg.encode().unwrap_or_else(|e| panic!("encode: {e}"));
     let for_ = SealFor {
         group,
         epoch: GROUP_EPOCH,
         workspace,
     };
-    let sealed = seal(plain.version, for_, key, &plain.body).unwrap_or_else(|e| panic!("seal: {e}"));
+    let sealed =
+        seal(plain.version, for_, key, &plain.body).unwrap_or_else(|e| panic!("seal: {e}"));
     link.send(Frame {
         version: plain.version,
         body: sealed,

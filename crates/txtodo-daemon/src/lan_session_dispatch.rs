@@ -120,7 +120,12 @@ fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx, session: &mu
 /// Sends our own `Greet` for one workspace and, on success, the message it produced. A session-
 /// level refusal (e.g. an already-greeted workspace) is logged and skipped, not fatal to the
 /// connection's other workspaces — only a real send failure is.
-fn send_greet_for(link: &mut dyn Link, shared: &SharedCtx, session: &mut Session, id: WorkspaceId) -> bool {
+fn send_greet_for(
+    link: &mut dyn Link,
+    shared: &SharedCtx,
+    session: &mut Session,
+    id: WorkspaceId,
+) -> bool {
     match session.hello(id) {
         Ok(greet) => send_message(link, shared.group, id, &shared.key, greet).is_ok(),
         Err(e) => {
@@ -217,7 +222,10 @@ pub(crate) fn drive_shared_session(
     // rather than opening one per workspace (`tests/relay_multiplex.rs` greps for it). `workspaces
     // = 1` for the common single-workspace case is exactly as informative and equally cheap to
     // emit, so this is not gated on the count.
-    tracing::info!(workspaces = shared.routes.len(), "lan_shared_session_started");
+    tracing::info!(
+        workspaces = shared.routes.len(),
+        "lan_shared_session_started"
+    );
     let mut session = Session::new(device, group);
     open_every_route(&mut session, &shared.routes);
     if !send_initial_greetings(link, &shared, &mut session) {

@@ -10,6 +10,17 @@ on:
 permissions:
   contents: read
 
+# .cargo/config.toml points x86_64-unknown-linux-gnu's linker at .cargo/zig/zigcc-*.sh so that a
+# dev on macOS can cross-build for Linux. On a Linux runner that triple is the *host*, so every
+# native build tried to link through zig — which isn't installed there (`exec: zig: not found`,
+# exit 127) and broke the ubuntu check/daemon/bench/coverage/fuzz jobs. Env vars outrank
+# config.toml in cargo's config hierarchy, so this pins the runner back to its system linker
+# without touching the local cross-build setup. The var is ignored on macOS/Windows runners.
+# Precedence: https://doc.rust-lang.org/cargo/reference/config.html#environment-variables
+# Key name mapping: https://doc.rust-lang.org/cargo/reference/config.html#target
+env:
+  CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
+
 jobs:
   check:
     strategy:

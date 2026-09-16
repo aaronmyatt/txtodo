@@ -336,7 +336,10 @@ fn archive_vs_edit_lands_the_edit_and_keeps_the_task_in_todo_txt() {
     apply(&mut b, &replace(2, 11, DESC, "ducks", "geese")).unwrap();
     converge(&mut a, &mut b);
     for doc in [&a, &b] {
-        assert!(doc.list_ids(&todo_file()).contains(&task(TASK)), "still in todo.txt");
+        assert!(
+            doc.list_ids(&todo_file()).contains(&task(TASK)),
+            "still in todo.txt"
+        );
         assert!(
             doc.description(task(TASK)).unwrap().contains("geese"),
             "the edit lands"

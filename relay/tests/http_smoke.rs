@@ -33,10 +33,21 @@ async fn spawn_server() -> String {
     format!("http://{addr}")
 }
 
+/// A plaintext HTTP client. Building one needs a process-wide rustls crypto provider whenever
+/// cargo's workspace feature unification has turned on reqwest's `rustls-no-provider` (iroh does,
+/// via the sync crates) — without one, `Client::new()` panics even though nothing here speaks
+/// TLS. `install_default` returns Err if a provider is already installed, which is expected once
+/// the second test in this binary runs, so the result is deliberately discarded.
+/// Ref: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+fn http_client() -> reqwest::Client {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    reqwest::Client::new()
+}
+
 #[tokio::test]
 async fn put_then_get_then_list_round_trip_over_http() {
     let base = spawn_server().await;
-    let client = reqwest::Client::new();
+    let client = http_client();
 
     let put = client
         .put(format!("{base}/v1/groups/g1/devices/d1/blobs"))
@@ -86,7 +97,7 @@ async fn put_then_get_then_list_round_trip_over_http() {
 #[tokio::test]
 async fn oversized_put_is_rejected_over_http() {
     let base = spawn_server().await;
-    let client = reqwest::Client::new();
+    let client = http_client();
     let oversized = vec![0u8; relay::bounds::MAX_BLOB_SIZE + 1];
 
     let put = client

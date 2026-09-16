@@ -44,6 +44,14 @@ tempfile = "3"
 # feature set (no TLS needed: tests talk to 127.0.0.1 in plaintext). Version matches the copy
 # already in Cargo.lock (pulled in elsewhere in the workspace) to avoid a second major version.
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
+# https://docs.rs/rustls — test-only, and only to satisfy a feature-unification artifact. This
+# crate needs no TLS, but cargo unifies features per-package across a workspace build: iroh (in
+# the sync crates) turns on reqwest's `rustls-no-provider`, and under that feature
+# `reqwest::Client::new()` panics unless a process-wide crypto provider was installed first.
+# `ring` is the provider the rest of the workspace already resolves to.
+# Feature unification: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
+# Providers: https://docs.rs/rustls/latest/rustls/#cryptography-providers
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 [lints]
 workspace = true

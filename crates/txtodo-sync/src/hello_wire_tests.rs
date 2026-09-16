@@ -158,7 +158,11 @@ fn replaying_a_captured_hello_after_the_handshake_moved_on_is_refused_and_change
         .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
     let peer_after_first = session.peer();
-    assert_eq!(peer_after_first, Some(dev(1)), "sanity: the Hello was accepted");
+    assert_eq!(
+        peer_after_first,
+        Some(dev(1)),
+        "sanity: the Hello was accepted"
+    );
 
     let replay = session.on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0);
     assert_eq!(
@@ -190,17 +194,13 @@ fn replaying_a_captured_hello_to_a_fresh_session_reveals_the_same_peer_and_skew(
     );
 
     let mut victim_one = Session::new(dev(2), group);
-    victim_one
-        .link_hello(0)
-        .unwrap_or_else(|e| panic!("{e:?}"));
+    victim_one.link_hello(0).unwrap_or_else(|e| panic!("{e:?}"));
     let skew_one = victim_one
         .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
 
     let mut victim_two = Session::new(dev(3), group);
-    victim_two
-        .link_hello(0)
-        .unwrap_or_else(|e| panic!("{e:?}"));
+    victim_two.link_hello(0).unwrap_or_else(|e| panic!("{e:?}"));
     let skew_two = victim_two
         .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));

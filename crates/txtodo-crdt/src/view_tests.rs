@@ -79,7 +79,10 @@ fn list_ids_keeps_order_and_sentinels_and_last_blank_id_tracks_blank_insert() {
     );
     assert_eq!(doc.last_blank_id(), Some(ids[1]));
     assert_eq!(LoroDocument::open().last_blank_id(), None);
-    assert!(doc.list_ids(&FilePath::new("other.txt").unwrap()).is_empty());
+    assert!(
+        doc.list_ids(&FilePath::new("other.txt").unwrap())
+            .is_empty()
+    );
 }
 
 #[test]

@@ -80,9 +80,7 @@ fn greeted() -> Session {
     let mut s = Session::new(dev(1), GroupId(7));
     s.open_workspace(ws(), heads(&[(1, 5)])).unwrap();
     s.link_hello(NOW_MS).unwrap();
-    let skew = s
-        .on_link_hello(&peer_link_hello(NOW_MS), NOW_MS)
-        .unwrap();
+    let skew = s.on_link_hello(&peer_link_hello(NOW_MS), NOW_MS).unwrap();
     assert_eq!(skew, Skew::Ok);
     let greet = s.hello(ws()).unwrap();
     assert_eq!(

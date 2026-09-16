@@ -59,7 +59,12 @@ pub(crate) fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
 /// routing table for `ws` and hands it to `lan_session_shared::drive_shared_session`, so a peer
 /// relationship with only one open workspace behaves exactly as it did before this stage (same
 /// code path, not a parallel one that could drift).
-pub(crate) fn drive_session(link: &mut dyn Link, ws: SharedWorkspace, device: DeviceId, group: GroupId) {
+pub(crate) fn drive_session(
+    link: &mut dyn Link,
+    ws: SharedWorkspace,
+    device: DeviceId,
+    group: GroupId,
+) {
     let id = read(&ws).workspace_id();
     let routes = WorkspaceRoutes::new();
     let registered = routes.register(id, WorkspaceRoute { ws, device, group });

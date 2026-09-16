@@ -37,7 +37,12 @@ fn ws() -> WorkspaceId {
 /// Stage 2: a workspace's `Greet` requires the link-level `Hello` handshake done first
 /// (`Session::on_hello`'s own `LinkNotReady` guard) — drives both steps so `on_ops`-focused tests
 /// can reach `Wanting` without re-deriving this sequence three times.
-fn greeted_and_wanting(local: DeviceId, group: GroupId, sender: DeviceId, sender_heads: Heads) -> Session {
+fn greeted_and_wanting(
+    local: DeviceId,
+    group: GroupId,
+    sender: DeviceId,
+    sender_heads: Heads,
+) -> Session {
     let mut session = Session::new(local, group);
     session.open_workspace(ws(), BTreeMap::new()).unwrap();
     session.link_hello(0).unwrap();

@@ -117,7 +117,11 @@ pub(crate) struct PeerCrypto {
 /// own `Hello`, its own `Greet`, then — once it has processed ours — the `Want` that workspace
 /// derived). Split out of `run_peer_script` purely to keep that function under this workspace's
 /// line budget (`clippy.toml`).
-fn peer_handshake(peer_link: &mut txtodo_sync::ChannelLink, crypto: &PeerCrypto, range: OriginRange) {
+fn peer_handshake(
+    peer_link: &mut txtodo_sync::ChannelLink,
+    crypto: &PeerCrypto,
+    range: OriginRange,
+) {
     let PeerCrypto {
         group,
         workspace,
@@ -150,8 +154,14 @@ fn peer_handshake(peer_link: &mut txtodo_sync::ChannelLink, crypto: &PeerCrypto,
             heads,
         },
     );
-    assert!(matches!(recv(peer_link, group, keys), Message::Hello { .. }));
-    assert!(matches!(recv(peer_link, group, keys), Message::Greet { .. }));
+    assert!(matches!(
+        recv(peer_link, group, keys),
+        Message::Hello { .. }
+    ));
+    assert!(matches!(
+        recv(peer_link, group, keys),
+        Message::Greet { .. }
+    ));
     let want = recv(peer_link, group, keys);
     assert_eq!(
         want,
