@@ -73,6 +73,23 @@ An illustrative systemd unit is at [`deploy/systemd/relay.service`](../deploy/sy
 starting point, not a finished production unit: adjust the user, paths and any distro-specific
 hardening (`ProtectSystem=`, `NoNewPrivileges=`, ...) for your own host.
 
+## Logging
+
+`RELAY_LOG` sets the `tracing-subscriber` `EnvFilter` directive (same syntax as every other
+txtodo binary's `TXTODO_LOG` — e.g. `info`, `debug`, `relay=debug,tower_http=warn`); `TXTODO_LOG`
+is the fallback if `RELAY_LOG` isn't set, so relay behaves like the rest of the workspace by
+default. Defaults to `info` when neither is set. Ref:
+<https://docs.rs/tracing-subscriber/latest/tracing_subscriber/struct.EnvFilter.html>
+
+Every run writes two places: JSON, daily-rotated (newest 7 kept) at
+`<data-dir>/logs/relay.log.YYYY-MM-DD` — the durable record — and a pretty-printed copy on
+stderr, which a process manager (systemd's journal, launchd, Kamal's log driver, ...) captures on
+its own. This is the same JSON-file-plus-pretty-stderr shape every other txtodo binary uses
+(`txtodo_telemetry::init`), reimplemented locally rather than depended on: `relay/` must never
+take a `txtodo-*` dependency (`relay/tests/no_txtodo_deps.rs`, design §4.6) — see
+`tasks/logging-relay-converge/notes.md` for the full reasoning. Logs never carry blob payloads or
+group/device ids beyond what's already routing metadata (design §4.6's own contract).
+
 ## TLS and the reverse-proxy trust boundary
 
 The relay binds a plain HTTP listener — it does not terminate TLS itself. Put it behind a

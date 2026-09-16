@@ -33,8 +33,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # https://docs.rs/tracing — structured logs, including NoopPush's wake log line.
 tracing = "0.1"
-# https://docs.rs/tracing-subscriber — env-filtered log output for the binary's main.
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# https://docs.rs/tracing-subscriber — env-filtered log output for the binary's main; "json" is
+# for the rolling-file layer (tasks/logging-relay-converge). Not `workspace = true`: relay pins
+# its own versions independently of the rest of the workspace (see this file's own header) —
+# version matches `tracing-subscriber`'s workspace pin so no second copy is resolved.
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# https://docs.rs/tracing-appender — daily rolling file writer, non-blocking (tasks/
+# logging-relay-converge: relay's own JSON-rolling-file layer, matching `txtodo_telemetry`'s
+# shape without depending on that crate — see `tasks/logging-relay-converge/notes.md`). Version
+# matches its workspace pin for the same reason as `tracing-subscriber` above.
+tracing-appender = "0.2"
 
 [dev-dependencies]
 # https://docs.rs/tempfile — every store/HTTP test gets its own on-disk data dir (SQLite WAL

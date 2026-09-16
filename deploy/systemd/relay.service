@@ -6,7 +6,11 @@
 #   systemctl --user enable --now relay.service
 #
 # Flags come entirely from the EnvironmentFile below (see docs/relay.md's flags table for the
-# full set) so this unit file itself never needs to change when a value does.
+# full set) so this unit file itself never needs to change when a value does. RELAY_LOG (fallback
+# TXTODO_LOG) also belongs in that file if you want anything other than the "info" default — see
+# docs/relay.md's "Logging" section: it controls both the JSON file under
+# $RELAY_DATA_DIR/logs and the pretty copy on stderr, which lands in the user journal below by
+# systemd's own default (no redirect needed here).
 # Ref: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
 
 [Unit]
