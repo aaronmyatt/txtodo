@@ -98,4 +98,5 @@ that entry below.
 - Ids are stored as 16-byte big-endian BLOBs; wall times as i64 milliseconds.
 - A device's ops are dense by construction (own ops always land; sync commits contiguous runs
   from `head + 1`), which is what lets `COUNT(*)` per device be the head.
+- Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-model.
