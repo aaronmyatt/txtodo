@@ -1,0 +1,5 @@
+2026-09-16 mark root todo.txt line 36 done +m11 @desktop @web id:01M2MXPV95FWS2GWKSJBKHYQ62
+x 2026-09-16 2026-09-16 run npm run check and npm run test, confirm green +m11 @desktop @web id:01M2MXPV8QSTBB79RCR4KHFXPE
+x 2026-09-16 2026-09-16 add tauriShim.test.ts covering mock backend + ui_log shape + no content leakage +m11 @desktop @web id:01M2MXPV88W1NG92DC95AK3FVR
+x 2026-09-16 2026-09-16 wrap listen() to emit ui_event on payload arrival via ui_log +m11 @desktop @web id:01M2MXPV7SH72V9F9F26A6SH6V
+x 2026-09-16 2026-09-16 wrap invoke() with request_id + ui_invoke_start/ok/err via ui_log +m11 @desktop @web id:01M2MXPV78N0NY0P3C20169DYR
