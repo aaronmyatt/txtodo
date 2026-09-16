@@ -46,16 +46,24 @@ impl LoroDocument {
     }
 
     /// `export_updates` for a version given as `version_bytes()`; garbage bytes are an error,
-    /// never a full export.
+    /// never a full export. Thin wrapper around `export_updates_since_inner` for the tracing span
+    /// (`#[instrument]` on the real body overflows the `cognitive_complexity` budget), the same
+    /// pattern `import`/`import_inner` use below — including the log event living in its own
+    /// helper ([`log_export_updates_since`]), since the macro itself counts against the budget too.
     #[tracing::instrument(skip_all, fields(since_bytes = since.len()))]
     pub fn export_updates_since(&self, since: &[u8]) -> LoroResult<Vec<u8>> {
+        let bytes = self.export_updates_since_inner(since)?;
+        log_export_updates_since(bytes.len());
+        Ok(bytes)
+    }
+
+    fn export_updates_since_inner(&self, since: &[u8]) -> LoroResult<Vec<u8>> {
         let vv = VersionVector::decode(since)?;
         let bytes = self
             .doc
             .export(loro::ExportMode::updates(&vv))
             .map_err(|e| loro::LoroError::DecodeError(e.to_string().into_boxed_str()))?;
         debug_assert!(!bytes.is_empty());
-        tracing::debug!(exported_bytes = bytes.len(), "crdt_export_updates_since");
         Ok(bytes)
     }
 
@@ -133,4 +141,9 @@ impl LoroDocument {
 /// return value a caller can inspect directly.
 fn log_import_landed(applied: bool) {
     tracing::debug!(applied, "crdt_import_landed");
+}
+
+/// `export_updates_since`'s own outcome — split out the same reason [`log_import_landed`] is.
+fn log_export_updates_since(exported_bytes: usize) {
+    tracing::debug!(exported_bytes, "crdt_export_updates_since");
 }
