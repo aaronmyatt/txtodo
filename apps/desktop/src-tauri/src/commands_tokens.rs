@@ -10,8 +10,19 @@ use txtodo_proto::v1 as pb;
 
 /// Mints a new capability token from the design §6.2 scope/caveat grammar; the daemon rejects an
 /// unrecognized scope at create time. `expires` is RFC 3339 text; empty means no expiry.
+#[tracing::instrument(name = "ipc.token_create", skip_all)]
 #[tauri::command]
 pub async fn token_create(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    scopes: Vec<String>,
+    expires: String,
+) -> Result<TokenDto, String> {
+    token_create_inner(app, state, name, scopes, expires).await
+}
+
+async fn token_create_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
@@ -33,8 +44,16 @@ pub async fn token_create(
 
 /// Tokens for this workspace, scopes included; a revoked token has already dropped out of this
 /// list (the wire message carries no revoked marker to show it with).
+#[tracing::instrument(name = "ipc.token_list", skip_all)]
 #[tauri::command]
 pub async fn token_list(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<TokenDto>, String> {
+    token_list_inner(app, state).await
+}
+
+async fn token_list_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<TokenDto>, String> {
@@ -46,8 +65,17 @@ pub async fn token_list(
 }
 
 /// Revokes a token by id; the daemon refuses it on its next use.
+#[tracing::instrument(name = "ipc.token_revoke", skip_all)]
 #[tauri::command]
 pub async fn token_revoke(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<bool, String> {
+    token_revoke_inner(app, state, id).await
+}
+
+async fn token_revoke_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     id: String,

@@ -10,8 +10,16 @@ use tauri::{AppHandle, State};
 /// Newest ops across every tracked file, at most 200, newest first: one bounded read, not a live
 /// tail — unlike [`crate::commands::watch`], this returns the whole page at once instead of
 /// pushing `daemon-change` events.
+#[tracing::instrument(name = "ipc.op_log", skip_all)]
 #[tauri::command]
 pub async fn op_log(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Vec<OpLogEntryDto>, String> {
+    op_log_inner(app, state).await
+}
+
+async fn op_log_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<OpLogEntryDto>, String> {

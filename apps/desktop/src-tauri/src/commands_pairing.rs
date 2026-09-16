@@ -9,8 +9,16 @@ use tauri::{AppHandle, State};
 
 /// Starts a pairing handshake on this device and returns the QR payload: identity + handshake
 /// material only, never the group key or a private key.
+#[tracing::instrument(name = "ipc.pair_offer", skip_all)]
 #[tauri::command]
 pub async fn pair_offer(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<PairOfferDto, String> {
+    pair_offer_inner(app, state).await
+}
+
+async fn pair_offer_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<PairOfferDto, String> {
@@ -23,8 +31,17 @@ pub async fn pair_offer(
 
 /// Accepts a peer's scanned `PairOffer` (`code`) and begins the X25519 handshake; returns the
 /// 6-word SAS to show the human.
+#[tracing::instrument(name = "ipc.pair_accept", skip_all)]
 #[tauri::command]
 pub async fn pair_accept(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    code: String,
+) -> Result<PairResultDto, String> {
+    pair_accept_inner(app, state, code).await
+}
+
+async fn pair_accept_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     code: String,
@@ -38,8 +55,16 @@ pub async fn pair_accept(
 
 /// Confirms the SAS shown to the human on this device. The group key lands only once both sides
 /// have confirmed.
+#[tracing::instrument(name = "ipc.pair_confirm_sas", skip_all)]
 #[tauri::command]
 pub async fn pair_confirm_sas(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<PairResultDto, String> {
+    pair_confirm_sas_inner(app, state).await
+}
+
+async fn pair_confirm_sas_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<PairResultDto, String> {

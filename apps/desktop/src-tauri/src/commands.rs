@@ -365,7 +365,9 @@ fn ui_log_inner(
 ) -> Result<(), String> {
     // Serialized once, up front: `serde_json::Value::to_string()` is compact JSON (`Display`,
     // not `Debug`), so the field lands in the log as real JSON text instead of Rust debug syntax.
-    let fields_json = fields.as_ref().map_or_else(|| "null".to_owned(), ToString::to_string);
+    let fields_json = fields
+        .as_ref()
+        .map_or_else(|| "null".to_owned(), ToString::to_string);
     match level {
         "error" => log_ui_error(message, &fields_json),
         "warn" => log_ui_warn(message, &fields_json),
@@ -449,9 +451,12 @@ mod tests {
         );
         // `fields` rides as a nested, already-serialized JSON string (see `ui_log_inner`), so it
         // is parsed a second time here rather than compared as a substring.
-        let nested_fields: serde_json::Value =
-            serde_json::from_str(event_value["fields"]["fields"].as_str().expect("string field"))
-                .expect("nested fields value is valid JSON");
+        let nested_fields: serde_json::Value = serde_json::from_str(
+            event_value["fields"]["fields"]
+                .as_str()
+                .expect("string field"),
+        )
+        .expect("nested fields value is valid JSON");
         assert_eq!(nested_fields["attempt"], 2, "{event_line}");
     }
 }

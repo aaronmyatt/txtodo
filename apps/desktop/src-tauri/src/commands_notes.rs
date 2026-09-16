@@ -10,8 +10,17 @@ use txtodo_proto::v1 as pb;
 
 /// `notes.md` for one task's `ref:` directory; the daemon resolves the task, this bridge never
 /// touches the filesystem itself.
+#[tracing::instrument(name = "ipc.get_notes", skip_all)]
 #[tauri::command]
 pub async fn get_notes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task: TaskRefDto,
+) -> Result<NotesDocDto, String> {
+    get_notes_inner(app, state, task).await
+}
+
+async fn get_notes_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     task: TaskRefDto,
@@ -28,8 +37,18 @@ pub async fn get_notes(
 
 /// Whole-document replacement of one task's `notes.md`; the daemon derives the Loro text ops and
 /// lazily creates the `ref:` directory on the first edit (plan §3.2.4).
+#[tracing::instrument(name = "ipc.edit_notes", skip_all)]
 #[tauri::command]
 pub async fn edit_notes(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task: TaskRefDto,
+    new_text: String,
+) -> Result<ApplyResultDto, String> {
+    edit_notes_inner(app, state, task, new_text).await
+}
+
+async fn edit_notes_inner(
     app: AppHandle,
     state: State<'_, AppState>,
     task: TaskRefDto,
