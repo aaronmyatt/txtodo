@@ -451,6 +451,12 @@ message PairOfferResponse {
   // The relay URL that relay_node_id above is reachable through; empty exactly when
   // relay_node_id is empty.
   string relay_url = 8;
+  // This device's real, catalog-assigned WorkspaceId (ULID text) for the workspace being offered
+  // (task pairing-workspace-identity) — catalog/routing metadata, not crypto material, the same
+  // reason identity_mode above isn't part of the handshake transcript either. The joiner adopts
+  // this verbatim (first-registrant-wins) instead of keeping the id it self-minted when its own
+  // daemon opened the workspace, so both sides route post-pairing sync messages to the same id.
+  string workspace_id = 9;
 }
 
 message PairAcceptRequest {
