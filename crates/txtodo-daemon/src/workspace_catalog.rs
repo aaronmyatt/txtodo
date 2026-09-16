@@ -164,6 +164,39 @@ impl WorkspaceCatalog {
             })
     }
 
+    /// The registry half of [`Self::adopt_offered_workspace_id`], split out for that function's
+    /// cognitive-complexity budget: releases `current_id`'s row for `root`, then adopts
+    /// `offered_id` for it — rolling back to `current_id` (logged, never silent) if `offered_id`
+    /// turns out to already name a different root on this device.
+    fn rekey_registry(
+        &self,
+        current_id: WorkspaceId,
+        offered_id: WorkspaceId,
+        root: &Path,
+    ) -> Result<(), Status> {
+        let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        registry
+            .remove(current_id, self.clock.as_ref())
+            .map_err(|e| {
+                Status::internal(format!(
+                    "release {current_id} before adopting {offered_id}: {e}"
+                ))
+            })?;
+        if let Err(e) = registry.adopt(offered_id, root, self.clock.as_ref()) {
+            if let Err(rollback_err) = registry.adopt(current_id, root, self.clock.as_ref()) {
+                tracing::error!(
+                    %current_id, %offered_id, error = %rollback_err,
+                    "workspace_id_rekey_rollback_failed"
+                );
+            }
+            return Err(Status::invalid_argument(format!(
+                "pairing offered workspace {offered_id}, which is already registered to a \
+                 different directory on this device: {e}"
+            )));
+        }
+        Ok(())
+    }
+
     /// `PairAccept`'s own id adoption (task `pairing-workspace-identity`, distinct from
     /// `accept_offer` above): the joiner's daemon already self-registered and opened `ws` under a
     /// locally-minted id (`open_one`, run unconditionally at daemon startup for the `--dir` bridge,
@@ -187,28 +220,7 @@ impl WorkspaceCatalog {
         if current_id == offered_id {
             return Ok(current_id);
         }
-        {
-            let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
-            registry
-                .remove(current_id, self.clock.as_ref())
-                .map_err(|e| {
-                    Status::internal(format!(
-                        "release {current_id} before adopting {offered_id}: {e}"
-                    ))
-                })?;
-            if let Err(e) = registry.adopt(offered_id, &root, self.clock.as_ref()) {
-                if let Err(rollback_err) = registry.adopt(current_id, &root, self.clock.as_ref()) {
-                    tracing::error!(
-                        %current_id, %offered_id, error = %rollback_err,
-                        "workspace_id_rekey_rollback_failed"
-                    );
-                }
-                return Err(Status::invalid_argument(format!(
-                    "pairing offered workspace {offered_id}, which is already registered to a \
-                     different directory on this device: {e}"
-                )));
-            }
-        }
+        self.rekey_registry(current_id, offered_id, &root)?;
         {
             let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);
             if let Some(mut opened) = open.remove(&current_id) {
