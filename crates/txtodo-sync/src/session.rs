@@ -153,8 +153,17 @@ impl Session {
     /// Our own link-level `Hello`: device, group, protocol and wall clock, sent exactly once per
     /// connection before any workspace's own `Greet` is legal to send. `heads` is always empty —
     /// `Hello`'s field layout is frozen (module doc); each workspace reports its own heads via
-    /// `Greet` instead. A second call is `SessionError::LinkAlreadyGreeted`.
+    /// `Greet` instead. A second call is `SessionError::LinkAlreadyGreeted`. A thin span wrapper
+    /// around `link_hello_inner` (`#[instrument]` on the real body overflows the cognitive-
+    /// complexity budget, `tasks/logging-sync-crate/notes.md`).
+    #[tracing::instrument(skip_all, fields(device = %self.device, group = ?self.group))]
     pub fn link_hello(&mut self, now_ms: u64) -> Result<Message, SessionError> {
+        let r = self.link_hello_inner(now_ms);
+        log_link_hello(&r);
+        r
+    }
+
+    fn link_hello_inner(&mut self, now_ms: u64) -> Result<Message, SessionError> {
         if self.link_hello_sent {
             return Err(SessionError::LinkAlreadyGreeted);
         }
@@ -173,8 +182,16 @@ impl Session {
     /// (`SessionError::LinkNotReady` otherwise) and refuses a second peer `Hello`
     /// (`SessionError::LinkAlreadyGreeted`) — the link-level counterpart of the per-workspace state
     /// machine's own "no message twice" discipline. Every open (or later-opened) workspace's own
-    /// `Greet`/`on_hello` requires this to have succeeded first (`peer` known).
+    /// `Greet`/`on_hello` requires this to have succeeded first (`peer` known). Wrapper/inner split,
+    /// same reason as `link_hello`.
+    #[tracing::instrument(skip_all, fields(device = %self.device, group = ?self.group))]
     pub fn on_link_hello(&mut self, msg: &Message, now_ms: u64) -> Result<Skew, SessionError> {
+        let r = self.on_link_hello_inner(msg, now_ms);
+        log_on_link_hello(&r);
+        r
+    }
+
+    fn on_link_hello_inner(&mut self, msg: &Message, now_ms: u64) -> Result<Skew, SessionError> {
         if !self.link_hello_sent {
             return Err(SessionError::LinkNotReady);
         }
@@ -281,4 +298,26 @@ impl Session {
             .get_mut(&workspace)
             .ok_or(SessionError::UnknownWorkspace(workspace))
     }
+}
+
+/// Split out so the event macro doesn't count against `link_hello`'s own `#[instrument]` budget.
+/// One unconditional event, `kind` present only on `Err` — a `match`'s own branches inside a
+/// `tracing` macro call cost real `cognitive_complexity` points on their own
+/// (`tasks/logging-sync-crate/notes.md`), so this stays branch-free and lets `Option<&str>`'s own
+/// `tracing::Value` impl (empty field when `None`) do the conditional part instead.
+fn log_link_hello(r: &Result<Message, SessionError>) {
+    tracing::debug!(
+        ok = r.is_ok(),
+        kind = r.as_ref().err().map(SessionError::kind),
+        "link_hello"
+    );
+}
+
+/// Split out for the same reason as `log_link_hello`.
+fn log_on_link_hello(r: &Result<Skew, SessionError>) {
+    tracing::debug!(
+        ok = r.is_ok(),
+        kind = r.as_ref().err().map(SessionError::kind),
+        "link_hello_received"
+    );
 }

@@ -8906,6 +8906,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "tracing",
  "txtodo-model",
  "txtodo-store",
  "x25519-dalek",

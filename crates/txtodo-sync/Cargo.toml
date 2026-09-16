@@ -48,6 +48,10 @@ mdns-sd = "0.21"
 # https://docs.rs/tokio — iroh's endpoint/connection API is async; the daemon already runs tokio,
 # this crate's own transport code needs a runtime handle to drive it.
 tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+# https://docs.rs/tracing — structured spans/events for the session/pairing/crypto engine (task
+# logging-sync-crate); this crate never installs a subscriber, only emits — the daemon binary owns
+# init (`txtodo-daemon`'s `logging-daemon-boot`), already vetted the same license family.
+tracing = "0.1"
 
 [dev-dependencies]
 # https://docs.rs/proptest — want(local, remote) requests exactly the missing ops

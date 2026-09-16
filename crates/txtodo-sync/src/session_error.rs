@@ -87,6 +87,31 @@ pub enum SessionError {
     NotAHello(&'static str),
 }
 
+impl SessionError {
+    /// Stable snake_case event tag, one per variant — for structured logs, never the full
+    /// `Display` sentence (task `logging-sync-crate`). `Crypto` collapses to the flat `"crypto"`
+    /// tag here; the wrapped `CryptoError`'s own, more specific `kind()` is logged directly at the
+    /// crypto call site that produced it instead of re-derived through this wrapper.
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            SessionError::Unexpected { .. } => "unexpected",
+            SessionError::UnknownWorkspace(_) => "unknown_workspace",
+            SessionError::TooManyWorkspaces { .. } => "too_many_workspaces",
+            SessionError::WorkspaceMismatch { .. } => "workspace_mismatch",
+            SessionError::GroupMismatch { .. } => "group_mismatch",
+            SessionError::ProtocolMismatch { .. } => "protocol_mismatch",
+            SessionError::PeerAhead { .. } => "peer_ahead",
+            SessionError::Unrequested(_) => "unrequested",
+            SessionError::NotInBatch(_) => "not_in_batch",
+            SessionError::Gap(_) => "gap",
+            SessionError::Crypto(_) => "crypto",
+            SessionError::LinkNotReady => "link_not_ready",
+            SessionError::LinkAlreadyGreeted => "link_already_greeted",
+            SessionError::NotAHello(_) => "not_a_hello",
+        }
+    }
+}
+
 impl fmt::Display for SessionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
