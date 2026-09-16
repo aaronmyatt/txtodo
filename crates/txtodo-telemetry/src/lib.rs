@@ -21,7 +21,9 @@ pub mod testing;
 use std::io;
 use std::path::Path;
 
+use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 
 /// Daily files kept per service under its own `logs_dir` (one family per binary — see
@@ -42,19 +44,10 @@ pub struct LogGuard {
 /// stderr — both filtered by [`LOG_FILTER_ENV`] (default `info`, with `loro`/`loro_internal`
 /// quieted to `warn` — Loro logs diagnostics at info carrying payload sizes, not this workspace's
 /// own ids, and a 10k-task snapshot emits thousands of lines), both stamping `service` on every
-/// line. Call once per process.
+/// line. Call once per process. See [`init_file_only`] for a binary that must never write stderr.
 pub fn init(service: &'static str, logs_dir: &Path) -> io::Result<LogGuard> {
-    std::fs::create_dir_all(logs_dir)?;
-    let file_prefix = format!("{service}.log");
-    prune(logs_dir, &file_prefix)?;
-    // https://docs.rs/tracing-appender/latest/tracing_appender/rolling/fn.daily.html
-    let file = tracing_appender::rolling::daily(logs_dir, &file_prefix);
-    // Bounded buffer (default 128k lines), lossy on overflow: logging never blocks an actor.
-    let (json_writer, guard) = tracing_appender::non_blocking(file);
+    let (json_layer, guard) = build_json_layer(service, logs_dir)?;
     let filter = build_filter();
-    let json_layer = tracing_subscriber::fmt::layer()
-        .json()
-        .with_writer(stamp::json_writer(json_writer, service));
     let pretty_layer = tracing_subscriber::fmt::layer().with_writer(stamp::text_writer(
         std::io::stderr as fn() -> std::io::Stderr,
         service,
@@ -70,6 +63,51 @@ pub fn init(service: &'static str, logs_dir: &Path) -> io::Result<LogGuard> {
         .map_err(io::Error::other)?;
     debug_assert!(logs_dir.is_dir());
     Ok(LogGuard { _json_guard: guard })
+}
+
+/// Installs the global subscriber with **only** the JSON rolling-file layer from [`init`] — no
+/// stderr layer at all, not merely a quieted one. For a binary that owns the terminal in raw mode
+/// with an alternate screen (root todo.txt `logging-tui`): any stderr write there lands on the
+/// same physical terminal the alternate screen is managing and visibly corrupts the render, so the
+/// sink for that binary must be structurally incapable of writing to stderr, not just configured
+/// not to. Same file naming, rotation, pruning, `TXTODO_LOG` filter and `service` stamp as `init`.
+pub fn init_file_only(service: &'static str, logs_dir: &Path) -> io::Result<LogGuard> {
+    let (json_layer, guard) = build_json_layer(service, logs_dir)?;
+    let filter = build_filter();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(json_layer)
+        .try_init()
+        .map_err(io::Error::other)?;
+    debug_assert!(logs_dir.is_dir());
+    Ok(LogGuard { _json_guard: guard })
+}
+
+/// The JSON rolling-file layer shared by [`init`] and [`init_file_only`] — the only piece of setup
+/// (directory creation, pruning, daily rotation, the `service`-stamped writer) those two entry
+/// points would otherwise duplicate; everything sink-shape-specific (which other layers, if any,
+/// join it on the registry) stays in each caller.
+fn build_json_layer<S>(
+    service: &'static str,
+    logs_dir: &Path,
+) -> io::Result<(
+    impl Layer<S> + Send + Sync,
+    tracing_appender::non_blocking::WorkerGuard,
+)>
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
+    std::fs::create_dir_all(logs_dir)?;
+    let file_prefix = format!("{service}.log");
+    prune(logs_dir, &file_prefix)?;
+    // https://docs.rs/tracing-appender/latest/tracing_appender/rolling/fn.daily.html
+    let file = tracing_appender::rolling::daily(logs_dir, &file_prefix);
+    // Bounded buffer (default 128k lines), lossy on overflow: logging never blocks an actor.
+    let (json_writer, guard) = tracing_appender::non_blocking(file);
+    let json_layer = tracing_subscriber::fmt::layer()
+        .json()
+        .with_writer(stamp::json_writer(json_writer, service));
+    Ok((json_layer, guard))
 }
 
 /// `TXTODO_LOG`, defaulting to `info`, always with `loro=warn`/`loro_internal=warn` layered on
