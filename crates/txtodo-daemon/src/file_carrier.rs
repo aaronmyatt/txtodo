@@ -129,13 +129,18 @@ fn seal_message(
     key: &GroupKey,
     msg: &Message,
 ) -> Option<Frame> {
-    let plain = msg.encode().ok()?;
+    let plain = msg
+        .encode()
+        .inspect_err(|e| tracing::warn!(%workspace, error = %e, "file_carrier_encode_failed"))
+        .ok()?;
     let for_ = SealFor {
         group,
         epoch: GROUP_EPOCH,
         workspace,
     };
-    let sealed = aead_seal(plain.version, for_, key, &plain.body).ok()?;
+    let sealed = aead_seal(plain.version, for_, key, &plain.body)
+        .inspect_err(|e| tracing::warn!(%workspace, error = %e, "file_carrier_seal_failed"))
+        .ok()?;
     Some(Frame {
         version: plain.version,
         body: sealed,
@@ -158,8 +163,9 @@ fn send_route(
         return;
     }
     let signing_key = derive_group_op_signing_key(key);
-    let Ok(messages) = serve_want(&route.ws, &ranges, workspace, &signing_key) else {
-        return;
+    let messages = match serve_want(&route.ws, &ranges, workspace, &signing_key) {
+        Ok(m) => m,
+        Err(e) => return log_serve_want_failed(workspace, &e),
     };
     for msg in &messages {
         let Message::Ops {
@@ -169,15 +175,31 @@ fn send_route(
             continue;
         };
         let Some(frame) = seal_message(route.group, workspace, key, msg) else {
-            continue;
+            continue; // already logged inside seal_message
         };
-        if carrier.send(frame).is_err() {
+        if let Err(e) = carrier.send(frame) {
+            log_carrier_send_failed(workspace, &e);
             continue;
         }
         for r in msg_ranges {
-            let _ = advance(last_sent, r); // best-effort; a gap here just gets retried next tick
+            // Best-effort: a gap here just gets retried next tick.
+            if let Err(gap) = advance(last_sent, r) {
+                log_advance_gap(workspace, &gap);
+            }
         }
     }
+}
+
+fn log_serve_want_failed(workspace: WorkspaceId, e: &txtodo_store::StoreError) {
+    tracing::warn!(%workspace, error = %e, "file_carrier_serve_want_failed");
+}
+
+fn log_carrier_send_failed(workspace: WorkspaceId, e: &txtodo_sync::LinkError) {
+    tracing::warn!(%workspace, error = %e, "file_carrier_send_failed");
+}
+
+fn log_advance_gap(workspace: WorkspaceId, gap: &txtodo_sync::Gap) {
+    tracing::debug!(%workspace, error = %gap, "file_carrier_advance_gap_retrying_next_tick");
 }
 
 /// One send half of a tick: every workspace currently registered on `device_file_carrier`, each
