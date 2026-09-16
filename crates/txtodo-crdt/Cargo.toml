@@ -13,6 +13,8 @@ txtodo-store.workspace = true
 txtodo-core.workspace = true
 # https://docs.rs/loro — CRDT engine: movable list, text, maps (ADR 0002; LWW stamping ADR 0013)
 loro = "1.16.0"
+# https://docs.rs/tracing — event/span emission only; txtodo-daemon wires the subscriber.
+tracing = "0.1"
 
 [lints]
 workspace = true

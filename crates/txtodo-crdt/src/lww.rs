@@ -56,17 +56,35 @@ impl Lww<LoroValue> {
 }
 
 /// Reads, decodes and compares the register at `key`, writing `value` only when `incoming` is
-/// strictly newer than what is stored. Returns whether a write happened.
+/// strictly newer than what is stored. Returns whether a write happened. Thin wrapper around
+/// `write_if_newer_inner` for the tracing span (`#[instrument]` on the real body risks the
+/// `cognitive_complexity` budget once the branch is there).
+#[tracing::instrument(skip_all, fields(key = %key))]
 pub fn write_if_newer(
     map: &LoroMap,
     key: &str,
     value: LoroValue,
     incoming: Hlc,
 ) -> LoroResult<bool> {
+    let (wrote, existing_hlc) = write_if_newer_inner(map, key, value, incoming)?;
+    log_lww_write(incoming, existing_hlc, wrote);
+    Ok(wrote)
+}
+
+/// The actual arbitration (ADR 0013): reads the register's existing stamp, writes only when
+/// `incoming` beats it. Returns whether the write happened plus the existing stamp (`None` the
+/// first time a key is written), so the wrapper can log which side's `Hlc` won.
+fn write_if_newer_inner(
+    map: &LoroMap,
+    key: &str,
+    value: LoroValue,
+    incoming: Hlc,
+) -> LoroResult<(bool, Option<Hlc>)> {
     let existing = map
         .get(key)
         .and_then(|voc| voc.into_value().ok())
         .and_then(|v| Lww::decode(&v));
+    let existing_hlc = existing.as_ref().map(|reg| reg.hlc);
     let wins = existing.is_none_or(|reg| reg.wins_over(incoming));
     if wins {
         map.insert(
@@ -77,10 +95,23 @@ pub fn write_if_newer(
             }
             .encode(),
         )?;
-        Ok(true)
-    } else {
-        Ok(false)
     }
+    Ok((wins, existing_hlc))
+}
+
+/// The arbitration outcome for one `write_if_newer` call: `wrote = true` means `incoming`'s `Hlc`
+/// beat the register's existing stamp (or none existed yet) and now holds it; `wrote = false`
+/// means the existing stamp was already newer or equal and nothing changed. Never logs `value` —
+/// an LWW register may hold a task description, which is task content.
+fn log_lww_write(incoming: Hlc, existing: Option<Hlc>, wrote: bool) {
+    tracing::debug!(
+        incoming_wall_ms = incoming.wall_ms,
+        incoming_device = %incoming.device,
+        existing_wall_ms = existing.map(|h| h.wall_ms),
+        existing_device = ?existing.map(|h| h.device),
+        wrote,
+        "lww_write_if_newer"
+    );
 }
 
 /// Encodes an [`Hlc`] as 26 little-endian bytes (wall_ms, counter, device).

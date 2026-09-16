@@ -8771,6 +8771,7 @@ name = "txtodo-crdt"
 version = "0.0.0"
 dependencies = [
  "loro",
+ "tracing",
  "txtodo-core",
  "txtodo-model",
  "txtodo-store",
