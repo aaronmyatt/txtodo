@@ -100,9 +100,13 @@ transport.
 ### Step 6 — pair
 
 ```bash
-txtodo --dir ~/todo-trial pair            # on A: prints a JSON offer, waits
-txtodo --dir ~/todo-trial pair '<JSON>'   # on B: prints six SAS words
+txtodo --dir ~/todo-trial pair             # on A: prints a QR and a compact code, waits
+txtodo --dir ~/todo-trial pair '<CODE>'    # on B: paste the compact code, prints six SAS words
 ```
+
+(2026-09-17 update, task `pairing-code-compact`: the printed text fallback is now a short base32
+code, not raw JSON — same data, shorter to read aloud or paste. The QR still encodes JSON
+underneath, unchanged, so an existing QR scanner keeps working either way.)
 
 Compare the six words out loud, confirm on **both**. Budget 30 s — real mDNS plus the pairing
 retry burst is not instant. Then:
