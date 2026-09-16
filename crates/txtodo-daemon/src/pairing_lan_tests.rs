@@ -6,10 +6,10 @@ use std::sync::{Arc, RwLock};
 
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::NewDevice;
-use txtodo_sync::{GroupId, PairingOffer};
+use txtodo_sync::{GroupId, InitiatorReply, JoinerHello, PairingOffer};
 
 use crate::clock::{Clock, FakeClock};
-use crate::pairing_lan::record_offer_relay_reachability;
+use crate::pairing_lan::{process_hello, record_offer_relay_reachability};
 use crate::server::SharedWorkspace;
 use crate::workspace::Workspace;
 
@@ -102,4 +102,45 @@ fn a_lan_only_offer_is_a_harmless_no_op() {
         .unwrap();
     assert_eq!(row.relay_node_id, None);
     assert_eq!(row.relay_url, None);
+}
+
+fn hello(device_id: DeviceId, group: GroupId, nonce: [u8; 16]) -> JoinerHello {
+    JoinerHello {
+        device: device_id,
+        group,
+        nonce,
+        public_key: [0xCD; 32],
+        static_public: [0xEF; 32],
+        confirmed: false,
+    }
+}
+
+/// `pairing_lan.rs`'s own former bug (root todo `logging-daemon-swallowed-errors`): every
+/// `InitiatorReply::Rejected` return used to be completely invisible on the initiator side. This
+/// asserts the wire behaviour is unchanged now that each reason is logged — a fresh workspace has
+/// no active pairing at all, so any hello is rejected.
+#[test]
+fn process_hello_rejects_when_no_pairing_is_active() {
+    let ws = shared_workspace();
+    let reply = process_hello(&ws, hello(device(1), GroupId(1), [1u8; 16]));
+    assert!(matches!(reply, InitiatorReply::Rejected));
+}
+
+/// A hello whose group/nonce does not match the initiator's own active offer is rejected too —
+/// distinct from the "nothing active at all" case above, but previously just as invisible.
+#[test]
+fn process_hello_rejects_a_group_or_nonce_mismatch() {
+    let ws = shared_workspace();
+    let offer = ws
+        .read()
+        .unwrap()
+        .pairing()
+        .begin_offer(device(0), GroupId(1), "192.168.1.5:4242".to_string(), 1_000)
+        .unwrap();
+
+    let wrong_group = process_hello(&ws, hello(device(1), GroupId(2), offer.nonce));
+    assert!(matches!(wrong_group, InitiatorReply::Rejected));
+
+    let wrong_nonce = process_hello(&ws, hello(device(1), offer.group, [0u8; 16]));
+    assert!(matches!(wrong_nonce, InitiatorReply::Rejected));
 }
