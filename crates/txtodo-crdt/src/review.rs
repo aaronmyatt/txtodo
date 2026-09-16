@@ -62,8 +62,17 @@ impl std::error::Error for ReviewError {}
 /// A char range in ancestor coordinates, inclusive of its insertion point.
 type Range = (usize, usize);
 
-/// Detects same-word concurrent edits for the import described by `imported`.
+/// Detects same-word concurrent edits for the import described by `imported`. Thin wrapper around
+/// `detect_inner` for the tracing span (`#[instrument]` on the real body overflows the
+/// `cognitive_complexity` budget).
+#[tracing::instrument(skip_all)]
 pub fn detect(doc: &LoroDocument, imported: &Imported) -> Result<Review, ReviewError> {
+    let review = detect_inner(doc, imported)?;
+    log_review_detected(&review);
+    Ok(review)
+}
+
+fn detect_inner(doc: &LoroDocument, imported: &Imported) -> Result<Review, ReviewError> {
     if !imported.applied {
         return Ok(Review::default());
     }
@@ -104,6 +113,16 @@ pub fn detect(doc: &LoroDocument, imported: &Imported) -> Result<Review, ReviewE
             .all(|f| f.mine != f.theirs || f.mine.is_empty())
     );
     Ok(review)
+}
+
+/// `detect`'s own outcome, once the diff walk has landed: counts only — never a `ReviewFlag`'s
+/// `task`/`file`/`mine`/`theirs`, which is task content.
+fn log_review_detected(review: &Review) {
+    tracing::debug!(
+        flags = review.flags.len(),
+        overflowed = review.overflowed.len(),
+        "crdt_review_detected"
+    );
 }
 
 /// Applies `MAX_REVIEW_FLAGS_PER_FILE`: an over-cap file keeps no per-task flags.
