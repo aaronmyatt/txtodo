@@ -247,7 +247,20 @@ impl Link for IrohLink {
             .map_err(|e: WriteError| LinkError::Io(e.to_string()))
     }
 
+    /// Thin span wrapper around `recv_inner` (`#[instrument]` on the real loop overflows
+    /// `cognitive_complexity`, `tasks/logging-sync-crate/notes.md`).
+    #[tracing::instrument(skip_all)]
     fn recv(&mut self) -> Result<Frame, LinkError> {
+        self.recv_inner()
+    }
+}
+
+impl IrohLink {
+    /// The disambiguation the backlog line names: both terminal `Closed` sites below stay the same
+    /// `LinkError::Closed` at the type level (no wire/API break — see `tasks/logging-sync-crate/
+    /// notes.md`), but each now logs which one it was *before* returning, so a human reading the
+    /// JSON log can finally tell an idle redial apart from a real peer hangup.
+    fn recv_inner(&mut self) -> Result<Frame, LinkError> {
         loop {
             match Frame::decode(&self.inbox) {
                 Ok((frame, used)) => {
@@ -261,10 +274,24 @@ impl Link for IrohLink {
             let read = tokio::time::timeout(IDLE_TIMEOUT, self.recv.read(&mut chunk));
             match self.handle.block_on(read) {
                 Ok(Ok(Some(n))) => self.inbox.extend_from_slice(&chunk[..n]),
-                Ok(Ok(None)) => return Err(LinkError::Closed),
+                Ok(Ok(None)) => return Err(log_link_peer_closed()),
                 Ok(Err(e)) => return Err(LinkError::Io(e.to_string())),
-                Err(_elapsed) => return Err(LinkError::Closed),
+                Err(_elapsed) => return Err(log_link_idle_timeout()),
             }
         }
     }
+}
+
+/// A real peer closed the stream (`recv` read `None`, i.e. EOF) — distinct from
+/// `log_link_idle_timeout` below even though both return the identical `LinkError::Closed`.
+fn log_link_peer_closed() -> LinkError {
+    tracing::debug!("link_peer_closed");
+    LinkError::Closed
+}
+
+/// `IDLE_TIMEOUT` elapsed with no bytes at all — by design (module doc), not a real close; a
+/// caller is expected to redial. Distinct from `log_link_peer_closed` above.
+fn log_link_idle_timeout() -> LinkError {
+    tracing::debug!(millis = IDLE_TIMEOUT.as_millis(), "link_idle_timeout");
+    LinkError::Closed
 }

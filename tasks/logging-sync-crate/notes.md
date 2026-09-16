@@ -186,3 +186,98 @@ Each commit independently green: `cargo fmt -p txtodo-sync -- --check`, `cargo c
 - `cargo clippy -p txtodo-sync --all-targets -- -D warnings`: clean, every commit.
 - `cargo test -p txtodo-sync`: green, every commit.
 - Root todo.txt's `logging-sync-crate` line marked done only if every location above landed.
+
+## As built (2026-09-16, agent)
+
+Built exactly to the design above, five commits, one per subtask line:
+
+1. `d88ad9a` — `Cargo.toml` (`tracing = "0.1"`), `session_error.rs` (`SessionError::kind()`),
+   `session.rs` (`link_hello`/`on_link_hello`, wrapper+inner).
+2. `e24760d` — `workspace_session.rs` (`hello`/`on_hello`/`on_ops`/`committed`, wrapper+inner) +
+   `crypto_error.rs` (`CryptoError::kind()`, moved up from the original plan — see below).
+3. `20a0fb3` — `pairing.rs` (`offer`/`accept`, wrapper+inner; file-length prose trim to 400/400).
+4. `89de848` — `frame.rs` (`FrameError::kind()`, `Frame::decode`) + `aead.rs` (`seal`/`open`).
+5. (this commit) — `lan_link.rs` (`IrohLink::recv`, the `IDLE_TIMEOUT`/peer-close disambiguation).
+
+### The recurring wrinkle, sharper than the daemon's own version
+
+`logging-daemon-datapath` found that `#[instrument]` alone can cost real `cognitive_complexity`
+points. This task found something one level worse: **a bare `tracing::debug!`/`warn!`/`trace!`
+call nested inside a `match` arm or an `if` branch costs real points on its own, independent of
+`#[instrument]` entirely** — confirmed the moment `session.rs::log_link_hello` (a *plain*,
+un-instrumented free function, just a 2-arm match each calling one `tracing::debug!`) measured
+16/10. Every `log_*` helper in this task therefore follows a stricter rule than the daemon's own
+precedent: **no `tracing` macro call may appear directly inside a `match` arm or `if` branch of a
+function that also contains other branches.** Two techniques cover every case found:
+
+- **Branch-free fields** (`session.rs::log_link_hello`, `log_on_link_hello`,
+  `workspace_session.rs::log_state_result`): when the only thing that varies between `Ok`/`Err` is
+  which optional fields are present, skip the `match` entirely — `r.as_ref().err().map(F::kind)`
+  gives `Option<&'static str>`, and `tracing`'s own `Value` impl for `Option<T: Value>` records
+  nothing when `None`. Combinators (`.map`/`.as_ref`) are not control-flow keywords, so they add
+  nothing to `cognitive_complexity` the way `if`/`match` do.
+- **One-macro-call leaf functions** (`workspace_session.rs::log_ops_ok/_crypto_refused/_refused`,
+  `frame.rs::log_decode_ok/_failed`, `aead.rs::log_seal_ok/_failed`/`log_open_ok/_failed`,
+  `pairing.rs::log_pairing_ok/_failed`, `lan_link.rs::log_link_peer_closed/_idle_timeout`): needed
+  whenever the branches must pick a different **macro** (`debug!` vs `warn!`), which no field trick
+  can express. Each arm calls a dedicated function containing *only* one `tracing` call and nothing
+  else; the dispatching `match`/`if` itself holds no macro call, so its own complexity stays low
+  regardless of how many arms it has. `lan_link.rs::recv_inner` takes this furthest: each leaf
+  function returns `LinkError::Closed` itself (`return Err(log_link_peer_closed())`), so the
+  already-branchy 4-arm-inside-a-loop function gains a plain function call at each site, never a
+  macro invocation directly in its own body.
+
+### `CryptoError::kind()` landed one commit earlier than planned
+
+The original plan (notes above, first draft) put `CryptoError::kind()` in commit 4 alongside
+`frame.rs`/`aead.rs`, on the theory that `SessionError::Crypto` would log the flat `"crypto"` tag
+and nothing needed the real `CryptoError::kind()` before then. Building `workspace_session.rs`'s
+`on_ops` crypto-refusal `warn!` event found that untrue: that event *does* want the wrapped
+`CryptoError`'s own specific kind (`"signature_invalid"`, `"unknown_device"`, etc.), not the flat
+tag — a session-level "some crypto thing failed" is far less actionable than knowing which. So
+`CryptoError::kind()` moved to commit 2, used immediately by `on_ops`'s own `log_ops_crypto_refused`
+and reused unchanged by `frame.rs`/`aead.rs` in commit 4.
+
+### `pairing.rs`'s file-length budget: landed at 416/400 first pass, trimmed to exactly 400/400
+
+As anticipated in the design: two wrapper+inner splits added ~45 lines to a file with only 30 of
+headroom. Paid for by tightening prose across the file's own existing doc comments (module doc,
+`PairingSession`'s struct doc, `Debug`'s doc, `MAX_FAILED_SAS_CONFIRMATIONS`, `complete`/
+`sas_words`/`reject`/`wrap_group_key`/`unwrap_group_key`/`wrap_grant`/`group`, and the two new
+wrapper docs themselves) — every fact kept, fewer words each — landing at exactly 400/400, the same
+move `logging-daemon-datapath` made for `actor.rs`/`state.rs`/`global_service.rs`.
+
+### Verification
+
+- `cargo fmt -p txtodo-sync -- --check`: clean, every commit.
+- `cargo clippy -p txtodo-sync --all-targets -- -D warnings`: clean, every commit — no
+  `#[allow]`/`#[expect]` added anywhere; every complexity hit was fixed by restructuring, not
+  suppressed.
+- `cargo test -p txtodo-sync` (182 tests, all `*_tests.rs` modules compiled into the lib target,
+  this crate has no separate `tests/` integration dir): green after every commit, no new failures,
+  3 pre-existing `#[ignore]`d tests untouched (the same-process `iroh` connect bug, unrelated to
+  this task).
+- `.claude/scripts/check-file-length.sh` and `check-boundaries.sh`: clean after every commit —
+  `tracing` is an external crate, so `check-boundaries.sh` (which only gates `txtodo-*` edges)
+  never had anything to say about it, exactly as the orchestrating brief predicted.
+- Manual proof events actually fire and stay payload-free was not captured via
+  `txtodo_telemetry::testing` (that crate is intentionally out of reach for this crate — see the
+  brief's own "Context you need"); instead, `session_tests.rs`/`workspace_session`'s own existing
+  test suite exercises every instrumented path (`link_hello_checks_group_protocol_and_clock_before_
+  anything_wants_anything`, `every_message_out_of_order_is_refused_and_changes_nothing`, the two
+  multiplex tests, `sealed_ops_tests`, `pairing_tests`, `frame_tests`, `aead_tests`) and all 182
+  stayed green with the instrumentation compiled in — proof the new spans/events don't change any
+  observable behavior, though no subscriber was installed in-process to capture and assert on the
+  JSON lines themselves (this crate deliberately never installs one; that is the daemon's job).
+
+### Deliberately out of scope
+
+- `session.rs::open_workspace`/`workspace`/`workspace_mut` (`TooManyWorkspaces`/`UnknownWorkspace`)
+  — not named by the backlog line's four `workspace_session.rs` + two `session.rs` locations; see
+  "Deliberately not instrumented" above.
+- No `#[instrument]` on `Frame::peek` (subsumed by `decode`'s own span/event) or on `IrohLink::send`
+  (the backlog line names only `lan_link.rs:266`, `recv`'s own `Closed` ambiguity — `send`'s error
+  path has no equivalent ambiguity to fix and adding a span there was never asked for).
+- No change to any `txtodo-daemon` file, any other `+m11 @observability` line, or any file outside
+  `crates/txtodo-sync/`, `tasks/logging-sync-crate/` and this one root todo.txt line — held to
+  exactly the scope the orchestrating brief set.
