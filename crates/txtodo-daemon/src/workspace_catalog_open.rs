@@ -71,7 +71,17 @@ pub struct OpenedWorkspace {
 }
 
 impl Drop for OpenedWorkspace {
+    // Workspace teardown was entirely silent before this task: a paired device losing its route
+    // now shows up in the log. A thin span wrapper around `drop_inner` (`#[instrument]` on the
+    // real body overflows, same reason `actor.rs`/`state.rs`'s instrumented functions split too).
+    #[tracing::instrument(skip_all, fields(workspace = %self.id))]
     fn drop(&mut self) {
+        self.drop_inner();
+    }
+}
+
+impl OpenedWorkspace {
+    fn drop_inner(&mut self) {
         self.watch_task.abort();
         if let Some(l) = &self.lan {
             l.abort();
@@ -88,7 +98,13 @@ impl Drop for OpenedWorkspace {
         if let Some(device_file_carrier) = &self.device_file_carrier {
             device_file_carrier.routes().unregister(self.id);
         }
+        log_workspace_closed();
     }
+}
+
+/// Split out so the event macro doesn't count against `drop`'s own `#[instrument]` budget.
+fn log_workspace_closed() {
+    tracing::info!("workspace_closed");
 }
 
 /// Opens `root` under `args`, spawns its watcher and (unless disabled) LAN — the same sequence

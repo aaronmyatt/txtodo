@@ -1,7 +1,7 @@
 //! The actor's recovery, external-change (design §4.3 steps 2–7 on one device) and snapshot
 //! paths. Split from `actor.rs` for the file budget; same `impl FileActor`.
 
-use crate::actor::{Commit, CommitTail, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
+use crate::actor::{ActorConfig, Commit, CommitTail, FileActor, SNAPSHOT_EVERY_OPS, hash_of};
 use crate::actor_mirror::loro_peer;
 use crate::expected::{Hash, hex8};
 use crate::handle::{ActorError, Applied, Change};
@@ -19,6 +19,23 @@ use txtodo_store::{Seq, Snapshot};
 pub(crate) fn tracing_stub_error(path: &FilePath, e: &ActorError) {
     debug_assert!(!path.as_str().is_empty());
     tracing::error!(file = %path, error = %e, "external change failed");
+}
+
+/// The workspace root, derived from `cfg.disk`/`cfg.path` (no separate field on `ActorConfig` —
+/// adding one would touch its one production construction site, `workspace.rs::register`, and
+/// seven `_tests.rs` files that build one by struct literal, all outside this task's file scope).
+/// One daemon now opens several workspaces (ADR 0025), so this distinguishes which one a
+/// `reconcile` span belongs to — the span's pre-existing `file` field alone no longer does.
+fn workspace_root(cfg: &ActorConfig) -> std::path::PathBuf {
+    let mut root = cfg.disk.clone();
+    for _ in cfg.path.as_str().split('/') {
+        root.pop();
+    }
+    debug_assert!(
+        cfg.disk.starts_with(&root),
+        "disk stays under the derived root"
+    );
+    root
 }
 
 /// What reconciling an external change against our projection produced (`derive_reconciled_ops`).
@@ -110,7 +127,10 @@ impl FileActor {
 
     /// Design §4.3 steps 2–7 on one device.
     pub(crate) fn on_external_change(&mut self) -> Result<Option<Change>, ActorError> {
-        let _span = tracing::info_span!("reconcile", file = %self.cfg.path).entered();
+        let workspace = workspace_root(&self.cfg);
+        let _span =
+            tracing::info_span!("reconcile", file = %self.cfg.path, workspace = %workspace.display())
+                .entered();
         let bytes = read_or_empty(&self.cfg.disk)?;
         if self.log_and_skip_own_write(&bytes) {
             return Ok(None);

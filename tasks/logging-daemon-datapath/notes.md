@@ -200,6 +200,123 @@ Each commit independently `cargo fmt -p txtodo-daemon -- --check` / `cargo clipp
   established precedent of flagging it rather than re-running for luck).
 - Root todo.txt's `logging-daemon-datapath` line and every subtask below marked done.
 
-## As built
+## As built (2026-09-16, agent)
 
-See the end of this file, appended once every commit lands.
+Built close to the design above, with a few real-world adjustments discovered while making each
+commit's own `cargo clippy -D warnings` pass.
+
+### Commits
+
+1. `66138b4` — `actor.rs` (`handle_core`, `commit`, `persist_change`), `watcher.rs` (`ingest`),
+   `debounce.rs` (`drain_due`), `watch_task.rs` (`drain`), `walker.rs` (`walk`).
+2. `e7ee9dd` — `write.rs` (`write_atomic`), `mutation.rs` (`mutation_ops`), `reconcile.rs`
+   (`reconcile`), `state.rs` (`apply`).
+3. (this commit) — `global_service.rs` (`rpc_span`, ~24 methods), `server.rs` (doc note only),
+   `workspace_catalog_open.rs` (`Drop`), `external.rs` (`workspace_root`, span field).
+
+### The recurring wrinkle: `#[instrument]` needs headroom, and inline event macros cost more
+
+Every single instrumented function in this task hit `clippy::cognitive_complexity` (budget 10) the
+moment `#[instrument(skip_all, ...)]` was added — even ones that compiled comfortably under budget
+before, and even a 3-statement function with no branches of its own. `#[instrument]`'s own macro
+expansion (span creation, field recording, the entered guard) apparently costs real points against
+the budget on its own, then each *additional* inline `tracing::debug!`/`info!`/`trace!` call inside
+the same function costs several more — confirmed by measurement: a bare wrapper with `#[instrument]`
+plus one inline event macro scored **16/10**, dropping to a clean pass only once the event macro
+moved into its own tiny, uninstrumented function (`log_commit_done`, `log_persisted`,
+`log_drain_due`, `log_directory_event`, `log_document_event`, `log_write_atomic_done`,
+`log_reconcile_diff`, `log_state_applied`, `log_watch_drain_started`/`_stopped`, `log_workspace_closed`
+— one per instrumented function that also needed a completion event). This is the same shape
+`logging-daemon-boot`'s own "As built" already found for `main.rs` (`log_ready`/`log_stopped`/
+`start_boot_span`); this task hit it far more often since almost every named function is both
+branchy *and* wanted its own event. The general fix, applied everywhere: **wrapper + inner**. The
+public/`pub(crate)` function keeps its original name and gets `#[instrument]` plus, at most, a
+single call to a separate `log_*` function; the actual logic moves to a `*_inner`/`*_match`/
+`*_loop` sibling with no attribute at all, free to hold as much branching as it needs (verified: the
+*_inner functions never themselves triggered a complexity error, only the newly-instrumented outer
+function did).
+
+### File-length budget: every touched file landed at or within a few lines of 400
+
+`actor.rs`, `state.rs` and `global_service.rs` all finished exactly at 400/400 — the wrapper-split
+pattern above adds a genuine amount of code (a new small function per instrumented site), and three
+of the five files this task's spans/events land in were already close to the 400-line `fileLines`
+budget before this task started (the same wall `logging-daemon-boot` hit in `main.rs`). Paid for by
+tightening prose across each file's *existing* doc comments and inline comments (not just the ones
+this task touched functionally) — every fact that was there before is still there, just fewer words
+per fact — plus a few small, deliberate simplifications with no loss of coverage:
+`actor_msg_kind`/`op_kind_name` group the less-central `ActorMsg`/`OpKind` variants under one
+`"sync"`/`"other"` label instead of naming all of them, matching a grouping `handle_core_match`/
+`apply_inner` already use internally. `global_service.rs` additionally introduces a `let svc =
+TxtodoService::new(ws);` local for the RPC methods whose full delegate chain doesn't fit on one
+`rustfmt`-approved line, turning a 4-line chain into 2 — applied to the five methods that needed it
+to close the last few lines of budget; seven longer-named methods (`token_create`, `op_log_stream`,
+`device_remove`, `debug_set_group_key`, `bundle_export`, `bundle_import`, `token_revoke`) still use
+the plain 4-line form, which is valid, just not the shortest — left as-is since the budget was
+already met and further uniformity wasn't worth more churn.
+
+### `rpc{method,workspace}` span: `global_service.rs` only, not `server.rs`, by design
+
+As anticipated: `server.rs` (381/400 before this task) had nowhere near enough headroom to
+instrument its own ~30 `TxtodoService` trait methods individually (the only way to reach every RPC,
+since tonic's generated trait has one method per RPC and this crate has no generic request-decoding
+middleware to hook once). Since `GlobalService::instrument()` already wraps the *entire* delegated
+future — including every bit of work `TxtodoService`'s own method body does — production traffic is
+fully covered by the one span in `global_service.rs`; a second span in `server.rs` would only
+double-count the same work, and whitebox tests that construct a bare `TxtodoService` (bypassing the
+catalog) have no `WorkspaceSelector` to build a `workspace` field from in the first place. `server.rs`
+got a small module-doc addition recording this decision, not a code change — confirmed by rereading
+its own doc: no other file in this task's scope needed the same treatment.
+
+### `workspace` field on `external.rs`'s `reconcile` span
+
+Built exactly as designed: `workspace_root(cfg: &ActorConfig)` pops `cfg.path.as_str().split('/')`
+components off `cfg.disk`, guarded by a `debug_assert!(cfg.disk.starts_with(&root), ...)` so a
+future change to how `workspace.rs::register` builds `disk` would fail loudly in a debug test run.
+No `ActorConfig` schema change, so `workspace.rs` and the seven `_tests.rs` files that build one by
+struct literal needed no changes — verified by `cargo test -p txtodo-daemon --lib` staying green
+(207/207) with this file's diff alone.
+
+### Verification
+
+- `cargo fmt -p txtodo-daemon -- --check`: clean, every commit.
+- `cargo clippy -p txtodo-daemon --all-targets -- -D warnings`: clean, every commit.
+- `cargo test -p txtodo-daemon` (unit + every `tests/*.rs` integration binary): green across all
+  three commits — 207 unit tests, every integration binary, no new failures. The two pre-existing,
+  already-quarantined `tests/pairing_relay.rs` flakes (`f32ff5a`, landed before this task started)
+  stayed `#[ignore]`d and untouched, exactly as expected.
+- `cargo bench -p txtodo-daemon --bench reconcile -- reconcile_10k_one_edit`: **13.0 ms** (budget
+  20 ms; measured 12.1 ms before this task) — the new `reconcile`/`state.rs::apply` spans and
+  events add negligible overhead to the crate's one latency-budgeted hot path, confirming the
+  `trace!`-level choice for `apply`'s own event was the right call.
+- Manual proof the events actually fire: spawned a real `txtodod --dir <tmp>` (`TXTODO_LOG=debug`),
+  wrote a line to its `todo.txt` directly (external change) and ran a real `txtodo add` through it
+  (an `Apply` RPC), then read its JSON log file. Real captured lines, ids/counts/hashes only, no
+  task-line text anywhere:
+  ```json
+  {"fields":{"message":"walk_complete","found":1},"span":{"root":"/…/tmp…","name":"walk"},
+   "spans":[{"method":"list_files","workspace":"/…/tmp…","name":"rpc"}, …]}
+  {"fields":{"message":"actor_apply","mutations":1},"span":{"file":"todo.txt","msg":"apply","name":"handle_core"}}
+  {"fields":{"message":"mutation_ops","ops":1},"span":{"kind":"add","name":"mutation_ops"}}
+  {"fields":{"message":"persisted","seq":"Some(4)"},"span":{"file":"todo.txt","ops":1,"name":"persist_change"}}
+  {"fields":{"message":"commit_done","hash":"7c2143e5","ops":1},"span":{"file":"todo.txt","ops":1,"name":"commit"}}
+  {"fields":{"message":"persisted","seq":"Some(6)"},
+   "spans":[{"file":".../todo.txt","msg":"external_change","name":"handle_core"},
+            {"file":".../todo.txt","workspace":"/…/tmp…","name":"reconcile"}, …]}
+  ```
+  This confirms, end to end and not just by inspection: the `rpc` span carries `method`/`workspace`
+  (`global_service.rs`); `handle_core`'s span carries `msg` for both an `Apply` RPC and a real
+  filesystem `external_change` (`actor.rs`); the `reconcile` span carries `workspace` alongside
+  `file` (`external.rs`); `mutation_ops` names the mutation kind and op count, never the line text
+  actually added (`mutation.rs`); `persisted`/`commit_done` show the durability boundary and the
+  commit's hash (`actor.rs`); and `walk_complete` fires on the startup discovery walk (`walker.rs`).
+
+### Deliberately out of scope
+
+- No change to `workspace.rs`, any `_tests.rs` file, or any other `+m11 @observability` backlog
+  line/crate — held to exactly the files root todo.txt line 36 named.
+- The seven `GlobalService` methods still using the plain 4-line delegate chain (noted above) are a
+  cosmetic, not functional, gap — every one of them still carries the `rpc{method,workspace}` span.
+- `workspace_catalog.rs` (the `resolve` function `GlobalService`'s methods call before building the
+  span) was not touched — the `rpc_span` helper lives entirely in `global_service.rs`, reading the
+  already-resolved `SharedWorkspace` rather than needing any new parameter on `resolve` itself.
