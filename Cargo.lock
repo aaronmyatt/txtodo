@@ -8793,6 +8793,7 @@ dependencies = [
  "blake3",
  "chacha20poly1305",
  "criterion",
+ "data-encoding",
  "getrandom 0.3.4",
  "humantime",
  "hyper-util",
