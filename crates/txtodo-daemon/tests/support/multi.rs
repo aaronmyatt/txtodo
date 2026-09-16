@@ -20,16 +20,30 @@ pub struct MultiWorkspaceDaemon {
 
 impl MultiWorkspaceDaemon {
     pub async fn start(registry_dir: tempfile::TempDir, sync_dir: &Path) -> (Self, MultiClient) {
+        Self::start_with_args(
+            registry_dir,
+            &[
+                "--no-lan".into(),
+                "--sync-dir".into(),
+                sync_dir.to_string_lossy().into_owned(),
+            ],
+        )
+        .await
+    }
+
+    /// `start`, but with whatever CLI args the caller wants after `--identity-mode tagged` — task
+    /// `daemon-workspace-session-multiplex` stage 2's own real, multi-workspace-over-one-relay-
+    /// connection test needs `--relay`/`--relay-dial-peer` here, which the fixed `start` above
+    /// never supported (mirrors `support::Daemon::start_in`'s own `extra_args`).
+    pub async fn start_with_args(
+        registry_dir: tempfile::TempDir,
+        extra_args: &[String],
+    ) -> (Self, MultiClient) {
         let socket = registry_dir.path().join("txtodod.sock");
         let registry_db = registry_dir.path().join("registry.db");
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
-            .args([
-                "--no-lan",
-                "--identity-mode",
-                "tagged",
-                "--sync-dir",
-                &sync_dir.to_string_lossy(),
-            ])
+            .args(["--identity-mode", "tagged"])
+            .args(extra_args)
             .env("TXTODO_REGISTRY_DB", &registry_db)
             .env("TXTODO_SOCKET", &socket)
             .env("TXTODO_TEST_HOOKS", "1")
@@ -131,6 +145,22 @@ pub async fn debug_set_group_key(
         })
         .await
         .expect("debug_set_group_key");
+}
+
+/// `Health` is per-workspace on the wire (`HealthRequest.workspace`), but every open workspace's
+/// own `LanStatus.relay_last_outcome`/`lan_endpoint_bound` reflect the same device-wide facts
+/// (`relay.rs::register` stamps them the same way on every workspace it registers, since it is the
+/// one shared `DeviceRelay`/`RelayEndpoint` underneath) — so any one workspace's `Health` answers
+/// for the whole device. Needs an explicit selector: unlike `file_at`, `HealthRequest{workspace:
+/// None}` is ambiguous once more than one workspace is open (`workspace_catalog.rs::resolve`).
+pub async fn health_at(client: &mut MultiClient, workspace: &Path) -> pb::HealthResponse {
+    client
+        .health(pb::HealthRequest {
+            workspace: Some(path_selector(workspace)),
+        })
+        .await
+        .expect("health")
+        .into_inner()
 }
 
 pub async fn file_at(client: &mut MultiClient, workspace: &Path) -> Vec<u8> {

@@ -139,7 +139,7 @@ pub fn open_workspace_full(
     let relay = relay::start(
         Arc::clone(&ws),
         args.relay_url.clone(),
-        args.device_relay.as_ref().map(|dr| dr.endpoint()),
+        args.device_relay.clone(),
         args.relay_dial_peer,
     );
     Ok(OpenedWorkspace {

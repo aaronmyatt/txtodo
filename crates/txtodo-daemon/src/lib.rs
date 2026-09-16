@@ -43,6 +43,8 @@ pub mod lan;
 mod lan_apply;
 mod lan_peers;
 mod lan_session;
+mod lan_session_dispatch;
+mod lan_session_shared;
 pub mod lan_status;
 pub mod mirror;
 mod mirror_converge;
