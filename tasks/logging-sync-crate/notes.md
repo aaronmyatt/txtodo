@@ -150,10 +150,12 @@ frame" for the same stream.
 
 1. `Cargo.toml` (`tracing` dependency) + `session_error.rs` (`kind()`, needed by `session.rs` and
    `workspace_session.rs`) + `session.rs` (`link_hello`, `on_link_hello`).
-2. `workspace_session.rs` (`hello`, `on_hello`, `on_ops`, `committed`).
+2. `workspace_session.rs` (`hello`, `on_hello`, `on_ops`, `committed`) + `crypto_error.rs` (`kind()`
+   — moved up from the original plan: `on_ops`'s crypto-refusal `warn!` needs it a commit earlier
+   than expected, since it names the wrapped `CryptoError`'s own kind directly, not the flat
+   `"crypto"` tag `SessionError::kind()` uses).
 3. `pairing.rs` (`offer`, `accept`).
-4. `crypto_error.rs` (`kind()`, used for the first time here) + `frame.rs` (`decode`) + `aead.rs`
-   (`seal`, `open`).
+4. `frame.rs` (`decode`) + `aead.rs` (`seal`, `open`), reusing `CryptoError::kind()` from commit 2.
 5. `lan_link.rs` (`recv`, the `IDLE_TIMEOUT`/peer-close disambiguation).
 
 Each commit independently green: `cargo fmt -p txtodo-sync -- --check`, `cargo clippy -p txtodo-sync

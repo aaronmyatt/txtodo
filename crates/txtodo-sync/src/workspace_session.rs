@@ -60,8 +60,16 @@ impl WorkspaceSession {
     /// `Idle → Greeted`: the `Greet` to send. Stage 2: this used to be the `Hello` itself
     /// (single-workspace design); now the link-level `Hello` is `Session::link_hello`'s own job,
     /// sent once per connection, and this is purely this workspace's own announcement of what it
-    /// already holds.
+    /// already holds. A thin span wrapper around `hello_inner` (`#[instrument]` on the real body
+    /// overflows the cognitive-complexity budget, `tasks/logging-sync-crate/notes.md`).
+    #[tracing::instrument(skip_all, fields(from = ?self.state))]
     pub(crate) fn hello(&mut self, workspace: WorkspaceId) -> Result<Message, SessionError> {
+        let r = self.hello_inner(workspace);
+        log_state_result("workspace_hello", &r, self.state);
+        r
+    }
+
+    fn hello_inner(&mut self, workspace: WorkspaceId) -> Result<Message, SessionError> {
         match self.state {
             SessionState::Idle => {}
             SessionState::Greeted | SessionState::Wanting | SessionState::Importing => {
@@ -79,8 +87,20 @@ impl WorkspaceSession {
     /// `Greeted → Wanting` (or `Idle` when nothing is wanted): consumes the peer's `Greet` for this
     /// workspace and derives our own `Want`. Stage 2: no group/protocol/skew check here any more —
     /// `Session::on_link_hello` already ran those once, before any workspace's `Greet` is legal to
-    /// send or accept (`Session::on_hello`'s own `peer.is_none()` guard).
+    /// send or accept (`Session::on_hello`'s own `peer.is_none()` guard). Wrapper/inner split, same
+    /// reason as `hello`.
+    #[tracing::instrument(skip_all, fields(from = ?self.state))]
     pub(crate) fn on_hello(
+        &mut self,
+        msg: &Message,
+        workspace: WorkspaceId,
+    ) -> Result<Message, SessionError> {
+        let r = self.on_hello_inner(msg, workspace);
+        log_state_result("workspace_greet_received", &r, self.state);
+        r
+    }
+
+    fn on_hello_inner(
         &mut self,
         msg: &Message,
         workspace: WorkspaceId,
@@ -118,7 +138,20 @@ impl WorkspaceSession {
     /// anything else runs (`sign::verify_batch` is all-or-nothing); only once authorship checks
     /// out does a run outside our `Want` get checked. `msg` must already be opened (see
     /// `sealed_ops::open_ops`) — this never touches the group-key AEAD, only per-op signatures.
+    /// Wrapper/inner split, same reason as `hello`.
+    #[tracing::instrument(skip_all, fields(from = ?self.state))]
     pub(crate) fn on_ops(
+        &mut self,
+        workspace: WorkspaceId,
+        msg: &Message,
+        device_keys: &BTreeMap<DeviceId, DevicePublicKey>,
+    ) -> Result<Vec<Op>, SessionError> {
+        let r = self.on_ops_inner(workspace, msg, device_keys);
+        log_ops_result(&r);
+        r
+    }
+
+    fn on_ops_inner(
         &mut self,
         workspace: WorkspaceId,
         msg: &Message,
@@ -153,7 +186,19 @@ impl WorkspaceSession {
 
     /// `Importing → Wanting | Idle`: the caller reports what it durably committed; heads advance
     /// and the `Ack` to send carries exactly those runs. A run outside the batch is refused.
+    /// Wrapper/inner split, same reason as `hello`.
+    #[tracing::instrument(skip_all, fields(from = ?self.state))]
     pub(crate) fn committed(
+        &mut self,
+        workspace: WorkspaceId,
+        ranges: &[OriginRange],
+    ) -> Result<Message, SessionError> {
+        let r = self.committed_inner(workspace, ranges);
+        log_state_result("workspace_committed", &r, self.state);
+        r
+    }
+
+    fn committed_inner(
         &mut self,
         workspace: WorkspaceId,
         ranges: &[OriginRange],
@@ -228,6 +273,49 @@ fn consume(wanted: &mut Vec<OriginRange>, committed: &[OriginRange]) {
     wanted.retain(|w| w.first <= w.last);
     debug_assert!(wanted.len() <= before, "consume never adds a run");
     debug_assert!(wanted.iter().all(|w| w.first <= w.last));
+}
+
+/// Split out so the event macro doesn't count against the caller's own `#[instrument]` budget
+/// (`tasks/logging-sync-crate/notes.md`). Covers `hello`/`on_hello`/`committed`, which all return a
+/// `Message` — `to` is `self.state` read back *after* the call (the new state on success, unchanged
+/// on failure), branch-free so a `match`/`if` inside a `tracing` macro call doesn't itself cost
+/// `cognitive_complexity` points. `SessionError::Crypto` never reaches this helper (only `on_ops`
+/// produces it, logged separately by `log_ops_result` at `warn!`).
+fn log_state_result(op: &'static str, r: &Result<Message, SessionError>, to: SessionState) {
+    tracing::debug!(
+        ok = r.is_ok(),
+        to = ?to,
+        kind = r.as_ref().err().map(SessionError::kind),
+        op
+    );
+}
+
+/// `on_ops`'s own result logger: logs an op count on success (state is always `Importing` by then,
+/// nothing `from` didn't already say) and promotes a crypto refusal to `warn!` — the one outcome in
+/// this state machine worth a human's attention at a glance, per the backlog line's own "crypto
+/// refusal" framing (`tasks/logging-sync-crate/notes.md`). Every other refusal here is routine,
+/// validated-not-asserted traffic, so it stays at `debug!`. Each arm delegates to its own one-line,
+/// branch-free leaf so the `match` itself (no macro calls of its own) stays cheap and the level
+/// choice (`debug!` vs `warn!`) — which a field can't express, unlike `log_state_result`'s `Option`
+/// trick — doesn't reintroduce the nested-macro-in-a-branch cost that blew the budget earlier.
+fn log_ops_result(r: &Result<Vec<Op>, SessionError>) {
+    match r {
+        Ok(ops) => log_ops_ok(ops.len()),
+        Err(SessionError::Crypto(e)) => log_ops_crypto_refused(e.kind()),
+        Err(e) => log_ops_refused(e.kind()),
+    }
+}
+
+fn log_ops_ok(count: usize) {
+    tracing::debug!(count, "workspace_ops_received");
+}
+
+fn log_ops_crypto_refused(kind: &'static str) {
+    tracing::warn!(kind, "workspace_ops_crypto_refused");
+}
+
+fn log_ops_refused(kind: &'static str) {
+    tracing::debug!(kind, "workspace_ops_refused");
 }
 
 /// `pub(crate)`: `session.rs`'s own link-level `on_link_hello` reuses this to name a wrong-variant

@@ -92,6 +92,29 @@ pub enum CryptoError {
     Entropy,
 }
 
+impl CryptoError {
+    /// Stable snake_case event tag, one per variant — for structured logs, never the full
+    /// `Display` sentence (task `logging-sync-crate`, mirroring `SessionError::kind`).
+    pub(crate) fn kind(&self) -> &'static str {
+        match self {
+            CryptoError::Encode(_) => "encode",
+            CryptoError::BatchLength { .. } => "batch_length",
+            CryptoError::UnknownDevice { .. } => "unknown_device",
+            CryptoError::BadPublicKey { .. } => "bad_public_key",
+            CryptoError::SignatureInvalid { .. } => "signature_invalid",
+            CryptoError::WrongVersion { .. } => "wrong_version",
+            CryptoError::WrongGroup { .. } => "wrong_group",
+            CryptoError::WrongWorkspace { .. } => "wrong_workspace",
+            CryptoError::Truncated { .. } => "truncated",
+            CryptoError::UnknownEpoch { .. } => "unknown_epoch",
+            CryptoError::TooManyEpochs { .. } => "too_many_epochs",
+            CryptoError::Encrypt => "encrypt",
+            CryptoError::Decrypt { .. } => "decrypt",
+            CryptoError::Entropy => "entropy",
+        }
+    }
+}
+
 impl fmt::Display for CryptoError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
