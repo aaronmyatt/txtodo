@@ -7,8 +7,9 @@ use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::Hlc;
 use crate::backend::{FileMeta, GetTarget, ListArgs, OpSummary, RefPath, TaskId, TaskRow};
+use crate::backend::{WorkspaceArg, WorkspaceInfo};
 use crate::error::McpError;
-use crate::grpc_convert::{file_meta, op_summary};
+use crate::grpc_convert::{file_meta, op_summary, workspace_info, workspace_selector};
 use crate::parse;
 
 /// `todo.txt` at the workspace root; every `file`-taking tool defaults to it.
@@ -23,19 +24,25 @@ fn status(s: tonic::Status) -> McpError {
 pub async fn get_file_text(
     mut client: TxtodoClient<Channel>,
     path: &str,
+    workspace: WorkspaceArg,
 ) -> Result<String, McpError> {
     let req = pb::GetFileRequest {
         path: path.to_owned(),
-        workspace: None,
+        workspace: workspace_selector(workspace),
     };
     let rep = client.get_file(req).await.map_err(status)?;
     Ok(String::from_utf8_lossy(&rep.into_inner().bytes).into_owned())
 }
 
 /// Every synced document (`ListFiles`).
-pub async fn list_files(mut client: TxtodoClient<Channel>) -> Result<Vec<FileMeta>, McpError> {
+pub async fn list_files(
+    mut client: TxtodoClient<Channel>,
+    workspace: WorkspaceArg,
+) -> Result<Vec<FileMeta>, McpError> {
     let rep = client
-        .list_files(pb::ListFilesRequest { workspace: None })
+        .list_files(pb::ListFilesRequest {
+            workspace: workspace_selector(workspace),
+        })
         .await
         .map_err(status)?;
     Ok(rep
@@ -46,10 +53,27 @@ pub async fn list_files(mut client: TxtodoClient<Channel>) -> Result<Vec<FileMet
         .collect())
 }
 
+/// Every registered workspace (`WorkspaceList`; `todo_list_workspaces` resource). Device-global —
+/// no selector applies.
+pub async fn list_workspaces(
+    mut client: TxtodoClient<Channel>,
+) -> Result<Vec<WorkspaceInfo>, McpError> {
+    let rep = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .map_err(status)?;
+    Ok(rep
+        .into_inner()
+        .workspaces
+        .into_iter()
+        .map(workspace_info)
+        .collect())
+}
+
 /// `todo_list`.
 pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<TaskRow>, McpError> {
     let path = args.file.clone().unwrap_or_else(|| DEFAULT_TODO.to_owned());
-    let text = get_file_text(client, &path).await?;
+    let text = get_file_text(client, &path, args.workspace.clone()).await?;
     let mut rows: Vec<TaskRow> = parse::lines(&text)
         .into_iter()
         .map(|(n, l)| parse::parse_row(n, l))
@@ -64,13 +88,14 @@ pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<T
     Ok(rows)
 }
 
-/// `todo_search`: case-insensitive substring over `raw`. Design §6.3 calls for a tantivy full-text
+/// `todo_search`: case-insensitive substring over `raw`. Design §8 calls for a tantivy full-text
 /// index "owned by the daemon backend" — no such index exists yet (see the crate's As-built
 /// notes), so this is the honest placeholder until that infrastructure lands.
 pub async fn search(
     client: TxtodoClient<Channel>,
     text: String,
     file: Option<RefPath>,
+    workspace: WorkspaceArg,
 ) -> Result<Vec<TaskRow>, McpError> {
     let rows = list(
         client,
@@ -78,6 +103,7 @@ pub async fn search(
             query: None,
             file,
             limit: None,
+            workspace,
         },
     )
     .await?;
@@ -91,14 +117,14 @@ pub async fn search(
 /// `todo_get`.
 pub async fn get(client: TxtodoClient<Channel>, target: GetTarget) -> Result<TaskRow, McpError> {
     if let Some(id) = &target.id {
-        let (_, _, row) = locate_by_id(client, id).await?;
+        let (_, _, row) = locate_by_id(client, id, target.workspace).await?;
         return Ok(row);
     }
     let Some(line) = target.line else {
         return Err(McpError::invalid_params("todo_get needs id or line"));
     };
     let path = target.file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
-    let text = get_file_text(client, &path).await?;
+    let text = get_file_text(client, &path, target.workspace).await?;
     row_at_line(&text, line)
 }
 
@@ -110,17 +136,18 @@ fn row_at_line(text: &str, line: u32) -> Result<TaskRow, McpError> {
         .ok_or_else(|| McpError::not_found(format!("no line {line}")).with_line(line))
 }
 
-/// Finds the task across every `todo` document. An `id` lookup has no path to start from —
-/// unlike `GetNotes`/`EditNotes`'s wire `TaskRef`, which the daemon itself resolves by id
+/// Finds the task across every `todo` document in `workspace`. An `id` lookup has no path to start
+/// from — unlike `GetNotes`/`EditNotes`'s wire `TaskRef`, which the daemon itself resolves by id
 /// (`notes_lookup.rs`), the general `Apply`/`GetFile` RPCs need a real `path` + `line_number`, so
 /// the client scans (bounded: workspace document counts are already capped at 10 000).
 pub async fn locate_by_id(
     client: TxtodoClient<Channel>,
     id: &TaskId,
+    workspace: WorkspaceArg,
 ) -> Result<(RefPath, u32, TaskRow), McpError> {
-    let files = list_files(client.clone()).await?;
+    let files = list_files(client.clone(), workspace.clone()).await?;
     for f in files.iter().filter(|f| f.kind == "todo") {
-        let text = get_file_text(client.clone(), &f.path).await?;
+        let text = get_file_text(client.clone(), &f.path, workspace.clone()).await?;
         if let Some((line, raw)) = parse::find_by_id(&text, id) {
             return Ok((f.path.clone(), line, parse::parse_row(line, raw)));
         }
@@ -134,13 +161,14 @@ pub async fn history(
     since: Option<Hlc>,
     id: Option<TaskId>,
     file: Option<RefPath>,
+    workspace: WorkspaceArg,
 ) -> Result<Vec<OpSummary>, McpError> {
     let req = pb::HistoryRequest {
         path: file.unwrap_or_default(),
         task_id: id.unwrap_or_default(),
         limit: 0,
         before_seq: 0,
-        workspace: None,
+        workspace: workspace_selector(workspace),
     };
     let rep = client.history(req).await.map_err(status)?;
     let mut ops: Vec<OpSummary> = rep.into_inner().ops.into_iter().map(op_summary).collect();
@@ -155,8 +183,9 @@ pub async fn raw_read(
     client: TxtodoClient<Channel>,
     file: RefPath,
     lines: Vec<u32>,
+    workspace: WorkspaceArg,
 ) -> Result<Vec<String>, McpError> {
-    let text = get_file_text(client, &file).await?;
+    let text = get_file_text(client, &file, workspace).await?;
     let all = parse::lines(&text);
     lines
         .into_iter()

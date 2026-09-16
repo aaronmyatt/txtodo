@@ -6,9 +6,11 @@
 #![forbid(unsafe_code)]
 
 pub mod backend;
+mod backend_args;
 pub mod error;
 pub mod grpc_backend;
 mod grpc_convert;
+mod grpc_notes;
 mod grpc_read;
 mod grpc_write;
 mod parse;

@@ -120,9 +120,9 @@ impl McpServer {
     #[tool(description = "Mark a task done, preserving its priority as a pri: tag.")]
     pub async fn todo_complete(
         &self,
-        Parameters(IdArgs { id }): Parameters<IdArgs>,
+        Parameters(IdArgs { id, workspace }): Parameters<IdArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        tools_write::complete(self.backend.as_ref(), id, true).await
+        tools_write::complete(self.backend.as_ref(), id, true, workspace).await
     }
 
     /// `todo_uncomplete`.
@@ -134,9 +134,9 @@ impl McpServer {
     #[tool(description = "Reopen a completed task, restoring its pri: tag as a priority.")]
     pub async fn todo_uncomplete(
         &self,
-        Parameters(IdArgs { id }): Parameters<IdArgs>,
+        Parameters(IdArgs { id, workspace }): Parameters<IdArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        tools_write::complete(self.backend.as_ref(), id, false).await
+        tools_write::complete(self.backend.as_ref(), id, false, workspace).await
     }
 
     /// `todo_edit`.
@@ -250,9 +250,9 @@ impl McpServer {
     #[tool(description = "Read a task's notes.md.")]
     pub async fn todo_notes_get(
         &self,
-        Parameters(NotesGetArgs { id }): Parameters<NotesGetArgs>,
+        Parameters(NotesGetArgs { id, workspace }): Parameters<NotesGetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        tools_read::notes_get(self.backend.as_ref(), id).await
+        tools_read::notes_get(self.backend.as_ref(), id, workspace).await
     }
 
     /// `todo_notes_set`.
@@ -264,9 +264,13 @@ impl McpServer {
     #[tool(description = "Replace a task's notes.md.")]
     pub async fn todo_notes_set(
         &self,
-        Parameters(NotesSetArgs { id, text }): Parameters<NotesSetArgs>,
+        Parameters(NotesSetArgs {
+            id,
+            text,
+            workspace,
+        }): Parameters<NotesSetArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        tools_write::notes_set(self.backend.as_ref(), id, text).await
+        tools_write::notes_set(self.backend.as_ref(), id, text, workspace).await
     }
 }
 

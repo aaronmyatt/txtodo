@@ -11,7 +11,7 @@ use serde_json::json;
 
 use txtodo_mcp::backend::{
     ApplyOutcome, FieldPatch, FileMeta, GetTarget, Hlc, ListArgs, McpBackend, MoveAnchor,
-    OpSummary, RefPath, TaskId, TaskRow, TodoOp,
+    OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg, WorkspaceInfo,
 };
 use txtodo_mcp::error::McpError;
 use txtodo_mcp::schema::McpServer;
@@ -46,7 +46,12 @@ impl McpBackend for FakeBackend {
             ..TaskRow::default()
         }])
     }
-    async fn search(&self, _t: String, _f: Option<RefPath>) -> Result<Vec<TaskRow>, McpError> {
+    async fn search(
+        &self,
+        _t: String,
+        _f: Option<RefPath>,
+        _w: WorkspaceArg,
+    ) -> Result<Vec<TaskRow>, McpError> {
         self.record("search");
         Ok(vec![])
     }
@@ -54,31 +59,56 @@ impl McpBackend for FakeBackend {
         self.record("get");
         Ok(TaskRow::default())
     }
-    async fn add(&self, _text: String, _file: Option<RefPath>) -> Result<TaskRow, McpError> {
+    async fn add(
+        &self,
+        _text: String,
+        _file: Option<RefPath>,
+        _w: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
         self.record("add");
         Ok(TaskRow::default())
     }
-    async fn complete(&self, _id: TaskId, _done: bool) -> Result<TaskRow, McpError> {
+    async fn complete(
+        &self,
+        _id: TaskId,
+        _done: bool,
+        _w: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
         self.record("complete");
         Ok(TaskRow::default())
     }
-    async fn edit(&self, _id: TaskId, _patch: FieldPatch) -> Result<TaskRow, McpError> {
+    async fn edit(
+        &self,
+        _id: TaskId,
+        _patch: FieldPatch,
+        _w: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
         self.record("edit");
         Ok(TaskRow::default())
     }
-    async fn move_task(&self, _id: TaskId, _anchor: MoveAnchor) -> Result<TaskRow, McpError> {
+    async fn move_task(
+        &self,
+        _id: TaskId,
+        _anchor: MoveAnchor,
+        _w: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
         self.record("move_task");
         Ok(TaskRow::default())
     }
-    async fn delete(&self, _id: TaskId, _confirm: bool) -> Result<(), McpError> {
+    async fn delete(&self, _id: TaskId, _confirm: bool, _w: WorkspaceArg) -> Result<(), McpError> {
         self.record("delete");
         Ok(())
     }
-    async fn archive(&self, _file: RefPath) -> Result<ApplyOutcome, McpError> {
+    async fn archive(&self, _file: RefPath, _w: WorkspaceArg) -> Result<ApplyOutcome, McpError> {
         self.record("archive");
         Ok(ApplyOutcome::default())
     }
-    async fn batch(&self, _ops: Vec<TodoOp>, _dry_run: bool) -> Result<ApplyOutcome, McpError> {
+    async fn batch(
+        &self,
+        _ops: Vec<TodoOp>,
+        _dry_run: bool,
+        _w: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError> {
         self.record("batch");
         Ok(ApplyOutcome::default())
     }
@@ -87,36 +117,63 @@ impl McpBackend for FakeBackend {
         _since: Option<Hlc>,
         _id: Option<TaskId>,
         _file: Option<RefPath>,
+        _w: WorkspaceArg,
     ) -> Result<Vec<OpSummary>, McpError> {
         self.record("history");
         Ok(vec![])
     }
-    async fn raw_read(&self, _file: RefPath, _lines: Vec<u32>) -> Result<Vec<String>, McpError> {
+    async fn raw_read(
+        &self,
+        _file: RefPath,
+        _lines: Vec<u32>,
+        _w: WorkspaceArg,
+    ) -> Result<Vec<String>, McpError> {
         self.record("raw_read");
         Ok(vec![])
     }
-    async fn raw_write(&self, _file: RefPath, _line: u32, _text: String) -> Result<(), McpError> {
+    async fn raw_write(
+        &self,
+        _file: RefPath,
+        _line: u32,
+        _text: String,
+        _w: WorkspaceArg,
+    ) -> Result<(), McpError> {
         self.record("raw_write");
         Ok(())
     }
-    async fn notes_get(&self, _id: TaskId) -> Result<String, McpError> {
+    async fn notes_get(&self, _id: TaskId, _w: WorkspaceArg) -> Result<String, McpError> {
         self.record("notes_get");
         Ok(String::new())
     }
-    async fn notes_set(&self, _id: TaskId, _text: String) -> Result<(), McpError> {
+    async fn notes_set(
+        &self,
+        _id: TaskId,
+        _text: String,
+        _w: WorkspaceArg,
+    ) -> Result<(), McpError> {
         self.record("notes_set");
         Ok(())
     }
-    async fn list_files(&self) -> Result<Vec<FileMeta>, McpError> {
+    async fn list_files(&self, _w: WorkspaceArg) -> Result<Vec<FileMeta>, McpError> {
         self.record("list_files");
         Ok(vec![FileMeta {
             path: "todo.txt".to_owned(),
             kind: "todo",
         }])
     }
-    async fn get_file(&self, _file: RefPath) -> Result<String, McpError> {
+    async fn get_file(&self, _file: RefPath, _w: WorkspaceArg) -> Result<String, McpError> {
         self.record("get_file");
         Ok("(A) 2026-09-11 Draft +work id:01J\n".to_owned())
+    }
+    async fn list_workspaces(&self) -> Result<Vec<WorkspaceInfo>, McpError> {
+        self.record("list_workspaces");
+        Ok(vec![WorkspaceInfo {
+            id: "01J0000000000000000000ABC".to_owned(),
+            root: "/workspace".to_owned(),
+            added_at_ms: 0,
+            root_exists: true,
+            has_state: true,
+        }])
     }
     fn principal(&self) -> String {
         "user".to_owned()

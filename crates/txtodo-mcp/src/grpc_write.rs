@@ -8,10 +8,11 @@ use txtodo_proto::v1 as pb;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::{
-    ApplyOutcome, FieldPatch, Hlc, MoveAnchor, RefPath, TaskId, TaskRow, TodoOp, move_anchor,
+    ApplyOutcome, FieldPatch, Hlc, MoveAnchor, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
+    move_anchor,
 };
 use crate::error::McpError;
-use crate::grpc_convert::hex;
+use crate::grpc_convert::{hex, workspace_selector};
 use crate::grpc_read::{DEFAULT_TODO, get_file_text, locate_by_id};
 use crate::parse;
 
@@ -42,28 +43,34 @@ async fn apply_one(
     ctx: GrpcCtx,
     path: &str,
     mutation: pb::Mutation,
+    workspace: WorkspaceArg,
 ) -> Result<pb::ApplyResponse, McpError> {
     let mut client = ctx.client;
     let req = pb::ApplyRequest {
         path: path.to_owned(),
         mutations: vec![mutation],
         agent: ctx.agent,
-        workspace: None,
+        workspace: workspace_selector(workspace),
     };
     let rep = client.apply(req).await.map_err(status)?;
     Ok(rep.into_inner())
 }
 
 /// `todo_add`.
-pub async fn add(ctx: GrpcCtx, text: String, file: Option<RefPath>) -> Result<TaskRow, McpError> {
+pub async fn add(
+    ctx: GrpcCtx,
+    text: String,
+    file: Option<RefPath>,
+    workspace: WorkspaceArg,
+) -> Result<TaskRow, McpError> {
     validate_add_text(&text)?;
     let path = file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
     let mutation = pb::Mutation {
         kind: Some(pb::mutation::Kind::Add(pb::Add { line: text.clone() })),
     };
     let client = ctx.client.clone();
-    apply_one(ctx, &path, mutation).await?;
-    find_added_row(client, &path, &text).await
+    apply_one(ctx, &path, mutation, workspace.clone()).await?;
+    find_added_row(client, &path, &text, workspace).await
 }
 
 /// design §6.3: "`todo_add` text with a hand-written `created:` already present is a client error,
@@ -90,8 +97,9 @@ async fn find_added_row(
     client: TxtodoClient<Channel>,
     path: &str,
     text: &str,
+    workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
-    let after = get_file_text(client, path).await?;
+    let after = get_file_text(client, path, workspace).await?;
     parse::lines(&after)
         .into_iter()
         .rev()
@@ -101,8 +109,13 @@ async fn find_added_row(
 }
 
 /// `todo_complete` (`done: true`) / `todo_uncomplete` (`done: false`).
-pub async fn complete(ctx: GrpcCtx, id: TaskId, done: bool) -> Result<TaskRow, McpError> {
-    let (path, line, row) = locate_by_id(ctx.client.clone(), &id).await?;
+pub async fn complete(
+    ctx: GrpcCtx,
+    id: TaskId,
+    done: bool,
+    workspace: WorkspaceArg,
+) -> Result<TaskRow, McpError> {
+    let (path, line, row) = locate_by_id(ctx.client.clone(), &id, workspace.clone()).await?;
     if row.done == done {
         return Ok(row);
     }
@@ -126,14 +139,19 @@ pub async fn complete(ctx: GrpcCtx, id: TaskId, done: bool) -> Result<TaskRow, M
         }
     };
     let client = ctx.client.clone();
-    apply_one(ctx, &path, mutation).await?;
-    let (_, _, row) = locate_by_id(client, &id).await?;
+    apply_one(ctx, &path, mutation, workspace.clone()).await?;
+    let (_, _, row) = locate_by_id(client, &id, workspace).await?;
     Ok(row)
 }
 
 /// `todo_edit`.
-pub async fn edit(ctx: GrpcCtx, id: TaskId, patch: FieldPatch) -> Result<TaskRow, McpError> {
-    let (path, line, row) = locate_by_id(ctx.client.clone(), &id).await?;
+pub async fn edit(
+    ctx: GrpcCtx,
+    id: TaskId,
+    patch: FieldPatch,
+    workspace: WorkspaceArg,
+) -> Result<TaskRow, McpError> {
+    let (path, line, row) = locate_by_id(ctx.client.clone(), &id, workspace.clone()).await?;
     let new_line = apply_patch(&row.raw, &patch);
     if new_line == row.raw {
         return Ok(row);
@@ -149,8 +167,8 @@ pub async fn edit(ctx: GrpcCtx, id: TaskId, patch: FieldPatch) -> Result<TaskRow
         })),
     };
     let client = ctx.client.clone();
-    apply_one(ctx, &path, mutation).await?;
-    let (_, _, row) = locate_by_id(client, &id).await?;
+    apply_one(ctx, &path, mutation, workspace.clone()).await?;
+    let (_, _, row) = locate_by_id(client, &id, workspace).await?;
     Ok(row)
 }
 
@@ -182,6 +200,7 @@ pub async fn move_task(
     _ctx: GrpcCtx,
     _id: TaskId,
     _anchor: MoveAnchor,
+    _workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     Err(McpError::daemon(
         "todo_move (same-file reorder by anchor) has no daemon equivalent yet; see this crate's \
@@ -190,13 +209,18 @@ pub async fn move_task(
 }
 
 /// `todo_delete`. `confirm` is asserted, never trusted (design §6.3 invariant).
-pub async fn delete(ctx: GrpcCtx, id: TaskId, confirm: bool) -> Result<(), McpError> {
+pub async fn delete(
+    ctx: GrpcCtx,
+    id: TaskId,
+    confirm: bool,
+    workspace: WorkspaceArg,
+) -> Result<(), McpError> {
     if !confirm {
         return Err(McpError::confirm_required(
             "todo_delete needs confirm: true",
         ));
     }
-    let (path, line, _row) = locate_by_id(ctx.client.clone(), &id).await?;
+    let (path, line, _row) = locate_by_id(ctx.client.clone(), &id, workspace.clone()).await?;
     let task_ref = pb::TaskRef {
         line_number: line,
         task_id: id,
@@ -207,7 +231,7 @@ pub async fn delete(ctx: GrpcCtx, id: TaskId, confirm: bool) -> Result<(), McpEr
             leave_blank: true,
         })),
     };
-    apply_one(ctx, &path, mutation).await?;
+    apply_one(ctx, &path, mutation, workspace).await?;
     Ok(())
 }
 
@@ -215,8 +239,12 @@ pub async fn delete(ctx: GrpcCtx, id: TaskId, confirm: bool) -> Result<(), McpEr
 /// already pushed to the bottom never has to move again — the daemon computes each task's new
 /// position live (after the current last other task in the file), so only the line number for the
 /// `TaskRef` needs tracking here as earlier moves close up the gap they leave behind.
-pub async fn archive(ctx: GrpcCtx, file: RefPath) -> Result<ApplyOutcome, McpError> {
-    let text = get_file_text(ctx.client.clone(), &file).await?;
+pub async fn archive(
+    ctx: GrpcCtx,
+    file: RefPath,
+    workspace: WorkspaceArg,
+) -> Result<ApplyOutcome, McpError> {
+    let text = get_file_text(ctx.client.clone(), &file, workspace.clone()).await?;
     let mut completed: Vec<(u32, String)> = parse::lines(&text)
         .into_iter()
         .map(|(n, l)| (n, parse::parse_row(n, l)))
@@ -237,7 +265,7 @@ pub async fn archive(ctx: GrpcCtx, file: RefPath) -> Result<ApplyOutcome, McpErr
                 task: Some(task_ref),
             })),
         };
-        let resp = apply_one(ctx.clone(), &file, mutation).await?;
+        let resp = apply_one(ctx.clone(), &file, mutation, workspace.clone()).await?;
         applied += resp.applied;
         last = Some(resp);
         // The moved line's old slot closes up: every not-yet-processed line after it shifts back one.
@@ -268,18 +296,19 @@ fn outcome_from(applied: u32, last: Option<pb::ApplyResponse>) -> ApplyOutcome {
 /// `todo_batch`. `dry_run: true` never calls `Apply` — see [`crate::backend::McpBackend::batch`]'s
 /// doc for why. Each op reuses its single-tool counterpart above, sequentially: it is not one
 /// atomic multi-mutation `Apply`, since ops may target different files and `apply_route.rs` never
-/// allows a `Move` alongside anything else in one batch.
+/// allows a `Move` alongside anything else in one batch. `workspace` applies to every op.
 pub async fn batch(
     ctx: GrpcCtx,
     ops: Vec<TodoOp>,
     dry_run: bool,
+    workspace: WorkspaceArg,
 ) -> Result<ApplyOutcome, McpError> {
     if dry_run {
         return Ok(ApplyOutcome::default());
     }
     let mut applied = 0u32;
     for op in ops {
-        apply_batch_op(ctx.clone(), op).await?;
+        apply_batch_op(ctx.clone(), op, workspace.clone()).await?;
         applied += 1;
     }
     Ok(ApplyOutcome {
@@ -288,25 +317,25 @@ pub async fn batch(
     })
 }
 
-async fn apply_batch_op(ctx: GrpcCtx, op: TodoOp) -> Result<(), McpError> {
+async fn apply_batch_op(ctx: GrpcCtx, op: TodoOp, workspace: WorkspaceArg) -> Result<(), McpError> {
     match op {
         TodoOp::TodoAdd { text, file } => {
-            add(ctx, text, file).await?;
+            add(ctx, text, file, workspace).await?;
         }
         TodoOp::TodoComplete { id } => {
-            complete(ctx, id, true).await?;
+            complete(ctx, id, true, workspace).await?;
         }
         TodoOp::TodoUncomplete { id } => {
-            complete(ctx, id, false).await?;
+            complete(ctx, id, false, workspace).await?;
         }
         TodoOp::TodoEdit { id, patch } => {
-            edit(ctx, id, patch).await?;
+            edit(ctx, id, patch, workspace).await?;
         }
         TodoOp::TodoMove { id, before, after } => {
-            move_task(ctx, id, move_anchor(before, after)?).await?;
+            move_task(ctx, id, move_anchor(before, after)?, workspace).await?;
         }
         TodoOp::TodoDelete { id, confirm } => {
-            delete(ctx, id, confirm).await?;
+            delete(ctx, id, confirm, workspace).await?;
         }
     }
     Ok(())
@@ -319,6 +348,7 @@ pub async fn raw_write(
     file: RefPath,
     line: u32,
     text: String,
+    workspace: WorkspaceArg,
 ) -> Result<(), McpError> {
     let task_ref = pb::TaskRef {
         line_number: line,
@@ -330,41 +360,6 @@ pub async fn raw_write(
             new_line: text,
         })),
     };
-    apply_one(ctx, &file, mutation).await?;
-    Ok(())
-}
-
-/// `todo_notes_get` → daemon gRPC `GetNotes`. `line_number` is irrelevant here: `GetNotes`'s
-/// `parse_required_task_id` (`notes.rs`) resolves purely by `task_id`, unlike every other RPC's
-/// `TaskRef`, which needs a real line number.
-pub async fn notes_get(mut client: TxtodoClient<Channel>, id: TaskId) -> Result<String, McpError> {
-    let req = pb::GetNotesRequest {
-        task: Some(pb::TaskRef {
-            line_number: 0,
-            task_id: id,
-        }),
-        workspace: None,
-    };
-    let rep = client.get_notes(req).await.map_err(status)?;
-    Ok(String::from_utf8_lossy(&rep.into_inner().bytes).into_owned())
-}
-
-/// `todo_notes_set` → daemon gRPC `EditNotes`. Note: `edit_notes_impl` hardcodes
-/// `Principal::User` regardless of caller (a pre-existing M5 gap, not introduced here) — an
-/// agent's notes edits are attributed to the local user until that's wired up.
-pub async fn notes_set(
-    mut client: TxtodoClient<Channel>,
-    id: TaskId,
-    text: String,
-) -> Result<(), McpError> {
-    let req = pb::NotesEditRequest {
-        task: Some(pb::TaskRef {
-            line_number: 0,
-            task_id: id,
-        }),
-        new_text: text,
-        workspace: None,
-    };
-    client.edit_notes(req).await.map_err(status)?;
+    apply_one(ctx, &file, mutation, workspace).await?;
     Ok(())
 }

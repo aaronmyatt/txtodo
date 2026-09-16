@@ -64,7 +64,7 @@ async fn plan_today(
     file: Option<String>,
 ) -> Result<GetPromptResult, ErrorData> {
     let text = backend
-        .get_file(file.unwrap_or_else(|| "todo.txt".into()))
+        .get_file(file.unwrap_or_else(|| "todo.txt".into()), None)
         .await?;
     let instructions =
         "Prioritise today's actionable tasks (skip anything already done or blocked):";
@@ -79,7 +79,7 @@ async fn weekly_review(
     file: Option<String>,
 ) -> Result<GetPromptResult, ErrorData> {
     let path = file.unwrap_or_else(|| "todo.txt".into());
-    let text = backend.get_file(path).await?;
+    let text = backend.get_file(path, None).await?;
     let instructions = "Summarise this week: what's done, what's stuck, what to carry forward:";
     Ok(GetPromptResult::new(vec![
         PromptMessage::new_text(Role::User, instructions),
@@ -97,6 +97,7 @@ async fn triage_inbox(
             query: Some(format!("@{context}")),
             file: None,
             limit: None,
+            workspace: None,
         })
         .await?;
     let instructions =

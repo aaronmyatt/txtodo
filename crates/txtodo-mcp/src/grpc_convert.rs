@@ -3,7 +3,7 @@
 
 use txtodo_proto::v1 as pb;
 
-use crate::backend::{FileMeta, Hlc, OpSummary};
+use crate::backend::{FileMeta, Hlc, OpSummary, WorkspaceArg, WorkspaceInfo};
 
 /// Lowercase hex, no `0x` prefix (the daemon's `blake3` projection hashes and op ids are shown
 /// this way everywhere else in the CLI/daemon).
@@ -44,6 +44,47 @@ pub fn op_summary(o: pb::OpSummary) -> OpSummary {
         kind: o.kind,
         task_id: (!o.task_id.is_empty()).then_some(o.task_id),
         summary: o.summary,
+    }
+}
+
+/// Turns an MCP-level `workspace` arg into the wire `WorkspaceSelector`: a 26-character Crockford
+/// base32 string (a `WorkspaceId` ULID's own encoding) is treated as `workspace_id`, anything else
+/// as `path` — mirrors the daemon's own `WorkspaceSelector` oneof (`txtodo.proto`'s doc), sniffed
+/// client-side since this crate may not depend on `txtodo_model` to call its real `Ulid::parse`
+/// (`budgets.json`'s `allowedDeps`). `None` stays `None` — the daemon's own "sole open workspace"
+/// fallback (`workspace_catalog.rs::resolve_sole_open`).
+pub fn workspace_selector(workspace: WorkspaceArg) -> Option<pb::WorkspaceSelector> {
+    let value = workspace?;
+    let selector = if is_ulid(&value) {
+        pb::workspace_selector::Selector::WorkspaceId(value)
+    } else {
+        pb::workspace_selector::Selector::Path(value)
+    };
+    Some(pb::WorkspaceSelector {
+        selector: Some(selector),
+    })
+}
+
+/// Crockford base32 (`0-9A-HJKMNP-TV-Z`, case-insensitive, no `I`/`L`/`O`/`U`) at exactly 26
+/// characters — a ULID's shape, checked as a format only (this crate never decodes the timestamp/
+/// randomness it carries, just tells "id" from "path").
+fn is_ulid(s: &str) -> bool {
+    s.len() == 26
+        && s.bytes().all(|b| {
+            let b = b.to_ascii_uppercase();
+            b.is_ascii_digit()
+                || (b.is_ascii_uppercase() && !matches!(b, b'I' | b'L' | b'O' | b'U'))
+        })
+}
+
+/// `pb::WorkspaceInfo` into the model's [`WorkspaceInfo`] (`WorkspaceList` RPC).
+pub fn workspace_info(w: pb::WorkspaceInfo) -> WorkspaceInfo {
+    WorkspaceInfo {
+        id: w.workspace_id,
+        root: w.root,
+        added_at_ms: w.added_at_ms,
+        root_exists: w.root_exists,
+        has_state: w.has_state,
     }
 }
 

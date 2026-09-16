@@ -5,14 +5,15 @@ use rmcp::ErrorData;
 use rmcp::model::CallToolResult;
 
 use crate::backend::{
-    AddArgs, ArchiveArgs, BatchArgs, DeleteArgs, EditArgs, McpBackend, MoveArgs, move_anchor,
+    AddArgs, ArchiveArgs, BatchArgs, DeleteArgs, EditArgs, McpBackend, MoveArgs, WorkspaceArg,
+    move_anchor,
 };
 use crate::error::McpError;
 use crate::tools::json_result;
 
 /// `todo_add`.
 pub async fn add(backend: &dyn McpBackend, args: AddArgs) -> Result<CallToolResult, ErrorData> {
-    json_result(&backend.add(args.text, args.file).await?)
+    json_result(&backend.add(args.text, args.file, args.workspace).await?)
 }
 
 /// `todo_complete` / `todo_uncomplete`: `done` is fixed by which tool called this.
@@ -20,13 +21,14 @@ pub async fn complete(
     backend: &dyn McpBackend,
     id: String,
     done: bool,
+    workspace: WorkspaceArg,
 ) -> Result<CallToolResult, ErrorData> {
-    json_result(&backend.complete(id, done).await?)
+    json_result(&backend.complete(id, done, workspace).await?)
 }
 
 /// `todo_edit`.
 pub async fn edit(backend: &dyn McpBackend, args: EditArgs) -> Result<CallToolResult, ErrorData> {
-    json_result(&backend.edit(args.id, args.patch).await?)
+    json_result(&backend.edit(args.id, args.patch, args.workspace).await?)
 }
 
 /// `todo_move`.
@@ -35,7 +37,7 @@ pub async fn move_task(
     args: MoveArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let anchor = move_anchor(args.before, args.after)?;
-    json_result(&backend.move_task(args.id, anchor).await?)
+    json_result(&backend.move_task(args.id, anchor, args.workspace).await?)
 }
 
 /// `todo_delete`. `confirm` is asserted here — before the backend is even called — not merely
@@ -47,7 +49,9 @@ pub async fn delete(
     if !args.confirm {
         return Err(McpError::confirm_required("todo_delete needs confirm: true").into());
     }
-    backend.delete(args.id, args.confirm).await?;
+    backend
+        .delete(args.id, args.confirm, args.workspace)
+        .await?;
     json_result(&())
 }
 
@@ -57,12 +61,16 @@ pub async fn archive(
     args: ArchiveArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let file = args.file.unwrap_or_else(|| "todo.txt".to_owned());
-    json_result(&backend.archive(file).await?)
+    json_result(&backend.archive(file, args.workspace).await?)
 }
 
 /// `todo_batch`.
 pub async fn batch(backend: &dyn McpBackend, args: BatchArgs) -> Result<CallToolResult, ErrorData> {
-    json_result(&backend.batch(args.ops, args.dry_run).await?)
+    json_result(
+        &backend
+            .batch(args.ops, args.dry_run, args.workspace)
+            .await?,
+    )
 }
 
 /// `todo_notes_set`.
@@ -70,7 +78,8 @@ pub async fn notes_set(
     backend: &dyn McpBackend,
     id: String,
     text: String,
+    workspace: WorkspaceArg,
 ) -> Result<CallToolResult, ErrorData> {
-    backend.notes_set(id, text).await?;
+    backend.notes_set(id, text, workspace).await?;
     json_result(&())
 }

@@ -13,11 +13,11 @@ use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::{
     ApplyOutcome, FieldPatch, FileMeta, GetTarget, Hlc, ListArgs, McpBackend, MoveAnchor,
-    OpSummary, RefPath, TaskId, TaskRow, TodoOp,
+    OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg, WorkspaceInfo,
 };
 use crate::error::McpError;
 use crate::grpc_write::GrpcCtx;
-use crate::{grpc_read, grpc_write};
+use crate::{grpc_notes, grpc_read, grpc_write};
 
 /// Where the daemon listens, relative to the workspace dir (ADR 0010). Mirrors
 /// `txtodo-cli::client::SOCKET_REL` — reimplemented here rather than imported, since
@@ -54,8 +54,9 @@ impl std::error::Error for ConnectError {}
 
 impl GrpcMcpBackend {
     /// Dials `txtodod`'s unix socket (the same `.txtodo/txtodod.sock` `txtodo-cli`'s `client.rs`
-    /// connects to), reimplementing that small connector here since `txtodo-mcp` may not depend on
-    /// the (binary-only) `txtodo-cli` crate. `agent` is attached to every mutation's
+    /// connects to, or the device-global socket in `--global` mode — `main.rs` resolves which
+    /// path to pass), reimplementing that small connector here since `txtodo-mcp` may not depend
+    /// on the (binary-only) `txtodo-cli` crate. `agent` is attached to every mutation's
     /// `ApplyRequest.agent`; `None` until a real token principal exists
     /// ([mcp-agent-principal](../../../tasks/mcp-agent-principal)).
     #[cfg(unix)]
@@ -112,40 +113,79 @@ impl McpBackend for GrpcMcpBackend {
         grpc_read::list(self.client(), args).await
     }
 
-    async fn search(&self, text: String, file: Option<RefPath>) -> Result<Vec<TaskRow>, McpError> {
-        grpc_read::search(self.client(), text, file).await
+    async fn search(
+        &self,
+        text: String,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<TaskRow>, McpError> {
+        grpc_read::search(self.client(), text, file, workspace).await
     }
 
     async fn get(&self, target: GetTarget) -> Result<TaskRow, McpError> {
         grpc_read::get(self.client(), target).await
     }
 
-    async fn add(&self, text: String, file: Option<RefPath>) -> Result<TaskRow, McpError> {
-        grpc_write::add(self.ctx(), text, file).await
+    async fn add(
+        &self,
+        text: String,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
+        grpc_write::add(self.ctx(), text, file, workspace).await
     }
 
-    async fn complete(&self, id: TaskId, done: bool) -> Result<TaskRow, McpError> {
-        grpc_write::complete(self.ctx(), id, done).await
+    async fn complete(
+        &self,
+        id: TaskId,
+        done: bool,
+        workspace: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
+        grpc_write::complete(self.ctx(), id, done, workspace).await
     }
 
-    async fn edit(&self, id: TaskId, patch: FieldPatch) -> Result<TaskRow, McpError> {
-        grpc_write::edit(self.ctx(), id, patch).await
+    async fn edit(
+        &self,
+        id: TaskId,
+        patch: FieldPatch,
+        workspace: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
+        grpc_write::edit(self.ctx(), id, patch, workspace).await
     }
 
-    async fn move_task(&self, id: TaskId, anchor: MoveAnchor) -> Result<TaskRow, McpError> {
-        grpc_write::move_task(self.ctx(), id, anchor).await
+    async fn move_task(
+        &self,
+        id: TaskId,
+        anchor: MoveAnchor,
+        workspace: WorkspaceArg,
+    ) -> Result<TaskRow, McpError> {
+        grpc_write::move_task(self.ctx(), id, anchor, workspace).await
     }
 
-    async fn delete(&self, id: TaskId, confirm: bool) -> Result<(), McpError> {
-        grpc_write::delete(self.ctx(), id, confirm).await
+    async fn delete(
+        &self,
+        id: TaskId,
+        confirm: bool,
+        workspace: WorkspaceArg,
+    ) -> Result<(), McpError> {
+        grpc_write::delete(self.ctx(), id, confirm, workspace).await
     }
 
-    async fn archive(&self, file: RefPath) -> Result<ApplyOutcome, McpError> {
-        grpc_write::archive(self.ctx(), file).await
+    async fn archive(
+        &self,
+        file: RefPath,
+        workspace: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError> {
+        grpc_write::archive(self.ctx(), file, workspace).await
     }
 
-    async fn batch(&self, ops: Vec<TodoOp>, dry_run: bool) -> Result<ApplyOutcome, McpError> {
-        grpc_write::batch(self.ctx(), ops, dry_run).await
+    async fn batch(
+        &self,
+        ops: Vec<TodoOp>,
+        dry_run: bool,
+        workspace: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError> {
+        grpc_write::batch(self.ctx(), ops, dry_run, workspace).await
     }
 
     async fn history(
@@ -153,32 +193,53 @@ impl McpBackend for GrpcMcpBackend {
         since: Option<Hlc>,
         id: Option<TaskId>,
         file: Option<RefPath>,
+        workspace: WorkspaceArg,
     ) -> Result<Vec<OpSummary>, McpError> {
-        grpc_read::history(self.client(), since, id, file).await
+        grpc_read::history(self.client(), since, id, file, workspace).await
     }
 
-    async fn raw_read(&self, file: RefPath, lines: Vec<u32>) -> Result<Vec<String>, McpError> {
-        grpc_read::raw_read(self.client(), file, lines).await
+    async fn raw_read(
+        &self,
+        file: RefPath,
+        lines: Vec<u32>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<String>, McpError> {
+        grpc_read::raw_read(self.client(), file, lines, workspace).await
     }
 
-    async fn raw_write(&self, file: RefPath, line: u32, text: String) -> Result<(), McpError> {
-        grpc_write::raw_write(self.ctx(), file, line, text).await
+    async fn raw_write(
+        &self,
+        file: RefPath,
+        line: u32,
+        text: String,
+        workspace: WorkspaceArg,
+    ) -> Result<(), McpError> {
+        grpc_write::raw_write(self.ctx(), file, line, text, workspace).await
     }
 
-    async fn notes_get(&self, id: TaskId) -> Result<String, McpError> {
-        grpc_write::notes_get(self.client(), id).await
+    async fn notes_get(&self, id: TaskId, workspace: WorkspaceArg) -> Result<String, McpError> {
+        grpc_notes::notes_get(self.client(), id, workspace).await
     }
 
-    async fn notes_set(&self, id: TaskId, text: String) -> Result<(), McpError> {
-        grpc_write::notes_set(self.client(), id, text).await
+    async fn notes_set(
+        &self,
+        id: TaskId,
+        text: String,
+        workspace: WorkspaceArg,
+    ) -> Result<(), McpError> {
+        grpc_notes::notes_set(self.client(), id, text, workspace).await
     }
 
-    async fn list_files(&self) -> Result<Vec<FileMeta>, McpError> {
-        grpc_read::list_files(self.client()).await
+    async fn list_files(&self, workspace: WorkspaceArg) -> Result<Vec<FileMeta>, McpError> {
+        grpc_read::list_files(self.client(), workspace).await
     }
 
-    async fn get_file(&self, file: RefPath) -> Result<String, McpError> {
-        grpc_read::get_file_text(self.client(), &file).await
+    async fn get_file(&self, file: RefPath, workspace: WorkspaceArg) -> Result<String, McpError> {
+        grpc_read::get_file_text(self.client(), &file, workspace).await
+    }
+
+    async fn list_workspaces(&self) -> Result<Vec<WorkspaceInfo>, McpError> {
+        grpc_read::list_workspaces(self.client()).await
     }
 
     fn principal(&self) -> String {
