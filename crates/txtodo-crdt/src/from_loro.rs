@@ -62,6 +62,7 @@ impl From<loro::LoroError> for FromLoroError {
 }
 
 /// Translates one owned diff batch into ops, in the order the batch carries.
+#[tracing::instrument(skip_all, fields(diffs = batch.iter().count()))]
 pub fn from_batch(
     doc: &LoroDocument,
     batch: &DiffBatch,
@@ -72,7 +73,9 @@ pub fn from_batch(
         .iter()
         .map(|(cid, d)| (cid.clone(), d.clone()))
         .collect();
-    convert(doc, diffs, stamp, mint)
+    let ops = convert(doc, diffs, stamp, mint)?;
+    tracing::debug!(ops = ops.len(), "crdt_ops_translated");
+    Ok(ops)
 }
 
 fn convert(
