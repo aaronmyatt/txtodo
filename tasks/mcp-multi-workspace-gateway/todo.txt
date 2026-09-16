@@ -1,4 +1,4 @@
-2026-09-16 real two-daemon multi-workspace proof (global mode, two registered workspaces) +m11 @mcp id:01M2N4MT0GNYZYTJHYS1ZS34HC
+x 2026-09-16 2026-09-16 real two-daemon multi-workspace proof (global mode, two registered workspaces) +m11 @mcp id:01M2N4MT0GNYZYTJHYS1ZS34HC
 x 2026-09-16 2026-09-16 main.rs: --global mode dialing the device-global socket +m11 @mcp id:01M2N4MSZQYJ19G7CCSDVV5PBJ
 x 2026-09-16 2026-09-16 smoke.rs FakeBackend + new resource/tool tests for workspace selector +m11 @mcp id:01M2N4MT03NPHGCDX6K8ND8YBC
 x 2026-09-16 2026-09-16 resources.rs: todo_list_workspaces resource + ?workspace= query threading +m11 @mcp id:01M2N4MSZ9Y46JFJFHDMVFTYA5
