@@ -18,7 +18,11 @@ use std::time::Duration;
 
 use txtodo_proto::v1 as pb;
 
-/// Per-attempt bound for [`Daemon::wait_until_ready`]'s `Health` probe.
+/// Per-attempt bound for [`Daemon::wait_until_ready`]'s `Health` probe. Gated with the same
+/// `#[cfg(unix)]` as its one use site (`connect`'s unix-socket dial): on Windows that arm is
+/// `UnsupportedPlatform` and an ungated const is dead code, which CI's `-D warnings` rejects.
+/// Ref: https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg-attribute
+#[cfg(unix)]
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(500);
 /// How many probe attempts [`Daemon::wait_until_ready`] makes before giving up.
 const MAX_CONNECT_RETRIES: u32 = 5;
