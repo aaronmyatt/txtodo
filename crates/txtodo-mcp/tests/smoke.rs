@@ -118,6 +118,9 @@ impl McpBackend for FakeBackend {
         self.record("get_file");
         Ok("(A) 2026-09-11 Draft +work id:01J\n".to_owned())
     }
+    fn principal(&self) -> String {
+        "user".to_owned()
+    }
 }
 
 /// Every §6.3 tool plus `todo_notes_get`/`todo_notes_set` — the exact-match set mcp-server-tools
@@ -263,3 +266,51 @@ fn _construction_reference(u: &str) -> (ReadResourceRequestParams, GetPromptRequ
 // needs — it never receives a server-initiated request.
 #[allow(dead_code)]
 fn _client_handler_reference<T: ClientHandler>() {}
+
+/// tasks/logging-mcp-call-span: proves the `mcp.call{tool,principal}` span (plan §5,
+/// `txtodo-implementation-plan.md:447`) actually lands on a JSON log line with the right name and
+/// fields — not just "it compiled". `txtodo_telemetry::testing::LogSink` is the shared capture
+/// seam every crate's own tests use; this test builds its own `with_span_events(FmtSpan::CLOSE)`
+/// layer on top of it (see this crate's `Cargo.toml` for why `capturing_dispatch` alone isn't
+/// enough — a span that closes with no event inside it never otherwise reaches the writer).
+/// `#[tokio::test]`'s default current-thread runtime is load-bearing here: `set_default`'s guard
+/// is a thread-local, and the server side of `connect()` runs inside a `tokio::spawn`ed task
+/// polled on that same one OS thread, so the guard covers it too.
+#[tokio::test]
+async fn mcp_call_span_names_tool_and_records_principal() {
+    use tracing_subscriber::fmt::format::FmtSpan;
+    use tracing_subscriber::layer::SubscriberExt;
+
+    let sink = txtodo_telemetry::testing::LogSink::new();
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::fmt::layer()
+            .json()
+            .with_span_events(FmtSpan::CLOSE)
+            .with_writer(sink.clone()),
+    );
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let (_backend, client, server_task) = connect().await;
+    let args = json!({}).as_object().cloned().expect("object literal");
+    let _ = client
+        .peer()
+        .call_tool(CallToolRequestParams::new("todo_list").with_arguments(args))
+        .await
+        .expect("tools/call succeeds");
+    client.cancel().await.expect("client cancels cleanly");
+    server_task.await.expect("server task joins");
+
+    let text = sink.captured_text();
+    let line = text
+        .lines()
+        .find(|l| l.contains("\"mcp.call\""))
+        .unwrap_or_else(|| panic!("no mcp.call span line in captured output: {text}"));
+    let value: serde_json::Value = serde_json::from_str(line).expect("captured line is JSON");
+    let span = &value["span"];
+    assert_eq!(span["name"], "mcp.call", "{line}");
+    assert_eq!(span["tool"], "todo_list", "{line}");
+    assert_eq!(span["principal"], "user", "{line}");
+    // The bearer/secret side of a principal never appears — `FakeBackend::principal` returns
+    // "user" (the unauthenticated default), so this also doubles as proof no token text leaks.
+    assert!(!text.contains("token_id"), "{text}");
+}

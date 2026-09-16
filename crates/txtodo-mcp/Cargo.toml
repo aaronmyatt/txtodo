@@ -59,10 +59,21 @@ tracing = "0.1"
 # https://docs.rs/mdns-sd — advertises `_txtodo-mcp._tcp` for `--lan` (design §6.1). Same crate
 # crates/txtodo-sync's discovery.rs uses for `_txtodo._udp`, so the workspace has one mDNS library.
 mdns-sd = "0.21"
+# JSON-rolling-file + pretty-stderr tracing init, shared with every other txtodo binary (tasks/
+# logging-mcp-call-span). `txtodo-mcp` is a leaf-adjacent binary crate: `.claude/budgets.json`'s
+# `allowedDeps` lists this alongside txtodo-proto/txtodo-query.
+txtodo-telemetry = { path = "../txtodo-telemetry" }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — scratch unix sockets for the in-process transport smoke test.
 tempfile = "3"
+# https://docs.rs/tracing-subscriber — only `tests/smoke.rs`'s `mcp_call_span_*` test needs this:
+# `txtodo_telemetry::testing::LogSink` captures bytes, but proving the `mcp.call` span's own
+# fields land on a JSON line needs a `with_span_events(FmtSpan::CLOSE)` layer, which
+# `txtodo_telemetry::testing::capturing_dispatch` deliberately doesn't build (it mirrors `init`'s
+# production layer, which never enables span-lifecycle events). Same workspace version/features
+# `txtodo-daemon`/`txtodo-telemetry` already use.
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

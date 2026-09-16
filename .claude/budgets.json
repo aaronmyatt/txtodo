@@ -44,7 +44,8 @@
       "txtodo-proto": [],
       "txtodo-mcp": [
         "txtodo-proto",
-        "txtodo-query"
+        "txtodo-query",
+        "txtodo-telemetry"
       ],
       "txtodo-cli": [
         "txtodo-core",

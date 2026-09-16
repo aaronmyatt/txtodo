@@ -375,4 +375,12 @@ pub trait McpBackend: Send + Sync {
     async fn list_files(&self) -> Result<Vec<FileMeta>, McpError>;
     /// A whole file's bytes as text (`todotxt://todo.txt`; see module doc).
     async fn get_file(&self, file: RefPath) -> Result<String, McpError>;
+    /// Non-secret identifier for whoever is driving this call: `"agent:<name>#<token_id>"` when a
+    /// token principal was attached ([`crate::grpc_backend::GrpcMcpBackend::connect_unix`]'s
+    /// `agent` arg), else `"user"` (an unauthenticated stdio session — today's default). Never the
+    /// bearer secret, which `token_id` is not: it is a `TokenId` ULID
+    /// (`txtodo-daemon/src/tokens.rs::parse_token_id`), the same stable identifier
+    /// `Store::verify_token` looks up by, not the once-shown-at-creation bearer string. Used only
+    /// by the `mcp.call{tool,principal}` span (plan §5, `txtodo-implementation-plan.md:447`).
+    fn principal(&self) -> String;
 }

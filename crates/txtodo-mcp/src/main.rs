@@ -93,6 +93,13 @@ fn main() -> ExitCode {
 }
 
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
+    // JSON rolling-file + pretty-stderr layer (never stdout — `transport::serve_stdio` owns
+    // stdin/stdout for the MCP protocol itself, see `transport.rs`'s `rmcp::transport::io::stdio`
+    // call and this crate's As-built notes). Logs share the daemon's `.txtodo/logs/` directory
+    // (own `txtodo-mcp.log.YYYY-MM-DD` file family via the `service` name) so `txtodo doctor` and a
+    // human tailing the directory see every process's lines in one place. `_log_guard` must outlive
+    // every `tracing::` call below — held for `run`'s whole body, dropped only on return.
+    let _log_guard = txtodo_telemetry::init("txtodo-mcp", &args.dir.join(".txtodo/logs"))?;
     let socket = args.dir.join(SOCKET_REL);
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;

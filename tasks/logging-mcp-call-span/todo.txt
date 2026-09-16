@@ -1,0 +1,5 @@
+x 2026-09-16 2026-09-16 add mcp_call_span_names_tool_and_records_principal proof test in tests/smoke.rs +m11 @mcp id:01M2MTGXCYK4WC2H4AQ3CV8XPR
+x 2026-09-16 2026-09-16 wire txtodo_telemetry::init into main.rs run(), JSON file + stderr, verify stdout stays clean +m11 @mcp id:01M2MTGXCKBB1CYN70B6WV0Q6S
+x 2026-09-16 2026-09-16 add mcp.call{tool,principal} #[instrument] to all 15 schema.rs tool methods +m11 @mcp id:01M2MTGXC8SRGK91S4SSG728N7
+x 2026-09-16 2026-09-16 add McpBackend::principal, implement on GrpcMcpBackend and test FakeBackend +m11 @mcp id:01M2MTGXBWTY04PS2DWGJQD5HT
+x 2026-09-16 2026-09-16 add txtodo-telemetry dep to txtodo-mcp Cargo.toml and budgets.json mcp allowedDeps +m11 @mcp id:01M2MTGXBFTY70CHRRWSCN6VKM

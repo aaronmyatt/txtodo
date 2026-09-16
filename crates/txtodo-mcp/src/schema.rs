@@ -4,6 +4,16 @@
 //! `tools_write.rs`/`resources.rs`/`prompts.rs`, kept out of this file so the
 //! `#[tool_router]`/`#[tool_handler]` macros (which must see the whole `impl` block) stay
 //! readable.
+//!
+//! Every `#[tool]` method also carries the `mcp.call{tool,principal}` span (plan §5,
+//! `txtodo-implementation-plan.md:447`; tasks/logging-mcp-call-span): `#[tracing::instrument]`
+//! listed *above* `#[tool]`, never below — `#[tool]` rewrites an `async fn` into a sync fn
+//! returning a boxed future (see `rmcp-macros`' `tool.rs`), and `tracing::instrument`'s own
+//! expansion needs to see the original `async fn` to wrap its body in the span correctly; written
+//! the other way round, `#[tool]` would run first and `instrument` would be spanning a plain sync
+//! function that merely returns an unstarted future, never entering it. `principal` is always
+//! [`crate::backend::McpBackend::principal`]'s non-secret identifier — never a bearer token, tool
+//! argument, or task line text (`CLAUDE.md`'s logging rule).
 
 use std::sync::Arc;
 
@@ -46,6 +56,11 @@ impl McpServer {
 #[tool_router(router = tool_router)]
 impl McpServer {
     /// `todo_list`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_list", principal = %self.backend.principal())
+    )]
     #[tool(description = "List tasks, filtered by an optional query and file, capped at limit.")]
     pub async fn todo_list(
         &self,
@@ -55,6 +70,11 @@ impl McpServer {
     }
 
     /// `todo_search`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_search", principal = %self.backend.principal())
+    )]
     #[tool(description = "Search tasks by text (case-insensitive substring today).")]
     pub async fn todo_search(
         &self,
@@ -64,6 +84,11 @@ impl McpServer {
     }
 
     /// `todo_get`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_get", principal = %self.backend.principal())
+    )]
     #[tool(description = "Get one task by id or line number.")]
     pub async fn todo_get(
         &self,
@@ -73,6 +98,11 @@ impl McpServer {
     }
 
     /// `todo_add`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_add", principal = %self.backend.principal())
+    )]
     #[tool(description = "Add a task; text must not carry a leading date or id: tag.")]
     pub async fn todo_add(
         &self,
@@ -82,6 +112,11 @@ impl McpServer {
     }
 
     /// `todo_complete`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_complete", principal = %self.backend.principal())
+    )]
     #[tool(description = "Mark a task done, preserving its priority as a pri: tag.")]
     pub async fn todo_complete(
         &self,
@@ -91,6 +126,11 @@ impl McpServer {
     }
 
     /// `todo_uncomplete`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_uncomplete", principal = %self.backend.principal())
+    )]
     #[tool(description = "Reopen a completed task, restoring its pri: tag as a priority.")]
     pub async fn todo_uncomplete(
         &self,
@@ -100,6 +140,11 @@ impl McpServer {
     }
 
     /// `todo_edit`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_edit", principal = %self.backend.principal())
+    )]
     #[tool(description = "Field-level patch: priority, due, append, replace.")]
     pub async fn todo_edit(
         &self,
@@ -109,6 +154,11 @@ impl McpServer {
     }
 
     /// `todo_move`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_move", principal = %self.backend.principal())
+    )]
     #[tool(
         description = "Reorder a task before/after another (same-file; see the As-built notes for the current limitation)."
     )]
@@ -120,6 +170,11 @@ impl McpServer {
     }
 
     /// `todo_delete`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_delete", principal = %self.backend.principal())
+    )]
     #[tool(description = "Delete a task; confirm must be true.")]
     pub async fn todo_delete(
         &self,
@@ -129,6 +184,11 @@ impl McpServer {
     }
 
     /// `todo_archive`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_archive", principal = %self.backend.principal())
+    )]
     #[tool(description = "Move completed tasks in file to the bottom, same file.")]
     pub async fn todo_archive(
         &self,
@@ -138,6 +198,11 @@ impl McpServer {
     }
 
     /// `todo_batch`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_batch", principal = %self.backend.principal())
+    )]
     #[tool(
         description = "Apply several operations in order; dry_run skips execution (no diff yet)."
     )]
@@ -149,6 +214,11 @@ impl McpServer {
     }
 
     /// `todo_history`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_history", principal = %self.backend.principal())
+    )]
     #[tool(description = "Read the op log, optionally since an HLC or for one task/file.")]
     pub async fn todo_history(
         &self,
@@ -158,6 +228,11 @@ impl McpServer {
     }
 
     /// `todo_raw`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_raw", principal = %self.backend.principal())
+    )]
     #[tool(description = "Line-level read (lines[]) or write (line+text); needs the raw scope.")]
     pub async fn todo_raw(
         &self,
@@ -167,6 +242,11 @@ impl McpServer {
     }
 
     /// `todo_notes_get`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_notes_get", principal = %self.backend.principal())
+    )]
     #[tool(description = "Read a task's notes.md.")]
     pub async fn todo_notes_get(
         &self,
@@ -176,6 +256,11 @@ impl McpServer {
     }
 
     /// `todo_notes_set`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_notes_set", principal = %self.backend.principal())
+    )]
     #[tool(description = "Replace a task's notes.md.")]
     pub async fn todo_notes_set(
         &self,

@@ -8845,8 +8845,10 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "txtodo-proto",
  "txtodo-query",
+ "txtodo-telemetry",
 ]
 
 [[package]]

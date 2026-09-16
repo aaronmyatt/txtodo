@@ -180,4 +180,11 @@ impl McpBackend for GrpcMcpBackend {
     async fn get_file(&self, file: RefPath) -> Result<String, McpError> {
         grpc_read::get_file_text(self.client(), &file).await
     }
+
+    fn principal(&self) -> String {
+        match &self.ctx.agent {
+            Some(pb::AgentPrincipal { token_id, name }) => format!("agent:{name}#{token_id}"),
+            None => "user".to_owned(),
+        }
+    }
 }
