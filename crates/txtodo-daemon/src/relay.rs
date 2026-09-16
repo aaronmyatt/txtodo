@@ -64,6 +64,60 @@ use crate::server::SharedWorkspace;
 /// counterpart of `lan.rs`'s `RESYNC_INTERVAL`, same reasoning.
 const DIAL_KNOWN_PEER_INTERVAL: Duration = Duration::from_millis(1_000);
 
+/// n0's own public relay (named in `docs.rs/iroh`'s own `Endpoint::builder` doctest,
+/// `use1-1.relay.n0.iroh.link`) — already proven reliable by this repo's own real-relay tests
+/// (`tests/relay_converge.rs`, `tests/pairing_relay.rs`). Task `relay-default-public-url`: used
+/// whenever `--relay`/`$TXTODO_RELAY_URL`/config `relay_url` and `--no-relay` are all absent, so
+/// cross-network sync works with zero setup. Safe to default on — every `Op` is AEAD-sealed before
+/// it ever reaches a relay (design §4.6), so a relay only ever routes ciphertext, the same threat
+/// model already accepted for a self-hosted one (ADR 0018/0027).
+pub const DEFAULT_RELAY_URL: &str = "https://use1-1.relay.n0.iroh.link";
+
+/// The relay URL actually in effect: `no_relay` always wins (`None`, the explicit LAN-only
+/// opt-out); else a non-empty `explicit` (`--relay`/`$TXTODO_RELAY_URL`/config `relay_url`); else
+/// [`DEFAULT_RELAY_URL`]. `main.rs::run` is the only caller — resolved once, before any workspace
+/// opens, and threaded into both the actual relay bind (`DeviceRelay::bind`) and `OpenArgs.relay_url`
+/// (`Health`'s reporting field) so they can never disagree about which URL is really in use.
+pub fn resolve_relay_url(explicit: Option<String>, no_relay: bool) -> Option<String> {
+    if no_relay {
+        return None;
+    }
+    explicit
+        .filter(|u| !u.is_empty())
+        .or_else(|| Some(DEFAULT_RELAY_URL.to_owned()))
+}
+
+#[cfg(test)]
+mod resolve_relay_url_tests {
+    use super::{DEFAULT_RELAY_URL, resolve_relay_url};
+
+    #[test]
+    fn no_relay_always_wins() {
+        assert_eq!(resolve_relay_url(Some("https://x".to_owned()), true), None);
+        assert_eq!(resolve_relay_url(None, true), None);
+    }
+
+    #[test]
+    fn an_explicit_url_overrides_the_default() {
+        assert_eq!(
+            resolve_relay_url(Some("https://mine.example".to_owned()), false),
+            Some("https://mine.example".to_owned())
+        );
+    }
+
+    #[test]
+    fn absent_or_empty_falls_back_to_the_default() {
+        assert_eq!(
+            resolve_relay_url(None, false),
+            Some(DEFAULT_RELAY_URL.to_owned())
+        );
+        assert_eq!(
+            resolve_relay_url(Some(String::new()), false),
+            Some(DEFAULT_RELAY_URL.to_owned())
+        );
+    }
+}
+
 /// This device's identity plus its workspace and live status — bundled the same way `lan.rs`'s own
 /// `LanCtx` is, so no function below needs more than `maxParams` arguments.
 #[derive(Clone)]
