@@ -1,0 +1,4 @@
+x 2026-09-16 2026-09-16 projections.rs: instrument upsert_projection (shared write path) and put_snapshot +m11 @store id:01M2MQDH5E7XW607SVS50MY84H
+x 2026-09-16 2026-09-16 heads.rs: instrument heads/head_of/next_origin_seq (per-device ledger reads) +m11 @store id:01M2MQDH535QM4FGEARRN3DBFJ
+x 2026-09-16 2026-09-16 commit.rs: instrument commit_change_with (ops, bytes, hash span; seq outcome event) +m11 @store id:01M2MQDH4Q69TA8Q9X44NFBX1N
+x 2026-09-16 2026-09-16 lib.rs: add tracing dep, hex8 helper, instrument open (WAL confirm, migration count, schema version) +m11 @store id:01M2MQDH47WQM6FCHQK48AQER1
