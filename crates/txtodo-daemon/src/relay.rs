@@ -25,9 +25,12 @@
 //! **mDNS**, which by construction never crosses a real network boundary — two daemons that were
 //! never on the same LAN never populate each other's `PeerTable` at all, so the relay fallback path
 //! is simply never reached for them, identity-sharing aside. Real pairing-over-relay (a rendezvous
-//! protocol that works with no shared LAN) is `sync-pairing-relay`'s own not-yet-built task per ADR
-//! 0026's follow-up list — out of scope here to build in full. `--relay-dial-peer <hex node id>`
-//! is that task's minimal, honestly-scoped substitute: a caller who already knows a peer's *relay*
+//! protocol that works with no shared LAN) landed 2026-09-14 as `sync-pairing-relay`
+//! (`pairing_grpc.rs`/`pairing_relay_dial.rs`, racing LAN vs relay per joiner round) — out of scope
+//! *here* to build, since this module is about the already-paired sync `Session`, not pairing
+//! itself. `--relay-dial-peer <hex node id>` predates that and stays a narrower,
+//! `relay-converge-test`-only substitute for the same rendezvous problem one layer down (this
+//! module's own dial loop, not the pairing handshake): a caller who already knows a peer's *relay*
 //! node id (e.g. read off that peer's own `Health.relay_last_outcome`, or a test harness that
 //! seeded it) can hand it to this daemon at startup, and [`dial_known_peer`] below drives the
 //! connect/sync loop directly over the shared `RelayEndpoint` — no LAN discovery, no shared LAN,
@@ -36,9 +39,10 @@
 //!
 //! **Known scope limit, deliberate**: unlike `lan.rs::rebuild_on_group_change`, this module never
 //! rebinds anything when the workspace's sync group changes (e.g. mid-run pairing) — nor could it
-//! now, since binding is a device-level concern this module no longer performs at all. Pairing-
-//! over-relay is a separate, not-yet-built task (`sync-pairing-relay`, scoped by ADR 0026's own
-//! follow-up list) — out of scope here.
+//! now, since binding is a device-level concern this module no longer performs at all. This is
+//! fine for pairing-over-relay itself (`sync-pairing-relay`, landed 2026-09-14): a group change
+//! only ever *follows* a completed pairing, which is `pairing_grpc.rs`/`pairing_relay_dial.rs`'s
+//! job, not this module's — nothing here needs to notice the change mid-handshake.
 
 use std::sync::Arc;
 use std::time::Duration;

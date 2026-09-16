@@ -221,8 +221,10 @@ multiplex every workspace's traffic — not done by this task).
   Option<Arc<DeviceRelay>>, dial_peer)` registers this workspace against the device's already-bound
   shared endpoint (`LanStatus::set_relay_configured("")` and nothing else when `--relay` was never
   configured) and, when `--relay-dial-peer` names one, spawns the outbound dial loop — deliberately
-  does **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does;
-  pairing-over-relay is `sync-pairing-relay`'s separate, not-yet-built task. `relay_state.rs`'s
+  does **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does (a
+  group change only ever follows a completed pairing, `pairing_grpc.rs`/`pairing_relay_dial.rs`'s
+  job — nothing here needs to notice it mid-handshake, unlike LAN's mDNS advertisement, which is
+  itself group-scoped). `relay_state.rs`'s
   `RelayState` (same `Arc<Mutex<Option<Arc<_>>>>` shape as `pairing_lan_state.rs`'s endpoint half)
   is how `relay.rs`'s bound endpoint reaches `lan.rs`'s dial path. `relay_fallback.rs`'s generic
   `lan_then_relay(timeout, primary, fallback)` is the actual selection logic — tries `primary`
@@ -239,9 +241,11 @@ multiplex every workspace's traffic — not done by this task).
   identity gap above for a real two-daemon test surfaced a deeper one — `relay_fallback_dial` only
   ever runs for a peer `lan.rs::handle_sighting` already learned about via mDNS, which by
   construction never crosses a real network boundary, so the relay fallback path was never actually
-  reachable for two daemons that never shared a LAN. `--relay-dial-peer <hex relay node id>` is a
-  test/manual-pairing-substitute seam (real pairing-over-relay is still `sync-pairing-relay`'s own
-  not-yet-built task): `relay.rs::dial_known_peer` connects directly to a peer's *relay* identity
+  reachable for two daemons that never shared a LAN. `--relay-dial-peer <hex relay node id>`
+  predates real pairing-over-relay (`sync-pairing-relay`, landed 2026-09-14 — `txtodo pair`/`pair
+  CODE` now race LAN vs relay per round via `pairing_grpc.rs`/`pairing_relay_dial.rs`, no flag
+  needed) and stays a narrower `relay-converge-test`-only seam for this module's own dial loop, one
+  layer below pairing: `relay.rs::dial_known_peer` connects directly to a peer's *relay* identity
   (never conflated with a LAN one, sidestepping the identity gap too) once this daemon's own
   endpoint is online, retrying on `DIAL_KNOWN_PEER_INTERVAL` the same way `lan.rs`'s resync does.
   `relay.rs::bind` also now records the bound node id in `Health.relay_last_outcome`
