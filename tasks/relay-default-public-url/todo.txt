@@ -1,0 +1,6 @@
+2026-09-16 Add DEFAULT_RELAY_URL = "https://use1-1.relay.n0.iroh.link" (crates/txtodo-sync or txtodo-cli config), the same URL crates/txtodo-daemon/tests/{relay_converge,pairing_relay}.rs already rely on as a real public relay +m11 @cli @sync id:01M2P0RELAYDEFAULTURLSUB01
+2026-09-16 Thread it into the existing relay_url precedence chain (--relay flag > $TXTODO_RELAY_URL > config.toml relay_url > this default) in txtodo-cli/src/config.rs, no new flag, no change to override behavior +m11 @cli id:01M2P0RELAYDEFAULTURLSUB02
+2026-09-16 txtodo doctor's relay line names which URL is active and whether it's the built-in default or an override, so nobody is silently talking to a URL they didn't choose +m11 @cli id:01M2P0RELAYDEFAULTURLSUB03
+2026-09-16 Update docs/trial-run-two-computers.md and docs/relay.md: cross-network sync works with zero relay setup against the public default; self-hosting documented as optional, not required +m11 @docs id:01M2P0RELAYDEFAULTURLSUB04
+2026-09-16 Test: with no --relay/$TXTODO_RELAY_URL/config value, doctor reports the default URL as active; with any override set, doctor reports that instead +m11 @cli @test id:01M2P0RELAYDEFAULTURLSUB05
+2026-09-16 Complete the parent line in ./todo.txt +m11 @cli id:01M2P0RELAYDEFAULTURLSUB06

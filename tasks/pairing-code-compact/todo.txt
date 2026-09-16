@@ -1,0 +1,6 @@
+2026-09-16 Replace PairingCode::to_json/from_json (crates/txtodo-cli/src/commands/pair.rs) with a postcard-packed, base32-encoded string of the same PairOfferResponse fields (device, group_id, x25519_pub, endpoint, nonce, identity_mode, relay_node_id, relay_url) +m11 @cli id:01M2P0PAIRINGCODECOMPSUB1
+2026-09-16 Keep the QR path unchanged (still encodes whatever payload from_string/to_string produce; QR capacity is not the bottleneck here, human copy-paste is) +m11 @cli id:01M2P0PAIRINGCODECOMPSUB2
+2026-09-16 txtodo pair <code> accepts only the new compact format; no back-compat shim (no released users yet, same reasoning daemon-device-set-identity's notes.md already used for its own migration story) +m11 @cli id:01M2P0PAIRINGCODECOMPSUB3
+2026-09-16 Update docs/trial-run-two-computers.md's `txtodo pair '<JSON>'` example to the new compact code, and adjust the CLI's own "paste this into txtodo pair <code>" prompt text +m11 @docs @cli id:01M2P0PAIRINGCODECOMPSUB4
+2026-09-16 Test: encode/decode round-trips every PairOfferResponse field byte-for-byte; a real two-daemon CLI pairing test using the compact code path (not JSON) completes through SAS confirmation, reusing the shape of the existing pairing CLI tests +m11 @cli @test id:01M2P0PAIRINGCODECOMPSUB5
+2026-09-16 Complete the parent line in ./todo.txt +m11 @cli id:01M2P0PAIRINGCODECOMPSUB6
