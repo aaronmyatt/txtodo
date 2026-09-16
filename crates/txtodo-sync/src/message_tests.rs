@@ -124,6 +124,17 @@ fn every_message_matches_its_checked_in_golden() {
             ranges: Vec::new(),
         },
     );
+    golden(
+        "greet",
+        &Message::Greet {
+            workspace: WS,
+            heads: {
+                let mut h = BTreeMap::new();
+                h.insert(dev(1), 3);
+                h
+            },
+        },
+    );
 }
 
 #[test]
@@ -144,12 +155,16 @@ fn variant_tags_are_frozen_in_declaration_order() {
             workspace: WS,
             committed: Vec::new(),
         },
+        Message::Greet {
+            workspace: WS,
+            heads: BTreeMap::new(),
+        },
     ]
     .iter()
     .map(|m| m.encode().unwrap().body[0])
     .collect();
     // postcard writes the variant index first; appending a variant keeps these, inserting breaks them.
-    assert_eq!(tags, vec![0, 1, 2, 3]);
+    assert_eq!(tags, vec![0, 1, 2, 3, 4]);
     assert_eq!(
         Message::Ack {
             workspace: 0,

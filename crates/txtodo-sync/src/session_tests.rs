@@ -1,10 +1,14 @@
-//! Session: the happy path end to end, every out-of-order message refused, the skew guard on
-//! Hello, and Ack carrying committed runs only — all driven through one opened workspace on the
-//! new multi-workspace `Session` container. `on_ops` also verifies signatures now
+//! Session: the happy path end to end, every out-of-order message refused, the skew guard on the
+//! link-level `Hello`, and Ack carrying committed runs only — all driven through one opened
+//! workspace on the multi-workspace `Session` container. `on_ops` also verifies signatures now
 //! (`sync-reject-tests`); these tests pass empty ops/signatures and an empty key map throughout —
 //! `sign_tests.rs`/`sealed_ops_tests.rs` own the crypto behaviour itself. Multi-workspace
 //! interleaving and the unopened/unknown-workspace error path are `session_multiplex_tests.rs`'s
 //! own job, not repeated here.
+//!
+//! Stage 2: the link-level handshake (`link_hello`/`on_link_hello`, real `Message::Hello`) and a
+//! workspace's own greeting (`hello`/`on_hello`, `Message::Greet`) are two separate steps now —
+//! `greeted()` below does both, in the order a real caller must (link first).
 
 use std::collections::BTreeMap;
 
@@ -50,28 +54,44 @@ fn range(device: u128, first: u64, last: u64) -> OriginRange {
     }
 }
 
-fn peer_hello(heads: Heads, wall_ms: u64) -> Message {
+/// The peer's link-level `Hello` — device+group+protocol+wall clock, no heads (stage 2: heads
+/// moved to `Greet`).
+fn peer_link_hello(wall_ms: u64) -> Message {
     Message::Hello {
         device: dev(2),
         group: GroupId(7),
-        heads,
+        heads: Heads::new(),
         protocol: PROTOCOL_VERSION,
         wall_ms,
     }
 }
 
-/// A session with `ws()` open, holding device 1 up to 5, that has already said Hello.
+/// The peer's `Greet` for `ws()`.
+fn peer_greet(heads: Heads) -> Message {
+    Message::Greet {
+        workspace: ws_bits(),
+        heads,
+    }
+}
+
+/// A session with `ws()` open, holding device 1 up to 5, whose link handshake is done and whose
+/// own workspace `Greet` was already sent.
 fn greeted() -> Session {
     let mut s = Session::new(dev(1), GroupId(7));
     s.open_workspace(ws(), heads(&[(1, 5)])).unwrap();
-    let hello = s.hello(ws(), NOW_MS).unwrap();
-    assert!(matches!(
-        hello,
-        Message::Hello {
-            wall_ms: NOW_MS,
-            ..
+    s.link_hello(NOW_MS).unwrap();
+    let skew = s
+        .on_link_hello(&peer_link_hello(NOW_MS), NOW_MS)
+        .unwrap();
+    assert_eq!(skew, Skew::Ok);
+    let greet = s.hello(ws()).unwrap();
+    assert_eq!(
+        greet,
+        Message::Greet {
+            workspace: ws_bits(),
+            heads: heads(&[(1, 5)])
         }
-    ));
+    );
     assert_eq!(s.state(ws()).unwrap(), SessionState::Greeted);
     s
 }
@@ -79,12 +99,11 @@ fn greeted() -> Session {
 #[test]
 fn happy_path_hello_want_ops_ack_in_two_batches() {
     let mut s = greeted();
-    let g = s
-        .on_hello(ws(), &peer_hello(heads(&[(1, 5), (2, 4)]), NOW_MS), NOW_MS)
+    let want = s
+        .on_hello(ws(), &peer_greet(heads(&[(1, 5), (2, 4)])))
         .unwrap();
-    assert_eq!(g.skew, Skew::Ok);
     assert_eq!(
-        g.want,
+        want,
         Message::Want {
             workspace: ws_bits(),
             ranges: vec![range(2, 1, 4)]
@@ -118,7 +137,7 @@ fn happy_path_hello_want_ops_ack_in_two_batches() {
 #[test]
 fn the_second_batch_drains_the_want_and_returns_to_idle() {
     let mut s = greeted();
-    s.on_hello(ws(), &peer_hello(heads(&[(1, 5), (2, 4)]), NOW_MS), NOW_MS)
+    s.on_hello(ws(), &peer_greet(heads(&[(1, 5), (2, 4)])))
         .unwrap();
     s.on_ops(
         ws(),
@@ -151,11 +170,9 @@ fn the_second_batch_drains_the_want_and_returns_to_idle() {
 #[test]
 fn a_peer_with_nothing_new_leaves_us_idle_with_an_empty_want() {
     let mut s = greeted();
-    let g = s
-        .on_hello(ws(), &peer_hello(heads(&[(1, 3)]), NOW_MS), NOW_MS)
-        .unwrap();
+    let want = s.on_hello(ws(), &peer_greet(heads(&[(1, 3)]))).unwrap();
     assert_eq!(
-        g.want,
+        want,
         Message::Want {
             workspace: ws_bits(),
             ranges: Vec::new()
@@ -182,11 +199,9 @@ fn every_message_out_of_order_is_refused_and_changes_nothing() {
         })
     );
     assert_eq!(
-        s.on_hello(ws(), &peer_hello(heads(&[]), NOW_MS), NOW_MS),
-        Err(SessionError::Unexpected {
-            state: SessionState::Idle,
-            what: "Hello"
-        })
+        s.on_hello(ws(), &peer_greet(heads(&[]))),
+        Err(SessionError::LinkNotReady),
+        "a workspace cannot be greeted before the link handshake completes"
     );
     assert_eq!(
         s.committed(ws(), &[]),
@@ -195,33 +210,36 @@ fn every_message_out_of_order_is_refused_and_changes_nothing() {
             what: "committed()"
         })
     );
-    s.hello(ws(), NOW_MS).unwrap();
+    s.link_hello(NOW_MS).unwrap();
+    s.on_link_hello(&peer_link_hello(NOW_MS), NOW_MS).unwrap();
+    s.hello(ws()).unwrap();
     assert!(matches!(
-        s.hello(ws(), NOW_MS),
+        s.hello(ws()),
         Err(SessionError::Unexpected {
             state: SessionState::Greeted,
             ..
         })
     ));
     assert!(matches!(
-        s.on_hello(ws(), &ops, NOW_MS),
+        s.on_hello(ws(), &ops),
         Err(SessionError::Unexpected { what: "Ops", .. })
     ));
     assert_eq!(s.state(ws()).unwrap(), SessionState::Greeted);
 }
 
 #[test]
-fn hello_checks_group_protocol_and_clock_before_wanting_anything() {
-    let mut s = greeted();
+fn link_hello_checks_group_protocol_and_clock_before_anything_wants_anything() {
+    let mut s = Session::new(dev(1), GroupId(7));
+    s.link_hello(NOW_MS).unwrap();
     let other_group = Message::Hello {
         device: dev(2),
         group: GroupId(8),
-        heads: heads(&[(2, 1)]),
+        heads: Heads::new(),
         protocol: PROTOCOL_VERSION,
         wall_ms: NOW_MS,
     };
     assert_eq!(
-        s.on_hello(ws(), &other_group, NOW_MS),
+        s.on_link_hello(&other_group, NOW_MS),
         Err(SessionError::GroupMismatch {
             ours: GroupId(7),
             theirs: GroupId(8)
@@ -230,12 +248,12 @@ fn hello_checks_group_protocol_and_clock_before_wanting_anything() {
     let other_protocol = Message::Hello {
         device: dev(2),
         group: GroupId(7),
-        heads: heads(&[(2, 1)]),
+        heads: Heads::new(),
         protocol: PROTOCOL_VERSION + 1,
         wall_ms: NOW_MS,
     };
     assert_eq!(
-        s.on_hello(ws(), &other_protocol, NOW_MS),
+        s.on_link_hello(&other_protocol, NOW_MS),
         Err(SessionError::ProtocolMismatch {
             ours: PROTOCOL_VERSION,
             theirs: PROTOCOL_VERSION + 1
@@ -243,36 +261,26 @@ fn hello_checks_group_protocol_and_clock_before_wanting_anything() {
     );
     let ahead = NOW_MS + MAX_PEER_SKEW_AHEAD_MS + 1;
     assert_eq!(
-        s.on_hello(ws(), &peer_hello(heads(&[(2, 1)]), ahead), NOW_MS),
+        s.on_link_hello(&peer_link_hello(ahead), NOW_MS),
         Err(SessionError::PeerAhead {
             peer_ms: ahead,
             local_ms: NOW_MS,
             lead_ms: MAX_PEER_SKEW_AHEAD_MS + 1
         })
     );
-    assert_eq!(
-        s.state(ws()).unwrap(),
-        SessionState::Greeted,
-        "still waiting for a good Hello"
-    );
-    assert!(s.wanted(ws()).unwrap().is_empty());
+    assert!(s.peer().is_none(), "still waiting for a good Hello");
     let day_ms = 24 * 60 * 60 * 1_000;
-    let g = s
-        .on_hello(ws(), &peer_hello(heads(&[(2, 1)]), NOW_MS - day_ms), NOW_MS)
+    let skew = s
+        .on_link_hello(&peer_link_hello(NOW_MS - day_ms), NOW_MS)
         .unwrap();
-    assert_eq!(
-        g.skew,
-        Skew::Behind(day_ms),
-        "behind merges, with a warning"
-    );
-    assert_eq!(s.state(ws()).unwrap(), SessionState::Wanting);
+    assert_eq!(skew, Skew::Behind(day_ms), "behind merges, with a warning");
+    assert_eq!(s.peer(), Some(dev(2)));
 }
 
 #[test]
 fn ops_outside_the_want_and_commits_outside_the_batch_are_refused() {
     let mut s = greeted();
-    s.on_hello(ws(), &peer_hello(heads(&[(2, 4)]), NOW_MS), NOW_MS)
-        .unwrap();
+    s.on_hello(ws(), &peer_greet(heads(&[(2, 4)]))).unwrap();
     let stray = Message::Ops {
         workspace: ws_bits(),
         ops: Vec::new(),

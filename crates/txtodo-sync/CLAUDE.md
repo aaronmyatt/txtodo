@@ -7,45 +7,60 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
   `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 2, bumped 1 -> 2 by
   task `daemon-workspace-session-multiplex`, root todo, stage 1), `MAX_FRAME_BYTES`.
-- `Message::{Hello, Want, Ops, Ack}` (append-only variants), `Message::{encode, decode,
-  check_caps, workspace}`, `MessageError`, `Heads = BTreeMap<DeviceId, u64>`, `OriginRange`,
+- `Message::{Hello, Want, Ops, Ack, Greet}` (append-only variants — `Greet` added stage 2, index 4,
+  no `PROTOCOL_VERSION` bump since appending a variant is exactly the safe case), `Message::{encode,
+  decode, check_caps, workspace}`, `MessageError`, `Heads = BTreeMap<DeviceId, u64>`, `OriginRange`,
   `GroupId`, caps `MAX_OPS_PER_BATCH` / `MAX_WANT_RANGES` / `MAX_HEADS`. `Ops` carries
   `signatures: Vec<Signature>` parallel to `ops` (`sync-reject-tests`); a length mismatch is
-  `MessageError::SignatureCount`. `Want`/`Ops`/`Ack` each also carry `workspace: u128` (task
-  `daemon-workspace-session-multiplex`, stage 1) — a raw ULID, not the typed
-  `txtodo_store::WorkspaceId`, the same wire idiom `control.rs`'s `ControlMessage` already
-  established (`txtodo-store` carries no `serde` dependency, and adding one so `Message` can
-  derive `Serialize` on a typed `WorkspaceId` field is not worth it). `Hello` deliberately gains no
-  such field — it still negotiates device+group once per link, workspace-agnostic.
-  `Message::workspace() -> Option<WorkspaceId>` converts back to the typed id (`None` for `Hello`)
-  for a caller demuxing incoming messages by it. Goldens in `goldens/*.postcard` (regenerate with
-  `TXTODO_UPDATE_GOLDENS=1 cargo test -p txtodo-sync`).
+  `MessageError::SignatureCount`. `Want`/`Ops`/`Ack`/`Greet` each also carry `workspace: u128` (task
+  `daemon-workspace-session-multiplex`) — a raw ULID, not the typed `txtodo_store::WorkspaceId`, the
+  same wire idiom `control.rs`'s `ControlMessage` already established (`txtodo-store` carries no
+  `serde` dependency, and adding one so `Message` can derive `Serialize` on a typed `WorkspaceId`
+  field is not worth it). `Message::workspace() -> Option<WorkspaceId>` converts back to the typed id
+  (`None` for `Hello`) for a caller demuxing incoming messages by it. Goldens in
+  `goldens/*.postcard` (regenerate with `TXTODO_UPDATE_GOLDENS=1 cargo test -p txtodo-sync`).
+  **`Greet { workspace, heads }` (stage 2) is the per-workspace counterpart of `Hello` in a
+  multiplexed world**: `Hello` now negotiates device+group exactly once per *link* (sent/consumed
+  by `Session::link_hello`/`on_link_hello`, never per workspace — its own `heads` field is always
+  an empty map now, dead weight kept only because the struct's layout is frozen); `Greet` is what
+  each individually open workspace exchanges once that link handshake is done, carrying just that
+  workspace's own heads (`Session::hello`/`on_hello`, per workspace).
 - `want(local, remote) -> Vec<OriginRange>`, `advance(heads, run) -> Result<(), Gap>`.
-- `Session` (task `daemon-workspace-session-multiplex`, stage 1, redesigned from a one-workspace
-  type): a container of one sub-session per open `WorkspaceId`, multiplexing several workspaces'
-  Want/Ack bookkeeping over one `(device, group)` peer relationship — `Session::new(device, group)`
-  holds no workspace open yet; `open_workspace(id, heads) -> Result<(), SessionError>` opens one
+- `Session` (task `daemon-workspace-session-multiplex`; stage 1 redesigned it from a one-workspace
+  type, stage 2 split the link handshake out of it): a container of one sub-session per open
+  `WorkspaceId`, multiplexing several workspaces' Want/Ack bookkeeping over one `(device, group)`
+  peer relationship — `Session::new(device, group)` holds no workspace open yet and its link
+  handshake unstarted; `open_workspace(id, heads) -> Result<(), SessionError>` opens one
   (idempotent-in-place for an already-open id; a genuinely new one past `MAX_OPEN_WORKSPACES` is
   `SessionError::TooManyWorkspaces`). `is_open`, `device`, `group`, `peer` (the peer's device id,
-  learned from its `Hello`, shared across every open workspace on this link) are workspace-agnostic
-  accessors; `state(id)`, `heads(id)`, `wanted(id)` are per-workspace and `Result`-returning — an
-  unopened or unknown id is `SessionError::UnknownWorkspace`, never a panic. Each workspace's own
-  state machine, `Idle → Greeted → Wanting → Importing → (Wanting | Idle)`, is unchanged in spirit
-  from the pre-multiplex design (now living in `workspace_session.rs`'s crate-private
-  `WorkspaceSession`) and is driven by `hello(id, now_ms)`, `on_hello(id, msg, now_ms)` (group,
-  protocol, `Skew` guard — checked against the shared `group`, records `peer`), `on_ops(id, msg,
-  &BTreeMap<DeviceId, DevicePublicKey>)`, `committed(id, ranges)`; `SessionError`, `Greeting`.
-  `on_ops` first checks `msg`'s own embedded `workspace` field matches `id`
-  (`SessionError::WorkspaceMismatch` otherwise — a message routed to the wrong sub-session is
-  refused, never silently misapplied), then runs `verify_batch` on `msg`'s ops/signatures before
-  the wanted-range check — a bad signature or unrecognised device is `SessionError::Crypto` and
-  never touches that workspace's `wanted`/`inflight`. `Session` never touches the group-key AEAD; a
-  caller decrypts first (`sealed_ops::open_ops`) and only hands `Session::on_ops` an already-opened
-  `Message`. **Not yet wired into `txtodo-daemon`'s real multiplexed dispatch** — `lan_session.rs`'s
-  `drive_session` opens exactly one workspace in the new `Session` and drives only that one, the
-  same single-workspace-per-connection behavior as before the redesign; a shared read/write loop
-  that actually interleaves several workspaces over one `Link` is stage 2, not started (see
-  `tasks/daemon-workspace-session-multiplex/notes.md`).
+  learned from its link `Hello`, shared across every open workspace on this link) are
+  workspace-agnostic accessors; `state(id)`, `heads(id)`, `wanted(id)` are per-workspace and
+  `Result`-returning — an unopened or unknown id is `SessionError::UnknownWorkspace`, never a panic.
+  **Link-level handshake** (stage 2, new): `link_hello(now_ms) -> Result<Message, SessionError>`
+  builds our own `Hello` (refuses a second call, `SessionError::LinkAlreadyGreeted`);
+  `on_link_hello(msg, now_ms) -> Result<Skew, SessionError>` consumes the peer's — checks group,
+  protocol and clock skew (moved here from the old per-workspace `on_hello` in stage 1), requires
+  our own `link_hello` already sent (`SessionError::LinkNotReady` otherwise), refuses a second peer
+  `Hello` (`LinkAlreadyGreeted`), and a non-`Hello` message is `SessionError::NotAHello(&'static
+  str)`; records `peer` on success. **Per-workspace** (stage 2: same names as stage 1, now
+  `Greet`-based): each workspace's own state machine, `Idle → Greeted → Wanting → Importing →
+  (Wanting | Idle)` (unchanged in spirit, living in `workspace_session.rs`'s crate-private
+  `WorkspaceSession`), is driven by `hello(id) -> Result<Message, SessionError>` (builds our
+  `Greet` for `id`), `on_hello(id, msg) -> Result<Message, SessionError>` (consumes the peer's
+  `Greet`, returns our `Want` directly — the `Greeting{want, skew}` bundle stage 1 had is gone,
+  since skew is a link-level fact now; requires the link handshake already done,
+  `SessionError::LinkNotReady`, checked *after* confirming `id` is actually open so an unknown
+  workspace is still the more specific `UnknownWorkspace`), `on_ops(id, msg,
+  &BTreeMap<DeviceId, DevicePublicKey>)`, `committed(id, ranges)`. `on_ops` first checks `msg`'s own
+  embedded `workspace` field matches `id` (`SessionError::WorkspaceMismatch` otherwise — a message
+  routed to the wrong sub-session is refused, never silently misapplied), then runs `verify_batch`
+  on `msg`'s ops/signatures before the wanted-range check — a bad signature or unrecognised device
+  is `SessionError::Crypto` and never touches that workspace's `wanted`/`inflight`. `Session` never
+  touches the group-key AEAD; a caller decrypts first (`sealed_ops::open_ops`) and only hands
+  `Session::on_ops` an already-opened `Message`. **Wired into `txtodo-daemon`'s real multiplexed
+  dispatch as of stage 2** — `lan_session_dispatch.rs::drive_shared_session` opens every routed
+  workspace onto one `Session` and interleaves `Greet`/`Want`/`Ops`/`Ack` across all of them over
+  one connection; see that crate's own `CLAUDE.md`.
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,
   `verify_batch(&[Op], &[Signature], &BTreeMap<DeviceId, DevicePublicKey>)` (all-or-nothing);
   `DeviceSigningKey`/`DevicePublicKey`/`Signature` with `from_bytes`/`to_bytes`.
@@ -54,11 +69,16 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   5-argument cap), `GroupKey`, `GroupKeys`, `CryptoError`, `MAX_RETAINED_KEY_EPOCHS`, header/AAD/
   nonce/tag byte consts. The clear header/AAD is `version || group || epoch || workspace` (ADR
   0021, task `daemon-shared-sync-link`, 2026-09-15): every workspace a device opens now shares one
-  group key (`daemon-device-set-identity`), so once traffic for several workspaces is multiplexed
-  over one shared `Link`, `workspace` is what a receiver demuxes on and the AEAD tag is what stops
+  group key (`daemon-device-set-identity`), so now that several workspaces' traffic really is
+  multiplexed over one shared `Link` (`daemon-workspace-session-multiplex` stage 2,
+  `txtodo-daemon`'s `lan_session_dispatch::drive_shared_session`), `workspace` is what a receiver
+  demuxes on (`peek_workspace`, read before a key is even looked up) and the AEAD tag is what stops
   a mislabelled batch (bug or active relay) from being silently routed into the wrong workspace's
   oplog — `CryptoError::WrongWorkspace` mirrors `WrongGroup`'s shape exactly, checked the same way,
-  before the ciphertext is touched.
+  before the ciphertext is touched. This module's own binding — one `workspace` per sealed frame —
+  did not need to change for real multiplexing: each outgoing `Message`, whichever workspace it is
+  for, still becomes its own sealed `Frame`; a `Session` with several workspaces open just means
+  more distinct sealed frames flow over the one link, each still bound to exactly one workspace.
 - `sealed_ops.rs` (`sync-reject-tests`, M4; `workspace` field added by `daemon-shared-sync-link`):
   the actual op send/receive path, wiring the crypto above into real `Frame`s instead of leaving
   `Session` to call it. `seal_ops(ops, ranges, &DeviceSigningKey, &SealContext)` signs then seals

@@ -152,9 +152,13 @@ multiplex every workspace's traffic — not done by this task).
   `lan_peers.rs` owns this decision and its `backoff_ms`-paced retry bookkeeping) and accepts
   incoming connections, both bounded by `MAX_CONCURRENT_LAN_SESSIONS`. Never fatal: a bind/
   discovery failure is logged and the daemon runs without LAN sync. Each connection is driven by
-  `lan_session::drive_session` on a `spawn_blocking` thread (the real, synchronous `Link` trait),
-  sealing/opening every message with the workspace's epoch-0 group key and serving/committing
-  through `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
+  `lan_session::drive_session` on a `spawn_blocking` thread (the real, synchronous `Link` trait) —
+  task `daemon-workspace-session-multiplex` stage 2 turned this into a thin single-workspace
+  wrapper around `lan_session_dispatch::drive_shared_session` (see that bullet below); LAN itself
+  stays exactly as it was, one `LanEndpoint` bound per workspace, since no shared-LAN-endpoint
+  substrate exists yet for it to multiplex several workspaces over (unlike the relay path). Sealing/
+  opening every message uses the workspace's epoch-0 group key and serves/commits through
+  `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
   `FileActor::on_sync_ops` (`sync_ops.rs`), the verbatim-apply path for a peer's already-signed ops
   (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
   crate; only `txtodo_sync`'s own types do. Sessions are short-lived by design (`IrohLink`'s own
@@ -185,13 +189,39 @@ multiplex every workspace's traffic — not done by this task).
   seam still used by `lan_loopback_converge.rs`/`nested_ref_sync.rs` for tests that seed a shared
   group up front rather than exercise pairing itself (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`,
   refused with `UNIMPLEMENTED` unless set to `"1"`); `tests/pairing_lan.rs` pairs for real instead.
+- `lan_session_shared.rs`/`lan_session_dispatch.rs` (task `daemon-workspace-session-multiplex`
+  stage 2, split out of `lan_session.rs` for the file-length budget): the real multiplexed
+  read/write loop, `lan_session_dispatch::drive_shared_session(link, routes: &WorkspaceRoutes,
+  device, group)` — opens every workspace `routes` names onto one `txtodo_sync::Session`, sends the
+  link-level `Hello` once (sealed under a reserved all-zero `LINK_WORKSPACE` sentinel — a real
+  `WorkspaceId` always has a non-zero ULID timestamp, so it can never collide) then a `Greet` per
+  workspace, and demuxes every incoming frame by its own peeked `workspace` id
+  (`txtodo_sync::peek_workspace`): a message for a workspace this side never opened is logged and
+  **skipped, not fatal**, and a single workspace's own session-level refusal no longer ends the
+  whole connection (only a link-handshake or transport/crypto failure does) — a deliberate change
+  from the pre-stage-2 single-workspace `lan_session::drive_session`, which today is nothing more
+  than a wrapper handing this a one-entry routing table. `lan_session_shared.rs` owns the wire
+  primitives and per-workspace message handlers (`SessionCtx`, `handle_link_hello`/`handle_greet`/
+  `handle_want`/`handle_ops`); `lan_session_dispatch.rs` owns the loop itself (`SharedCtx`,
+  `build_shared_ctx`, `send_initial_greetings`, `recv_and_dispatch`, `run_shared_message_loop`).
+  Emits `lan_shared_session_started` (`workspaces = <count>`) once per connection, at `info` —
+  deliberately loud: it is the one line a test can grep to prove a connection actually carried more
+  than one workspace, rather than inferring it from convergence alone
+  (`tests/relay_multiplex.rs`). `control_dispatch.rs`'s sync-`ALPN` accept branch
+  (`dispatch_sync`) calls this directly with `device_relay.routes()` and `device`/`group` read off
+  `DeviceIdentity` (ADR 0021) — no first-frame peek needed any more to pick a route, since the
+  accept side already knows every workspace it has open; the old peek-and-route-to-one-workspace
+  machinery (`ReplayFirstFrame` and friends) is gone. See `device_relay.rs`'s own doc for
+  `WorkspaceRoutes`/`DeviceRelay` (the shared per-device relay endpoint task `daemon-shared-sync-
+  link` built) and `relay.rs`'s bullet below for the outbound dial-side half of this stage.
 - `relay.rs`/`relay_state.rs`/`relay_fallback.rs` (plan M8 `sync-relay-enable`, ADR 0026 — reverses
   ADR 0024: LAN is reinstated as primary, relay becomes an *additive* fallback carrier, not a
-  replacement): `relay::start(ws, relay_url)` binds `txtodo_sync::RelayEndpoint` when `--relay
-  <url>` names one (`LanStatus::set_relay_configured("")` and no task spawned at all when it
-  doesn't) and runs an accept loop reusing `lan::spawn_driver` (now `pub(crate)`, since
-  `RelayEndpoint::connect`/`accept` return the same `IrohLink` type LAN uses) — deliberately does
-  **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does;
+  replacement; binding itself moved to `device_relay.rs`'s `DeviceRelay::bind`, task
+  `daemon-shared-sync-link` stage 5 — see that bullet): `relay::start(ws, relay_url, device_relay:
+  Option<Arc<DeviceRelay>>, dial_peer)` registers this workspace against the device's already-bound
+  shared endpoint (`LanStatus::set_relay_configured("")` and nothing else when `--relay` was never
+  configured) and, when `--relay-dial-peer` names one, spawns the outbound dial loop — deliberately
+  does **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does;
   pairing-over-relay is `sync-pairing-relay`'s separate, not-yet-built task. `relay_state.rs`'s
   `RelayState` (same `Arc<Mutex<Option<Arc<_>>>>` shape as `pairing_lan_state.rs`'s endpoint half)
   is how `relay.rs`'s bound endpoint reaches `lan.rs`'s dial path. `relay_fallback.rs`'s generic
@@ -219,7 +249,21 @@ multiplex every workspace's traffic — not done by this task).
   `--no-lan` (`main.rs::start_lan`) skips `lan::start` entirely, for a forced-relay test that must
   prove no LAN path exists to converge through instead. `crates/txtodo-daemon/tests/
   relay_converge.rs` is the real two-daemon proof; see its own module doc for what it does and does
-  not establish in this sandbox (no Linux/root — no real network-namespace boundary).
+  not establish in this sandbox (no Linux/root — no real network-namespace boundary). **Task
+  `daemon-workspace-session-multiplex` stage 2 found and fixed a real bug here**: `relay::start` is
+  called once per *workspace* (`workspace_catalog_open.rs`'s per-workspace open sequence), so two
+  open workspaces sharing one `--relay-dial-peer` used to spawn *two* independent
+  `dial_known_peer` loops racing to connect to the same peer, each driving its own single-workspace
+  connection. `device_relay.rs::DeviceRelay::claim_dial(peer) -> bool` (a `Mutex<HashSet<[u8; 32]>>`
+  capped at `MAX_DIAL_PEERS = 16`) now lets only the first caller's `relay::start` spawn the dial
+  task; the resulting connection is driven by `lan_session_dispatch::drive_shared_session` over
+  every workspace `device_relay.routes()` names, not just the winning caller's own `ws`. Known,
+  flagged, not solved: the dial task's `JoinHandle` still lives inside the `RelayTransport` handed
+  back to whichever workspace won the claim (every other one gets `RelayTransport { task: None }`)
+  — if that workspace closes while others sharing the dial peer remain open, the shared dial task
+  stops with it; there is no longer-lived, device-level owner to hand it to instead yet.
+  `tests/relay_multiplex.rs` is the real two-daemon, two-workspaces-per-side proof this fix exists
+  for.
 - `file_carrier.rs` (plan M8 `relay-converge-test`, wiring `sync-file-carrier`'s
   `txtodo_sync::FileCarrier` into the daemon for the first time — `--sync-dir` has existed in
   `txtodo-cli`'s config since that task, but nothing on the daemon side ever opened a carrier):

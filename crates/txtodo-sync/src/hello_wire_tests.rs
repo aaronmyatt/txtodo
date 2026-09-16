@@ -138,8 +138,12 @@ fn a_hello_sealed_for_one_group_cannot_be_opened_with_another_key_group_or_no_ke
 fn replaying_a_captured_hello_after_the_handshake_moved_on_is_refused_and_changes_nothing() {
     // The realistic replay: an attacker records a genuine sealed Hello frame in flight and
     // resends the identical bytes later at the same session. By then the session has already
-    // consumed its one legal Hello and moved past `Greeted`, so the replay is not just useless —
-    // it is a protocol violation the state machine refuses outright, touching no state.
+    // consumed its one legal link-level Hello and learned the peer's device id, so the replay is
+    // not just useless — it is a protocol violation `Session` refuses outright, touching no state.
+    // Stage 2: `Hello` is purely link-level now (no workspace, no `Want` — that moved to `Greet`),
+    // so this test exercises `link_hello`/`on_link_hello` directly; the "heads/Want reveal
+    // nothing new on replay" property now belongs to `Greet`, covered by
+    // `session_multiplex_tests.rs`'s own greet-focused tests instead.
     let group = GroupId(42);
     let keys = one_key(7);
     let sealed_frame = seal_message(
@@ -149,46 +153,34 @@ fn replaying_a_captured_hello_after_the_handshake_moved_on_is_refused_and_change
     );
 
     let mut session = Session::new(dev(2), group);
+    session.link_hello(0).unwrap_or_else(|e| panic!("{e:?}"));
     session
-        .open_workspace(ws(), BTreeMap::new())
+        .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
-    session.hello(ws(), 0).unwrap_or_else(|e| panic!("{e:?}"));
-    let first = session
-        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
-        .unwrap_or_else(|e| panic!("{e:?}"));
-    let heads_after_first = session
-        .heads(ws())
-        .unwrap_or_else(|e| panic!("{e:?}"))
-        .clone();
+    let peer_after_first = session.peer();
+    assert_eq!(peer_after_first, Some(dev(1)), "sanity: the Hello was accepted");
 
-    let replay = session.on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0);
-    assert!(
-        matches!(replay, Err(SessionError::Unexpected { .. })),
-        "a second Hello once past Greeted is refused, not silently reapplied: {replay:?}"
+    let replay = session.on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0);
+    assert_eq!(
+        replay,
+        Err(SessionError::LinkAlreadyGreeted),
+        "a second Hello once the link handshake is done is refused, not silently reapplied"
     );
     assert_eq!(
-        session.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
-        &heads_after_first,
+        session.peer(),
+        peer_after_first,
         "a refused replay changes nothing"
-    );
-    assert_eq!(
-        first.want,
-        Message::Want {
-            workspace: ws().ulid().to_u128(),
-            ranges: crate::want::want(&BTreeMap::new(), &BTreeMap::from([(dev(1), 5)]))
-        },
-        "sanity: the first Hello did produce the expected Want"
     );
 }
 
 #[test]
-fn replaying_a_captured_hello_to_a_fresh_session_reveals_nothing_new() {
+fn replaying_a_captured_hello_to_a_fresh_session_reveals_the_same_peer_and_skew() {
     // The other realistic replay: a *different*, freshly-started session receives the same
     // captured bytes (e.g. the attacker relays it to a new connection instead of the original
-    // one). `Want` is a pure function of two head maps, so the reply it gets back is exactly the
-    // one any legitimate peer with the same local heads would have gotten — the replay teaches
-    // an attacker nothing beyond what the genuine Hello already revealed the first time, and it
-    // still cannot authorize a single op: heads only ever advance via `Session::committed`.
+    // one). At the link level there is no per-workspace state to leak — both sessions learn
+    // exactly the same, purely public facts (the sender's device id and how its clock compares),
+    // and nothing about either session's own local heads is exposed (`Hello` carries none, since
+    // stage 2 moved heads to the per-workspace `Greet`).
     let group = GroupId(42);
     let keys = one_key(7);
     let sealed_frame = seal_message(
@@ -197,43 +189,28 @@ fn replaying_a_captured_hello_to_a_fresh_session_reveals_nothing_new() {
         &a_hello(BTreeMap::from([(dev(1), 5)])),
     );
 
-    let local_heads: BTreeMap<DeviceId, u64> = BTreeMap::from([(dev(1), 2)]);
     let mut victim_one = Session::new(dev(2), group);
     victim_one
-        .open_workspace(ws(), local_heads.clone())
+        .link_hello(0)
         .unwrap_or_else(|e| panic!("{e:?}"));
-    victim_one
-        .hello(ws(), 0)
-        .unwrap_or_else(|e| panic!("{e:?}"));
-    let reply_one = victim_one
-        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
+    let skew_one = victim_one
+        .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
 
     let mut victim_two = Session::new(dev(3), group);
     victim_two
-        .open_workspace(ws(), local_heads.clone())
+        .link_hello(0)
         .unwrap_or_else(|e| panic!("{e:?}"));
-    victim_two
-        .hello(ws(), 0)
-        .unwrap_or_else(|e| panic!("{e:?}"));
-    let reply_two = victim_two
-        .on_hello(ws(), &open_and_decode(&sealed_frame, group, &keys), 0)
+    let skew_two = victim_two
+        .on_link_hello(&open_and_decode(&sealed_frame, group, &keys), 0)
         .unwrap_or_else(|e| panic!("{e:?}"));
 
     assert_eq!(
-        reply_one.want, reply_two.want,
-        "replaying the same Hello to an equally-caught-up session yields the same public Want"
+        skew_one, skew_two,
+        "replaying the same Hello to any session yields the same public skew reading"
     );
-    assert_eq!(
-        victim_one.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
-        &local_heads,
-        "Hello never advances heads"
-    );
-    assert_eq!(
-        victim_two.heads(ws()).unwrap_or_else(|e| panic!("{e:?}")),
-        &local_heads,
-        "Hello never advances heads"
-    );
+    assert_eq!(victim_one.peer(), Some(dev(1)));
+    assert_eq!(victim_two.peer(), Some(dev(1)));
 }
 
 #[test]

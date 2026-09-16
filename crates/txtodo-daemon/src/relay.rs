@@ -48,8 +48,10 @@ use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
 use txtodo_sync::{GroupId, HolepunchError, RelayEndpoint};
 
-use crate::lan::{MAX_CONCURRENT_LAN_SESSIONS, spawn_driver};
+use crate::device_relay::DeviceRelay;
+use crate::lan::MAX_CONCURRENT_LAN_SESSIONS;
 use crate::lan_session::read;
+use crate::lan_session_dispatch::drive_shared_session;
 use crate::lan_status::LanStatus;
 use crate::server::SharedWorkspace;
 
@@ -74,14 +76,22 @@ type DialPeer = [u8; 32];
 /// The background relay dial task; `abort()` on daemon shutdown, same pattern as `LanTransport`.
 /// `None` from [`start`] (no dial peer configured) means there is nothing to abort at all —
 /// registering the shared endpoint against this workspace happens synchronously, not as a task.
+/// `task` is itself `Option`al (not just the outer `RelayTransport`) since stage 2: a workspace
+/// that registered but lost the device-level dial claim (`DeviceRelay::claim_dial`) still gets a
+/// `RelayTransport` back (so callers need no `None`-means-"registration failed" special case), it
+/// just owns nothing to abort — see [`start`]'s own doc for the known ownership limitation this
+/// implies.
 pub struct RelayTransport {
-    task: JoinHandle<()>,
+    task: Option<JoinHandle<()>>,
 }
 
 impl RelayTransport {
-    /// Stops the dial loop. Best-effort: the task may already have exited.
+    /// Stops the dial loop, if this workspace is the one that owns it. Best-effort: the task may
+    /// already have exited.
     pub fn abort(&self) {
-        self.task.abort();
+        if let Some(task) = &self.task {
+            task.abort();
+        }
     }
 }
 
@@ -93,25 +103,40 @@ impl RelayTransport {
 /// contract. `dial_peer` (`--relay-dial-peer`) is this workspace's own active half; registration
 /// itself needs no background task, so `None` dial-peer with a present endpoint returns `None`
 /// (nothing to abort) after registering synchronously.
+///
+/// Task `daemon-workspace-session-multiplex` stage 2: `open_workspace_full` calls this once per
+/// *workspace*, but a dial task must exist at most once per *device* — `device_relay.claim_dial`
+/// is what lets a second (or third...) open workspace with the same `--relay-dial-peer` register
+/// without spawning a second, redundant dial loop that would just race the first one to connect.
+/// Only the workspace whose call actually wins the claim gets a `RelayTransport` with something to
+/// abort; every other one still registers (so its own `Health`/`RelayState` are correct) but gets
+/// `RelayTransport { task: None }` — a known, flagged limitation: if *that* first workspace closes
+/// while others with the same dial peer remain open, the shared dial task stops with it, since
+/// there is no single, longer-lived owner below the device level to hand it to instead. Building
+/// that owner is real further work this stage does not attempt; the daemon process itself tearing
+/// down (which drops every task together) is unaffected.
 pub fn start(
     ws: SharedWorkspace,
     relay_url: Option<String>,
-    endpoint: Option<Arc<RelayEndpoint>>,
+    device_relay: Option<Arc<DeviceRelay>>,
     dial_peer: Option<DialPeer>,
 ) -> Option<RelayTransport> {
     let ctx = build_ctx(&ws);
     ctx.status
         .set_relay_configured(relay_url.as_deref().unwrap_or_default());
-    let endpoint = endpoint?;
-    register(&ctx, &endpoint);
+    let device_relay = device_relay?;
+    register(&ctx, &device_relay.endpoint());
     let peer = dial_peer?;
+    if !device_relay.claim_dial(peer) {
+        return Some(RelayTransport { task: None });
+    }
     Some(RelayTransport {
-        task: tokio::spawn(dial_known_peer(
+        task: Some(tokio::spawn(dial_known_peer(
             ctx,
-            endpoint,
+            device_relay,
             peer,
             Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS)),
-        )),
+        ))),
     })
 }
 
@@ -135,13 +160,24 @@ fn register(ctx: &RelayCtx, endpoint: &Arc<RelayEndpoint>) {
     read(&ctx.ws).relay_state().set(Arc::clone(endpoint));
 }
 
+/// Stage 2: drives the new connection over *every* workspace `device_relay.routes()` currently
+/// names, not just `ctx.ws` alone — the whole point of deduplicating the dial task
+/// (`DeviceRelay::claim_dial`) is that one connection now serves every workspace sharing this
+/// `--relay-dial-peer`, interleaved, instead of one connection per workspace.
 fn on_dial_connected(
     ctx: &RelayCtx,
+    device_relay: &Arc<DeviceRelay>,
     link: txtodo_sync::IrohLink,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     ctx.status.set_relay_last_outcome("dialed known peer");
-    spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+    let device_relay = Arc::clone(device_relay);
+    let (device, group) = (ctx.device, ctx.group);
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let mut link = link;
+        drive_shared_session(&mut link, device_relay.routes(), device, group);
+    });
 }
 
 fn log_dial_failed(e: &HolepunchError) {
@@ -174,12 +210,12 @@ async fn connect_bounded(
 /// caller ([`dial_known_peer`]), which owns the retry loop.
 async fn dial_once(
     ctx: &RelayCtx,
-    endpoint: &RelayEndpoint,
+    device_relay: &Arc<DeviceRelay>,
     peer: DialPeer,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
-    if let Some(link) = connect_bounded(endpoint, peer, ctx.group).await {
-        on_dial_connected(ctx, link, permit);
+    if let Some(link) = connect_bounded(&device_relay.endpoint(), peer, ctx.group).await {
+        on_dial_connected(ctx, device_relay, link, permit);
     }
 }
 
@@ -192,16 +228,16 @@ async fn dial_once(
 /// reached.
 async fn dial_known_peer(
     ctx: RelayCtx,
-    endpoint: Arc<RelayEndpoint>,
+    device_relay: Arc<DeviceRelay>,
     peer: DialPeer,
     sessions: Arc<Semaphore>,
 ) {
-    endpoint.online().await;
+    device_relay.endpoint().online().await;
     let mut interval = tokio::time::interval(DIAL_KNOWN_PEER_INTERVAL);
     loop {
         interval.tick().await;
         if let Ok(permit) = Arc::clone(&sessions).try_acquire_owned() {
-            dial_once(&ctx, &endpoint, peer, permit).await;
+            dial_once(&ctx, &device_relay, peer, permit).await;
         }
     }
 }

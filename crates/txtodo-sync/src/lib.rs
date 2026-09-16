@@ -96,7 +96,7 @@ pub use sas::{
     PAIR_KEY_BYTES, PAIR_KEY_INFO, SAS_INFO, SAS_WORD_COUNT, SasError, pair_key, sas_words,
 };
 pub use sealed_ops::{SealContext, SealedOpsError, open_ops, seal_ops};
-pub use session::{Greeting, Session, SessionState};
+pub use session::{Session, SessionState};
 pub use session_error::SessionError;
 pub use sign::{
     DevicePublicKey, DeviceSigningKey, PUBLIC_KEY_BYTES, SIGNATURE_BYTES, SIGNING_KEY_BYTES,

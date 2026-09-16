@@ -19,6 +19,20 @@
 //! `txtodo-store` carries no `serde` dependency, and adding one so a single field can derive
 //! `Serialize` is not worth it. [`Message::workspace`] converts back to the typed id for a caller
 //! that wants it (e.g. a demuxing read loop, or `Session` itself internally).
+//!
+//! `Message::Greet { workspace, heads }` (stage 2, purely additive — appended at the end, no
+//! `PROTOCOL_VERSION` bump, per this module's own append-only rule; an unrecognized trailing
+//! variant is a clean decode error for an old peer, never garbage, since postcard tags enum
+//! variants by index) is the per-workspace counterpart of `Hello` in a genuinely multiplexed
+//! world: `Hello` now negotiates device+group *once per link*, sent exactly once per connection
+//! (`Session::link_hello`/`on_link_hello`), and carries an empty `heads` map (dead weight kept
+//! only because `Hello`'s field layout is frozen — see this file's own append-only rule, which
+//! forbids removing a field just as it forbids reordering a variant). `Greet` is what each
+//! individual open workspace exchanges once the link handshake is done: just `workspace` and that
+//! workspace's own `heads`, so a caller can drive several workspaces' `Idle -> Greeted -> Wanting`
+//! transitions over the same link, interleaved in any order, without repeating the
+//! group/protocol/skew checks `on_link_hello` already ran once. See `session.rs`'s module doc for
+//! the full stage-2 handshake shape.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -102,6 +116,15 @@ pub enum Message {
         /// Runs durably stored.
         committed: Vec<OriginRange>,
     },
+    /// One workspace's own greeting, sent once the link-level `Hello` is done (stage 2, appended —
+    /// see the module doc). The per-workspace counterpart of `Hello`'s old, single-workspace job:
+    /// announces what this workspace already holds so the peer can derive a `Want`.
+    Greet {
+        /// Which open workspace this `Greet` is for — see the module doc.
+        workspace: u128,
+        /// What the sender already holds for this workspace, per origin device.
+        heads: Heads,
+    },
 }
 
 /// Why a message could not be encoded or decoded.
@@ -174,7 +197,10 @@ impl Message {
             Message::Hello { .. } => None,
             Message::Want { workspace, .. }
             | Message::Ops { workspace, .. }
-            | Message::Ack { workspace, .. } => Some(WorkspaceId::new(Ulid::from_u128(*workspace))),
+            | Message::Ack { workspace, .. }
+            | Message::Greet { workspace, .. } => {
+                Some(WorkspaceId::new(Ulid::from_u128(*workspace)))
+            }
         }
     }
 
@@ -228,6 +254,7 @@ impl Message {
                 ranges_ok("ops ranges", ranges)
             }
             Message::Ack { committed, .. } => ranges_ok("ack ranges", committed),
+            Message::Greet { heads, .. } => cap("heads", heads.len(), MAX_HEADS),
         }
     }
 }

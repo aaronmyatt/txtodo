@@ -73,6 +73,18 @@ pub enum SessionError {
     /// An op's signature did not verify, or its device is unrecognised. Checked before anything
     /// else in `on_ops`, so a bad batch never advances `wanted`/`inflight`.
     Crypto(CryptoError),
+    /// A link-level `Hello`/workspace `Greet` was attempted or accepted before its precondition:
+    /// `Session::on_link_hello` before our own `link_hello` was sent, or a workspace's `hello`/
+    /// `on_hello` before the link handshake completed (`peer` known) — stage 2's "the link owns
+    /// its own handshake state" guard (`session.rs` module doc).
+    LinkNotReady,
+    /// The link-level `Hello` was sent, or a peer `Hello` accepted, more than once on this
+    /// session — refused, not silently reapplied, the same "no message twice" discipline
+    /// `Unexpected` already gives every per-workspace state.
+    LinkAlreadyGreeted,
+    /// A link-level `on_link_hello` call was given a message that was not a `Hello` at all;
+    /// names what arrived.
+    NotAHello(&'static str),
 }
 
 impl fmt::Display for SessionError {
@@ -124,6 +136,13 @@ impl fmt::Display for SessionError {
             }
             SessionError::Gap(g) => write!(f, "{g}"),
             SessionError::Crypto(e) => write!(f, "{e}"),
+            SessionError::LinkNotReady => {
+                write!(f, "the link handshake is not ready for this yet")
+            }
+            SessionError::LinkAlreadyGreeted => {
+                write!(f, "the link-level Hello was already sent or received")
+            }
+            SessionError::NotAHello(what) => write!(f, "{what} is not a Hello"),
         }
     }
 }

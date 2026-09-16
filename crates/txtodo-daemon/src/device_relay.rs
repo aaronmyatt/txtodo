@@ -18,9 +18,9 @@
 //! `tests/` instead. `register`/`unregister` gain their first production caller in stage 5, when
 //! `workspace_catalog_open.rs` starts keeping this table in sync with which workspaces are open.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
@@ -145,6 +145,9 @@ impl WorkspaceRoutes {
 pub struct DeviceRelay {
     endpoint: Arc<RelayEndpoint>,
     routes: WorkspaceRoutes,
+    /// Every `--relay-dial-peer` this device has already started dialing (task
+    /// `daemon-workspace-session-multiplex` stage 2) — see [`DeviceRelay::claim_dial`].
+    dialing: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl DeviceRelay {
@@ -176,7 +179,38 @@ impl DeviceRelay {
     pub fn routes(&self) -> &WorkspaceRoutes {
         &self.routes
     }
+
+    /// `true` the first time any workspace's own `relay::start` asks to dial `peer` on this
+    /// device; every later call for the same peer (e.g. a second open workspace, same
+    /// `--relay-dial-peer`) returns `false` — task `daemon-workspace-session-multiplex` stage 2:
+    /// one connection per peer, not one per workspace. `relay::start`'s own caller only spawns
+    /// the actual dial task on `true`; the resulting connection is driven by
+    /// `lan_session_dispatch::drive_shared_session` over every workspace `routes()` names, so a
+    /// second dial was never needed anyway. Refuses (returning `false`, same as "already
+    /// claimed") past [`MAX_DIAL_PEERS`] rather than growing without limit — this device
+    /// realistically ever dials one `--relay-dial-peer` today, but every collection in this crate
+    /// has a named, checked cap regardless.
+    pub fn claim_dial(&self, peer: [u8; 32]) -> bool {
+        let mut dialing = self
+            .dialing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if dialing.contains(&peer) {
+            return false;
+        }
+        if dialing.len() >= MAX_DIAL_PEERS {
+            tracing::warn!(cap = MAX_DIAL_PEERS, "device_relay_dial_cap_reached");
+            return false;
+        }
+        dialing.insert(peer);
+        true
+    }
 }
+
+/// Most distinct `--relay-dial-peer` values one device claims a dial task for at once — this
+/// device realistically dials one today (the CLI accepts a single value), but the cap exists so
+/// [`DeviceRelay::claim_dial`]'s own table cannot grow without limit either.
+pub const MAX_DIAL_PEERS: usize = 16;
 
 fn on_bind_result(
     bound: Result<RelayEndpoint, txtodo_sync::RelayError>,
@@ -192,6 +226,7 @@ fn on_bind_result(
     Some(Arc::new(DeviceRelay {
         endpoint: Arc::new(endpoint),
         routes: WorkspaceRoutes::new(),
+        dialing: Mutex::new(HashSet::new()),
     }))
 }
 

@@ -5,23 +5,36 @@
 //! `Op`'s wire shape stays frozen, so the workspace dimension lives on `Message::Want`/`Ops`/`Ack`
 //! only, never on `Op` itself).
 //!
-//! **One `Hello`, per-workspace sub-sessions.** A link negotiates device+group exactly once
-//! (`GroupId` stays one shared id per device-set per ADR 0021, not per-workspace) — but at this
-//! library's level, `hello`/`on_hello`/`on_ops`/`committed` are all keyed by an explicit
-//! `WorkspaceId` parameter, so a caller (the read/write loop `daemon-workspace-session-multiplex`
-//! stage 2 will build) can drive several workspaces' handshakes over the same `Session`,
-//! interleaved in any order, without their bookkeeping crossing. Each workspace's own state
-//! machine (`Idle → Greeted → Wanting → Importing → (Wanting | Idle)`) is unchanged from the
-//! pre-multiplex design — see `workspace_session.rs`, where it now lives. This `Session` owns only
-//! what is genuinely shared across every workspace on one link: this device's own id, the group,
+//! **One `Hello`, per-workspace `Greet`s.** A link negotiates device+group exactly once
+//! (`GroupId` stays one shared id per device-set per ADR 0021, not per-workspace) via
+//! [`Session::link_hello`]/[`Session::on_link_hello`] — sent/consumed exactly once per connection,
+//! before any workspace's own `Greet` is legal. At this library's level, the per-workspace
+//! `hello`/`on_hello`/`on_ops`/`committed` are all keyed by an explicit `WorkspaceId` parameter, so
+//! a caller (`txtodo-daemon`'s `lan_session.rs::drive_shared_session`, stage 2) can drive several
+//! workspaces' `Greet`/`Want`/`Ops`/`Ack` exchanges over the same `Session`, interleaved in any
+//! order, without their bookkeeping crossing. Each workspace's own state machine (`Idle → Greeted →
+//! Wanting → Importing → (Wanting | Idle)`) is unchanged from the pre-multiplex design — see
+//! `workspace_session.rs`, where it now lives, except that stage 2 moved the group/protocol/skew
+//! checks that used to run on every workspace's own `Hello` up to `on_link_hello`, since they only
+//! need to happen once per link. This `Session` owns only what is genuinely shared across every
+//! workspace on one link: this device's own id, the group, whether our own link `Hello` was sent,
 //! and the peer's device id once learned from its `Hello`.
 //!
+//! **Stage 2 design decision, recorded here since this is where it lives:** `Session` now owns
+//! "have we sent our link-level identity yet" (`link_hello_sent`), not `txtodo-daemon`'s
+//! `lan_session.rs` — stage 1 left this as an open question (`lan_session.rs::initial_hello` sat
+//! entirely outside `Session`). Moving it in means a caller cannot accidentally send a workspace's
+//! `Greet` before the link handshake, or accept one before the peer's `Hello` validated group/
+//! protocol/skew (`on_hello`'s own `peer.is_none()` guard) — `Session` enforces the ordering itself
+//! rather than trusting every caller to get it right, the same reasoning that already justified
+//! `Session` owning the per-workspace state machines instead of leaving that to callers.
+//!
 //! Every transition matches state exhaustively with no default arm, so a new state cannot be
-//! silently ignored. The skew guard runs on `Hello` (`txtodo_model::Skew`), before a single op is
-//! accepted, and `Ack` carries only runs the caller reports as *committed* — never merely
-//! received — so a crash mid-import re-requests them. Naming an unopened or unknown workspace is a
-//! typed error (`SessionError::UnknownWorkspace`), never a panic — exactly as routine as any other
-//! malformed caller input this crate refuses rather than asserts.
+//! silently ignored. The skew guard runs on the link-level `Hello` (`txtodo_model::Skew`), before a
+//! single op is accepted for any workspace, and `Ack` carries only runs the caller reports as
+//! *committed* — never merely received — so a crash mid-import re-requests them. Naming an unopened
+//! or unknown workspace is a typed error (`SessionError::UnknownWorkspace`), never a panic —
+//! exactly as routine as any other malformed caller input this crate refuses rather than asserts.
 
 use std::collections::BTreeMap;
 
@@ -31,7 +44,7 @@ use txtodo_store::WorkspaceId;
 use crate::message::{GroupId, Heads, Message, OriginRange};
 use crate::session_error::SessionError;
 use crate::sign::DevicePublicKey;
-use crate::workspace_session::WorkspaceSession;
+use crate::workspace_session::{self, WorkspaceSession};
 
 /// Most workspaces one `Session` multiplexes at once — a device realistically opens far fewer
 /// than this; the cap exists so nothing here can grow without limit (every collection in this
@@ -51,32 +64,29 @@ pub enum SessionState {
     Importing,
 }
 
-/// The outcome of a valid peer `Hello`, for one workspace.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Greeting {
-    /// The `Want` to send back (possibly empty: in sync).
-    pub want: Message,
-    /// How the peer's clock compared; `Behind` is safe and worth a warning.
-    pub skew: Skew,
-}
-
 /// One peer relationship, multiplexing every open workspace's own sub-session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
     device: DeviceId,
     group: GroupId,
+    /// Whether our own link-level `Hello` was already sent (`link_hello`) — a second call, or a
+    /// peer `Hello` arriving before this is true, is refused (`SessionError::LinkNotReady`/
+    /// `LinkAlreadyGreeted`).
+    link_hello_sent: bool,
     /// The peer's device id, learned from its `Hello` — shared across every workspace on this
-    /// link, set at most once per real handshake (a later `on_hello` call just re-confirms it).
+    /// link, set at most once per real handshake (`on_link_hello` refuses a second one).
     peer: Option<DeviceId>,
     workspaces: BTreeMap<WorkspaceId, WorkspaceSession>,
 }
 
 impl Session {
-    /// A fresh session for this device and group, with no workspace open yet.
+    /// A fresh session for this device and group, with no workspace open yet and its link-level
+    /// handshake not started.
     pub fn new(device: DeviceId, group: GroupId) -> Session {
         Session {
             device,
             group,
+            link_hello_sent: false,
             peer: None,
             workspaces: BTreeMap::new(),
         }
@@ -140,28 +150,97 @@ impl Session {
         Ok(self.workspace(workspace)?.wanted())
     }
 
-    /// `workspace`'s `Idle → Greeted`: the `Hello` to send. `Hello` itself carries no workspace
-    /// (module doc) — `workspace` only selects which sub-session advances.
-    pub fn hello(&mut self, workspace: WorkspaceId, now_ms: u64) -> Result<Message, SessionError> {
-        let (device, group) = (self.device, self.group);
-        self.workspace_mut(workspace)?.hello(device, group, now_ms)
+    /// Our own link-level `Hello`: device, group, protocol and wall clock, sent exactly once per
+    /// connection before any workspace's own `Greet` is legal to send. `heads` is always empty —
+    /// `Hello`'s field layout is frozen (module doc); each workspace reports its own heads via
+    /// `Greet` instead. A second call is `SessionError::LinkAlreadyGreeted`.
+    pub fn link_hello(&mut self, now_ms: u64) -> Result<Message, SessionError> {
+        if self.link_hello_sent {
+            return Err(SessionError::LinkAlreadyGreeted);
+        }
+        self.link_hello_sent = true;
+        Ok(Message::Hello {
+            device: self.device,
+            group: self.group,
+            heads: Heads::new(),
+            protocol: crate::frame::PROTOCOL_VERSION,
+            wall_ms: now_ms,
+        })
     }
 
-    /// `workspace`'s `Greeted → Wanting` (or `Idle`): checks group, protocol and clock skew, then
-    /// derives that workspace's own `Want`. Records the peer's device id (shared across every
-    /// workspace on this link) once learned.
+    /// Consumes the peer's link-level `Hello`: checks group, protocol and clock skew, and records
+    /// the peer's device id. Requires our own `link_hello` to have been sent first
+    /// (`SessionError::LinkNotReady` otherwise) and refuses a second peer `Hello`
+    /// (`SessionError::LinkAlreadyGreeted`) — the link-level counterpart of the per-workspace state
+    /// machine's own "no message twice" discipline. Every open (or later-opened) workspace's own
+    /// `Greet`/`on_hello` requires this to have succeeded first (`peer` known).
+    pub fn on_link_hello(&mut self, msg: &Message, now_ms: u64) -> Result<Skew, SessionError> {
+        if !self.link_hello_sent {
+            return Err(SessionError::LinkNotReady);
+        }
+        if self.peer.is_some() {
+            return Err(SessionError::LinkAlreadyGreeted);
+        }
+        let Message::Hello {
+            device,
+            group: theirs,
+            protocol,
+            wall_ms,
+            ..
+        } = msg
+        else {
+            return Err(SessionError::NotAHello(workspace_session::name_of(msg)));
+        };
+        if *theirs != self.group {
+            return Err(SessionError::GroupMismatch {
+                ours: self.group,
+                theirs: *theirs,
+            });
+        }
+        if *protocol != crate::frame::PROTOCOL_VERSION {
+            return Err(SessionError::ProtocolMismatch {
+                ours: crate::frame::PROTOCOL_VERSION,
+                theirs: *protocol,
+            });
+        }
+        let skew = Skew::check(*wall_ms, now_ms);
+        if let Skew::Ahead(lead_ms) = skew {
+            return Err(SessionError::PeerAhead {
+                peer_ms: *wall_ms,
+                local_ms: now_ms,
+                lead_ms,
+            });
+        }
+        self.peer = Some(*device);
+        Ok(skew)
+    }
+
+    /// `workspace`'s `Idle → Greeted`: the `Greet` to send (device/group/protocol/skew were
+    /// already handled once by `link_hello`/`on_link_hello`).
+    pub fn hello(&mut self, workspace: WorkspaceId) -> Result<Message, SessionError> {
+        self.workspace_mut(workspace)?.hello(workspace)
+    }
+
+    /// `workspace`'s `Greeted → Wanting` (or `Idle`): consumes the peer's `Greet` for this
+    /// workspace and derives our own `Want`. Requires the link handshake to already be done
+    /// (`peer` known) — a workspace cannot be greeted before `on_link_hello` succeeded
+    /// (`SessionError::LinkNotReady`), so a hostile or buggy peer can never skip the
+    /// group/protocol/skew checks by going straight for a workspace's `Greet`. Checked *after*
+    /// confirming `workspace` is actually open: an unopened workspace is always
+    /// `SessionError::UnknownWorkspace`, the more specific and actionable error, never masked by
+    /// `LinkNotReady` just because the link handshake also happens not to be done yet.
     pub fn on_hello(
         &mut self,
         workspace: WorkspaceId,
         msg: &Message,
-        now_ms: u64,
-    ) -> Result<Greeting, SessionError> {
-        let group = self.group;
-        let (greeting, peer) = self
-            .workspace_mut(workspace)?
-            .on_hello(group, msg, now_ms, workspace)?;
-        self.peer = Some(peer);
-        Ok(greeting)
+    ) -> Result<Message, SessionError> {
+        if !self.is_open(workspace) {
+            return Err(SessionError::UnknownWorkspace(workspace));
+        }
+        if self.peer.is_none() {
+            return Err(SessionError::LinkNotReady);
+        }
+        self.workspace_mut(workspace)?.on_hello(msg, workspace)
     }
 
     /// `workspace`'s `Wanting → Importing`. `msg` must be a `Message::Ops` whose own `workspace`

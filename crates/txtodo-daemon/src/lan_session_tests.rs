@@ -65,8 +65,13 @@ fn send(link: &mut dyn Link, group: GroupId, workspace: WorkspaceId, key: &Group
     .unwrap_or_else(|e| panic!("send: {e}"));
 }
 
-fn recv(link: &mut dyn Link, group: GroupId, workspace: WorkspaceId, keys: &GroupKeys) -> Message {
+/// Peeks the frame's own workspace rather than being told one — stage 2: an incoming frame may be
+/// the link-level `Hello` (sealed under `LINK_WORKSPACE`) or a real workspace's own message, and a
+/// real caller (`lan_session_dispatch.rs`) never knows which up front either.
+fn recv(link: &mut dyn Link, group: GroupId, keys: &GroupKeys) -> Message {
     let frame = link.recv().unwrap_or_else(|e| panic!("recv: {e}"));
+    let workspace = txtodo_sync::peek_workspace(&frame.body)
+        .unwrap_or_else(|| panic!("frame too short to peek a workspace"));
     let plain = open(frame.version, group, workspace, keys, &frame.body)
         .unwrap_or_else(|e| panic!("open: {e}"));
     Message::decode(&Frame {
@@ -106,6 +111,57 @@ pub(crate) struct PeerCrypto {
     pub(crate) keys: GroupKeys,
 }
 
+/// The stage-2 handshake half of [`run_peer_script`]: our own link-level `Hello` (no heads —
+/// those moved to `Greet`), sealed under the reserved sentinel, then our own `Greet` for the one
+/// workspace this test cares about; then asserts the driven side answers in the same order (its
+/// own `Hello`, its own `Greet`, then — once it has processed ours — the `Want` that workspace
+/// derived). Split out of `run_peer_script` purely to keep that function under this workspace's
+/// line budget (`clippy.toml`).
+fn peer_handshake(peer_link: &mut txtodo_sync::ChannelLink, crypto: &PeerCrypto, range: OriginRange) {
+    let PeerCrypto {
+        group,
+        workspace,
+        key,
+        keys,
+    } = crypto;
+    let (group, workspace) = (*group, *workspace);
+    send(
+        peer_link,
+        group,
+        crate::lan_session_shared::LINK_WORKSPACE,
+        key,
+        Message::Hello {
+            device: peer_device(),
+            group,
+            heads: BTreeMap::new(),
+            protocol: PROTOCOL_VERSION,
+            wall_ms: 1_000,
+        },
+    );
+    let mut heads = BTreeMap::new();
+    heads.insert(peer_device(), 1u64);
+    send(
+        peer_link,
+        group,
+        workspace,
+        key,
+        Message::Greet {
+            workspace: workspace.ulid().to_u128(),
+            heads,
+        },
+    );
+    assert!(matches!(recv(peer_link, group, keys), Message::Hello { .. }));
+    assert!(matches!(recv(peer_link, group, keys), Message::Greet { .. }));
+    let want = recv(peer_link, group, keys);
+    assert_eq!(
+        want,
+        Message::Want {
+            workspace: workspace.ulid().to_u128(),
+            ranges: vec![range]
+        }
+    );
+}
+
 /// The scripted peer's whole side of the exchange: offer one op, serve it once wanted, check the
 /// ack. Runs on its own blocking thread since `send`/`recv` block. `pub(crate)`: see
 /// [`peer_device`]'s doc for why.
@@ -115,39 +171,13 @@ pub(crate) fn run_peer_script(
     op: Op,
     range: OriginRange,
 ) {
+    peer_handshake(&mut peer_link, &crypto, range);
     let PeerCrypto {
         group,
         workspace,
         key,
         keys,
     } = crypto;
-    let mut heads = BTreeMap::new();
-    heads.insert(peer_device(), 1u64);
-    send(
-        &mut peer_link,
-        group,
-        workspace,
-        &key,
-        Message::Hello {
-            device: peer_device(),
-            group,
-            heads,
-            protocol: PROTOCOL_VERSION,
-            wall_ms: 1_000,
-        },
-    );
-    assert!(matches!(
-        recv(&mut peer_link, group, workspace, &keys),
-        Message::Hello { .. }
-    ));
-    let want = recv(&mut peer_link, group, workspace, &keys);
-    assert_eq!(
-        want,
-        Message::Want {
-            workspace: workspace.ulid().to_u128(),
-            ranges: vec![range]
-        }
-    );
     let signing_key = txtodo_sync::derive_group_op_signing_key(&key);
     let signature = txtodo_sync::sign(&op, &signing_key).unwrap_or_else(|e| panic!("sign: {e}"));
     send(
@@ -162,7 +192,7 @@ pub(crate) fn run_peer_script(
             ranges: vec![range],
         },
     );
-    let ack = recv(&mut peer_link, group, workspace, &keys);
+    let ack = recv(&mut peer_link, group, &keys);
     assert_eq!(
         ack,
         Message::Ack {

@@ -4,6 +4,13 @@
 //! unopened/unknown workspace, a message routed to the wrong one, and the open-workspace cap.
 //! `session_tests.rs` owns the single-workspace state-machine behaviour itself; this file only
 //! covers what genuinely changed by giving `Session` a workspace dimension.
+//!
+//! Stage 2: every workspace-level `Greet` now requires the link-level `Hello` handshake
+//! (`do_link_handshake`) to have completed first — a real, deliberate precondition
+//! (`SessionError::LinkNotReady`), not an oversight; `an_operation_against_an_unopened_workspace_
+//! is_a_typed_error_not_a_panic` below still expects `UnknownWorkspace` (not `LinkNotReady`) for a
+//! workspace this session never opened at all, because `Session::on_hello` checks "is this
+//! workspace even open" before "is the link ready" — the more specific, actionable error wins.
 
 use std::collections::BTreeMap;
 
@@ -36,18 +43,32 @@ fn range(device: u128, first: u64, last: u64) -> OriginRange {
     }
 }
 
-fn peer_hello(heads: Heads) -> Message {
+fn peer_link_hello() -> Message {
     Message::Hello {
         device: dev(9),
         group: GroupId(1),
-        heads,
+        heads: Heads::new(),
         protocol: PROTOCOL_VERSION,
         wall_ms: NOW_MS,
     }
 }
 
+fn peer_greet(workspace: WorkspaceId, heads: Heads) -> Message {
+    Message::Greet {
+        workspace: workspace.ulid().to_u128(),
+        heads,
+    }
+}
+
 fn no_keys() -> BTreeMap<DeviceId, crate::sign::DevicePublicKey> {
     BTreeMap::new()
+}
+
+/// The one-time link-level handshake every workspace's own `Greet` now requires
+/// (`SessionError::LinkNotReady` otherwise).
+fn do_link_handshake(s: &mut Session) {
+    s.link_hello(NOW_MS).unwrap();
+    s.on_link_hello(&peer_link_hello(), NOW_MS).unwrap();
 }
 
 /// Two workspaces, opened at different local heads so their `Want`s (and therefore their whole
@@ -64,21 +85,20 @@ fn two_open_workspaces() -> (Session, WorkspaceId, WorkspaceId) {
 #[test]
 fn two_workspaces_hello_and_want_interleave_without_crossing() {
     let (mut s, a, b) = two_open_workspaces();
-    s.hello(a, NOW_MS).unwrap();
-    s.hello(b, NOW_MS).unwrap();
+    do_link_handshake(&mut s);
+    s.hello(a).unwrap();
+    s.hello(b).unwrap();
     assert_eq!(s.state(a).unwrap(), SessionState::Greeted);
     assert_eq!(s.state(b).unwrap(), SessionState::Greeted);
 
-    // Interleaved: b's Hello lands before a's, and each workspace's Want reflects only its own
+    // Interleaved: b's Greet lands before a's, and each workspace's Want reflects only its own
     // local heads (2 for a, 5 for b) diffed against the same peer heads (10).
     let peer_heads = heads(&[(9, 10)]);
-    let gb = s
-        .on_hello(b, &peer_hello(peer_heads.clone()), NOW_MS)
-        .unwrap();
-    let ga = s.on_hello(a, &peer_hello(peer_heads), NOW_MS).unwrap();
+    let want_b = s.on_hello(b, &peer_greet(b, peer_heads.clone())).unwrap();
+    let want_a = s.on_hello(a, &peer_greet(a, peer_heads)).unwrap();
 
     assert_eq!(
-        ga.want,
+        want_a,
         Message::Want {
             workspace: a.ulid().to_u128(),
             ranges: vec![range(9, 3, 10)]
@@ -86,7 +106,7 @@ fn two_workspaces_hello_and_want_interleave_without_crossing() {
         "a's Want reflects a's own heads (2), not b's (5)"
     );
     assert_eq!(
-        gb.want,
+        want_b,
         Message::Want {
             workspace: b.ulid().to_u128(),
             ranges: vec![range(9, 6, 10)]
@@ -108,12 +128,12 @@ fn ops_for(workspace: WorkspaceId, r: OriginRange) -> Message {
 
 /// Greets and hellos both `a` and `b` against the same peer heads, leaving both `Wanting`.
 fn greet_both(s: &mut Session, a: WorkspaceId, b: WorkspaceId) {
-    s.hello(a, NOW_MS).unwrap();
-    s.hello(b, NOW_MS).unwrap();
+    do_link_handshake(s);
+    s.hello(a).unwrap();
+    s.hello(b).unwrap();
     let peer_heads = heads(&[(9, 10)]);
-    s.on_hello(a, &peer_hello(peer_heads.clone()), NOW_MS)
-        .unwrap();
-    s.on_hello(b, &peer_hello(peer_heads), NOW_MS).unwrap();
+    s.on_hello(a, &peer_greet(a, peer_heads.clone())).unwrap();
+    s.on_hello(b, &peer_greet(b, peer_heads)).unwrap();
 }
 
 /// Asserts `s.committed(workspace, ...)`'s `Ack` names exactly `r`, and that workspace lands at
@@ -163,12 +183,13 @@ fn an_operation_against_an_unopened_workspace_is_a_typed_error_not_a_panic() {
     let mut s = Session::new(dev(1), GroupId(1));
     let never_opened = wsid(404);
     assert_eq!(
-        s.hello(never_opened, NOW_MS),
+        s.hello(never_opened),
         Err(SessionError::UnknownWorkspace(never_opened))
     );
     assert_eq!(
-        s.on_hello(never_opened, &peer_hello(heads(&[])), NOW_MS),
-        Err(SessionError::UnknownWorkspace(never_opened))
+        s.on_hello(never_opened, &peer_greet(never_opened, heads(&[]))),
+        Err(SessionError::UnknownWorkspace(never_opened)),
+        "an unopened workspace is UnknownWorkspace even before the link handshake completes"
     );
     let ops = Message::Ops {
         workspace: never_opened.ulid().to_u128(),
@@ -200,11 +221,27 @@ fn an_operation_against_an_unopened_workspace_is_a_typed_error_not_a_panic() {
 }
 
 #[test]
+fn a_workspace_cannot_be_greeted_before_the_link_handshake_completes() {
+    let (mut s, a, _b) = two_open_workspaces();
+    // No `do_link_handshake` call at all: `a` is genuinely open, but the link never greeted.
+    assert_eq!(
+        s.on_hello(a, &peer_greet(a, heads(&[(9, 10)]))),
+        Err(SessionError::LinkNotReady)
+    );
+    assert_eq!(
+        s.state(a).unwrap(),
+        SessionState::Idle,
+        "a refused Greet changes nothing"
+    );
+}
+
+#[test]
 fn an_ops_message_tagged_for_a_different_workspace_is_refused_not_misrouted() {
     let (mut s, a, b) = two_open_workspaces();
-    s.hello(a, NOW_MS).unwrap();
+    do_link_handshake(&mut s);
+    s.hello(a).unwrap();
     let peer_heads = heads(&[(9, 10)]);
-    s.on_hello(a, &peer_hello(peer_heads), NOW_MS).unwrap();
+    s.on_hello(a, &peer_greet(a, peer_heads)).unwrap();
 
     // A message that carries b's workspace id but is routed to a — never silently applied to a's
     // sub-session, and b (never even greeted) is untouched.

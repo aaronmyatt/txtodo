@@ -12,7 +12,7 @@ use txtodo_store::WorkspaceId;
 use crate::aead::{GroupKey, GroupKeys, SealFor};
 use crate::crypto_error::CryptoError;
 use crate::frame::PROTOCOL_VERSION;
-use crate::message::{GroupId, Message, MessageError, OriginRange};
+use crate::message::{GroupId, Heads, Message, MessageError, OriginRange};
 use crate::sealed_ops::{SealContext, SealedOpsError, open_ops, seal_ops};
 use crate::session::{Session, SessionState};
 use crate::session_error::SessionError;
@@ -32,6 +32,38 @@ fn group_key(byte: u8) -> GroupKey {
 
 fn ws() -> WorkspaceId {
     WorkspaceId::new(Ulid::from_u128(0x5EED))
+}
+
+/// Stage 2: a workspace's `Greet` requires the link-level `Hello` handshake done first
+/// (`Session::on_hello`'s own `LinkNotReady` guard) — drives both steps so `on_ops`-focused tests
+/// can reach `Wanting` without re-deriving this sequence three times.
+fn greeted_and_wanting(local: DeviceId, group: GroupId, sender: DeviceId, sender_heads: Heads) -> Session {
+    let mut session = Session::new(local, group);
+    session.open_workspace(ws(), BTreeMap::new()).unwrap();
+    session.link_hello(0).unwrap();
+    session
+        .on_link_hello(
+            &Message::Hello {
+                device: sender,
+                group,
+                heads: BTreeMap::new(),
+                protocol: PROTOCOL_VERSION,
+                wall_ms: 0,
+            },
+            0,
+        )
+        .unwrap();
+    session.hello(ws()).unwrap();
+    session
+        .on_hello(
+            ws(),
+            &Message::Greet {
+                workspace: ws().ulid().to_u128(),
+                heads: sender_heads,
+            },
+        )
+        .unwrap();
+    session
 }
 
 fn op(device: DeviceId, line: &str) -> Op {
@@ -90,22 +122,8 @@ fn a_genuine_sealed_batch_opens_and_flows_straight_into_session_on_ops() {
 
     let msg = open_ops(&frame, GroupId(42), ws(), &v.group_keys, &v.device_keys).unwrap();
 
-    let mut session = Session::new(dev(2), GroupId(42));
-    session.open_workspace(ws(), BTreeMap::new()).unwrap();
-    session.hello(ws(), 0).unwrap();
-    session
-        .on_hello(
-            ws(),
-            &Message::Hello {
-                device: sender,
-                group: GroupId(42),
-                heads: BTreeMap::from([(sender, 1)]),
-                protocol: PROTOCOL_VERSION,
-                wall_ms: 0,
-            },
-            0,
-        )
-        .unwrap();
+    let mut session =
+        greeted_and_wanting(dev(2), GroupId(42), sender, BTreeMap::from([(sender, 1)]));
     let ops = session.on_ops(ws(), &msg, &v.device_keys).unwrap();
     assert_eq!(ops.len(), 1, "the genuine op reaches the session");
     assert_eq!(session.state(ws()).unwrap(), SessionState::Importing);
@@ -213,22 +231,8 @@ fn session_on_ops_rejects_a_signed_batch_tampered_after_signing() {
     let mut device_keys = BTreeMap::new();
     device_keys.insert(sender, sender_key.public_key());
 
-    let mut session = Session::new(dev(2), GroupId(42));
-    session.open_workspace(ws(), BTreeMap::new()).unwrap();
-    session.hello(ws(), 0).unwrap();
-    session
-        .on_hello(
-            ws(),
-            &Message::Hello {
-                device: sender,
-                group: GroupId(42),
-                heads: BTreeMap::from([(sender, 1)]),
-                protocol: PROTOCOL_VERSION,
-                wall_ms: 0,
-            },
-            0,
-        )
-        .unwrap();
+    let mut session =
+        greeted_and_wanting(dev(2), GroupId(42), sender, BTreeMap::from([(sender, 1)]));
     assert_eq!(
         session.on_ops(ws(), &tampered, &device_keys),
         Err(SessionError::Crypto(CryptoError::SignatureInvalid {
@@ -258,22 +262,8 @@ fn session_on_ops_rejects_a_batch_from_a_device_with_no_known_key() {
         }],
     };
 
-    let mut session = Session::new(dev(2), GroupId(42));
-    session.open_workspace(ws(), BTreeMap::new()).unwrap();
-    session.hello(ws(), 0).unwrap();
-    session
-        .on_hello(
-            ws(),
-            &Message::Hello {
-                device: sender,
-                group: GroupId(42),
-                heads: BTreeMap::from([(sender, 1)]),
-                protocol: PROTOCOL_VERSION,
-                wall_ms: 0,
-            },
-            0,
-        )
-        .unwrap();
+    let mut session =
+        greeted_and_wanting(dev(2), GroupId(42), sender, BTreeMap::from([(sender, 1)]));
     // No entry at all for `sender`: a missing key is refused, never skipped.
     assert_eq!(
         session.on_ops(ws(), &msg, &BTreeMap::new()),
