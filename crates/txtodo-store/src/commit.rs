@@ -8,7 +8,7 @@ use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
 use crate::{
     FingerprintRow, MAX_OPS_PER_READ, Projection, Seq, SeqRange, Snapshot, Store, StoreError,
-    Stored,
+    Stored, hex8,
 };
 use rusqlite::{OptionalExtension, params};
 use txtodo_model::{FilePath, Op, TaskId};
@@ -82,6 +82,12 @@ pub fn prev_hash_key(file: &FilePath) -> String {
     format!("prev_hash/{}", file.as_str())
 }
 
+/// `commit_change_with`'s own outcome, once the transaction has landed; the span's own fields
+/// (`ops`/`bytes`/`hash`) already describe what went in, this is what came out.
+fn log_commit_landed(range: Option<SeqRange>) {
+    tracing::debug!(seq = ?range.map(|r| r.last.0), "commit_landed");
+}
+
 impl Store {
     /// Appends `ops` (may be empty), replaces the projection and records `prev_hash`, atomically.
     /// Returns the seqs appended, `None` when there were no ops.
@@ -97,8 +103,29 @@ impl Store {
     /// `commit_change` with the M4 extras in the same transaction: clear one needs_review flag
     /// (a resolution's write-back and its clear land together or not at all) and/or store the
     /// Loro mirror snapshot at this commit's seq (an import's derived ops and the mirror that
-    /// already holds them never part ways across a crash).
+    /// already holds them never part ways across a crash). The durability funnel every write
+    /// path lands through (`txtodo-daemon`'s `actor.rs::persist_change` calls this directly). A
+    /// thin span wrapper around `commit_change_with_inner` (`#[instrument]` on the real body
+    /// overflows).
+    #[tracing::instrument(skip_all, fields(
+        file = %projection.file,
+        ops = ops.len(),
+        bytes = projection.bytes.len(),
+        hash = %hex8(&projection.hash),
+    ))]
     pub fn commit_change_with(
+        &mut self,
+        ops: &[Op],
+        projection: &Projection,
+        prev_hash: Option<[u8; 32]>,
+        extras: &CommitExtras,
+    ) -> Result<Option<SeqRange>, StoreError> {
+        let range = self.commit_change_with_inner(ops, projection, prev_hash, extras)?;
+        log_commit_landed(range);
+        Ok(range)
+    }
+
+    fn commit_change_with_inner(
         &mut self,
         ops: &[Op],
         projection: &Projection,

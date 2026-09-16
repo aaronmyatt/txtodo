@@ -8883,6 +8883,7 @@ dependencies = [
  "postcard",
  "rusqlite",
  "tempfile",
+ "tracing",
  "txtodo-model",
 ]
 
