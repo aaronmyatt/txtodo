@@ -9,11 +9,10 @@
 //! sides' explicit confirmation, a declined SAS never confirming, and the identity_mode mismatch
 //! refusal (docs/questions.md Q6) never even reaching the network.
 //!
-//! What is **not** asserted on a normal run: that the joiner then actually receives the
-//! initiator's file content over the LAN. That is real and it is broken — see
-//! [`a_paired_joiner_receives_the_initiators_real_file`]'s own doc for the mechanism and
-//! `tasks/pairing-workspace-identity/` for the fix. It is `#[ignore]`d, not deleted, and is that
-//! task's acceptance bar.
+//! [`a_paired_joiner_receives_the_initiators_real_file`] asserts the other half: the joiner then
+//! actually receives the initiator's file content over the LAN. That required
+//! `tasks/pairing-workspace-identity/` — the initiator's real `WorkspaceId` now rides the pairing
+//! code, and the joiner adopts it, so both sides route post-pairing sync messages to the same id.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -277,34 +276,17 @@ fn two_real_devices_complete_a_real_pairing_ceremony() {
     let _paired = pair_two_real_devices("(A) buy milk id:01M2CZ00000000000000000A\n");
 }
 
-/// **KNOWN BROKEN, quarantined 2026-09-16 — a real product bug, not a flake.** This is the only
-/// test in the repo that pairs two *genuinely independent* daemons and then asks whether sync
-/// actually converges, and it fails deterministically on ubuntu-latest, macos-latest and locally.
-///
-/// Why: a `WorkspaceId` is a ULID minted locally per device (`txtodo_store::registry`,
-/// `workspace_registry::add`), and `txtodo pair` agrees on a group id and group key but never on a
-/// workspace id — `Daemon::start_with_workspace_id`'s own doc in the daemon crate's test support
-/// says so outright ("workspace identity is still a separate dimension pairing does not touch").
-/// Since `daemon-workspace-session-multiplex` stages 1/2 every sync message carries a workspace
-/// id, and `lan_session_dispatch.rs::dispatch_workspace_frame` skips any workspace the receiving
-/// side never opened. So both daemons pair, connect, exchange a link `Hello`, then each drops the
-/// other's every `Greet` as `lan_session_unrouted_workspace_message_skipped` and nothing ever
-/// converges. Confirmed by reading both daemons' `TXTODO_LOG=debug` JSON logs directly.
-///
-/// The other real-daemon pairing tests (`txtodo-daemon`'s `pairing_lan.rs`, `pairing_relay.rs`,
-/// `relay_multiplex.rs`) pass only because their harness pre-seeds *both* sides with the same id
-/// (`Daemon::start_with_workspace_id`, `seed_workspace_at`) — they pre-agree the exact thing that
-/// is broken here.
-///
-/// The fix is to run the workspace-identity offer/accept exchange that task
-/// `daemon-workspace-identity-agreement` already landed (`WorkspaceRegistry::add_with_id`/`adopt`,
-/// `workspace_offer_grpc.rs`, first-registrant-wins) as part of pairing; that task explicitly
-/// deferred the CLI wiring as "not required for stage 7's payoff ... not silently dropped".
-/// Tracked as its own task: `tasks/pairing-workspace-identity/`. Un-`#[ignore]` this the moment
-/// that lands — it is the acceptance bar for it.
+/// This is the only test in the repo that pairs two *genuinely independent* daemons (every other
+/// real-daemon pairing test — `txtodo-daemon`'s `pairing_lan.rs`, `pairing_relay.rs`,
+/// `relay_multiplex.rs` — pre-seeds both sides with the same `WorkspaceId` via
+/// `Daemon::start_with_workspace_id`/`seed_workspace_at`) and then asks whether sync actually
+/// converges. It was quarantined 2026-09-16 (`tasks/pairing-workspace-identity/`) because `txtodo
+/// pair` agreed a group id/key but never a workspace id, so `lan_session_dispatch.rs` dropped
+/// every post-pairing sync message as unrouted. Fixed by carrying the initiator's real
+/// `WorkspaceId` on the pairing code (`PairOfferResponse.workspace_id`) and having the joiner
+/// adopt it (`WorkspaceCatalog::adopt_offered_workspace_id`, first-registrant-wins) on
+/// `PairAccept` — this test is that fix's acceptance bar.
 #[test]
-#[ignore = "real bug, not a flake: txtodo pair never agrees a WorkspaceId, so post-pairing sync is \
-            skipped as unrouted — see this test's doc comment and tasks/pairing-workspace-identity/"]
 fn a_paired_joiner_receives_the_initiators_real_file() {
     let todo_content = "(A) buy milk id:01M2CZ00000000000000000A\n";
     let paired = pair_two_real_devices(todo_content);
