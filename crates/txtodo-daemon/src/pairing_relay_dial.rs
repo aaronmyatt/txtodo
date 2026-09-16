@@ -81,18 +81,58 @@ async fn lan_attempt(
 /// why): the joiner's outer retry loop (`pairing_lan.rs::joiner_loop`, bounded by
 /// `PAIRING_WINDOW_MS`) is what recovers from a slow or hung relay attempt, exactly as it already
 /// does for a slow or hung LAN one via `attempt`.
+fn log_relay_no_rendezvous() {
+    tracing::debug!("pairing_joiner_relay_no_rendezvous_in_offer");
+}
+
+fn log_relay_endpoint_not_bound() {
+    tracing::debug!("pairing_joiner_relay_endpoint_not_bound");
+}
+
+fn log_relay_connect_failed(e: &txtodo_sync::HolepunchError) {
+    tracing::debug!(error = %e, "pairing_joiner_relay_connect_failed");
+}
+
+fn log_relay_round_no_reply() {
+    tracing::debug!("pairing_joiner_relay_round_no_reply");
+}
+
+/// The connect+dial half of [`relay_attempt`], split out purely to keep that function's own
+/// cognitive complexity under this workspace's budget (`clippy.toml`) — logs (at `debug`, see
+/// [`relay_attempt`]'s doc) every reason a round produced nothing, the same discipline
+/// `pairing_lan.rs::attempt` now applies to its own LAN half.
+async fn relay_connect(ws: &SharedWorkspace, offer: &PairingOffer) -> Option<txtodo_sync::IrohLink> {
+    let Some(node) = offer.relay_node_id else {
+        log_relay_no_rendezvous();
+        return None;
+    };
+    let Some(endpoint) = read(ws).relay_state().get() else {
+        log_relay_endpoint_not_bound();
+        return None;
+    };
+    match endpoint.connect_pairing(node).await {
+        Ok(link) => Some(link),
+        Err(e) => {
+            log_relay_connect_failed(&e);
+            None
+        }
+    }
+}
+
 async fn relay_attempt(
     ws: &SharedWorkspace,
     offer: &PairingOffer,
     hello: JoinerHello,
 ) -> Option<InitiatorReply> {
-    let node = offer.relay_node_id?;
-    let endpoint = read(ws).relay_state().get()?;
-    let link = endpoint.connect_pairing(node).await.ok()?;
+    let link = relay_connect(ws, offer).await?;
     let reply = tokio::task::spawn_blocking(move || send_and_receive(link, &hello))
         .await
         .ok()
-        .flatten()?;
+        .flatten();
+    let Some(reply) = reply else {
+        log_relay_round_no_reply();
+        return None;
+    };
     if matches!(reply, InitiatorReply::Grant(_)) {
         read(ws).pairing_lan().record_carrier("relay");
     }

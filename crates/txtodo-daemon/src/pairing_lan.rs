@@ -208,21 +208,38 @@ async fn wait_for_endpoint(ws: &SharedWorkspace) -> Option<Arc<LanEndpoint>> {
 
 /// One connection attempt over LAN: dial, send `hello`, read one reply. `None` on any failure
 /// worth a retry (dial refused, link closed, a frame that didn't decode) — never a hard error,
-/// since the peer may simply not be reachable yet. `pub(crate)`: `pairing_relay_dial.rs`'s racing
-/// joiner round drives this as its LAN half.
+/// since the peer may simply not be reachable yet; logged at `debug` (not silently swallowed —
+/// a real gap this crate's own retry loops otherwise share, found debugging a real cross-network
+/// pairing attempt where neither carrier's failure was visible anywhere). `pub(crate)`:
+/// `pairing_relay_dial.rs`'s racing joiner round drives this as its LAN half.
+fn log_lan_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
+    tracing::debug!(%peer, error = %e, "pairing_joiner_lan_connect_failed");
+}
+
+fn log_lan_round_no_reply(peer: DeviceId) {
+    tracing::debug!(%peer, "pairing_joiner_lan_round_no_reply");
+}
+
 pub(crate) async fn attempt(
     endpoint: &LanEndpoint,
     peer: &DiscoveredPeer,
     hello: JoinerHello,
 ) -> Option<InitiatorReply> {
-    let link = endpoint
-        .connect_pairing(peer.node, &peer.addresses)
-        .await
-        .ok()?;
-    tokio::task::spawn_blocking(move || send_and_receive(link, &hello))
+    let link = match endpoint.connect_pairing(peer.node, &peer.addresses).await {
+        Ok(link) => link,
+        Err(e) => {
+            log_lan_connect_failed(peer.device, &e);
+            return None;
+        }
+    };
+    let reply = tokio::task::spawn_blocking(move || send_and_receive(link, &hello))
         .await
         .ok()
-        .flatten()
+        .flatten();
+    if reply.is_none() {
+        log_lan_round_no_reply(peer.device);
+    }
+    reply
 }
 
 /// Blocks a dedicated thread on `link`'s synchronous `send`/`recv` (`Link`'s own contract — see
