@@ -12,8 +12,9 @@
 //! `e2e-bridge` Cargo feature (`Cargo.toml`'s `required-features` on this `[[bin]]`), which a
 //! plain `cargo build -p desktop` never enables.
 //!
-//! Run: `TXTODO_WORKSPACE=<dir> E2E_BRIDGE_PORT=<port> cargo run -p desktop --features
-//! e2e-bridge --bin e2e_bridge` — `apps/desktop/e2e/fixtures.ts` does exactly this.
+//! Run: `TXTODO_WORKSPACE=<dir> E2E_BRIDGE_PORT=<port> TXTODO_E2E_GLOBAL_DIR=<dir2>
+//! cargo run -p desktop --features e2e-bridge --bin e2e_bridge` — `apps/desktop/e2e/fixtures.ts`
+//! does exactly this.
 //! Ref: <https://docs.rs/axum>
 
 use axum::extract::{Request, State};
@@ -34,9 +35,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use txtodo_model::{FilePath, TaskId, Ulid};
 use txtodo_proto::v1 as pb;
-use txtodo_store::{ReviewRow, Store};
 
 #[path = "e2e_bridge/workspace.rs"]
 mod workspace;
@@ -45,6 +44,10 @@ use workspace::dispatch_workspace_cmd;
 #[path = "e2e_bridge/activity.rs"]
 mod activity;
 use activity::cmd_op_log_all;
+
+#[path = "e2e_bridge/conflict.rs"]
+mod conflict;
+use conflict::cmd_debug_raise_conflict;
 
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
@@ -65,7 +68,20 @@ async fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(4567);
 
-    let cfg = DesktopConfig::new(workspace.clone());
+    // Isolate this bridge's daemon from the REAL, machine-global socket/registry.db
+    // (`$XDG_DATA_HOME/txtodo/...`): without an override, `ensure_daemon` below binds true global
+    // mode onto that shared state, so every Playwright fixture would leak a workspace-registry row
+    // into a human's actual desktop app and share one `txtodod` across the whole test run (see
+    // `fixtures.ts`'s module doc). `TXTODO_E2E_GLOBAL_DIR` is a tempdir `fixtures.ts` creates and
+    // tears down alongside the workspace — a SIBLING of it, not nested inside: `notes-create.spec.
+    // ts`'s negative assertion checks the workspace root's own top-level listing is exactly
+    // `{todo.txt, .txtodo}` before any user action, so this daemon's global state (socket,
+    // registry.db, identity.db, pidfile, logs) must never appear inside the workspace tree at all.
+    let global_state_dir = std::env::var("TXTODO_E2E_GLOBAL_DIR")
+        .unwrap_or_else(|_| panic!("e2e_bridge: TXTODO_E2E_GLOBAL_DIR must be set"));
+    let mut cfg = DesktopConfig::new(workspace.clone());
+    cfg.global_socket_override = Some(PathBuf::from(&global_state_dir).join("txtodod.sock"));
+    cfg.global_registry_override = Some(PathBuf::from(&global_state_dir).join("registry.db"));
     let sock = daemon::ensure_daemon(&cfg)
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: ensure_daemon: {e}"));
@@ -242,47 +258,6 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         }
     };
     Ok(Json(value).into_response())
-}
-
-/// Raises a `needs_review` flag directly in `.txtodo/oplog.db`, the same way
-/// `crates/txtodo-daemon/tests/grpc.rs::raise_flag` does for the daemon's own tests: "what an
-/// import merge would do... no actual sync is needed." Real daemon-to-daemon sync has no
-/// transport wired up yet at all (`crates/txtodo-daemon/src/pairing_grpc.rs`'s own doc comment;
-/// see `todo.txt`'s `sync-loopback-converge` entry) — this is not a workaround invented for this
-/// harness, it's the same substitute the daemon team already uses to test `ListConflicts`/
-/// `ResolveConflict` without it. WAL mode lets this connection share the file safely with the
-/// live daemon's own connection to the same database.
-fn cmd_debug_raise_conflict(workspace: &std::path::Path, args: Value) -> Result<Value, ApiError> {
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Req {
-        path: String,
-        task_id: String,
-        mine: String,
-        theirs: String,
-    }
-    let r: Req = parse(args)?;
-    let file = FilePath::new(&r.path)
-        .map_err(|e| ApiError(format!("e2e_bridge: invalid path {:?}: {e}", r.path)))?;
-    let ulid = Ulid::parse(&r.task_id)
-        .ok_or_else(|| ApiError(format!("e2e_bridge: invalid task_id {:?}", r.task_id)))?;
-    let raised_at_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(1);
-
-    let mut store = Store::open(&workspace.join(".txtodo").join("oplog.db"))
-        .map_err(|e| ApiError(format!("e2e_bridge: Store::open: {e}")))?;
-    store
-        .raise_flag(&ReviewRow {
-            file,
-            task: TaskId::new(ulid),
-            raised_at_ms,
-            mine: r.mine.into_bytes(),
-            theirs: r.theirs.into_bytes(),
-        })
-        .map_err(|e| ApiError(format!("e2e_bridge: raise_flag: {e}")))?;
-    Ok(Value::Null)
 }
 
 async fn cmd_list_files(client: &mut DaemonClient) -> Result<Value, ApiError> {

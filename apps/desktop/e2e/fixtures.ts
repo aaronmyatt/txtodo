@@ -150,6 +150,14 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 	seed(dir, fixture);
 	const port = pickPort();
 
+	// A SEPARATE tempdir for this fixture's isolated global-mode daemon state (socket, registry.db,
+	// identity.db, pidfile, logs — see `e2e_bridge.rs`'s module doc). Deliberately not nested under
+	// `dir`: `notes-create.spec.ts`'s negative assertion checks the workspace root's own top-level
+	// listing is exactly `{todo.txt, .txtodo}` before any user action, so anything the daemon's
+	// *global* state creates must live outside the workspace tree entirely, not just outside
+	// `.txtodo/`.
+	const globalDir = mkdtempSync(join(tmpdir(), "txtodo-e2e-global-"));
+
 	const proc: ChildProcess = spawn(join(TARGET_DEBUG, "e2e_bridge"), [], {
 		env: {
 			...process.env,
@@ -158,7 +166,8 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 			// than adding a bridge-only env override for a binary that already resolves via PATH.
 			PATH: `${TARGET_DEBUG}:${process.env.PATH ?? ""}`,
 			TXTODO_WORKSPACE: dir,
-			E2E_BRIDGE_PORT: String(port)
+			E2E_BRIDGE_PORT: String(port),
+			TXTODO_E2E_GLOBAL_DIR: globalDir
 		},
 		stdio: "ignore"
 	});
@@ -169,10 +178,15 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 		port,
 		dir,
 		dispose() {
-			killDaemon(dir);
+			killDaemon(globalDir);
 			proc.kill("SIGKILL");
 			try {
 				rmSync(dir, { recursive: true, force: true });
+			} catch {
+				// best-effort cleanup only
+			}
+			try {
+				rmSync(globalDir, { recursive: true, force: true });
 			} catch {
 				// best-effort cleanup only
 			}
@@ -194,12 +208,17 @@ async function waitForHealth(port: number, timeoutMs = 30_000): Promise<void> {
 	throw new Error(`e2e_bridge on port ${port} never became healthy within ${timeoutMs}ms`);
 }
 
-/** Best-effort: reads the daemon's own pidfile (the same one
- * `apps/desktop/src-tauri/tests/support::wait_for_pid` reads) and SIGKILLs it, since killing the
- * bridge process alone does not reap the `txtodod` child it spawned. */
-function killDaemon(dir: string): void {
+/** Best-effort: reads the daemon's own pidfile (under `globalDir`, the isolated global-mode state
+ * dir `TXTODO_E2E_GLOBAL_DIR` points `e2e_bridge.rs` at) and SIGKILLs it, since killing the bridge
+ * process alone does not reap the `txtodod` child it spawned. `e2e_bridge.rs`'s `main` points
+ * `DesktopConfig.global_socket_override`/`global_registry_override` at `globalDir` (not the real,
+ * machine-global socket/registry.db `ensure_daemon` would otherwise bind) so every fixture's
+ * `txtodod` is fully isolated — its pid file lands alongside that socket, per
+ * `workspace_registry_paths.rs`'s "pid lock ... alongside it" rule, not under `<dir>/.txtodo/`
+ * (that path only ever held a pidfile in the pre-ADR-0025, one-daemon-per-workspace model). */
+function killDaemon(globalDir: string): void {
 	try {
-		const pid = readFileSync(join(dir, ".txtodo", "txtodod.pid"), "utf8").trim();
+		const pid = readFileSync(join(globalDir, "txtodod.pid"), "utf8").trim();
 		if (pid) process.kill(Number(pid), "SIGKILL");
 	} catch {
 		// no pidfile yet, or the process is already gone
