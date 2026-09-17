@@ -78,9 +78,62 @@ the persistent service covers "won't come back after reboot".
 - Windows support for the spawn-helper crate — matches today's `apps/desktop` scope
   (`#[cfg(unix)]`, stub on other platforms); a separate task if Windows daemon lifecycle is prioritized.
 
-## Open questions for the human (tagged `@human` on the relevant lines)
+## Open questions for the human (tagged `@human` on the relevant lines) — resolved 2026-09-18
 
-- Exact shared-crate boundary/name and its dependency graph (item 1).
-- Whether the auto-install-on-spawn step (item 2) needs a `--no-daemon`/opt-out escape hatch per
-  client (matches the CLI's existing `--no-daemon` flag; TUI/MCP have no equivalent today) — a
-  human call on whether "always available" should ever be skippable.
+- Exact shared-crate boundary/name: **`txtodo-daemon-launch`** (new leaf crate, zero
+  `txtodo-daemon` dependency, `.claude/budgets.json`'s `allowedDeps` gives it to
+  `txtodo-cli`/`txtodo-tui`/`txtodo-mcp`/`src-tauri`).
+- The auto-install-on-spawn opt-out: **yes**, `TXTODO_NO_AUTOSTART=1`
+  (`txtodo_daemon_launch::autostart_disabled()`), checked by every non-GUI client (cli/tui/mcp)
+  before calling `ensure_daemon` at all. `apps/desktop` deliberately never checks it — a GUI app
+  the user explicitly launched keeps its pre-existing always-spawn behavior.
+
+## As built (2026-09-18, agent, across one coordinating session + three fenced subagent sessions)
+
+All 9 sub-items closed; see `tasks/daemon-always-available/todo.txt` for the exact commit each one
+points at. Summary:
+
+- **`crates/txtodo-daemon-launch`** (commit `5e1d197`): `ensure_daemon(cfg: &LaunchConfig)` —
+  probe/lock/spawn/wait, generalized over the target socket + daemon binary + extra argv so one
+  implementation covers both the ADR 0025 global daemon (empty argv) and a legacy `--dir` bridge
+  daemon (`.with_dir(workspace)`, what `txtodo-tui` dials). `service` module: the launchd/systemd
+  render/install/start/stop logic moved out of `crates/txtodo-cli/src/commands/service.rs`
+  (stripped of `println!`, since this is a library). `ensure_daemon`'s ad-hoc-spawn branch also
+  best-effort installs+starts the persistent service (non-fatal, skipped for the `--dir` shape).
+- **`apps/desktop`** (commit `0a4326f`): `daemon/spawn.rs::ensure_daemon` now translates
+  `DesktopConfig`/`DaemonError` to/from `LaunchConfig`/`LaunchError` and delegates, instead of
+  keeping its own copy — both existing real-daemon tests (`daemon_spawn.rs`) still pass unchanged.
+- **`crates/txtodo-cli`** (commit `18286a5`): `main.rs::run()` does ensure-then-retry for the
+  `NEEDS_DAEMON` command set (`needs_daemon()`, factored out of `dispatch_inner`'s match arm so
+  the variant list lives once) when `select()` first returns `Mode::Direct` — targets the global
+  socket, honors `--no-daemon`/`TXTODO_NO_AUTOSTART`. `commands/service.rs` is now a thin wrapper
+  over `txtodo_daemon_launch::service`, preserving identical CLI stdout.
+- **`crates/txtodo-tui`** (commit `2f6ee20`): `app.rs::async_main` calls `ensure_daemon`
+  (`.with_dir(workspace)` — the TUI only dials the legacy per-workspace bridge, no global-socket
+  support exists in this crate yet, out of scope here) right before `wait_until_ready`, result
+  ignored (that call is the one that actually surfaces a clear failure). Fixed the stale "TUI
+  never spawns the daemon" claims in both `app.rs`'s doc comment and `CLAUDE.md`.
+- **`crates/txtodo-mcp`** (commit `bdf4d1f`): `main.rs::ensure_daemon_for_target` builds the
+  right `LaunchConfig` for whichever `Target` (`--dir` bridge or `--global`) this run resolved to,
+  called before `connect_unix`. Fixed a pre-existing stale `CLAUDE.md` `allowedDeps` line (was
+  missing `txtodo-telemetry` too, unrelated to this task but caught in passing).
+- **Tests** (commit `51ef551` for the last piece): every client above got a real,
+  `txtodod`-spawning "cold start, no daemon running, ensure_daemon connects without manual
+  intervention" test, none of them `#[ignore]`d (each crate's harness builds `txtodod` on demand —
+  `txtodo-mcp`'s new test started `#[ignore]`d unnecessarily during a subagent draft; corrected to
+  match its siblings once the harness was confirmed to build on demand, same as theirs). The
+  simulated-reboot half (service installed, process killed, recovers via the installed unit) is
+  `#[ignore]`d in `crates/txtodo-daemon-launch/tests/simulated_reboot.rs` — this sandbox's
+  `launchctl bootstrap` fails (`Bootstrap failed: 5: Input/output error`, no real GUI login
+  session), so there is no service manager here that could ever restart a killed process; a human
+  or a real CI runner with an actual user session can run it directly
+  (`cargo test -p txtodo-daemon-launch --test simulated_reboot -- --ignored`).
+- **Docs**: `crates/txtodo-tui/CLAUDE.md` and `app.rs`'s doc comment fixed; grepped `crates/txtodo-
+  cli` and `crates/txtodo-mcp` for equivalent stale claims — none found (`grpc_backend.rs`'s "is
+  txtodod running?" error text is a live, still-accurate fallback message, left as-is).
+
+## Explicitly out of scope, confirmed still out of scope
+
+- `ref:desktop-daemon-sidecar-bundle` and `ref:desktop-cold-boot-dead-status` — both done as
+  separate tasks in this same overnight session, not folded into this one (see their own notes.md).
+- Windows support for `txtodo-daemon-launch` — still `#[cfg(unix)]` + stub, unchanged.
