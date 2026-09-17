@@ -33,7 +33,10 @@ use tauri::{AppHandle, Emitter, State};
 use txtodo_proto::v1 as pb;
 
 /// Updates the shared status and mirrors it to the frontend as a `daemon-status` event.
-async fn set_status(app: &AppHandle, state: &AppState, status: DaemonStatus) {
+/// `pub(crate)` (not private) so `lib.rs`'s `.setup()` can also set `DaemonStatus::Dead` directly
+/// on a startup connect failure, the same way `retry_connect_inner` already does on a manual
+/// retry's own failure (task `desktop-cold-boot-dead-status`).
+pub(crate) async fn set_status(app: &AppHandle, state: &AppState, status: DaemonStatus) {
     *state.status.lock().await = status;
     let _ = app.emit("daemon-status", status);
 }
