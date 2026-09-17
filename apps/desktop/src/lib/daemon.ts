@@ -203,6 +203,12 @@ export function workspaceRoot(): Promise<string> {
 	return invoke("workspace_root");
 }
 
+/** Advisory-only: true when no `txtodo skill install` has run yet on this machine. Mirrors
+ * `txtodo-cli`'s `doctor` skill row and `txtodo-tui`'s status-line hint. */
+export function skillHintNeeded(): Promise<boolean> {
+	return invoke("skill_hint");
+}
+
 /** One entry in the device-global workspace registry (ADR 0025). Mirrors
  * `desktop_lib::dto::WorkspaceInfoDto`. */
 export interface WorkspaceInfo {

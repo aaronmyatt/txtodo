@@ -75,6 +75,7 @@ pub fn run() {
             commands::daemon_status,
             commands::retry_connect,
             commands::workspace_root,
+            commands::skill_hint,
             commands::set_main_popover_dirty,
             commands::list_files,
             commands::get_file,

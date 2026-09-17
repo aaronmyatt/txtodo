@@ -26,3 +26,10 @@ Design decisions:
   duplicated in a new `crates/txtodo-tui/src/skill_hint.rs`. Still open: the `apps/desktop` hint
   (its own session — different stack, no fence edge to claim, but the design cut above still
   applies) and the `@human`-gated `todo_claim` idea.
+- 2026-09-17 (same day, next session): desktop hint done — same duplicated check a third time in
+  `apps/desktop/src-tauri/src/status.rs` (no Cargo edge from `desktop` to `txtodo-cli`/`txtodo-tui`
+  either). New `skill_hint` Tauri command + `SkillHintBanner.svelte`, a session-dismissible banner
+  mirroring `ConflictBanner.svelte`'s own pattern, mounted in `MainView.svelte` above the top-nav.
+  This closes every agent-actionable item under this ref — the parent root `todo.txt` line is
+  marked done too. The one line still open here is the `@human`-gated `todo_claim` idea, which
+  stays open on its own; it was never in scope for "ship the feature."

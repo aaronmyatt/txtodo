@@ -104,6 +104,15 @@ async fn workspace_root_inner(state: State<'_, AppState>) -> Result<String, Stri
     Ok(state.current_workspace.lock().await.display().to_string())
 }
 
+/// Advisory-only (never fails, never blocks): true when no prior `txtodo skill install` has run
+/// on this machine yet. See `crate::status::skill_hint_needed`'s doc comment for the mirrored
+/// checks this duplicates on purpose.
+#[tracing::instrument(name = "ipc.skill_hint", skip_all)]
+#[tauri::command]
+pub fn skill_hint() -> bool {
+    crate::status::skill_hint_needed(crate::status::home_dir().as_deref())
+}
+
 /// Records whether the main window's edit popover currently has an unsaved edit; the quick-add
 /// global hotkey's handler reads this to decide whether to open quick-add or refocus the main
 /// window instead (tasks/desktop-quick-add/notes.md).

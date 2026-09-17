@@ -17,6 +17,7 @@
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
+	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -95,6 +96,8 @@
 			<button onclick={retry}>Retry</button>
 		</div>
 	{/if}
+
+	<SkillHintBanner />
 
 	<div class="top-nav">
 		<h1>txtodo</h1>
