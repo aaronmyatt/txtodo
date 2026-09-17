@@ -132,6 +132,12 @@ service Txtodo {
   // an already-removed device rotates nothing and says so.
   rpc DeviceRemove(DeviceRemoveRequest) returns (DeviceRemoveResponse);
 
+  // The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
+  // an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
+  // last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
+  // precise per-peer ack count — no per-peer synced-seq is tracked anywhere yet).
+  rpc SyncStatus(SyncStatusRequest) returns (SyncStatusResponse);
+
   // TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
   // group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
   // daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
@@ -566,6 +572,25 @@ message DeviceRemoveResponse {
   // tasks/sync-device-remove's own notes — a security feature the human believes does more than
   // it does is worse than no feature).
   string message = 4;
+}
+
+message SyncStatusRequest {
+  WorkspaceSelector workspace = 1;
+}
+
+message SyncStatusResponse {
+  // One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
+  // SyncStatus design section).
+  message Peer {
+    string device = 1;   // ULID text, same form as Device.id
+    int64 lag_ms = 2;    // now_ms - last_seen_ms; 0 if never seen, mirroring Device.last_seen_ms's
+                          // own "0 = never contacted" convention
+  }
+  repeated Peer peers = 1;
+  // Approximate, not a precise per-peer ack count (tasks/tui/notes.md: no per-peer synced-seq is
+  // persisted anywhere yet) — local ops committed since the most-out-of-touch peer's last_seen_ms.
+  // 0 peers means 0 pending: nothing to be pending against.
+  uint64 pending_ops = 2;
 }
 
 // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---

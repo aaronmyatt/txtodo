@@ -667,6 +667,35 @@ pub struct DeviceRemoveResponse {
     #[prost(string, tag = "4")]
     pub message: ::prost::alloc::string::String,
 }
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SyncStatusRequest {
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceSelector>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SyncStatusResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub peers: ::prost::alloc::vec::Vec<sync_status_response::Peer>,
+    /// Approximate, not a precise per-peer ack count (tasks/tui/notes.md: no per-peer synced-seq is
+    /// persisted anywhere yet) — local ops committed since the most-out-of-touch peer's last_seen_ms.
+    /// 0 peers means 0 pending: nothing to be pending against.
+    #[prost(uint64, tag = "2")]
+    pub pending_ops: u64,
+}
+/// Nested message and enum types in `SyncStatusResponse`.
+pub mod sync_status_response {
+    /// One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
+    /// SyncStatus design section).
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct Peer {
+        /// ULID text, same form as Device.id
+        #[prost(string, tag = "1")]
+        pub device: ::prost::alloc::string::String,
+        /// now_ms - last_seen_ms; 0 if never seen, mirroring Device.last_seen_ms's
+        #[prost(int64, tag = "2")]
+        pub lag_ms: i64,
+    }
+}
 /// One entry in the device-global workspace registry.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceInfo {
@@ -1734,6 +1763,34 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DeviceRemove"));
             self.inner.unary(req, path, codec).await
         }
+        /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
+        /// an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
+        /// last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
+        /// precise per-peer ack count — no per-peer synced-seq is tracked anywhere yet).
+        pub async fn sync_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SyncStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SyncStatusResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/SyncStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "SyncStatus"));
+            self.inner.unary(req, path, codec).await
+        }
         /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
         /// group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
         /// daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
@@ -2060,6 +2117,17 @@ pub mod txtodo_server {
             request: tonic::Request<super::DeviceRemoveRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DeviceRemoveResponse>,
+            tonic::Status,
+        >;
+        /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
+        /// an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
+        /// last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
+        /// precise per-peer ack count — no per-peer synced-seq is tracked anywhere yet).
+        async fn sync_status(
+            &self,
+            request: tonic::Request<super::SyncStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SyncStatusResponse>,
             tonic::Status,
         >;
         /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
@@ -3489,6 +3557,49 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = DeviceRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/SyncStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct SyncStatusSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::SyncStatusRequest>
+                    for SyncStatusSvc<T> {
+                        type Response = super::SyncStatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SyncStatusRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::sync_status(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SyncStatusSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

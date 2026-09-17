@@ -9,7 +9,8 @@ use txtodo_proto::v1::{
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
     HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, SkewStatus,
-    TaskRef, TreeNode, UndoRequest, WatchRequest, mutation,
+    SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest, WatchRequest, mutation,
+    sync_status_response,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -197,4 +198,18 @@ fn device_messages_round_trip() {
         rotated_to_epoch: 3,
         message: "Rotated to key epoch 3.".into(),
     });
+}
+
+#[test]
+fn sync_status_messages_round_trip() {
+    round_trip(&SyncStatusRequest { workspace: None });
+    round_trip(&SyncStatusResponse {
+        peers: vec![sync_status_response::Peer {
+            device: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+            lag_ms: 400,
+        }],
+        pending_ops: 3,
+    });
+    // No peers, nothing pending — the empty case this RPC's own doc calls out.
+    round_trip(&SyncStatusResponse::default());
 }
