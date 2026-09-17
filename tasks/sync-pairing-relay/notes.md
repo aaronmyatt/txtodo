@@ -89,3 +89,37 @@ specifically.
 - The relay path never lets a device join a group without a matching nonce/code — a relay client
   guessing at random cannot pair itself in.
 - `txtodo doctor` reports which carrier a completed pairing actually used (LAN vs relay).
+
+## Bug fix: swallowed pairing-dial errors (2026-09-16)
+
+Doing an actual two-real-device pairing test by hand: `pairing_lan.rs::attempt` (LAN dial) and
+`pairing_relay_dial.rs::relay_attempt` (relay dial) swallowed every connect/send/recv failure with
+`.ok()?`, so a failed pairing round left literally nothing in the daemon log even at debug level —
+making a real cross-network pairing failure undiagnosable from the outside.
+
+Fixed: both now log a named `debug!()` line per failure point
+(`pairing_joiner_lan_connect_failed`, `pairing_joiner_relay_connect_failed`,
+`pairing_joiner_relay_no_rendezvous_in_offer`, `pairing_joiner_relay_endpoint_not_bound`,
+`pairing_joiner_lan_round_no_reply`, `pairing_joiner_relay_round_no_reply`). No behavior change.
+
+## As built (2026-09-14)
+
+Design decision (a): a nonce-gated `RelayEndpoint::connect_pairing` (`txtodo-sync`), no `GroupId`
+gate needed since `process_hello`'s existing nonce/group check is already carrier-agnostic.
+`pairing_grpc.rs` attaches the offering device's relay rendezvous to the offer when bound;
+`pairing_relay_dial.rs` (daemon) races LAN vs relay per joiner round; `relay.rs` dispatches
+`PAIRING_ALPN` connections to the same handler LAN uses; `txtodo doctor` reports which carrier a
+completed pairing used. Two real `txtodod` processes pair end to end over a real public relay with
+`--no-lan` on both (`tests/pairing_relay.rs`); a wrong-nonce relay dial is rejected and doesn't
+disturb the real offer; `tests/pairing_lan.rs` and `tests/pairing.rs` (cli) re-verified green, no
+regression.
+
+Found and fixed a real bug along the way: `run_joiner` previously bailed out entirely with no LAN
+endpoint at all, which would have made the relay path unreachable under `--no-lan` regardless of
+what the offer carried.
+
+**Doc-drift found and fixed 2026-09-16** (during `daemon-workspace-session-multiplex` stage 2,
+while answering "can two devices pair with no shared LAN today"): `relay.rs`'s own module doc and
+`txtodo-daemon/CLAUDE.md` still called real pairing-over-relay "sync-pairing-relay's own
+not-yet-built task" — stale since this landed. Both corrected to say it's done and name
+`pairing_grpc.rs`/`pairing_relay_dial.rs`.
