@@ -1,0 +1,4 @@
+2026-09-17 Decide the bundling approach: Tauri externalBin sidecar vs relying on the Homebrew cask's txtodod dependency (check Casks/txtodo-desktop.rb first — may already cover the Homebrew channel) +m11 @desktop @release @human
+2026-09-17 Implement the chosen approach +m11 @desktop @release
+2026-09-17 Test: fresh machine, no Rust toolchain, install only the desktop app through the chosen channel, daemon works on first launch +m11 @desktop @test
+2026-09-17 Complete the parent line in ../../todo.txt +m11 @desktop

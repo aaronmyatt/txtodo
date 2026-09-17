@@ -1,0 +1,9 @@
+2026-09-17 Extract ensure_daemon/probe_live/wait_until_live/SpawnGuard out of apps/desktop/src-tauri/src/daemon/spawn.rs into a new shared leaf crate, #[cfg(unix)] + stub, no txtodo-daemon dependency so txtodo-mcp can use it +m11 @daemon @human
+2026-09-17 Extend the shared crate: on the branch that spawns txtodod, also install+enable the persistent boot service (reuse crates/txtodo-cli/src/commands/service.rs::install/start), idempotent on an already-installed service +m11 @daemon @human
+2026-09-17 Wire crates/txtodo-tui/src/app.rs::async_main to the shared crate when wait_until_ready fails — supersedes tasks/tui-daemon-autostart's remaining wire/UX/test/docs lines, close those from here instead of duplicating +m11 @tui @daemon
+2026-09-17 Wire crates/txtodo-cli's daemon-required commands (the NEEDS_DAEMON path, commands/history.rs and siblings per main.rs:174-216) to ensure-then-retry instead of erroring immediately +m11 @cli @daemon
+2026-09-17 Wire crates/txtodo-mcp's connect path (grpc_backend.rs/main.rs) to the shared crate instead of assuming the daemon is already running +m11 @mcp @daemon
+2026-09-17 Migrate apps/desktop's own ensure_daemon call site onto the shared crate, dedupes the logic ADR 0025 already flagged as duplicated +m11 @desktop @daemon
+2026-09-17 Tests: per-client cold-start (no daemon, no service installed) connects without manual intervention; simulated-reboot case (service installed, process killed) recovers via the installed unit +m11 @daemon @test
+2026-09-17 Docs: fix crates/txtodo-tui/CLAUDE.md's stale "the TUI never spawns the daemon" line and any equivalent cli/mcp doc claims +m11 @docs
+2026-09-17 Complete the parent line in ../../todo.txt +m11 @daemon

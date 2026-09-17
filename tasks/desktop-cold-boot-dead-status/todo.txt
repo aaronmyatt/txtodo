@@ -1,0 +1,4 @@
+2026-09-17 lib.rs .setup()'s connect-error branch also calls set_status(.., DaemonStatus::Dead), mirroring retry_connect_inner +m11 @desktop
+2026-09-17 Fix the inaccurate doc comment at lib.rs:115-117 claiming Dead is already reflected +m11 @desktop @docs
+2026-09-17 Test: cold boot with txtodod missing from $PATH shows the dead banner immediately, no manual Retry needed to discover it +m11 @desktop @test
+2026-09-17 Complete the parent line in ../../todo.txt +m11 @desktop
