@@ -390,9 +390,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # `sign`'s own "signatures" artifact and the original `dist-*`/`bom` artifacts are
+          # separate uploads, so `download-artifact` (no `name:` filter, every artifact side by
+          # side under `artifacts/`) lands them in *different* directories: a bundle sits at
+          # artifacts/signatures/dist-<leg>/<file>.bundle while its real binary is one level up,
+          # at artifacts/dist-<leg>/<file> -- stripping just ".bundle" from the bundle's own path
+          # (as this step used to) looks for the binary in the wrong directory entirely. Strip the
+          # "signatures/" prefix too to recover the real path.
           # https://github.com/sigstore/cosign-installer
-          find artifacts -name '*.bundle' | while read -r bundle; do
-            f="${bundle%.bundle}"
+          find artifacts/signatures -name '*.bundle' | while read -r bundle; do
+            rel="${bundle#artifacts/signatures/}"
+            f="artifacts/${rel%.bundle}"
             cosign verify-blob \
               --certificate-identity-regexp "https://github.com/${GH_REPO}/.github/workflows/release.yml@refs/tags/.*" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
