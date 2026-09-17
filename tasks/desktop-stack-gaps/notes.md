@@ -35,3 +35,45 @@ use. Result: `commands.rs` 352 lines, `commands_ui_log.rs` 125. Both scripts exi
 
 The CI-wiring line stays open and `@human`-tagged, per the design questions above — nothing about
 those changed by fixing the mechanical half.
+
+## As built (2026-09-18, agent) — CI-coverage half closed
+
+Answered the three design questions this task's own `@human` tag flagged, per the overnight task
+brief that authorized this build (not re-litigated further):
+
+- **Node version**: 22, not the "else Node 20" fallback this task's own brief suggested —
+  `apps/desktop/package.json` has no `engines` field, but `.github/workflows/release.yml`'s
+  `build-desktop` job already pins Node 22 for this same app; matching that existing convention
+  beat introducing a second Node version for one more job.
+- **Playwright's browser download**: does NOT belong in the required PR gate. New
+  `.github/workflows/desktop-e2e-nightly.yml` (`on: schedule` daily at 07:00 UTC + `workflow_
+  dispatch`) runs the full suite (`npm run test:e2e` — both the six functional specs and the
+  light/dark visual-regression projects, `playwright.config.ts`'s own `projects` list) on that
+  separate cadence instead. No pre-existing nightly/scheduled workflow existed to extend, so this
+  is a new file, not an addition to one.
+- **Runner OS**: `ubuntu-latest` for the new required `desktop` job (cheaper; svelte-check/
+  vitest/build need no real macOS/Tauri runtime), reusing the same Tauri Linux system-dependency
+  apt-get list the `check` job already has (webkit2gtk/gtk/appindicator/etc — duplicated inline,
+  not factored into a composite step, matching this file's existing no-composite-actions style).
+  The nightly e2e workflow also runs on `ubuntu-latest` for the same reason, plus `npx playwright
+  install --with-deps` for the browsers themselves.
+
+**New required job**: `ci.yml`'s `desktop` job runs `npm ci`, `npm run check` (svelte-check),
+`npx vitest run`, `npm run build`, in that order. No aggregating "all jobs must pass" gate job
+exists anywhere in this repo (`ci.yml` has no such job, and there is no branch-protection-as-code
+file — `.github/` has only the two workflow files) for this new job to be added to; GitHub's own
+branch-protection required-checks list (configured outside this repo, in the GitHub UI/API) is
+what would need `desktop` added to it by whoever administers that — flagged here since this repo
+has no way to encode that itself.
+
+**Verification — what's real vs not**: every command the new `desktop` job runs was actually
+executed locally in this session against the real `apps/desktop` tree (after this session's own
+tray/pin/sidecar changes): `npm run check` (0 errors), `npx vitest run` (113 tests passing),
+`npm run build` (succeeds, static adapter output written). Both new workflow YAML files were
+syntax-checked (`python3 -c "import yaml; yaml.safe_load(...)"`), and mirror this repo's own
+existing job patterns closely. **What is NOT verified**: an actual GitHub Actions run of either
+workflow — the ubuntu-latest apt-get package list, `actions/setup-node@v4`'s Node 22 resolution,
+and (for the nightly workflow) `npx playwright install --with-deps` succeeding and the real e2e
+suite passing against a runner-built `e2e_bridge`/`txtodod`, are only provably correct once a real
+PR or a manual `workflow_dispatch` run exercises them. Flagging plainly per this task's own
+instruction: this cannot be verified as green without a real CI run.

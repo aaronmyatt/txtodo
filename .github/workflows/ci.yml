@@ -173,3 +173,43 @@ jobs:
           name: fuzz-artifacts
           path: crates/txtodo-core/fuzz/artifacts
           if-no-files-found: ignore
+
+  # task desktop-stack-gaps (root todo.txt id:01M2Q3DESKTOPSTACKGAPS0001): apps/desktop had zero
+  # CI coverage at all — no step ran svelte-check, vitest, or even built it, so a broken frontend
+  # or a failing unit test never failed a PR. ubuntu-latest (cheaper than macOS): nothing this job
+  # does needs a real macOS/Tauri runtime — svelte-check/vitest/build all run against plain
+  # Node + the SvelteKit static adapter, same as a contributor's own machine. The Linux Tauri
+  # system deps below are only pulled in because `npm run build`/`svelte-check` still resolve
+  # `apps/desktop/src-tauri`'s own `Cargo.toml` via the vite/tauri tooling's config validation;
+  # mirrors the `check` job's own "Install system dependencies (Ubuntu)" step verbatim (kept as a
+  # duplicate, not factored into a reusable/composite step, matching this file's existing
+  # per-job style — no composite actions are used anywhere else in this workflow).
+  # Deliberately does NOT run the Playwright e2e/visual suite (see desktop-e2e-nightly.yml
+  # instead): browser downloads are heavy and this file is described as cost-frozen.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies (Ubuntu, Tauri Linux prerequisites)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev pkg-config
+      # apps/desktop/package.json has no "engines" field; Node 22 matches the version already
+      # pinned in this same workflow file's sibling release.yml's build-desktop job, rather than
+      # introducing a second Node version for this one app.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: npm ci
+        working-directory: apps/desktop
+        run: npm ci
+      - name: svelte-check
+        working-directory: apps/desktop
+        run: npm run check
+      - name: vitest
+        working-directory: apps/desktop
+        run: npx vitest run
+      - name: build (svelte-kit + static adapter)
+        working-directory: apps/desktop
+        run: npm run build
