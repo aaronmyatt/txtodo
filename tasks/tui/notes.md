@@ -195,3 +195,23 @@ before this — net new coverage for the sibling RPC too.
 
 Root todo.txt's `ref:tui` line stays open: TUI-side wiring (`daemon.rs`'s `Daemon::sync_status()`,
 `app.rs`'s periodic tick) is the last remaining piece, tracked as this file's own item 1.
+
+## TUI-side wiring shipped (2026-09-18) — epic closed
+
+`daemon.rs::Daemon::sync_status` (thin wrapper, same shape as `list_conflicts`/`resolve`) +
+`app.rs`'s 1 s tick (`SYNC_STATUS_INTERVAL`, its own `tokio::select!` arm) refreshing
+`AppState.sync` via `to_sync_snapshot`. Adding the third `select!` arm pushed `run_loop_inner`
+over its cognitive-complexity budget; fixed by extracting the `Watch`-message branch into its own
+`handle_watch_message` function (mirroring `handle_input`'s existing split), not by cutting scope.
+
+New `tests/sync_status.rs`: `Daemon::sync_status` round-trips against a real `txtodod` with no
+peers — proves the whole proto→daemon→tui chain works end to end for the case this session could
+reach without a real two-daemon pairing harness (which this crate's `tests/support` doesn't have
+yet). `crates/txtodo-tui/CLAUDE.md` updated to drop the stale "not yet wired"/"known gap" framing.
+
+Root todo.txt's `ref:tui` line and this file's own "Complete the parent line" line are both closed.
+Genuinely still open, both narrower and separately scoped: seeding a real `needs_review` flag for
+an integration test (needs `txtodo_store` directly, outside `allowedDeps`) and a real
+two-loopback-daemon *pairing* test for the `s` indicator (needs a pairing-driving harness this
+crate's tests don't have — `crates/txtodo-daemon`'s own `pairing_lan.rs` tests are the template if
+someone picks this up).

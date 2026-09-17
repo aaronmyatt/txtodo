@@ -5,12 +5,13 @@
 //! setup is cheaper than a new shared crate for the workspace boundary (allowedDeps["txtodo-tui"]
 //! is `[txtodo-core, txtodo-proto]` only — no new member).
 //!
-//! **Known gap:** `SyncStatus` (design §7's `s` indicator RPC) does not exist on the wire yet —
-//! adding it needs a `crates/txtodo-proto` schema change and a `crates/txtodo-daemon` handler,
-//! both outside this crate's slice (this session's edit fence allows exactly one crate; see the
-//! worktree's own report for the follow-up task). `AppState.sync` is therefore never populated
-//! from a real daemon today; `ui/sync.rs` still renders whatever is in it (design §3.3: colours
-//! are never the only signal, and here the signal is simply absent until that RPC lands).
+//! `SyncStatus` (design §7's `s` indicator RPC, tasks/tui) is wired below via
+//! [`Daemon::sync_status`] — `app.rs` polls it on a periodic tick to keep `AppState.sync`
+//! current; `ui/sync.rs` needed no changes, it already rendered whatever was in that field.
+//! **Known gap, not this crate's to fix**: the daemon's own `lag_ms` currently reads as "time
+//! since this peer was paired", not "time since it was last actually reached" — see
+//! `crates/txtodo-daemon/src/devices_grpc.rs::sync_status_impl`'s own doc comment and
+//! `tasks/tui/notes.md` for the full account.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -193,6 +194,13 @@ impl Daemon {
         req: pb::ResolveRequest,
     ) -> Result<pb::ApplyResponse, DaemonError> {
         Ok(self.inner.resolve_conflict(req).await?.into_inner())
+    }
+
+    /// Peers and an approximate pending-ops count for the `s` indicator (design §7); polled on a
+    /// tick by `app.rs`, not a stream — same one-shot-per-call shape as `list_conflicts`.
+    pub async fn sync_status(&mut self) -> Result<pb::SyncStatusResponse, DaemonError> {
+        let req = pb::SyncStatusRequest { workspace: None };
+        Ok(self.inner.sync_status(req).await?.into_inner())
     }
 }
 

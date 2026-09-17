@@ -2,9 +2,9 @@
 
 ## Purpose
 The ratatui client: vim keys, live sync indicator, conflict review (plan M10, design §7).
-Built 2026-09-13. **Not yet wired to real users**: `main()` runs a real event loop against a real
-daemon, but `SyncStatus` (the `s` indicator's live data) doesn't exist on the wire yet — see
-Invariants below for the exact gap and why.
+Built 2026-09-13; the sync indicator's `SyncStatus` RPC (proto, daemon handler, and this crate's
+own `app.rs`/`daemon.rs` wiring) landed 2026-09-18 across three slice-fenced sessions — see
+Invariants below for the one real gap that RPC surfaced but did not fix.
 
 ## Public interface
 - `paint::{paint_line, token_style}` — `TokenKind` -> styled `ratatui::text::Line`/`Span`
@@ -24,42 +24,48 @@ Invariants below for the exact gap and why.
 - `daemon::{Daemon, DaemonError, socket_path, MAX_RECONNECT_ATTEMPTS}` — the gRPC bridge to
   `txtodod` over the ADR 0010 unix socket (mirrors `apps/desktop/src-tauri/src/daemon.rs`'s
   `DaemonClient`): `connect`/`wait_until_ready`/`get_file`/`watch`/`apply`/`list_conflicts`/
-  `resolve`. **No `sync_status` method** — see Invariants.
+  `resolve`/`sync_status`.
 - `input::Input` — pure vim-key dispatch (`AppState` + one `KeyEvent` -> an optional
   `action::Action`), daemon-free and fully unit tested; `app::{run, perform, reconnect_watch,
   main}` is the async glue that actually sends an `Action` to a real `Daemon` and drives the
-  terminal.
-- Tests: 43 unit tests (`cargo test -p txtodo-tui --lib`) covering every module above against
-  `AppState::fixture()`/hand-built drafts, no daemon needed. 7 integration tests
-  (`tests/roundtrip.rs`, `tests/external_edit.rs`) spawn a real `txtodod` (via `tests/support`,
-  which locates/builds `target/debug/txtodod` by path since `CARGO_BIN_EXE_txtodod` is only set
-  for a binary in its *own* package) and drive `Daemon`/`app::perform`/`app::reconnect_watch`
-  directly: `dd`/`Space`/`i`+save round-trip through `Apply` and are visible on a real `Watch`
-  stream; an external file write appears on `Watch` without a manual refresh; a dropped `Watch`
-  reconnects (bounded) and re-baselines; reconnecting past the bound with no daemon at all fails
-  rather than looping forever.
+  terminal. `app.rs` also polls `Daemon::sync_status` on a 1 s tick (`SYNC_STATUS_INTERVAL`),
+  mapping the response into `AppState.sync` via `to_sync_snapshot` — best-effort: a failed poll
+  leaves the previous snapshot in place rather than erroring the event loop.
+- Tests: 48 unit tests (`cargo test -p txtodo-tui --lib`) covering every module above against
+  `AppState::fixture()`/hand-built drafts, no daemon needed. 8 integration tests
+  (`tests/roundtrip.rs`, `tests/external_edit.rs`, `tests/sync_status.rs`) spawn a real `txtodod`
+  (via `tests/support`, which locates/builds `target/debug/txtodod` by path since
+  `CARGO_BIN_EXE_txtodod` is only set for a binary in its *own* package) and drive
+  `Daemon`/`app::perform`/`app::reconnect_watch` directly: `dd`/`Space`/`i`+save round-trip
+  through `Apply` and are visible on a real `Watch` stream; an external file write appears on
+  `Watch` without a manual refresh; a dropped `Watch` reconnects (bounded) and re-baselines;
+  reconnecting past the bound with no daemon at all fails rather than looping forever;
+  `sync_status` round-trips against a real daemon with no peers (the two-loopback-daemon,
+  real-peer version of this test is still open — `tasks/tui/todo.txt`).
 
 ## Invariants
 - Thin client: talks to the daemon, never parses the file — every byte painted comes from
   `GetFile`/`Watch`; the only file-shaped work done in-process is `txtodo_core::tokenize` for
   colouring (design §7 explicitly allows this: "identical token boundaries everywhere").
 - Every buffer change is an `Apply`; this crate never writes `todo.txt` itself.
-- **Known gap, not silently dropped:** design's `s` indicator calls for a `rpc SyncStatus`
-  (`SyncStatusResponse{ peers, pending_ops }`) that does not exist in `crates/txtodo-proto` yet,
-  and a daemon-side handler that doesn't exist in `crates/txtodo-daemon` yet. Adding both needs
-  edits outside this crate — this session's edit fence (`.claude/hooks/fence.sh`, "one slice per
-  session") allows exactly one crate per session, and `txtodo-tui` was it. `ui/sync.rs` is fully
-  built and tested against a `SyncSnapshot` fixture (`state.rs`'s own UI-local mirror of the
-  future wire shape, deliberately *not* the generated `pb` type, so this crate needed no proto
-  change to build); `AppState.sync` is simply never populated by `app.rs` today. Follow-up task:
-  add `SyncStatus` (+ the `Tokenizer`/`Complete` messages `tasks/tui/notes.md` bundles with it,
-  for `editor-plugins`) to the proto in a `txtodo-proto`-slice session, a handler in a
-  `txtodo-daemon`-slice session, then wire `Daemon::sync_status` + a 1 s tick in `app.rs` here.
-  The same fence blocked seeding a real `needs_review` conflict flag for an integration test
-  (`crates/txtodo-daemon/tests/grpc.rs::raise_flag` needs `txtodo_store` directly, out of
-  `allowedDeps`) and a real two-daemon LAN-sync convergence test for the `s` indicator (needs the
-  same missing `SyncStatus` RPC) — both `ui::conflicts`/`ui::sync`'s own logic is unit tested
-  against fixtures instead.
+- **`SyncStatus` shipped 2026-09-18** across three slice-fenced sessions (proto message +
+  RPC, `crates/txtodo-daemon/src/devices_grpc.rs::sync_status_impl`, then this crate's own
+  `Daemon::sync_status` + `app.rs`'s 1 s tick). `ui/sync.rs` needed zero changes — it was already
+  built and tested against `state.rs`'s `SyncSnapshot` fixture type, deliberately kept separate
+  from the generated `pb` type so this crate never needed the proto change just to build.
+  **Known gap the daemon handler surfaced, not fixed by it:** a device's `last_seen_ms` is set
+  once at pairing registration and never advanced by any real sync session anywhere in
+  `txtodo-daemon` — so every peer's `lag_ms` here currently reads as "time since it was paired",
+  not "time since it was last actually reached". See `devices_grpc.rs::sync_status_impl`'s own
+  doc comment and `tasks/tui/notes.md` for the full account; a follow-up task is spawned to wire a
+  real touch on session success.
+  Still blocked by the same "seeding needs an out-of-`allowedDeps` crate" reasoning: a real
+  `needs_review` conflict flag for an integration test (`crates/txtodo-daemon/tests/grpc.rs::
+  raise_flag` needs `txtodo_store` directly) and a real two-loopback-daemon *pairing* test for the
+  `s` indicator (the RPC itself is now proven end to end against a real daemon with no peers,
+  `tests/sync_status.rs` — what's still open is driving a real pairing handshake between two real
+  daemons in this crate's own test harness) — both `ui::conflicts`/`ui::sync`'s own logic stay
+  unit tested against fixtures for the peer-bearing case.
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-core, txtodo-proto (external: ratatui, crossterm, tonic, tokio,
   hyper-util, tower, jiff — same socket-dial set `txtodo-cli` already carries, `cargo deny check`
