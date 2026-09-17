@@ -33,6 +33,19 @@ Before looping, thin or missing detail is a blocker, not something to improvise 
   hesitate to add one rather than cramming a plan into the root line's text.
 - Skip this pass entirely for lines that are already well-specified (a `ref:` whose todo.txt
   already has concrete, actionable sub-lines) — don't rewrite work that's already planned.
+- **Once a line carries `ref:`, its own text is a pointer, not the spec.** Per
+  `txtodo-design.md` §2.6, "a task that needs more than one line gets a directory, not a richer
+  line" — that rule applies to length, not just syntax. A root/parent line should read as one
+  short clause (what + rough where); the brief, rationale, constraints ("leave X alone because
+  Y"), and any sub-spec (a sink matrix, a schema, an API shape) belong in `tasks/<slug>/notes.md`
+  as a `## Goal`/`## Design` section, with each independently-doable piece as its own line in
+  `tasks/<slug>/todo.txt` — not folded into one paragraph on the parent line. If a task arrives
+  as a long pasted brief, treat splitting it this way as part of step 2, not an optional tidy-up.
+  Bad: a 40-word parent line reciting file:line targets, a "leave println! alone" caveat, and a
+  sink-matrix spec inline. Good: parent line = `txtodo-cli: cli.command span + eprintln! cleanup
+  ref:logging-cli`; the caveat, targets, and sink matrix live in `tasks/logging-cli/notes.md`;
+  "add cli.command span", "convert 3 eprintln!s", "wire sink matrix" are separate
+  `tasks/logging-cli/todo.txt` lines.
 
 ## 3. Loop top to bottom
 
@@ -57,6 +70,9 @@ before moving on to the next top-level line:
 5. **Close**: `todo_complete` the line, then `todo_edit` (append) a one-line summary in the
    existing style — what shipped, and any known gap named honestly rather than left implicit, e.g.
    `— real device-to-device pairing works; known gap: no shared identity across LAN/relay yet`.
+   If the line carries `ref:`, that summary is one clause pointing at the notes (`— see
+   tasks/<slug>/notes.md`), never a re-enumeration of what each sub-line did — that's already
+   recorded in the sub-backlog's own completed lines and in notes.md's `## As built` section.
    Drop the `@doing`/`by:` claim tags first if `todo_complete` doesn't already clear them.
 6. If closing this line finished every task under a `ref:<slug>` sub-backlog, go close or update
    the *root* line pointing at it too — finishing everything inside `tasks/<slug>/todo.txt` does
