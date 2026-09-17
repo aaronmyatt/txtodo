@@ -8828,6 +8828,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "txtodo-daemon-launch"
+version = "0.0.1"
+dependencies = [
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "txtodo-ffi"
 version = "0.0.1"
 dependencies = [

@@ -46,15 +46,18 @@
         "txtodo-store"
       ],
       "txtodo-proto": [],
+      "txtodo-daemon-launch": [],
       "txtodo-mcp": [
         "txtodo-proto",
         "txtodo-query",
-        "txtodo-telemetry"
+        "txtodo-telemetry",
+        "txtodo-daemon-launch"
       ],
       "txtodo-cli": [
         "txtodo-core",
         "txtodo-proto",
-        "txtodo-telemetry"
+        "txtodo-telemetry",
+        "txtodo-daemon-launch"
       ],
       "txtodo-daemon": [
         "txtodo-core",
@@ -70,7 +73,8 @@
       "txtodo-tui": [
         "txtodo-core",
         "txtodo-proto",
-        "txtodo-telemetry"
+        "txtodo-telemetry",
+        "txtodo-daemon-launch"
       ],
       "txtodo-ffi": [
         "txtodo-core",
@@ -81,7 +85,8 @@
         "txtodo-proto",
         "txtodo-telemetry",
         "txtodo-store",
-        "txtodo-model"
+        "txtodo-model",
+        "txtodo-daemon-launch"
       ]
     },
     "unfrozen-until-m1-done": "crates/txtodo-core/**",

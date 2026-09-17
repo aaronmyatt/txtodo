@@ -1,0 +1,21 @@
+[package]
+name = "txtodo-daemon-launch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Shared 'make sure txtodod exists' logic: ad-hoc spawn-if-absent plus best-effort persistent-service install/start, used by every client (cli, tui, mcp, desktop) so none of them duplicate it (task daemon-always-available)."
+
+[lints]
+workspace = true
+
+[dependencies]
+# https://docs.rs/tokio — async runtime for the spawn/probe logic (UnixStream liveness probe,
+# sleep between retries) and for the file-lock's spawn_blocking hop.
+tokio = { version = "1", features = ["net", "time", "process", "fs", "rt", "sync"] }
+
+[dev-dependencies]
+# https://docs.rs/tempfile — every test gets its own on-disk socket dir, no shared global state.
+tempfile = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
