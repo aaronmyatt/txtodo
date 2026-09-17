@@ -7,7 +7,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // this binary's only human output path (matches txtodod's main.rs)
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -89,6 +89,25 @@ fn usage() -> String {
         .to_owned()
 }
 
+/// Best-effort daemon autostart before dialing `socket` (task `daemon-always-available`, item 5):
+/// builds whichever `LaunchConfig` shape matches this run's `Target` (a legacy `--dir <workspace>`
+/// bridge daemon, or the ADR 0025 global daemon) and calls `ensure_daemon`. The `Result` is
+/// deliberately discarded: the `GrpcMcpBackend::connect_unix` call right after this is the real,
+/// honest failure path, and its `ConnectError` ("is txtodod running?") stays the accurate message
+/// to show when even this best-effort spawn couldn't produce a reachable daemon (e.g. no `txtodod`
+/// anywhere on `$PATH` in this environment). Split out of `run` to keep it under this crate's
+/// function-length/complexity budgets (`.claude/budgets.json`: 60 lines, cognitive complexity 10).
+async fn ensure_daemon_for_target(target: &Target, socket: &Path) {
+    if txtodo_daemon_launch::autostart_disabled() {
+        return;
+    }
+    let cfg = match target {
+        Target::Dir(dir) => txtodo_daemon_launch::LaunchConfig::new(socket).with_dir(dir),
+        Target::Global => txtodo_daemon_launch::LaunchConfig::new(socket),
+    };
+    let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
+}
+
 fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(a) => a,
@@ -131,6 +150,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
+    ensure_daemon_for_target(&args.target, &socket).await;
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
     let server = McpServer::new(Arc::new(backend));
     match args.mode {

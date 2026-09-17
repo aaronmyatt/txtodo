@@ -63,6 +63,9 @@ mdns-sd = "0.21"
 # logging-mcp-call-span). `txtodo-mcp` is a leaf-adjacent binary crate: `.claude/budgets.json`'s
 # `allowedDeps` lists this alongside txtodo-proto/txtodo-query.
 txtodo-telemetry = { path = "../txtodo-telemetry" }
+# Shared spawn-if-absent logic (task daemon-always-available): main.rs ensures a daemon exists
+# (matching whichever target — --dir bridge or --global) before dialing it.
+txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — scratch unix sockets for the in-process transport smoke test.
