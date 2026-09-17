@@ -12,6 +12,9 @@ fn txtodo(dir: &Path, args: &[&str]) -> bool {
         .current_dir(dir)
         .env_remove("TXTODO_TODO_DIR")
         .env("TXTODO_CONFIG", dir.join("none.toml"))
+        // Isolates from any ambient *global* daemon on the machine running this suite (see
+        // `tests/daemon_mode.rs::txtodo`'s own comment on this exact hazard).
+        .env("XDG_DATA_HOME", dir.join(".global-home"))
         .arg("--no-id")
         .args(args)
         .status()

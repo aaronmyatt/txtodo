@@ -82,6 +82,10 @@ fn txtodo(dir: &Path, args: &[&str]) -> Output {
         .env_remove("TXTODO_TODO_DIR")
         .env("TXTODO_CONFIG", dir.join("none.toml"))
         .env("EDITOR", "true")
+        // Isolates from any ambient *global* daemon on the machine running this suite (see
+        // `tests/daemon_mode.rs::txtodo`'s own comment on this exact hazard): this test relies on
+        // the per-dir bridge daemon `Daemon::spawn` starts, never a real, shared global one.
+        .env("XDG_DATA_HOME", dir.join(".global-home"))
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("txtodo: {e}"))

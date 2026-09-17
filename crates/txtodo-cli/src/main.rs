@@ -11,6 +11,7 @@ mod client_workspace;
 mod clock;
 mod commands;
 mod config;
+mod daemon_ensure;
 mod daemon_mode;
 mod error;
 mod json;
@@ -89,6 +90,9 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         _ => {}
     }
     match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
+        client::Mode::Direct if daemon_ensure::needs_daemon(&cli.command) && !cli.no_daemon => {
+            daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)
+        }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => dispatch_daemon(&ctx, &mut daemon, &cli.command),
     }
@@ -235,19 +239,7 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Daemon { .. }
         | Command::Mcp { .. }
         | Command::Skill { .. } => unreachable!("handled before mode selection"),
-        Command::Log { .. }
-        | Command::Blame { .. }
-        | Command::Undo { .. }
-        | Command::Checkout { .. }
-        | Command::Conflicts { .. }
-        | Command::Pair { .. }
-        | Command::Open { .. }
-        | Command::Notes { .. }
-        | Command::Sub { .. }
-        | Command::Prune { .. }
-        | Command::Device { .. }
-        | Command::Workspace { .. }
-        | Command::Bundle { .. } => Err(needs_daemon_err()),
+        c if daemon_ensure::needs_daemon(c) => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),
         Command::Append { item, text } => {
@@ -287,6 +279,10 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
                 commands::list::list_file(ctx, &path, terms)
             }
         },
+        // Unreachable in practice: every variant is handled by an arm above, either the
+        // `needs_daemon` guard or an explicit one — a guard is not itself proof of exhaustiveness
+        // to the compiler, so this wildcard exists only to satisfy it.
+        _ => unreachable!("every Command variant is handled by an arm above"),
     }
 }
 

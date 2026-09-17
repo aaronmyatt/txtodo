@@ -9,7 +9,11 @@ fn txtodo(dir: &Path, args: &[&str]) -> Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_txtodo"));
     cmd.current_dir(dir)
         .env_remove("TXTODO_TODO_DIR")
-        .env("TXTODO_CONFIG", dir.join("none.toml"));
+        .env("TXTODO_CONFIG", dir.join("none.toml"))
+        // Isolates from any ambient *global* daemon on the machine running this suite (see
+        // `tests/daemon_mode.rs::txtodo`'s own comment on this exact hazard) — this file only
+        // ever wants direct-file mode, never a real, shared daemon.
+        .env("XDG_DATA_HOME", dir.join(".global-home"));
     cmd.args(args)
         .output()
         .unwrap_or_else(|e| panic!("txtodo runs: {e}"))
@@ -50,6 +54,7 @@ fn add_stamps_id_when_tagged_mode_is_configured_and_no_id_still_skips_it() {
     let out = Command::new(env!("CARGO_BIN_EXE_txtodo"))
         .current_dir(dir.path())
         .env("TXTODO_CONFIG", dir.path().join("cfg.toml"))
+        .env("XDG_DATA_HOME", dir.path().join(".global-home"))
         .args(["add", "(b)", "call", "mum", "+family"])
         .output()
         .unwrap_or_else(|e| panic!("{e}"));
@@ -69,6 +74,7 @@ fn add_stamps_id_when_tagged_mode_is_configured_and_no_id_still_skips_it() {
     Command::new(env!("CARGO_BIN_EXE_txtodo"))
         .current_dir(dir.path())
         .env("TXTODO_CONFIG", dir.path().join("cfg.toml"))
+        .env("XDG_DATA_HOME", dir.path().join(".global-home"))
         .args(["--no-id", "a", "second"])
         .output()
         .unwrap_or_else(|e| panic!("{e}"));
@@ -86,6 +92,7 @@ fn addm_adds_one_task_per_line_and_config_can_disable_ids() {
     let out = Command::new(env!("CARGO_BIN_EXE_txtodo"))
         .current_dir(dir.path())
         .env("TXTODO_CONFIG", dir.path().join("cfg.toml"))
+        .env("XDG_DATA_HOME", dir.path().join(".global-home"))
         .args(["addm", "first\n(A) second"])
         .output()
         .unwrap();

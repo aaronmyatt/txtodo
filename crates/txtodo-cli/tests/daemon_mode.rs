@@ -77,6 +77,31 @@ fn txtodo(dir: &Path, args: &[&str]) -> Output {
         .current_dir(dir)
         .env_remove("TXTODO_TODO_DIR")
         .env("TXTODO_CONFIG", dir.join("none.toml"))
+        // `config::global_socket_path`'s own fallback chain means an ambient *global* daemon on
+        // whatever machine runs this suite (e.g. a real desktop app the developer has open) would
+        // otherwise be found by `client::select` ahead of this file's own per-dir bridge daemons —
+        // silently registering an ephemeral test workspace into a real, shared registry. Pointing
+        // `XDG_DATA_HOME` at a location under this test's own fresh tempdir guarantees no global
+        // socket/registry can ever exist there, independent of the real machine's own state.
+        .env("XDG_DATA_HOME", dir.join(".global-home"))
+        .args(args)
+        .output()
+        .unwrap_or_else(|e| panic!("txtodo: {e}"))
+}
+
+/// Like [`txtodo`], but with `$TXTODO_NO_AUTOSTART=1` (task `daemon-always-available`): opts out
+/// of `main.rs`'s ensure-then-retry wiring, so a NEEDS_DAEMON command with no daemon reachable
+/// still fails immediately with the honest message, the same as the whole crate did before that
+/// task — used by the two tests below that specifically document that fallback still exists,
+/// rather than exercising the new default-on autostart (which a real, discoverable `txtodod` on
+/// this machine's own `$PATH` would otherwise make succeed instead of fail).
+fn txtodo_no_autostart(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(dir)
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", dir.join("none.toml"))
+        .env("XDG_DATA_HOME", dir.join(".global-home"))
+        .env("TXTODO_NO_AUTOSTART", "1")
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("txtodo: {e}"))
@@ -179,14 +204,20 @@ fn a_direct_write_is_reconciled_as_an_external_edit() {
 
 #[test]
 fn history_commands_without_a_daemon_say_so() {
+    // Task `daemon-always-available`: by default the CLI now tries to ensure a daemon before
+    // giving up, so this documents the fallback (`$TXTODO_NO_AUTOSTART=1`) rather than the old
+    // always-fails-immediately behavior — see `txtodo_no_autostart`'s own doc.
     let dir = tempfile::tempdir().unwrap();
-    let out = txtodo(dir.path(), &["log"]);
+    let out = txtodo_no_autostart(dir.path(), &["log"]);
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("needs the daemon"));
 }
 
 #[test]
 fn conflicts_without_a_daemon_say_so() {
+    // See `history_commands_without_a_daemon_say_so`'s comment: `$TXTODO_NO_AUTOSTART=1` opts out
+    // of task `daemon-always-available`'s ensure-then-retry so this still proves the honest
+    // fallback message, rather than a real `txtodod` on this machine's `$PATH` making it succeed.
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
     // Both subcommands are daemon-only: a flag lives in the store, never in the file.
@@ -194,7 +225,7 @@ fn conflicts_without_a_daemon_say_so() {
         &["conflicts"] as &[&str],
         &["conflicts", "resolve", "1", "mine"],
     ] {
-        let out = txtodo(dir.path(), args);
+        let out = txtodo_no_autostart(dir.path(), args);
         assert!(!out.status.success(), "{args:?} must fail");
         assert!(
             String::from_utf8_lossy(&out.stderr).contains("needs the daemon"),

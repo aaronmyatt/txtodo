@@ -14,6 +14,10 @@ path = "src/main.rs"
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true
+# Shared spawn-if-absent + best-effort service install/start (task daemon-always-available):
+# client::select's NEEDS_DAEMON path ensures a daemon exists before giving up, and
+# commands/service.rs calls into its `service` module for the render/install/start logic.
+txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
 # JSON-rolling-file + pretty-stderr tracing init, shared with every other txtodo binary (root
 # todo.txt `logging-cli`; `.claude/budgets.json`'s `allowedDeps` lists this for the cli slice).
 # Used only when $TXTODO_LOG is set — see `main.rs::init_telemetry` for the CLI's own sink matrix.
