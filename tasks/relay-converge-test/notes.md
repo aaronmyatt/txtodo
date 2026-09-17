@@ -136,6 +136,36 @@ clippy -p txtodo-daemon --all-targets -- -D warnings` clean; full `cargo test -p
 `lan_session.rs` visibility bump or the new modules).
 
 **Not done, left open** (see the root `todo.txt` parent line's own note for the precise remaining
-scope): a real network-namespace run; hole-punch-vs-relay-forwarding path introspection (todo.txt
-item 4 — needs an iroh-facing signal `txtodo-sync` does not currently expose); wiring real `txtodod`
-processes to actually run *inside* the netns `netns.sh` creates, in CI.
+scope): a real network-namespace run; wiring real `txtodod` processes to actually run *inside* the
+netns `netns.sh` creates, in CI.
+
+## As built (2026-09-17, agent) — hole-punch introspection, and a real, honest result
+
+Built the iroh-facing signal the note above said didn't exist: `ConnPath`
+(`crates/txtodo-sync/src/holepunch.rs`), composed from iroh 1.2.0's `Endpoint::remote_info` and the
+active `TransportAddr` — this iroh version exposes no single `ConnType`/`ConnectionType` enum the
+way some older releases did, so `Direct`/`Relayed`/`Unknown` is derived from whichever address
+`TransportAddrUsage::Active` names. Every `RelayEndpoint::connect` now logs
+`relay_connect_established` with this value.
+
+Wired into `relay_converge.rs`'s real two-process test (`b`, the `--relay-dial-peer` dialer, is the
+side with the log) and run for real, twice: **`Relayed` both times**, reproducibly. Not the "punch
+succeeded" case the todo.txt line's own title assumed — a real, honest finding, not a bug in the
+introspection: the check happens immediately after `connect()` returns, and iroh's hole-punch
+upgrade from an initial relay-established connection to a direct path happens asynchronously
+afterward (matching `holepunch_tests.rs`'s own ignored same-process test's debug-log evidence:
+"direct LAN path... selected `Available`" only shows up well after connection establishment, not at
+it). A one-shot snapshot right at connect-time structurally cannot observe a transition that hasn't
+happened yet, whether or not one eventually would.
+
+**Deliberately not resolved this pass**: whether polling `ConnPath` over a bounded window after
+connect would ever observe an upgrade to `Direct` in this sandbox is a real, different question —
+filed as its own line (`id:01M2Q4RELAYPUNCHPOLL00001`) rather than answered speculatively. The
+parent `todo.txt` line stays open because of it; everything else blocking that line is now either
+closed for real or `@human`-gated on the already-prepared `RELAY_CONVERGE_CI.patch.md` landing.
+
+Verified: `cargo test -p txtodo-sync` (183 passed, 3 pre-existing ignores, no new ones), `cargo test
+-p txtodo-daemon --test relay_converge` (5 passed, including the two real ones above),
+`cargo clippy -p txtodo-sync -p txtodo-daemon --all-targets -- -D warnings` and
+`cargo fmt --check` both clean (one `cognitive_complexity` hit from the added log call, fixed the
+same way `mutation.rs::log_mutation_ops` already establishes: split into its own small fn).

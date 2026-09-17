@@ -168,6 +168,24 @@ async fn two_real_daemons_converge_via_relay_with_lan_disabled() {
 
     wait_for_relay_convergence(&mut a, &mut b, "a-to-b").await;
     assert_eq!(a.daemon_bytes().await, b.daemon_bytes().await);
+
+    // todo.txt item 1 (`ConnPath`, `crates/txtodo-sync/src/holepunch.rs`): b is the dialer
+    // (`--relay-dial-peer`), so its own log carries the `relay_connect_established` event this
+    // ticket's introspection logs. Printed rather than hard-asserted to `Direct`: whether two
+    // processes on one host's loopback hole-punch a direct path or stay relayed is a property of
+    // this sandbox's own network stack, not something this test controls — see this file's module
+    // doc for the same reasoning applied to the LAN-vs-relay boundary probe below.
+    let log = b.log_tail();
+    let path = log
+        .lines()
+        .find(|l| l.contains("relay_connect_established"))
+        .and_then(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .map(|v| v["fields"]["path"].to_string());
+    eprintln!("relay-converge-test[a-to-b]: dialer's connection path = {path:?}");
+    assert!(
+        path.is_some(),
+        "b's log has no relay_connect_established event at all\n--- b's log ---\n{log}"
+    );
 }
 
 /// todo.txt items 8/9 (design §4.6, "the relay learns nothing"): a blob sealed with the real

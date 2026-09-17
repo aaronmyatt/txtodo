@@ -9,7 +9,7 @@
 
 use std::fmt;
 
-use iroh::endpoint::{ConnectError, ConnectingError};
+use iroh::endpoint::{ConnectError, ConnectingError, TransportAddrUsage};
 use iroh::{EndpointAddr, RelayUrl};
 
 use crate::lan_link::IrohLink;
@@ -60,6 +60,48 @@ impl fmt::Display for HolepunchError {
 }
 
 impl std::error::Error for HolepunchError {}
+
+/// Which physical path a relay-configured connection is using right now — `relay-converge-test`
+/// item 1's own ask ("assert convergence came via direct QUIC, not relay forwarding"), which
+/// needed exactly this: iroh itself decides hole-punch vs. relay-forwarding internally and
+/// exposes no single `ConnType` enum for it (unlike older `iroh` releases) — this is composed
+/// from `Endpoint::remote_info`'s currently-active `TransportAddr` instead. A snapshot, not a
+/// permanent property (`RemoteInfo`'s own doc: "may already be outdated by the time you are
+/// reading this") — a punch that later degrades to relay, or vice versa, would read differently
+/// on a second call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnPath {
+    /// The active address is a direct IP path — the hole-punch succeeded.
+    Direct,
+    /// The active address is the relay — no direct path is in use right now.
+    Relayed,
+    /// `remote_info` returned nothing (endpoint closed, or the remote is unknown to it yet), or no
+    /// address reports `Active` — genuinely undetermined, never guessed as one or the other.
+    Unknown,
+}
+
+/// Composes [`ConnPath`] for `connection`'s remote, as `endpoint` currently sees it.
+async fn conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Connection) -> ConnPath {
+    let Some(info) = endpoint.remote_info(connection.remote_id()).await else {
+        return ConnPath::Unknown;
+    };
+    match info
+        .addrs()
+        .find(|a| matches!(a.usage(), TransportAddrUsage::Active))
+    {
+        Some(a) if a.addr().is_relay() => ConnPath::Relayed,
+        Some(a) if a.addr().is_ip() => ConnPath::Direct,
+        _ => ConnPath::Unknown,
+    }
+}
+
+/// One event per successful [`RelayEndpoint::connect`], naming which path it's using right now —
+/// split out of `connect` purely to keep clippy's `cognitive_complexity` under this crate's budget
+/// (the same reason `crates/txtodo-daemon/src/mutation.rs`'s `log_mutation_ops` is its own fn).
+async fn log_conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Connection) {
+    let path = conn_path(endpoint, connection).await;
+    tracing::info!(path = ?path, "relay_connect_established");
+}
 
 /// A relay-configured endpoint, plus what a caller needs to dial or accept peers over it. One per
 /// daemon, same lifetime shape as `LanEndpoint`.
@@ -150,6 +192,7 @@ impl RelayEndpoint {
             .connect(target, crate::endpoint::ALPN)
             .await
             .map_err(HolepunchError::Connect)?;
+        log_conn_path(&self.endpoint, &connection).await;
         let (send, recv) = connection
             .open_bi()
             .await
