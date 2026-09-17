@@ -315,6 +315,13 @@ impl Txtodo for TxtodoService {
         self.device_remove_impl(r).await
     }
 
+    async fn sync_status(
+        &self,
+        r: Request<pb::SyncStatusRequest>,
+    ) -> Result<Response<pb::SyncStatusResponse>, Status> {
+        self.sync_status_impl(r).await
+    }
+
     async fn debug_set_group_key(
         &self,
         r: Request<pb::DebugSetGroupKeyRequest>,

@@ -10,45 +10,19 @@
 //! wraps its delegated call in an `rpc{method,workspace}` span (`rpc_span`) — this is the one
 //! place that sees every RPC, so the span lives here, not duplicated in `server.rs`.
 
-use crate::server::{SharedWorkspace, TxtodoService};
+use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
-use crate::workspace_registry::WorkspaceEntry;
 use std::path::Path;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use tracing::Instrument;
-use txtodo_model::Ulid;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
-use txtodo_store::WorkspaceId;
 
-pub(crate) fn to_workspace_info(e: WorkspaceEntry) -> pb::WorkspaceInfo {
-    pb::WorkspaceInfo {
-        workspace_id: e.id.to_string(),
-        root: e.root.display().to_string(),
-        added_at_ms: e.added_at_ms,
-        root_exists: e.root_exists,
-        has_state: e.has_state,
-    }
-}
-
-fn parse_workspace_id(text: &str) -> Result<WorkspaceId, Status> {
-    let ulid = Ulid::parse(text)
-        .ok_or_else(|| Status::invalid_argument(format!("{text:?} is not a ULID")))?;
-    Ok(WorkspaceId::new(ulid))
-}
-
-/// `.instrument()`-wrapped, never `.enter()`-ed across the `.await` (shared multi-thread runtime).
-/// `pub(crate)`: `pairing_grpc.rs`'s split-out `pair_accept_with_catalog` needs it too.
-pub(crate) fn rpc_span(method: &'static str, ws: &SharedWorkspace) -> tracing::Span {
-    let root = ws
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .root()
-        .display()
-        .to_string();
-    tracing::info_span!("rpc", method, workspace = %root)
-}
+// Re-exported (not just `use`d) so `crate::global_service::rpc_span`/`to_workspace_info` — the
+// paths `pairing_grpc.rs`/`workspace_offer_grpc.rs` already call them by — keep resolving after
+// this split; `parse_workspace_id` has no outside caller, so a plain `use` is enough for it.
+pub(crate) use crate::global_service_helpers::{parse_workspace_id, rpc_span, to_workspace_info};
 
 /// The service actually bound to the one global socket. `Clone` is a cheap `Arc` clone.
 #[derive(Clone)]
@@ -304,6 +278,15 @@ impl Txtodo for GlobalService {
             .device_remove(r)
             .instrument(span)
             .await
+    }
+
+    async fn sync_status(
+        &self,
+        r: Request<pb::SyncStatusRequest>,
+    ) -> Result<Response<pb::SyncStatusResponse>, Status> {
+        let ws = self.catalog.resolve(r.get_ref().workspace.as_ref())?;
+        let span = rpc_span("sync_status", &ws);
+        TxtodoService::new(ws).sync_status(r).instrument(span).await
     }
 
     async fn debug_set_group_key(

@@ -13,7 +13,7 @@ use std::sync::PoisonError;
 use tonic::{Request, Response, Status};
 use txtodo_model::{DeviceId, Skew, Ulid};
 use txtodo_proto::v1 as pb;
-use txtodo_store::DeviceRow;
+use txtodo_store::{DeviceRow, MAX_OPS_PER_READ};
 
 use crate::device_remove::RemoveDeviceError;
 use crate::server::TxtodoService;
@@ -63,6 +63,41 @@ fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64) -> pb::Device {
     }
 }
 
+/// Approximate "ops not yet reflected in every peer" count: local ops (every tracked file, same
+/// `store.newest(path, ...)` pattern `activity.rs::newest_rows` already uses) committed after the
+/// **oldest** active peer's `last_seen_ms` — i.e. ops made since we last heard from our
+/// most-out-of-touch peer. `0` peers means `0` pending (nothing to be pending against); a peer
+/// never yet seen (`last_seen_ms: None`) counts as `0` (the epoch), so everything is pending until
+/// it's heard from at least once.
+///
+/// **Known limitation, by design, not hidden**: this over-counts once a peer reconnects and acks
+/// everything — it still reads non-zero until that peer's own `last_seen_ms` advances past those
+/// ops' timestamps. A precise count needs a persisted per-peer synced-seq, which nothing in this
+/// crate tracks today (see `tasks/tui/notes.md`'s "SyncStatus RPC design" section); this is the
+/// honestly-scoped stand-in, not a fake placeholder.
+fn pending_ops_since(service: &TxtodoService, active_peers: &[DeviceRow]) -> Result<u64, Status> {
+    let Some(oldest_last_seen) = active_peers
+        .iter()
+        .map(|p| p.last_seen_ms.unwrap_or(0))
+        .min()
+    else {
+        return Ok(0);
+    };
+    let ws = service.workspace();
+    let store = ws.store().lock().unwrap_or_else(PoisonError::into_inner);
+    let mut pending = 0u64;
+    for path in ws.paths() {
+        let rows = store
+            .newest(path, MAX_OPS_PER_READ)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        pending += rows
+            .iter()
+            .filter(|s| s.op.hlc.wall_ms > oldest_last_seen)
+            .count() as u64;
+    }
+    Ok(pending)
+}
+
 /// `RemoveDeviceError` is never the removal being refused for a normal reason (self, last device):
 /// that is `FAILED_PRECONDITION`, a real, expected outcome, not a server bug.
 fn remove_status(e: RemoveDeviceError) -> Status {
@@ -99,6 +134,53 @@ impl TxtodoService {
             .map(|r| to_pb(r, self_device, now_ms))
             .collect();
         Ok(Response::new(pb::DeviceListResponse { devices }))
+    }
+
+    /// The TUI's `s` sync indicator (plan M10, tasks/tui). `peers` mirrors `device_list_impl`'s
+    /// own row-to-peer mapping, minus removed rows and this device itself; `pending_ops` is a
+    /// deliberate approximation — see `pending_ops_since` below for exactly what it counts and
+    /// why (tasks/tui/notes.md's own "SyncStatus RPC design" section has the full reasoning: no
+    /// per-peer synced-seq is persisted anywhere today, so a precise per-peer ack count isn't
+    /// derivable without new bookkeeping this task doesn't add).
+    ///
+    /// **A second real, pre-existing gap found while wiring this, not fixed here**: nothing in
+    /// this crate ever calls a "mark this device seen now" update after registration.
+    /// `Store::register_device`'s own SQL seeds `last_seen` from `paired_at` at insert time
+    /// (`identity_store.rs`'s `UPSERT_DEVICE` binds the same param to both columns), but no real
+    /// sync session (`lan.rs`/`relay.rs`/`control_channel.rs` checked; none of them touch it)
+    /// ever advances it again. So today every peer's `lag_ms` below reads as "time since it was
+    /// registered", not "time since it was last actually reached" — a real, useful-but-wrong
+    /// number until a separate task wires a real touch on session success. `unwrap_or(0)` below
+    /// only matters for the theoretical case `last_seen_ms` is genuinely absent (matching
+    /// `to_pb`'s own "0 = never contacted" convention for `Device.last_seen_ms`, not a new
+    /// sentinel) — normal registration never produces that case. Flagged, not silently worked
+    /// around with a fake "just now".
+    pub(crate) async fn sync_status_impl(
+        &self,
+        _r: Request<pb::SyncStatusRequest>,
+    ) -> Result<Response<pb::SyncStatusResponse>, Status> {
+        let ws = self.workspace();
+        let now_ms = ws.clock().now_ms();
+        let self_device = ws.device();
+        let rows = ws
+            .identity_store()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .list_devices()
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let active_peers: Vec<DeviceRow> = rows
+            .into_iter()
+            .filter(|r| r.removed_at_ms.is_none() && r.device != self_device)
+            .collect();
+        let peers = active_peers
+            .iter()
+            .map(|r| pb::sync_status_response::Peer {
+                device: r.device.ulid().to_string(),
+                lag_ms: now_ms.saturating_sub(r.last_seen_ms.unwrap_or(0)) as i64,
+            })
+            .collect();
+        let pending_ops = pending_ops_since(self, &active_peers)?;
+        Ok(Response::new(pb::SyncStatusResponse { peers, pending_ops }))
     }
 
     /// Removes a device and rotates the group key to the remaining devices (plan M4

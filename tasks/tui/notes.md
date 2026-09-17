@@ -171,3 +171,27 @@ module doc "recommended build order step 4"). Map `pb::SyncStatusResponse` → `
   problem, still open after SyncStatus ships.
 - `01M2B4ZWPKR2YNEF33NVATY9EZ` (two-loopback-daemon `s` test): unblocks once SyncStatus ships —
   do this one alongside the TUI wiring stage, not as a separate session.
+
+## Daemon-side SyncStatus shipped (2026-09-18)
+
+`crates/txtodo-daemon/src/devices_grpc.rs::sync_status_impl` + `pending_ops_since`, dispatched from
+both `server.rs` and `global_service.rs` (`global_service.rs` was exactly at its 400-line budget —
+split the three free-function helpers `to_workspace_info`/`parse_workspace_id`/`rpc_span` into a
+new `global_service_helpers.rs`, re-exported so `pairing_grpc.rs`'s/`workspace_offer_grpc.rs`'s
+existing `crate::global_service::...` call sites need no changes).
+
+**Second real gap found while testing this** (see `sync_status_impl`'s own doc comment for the
+full account, and the spawned follow-up task): `last_seen_ms` is set once, at registration
+(`identity_store.rs`'s `UPSERT_DEVICE` binds it equal to `paired_at` at insert), and never
+advanced again by any real sync session anywhere in this crate. So `lag_ms` today reads as "time
+since paired", not "time since last actually reached" — real, useful-but-wrong, flagged rather
+than silently faked as "just now". A follow-up session should wire a real touch on session
+success.
+
+3 new whitebox tests (`devices_grpc_tests.rs`, same shape as `pairing_grpc_tests.rs`): no
+peers/zero pending, lag+pending-ops arithmetic against a registered peer, removed/self rows
+excluded. `device_list_impl`/`DeviceList` itself had zero test coverage anywhere in this crate
+before this — net new coverage for the sibling RPC too.
+
+Root todo.txt's `ref:tui` line stays open: TUI-side wiring (`daemon.rs`'s `Daemon::sync_status()`,
+`app.rs`'s periodic tick) is the last remaining piece, tracked as this file's own item 1.

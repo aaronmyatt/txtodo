@@ -32,6 +32,7 @@ pub mod fastid;
 mod fields;
 pub mod file_carrier;
 pub mod global_service;
+mod global_service_helpers;
 pub mod handle;
 mod health_grpc;
 pub mod history;
@@ -119,6 +120,8 @@ mod control_session_tests;
 mod device_relay_tests;
 #[cfg(test)]
 mod device_remove_tests;
+#[cfg(test)]
+mod devices_grpc_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
