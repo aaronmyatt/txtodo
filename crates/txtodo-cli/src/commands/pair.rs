@@ -172,20 +172,25 @@ fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> 
     }
     daemon.pair_confirm_sas()?;
     println!("Confirmed on this device. Waiting for the initiator to confirm...");
-    await_group_key(daemon)?;
-    println!("Paired. Syncing this workspace with the initiator over the LAN...");
+    let carrier = await_group_key(daemon)?;
+    println!("Paired. Syncing this workspace with the initiator over {carrier}...");
     wait_for_convergence(daemon)?;
     print_workspace_snapshot(daemon)?;
     Ok(())
 }
 
 /// Polls `Health.lan_group_key_present` until the real group key this device's background relay
-/// task adopted (`Workspace::adopt_group_key`) shows up, or [`AWAIT_PEER_TIMEOUT`] passes.
-fn await_group_key(daemon: &mut Daemon) -> Result<(), CliError> {
+/// task adopted (`Workspace::adopt_group_key`) shows up, or [`AWAIT_PEER_TIMEOUT`] passes. Returns
+/// the carrier phrase for `run_join`'s own print, read off `Health.pairing_last_carrier`
+/// (`pairing_lan_state.rs::PairingLan::record_carrier`, the same field `doctor_transport.rs`
+/// already reports) rather than assuming LAN — pairing can just as well have completed over the
+/// relay (`sync-pairing-relay`).
+fn await_group_key(daemon: &mut Daemon) -> Result<&'static str, CliError> {
     let start = Instant::now();
     loop {
-        if daemon.health()?.lan_group_key_present {
-            return Ok(());
+        let health = daemon.health()?;
+        if health.lan_group_key_present {
+            return Ok(carrier_phrase(&health.pairing_last_carrier));
         }
         if start.elapsed() >= AWAIT_PEER_TIMEOUT {
             return Err(CliError::Message(
@@ -195,6 +200,16 @@ fn await_group_key(daemon: &mut Daemon) -> Result<(), CliError> {
             ));
         }
         std::thread::sleep(AWAIT_PEER_POLL);
+    }
+}
+
+/// `carrier` is `Health.pairing_last_carrier`: `"lan"`, `"relay"`, or (should not happen here,
+/// since we only call this once the group key has actually landed) empty.
+fn carrier_phrase(carrier: &str) -> &'static str {
+    match carrier {
+        "lan" => "the LAN",
+        "relay" => "the relay",
+        _ => "the network",
     }
 }
 
