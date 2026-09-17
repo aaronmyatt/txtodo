@@ -85,6 +85,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             lan,
             token,
         } => return commands::mcp::run(&ctx, *stdio, *http, *lan, token.as_deref()),
+        Command::Skill { action } => return commands::skill::run(action),
         _ => {}
     }
     match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
@@ -158,6 +159,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Sub { .. } => "sub",
         Command::Bundle { .. } => "bundle",
         Command::Workspace { .. } => "workspace",
+        Command::Skill { .. } => "skill",
         Command::Prune { .. } => "prune",
     }
 }
@@ -229,9 +231,10 @@ fn dispatch(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
 /// reason as `dispatch_daemon_inner` above.
 fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
     match command {
-        Command::Doctor { .. } | Command::Daemon { .. } | Command::Mcp { .. } => {
-            unreachable!("doctor, daemon and mcp are handled before mode selection")
-        }
+        Command::Doctor { .. }
+        | Command::Daemon { .. }
+        | Command::Mcp { .. }
+        | Command::Skill { .. } => unreachable!("handled before mode selection"),
         Command::Log { .. }
         | Command::Blame { .. }
         | Command::Undo { .. }
@@ -244,10 +247,7 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Prune { .. }
         | Command::Device { .. }
         | Command::Workspace { .. }
-        | Command::Bundle { .. } => Err(CliError::Message(format!(
-            "txtodo: {}",
-            commands::history::NEEDS_DAEMON
-        ))),
+        | Command::Bundle { .. } => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),
         Command::Append { item, text } => {
@@ -288,4 +288,9 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
             }
         },
     }
+}
+
+/// Shared by every todo.sh command listed as daemon-only in `dispatch_inner`.
+fn needs_daemon_err() -> CliError {
+    CliError::Message(format!("txtodo: {}", commands::history::NEEDS_DAEMON))
 }

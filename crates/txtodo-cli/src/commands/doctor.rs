@@ -145,6 +145,21 @@ fn health_checks(d: &mut client::Daemon) -> (Vec<Check>, Option<pb::HealthRespon
     (vec![socket_ok, watcher], Some(h))
 }
 
+/// Advisory only, never a FAIL: nudges toward `txtodo skill install` (agent playbook) when nothing
+/// has installed it yet.
+fn skill_check() -> Check {
+    if super::skill::claude_installed() {
+        check("skill", Status::Ok, "agent playbook installed")
+    } else {
+        check(
+            "skill",
+            Status::Warn,
+            "no agent playbook installed; run `txtodo skill install` so agents can work this \
+             backlog on their own",
+        )
+    }
+}
+
 /// Opens todo.txt for append without writing.
 fn files_check(ctx: &Ctx) -> Check {
     let mut problems = Vec::new();
@@ -312,6 +327,7 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
         state.daemon.as_deref_mut(),
         &ctx.paths.dir,
     ));
+    checks.push(skill_check());
     if ctx.json {
         let rows: Vec<String> = checks
             .iter()

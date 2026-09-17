@@ -280,6 +280,12 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<commands::workspace::Action>,
     },
+    /// The agent playbook for working this backlog: a Claude Code Skill under the user's global
+    /// `~/.claude/skills`, and a marked section in this project's `AGENTS.md` (cross-agent).
+    Skill {
+        #[command(subcommand)]
+        action: commands::skill::Action,
+    },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).
     Prune {

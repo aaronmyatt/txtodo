@@ -17,5 +17,6 @@ pub mod mcp;
 pub mod pair;
 pub mod refdir;
 pub mod service;
+pub mod skill;
 pub mod text;
 pub mod workspace;
