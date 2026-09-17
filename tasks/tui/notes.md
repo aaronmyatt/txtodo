@@ -180,13 +180,30 @@ split the three free-function helpers `to_workspace_info`/`parse_workspace_id`/`
 new `global_service_helpers.rs`, re-exported so `pairing_grpc.rs`'s/`workspace_offer_grpc.rs`'s
 existing `crate::global_service::...` call sites need no changes).
 
-**Second real gap found while testing this** (see `sync_status_impl`'s own doc comment for the
-full account, and the spawned follow-up task): `last_seen_ms` is set once, at registration
-(`identity_store.rs`'s `UPSERT_DEVICE` binds it equal to `paired_at` at insert), and never
-advanced again by any real sync session anywhere in this crate. So `lag_ms` today reads as "time
-since paired", not "time since last actually reached" — real, useful-but-wrong, flagged rather
-than silently faked as "just now". A follow-up session should wire a real touch on session
-success.
+**Second real gap found while testing this, now fixed (2026-09-18, follow-up session — see
+below)**: `last_seen_ms` was set once, at registration (`identity_store.rs`'s `UPSERT_DEVICE`
+binds it equal to `paired_at` at insert), and never advanced again by any real sync session
+anywhere in this crate. So `lag_ms` used to read as "time since paired", not "time since last
+actually reached".
+
+## `last_seen_ms` touch-on-session-success (2026-09-18, follow-up session)
+
+Fixed the gap above. `txtodo-store`: `IdentityStore::touch_last_seen(device, now_ms)`
+(`identity_store_touch.rs`, split out for the file-length budget, same pattern as
+`devices_relay.rs`) — an upsert-shaped `UPDATE ... SET last_seen` (never a bare `UPDATE`, this
+crate's own invariant), `false` for a wholly unknown device. `txtodo-daemon`:
+`Workspace::touch_peer_last_seen` wraps it (same shape as `record_peer_relay_reachability`), called
+from `lan_session_dispatch.rs::dispatch_link_frame` right after a peer's link-level `Hello`
+validates and `Session::peer()` becomes known.
+
+Wiring at one choke point, not three: `lan.rs::spawn_driver`, `relay.rs::dial_known_peer`'s driven
+connection, and `control_dispatch.rs::dispatch_sync` all converge on
+`lan_session_dispatch::drive_shared_session` (`daemon-workspace-session-multiplex` stage 2's own
+multiplexed driver) — none of the three transport-specific modules needed a change. Trusts the same
+self-declared `device` field the link `Hello` already carries, the same trust level
+`last_known_wall_ms`/`SkewStatus` place in that message's `wall_ms` field — not new/stronger
+attribution than what already existed (`txtodo-sync/CLAUDE.md`'s own note: LAN op-signing isn't
+real per-device attribution either, today).
 
 3 new whitebox tests (`devices_grpc_tests.rs`, same shape as `pairing_grpc_tests.rs`): no
 peers/zero pending, lag+pending-ops arithmetic against a registered peer, removed/self rows
