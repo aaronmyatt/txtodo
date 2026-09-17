@@ -44,6 +44,10 @@ txtodo-core = { workspace = true }
 # Shared JSON-rolling-file + pretty-stderr tracing init (root todo.txt `logging-desktop`), the
 # same one every other txtodo binary (`txtodod`, `txtodo`, `tui`, `mcp`, `relay`) uses.
 txtodo-telemetry = { workspace = true }
+# Shared spawn-if-absent + best-effort service install/start (task daemon-always-available):
+# `daemon/spawn.rs::ensure_daemon` delegates to this instead of keeping its own copy, dedupng the
+# logic ADR 0025's consequences section flagged as duplicated across clients.
+txtodo-daemon-launch = { workspace = true }
 # https://docs.rs/tracing — event/span macros for the `ipc.<command>` spans and `ui_log` bridge.
 tracing = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
