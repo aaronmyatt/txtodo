@@ -8967,6 +8967,7 @@ dependencies = [
  "tower",
  "tracing",
  "txtodo-core",
+ "txtodo-daemon-launch",
  "txtodo-proto",
  "txtodo-telemetry",
 ]

@@ -24,11 +24,14 @@ use crate::ui::screen::draw;
 const SYNC_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Binary entry point: resolves the workspace (current directory, for now — a `--dir` flag is a
-/// natural CLI-parity follow-up, out of scope here), connects, and runs the event loop. The
-/// daemon is never spawned by the TUI itself (design §7 edge case: "the TUI never spawns the
-/// daemon, the desktop shell does"). `print_stderr` is allowed here only: this function (and
-/// `async_main`) is the binary's one human-output path before the terminal takes over — the
-/// same precedent as `txtodo-cli`/`txtodo-daemon`'s own `main.rs`.
+/// natural CLI-parity follow-up, out of scope here), connects, and runs the event loop. As of
+/// `tasks/daemon-always-available`, `async_main` optimistically ensures a per-workspace bridge
+/// daemon exists (via `txtodo_daemon_launch::ensure_daemon`) before waiting on it ready, instead
+/// of only ever erroring when one is absent — honoring `TXTODO_NO_AUTOSTART=1` as an opt-out. This
+/// supersedes the older design §7 edge case's claim that "the TUI never spawns the daemon, the
+/// desktop shell does". `print_stderr` is allowed here only: this function (and `async_main`) is
+/// the binary's one human-output path before the terminal takes over — the same precedent as
+/// `txtodo-cli`/`txtodo-daemon`'s own `main.rs`.
 #[allow(clippy::print_stderr)]
 pub fn main() -> ExitCode {
     let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -70,6 +73,16 @@ async fn async_main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // Optimistic, best-effort spawn-if-absent (task daemon-always-available): the `Result` is
+    // deliberately ignored here — `wait_until_ready()` right below is the real gate that turns
+    // "still not reachable" into the one honest, user-facing error message below. If
+    // `ensure_daemon` can't help (e.g. `txtodod` genuinely isn't installed anywhere), swallowing
+    // its own error here just means that message stays the single source of truth instead of a
+    // second, less clear one racing it.
+    if !txtodo_daemon_launch::autostart_disabled() {
+        let cfg = txtodo_daemon_launch::LaunchConfig::new(&sock).with_dir(&workspace);
+        let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
+    }
     if let Err(e) = daemon.wait_until_ready().await {
         eprintln!(
             "daemon not running — run `txtodo daemon start` ({sock}: {e})",

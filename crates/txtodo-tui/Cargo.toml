@@ -42,6 +42,9 @@ tracing = "0.1"
 # stderr layer). See crates/txtodo-telemetry/src/lib.rs's own doc for why the two entry points
 # exist.
 txtodo-telemetry = { path = "../txtodo-telemetry" }
+# Shared spawn-if-absent logic (task daemon-always-available): app.rs's async_main ensures the
+# per-workspace bridge daemon exists before wait_until_ready, instead of only erroring on it.
+txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own
