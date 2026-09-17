@@ -244,6 +244,29 @@ export function switchWorkspace(root: string): Promise<void> {
 	return invoke("switch_workspace", { root });
 }
 
+/** One `op_log_all()` row: an `OpEvent` (see `src/devices/types.ts`) tagged with its source
+ * workspace — the field `OpLogEntry` itself doesn't carry (task
+ * `desktop-activity-cross-workspace`; tagged client-side, not on the wire). Mirrors
+ * `desktop_lib::dto::AggregatedOpLogEntryDto`. */
+export interface AggregatedOpLogEntry {
+	/** `"you@dev"` / `"agent:name@dev"` / `"external@dev"`. */
+	principal: string;
+	/** One-line human summary of the mutation. */
+	op: string;
+	/** Unix ms. */
+	at_ms: number;
+	workspace_id: string;
+	workspace_root: string;
+}
+
+/** Newest ops across every *registered* workspace (not just the one open in the main view),
+ * merge-sorted newest-first and capped at 200 — same one-shot bounded-fetch contract as
+ * `src/devices/api.ts::opLog()`'s single-workspace feed, not a live tail. A workspace whose root
+ * no longer exists, or whose fetch fails, is silently skipped rather than failing the whole call. */
+export function opLogAll(): Promise<AggregatedOpLogEntry[]> {
+	return invoke("op_log_all");
+}
+
 /** One open (`!completed`) task line from some workspace's root `todo.txt`, tagged with enough
  * workspace identity to switch to it and label it. Mirrors
  * `desktop_lib::dto_universal::UniversalTaskDto`. */

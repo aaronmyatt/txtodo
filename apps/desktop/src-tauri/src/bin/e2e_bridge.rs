@@ -42,6 +42,10 @@ use txtodo_store::{ReviewRow, Store};
 mod workspace;
 use workspace::dispatch_workspace_cmd;
 
+#[path = "e2e_bridge/activity.rs"]
+mod activity;
+use activity::cmd_op_log_all;
+
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
 /// `crates/txtodo-daemon/tests/grpc.rs::raise_flag`).
@@ -201,6 +205,13 @@ async fn invoke(
     if WORKSPACE_CMDS.contains(&req.cmd.as_str()) {
         let mut client = state.client.lock().await;
         let value = dispatch_workspace_cmd(&mut client, &req.cmd, req.args).await?;
+        return Ok(Json(value).into_response());
+    }
+    // Same reasoning as the workspace-command branch above: its own branch, not a 9th arm in
+    // `invoke_core`'s match, to stay under this crate's cognitive-complexity budget.
+    if req.cmd == "op_log_all" {
+        let mut client = state.client.lock().await;
+        let value = cmd_op_log_all(&mut client).await?;
         return Ok(Json(value).into_response());
     }
     invoke_core(state, req).await

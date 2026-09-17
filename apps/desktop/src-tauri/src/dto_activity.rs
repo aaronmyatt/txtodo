@@ -24,3 +24,21 @@ impl From<pb::OpLogEntry> for OpLogEntryDto {
         }
     }
 }
+
+/// One op-log row from [`crate::commands_activity::op_log_all`]'s cross-workspace fan-out —
+/// `OpLogEntryDto` plus the source workspace, a field `pb::OpLogEntry` itself doesn't carry (task
+/// `desktop-activity-cross-workspace`: the daemon has nothing to add here, so this is tagged
+/// client-side from the `WorkspaceInfo` each entry's fan-out call already came from).
+#[derive(Debug, Clone, Serialize)]
+pub struct AggregatedOpLogEntryDto {
+    /// `"you@dev"` / `"agent:name@dev"` / `"external@dev"`.
+    pub principal: String,
+    /// One-line human summary, same shape as `OpSummaryDto::summary`.
+    pub op: String,
+    /// Unix ms.
+    pub at_ms: u64,
+    /// ULID text of the workspace this entry came from.
+    pub workspace_id: String,
+    /// That workspace's canonicalized absolute root path.
+    pub workspace_root: String,
+}

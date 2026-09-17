@@ -108,3 +108,35 @@ pub struct AggregatedOpLogEntryDto {
   (root-existing) workspace.
 - Activity tab renders it with agent principals visually distinct from human/device ones.
 - One unreachable workspace never blanks the whole feed.
+
+## As built (2026-09-17)
+
+- `DaemonClient::op_log_for(workspace)` (`daemon.rs`): explicit-selector sibling of `op_log`, both
+  now delegate to a shared `op_log_with(Option<WorkspaceSelector>)`.
+- `AggregatedOpLogEntryDto` (`dto_activity.rs`), `op_log_all` Tauri command
+  (`commands_activity.rs`): fans `op_log_for` out over every `WorkspaceList` entry with
+  `root_exists`, tags each result with `workspace_id`/`workspace_root`, merge-sorts by `at_ms`
+  descending, caps at 200. A single workspace's fetch failure is logged (`op_log_all_workspace_
+  failed`) and skipped, never propagated — split into `op_log_one_workspace` to stay under
+  clippy's cognitive-complexity budget.
+- `$lib/daemon.ts::opLogAll()` + `AggregatedOpLogEntry` type; `ActivityTab.svelte` (new component,
+  not inlined into `WorkspaceSwitcher.svelte`) renders it in the nav's Activity tab: workspace chip
+  (last path segment, full path on hover), principal (agent pill via `activityLogic.ts::isAgent`),
+  relative time (`devices/time.ts`, reused not duplicated), op summary. Same bounded-fetch contract
+  as `devices/ActivityFeed.svelte`: fetch on mount, refetch on window focus, manual refresh button,
+  no live tail.
+- `isAgent`/`shortRoot` split into `activityLogic.ts` (pure, no DOM/Tauri) for unit testing, same
+  pattern `editPopoverLogic.ts` uses — `activityLogic.test.ts`, 6 cases.
+- Real e2e coverage (`e2e/activity-tab.spec.ts`, 3 cases): own-workspace activity shows by default;
+  a second real workspace registered through the UI's own Add form gets merged in and tagged with
+  its own root once the Activity tab's fan-out opens it; a registered-then-deleted workspace is
+  skipped without an error state or blanking the rest of the feed. Also wired `op_log_all` into
+  `e2e_bridge` (`e2e_bridge/activity.rs`, split for the file-length budget, restating this task's
+  own merge/sort/cap logic since `op_log_all_inner`'s signature is tied to Tauri's extractors).
+- Also updated `workspace-switcher.spec.ts`'s tab-switching test: it asserted the old "coming soon"
+  placeholder text, which this task replaced with the real feed.
+- Registry-leak follow-up (see `desktop-workspace-nav-sidebar/notes.md` and the spawned task) bit
+  again here: every real-daemon Playwright run still leaks workspace-registry entries into the
+  real global registry and leaves the shared daemon process running. Cleaned up by hand again this
+  session (`txtodo workspace remove` in a loop + kill the daemon PID) — not re-flagged as a
+  separate task since the existing follow-up already covers it.

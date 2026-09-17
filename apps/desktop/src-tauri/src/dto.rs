@@ -11,7 +11,7 @@ use txtodo_proto::v1 as pb;
 // `notes.rs`/`tokens.rs`/`pairing_grpc.rs`/`activity.rs`: keeping every DTO in one file would blow
 // the line budget. Each sibling re-exports through here so callers keep a single `crate::dto::*`
 // import surface, unaware of the split.
-pub use crate::dto_activity::OpLogEntryDto;
+pub use crate::dto_activity::{AggregatedOpLogEntryDto, OpLogEntryDto};
 pub use crate::dto_notes::NotesDocDto;
 pub use crate::dto_pairing::{PairOfferDto, PairResultDto};
 pub use crate::dto_tokens::TokenDto;

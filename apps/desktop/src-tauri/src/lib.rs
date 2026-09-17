@@ -100,6 +100,7 @@ pub fn run() {
             commands_tokens::token_list,
             commands_tokens::token_revoke,
             commands_activity::op_log,
+            commands_activity::op_log_all,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

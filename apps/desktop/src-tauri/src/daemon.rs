@@ -324,6 +324,23 @@ impl DaemonClient {
     /// returning instead of forwarding it as an event stream.
     pub async fn op_log(&mut self) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
         let workspace = self.selector.clone();
+        self.op_log_with(workspace).await
+    }
+
+    /// As [`Self::op_log`], but targeting `workspace` explicitly rather than this client's own
+    /// ambient `selector` — task `desktop-activity-cross-workspace`'s fan-out needs to read one
+    /// workspace's op log while switched to (or connected with no selector on) another.
+    pub async fn op_log_for(
+        &mut self,
+        workspace: pb::WorkspaceSelector,
+    ) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
+        self.op_log_with(Some(workspace)).await
+    }
+
+    async fn op_log_with(
+        &mut self,
+        workspace: Option<pb::WorkspaceSelector>,
+    ) -> Result<Vec<pb::OpLogEntry>, DaemonError> {
         let mut stream = self
             .inner
             .op_log_stream(pb::OpLogRequest { workspace })

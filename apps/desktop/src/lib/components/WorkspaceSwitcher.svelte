@@ -12,9 +12,8 @@
 	// open. Ref (disclosure pattern): https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
 	// Ref (tabs pattern): https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
 	//
-	// The Activity tab renders a placeholder here; its real cross-workspace feed is
-	// desktop-activity-cross-workspace's job (deliberately split off — needs its own daemon
-	// fan-out design, not just a UI shell).
+	// The Activity tab renders ActivityTab.svelte (task desktop-activity-cross-workspace): a
+	// separate component, not inlined here, to keep this file focused on the sidebar shell itself.
 	import { tick } from "svelte";
 	import { fly } from "svelte/transition";
 	import {
@@ -26,6 +25,7 @@
 		type WorkspaceInfo
 	} from "$lib/daemon";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
+	import ActivityTab from "./ActivityTab.svelte";
 
 	let open = $state(false);
 	let activeTab = $state<"workspaces" | "activity">("workspaces");
@@ -189,7 +189,7 @@
 		</div>
 
 		{#if activeTab === "workspaces"}
-			<div id="nav-panel-workspaces" role="tabpanel" aria-labelledby="nav-tab-workspaces">
+			<div id="nav-panel-workspaces" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-workspaces">
 				{#if error}
 					<p class="error" role="alert">{error}</p>
 				{/if}
@@ -224,8 +224,8 @@
 				</form>
 			</div>
 		{:else}
-			<div id="nav-panel-activity" role="tabpanel" aria-labelledby="nav-tab-activity">
-				<p class="placeholder">Activity across workspaces is coming soon.</p>
+			<div id="nav-panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-activity">
+				<ActivityTab />
 			</div>
 		{/if}
 	</div>
@@ -277,6 +277,13 @@
 		color: var(--color-text);
 		border-bottom-color: var(--color-text);
 		font-weight: 600;
+	}
+
+	.tab-panel {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
 	}
 
 	ul {
@@ -341,9 +348,5 @@
 	.error {
 		margin: 0 0 0.5rem;
 		color: var(--color-danger);
-	}
-
-	.placeholder {
-		color: var(--color-text-muted);
 	}
 </style>

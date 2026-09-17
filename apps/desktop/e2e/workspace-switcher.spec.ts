@@ -56,7 +56,9 @@ test("the tab bar switches between the Workspaces and Activity panels", async ({
 	await activityTab.click();
 	await expect(activityTab).toHaveAttribute("aria-selected", "true");
 	await expect(workspacesTab).toHaveAttribute("aria-selected", "false");
-	await expect(sidebar).toContainText("coming soon");
+	// Real content now (desktop-activity-cross-workspace), not a placeholder — the Workspaces
+	// panel's own full-path entries are gone, replaced by the Activity feed's refresh control.
+	await expect(sidebar.getByRole("button", { name: "Refresh" })).toBeVisible();
 	await expect(sidebar).not.toContainText(daemon.dir);
 
 	await workspacesTab.click();
