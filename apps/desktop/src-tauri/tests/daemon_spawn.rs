@@ -6,6 +6,15 @@
 //! `global_registry_override` give each test its own hermetic global socket/registry without
 //! mutating this process' shared environment (see `config.rs`'s own doc on why). Spawn/build
 //! helpers live in `tests/support/mod.rs`, shared with `tests/new_rpcs.rs`.
+//!
+//! Unix-only (task `desktop-windows-daemon-tests`): `support::TXTODOD_BIN` unconditionally
+//! `cargo build -p txtodo-daemon`, which does not compile on Windows at all (ADR 0010, already
+//! excluded from `ci.yml`'s own typecheck/lint/test steps there) — this crate itself has no such
+//! exclusion, so this file's tests reached that build and failed on `windows-latest` for every PR
+//! touching `apps/desktop` or `txtodo-daemon` (found on PR #4, 2026-09-16). Same `#![cfg(unix)]`
+//! pattern `crates/txtodo-daemon`'s own real-daemon test files already use (e.g.
+//! `tests/lan_discovery.rs`).
+#![cfg(unix)]
 
 mod support;
 

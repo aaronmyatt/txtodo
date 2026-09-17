@@ -10,6 +10,10 @@
 //! resolve to any real task in the seeded workspace, so `locate_task` refuses it — this file only
 //! asserts that a bad `TaskRef` comes back as a real, typed RPC error, never a connect/transport
 //! failure, not that the feature is unimplemented.
+//!
+//! Unix-only: see `tests/daemon_spawn.rs`'s own doc comment (task `desktop-windows-daemon-tests`)
+//! for why — same `support::TXTODOD_BIN` dependency, same fix.
+#![cfg(unix)]
 
 mod support;
 

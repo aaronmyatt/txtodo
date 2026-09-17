@@ -6,6 +6,9 @@
 //! is a thin loop over exactly this plus `open_tasks`, which has its own unit test alongside the
 //! parsing logic in `src/commands_universal.rs`.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+// Unix-only: see tests/daemon_spawn.rs's own doc comment (task desktop-windows-daemon-tests) for
+// why -- same support::TXTODOD_BIN dependency, same fix.
+#![cfg(unix)]
 
 mod support;
 

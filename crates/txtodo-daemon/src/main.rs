@@ -3,6 +3,7 @@
 //! workspace(s) → pid lock → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain, remove socket.
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
+#![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -48,7 +49,18 @@ struct Args {
     sync_dir: Option<PathBuf>,
 }
 
-fn parse_args() -> Result<Args, String> {
+/// `parse_args`'s success case: either real startup [`Args`], or `--version` asked to print and
+/// exit 0 — kept distinct from the `Err` (usage error, exit 2) path below, which a bare
+/// `Result<Args, String>` used to conflate: `--version` returned `Err(version_string)`, the same
+/// path a real parse error takes, so `main` printed the version and still exited 2. Found on this
+/// project's first real release run: the release workflow's own smoke test ("every binary runs
+/// --version") failed here even though the version printed correctly.
+enum ArgsOutcome {
+    Run(Args),
+    ShowVersion,
+}
+
+fn parse_args() -> Result<ArgsOutcome, String> {
     let mut args = std::env::args_os().skip(1);
     let mut dir: Option<PathBuf> = None;
     let mut identity_mode = IdentityMode::Sidecar;
@@ -84,7 +96,7 @@ fn parse_args() -> Result<Args, String> {
                 let raw = args.next().ok_or("--sync-dir needs a value")?;
                 sync_dir = Some(PathBuf::from(raw));
             }
-            Some("--version") => return Err(format!("txtodod {}", env!("CARGO_PKG_VERSION"))),
+            Some("--version") => return Ok(ArgsOutcome::ShowVersion),
             _ => {
                 return Err(format!(
                     "unknown argument {a:?}; usage: txtodod [--dir <workspace>]"
@@ -99,7 +111,7 @@ fn parse_args() -> Result<Args, String> {
         })
         .transpose()?;
     debug_assert!(dir.as_ref().is_none_or(|d| d.is_absolute()));
-    Ok(Args {
+    Ok(ArgsOutcome::Run(Args {
         dir,
         identity_mode,
         key_store_mode,
@@ -108,7 +120,7 @@ fn parse_args() -> Result<Args, String> {
         no_lan,
         no_relay,
         sync_dir,
-    })
+    }))
 }
 
 /// Reads a passphrase for `--key-store file` as one line from stdin — never a CLI argument or
@@ -131,7 +143,11 @@ fn prompt_file_passphrase() -> Result<Secret, Box<dyn std::error::Error>> {
 
 fn main() -> ExitCode {
     let args = match parse_args() {
-        Ok(a) => a,
+        Ok(ArgsOutcome::Run(a)) => a,
+        Ok(ArgsOutcome::ShowVersion) => {
+            println!("txtodod {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
         Err(msg) => {
             eprintln!("{msg}");
             return ExitCode::from(2);

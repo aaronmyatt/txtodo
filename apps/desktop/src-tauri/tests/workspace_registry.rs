@@ -5,6 +5,9 @@
 //! in `commands_workspace.rs` are thin wrappers over exactly this, so this is the real proof.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+// Unix-only: see tests/daemon_spawn.rs's own doc comment (task desktop-windows-daemon-tests) for
+// why -- same support::TXTODOD_BIN dependency, same fix.
+#![cfg(unix)]
 
 mod support;
 
