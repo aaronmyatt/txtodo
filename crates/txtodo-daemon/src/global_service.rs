@@ -39,7 +39,8 @@ fn parse_workspace_id(text: &str) -> Result<WorkspaceId, Status> {
 }
 
 /// `.instrument()`-wrapped, never `.enter()`-ed across the `.await` (shared multi-thread runtime).
-fn rpc_span(method: &'static str, ws: &SharedWorkspace) -> tracing::Span {
+/// `pub(crate)`: `pairing_grpc.rs`'s split-out `pair_accept_with_catalog` needs it too.
+pub(crate) fn rpc_span(method: &'static str, ws: &SharedWorkspace) -> tracing::Span {
     let root = ws
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -213,9 +214,8 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::PairAcceptRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
-        let ws = self.catalog.resolve(r.get_ref().workspace.as_ref())?;
-        let span = rpc_span("pair_accept", &ws);
-        TxtodoService::new(ws).pair_accept(r).instrument(span).await
+        // Id adoption (task pairing-workspace-identity) split into pairing_grpc.rs, this file's budget.
+        crate::pairing_grpc::pair_accept_with_catalog(self, r).await
     }
 
     async fn pair_confirm_sas(

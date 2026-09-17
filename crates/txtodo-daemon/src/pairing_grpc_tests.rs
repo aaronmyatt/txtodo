@@ -46,7 +46,7 @@ async fn confirm(svc: &TxtodoService) -> Result<pb::PairResult, tonic::Status> {
 }
 
 #[tokio::test]
-async fn qr_payload_has_no_field_beyond_the_documented_eight() {
+async fn qr_payload_has_no_field_beyond_the_documented_nine() {
     let dir = tempfile::tempdir().unwrap();
     let svc = service(dir.path(), Arc::new(FakeClock::new(1_000)));
     let response = offer(&svc).await;
@@ -70,6 +70,7 @@ async fn qr_payload_has_no_field_beyond_the_documented_eight() {
             "nonce",
             "relay_node_id",
             "relay_url",
+            "workspace_id",
             "x25519_pub"
         ]
     );

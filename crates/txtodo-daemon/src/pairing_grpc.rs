@@ -24,12 +24,32 @@
 //! material beyond the documented fields — is real and fully exercised.
 
 use crate::pairing_state::PairingStateError;
-use crate::pairing_wire::{WireError, code_to_offer, hex_encode};
+use crate::pairing_wire::{WireError, code_to_offer, code_workspace_id, hex_encode};
 use crate::server::TxtodoService;
 use crate::workspace::Workspace;
 use tonic::{Request, Response, Status};
+use tracing::Instrument;
 use txtodo_proto::v1 as pb;
+use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_sync::{PairingOffer, SAS_WORD_COUNT};
+
+/// `GlobalService`'s own `PairAccept`, split out for `global_service.rs`'s length budget (the same
+/// pattern `workspace_offer_grpc.rs` already uses): resolves the selector, adopts the initiator's
+/// offered `WorkspaceId` (task `pairing-workspace-identity`) before delegating to the crypto
+/// handshake below, then runs `pair_accept_impl` exactly as `global_service.rs`'s other methods do.
+pub(crate) async fn pair_accept_with_catalog(
+    service: &crate::global_service::GlobalService,
+    r: Request<pb::PairAcceptRequest>,
+) -> Result<Response<pb::PairResult>, Status> {
+    let ws = service.catalog().resolve(r.get_ref().workspace.as_ref())?;
+    if let Some(offered_id) = code_workspace_id(&r.get_ref().code).map_err(wire_status)? {
+        service
+            .catalog()
+            .adopt_offered_workspace_id(&ws, offered_id)?;
+    }
+    let span = crate::global_service::rpc_span("pair_accept", &ws);
+    TxtodoService::new(ws).pair_accept(r).instrument(span).await
+}
 
 impl TxtodoService {
     /// Starts a pairing handshake on this device and returns the QR payload: identity + handshake
@@ -51,7 +71,11 @@ impl TxtodoService {
             offer.relay_node_id = Some(node_id);
             offer.relay_url = Some(url);
         }
-        Ok(Response::new(response_of(&offer, ws.identity_mode())))
+        Ok(Response::new(response_of(
+            &offer,
+            ws.identity_mode(),
+            ws.workspace_id(),
+        )))
     }
 
     /// Accepts a peer's scanned `PairOffer` (`code`, decoded per `pairing_wire`'s module doc) and
@@ -116,14 +140,19 @@ fn words(sas: &[&'static str; SAS_WORD_COUNT]) -> String {
     sas.join(" ")
 }
 
-/// `PairOfferResponse` from an offer: exactly its eight documented fields, nothing else — the
+/// `PairOfferResponse` from an offer: exactly its nine documented fields, nothing else — the
 /// QR-payload invariant `pairing_grpc_tests.rs` asserts (updated the same task for the two relay
-/// rendezvous fields below). `identity_mode` is this daemon's own (docs/questions.md Q2/Q6), not
-/// part of the crypto offer itself; `relay_node_id`/`relay_url` are hex/plain strings, empty
-/// exactly when the offer's own `Option` fields are `None` (plan M8 `sync-pairing-relay`).
+/// rendezvous fields below, and again for `workspace_id`). `identity_mode` is this daemon's own
+/// (docs/questions.md Q2/Q6), not part of the crypto offer itself; `relay_node_id`/`relay_url` are
+/// hex/plain strings, empty exactly when the offer's own `Option` fields are `None` (plan M8
+/// `sync-pairing-relay`). `workspace_id` (task `pairing-workspace-identity`) is this device's real,
+/// catalog-assigned id for the workspace being offered — always non-empty by the time this RPC is
+/// servable (`workspace_catalog_open.rs::open_workspace_full` sets it before any RPC can reach this
+/// workspace), never the crypto offer's own concern either.
 fn response_of(
     offer: &PairingOffer,
     identity_mode: txtodo_model::IdentityMode,
+    workspace_id: txtodo_store::WorkspaceId,
 ) -> pb::PairOfferResponse {
     pb::PairOfferResponse {
         device: offer.device.to_string(),
@@ -137,6 +166,7 @@ fn response_of(
             .map(|n| hex_encode(&n))
             .unwrap_or_default(),
         relay_url: offer.relay_url.clone().unwrap_or_default(),
+        workspace_id: workspace_id.to_string(),
     }
 }
 

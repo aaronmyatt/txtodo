@@ -45,6 +45,13 @@ impl Store {
     /// Records the bytes just written for `p.file`, replacing the previous projection.
     #[tracing::instrument(skip_all, fields(file = %p.file))]
     pub fn put_projection(&mut self, p: &Projection) -> Result<(), StoreError> {
+        self.put_projection_inner(p)
+    }
+
+    /// The real body of [`Self::put_projection`], split out so `#[instrument]` on the outer
+    /// function stays under the cognitive-complexity budget — same reason `actor.rs`/`state.rs`'s
+    /// instrumented functions split too.
+    fn put_projection_inner(&mut self, p: &Projection) -> Result<(), StoreError> {
         upsert_projection(&self.conn, p)?;
         debug_assert!(
             self.get_projection(&p.file)?
@@ -84,6 +91,12 @@ impl Store {
     /// Stores a checkpoint at `seq` for `file`.
     #[tracing::instrument(skip_all, fields(file = %file, seq = snap.seq.0))]
     pub fn put_snapshot(&mut self, file: &FilePath, snap: &Snapshot) -> Result<(), StoreError> {
+        self.put_snapshot_inner(file, snap)
+    }
+
+    /// The real body of [`Self::put_snapshot`], split out the same reason
+    /// [`Self::put_projection_inner`] is.
+    fn put_snapshot_inner(&mut self, file: &FilePath, snap: &Snapshot) -> Result<(), StoreError> {
         debug_assert!(snap.seq.0 >= 0, "seqs start at 1");
         self.conn
             .execute(

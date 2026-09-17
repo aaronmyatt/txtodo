@@ -76,7 +76,7 @@ impl GlobalDaemon {
         // --no-lan: this suite only exercises selector routing, never sync — skipping LAN/mDNS
         // startup avoids real-network contention when several of these run concurrently.
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
-            .arg("--no-lan")
+            .args(["--no-lan", "--no-relay"])
             .env("TXTODO_REGISTRY_DB", &registry_db)
             .env("TXTODO_SOCKET", &socket)
             .stdout(Stdio::null())

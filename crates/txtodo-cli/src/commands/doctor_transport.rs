@@ -51,18 +51,31 @@ fn paired_summary(h: &pb::HealthResponse) -> String {
     }
 }
 
-/// `"relay off"` when unconfigured (`lan_relay_disabled`), else `"relay <url> (<outcome>)"` —
-/// `relay_last_outcome` empty means configured but never yet exercised.
+/// The built-in public relay `txtodod` defaults to when no `--relay`/`$TXTODO_RELAY_URL`/config
+/// `relay_url` and no `--no-relay` are given (task `relay-default-public-url`). Mirrors
+/// `crates/txtodo-daemon/src/relay.rs::DEFAULT_RELAY_URL` — this crate may not depend on
+/// `txtodo-daemon` (slice rule), so the value is duplicated here, the same pattern
+/// `pair.rs`'s `AWAIT_PEER_TIMEOUT`/`PAIRING_WINDOW_MS` already use.
+const DEFAULT_RELAY_URL: &str = "https://use1-1.relay.n0.iroh.link";
+
+/// `"relay off"` when unconfigured (`lan_relay_disabled`), else `"relay <url> (default,
+/// <outcome>)"` or `"relay <url> (configured, <outcome>)"` — naming which so nobody is silently
+/// talking to a URL they didn't choose. `relay_last_outcome` empty means never yet exercised.
 fn relay_summary(h: &pb::HealthResponse) -> String {
     if h.lan_relay_disabled {
         return "relay off".to_string();
     }
+    let source = if h.relay_url == DEFAULT_RELAY_URL {
+        "default"
+    } else {
+        "configured"
+    };
     let outcome = if h.relay_last_outcome.is_empty() {
         "no attempts yet"
     } else {
         h.relay_last_outcome.as_str()
     };
-    format!("relay {} ({outcome})", h.relay_url)
+    format!("relay {} ({source}, {outcome})", h.relay_url)
 }
 
 #[cfg(test)]
@@ -107,7 +120,7 @@ mod tests {
         assert_ne!(c.status, Status::Fail);
         assert!(
             c.detail
-                .contains("relay https://relay.example.org (connected)")
+                .contains("relay https://relay.example.org (configured, connected)")
         );
     }
 
@@ -121,6 +134,23 @@ mod tests {
         };
         let c = transport_check(Some(&h));
         assert!(c.detail.contains("no attempts yet"));
+    }
+
+    /// Task `relay-default-public-url`: the built-in public relay is labeled "default", not
+    /// "configured", so nobody mistakes it for something they set themselves.
+    #[test]
+    fn relay_at_the_built_in_default_url_is_labeled_default() {
+        let h = pb::HealthResponse {
+            lan_relay_disabled: false,
+            relay_url: DEFAULT_RELAY_URL.into(),
+            relay_last_outcome: "connected".into(),
+            ..healthy()
+        };
+        let c = transport_check(Some(&h));
+        assert!(
+            c.detail
+                .contains(&format!("relay {DEFAULT_RELAY_URL} (default, connected)"))
+        );
     }
 
     #[test]

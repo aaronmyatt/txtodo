@@ -41,8 +41,15 @@ impl MultiWorkspaceDaemon {
     ) -> (Self, MultiClient) {
         let socket = registry_dir.path().join("txtodod.sock");
         let registry_db = registry_dir.path().join("registry.db");
+        // Task relay-default-public-url: this harness's own default stays offline/fast unless a
+        // caller's extra_args already asks for a specific relay (support::Daemon::start_in's own
+        // comment has the full reasoning).
+        let mut args: Vec<String> = vec!["--identity-mode".into(), "tagged".into()];
+        if !extra_args.iter().any(|a| a == "--relay") {
+            args.push("--no-relay".into());
+        }
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
-            .args(["--identity-mode", "tagged"])
+            .args(&args)
             .args(extra_args)
             .env("TXTODO_REGISTRY_DB", &registry_db)
             .env("TXTODO_SOCKET", &socket)

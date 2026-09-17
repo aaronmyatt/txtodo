@@ -55,6 +55,9 @@ chacha20poly1305 = { version = "0.10", features = ["getrandom", "stream"] }
 # https://docs.rs/postcard — the bundle's own record framing (same codec txtodo-store already uses
 # for the ops.payload column); this crate has no prior direct dependency on it.
 postcard = { version = "1", features = ["alloc"] }
+# https://docs.rs/data-encoding — base32 for the compact `pair_accept` code (task
+# `pairing-code-compact`); same crate/version txtodo-sync's own offer.rs already uses.
+data-encoding = "2"
 # https://docs.rs/serde — derives for the bundle's own wire records (bundle_wire.rs)
 serde = { version = "1", features = ["derive"] }
 # https://docs.rs/prost — encodes BundleManifest to bytes for the bundle's clear header frame

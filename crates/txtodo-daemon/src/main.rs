@@ -8,6 +8,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
+use txtodo_daemon::args_parse::{parse_identity_mode, parse_key_store_mode, parse_relay_dial_peer};
 use txtodo_daemon::clock::{Clock, SystemClock};
 use txtodo_daemon::device_identity::DeviceIdentity;
 use txtodo_daemon::device_relay::DeviceRelay;
@@ -21,8 +22,8 @@ use txtodo_model::IdentityMode;
 use txtodo_sync::{KeyStoreMode, Secret};
 
 /// `txtodod [--dir <workspace>] [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
-/// [--relay <url>]`; nothing is guessed from the cwd. `--dir` is the legacy single-workspace
-/// bridge (`tasks/daemon-global-socket/notes.md`) — omit it for true global mode.
+/// [--relay <url>] [--no-relay]`; nothing is guessed from the cwd. `--dir` is the legacy
+/// single-workspace bridge (`tasks/daemon-global-socket/notes.md`) — omit for true global mode.
 struct Args {
     /// `Some` is the legacy `--dir <workspace>` bridge; `None` is the true global mode.
     dir: Option<PathBuf>,
@@ -32,52 +33,19 @@ struct Args {
     /// keeps the pre-existing in-memory placeholder — `auto`/`os` touch the real OS keychain,
     /// which most CI/headless environments can't reach.
     key_store_mode: Option<KeyStoreMode>,
-    /// The relay URL (ADR 0026); `None` (omitted) means relay stays off (LAN-only) — additive.
+    /// The explicit `--relay <url>` flag; `None` no longer means relay is off — `relay::
+    /// resolve_relay_url` (this file's `run`) is the real decision now.
     relay_url: Option<String>,
     /// `--relay-dial-peer <hex node id>`: a peer's *relay* node id to dial once this daemon's
     /// relay endpoint is bound, bypassing LAN discovery. Test-only; `None` if omitted.
     relay_dial_peer: Option<[u8; 32]>,
     /// `--no-lan`: skips LAN entirely for every workspace this daemon opens (relay-only tests).
     no_lan: bool,
+    /// `--no-relay`: opts out now that relay defaults on, symmetric with `--no-lan`.
+    no_relay: bool,
     /// `--sync-dir <path>`: the shared folder every opened workspace's file-carrier watches;
     /// `None` (omitted) keeps it off.
     sync_dir: Option<PathBuf>,
-}
-
-/// Lowercase (or uppercase) hex to exactly 32 bytes; `None` on anything else — `--relay-dial-peer`
-/// is external input (a human or a test harness typed it), never assumed well-formed.
-fn parse_relay_dial_peer(raw: &std::ffi::OsStr) -> Result<[u8; 32], String> {
-    let s = raw
-        .to_str()
-        .ok_or_else(|| "--relay-dial-peer must be valid UTF-8 hex".to_owned())?;
-    let bad = || format!("--relay-dial-peer must be 64 hex chars (32 bytes), got {s:?}");
-    if s.len() != 64 {
-        return Err(bad());
-    }
-    let mut out = [0u8; 32];
-    for (i, byte) in out.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).map_err(|_| bad())?;
-    }
-    Ok(out)
-}
-
-fn parse_identity_mode(raw: &std::ffi::OsStr) -> Result<IdentityMode, String> {
-    match raw.to_str() {
-        Some("tagged") => Ok(IdentityMode::Tagged),
-        Some("sidecar") => Ok(IdentityMode::Sidecar),
-        _ => Err(format!(
-            "--identity-mode must be tagged or sidecar, got {raw:?}"
-        )),
-    }
-}
-
-fn parse_key_store_mode(raw: &std::ffi::OsStr) -> Result<KeyStoreMode, String> {
-    match raw.to_str() {
-        Some("auto") => Ok(KeyStoreMode::Auto),
-        Some("os") => Ok(KeyStoreMode::Os),
-        Some("file") => Ok(KeyStoreMode::File),
-        _ => Err(format!("--key-store must be auto, os or file, got {raw:?}")),
-    }
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -88,6 +56,7 @@ fn parse_args() -> Result<Args, String> {
     let mut relay_url = None;
     let mut relay_dial_peer = None;
     let mut no_lan = false;
+    let mut no_relay = false;
     let mut sync_dir = None;
     // Bounded by the argv length; this binary's flags are all it knows.
     while let Some(a) = args.next() {
@@ -110,6 +79,7 @@ fn parse_args() -> Result<Args, String> {
                 relay_dial_peer = Some(parse_relay_dial_peer(&raw)?);
             }
             Some("--no-lan") => no_lan = true,
+            Some("--no-relay") => no_relay = true,
             Some("--sync-dir") => {
                 let raw = args.next().ok_or("--sync-dir needs a value")?;
                 sync_dir = Some(PathBuf::from(raw));
@@ -136,6 +106,7 @@ fn parse_args() -> Result<Args, String> {
         relay_url,
         relay_dial_peer,
         no_lan,
+        no_relay,
         sync_dir,
     })
 }
@@ -223,16 +194,18 @@ fn build_identity(
 
 /// `WorkspaceOpenArgs` from the CLI flags plus the identity/relay/file-carrier `run` already
 /// resolved — every workspace this catalog opens shares the identical `Option`s, never its own.
+/// `relay_url` is `run`'s resolved value, not `args.relay_url` re-read (must match `device_relay`).
 fn open_args(
     args: &Args,
     identity: Arc<DeviceIdentity>,
+    relay_url: Option<String>,
     device_relay: Option<Arc<DeviceRelay>>,
     device_file_carrier: Option<Arc<DeviceFileCarrier>>,
 ) -> OpenArgs {
     OpenArgs {
         identity_mode: args.identity_mode,
         identity,
-        relay_url: args.relay_url.clone(),
+        relay_url,
         device_relay,
         relay_dial_peer: args.relay_dial_peer,
         no_lan: args.no_lan,
@@ -360,10 +333,10 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let state_dir = resolve_state_dir(&args, &env)?;
     let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
     // One shared relay endpoint per device (`daemon-shared-sync-link` stage 5), bound before the
-    // control channel or any workspace opens — avoids two `iroh::Endpoint`s sharing one persisted
-    // relay identity. `None` when `--relay` was never given or the bind failed; every consumer
-    // below shares this identical `Option`, never binds its own.
-    let device_relay = match args.relay_url.clone().filter(|u| !u.is_empty()) {
+    // control channel or any workspace opens. Resolved once (defaults to a public relay unless
+    // `--no-relay`) so `open_args`'s `Health` reporting below agrees with the actual bind.
+    let relay_url = txtodo_daemon::relay::resolve_relay_url(args.relay_url.clone(), args.no_relay);
+    let device_relay = match relay_url.clone() {
         Some(url) => DeviceRelay::bind(&identity, url).await,
         None => None,
     };
@@ -383,7 +356,13 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         .map(txtodo_daemon::file_carrier::start);
     let catalog = Arc::new(WorkspaceCatalog::new(
         registry,
-        open_args(&args, identity, device_relay, device_file_carrier),
+        open_args(
+            &args,
+            identity,
+            relay_url,
+            device_relay,
+            device_file_carrier,
+        ),
         clock,
     ));
 

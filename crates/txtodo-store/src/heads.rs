@@ -50,6 +50,15 @@ impl Store {
     /// `MAX_DEVICES_PER_HEADS`.
     #[tracing::instrument(skip_all)]
     pub fn heads(&self) -> Result<BTreeMap<DeviceId, u64>, StoreError> {
+        let heads = self.heads_inner()?;
+        log_heads_read(heads.len());
+        Ok(heads)
+    }
+
+    /// The real body of [`Self::heads`], split out so `#[instrument]` on the outer function stays
+    /// under the cognitive-complexity budget — same reason `actor.rs`/`state.rs`'s instrumented
+    /// functions split too.
+    fn heads_inner(&self) -> Result<BTreeMap<DeviceId, u64>, StoreError> {
         let mut stmt = self
             .conn
             .prepare_cached(SELECT_HEADS)
@@ -70,13 +79,19 @@ impl Store {
             heads.values().all(|h| *h > 0),
             "a device with no ops has no head"
         );
-        log_heads_read(heads.len());
         Ok(heads)
     }
 
     /// How many of `device`'s ops we hold (0 for a device we have never heard from).
     #[tracing::instrument(skip_all, fields(device = %device))]
     pub fn head_of(&self, device: DeviceId) -> Result<u64, StoreError> {
+        let head = self.head_of_inner(device)?;
+        log_head_of(device, head);
+        Ok(head)
+    }
+
+    /// The real body of [`Self::head_of`], split out the same reason [`Self::heads_inner`] is.
+    fn head_of_inner(&self, device: DeviceId) -> Result<u64, StoreError> {
         let count: i64 = self
             .conn
             .query_row(SELECT_HEAD, params![device_blob(device)], |r| r.get(0))
@@ -84,16 +99,22 @@ impl Store {
         debug_assert!(count >= 0);
         let head = u64::try_from(count).unwrap_or(0);
         debug_assert_eq!(head == 0, count == 0);
-        log_head_of(device, head);
         Ok(head)
     }
 
     /// The `origin_seq` the next op from `device` will take: `head_of + 1`.
     #[tracing::instrument(skip_all, fields(device = %device))]
     pub fn next_origin_seq(&self, device: DeviceId) -> Result<u64, StoreError> {
+        let next = self.next_origin_seq_inner(device)?;
+        log_next_origin_seq(device, next);
+        Ok(next)
+    }
+
+    /// The real body of [`Self::next_origin_seq`], split out the same reason
+    /// [`Self::heads_inner`] is.
+    fn next_origin_seq_inner(&self, device: DeviceId) -> Result<u64, StoreError> {
         let next = self.head_of(device)?.saturating_add(1);
         debug_assert!(next >= 1);
-        log_next_origin_seq(device, next);
         Ok(next)
     }
 
