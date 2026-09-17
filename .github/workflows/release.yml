@@ -115,11 +115,23 @@ jobs:
         # ziglang FIRST: .cargo/config.toml pins zig as the x86_64-unknown-linux-gnu linker
         # unconditionally, so `cargo install cargo-zigbuild` (a plain, un-cross-targeted `cargo
         # install`, itself compiling host-target proc-macro/build-script crates like `libc`) hits
-        # that same override — installing zig second left it missing exactly when this step's own
-        # first command needed it, failing every non-native leg with "exit status: 127" (zig cc
-        # not found) on this project's first real release run.
+        # that same override.
+        #
+        # `pip3 install ziglang` alone still isn't enough (found on this project's first real
+        # release run, twice): the `ziglang` PyPI package's own installed script location isn't
+        # reliably on this runner's PATH for later steps (Ubuntu 24.04's system pip3 install
+        # location varies by whether it lands in a user site or a hostedtoolcache one — not worth
+        # depending on either). A hand-written wrapper at a location this step explicitly adds to
+        # $GITHUB_PATH (which, unlike a plain PATH export, persists to every later step in this
+        # job: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#adding-a-system-path)
+        # sidesteps the question of where pip put anything.
         run: |
-          pip3 install ziglang   # cargo-zigbuild's own recommended zig install path
+          pip3 install ziglang
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/sh\nexec python3 -m ziglang "$@"\n' > "$HOME/.local/bin/zig"
+          chmod +x "$HOME/.local/bin/zig"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/zig" version   # fail loudly here, not three steps later
           cargo install --locked cargo-zigbuild
 
       - name: build (cargo-zigbuild)
@@ -212,7 +224,16 @@ jobs:
       # (command not found). `build`'s own zig install already works around this; this job needs
       # the same fix even though it has no zig cross-compiling of its own to do.
       - name: install zig (works around .cargo/config.toml's host-linker override, see above)
-        run: pip3 install ziglang
+        # `pip3 install ziglang` alone isn't enough — see the `build` job's own "install
+        # cargo-zigbuild + zig" step comment for why this wrapper-plus-$GITHUB_PATH form is used
+        # instead of trusting wherever pip put its own console script.
+        run: |
+          pip3 install ziglang
+          mkdir -p "$HOME/.local/bin"
+          printf '#!/bin/sh\nexec python3 -m ziglang "$@"\n' > "$HOME/.local/bin/zig"
+          chmod +x "$HOME/.local/bin/zig"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/zig" version
       # https://github.com/rustwasm/wasm-pack
       - name: install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
