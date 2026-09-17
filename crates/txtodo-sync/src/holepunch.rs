@@ -95,12 +95,48 @@ async fn conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Conne
     }
 }
 
+/// Opt-in only, and deliberately its own env var rather than reusing `TXTODO_TEST_HOOKS`
+/// (`crates/txtodo-daemon/src/debug_hooks.rs`): that flag is already set broadly across this
+/// crate's own test harness (`support/mod.rs`, `support/multi.rs`, `support/relay.rs`) for an
+/// unrelated purpose (`DebugSetGroupKey`), and every one of those callers would otherwise pay
+/// [`POLL_WINDOW`]'s extra latency on every relay connect whether or not they care about this
+/// question at all.
+const CONN_PATH_POLL_ENV_VAR: &str = "TXTODO_CONN_PATH_POLL";
+
+/// `relay-converge-test`'s own follow-up (id `01M2Q4RELAYPUNCHPOLL00001`): one immediate
+/// [`conn_path`] snapshot can never observe iroh's hole-punch upgrading a connection from relay to
+/// direct *after* `connect()` returns, since that upgrade (if any) happens asynchronously. Bounded
+/// so a test that enables it never hangs the connect call.
+const POLL_WINDOW: std::time::Duration = std::time::Duration::from_secs(3);
+const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(300);
+
 /// One event per successful [`RelayEndpoint::connect`], naming which path it's using right now —
 /// split out of `connect` purely to keep clippy's `cognitive_complexity` under this crate's budget
 /// (the same reason `crates/txtodo-daemon/src/mutation.rs`'s `log_mutation_ops` is its own fn).
-async fn log_conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Connection) {
-    let path = conn_path(endpoint, connection).await;
-    tracing::info!(path = ?path, "relay_connect_established");
+/// Never delays `connect`'s own return, with [`CONN_PATH_POLL_ENV_VAR`] set or not: `endpoint` and
+/// `connection` are both cheap-clone handles to shared state (`iroh::Endpoint` wraps an `Arc`,
+/// `iroh::endpoint::Connection`'s own doc: "may be cloned to obtain another handle to the same
+/// connection"), so the poll below runs as its own spawned task the caller never awaits.
+fn log_conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Connection) {
+    let endpoint = endpoint.clone();
+    let connection = connection.clone();
+    tokio::spawn(async move {
+        let path = conn_path(&endpoint, &connection).await;
+        tracing::info!(path = ?path, "relay_connect_established");
+        if std::env::var(CONN_PATH_POLL_ENV_VAR).as_deref() != Ok("1") {
+            return;
+        }
+        let start = std::time::Instant::now();
+        while start.elapsed() < POLL_WINDOW {
+            tokio::time::sleep(POLL_INTERVAL).await;
+            let polled = conn_path(&endpoint, &connection).await;
+            tracing::info!(
+                path = ?polled,
+                elapsed_ms = start.elapsed().as_millis() as u64,
+                "relay_connect_path_poll"
+            );
+        }
+    });
 }
 
 /// A relay-configured endpoint, plus what a caller needs to dial or accept peers over it. One per
@@ -192,7 +228,7 @@ impl RelayEndpoint {
             .connect(target, crate::endpoint::ALPN)
             .await
             .map_err(HolepunchError::Connect)?;
-        log_conn_path(&self.endpoint, &connection).await;
+        log_conn_path(&self.endpoint, &connection);
         let (send, recv) = connection
             .open_bi()
             .await

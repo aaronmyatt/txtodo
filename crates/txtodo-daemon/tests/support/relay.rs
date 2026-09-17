@@ -42,6 +42,27 @@ pub async fn start_with_seeded_group_and_workspace_args(
     Daemon::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
 }
 
+/// `start_with_seeded_group_and_workspace_args`, plus extra environment variables on the spawned
+/// process (e.g. `TXTODO_CONN_PATH_POLL`, `crates/txtodo-sync/src/holepunch.rs`) — additive rather
+/// than a signature change to the existing helper every other call site already uses. `ids` is
+/// `(group_id, workspace_id)`, paired up so this stays at `clippy::too_many_arguments`'s budget.
+pub async fn start_with_seeded_group_and_workspace_args_and_envs(
+    files: &[(&str, &str)],
+    mode: &str,
+    ids: (u128, u128),
+    extra_args: &[String],
+    extra_envs: &[(&str, &str)],
+) -> Daemon {
+    let (group_id, workspace_id) = ids;
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    write_tree(dir.path(), files);
+    seed_group_id(dir.path(), group_id);
+    seed_workspace_id(dir.path(), workspace_id);
+    let mut envs = vec![("TXTODO_TEST_HOOKS", "1")];
+    envs.extend_from_slice(extra_envs);
+    Daemon::start_in(dir, mode, &envs, extra_args).await
+}
+
 /// `relay.rs`'s `bind()` records `"bound as <hex>; awaiting connections"` in
 /// `Health.relay_last_outcome` on a successful bind — this parses the hex node id back out, so one
 /// daemon's relay identity can be handed to another's `--relay-dial-peer` without any pairing
