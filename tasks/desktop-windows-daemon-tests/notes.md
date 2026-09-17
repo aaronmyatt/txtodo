@@ -86,3 +86,8 @@ Real, live verification in progress: pushed both fixes and re-ran `ci.yml` for r
 `windows-latest` (not just local `cargo check` on this unix machine, which can't exercise the
 `cfg(unix)` boundary either way) — see this task's own root `todo.txt` line for the outcome once
 that run lands.
+
+## Live CI confirmation
+
+Pushed both fixes and re-ran `ci.yml` for real against `windows-latest`: `check (windows-latest)`
+= success.

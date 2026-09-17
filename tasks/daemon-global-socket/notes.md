@@ -255,3 +255,12 @@ call sites were flagged) — a real gap in scoping, found only by running the fu
 Both are their own fenced slices, next up. Root `todo.txt` line 18 stays un-x'd until the CLI slice
 (at minimum) lands, since "every gRPC call carries a workspace selector" isn't true end-to-end
 until a real client can supply one.
+
+## Closed (2026-09-13)
+
+The daemon slice (`c55a4aa`) routes `WorkspaceSelector` via `WorkspaceCatalog` (`None` resolves to
+the sole open workspace); cli/mcp/tui/desktop-test/proto-test call sites all now carry
+`workspace: None` (`0cd9a4e`, `3e5c76a`, `4511ab7`, `bc6c9da`, `ece7457`) — every RPC carries a
+selector end to end, `cargo check --workspace --all-targets` clean. This closes out the
+"still open, real cross-crate consequence" gap noted above: the CLI and MCP call sites are now
+both updated.

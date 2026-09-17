@@ -46,3 +46,16 @@ desktop-general-availability gap, not cosmetic.
 - No back-compat with the old JSON format — matches the project's stated "no released users yet"
   posture used elsewhere (`daemon-device-set-identity`'s notes.md) for breaking a wire-adjacent
   format with no migration story.
+
+## As built
+
+`run_offer`'s printed fallback is now `to_compact(&code)` (postcard+base32); the QR itself still
+renders JSON unchanged.
+
+Deviated from the original "no back-compat" plan after finding a real consumer mid-implementation:
+`apps/desktop`'s own TypeScript QR encode/decode (`qr.ts`/`pairing.ts`) independently builds and
+scans JSON — decode now accepts either format (auto-detected by a leading `'{'`), so the desktop
+app needed zero changes; only the CLI's own encode side switched.
+
+Verified for real: the existing two-daemon `pairing.rs` suite (4/4) now exercises the compact path
+in normal use, no separate test needed.

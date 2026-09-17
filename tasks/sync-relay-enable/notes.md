@@ -72,3 +72,14 @@ impl Link for RelayLink {
 - [sync-lan-transport](../sync-lan-transport/notes.md) ·
   [sync-protocol-frames](../sync-protocol-frames/notes.md) ·
   [sync-crypto-envelope](../sync-crypto-envelope/notes.md).
+
+## As built
+
+The daemon wires `txtodo_sync::RelayEndpoint` as an additive LAN fallback (`relay.rs`/
+`relay_state.rs`/`relay_fallback.rs`, ADR 0026); `lan.rs::dial_and_spawn` tries LAN then falls
+back to relay via `lan_then_relay`; the CLI threads `--relay`/`$TXTODO_RELAY_URL`/config
+`relay_url` through, and `txtodo doctor` reports it (no longer a `Status::Fail`). Both crates'
+tests green.
+
+**Known gap, deliberately out of scope**: no shared identity across LAN/relay yet
+(`relay-converge-test`) and no rebuild-on-group-change for relay (`sync-pairing-relay`).

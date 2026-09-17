@@ -69,3 +69,8 @@ self-host-only per the Q5 default, and a pointer to `docs/relay.md`.
 - plan M8 and §5 (txtodo-implementation-plan.md), design §4.5/§4.6 (txtodo-design.md)
 - Sibling: [relay-reference](../relay-reference/notes.md), [relay-converge-test](../relay-converge-test/notes.md)
 - systemd units: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
+
+## As built
+
+`docs/relay.md`, `deploy/systemd/relay.service`, and a README.md section written; the
+`relay --help`/doc-drift test and the README/doc "optional" test both pass.

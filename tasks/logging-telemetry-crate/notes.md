@@ -257,3 +257,11 @@ subtask (can't run `-p txtodo-daemon` meaningfully until the wiring exists), and
 - `crates/txtodo-daemon/src/lan_session_security_tests.rs:1-80` (source of `LogSink`)
 - `.txtodo/logs/txtodod.log.2026-09-13` (the `workspace` vs `dir` drift evidence)
 - `crates/txtodo-daemon/src/main.rs:311-346` (`prepare_and_announce`, today's call site)
+
+## Closed (2026-09-16)
+
+Crate built (commit `f080510`), tests green. The daemon-side thin re-export and each consumer's
+own `budgets.json` `allowedDeps` entry — previously "blocked mid-flight" above — were redirected
+to the sibling tasks that each add their own dep + budgets entry when they wire in:
+`logging-daemon-boot`, `logging-cli`, `logging-tui`, `logging-mcp-call-span`. This crate's own
+scope (the shared init itself) is done; the parent root `todo.txt` line is marked done too.

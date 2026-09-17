@@ -66,3 +66,15 @@ this formula's two `resource` blocks doesn't hold up on its first real run — g
 either way without a real upstream release to bump against. Pushed to
 <https://github.com/aaronmyatt/homebrew-tap> — see `BREW_TAP.patch.md` for the full status and
 what's still open.
+
+## RESOLVED (2026-09-17)
+
+v0.0.1 published. Every macOS binary's cosign Sigstore signature verified against `release.yml`'s
+own OIDC identity before stamping; `deploy/homebrew/Formula/txtodo.rb` pushed live to
+`aaronmyatt/homebrew-tap`. `brew tap` + `brew audit --strict` + `brew install` + `brew test` all
+run for real against the live tap and pass — installed `txtodo`/`txtodod`/`txtodo-tui` each report
+`0.0.1`.
+
+`autobump.yml`'s multi-resource handling is still unproven (needs a second real release to fire) —
+that's the only remaining gap, tracked as its own follow-up
+(`id:01M2Q1BREWAUTOBUMPCHECK01`, root todo.txt).

@@ -96,3 +96,12 @@ pair eventually syncs), and `NoLoss`.)
 - plan M10 (txtodo-implementation-plan.md), design §11 (txtodo-design.md)
 - TLA+ / TLC: https://lamport.azurewebsites.net/tla/tla.html · https://github.com/tlaplus/tlaplus
 - TLC CLI + .cfg: https://tla.msr-inria.fr/tlatoolbox/documentation/
+
+## Status (deferred 2026-09-13)
+
+Not built. On reviewing the pseudocode above, real gaps surfaced: undefined operators, an
+incomplete invariant, and a liveness property (`Convergence`'s weak-fairness condition) that needs
+careful phrasing to state correctly. This needs a human TLA+ pass before an agent implements it.
+
+In the meantime, `crates/txtodo-crdt/tests/sim.rs` already covers convergence/no-loss
+probabilistically, so the sync protocol isn't unverified — just not model-checked.

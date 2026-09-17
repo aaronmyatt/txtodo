@@ -374,3 +374,18 @@ than one workspace. Passed 4/4 real runs against the live relay, converging in 3
 Root todo.txt line 164 (id `01M2HV96V8SESSIONMULTIPLEX01`) is marked done: the real multiplexing
 this stage set out to prove is proven for real, against a real external relay, not just
 library-level support for it.
+
+## Correction (2026-09-16)
+
+Two pre-existing real-network/mDNS-timing failures were called flakes in the "Verified" section
+above; that diagnosis was **wrong** for one of them. `crates/txtodo-cli/tests/pairing.rs` fails
+deterministically on ubuntu, macOS and locally, and it fails **because of** this task's stage 1/2:
+pairing agrees a group id and key but never a `WorkspaceId` (minted locally per device by
+`workspace_registry::add`), so once every sync message carried one, `lan_session_dispatch.rs`
+skips the peer's every `Greet` as `lan_session_unrouted_workspace_message_skipped` and two
+freshly-paired devices never sync a byte. Confirmed from both daemons' `TXTODO_LOG=debug` logs.
+
+Not caught anywhere else because `pairing_lan.rs`/`pairing_relay.rs`/`relay_multiplex.rs` all
+pre-seed both sides with the same id (`Daemon::start_with_workspace_id`, `seed_workspace_at`),
+pre-agreeing the exact thing that is broken. The real fix is tracked and landed as
+`pairing-workspace-identity`.

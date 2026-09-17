@@ -47,3 +47,23 @@ already tracked, deferred) applies equally either way.
 - No change to LAN behavior (`RelayMode::Disabled` for the LAN endpoint) or to the relay-dial bugs
   tracked separately as `pairing-workspace-identity` and `sync-pairing-relay-ongoing-dial` — this
   ticket only removes the need to configure a URL; it does not fix convergence itself.
+
+## As built
+
+`resolve_relay_url` (`crates/txtodo-daemon/src/relay.rs`) is the single decision point:
+`--no-relay` (new, symmetric with `--no-lan`) always wins, else an explicit `--relay`, else the
+default; threaded into both the real `DeviceRelay::bind` and `Health`'s reporting field so they
+can't disagree. `doctor_transport.rs` labels "default" vs "configured". Real acceptance test
+(`tests/relay_default.rs`): a daemon spawned with zero relay flags ends up with a real relay bound
+at the default URL.
+
+Design deviated from the original sketch (this task's own `todo.txt` item 2): `txtodo-cli`'s own
+`relay_url` config never actually reaches a spawned `txtodod` today (not via launchd/systemd, not
+via the Tauri spawn path), so the default had to live in the daemon's own arg resolution instead,
+applying regardless of launch method.
+
+Test harness updated to inject `--no-relay` by default (6 files) so the existing suite stays
+fast/offline; found and fixed two pieces of pre-existing debt blocking a clean workspace clippy
+gate along the way (`txtodo-store`'s and `txtodo-crdt`'s own instrumented functions over the
+cognitive-complexity budget, same thin-wrapper pattern as before) — the rest of that debt outside
+what blocked this ticket is tracked separately, not fixed here.

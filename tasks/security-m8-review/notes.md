@@ -64,3 +64,19 @@ new surfaces. External input (`--sync-dir`) is VALIDATED, not asserted — const
 
 - plan §5 (txtodo-implementation-plan.md), design §4.6 (txtodo-design.md)
 - Sibling: [security-m4-review](../security-m4-review/notes.md), [relay-reference](../relay-reference/notes.md), [relay-converge-test](../relay-converge-test/notes.md), [cli-bundle](../cli-bundle/notes.md)
+
+## Finding: relay op-type frame-length side channel (deferred 2026-09-14)
+
+Content opacity is closed (`relay_store_holds_only_opaque_ciphertext`), but a narrower gap remains
+open: Hello/Want/Ack/Ops have distinct on-wire size distributions, so a relay that can't read
+content can still often guess message type by ciphertext length alone. Needs a padding scheme.
+First recorded at M4 close, carried forward once already — `id:06G9ZV2JPBJ8P829RA634BE8KG`.
+
+## M8 close results (2026-09-14)
+
+The 7-item plan §5 checklist all pass or are tracked-deferred: no secrets in logs, keys only in
+keystore, network messages versioned/authenticated/encrypted, and `ref:`-path-traversal all pass —
+the last one found and fixed a real symlink-escape bug in `--sync-dir`'s threat model. The
+relay op-type deferred split above (content opacity closed, frame-length side channel deferred).
+MCP-loopback and tokens-never-logged deferred to M6 (already-deferred, cross-referenced there).
+`RATCHET.md`'s 2026-09-14 entry has the full writeup.

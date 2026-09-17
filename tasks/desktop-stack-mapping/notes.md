@@ -92,3 +92,13 @@ list disturbs the other.
 - `.claude/stack.md` (frozen) · `.claude/budgets.json` (frozen) · constitution §1 budgets, §2 slices.
 - https://eslint.org/docs/latest/rules/ · https://typescript-eslint.io/rules/
 - https://prettier.io/ · https://github.com/sveltejs/language-tools · https://vitest.dev/
+
+## As built
+
+`.claude/stack.md`'s "Second stack" section written: toolchain table, rule-to-tier mapping,
+commands, and the honest gaps below.
+
+Found and flagged as its own follow-up (`desktop-stack-gaps`): `apps/desktop` had zero CI coverage
+(no typecheck/test/build step in `.github/workflows/ci.yml`), and its Rust crate (a real workspace
+member) was outside `check-file-length.sh`/`check-boundaries.sh`'s `crates/*`-only globs and the
+crate-slice lease fence.

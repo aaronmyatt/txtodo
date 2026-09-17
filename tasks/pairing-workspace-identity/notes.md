@@ -105,3 +105,26 @@ Un-`#[ignore]` `crates/txtodo-cli/tests/pairing.rs`'s
 `a_paired_joiner_receives_the_initiators_real_file` and have it pass on all three runners. That
 test was quarantined by this task's filing and is its acceptance bar; nothing else needs to be
 written to prove the fix.
+
+## As built
+
+The initiator's real `WorkspaceId` now rides `PairOfferResponse` as a ninth field (catalog
+metadata, same treatment as `identity_mode` — not part of the crypto transcript); the joiner
+adopts it via `WorkspaceCatalog::adopt_offered_workspace_id` (first-registrant-wins: releases its
+self-registered row, adopts the offered id, rekeys the open-map entry, live `Workspace` id, and
+device-level relay/file-carrier routes together).
+
+`crates/txtodo-cli/tests/pairing.rs::a_paired_joiner_receives_the_initiators_real_file` un-ignored
+and green (4/4 local repeat runs), no regressions in `txtodo-daemon`'s 213 lib tests or the real
+two-daemon `pairing_lan.rs` test.
+
+Found and fixed a real dependency along the way: `txtodo-store`'s `heads()`/`head_of()`/
+`next_origin_seq()`/`put_projection()`/`put_snapshot()` exceeded the cognitive-complexity budget
+once instrumented (pre-existing, from the M11 logging milestone) — split with the same
+thin-wrapper-plus-`_inner` pattern as `OpenedWorkspace::drop`/`drop_inner`. The rest of that
+pre-existing debt (at least `txtodo-crdt`) is out of scope here, flagged as its own follow-up.
+
+**Deliberately still open, genuinely separate scope**: `txtodo workspace offers`/`accept` CLI
+surface for adding a second workspace to an already-paired device (this task's own `todo.txt` item
+4); not verified on ubuntu/Windows CI (no CI access this session, no platform-specific code path
+involved).

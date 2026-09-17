@@ -66,3 +66,10 @@ pub struct AppendFrame { len: u32, body: Vec<u8> }   // partial sync may deliver
 - [sync-protocol-frames](../sync-protocol-frames/notes.md) ·
   [sync-lan-transport](../sync-lan-transport/notes.md) ·
   [sync-crypto-envelope](../sync-crypto-envelope/notes.md).
+
+## As built
+
+`crates/txtodo-sync/src/{append_frame,carrier,carrier_error}.rs` (`FileCarrier` as a `Link` impl)
+built and tested (4/4 acceptance tests); `crates/txtodo-cli` config `sync_dir`/`--sync-dir`/env
+wired. `op_id`-level dedupe into `txtodo-store` deliberately deferred — see this task's own
+`todo.txt` remaining `@store` item.
