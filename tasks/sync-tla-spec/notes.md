@@ -105,3 +105,11 @@ careful phrasing to state correctly. This needs a human TLA+ pass before an agen
 
 In the meantime, `crates/txtodo-crdt/tests/sim.rs` already covers convergence/no-loss
 probabilistically, so the sync protocol isn't unverified — just not model-checked.
+
+## Dropped (2026-09-17, human decision)
+
+Not pursuing. `sim.rs`'s probabilistic convergence/no-loss fuzzing is judged sufficient for this
+project's stakes; the TLA+ pass needed real formal-methods expertise plus ongoing spec maintenance
+as the protocol evolves, and the cost wasn't judged worth it for a todo-list sync engine (vs. e.g.
+a consensus protocol where formal proof is standard practice). Root todo.txt line closed (`x`) and
+moved to the bottom of the file.

@@ -50,3 +50,43 @@ with the initiator over the LAN..." regardless of which carrier the pairing itse
 Building this generically for every paired device (multiple peers, rotation, etc.) — start with the
 single-peer case `--relay-dial-peer` already covers manually, same scope discipline
 `relay-converge-test`/`sync-pairing-relay` used.
+
+## As built (2026-09-17)
+
+- New `crates/txtodo-daemon/src/relay_autodial.rs` (split from `lan.rs`, which was already at the
+  400-line file budget): `resync_and_dial` runs on `lan.rs`'s existing `run()` resync tick,
+  alongside the pre-existing known-peer redial. `filter_relay_only` reads the devices table (via
+  `Workspace::identity_store()`) and picks every non-removed row with a recorded `relay_node_id`
+  that `known_peers` (LAN sightings) has never resolved, then dials each one with the existing
+  `relay_fallback_dial` (unchanged) — the same primitive `lan.rs::dial_and_spawn` already uses for
+  its LAN-then-relay fallback, just fed a *recorded relay identity* instead of a LAN one, which
+  sidesteps `relay_fallback.rs`'s own flagged "dials the peer's LAN identity over relay" gap.
+- **No device-id tie-break**, deliberately, unlike `peers_to_resync`'s. `record_peer_relay_
+  reachability` is one-directional (`pairing_lan.rs::finish_joiner`: only the joiner records the
+  initiator's relay id) — a tie-break here could silence the only side that ever has data to dial
+  with. See `relay_autodial.rs`'s own module doc for the full reasoning. Follow-up if the reverse
+  direction is ever recorded too: revisit whether a tie-break is worth adding back.
+- `filter_relay_only` is a pure function, unit-tested directly (5 cases: dials, skips a LAN-known
+  peer, skips removed, skips no-relay-id, and — before the tie-break was removed — the tie-break
+  itself). The impure edges (`relay_only_peers`'s devices-table read, `spawn_relay_only_dial`'s
+  actual dial) are exercised only by the real two-daemon test below, not separately unit-tested —
+  same split `lan_peers.rs`'s own tests use.
+- Real two-daemon test: `crates/txtodo-daemon/tests/relay_auto_dial.rs`,
+  `joiner_auto_dials_initiator_via_relay_after_pairing_with_no_dial_peer_flag` — real pairing over
+  n0's public relay (no test-only seam exists to fake the devices-table row; adding one would need
+  a new proto message, `txtodo-proto`, a separate crate/slice from this task), then two rounds of
+  convergence assertion (the initial snapshot, then a later edit) with no `--relay-dial-peer` on
+  either side. **`#[ignore]`d**: ran it live twice in this session, both times it timed out at the
+  group-key-never-lands step; re-ran the pre-existing, already-`#[ignore]`d sibling
+  `pairing_relay.rs::two_real_daemons_pair_over_relay_with_lan_disabled` for comparison and got the
+  identical failure signature (same timeout, same near-empty log) — this sandbox's real pairing-
+  over-relay handshake does not complete at all right now, a pre-existing environment issue, not a
+  bug in this task's new code. The fast, non-pairing `relay_converge.rs` test (debug-seeded group
+  key + `--relay-dial-peer`, exercises the same `resync_and_dial`/`spawn_resync_dial` call site)
+  still passes and converges in ~3.6s, so the resync-tick wiring itself is proven live; only the
+  *real pairing* half of this new test is blocked on that pre-existing sandbox issue. Full daemon
+  unit suite (225 tests) plus `lan_loopback_converge`/`file_carrier_converge`/`relay_multiplex`
+  integration tests all green after this change — no regression.
+- `pair.rs::run_join`'s hardcoded "over the LAN" message is a separate `txtodo-cli` slice/commit
+  (this session's fence enforces one crate lease at a time) — tracked as the remaining open
+  sub-line in this task's own `todo.txt`.

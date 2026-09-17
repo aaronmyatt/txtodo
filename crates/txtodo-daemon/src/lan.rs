@@ -28,8 +28,7 @@ use txtodo_sync::{
 
 use crate::clock::Clock;
 use crate::lan_peers::{
-    DialState, KnownPeers, SharedDialState, peers_to_resync, record_dial_outcome, remember_peer,
-    worth_dialing,
+    DialState, KnownPeers, SharedDialState, record_dial_outcome, remember_peer, worth_dialing,
 };
 use crate::lan_session::{drive_session, read};
 use crate::server::SharedWorkspace;
@@ -141,9 +140,7 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                     ctx.group = rebuilt.group;
                     table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
                 }
-                for peer in peers_to_resync(&known_peers, ctx.device) {
-                    spawn_resync_dial(Arc::clone(&sessions), ctx.clone(), Arc::clone(&endpoint), peer);
-                }
+                crate::relay_autodial::resync_and_dial(&known_peers, &ctx, &endpoint, &sessions);
             }
         }
     }
@@ -375,7 +372,7 @@ fn spawn_dial(
 
 /// The periodic-resync counterpart of `spawn_dial`: same connect-and-drive, but no `DialState`
 /// bookkeeping — deliberate, unconditional churn rather than failure recovery (module doc).
-fn spawn_resync_dial(
+pub(crate) fn spawn_resync_dial(
     sessions: Arc<Semaphore>,
     ctx: LanCtx,
     endpoint: Arc<LanEndpoint>,

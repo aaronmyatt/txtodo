@@ -75,6 +75,7 @@ pub mod refdir;
 mod refdir_grpc;
 mod refdir_ops;
 pub mod relay;
+mod relay_autodial;
 mod relay_fallback;
 #[cfg(test)]
 mod relay_fallback_tests;

@@ -65,6 +65,14 @@ new surfaces. External input (`--sync-dir`) is VALIDATED, not asserted — const
 - plan §5 (txtodo-implementation-plan.md), design §4.6 (txtodo-design.md)
 - Sibling: [security-m4-review](../security-m4-review/notes.md), [relay-reference](../relay-reference/notes.md), [relay-converge-test](../relay-converge-test/notes.md), [cli-bundle](../cli-bundle/notes.md)
 
+## Finding: relay op-type frame-length side channel — dropped (2026-09-17, human decision)
+
+Not pursuing the padding scheme. Self-hosting the relay (the direction the project is headed —
+see `relay-default-public-url`/`cli-relay-enroll`-adjacent access-control work) removes the shared
+multi-tenant relay operator as an adversary in this threat model; the residual risk (whoever has
+network visibility into your own relay host) was judged low-priority relative to the cost of
+building and maintaining a padding scheme. Root todo.txt line closed (`x`) and moved to bottom.
+
 ## Finding: relay op-type frame-length side channel (deferred 2026-09-14)
 
 Content opacity is closed (`relay_store_holds_only_opaque_ciphertext`), but a narrower gap remains
