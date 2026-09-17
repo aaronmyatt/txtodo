@@ -221,6 +221,13 @@ mod tests {
         );
     }
 
+    // Both below assume `connect` actually dials a unix socket (ADR 0010): on Windows it returns
+    // `Err(UnsupportedPlatform)` immediately instead, which the `.is_ok()`/`.unwrap()` here would
+    // wrongly read as a failure (or panic outright) rather than the correct, already-handled
+    // platform gap `DaemonError::UnsupportedPlatform` documents. Found on this project's first
+    // real Windows CI run — `connect`/`wait_until_ready` themselves are already Windows-aware;
+    // only these two tests weren't.
+    #[cfg(unix)]
     #[tokio::test]
     async fn connect_never_blocks_even_with_no_daemon_listening() {
         // `connect_lazy` defers the actual dial to the first RPC; building the client against a
@@ -231,6 +238,7 @@ mod tests {
         assert!(daemon.is_ok(), "connect_lazy must not dial eagerly");
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn wait_until_ready_times_out_without_a_daemon() {
         let sock = std::env::temp_dir().join("txtodo-tui-test-no-such-daemon-2.sock");

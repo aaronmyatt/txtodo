@@ -1,6 +1,10 @@
 //! Integration tests (recommended build order step 5, todo.txt item 12): an external edit (a
 //! save from outside the TUI) appears on a `Watch` stream without a manual refresh, and a
 //! dropped `Watch` reconnects and re-baselines. A real `txtodod` on a temp workspace.
+//!
+//! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
+//! `src/daemon.rs`'s own unit tests were just gated for.
+#![cfg(unix)]
 
 mod support;
 

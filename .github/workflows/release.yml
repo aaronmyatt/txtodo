@@ -381,6 +381,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      # Missing on this project's first real release run: this job runs on its own fresh
+      # runner (a separate VM from `sign`'s), so `cosign` isn't just already there from that
+      # job — every job that shells out to it needs its own copy of this step.
+      - uses: sigstore/cosign-installer@v3
       - name: verify every signature before publishing
         env:
           GH_REPO: ${{ github.repository }}

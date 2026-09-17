@@ -2,6 +2,10 @@
 //! each round-trip through a real `Daemon::apply` and repaint via a real `Watch` — a real
 //! `txtodod` on a temp workspace, driven directly (not through a terminal; `app::perform` is the
 //! same seam the real event loop calls).
+//!
+//! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
+//! `src/daemon.rs`'s own unit tests were just gated for.
+#![cfg(unix)]
 
 mod support;
 

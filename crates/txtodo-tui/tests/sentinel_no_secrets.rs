@@ -6,6 +6,10 @@
 //! sentinel test — including that test's own load-bearing note: `#[tokio::test]`'s default
 //! current-thread runtime is why a thread-local `set_default` guard held across `.await` points
 //! still covers every async call made through it.
+//!
+//! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
+//! `src/daemon.rs`'s own unit tests were just gated for.
+#![cfg(unix)]
 
 mod support;
 
