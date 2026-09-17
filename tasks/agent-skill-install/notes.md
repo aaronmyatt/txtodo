@@ -21,3 +21,8 @@ Design decisions:
   (`.claude/hooks/fence.sh`), so the TUI hint (`txtodo-tui`, its own crate) and the desktop hint
   (`apps/desktop`, a different stack — SvelteKit/Tauri) are separate sub-tasks for separate
   sessions, not skipped.
+- 2026-09-17: TUI hint done, this session, `txtodo-tui` leased. Couldn't share `txtodo-cli`'s
+  `claude_installed()` (no `allowedDeps` edge tui->cli), so the one-file SKILL.md check is
+  duplicated in a new `crates/txtodo-tui/src/skill_hint.rs`. Still open: the `apps/desktop` hint
+  (its own session — different stack, no fence edge to claim, but the design cut above still
+  applies) and the `@human`-gated `todo_claim` idea.

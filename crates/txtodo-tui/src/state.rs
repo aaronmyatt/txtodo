@@ -182,6 +182,11 @@ pub struct AppState {
     pub command: Option<String>,
     /// Set once `:q` is entered; the event loop exits when this is true.
     pub should_quit: bool,
+    /// Advisory-only (`crate::skill_hint::needed`), painted in the status line by `ui/screen.rs`.
+    /// `from_document` defaults this to `false`; `app.rs::run` sets the real value once at
+    /// startup, against the real `$HOME` — pure-rendering callers (fixtures, tests) never touch
+    /// the filesystem.
+    pub skill_hint: bool,
 }
 
 impl AppState {
@@ -206,6 +211,7 @@ impl AppState {
             sync: SyncSnapshot::default(),
             command: None,
             should_quit: false,
+            skill_hint: false,
         }
     }
 

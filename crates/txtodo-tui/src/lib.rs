@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod paint;
+pub mod skill_hint;
 pub mod state;
 
 /// Widgets, each rendering a pure function of `&state::AppState` (design §7's per-row/pane split):

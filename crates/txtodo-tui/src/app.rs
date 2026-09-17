@@ -85,6 +85,7 @@ async fn async_main() -> ExitCode {
 pub async fn run(daemon: &mut Daemon, path: &str) -> Result<(), DaemonError> {
     let file = daemon.get_file(path).await?;
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
+    state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
 
     let mut terminal = ratatui::init();
     let result = run_loop(&mut terminal, daemon, &mut state).await;

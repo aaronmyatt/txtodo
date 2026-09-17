@@ -49,7 +49,12 @@ fn edit_label(target: &EditTarget) -> &'static str {
 
 fn status_line(state: &AppState) -> Line<'static> {
     let id = if state.show_id { "id:on" } else { "id:off" };
-    Line::from(format!(" {} \u{b7} {id}", state.path))
+    let hint = if state.skill_hint {
+        " \u{b7} no agent playbook installed; run `txtodo skill install`"
+    } else {
+        ""
+    };
+    Line::from(format!(" {} \u{b7} {id}{hint}", state.path))
 }
 
 /// A one-line strip anchored to the bottom of `area` — good enough for the sync indicator and
@@ -83,4 +88,26 @@ fn draw_conflicts(frame: &mut Frame, area: Rect, state: &AppState) {
         .block(block)
         .highlight_style(Style::new().fg(Color::Black).bg(Color::Yellow));
     frame.render_stateful_widget(list, area, &mut list_state);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::AppState;
+
+    #[test]
+    fn status_line_omits_hint_by_default() {
+        let state = AppState::fixture();
+        let text = status_line(&state).to_string();
+        assert!(!text.contains("skill install"));
+        assert!(text.contains("id:off"));
+    }
+
+    #[test]
+    fn status_line_shows_hint_when_needed() {
+        let mut state = AppState::fixture();
+        state.skill_hint = true;
+        let text = status_line(&state).to_string();
+        assert!(text.contains("no agent playbook installed; run `txtodo skill install`"));
+    }
 }
