@@ -39,3 +39,14 @@ Two different notions of "start the daemon":
 
 Picking between these (and whether both need a `--no-daemon`/opt-out escape hatch, matching the
 CLI's own flag) is the first sub-task, flagged `@human`.
+
+## Resolved and superseded (2026-09-17/18)
+
+Human decided: do **both** (ad-hoc spawn covers "not running now", auto-installing the persistent
+launchd/systemd service covers "won't come back after reboot") — neither option alone from the
+question above. Scope was broadened past just the TUI to every client (`txtodo`, `txtodo-tui`,
+`txtodo-mcp`, `apps/desktop`), so the remaining implementation work (wire app.rs, failure-path UX,
+tests, docs) now lives under `tasks/daemon-always-available` instead of here, to avoid tracking
+the same work in two places. This ref's own todo.txt lines are closed as redirected, not
+implemented — see `tasks/daemon-always-available/notes.md` for the actual design and remaining
+work.

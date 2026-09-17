@@ -58,9 +58,10 @@ impl LineState {
     }
 }
 
-/// One peer in the sync indicator (`s`), the UI-local mirror of the M10 `SyncStatusResponse.Peer`
-/// wire message (added in `daemon.rs`'s step); kept separate from the generated `pb` type so this
-/// module builds and tests before the proto change lands (recommended build order steps 2 vs 4).
+/// One peer in the sync indicator (`s`), the UI-local mirror of `pb::SyncStatusResponse::Peer`
+/// (`app.rs::to_sync_snapshot` maps one to the other) — kept as its own type rather than using
+/// the generated `pb` one directly so this module and `ui/sync.rs` stay daemon/proto-free and
+/// fixture-testable, the same idiom `ConflictItem` already uses for `pb::ReviewFlag`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PeerStatus {
     /// Device id (ULID text).

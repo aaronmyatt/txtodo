@@ -6,6 +6,7 @@
 
 use std::io;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use crossterm::event::{Event, KeyEventKind};
 use tokio::sync::mpsc;
@@ -14,8 +15,13 @@ use txtodo_proto::v1 as pb;
 use crate::action::Action;
 use crate::daemon::{Daemon, DaemonError, MAX_RECONNECT_ATTEMPTS, socket_path};
 use crate::input::Input;
-use crate::state::AppState;
+use crate::state::{AppState, PeerStatus, SyncSnapshot};
 use crate::ui::screen::draw;
+
+/// How often the `s` indicator refreshes from a real `SyncStatus` call (`ui/sync.rs`'s own
+/// module doc: "on a 1 s tick") — independent of the `Watch`-driven refresh `apply_change` also
+/// does, since a peer's lag can change with no local `Watch` event at all.
+const SYNC_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
 /// Binary entry point: resolves the workspace (current directory, for now — a `--dir` flag is a
 /// natural CLI-parity follow-up, out of scope here), connects, and runs the event loop. The
@@ -132,6 +138,7 @@ async fn run_loop_inner(
     let mut events = spawn_input_reader();
     let mut watch = daemon.watch(vec![state.path.clone()]).await?;
     let mut reconnects = 0u32;
+    let mut sync_tick = tokio::time::interval(SYNC_STATUS_INTERVAL);
 
     loop {
         terminal.draw(|f| draw(f, state)).ok();
@@ -142,19 +149,37 @@ async fn run_loop_inner(
                 }
             }
             change = watch.message() => {
-                if let Ok(Some(change)) = change {
-                    apply_change(state, change);
-                    reconnects = 0;
-                } else {
-                    log_watch_dropped();
-                    watch = reconnect_watch(daemon, state, &mut reconnects).await?;
-                }
+                handle_watch_message(daemon, state, change, &mut watch, &mut reconnects).await?;
+            }
+            _ = sync_tick.tick() => {
+                refresh_sync_status(daemon, state).await;
             }
         }
         if state.should_quit {
             return Ok(());
         }
     }
+}
+
+/// One `Watch` poll result: applies a real change, or reconnects on a drop (bounded). Split out of
+/// `run_loop_inner`'s own `tokio::select!` arm — same reasoning as `handle_input`'s own split —
+/// to keep that function's cognitive complexity under budget with the sync-status tick added
+/// alongside it.
+async fn handle_watch_message(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    change: Result<Option<pb::Change>, tonic::Status>,
+    watch: &mut tonic::Streaming<pb::Change>,
+    reconnects: &mut u32,
+) -> Result<(), DaemonError> {
+    if let Ok(Some(change)) = change {
+        apply_change(state, change);
+        *reconnects = 0;
+    } else {
+        log_watch_dropped();
+        *watch = reconnect_watch(daemon, state, reconnects).await?;
+    }
+    Ok(())
 }
 
 /// Split out so the event macro doesn't count against `run_loop`'s own `#[instrument]` budget —
@@ -286,5 +311,29 @@ fn to_conflict_item(flag: pb::ReviewFlag) -> crate::state::ConflictItem {
         line_number: flag.line_number,
         mine: flag.mine,
         theirs: flag.theirs,
+    }
+}
+
+/// Refreshes `state.sync` from a real `SyncStatus` call. Best-effort: a failed call (transient
+/// daemon hiccup) leaves the previous snapshot in place rather than erroring the whole event
+/// loop — the same "colours are never the only signal" spirit as `ui/sync.rs` itself, just applied
+/// to a stale-but-present reading instead of a missing one.
+async fn refresh_sync_status(daemon: &mut Daemon, state: &mut AppState) {
+    if let Ok(resp) = daemon.sync_status().await {
+        state.sync = to_sync_snapshot(resp);
+    }
+}
+
+fn to_sync_snapshot(resp: pb::SyncStatusResponse) -> SyncSnapshot {
+    SyncSnapshot {
+        peers: resp
+            .peers
+            .into_iter()
+            .map(|p| PeerStatus {
+                device: p.device,
+                lag_ms: p.lag_ms,
+            })
+            .collect(),
+        pending_ops: u32::try_from(resp.pending_ops).unwrap_or(u32::MAX),
     }
 }
