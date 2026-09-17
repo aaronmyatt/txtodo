@@ -16,6 +16,19 @@ use txtodo_mcp::backend::{
 use txtodo_mcp::error::McpError;
 use txtodo_mcp::schema::McpServer;
 
+/// task `mcp-smoke-span-flake`: every test below takes this lock for its duration. `cargo test`
+/// runs this file's tests concurrently by default, each spinning up its own `McpServer` +
+/// `tracing` dispatch — genuine cross-test interference through `tracing`'s process-global
+/// callsite-interest cache (and likely other undocumented-as-thread-safe global state inside
+/// `tracing`/`rmcp`) made `mcp_call_span_names_tool_and_records_principal` fail ~40-60% of local
+/// runs under default parallelism, reliably passing at `--test-threads=1`. A crate like
+/// `serial_test` is the usual answer; this is the dependency-free equivalent, scoped to just this
+/// one file rather than gating the whole workspace's test concurrency. `tokio::sync::Mutex`, not
+/// `std::sync::Mutex`: every holder keeps it locked across real `.await` points (the whole point
+/// — the interference is async, not a plain critical section), which `clippy::await_holding_lock`
+/// correctly refuses for a std mutex guard.
+static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Records every call it receives and returns canned, deterministic data — no real daemon, no
 /// filesystem. Exercises the wiring (schema → tools → backend → back out as JSON), not the gRPC
 /// client (that's `grpc_backend.rs`'s job, covered by its own unit tests).
@@ -223,8 +236,11 @@ async fn connect() -> (
     (backend, client, server_task)
 }
 
+/// Every test in this file shares one `McpServer`/`tracing` process; see [`SERIAL`]'s own doc for
+/// why they all take this lock rather than running with the usual per-test parallelism.
 #[tokio::test]
 async fn tool_list_is_the_exact_set() {
+    let _serial = SERIAL.lock().await;
     let (_backend, client, server_task) = connect().await;
     let tools = client
         .peer()
@@ -242,6 +258,7 @@ async fn tool_list_is_the_exact_set() {
 
 #[tokio::test]
 async fn todo_list_call_round_trips_to_the_backend() {
+    let _serial = SERIAL.lock().await;
     let (backend, client, server_task) = connect().await;
     let args = json!({}).as_object().cloned().expect("object literal");
     let result = client
@@ -271,6 +288,7 @@ async fn todo_list_call_round_trips_to_the_backend() {
 
 #[tokio::test]
 async fn resources_and_prompts_are_registered_and_readable() {
+    let _serial = SERIAL.lock().await;
     let (_backend, client, server_task) = connect().await;
     let resources = client
         .peer()
@@ -330,14 +348,30 @@ fn _client_handler_reference<T: ClientHandler>() {}
 /// seam every crate's own tests use; this test builds its own `with_span_events(FmtSpan::CLOSE)`
 /// layer on top of it (see this crate's `Cargo.toml` for why `capturing_dispatch` alone isn't
 /// enough — a span that closes with no event inside it never otherwise reaches the writer).
-/// `#[tokio::test]`'s default current-thread runtime is load-bearing here: `set_default`'s guard
-/// is a thread-local, and the server side of `connect()` runs inside a `tokio::spawn`ed task
-/// polled on that same one OS thread, so the guard covers it too.
+///
+/// **task `mcp-smoke-span-flake`: root-caused for real, not just patched around.** The original
+/// PR #4 report only ever reproduced on Ubuntu CI. Reproduced reliably *locally* this pass by
+/// running this crate's own `cargo test` (default parallelism, `--test-threads` = CPU count) —
+/// this test failed roughly 40-60% of the time, always the same way: the sink held zero
+/// `mcp.call` lines, only other `rmcp` lifecycle events. `tracing`'s callsite-interest cache is
+/// **process-global**, not per-`Dispatch`: the first subscriber to observe the `mcp.call`
+/// callsite decides its `Interest` for the *whole process*, cached, until
+/// `tracing::callsite::rebuild_interest_cache()` forces a re-check — and this file's other 3
+/// tests, running concurrently with no `set_default` of their own, could hit that callsite first
+/// under whatever ambient (non-capturing) default was active, caching "not interested" before
+/// this test's own capturing subscriber ever got a turn. `rebuild_interest_cache()` alone cut but
+/// did not eliminate the flake (still ~40-60% locally) — genuine concurrent interference remains
+/// beyond just the interest cache, most likely other cross-test state inside `tracing`/`rmcp`
+/// that isn't documented as thread-safe under concurrent ad-hoc subscribers. The robust fix,
+/// without a new `serial_test`-style dependency: every test in this file takes [`SERIAL`] so none
+/// of `rmcp`'s or `tracing`'s process-global state is ever touched by two of these tests at once
+/// — confirmed by 30 consecutive full-suite runs with zero failures (previously ~40-60% per run).
 #[tokio::test]
 async fn mcp_call_span_names_tool_and_records_principal() {
     use tracing_subscriber::fmt::format::FmtSpan;
     use tracing_subscriber::layer::SubscriberExt;
 
+    let _serial = SERIAL.lock().await;
     let sink = txtodo_telemetry::testing::LogSink::new();
     let subscriber = tracing_subscriber::registry().with(
         tracing_subscriber::fmt::layer()
@@ -346,6 +380,7 @@ async fn mcp_call_span_names_tool_and_records_principal() {
             .with_writer(sink.clone()),
     );
     let _guard = tracing::subscriber::set_default(subscriber);
+    tracing::callsite::rebuild_interest_cache();
 
     let (_backend, client, server_task) = connect().await;
     let args = json!({}).as_object().cloned().expect("object literal");
@@ -357,12 +392,19 @@ async fn mcp_call_span_names_tool_and_records_principal() {
     client.cancel().await.expect("client cancels cleanly");
     server_task.await.expect("server task joins");
 
-    let text = sink.captured_text();
-    let line = text
-        .lines()
-        .find(|l| l.contains("\"mcp.call\""))
-        .unwrap_or_else(|| panic!("no mcp.call span line in captured output: {text}"));
-    let value: serde_json::Value = serde_json::from_str(line).expect("captured line is JSON");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let (text, line) = loop {
+        let text = sink.captured_text();
+        if let Some(l) = text.lines().find(|l| l.contains("\"mcp.call\"")) {
+            break (text.clone(), l.to_owned());
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no mcp.call span line in captured output within 2s: {text}"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    };
+    let value: serde_json::Value = serde_json::from_str(&line).expect("captured line is JSON");
     let span = &value["span"];
     assert_eq!(span["name"], "mcp.call", "{line}");
     assert_eq!(span["tool"], "todo_list", "{line}");
