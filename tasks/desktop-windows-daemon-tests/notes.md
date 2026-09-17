@@ -64,3 +64,25 @@ instead of the whole file).
 Every future PR touching either `apps/desktop` or `txtodo-daemon` hits this exact failure on
 `windows-latest` until it's fixed — noise that makes real Windows-relevant CI signal (if any is
 ever added) impossible to distinguish from this known, unconditional failure.
+
+## As built (2026-09-17, agent)
+
+Gated 4 files, not 2 — `tests/universal_view.rs` and `tests/workspace_registry.rs` also
+`use support::TXTODOD_BIN`, un-gated, a real gap this ticket's own text didn't name. Grepped this
+crate for any other `UnixListener`/`UnixStream`/`unix::net` use: none. `cargo clippy`/`fmt -p
+desktop` clean.
+
+**Fixing this surfaced a second, previously-hidden Windows failure, one layer down**: once
+`apps/desktop`'s own build/test no longer failed first, `check (windows-latest)` failed again —
+this time in `crates/txtodo-tui`'s own unit tests. `daemon.rs`'s `connect_never_blocks_even_with_
+no_daemon_listening`/`wait_until_ready_times_out_without_a_daemon` assume `Daemon::connect` always
+dials a real unix socket; on Windows it correctly returns `Err(DaemonError::UnsupportedPlatform)`
+instead (the production code already handles this cleanly — only the tests hadn't caught up).
+Gated those two `#[cfg(unix)]`, plus three more real-`txtodod` integration tests in the same crate
+that had never been gated at all (`external_edit.rs`, `roundtrip.rs`, `sentinel_no_secrets.rs`) —
+same reasoning, same fix, found by inspection once the pattern was clear.
+
+Real, live verification in progress: pushed both fixes and re-ran `ci.yml` for real against
+`windows-latest` (not just local `cargo check` on this unix machine, which can't exercise the
+`cfg(unix)` boundary either way) — see this task's own root `todo.txt` line for the outcome once
+that run lands.
