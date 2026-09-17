@@ -78,3 +78,11 @@ run for real against the live tap and pass — installed `txtodo`/`txtodod`/`txt
 `autobump.yml`'s multi-resource handling is still unproven (needs a second real release to fire) —
 that's the only remaining gap, tracked as its own follow-up
 (`id:01M2Q1BREWAUTOBUMPCHECK01`, root todo.txt).
+
+## Cask sibling added (task desktop-cask-distribution, 2026-09-17)
+
+A Homebrew Cask for `apps/desktop` was staged alongside this formula — `deploy/homebrew/
+Casks/txtodo-desktop.rb`, `deploy/homebrew/update-cask.sh`, and a unified `update-release.sh`
+wrapper that stamps both the formula and the cask from one release tag in one pass. See
+`tasks/desktop-cask-distribution/notes.md` and `BREW_TAP.patch.md`'s own "Cask addition" section
+for the full account — not duplicated here.

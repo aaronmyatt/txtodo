@@ -205,6 +205,65 @@ jobs:
           name: dist-${{ matrix.leg }}
           path: dist/*
 
+  # apps/desktop (Tauri) .app/.dmg legs (task desktop-cask-distribution): mirrors the CLI matrix's
+  # own two macOS legs above — aarch64 native, x86_64 cross-linked from the same arm64 runner via
+  # Xcode's native cross-linking (`build`'s own "macos-x86_64" leg comment explains why this needs
+  # no zig/cargo-zigbuild the way the Linux/Windows legs do). No Linux/Windows leg: Tauri bundles a
+  # platform's own native webview (WKWebView here), so a macOS bundle is all this task's own scope
+  # covers — see tasks/desktop-cask-distribution/notes.md.
+  #
+  # Ad-hoc signed only (verified locally: `codesign -dv` on a real build here shows
+  # `Signature=adhoc`, `TeamIdentifier=not set`) — real Apple Developer ID signing + notarization
+  # needs a human-provisioned cert (notes.md item 3), not done by this job.
+  build-desktop:
+    needs: reject-duplicate-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: macos-aarch64
+            target: aarch64-apple-darwin
+            native: true
+          - leg: macos-x86_64
+            target: x86_64-apple-darwin
+            native: false
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: rustup target add
+        if: ${{ !matrix.native }}
+        run: rustup target add ${{ matrix.target }}
+      - name: npm ci
+        working-directory: apps/desktop
+        run: npm ci
+      # `tauri build`'s own `beforeBuildCommand` (tauri.conf.json) runs `npm run build` (the
+      # SvelteKit frontend) for us — no separate frontend-build step needed here.
+      - name: tauri build (app, dmg)
+        working-directory: apps/desktop
+        run: npx tauri build --target ${{ matrix.target }} --bundles app,dmg
+      # Bundle output lands under the *workspace* root `target/`, not apps/desktop/src-tauri's own
+      # (this crate is a real Cargo workspace member) — verified locally against a real build.
+      # `--target` always writes to `target/<triple>/release/bundle/...`, even for this runner's
+      # own native triple (unlike a plain `cargo build`, which omits the triple segment when it
+      # matches the host) — confirmed by hand for both legs, so both take the same path here.
+      - name: collect artifact (rename to this release's <bin>-<leg> convention)
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          bundle="target/${{ matrix.target }}/release/bundle/dmg"
+          dmg="$(find "$bundle" -maxdepth 1 -name '*.dmg')"
+          cp "$dmg" "dist/desktop-${{ matrix.leg }}.dmg"
+          echo "packaged dist/desktop-${{ matrix.leg }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-desktop-${{ matrix.leg }}
+          path: dist/*
+
   # wasm leg: txtodo-ffi's wasm-bindgen build (already M7 — design §11's WASM matrix entry).
   wasm:
     needs: reject-duplicate-tag
@@ -339,7 +398,7 @@ jobs:
   # Sigstore keyless signing: publish signature + certificate to the transparency log for every
   # release artifact (binaries + bom.json). https://docs.sigstore.dev/cosign/keyless/
   sign:
-    needs: [build, wasm, sbom]
+    needs: [build, build-desktop, wasm, sbom]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -372,7 +431,7 @@ jobs:
   # still runs and still reports pass/fail in the Actions UI; it's informational for now,
   # not a release blocker. Revisit once the zig-wiring the comment describes lands.
   publish:
-    needs: [build, wasm, sbom, sign]
+    needs: [build, build-desktop, wasm, sbom, sign]
     runs-on: ubuntu-latest
     permissions:
       contents: write

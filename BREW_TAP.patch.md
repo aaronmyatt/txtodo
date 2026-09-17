@@ -62,3 +62,45 @@ single-tap-per-user convention (<https://docs.brew.sh/How-to-Create-and-Maintain
   never get a hash committed to the tap at all. `autobump.yml`'s stock `brew bump` doesn't do this;
   wiring it in (a custom step, or falling back to `update-formula.sh` plus an explicit verify step)
   is real, separate work once there's a real release to verify against.
+
+## Cask addition (task desktop-cask-distribution, 2026-09-17)
+
+Adds a Homebrew Cask for `apps/desktop` (Tauri) alongside the existing formula — a `.app`/`.dmg`
+install into `/Applications`, not a `bin/` binary, so it lives in `Casks/`, not `Formula/`.
+
+- **CI**: `.github/workflows/release.yml` gained a `build-desktop` job (2 legs: `macos-aarch64`
+  native, `macos-x86_64` cross-linked from the same arm64 runner — mirrors the CLI matrix's own
+  two macOS legs) producing `desktop-<leg>.dmg`, wired into `sign`/`publish`'s existing `needs` so
+  it's cosign-signed and published the same way every other release asset is. Verified locally:
+  `tauri build --target <triple> --bundles app,dmg` produces a real `desktop.app`/`.dmg` for both
+  architectures on this machine.
+- **`Casks/txtodo-desktop.rb`** (staged here, not yet pushed): `on_arm`/`on_intel` url/sha256
+  pairs, `app "desktop.app"` (the real `productName` from `tauri.conf.json` — not renamed, see the
+  cask's own comment), a `zap` stanza for the three App Support/Cache/Preferences/Saved-State
+  locations keyed by `com.txtodo.desktop`. Placeholder `version "0.0.0"`/all-zero hashes, same as
+  the formula's own placeholder stage before v0.0.1. `brew style` and `brew audit --strict` both
+  pass clean against a local throwaway tap, removed after (same discipline `tasks/
+  brew-distribution/notes.md` used for the formula).
+- **`deploy/homebrew/update-cask.sh`**: the cask's counterpart to `bin/update-formula.sh`,
+  network-free, validated for real against real locally-built `.dmg` bundles (two distinctly
+  hashed test files) — stamps `version` plus each arch's own sha256 with no cross-contamination,
+  fails cleanly (exit 1, names the missing path) when an asset is absent. Not yet copied into the
+  tap repo as `bin/update-cask.sh` — do that alongside pushing the cask itself.
+- **Apple Gatekeeper — still entirely unresolved, human-only**: no code signing identity, no
+  notarization. The cask installs a real, cosign-provenance-verifiable `.app`, but a fresh Mac's
+  Gatekeeper will still flag it "unidentified developer" until a human provisions an Apple
+  Developer ID cert + notarytool credentials (`tasks/desktop-cask-distribution/notes.md`'s open
+  question: ship unsigned first with that warning, or block the cask on the cert). Not decided
+  here — flagged, not assumed either way.
+- **`autobump.yml`'s cask handling**: not tested this pass either (no live release to bump
+  against, same gap `01M2Q1BREWAUTOBUMPCHECK01` already tracks for the formula) — a cask's
+  simpler shape (no `resource` blocks) makes it *more* likely `brew bump --open-pr` handles it
+  cleanly than the formula's multi-resource case, but that's an expectation, not a proof.
+
+## Still open, needs a human (cask-specific, in addition to the formula's own list above)
+
+- Push `Casks/txtodo-desktop.rb` and `update-cask.sh` to `aaronmyatt/homebrew-tap` once there's a
+  real desktop release to point them at.
+- The Apple code-signing/notarization decision above.
+- Confirm Tauri 2's real minimum macOS version (this session had no network access to check
+  v2.tauri.app's own docs) and tighten the cask's bare `depends_on :macos` to that floor.
