@@ -78,7 +78,7 @@ fn read_device_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawRow> {
 /// the workspace registry's `registry.db`. `txtodo-daemon`'s `device_identity.rs` decides where
 /// this file lives and owns id/group minting; this type is only the raw rows.
 pub struct IdentityStore {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl IdentityStore {

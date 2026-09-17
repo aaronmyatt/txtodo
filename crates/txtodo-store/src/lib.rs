@@ -12,6 +12,7 @@ mod flags;
 mod heads;
 mod identity;
 mod identity_store;
+mod identity_store_touch;
 mod ops;
 mod projections;
 mod registry;

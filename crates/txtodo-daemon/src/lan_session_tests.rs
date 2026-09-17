@@ -273,3 +273,72 @@ async fn drive_session_pulls_a_peers_op_and_acks_what_it_committed() {
 
     assert_todo_txt_has(&ws, "buy milk").await;
 }
+
+/// The fix for the real gap `devices_grpc.rs::sync_status_impl`'s doc traces: a real session's
+/// link-level `Hello` now touches the peer's `last_seen_ms`, not just its `paired_at_ms`. Only
+/// the handshake matters here, so the peer closes the link right after it (no op transfer) —
+/// `drive_session`'s next `recv` then reports `Closed` and it returns cleanly.
+#[tokio::test(flavor = "multi_thread")]
+async fn drive_session_touches_last_seen_for_a_known_peer_after_link_hello() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let key_bytes = [7u8; 32];
+    let key = GroupKey::from_bytes(key_bytes);
+    let (ws, device_b, group, workspace) = make_workspace(dir.path(), key_bytes);
+    let mut keys = GroupKeys::new();
+    keys.insert(GROUP_EPOCH, key.clone())
+        .unwrap_or_else(|e| panic!("{e:?}"));
+    {
+        let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .identity_store()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .register_device(&txtodo_store::NewDevice {
+                device: peer_device(),
+                name: String::new(),
+                static_public: [0; 32],
+                paired_at_ms: 500,
+                last_known_wall_ms: None,
+                key_epoch: 0,
+            })
+            .unwrap_or_else(|e| panic!("register peer: {e}"));
+    }
+
+    let (peer_link, mut b_link) = channel_link_pair();
+    let range = OriginRange {
+        device: peer_device(),
+        first: 1,
+        last: 1,
+    };
+    let ws_for_driver = Arc::clone(&ws);
+    let driver = tokio::task::spawn_blocking(move || {
+        drive_session(&mut b_link, ws_for_driver, device_b, group);
+    });
+    let crypto = PeerCrypto {
+        group,
+        workspace,
+        key,
+        keys,
+    };
+    let peer = tokio::task::spawn_blocking(move || {
+        let mut peer_link = peer_link;
+        peer_handshake(&mut peer_link, &crypto, range);
+    });
+
+    peer.await
+        .unwrap_or_else(|e| panic!("peer task panicked: {e}"));
+    driver
+        .await
+        .unwrap_or_else(|e| panic!("driver task panicked: {e}"));
+
+    let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let row = guard
+        .identity_store()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .device(peer_device())
+        .unwrap_or_else(|e| panic!("read peer row: {e}"))
+        .expect("peer row exists");
+    assert_eq!(row.last_seen_ms, Some(1_000));
+    assert_eq!(row.paired_at_ms, 500);
+}
