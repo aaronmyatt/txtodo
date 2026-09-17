@@ -104,3 +104,70 @@ proto change is one commit — see [../editor-plugins/notes.md](../editor-plugin
 - plan M10 (txtodo-implementation-plan.md), design §7 (txtodo-design.md)
 - https://docs.rs/ratatui · https://docs.rs/crossterm · https://docs.rs/tonic
 - sibling: [../editor-plugins/notes.md](../editor-plugins/notes.md) (shared Tokenize/Complete RPCs)
+
+## SyncStatus RPC design (2026-09-17, this session — resuming the 2026-09-13 partial ticket)
+
+Root cause of the 4 still-open lines below: everything in this task except the `s` indicator's
+live data is done and tested (vim keys, edit, conflicts, paint, app loop — see root todo.txt's
+consolidated line, `ref:tui`). Closing this out needs one new RPC, threaded through 3 crates
+(proto → daemon → tui), each its own slice-fence session — this note exists so none of that design
+work has to be re-derived per session.
+
+### Proto (`crates/txtodo-proto/proto/txtodo/v1/txtodo.proto`)
+
+```protobuf
+message SyncStatusRequest {
+  WorkspaceSelector workspace = 1;
+}
+
+message SyncStatusResponse {
+  message Peer {
+    string device = 1;   // ULID text, same form as Device.id
+    int64 lag_ms = 2;    // now_ms - last_seen_ms; 0 if never seen (mirrors Device.last_seen_ms's
+                          // own "0 = never contacted" convention, not a sentinel to special-case)
+  }
+  repeated Peer peers = 1;
+  uint64 pending_ops = 2;
+}
+```
+Add `rpc SyncStatus(SyncStatusRequest) returns (SyncStatusResponse);` to the `Txtodo` service,
+next to `DeviceList`. Regenerate via whatever this crate's own build.rs/committed-output convention
+is (check `txtodo-proto/CLAUDE.md` first — other RPCs' additions in this repo commit generated
+code, not just the .proto source).
+
+### Daemon (`crates/txtodo-daemon/src/`, new `sync_status_grpc.rs` or folded into an existing file
+— check `server.rs`'s dispatch list and file-length budgets before picking)
+
+`devices_grpc.rs::device_list_impl`/`to_pb` is the exact template: same `ws.identity_store()
+.lock()...list_devices()`, same `now_ms = ws.clock().now_ms()`, same `self_device = ws.device()`
+pattern. `peers` = every row where `!removed_at_ms.is_some() && device != self_device`, mapped to
+`Peer { device: row.device.ulid().to_string(), lag_ms: now_ms.saturating_sub(row.last_seen_ms
+.unwrap_or(now_ms)) as i64 }`.
+
+`pending_ops` — **no per-peer ack/synced-seq is persisted anywhere today** (checked: `devices`
+table has `relay_node_id`/`last_seen_ms`/`key_epoch`/`removed_at_ms`, nothing that says "what seq
+has peer X acked" — real per-peer convergence tracking would need new persistence, a bigger change
+than this RPC). Chosen approximation, honestly scoped rather than faked: count of local ops (every
+tracked file, same `ws.paths()` + `store.newest(path, ...)` pattern `activity.rs::newest_rows`
+already uses) whose `op.hlc.wall_ms` is newer than the **oldest** peer's `last_seen_ms` — i.e. "ops
+committed since we last heard from our most-out-of-touch peer." `0` peers ⇒ `0` pending
+(nothing to be pending against). **Known limitation to document in the handler's own doc comment,
+not hide**: this over-counts once a peer reconnects and acks everything (still shows non-zero
+until its `last_seen_ms` itself advances past those ops' timestamps) — real per-peer seq tracking
+is the correct fix, flagged as a future improvement, not attempted here.
+
+### TUI (`crates/txtodo-tui/src/daemon.rs`, `app.rs`)
+
+`daemon.rs`'s own module doc already flags exactly where this slots in: a `Daemon::sync_status()`
+method mirroring `list_conflicts`/`resolve`'s shape, called on a 1s tick in `app.rs`'s event loop
+(`ui/sync.rs` needs zero changes — it already renders whatever's in `AppState.sync`, per its own
+module doc "recommended build order step 4"). Map `pb::SyncStatusResponse` → `state::SyncSnapshot`/
+`PeerStatus` (both already exist, built ahead of the wire type per `state.rs`'s own comment).
+
+### Test lines still blocked after SyncStatus lands
+
+- `01M2B4ZWPK65Q4EHNK1GGD31MP` (needs_review integration test): separately blocked on seeding a
+  real flag needing `txtodo_store` directly, out of `txtodo-tui`'s `allowedDeps` — not this RPC's
+  problem, still open after SyncStatus ships.
+- `01M2B4ZWPKR2YNEF33NVATY9EZ` (two-loopback-daemon `s` test): unblocks once SyncStatus ships —
+  do this one alongside the TUI wiring stage, not as a separate session.
