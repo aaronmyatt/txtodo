@@ -1760,7 +1760,7 @@ dependencies = [
 
 [[package]]
 name = "desktop"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "serde",
@@ -6473,7 +6473,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "relay"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "axum",
  "reqwest",
@@ -8736,7 +8736,7 @@ checksum = "5283634e518fe9e82c7b20520bb4bc209009fd16c82077c802f8111ecbb0117a"
 
 [[package]]
 name = "txtodo-cli"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "clap",
  "data-encoding",
@@ -8763,7 +8763,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-core"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "abnf 0.13.0",
  "abnf_to_pest",
@@ -8777,7 +8777,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-crdt"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "loro",
  "tracing",
@@ -8789,7 +8789,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-daemon"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "blake3",
@@ -8829,7 +8829,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-ffi"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "js-sys",
  "txtodo-core",
@@ -8839,7 +8839,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-mcp"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -8864,7 +8864,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-model"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "postcard",
  "proptest",
@@ -8877,7 +8877,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-proto"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "prost",
  "tonic",
@@ -8887,14 +8887,14 @@ dependencies = [
 
 [[package]]
 name = "txtodo-query"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "txtodo-core",
 ]
 
 [[package]]
 name = "txtodo-store"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "blake3",
  "postcard",
@@ -8907,7 +8907,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-sync"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -8935,7 +8935,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-telemetry"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "tempfile",
  "tracing",
@@ -8945,7 +8945,7 @@ dependencies = [
 
 [[package]]
 name = "txtodo-tui"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "crossterm",
  "hyper-util",

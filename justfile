@@ -62,5 +62,60 @@ corpus:
     .claude/scripts/check-corpus-oracle.sh
     cargo test -p txtodo-core --test corpus
 
+# Local pre-tag smoke: build the three release binaries for every release.yml matrix leg via
+# cargo-zigbuild (https://github.com/rust-cross/cargo-zigbuild), assert the musl legs are static
+# (no `ldd` interpreter), sign every artifact with cosign (https://docs.sigstore.dev/cosign/) using
+# a local key (release.yml itself signs keyless via GitHub OIDC — see RELEASE_CI.patch.md — this
+# recipe is a pre-tag *local* smoke, so it needs a key pair, generated once with
+# `cosign generate-key-pair`), verify every signature, and generate the SBOM via cargo-cyclonedx
+# (https://github.com/CycloneDX/cyclonedx-rust-cargo). Mirrors deploy/nix/packages.nix's bin-name
+# mapping (crate name -> [[bin]] name): txtodo-cli -> txtodo, txtodo-daemon -> txtodod,
+# txtodo-tui -> txtodo-tui. Windows ships txtodo-tui only, matching ci.yml's own Windows exclusion
+# of txtodo-cli/txtodo-daemon/txtodo-mcp under ADR 0010 (no Unix domain sockets on Windows).
 release:
-    cargo build --workspace --release
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rustup target add x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-pc-windows-gnu
+    mkdir -p dist
+    build() {
+        local zig_target="$1" rust_target="$2"; shift 2
+        for pkg in "$@"; do
+            cargo zigbuild --release --target "$zig_target" -p "$pkg" --locked
+            case "$pkg" in
+                txtodo-cli) bin=txtodo ;;
+                txtodo-daemon) bin=txtodod ;;
+                txtodo-tui) bin=txtodo-tui ;;
+            esac
+            ext=""; case "$rust_target" in *windows*) ext=".exe" ;; esac
+            cp "target/${rust_target}/release/${bin}${ext}" "dist/${bin}-${zig_target%%.*}${ext}"
+        done
+    }
+    build x86_64-unknown-linux-gnu.2.17 x86_64-unknown-linux-gnu txtodo-cli txtodo-daemon txtodo-tui
+    build x86_64-unknown-linux-musl x86_64-unknown-linux-musl txtodo-cli txtodo-daemon txtodo-tui
+    build aarch64-unknown-linux-musl aarch64-unknown-linux-musl txtodo-cli txtodo-daemon txtodo-tui
+    build x86_64-windows-gnu x86_64-pc-windows-gnu txtodo-tui
+    echo "== static check: musl artifacts must have no dynamic interpreter =="
+    for f in dist/*musl*; do
+        file "$f" | grep -q 'statically linked' || { echo "::error:: $f is not static"; exit 1; }
+    done
+    echo "== SBOM: cargo cyclonedx --all, merged via deploy/release/merge-bom.jq =="
+    # cargo-cyclonedx has no workspace-wide mode: `--all` writes one <crate>.cdx.json per
+    # workspace member next to its own Cargo.toml. merge-bom.jq combines the release-relevant
+    # ones (the 3 shipped bins + their full dep graph) into one bom.json.
+    cargo cyclonedx --all --format json
+    jq -s -f deploy/release/merge-bom.jq \
+        crates/txtodo-cli/txtodo-cli.cdx.json crates/txtodo-daemon/txtodo-daemon.cdx.json \
+        crates/txtodo-tui/txtodo-tui.cdx.json crates/txtodo-core/txtodo-core.cdx.json \
+        crates/txtodo-query/txtodo-query.cdx.json crates/txtodo-model/txtodo-model.cdx.json \
+        crates/txtodo-store/txtodo-store.cdx.json crates/txtodo-crdt/txtodo-crdt.cdx.json \
+        crates/txtodo-sync/txtodo-sync.cdx.json crates/txtodo-proto/txtodo-proto.cdx.json \
+        crates/txtodo-mcp/txtodo-mcp.cdx.json \
+        > bom.json
+    echo "== sign every artifact (local key — generate once with: cosign generate-key-pair) =="
+    # --bundle alone carries the signature (cosign 3.x deprecates the separate --output-signature
+    # file in favour of the bundle: https://docs.sigstore.dev/cosign/signing/overview/).
+    for f in dist/* bom.json; do
+        cosign sign-blob --key cosign.key --yes --bundle "${f}.bundle" "$f"
+        cosign verify-blob --key cosign.pub --bundle "${f}.bundle" "$f"
+    done
+    echo "release smoke OK: $(ls dist/) bom.json"
