@@ -143,18 +143,19 @@ impl TxtodoService {
     /// per-peer synced-seq is persisted anywhere today, so a precise per-peer ack count isn't
     /// derivable without new bookkeeping this task doesn't add).
     ///
-    /// **A second real, pre-existing gap found while wiring this, not fixed here**: nothing in
-    /// this crate ever calls a "mark this device seen now" update after registration.
-    /// `Store::register_device`'s own SQL seeds `last_seen` from `paired_at` at insert time
-    /// (`identity_store.rs`'s `UPSERT_DEVICE` binds the same param to both columns), but no real
-    /// sync session (`lan.rs`/`relay.rs`/`control_channel.rs` checked; none of them touch it)
-    /// ever advances it again. So today every peer's `lag_ms` below reads as "time since it was
-    /// registered", not "time since it was last actually reached" — a real, useful-but-wrong
-    /// number until a separate task wires a real touch on session success. `unwrap_or(0)` below
-    /// only matters for the theoretical case `last_seen_ms` is genuinely absent (matching
-    /// `to_pb`'s own "0 = never contacted" convention for `Device.last_seen_ms`, not a new
-    /// sentinel) — normal registration never produces that case. Flagged, not silently worked
-    /// around with a fake "just now".
+    /// **A second real, pre-existing gap found while wiring this — since fixed**: nothing in this
+    /// crate used to call a "mark this device seen now" update after registration.
+    /// `IdentityStore::register_device`'s own SQL only seeds `last_seen` from `paired_at` at
+    /// insert time (`identity_store.rs`'s `UPSERT_DEVICE` binds the same param to both columns),
+    /// so before this fix every peer's `lag_ms` below read as "time since it was registered", not
+    /// "time since it was last actually reached". `lan_session_dispatch.rs::dispatch_link_frame`
+    /// now calls `IdentityStore::touch_last_seen` the moment a real sync session's link-level
+    /// `Hello` validates and the peer's device id is learned — the one choke point every real
+    /// session (LAN, relay, control channel) converges on (`drive_shared_session`), so this
+    /// needed wiring in one place, not three. `unwrap_or(0)` below only matters for the
+    /// theoretical case `last_seen_ms` is genuinely absent (matching `to_pb`'s own "0 = never
+    /// contacted" convention for `Device.last_seen_ms`, not a new sentinel) — normal registration
+    /// never produces that case.
     pub(crate) async fn sync_status_impl(
         &self,
         _r: Request<pb::SyncStatusRequest>,

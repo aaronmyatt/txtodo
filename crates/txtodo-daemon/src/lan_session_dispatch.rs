@@ -5,10 +5,11 @@
 //! file's module doc for the wire sequence and failure scope this loop implements.
 
 use std::collections::BTreeMap;
+use std::sync::PoisonError;
 
 use tokio::runtime::Handle;
 use txtodo_model::DeviceId;
-use txtodo_store::WorkspaceId;
+use txtodo_store::{StoreError, WorkspaceId};
 use txtodo_sync::{
     DeviceSigningKey, GroupId, GroupKey, GroupKeys, Link, Session, derive_group_op_signing_key,
     peek_workspace,
@@ -52,6 +53,42 @@ fn log_unrouted_workspace_skipped(workspace: WorkspaceId) {
     tracing::debug!(%workspace, "lan_session_unrouted_workspace_message_skipped");
 }
 
+fn log_touch_last_seen_unknown_device(peer: DeviceId) {
+    tracing::debug!(peer = %peer, "lan_session_touch_last_seen_unknown_device");
+}
+
+fn log_touch_last_seen_failed(peer: DeviceId, error: &StoreError) {
+    tracing::warn!(peer = %peer, error = %error, "lan_session_touch_last_seen_failed");
+}
+
+/// Marks `peer` seen right now, fixing a real, pre-existing gap: registration only ever sets
+/// `last_seen` once, at pairing time (`devices_grpc.rs::sync_status_impl`'s doc has the full
+/// history) — nothing ever advanced it again. This runs right after `peer`'s link-level `Hello`
+/// validates (`dispatch_link_frame`, below) — the one place every real sync session (LAN, relay,
+/// control channel all converge on `drive_shared_session`) learns the peer's device id, so it is
+/// the one place this needs wiring, not three. Any routed workspace's identity store works, same
+/// reasoning as [`any_route_now_ms`] — the device-global `devices` table is shared across every
+/// workspace this daemon has open (ADR 0021).
+fn touch_peer_last_seen(
+    routes: &BTreeMap<WorkspaceId, WorkspaceRoute>,
+    peer: DeviceId,
+    now_ms: u64,
+) {
+    let Some(route) = routes.values().next() else {
+        return;
+    };
+    let result = read(&route.ws)
+        .identity_store()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .touch_last_seen(peer, now_ms);
+    match result {
+        Ok(true) => {}
+        Ok(false) => log_touch_last_seen_unknown_device(peer),
+        Err(e) => log_touch_last_seen_failed(peer, &e),
+    }
+}
+
 /// The link-level `Hello` branch of [`recv_and_dispatch`] — split out purely to keep that
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
@@ -61,7 +98,13 @@ fn dispatch_link_frame(
 ) -> Option<()> {
     let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)?;
     let now_ms = any_route_now_ms(&shared.routes);
-    handle_link_hello(session, &msg, now_ms).then_some(())
+    if !handle_link_hello(session, &msg, now_ms) {
+        return None;
+    }
+    if let Some(peer) = session.peer() {
+        touch_peer_last_seen(&shared.routes, peer, now_ms);
+    }
+    Some(())
 }
 
 /// A real workspace's own branch of [`recv_and_dispatch`] — `Some(())` (not `None`) when
