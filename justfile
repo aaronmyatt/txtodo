@@ -93,7 +93,9 @@ release:
     build x86_64-unknown-linux-gnu.2.17 x86_64-unknown-linux-gnu txtodo-cli txtodo-daemon txtodo-tui
     build x86_64-unknown-linux-musl x86_64-unknown-linux-musl txtodo-cli txtodo-daemon txtodo-tui
     build aarch64-unknown-linux-musl aarch64-unknown-linux-musl txtodo-cli txtodo-daemon txtodo-tui
-    build x86_64-windows-gnu x86_64-pc-windows-gnu txtodo-tui
+    # Same zig target as rust_target here (not a typo left in): windows-gnu has no
+    # glibc-version-suffix convention, and "x86_64-windows-gnu" alone isn't a real target triple.
+    build x86_64-pc-windows-gnu x86_64-pc-windows-gnu txtodo-tui
     echo "== static check: musl artifacts must have no dynamic interpreter =="
     for f in dist/*musl*; do
         file "$f" | grep -q 'statically linked' || { echo "::error:: $f is not static"; exit 1; }

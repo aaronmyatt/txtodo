@@ -78,7 +78,12 @@ jobs:
           - leg: windows-x86_64-gnu
             os: ubuntu-latest
             rust_target: x86_64-pc-windows-gnu
-            zig_target: x86_64-windows-gnu
+            # Same as rust_target, not a typo left in: unlike the glibc legs above, windows-gnu
+            # has no glibc-version-suffix convention to apply, and "x86_64-windows-gnu" (missing
+            # the "pc" vendor component) is not a real target triple at all — cargo/rustc refused
+            # it outright ("could not find specification for target") on this project's first
+            # real release run.
+            zig_target: x86_64-pc-windows-gnu
             packages: "txtodo-tui"
             native: false
             static_check: false
@@ -107,9 +112,15 @@ jobs:
 
       - name: install cargo-zigbuild + zig
         if: ${{ !matrix.native }}
+        # ziglang FIRST: .cargo/config.toml pins zig as the x86_64-unknown-linux-gnu linker
+        # unconditionally, so `cargo install cargo-zigbuild` (a plain, un-cross-targeted `cargo
+        # install`, itself compiling host-target proc-macro/build-script crates like `libc`) hits
+        # that same override — installing zig second left it missing exactly when this step's own
+        # first command needed it, failing every non-native leg with "exit status: 127" (zig cc
+        # not found) on this project's first real release run.
         run: |
-          cargo install --locked cargo-zigbuild
           pip3 install ziglang   # cargo-zigbuild's own recommended zig install path
+          cargo install --locked cargo-zigbuild
 
       - name: build (cargo-zigbuild)
         if: ${{ !matrix.native }}
@@ -191,6 +202,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup target add wasm32-unknown-unknown
+      # .cargo/config.toml pins zig as the x86_64-unknown-linux-gnu linker unconditionally (its
+      # own doc says this is meant for local cross-target builds, independent of the release
+      # matrix's own `cargo zigbuild` invocations) — but that override still applies to *this*
+      # job's host-target proc-macro/build-script compilation even though it never cross-compiles
+      # anything itself, since ubuntu-latest's host triple is that same target. Found on this
+      # project's first real release run: without zig on PATH, every proc-macro crate
+      # (wasm-bindgen-shared, quote, proc-macro2, ...) fails to link with "exit status: 127"
+      # (command not found). `build`'s own zig install already works around this; this job needs
+      # the same fix even though it has no zig cross-compiling of its own to do.
+      - name: install zig (works around .cargo/config.toml's host-linker override, see above)
+        run: pip3 install ziglang
       # https://github.com/rustwasm/wasm-pack
       - name: install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
