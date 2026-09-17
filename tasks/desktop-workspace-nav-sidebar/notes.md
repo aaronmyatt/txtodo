@@ -84,3 +84,46 @@ fan-out design, not just a UI shell.
 - Playwright coverage (if `WorkspaceSwitcher` has any today — check `apps/desktop/tests/` before
   assuming there is none) re-pointed at the new markup, plus new cases for Esc/outside-click dismiss
   and tab switching.
+
+## As built (2026-09-17)
+
+- `WorkspaceSwitcher.svelte` rebuilt in place (same component/import site, `MainView`'s
+  `.top-nav-actions` unchanged): the trigger is now an icon-only `▤` button; the panel is a fixed,
+  full-height `div role="menu"` (not `<aside>` — svelte-check's a11y rule flags a landmark element
+  given an interactive role, same fix `ConflictReviewSheet.svelte` already uses for its own
+  `role="dialog"`) sliding in from the left via `svelte/transition`'s `fly`. Esc and outside-click
+  (`window` listeners registered only while open) both dismiss; focus moves to the first tab on
+  open and returns to the toggle on close — same pattern `ConflictReviewSheet.svelte` uses.
+- Tab bar (`role="tablist"`/`role="tab"`/`role="tabpanel"`): `Workspaces` renders the moved
+  list+add-form unchanged; `Activity` is a placeholder pending `desktop-activity-cross-workspace`.
+- New `apps/desktop/e2e/workspace-switcher.spec.ts`: toggle+Esc+focus-restore, outside-click
+  dismiss, tab switching — no prior Playwright coverage existed (confirmed by checking `e2e/`
+  first, per this task's own notes).
+- **Found and fixed a real, pre-existing break in the whole Playwright suite** while writing that
+  spec: `e2e_bridge.rs`'s `DaemonClient::connect(&sock)` call was a straight compile error
+  (`connect` grew a required `selector` param under `mcp-multi-workspace-gateway`) — every
+  Playwright test in this repo was silently broken (never caught since `apps/desktop` has no CI
+  coverage, `desktop-stack-gaps`). Fixed with a `Path`-selector `connect` call mirroring
+  `commands.rs::connect_and_store`'s own pattern (an initial attempt using `None` also compiled but
+  failed at runtime — "no workspace is open" — since `ensure_daemon` spawns true global mode with
+  zero workspaces open; only a `Path` selector actually gets one auto-registered/opened). Also
+  wired `list_workspaces`/`add_workspace`/`remove_workspace`/`switch_workspace` into the bridge
+  (`e2e_bridge/workspace.rs`, split out for the file-length budget) and into
+  `apps/desktop/e2e/fixtures.ts`'s implicit pass-through (`e2e/shim/core.ts`'s `default` case
+  already forwards unknown commands, no change needed there) — none of the four existed on the
+  bridge before, since nothing had exercised `WorkspaceSwitcher` over Playwright until now.
+- **Known gap surfaced, not fixed here (flagged to a human as a follow-up task):** `ensure_daemon`
+  spawns one real, machine-global `txtodod` (true global mode) shared across every Playwright run,
+  and `fixtures.ts::dispose()` still calls `killDaemon(dir)` — a leftover per-directory-daemon
+  assumption from before the global-daemon migration — and never un-registers the workspace it
+  registered. Every test run leaks a registry.db entry and the daemon process itself outlives the
+  run. Found ~52 leaked entries (my own session's repeated test runs) in the real, persistent
+  registry and cleaned them up by hand (`txtodo workspace remove` in a loop) plus killed the stray
+  daemon process — a one-off manual fix, not a structural one. Out of this task's scope (a Svelte
+  shell change), so flagged as its own follow-up rather than fixed inline.
+- Visual regression goldens (`e2e/visual/main-view.spec.ts` and 2 others) now fail — expected: the
+  trigger changed from a wide text button to a small icon, shifting the top-nav's other links left
+  by a few px, which cascades into the "95% pixels differ" reading (confirmed by eye: the actual
+  screenshot renders correctly, just shifted). Deliberately **not** regenerated here —
+  `playwright.config.ts`'s own comment: golden updates are human-reviewed only
+  (`test:visual:update`), never automatic. A human should run that and review the diff.

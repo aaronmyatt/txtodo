@@ -38,6 +38,10 @@ use txtodo_model::{FilePath, TaskId, Ulid};
 use txtodo_proto::v1 as pb;
 use txtodo_store::{ReviewRow, Store};
 
+#[path = "e2e_bridge/workspace.rs"]
+mod workspace;
+use workspace::dispatch_workspace_cmd;
+
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
 /// `crates/txtodo-daemon/tests/grpc.rs::raise_flag`).
@@ -61,7 +65,14 @@ async fn main() {
     let sock = daemon::ensure_daemon(&cfg)
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: ensure_daemon: {e}"));
-    let mut client = DaemonClient::connect(&sock)
+    // `ensure_daemon` spawns `txtodod` in true global mode (no `--dir`) — no workspace is open at
+    // all yet, so `None` ("the sole open workspace") has nothing to resolve to. A `Path` selector
+    // is what actually gets it opened (`WorkspaceCatalog::resolve` auto-registers/opens an unknown
+    // directory), the same selector `commands.rs::connect_and_store` builds for the real app.
+    let selector = Some(pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(workspace.clone())),
+    });
+    let mut client = DaemonClient::connect(&sock, selector)
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: connect: {e}"));
     client
@@ -166,6 +177,11 @@ fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
 /// `DetailView.svelte`'s footer (`{absoluteRefDir}`) empty for that task's detail-view golden —
 /// the one thing the real Tauri command surface has that those six scenarios happened never to
 /// need. No daemon RPC involved: the bridge already knows its own workspace root.
+///
+/// `list_workspaces`/`add_workspace`/`remove_workspace`/`switch_workspace` were added by task
+/// `desktop-workspace-nav-sidebar`: the first Playwright coverage of `WorkspaceSwitcher.svelte`
+/// needed them, restating `commands_workspace.rs`'s own bodies over this bridge's `DaemonClient`
+/// exactly like every other `cmd_*` here restates `commands.rs`'s.
 async fn invoke(
     State(state): State<Shared>,
     Json(req): Json<InvokeReq>,
@@ -178,6 +194,26 @@ async fn invoke(
         let value = Value::String(state.workspace.display().to_string());
         return Ok(Json(value).into_response());
     }
+    // Kept as a separate function, not a 5th arm/branch here: clippy's cognitive-complexity lint
+    // was already at this crate's budget with just the two `if`s above plus the match `invoke_core`
+    // now owns unchanged, so the new workspace-command path gets its own branch in its own
+    // function rather than adding a branch to this one.
+    if WORKSPACE_CMDS.contains(&req.cmd.as_str()) {
+        let mut client = state.client.lock().await;
+        let value = dispatch_workspace_cmd(&mut client, &req.cmd, req.args).await?;
+        return Ok(Json(value).into_response());
+    }
+    invoke_core(state, req).await
+}
+
+const WORKSPACE_CMDS: [&str; 4] = [
+    "list_workspaces",
+    "add_workspace",
+    "remove_workspace",
+    "switch_workspace",
+];
+
+async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError> {
     let mut client = state.client.lock().await;
     let value: Value = match req.cmd.as_str() {
         "list_files" => cmd_list_files(&mut client).await?,

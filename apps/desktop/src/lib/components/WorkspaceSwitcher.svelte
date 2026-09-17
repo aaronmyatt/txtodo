@@ -1,13 +1,22 @@
 <script lang="ts">
-	// Workspace switcher (ADR 0025, task desktop-workspace-switcher): lists every registered
-	// workspace, switches the active one, and adds/removes registry entries. Mounted in
-	// MainView's top-nav; MainView wraps its file view in `{#key $currentWorkspaceRoot}` so a
-	// switch remounts FileView/ConflictBanner — `switchWorkspace` only changes the selector
-	// attached to calls made *after* it resolves, so anything already loaded (or an open `watch`
-	// stream) has to be re-established against the new workspace, not just re-read in place.
+	// Workspace + Activity nav sidebar (task desktop-workspace-nav-sidebar, storyboard screens
+	// 07/08): replaces the old anchored dropdown with a dismissable left-nav sidebar toggled from
+	// MainView's titlebar. Same pick/add/remove/refresh daemon calls as before (ADR 0025, task
+	// desktop-workspace-switcher) — only the shell moved; MainView still wraps its file view in
+	// `{#key $currentWorkspaceRoot}` so a switch remounts FileView/ConflictBanner.
 	//
-	// No folder-picker dialog: `@tauri-apps/plugin-dialog` isn't a dependency yet, so "add" takes a
-	// typed absolute path, mirroring `txtodo workspace add <path>` on the CLI.
+	// Esc/outside-click dismiss and focus-on-open/restore-on-close follow
+	// ConflictReviewSheet.svelte's own pattern (this codebase's existing "dismissable floating
+	// panel" idiom) — its Tab focus-trap is not reused here since this sidebar is a `role="menu"`
+	// disclosure, not a modal `role="dialog"`, so content behind it stays reachable while it's
+	// open. Ref (disclosure pattern): https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
+	// Ref (tabs pattern): https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
+	//
+	// The Activity tab renders a placeholder here; its real cross-workspace feed is
+	// desktop-activity-cross-workspace's job (deliberately split off — needs its own daemon
+	// fan-out design, not just a UI shell).
+	import { tick } from "svelte";
+	import { fly } from "svelte/transition";
 	import {
 		addWorkspace,
 		listWorkspaces,
@@ -19,25 +28,77 @@
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 
 	let open = $state(false);
+	let activeTab = $state<"workspaces" | "activity">("workspaces");
 	let workspaces = $state<WorkspaceInfo[]>([]);
 	let newPath = $state("");
 	let error = $state("");
 	let busy = $state(false);
 
+	let toggleRef: HTMLButtonElement | undefined = $state();
+	let asideRef: HTMLElement | undefined = $state();
+	let previouslyFocused: HTMLElement | null = null;
+
 	async function refresh() {
 		workspaces = await listWorkspaces();
 	}
 
-	async function toggle() {
-		open = !open;
-		if (!open) return;
+	function focusableElements(): HTMLElement[] {
+		if (!asideRef) return [];
+		const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+		return Array.from(asideRef.querySelectorAll<HTMLElement>(selector)).filter(
+			(el) => !el.hasAttribute("disabled")
+		);
+	}
+
+	async function openSidebar() {
+		if (open) return;
+		previouslyFocused = document.activeElement as HTMLElement | null;
+		open = true;
 		error = "";
 		try {
 			await refresh();
 		} catch (e) {
 			error = String(e);
 		}
+		await tick(); // https://svelte.dev/docs/svelte/lifecycle-hooks#tick — wait for the aside to render
+		focusableElements()[0]?.focus();
 	}
+
+	function closeSidebar() {
+		if (!open) return;
+		open = false;
+		(previouslyFocused ?? toggleRef)?.focus();
+		previouslyFocused = null;
+	}
+
+	function toggle() {
+		if (open) closeSidebar();
+		else openSidebar();
+	}
+
+	function onWindowKeydown(e: KeyboardEvent) {
+		if (e.key === "Escape") closeSidebar();
+	}
+
+	// Outside-click dismiss: bound to `window` only while open (removed on close), checking the
+	// event target against the sidebar's own node and the toggle button (a click on the toggle
+	// itself already closes it through `toggle()` — this must not also fire and re-open it).
+	function onWindowPointerdown(e: PointerEvent) {
+		const target = e.target as Node | null;
+		if (!target) return;
+		if (asideRef?.contains(target) || toggleRef?.contains(target)) return;
+		closeSidebar();
+	}
+
+	$effect(() => {
+		if (!open) return;
+		window.addEventListener("keydown", onWindowKeydown);
+		window.addEventListener("pointerdown", onWindowPointerdown);
+		return () => {
+			window.removeEventListener("keydown", onWindowKeydown);
+			window.removeEventListener("pointerdown", onWindowPointerdown);
+		};
+	});
 
 	async function pick(root: string) {
 		if (root === $currentWorkspaceRoot || busy) return;
@@ -46,7 +107,7 @@
 		try {
 			await switchWorkspace(root);
 			$currentWorkspaceRoot = await workspaceRoot();
-			open = false;
+			closeSidebar();
 		} catch (e) {
 			error = String(e);
 		} finally {
@@ -86,80 +147,143 @@
 	}
 </script>
 
-<div class="switcher">
-	<button type="button" class="trigger" onclick={toggle} aria-expanded={open}>
-		{$currentWorkspaceRoot || "Workspace"}
-	</button>
-	{#if open}
-		<div class="panel" role="menu">
-			{#if error}
-				<p class="error" role="alert">{error}</p>
-			{/if}
-			<ul>
-				{#each workspaces as ws (ws.id)}
-					<li class:current={ws.root === $currentWorkspaceRoot}>
-						<button type="button" class="entry" onclick={() => pick(ws.root)} disabled={busy}>
-							{ws.root}
-						</button>
-						{#if ws.root !== $currentWorkspaceRoot}
-							<button
-								type="button"
-								class="remove"
-								aria-label={`Remove ${ws.root}`}
-								onclick={() => remove(ws)}
-								disabled={busy}
-							>
-								&times;
-							</button>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-			<form onsubmit={add}>
-				<input type="text" placeholder="/path/to/workspace" bind:value={newPath} disabled={busy} />
-				<button type="submit" disabled={busy}>Add</button>
-			</form>
+<button
+	type="button"
+	class="nav-toggle"
+	bind:this={toggleRef}
+	onclick={toggle}
+	aria-expanded={open}
+	aria-label={open ? "Close workspace navigation" : "Open workspace navigation"}
+>
+	<span aria-hidden="true">▤</span>
+</button>
+
+{#if open}
+	<!-- A plain div, not <aside>: svelte-check's a11y rule flags a landmark element (aside) being
+	     given an interactive role like "menu" — same fix ConflictReviewSheet.svelte uses for its
+	     own dialog role. -->
+	<div class="nav-sidebar" role="menu" bind:this={asideRef} transition:fly={{ x: -280, duration: 180 }}>
+		<div class="tabs" role="tablist" aria-label="Workspace navigation">
+			<button
+				type="button"
+				role="tab"
+				id="nav-tab-workspaces"
+				aria-selected={activeTab === "workspaces"}
+				aria-controls="nav-panel-workspaces"
+				class:active={activeTab === "workspaces"}
+				onclick={() => (activeTab = "workspaces")}
+			>
+				Workspaces
+			</button>
+			<button
+				type="button"
+				role="tab"
+				id="nav-tab-activity"
+				aria-selected={activeTab === "activity"}
+				aria-controls="nav-panel-activity"
+				class:active={activeTab === "activity"}
+				onclick={() => (activeTab = "activity")}
+			>
+				Activity
+			</button>
 		</div>
-	{/if}
-</div>
+
+		{#if activeTab === "workspaces"}
+			<div id="nav-panel-workspaces" role="tabpanel" aria-labelledby="nav-tab-workspaces">
+				{#if error}
+					<p class="error" role="alert">{error}</p>
+				{/if}
+				<ul>
+					{#each workspaces as ws (ws.id)}
+						<li class:current={ws.root === $currentWorkspaceRoot}>
+							<button type="button" class="entry" onclick={() => pick(ws.root)} disabled={busy}>
+								{ws.root}
+							</button>
+							{#if ws.root !== $currentWorkspaceRoot}
+								<button
+									type="button"
+									class="remove"
+									aria-label={`Remove ${ws.root}`}
+									onclick={() => remove(ws)}
+									disabled={busy}
+								>
+									&times;
+								</button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+				<form onsubmit={add}>
+					<input
+						type="text"
+						placeholder="/path/to/workspace"
+						bind:value={newPath}
+						disabled={busy}
+					/>
+					<button type="submit" disabled={busy}>Add</button>
+				</form>
+			</div>
+		{:else}
+			<div id="nav-panel-activity" role="tabpanel" aria-labelledby="nav-tab-activity">
+				<p class="placeholder">Activity across workspaces is coming soon.</p>
+			</div>
+		{/if}
+	</div>
+{/if}
 
 <style>
-	.switcher {
-		position: relative;
-	}
-
-	.trigger {
+	.nav-toggle {
 		background: transparent;
-		border: 1px solid var(--color-border, currentColor);
+		border: 1px solid var(--color-border);
 		border-radius: 6px;
-		padding: 0.25rem 0.6rem;
+		padding: 0.25rem 0.5rem;
 		color: inherit;
 		cursor: pointer;
-		max-width: 22ch;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		font-size: 1rem;
+		line-height: 1;
 	}
 
-	.panel {
-		position: absolute;
-		right: 0;
-		top: calc(100% + 0.35rem);
-		z-index: 10;
-		min-width: 24rem;
-		background: var(--color-bg);
+	.nav-sidebar {
+		position: fixed;
+		inset: 0 auto 0 0;
+		z-index: 20;
+		width: min(24rem, 85vw);
+		display: flex;
+		flex-direction: column;
+		background: var(--color-bg-elevated);
 		color: var(--color-text);
-		border: 1px solid var(--color-border, currentColor);
-		border-radius: 8px;
+		border-right: 1px solid var(--color-border);
+		box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
 		padding: 0.5rem;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+	}
+
+	.tabs {
+		display: flex;
+		gap: 0.25rem;
+		border-bottom: 1px solid var(--color-border-subtle);
+		margin-bottom: 0.5rem;
+	}
+
+	.tabs button {
+		background: transparent;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		padding: 0.5rem 0.75rem;
+		border-bottom: 2px solid transparent;
+	}
+
+	.tabs button.active {
+		color: var(--color-text);
+		border-bottom-color: var(--color-text);
+		font-weight: 600;
 	}
 
 	ul {
 		list-style: none;
 		margin: 0 0 0.5rem;
 		padding: 0;
-		max-height: 16rem;
+		flex: 1;
 		overflow-y: auto;
 	}
 
@@ -188,7 +312,7 @@
 	}
 
 	.entry:hover:not(:disabled) {
-		background: var(--color-hover-bg, rgba(128, 128, 128, 0.15));
+		background: var(--color-hover-overlay);
 	}
 
 	.remove {
@@ -216,6 +340,10 @@
 
 	.error {
 		margin: 0 0 0.5rem;
-		color: var(--color-banner-text, crimson);
+		color: var(--color-danger);
+	}
+
+	.placeholder {
+		color: var(--color-text-muted);
 	}
 </style>
