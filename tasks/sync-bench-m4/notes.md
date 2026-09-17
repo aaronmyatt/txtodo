@@ -114,3 +114,37 @@ Two separate tests, as the notes require ("do not put them in one harness").
 - "Idle" definition matches the notes exactly: daemon started, workspace walked, watcher armed, a
   fresh random sync group that never finds a peer (same isolation `sync-loopback-converge` uses),
   1.5 s settle with no edits before reading RSS.
+
+## As built (2026-09-17, agent) — budgets.json, the multi-frame shape, and closing this out
+
+`.claude/UNFROZEN` is present (a human's prior 2026-09-13 sign-off), so the two `budgets.json`
+deviations flagged above are resolved for real:
+
+- **`syncMs: 500` and `idleRssMb: 50`** added at root level, `notes.syncMs`/`notes.idleRssMb`
+  written explaining the definitions and, honestly, that neither is `check-bench.sh`-enforced —
+  both real tests they describe don't fit criterion's iterate-a-closure model, same reasoning the
+  2026-09-13 pass already gave for not building a separate RSS script under `check-bench.sh`.
+- **Correction to the 2026-09-13 signature deviation above**: it's stale. `Message::Ops` now
+  carries a real `signatures: Vec<Signature>` field, `lan_apply.rs::sign_ops` signs every
+  outgoing op, and `workspace_session.rs::on_ops_inner` calls `sign::verify_batch` unconditionally
+  before any insertion — per-op signing landed on the wire protocol in later work (protocol version
+  bumped 1->2, per `daemon-workspace-session-multiplex`). `lan_sync_bench.rs`'s real daemon pair
+  already exercises this for real; nothing to add.
+- **The "both shapes" gap is now closed**: added `multi_frame_ops_converge_within_budget` to
+  `lan_sync_bench.rs`. `MAX_OPS_PER_BATCH` is exactly 1000 and so is the task's own op count, so
+  "one big frame" and "a `MAX_OPS_PER_BATCH`-sized frame" were never distinguishable at that count —
+  the wire format's own cap (`message.rs`'s `cap` guard) makes a frame bigger than
+  `MAX_OPS_PER_BATCH` impossible, so the only way to force the second shape is more ops than one
+  frame holds. `MULTI_FRAME_OP_COUNT = 3 * MAX_OPS_PER_BATCH` (3000) chunks into exactly 3 `Ops`
+  frames. **Measured for real: 3000 ops / 3 frames converged in 579 ms** against a (unjustified
+  beyond "roughly proportional") 1500 ms scaled budget. Same `#[ignore]` CPU-contention caveat as
+  the single-frame test — worse here, moving 3x the bytes.
+- **`check-bench.sh` wiring (item 8) stays open, `@human`-tagged**: two independent calls that
+  aren't an agent's to make alone — (1) `check-bench.sh`'s mechanism is criterion-only; wiring a
+  real-process test needs either a criterion adapter or a second, differently-shaped check script,
+  and (2) both real tests it would gate on are still `#[ignore]`d for CPU-contention flakiness, not
+  root-caused — gating CI on a flaky, ignored test would make CI worse, not better, until that's
+  fixed first.
+- Every other line closed; the parent `todo.txt` line (`id:01M2B4ZWQDY3MXJMW0164D3RB4`) is marked
+  done too, since the one line left open here is `@human`-gated and was never in scope for that
+  parent line's own "throughput done and tested" claim.

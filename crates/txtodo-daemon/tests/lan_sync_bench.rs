@@ -35,12 +35,25 @@ use txtodo_model::{TaskId, Ulid};
 
 const OP_COUNT: usize = 1_000;
 
+/// Second shape the task notes ask for: several chunked `MAX_OPS_PER_BATCH`-sized frames, distinct
+/// from `OP_COUNT`'s single frame. `OP_COUNT` ops IS exactly one `MAX_OPS_PER_BATCH` frame already
+/// — the wire format's own cap (`txtodo_sync::message`'s `cap` guard) makes "one frame bigger than
+/// `MAX_OPS_PER_BATCH`" impossible, so the only way to exercise a genuinely different shape is more
+/// ops than a single frame holds. `3 * MAX_OPS_PER_BATCH` makes `serve_want` (`lan_apply.rs`) chunk
+/// this batch into exactly 3 `Ops` frames instead of 1.
+const MULTI_FRAME_OP_COUNT: usize = 3 * txtodo_sync::MAX_OPS_PER_BATCH;
+
 /// Plan M4's own number, measured from A's ops already durably committed (pairing/discovery
 /// excluded — both daemons are already up and paired before the clock starts) to B holding all
 /// 1 000 committed. Generous relative to the sub-millisecond convergence
 /// `sync-loopback-converge`'s much smaller edits measured on this machine; a real budget check
 /// would want CI-runner headroom same as `latencyMs`'s own documented reasoning.
 const THROUGHPUT_BUDGET_MS: u128 = 500;
+
+/// Scaled 3x `THROUGHPUT_BUDGET_MS` for `MULTI_FRAME_OP_COUNT`'s 3 frames — no independent
+/// justification beyond "roughly proportional"; a tight, CI-run number for this shape is real,
+/// separate work, same as `THROUGHPUT_BUDGET_MS`'s own open CI-flakiness question below.
+const MULTI_FRAME_THROUGHPUT_BUDGET_MS: u128 = 3 * THROUGHPUT_BUDGET_MS;
 
 fn rand_u128() -> u128 {
     use std::hash::{Hash, Hasher};
@@ -50,15 +63,20 @@ fn rand_u128() -> u128 {
     (u128::from(hasher.finish()) << 64) | u128::from(hasher.finish().wrapping_add(1))
 }
 
-/// `OP_COUNT` task lines, each with its own `id:` tag so tagged-mode adoption mints nothing extra
-/// and every line becomes exactly one `Insert` op on reconcile.
-fn thousand_lines() -> String {
-    let mut out = String::with_capacity(OP_COUNT * 48);
-    for i in 0..OP_COUNT {
+/// `n` task lines, each with its own `id:` tag so tagged-mode adoption mints nothing extra and
+/// every line becomes exactly one `Insert` op on reconcile.
+fn n_task_lines(n: usize) -> String {
+    let mut out = String::with_capacity(n * 48);
+    for i in 0..n {
         let id = TaskId::new(Ulid::from_u128(0x0B00_0000 + i as u128));
         let _ = writeln!(out, "task number {i} id:{id}");
     }
     out
+}
+
+/// `OP_COUNT` task lines — the single-frame shape's fixture.
+fn thousand_lines() -> String {
+    n_task_lines(OP_COUNT)
 }
 
 /// **Blocked — flaky under CPU contention, unrelated to LAN sync correctness.** Failed on a
@@ -117,5 +135,56 @@ async fn thousand_ops_converge_within_budget() {
     assert!(
         elapsed_ms <= THROUGHPUT_BUDGET_MS,
         "converged in {elapsed_ms} ms, over the {THROUGHPUT_BUDGET_MS} ms budget"
+    );
+}
+
+/// The multi-frame shape: same measurement as [`thousand_ops_converge_within_budget`], but with
+/// [`MULTI_FRAME_OP_COUNT`] ops so `serve_want` chunks 3 `Ops` frames instead of 1 — the shape the
+/// task notes ask to bench separately from the single-frame case. Same ignore rationale: a real
+/// two-process QUIC workload is sensitive to scheduler noise under `cargo test --workspace`, more
+/// so here since it moves 3x the bytes.
+#[tokio::test]
+#[ignore = "same CPU-contention sensitivity as thousand_ops_converge_within_budget, worse here at 3x the bytes — not root-caused this pass, see that test's doc comment"]
+async fn multi_frame_ops_converge_within_budget() {
+    let group_id = rand_u128();
+    let workspace_id = rand_u128();
+    let mut a =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
+    let mut b =
+        Daemon::start_with_seeded_group_and_workspace("", "tagged", group_id, workspace_id).await;
+    let key_hex = "cd".repeat(32);
+    a.debug_set_group_key(&group_id.to_string(), &key_hex).await;
+    b.debug_set_group_key(&group_id.to_string(), &key_hex).await;
+
+    let batch = n_task_lines(MULTI_FRAME_OP_COUNT);
+    a.external_write(&batch);
+    let landed = a.settle().await;
+    assert_eq!(
+        landed.lines().count(),
+        MULTI_FRAME_OP_COUNT,
+        "the fixture reconciles to exactly one Insert op per line"
+    );
+
+    let want = a.daemon_bytes().await;
+    let start = Instant::now();
+    loop {
+        let got = b.daemon_bytes().await;
+        if got == want {
+            break;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "{MULTI_FRAME_OP_COUNT} ops did not converge within 30s\n--- b's log ---\n{}",
+            b.log_tail()
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let elapsed_ms = start.elapsed().as_millis();
+    eprintln!(
+        "sync-bench-m4: {MULTI_FRAME_OP_COUNT} ops (3 frames) converged in {elapsed_ms} ms (budget {MULTI_FRAME_THROUGHPUT_BUDGET_MS} ms)"
+    );
+    assert!(
+        elapsed_ms <= MULTI_FRAME_THROUGHPUT_BUDGET_MS,
+        "converged in {elapsed_ms} ms, over the {MULTI_FRAME_THROUGHPUT_BUDGET_MS} ms budget"
     );
 }
