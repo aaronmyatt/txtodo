@@ -121,3 +121,19 @@ release:
         cosign verify-blob --key cosign.pub --bundle "${f}.bundle" "$f"
     done
     echo "release smoke OK: $(ls dist/) bom.json"
+
+# task desktop-daemon-sidecar-bundle: stages this host's own txtodod build as apps/desktop's Tauri
+# sidecar (tauri.conf.json's bundle.externalBin), so a local `npm run tauri build` produces a
+# bundle with a working daemon instead of relying on $PATH. Host-only (one target triple, via
+# `rustc --print host-tuple`, https://v2.tauri.app/develop/sidecar/#platform-specific-binaries) —
+# .github/workflows/release.yml's build-desktop job does the equivalent per matrix leg for every
+# shipped platform, not just the CI runner's own host.
+stage-desktop-sidecar:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release -p txtodo-daemon --bin txtodod
+    triple=$(rustc --print host-tuple)
+    ext=""; case "$triple" in *windows*) ext=".exe" ;; esac
+    mkdir -p apps/desktop/src-tauri/binaries
+    cp "target/release/txtodod${ext}" "apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
+    echo "staged apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"

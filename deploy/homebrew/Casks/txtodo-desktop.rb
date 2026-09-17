@@ -38,6 +38,15 @@ cask "txtodo-desktop" do
   homepage "https://github.com/aaronmyatt/txtodo"
 
   depends_on :macos
+  # Defense in depth for task `desktop-daemon-sidecar-bundle`: the primary fix is bundling
+  # `txtodod` into the app itself as a Tauri sidecar (see `apps/desktop/src-tauri/tauri.conf.json`'s
+  # `bundle.externalBin` and `daemon/spawn.rs`'s sidecar-first resolution), but a Homebrew install
+  # of this cask should not rely on that alone — depending on the sibling `txtodo` formula (same
+  # tap: `Formula/txtodo.rb`, which ships `txtodod` too, see its own header comment) guarantees a
+  # working `txtodod` on `$PATH` even if the sidecar resolution ever regresses. Same-tap formula
+  # reference, not `"aaronmyatt/tap/txtodo"` (that longer form is for a *different* tap).
+  # Ref: https://docs.brew.sh/Cask-Cookbook#depends_on
+  depends_on formula: "txtodo"
 
   # `productName: "desktop"` in apps/desktop/src-tauri/tauri.conf.json is what `tauri build`
   # actually names the bundle (verified locally: a real build produces `desktop.app`) — not

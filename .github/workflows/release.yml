@@ -241,6 +241,19 @@ jobs:
       - name: npm ci
         working-directory: apps/desktop
         run: npm ci
+      # task desktop-daemon-sidecar-bundle: a packaged desktop build has no guarantee txtodod
+      # exists anywhere on the installing machine's $PATH — bundle it as a Tauri sidecar instead
+      # (tauri.conf.json's bundle.externalBin: ["binaries/txtodod"]). Built for the exact same
+      # target this leg's `tauri build --target` below produces, named per Tauri's
+      # binary-name{-target-triple} convention (https://v2.tauri.app/develop/sidecar/) so
+      # tauri-bundler picks it up and strips the suffix when it copies it into the bundle.
+      - name: build + stage txtodod as this leg's Tauri sidecar
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }} -p txtodo-daemon --bin txtodod --locked
+          mkdir -p apps/desktop/src-tauri/binaries
+          cp "target/${{ matrix.target }}/release/txtodod" \
+             "apps/desktop/src-tauri/binaries/txtodod-${{ matrix.target }}"
       # `tauri build`'s own `beforeBuildCommand` (tauri.conf.json) runs `npm run build` (the
       # SvelteKit frontend) for us — no separate frontend-build step needed here.
       - name: tauri build (app, dmg)

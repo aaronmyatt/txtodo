@@ -38,8 +38,14 @@
 ## Requirements
 
 - Rust (workspace `rust-version` — see root `Cargo.toml`) and Node.js.
-- `txtodod` on `PATH` (built by `cargo build --workspace`), unless overriding `daemon_bin` in
-  code for a test.
+- `txtodod` reachable one of three ways, checked in this order (`config.rs::sidecar_daemon_bin`,
+  `daemon/spawn.rs`): a Tauri sidecar bundled alongside the packaged app (`tauri.conf.json`'s
+  `bundle.externalBin`, task `desktop-daemon-sidecar-bundle` — what a real install gets, no
+  manual step); a binary sitting beside this process' own executable (what a plain `cargo build
+  --workspace` dev checkout gets for free, since both land in the same `target/debug/`); or
+  `$PATH` (the old, still-supported fallback). `just stage-desktop-sidecar` builds and stages this
+  host's own `txtodod` as the sidecar for a local `npm run tauri build` — see that recipe's own
+  comment for what CI does per release target instead.
 - macOS/Linux only for now — the sync transport is unix-socket only; Windows named pipes land
   in plan M10.
 
