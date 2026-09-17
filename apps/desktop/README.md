@@ -28,6 +28,12 @@
   once, at creation, and never again.
 - **Activity feed.** The newest ~200 ops across the workspace, newest first, with who did what
   and when. One bounded fetch (refresh button + refetch on window focus), not a live tail.
+- **Always-on background app.** A persistent tray/menu-bar icon (Open, Quick Add, Quit) keeps the
+  app reachable after the window closes — closing the main window hides it rather than quitting;
+  the tray's Quit item is the only thing that actually exits. An optional pin-on-top toggle in the
+  top nav keeps the window above others, persisted across restarts. The macOS dock icon stays
+  visible always (a deliberate choice, not a true menu-bar-only app — see
+  `tasks/desktop-always-on/notes.md`).
 
 ## Requirements
 

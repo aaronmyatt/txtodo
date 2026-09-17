@@ -11,6 +11,7 @@ mod commands_pairing;
 mod commands_tokens;
 mod commands_ui_log;
 mod commands_universal;
+mod commands_window;
 mod commands_workspace;
 // `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
 // target that only sees this library's public surface, and it reuses these DTOs and their
@@ -27,6 +28,7 @@ mod dto_workspace;
 mod quick_add;
 mod state;
 mod status;
+mod tray;
 
 // Public so the integration test in `tests/` (and, later, other desktop-side crates) can drive
 // `ensure_daemon`/`DaemonClient` directly without going through the Tauri command bridge.
@@ -63,6 +65,8 @@ pub fn run() {
             app.manage(AppState::new(DesktopConfig::new(workspace_dir())));
             quick_add::create_window(app.handle())?;
             quick_add::register_shortcut(app.handle())?;
+            tray::create_tray(app.handle())?;
+            install_hide_not_quit(app.handle());
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<AppState>();
@@ -87,6 +91,7 @@ pub fn run() {
             commands::resolve,
             commands::list_conflicts,
             commands_ui_log::ui_log,
+            commands_window::set_pinned,
             commands_workspace::list_workspaces,
             commands_workspace::add_workspace,
             commands_workspace::remove_workspace,
@@ -125,6 +130,25 @@ pub fn run() {
 /// `crates/txtodo-daemon/src/mutation.rs`'s `log_mutation_ops` pattern regardless).
 fn log_startup_connect_failed(e: &daemon::DaemonError) {
     tracing::warn!(error = %e, "startup_connect_failed");
+}
+
+/// Hide-not-quit (task `desktop-always-on`): closing the main window hides it instead of quitting
+/// the app — the tray icon (`tray.rs`) is what keeps the process (and the daemon connection)
+/// alive afterward, and its own "Quit" menu item is the only remaining path that actually calls
+/// `app.exit(0)`. A no-op if the main window doesn't exist yet (it always does by the time
+/// `.setup()` runs, since Tauri creates the windows declared in `tauri.conf.json` before calling
+/// it — this `if let` is defensive, not expected to ever miss).
+fn install_hide_not_quit(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let hidden = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            let _ = hidden.hide();
+        }
+    });
 }
 
 /// The workspace to talk to: `TXTODO_WORKSPACE` if set (dev/test override), else the current

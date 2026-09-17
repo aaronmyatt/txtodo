@@ -51,7 +51,9 @@ txtodo-daemon-launch = { workspace = true }
 # https://docs.rs/tracing — event/span macros for the `ipc.<command>` spans and `ui_log` bridge.
 tracing = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte
-tauri = { version = "2", features = [] }
+# `tray-icon` (task desktop-always-on): the persistent tray icon + menu (tray.rs) that keeps the
+# app reachable after the main window is hidden. Ref: https://v2.tauri.app/learn/system-tray/
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 # https://docs.rs/tauri-plugin-global-shortcut — menu-bar quick-add's global hotkey
 # (tasks/desktop-quick-add/notes.md). New dependency: needs human sign-off + a `cargo deny` pass.

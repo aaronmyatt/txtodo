@@ -73,7 +73,10 @@ pub fn register_shortcut(app: &AppHandle) -> Result<(), ShortcutError> {
 }
 
 /// Shows and focuses the quick-add window, then tells its frontend to reset/refocus the input.
-fn focus_quick_add(app: &AppHandle) {
+/// `pub(crate)` (not private) so `tray.rs`'s "Quick Add" menu item (task `desktop-always-on`) can
+/// reuse the exact same show/focus/reset sequence the global hotkey uses, rather than a second
+/// copy.
+pub(crate) fn focus_quick_add(app: &AppHandle) {
     let Some(window) = app.get_webview_window(QUICK_ADD_LABEL) else {
         return; // create_window() runs at startup; only absent if that itself failed
     };

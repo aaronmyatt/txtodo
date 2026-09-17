@@ -113,6 +113,10 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return universalTasksDto() as T;
 		case "set_main_popover_dirty":
 			return undefined as T;
+		case "set_pinned":
+			// No real OS window to pin in the mock/browser preview (task desktop-always-on) —
+			// the store still applies and persists the preference locally either way.
+			return undefined as T;
 		default:
 			throw new Error(`mock Tauri bridge: unhandled command "${cmd}"`);
 	}

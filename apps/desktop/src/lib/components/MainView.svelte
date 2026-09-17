@@ -12,11 +12,13 @@
 		workspaceRoot,
 		type DaemonStatus
 	} from "$lib/daemon";
+	import { applyStoredPin } from "$lib/stores/pin";
 	import { currentWorkspaceRoot, pendingUniversalNav } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
+	import PinToggle from "./PinToggle.svelte";
 	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
@@ -80,6 +82,9 @@
 	onMount(() => {
 		daemonStatus().then((s) => (status = s));
 		workspaceRoot().then((r) => ($currentWorkspaceRoot = r));
+		// A freshly created OS-level window always starts un-pinned; re-apply whatever was stored
+		// from a previous session (task desktop-always-on).
+		void applyStoredPin();
 		const unlisten = onDaemonStatus((s) => {
 			status = s;
 		});
@@ -104,6 +109,7 @@
 		<div class="top-nav-actions">
 			<WorkspaceSwitcher />
 			<ThemeToggle />
+			<PinToggle />
 			<a href="/universal">Universal view</a>
 			<a href="/devices">Devices &amp; agents</a>
 		</div>
