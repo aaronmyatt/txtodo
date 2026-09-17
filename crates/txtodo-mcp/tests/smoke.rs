@@ -16,17 +16,12 @@ use txtodo_mcp::backend::{
 use txtodo_mcp::error::McpError;
 use txtodo_mcp::schema::McpServer;
 
-/// task `mcp-smoke-span-flake`: every test below takes this lock for its duration. `cargo test`
-/// runs this file's tests concurrently by default, each spinning up its own `McpServer` +
-/// `tracing` dispatch — genuine cross-test interference through `tracing`'s process-global
-/// callsite-interest cache (and likely other undocumented-as-thread-safe global state inside
-/// `tracing`/`rmcp`) made `mcp_call_span_names_tool_and_records_principal` fail ~40-60% of local
-/// runs under default parallelism, reliably passing at `--test-threads=1`. A crate like
-/// `serial_test` is the usual answer; this is the dependency-free equivalent, scoped to just this
-/// one file rather than gating the whole workspace's test concurrency. `tokio::sync::Mutex`, not
-/// `std::sync::Mutex`: every holder keeps it locked across real `.await` points (the whole point
-/// — the interference is async, not a plain critical section), which `clippy::await_holding_lock`
-/// correctly refuses for a std mutex guard.
+/// task `mcp-smoke-span-flake`: every test below takes this lock for its duration, serializing
+/// them against `tracing`'s process-global callsite-interest cache (and other global state
+/// `tracing`/`rmcp` don't document as safe under concurrent ad-hoc subscribers) — see this task's
+/// `notes.md` "As built" section for the full root-cause writeup. Dependency-free equivalent of
+/// `serial_test`, scoped to this file. `tokio::sync::Mutex`, not `std`'s: every holder keeps it
+/// locked across real `.await` points, which `clippy::await_holding_lock` refuses for a std guard.
 static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Records every call it receives and returns canned, deterministic data — no real daemon, no
@@ -349,23 +344,10 @@ fn _client_handler_reference<T: ClientHandler>() {}
 /// layer on top of it (see this crate's `Cargo.toml` for why `capturing_dispatch` alone isn't
 /// enough — a span that closes with no event inside it never otherwise reaches the writer).
 ///
-/// **task `mcp-smoke-span-flake`: root-caused for real, not just patched around.** The original
-/// PR #4 report only ever reproduced on Ubuntu CI. Reproduced reliably *locally* this pass by
-/// running this crate's own `cargo test` (default parallelism, `--test-threads` = CPU count) —
-/// this test failed roughly 40-60% of the time, always the same way: the sink held zero
-/// `mcp.call` lines, only other `rmcp` lifecycle events. `tracing`'s callsite-interest cache is
-/// **process-global**, not per-`Dispatch`: the first subscriber to observe the `mcp.call`
-/// callsite decides its `Interest` for the *whole process*, cached, until
-/// `tracing::callsite::rebuild_interest_cache()` forces a re-check — and this file's other 3
-/// tests, running concurrently with no `set_default` of their own, could hit that callsite first
-/// under whatever ambient (non-capturing) default was active, caching "not interested" before
-/// this test's own capturing subscriber ever got a turn. `rebuild_interest_cache()` alone cut but
-/// did not eliminate the flake (still ~40-60% locally) — genuine concurrent interference remains
-/// beyond just the interest cache, most likely other cross-test state inside `tracing`/`rmcp`
-/// that isn't documented as thread-safe under concurrent ad-hoc subscribers. The robust fix,
-/// without a new `serial_test`-style dependency: every test in this file takes [`SERIAL`] so none
-/// of `rmcp`'s or `tracing`'s process-global state is ever touched by two of these tests at once
-/// — confirmed by 30 consecutive full-suite runs with zero failures (previously ~40-60% per run).
+/// task `mcp-smoke-span-flake`: this test used to flake under concurrent test execution (`tracing`
+/// callsite-interest is process-global, not per-`Dispatch` — see [`SERIAL`]'s own doc and this
+/// task's `notes.md` "As built" section for the full root-cause writeup); fixed by taking
+/// [`SERIAL`] for the duration, confirmed by 30 consecutive full-suite runs with zero failures.
 #[tokio::test]
 async fn mcp_call_span_names_tool_and_records_principal() {
     use tracing_subscriber::fmt::format::FmtSpan;
