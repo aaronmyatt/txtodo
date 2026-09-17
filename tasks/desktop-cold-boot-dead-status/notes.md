@@ -39,3 +39,16 @@ Small, mechanical fix — no architecture call needed:
 - Renaming/removing `txtodod` from `$PATH`, then launching the desktop app fresh, shows the "dead"
   banner immediately on boot — no manual Retry click needed to discover the failure.
 - Restoring `txtodod` and clicking Retry still recovers normally (unchanged existing behavior).
+
+## As built (2026-09-18)
+
+Shipped in `2ab27d3`: `.setup()`'s connect-error branch now also calls
+`commands::set_status(&handle, &state, DaemonStatus::Dead).await` (`set_status` made
+`pub(crate)`), and the stale doc comment above `log_startup_connect_failed` was corrected to
+describe the real behavior. `cargo test -p desktop --lib` / `--test daemon_spawn` stay green.
+
+No automated test covers this specific transition — `.setup()` runs inside a real Tauri
+`AppHandle`/`AppState` context with no unit-test seam today (`retry_connect_inner`, the other
+`Dead`-setting path, has the same gap, so this isn't a new hole). The acceptance scenario above
+(rename `txtodod` off `$PATH`, cold-launch, confirm the banner reads Dead immediately) needs a
+human running the real app once — flagged in the 0.0.2 manual test instructions.
