@@ -61,9 +61,29 @@ impl From<loro::LoroError> for FromLoroError {
     }
 }
 
-/// Translates one owned diff batch into ops, in the order the batch carries.
+/// Translates one owned diff batch into ops, in the order the batch carries. Thin wrapper around
+/// `from_batch_inner` for the tracing span (`#[instrument]` on the real body overflows the
+/// `cognitive_complexity` budget), the same pattern `crate::doc::sync`'s `import`/`import_inner`
+/// use — including the log event living in its own helper ([`log_ops_translated`]), since the
+/// macro itself counts against the budget too.
 #[tracing::instrument(skip_all, fields(diffs = batch.iter().count()))]
 pub fn from_batch(
+    doc: &LoroDocument,
+    batch: &DiffBatch,
+    stamp: &Stamp,
+    mint: &mut dyn FnMut() -> OpId,
+) -> Result<Vec<Op>, FromLoroError> {
+    let ops = from_batch_inner(doc, batch, stamp, mint)?;
+    log_ops_translated(ops.len());
+    Ok(ops)
+}
+
+/// `from_batch`'s own outcome.
+fn log_ops_translated(ops: usize) {
+    tracing::debug!(ops, "crdt_ops_translated");
+}
+
+fn from_batch_inner(
     doc: &LoroDocument,
     batch: &DiffBatch,
     stamp: &Stamp,
@@ -73,9 +93,7 @@ pub fn from_batch(
         .iter()
         .map(|(cid, d)| (cid.clone(), d.clone()))
         .collect();
-    let ops = convert(doc, diffs, stamp, mint)?;
-    tracing::debug!(ops = ops.len(), "crdt_ops_translated");
-    Ok(ops)
+    convert(doc, diffs, stamp, mint)
 }
 
 fn convert(

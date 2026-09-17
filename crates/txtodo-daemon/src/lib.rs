@@ -6,6 +6,7 @@ mod activity;
 pub mod actor;
 mod actor_mirror;
 mod apply_route;
+pub mod args_parse;
 mod bundle_crypto;
 mod bundle_export;
 mod bundle_grpc;

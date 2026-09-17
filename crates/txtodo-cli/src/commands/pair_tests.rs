@@ -16,6 +16,7 @@ fn sample_code() -> PairingCode {
         identity_mode: "sidecar".to_owned(),
         relay_node_id: String::new(),
         relay_url: String::new(),
+        workspace_id: "01M2CZ00000000000000000WS".to_owned(),
     }
 }
 
@@ -32,10 +33,11 @@ fn pairing_code_round_trips_through_json() {
     assert_eq!(code.identity_mode, back.identity_mode);
     assert_eq!(code.relay_node_id, back.relay_node_id);
     assert_eq!(code.relay_url, back.relay_url);
+    assert_eq!(code.workspace_id, back.workspace_id);
 }
 
 #[test]
-fn pairing_code_json_carries_no_field_beyond_the_documented_eight() {
+fn pairing_code_json_carries_no_field_beyond_the_documented_nine() {
     let text = to_json(&sample_code()).unwrap();
     let value: serde_json::Value = serde_json::from_str(&text).unwrap();
     let mut keys: Vec<&str> = value
@@ -55,6 +57,7 @@ fn pairing_code_json_carries_no_field_beyond_the_documented_eight() {
             "nonce",
             "relay_node_id",
             "relay_url",
+            "workspace_id",
             "x25519_pub"
         ]
     );
@@ -76,6 +79,53 @@ fn a_code_with_no_relay_fields_at_all_still_decodes() {
     let parsed = from_json(old_code).unwrap();
     assert_eq!(parsed.relay_node_id, "");
     assert_eq!(parsed.relay_url, "");
+    assert_eq!(parsed.workspace_id, "");
+}
+
+#[test]
+fn pairing_code_round_trips_through_compact() {
+    let code = sample_code();
+    let text = to_compact(&code).unwrap();
+    let back = from_compact(&text).unwrap();
+    assert_eq!(code.device, back.device);
+    assert_eq!(code.group_id, back.group_id);
+    assert_eq!(code.x25519_pub, back.x25519_pub);
+    assert_eq!(code.endpoint, back.endpoint);
+    assert_eq!(code.nonce, back.nonce);
+    assert_eq!(code.identity_mode, back.identity_mode);
+    assert_eq!(code.relay_node_id, back.relay_node_id);
+    assert_eq!(code.relay_url, back.relay_url);
+    assert_eq!(code.workspace_id, back.workspace_id);
+}
+
+/// The whole point: shorter than the JSON `pairing_code_json_carries_no_field_beyond_the_
+/// documented_nine` produces for the identical fields.
+#[test]
+fn compact_code_is_shorter_than_json() {
+    let code = sample_code();
+    let json = to_json(&code).unwrap();
+    let compact = to_compact(&code).unwrap();
+    assert!(
+        compact.len() < json.len(),
+        "compact ({}) should be shorter than json ({})",
+        compact.len(),
+        json.len()
+    );
+}
+
+#[test]
+fn from_compact_rejects_garbage_instead_of_panicking() {
+    assert!(from_compact("not base32 at all !!!").is_err());
+    assert!(from_compact("{}").is_err(), "JSON is not compact");
+}
+
+#[test]
+fn parse_code_detects_either_format() {
+    let code = sample_code();
+    let json = to_json(&code).unwrap();
+    let compact = to_compact(&code).unwrap();
+    assert_eq!(parse_code(&json).unwrap().device, code.device);
+    assert_eq!(parse_code(&compact).unwrap().device, code.device);
 }
 
 #[test]

@@ -201,13 +201,20 @@ impl Daemon {
         envs: &[(&str, &str)],
         extra_args: &[String],
     ) -> Daemon {
+        let mut args: Vec<String> = vec![
+            "--dir".into(),
+            dir.path().to_string_lossy().into_owned(),
+            "--identity-mode".into(),
+            mode.into(),
+        ];
+        // Task relay-default-public-url defaulted txtodod to a public relay; this harness's own
+        // default stays offline/fast (`--no-relay`) unless a test's own extra_args already asks
+        // for a specific relay (relay_converge.rs/pairing_relay.rs/relay_multiplex.rs).
+        if !extra_args.iter().any(|a| a == "--relay") {
+            args.push("--no-relay".into());
+        }
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
-            .args([
-                "--dir",
-                &dir.path().to_string_lossy(),
-                "--identity-mode",
-                mode,
-            ])
+            .args(&args)
             .args(extra_args)
             .envs(envs.iter().copied())
             .stdout(Stdio::null())

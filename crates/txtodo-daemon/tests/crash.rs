@@ -40,7 +40,13 @@ fn fixture() -> String {
 /// sidecar mode never does (no tags in the file to begin with).
 fn spawn(dir: &Path) -> std::process::Child {
     let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
-        .args(["--dir", &dir.to_string_lossy(), "--identity-mode", "tagged"])
+        .args([
+            "--dir",
+            &dir.to_string_lossy(),
+            "--identity-mode",
+            "tagged",
+            "--no-relay",
+        ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()

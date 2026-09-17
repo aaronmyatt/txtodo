@@ -506,6 +506,13 @@ pub struct PairOfferResponse {
     /// relay_node_id is empty.
     #[prost(string, tag = "8")]
     pub relay_url: ::prost::alloc::string::String,
+    /// This device's real, catalog-assigned WorkspaceId (ULID text) for the workspace being offered
+    /// (task pairing-workspace-identity) — catalog/routing metadata, not crypto material, the same
+    /// reason identity_mode above isn't part of the handshake transcript either. The joiner adopts
+    /// this verbatim (first-registrant-wins) instead of keeping the id it self-minted when its own
+    /// daemon opened the workspace, so both sides route post-pairing sync messages to the same id.
+    #[prost(string, tag = "9")]
+    pub workspace_id: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairAcceptRequest {
