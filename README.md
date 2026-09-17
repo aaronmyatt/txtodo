@@ -5,18 +5,31 @@ multi-device sync daemon, CRDT merge, and an MCP server for agents.
 
 ## Install
 
+### Homebrew (macOS)
+
+```bash
+brew install aaronmyatt/tap/txtodo
+```
+
+Installs three binaries: `txtodo` (the CLI), `txtodod` (the sync daemon) and `txtodo-tui` (the
+ratatui client).
+
+### From source
+
 ```bash
 cargo build --workspace --release
-# binary at target/release/txtodo
+# binaries at target/release/{txtodo,txtodod,txtodo-tui}
 ```
 
 ## Usage
 
 ```bash
-txtodo [--dir DIR] [--json] [--no-id] [-A|--no-archive] [--no-daemon] <COMMAND>
+txtodo [--dir DIR] [--sync-dir DIR] [--relay URL] [--json] [--no-id] [-A|--no-archive] [--no-daemon] <COMMAND>
 ```
 
 - `--dir DIR` — todo directory for this run (overrides `$TXTODO_TODO_DIR` and config `todo_dir`).
+- `--sync-dir DIR` — file-carrier sync folder (overrides `$TXTODO_SYNC_DIR` and config `sync_dir`).
+- `--relay URL` — relay URL (overrides `$TXTODO_RELAY_URL` and config `relay_url`).
 - `--json` — one JSON object per line on listing commands.
 - `--no-id` — don't stamp `id:` on added tasks (overrides config `id_tags`).
 - `-A`, `--no-archive` — don't archive after `do`.
@@ -64,11 +77,14 @@ These need a running `txtodo daemon` for this workspace.
 | `undo [--steps N]` | Undo the newest N ops (default 1). |
 | `checkout AT [--stdout] [--file FILE]` | Render a document as it was at a local date-time. |
 | `conflicts [list\|resolve]` | Open `needs_review` flags and resolve them. |
+| `device [list\|remove ID]` | Devices paired into this workspace's sync group. |
 | `pair [CODE]` | Pair with another device (no CODE starts a handshake; CODE joins it). |
 | `open ITEM#` | Print the resolved `ref:` directory for a line. |
 | `notes ITEM#` | Open `$EDITOR` on a line's `ref:`/`notes.md`. |
 | `sub ITEM# CMD...` | Run CMD with its directory scoped to a line's `ref:` sub-list. |
 | `prune --orphans [--yes]` | List `ref:` directories no line points to; delete only with `--yes`. |
+| `bundle export\|import` | Move the whole workspace as one encrypted file (sneakernet carrier). |
+| `workspace [list\|add\|remove ID]` | Manage the device-global daemon's workspace registry. |
 
 ### Service and diagnostics
 
@@ -77,6 +93,7 @@ These need a running `txtodo daemon` for this workspace.
 | `daemon <start\|stop\|status\|install\|uninstall> [--force]` | Manage the `txtodod` service for this workspace. |
 | `mcp [--stdio] [--http] [--lan] [--token TOKEN]` | Serve the Model Context Protocol surface for this workspace. |
 | `doctor [--verbose]` | Check socket, watcher, files, clock and config; exit 1 on any failure. |
+| `skill install [--only claude\|agents]` | Install the agent playbook for working this backlog. |
 | `env` | Print the resolved paths and config. |
 
 ## Configuration
