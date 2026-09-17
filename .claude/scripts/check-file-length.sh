@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tier-3 check: no .rs file under crates/ may exceed budgets.json.fileLines.
+# Tier-3 check: no .rs file under crates/ (or apps/desktop/src-tauri, task desktop-stack-gaps — a
+# real Cargo workspace member this script used to skip entirely) may exceed budgets.json.fileLines.
 # Generated artifacts are exempt (constitution §6) — the list lives in budgets.json.generatedPaths so
 # this script, gate.sh and the Pi twin cannot drift. Exits 1 and lists offenders.
 set -euo pipefail
@@ -18,5 +19,5 @@ while IFS= read -r f; do
   echo "$rel" | grep -Eq "$EXEMPT" && continue
   n=$(wc -l < "$f")
   if [ "$n" -gt "$MAX" ]; then echo "file-length: $rel has $n lines (max $MAX)"; status=1; fi
-done < <(find "$ROOT/crates" -name '*.rs' -not -path '*/target/*')
+done < <(find "$ROOT/crates" "$ROOT/apps/desktop/src-tauri" -name '*.rs' -not -path '*/target/*')
 exit $status

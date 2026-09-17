@@ -122,4 +122,72 @@ exit $status
 
 ## Framework notes
 
-- None. No framework bends a rule at M0. Revisit at M7 (Tauri + Svelte add a second stack under `apps/desktop`, which needs its own mapping).
+- None for the Rust workspace itself. No framework bends a rule at M0.
+
+## Second stack: `apps/desktop` (Tauri 2 + SvelteKit, M7)
+
+Two halves. `apps/desktop/src-tauri` is Rust — a real member of the root Cargo workspace
+(`Cargo.toml`'s `members` includes `"apps/desktop/src-tauri"`) — but, as noted below, several of
+this repo's own Rust-tier scripts only ever look under `crates/`, so it's Rust without getting the
+same mechanical coverage the 12 `crates/*` get. `apps/desktop/src` is SvelteKit/TypeScript, an
+entirely separate toolchain (`apps/desktop/package.json`).
+
+### Toolchain
+
+| Concern | Tool | Version | Installed by /setup |
+|---|---|---|---|
+| Format (Rust half) | rustfmt (`cargo fmt -p desktop`) | 1.95 toolchain | no (present, same workspace toolchain) |
+| Lint (Rust half) | clippy (`cargo clippy -p desktop`) | 1.95 toolchain | no (present) |
+| Format/Lint (TS/Svelte half) | none | — | not installed — no `.eslintrc*`/`eslint.config.*`/`.prettierrc*` anywhere under `apps/desktop` or the repo root |
+| Typecheck (TS/Svelte) | `svelte-check` (`npm run check`) | 4.6.0 | no (present) |
+| Unit tests (TS/Svelte) | `vitest` (`npm run test`) | 5.0.0 | no (present) |
+| E2E/visual/perf (TS/Svelte) | `playwright` (`npm run test:e2e`/`test:visual`/`test:perf`) | 1.63.0 | no (present) |
+| Type strictness | TypeScript `strict: true` (`apps/desktop/tsconfig.json`) | ~6.0.3 | no (present); `noUnusedLocals`/`noUnusedParameters` not set |
+
+### Rule → tier, this stack
+
+Almost none of the 12-rule constitution mapping above transfers, because there is no ESLint (or
+equivalent) installed — clippy's role has no TS-side counterpart here.
+
+| Rule | Rust half (`src-tauri`) | TS/Svelte half (`src`) |
+|---|---|---|
+| Function/file length | Same clippy/rustfmt as the rest of the workspace, but **not scanned by `.claude/scripts/check-file-length.sh`** — its `find "$ROOT/crates" ...` glob never reaches `apps/desktop/src-tauri`, so this crate's 400-line file budget is unenforced despite being a real workspace member. Flagged as its own follow-up below. | Not enforced — no lint rule, no script. |
+| Boundaries (dependency edges) | **Not scanned by `.claude/scripts/check-boundaries.sh`** either — its loop is `for manifest in "$ROOT"/crates/*/Cargo.toml`, so `apps/desktop/src-tauri/Cargo.toml`'s own dependency edges are never checked against an allowlist the way the 12 `crates/*` are. Also outside the slice-lease fence (`fence.sh`'s `sliceOf` regex is `^crates/([^/]+)/`), so it isn't subject to the one-crate-per-session lease either — confirmed in practice: editing it took no lease. | N/A — no crate graph. |
+| Typecheck | `cargo check` (workspace-wide, covers this crate) | `svelte-check --tsconfig ./tsconfig.json`, strict mode. Enforced locally, **not run in CI** (see below). |
+| Tests | `cargo test -p desktop` (workspace-wide `cargo test` covers this too) | `vitest run` + `playwright test`. Both pass locally, **neither runs in CI**. |
+| Coverage | Counted in the workspace-wide `cargo llvm-cov` figure | Not measured. |
+| No print/todo/dbg, dead code, unsafe | Same clippy denies as the rest of the workspace (this crate is in the same `[lints] workspace = true` group) | No equivalent lint; TypeScript's own compiler only catches unreachable code, not unused exports, without `noUnusedLocals` set. |
+| New dependency sign-off | Same convention as the rest of the workspace — `Cargo.toml` comments call out `tauri-plugin-global-shortcut`/`axum` as needing human sign-off + `cargo deny` | No convention recorded; `package.json` has no equivalent gate. |
+
+### Commands
+
+| Key | Command | Notes |
+|---|---|---|
+| format (Rust half) | `cargo fmt -p desktop --check` | Covered by the workspace-wide `cargo fmt --all --check` already in `budgets.json.commands`. |
+| lint (Rust half) | `cargo clippy -p desktop --all-targets -- -D warnings` | Covered by the workspace-wide clippy command already in `budgets.json.commands`. |
+| check (TS/Svelte) | `npm --prefix apps/desktop run check` | Not in `budgets.json.commands`; not run by the gate or CI. |
+| test (TS/Svelte) | `npm --prefix apps/desktop run test` | Same — local only. |
+| test:e2e/test:visual/test:perf | `npm --prefix apps/desktop run test:e2e` etc. | Playwright; local only, needs a display/browser install. |
+
+### Not mechanically enforced (this stack, beyond the workspace-wide list above)
+
+- **No CI coverage at all for `apps/desktop`.** `.github/workflows/ci.yml` has no step that runs
+  `npm install`, `svelte-check`, `vitest`, or `playwright` for this app, and no step builds it. A
+  broken `apps/desktop` build or a failing frontend test would not fail a PR today. Not fixed here
+  (this task was "add the mapping", not "wire the CI") — flagged as its own follow-up, see root
+  `todo.txt`.
+- **`apps/desktop/src-tauri` is a real Rust workspace member outside every Rust-tier script's
+  glob.** `check-file-length.sh` and `check-boundaries.sh` both hardcode `crates/*`; this crate
+  gets neither the 400-line file budget nor the dependency-edge allowlist check the 12 `crates/*`
+  get, and it's outside the one-crate-per-session lease fence too. Same follow-up as above.
+- **No lint/format tooling for TS/Svelte at all.** No ESLint, no Prettier, no equivalent of
+  clippy's `unwrap_used`/`print_stdout` denies. `svelte-check` catches type errors only.
+- **No dependency-sign-off gate for `package.json`.** The Rust side's "new dependency needs human
+  sign-off + `cargo deny`" convention (see `Cargo.toml` comments) has no npm-side counterpart.
+
+### Judgement calls (this stack)
+
+- **Documented the gaps rather than closing them.** Wiring `apps/desktop`'s scripts into CI, or
+  widening `check-file-length.sh`/`check-boundaries.sh` to also scan `apps/desktop/src-tauri`, is
+  real, separate work with its own design questions (a new CI job? a generalized glob? a
+  package.json-side allowlist?) — not something to fold silently into a stack-mapping doc task.

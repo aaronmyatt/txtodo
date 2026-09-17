@@ -75,6 +75,13 @@
       "txtodo-ffi": [
         "txtodo-core",
         "txtodo-query"
+      ],
+      "src-tauri": [
+        "txtodo-core",
+        "txtodo-proto",
+        "txtodo-telemetry",
+        "txtodo-store",
+        "txtodo-model"
       ]
     },
     "unfrozen-until-m1-done": "crates/txtodo-core/**",

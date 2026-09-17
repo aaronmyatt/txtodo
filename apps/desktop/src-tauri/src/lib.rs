@@ -9,6 +9,7 @@ mod commands_activity;
 mod commands_notes;
 mod commands_pairing;
 mod commands_tokens;
+mod commands_ui_log;
 mod commands_universal;
 mod commands_workspace;
 // `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
@@ -84,7 +85,7 @@ pub fn run() {
             commands::history,
             commands::resolve,
             commands::list_conflicts,
-            commands::ui_log,
+            commands_ui_log::ui_log,
             commands_workspace::list_workspaces,
             commands_workspace::add_workspace,
             commands_workspace::remove_workspace,
