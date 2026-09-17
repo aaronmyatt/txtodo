@@ -74,3 +74,41 @@ run of this same test across this project's history).
 
 The reproduction loop in `todo.txt` item 1, run again after the fix, showing zero failures across
 at least as many iterations as it took to observe the original failure.
+
+## As built (2026-09-17, agent) — the real root cause was different, and reproducible on macOS
+
+The hypothesis above (a `LogSink`/`FmtSpan::CLOSE` flush-timing gap) turned out to be wrong, and
+easy to disprove directly: `LogSink` is a plain synchronous `Arc<Mutex<Vec<u8>>>` write, no
+buffering, no background thread. Adding a bounded poll (checking `captured_text()` repeatedly for
+up to 10s instead of once) *still* found zero `mcp.call` lines on a failing run — ruling out "just
+needs more time to flush" entirely.
+
+**The real cause: `tracing`'s callsite-interest cache is process-global, not per-`Dispatch`.**
+This test file has 4 tests; only this one builds a custom capturing subscriber via
+`tracing::subscriber::set_default`. Run under `cargo test`'s default parallelism, the other 3 can
+be mid-flight on other threads with no subscriber override of their own. The `mcp.call` callsite's
+`Interest` (should any event from it fire at all) is decided once, by whichever subscriber sees it
+*first* across the whole process, and cached — `tracing::callsite::rebuild_interest_cache()`
+exists specifically to force a recheck, but calling it right after `set_default` only cut the
+failure rate (still ~40-60% of local runs), not eliminated it: real concurrent interference
+remains beyond just the interest cache, most likely other `tracing`/`rmcp` global state not
+documented as safe under concurrent ad-hoc subscribers in the same process.
+
+**Fix**: every test in this file now takes a shared `static SERIAL: tokio::sync::Mutex<()>` for
+its whole duration (not `std::sync::Mutex` — `clippy::await_holding_lock` correctly refuses a std
+guard held across real `.await` points, and holding it across awaits is the entire point here).
+Dependency-free equivalent of the `serial_test` crate, scoped to just this one file rather than
+gating the whole workspace's test concurrency. **30/30 consecutive full-suite runs clean locally**
+(previously ~40-60% failure per run) — reproduced and fixed entirely on macOS, no Linux box or CI
+loop needed; the original ubuntu-only sighting was scheduling luck, not a platform difference.
+
+**Not audited, flagged as an open question**: several other test files in this workspace use the
+same `tracing::subscriber::set_default`/`capturing_dispatch` pattern (`crates/txtodo-tui/tests/
+sentinel_no_secrets.rs`, `crates/txtodo-store/tests/no_secrets_sentinel.rs`,
+`crates/txtodo-model/src/hlc_no_secrets_tests.rs`, `crates/txtodo-sync/src/no_secrets_tests.rs`,
+`crates/txtodo-daemon/src/security_m8_tests.rs`, `crates/txtodo-daemon/src/
+lan_session_security_tests.rs`, `crates/txtodo-crdt/src/no_secrets_tests.rs`). Most assert
+*absence* of a sentinel string (a missing-callsite false negative there fails differently, or not
+at all, versus this test's positive "the line exists" assertion), so they're plausibly lower-risk
+— but none were checked for the same failure mode here. Real, separate follow-up work, out of
+scope for this ticket.
