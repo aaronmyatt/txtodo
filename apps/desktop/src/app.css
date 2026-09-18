@@ -18,6 +18,13 @@
 	   Ref (`ui-monospace` generic family): https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#monospace_fonts */
 	--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 
+	/* Centralized UI sans stack (was duplicated inline in MainView.svelte and DetailView.svelte). */
+	--font-sans: Inter, Avenir, Helvetica, Arial, sans-serif;
+
+	/* Brand typeface: the "txtodo" wordmark's own font, used only where the app names itself
+	   (MainView's <h1>) — not a general UI font swap. Loaded via Google Fonts in app.html. */
+	--font-brand: "JetBrains Mono", var(--font-mono);
+
 	--color-bg: #ffffff;
 	--color-surface: #f9fafb;
 	--color-surface-muted: #f3f4f6;
@@ -25,7 +32,9 @@
 	--color-overlay: rgb(0 0 0 / 40%);
 	--color-hover-overlay: rgba(15, 23, 42, 0.05);
 
-	--color-text: #1f2937;
+	/* Brand pass: core ink/paper contrast pushed to true black-on-white ("pure mono"). Surfaces,
+	   borders and secondary text tones are left as calibrated — only the primary text color moved. */
+	--color-text: #000000;
 	--color-text-secondary: #374151;
 	--color-text-muted: #6b7280;
 	--color-text-faint: #9ca3af;
@@ -57,14 +66,15 @@
 [data-theme="dark"] {
 	color-scheme: dark;
 
-	--color-bg: #111827;
+	--color-bg: #000000;
 	--color-surface: #1f2937;
 	--color-surface-muted: #374151;
 	--color-bg-elevated: #1f2937;
 	--color-overlay: rgb(0 0 0 / 60%);
 	--color-hover-overlay: rgba(255, 255, 255, 0.08);
 
-	--color-text: #f3f4f6;
+	/* Brand pass: "inverse mono" — true white-on-black. Same scoping note as :root above. */
+	--color-text: #ffffff;
 	--color-text-secondary: #d1d5db;
 	--color-text-muted: #9ca3af;
 	--color-text-faint: #6b7280;

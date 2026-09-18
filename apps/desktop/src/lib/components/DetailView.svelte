@@ -306,12 +306,7 @@
 		flex-direction: column;
 		gap: 1rem;
 		padding: 2rem;
-		font-family:
-			Inter,
-			Avenir,
-			Helvetica,
-			Arial,
-			sans-serif;
+		font-family: var(--font-sans);
 	}
 
 	.detail-header {
