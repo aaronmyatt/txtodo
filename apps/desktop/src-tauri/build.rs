@@ -32,6 +32,10 @@ fn ensure_sidecar_placeholder() {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+    // Needed on unix (skips permission-setting below on write failure); on non-unix targets
+    // there's nothing left in the function afterward, so clippy sees this `return` as needless —
+    // it isn't, once `#[cfg(unix)]` is accounted for.
+    #[cfg_attr(not(unix), allow(clippy::needless_return))]
     if std::fs::write(&path, []).is_err() {
         return;
     }

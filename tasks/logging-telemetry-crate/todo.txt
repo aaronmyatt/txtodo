@@ -1,7 +1,7 @@
 2026-09-16 Complete the parent line in ./todo.txt +m11 @telemetry id:01M2M6KFD1VCK3D2R6ARME12X8
-x 2026-09-16 2026-09-16 root Cargo.toml workspace.dependencies wiring: done (commit f080510). .claude/budgets.json allowedDeps x4 redirected — each consumer crate (daemon/cli/tui/mcp, items 174/181/182/183) adds its own entry when it adds the txtodo-telemetry dep id:01M2S0SX3Z4JTD7MJGPMDZQNJK
-x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-telemetry: done, all green. -p txtodo-daemon portion redirected to logging-daemon-boot (todo.txt:174) alongside its thin re-export id:01M2S0SX3ZCHGM80MA6H9G2A2X
-x 2026-09-16 2026-09-16 crates/txtodo-daemon/src/telemetry.rs thin re-export: redirected — absorbed into logging-daemon-boot (todo.txt:174), which already owns this exact swap id:01M2S0SX3ZKJJTHECH0Q5S3T58
+x 2026-09-16 2026-09-16 root Cargo.toml workspace.dependencies wiring: done (commit f080510). .claude/budgets.json allowedDeps x4 redirected — each consumer crate (daemon/cli/tui/mcp, items 174/181/182/183) adds its own entry when it adds the txtodo-telemetry dep
+x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-telemetry: done, all green. -p txtodo-daemon portion redirected to logging-daemon-boot (todo.txt:174) alongside its thin re-export
+x 2026-09-16 2026-09-16 crates/txtodo-daemon/src/telemetry.rs thin re-export: redirected — absorbed into logging-daemon-boot (todo.txt:174), which already owns this exact swap
 x 2026-09-16 2026-09-16 Append As built section to tasks/logging-telemetry-crate/notes.md +m11 @telemetry id:01M2M6KFCQJW9JK1VN7DMAC9NX
 x 2026-09-16 2026-09-16 Test proving the schema: service field present on every emitted line, using testing::LogSink +m11 @telemetry @test id:01M2M6KFC5VAQNJQ1YYA1EBQC4
 x 2026-09-16 2026-09-16 Fix the drifted boot field name (workspace vs dir at main.rs:332), pick one and document the decision in notes.md +m11 @telemetry id:01M2M6KFAYV3ZK65FRK5FHKC8D

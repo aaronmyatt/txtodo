@@ -1,9 +1,9 @@
-2026-09-15 FIRST, before anything else is built: prove kamal-proxy round-trips a long-lived WebSocket upgrade to a backend container and does not idle it out — the relay protocol is a WebSocket, and if this fails the whole colocated topology is wrong +m8 @ops id:01M2S0SX62WM7MEWXZW76HR19B
-2026-09-15 Decide and record: relay as a Kamal accessory (pinned third-party image, right conceptually) vs its own Kamal app (guaranteed kamal-proxy host routing) — settle by whether an accessory can sit behind kamal-proxy cleanly +m8 @ops id:01M2S0SX62VPJSAHC8W450JK1R
-2026-09-15 Droplet: DNS A records for both hostnames, firewall 22/80/443 only, kamal setup, secrets via .kamal/secrets never committed +m8 @ops id:01M2S0SX62VVQKYBVRSNJVMSYA
-2026-09-15 Pin an iroh-relay image at the crate version this workspace depends on (iroh 1.x), so the server and the client's relay protocol version can never drift silently +m8 @ops id:01M2S0SX62F3P0NC9DD03SEPFB
-2026-09-15 Relay config: enable_relay true, http_bind_addr behind the proxy, NO tls block (kamal-proxy terminates), enable_quic_addr_discovery false, access.allowlist seeded with my own devices +m8 @ops @relay id:01M2S0SX62W4AQC3M2MZ6AQB3V
-2026-09-15 Phase 2 flip: access.http pointing at the accounts container over the Docker network, with IROH_RELAY_HTTP_BEARER_TOKEN set; keep access.allowlist in the file as documented break-glass +m8 @ops @relay id:01M2S0SX625PQ7JCDZQ5YHKVNZ
-2026-09-15 Deploy runbook in docs/: what to run, what to check, how to roll back, and how to revoke a device in a hurry +m8 @ops @docs id:01M2S0SX622S1BS1CHP8NP9P8P
-2026-09-15 Verify for real: a node id in the allowlist syncs across two networks; one not in it is refused and says so in the relay's log +m8 @ops @test id:01M2S0SX6268RS54GM8ZF181GX
-2026-09-15 Complete the parent line in ./todo.txt +m8 @ops id:01M2S0SX62CX3VTT2D9N2NG40S
+2026-09-15 FIRST, before anything else is built: prove kamal-proxy round-trips a long-lived WebSocket upgrade to a backend container and does not idle it out — the relay protocol is a WebSocket, and if this fails the whole colocated topology is wrong +m8 @ops id:01M2HVA400KAMALWSPROOF001
+2026-09-15 Decide and record: relay as a Kamal accessory (pinned third-party image, right conceptually) vs its own Kamal app (guaranteed kamal-proxy host routing) — settle by whether an accessory can sit behind kamal-proxy cleanly +m8 @ops id:01M2HVA400KAMALSHAPE00001
+2026-09-15 Droplet: DNS A records for both hostnames, firewall 22/80/443 only, kamal setup, secrets via .kamal/secrets never committed +m8 @ops id:01M2HVA400KAMALDROPLET001
+2026-09-15 Pin an iroh-relay image at the crate version this workspace depends on (iroh 1.x), so the server and the client's relay protocol version can never drift silently +m8 @ops id:01M2HVA400KAMALIMAGE00001
+2026-09-15 Relay config: enable_relay true, http_bind_addr behind the proxy, NO tls block (kamal-proxy terminates), enable_quic_addr_discovery false, access.allowlist seeded with my own devices +m8 @ops @relay id:01M2HVA400KAMALRELAYCFG01
+2026-09-15 Phase 2 flip: access.http pointing at the accounts container over the Docker network, with IROH_RELAY_HTTP_BEARER_TOKEN set; keep access.allowlist in the file as documented break-glass +m8 @ops @relay id:01M2HVA400KAMALACCESSHTTP
+2026-09-15 Deploy runbook in docs/: what to run, what to check, how to roll back, and how to revoke a device in a hurry +m8 @ops @docs id:01M2HVA400KAMALRUNBOOK001
+2026-09-15 Verify for real: a node id in the allowlist syncs across two networks; one not in it is refused and says so in the relay's log +m8 @ops @test id:01M2HVA400KAMALVERIFY0001
+2026-09-15 Complete the parent line in ./todo.txt +m8 @ops id:01M2HVA400KAMALCLOSE00001
