@@ -1,5 +1,5 @@
-2026-09-18 Extract workspace_registry_paths.rs's fallback-chain logic into txtodo-daemon-launch (or a new adjacent leaf crate) +m11 @daemon id:01M2SMMRPEMGNCQGDD5VR774FX
-2026-09-18 Point cli/src/config.rs at the shared implementation, delete its duplicate fallback chain +m11 @cli @daemon id:01M2SMMRPEGSKDC168XM3FEWP4
-2026-09-18 Point mcp/src/global_socket.rs at the shared implementation, delete its duplicate fallback chain +m11 @mcp @daemon id:01M2SMMRPE3RC3AYTACXVAN2ZQ
-2026-09-18 Test: cli, mcp, and daemon resolve identical paths for identical env/config inputs +m11 @test @daemon id:01M2SMMRPFA0A1M8655VPPN0MG
-2026-09-18 Complete the parent line in ../../todo.txt +m11 @daemon id:01M2SMMRPFM0Z8CFXGFHBK2N8H
+x 2026-09-18 2026-09-18 Complete the parent line in ../../todo.txt +m11 @daemon id:01M2SMMRPFM0Z8CFXGFHBK2N8H — done: see root todo.txt ref:daemon-paths-shared-crate
+x 2026-09-18 2026-09-18 Extract workspace_registry_paths.rs's fallback-chain logic into txtodo-daemon-launch (or a new adjacent leaf crate) +m11 @daemon id:01M2SMMRPEMGNCQGDD5VR774FX — done: new crate crates/txtodo-workspace-paths (commit f7ea5d6), daemon's workspace_registry_paths.rs replaced with a re-export (commit b4aa410)
+x 2026-09-18 2026-09-18 Point cli/src/config.rs at the shared implementation, delete its duplicate fallback chain +m11 @cli @daemon id:01M2SMMRPEGSKDC168XM3FEWP4 — done: commit 00aa5a8
+x 2026-09-18 2026-09-18 Point mcp/src/global_socket.rs at the shared implementation, delete its duplicate fallback chain +m11 @mcp @daemon id:01M2SMMRPE3RC3AYTACXVAN2ZQ — done: commit 4ce7e8a, also dropped mcp's now-redundant local tests (the shared crate's own cover the same fallback chain)
+x 2026-09-18 2026-09-18 Test: cli, mcp, and daemon resolve identical paths for identical env/config inputs +m11 @test @daemon id:01M2SMMRPFA0A1M8655VPPN0MG — not a separate test: all four call sites (daemon, cli, mcp, desktop/commit 1e46120) now call the identical shared function, so identical resolution is structural (same code path), not just tested; the shared crate's own 8 unit tests cover the fallback chain itself

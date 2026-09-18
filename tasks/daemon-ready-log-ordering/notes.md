@@ -59,6 +59,6 @@ Small, mechanical fix:
   socket connect) and asserts `daemon_starting` precedes `daemon_ready` in the daemon's own JSON
   log. `cargo test -p txtodo-daemon --test ready_log_ordering` and
   `cargo clippy -p txtodo-daemon --all-targets` both green.
-- Not yet committed — left for the human to review/commit alongside (or separately from) the
-  other three sibling tasks (`daemon-paths-shared-crate`, `tui-global-socket-migration`,
-  `desktop-autostart-env-respect`) from the same daemon-consistency audit.
+- Committed as `fe576ac`. `daemon-paths-shared-crate` (the next sibling task from the same
+  daemon-consistency audit) is done too; `tui-global-socket-migration` and
+  `desktop-autostart-env-respect` remain open.
