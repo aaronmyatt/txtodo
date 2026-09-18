@@ -15,6 +15,7 @@ path = "src/main.rs"
 txtodo-core.workspace = true
 txtodo-query.workspace = true
 txtodo-model.workspace = true
+txtodo-workspace-paths.workspace = true
 txtodo-store.workspace = true
 txtodo-crdt.workspace = true
 txtodo-sync.workspace = true

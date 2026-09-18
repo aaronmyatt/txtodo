@@ -1,0 +1,13 @@
+[package]
+name = "txtodo-workspace-paths"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Where this device's global daemon state lives (registry db, socket, pid lock, log dir): the one shared fallback-chain implementation, used by txtodo-daemon, txtodo-cli, txtodo-mcp and apps/desktop instead of each reimplementing it (task daemon-paths-shared-crate)."
+
+[lints]
+workspace = true
+
+[dependencies]

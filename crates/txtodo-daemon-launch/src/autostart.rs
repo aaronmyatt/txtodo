@@ -1,7 +1,7 @@
 //! The `TXTODO_NO_AUTOSTART` escape hatch (task `daemon-always-available`'s open question,
-//! resolved: yes, every non-GUI client needs one). `apps/desktop` deliberately never checks this
-//! — it's a GUI app the user explicitly launched, so it keeps its pre-existing always-spawn
-//! behavior unconditionally.
+//! resolved: yes, every client needs one). `apps/desktop` honors it too as of task
+//! `desktop-autostart-env-respect` (`commands.rs::connect_and_store`) — it had been the one
+//! silent exception, always-spawning unconditionally regardless of the var.
 
 /// True when `$TXTODO_NO_AUTOSTART` is set to exactly `"1"`. Callers check this before calling
 /// [`crate::ensure_daemon`] at all — never inside it — so a caller that wants to skip the

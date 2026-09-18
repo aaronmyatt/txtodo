@@ -1,22 +1,30 @@
-//! Where this device's global, per-user daemon state lives: the registry database, and — since
-//! task `daemon-global-socket` (ADR 0025, M11) — the one socket, pid lock and log directory the
-//! single `txtodod` for this device binds, all deliberately outside any single workspace's
-//! `<workspace>/.txtodo/` (ADR 0010 fixes that path per workspace; device-global state has no
-//! single workspace to live under). See `tasks/daemon-workspace-registry/notes.md` for the
-//! registry placement reasoning — in short, `$XDG_DATA_HOME` (or the platform equivalent), not
-//! `$XDG_CONFIG_HOME`: this is generated, mutable state the daemon owns, not something a human
-//! hand-edits like `config.toml`. Mirrors `txtodo-cli/src/config.rs`'s `Env`/`config_path`
-//! env-injection idiom so a test never touches the real machine's home directory.
+//! Where this device's global, per-user daemon state lives: the registry database, socket, pid
+//! lock and log directory the single `txtodod` for this device binds — deliberately outside any
+//! single workspace's `<workspace>/.txtodo/` (ADR 0010 fixes that path per workspace; device-
+//! global state has no single workspace to live under). `$XDG_DATA_HOME` (or the platform
+//! equivalent), not `$XDG_CONFIG_HOME`: this is generated, mutable state the daemon owns, not
+//! something a human hand-edits like `config.toml`.
 //!
-//! `--dir <workspace>`-started daemons (`daemon-global-socket`'s own bridge for the huge existing
-//! single-workspace test suite and today's CLI, which still only knows a directory) do **not**
-//! use the device-global defaults below: `global_socket_path`/`registry_db_path_for` both take an
-//! optional `legacy_dir` and fall back to the pre-existing `<dir>/.txtodo/{txtodod.sock,
-//! registry.db}` locations when it is given, so every ephemeral-tmpdir-per-test daemon stays
-//! exactly as hermetic as before — none of them touch this machine's real `$XDG_DATA_HOME/txtodo/`
-//! at all. Only a daemon started with `--dir` omitted (the new, true one-per-device mode) resolves
-//! the device-global defaults; `$TXTODO_SOCKET`/`$TXTODO_REGISTRY_DB` remain escape hatches either
-//! way, checked before `legacy_dir`.
+//! Extracted into its own leaf crate (task `daemon-paths-shared-crate`, following the daemon-
+//! consistency audit that also produced `ref:daemon-ready-log-ordering`) after this exact
+//! fallback chain had been independently reimplemented three more times — `txtodo-cli`'s
+//! `config.rs`, `txtodo-mcp`'s `global_socket.rs`, and `apps/desktop/src-tauri`'s `config.rs` —
+//! each unable to depend on `txtodo-daemon` directly (`.claude/budgets.json`'s `allowedDeps` runs
+//! the dependency the other way: the daemon depends on `txtodo-mcp`, not vice versa, and pulling
+//! in the whole daemon crate for one path function was never the point anyway). This crate has
+//! zero dependencies, so every one of `txtodo-daemon`, `txtodo-cli`, `txtodo-mcp` and
+//! `apps/desktop` can depend on it directly instead of drifting independently.
+//!
+//! `--dir <workspace>`-started daemons (the legacy single-workspace bridge, kept for the huge
+//! pre-existing single-workspace test suite and today's CLI) do **not** use the device-global
+//! defaults below: `global_socket_path`/`registry_db_path_for` both take an optional `legacy_dir`
+//! and fall back to the pre-existing `<dir>/.txtodo/{txtodod.sock, registry.db}` locations when
+//! it is given, so every ephemeral-tmpdir-per-test daemon stays exactly as hermetic as before —
+//! none of them touch this machine's real `$XDG_DATA_HOME/txtodo/` at all. Only a daemon started
+//! with `--dir` omitted (true one-per-device mode) resolves the device-global defaults;
+//! `$TXTODO_SOCKET`/`$TXTODO_REGISTRY_DB` remain escape hatches either way, checked before
+//! `legacy_dir`.
+#![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -115,7 +123,9 @@ pub fn global_socket_path(env: &RegistryEnv, legacy_dir: Option<&Path>) -> PathB
 /// isolated `$TXTODO_SOCKET` overrides (e.g. two tests running concurrently) still collided on the
 /// *same* real `$XDG_DATA_HOME/txtodo/txtodod.pid` — the second always lost the pid lock race and
 /// refused to start with "already running", even though its socket/registry were fully isolated.
-fn global_state_dir(env: &RegistryEnv) -> PathBuf {
+/// `pub` (task `daemon-paths-shared-crate`): `apps/desktop` needs this same directory (its own
+/// client-side spawn-lock parent and log location), not just the pid/log paths built from it.
+pub fn global_state_dir(env: &RegistryEnv) -> PathBuf {
     global_socket_path(env, None)
         .parent()
         .map(Path::to_path_buf)

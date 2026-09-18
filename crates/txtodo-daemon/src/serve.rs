@@ -29,6 +29,14 @@ impl std::fmt::Display for ServeError {
 
 impl std::error::Error for ServeError {}
 
+/// The true readiness signal (`ref:daemon-ready-log-ordering`): only emitted once
+/// `UnixListener::bind` has actually succeeded, unlike `main.rs`'s earlier "starting" log. Split
+/// out of `serve_with` for its cognitive-complexity budget, same pattern as `main.rs`'s
+/// `log_ready`/`log_stopped`.
+fn log_socket_bound(socket: &Path) {
+    tracing::info!(socket = %socket.display(), "daemon_ready");
+}
+
 /// Binds `socket`, serves `svc` until `shutdown` resolves, then removes the socket file. Shared
 /// tail of [`serve`] and [`serve_global`] — one bind/serve/cleanup path, not two that could drift.
 async fn serve_with<S: Txtodo>(
@@ -38,6 +46,7 @@ async fn serve_with<S: Txtodo>(
 ) -> Result<(), ServeError> {
     let listener = tokio::net::UnixListener::bind(socket)
         .map_err(|e| ServeError::Bind(socket.to_path_buf(), e))?;
+    log_socket_bound(socket);
     let incoming = UnixListenerStream::new(listener);
     let result = tonic::transport::Server::builder()
         .concurrency_limit_per_connection(MAX_INFLIGHT_RPCS)

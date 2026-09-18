@@ -23,6 +23,9 @@ txtodo-telemetry = { path = "crates/txtodo-telemetry" }
 # Shared "make sure txtodod exists" spawn/service logic (task daemon-always-available), used by
 # txtodo-cli, txtodo-tui, txtodo-mcp and apps/desktop/src-tauri.
 txtodo-daemon-launch = { path = "crates/txtodo-daemon-launch" }
+# Shared device-global daemon state paths (registry/socket/pid/log dir; task
+# daemon-paths-shared-crate), used by txtodo-daemon, txtodo-cli, txtodo-mcp and apps/desktop/src-tauri.
+txtodo-workspace-paths = { path = "crates/txtodo-workspace-paths" }
 # https://docs.rs/tracing — event/span macros; pinned here so txtodo-telemetry (workspace-deps-only,
 # like txtodo-core) and every future crate can share one version instead of drifting per-Cargo.toml.
 tracing = "0.1"

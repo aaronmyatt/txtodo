@@ -48,6 +48,9 @@ txtodo-telemetry = { workspace = true }
 # `daemon/spawn.rs::ensure_daemon` delegates to this instead of keeping its own copy, dedupng the
 # logic ADR 0025's consequences section flagged as duplicated across clients.
 txtodo-daemon-launch = { workspace = true }
+# Shared device-global daemon state paths (task daemon-paths-shared-crate): config.rs's
+# global_socket_path/global_state_dir delegate to this instead of their own reimplementation.
+txtodo-workspace-paths = { workspace = true }
 # https://docs.rs/tracing — event/span macros for the `ipc.<command>` spans and `ui_log` bridge.
 tracing = { workspace = true }
 # https://docs.rs/tauri — window/webview shell and the command bridge to Svelte

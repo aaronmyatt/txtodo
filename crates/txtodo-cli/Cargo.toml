@@ -18,6 +18,9 @@ txtodo-proto.workspace = true
 # client::select's NEEDS_DAEMON path ensures a daemon exists before giving up, and
 # commands/service.rs calls into its `service` module for the render/install/start logic.
 txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
+# Shared device-global daemon state paths (task daemon-paths-shared-crate): global_socket_path's
+# own fallback chain, instead of this crate's own reimplementation of it.
+txtodo-workspace-paths = { path = "../txtodo-workspace-paths" }
 # JSON-rolling-file + pretty-stderr tracing init, shared with every other txtodo binary (root
 # todo.txt `logging-cli`; `.claude/budgets.json`'s `allowedDeps` lists this for the cli slice).
 # Used only when $TXTODO_LOG is set — see `main.rs::init_telemetry` for the CLI's own sink matrix.

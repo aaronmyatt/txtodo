@@ -1,14 +1,16 @@
 //! Desktop shell configuration: the workspace root and the daemon-spawn timing knob.
 //! ADR 0010 fixes the socket layout; everything else here is just how long we wait.
 //!
-//! `global_socket_path` (ADR 0025, task `desktop-workspace-switcher`, M11) is this crate's own
-//! copy of `crates/txtodo-cli/src/config.rs::global_socket_path`'s logic — same env vars, same
-//! XDG fallback chain — kept separate rather than a dependency on `txtodo-cli` (a binary crate,
-//! not meant to be linked) or `txtodo-daemon` (its `workspace_registry_paths` module pulls in the
-//! whole daemon dependency graph for one path function).
+//! `global_socket_path`/`global_state_dir` (ADR 0025, task `desktop-workspace-switcher`, M11)
+//! delegate to `txtodo-workspace-paths` (task `daemon-paths-shared-crate`) — this crate
+//! previously reimplemented the same fallback chain by hand, kept separate rather than a
+//! dependency on `txtodo-cli` (a binary crate, not meant to be linked) or `txtodo-daemon` (its
+//! `workspace_registry_paths` module pulls in the whole daemon dependency graph for one path
+//! function). The shared crate has neither constraint, being a dependency-free leaf.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use txtodo_workspace_paths::RegistryEnv;
 
 /// The state directory name under the workspace root, matching
 /// `crates/txtodo-daemon`'s `walker::STATE_DIR`.
@@ -19,32 +21,18 @@ const SOCKET_FILE: &str = "txtodod.sock";
 
 /// The one device-global socket's path (ADR 0025): `$TXTODO_SOCKET` if set, else
 /// `$XDG_DATA_HOME`/`%LOCALAPPDATA%`/`~/.local/share` + `txtodo/txtodod.sock`, falling back to
-/// the cwd when none of those resolve — mirrors `txtodo-daemon`'s `workspace_registry_paths::
-/// global_socket_path` (`legacy_dir: None` case) and `txtodo-cli`'s own copy of the same logic.
+/// the cwd when none of those resolve.
 pub fn global_socket_path() -> PathBuf {
-    if let Ok(p) = std::env::var("TXTODO_SOCKET") {
-        return PathBuf::from(p);
-    }
-    global_state_dir().join(SOCKET_FILE)
+    let env = RegistryEnv::from_process().unwrap_or_default();
+    txtodo_workspace_paths::global_socket_path(&env, None)
 }
 
 /// The device-global state directory (parent of [`global_socket_path`]'s default) — where
 /// `ensure_daemon`'s client-side no-double-spawn lock lives now that it guards one global daemon
 /// instead of one per workspace.
 pub fn global_state_dir() -> PathBuf {
-    data_dir().join("txtodo")
-}
-
-fn data_dir() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .or_else(|| std::env::var_os("LOCALAPPDATA"))
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .map(|h| PathBuf::from(h).join(".local/share"))
-        })
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_e| PathBuf::from(".")))
+    let env = RegistryEnv::from_process().unwrap_or_default();
+    txtodo_workspace_paths::global_state_dir(&env)
 }
 
 /// The bundled sidecar's expected path, if one exists (task `desktop-daemon-sidecar-bundle`):

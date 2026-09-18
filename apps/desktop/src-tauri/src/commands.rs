@@ -45,12 +45,25 @@ pub(crate) async fn set_status(app: &AppHandle, state: &AppState, status: Daemon
 /// `daemon-status` events. Never panics: failures come back as a `DaemonError` and land on
 /// `DaemonStatus::Dead` in the caller. `pub(crate)` so `lib.rs` can kick off the first connect
 /// from `setup` without going through the command-invoke machinery.
+///
+/// Honors `TXTODO_NO_AUTOSTART=1` (task `desktop-autostart-env-respect`): every other client
+/// (`txtodo`, `txtodo-tui`, `txtodo-mcp`) already skips `ensure_daemon` under it, and Desktop had
+/// been the one silent exception. Checked here, not inside `daemon::ensure_daemon` itself — same
+/// call-site convention `txtodo_daemon_launch::autostart_disabled`'s own doc prescribes. Both the
+/// cold-boot path (`lib.rs`'s `.setup()`) and the manual Retry button (`retry_connect_inner`) go
+/// through this one function, so the var's effect is uniform: with it set and no daemon already
+/// reachable, `wait_until_ready` below simply times out and this returns `Err`, landing on the
+/// existing `DaemonStatus::Dead`/reconnect-banner UI (`ref:desktop-cold-boot-dead-status`)
+/// instead of autospawning.
 pub(crate) async fn connect_and_store(
     app: &AppHandle,
     state: &AppState,
 ) -> Result<(), DaemonError> {
     set_status(app, state, DaemonStatus::Spawning).await;
-    let sock = daemon::ensure_daemon(&state.config).await?;
+    let sock = state.config.resolved_global_socket();
+    if !txtodo_daemon_launch::autostart_disabled() {
+        daemon::ensure_daemon(&state.config).await?;
+    }
     set_status(app, state, DaemonStatus::Connecting).await;
     let workspace = state.current_workspace.lock().await.clone();
     let selector = Some(pb::WorkspaceSelector {
