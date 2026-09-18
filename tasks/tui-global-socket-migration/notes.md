@@ -43,3 +43,39 @@ dialing a different daemon than the rest of the fleet.
   connects to that same daemon — no second daemon process spawned.
 - Opening the TUI with no daemon running spawns exactly one global `txtodod`, same as `txtodo`/
   `apps/desktop` do today.
+
+## As built (2026-09-18)
+
+- `app.rs::async_main` now resolves `daemon::global_socket_path()` (delegating to
+  `txtodo-workspace-paths`, `ref:daemon-paths-shared-crate`) and spawns via
+  `LaunchConfig::new(&sock)` with no `.with_dir` — the exact shape `txtodo-cli`/`apps/desktop`
+  already use.
+- Found the real gap this migration needed to close, beyond the LaunchConfig swap alone: the
+  global daemon can have several workspaces open at once, so every RPC needs a
+  `WorkspaceSelector` telling it which one — `txtodo-cli`'s `client.rs` already had this
+  (`selector: Option<pb::WorkspaceSelector>`, cloned onto every request); `daemon.rs::Daemon`
+  gained the identical field, and `daemon::workspace_selector(path)` builds a `Path` selector
+  (auto-registers/opens an unknown directory, `workspace_catalog.rs::resolve`, no separate
+  `txtodo workspace add` step needed).
+  `Daemon::connect`'s signature grew a `selector: Option<pb::WorkspaceSelector>` parameter to
+  carry it, updated at all 5 call sites (`app.rs`, `daemon.rs`'s own 2 unit tests,
+  `tests/roundtrip.rs`, `tests/support/mod.rs`) — the 4 test-harness ones pass `None`
+  deliberately: they still spawn the legacy per-workspace bridge daemon (item 1's finding), which
+  is unambiguous without a selector.
+  - `daemon_autostart.rs` explicitly documents itself as replicating `async_main`'s exact
+    behavior, so it needed rewriting too, not just a signature fix: it now spawns a hermetic
+    *global* daemon (`TXTODO_SOCKET`/`TXTODO_REGISTRY_DB` overrides in `LaunchConfig::extra_env`,
+    same pattern `apps/desktop/src-tauri/src/daemon/spawn.rs` uses for its own hermetic
+    global-daemon tests) instead of a per-`--dir` one.
+  - New test `a_second_workspace_reuses_the_already_running_global_daemon`: runs the
+    ensure-then-connect sequence twice against one hermetic global socket for two different
+    workspaces, asserts the pid file names the identical process both times (no second spawn),
+    and that each `Daemon`'s `get_file` returns its own workspace's content, not the other's —
+    directly proving both acceptance bullets at once, not just the "no double-spawn" half.
+- One sub-item left open, not silently dropped: folding `wait_until_ready`'s own retry budget
+  (`CONNECT_TIMEOUT`/`MAX_CONNECT_RETRIES`/`RETRY_BACKOFF`, `daemon.rs:27-31`) into or against
+  `ensure_daemon`'s is unchanged — the design note flagging it as "only safe because
+  `ensure_daemon` already blocked until live" still holds, so this is redundant-but-harmless, not
+  a correctness gap; left for a follow-up rather than risking a hasty change to it this pass.
+- `cargo build/clippy/test -p txtodo-tui` (48 unit tests + all 5 real-daemon integration suites)
+  and `check-boundaries.sh` all green. Committed as `d73ba00`.
