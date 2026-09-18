@@ -10,6 +10,7 @@ description = "MCP tools, resources, prompts, tokens."
 [dependencies]
 txtodo-proto.workspace = true
 txtodo-query.workspace = true
+txtodo-workspace-paths.workspace = true
 # https://docs.rs/rmcp — Rust SDK for the Model Context Protocol: server, stdio + Streamable HTTP
 # transports (design §6.1). "macros" (default) gives tool_router/tool/tool_handler.
 rmcp = { version = "3.3", default-features = false, features = [
