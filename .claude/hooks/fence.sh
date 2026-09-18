@@ -82,7 +82,7 @@ if(target){
   const mine=myOtherLease(target);
   if(mine){
     const dirty=cp.execSync("git status --porcelain",{cwd:root,encoding:"utf8"}).trim().length>0;
-    if(dirty) out("deny",`Slice fence: you already lease ${mine} and its tree isn't clean yet. One slice per session: get the gate green on ${mine}, then run \`.claude/scripts/close-slice.sh ${mine} "<message>"\` to commit and close it out (pre-authorized — no need to ask). Once that tree is clean, request ${target} again here and the lease hands over automatically.`);
+    if(dirty) out("deny",`Slice fence: you already lease ${mine} and its tree is not clean yet. One slice per session: get the gate green on ${mine}, then run \`.claude/scripts/close-slice.sh ${mine} "<message>"\` to commit and close it out (pre-authorized — no need to ask). Once that tree is clean, request ${target} again here and the lease hands over automatically.`);
     try{ fs.unlinkSync(leasePath(mine)); }catch{} // clean tree: self-release, no deny — see header note above
   }
   writeLease(target);
