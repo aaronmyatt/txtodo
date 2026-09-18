@@ -135,10 +135,12 @@ async fn apply_is_visible_on_a_separate_watch_stream() {
     // this session's `Apply` made — proving the daemon really did commit an op, not just answer
     // this call, and that any client (this one, or a second TUI instance) can repaint from it.
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
-    let mut watcher =
-        txtodo_tui::daemon::Daemon::connect(&txtodo_tui::daemon::socket_path(_real.dir.path()))
-            .await
-            .unwrap_or_else(|e| panic!("connect: {e}"));
+    let mut watcher = txtodo_tui::daemon::Daemon::connect(
+        &txtodo_tui::daemon::socket_path(_real.dir.path()),
+        None,
+    )
+    .await
+    .unwrap_or_else(|e| panic!("connect: {e}"));
     let mut watch = watcher
         .watch(vec!["todo.txt".to_owned()])
         .await

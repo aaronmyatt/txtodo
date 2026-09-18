@@ -78,7 +78,8 @@
         "txtodo-core",
         "txtodo-proto",
         "txtodo-telemetry",
-        "txtodo-daemon-launch"
+        "txtodo-daemon-launch",
+        "txtodo-workspace-paths"
       ],
       "txtodo-ffi": [
         "txtodo-core",

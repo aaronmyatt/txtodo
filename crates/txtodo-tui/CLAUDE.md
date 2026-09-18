@@ -32,9 +32,15 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   mapping the response into `AppState.sync` via `to_sync_snapshot` — best-effort: a failed poll
   leaves the previous snapshot in place rather than erroring the event loop. **`tasks/
   daemon-always-available`**: `app::async_main` now calls `txtodo_daemon_launch::ensure_daemon`
-  (a `LaunchConfig::with_dir(workspace)` per-workspace bridge daemon) right before
-  `Daemon::wait_until_ready`, so a missing `txtodod` is spawned rather than only ever erroring —
-  honoring `TXTODO_NO_AUTOSTART=1` as an opt-out. The `ensure_daemon` result is deliberately
+  right before `Daemon::wait_until_ready`, so a missing `txtodod` is spawned rather than only
+  ever erroring — honoring `TXTODO_NO_AUTOSTART=1` as an opt-out. **`tasks/
+  tui-global-socket-migration`**: that daemon is the one device-global `txtodod`
+  `txtodo`/`txtodo-mcp`/`apps/desktop` all dial too (`LaunchConfig::new`, no `.with_dir`), not a
+  per-workspace bridge daemon of its own — `Daemon` carries an `Option<pb::WorkspaceSelector>`
+  (`daemon.rs::workspace_selector`), cloned onto every request, so a device-global daemon with
+  several open workspaces still routes each RPC to the right one. `socket_path`/`with_dir` remain
+  for the legacy per-workspace bridge daemon this crate's own test harness still spawns (hermetic,
+  one workspace per daemon, unambiguous with `selector: None`). The `ensure_daemon` result is deliberately
   ignored; `wait_until_ready`'s own error is still the one message a user sees.
 - Tests: 48 unit tests (`cargo test -p txtodo-tui --lib`) covering every module above against
   `AppState::fixture()`/hand-built drafts, no daemon needed. 8 integration tests
@@ -72,6 +78,7 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   daemons in this crate's own test harness) — both `ui::conflicts`/`ui::sync`'s own logic stay
   unit tested against fixtures for the peer-bearing case.
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
-- May depend only on: txtodo-core, txtodo-proto, txtodo-daemon-launch (external: ratatui,
-  crossterm, tonic, tokio, hyper-util, tower, jiff — same socket-dial set `txtodo-cli` already
-  carries, `cargo deny check` clean as of 2026-09-13, human sign-off still outstanding).
+- May depend only on: txtodo-core, txtodo-proto, txtodo-telemetry, txtodo-daemon-launch,
+  txtodo-workspace-paths (external: ratatui, crossterm, tonic, tokio, hyper-util, tower, jiff —
+  same socket-dial set `txtodo-cli` already carries, `cargo deny check` clean as of 2026-09-13,
+  human sign-off still outstanding).

@@ -43,8 +43,11 @@ tracing = "0.1"
 # exist.
 txtodo-telemetry = { path = "../txtodo-telemetry" }
 # Shared spawn-if-absent logic (task daemon-always-available): app.rs's async_main ensures the
-# per-workspace bridge daemon exists before wait_until_ready, instead of only erroring on it.
+# device-global daemon exists before wait_until_ready, instead of only erroring on it.
 txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
+# Shared device-global daemon state paths (task daemon-paths-shared-crate, tui-global-socket-
+# migration): app.rs resolves the same global socket cli/mcp/desktop dial, not a per-workspace one.
+txtodo-workspace-paths = { path = "../txtodo-workspace-paths" }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own

@@ -73,7 +73,7 @@ impl RealDaemon {
             assert!(start.elapsed() < SOCKET_WAIT, "socket did not appear");
             std::thread::sleep(Duration::from_millis(20));
         }
-        let mut daemon = Daemon::connect(&sock)
+        let mut daemon = Daemon::connect(&sock, None)
             .await
             .unwrap_or_else(|e| panic!("connect: {e}"));
         daemon

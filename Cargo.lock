@@ -8975,6 +8975,7 @@ dependencies = [
  "txtodo-daemon-launch",
  "txtodo-proto",
  "txtodo-telemetry",
+ "txtodo-workspace-paths",
 ]
 
 [[package]]

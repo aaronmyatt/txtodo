@@ -67,11 +67,17 @@ impl From<tonic::Status> for DaemonError {
     }
 }
 
-/// A client to one workspace's `txtodod`, dialed lazily over its ADR 0010 unix socket. The TUI
-/// never opens `todo.txt` itself — every byte comes from [`Daemon::get_file`]/[`Daemon::watch`].
+/// A client to `txtodod`, dialed lazily over its ADR 0010 unix socket. The TUI never opens
+/// `todo.txt` itself — every byte comes from [`Daemon::get_file`]/[`Daemon::watch`].
+///
+/// `selector` (task `tui-global-socket-migration`) is `None` for the legacy per-workspace bridge
+/// daemon (unambiguous: it only ever has one workspace open) and `Some(Path(workspace))` for the
+/// device-global daemon this crate now dials by default — mirrors `txtodo-cli`'s `client.rs`,
+/// whose own `Daemon` carries the identical field, cloned onto every request's `workspace` field.
 pub struct Daemon {
     inner: pb::txtodo_client::TxtodoClient<tonic::transport::Channel>,
     sock: PathBuf,
+    selector: Option<pb::WorkspaceSelector>,
 }
 
 impl Daemon {
@@ -80,18 +86,26 @@ impl Daemon {
         &self.sock
     }
 
-    /// Builds a lazily-dialed channel to `sock`. This never blocks: the first RPC drives the
-    /// actual unix-socket dial, bounded by [`CONNECT_TIMEOUT`]. A thin span wrapper around
-    /// `connect_inner` (`#[instrument]` on the real body overflows) — root todo.txt `logging-tui`.
+    /// Builds a lazily-dialed channel to `sock`, targeted with `selector` (`None` for a per-
+    /// workspace bridge daemon; `Some` to pick one workspace out of a device-global daemon's
+    /// several). This never blocks: the first RPC drives the actual unix-socket dial, bounded by
+    /// [`CONNECT_TIMEOUT`]. A thin span wrapper around `connect_inner` (`#[instrument]` on the
+    /// real body overflows) — root todo.txt `logging-tui`.
     /// Ref: <https://docs.rs/tonic/latest/tonic/transport/struct.Endpoint.html#method.connect_lazy>
     #[cfg(unix)]
     #[tracing::instrument(name = "tui.daemon_connect", skip_all)]
-    pub async fn connect(sock: &Path) -> Result<Daemon, DaemonError> {
-        Self::connect_inner(sock).await
+    pub async fn connect(
+        sock: &Path,
+        selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<Daemon, DaemonError> {
+        Self::connect_inner(sock, selector).await
     }
 
     #[cfg(unix)]
-    async fn connect_inner(sock: &Path) -> Result<Daemon, DaemonError> {
+    async fn connect_inner(
+        sock: &Path,
+        selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<Daemon, DaemonError> {
         let dst = format!("unix://{}", sock.display());
         let endpoint = tonic::transport::Endpoint::from_shared(dst)
             .map_err(DaemonError::Connect)?
@@ -100,12 +114,16 @@ impl Daemon {
         Ok(Daemon {
             inner: pb::txtodo_client::TxtodoClient::new(channel),
             sock: sock.to_path_buf(),
+            selector,
         })
     }
 
     /// Stub for non-unix targets.
     #[cfg(not(unix))]
-    pub async fn connect(_sock: &Path) -> Result<Daemon, DaemonError> {
+    pub async fn connect(
+        _sock: &Path,
+        _selector: Option<pb::WorkspaceSelector>,
+    ) -> Result<Daemon, DaemonError> {
         Err(DaemonError::UnsupportedPlatform)
     }
 
@@ -143,7 +161,9 @@ impl Daemon {
     async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
         Ok(self
             .inner
-            .health(pb::HealthRequest { workspace: None })
+            .health(pb::HealthRequest {
+                workspace: self.selector.clone(),
+            })
             .await?
             .into_inner())
     }
@@ -153,7 +173,7 @@ impl Daemon {
     pub async fn get_file(&mut self, path: &str) -> Result<pb::FileContents, DaemonError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.get_file(req).await?.into_inner())
     }
@@ -165,13 +185,17 @@ impl Daemon {
     ) -> Result<tonic::Streaming<pb::Change>, DaemonError> {
         let req = pb::WatchRequest {
             paths,
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
 
     /// Intent-level mutations (`dd`/`Space`/`i`+save); the daemon turns them into ops.
-    pub async fn apply(&mut self, req: pb::ApplyRequest) -> Result<pb::ApplyResponse, DaemonError> {
+    pub async fn apply(
+        &mut self,
+        mut req: pb::ApplyRequest,
+    ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.apply(req).await?.into_inner())
     }
 
@@ -182,7 +206,7 @@ impl Daemon {
     ) -> Result<pb::ConflictsResponse, DaemonError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
-            workspace: None,
+            workspace: self.selector.clone(),
         };
         Ok(self.inner.list_conflicts(req).await?.into_inner())
     }
@@ -191,15 +215,18 @@ impl Daemon {
     /// pick) — the daemon writes the chosen text back and clears the flag, both or neither.
     pub async fn resolve(
         &mut self,
-        req: pb::ResolveRequest,
+        mut req: pb::ResolveRequest,
     ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = self.selector.clone();
         Ok(self.inner.resolve_conflict(req).await?.into_inner())
     }
 
     /// Peers and an approximate pending-ops count for the `s` indicator (design §7); polled on a
     /// tick by `app.rs`, not a stream — same one-shot-per-call shape as `list_conflicts`.
     pub async fn sync_status(&mut self) -> Result<pb::SyncStatusResponse, DaemonError> {
-        let req = pb::SyncStatusRequest { workspace: None };
+        let req = pb::SyncStatusRequest {
+            workspace: self.selector.clone(),
+        };
         Ok(self.inner.sync_status(req).await?.into_inner())
     }
 }
@@ -211,9 +238,31 @@ fn log_ready_attempt(attempt: u32, ok: bool) {
     tracing::debug!(attempt, ok, "ready_attempt");
 }
 
-/// Builds the ADR 0010 socket path for a workspace root: `<workspace>/.txtodo/txtodod.sock`.
+/// Builds the ADR 0010 socket path for a workspace root: `<workspace>/.txtodo/txtodod.sock`
+/// (the legacy per-workspace bridge daemon; still used by this crate's own test harness for
+/// hermetic, isolated per-test daemons — never the real device's global socket).
 pub fn socket_path(workspace: &Path) -> PathBuf {
     workspace.join(".txtodo").join("txtodod.sock")
+}
+
+/// The one device-global socket's path (ADR 0025, task `tui-global-socket-migration`): the same
+/// socket `txtodo`/`txtodo-mcp`/`apps/desktop` dial, so a workspace already served by one of
+/// them doesn't get a second, separate daemon spawned when the TUI opens.
+pub fn global_socket_path() -> PathBuf {
+    let env = txtodo_workspace_paths::RegistryEnv::from_process().unwrap_or_default();
+    txtodo_workspace_paths::global_socket_path(&env, None)
+}
+
+/// The `WorkspaceSelector` naming `workspace` by path, for [`Daemon::connect`]'s `selector`
+/// argument against the device-global daemon — mirrors `txtodo-cli`'s `client.rs`, whose own
+/// `Path` selector auto-registers and opens an unknown directory (`workspace_catalog.rs::
+/// resolve`), so the TUI needs no separate `txtodo workspace add` step first.
+pub fn workspace_selector(workspace: &Path) -> pb::WorkspaceSelector {
+    pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            workspace.display().to_string(),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -242,7 +291,7 @@ mod tests {
         // socket path that doesn't exist must still succeed immediately (design §7: "connect"
         // failing is what `wait_until_ready` surfaces, not `connect` itself).
         let sock = std::env::temp_dir().join("txtodo-tui-test-no-such-daemon.sock");
-        let daemon = Daemon::connect(&sock).await;
+        let daemon = Daemon::connect(&sock, None).await;
         assert!(daemon.is_ok(), "connect_lazy must not dial eagerly");
     }
 
@@ -250,7 +299,7 @@ mod tests {
     #[tokio::test]
     async fn wait_until_ready_times_out_without_a_daemon() {
         let sock = std::env::temp_dir().join("txtodo-tui-test-no-such-daemon-2.sock");
-        let mut daemon = Daemon::connect(&sock).await.unwrap();
+        let mut daemon = Daemon::connect(&sock, None).await.unwrap();
         let result = daemon.wait_until_ready().await;
         assert!(result.is_err(), "no daemon is listening on this socket");
     }
