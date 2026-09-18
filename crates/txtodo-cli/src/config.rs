@@ -50,22 +50,14 @@ impl Env {
     }
 }
 
-/// The one global daemon socket's path (ADR 0025, task `cli-workspace-commands`; mirrors
-/// `txtodo-daemon`'s `workspace_registry_paths::global_socket_path` with `legacy_dir: None`, the
-/// true-global case — this crate may not depend on `txtodo-daemon` to share that function
-/// directly): `$TXTODO_SOCKET` if set, else `$XDG_DATA_HOME`/`%LOCALAPPDATA%`/`~/.local/share` +
-/// `txtodo/txtodod.sock`, falling back to the cwd when none of those resolve.
+/// The one global daemon socket's path (ADR 0025, task `cli-workspace-commands`): delegates to
+/// `txtodo-workspace-paths::global_socket_path` (`legacy_dir: None`, the true-global case) —
+/// task `daemon-paths-shared-crate` replaced this crate's own copy of that fallback chain with a
+/// dependency on the same shared crate `txtodo-daemon`, `txtodo-mcp` and `apps/desktop` now use
+/// too, so the four no longer drift independently.
 pub fn global_socket_path(env: &Env) -> PathBuf {
-    if let Some(p) = env.var("TXTODO_SOCKET") {
-        return PathBuf::from(p);
-    }
-    let base = env
-        .var("XDG_DATA_HOME")
-        .or_else(|| env.var("LOCALAPPDATA"))
-        .map(PathBuf::from)
-        .or_else(|| env.home().map(|h| PathBuf::from(h).join(".local/share")))
-        .unwrap_or_else(|| env.cwd.clone());
-    base.join("txtodo").join("txtodod.sock")
+    let registry_env = txtodo_workspace_paths::RegistryEnv::new(env.vars.clone(), env.cwd.clone());
+    txtodo_workspace_paths::global_socket_path(&registry_env, None)
 }
 
 /// How a workspace establishes task identity (docs/questions.md Q2). This crate's own copy —
