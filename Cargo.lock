@@ -8827,6 +8827,7 @@ dependencies = [
  "txtodo-store",
  "txtodo-sync",
  "txtodo-telemetry",
+ "txtodo-workspace-paths",
 ]
 
 [[package]]

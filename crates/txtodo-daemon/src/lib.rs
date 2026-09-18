@@ -105,7 +105,11 @@ mod workspace_offer_grpc;
 pub mod workspace_offer_registry;
 pub mod workspace_registry;
 mod workspace_registry_error;
-pub mod workspace_registry_paths;
+/// Re-exported from the shared `txtodo-workspace-paths` crate (task `daemon-paths-shared-crate`)
+/// so every existing `txtodo_daemon::workspace_registry_paths::*` call site keeps working
+/// unchanged — `txtodo-cli`/`txtodo-mcp`/`apps/desktop` now depend on the same crate directly
+/// instead of each reimplementing its fallback chain.
+pub use txtodo_workspace_paths as workspace_registry_paths;
 pub mod write;
 
 #[cfg(test)]
