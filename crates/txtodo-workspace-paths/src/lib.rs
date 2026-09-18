@@ -123,7 +123,9 @@ pub fn global_socket_path(env: &RegistryEnv, legacy_dir: Option<&Path>) -> PathB
 /// isolated `$TXTODO_SOCKET` overrides (e.g. two tests running concurrently) still collided on the
 /// *same* real `$XDG_DATA_HOME/txtodo/txtodod.pid` — the second always lost the pid lock race and
 /// refused to start with "already running", even though its socket/registry were fully isolated.
-fn global_state_dir(env: &RegistryEnv) -> PathBuf {
+/// `pub` (task `daemon-paths-shared-crate`): `apps/desktop` needs this same directory (its own
+/// client-side spawn-lock parent and log location), not just the pid/log paths built from it.
+pub fn global_state_dir(env: &RegistryEnv) -> PathBuf {
     global_socket_path(env, None)
         .parent()
         .map(Path::to_path_buf)
