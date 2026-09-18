@@ -29,9 +29,21 @@ pub struct LaunchConfig {
 
 impl LaunchConfig {
     /// The default spawn timeout every client used before this crate existed
-    /// (`DesktopConfig::DEFAULT_SPAWN_TIMEOUT`): generous enough for a debug build on a slow CI
-    /// runner.
-    pub const DEFAULT_SPAWN_TIMEOUT: Duration = Duration::from_secs(30);
+    /// (`DesktopConfig::DEFAULT_SPAWN_TIMEOUT`) was 30s, sized for a debug build on a slow CI
+    /// runner opening a small test workspace. That's too short for a real cold start in true
+    /// global mode: `open_all_registered` opens every registered workspace's documents
+    /// *sequentially*, and rebuilding each one's Loro mirror from its stored snapshot
+    /// (`external.rs::load_mirror`) is a known, already-measured, non-trivial per-document cost
+    /// (`mirror.rs`'s own doc comment: "22s per 10k-line adopt" in a debug build). A real,
+    /// organically-grown registry (this project's own dogfooded backlog: ~1700 documents across
+    /// nested `tasks/*/` dirs) measured ~38s cold, in a *release* build, before the socket
+    /// answered — comfortably past the old 30s ceiling, so `ensure_daemon` gave up and every
+    /// daemon-mode CLI command fell back to "needs the daemon" even though the daemon was doing
+    /// fine and came up moments later. 120s gives real headroom without the underlying, still-open
+    /// scaling problem (sequential opens, eager full-mirror-replay per document — see
+    /// `crates/txtodo-daemon/CLAUDE.md`'s `idle_rss` note for the same pipeline's memory side of
+    /// this) — that's a real performance fix, not a timeout tweak, and stays out of scope here.
+    pub const DEFAULT_SPAWN_TIMEOUT: Duration = Duration::from_secs(120);
 
     /// A config for `socket` with every other field defaulted: no override binary, no extra
     /// argv/env (global-daemon shape), the default spawn timeout.
