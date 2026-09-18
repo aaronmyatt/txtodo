@@ -40,6 +40,9 @@ pub struct Daemon {
     /// always meant); `Some(Path(dir))` against the true global daemon, resolved once at
     /// `select()` time rather than re-resolved per call.
     pub(crate) selector: Option<pb::WorkspaceSelector>,
+    /// The socket this connection actually dialed — what `txtodo daemon status` reports, so the
+    /// printed path can never differ from the one that answered.
+    pub(crate) socket: PathBuf,
 }
 
 /// Why daemon mode failed.
@@ -79,7 +82,7 @@ impl std::error::Error for ClientError {}
 
 /// Which socket a `select()` call for `dir` would actually use, without connecting: the per-dir
 /// socket (`dir.join(SOCKET_REL)`) if a real file exists there, else the resolved global socket
-/// path — the same precedence `select` itself applies below. Exists so a caller that only wants
+/// path — `select` below calls this, so the precedence lives here only. Exists so a caller that only wants
 /// to *report* the socket (`txtodo daemon status`) shows the path a connection would actually
 /// use, rather than always assuming the per-dir one (`ref:cli-global-socket-cwd-fallback`: a
 /// `status` run from a directory with no per-dir socket, whose command actually reached the true
@@ -103,23 +106,23 @@ pub fn select(dir: &Path, no_daemon: bool, env: &crate::config::Env) -> Result<M
         log_mode_selected("direct", "no_daemon_flag");
         return Ok(Mode::Direct);
     }
-    let per_dir_socket = dir.join(SOCKET_REL);
-    if per_dir_socket.exists() {
+    // One copy of the per-dir-then-global precedence: `resolve_socket_path` owns it.
+    let socket = resolve_socket_path(dir, env);
+    if !socket.exists() {
+        log_mode_selected("direct", "no_socket_found");
+        return Ok(Mode::Direct);
+    }
+    if socket == dir.join(SOCKET_REL) {
         log_mode_selected("daemon", "per_dir_socket");
-        return Daemon::connect(per_dir_socket, None).map(|d| Mode::Daemon(Box::new(d)));
+        return Daemon::connect(socket, None).map(|d| Mode::Daemon(Box::new(d)));
     }
-    let global_socket = crate::config::global_socket_path(env);
-    if global_socket.exists() {
-        log_mode_selected("daemon", "global_socket");
-        let selector = pb::WorkspaceSelector {
-            selector: Some(pb::workspace_selector::Selector::Path(
-                dir.display().to_string(),
-            )),
-        };
-        return Daemon::connect(global_socket, Some(selector)).map(|d| Mode::Daemon(Box::new(d)));
-    }
-    log_mode_selected("direct", "no_socket_found");
-    Ok(Mode::Direct)
+    log_mode_selected("daemon", "global_socket");
+    let selector = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            dir.display().to_string(),
+        )),
+    };
+    Daemon::connect(socket, Some(selector)).map(|d| Mode::Daemon(Box::new(d)))
 }
 
 /// Emits the daemon-vs-direct mode decision — split into its own function so the tracing macro's
@@ -161,6 +164,7 @@ impl Daemon {
             rt,
             client: TxtodoClient::new(channel),
             selector,
+            socket,
         })
     }
 

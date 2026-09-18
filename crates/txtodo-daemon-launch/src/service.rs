@@ -139,8 +139,21 @@ pub fn migrate_old_units(home: &Path) -> Vec<String> {
 /// means the body doesn't look like either template (e.g. a human hand-edited it into something
 /// unrecognizable) — treated as "not stale" by [`is_stale`], never as a false positive.
 fn installed_program_path(body: &str) -> Option<PathBuf> {
-    if let Some((_, rest)) = body.split_once("ExecStart=") {
-        return Some(PathBuf::from(rest.lines().next()?.trim()));
+    // A real `ExecStart=` directive only: line-anchored, so a comment or `ExecStartPre=` never
+    // matches. systemd splits the value on whitespace and allows `@`, `-`, `:`, `+`, `!` prefixes
+    // before the executable, so the binary is the first token with those stripped — a
+    // human-added argument or prefix must not read as "binary gone".
+    // Ref: https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html#Command%20lines
+    if let Some(rest) = body
+        .lines()
+        .find_map(|l| l.trim_start().strip_prefix("ExecStart="))
+    {
+        let program = rest
+            .trim_start()
+            .trim_start_matches(['@', '-', ':', '+', '!'])
+            .split_whitespace()
+            .next()?;
+        return Some(PathBuf::from(program));
     }
     let mut lines = body.lines();
     lines.find(|l| l.contains("<key>ProgramArguments</key>"))?;

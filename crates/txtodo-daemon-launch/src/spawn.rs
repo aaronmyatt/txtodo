@@ -194,8 +194,21 @@ mod unix_impl {
         // clobber) — never clobber a service file a human or a previous install already
         // customized. An "already exists" error from `install` with `force: false` is exactly
         // the idempotent no-op this needs otherwise, not a failure worth reporting.
-        let force = crate::service::is_stale(&rendered);
-        let _ = crate::service::install(&home, &rendered, force);
+        //
+        // Only a binary the service manager can really exec is ever written: launchd/systemd
+        // run with cwd `/`, so a relative or missing `daemon_bin` would just install another
+        // stale unit (and re-trigger this repair on every launch). An existing unit is still
+        // (re)started either way.
+        if txtodod.is_absolute() && txtodod.is_file() {
+            let force = crate::service::is_stale(&rendered);
+            if force {
+                // launchd keeps the job it loaded from the old file: without a bootout first,
+                // `bootstrap` in `start` fails as "already loaded" and the dead path stays live.
+                // Ref: https://keith.github.io/xcode-man-pages/launchctl.1.html
+                let _ = crate::service::stop(&rendered);
+            }
+            let _ = crate::service::install(&home, &rendered, force);
+        }
         let _ = crate::service::start(&rendered);
     }
 

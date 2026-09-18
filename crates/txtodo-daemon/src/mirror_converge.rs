@@ -18,30 +18,26 @@ impl Mirror {
         let want: Vec<Entry> = (0..state.len()).filter_map(|i| state.entry_at(i)).collect();
         debug_assert_eq!(want.len(), state.len());
         let mut visible = self.visible_ids();
-        let mut ops: Vec<(OpKind, Option<TaskId>)> = delete_missing(&mut visible, state)
-            .into_iter()
-            .map(|k| (k, None))
-            .collect();
+        let mut ops = delete_missing(&mut visible, state);
         // Order, inserts and blanks in one walk; `prev` is the entry the next one follows.
         let mut prev: Option<TaskId> = None;
         let mut placeholders: u128 = u128::MAX;
+        // The n-th `BlankInsert` in `ops` defines the n-th placeholder here: only a fresh
+        // `BlankInsert` mints one; an "already there" match or a Task op never does.
+        let mut minted: Vec<TaskId> = Vec::new();
         for entry in &want {
             let (op, id) = place(entry, prev, &mut visible, state, &mut placeholders);
-            if let Some(op) = op {
-                // Only a fresh `BlankInsert` defines a placeholder that later anchors need
-                // resolved; an "already there" match or a Task op never does.
-                let defines = matches!(op, OpKind::BlankInsert { .. }).then_some(id);
-                ops.push((op, defines));
+            if matches!(op, Some(OpKind::BlankInsert { .. })) {
+                minted.push(id);
             }
+            ops.extend(op);
             prev = Some(id);
         }
-        ops.extend(
-            trim_blanks(&mut visible, want.len())
-                .into_iter()
-                .map(|k| (k, None)),
-        );
-        self.apply_corrections(state, &ops, hlc)?;
-        debug_assert!(self.agrees_with(state), "converged");
+        ops.extend(trim_blanks(&mut visible, want.len()));
+        self.apply_corrections(state, &ops, &minted, hlc)?;
+        // No `debug_assert!(agrees_with)` here: the actor checks agreement in every build and
+        // escalates to a new lineage (`actor_mirror.rs::after_converge`), which a panic here
+        // would make unreachable in dev/test builds.
         Ok(ops.len())
     }
 
@@ -53,13 +49,16 @@ impl Mirror {
     fn apply_corrections(
         &mut self,
         state: &DocState,
-        ops: &[(OpKind, Option<TaskId>)],
+        ops: &[OpKind],
+        minted: &[TaskId],
         hlc: Hlc,
     ) -> Result<(), MirrorError> {
         let mut resolved: HashMap<TaskId, TaskId> = HashMap::new();
         // Bounded by the corrective op list, itself ≤ 3 × the document length.
-        for (kind, defines) in ops {
+        let mut minted = minted.iter().copied();
+        for kind in ops {
             let kind = resolve_anchor(kind.clone(), &resolved);
+            let blank_before = self.doc().last_blank_id();
             let op = Op {
                 id: OpId::new(Ulid::from_u128(0)),
                 hlc,
@@ -71,10 +70,21 @@ impl Mirror {
             if let OpKind::Insert { task, .. } | OpKind::EditText { task, .. } = op.kind {
                 self.settle_description(task, state)?;
             }
-            if let Some(placeholder) = defines
-                && let Some(real) = self.doc().last_blank_id()
-            {
-                resolved.insert(*placeholder, real);
+            if matches!(op.kind, OpKind::BlankInsert { .. }) {
+                // `last_blank_id` reads a counter, not the op just applied: if it did not
+                // advance, nothing was minted, and a later anchor would reach the crdt as a
+                // fake placeholder id. Refuse loudly instead.
+                let real = self
+                    .doc()
+                    .last_blank_id()
+                    .filter(|real| Some(*real) != blank_before);
+                let (Some(placeholder), Some(real)) = (minted.next(), real) else {
+                    return Err(MirrorError::Refused {
+                        kind: "BlankInsert",
+                        message: "corrective blank insert minted no new sentinel".to_owned(),
+                    });
+                };
+                resolved.insert(placeholder, real);
             }
         }
         debug_assert!(ops.is_empty() || !self.visible_ids().is_empty() || state.is_empty());

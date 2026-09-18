@@ -9,8 +9,27 @@ use crate::identity_fingerprint::fingerprint_of;
 use crate::mirror::{Mirror, MirrorError};
 use crate::reconcile::task_of;
 use crate::state::DocState;
-use txtodo_model::{DeviceId, FilePath, IdentityMode, Op};
+use txtodo_model::{DeviceId, Field, FilePath, IdentityMode, Op, OpKind};
 use txtodo_store::{CommitExtras, FingerprintRow, ReviewRow};
+
+/// Whether any op in the batch adds, removes or reorders list entries — the only kind of batch
+/// `after_flush` pays a full `agrees_with` walk for. An empty batch never does.
+fn reshapes_list(ops: &[Op]) -> bool {
+    ops.iter().any(|o| {
+        matches!(
+            o.kind,
+            OpKind::Insert { .. }
+                | OpKind::Move { .. }
+                | OpKind::BlankInsert { .. }
+                | OpKind::BlankRemove { .. }
+                // A tombstone drops the task out of the visible list.
+                | OpKind::SetField {
+                    field: Field::Deleted,
+                    ..
+                }
+        )
+    })
+}
 
 /// The Loro peer id for a device: the ULID's low 64 bits (its random half).
 pub(crate) fn loro_peer(device: DeviceId) -> u64 {
@@ -23,6 +42,14 @@ pub(crate) fn loro_peer(device: DeviceId) -> u64 {
 impl FileActor {
     /// The Loro updates a peer at `since` is missing.
     pub(crate) fn on_export(&self, since: &[u8]) -> Result<Vec<u8>, ActorError> {
+        // A mirror every heal failed on (`resync_mirror`'s last resort included) must never
+        // reach a peer: refuse the export rather than ship a known-wrong document. One walk per
+        // export, off the commit hot path.
+        if !self.mirror.agrees_with(&self.state) {
+            return Err(ActorError::Mirror(
+                "mirror disagrees with the state; export refused".to_owned(),
+            ));
+        }
         let bytes = self
             .mirror
             .export_since(since)
@@ -85,7 +112,10 @@ impl FileActor {
 
     fn after_flush(&mut self, ops: &[Op], result: Result<(), MirrorError>) {
         match result {
-            Ok(()) if ops.is_empty() || self.mirror.agrees_with(&self.state) => {
+            // The full-document walk only runs for a batch that can change the list's shape:
+            // field and text edits are settled per task by `flush` itself, and paying the walk
+            // on every such commit puts O(document) on the hot path.
+            Ok(()) if !reshapes_list(ops) || self.mirror.agrees_with(&self.state) => {
                 self.log_flushed(ops.len());
             }
             // A flush that returned Ok can still leave the mirror disagreeing with the state

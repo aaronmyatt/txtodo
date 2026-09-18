@@ -103,10 +103,9 @@ impl Mirror {
         for task in ops.iter().filter_map(|o| touched_task(&o.kind)) {
             self.settle_description(task, state)?;
         }
-        debug_assert!(
-            ops.is_empty() || self.agrees_with(state),
-            "flush keeps the mirror in step"
-        );
+        // No `debug_assert!(agrees_with)` here: the actor checks agreement in every build and
+        // converges on a mismatch (`actor_mirror.rs::after_flush`), which a panic here would
+        // make unreachable in dev/test builds.
         Ok(())
     }
 

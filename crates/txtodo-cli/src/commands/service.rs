@@ -7,7 +7,7 @@
 //! conversion, and `txtodod_path` (this binary's own "beside the exe, else PATH" resolution,
 //! distinct from `txtodo_daemon_launch::service`'s functions, which take an already-resolved path).
 
-use crate::client::{self, Mode};
+use crate::client::{self, Mode, SOCKET_REL};
 use crate::{CliError, Ctx};
 use std::path::PathBuf;
 use txtodo_daemon_launch::service::{self, ServiceError};
@@ -87,17 +87,32 @@ fn status(ctx: &Ctx, r: &service::Rendered) -> Result<(), CliError> {
         "not installed"
     };
     let env = crate::config::Env::from_process().map_err(CliError::Io)?;
-    let socket = client::resolve_socket_path(&ctx.paths.dir, &env);
-    let answers = match client::select(&ctx.paths.dir, false, &env) {
-        Ok(Mode::Daemon(mut d)) => d
-            .health()
-            .map(|h| format!("answers ({} document(s), v{})", h.documents, h.version))
-            .unwrap_or_else(|e| e.to_string()),
-        Ok(Mode::Direct) => "no socket".to_owned(),
-        Err(e) => e.to_string(),
+    // The socket shown is the one that answered (or refused); with no socket at all, both
+    // candidates are named, since either could be the one the human expected to find.
+    let (socket, answers) = match client::select(&ctx.paths.dir, false, &env) {
+        Ok(Mode::Daemon(mut d)) => (
+            d.socket.display().to_string(),
+            d.health()
+                .map(|h| format!("answers ({} document(s), v{})", h.documents, h.version))
+                .unwrap_or_else(|e| e.to_string()),
+        ),
+        Ok(Mode::Direct) => (
+            format!(
+                "{} | {}",
+                ctx.paths.dir.join(SOCKET_REL).display(),
+                crate::config::global_socket_path(&env).display()
+            ),
+            "no socket".to_owned(),
+        ),
+        Err(e) => (
+            client::resolve_socket_path(&ctx.paths.dir, &env)
+                .display()
+                .to_string(),
+            e.to_string(),
+        ),
     };
     println!("service {} ({installed}, {})", r.label, r.path.display());
-    println!("socket {} {answers}", socket.display());
+    println!("socket {socket} {answers}");
     if answers.starts_with("answers") {
         Ok(())
     } else {
