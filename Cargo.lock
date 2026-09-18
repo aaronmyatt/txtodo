@@ -1780,6 +1780,7 @@ dependencies = [
  "txtodo-proto",
  "txtodo-store",
  "txtodo-telemetry",
+ "txtodo-workspace-paths",
 ]
 
 [[package]]
