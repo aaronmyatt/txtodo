@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # txtodo feedback — Claude Code PostToolUse hook. Runs budgets.json.commands.feedback.* on the file just
 # written (extensions in commands.feedbackExtensions), plus file-length; boundaries on any Cargo.toml.
+# Any feedback command containing --workspace is scoped to `-p <crate>` for the file's own crate
+# (same trick as gate.sh) so e.g. clippy doesn't recheck all 13 crates on every single edit; a file
+# outside crates/<name>/ has no crate to scope to, so that command is skipped for it.
 # Informs via additionalContext; never blocks. Lockstep twin: guardrails/index.ts tool_result.
 set -uo pipefail
 IN=$(cat); ROOT=$(node -pe 'JSON.parse(process.argv[1]).cwd' "$IN"); cd "$ROOT"
 FILE=$(node -pe 'const i=JSON.parse(process.argv[1]).tool_input||{};require("path").relative(process.argv[2],require("path").resolve(process.argv[2],i.file_path||i.notebook_path||""))' "$IN" "$ROOT")
 [ -z "$FILE" ] && exit 0
 B=.claude/budgets.json; ext="${FILE##*.}"; findings=""
+CRATE=""; case "$FILE" in crates/*/*) CRATE=$(echo "$FILE" | cut -d/ -f2) ;; esac
 if node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands.feedbackExtensions.includes(process.argv[2])?"":process.exit(1)' $B "$ext" >/dev/null 2>&1; then
   for k in $(node -pe 'Object.keys(JSON.parse(require("fs").readFileSync(process.argv[1])).commands.feedback).join(" ")' $B); do
     cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands.feedback[process.argv[2]].replace("{file}",process.argv[3])' $B "$k" "$FILE")
+    case "$cmd" in
+      *--workspace*) [ -z "$CRATE" ] && continue; cmd=${cmd/--workspace/-p $CRATE} ;;
+    esac
     out=$(bash -c "$cmd" 2>&1) || findings+="[$k] $(echo "$out" | tail -20)"$'\n'
   done
   out=$(.claude/scripts/check-file-length.sh 2>&1) || findings+="$out"$'\n'
