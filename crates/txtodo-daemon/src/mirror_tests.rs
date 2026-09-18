@@ -193,3 +193,70 @@ fn converge_reorders_deletes_and_trims_blanks_keeping_the_lineage() {
         "already there"
     );
 }
+
+/// Task `daemon-mirror-assertion-panic`: reproduces the real `debug_assert!(self.agrees_with(
+/// &state), "converged")` panic (`mirror_converge.rs:29`). Root cause: `place()` stands in a
+/// not-yet-real blank with a shared `PLACEHOLDER` sentinel value, and once two or more of those
+/// coexist in the walk's local `visible` simulation, `position()`'s `.iter().position(..)`
+/// (first-match) can no longer tell them apart — the third (and any further) new blank in a row
+/// silently reads as "already there" against an *earlier* placeholder's slot, and its
+/// `BlankInsert` is never emitted at all.
+#[test]
+fn converge_inserts_three_consecutive_brand_new_blank_lines() {
+    // No blank at all between A and B in the mirror's starting state.
+    let start = DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("(A) 2026-09-11 buy ducks +farm id:{A}\nwalk the dog @home id:{B}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    let mut mirror = Mirror::from_state(&start, 1).unwrap();
+    // The adopted state wants three brand-new blank lines in a row between them.
+    let adopted = DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\n\n\nwalk the dog @home id:{B}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    assert!(!mirror.agrees_with(&adopted));
+    let ops = mirror.converge_to(&adopted, hlc0()).unwrap();
+    assert_eq!(ops, 3, "three blank inserts, none silently dropped");
+    assert!(
+        mirror.agrees_with(&adopted),
+        "every consecutive new blank landed, not just the first two"
+    );
+}
+
+/// A pre-existing real blank followed by several brand-new ones — the placeholder-uniqueness fix
+/// must hold regardless of how many real ids already sit in `visible` before the walk starts.
+#[test]
+fn converge_extends_an_existing_blank_run_with_several_more() {
+    let start = DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\nwalk the dog @home id:{B}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    let mut mirror = Mirror::from_state(&start, 1).unwrap();
+    // One blank already exists; the adopted state wants five in a row (four brand new).
+    let adopted = DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(
+            format!("(A) 2026-09-11 buy ducks +farm id:{A}\n\n\n\n\n\nwalk the dog @home id:{B}\n")
+                .as_bytes(),
+        ),
+    )
+    .unwrap();
+    let ops = mirror.converge_to(&adopted, hlc0()).unwrap();
+    assert_eq!(
+        ops, 4,
+        "four new blank inserts on top of the one already there"
+    );
+    assert!(mirror.agrees_with(&adopted));
+}

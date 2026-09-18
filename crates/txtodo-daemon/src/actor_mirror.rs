@@ -81,14 +81,33 @@ impl FileActor {
     pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
         let result = self.mirror.flush(ops, &self.state);
         self.after_flush(ops, result);
-        debug_assert!(ops.is_empty() || self.mirror.agrees_with(&self.state));
     }
 
     fn after_flush(&mut self, ops: &[Op], result: Result<(), MirrorError>) {
         match result {
-            Ok(()) => tracing::debug!(file = %self.cfg.path, ops = ops.len(), "mirror_flushed"),
+            Ok(()) if ops.is_empty() || self.mirror.agrees_with(&self.state) => {
+                self.log_flushed(ops.len());
+            }
+            // A flush that returned Ok can still leave the mirror disagreeing with the state
+            // (task `daemon-mirror-assertion-panic`: this used to be a debug-only assertion, a
+            // real panic in dev/test builds and a silently wrong mirror in release — neither
+            // ever reached a client, since the mirror is never consulted for bytes, but a wrong
+            // mirror is a real bug in what sync exports). Escalate exactly like a refusal: never
+            // trust an unchecked "it said Ok" past this point.
+            Ok(()) => {
+                self.log_flush_disagreed();
+                self.converge_mirror();
+            }
             Err(e) => self.flush_refused(&e),
         }
+    }
+
+    fn log_flushed(&self, ops: usize) {
+        tracing::debug!(file = %self.cfg.path, ops, "mirror_flushed");
+    }
+
+    fn log_flush_disagreed(&self) {
+        tracing::error!(file = %self.cfg.path, "mirror_flush_disagreed_converging");
     }
 
     fn flush_refused(&mut self, e: &MirrorError) {
@@ -97,18 +116,34 @@ impl FileActor {
     }
 
     /// Brings the mirror to the state with corrective ops, keeping its lineage; only if that
-    /// fails too is it rebuilt from scratch (a new lineage, logged as such).
+    /// fails too — or still disagrees afterward — is it rebuilt from scratch (a new lineage,
+    /// logged as such).
     pub(crate) fn converge_mirror(&mut self) {
         let result = self.mirror.converge_to(&self.state, self.hlc);
         self.after_converge(result);
-        debug_assert!(self.mirror.agrees_with(&self.state));
     }
 
     fn after_converge(&mut self, result: Result<usize, MirrorError>) {
         match result {
-            Ok(n) => tracing::info!(file = %self.cfg.path, ops = n, "mirror_converged"),
+            Ok(n) if self.mirror.agrees_with(&self.state) => self.log_converged(n),
+            // Same reasoning as `after_flush`: a converge that reported success but still
+            // disagrees is exactly the bug this task fixed the known cause of (a walk-local
+            // placeholder collision in `mirror_converge.rs::place`) — checked here, always, not
+            // only in a debug build, in case a different divergence is ever introduced later.
+            Ok(n) => {
+                self.log_converge_disagreed(n);
+                self.resync_mirror();
+            }
             Err(e) => self.converge_failed(&e),
         }
+    }
+
+    fn log_converged(&self, ops: usize) {
+        tracing::info!(file = %self.cfg.path, ops, "mirror_converged");
+    }
+
+    fn log_converge_disagreed(&self, ops: usize) {
+        tracing::error!(file = %self.cfg.path, ops, "mirror_converge_disagreed_new_lineage");
     }
 
     fn converge_failed(&mut self, e: &MirrorError) {
@@ -117,13 +152,16 @@ impl FileActor {
     }
 
     /// Rebuilds the mirror from the state: a new Loro lineage. For a first open with no
-    /// snapshot, or as the last resort.
+    /// snapshot, or as the last resort — nothing left to escalate to, so a lingering
+    /// disagreement here can only be logged, not healed further.
     pub(crate) fn resync_mirror(&mut self) {
         match Mirror::from_state(&self.state, loro_peer(self.cfg.device)) {
             Ok(m) => self.mirror = m,
             Err(e) => Self::log_rebuild_failed(&self.cfg.path, &e),
         }
-        debug_assert!(self.mirror.agrees_with(&self.state));
+        if !self.mirror.agrees_with(&self.state) {
+            tracing::error!(file = %self.cfg.path, "mirror_resync_still_disagrees");
+        }
     }
 
     fn log_rebuild_failed(path: &FilePath, e: &MirrorError) {

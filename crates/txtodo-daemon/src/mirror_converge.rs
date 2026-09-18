@@ -5,6 +5,8 @@
 //! the state fixes order, inserts and blanks; deletes and rewrites come first. Every op is
 //! stamped `hlc` and never enters the log: it is the mirror catching up, not a change.
 
+use std::collections::HashMap;
+
 use crate::mirror::{Mirror, MirrorError};
 use crate::state::{DocState, Entry};
 use txtodo_crdt::{is_blank, rebuild_line};
@@ -16,33 +18,48 @@ impl Mirror {
         let want: Vec<Entry> = (0..state.len()).filter_map(|i| state.entry_at(i)).collect();
         debug_assert_eq!(want.len(), state.len());
         let mut visible = self.visible_ids();
-        let mut ops = delete_missing(&mut visible, state);
+        let mut ops: Vec<(OpKind, Option<TaskId>)> = delete_missing(&mut visible, state)
+            .into_iter()
+            .map(|k| (k, None))
+            .collect();
         // Order, inserts and blanks in one walk; `prev` is the entry the next one follows.
         let mut prev: Option<TaskId> = None;
+        let mut placeholders: u128 = u128::MAX;
         for entry in &want {
-            let (op, id) = place(entry, prev, &mut visible, state);
-            ops.extend(op);
+            let (op, id) = place(entry, prev, &mut visible, state, &mut placeholders);
+            if let Some(op) = op {
+                // Only a fresh `BlankInsert` defines a placeholder that later anchors need
+                // resolved; an "already there" match or a Task op never does.
+                let defines = matches!(op, OpKind::BlankInsert { .. }).then_some(id);
+                ops.push((op, defines));
+            }
             prev = Some(id);
         }
-        ops.extend(trim_blanks(&mut visible, want.len()));
+        ops.extend(
+            trim_blanks(&mut visible, want.len())
+                .into_iter()
+                .map(|k| (k, None)),
+        );
         self.apply_corrections(state, &ops, hlc)?;
         debug_assert!(self.agrees_with(state), "converged");
         Ok(ops.len())
     }
 
-    /// Applies the corrective ops one at a time, resolving the placeholder anchor to the sentinel
-    /// the previous `BlankInsert` minted, then settles descriptions (a canonical line may differ
-    /// from the raw one in ways the text must follow).
+    /// Applies the corrective ops one at a time, resolving each placeholder anchor to the real
+    /// sentinel *its own* `BlankInsert` minted (task `daemon-mirror-assertion-panic`: tracking
+    /// only "the last blank minted so far" broke once two or more placeholders needed resolving
+    /// in the same walk), then settles descriptions (a canonical line may differ from the raw one
+    /// in ways the text must follow).
     fn apply_corrections(
         &mut self,
         state: &DocState,
-        kinds: &[OpKind],
+        ops: &[(OpKind, Option<TaskId>)],
         hlc: Hlc,
     ) -> Result<(), MirrorError> {
-        let mut last_blank: Option<TaskId> = None;
+        let mut resolved: HashMap<TaskId, TaskId> = HashMap::new();
         // Bounded by the corrective op list, itself ≤ 3 × the document length.
-        for kind in kinds {
-            let kind = resolve_anchor(kind.clone(), last_blank);
+        for (kind, defines) in ops {
+            let kind = resolve_anchor(kind.clone(), &resolved);
             let op = Op {
                 id: OpId::new(Ulid::from_u128(0)),
                 hlc,
@@ -54,11 +71,13 @@ impl Mirror {
             if let OpKind::Insert { task, .. } | OpKind::EditText { task, .. } = op.kind {
                 self.settle_description(task, state)?;
             }
-            if matches!(op.kind, OpKind::BlankInsert { .. }) {
-                last_blank = self.doc().last_blank_id();
+            if let Some(placeholder) = defines
+                && let Some(real) = self.doc().last_blank_id()
+            {
+                resolved.insert(*placeholder, real);
             }
         }
-        debug_assert!(kinds.is_empty() || !self.visible_ids().is_empty() || state.is_empty());
+        debug_assert!(ops.is_empty() || !self.visible_ids().is_empty() || state.is_empty());
         Ok(())
     }
 
@@ -100,13 +119,14 @@ fn delete_missing(visible: &mut Vec<TaskId>, state: &DocState) -> Vec<OpKind> {
 }
 
 /// Puts `entry` right after `prev` in `visible`, emitting the op that does it in the mirror (none
-/// when it is already there). Returns the id the next entry will follow — for a fresh blank the
-/// placeholder, resolved to the minted sentinel at apply time.
+/// when it is already there). Returns the id the next entry will follow — for a fresh blank a
+/// freshly minted placeholder (from `placeholders`), resolved to the real sentinel at apply time.
 fn place(
     entry: &Entry,
     prev: Option<TaskId>,
     visible: &mut Vec<TaskId>,
     state: &DocState,
+    placeholders: &mut u128,
 ) -> (Option<OpKind>, TaskId) {
     let at = prev.map_or(0, |p| position(visible, p) + 1);
     debug_assert!(at <= visible.len());
@@ -135,8 +155,9 @@ fn place(
         Entry::Blank(_) => match visible.get(at).copied().filter(|s| is_blank(*s)) {
             Some(s) => (None, s),
             None => {
-                visible.insert(at, PLACEHOLDER);
-                (Some(OpKind::BlankInsert { after: prev }), PLACEHOLDER)
+                let placeholder = mint_placeholder(placeholders);
+                visible.insert(at, placeholder);
+                (Some(OpKind::BlankInsert { after: prev }), placeholder)
             }
         },
     }
@@ -160,18 +181,27 @@ fn trim_blanks(visible: &mut Vec<TaskId>, keep: usize) -> Vec<OpKind> {
     ops
 }
 
-/// Stands in for a sentinel the mirror has not minted yet; the top byte marks it as a blank.
-const PLACEHOLDER: TaskId = TaskId::new(Ulid::from_u128(0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF));
+/// Mints a fresh not-yet-real blank stand-in each call — walk-local, valid only until
+/// `apply_corrections` resolves it via its own `resolved` map. Task
+/// `daemon-mirror-assertion-panic`: a single shared sentinel (the old `PLACEHOLDER` constant)
+/// could not be told apart from itself once two or more coexisted in one walk's `visible`
+/// simulation, so `position()` (`.iter().position`, first-match) silently resolved to a *stale*
+/// occurrence — the third+ new blank in a row in the same walk read as "already there" against
+/// an earlier placeholder's slot, and its `BlankInsert` was never emitted at all. Counting down
+/// from `u128::MAX` only ever changes the low 120 bits for any realistic document (`txtodo-daemon`
+/// bounds documents at `MAX_LINES_PER_FILE`, far short of 2^120), so it never touches the top
+/// byte `is_blank` checks, and never collides with a real blank's small, upward-growing
+/// `next_blank` counter.
+fn mint_placeholder(next: &mut u128) -> TaskId {
+    let id = TaskId::new(Ulid::from_u128(*next));
+    debug_assert!(is_blank(id), "a placeholder must still look like a blank");
+    *next -= 1;
+    id
+}
 
-/// Replaces a placeholder anchor with the sentinel the last `BlankInsert` produced.
-fn resolve_anchor(kind: OpKind, last_blank: Option<TaskId>) -> OpKind {
-    let fix = |after: Option<TaskId>| {
-        if after == Some(PLACEHOLDER) {
-            last_blank
-        } else {
-            after
-        }
-    };
+/// Replaces a placeholder anchor with the real sentinel `resolved` recorded for it, if any.
+fn resolve_anchor(kind: OpKind, resolved: &HashMap<TaskId, TaskId>) -> OpKind {
+    let fix = |after: Option<TaskId>| after.map(|a| resolved.get(&a).copied().unwrap_or(a));
     match kind {
         OpKind::Insert { task, after, line } => OpKind::Insert {
             task,
