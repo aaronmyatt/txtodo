@@ -12,13 +12,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use txtodo_workspace_paths::RegistryEnv;
 
-/// The state directory name under the workspace root, matching
-/// `crates/txtodo-daemon`'s `walker::STATE_DIR`.
-const STATE_DIR: &str = ".txtodo";
-
-/// The socket file name under the state directory (ADR 0010).
-const SOCKET_FILE: &str = "txtodod.sock";
-
 /// The one device-global socket's path (ADR 0025): `$TXTODO_SOCKET` if set, else
 /// `$XDG_DATA_HOME`/`%LOCALAPPDATA%`/`~/.local/share` + `txtodo/txtodod.sock`, falling back to
 /// the cwd when none of those resolve.
@@ -68,7 +61,7 @@ fn sidecar_candidate(exe: &Path) -> PathBuf {
 pub struct DesktopConfig {
     /// Workspace directory (contains `todo.txt` / `.txtodo/`, ADR 0010) — the startup default for
     /// `AppState::current_workspace`, not which daemon to dial (that's always the global one now).
-    pub workspace: PathBuf,
+    pub workspace: Option<PathBuf>,
     /// Upper bound on waiting for the socket to appear after spawning `txtodod`.
     pub spawn_timeout: Duration,
     /// Overrides the `txtodod` program looked up when spawning; `None` means "resolve
@@ -102,8 +95,24 @@ impl DesktopConfig {
     /// checkout with no sidecar). A test that wants a specific binary overrides `daemon_bin`
     /// directly on the returned value, same as before this existed.
     pub fn new(workspace: impl Into<PathBuf>) -> DesktopConfig {
+        DesktopConfig::with_workspace(Some(workspace.into()))
+    }
+
+    /// As [`DesktopConfig::new`], but with no workspace selected: the app only reflects
+    /// workspaces a human linked or the cli/tui touched, never one guessed from its launch
+    /// directory (a Finder-launched app's cwd is `/`).
+    pub fn unbound() -> DesktopConfig {
+        DesktopConfig::with_workspace(None)
+    }
+
+    /// [`DesktopConfig::new`] for `Some`, [`DesktopConfig::unbound`] for `None`.
+    pub fn with_optional_workspace(workspace: Option<PathBuf>) -> DesktopConfig {
+        DesktopConfig::with_workspace(workspace)
+    }
+
+    fn with_workspace(workspace: Option<PathBuf>) -> DesktopConfig {
         DesktopConfig {
-            workspace: workspace.into(),
+            workspace,
             spawn_timeout: DesktopConfig::DEFAULT_SPAWN_TIMEOUT,
             daemon_bin: sidecar_daemon_bin(),
             global_socket_override: None,
@@ -117,17 +126,6 @@ impl DesktopConfig {
         self.global_socket_override
             .clone()
             .unwrap_or_else(global_socket_path)
-    }
-
-    /// ADR 0010: `<workspace>/.txtodo/txtodod.sock`.
-    pub fn socket_path(&self) -> PathBuf {
-        self.state_dir().join(SOCKET_FILE)
-    }
-
-    /// `<workspace>/.txtodo`, created by `ensure_daemon` if missing (the daemon also owns it,
-    /// so this only needs to exist far enough to hold the client-side spawn lock file).
-    pub fn state_dir(&self) -> PathBuf {
-        self.workspace.join(STATE_DIR)
     }
 }
 

@@ -102,3 +102,19 @@ async fn switch_workspace_retargets_every_call_with_no_reconnect() {
     assert_eq!(String::from_utf8_lossy(&files_b.bytes).trim(), "only in b");
     kill(pid);
 }
+
+/// Task `desktop-no-assumed-workspace`: a client with no workspace selected must still come up
+/// ready — the daemon refuses an unselected `Health` call while zero (or several) workspaces are
+/// open, so readiness for an unbound client is probed through the registry instead. This is what
+/// keeps a Finder-launched app (no workspace, nothing registered yet) from landing on "Daemon:
+/// dead".
+#[tokio::test]
+async fn an_unbound_client_is_ready_and_lists_an_empty_registry() {
+    let (mut client, pid, _state_dir) = connected().await;
+    client
+        .wait_until_ready()
+        .await
+        .unwrap_or_else(|e| panic!("an unbound client must be ready: {e}"));
+    assert!(client.workspace_list().await.unwrap().is_empty());
+    kill(pid);
+}

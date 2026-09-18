@@ -127,13 +127,21 @@ impl DaemonClient {
         Err(DaemonError::UnsupportedPlatform)
     }
 
-    /// Probes `Health` up to [`MAX_CONNECT_RETRIES`] times, [`RETRY_BACKOFF`] apart, so a
-    /// freshly spawned daemon has time to bind the socket before the first real call.
+    /// Probes the daemon up to [`MAX_CONNECT_RETRIES`] times, [`RETRY_BACKOFF`] apart, so a
+    /// freshly spawned daemon has time to bind the socket before the first real call. With a
+    /// workspace selected that is a `Health` call; with none, `Health` would be refused (an
+    /// unselected call needs exactly one open workspace), so the registry-level `workspace_list`
+    /// — never selector-scoped — is the probe instead.
     pub async fn wait_until_ready(&mut self) -> Result<(), DaemonError> {
         let mut last: Option<DaemonError> = None;
         for attempt in 0..MAX_CONNECT_RETRIES {
-            match self.health().await {
-                Ok(_health) => return Ok(()),
+            let probe = if self.selector.is_some() {
+                self.health().await.map(drop)
+            } else {
+                self.workspace_list().await.map(drop)
+            };
+            match probe {
+                Ok(()) => return Ok(()),
                 Err(e) => last = Some(e),
             }
             if attempt + 1 < MAX_CONNECT_RETRIES {

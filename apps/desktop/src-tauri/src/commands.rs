@@ -65,12 +65,18 @@ pub(crate) async fn connect_and_store(
         daemon::ensure_daemon(&state.config).await?;
     }
     set_status(app, state, DaemonStatus::Connecting).await;
-    let workspace = state.current_workspace.lock().await.clone();
-    let selector = Some(pb::WorkspaceSelector {
-        selector: Some(pb::workspace_selector::Selector::Path(
-            workspace.display().to_string(),
-        )),
-    });
+    // No workspace selected yet means no selector: the daemon is dialed, and its registry
+    // browsed, without the app ever naming a directory of its own.
+    let selector = state
+        .current_workspace
+        .lock()
+        .await
+        .as_ref()
+        .map(|workspace| pb::WorkspaceSelector {
+            selector: Some(pb::workspace_selector::Selector::Path(
+                workspace.display().to_string(),
+            )),
+        });
     let mut client = DaemonClient::connect(&sock, selector).await?;
     client.wait_until_ready().await?;
     *state.client.lock().await = Some(client);
@@ -104,7 +110,7 @@ async fn daemon_status_inner(state: State<'_, AppState>) -> Result<DaemonStatus,
     Ok(*state.status.lock().await)
 }
 
-/// Absolute workspace root, for the detail view's footer (tasks/desktop-detail-view/notes.md:
+/// Absolute workspace root (empty until one is selected), for the detail view's footer (tasks/desktop-detail-view/notes.md:
 /// "footer: absolute directory path + sync status") — display only. The frontend never uses this
 /// to open a file itself (design §7: every read/write still crosses the `DaemonClient`); it only
 /// joins this with a workspace-relative directory to show the human where they are on disk.
@@ -117,7 +123,13 @@ pub async fn workspace_root(state: State<'_, AppState>) -> Result<String, String
 }
 
 async fn workspace_root_inner(state: State<'_, AppState>) -> Result<String, String> {
-    Ok(state.current_workspace.lock().await.display().to_string())
+    Ok(state
+        .current_workspace
+        .lock()
+        .await
+        .as_ref()
+        .map(|w| w.display().to_string())
+        .unwrap_or_default())
 }
 
 /// Advisory-only (never fails, never blocks): true when no prior `txtodo skill install` has run

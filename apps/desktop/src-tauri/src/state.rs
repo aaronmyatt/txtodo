@@ -11,8 +11,8 @@ use tokio::sync::Mutex;
 
 /// State handed to every Tauri command via `tauri::State`.
 pub struct AppState {
-    /// Spawn-timeout/daemon-bin knobs; `config.workspace` is only the startup default now (ADR
-    /// 0025, task `desktop-workspace-switcher`) — `current_workspace` below is the live value.
+    /// Spawn-timeout/daemon-bin knobs; `config.workspace` is only an explicit override
+    /// (`TXTODO_WORKSPACE`, tests) — `current_workspace` below is the live value.
     pub config: DesktopConfig,
     /// Current connectivity state, mirrored to the frontend as a `daemon-status` event.
     pub status: Mutex<DaemonStatus>,
@@ -20,10 +20,11 @@ pub struct AppState {
     /// client now serves every registered workspace (the global daemon) — `switch_workspace`
     /// changes which one its requests target via `DaemonClient::switch_workspace`, no reconnect.
     pub client: Mutex<Option<DaemonClient>>,
-    /// The workspace every command currently targets — starts as `config.workspace`, changed by
-    /// the `switch_workspace` command. Kept separate from `client` so `workspace_root` and the
-    /// switcher UI can read it without locking the (possibly `None`, possibly mid-RPC) client.
-    pub current_workspace: Mutex<PathBuf>,
+    /// The workspace every command currently targets: `None` until a human links or picks one
+    /// (`switch_workspace`) — the app never assumes one from its launch directory. Kept separate
+    /// from `client` so `workspace_root` and the switcher UI can read it without locking the
+    /// (possibly `None`, possibly mid-RPC) client.
+    pub current_workspace: Mutex<Option<PathBuf>>,
     /// Whether the main window's edit popover currently has an unsaved edit
     /// (tasks/desktop-quick-add/notes.md: the global hotkey focuses the main window instead of
     /// opening quick-add while this is true). A plain `AtomicBool`, not a `tokio::sync::Mutex`:

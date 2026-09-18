@@ -76,7 +76,7 @@ async fn remove_workspace_inner(
     root: String,
 ) -> Result<bool, String> {
     let current = state.current_workspace.lock().await.clone();
-    if current.as_path() == std::path::Path::new(&root) {
+    if current.as_deref() == Some(std::path::Path::new(&root)) {
         return Err("cannot remove the current workspace; switch away first".to_owned());
     }
     ensure_connected(&app, &state).await?;
@@ -111,6 +111,6 @@ async fn switch_workspace_inner(
     let client = guard.as_mut().ok_or("daemon not connected")?;
     client.switch_workspace(&path);
     drop(guard);
-    *state.current_workspace.lock().await = path;
+    *state.current_workspace.lock().await = Some(path);
     Ok(())
 }
