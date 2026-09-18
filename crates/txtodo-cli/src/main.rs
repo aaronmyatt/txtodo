@@ -7,6 +7,8 @@ mod cli;
 mod client;
 mod client_bundle;
 mod client_pairing;
+#[cfg(test)]
+mod client_tests;
 mod client_workspace;
 mod clock;
 mod commands;

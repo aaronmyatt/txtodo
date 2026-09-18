@@ -7,7 +7,7 @@
 //! conversion, and `txtodod_path` (this binary's own "beside the exe, else PATH" resolution,
 //! distinct from `txtodo_daemon_launch::service`'s functions, which take an already-resolved path).
 
-use crate::client::{self, Mode, SOCKET_REL};
+use crate::client::{self, Mode};
 use crate::{CliError, Ctx};
 use std::path::PathBuf;
 use txtodo_daemon_launch::service::{self, ServiceError};
@@ -86,8 +86,8 @@ fn status(ctx: &Ctx, r: &service::Rendered) -> Result<(), CliError> {
     } else {
         "not installed"
     };
-    let socket = ctx.paths.dir.join(SOCKET_REL);
     let env = crate::config::Env::from_process().map_err(CliError::Io)?;
+    let socket = client::resolve_socket_path(&ctx.paths.dir, &env);
     let answers = match client::select(&ctx.paths.dir, false, &env) {
         Ok(Mode::Daemon(mut d)) => d
             .health()

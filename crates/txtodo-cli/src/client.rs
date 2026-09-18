@@ -77,6 +77,22 @@ impl fmt::Display for ClientError {
 
 impl std::error::Error for ClientError {}
 
+/// Which socket a `select()` call for `dir` would actually use, without connecting: the per-dir
+/// socket (`dir.join(SOCKET_REL)`) if a real file exists there, else the resolved global socket
+/// path — the same precedence `select` itself applies below. Exists so a caller that only wants
+/// to *report* the socket (`txtodo daemon status`) shows the path a connection would actually
+/// use, rather than always assuming the per-dir one (`ref:cli-global-socket-cwd-fallback`: a
+/// `status` run from a directory with no per-dir socket, whose command actually reached the true
+/// global daemon, was still printing the non-existent per-dir path as if that were "the socket").
+pub fn resolve_socket_path(dir: &Path, env: &crate::config::Env) -> PathBuf {
+    let per_dir_socket = dir.join(SOCKET_REL);
+    if per_dir_socket.exists() {
+        per_dir_socket
+    } else {
+        crate::config::global_socket_path(env)
+    }
+}
+
 /// Picks the mode for this invocation. A per-directory socket (`--dir`-bridge daemon, or a
 /// legacy install) wins when present — every existing test/harness that expects one there keeps
 /// working unmodified, and the daemon behind it only ever has one workspace open anyway. Else the
