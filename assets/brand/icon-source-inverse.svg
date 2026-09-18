@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Primary app icon source: inverse mono (black tile, white mark). Feed to `tauri icon`. -->
+  <rect width="1024" height="1024" fill="#000000"/>
+  <g transform="translate(248,347) scale(6)" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 6 L20 42 C 20 47, 23 49, 28 49"/>
+    <path d="M8 20 L28 20 L40 34"/>
+    <path d="M58 22 L80 44"/>
+    <path d="M80 22 L58 44"/>
+  </g>
+</svg>

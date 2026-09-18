@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 64" fill="none">
+  <!--
+    txtodo mark: a lowercase "t" whose crossbar hooks down like a
+    checkmark, paired with an "x" — todo.txt's own completion marker
+    (a done line starts with a literal "x "), and also literally the
+    first two letters of "txtodo".
+    Single color via currentColor so it can be recolored per context
+    (light: black, dark: white) without a second SVG.
+  -->
+  <path d="M20 6 L20 42 C 20 47, 23 49, 28 49" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M8 20 L28 20 L40 34" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M58 22 L80 44" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <path d="M80 22 L58 44" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+</svg>

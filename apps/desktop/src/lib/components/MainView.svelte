@@ -146,12 +146,15 @@
 		height: 100vh;
 		background: var(--color-bg);
 		color: var(--color-text);
-		font-family:
-			Inter,
-			Avenir,
-			Helvetica,
-			Arial,
-			sans-serif;
+		font-family: var(--font-sans);
+	}
+
+	.top-nav h1 {
+		margin: 0;
+		font-family: var(--font-brand);
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
 	}
 
 	.banner {

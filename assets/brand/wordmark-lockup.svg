@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 100">
+  <!-- tx mark + "txtodo" wordmark, mono B&W. Recolor bg/fg to switch light/dark. -->
+  <rect width="420" height="100" rx="16" fill="#000000"/>
+  <g transform="translate(28,18) scale(0.65)" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 6 L20 42 C 20 47, 23 49, 28 49"/>
+    <path d="M8 20 L28 20 L40 34"/>
+    <path d="M58 22 L80 44"/>
+    <path d="M80 22 L58 44"/>
+  </g>
+  <text x="112" y="64" font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="40" font-weight="700" fill="#ffffff" letter-spacing="-1">txtodo</text>
+</svg>
