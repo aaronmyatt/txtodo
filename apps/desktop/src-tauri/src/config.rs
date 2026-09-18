@@ -99,9 +99,14 @@ pub struct DesktopConfig {
 }
 
 impl DesktopConfig {
-    /// Default spawn timeout: generous enough for a debug build on a slow CI runner
-    /// (`crates/txtodo-daemon/tests/support` uses 120 s for the same reason).
-    pub const DEFAULT_SPAWN_TIMEOUT: Duration = Duration::from_secs(30);
+    /// Delegates to the shared crate's constant (`txtodo_daemon_launch::LaunchConfig`'s own doc
+    /// has the real reasoning: a full cold start replays every registered workspace's Loro mirror
+    /// sequentially, a known, data-size-dependent cost, not a fixed one). This used to be its own
+    /// separately-hardcoded 30s here — found stale and out of sync with the shared crate's value
+    /// after `daemon/spawn.rs` migrated onto it (item 6), which meant this config's own override
+    /// silently kept desktop on the old, too-short timeout regardless of the shared default.
+    pub const DEFAULT_SPAWN_TIMEOUT: Duration =
+        txtodo_daemon_launch::LaunchConfig::DEFAULT_SPAWN_TIMEOUT;
 
     /// Configuration for `workspace` with the default spawn timeout, no socket/registry
     /// overrides, and `daemon_bin` set to the bundled sidecar ([`sidecar_daemon_bin`]) if one is
