@@ -21,8 +21,15 @@
 # under the repo's shared git-common-dir (`git rev-parse --git-common-dir`, the same for the main
 # checkout and every linked worktree): <git-common-dir>/txtodo-leases/<crate>.lock = {sessionId, ts}.
 # A lease older than LEASE_TTL_MS is abandoned and stops blocking — same "the human decides, don't
-# deadlock forever" spirit as the gate's 3-strike loop guard. gate.sh releases a session's own leases
-# the moment its tree comes back clean; a human can also just delete the lock file by hand.
+# deadlock forever" spirit as the gate's 3-strike loop guard. A human can also just delete the lock
+# file by hand.
+#
+# Self-service handoff: a session isn't stuck holding its crate for its own lifetime. Once its tree
+# is clean (committed — see .claude/scripts/close-slice.sh, which gates then commits so the agent
+# never has to stop and ask "can I commit?"), requesting a *different* crate here releases the old
+# lease and grants the new one in the same turn — no session restart needed to pick up the next
+# todo.txt item. gate.sh's Stop hook still releases a clean session's leases too, as a fallback for
+# a session that ends without ever asking for another crate.
 # stdin: {cwd, tool_name, tool_input, session_id}; stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":…}}
 set -euo pipefail
 exec node -e '
@@ -73,7 +80,11 @@ if(target){
   const theirs=readLease(target);
   if(theirs&&theirs.sessionId!==sid&&freshLease(theirs)) out("deny",`Slice fence: ${target} is leased by another session (claimed ${new Date(theirs.ts).toISOString()}, worktree ${theirs.cwd}). One slice per session, across every worktree of this repo: wait for it to commit and stop, or ask the human to delete ${leasePath(target)} if abandoned.`);
   const mine=myOtherLease(target);
-  if(mine) out("deny",`Slice fence: you already lease ${mine}. One slice per session: finish and commit ${mine} first, then start ${target} as its own task.`);
+  if(mine){
+    const dirty=cp.execSync("git status --porcelain",{cwd:root,encoding:"utf8"}).trim().length>0;
+    if(dirty) out("deny",`Slice fence: you already lease ${mine} and its tree isn't clean yet. One slice per session: get the gate green on ${mine}, then run \`.claude/scripts/close-slice.sh ${mine} "<message>"\` to commit and close it out (pre-authorized — no need to ask). Once that tree is clean, request ${target} again here and the lease hands over automatically.`);
+    try{ fs.unlinkSync(leasePath(mine)); }catch{} // clean tree: self-release, no deny — see header note above
+  }
   writeLease(target);
 }
 if(hit(b.slices.appendOnly,rel)){
