@@ -134,6 +134,50 @@ pub fn migrate_old_units(home: &Path) -> Vec<String> {
     migrated
 }
 
+/// The daemon binary path recorded in an already-rendered unit's `body` — the inverse of
+/// `render_template`'s `{{TXTODOD}}` substitution (task `daemon-stale-service-repair`). `None`
+/// means the body doesn't look like either template (e.g. a human hand-edited it into something
+/// unrecognizable) — treated as "not stale" by [`is_stale`], never as a false positive.
+fn installed_program_path(body: &str) -> Option<PathBuf> {
+    if let Some((_, rest)) = body.split_once("ExecStart=") {
+        return Some(PathBuf::from(rest.lines().next()?.trim()));
+    }
+    let mut lines = body.lines();
+    lines.find(|l| l.contains("<key>ProgramArguments</key>"))?;
+    for line in lines {
+        match line.trim() {
+            "<array>" => continue,
+            other => {
+                return other
+                    .strip_prefix("<string>")
+                    .and_then(|s| s.strip_suffix("</string>"))
+                    .map(PathBuf::from);
+            }
+        }
+    }
+    None
+}
+
+/// Whether the unit already installed at `r.path` is stale: it exists on disk, but the binary
+/// path it records no longer exists (task `daemon-stale-service-repair`) — e.g. a debug binary
+/// inside a git worktree that has since been deleted. `KeepAlive`/`Restart=on-failure` can retry
+/// an exec against a missing binary forever without ever succeeding, and nothing short of
+/// reinstalling the unit file itself can fix that.
+///
+/// Deliberately narrow (see `tasks/daemon-stale-service-repair/notes.md`'s design notes): only
+/// "the recorded binary is gone" counts as stale. A unit whose binary exists but differs from
+/// what would be rendered today is left alone — that may be a human's deliberate customization,
+/// not a bug to silently overwrite. No unit installed at all is "not installed", not "stale".
+pub fn is_stale(r: &Rendered) -> bool {
+    let Ok(body) = std::fs::read_to_string(&r.path) else {
+        return false;
+    };
+    match installed_program_path(&body) {
+        Some(path) => !path.is_file(),
+        None => false,
+    }
+}
+
 /// `$HOME` (or `%USERPROFILE%`), or an error if neither is set.
 pub fn home_dir() -> Result<PathBuf, ServiceError> {
     std::env::var_os("HOME")
@@ -233,104 +277,5 @@ fn stop_by_label(label: &str) -> Result<(), ServiceError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn render_is_one_global_unit_with_no_workspace_argument() {
-        let body = render_template(
-            LAUNCHD_TEMPLATE,
-            LABEL,
-            Path::new("/usr/local/bin/txtodod"),
-            Path::new("/home/u/Library/Logs/txtodo"),
-        );
-        assert!(body.contains("<string>/usr/local/bin/txtodod</string>"));
-        assert!(body.contains("<string>/home/u/Library/Logs/txtodo/launchd.out.log</string>"));
-        assert!(
-            !body.contains("<string>--dir</string>"),
-            "true global mode takes no --dir argument"
-        );
-        assert!(!body.contains("{{"));
-        let unit = render_template(
-            SYSTEMD_TEMPLATE,
-            LABEL,
-            Path::new("/bin/txtodod"),
-            Path::new("/home/u/Library/Logs/txtodo"),
-        );
-        assert_eq!(
-            unit.lines().find(|l| l.starts_with("ExecStart=")),
-            Some("ExecStart=/bin/txtodod")
-        );
-        let r = render(Path::new("/home/u"), Path::new("/bin/txtodod"));
-        if cfg!(any(target_os = "macos", target_os = "linux")) {
-            let r = r.unwrap_or_else(|| panic!("supported platform"));
-            assert_eq!(r.label, LABEL);
-            assert!(r.path.starts_with("/home/u"));
-            assert_eq!(
-                r.path.file_stem().and_then(|s| s.to_str()),
-                Some(LABEL),
-                "one bare label, no per-workspace hash suffix: {}",
-                r.path.display()
-            );
-        }
-    }
-
-    #[test]
-    fn old_workspace_label_recognizes_the_pre_m11_hash_suffix_only() {
-        assert_eq!(
-            old_workspace_label("com.txtodo.txtodod.1a2b3c4d.plist", "plist"),
-            Some("com.txtodo.txtodod.1a2b3c4d".to_owned())
-        );
-        assert_eq!(
-            old_workspace_label("com.txtodo.txtodod.1a2b3c4d.service", "service"),
-            Some("com.txtodo.txtodod.1a2b3c4d".to_owned())
-        );
-        // The new global unit's own file must never be mistaken for an old one to migrate.
-        assert_eq!(
-            old_workspace_label("com.txtodo.txtodod.plist", "plist"),
-            None
-        );
-        assert_eq!(old_workspace_label("not-ours.plist", "plist"), None);
-        assert_eq!(
-            old_workspace_label("com.txtodo.txtodod.notquite8x.plist", "plist"),
-            None,
-            "wrong-length suffix is not a recognized old label"
-        );
-    }
-
-    #[test]
-    fn migrate_old_units_removes_matching_files_and_leaves_the_new_one_alone() {
-        let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        let (dir, ext) = service_dir_and_ext(home.path())
-            .unwrap_or_else(|| panic!("supported platform for this test"));
-        std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("mkdir: {e}"));
-        let old = dir.join(format!("{LABEL}.deadbeef.{ext}"));
-        let new = dir.join(format!("{LABEL}.{ext}"));
-        std::fs::write(&old, "old").unwrap_or_else(|e| panic!("write: {e}"));
-        std::fs::write(&new, "new").unwrap_or_else(|e| panic!("write: {e}"));
-
-        let migrated = migrate_old_units(home.path());
-        assert_eq!(migrated, vec![format!("{LABEL}.deadbeef")]);
-        assert!(!old.exists(), "the old per-workspace unit is removed");
-        assert!(new.exists(), "the new global unit's own file is untouched");
-    }
-
-    #[test]
-    fn install_reports_migrated_units_and_the_written_path() {
-        let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        let r = render(home.path(), Path::new("/bin/txtodod"))
-            .unwrap_or_else(|| panic!("supported platform for this test"));
-        let outcome = install(home.path(), &r, false).unwrap_or_else(|e| panic!("install: {e}"));
-        assert_eq!(outcome.path, r.path);
-        assert!(outcome.migrated.is_empty(), "nothing to migrate yet");
-        assert!(r.path.exists());
-
-        let err = install(home.path(), &r, false)
-            .expect_err("a second install without --force must refuse to clobber");
-        assert!(err.to_string().contains("--force"));
-
-        let forced =
-            install(home.path(), &r, true).unwrap_or_else(|e| panic!("forced install: {e}"));
-        assert_eq!(forced.path, r.path);
-    }
-}
+#[path = "service_tests.rs"]
+mod tests;

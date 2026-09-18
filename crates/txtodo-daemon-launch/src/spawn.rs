@@ -170,6 +170,13 @@ mod unix_impl {
     /// is expected to fail here quietly (task item 2: "best-effort and non-fatal"). Skipped
     /// entirely for a non-global target (`extra_args` non-empty, i.e. a legacy `--dir` bridge):
     /// ADR 0025 gives the one boot-time unit to the global daemon only.
+    ///
+    /// Also self-heals a stale existing unit (task `daemon-stale-service-repair`): one whose
+    /// recorded binary path no longer exists (e.g. a git worktree removed after install) can
+    /// never succeed no matter how many times `KeepAlive`/`Restart=on-failure` retries it, and
+    /// nothing else ever notices — every previous caller here treated "already installed" as
+    /// good enough. `crate::service::is_stale` is checked first so a merely-already-installed,
+    /// still-valid unit (the common case) is never force-overwritten.
     fn install_persistent_service_best_effort(cfg: &LaunchConfig) {
         if !cfg.extra_args.is_empty() {
             return;
@@ -183,14 +190,13 @@ mod unix_impl {
         let Some(rendered) = crate::service::render(&home, &txtodod) else {
             return;
         };
-        // `force: false`: never clobber a service file a human or a previous install already
-        // customized. An "already exists" error from `install` is exactly the idempotent no-op
-        // this needs, not a failure worth reporting.
-        if crate::service::install(&home, &rendered, false).is_ok() {
-            let _ = crate::service::start(&rendered);
-        } else {
-            let _ = crate::service::start(&rendered); // already installed; (re)start is still useful
-        }
+        // `force`: only when the existing unit is stale (a repair, not a customization
+        // clobber) — never clobber a service file a human or a previous install already
+        // customized. An "already exists" error from `install` with `force: false` is exactly
+        // the idempotent no-op this needs otherwise, not a failure worth reporting.
+        let force = crate::service::is_stale(&rendered);
+        let _ = crate::service::install(&home, &rendered, force);
+        let _ = crate::service::start(&rendered);
     }
 
     fn resolve_binary_path(cfg: &LaunchConfig) -> Option<PathBuf> {
