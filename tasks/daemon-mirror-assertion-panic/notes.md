@@ -73,3 +73,55 @@ possibly-inconsistent actor.
 - The pre-existing, separately-tracked idle-RSS/super-linear-memory issue in the same mirror/adopt
   pipeline (`tests/idle_rss.rs`) — only worth cross-checking if the repro here turns out to share a
   root cause.
+
+## As built (2026-09-18)
+
+**Root cause, found by reading, then confirmed by a real reproduction**: `mirror_converge.rs`'s
+`place()` stands a not-yet-real blank in for a `BlankInsert` it hasn't applied yet, using a single
+shared `PLACEHOLDER` sentinel constant. The walk keeps its own local `visible: Vec<TaskId>`
+simulation of what the mirror *will* look like once every corrective op lands. The moment two or
+more pending placeholders coexist in that `Vec` (i.e. the state wants three or more brand-new
+consecutive blank lines in one converge call), `position()`'s `.iter().position(|v| *v == id)`
+(first-match) can no longer distinguish "the placeholder I just inserted" from "an earlier,
+already-consumed one with the identical value" — the third+ new blank silently reads as
+"already there" against the wrong slot, and its `BlankInsert` is never emitted. Reproduced exactly
+(same file, line, and panic message as the real log:
+`mirror_converge.rs:29:9: converged`) via
+`mirror_tests::converge_inserts_three_consecutive_brand_new_blank_lines` before touching any
+production code.
+
+**Fix**: `place()` now mints a fresh, unique placeholder per pending blank
+(`mint_placeholder`, counting down from `u128::MAX` — only ever touches the low 120 bits for any
+realistic document, since real blank ids grow upward from a small counter, so the two ranges can't
+collide). `apply_corrections` resolves each placeholder to the real sentinel *its own*
+`BlankInsert` minted via a `HashMap<TaskId, TaskId>`, replacing the old single
+`last_blank: Option<TaskId>` (which happened to work for the 2-blank case only because ops are
+applied in the same order they're generated — fragile reasoning, not a real fix; the map is
+correct regardless of how the algorithm's op ordering evolves later).
+
+**Defense in depth, per this task's own item 3**: the three `debug_assert!`s in `actor_mirror.rs`
+(`flush_mirror`, `converge_mirror`, `resync_mirror`) — compiled out entirely in a release build,
+so a *different*, still-undiscovered divergence would have silently served a wrong mirror in
+production — are now always-on checks. A disagreement after `flush` escalates to `converge`; a
+disagreement after `converge` escalates to `resync` (the true last-resort rebuild, which does not
+share `place()`'s placeholder machinery at all); a disagreement even after `resync` has nothing
+left to escalate to and is logged at `error` (`mirror_resync_still_disagrees`) rather than trusted
+silently. Verified this genuinely changes release-build behavior: `cargo test -p txtodo-daemon
+--lib --release` (this repo's `Cargo.toml` has no `debug-assertions = true` override for the
+release profile) still passes the reproduction test, proving the always-on checks — not a
+compiled-out `debug_assert!` — are what's catching it now.
+
+**Tests**: `mirror_tests.rs` gained
+`converge_inserts_three_consecutive_brand_new_blank_lines` (the exact reported crash) and
+`converge_extends_an_existing_blank_run_with_several_more` (a pre-existing blank plus four new
+ones, a variant that only manifests once at least 4 total are wanted from a mirror already holding
+one real blank). Both green in `--lib` and `--release`; full `cargo test -p txtodo-daemon --lib`
+(223 tests) and `cargo clippy -p txtodo-daemon --lib -- -D warnings` both clean.
+
+**Item 4 left open, `@human`**: a worker-thread panic anywhere in `FileActor`'s mailbox loop
+(`actor.rs:133`'s `tokio::spawn(self.run(rx))` discards its `JoinHandle`) still silently ends that
+one document's actor with nothing noticing, independent of the specific bug this task fixed. Real
+supervision needs an actual design decision (where "this document is unavailable" state lives, how
+`resolve()`/gRPC surfaces it, auto-restart vs. refuse-until-reopened) that's a
+`workspace_catalog.rs`/`actor.rs` architecture change, not a mirror bugfix — flagged, not decided
+here.
