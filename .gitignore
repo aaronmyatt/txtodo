@@ -36,3 +36,7 @@ cosign.pub
 *.bundle
 *.sig
 
+# Scratch Tailwind mockups for exploring UI variations — throwaway HTML, not part of the
+# real app or its build (see apps/desktop/src/app.css's hand-rolled token system).
+/apps/desktop/design-mockups/
+

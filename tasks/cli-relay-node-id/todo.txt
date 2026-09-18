@@ -1,6 +1,6 @@
-2026-09-15 proto: add relay_node_id (hex) and relay_bound to HealthResponse, both empty/false when no relay is configured — same "absence is a real state" shape relay_url already has +m8 @proto id:01M2HVA100RELAYNODEIDPROTO
-2026-09-15 daemon: health_impl populates them from the same source PairOffer already uses (pairing_grpc.rs::relay_rendezvous), so one helper feeds both and they can never disagree +m8 @daemon id:01M2HVA100RELAYNODEIDDAEMN
-2026-09-15 cli: txtodo doctor prints the node id on the existing transport check line (Status::Ok only — an absent relay stays silent, not a warning) +m8 @cli id:01M2HVA100RELAYNODEIDDOCTR
-2026-09-15 Test: a daemon started with a relay URL reports a stable, 64-hex-char node id that is byte-identical across a restart (the stage-1 persisted relay identity is what makes this true) +m8 @test id:01M2HVA100RELAYNODEIDTEST1
-2026-09-15 Test: a daemon started with no relay URL reports an empty node id and doctor's transport line is unchanged from today +m8 @test id:01M2HVA100RELAYNODEIDTEST2
-2026-09-15 Complete the parent line in ./todo.txt +m8 @cli id:01M2HVA100RELAYNODEIDCLOSE
+2026-09-15 proto: add relay_node_id (hex) and relay_bound to HealthResponse, both empty/false when no relay is configured — same "absence is a real state" shape relay_url already has +m8 @proto id:01M2S0SWZCKXCZP84SN523RAYP
+2026-09-15 daemon: health_impl populates them from the same source PairOffer already uses (pairing_grpc.rs::relay_rendezvous), so one helper feeds both and they can never disagree +m8 @daemon id:01M2S0SWZC2PM9BE6VPNFM8B8Y
+2026-09-15 cli: txtodo doctor prints the node id on the existing transport check line (Status::Ok only — an absent relay stays silent, not a warning) +m8 @cli id:01M2S0SWZCVTMNN8X7VMGTAWZX
+2026-09-15 Test: a daemon started with a relay URL reports a stable, 64-hex-char node id that is byte-identical across a restart (the stage-1 persisted relay identity is what makes this true) +m8 @test id:01M2S0SWZC0VEC10DYTH35702A
+2026-09-15 Test: a daemon started with no relay URL reports an empty node id and doctor's transport line is unchanged from today +m8 @test id:01M2S0SWZC0AWG2MTX8BQ78908
+2026-09-15 Complete the parent line in ./todo.txt +m8 @cli id:01M2S0SWZCJCMG39K5V4TDKH8T
