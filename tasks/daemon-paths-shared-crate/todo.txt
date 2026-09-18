@@ -1,0 +1,5 @@
+2026-09-18 Extract workspace_registry_paths.rs's fallback-chain logic into txtodo-daemon-launch (or a new adjacent leaf crate) +m11 @daemon id:01M2SMMRPEMGNCQGDD5VR774FX
+2026-09-18 Point cli/src/config.rs at the shared implementation, delete its duplicate fallback chain +m11 @cli @daemon id:01M2SMMRPEGSKDC168XM3FEWP4
+2026-09-18 Point mcp/src/global_socket.rs at the shared implementation, delete its duplicate fallback chain +m11 @mcp @daemon id:01M2SMMRPE3RC3AYTACXVAN2ZQ
+2026-09-18 Test: cli, mcp, and daemon resolve identical paths for identical env/config inputs +m11 @test @daemon id:01M2SMMRPFA0A1M8655VPPN0MG
+2026-09-18 Complete the parent line in ../../todo.txt +m11 @daemon id:01M2SMMRPFM0Z8CFXGFHBK2N8H

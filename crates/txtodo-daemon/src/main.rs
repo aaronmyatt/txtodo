@@ -5,6 +5,8 @@
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
+mod boot_log;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -278,8 +280,14 @@ async fn shutdown_signal() {
     }
 }
 
-/// Pid lock + log init + the "starting"/stale-socket-removal/"ready" sequence — split out of
-/// `run` for its cognitive-complexity budget. Returns the guards `run` must keep alive.
+/// Pid lock + log init + the "starting"/stale-socket-removal sequence — split out of `run` for
+/// its cognitive-complexity budget. Returns the guards `run` must keep alive.
+///
+/// Does **not** announce readiness: the daemon isn't actually ready until `serve.rs`'s
+/// `serve_with` binds the real socket, later in `run`. This only logs `daemon_starting` — the
+/// resolved socket path is known here, but a bind can still fail after this returns
+/// (`ref:daemon-ready-log-ordering`, which fixed an earlier version that logged "ready" at this
+/// point, before the bind).
 ///
 /// Logs go under `state_dir/logs`, **not** `workspace_registry_paths::global_log_dir(env)` called
 /// directly — that always resolves the true-global location regardless of mode, so a
@@ -304,33 +312,8 @@ fn prepare_and_announce(
         // The pid lock says no other instance runs, so this is a stale socket from a crash.
         std::fs::remove_file(socket)?;
     }
-    log_ready(socket, registry_path);
+    boot_log::log_starting(socket, registry_path);
     Ok((pid, logs))
-}
-
-/// Was a bare `eprintln!` (bypassed the subscriber). Split out for `prepare_and_announce`'s and
-/// `run`'s cognitive-complexity budgets. Sink matrix per `daemon.boot`'s own doc below. Records
-/// the enclosing `daemon.boot` span's `socket` field too (this runs while `run`'s guard is held).
-fn log_ready(socket: &std::path::Path, registry_path: &std::path::Path) {
-    tracing::Span::current().record("socket", socket.display().to_string().as_str());
-    tracing::info!(socket = %socket.display(), registry = %registry_path.display(), "daemon_ready");
-}
-
-/// Was a bare `eprintln!` (bypassed the subscriber) — split out, same reason as `log_ready`.
-fn log_stopped() {
-    tracing::info!("daemon_stopped");
-}
-
-/// `version`/`mode` for the `daemon.boot` span (`run`'s own doc); split out to keep the macro's
-/// expansion off `run`'s cognitive-complexity count.
-fn start_boot_span(args: &Args) -> tracing::Span {
-    let mode = args.dir.as_ref().map_or("global", |_| "dir-bridge");
-    tracing::info_span!(
-        "daemon.boot",
-        version = env!("CARGO_PKG_VERSION"),
-        mode,
-        socket = tracing::field::Empty
-    )
 }
 
 /// Boot (registry → identity → relay/file-carrier → catalog → socket → pid lock → log init) runs
@@ -339,7 +322,7 @@ fn start_boot_span(args: &Args) -> tracing::Span {
 /// terminal — launchd/systemd capture stderr into their own separate log instead
 /// (`deploy/launchd/*.plist`, `deploy/systemd/txtodod.service`), no detection needed here.
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let boot_span = start_boot_span(&args);
+    let boot_span = boot_log::start_boot_span(&args);
     let _boot = boot_span.enter();
     let env = RegistryEnv::from_process()?;
     let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
@@ -390,6 +373,6 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     drop(_boot);
 
     serve::serve_global(catalog, &socket, shutdown_signal()).await?;
-    log_stopped();
+    boot_log::log_stopped();
     Ok(())
 }
