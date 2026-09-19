@@ -1,6 +1,7 @@
 //! txtodod: one process per device, owning every registered workspace's files, op log and the one
-//! IPC socket (ADR 0025, task `daemon-global-socket`). Startup order: registry → catalog → open
-//! workspace(s) → pid lock → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain, remove socket.
+//! IPC socket (ADR 0025, task `daemon-global-socket`). Startup order: pid lock → logging →
+//! registry → catalog → open workspace(s) → gRPC → "ready". SIGTERM/SIGINT stop accepting, drain,
+//! remove socket.
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
@@ -16,7 +17,7 @@ use txtodo_daemon::clock::{Clock, SystemClock};
 use txtodo_daemon::device_identity::DeviceIdentity;
 use txtodo_daemon::device_relay::DeviceRelay;
 use txtodo_daemon::file_carrier::DeviceFileCarrier;
-use txtodo_daemon::pidfile::PidFile;
+use txtodo_daemon::pidfile::{PidError, PidFile};
 use txtodo_daemon::serve;
 use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use txtodo_daemon::workspace_registry::WorkspaceRegistry;
@@ -166,8 +167,19 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("txtodod: {e}");
-            ExitCode::FAILURE
+            exit_code_for(e.as_ref())
         }
+    }
+}
+
+/// Losing the pid lock is not a failure: another `txtodod` is already serving, and there is
+/// nothing for a supervisor to retry. Exiting 0 keeps launchd's `KeepAlive.SuccessfulExit=false`
+/// and systemd's `Restart=on-failure` from respawning it forever — `launchd.err.log` held 33
+/// 'already running' exits on 2026-09-19 (root todo id:01M2VV1ZXDK24H3P6Z4DJ2P8YM).
+fn exit_code_for(error: &(dyn std::error::Error + 'static)) -> ExitCode {
+    match error.downcast_ref::<PidError>() {
+        Some(PidError::Running { .. }) => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
     }
 }
 
@@ -232,31 +244,26 @@ fn open_args(
 }
 
 /// The `--dir` bridge: registers/opens that one directory, plus (best-effort) anything else
-/// already registered. Returns the socket path at its pre-existing `<dir>/.txtodo/...` location so
-/// today's whole test suite keeps working unmodified.
+/// already registered. Its socket stays at the pre-existing `<dir>/.txtodo/...` location (see
+/// `run`'s `global_socket_path` call) so today's whole test suite keeps working unmodified.
 fn start_dir_bridge(
     dir: &Path,
-    env: &RegistryEnv,
     catalog: &WorkspaceCatalog,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!(
         "txtodod: --dir is the legacy single-workspace bridge (see \
          tasks/daemon-global-socket/notes.md); omit --dir to run this device's one global daemon"
     );
     catalog.open_dir_bridge(dir)?;
     catalog.open_all_registered();
-    Ok(workspace_registry_paths::global_socket_path(env, Some(dir)))
+    Ok(())
 }
 
-/// True global mode (`--dir` omitted): opens every already-registered workspace and resolves the
-/// device-global socket path.
-fn start_global(
-    env: &RegistryEnv,
-    catalog: &WorkspaceCatalog,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+/// True global mode (`--dir` omitted): opens every already-registered workspace.
+fn start_global(catalog: &WorkspaceCatalog) {
     let opened = catalog.open_all_registered();
     eprintln!("txtodod: opened {opened} registered workspace(s)");
-    Ok(workspace_registry_paths::global_socket_path(env, None))
+    tracing::info!(opened, "workspaces_opened");
 }
 
 /// Resolves until either a ctrl-c or (unix only) SIGTERM.
@@ -280,27 +287,25 @@ async fn shutdown_signal() {
     }
 }
 
-/// Pid lock + log init + the "starting"/stale-socket-removal sequence — split out of `run` for
-/// its cognitive-complexity budget. Returns the guards `run` must keep alive.
-///
-/// Does **not** announce readiness: the daemon isn't actually ready until `serve.rs`'s
-/// `serve_with` binds the real socket, later in `run`. This only logs `daemon_starting` — the
-/// resolved socket path is known here, but a bind can still fail after this returns
-/// (`ref:daemon-ready-log-ordering`, which fixed an earlier version that logged "ready" at this
-/// point, before the bind).
+/// Pid lock + log init + stale-socket removal — the very first thing `run` does, so a losing
+/// second instance exits in milliseconds (before the registry, identity, relay or any workspace
+/// opens: the 2026-09-19 300% CPU boot storm was four daemons each rebuilding every Loro mirror
+/// before the lock told three of them to stop) and the cold-boot phase that follows lands in the
+/// log. Returns the guards `run` must keep alive.
 ///
 /// Logs go under `state_dir/logs`, **not** `workspace_registry_paths::global_log_dir(env)` called
 /// directly — that always resolves the true-global location regardless of mode, so a
 /// `--dir`-bridge-started daemon would silently write logs to the real machine's
 /// `$XDG_DATA_HOME/txtodo/logs/` instead of `<dir>/.txtodo/logs` (a real regression this crate's
 /// own daemon-slice pass caught via `tests/lan_discovery.rs`'s log-tailing assertion). `state_dir`
-/// is already resolved correctly per mode by `start_dir_bridge`/`start_global`.
-fn prepare_and_announce(
+/// is already resolved correctly per mode by `resolve_state_dir`.
+fn lock_and_start_logging(
     args: &Args,
-    state_dir: &std::path::Path,
-    socket: &std::path::Path,
-    registry_path: &std::path::Path,
+    state_dir: &Path,
+    socket: &Path,
 ) -> Result<(PidFile, txtodo_daemon::telemetry::LogGuard), Box<dyn std::error::Error>> {
+    // The lock file lives here, and nothing else has created the directory yet.
+    std::fs::create_dir_all(state_dir)?;
     let pid = PidFile::acquire(&state_dir.join("txtodod.pid"))?;
     let logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
     tracing::info!(
@@ -312,24 +317,29 @@ fn prepare_and_announce(
         // The pid lock says no other instance runs, so this is a stale socket from a crash.
         std::fs::remove_file(socket)?;
     }
-    boot_log::log_starting(socket, registry_path);
     Ok((pid, logs))
 }
 
-/// Boot (registry → identity → relay/file-carrier → catalog → socket → pid lock → log init) runs
+/// Boot is pid lock → log init → `daemon_starting` → registry → identity → relay/file-carrier →
+/// catalog → open workspaces → socket bind, in that order. Everything after the log init runs
 /// inside one `daemon.boot` span (`start_boot_span`), entered here and dropped before the
 /// long-running serve loop. JSON file always carries it; pretty stderr too in a foreground
 /// terminal — launchd/systemd capture stderr into their own separate log instead
 /// (`deploy/launchd/*.plist`, `deploy/systemd/txtodod.service`), no detection needed here.
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let boot_span = boot_log::start_boot_span(&args);
-    let _boot = boot_span.enter();
     let env = RegistryEnv::from_process()?;
     let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
+    let state_dir = resolve_state_dir(&args, &env)?;
+    let socket = workspace_registry_paths::global_socket_path(&env, args.dir.as_deref());
+    let (_pid, _logs) = lock_and_start_logging(&args, &state_dir, &socket)?;
+    let boot_span = boot_log::start_boot_span(&args);
+    let _boot = boot_span.enter();
+    // Not the real readiness event: that is `serve.rs::log_socket_bound`, emitted only once the
+    // socket actually binds (`ref:daemon-ready-log-ordering`).
+    boot_log::log_starting(&socket, &registry_path);
     let registry = WorkspaceRegistry::open(&registry_path)?;
     let clock = Arc::new(SystemClock);
 
-    let state_dir = resolve_state_dir(&args, &env)?;
     let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
     // One shared relay endpoint per device (`daemon-shared-sync-link` stage 5), bound before the
     // control channel or any workspace opens. Resolved once (defaults to a public relay unless
@@ -365,11 +375,10 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         clock,
     ));
 
-    let socket = match &args.dir {
-        Some(dir) => start_dir_bridge(dir, &env, &catalog)?,
-        None => start_global(&env, &catalog)?,
-    };
-    let (_pid, _logs) = prepare_and_announce(&args, &state_dir, &socket, &registry_path)?;
+    match &args.dir {
+        Some(dir) => start_dir_bridge(dir, &catalog)?,
+        None => start_global(&catalog),
+    }
     drop(_boot);
 
     serve::serve_global(catalog, &socket, shutdown_signal()).await?;
