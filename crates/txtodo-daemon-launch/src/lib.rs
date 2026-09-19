@@ -22,12 +22,14 @@
 //!
 //! Every client honors `TXTODO_NO_AUTOSTART=1` ([`autostart_disabled`]) as an opt-out, except
 //! `apps/desktop`: a GUI app the user explicitly launched keeps its pre-existing always-spawn
-//! behavior (task decision, `tasks/daemon-always-available/notes.md`).
+//! behavior (task decision, `tasks/daemon-always-available/notes.md`). `TXTODO_NO_SERVICE=1`
+//! ([`service_disabled`]) is the separate, narrower switch that keeps everything in this crate
+//! off launchd/systemd; the repo's `.cargo/config.toml` sets it for tests.
 #![forbid(unsafe_code)]
 
 mod autostart;
 pub mod service;
 mod spawn;
 
-pub use autostart::autostart_disabled;
+pub use autostart::{autostart_disabled, service_disabled};
 pub use spawn::{LaunchConfig, LaunchError, ensure_daemon};

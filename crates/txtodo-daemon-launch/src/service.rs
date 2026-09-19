@@ -199,7 +199,17 @@ pub fn home_dir() -> Result<PathBuf, ServiceError> {
         .ok_or_else(|| ServiceError::Message("txtodo daemon: $HOME is not set".into()))
 }
 
+/// The single choke point for every `launchctl`/`systemctl` call in this crate, so the
+/// `TXTODO_NO_SERVICE=1` guard ([`crate::service_disabled`]) cannot be missed by a new caller.
+/// A refusal is an ordinary `Err`, which every best-effort caller already ignores and an explicit
+/// `txtodo daemon start|stop` prints.
 fn run_ctl(program: &str, args: &[&str]) -> Result<(), ServiceError> {
+    if crate::service_disabled() {
+        return Err(ServiceError::Message(format!(
+            "txtodo daemon: TXTODO_NO_SERVICE=1 is set; refusing `{program} {}`",
+            args.join(" ")
+        )));
+    }
     let status = Command::new(program)
         .args(args)
         .status()

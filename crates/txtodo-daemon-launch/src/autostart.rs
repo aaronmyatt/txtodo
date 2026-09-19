@@ -14,3 +14,19 @@
 pub fn autostart_disabled() -> bool {
     std::env::var_os("TXTODO_NO_AUTOSTART").is_some_and(|v| v == "1")
 }
+
+/// True when `$TXTODO_NO_SERVICE` is set to exactly `"1"`: never touch the OS service manager
+/// (launchd/systemd). Unlike [`autostart_disabled`] this still lets an ad-hoc `txtodod` spawn
+/// happen — it only cuts the persistent-unit side of `ensure_daemon` and every `launchctl`/
+/// `systemctl` call in [`crate::service`].
+///
+/// Why it exists: launchd names jobs by label, and this project's label
+/// (`com.txtodo.txtodod`) is one fixed name per *user*, not per `$HOME`/socket/registry. A test
+/// that redirects those three at temp dirs still `bootstrap`s/`bootout`s the developer's real job
+/// (found when the live daemon turned out to be a test's job, loaded from a temp-dir plist).
+/// `.cargo/config.toml`'s `[env]` sets it for every `cargo test`/`cargo run` in this repo, so no
+/// individual harness has to remember it; `tests/service_disabled.rs` asserts that it did.
+/// Env-in-config reference: <https://doc.rust-lang.org/cargo/reference/config.html#env>
+pub fn service_disabled() -> bool {
+    std::env::var_os("TXTODO_NO_SERVICE").is_some_and(|v| v == "1")
+}

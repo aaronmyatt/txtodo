@@ -149,7 +149,7 @@ mod unix_impl {
     /// `tests/ensure_daemon.rs` timed out waiting on the test's own never-to-be-bound socket instead
     /// of spawning against it, on any machine with a real installed service.
     fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
-        if !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
+        if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return false;
         }
         let Some(txtodod) = resolve_binary_path(cfg) else {
@@ -217,9 +217,9 @@ mod unix_impl {
     /// is expected to fail here quietly (task item 2: "best-effort and non-fatal"). Skipped
     /// entirely for a non-global target (`extra_args` non-empty, i.e. a legacy `--dir` bridge):
     /// ADR 0025 gives the one boot-time unit to the global daemon only. Also skipped whenever
-    /// `extra_env` is non-empty (see [`already_installed_as_service`]'s doc: "hermetic test/
-    /// harness, not a real caller") — found the hard way when an in-process `ensure_daemon` test
-    /// really installed and started a persistent unit against the real `$HOME`.
+    /// `extra_env` is non-empty (a hermetic harness, see [`already_installed_as_service`]) or
+    /// `TXTODO_NO_SERVICE=1` ([`crate::service_disabled`]): each was found the hard way, a test
+    /// installing and starting a persistent unit against the real `$HOME`/launchd job.
     ///
     /// Also self-heals a stale existing unit (task `daemon-stale-service-repair`): one whose
     /// recorded binary path no longer exists (e.g. a git worktree removed after install) can
@@ -228,7 +228,7 @@ mod unix_impl {
     /// good enough. `crate::service::is_stale` is checked first so a merely-already-installed,
     /// still-valid unit (the common case) is never force-overwritten.
     fn install_persistent_service_best_effort(cfg: &LaunchConfig) {
-        if !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
+        if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return;
         }
         let Some(txtodod) = resolve_binary_path(cfg) else {

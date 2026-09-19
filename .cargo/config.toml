@@ -45,3 +45,13 @@ rustflags = ["-C", "link-self-contained=no"]
 # flagged gap for a human rather than guessed at further.
 [target.x86_64-pc-windows-gnu]
 linker = ".cargo/zig/zigcc-x86_64-windows-gnu.sh"
+
+# Keep every `cargo test`/`cargo run` in this repo off the real launchd/systemd job. launchd
+# names jobs by label and ours (`com.txtodo.txtodod`) is one fixed name per user, so temp
+# $HOME/socket/registry overrides do not isolate it — a test once left the developer's live
+# daemon running from a temp-dir plist. Read by `txtodo_daemon_launch::service_disabled`;
+# `tests/service_disabled.rs` fails if a runner ever drops this. `force` stays false, so a shell
+# `TXTODO_NO_SERVICE=0 cargo run ...` can still opt back in on purpose.
+# https://doc.rust-lang.org/cargo/reference/config.html#env
+[env]
+TXTODO_NO_SERVICE = "1"

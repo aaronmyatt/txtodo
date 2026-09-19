@@ -137,3 +137,27 @@ stage-desktop-sidecar:
     mkdir -p apps/desktop/src-tauri/binaries
     cp "target/release/txtodod${ext}" "apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
     echo "staged apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
+
+# Install `txtodo` + `txtodod` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that survives
+# `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit ended up
+# pointing at (a deleted or rebuilt-under-it binary). Both, not just the daemon: `txtodo daemon
+# install` records the `txtodod` sitting *beside* the `txtodo` that runs it. Leaves the running
+# daemon alone; `just repoint-service` is the separate, one-restart step.
+# https://doc.rust-lang.org/cargo/commands/cargo-install.html
+install-daemon:
+    cargo install --path crates/txtodo-daemon --locked --force --target-dir target/install
+    cargo install --path crates/txtodo-cli --locked --force --target-dir target/install
+
+# Point the real launchd/systemd unit at the `install-daemon` copy. Restarts the daemon once
+# (bootout, rewrite unit, bootstrap+kickstart). `env -u`: run without TXTODO_NO_SERVICE, which
+# .cargo/config.toml sets for anything started through cargo but which would refuse this on purpose.
+repoint-service:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bin="${CARGO_HOME:-$HOME/.cargo}/bin"
+    [ -x "$bin/txtodo" ] && [ -x "$bin/txtodod" ] || { echo "run 'just install-daemon' first"; exit 1; }
+    ctl() { env -u TXTODO_NO_SERVICE "$bin/txtodo" daemon "$@"; }
+    ctl stop || true
+    ctl install --force
+    ctl start
+    ctl status
