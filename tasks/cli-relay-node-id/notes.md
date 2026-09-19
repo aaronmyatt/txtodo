@@ -46,3 +46,18 @@ a human can paste straight into `access.allowlist`.
 
 `txtodo relay enroll` (its own task, `cli-relay-enroll`) and anything server-side. This task only
 makes an existing fact legible.
+
+## As built (2026-09-20)
+
+- proto `relay_node_id`/`relay_bound` on `HealthResponse` (4b4a14b, 13a9dcf); daemon fills them from
+  `pairing_grpc::relay_rendezvous`, the helper `PairOffer` already used (5425984); `txtodo doctor`
+  prints `node id <hex>` on the transport line once the endpoint is bound (19802c3).
+- `tests/relay_node_id.rs` (177ad79): stable 64-hex id across a restart, none with no relay.
+
+## Known gap
+
+- The id is stable across a restart only when the daemon runs with `--key-store file|os|auto`.
+  With no flag (how launchd and the desktop start it) the keystore is an in-memory placeholder and
+  the relay identity is minted fresh every start, so an allowlist entry goes stale each time. The
+  test runs with `--key-store file` for that reason. Fixing it is a keystore-default decision, filed
+  as its own `@human` line in the root `todo.txt`.
