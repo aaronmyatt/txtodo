@@ -142,8 +142,15 @@ mod unix_impl {
     /// Whether a persistent, non-stale boot-time unit is already installed for `cfg`'s target
     /// (ADR 0025: the global daemon only — `cfg.extra_args` non-empty means a legacy `--dir`
     /// bridge, which never gets one).
+    ///
+    /// Also `false` whenever `cfg.extra_env` is non-empty: only a hermetic test/harness sets it, to
+    /// redirect the spawned child at an isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB` — unrelated to
+    /// whatever unit is installed against the real machine's real `$HOME`. Found the hard way:
+    /// without this, `tests/ensure_daemon.rs` deterministically timed out on a machine with a real
+    /// installed service — `ensure_daemon` waited on the test's own never-to-be-bound socket instead
+    /// of spawning against it.
     fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
-        if !cfg.extra_args.is_empty() {
+        if !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return false;
         }
         let Some(txtodod) = resolve_binary_path(cfg) else {
@@ -313,6 +320,26 @@ mod unix_impl {
             assert!(
                 !already_installed_as_service(&cfg),
                 "ADR 0025: only the global daemon ever gets the boot-time unit"
+            );
+        }
+
+        /// The exact reported bug: a hermetic test/harness redirecting the spawned child at an
+        /// isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB` via `extra_env` must never be told "already
+        /// installed" off the real machine's real `$HOME` — that unit, if any, has nothing to do with
+        /// the isolated target, so treating it as installed makes `ensure_daemon` wait forever on a
+        /// socket nothing will bind (`tests/ensure_daemon.rs` deterministically timed out this way on
+        /// any machine with a real installed service, before this guard existed).
+        #[test]
+        fn a_target_with_extra_env_is_never_treated_as_installed() {
+            let mut cfg = LaunchConfig::new("/tmp/does-not-matter.sock");
+            cfg.extra_env = vec![(
+                "TXTODO_SOCKET".to_owned(),
+                "/tmp/does-not-matter.sock".to_owned(),
+            )];
+            assert!(
+                !already_installed_as_service(&cfg),
+                "extra_env is only ever set by a hermetic test/harness redirecting the child, never \
+                 by a real caller"
             );
         }
 
