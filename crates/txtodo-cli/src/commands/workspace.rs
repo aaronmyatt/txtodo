@@ -50,21 +50,41 @@ pub fn run(
     }
 }
 
+/// How far the daemon is through opening this workspace (task `daemon-early-bind`): `queued`,
+/// `loading`, `ready`, `failed`, or `unknown` from a daemon that predates the field.
+fn load_state_name(w: &pb::WorkspaceInfo) -> &'static str {
+    match pb::WorkspaceLoadState::try_from(w.load_state) {
+        Ok(pb::WorkspaceLoadState::Queued) => "queued",
+        Ok(pb::WorkspaceLoadState::Loading) => "loading",
+        Ok(pb::WorkspaceLoadState::Ready) => "ready",
+        Ok(pb::WorkspaceLoadState::Failed) => "failed",
+        Ok(pb::WorkspaceLoadState::Unspecified) | Err(_) => "unknown",
+    }
+}
+
 fn info_json(w: &pb::WorkspaceInfo) -> String {
     format!(
-        r#"{{"id":{},"root":{},"added_at_ms":{},"root_exists":{},"has_state":{}}}"#,
+        r#"{{"id":{},"root":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
         json::str(&w.workspace_id),
         json::str(&w.root),
         w.added_at_ms,
         w.root_exists,
-        w.has_state
+        w.has_state,
+        json::str(load_state_name(w)),
+        json::str(&w.load_error)
     )
 }
 
 fn info_text(w: &pb::WorkspaceInfo) -> String {
     let missing = if w.root_exists { "" } else { " [missing]" };
     let state = if w.has_state { "" } else { " [new]" };
-    format!("{}  {}{missing}{state}", w.workspace_id, w.root)
+    let load = match load_state_name(w) {
+        "queued" => " [queued]",
+        "loading" => " [opening]",
+        "failed" => " [failed to open]",
+        _ => "",
+    };
+    format!("{}  {}{missing}{state}{load}", w.workspace_id, w.root)
 }
 
 /// `workspace add [DIR]`: registers `dir` (default: the resolved `--dir`/cwd), never opens it.
@@ -159,4 +179,36 @@ fn run_prune(daemon: &mut Daemon, yes: bool, as_json: bool) -> Result<(), CliErr
         println!("TODO: run with --yes to remove.");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn info(state: pb::WorkspaceLoadState) -> pb::WorkspaceInfo {
+        pb::WorkspaceInfo {
+            workspace_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+            root: "/home/a/project".into(),
+            root_exists: true,
+            has_state: true,
+            load_state: state as i32,
+            ..pb::WorkspaceInfo::default()
+        }
+    }
+
+    /// Task `daemon-early-bind`: `scripts/cold-boot-timing.sh` reads `load_state` from this JSON.
+    #[test]
+    fn json_carries_the_load_state_and_text_marks_only_workspaces_still_opening() {
+        assert!(
+            info_json(&info(pb::WorkspaceLoadState::Ready)).contains(r#""load_state":"ready""#)
+        );
+        assert!(
+            info_json(&info(pb::WorkspaceLoadState::Loading)).contains(r#""load_state":"loading""#)
+        );
+        assert!(info_json(&pb::WorkspaceInfo::default()).contains(r#""load_state":"unknown""#));
+        assert!(!info_text(&info(pb::WorkspaceLoadState::Ready)).contains('['));
+        assert!(info_text(&info(pb::WorkspaceLoadState::Loading)).ends_with("[opening]"));
+        assert!(info_text(&info(pb::WorkspaceLoadState::Queued)).ends_with("[queued]"));
+        assert!(info_text(&info(pb::WorkspaceLoadState::Failed)).ends_with("[failed to open]"));
+    }
 }

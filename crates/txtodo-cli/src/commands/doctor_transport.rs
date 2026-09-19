@@ -75,7 +75,14 @@ fn relay_summary(h: &pb::HealthResponse) -> String {
     } else {
         h.relay_last_outcome.as_str()
     };
-    format!("relay {} ({source}, {outcome})", h.relay_url)
+    // The id a relay allowlist has to contain (task `cli-relay-node-id`): only once the endpoint is
+    // bound. An absent relay stays silent above, and an unbound one says nothing rather than warn.
+    let node = if h.relay_bound && !h.relay_node_id.is_empty() {
+        format!(", node id {}", h.relay_node_id)
+    } else {
+        String::new()
+    };
+    format!("relay {} ({source}, {outcome}){node}", h.relay_url)
 }
 
 #[cfg(test)]
@@ -123,6 +130,34 @@ mod tests {
             c.detail
                 .contains("relay https://relay.example.org (configured, connected)")
         );
+    }
+
+    /// Task `cli-relay-node-id`: a bound relay endpoint's node id is on the transport line, so a
+    /// human can read the id an allowlist has to contain.
+    #[test]
+    fn a_bound_relay_prints_its_node_id_and_is_still_not_a_warning() {
+        let id = "ab".repeat(32);
+        let h = pb::HealthResponse {
+            lan_relay_disabled: false,
+            relay_url: "https://relay.example.org".into(),
+            relay_last_outcome: "connected".into(),
+            relay_bound: true,
+            relay_node_id: id.clone(),
+            ..healthy()
+        };
+        let c = transport_check(Some(&h));
+        assert_eq!(c.status, Status::Ok);
+        assert!(
+            c.detail
+                .contains(&format!("(configured, connected), node id {id}"))
+        );
+    }
+
+    /// No relay configured: the line is exactly what it was before the field existed.
+    #[test]
+    fn no_relay_adds_nothing_to_the_transport_line() {
+        let c = transport_check(Some(&healthy()));
+        assert!(!c.detail.contains("node id"));
     }
 
     #[test]
