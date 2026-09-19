@@ -143,12 +143,11 @@ mod unix_impl {
     /// (ADR 0025: the global daemon only — `cfg.extra_args` non-empty means a legacy `--dir`
     /// bridge, which never gets one).
     ///
-    /// Also `false` whenever `cfg.extra_env` is non-empty: only a hermetic test/harness sets it, to
-    /// redirect the spawned child at an isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB` — unrelated to
-    /// whatever unit is installed against the real machine's real `$HOME`. Found the hard way:
-    /// without this, `tests/ensure_daemon.rs` deterministically timed out on a machine with a real
-    /// installed service — `ensure_daemon` waited on the test's own never-to-be-bound socket instead
-    /// of spawning against it.
+    /// Also `false` whenever `cfg.extra_env` is non-empty: only a hermetic test/harness sets it (to
+    /// redirect the spawned child at an isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB`), unrelated to
+    /// whatever unit is installed against the real `$HOME`. Found the hard way: without this,
+    /// `tests/ensure_daemon.rs` timed out waiting on the test's own never-to-be-bound socket instead
+    /// of spawning against it, on any machine with a real installed service.
     fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
         if !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return false;
@@ -168,8 +167,7 @@ mod unix_impl {
     /// cannot override the real process-wide `HOME` in-process either. A *stale* installed unit
     /// (`crate::service::is_stale` — a dead binary path, or the pre-fix `KeepAlive` shape) reads
     /// as "not installed": it can never come up on its own, so falling through to the ad-hoc
-    /// spawn (which then repairs it via `install_persistent_service_best_effort`) is still
-    /// correct there.
+    /// spawn (which then repairs it via `install_persistent_service_best_effort`) is still correct.
     fn already_installed_at(home: &Path, txtodod: &Path) -> bool {
         let Some(rendered) = crate::service::render(home, txtodod) else {
             return false;
@@ -218,7 +216,10 @@ mod unix_impl {
     /// already succeeded, and a sandboxed/CI environment with no launchd/systemd (or no `$HOME`)
     /// is expected to fail here quietly (task item 2: "best-effort and non-fatal"). Skipped
     /// entirely for a non-global target (`extra_args` non-empty, i.e. a legacy `--dir` bridge):
-    /// ADR 0025 gives the one boot-time unit to the global daemon only.
+    /// ADR 0025 gives the one boot-time unit to the global daemon only. Also skipped whenever
+    /// `extra_env` is non-empty (see [`already_installed_as_service`]'s doc: "hermetic test/
+    /// harness, not a real caller") — found the hard way when an in-process `ensure_daemon` test
+    /// really installed and started a persistent unit against the real `$HOME`.
     ///
     /// Also self-heals a stale existing unit (task `daemon-stale-service-repair`): one whose
     /// recorded binary path no longer exists (e.g. a git worktree removed after install) can
@@ -227,7 +228,7 @@ mod unix_impl {
     /// good enough. `crate::service::is_stale` is checked first so a merely-already-installed,
     /// still-valid unit (the common case) is never force-overwritten.
     fn install_persistent_service_best_effort(cfg: &LaunchConfig) {
-        if !cfg.extra_args.is_empty() {
+        if !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return;
         }
         let Some(txtodod) = resolve_binary_path(cfg) else {
