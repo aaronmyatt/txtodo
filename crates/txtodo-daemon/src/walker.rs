@@ -25,6 +25,9 @@ pub const WALK_MAX_DEPTH: usize = 32;
 pub const WALK_MAX_FILES: usize = 10_000;
 /// The daemon's own state directory, never a document.
 pub const STATE_DIR: &str = ".txtodo";
+/// Directory names the walker never enters wherever they appear: version-control internals and
+/// installed dependencies, which hold thousands of files and never a todo list.
+const SKIPPED_DIR_NAMES: [&str; 2] = [".git", "node_modules"];
 
 /// Why a walk stopped.
 #[derive(Debug)]
@@ -126,7 +129,7 @@ fn visit(
         source,
     })?;
     if meta.is_dir() {
-        if name != STATE_DIR {
+        if name != STATE_DIR && !is_skipped_dir(&path) {
             stack.push((path, depth + 1));
         }
         return Ok(());
@@ -138,6 +141,48 @@ fn visit(
         found.push(relative(root, &path)?);
     }
     Ok(())
+}
+
+/// True for a directory that is never part of a workspace's documents: `.git` and `node_modules`;
+/// a Cargo build directory (`target` holding the `CACHEDIR.TAG` cargo writes into it, or sitting
+/// beside a `Cargo.toml`); and `.claude/worktrees`, whose checkouts are whole copies of the repo
+/// (registered as workspaces of their own when they matter, never a subtree of this one). Walking
+/// them made the daemon adopt about 2979 documents against 361 real ones and re-walk every new
+/// directory a `cargo build` created under `target/` (root todo id:01M2WK7W1MPDW9VBWS25EF8CB5).
+/// A ref directory that merely happens to be called `target` is still walked.
+/// Ref: <https://bford.info/cachedir/>
+pub fn is_skipped_dir(dir: &Path) -> bool {
+    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if SKIPPED_DIR_NAMES.contains(&name) {
+        return true;
+    }
+    let parent = dir.parent();
+    match name {
+        "target" => {
+            dir.join("CACHEDIR.TAG").is_file()
+                || parent.is_some_and(|p| p.join("Cargo.toml").is_file())
+        }
+        "worktrees" => parent.and_then(Path::file_name).and_then(|n| n.to_str()) == Some(".claude"),
+        _ => false,
+    }
+}
+
+/// True when `path` (a directory or a document) is at or below a skipped directory that lies
+/// *inside* `root` — the watcher's routing test, since `notify` reports every file a build writes.
+/// `root`'s own ancestors do not count: a workspace registered at `.../.claude/worktrees/x` is a
+/// real workspace.
+pub fn is_in_skipped_dir(root: &Path, path: &Path) -> bool {
+    let Ok(below) = path.strip_prefix(root) else {
+        return false;
+    };
+    let mut current = root.to_path_buf();
+    // Bounded by the path's own component count.
+    below.components().any(|part| {
+        current.push(part);
+        is_skipped_dir(&current)
+    })
 }
 
 /// `root/a/b/todo.txt` → `a/b/todo.txt` with `/` separators on every platform.
@@ -205,6 +250,62 @@ mod tests {
             is_document_name("notes.md") && is_notes_document("notes.md"),
             "notes.md is a synced document (plan §3.2 rule 11)"
         );
+    }
+
+    #[test]
+    fn skips_vcs_dependency_build_and_worktree_trees_but_not_lookalikes() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let r = dir.path();
+        for p in [
+            "todo.txt",
+            // Skipped: version control, dependencies, the two cargo-target markers, worktrees.
+            ".git/todo.txt",
+            "web/node_modules/pkg/todo.txt",
+            "sub/target/CACHEDIR.TAG",
+            "sub/target/debug/todo.txt",
+            "app/Cargo.toml",
+            "app/target/todo.txt",
+            ".claude/worktrees/wt/todo.txt",
+            // Kept: a ref dir that is only called `target`, `worktrees` outside `.claude`, and the
+            // rest of `.claude`.
+            "tasks/target/todo.txt",
+            "worktrees/todo.txt",
+            ".claude/todo.txt",
+        ] {
+            touch(&r.join(p));
+        }
+        let found: Vec<String> = walk(r)
+            .unwrap_or_else(|e| panic!("{e}"))
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ".claude/todo.txt",
+                "tasks/target/todo.txt",
+                "todo.txt",
+                "worktrees/todo.txt"
+            ]
+        );
+    }
+
+    #[test]
+    fn is_in_skipped_dir_looks_only_below_the_root() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let r = dir.path();
+        touch(&r.join("Cargo.toml"));
+        std::fs::create_dir_all(r.join("target/debug/deps")).unwrap_or_else(|e| panic!("{e}"));
+        assert!(is_in_skipped_dir(r, &r.join("target/debug/deps")));
+        assert!(is_in_skipped_dir(r, &r.join("target/debug/todo.txt")));
+        assert!(is_in_skipped_dir(r, &r.join(".git/hooks")));
+        assert!(!is_in_skipped_dir(r, &r.join("q4/sub")));
+        assert!(!is_in_skipped_dir(r, r), "the root itself is never skipped");
+        // A workspace that itself lives in a worktree directory is a real workspace.
+        let inside = r.join(".claude/worktrees/wt");
+        std::fs::create_dir_all(inside.join("q4")).unwrap_or_else(|e| panic!("{e}"));
+        assert!(!is_in_skipped_dir(&inside, &inside.join("q4")));
+        assert!(is_in_skipped_dir(r, &inside.join("q4")));
     }
 
     #[cfg(unix)]

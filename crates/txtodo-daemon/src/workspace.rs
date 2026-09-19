@@ -163,12 +163,23 @@ impl Workspace {
     /// Walks `dir` (the root or a newly created subdirectory) and registers every document found.
     /// Returns how many actors were started.
     pub fn discover(&mut self, dir: &Path) -> Result<usize, WorkspaceError> {
+        self.register_discovered(dir, walker::walk(dir)?)
+    }
+
+    /// The registering half of [`Self::discover`], for a caller that already walked `dir` — the
+    /// watcher walks first with no lock held and takes the workspace write lock only for this, so
+    /// a slow walk never starves readers (root todo id:01M2WK7W1MPDW9VBWS25EF8CB5).
+    pub fn register_discovered(
+        &mut self,
+        dir: &Path,
+        found: Vec<FilePath>,
+    ) -> Result<usize, WorkspaceError> {
         debug_assert!(
             dir.starts_with(&self.root),
             "discover stays inside the workspace"
         );
         let mut started = 0usize;
-        for rel in walker::walk(dir)? {
+        for rel in found {
             let abs = dir.join(rel.as_str());
             let path = walker::relative(&self.root, &abs)?;
             if self.register(path)? {

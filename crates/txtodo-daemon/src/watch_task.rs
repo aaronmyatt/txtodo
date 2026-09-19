@@ -5,6 +5,7 @@
 use crate::clock::Clock;
 use crate::debounce::Debouncer;
 use crate::server::SharedWorkspace;
+use crate::walker::{is_in_skipped_dir, walk};
 use crate::watcher::{RawEvent, Routed, ingest, start as start_notify};
 use std::path::Path;
 use std::sync::Arc;
@@ -58,6 +59,7 @@ fn log_watch_drain_stopped(root: &Path) {
 
 async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::Receiver<RawEvent>) {
     let mut deb = Debouncer::default();
+    let root = read(&ws).root().to_path_buf();
     // Ends when the notify side drops its sender (the watcher handle was dropped).
     loop {
         let wait = deb
@@ -75,23 +77,43 @@ async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::R
             },
             () = tokio::time::sleep(wait) => None,
         };
-        if let Some(Routed::Directory(dir)) = routed {
+        // `notify` reports every directory a `cargo build` creates under `target/`; walking each
+        // one is what starved every RPC on 2026-09-19, so skipped trees never reach `discover`.
+        if let Some(Routed::Directory(dir)) = routed.filter(|r| !in_skipped_dir(&root, r)) {
             discover(&ws, &dir);
         }
         for path in deb.drain_due(clock.now_instant()) {
-            route_document(&ws, &path).await;
+            if !is_in_skipped_dir(&root, &path) {
+                route_document(&ws, &path).await;
+            }
         }
     }
 }
 
+/// True for a routed directory that sits below a skipped tree (`walker::is_skipped_dir`).
+fn in_skipped_dir(root: &Path, routed: &Routed) -> bool {
+    match routed {
+        Routed::Directory(dir) | Routed::Document(dir) => is_in_skipped_dir(root, dir),
+    }
+}
+
 fn discover(ws: &SharedWorkspace, dir: &Path) {
+    // The walk is plain filesystem I/O: run it before taking the write lock, which only the
+    // registration of anything new needs. A walk error here is a directory vanishing between
+    // event and walk; the next event retries.
+    let Ok(found) = walk(dir).inspect_err(|e| log_discover_failed(dir, e)) else {
+        return;
+    };
     let mut guard = ws
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // A walk error here is a directory vanishing between event and walk; the next event retries.
-    if let Err(e) = guard.discover(dir) {
-        tracing::warn!(dir = %dir.display(), error = %e, "discover failed");
-    }
+    let _ = guard
+        .register_discovered(dir, found)
+        .inspect_err(|e| log_discover_failed(dir, e));
+}
+
+fn log_discover_failed(dir: &Path, error: &dyn std::fmt::Display) {
+    tracing::warn!(dir = %dir.display(), %error, "discover failed");
 }
 
 /// A debounced document path: its actor gets `ExternalChange`; an unknown document in a known
