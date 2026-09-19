@@ -1,0 +1,7 @@
+2026-09-19 Check in the detector as scripts/check-test-hermetic.sh: run each crate's tests with XDG_DATA_HOME at a scratch dir, fail if any txtodo/ file appears there; wire into just + CI +ci @test id:01M2VVHDXV9FN514RM4X9C5JZF
+2026-09-19 Add 'txtodo workspace prune': hard-delete registry rows whose root no longer exists on disk (dry run by default, --yes to apply) +cli @daemon id:01M2VVHDXVQVNVJADNS69F109H
+2026-09-19 Desktop Workspaces tab: hide or grey out entries where root_exists is false, so dead temp paths stop filling the list +desktop @ui id:01M2VVHDXVW22MTR19SKENTFC2
+2026-09-19 e2e teardown: after the Playwright run, assert no txtodo-e2e-* dirs or daemons are left in tmpdir (globalTeardown) +desktop @test id:01M2VVHDXVEPCBM6BAEK3X779Y
+2026-09-19 Audit test launchd/systemd use: daemon-launch, tui and desktop test runs print 'Bootstrap failed: 5'; confirm no test can bootstrap into the real launchd domain or write the real ~/Library/LaunchAgents +test @daemon id:01M2VVHDXV401D614YAXHTY5NM
+2026-09-19 Find what registered the .tmpXXXXXX and .tmpXXXXXX/q4-roadmap roots on 2026-09-18 01:22-01:34 (+0800): not reproduced at HEAD, so check older worktree code and pre-0e59c22 desktop tests +test @daemon id:01M2VVHDXVX4SX9EYETYCQCKH7
+2026-09-19 One-off: remove the 124 dead temp-root rows from ~/.local/share/txtodo/registry.db once prune exists (real user data, human runs it) @human id:01M2VVHDXVZH4PX03ZM951G14E
