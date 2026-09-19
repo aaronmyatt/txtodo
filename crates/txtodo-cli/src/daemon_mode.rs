@@ -1,8 +1,9 @@
 //! Daemon mode for every todo.sh command without rewriting them: run the direct-file command
 //! against a scratch copy of the daemon's bytes, then express the resulting diff as intent-level
 //! mutations and `Apply` them. Output stays byte-identical to direct mode because the same code
-//! prints it. A diff no mutation can express (blank-line removal, mid-file inserts, moves) falls
-//! back to writing the scratch bytes to the real file, which the daemon reconciles as an edit.
+//! prints it. `archive`'s reorder goes out as guarded `MoveToEnd` mutations (`archive_plan.rs`). A
+//! diff no mutation can express (blank-line removal, mid-file inserts, any other move) falls back
+//! to writing the scratch bytes to the real file, which the daemon reconciles as an edit.
 
 use crate::client::Daemon;
 use crate::config::Paths;
@@ -105,7 +106,7 @@ fn copy_back(scratch: &Path, dir: &Path, name: &str) -> Result<(), CliError> {
     store::write(&dir.join(name), &parse_file(&bytes)).map_err(CliError::Store)
 }
 
-fn line_text(line: &OwnedLine) -> Option<String> {
+pub(crate) fn line_text(line: &OwnedLine) -> Option<String> {
     line.raw().map(str::to_owned)
 }
 
@@ -114,7 +115,7 @@ fn is_blank(line: &OwnedLine) -> bool {
         .is_some_and(|l| matches!(l.kind, LineKind::Blank))
 }
 
-fn task_ref(old: &File, from: usize) -> pb::TaskRef {
+pub(crate) fn task_ref(old: &File, from: usize) -> pb::TaskRef {
     let task_id = old.lines[from]
         .parse()
         .and_then(|l| match l.kind {
@@ -209,6 +210,9 @@ pub fn plan_mutations(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
 /// wrapping (here, the `log_mutation_plan` call) never pushes this already-branchy function over
 /// the cognitive-complexity budget.
 fn plan_mutations_inner(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
+    if let Some(archived) = crate::archive_plan::plan(old, new) {
+        return Some(archived);
+    }
     let diffs = diff_lines(old, new);
     let first_task_insert = diffs
         .iter()

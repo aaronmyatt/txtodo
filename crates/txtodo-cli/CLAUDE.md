@@ -58,8 +58,8 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   resolved path and, when set, whether it currently validates (`sync_dir_problem` in JSON).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
-  adapter, `plan_mutations`), `bundle` (`export`/`import`, plan M8 `cli-bundle`),
-  `commands::{add, list, edit, archive, text, fileops, hygiene,
+  adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `bundle`
+  (`export`/`import`, plan M8 `cli-bundle`), `commands::{add, list, edit, archive, text, fileops, hygiene,
   history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
   split out of `main.rs` purely for its own file-length budget.
@@ -69,8 +69,11 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   byte-for-byte; BOM, per-line endings and the trailing newline are kept (design §2.2 rule 7).
 - Daemon mode never touches a synced file directly except as the documented fallback: a command
   runs against a scratch copy of the daemon's bytes and its diff becomes Apply mutations (edits,
-  deletes bottom-up, appends). Inexpressible diffs (blank removal by `archive`, mid-file inserts,
-  moves) write the scratch bytes to the real file; the daemon reconciles them as an External edit.
+  deletes bottom-up, appends, and `archive`'s reorder as `MoveToEnd`s — `archive_plan.rs`, every
+  line carrying an `id:`). Inexpressible diffs (blank removal by `archive`, mid-file inserts, any
+  other move) write the scratch bytes to the real file; the daemon reconciles them as an External
+  edit. That fallback is a whole-file overwrite from a snapshot, so it can drop another writer's
+  concurrent `Apply` (`txtodo-daemon/tests/stale_snapshot_write.rs`, `#[ignore]`d repro).
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
 - todo.sh parity is a test: `tests/todosh_parity.rs` (direct mode). `tests/daemon_mode.rs` spawns a

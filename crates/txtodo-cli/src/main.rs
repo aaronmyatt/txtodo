@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stdout, clippy::print_stderr)] // the CLI is the output path (plan §0)
 
+mod archive_plan;
 mod bundle;
 mod cli;
 mod client;
