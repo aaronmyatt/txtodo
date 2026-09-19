@@ -137,6 +137,12 @@ service Txtodo {
   // fingerprints. `dry_run` only counts. Safe to repeat; a partly-done run resumes.
   rpc MigrateIdentity(MigrateIdentityRequest) returns (MigrateIdentityResponse);
 
+  // `txtodo lint` for one document (task mcp-hygiene-parity): parse quirks and file hygiene, one
+  // finding per problem, computed from the exact bytes the daemon holds. Read-only. The daemon
+  // links txtodo-core, so this is how a client that must not (the MCP server) gets the same
+  // findings the CLI prints.
+  rpc Lint(LintRequest) returns (LintResponse);
+
   // The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
   // an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
   // last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
@@ -297,6 +303,10 @@ message Delete { TaskRef task = 1; bool leave_blank = 2; } // todo.sh leaves a b
 // Moves a task within its own file to sit after the last other task (archiving: a completed task
 // stays in todo.txt, pushed to the bottom, instead of moving to a second file).
 message MoveToEnd { TaskRef task = 1; }
+// Moves a task within its own file to sit immediately before `before` (task mcp-move-reorder):
+// the same-file relocation `MoveToEnd` is the "after the last task" case of. Refused if `before`
+// is the task itself or is not in this file.
+message MoveBefore { TaskRef task = 1; TaskRef before = 2; }
 // Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
 // `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
 // holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
@@ -321,6 +331,7 @@ message Mutation {
     MoveToEnd move_to_end = 6;
     Replace replace = 7;
     RequireBase require_base = 8;
+    MoveBefore move_before = 9;
   }
 }
 
@@ -400,6 +411,17 @@ message HealthResponse {
   // Which carrier the most recently *completed* pairing actually used ("lan" or "relay", plan M8
   // sync-pairing-relay); empty until a pairing has finished on this device at all.
   string pairing_last_carrier = 14;
+  // Device-level totals (task daemon-early-bind), the same numbers on every response: Health on a
+  // daemon that is still opening workspaces answers with these instead of waiting for one.
+  uint32 workspaces_registered = 15;
+  uint32 workspaces_ready = 16;
+  uint32 workspaces_loading = 17;  // queued or loading
+  uint32 workspaces_failed = 18;
+  // This device's own relay node id, lowercase hex (task cli-relay-node-id): the value a relay
+  // allowlist has to contain. Empty and `relay_bound` false when no relay is configured or the
+  // endpoint has not bound yet — absence is a real state, like `relay_url` above.
+  string relay_node_id = 19;
+  bool relay_bound = 20;
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -596,6 +618,24 @@ message MigrateIdentityResponse {
   repeated string failures = 4;  // "<path>: <why>" per document that could not be migrated
   bool was_tagged = 5;           // the workspace was Tagged when the call arrived
   uint32 renumbered = 6;         // lines that repeated an earlier line's id and were given a fresh one
+  // Other devices paired into this workspace's sync group (task sidecar-migrate-tagged, "Single
+  // device only"): a still-Tagged peer rejects the tag-stripping edits and sends `id:` text back,
+  // so the CLI names this number before it asks for confirmation.
+  uint32 paired_peers = 7;
+}
+
+message LintRequest {
+  string path = 1;               // workspace-relative document path, e.g. "todo.txt"
+  WorkspaceSelector workspace = 2;
+}
+
+message LintFinding {
+  uint32 line = 1;               // 1-based line number; 0 for a whole-file finding
+  string message = 2;
+}
+
+message LintResponse {
+  repeated LintFinding findings = 1;   // per-line findings in line order, then file-level ones
 }
 
 message DeviceRemoveResponse {
@@ -630,12 +670,24 @@ message SyncStatusResponse {
 // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
 
 // One entry in the device-global workspace registry.
+// How far one registered workspace is through being opened by this daemon (task
+// daemon-early-bind): the daemon binds its socket first and opens workspaces in the background.
+enum WorkspaceLoadState {
+  WORKSPACE_LOAD_STATE_UNSPECIFIED = 0;  // not scheduled: the root is missing, or an older daemon
+  WORKSPACE_LOAD_STATE_QUEUED = 1;
+  WORKSPACE_LOAD_STATE_LOADING = 2;
+  WORKSPACE_LOAD_STATE_READY = 3;
+  WORKSPACE_LOAD_STATE_FAILED = 4;
+}
+
 message WorkspaceInfo {
   string workspace_id = 1;   // ULID text, same form as WorkspaceSelector.workspace_id
   string root = 2;           // canonicalized absolute path
   uint64 added_at_ms = 3;
   bool root_exists = 4;      // cheap fs::exists; false = the directory moved or was deleted
   bool has_state = 5;        // whether root/.txtodo/oplog.db exists; false = never opened yet
+  WorkspaceLoadState load_state = 6;
+  string load_error = 7;     // why the last open failed; empty unless load_state is FAILED
 }
 
 message WorkspaceAddRequest {

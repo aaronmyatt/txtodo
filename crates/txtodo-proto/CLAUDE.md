@@ -43,6 +43,13 @@ relay is configured), not the field-8-era hardcoded `true`. Fields 12-13, added 
 of the most recent relay bind/accept/connect attempt, empty until one has happened) — design §5's
 "doctor: relay reachability".
 
+Additive fields and messages, 2026-09-20 (all default to "absent" on an older peer):
+`WorkspaceInfo.load_state`/`load_error` (`WorkspaceLoadState`: the daemon binds first and opens
+workspaces in the background, task `daemon-early-bind`); `HealthResponse.workspaces_*` totals plus
+`relay_node_id`/`relay_bound` (task `cli-relay-node-id`); `MigrateIdentityResponse.paired_peers`;
+`Mutation.MoveBefore` (same-file reorder, task `mcp-move-reorder`); the read-only `Lint` RPC (task
+`mcp-hygiene-parity`, so a client that may not link txtodo-core still gets the CLI's findings).
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.
