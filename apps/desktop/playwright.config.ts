@@ -12,6 +12,9 @@ const PORT = 4373;
 export default defineConfig({
 	testDir: "./e2e",
 	timeout: 30_000,
+	// Mints this run's id (e2e/runId.ts) so teardown reaps only what this run made, not another
+	// worktree's parallel run.
+	globalSetup: "./e2e/globalSetup.ts",
 	// tasks/test-registry-leak-cleanup: suite-wide safety net behind every spec's own per-test
 	// dispose() — see globalTeardown.ts's own doc.
 	globalTeardown: "./e2e/globalTeardown.ts",

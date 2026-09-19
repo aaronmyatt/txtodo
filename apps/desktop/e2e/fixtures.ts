@@ -4,10 +4,11 @@
 // (tasks/desktop-playwright-tests/notes.md). Each spec calls `spawnDaemon(fixture)` for its own
 // fresh workspace — "no test may depend on another's side effects" (that file's own rule).
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { bridgePidFile, tmpPrefix } from "./runId";
 import { generateTenKLines, TEN_K_REF_SLUG } from "./tenKFixture";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -146,7 +147,7 @@ export async function debugRaiseConflict(
  * the daemon's startup adoption of the seeded file. */
 export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 	ensureBuilt();
-	const dir = mkdtempSync(join(tmpdir(), "txtodo-e2e-"));
+	const dir = mkdtempSync(join(tmpdir(), tmpPrefix()));
 	seed(dir, fixture);
 	const port = pickPort();
 
@@ -156,7 +157,7 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 	// listing is exactly `{todo.txt, .txtodo}` before any user action, so anything the daemon's
 	// *global* state creates must live outside the workspace tree entirely, not just outside
 	// `.txtodo/`.
-	const globalDir = mkdtempSync(join(tmpdir(), "txtodo-e2e-global-"));
+	const globalDir = mkdtempSync(join(tmpdir(), tmpPrefix("global-")));
 
 	const proc: ChildProcess = spawn(join(TARGET_DEBUG, "e2e_bridge"), [], {
 		env: {
@@ -171,6 +172,9 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 		},
 		stdio: "ignore"
 	});
+	// globalTeardown reaps only the bridges this run recorded here (runId.ts), never every
+	// `e2e_bridge` on the machine.
+	if (proc.pid !== undefined) appendFileSync(bridgePidFile(), `${proc.pid}\n`);
 
 	await waitForHealth(port);
 

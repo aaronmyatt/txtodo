@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { type DaemonHandle, spawnDaemon } from "./fixtures";
 import { gotoWithDaemon } from "./helpers";
+import { tmpPrefix } from "./runId";
 
 let daemon: DaemonHandle;
 
@@ -32,7 +33,7 @@ test("shows this workspace's own activity by default", async ({ page }) => {
 });
 
 test("merges in a second registered workspace, tagged with its own root", async ({ page }) => {
-	const secondDir = mkdtempSync(join(tmpdir(), "txtodo-e2e-second-"));
+	const secondDir = mkdtempSync(join(tmpdir(), tmpPrefix("second-")));
 	writeFileSync(join(secondDir, "todo.txt"), "(A) second workspace task\n");
 	try {
 		await page.getByRole("button", { name: "Open workspace navigation" }).click();
@@ -52,7 +53,7 @@ test("merges in a second registered workspace, tagged with its own root", async 
 test("a registered workspace whose directory is gone is skipped, not blanking the feed", async ({
 	page
 }) => {
-	const goneDir = mkdtempSync(join(tmpdir(), "txtodo-e2e-gone-"));
+	const goneDir = mkdtempSync(join(tmpdir(), tmpPrefix("gone-")));
 	writeFileSync(join(goneDir, "todo.txt"), "(A) will be deleted\n");
 
 	await page.getByRole("button", { name: "Open workspace navigation" }).click();
