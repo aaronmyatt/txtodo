@@ -5,7 +5,7 @@
 //! Ref: <https://docs.rs/ratatui/latest/ratatui/widgets/struct.List.html>
 
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem};
 
@@ -15,15 +15,35 @@ use crate::state::AppState;
 /// Placeholder text for the trailing Add-a-line row when it isn't being edited (design §3.1).
 const ADD_LINE_PLACEHOLDER: &str = "+ Add a line";
 
-/// One [`Line`] per row: every document line painted by [`paint_line`], plus the trailing
-/// Add-a-line row. Selection highlighting is intentionally *not* baked in here — the caller
-/// applies it via `ListState`/`List::highlight_style`, the idiomatic ratatui split between
-/// content and selection chrome.
+/// root todo 9: "add line length hints to the clients... to encourage keeping todo entries
+/// readable" — 100 matches the desktop editor's own hint and `.claude/budgets.json`'s Rust
+/// `lineWidth` budget, not a todo.txt-format rule. Added here, as a trailing marker span, rather
+/// than inside `paint_line` itself: that function's own byte-coverage test
+/// (`paint_line_covers_every_byte_of_every_corpus_line`) requires its output to reconstruct the
+/// raw line exactly when `show_id` is true, which a synthetic marker span would break.
+const LINE_LENGTH_HINT: usize = 100;
+
+/// One [`Line`] per row: every document line painted by [`paint_line`] (plus the length hint
+/// marker past [`LINE_LENGTH_HINT`] chars), plus the trailing Add-a-line row. Selection
+/// highlighting is intentionally *not* baked in here — the caller applies it via
+/// `ListState`/`List::highlight_style`, the idiomatic ratatui split between content and selection
+/// chrome.
 pub fn rows(state: &AppState) -> Vec<Line<'static>> {
     let mut out: Vec<Line<'static>> = state
         .lines
         .iter()
-        .map(|l| paint_line(&l.raw, l.completed, state.show_id))
+        .map(|l| {
+            let mut line = paint_line(&l.raw, l.completed, state.show_id);
+            if l.raw.chars().count() > LINE_LENGTH_HINT {
+                line.spans.push(Span::styled(
+                    " [100+]",
+                    Style::new()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::ITALIC),
+                ));
+            }
+            line
+        })
         .collect();
     out.push(Line::from(Span::styled(
         ADD_LINE_PLACEHOLDER,
@@ -82,6 +102,26 @@ mod tests {
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    /// root todo 9: a line past the 100-char hint gets the trailing marker, one at or under it
+    /// does not.
+    #[test]
+    fn rows_marks_only_lines_over_the_length_hint() {
+        let short = "buy milk";
+        let long = format!("buy milk {}", "x".repeat(100));
+        let raw = format!("{short}\n{long}");
+        let state = AppState::from_document("todo.txt", &raw);
+        let rows = rows(&state);
+        let text = |line: &Line<'static>| -> String {
+            line.spans.iter().map(|s| s.content.as_ref()).collect()
+        };
+        assert_eq!(text(&rows[0]), short, "short line unmarked");
+        assert!(
+            text(&rows[1]).ends_with("[100+]"),
+            "long line marked: {}",
+            text(&rows[1])
+        );
     }
 
     #[test]
