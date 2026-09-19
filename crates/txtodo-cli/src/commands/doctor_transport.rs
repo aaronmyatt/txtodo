@@ -98,6 +98,7 @@ mod tests {
             relay_url: String::new(),
             relay_last_outcome: String::new(),
             pairing_last_carrier: String::new(),
+            ..pb::HealthResponse::default()
         }
     }
 
