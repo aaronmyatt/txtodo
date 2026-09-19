@@ -5,6 +5,10 @@
 
 use super::*;
 
+// The five tests carrying `#[cfg(any(target_os = "macos", target_os = "linux"))]` need a real
+// service directory: `service_dir_and_ext` (and so `render`) is `None` everywhere else, Windows
+// included (ADR 0010: no service integration there), so they would `unwrap` a `None`.
+
 #[test]
 fn render_is_one_global_unit_with_no_workspace_argument() {
     let body = render_template(
@@ -68,6 +72,7 @@ fn old_workspace_label_recognizes_the_pre_m11_hash_suffix_only() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn migrate_old_units_removes_matching_files_and_leaves_the_new_one_alone() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let (dir, ext) = service_dir_and_ext(home.path())
@@ -85,6 +90,7 @@ fn migrate_old_units_removes_matching_files_and_leaves_the_new_one_alone() {
 }
 
 #[test]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn install_reports_migrated_units_and_the_written_path() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let r = render(home.path(), Path::new("/bin/txtodod"))
@@ -133,6 +139,7 @@ fn installed_program_path_reads_back_what_render_template_wrote() {
 /// A freshly installed unit, pointing at a binary that really exists, is never stale — the common
 /// case, and the one `install_persistent_service_best_effort` must not disturb.
 #[test]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn a_fresh_install_pointing_at_a_real_binary_is_not_stale() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let real_bin = home.path().join("txtodod");
@@ -147,6 +154,7 @@ fn a_fresh_install_pointing_at_a_real_binary_is_not_stale() {
 /// git worktree removed after the install) is stale, and reinstalling with `force` repairs it —
 /// the same repair `ensure_daemon`'s best-effort install now performs automatically.
 #[test]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn a_unit_pointing_at_a_deleted_binary_is_stale_and_force_reinstall_repairs_it() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let gone_bin = home.path().join("worktree-txtodod");
@@ -172,6 +180,7 @@ fn a_unit_pointing_at_a_deleted_binary_is_stale_and_force_reinstall_repairs_it()
 /// No unit installed at all is "not installed", never "stale" — `is_stale` must not treat a
 /// missing file as a repair opportunity (that's `install`'s own, unconditional job).
 #[test]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn no_installed_unit_is_not_stale() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let r = render(home.path(), Path::new("/bin/txtodod"))
