@@ -105,9 +105,24 @@ impl FileActor {
         if self.log_and_skip_own_write(&bytes) {
             return Ok(None);
         }
-        let reconciled = self.derive_reconciled_ops(&bytes)?;
+        let principal = Principal::External {
+            device: self.cfg.device,
+        };
+        let reconciled = self.derive_reconciled_ops(&bytes, &principal)?;
         let change = self.commit_reconciled(reconciled)?;
         Ok(Some(change))
+    }
+
+    /// `on_external_change`'s reconcile-and-commit for bytes that did not come off disk
+    /// (`replace.rs`): the file still holds our old projection, so any new render must be written.
+    pub(crate) fn commit_replacement(
+        &mut self,
+        contents: &[u8],
+        principal: &Principal,
+    ) -> Result<Change, ActorError> {
+        let mut reconciled = self.derive_reconciled_ops(contents, principal)?;
+        reconciled.write_back = reconciled.target != self.projection;
+        self.commit_reconciled(reconciled)
     }
 
     /// True (and logged) when `bytes` is a write this actor itself made — current or recent
@@ -151,15 +166,18 @@ impl FileActor {
     /// on: `exact` when replaying those ops onto our current state reproduces the reconciler's
     /// own render byte-for-byte (the common case), otherwise the reconciler's render is adopted
     /// directly and a snapshot is forced (mirror/state disagreement, healed on next flush).
-    fn derive_reconciled_ops(&mut self, disk_bytes: &[u8]) -> Result<ReconciledChange, ActorError> {
+    fn derive_reconciled_ops(
+        &mut self,
+        disk_bytes: &[u8],
+        principal: &Principal,
+    ) -> Result<ReconciledChange, ActorError> {
         let old = parse_file(&self.projection);
         let new = parse_file(disk_bytes);
         let clock = Arc::clone(&self.clock);
         let mut mint = || TaskId::new(clock.new_ulid());
         let r = self.reconcile_against(&old, &new, &mut mint);
         let target = r.file.to_bytes();
-        let device = self.cfg.device;
-        let ops = self.stamp(r.ops, &Principal::External { device })?;
+        let ops = self.stamp(r.ops, principal)?;
         let (next, exact) = match self.replay_on_clone(&ops) {
             Some(next) if next.to_bytes() == target => (next, true),
             _ => (

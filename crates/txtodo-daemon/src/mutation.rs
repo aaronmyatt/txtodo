@@ -2,6 +2,7 @@
 //! `DocState`; the actor stamps, applies and persists. A `TaskRef` names a line two ways so a
 //! client that read the file before someone else changed it gets `Stale`, never the wrong line.
 
+use crate::expected::Hash;
 use crate::reconcile::change_ops;
 use crate::state::{DocState, Entry, id_of};
 use std::fmt;
@@ -67,6 +68,15 @@ pub enum Mutation {
         /// The line.
         task: TaskRef,
     },
+    /// Replaces the whole document, but only if it still hashes to `base` (`replace.rs`): the
+    /// caller's compare-and-swap for a diff no other mutation can express. Must be alone in its
+    /// batch, and reconciled like an external edit, so untouched lines keep their identity.
+    Replace {
+        /// The hash the caller edited from (`Contents::hash`).
+        base: Hash,
+        /// The whole new document.
+        contents: Vec<u8>,
+    },
 }
 
 /// Why a mutation was refused. All are client errors except `TooMany`, which is a limit.
@@ -85,6 +95,9 @@ pub enum MutationError {
         /// What is there now.
         found: TaskId,
     },
+    /// A `Replace` named a base hash that is no longer the document's, or the file holds an edit
+    /// the daemon has not reconciled yet.
+    StaleBase,
     /// The text is not a task line (empty, or a line break).
     NotATask(String),
     /// The edit dropped or changed the `id:` tag.
@@ -111,6 +124,10 @@ impl fmt::Display for MutationError {
                     "line {line_number} is now task {found}, not {expected}; re-list and retry"
                 )
             }
+            MutationError::StaleBase => write!(
+                f,
+                "the document changed since it was read; nothing was written, re-read and retry"
+            ),
             MutationError::NotATask(t) => write!(f, "{t:?} is not a task line"),
             MutationError::IdChanged(t) => write!(f, "the edit must keep id {t}"),
             MutationError::Unsupported(what) => write!(f, "{what} is not supported yet"),
@@ -163,6 +180,7 @@ fn mutation_kind(m: &Mutation) -> &'static str {
         Mutation::Move { .. } => "move",
         Mutation::Delete { .. } => "delete",
         Mutation::MoveToEnd { .. } => "move_to_end",
+        Mutation::Replace { .. } => "replace",
     }
 }
 
@@ -202,6 +220,11 @@ fn mutation_ops_inner(
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),
         Mutation::MoveToEnd { task } => move_to_end_ops(state, task),
+        // The actor takes a lone `Replace` before any op is derived (`replace.rs`); one reaching
+        // here rode in a batch with other mutations.
+        Mutation::Replace { .. } => Err(MutationError::Unsupported(
+            "Replace must be its own Apply batch",
+        )),
         Mutation::Delete { task, leave_blank } => {
             let (i, id) = resolve(state, task)?;
             let after = state.task_before(i);

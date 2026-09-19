@@ -8,7 +8,8 @@ text doc (plan M5) added the same day. Sidecar identity mode (no `id:` tag in th
 docs/questions.md Q2) under construction 2026-09-13 — `DocState`/`reconcile` are mode-aware and
 `reconcile_sidecar`/`identity_fingerprint`/`identity_assign`/`identity_levenshtein` exist and are
 unit-tested, but nothing wires a real workspace to sidecar mode yet (no `ActorConfig` field, no
-`--identity-mode` flag): every workspace still runs tagged mode today.
+`--identity-mode` flag): every workspace still runs tagged mode today. (Stale since: `main.rs`
+now defaults `--identity-mode` to sidecar, tagged is opt-in, and both are wired.)
 Devices table wiring, keystore resolution and `DeviceList`/`DeviceRemove` (plan M4
 tasks/sync-device-remove, tasks/sync-keystore, tasks/model-hlc-skew-guard) added 2026-09-13.
 Real cross-device pairing over the LAN transport (plan M4 `sync-pairing`'s LAN wiring pass —
@@ -82,7 +83,11 @@ multiplex every workspace's traffic — not done by this task).
   `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every
   committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
-  ops; also `peek_line`, a read-only `TaskRef` resolve) · `history` (replay, checkout, inverse) ·
+  ops; also `peek_line`, a read-only `TaskRef` resolve) · `replace` (`Mutation::Replace`, a
+  whole-document compare-and-swap: refused as `FAILED_PRECONDITION`, nothing written, unless the
+  caller's `base_hash` is still the document's and the file on disk is still our own write, else
+  reconciled like an external edit but stamped as the caller; the CLI's fallback for a diff no
+  other mutation can express) · `history` (replay, checkout, inverse) ·
   `refdir` + `refdir_ops` (slug generation, collision-safe filesystem moves, lazy `ref:` creation
   and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
   two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers

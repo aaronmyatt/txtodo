@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use txtodo_core::File;
 use txtodo_model::{DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal, TaskId};
-use txtodo_store::{Projection, ReviewRow, Seq, Store, Stored};
+use txtodo_store::{Projection, Store};
 
 /// A checkpoint is written every this many ops (design §4.4 "every N ops").
 pub const SNAPSHOT_EVERY_OPS: i64 = 500;
@@ -230,6 +230,9 @@ impl FileActor {
         if mutations.len() > MAX_MUTATIONS_PER_APPLY {
             return Err(MutationError::TooMany(mutations.len()).into());
         }
+        if let Some(replaced) = self.replace_batch(&mutations, &principal) {
+            return replaced;
+        }
         let mut next = self.state.clone();
         let mut ops = Vec::new();
         let clock = Arc::clone(&self.clock);
@@ -370,31 +373,6 @@ impl FileActor {
             self.converge_mirror();
         } else if flush {
             self.flush_mirror(ops);
-        }
-    }
-
-    /// Numbers the committed ops and assembles the `Change` this commit produced.
-    fn stored_change(
-        &self,
-        hash: Hash,
-        range: Option<txtodo_store::SeqRange>,
-        ops: Vec<Op>,
-        review: Vec<ReviewRow>,
-    ) -> Change {
-        let first = range.map_or(0, |r| r.first.0);
-        let stored: Vec<Stored> = ops
-            .into_iter()
-            .enumerate()
-            .map(|(i, op)| Stored {
-                seq: Seq(first + i as i64),
-                op,
-            })
-            .collect();
-        Change {
-            path: self.cfg.path.clone(),
-            hash,
-            ops: stored,
-            review,
         }
     }
 }

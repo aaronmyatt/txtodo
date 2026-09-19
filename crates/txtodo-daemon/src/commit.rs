@@ -2,9 +2,12 @@
 //! Split out purely to keep `actor.rs` within its file budget — every user still reaches these as
 //! `crate::actor::{Commit, CommitTail}` via that module's re-export.
 
+use crate::actor::FileActor;
+use crate::expected::Hash;
+use crate::handle::Change;
 use crate::state::DocState;
 use txtodo_model::{Op, TaskId};
-use txtodo_store::ReviewRow;
+use txtodo_store::{ReviewRow, Seq, SeqRange, Stored};
 
 /// One persisted change, ready to commit.
 pub(crate) struct Commit {
@@ -35,6 +38,33 @@ impl Default for CommitTail {
             flush: true,
             clear: None,
             persist_mirror: false,
+        }
+    }
+}
+
+impl FileActor {
+    /// Numbers the committed ops and assembles the `Change` this commit produced.
+    pub(crate) fn stored_change(
+        &self,
+        hash: Hash,
+        range: Option<SeqRange>,
+        ops: Vec<Op>,
+        review: Vec<ReviewRow>,
+    ) -> Change {
+        let first = range.map_or(0, |r| r.first.0);
+        let stored: Vec<Stored> = ops
+            .into_iter()
+            .enumerate()
+            .map(|(i, op)| Stored {
+                seq: Seq(first + i as i64),
+                op,
+            })
+            .collect();
+        Change {
+            path: self.cfg.path.clone(),
+            hash,
+            ops: stored,
+            review,
         }
     }
 }

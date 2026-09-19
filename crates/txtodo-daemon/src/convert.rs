@@ -23,7 +23,7 @@ pub fn parse_path(s: &str) -> Result<FilePath, Status> {
 /// keep that file within its line budget.
 pub(crate) fn status_of(e: ActorError) -> Status {
     match e {
-        ActorError::Mutation(MutationError::Stale { .. }) => {
+        ActorError::Mutation(MutationError::Stale { .. } | MutationError::StaleBase) => {
             Status::failed_precondition(e.to_string())
         }
         ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
@@ -125,6 +125,11 @@ pub fn parse_mutation(m: pb::Mutation) -> Result<Mutation, Status> {
         },
         mutation::Kind::MoveToEnd(m) => Mutation::MoveToEnd {
             task: parse_task_ref(m.task)?,
+        },
+        mutation::Kind::Replace(r) => Mutation::Replace {
+            base: <[u8; 32]>::try_from(r.base_hash.as_slice())
+                .map_err(|_| Status::invalid_argument("base_hash must be 32 bytes"))?,
+            contents: r.contents,
         },
     })
 }
