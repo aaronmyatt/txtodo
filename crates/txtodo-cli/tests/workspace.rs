@@ -6,38 +6,14 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod support;
+
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
+use support::txtodod_binary;
 
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
-
-fn txtodod_binary() -> PathBuf {
-    let mut dir = std::env::current_exe().unwrap_or_else(|e| panic!("current_exe: {e}"));
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("txtodod{}", std::env::consts::EXE_SUFFIX));
-    // Non-empty, not just present: apps/desktop's build.rs leaves a 0-byte executable placeholder
-    // at target/debug/txtodod (tauri's externalBin copy) which CI's `--exclude txtodo-daemon`
-    // never overwrites; exec of it is ENOEXEC on linux and a silent no-op on macOS.
-    if !bin.metadata().is_ok_and(|m| m.len() > 0) {
-        let status = Command::new(env!("CARGO"))
-            .args([
-                "build",
-                "-p",
-                "txtodo-daemon",
-                "--bin",
-                "txtodod",
-                "--quiet",
-            ])
-            .status()
-            .unwrap_or_else(|e| panic!("cargo build txtodod: {e}"));
-        assert!(status.success(), "building txtodod failed");
-    }
-    bin
-}
 
 /// A real `txtodod` in true global mode (`--dir` omitted), hermetic via `$TXTODO_SOCKET`/
 /// `$TXTODO_REGISTRY_DB` so it never touches this machine's real `$XDG_DATA_HOME/txtodo/`.

@@ -16,40 +16,18 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod support;
+
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdout, Command, Output, Stdio};
 use std::time::{Duration, Instant};
+use support::txtodod_binary;
 
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
 /// Generous: real mDNS discovery plus the pairing relay's retry burst (`pairing_lan.rs::
 /// RETRY_INTERVAL`) takes a few seconds (`lan_loopback_converge.rs`), and a CI runner can be slow.
 const PAIR_CONVERGE_WAIT: Duration = Duration::from_secs(30);
-
-fn txtodod_binary() -> PathBuf {
-    let mut dir = std::env::current_exe().unwrap_or_else(|e| panic!("current_exe: {e}"));
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("txtodod{}", std::env::consts::EXE_SUFFIX));
-    // Non-empty, not just present: a 0-byte tauri sidecar placeholder can sit here (see bundle.rs).
-    if !bin.metadata().is_ok_and(|m| m.len() > 0) {
-        let status = Command::new(env!("CARGO"))
-            .args([
-                "build",
-                "-p",
-                "txtodo-daemon",
-                "--bin",
-                "txtodod",
-                "--quiet",
-            ])
-            .status()
-            .unwrap_or_else(|e| panic!("cargo build txtodod: {e}"));
-        assert!(status.success(), "building txtodod failed");
-    }
-    bin
-}
 
 struct Daemon {
     child: Child,
