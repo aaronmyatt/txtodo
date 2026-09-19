@@ -7,41 +7,18 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use std::path::{Path, PathBuf};
+mod support;
+
+use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
+use support::txtodod_binary;
 
 /// How long to wait for the daemon socket.
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
 /// Long enough for the daemon to notice and reconcile a direct disk write (150 ms debounce plus
 /// file-watcher latency): only then would a fallback write show up in `log` as `external@`.
 const RECONCILE_SETTLE: Duration = Duration::from_secs(2);
-
-/// `target/debug/deps/<test>` → `target/debug/txtodod`, built on demand: this crate may not depend
-/// on txtodo-daemon (slice rule), so the socket is the boundary. Same as `daemon_mode.rs`.
-fn txtodod_binary() -> PathBuf {
-    let mut dir = std::env::current_exe().unwrap();
-    dir.pop();
-    if dir.ends_with("deps") {
-        dir.pop();
-    }
-    let bin = dir.join(format!("txtodod{}", std::env::consts::EXE_SUFFIX));
-    if !bin.exists() {
-        let built = Command::new(env!("CARGO"))
-            .args([
-                "build",
-                "-p",
-                "txtodo-daemon",
-                "--bin",
-                "txtodod",
-                "--quiet",
-            ])
-            .status()
-            .unwrap();
-        assert!(built.success(), "building txtodod failed");
-    }
-    bin
-}
 
 struct Daemon(Child);
 
