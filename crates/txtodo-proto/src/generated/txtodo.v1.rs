@@ -191,6 +191,9 @@ pub struct ResolveRequest {
     pub resolution: i32,
     #[prost(message, optional, tag = "4")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// unset = the user on this device (task mcp-conflicts-parity: an MCP agent's resolution is attributed to it)
+    #[prost(message, optional, tag = "5")]
+    pub agent: ::core::option::Option<AgentPrincipal>,
 }
 /// A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
