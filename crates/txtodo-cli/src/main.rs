@@ -20,6 +20,9 @@ mod daemon_ensure;
 mod daemon_mode;
 mod error;
 mod json;
+#[cfg(test)]
+mod plan_audit;
+mod plan_check;
 mod store;
 
 use clap::Parser;

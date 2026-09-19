@@ -139,10 +139,14 @@ fn do_archives_through_move_to_end_never_a_whole_file_write() {
     assert_all_through_the_socket(dir.path());
 }
 
+fn log_of(dir: &Path) -> String {
+    String::from_utf8_lossy(&txtodo(dir, &["log", "-n", "50"]).stdout).into_owned()
+}
+
 /// `txtodo log` must hold ops from this user and none from a reconciled disk write.
 fn assert_all_through_the_socket(dir: &Path) {
     std::thread::sleep(RECONCILE_SETTLE);
-    let log = String::from_utf8_lossy(&txtodo(dir, &["log", "-n", "50"]).stdout).into_owned();
+    let log = log_of(dir);
     assert!(log.contains("you@"), "{log}");
     assert!(
         !log.contains("external@"),
@@ -176,8 +180,18 @@ fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
     txtodo(dir.path(), &["add", "call", "mum"]);
     txtodo(dir.path(), &["add", "walk", "dog"]);
     // No `id:` in sidecar text, so `pri` on a line that is not the last is a whole-line change no
-    // mutation can address (on a one-line file it would pass as a delete plus an append).
+    // mutation can address.
     txtodo(dir.path(), &["pri", "1", "A"]);
+    // The last line used to read as "delete a line, append a line", which tombstoned the task and
+    // minted a new one (its history gone, another device's concurrent edit to it refused). It must
+    // stay the same task: a priority change, and no delete anywhere in the log yet.
+    txtodo(dir.path(), &["pri", "2", "B"]);
+    let log = log_of(dir.path());
+    assert!(log.contains("Priority"), "{log}");
+    assert!(
+        !log.contains("Deleted"),
+        "the task was tombstoned and re-added: {log}"
+    );
     // `del` names its line by number alone, so it goes out led by a `RequireBase` on the hash the
     // command read (`base_guard.rs`); the real daemon must accept that hash while nothing moved.
     txtodo(dir.path(), &["del", "2"]);
@@ -188,5 +202,23 @@ fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
         Some(""),
         "`del` leaves a blank: {text:?}"
     );
+    assert_all_through_the_socket(dir.path());
+}
+
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[test]
+fn an_add_after_a_trailing_blank_lands_where_direct_mode_puts_it() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path(), "sidecar");
+    txtodo(dir.path(), &["add", "a"]);
+    txtodo(dir.path(), &["add", "b"]);
+    txtodo(dir.path(), &["del", "2"]);
+    // The file is now `a` and a blank. Direct mode appends after the blank (line 3); the daemon
+    // anchors an `Add` on the last task, which would put `c` on line 2 while `add` printed 3.
+    let out = txtodo(dir.path(), &["add", "c"]);
+    let printed = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(printed.starts_with("3 "), "{printed}");
+    assert_eq!(tasks(dir.path()), ["a", "", "c"]);
     assert_all_through_the_socket(dir.path());
 }

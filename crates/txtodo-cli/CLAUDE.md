@@ -59,7 +59,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `base_guard` (`RequireBase` for
-  line-number-only batches), `bundle`
+  line-number-only batches), `plan_check` (replays a plan the way the daemon applies it), `bundle`
   (`export`/`import`, plan M8 `cli-bundle`), `commands::{add, list, edit, archive, text, fileops, hygiene,
   history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
@@ -77,8 +77,13 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   (`FAILED_PRECONDITION`, nothing written) if the document changed since, instead of overwriting
   another writer's `Apply`. A mutation batch that addresses a line by number alone (sidecar text
   has no `id:` to check) leads with a `RequireBase` on that same hash (`base_guard.rs`); one whose
-  lines carry ids checks itself, and pure appends need nothing. The command's own output was
-  already printed by then; the error says nothing was written.
+  lines carry ids checks itself, and pure appends need nothing. A plan is only sent if
+  `plan_check::reproduces` says replaying it on the old lines (with the daemon's placement: an
+  append or `MoveToEnd` goes right after the last non-blank line, before trailing blanks) gives the
+  new lines exactly, and never as a delete plus an append (how a rewritten or moved line reads once
+  lines match by content: the daemon would tombstone the task and mint a new one, losing its
+  history and any concurrent edit another device made to it); anything else is a `Replace`. The
+  command's own output was already printed by then; the error says nothing was written.
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
 - todo.sh parity is a test: `tests/todosh_parity.rs` (direct mode). `tests/daemon_mode.rs` spawns a

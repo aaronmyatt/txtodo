@@ -11,6 +11,7 @@
 use crate::base_guard::guarded;
 use crate::client::Daemon;
 use crate::config::Paths;
+use crate::plan_check::reproduces;
 use crate::{CliError, Ctx, store};
 use std::path::Path;
 use txtodo_core::{File, LineDiff, LineKind, OwnedLine, diff_lines, parse_file};
@@ -233,7 +234,7 @@ fn log_mutation_plan(result: Option<&Vec<pb::Mutation>>) {
 /// below the next target), appends last. `None` when some step has no mutation — the CLI falls
 /// back to writing the scratch bytes to the real file instead (`push_document` above).
 pub fn plan_mutations(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
-    let result = plan_mutations_inner(old, new);
+    let result = plan_mutations_inner(old, new).filter(|muts| reproduces(old, new, muts));
     log_mutation_plan(result.as_ref());
     result
 }
@@ -264,6 +265,13 @@ fn plan_mutations_inner(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
         adds,
         blank_inserts,
     } = classify(&diffs, old, new)?;
+    // A delete plus an append is how a rewritten or moved line looks once lines are matched by
+    // content (sidecar text has no ids, and a changed last line reads as an append). Sent that way
+    // the daemon tombstones the task and mints a new one, losing its history and any concurrent
+    // edit another device made to it; a whole-document `Replace` matches identity instead.
+    if !deletes.is_empty() && !adds.is_empty() {
+        return None;
+    }
     // `del` leaves a blank in place: a task deleted at index i and a blank inserted at index i.
     for b in blank_inserts {
         let slot = deletes
