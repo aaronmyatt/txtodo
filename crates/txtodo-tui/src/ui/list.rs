@@ -11,20 +11,20 @@ use ratatui::widgets::{List, ListItem};
 
 use crate::paint::paint_line;
 use crate::state::AppState;
+use txtodo_core::{LINE_LENGTH_HINT, over_length_hint};
 
 /// Placeholder text for the trailing Add-a-line row when it isn't being edited (design §3.1).
 const ADD_LINE_PLACEHOLDER: &str = "+ Add a line";
 
 /// root todo 9: "add line length hints to the clients... to encourage keeping todo entries
-/// readable" — 100 matches the desktop editor's own hint and `.claude/budgets.json`'s Rust
-/// `lineWidth` budget, not a todo.txt-format rule. Added here, as a trailing marker span, rather
-/// than inside `paint_line` itself: that function's own byte-coverage test
-/// (`paint_line_covers_every_byte_of_every_corpus_line`) requires its output to reconstruct the
-/// raw line exactly when `show_id` is true, which a synthetic marker span would break.
-const LINE_LENGTH_HINT: usize = 100;
-
+/// readable". The measure and the limit live in `txtodo_core` (`over_length_hint`), shared with
+/// `txtodo lint` and the desktop editor: visible chars, the line's own `id:` tag not counted.
+/// Added here, as a trailing marker span, rather than inside `paint_line` itself: that function's
+/// own byte-coverage test (`paint_line_covers_every_byte_of_every_corpus_line`) requires its output
+/// to reconstruct the raw line exactly when `show_id` is true, which a synthetic marker span would
+/// break.
 /// One [`Line`] per row: every document line painted by [`paint_line`] (plus the length hint
-/// marker past [`LINE_LENGTH_HINT`] chars), plus the trailing Add-a-line row. Selection
+/// marker past the length hint), plus the trailing Add-a-line row. Selection
 /// highlighting is intentionally *not* baked in here — the caller applies it via
 /// `ListState`/`List::highlight_style`, the idiomatic ratatui split between content and selection
 /// chrome.
@@ -34,9 +34,9 @@ pub fn rows(state: &AppState) -> Vec<Line<'static>> {
         .iter()
         .map(|l| {
             let mut line = paint_line(&l.raw, l.completed, state.show_id);
-            if l.raw.chars().count() > LINE_LENGTH_HINT {
+            if over_length_hint(&l.raw).is_some() {
                 line.spans.push(Span::styled(
-                    " [100+]",
+                    format!(" [{LINE_LENGTH_HINT}+]"),
                     Style::new()
                         .fg(Color::DarkGray)
                         .add_modifier(Modifier::ITALIC),
@@ -122,6 +122,17 @@ mod tests {
             "long line marked: {}",
             text(&rows[1])
         );
+    }
+
+    /// A hidden `id:` tag must not tip a 75-char line over the hint (root todo id:
+    /// 01M2WK5DQQ2H17Z53VJGNB0JHP).
+    #[test]
+    fn rows_does_not_count_the_lines_own_id_tag() {
+        let raw = format!("{} id:01J9K3H5Z7Q8X2M4N6P8R0T2V4", "x".repeat(75));
+        let state = AppState::from_document("todo.txt", &raw);
+        let rows = rows(&state);
+        let text: String = rows[0].spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(!text.ends_with("[100+]"), "not marked: {text}");
     }
 
     #[test]
