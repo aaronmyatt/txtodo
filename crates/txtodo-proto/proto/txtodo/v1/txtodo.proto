@@ -287,6 +287,7 @@ message ResolveRequest {
   TaskRef task = 2;
   Resolution resolution = 3;
   WorkspaceSelector workspace = 4;
+  AgentPrincipal agent = 5;   // unset = the user on this device (task mcp-conflicts-parity: an MCP agent's resolution is attributed to it)
 }
 
 // A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
