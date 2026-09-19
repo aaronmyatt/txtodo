@@ -8,9 +8,10 @@ use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
-    HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, Replace,
+    HistoryResponse, LintFinding, LintRequest, LintResponse, ListFilesResponse,
+    MigrateIdentityResponse, Move, MoveBefore, MoveToEnd, Mutation, OpSummary, Progress, Replace,
     RequireBase, SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest,
-    WatchRequest, mutation, sync_status_response,
+    WatchRequest, WorkspaceInfo, WorkspaceLoadState, mutation, sync_status_response,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -146,6 +147,7 @@ fn responses_and_streams_round_trip() {
         relay_url: String::new(),
         relay_last_outcome: String::new(),
         pairing_last_carrier: String::new(),
+        ..HealthResponse::default()
     });
 }
 
@@ -219,4 +221,68 @@ fn sync_status_messages_round_trip() {
     });
     // No peers, nothing pending — the empty case this RPC's own doc calls out.
     round_trip(&SyncStatusResponse::default());
+}
+
+#[test]
+fn the_early_bind_and_relay_fields_round_trip_and_default_to_absent() {
+    let info = WorkspaceInfo {
+        workspace_id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        root: "/home/a/project".into(),
+        load_state: WorkspaceLoadState::Failed as i32,
+        load_error: "disk".into(),
+        ..WorkspaceInfo::default()
+    };
+    round_trip(&info);
+    assert_eq!(
+        WorkspaceInfo::default().load_state,
+        WorkspaceLoadState::Unspecified as i32,
+        "an older daemon says nothing"
+    );
+
+    let health = HealthResponse {
+        workspaces_registered: 12,
+        workspaces_ready: 3,
+        workspaces_loading: 8,
+        workspaces_failed: 1,
+        relay_node_id: "ab".repeat(32),
+        relay_bound: true,
+        ..HealthResponse::default()
+    };
+    round_trip(&health);
+    let none = HealthResponse::default();
+    assert!(none.relay_node_id.is_empty() && !none.relay_bound);
+
+    round_trip(&MigrateIdentityResponse {
+        paired_peers: 2,
+        ..MigrateIdentityResponse::default()
+    });
+}
+
+#[test]
+fn move_before_and_lint_round_trip() {
+    round_trip(&Mutation {
+        kind: Some(mutation::Kind::MoveBefore(MoveBefore {
+            task: task(),
+            before: Some(TaskRef {
+                line_number: 1,
+                task_id: String::new(),
+            }),
+        })),
+    });
+    round_trip(&LintRequest {
+        path: "todo.txt".into(),
+        workspace: None,
+    });
+    round_trip(&LintResponse {
+        findings: vec![
+            LintFinding {
+                line: 2,
+                message: "101 chars, over the 100-char hint".into(),
+            },
+            LintFinding {
+                line: 0,
+                message: "byte order mark".into(),
+            },
+        ],
+    });
 }
