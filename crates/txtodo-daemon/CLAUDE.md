@@ -87,7 +87,8 @@ multiplex every workspace's traffic — not done by this task).
   whole-document compare-and-swap: refused as `FAILED_PRECONDITION`, nothing written, unless the
   caller's `base_hash` is still the document's and the file on disk is still our own write, else
   reconciled like an external edit but stamped as the caller; the CLI's fallback for a diff no
-  other mutation can express) · `history` (replay, checkout, inverse) ·
+  other mutation can express; `Mutation::RequireBase` is the same check as a leading precondition
+  on an ordinary batch, for lines addressed by number alone, i.e. sidecar text) · `history` (replay, checkout, inverse) ·
   `refdir` + `refdir_ops` (slug generation, collision-safe filesystem moves, lazy `ref:` creation
   and rename; plan §3.2 rules 1, 4) · `move_coordinator` + `apply_route` (cross-file `Move` across
   two actors, relocating the task's `ref:` directory; plan §3.2.8) · `walker` (discovers

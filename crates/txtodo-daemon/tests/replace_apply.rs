@@ -2,7 +2,9 @@
 //! stale base hash (another `Apply` landed since the caller read) and an unreconciled edit on disk,
 //! changing nothing; otherwise reconciles the new bytes like an external edit (untouched lines keep
 //! their identity) but attributed to the caller. This is what the CLI's fallback sends instead of
-//! writing the file itself, which used to drop a concurrent `Apply` silently.
+//! writing the file itself, which used to drop a concurrent `Apply` silently. `RequireBase` is the
+//! same check as a leading precondition on an ordinary batch: sidecar text has no `id:` to catch a
+//! shifted line, so a line-number-only batch names the hash it was built from instead.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 // A unix-domain socket is the daemon's only transport (ADR 0010); this cannot run on Windows.
@@ -81,6 +83,27 @@ fn replace(base_hash: &[u8], contents: &str) -> mutation::Kind {
     mutation::Kind::Replace(pb::Replace {
         base_hash: base_hash.to_vec(),
         contents: contents.as_bytes().to_vec(),
+    })
+}
+
+fn require_base(base_hash: &[u8]) -> mutation::Kind {
+    mutation::Kind::RequireBase(pb::RequireBase {
+        base_hash: base_hash.to_vec(),
+    })
+}
+
+/// A line addressed by number alone, the only way sidecar text can be addressed.
+fn line_ref(line_number: u32) -> Option<pb::TaskRef> {
+    Some(pb::TaskRef {
+        line_number,
+        task_id: String::new(),
+    })
+}
+
+fn edit_line(line_number: u32, new_line: &str) -> mutation::Kind {
+    mutation::Kind::Edit(pb::Edit {
+        task: line_ref(line_number),
+        new_line: new_line.into(),
     })
 }
 
@@ -281,4 +304,61 @@ async fn sidecar_mode_replaces_too_and_drops_a_blank_line() {
         Code::FailedPrecondition,
         "the old hash is stale now: {err}"
     );
+}
+
+/// Agent A read `a b c` and means to edit `b` (line 2). Agent B then deletes line 1, so line 2 is
+/// `c`: with no id to disagree, only the base hash can refuse A's edit.
+#[tokio::test]
+async fn a_guarded_line_number_batch_is_refused_once_the_lines_have_shifted() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "a\nb\nc\n").unwrap();
+    let (mut a, _stop) = serve_in(dir.path(), IdentityMode::Sidecar).await;
+    let (_, stale_hash) = read(&mut a).await;
+    let mut b = connect(dir.path().join(".txtodo").join("txtodod.sock")).await;
+    let delete = mutation::Kind::Delete(pb::Delete {
+        task: line_ref(1),
+        leave_blank: false,
+    });
+    b.apply(apply_req(vec![delete])).await.unwrap();
+
+    let stale = apply_req(vec![require_base(&stale_hash), edit_line(2, "b edited")]);
+    let err = a.apply(stale).await.unwrap_err();
+    assert_eq!(err.code(), Code::FailedPrecondition, "{err}");
+    let (after, fresh_hash) = read(&mut a).await;
+    assert_eq!(after, "b\nc\n", "nothing was edited, `c` least of all");
+
+    // Re-read, find `b` at line 1 now, retry with the fresh hash.
+    let retry = apply_req(vec![require_base(&fresh_hash), edit_line(1, "b edited")]);
+    a.apply(retry).await.unwrap();
+    assert_eq!(read(&mut a).await.0, "b edited\nc\n");
+}
+
+#[tokio::test]
+async fn require_base_must_lead_alone_and_not_hide_an_unreconciled_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "a\n").unwrap();
+    let (mut client, _stop) = serve_in(dir.path(), IdentityMode::Sidecar).await;
+    let (_, hash) = read(&mut client).await;
+
+    let not_first = apply_req(vec![add("b"), require_base(&hash)]);
+    let twice = apply_req(vec![require_base(&hash), require_base(&hash)]);
+    let short = apply_req(vec![require_base(&hash[..5])]);
+    for bad in [not_first, twice, short] {
+        let err = client.apply(bad).await.unwrap_err();
+        assert_eq!(err.code(), Code::InvalidArgument, "{err}");
+    }
+    assert_eq!(
+        read(&mut client).await,
+        ("a\n".into(), hash.clone()),
+        "nothing changed"
+    );
+
+    // The projection, and so `hash`, is current, but the file holds an editor save the daemon has
+    // not reconciled: writing over it would lose it.
+    std::fs::write(dir.path().join("todo.txt"), "typed in vim\n").unwrap();
+    let guarded = apply_req(vec![require_base(&hash), add("b")]);
+    let err = client.apply(guarded).await.unwrap_err();
+    assert_eq!(err.code(), Code::FailedPrecondition, "{err}");
+    let disk = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
+    assert_eq!(disk, "typed in vim\n");
 }

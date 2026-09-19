@@ -230,6 +230,7 @@ impl FileActor {
         if mutations.len() > MAX_MUTATIONS_PER_APPLY {
             return Err(MutationError::TooMany(mutations.len()).into());
         }
+        self.guard_batch(&mutations)?;
         if let Some(replaced) = self.replace_batch(&mutations, &principal) {
             return replaced;
         }

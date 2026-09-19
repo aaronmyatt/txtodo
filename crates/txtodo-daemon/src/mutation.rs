@@ -77,6 +77,13 @@ pub enum Mutation {
         /// The whole new document.
         contents: Vec<u8>,
     },
+    /// A precondition, not a change (`replace.rs`): the batch is refused unless the document still
+    /// hashes to `base`. For batches that address lines by number alone, with no `id:` to check
+    /// (sidecar mode). Must be the batch's first mutation, and its only guard.
+    RequireBase {
+        /// The hash the batch was built from (`Contents::hash`).
+        base: Hash,
+    },
 }
 
 /// Why a mutation was refused. All are client errors except `TooMany`, which is a limit.
@@ -181,6 +188,7 @@ fn mutation_kind(m: &Mutation) -> &'static str {
         Mutation::Delete { .. } => "delete",
         Mutation::MoveToEnd { .. } => "move_to_end",
         Mutation::Replace { .. } => "replace",
+        Mutation::RequireBase { .. } => "require_base",
     }
 }
 
@@ -225,6 +233,8 @@ fn mutation_ops_inner(
         Mutation::Replace { .. } => Err(MutationError::Unsupported(
             "Replace must be its own Apply batch",
         )),
+        // Checked by the actor before any op is derived (`replace.rs`'s `guard_batch`).
+        Mutation::RequireBase { .. } => Ok(Vec::new()),
         Mutation::Delete { task, leave_blank } => {
             let (i, id) = resolve(state, task)?;
             let after = state.task_before(i);

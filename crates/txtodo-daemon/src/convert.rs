@@ -96,6 +96,11 @@ pub(crate) fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> 
     })
 }
 
+/// A document hash (blake3, 32 bytes) from the wire.
+fn parse_hash(bytes: &[u8]) -> Result<[u8; 32], Status> {
+    <[u8; 32]>::try_from(bytes).map_err(|_| Status::invalid_argument("base_hash must be 32 bytes"))
+}
+
 /// One wire mutation into the typed one.
 pub fn parse_mutation(m: pb::Mutation) -> Result<Mutation, Status> {
     let kind = m
@@ -127,9 +132,11 @@ pub fn parse_mutation(m: pb::Mutation) -> Result<Mutation, Status> {
             task: parse_task_ref(m.task)?,
         },
         mutation::Kind::Replace(r) => Mutation::Replace {
-            base: <[u8; 32]>::try_from(r.base_hash.as_slice())
-                .map_err(|_| Status::invalid_argument("base_hash must be 32 bytes"))?,
+            base: parse_hash(&r.base_hash)?,
             contents: r.contents,
+        },
+        mutation::Kind::RequireBase(r) => Mutation::RequireBase {
+            base: parse_hash(&r.base_hash)?,
         },
     })
 }
