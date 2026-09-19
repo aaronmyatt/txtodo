@@ -182,6 +182,12 @@ impl Daemon {
 
     /// Current bytes of a document (workspace-relative path).
     pub fn get(&mut self, path: &str) -> Result<Vec<u8>, ClientError> {
+        Ok(self.snapshot(path)?.0)
+    }
+
+    /// `get`, plus the document's hash: the base a later `Replace` names, so the daemon can refuse
+    /// it if the document changed since this read.
+    pub fn snapshot(&mut self, path: &str) -> Result<(Vec<u8>, Vec<u8>), ClientError> {
         let req = pb::GetFileRequest {
             path: path.to_owned(),
             workspace: self.selector.clone(),
@@ -189,8 +195,9 @@ impl Daemon {
         let rep = self
             .rt
             .block_on(self.client.get_file(req))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner().bytes)
+            .map_err(ClientError::Rpc)?
+            .into_inner();
+        Ok((rep.bytes, rep.hash))
     }
 
     /// Every synced document.

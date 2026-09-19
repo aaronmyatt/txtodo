@@ -1,8 +1,9 @@
-//! `do` + auto-archive against a real tagged-mode `txtodod`: the reorder must reach the daemon as
-//! guarded `MoveToEnd` mutations (`archive_plan.rs`), not as a whole-file write the daemon then
-//! reconciles as an External edit (which can drop another writer's concurrent `Apply`). Every
-//! change here goes through the socket, so `log` must show no `external@` op. Tagged mode because
-//! the plan needs `id:` tags in the text; the daemon defaults to sidecar, which has none.
+//! Edits the CLI cannot say as plain mutations, against a real `txtodod`. `do` + auto-archive must
+//! reach the daemon as guarded `MoveToEnd`s (`archive_plan.rs`, tagged mode: it needs `id:` tags in
+//! the text, which the default sidecar mode has none of); anything else, like dropping a blank line
+//! or any sidecar-mode edit, as a `Replace` naming the hash it read. Neither may be a direct write
+//! the daemon reconciles as an External edit, which can drop another writer's concurrent `Apply`.
+//! Every change here goes through the socket, so `log` must show no `external@` op.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -12,6 +13,9 @@ use std::time::{Duration, Instant};
 
 /// How long to wait for the daemon socket.
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
+/// Long enough for the daemon to notice and reconcile a direct disk write (150 ms debounce plus
+/// file-watcher latency): only then would a fallback write show up in `log` as `external@`.
+const RECONCILE_SETTLE: Duration = Duration::from_secs(2);
 
 /// `target/debug/deps/<test>` → `target/debug/txtodod`, built on demand: this crate may not depend
 /// on txtodo-daemon (slice rule), so the socket is the boundary. Same as `daemon_mode.rs`.
@@ -42,9 +46,14 @@ fn txtodod_binary() -> PathBuf {
 struct Daemon(Child);
 
 impl Daemon {
-    fn spawn_tagged(dir: &Path) -> Daemon {
+    fn spawn(dir: &Path, identity_mode: &str) -> Daemon {
         let child = Command::new(txtodod_binary())
-            .args(["--dir", &dir.to_string_lossy(), "--identity-mode", "tagged"])
+            .args([
+                "--dir",
+                &dir.to_string_lossy(),
+                "--identity-mode",
+                identity_mode,
+            ])
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
@@ -116,7 +125,7 @@ fn tasks(dir: &Path) -> Vec<String> {
 fn do_archives_through_move_to_end_never_a_whole_file_write() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
-    let _daemon = Daemon::spawn_tagged(dir.path());
+    let _daemon = Daemon::spawn(dir.path(), "tagged");
     // Added through the daemon, so its history holds no External op (an adopted seed file would).
     for name in ["a", "b", "c", "d"] {
         txtodo(dir.path(), &["add", name]);
@@ -127,11 +136,49 @@ fn do_archives_through_move_to_end_never_a_whole_file_write() {
     // the plan has to move `a` again, behind `b`.
     txtodo(dir.path(), &["do", "1"]);
     assert_eq!(tasks(dir.path()), ["c", "d", "x:b", "x:a"]);
-    let log =
-        String::from_utf8_lossy(&txtodo(dir.path(), &["log", "-n", "50"]).stdout).into_owned();
+    assert_all_through_the_socket(dir.path());
+}
+
+/// `txtodo log` must hold ops from this user and none from a reconciled disk write.
+fn assert_all_through_the_socket(dir: &Path) {
+    std::thread::sleep(RECONCILE_SETTLE);
+    let log = String::from_utf8_lossy(&txtodo(dir, &["log", "-n", "50"]).stdout).into_owned();
     assert!(log.contains("you@"), "{log}");
     assert!(
         !log.contains("external@"),
-        "the archive fell back to a whole-file write: {log}"
+        "a whole-file write reached the daemon as an external edit: {log}"
     );
+}
+
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[test]
+fn dropping_a_blank_line_is_a_guarded_replace_not_a_disk_write() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path(), "tagged");
+    for name in ["a", "b", "c"] {
+        txtodo(dir.path(), &["add", name]);
+    }
+    // `del` leaves a blank where `a` was; `archive` drops it, which no mutation can say.
+    txtodo(dir.path(), &["del", "1"]);
+    assert_eq!(tasks(dir.path()), ["", "b", "c"]);
+    txtodo(dir.path(), &["archive"]);
+    assert_eq!(tasks(dir.path()), ["b", "c"]);
+    assert_all_through_the_socket(dir.path());
+}
+
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[test]
+fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path(), "sidecar");
+    txtodo(dir.path(), &["add", "call", "mum"]);
+    txtodo(dir.path(), &["add", "walk", "dog"]);
+    // No `id:` in sidecar text, so `pri` on a line that is not the last is a whole-line change no
+    // mutation can address (on a one-line file it would pass as a delete plus an append).
+    txtodo(dir.path(), &["pri", "1", "A"]);
+    let text = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
+    assert!(text.starts_with("(A) "), "{text}");
+    assert_all_through_the_socket(dir.path());
 }

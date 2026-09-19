@@ -2,8 +2,9 @@
 //! against a scratch copy of the daemon's bytes, then express the resulting diff as intent-level
 //! mutations and `Apply` them. Output stays byte-identical to direct mode because the same code
 //! prints it. `archive`'s reorder goes out as guarded `MoveToEnd` mutations (`archive_plan.rs`). A
-//! diff no mutation can express (blank-line removal, mid-file inserts, any other move) falls back
-//! to writing the scratch bytes to the real file, which the daemon reconciles as an edit.
+//! diff no mutation can express (blank-line removal, mid-file inserts, any other move, every edit
+//! in sidecar mode) goes out as one `Replace` of the whole document, naming the hash the command
+//! read: the daemon refuses it if the document changed since, instead of overwriting.
 
 use crate::client::Daemon;
 use crate::config::Paths;
@@ -19,6 +20,8 @@ pub const DOCS: [&str; 1] = ["todo.txt"];
 struct Original {
     doc: &'static str,
     bytes: Vec<u8>,
+    /// The daemon's hash of `bytes`, empty when it does not know the document yet.
+    hash: Vec<u8>,
     known: bool,
 }
 
@@ -33,11 +36,20 @@ pub fn run_via_daemon(
     let mut originals: Vec<Original> = Vec::with_capacity(DOCS.len());
     for doc in DOCS {
         let known = listed.iter().any(|k| k == doc);
-        let bytes = if known { daemon.get(doc)? } else { Vec::new() };
+        let (bytes, hash) = if known {
+            daemon.snapshot(doc)?
+        } else {
+            (Vec::new(), Vec::new())
+        };
         if !bytes.is_empty() {
             std::fs::write(scratch.path().join(doc), &bytes).map_err(CliError::Io)?;
         }
-        originals.push(Original { doc, bytes, known });
+        originals.push(Original {
+            doc,
+            bytes,
+            hash,
+            known,
+        });
     }
     let scratch_ctx = Ctx {
         paths: Paths {
@@ -65,8 +77,9 @@ pub fn run_via_daemon(
     Ok(())
 }
 
-/// Sends one document's diff as mutations, or writes it directly when the diff is inexpressible
-/// or the daemon does not know the document yet (it adopts the file through its watcher).
+/// Sends one document's diff as mutations, or the whole new document as a guarded `Replace` when
+/// no mutation can express the diff. A document the daemon does not know yet is written directly
+/// instead (it adopts the file through its watcher).
 fn push_document(
     ctx: &Ctx,
     daemon: &mut Daemon,
@@ -92,8 +105,24 @@ fn push_document(
             Ok(())
         }
         Some(_) => Ok(()),
+        None if original.known => {
+            daemon.apply(original.doc, vec![replace(&original.hash, new)])?;
+            Ok(())
+        }
         None => store::write(&ctx.paths.dir.join(original.doc), &parse_file(&new))
             .map_err(CliError::Store),
+    }
+}
+
+/// The whole new document as one `Replace`, naming the hash `snapshot` returned for the bytes the
+/// command started from: a compare-and-swap, refused (nothing written) if the document has changed.
+fn replace(base_hash: &[u8], contents: Vec<u8>) -> pb::Mutation {
+    let replace = pb::Replace {
+        base_hash: base_hash.to_vec(),
+        contents,
+    };
+    pb::Mutation {
+        kind: Some(mutation::Kind::Replace(replace)),
     }
 }
 

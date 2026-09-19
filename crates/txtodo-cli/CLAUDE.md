@@ -67,13 +67,15 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 ## Invariants
 - Writes are atomic: temp file beside the target, fsync, rename. Untouched lines round-trip
   byte-for-byte; BOM, per-line endings and the trailing newline are kept (design §2.2 rule 7).
-- Daemon mode never touches a synced file directly except as the documented fallback: a command
-  runs against a scratch copy of the daemon's bytes and its diff becomes Apply mutations (edits,
-  deletes bottom-up, appends, and `archive`'s reorder as `MoveToEnd`s — `archive_plan.rs`, every
-  line carrying an `id:`). Inexpressible diffs (blank removal by `archive`, mid-file inserts, any
-  other move) write the scratch bytes to the real file; the daemon reconciles them as an External
-  edit. That fallback is a whole-file overwrite from a snapshot, so it can drop another writer's
-  concurrent `Apply` (`txtodo-daemon/tests/stale_snapshot_write.rs`, `#[ignore]`d repro).
+- Daemon mode never touches a synced file directly, except one the daemon does not know yet: a
+  command runs against a scratch copy of the daemon's bytes and its diff becomes Apply mutations
+  (edits, deletes bottom-up, appends, and `archive`'s reorder as `MoveToEnd`s — `archive_plan.rs`,
+  every line carrying an `id:`). A diff no mutation can express (blank removal by `archive`,
+  mid-file inserts, any other move, every edit in sidecar mode) goes out as one `Replace` of the
+  whole document, naming the hash the command read (`Daemon::snapshot`): the daemon refuses it
+  (`FAILED_PRECONDITION`, nothing written) if the document changed since, instead of overwriting
+  another writer's `Apply`. The command's own output was already printed by then; the error says
+  nothing was written.
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
 - todo.sh parity is a test: `tests/todosh_parity.rs` (direct mode). `tests/daemon_mode.rs` spawns a
