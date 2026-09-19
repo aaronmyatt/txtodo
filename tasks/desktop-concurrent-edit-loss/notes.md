@@ -56,3 +56,31 @@ tagged `@human`: needs a decision on 3-way merge vs. "block the repaint and show
 
 - Rebase vs. banner for line 5 (above).
 - Should the editor autosave (debounced) so a repaint has less to lose? Not in scope until 1–4 land.
+
+## As built (2026-09-19)
+
+Lines 1–4 done, commit 8551f3e.
+
+- `rawMode.ts::splitLines`: drops the naive split's trailing `""` only when `text` itself ends in
+  `\n` (not a blanket trim — `"a\n\n"` still keeps its real middle blank line), matching
+  `txtodo-core/src/file.rs::split_lines`'s byte-iterator loop exactly, verified case by case
+  including the `"\n"` → one blank line edge case. New regression test:
+  `computeDelta("a\nb\n", "a\nb\nnew") === [{kind:"add", line:"new"}]`, no phantom delete.
+- `FileView.refreshDoc`: re-checks `dirty` after the `getFile` await, plus a per-call `refreshSeq`
+  counter so a response superseded by a newer call (not just a dirty buffer) is also discarded.
+- `FileView.commit`: on `Apply` failure, restores `dirty = true` and sets `loadError` without
+  calling `refreshDoc()` — the buffer keeps the human's rejected text instead of being silently
+  replaced by the daemon's pre-edit content.
+- `commands.rs::watch`: one shared stream per connection (`AppState::watch_started`, reset in
+  `connect_and_store` on every reconnect) instead of one forwarder per call. The `paths` argument
+  is gone entirely (server always watches everything now; every listener already filtered to its
+  own path client-side) — updated `$lib/daemon.ts`, `FileView`/`DetailView`/`ConflictBanner`'s call
+  sites, and the e2e shim (`core.ts`/`event.ts`), which now derives its polling-loop path set from
+  `get_file`/`list_conflicts` calls instead of a `watch(paths)` argument that no longer carries any.
+
+## Known gaps
+
+- Line 5 (rebase baseline while dirty) is unbuilt, `@human`: needs a decision on 3-way merge vs. a
+  "block the repaint, show a conflict banner" UX, not just an implementation.
+- Nothing here has been driven against a real, running desktop app by a human yet — this pass is
+  vitest (rawMode) + `cargo check`/`clippy -p desktop` + svelte-check only.
