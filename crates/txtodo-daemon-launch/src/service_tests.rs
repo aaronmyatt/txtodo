@@ -179,3 +179,30 @@ fn no_installed_unit_is_not_stale() {
     assert!(!r.path.exists());
     assert!(!is_stale(&r));
 }
+
+#[test]
+fn wait_until_returns_as_soon_as_the_condition_holds() {
+    let mut polls = 0;
+    let settled = wait_until(Duration::from_secs(5), Duration::from_millis(1), || {
+        polls += 1;
+        polls == 3
+    });
+    assert!(
+        settled,
+        "a condition that turns true within the timeout is a success"
+    );
+    assert_eq!(polls, 3, "no further polling once the condition holds");
+}
+
+#[test]
+fn wait_until_gives_up_at_the_timeout() {
+    let start = Instant::now();
+    let settled = wait_until(Duration::from_millis(30), Duration::from_millis(1), || {
+        false
+    });
+    assert!(!settled, "a condition that never holds must report failure");
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "the wait must be bounded by its timeout, not hang"
+    );
+}

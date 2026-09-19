@@ -5,7 +5,8 @@
 //! install/start call (`spawn.rs`) must stay silent on the hot path.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 /// The launchd agent template (`deploy/launchd/`).
 pub const LAUNCHD_TEMPLATE: &str = include_str!("../../../deploy/launchd/com.txtodo.txtodod.plist");
@@ -288,15 +289,58 @@ pub fn stop(r: &Rendered) -> Result<(), ServiceError> {
     stop_by_label(&r.label)
 }
 
+/// How long [`stop_by_label`] waits for launchd to finish removing a job after `bootout`.
+/// `bootout` returns once teardown is *requested*: the job stays registered until its process
+/// exits (SIGTERM, then SIGKILL after the plist's `ExitTimeOut`, 20s by default), and a `bootstrap`
+/// in that window fails with the unhelpful "5: Input/output error" (launchd's own log says "same
+/// label as an existing service"). The daemon's graceful shutdown really does take seconds.
+/// https://keith.github.io/xcode-man-pages/launchd.plist.5.html — see `ExitTimeOut`
+const BOOTOUT_SETTLE: Duration = Duration::from_secs(30);
+const BOOTOUT_POLL: Duration = Duration::from_millis(100);
+
 fn stop_by_label(label: &str) -> Result<(), ServiceError> {
     if cfg!(target_os = "macos") {
-        run_ctl("launchctl", &["bootout", &format!("gui/{}/{label}", uid())])
+        let target = format!("gui/{}/{label}", uid());
+        run_ctl("launchctl", &["bootout", &target])?;
+        if wait_until(BOOTOUT_SETTLE, BOOTOUT_POLL, || !launchd_has(&target)) {
+            return Ok(());
+        }
+        Err(ServiceError::Message(format!(
+            "txtodo daemon: {label} still registered with launchd {}s after `bootout`",
+            BOOTOUT_SETTLE.as_secs()
+        )))
     } else {
+        // `disable --now` blocks until the unit has stopped, so there is nothing to wait for.
         run_ctl(
             "systemctl",
             &["--user", "disable", "--now", &format!("{label}.service")],
         )
     }
+}
+
+/// Whether launchd still has `target` (`gui/<uid>/<label>`) registered: `launchctl print` exits
+/// non-zero ("Could not find service") once it is gone. A launchctl that cannot even run reads as
+/// gone, so a missing binary never turns into a 30s stall.
+/// https://keith.github.io/xcode-man-pages/launchctl.1.html
+fn launchd_has(target: &str) -> bool {
+    Command::new("launchctl")
+        .args(["print", target])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+/// Polls `done` every `poll` until it holds (`true`) or `timeout` passes (`false`).
+fn wait_until(timeout: Duration, poll: Duration, mut done: impl FnMut() -> bool) -> bool {
+    let start = Instant::now();
+    while !done() {
+        if start.elapsed() >= timeout {
+            return false;
+        }
+        std::thread::sleep(poll);
+    }
+    true
 }
 
 #[cfg(test)]
