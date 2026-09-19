@@ -242,6 +242,16 @@ pub struct MoveToEnd {
     #[prost(message, optional, tag = "1")]
     pub task: ::core::option::Option<TaskRef>,
 }
+/// Moves a task within its own file to sit immediately before `before` (task mcp-move-reorder):
+/// the same-file relocation `MoveToEnd` is the "after the last task" case of. Refused if `before`
+/// is the task itself or is not in this file.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MoveBefore {
+    #[prost(message, optional, tag = "1")]
+    pub task: ::core::option::Option<TaskRef>,
+    #[prost(message, optional, tag = "2")]
+    pub before: ::core::option::Option<TaskRef>,
+}
 /// Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
 /// `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
 /// holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
@@ -267,7 +277,7 @@ pub struct RequireBase {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Mutation {
-    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
+    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9")]
     pub kind: ::core::option::Option<mutation::Kind>,
 }
 /// Nested message and enum types in `Mutation`.
@@ -290,6 +300,8 @@ pub mod mutation {
         Replace(super::Replace),
         #[prost(message, tag = "8")]
         RequireBase(super::RequireBase),
+        #[prost(message, tag = "9")]
+        MoveBefore(super::MoveBefore),
     }
 }
 /// Who is applying. M3 knows users only; M6 fills `agent`.
@@ -420,6 +432,24 @@ pub struct HealthResponse {
     /// sync-pairing-relay); empty until a pairing has finished on this device at all.
     #[prost(string, tag = "14")]
     pub pairing_last_carrier: ::prost::alloc::string::String,
+    /// Device-level totals (task daemon-early-bind), the same numbers on every response: Health on a
+    /// daemon that is still opening workspaces answers with these instead of waiting for one.
+    #[prost(uint32, tag = "15")]
+    pub workspaces_registered: u32,
+    #[prost(uint32, tag = "16")]
+    pub workspaces_ready: u32,
+    /// queued or loading
+    #[prost(uint32, tag = "17")]
+    pub workspaces_loading: u32,
+    #[prost(uint32, tag = "18")]
+    pub workspaces_failed: u32,
+    /// This device's own relay node id, lowercase hex (task cli-relay-node-id): the value a relay
+    /// allowlist has to contain. Empty and `relay_bound` false when no relay is configured or the
+    /// endpoint has not bound yet — absence is a real state, like `relay_url` above.
+    #[prost(string, tag = "19")]
+    pub relay_node_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "20")]
+    pub relay_bound: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -704,6 +734,33 @@ pub struct MigrateIdentityResponse {
     /// lines that repeated an earlier line's id and were given a fresh one
     #[prost(uint32, tag = "6")]
     pub renumbered: u32,
+    /// Other devices paired into this workspace's sync group (task sidecar-migrate-tagged, "Single
+    /// device only"): a still-Tagged peer rejects the tag-stripping edits and sends `id:` text back,
+    /// so the CLI names this number before it asks for confirmation.
+    #[prost(uint32, tag = "7")]
+    pub paired_peers: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LintRequest {
+    /// workspace-relative document path, e.g. "todo.txt"
+    #[prost(string, tag = "1")]
+    pub path: ::prost::alloc::string::String,
+    #[prost(message, optional, tag = "2")]
+    pub workspace: ::core::option::Option<WorkspaceSelector>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LintFinding {
+    /// 1-based line number; 0 for a whole-file finding
+    #[prost(uint32, tag = "1")]
+    pub line: u32,
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LintResponse {
+    /// per-line findings in line order, then file-level ones
+    #[prost(message, repeated, tag = "1")]
+    pub findings: ::prost::alloc::vec::Vec<LintFinding>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceRemoveResponse {
@@ -751,7 +808,6 @@ pub mod sync_status_response {
         pub lag_ms: i64,
     }
 }
-/// One entry in the device-global workspace registry.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceInfo {
     /// ULID text, same form as WorkspaceSelector.workspace_id
@@ -768,6 +824,11 @@ pub struct WorkspaceInfo {
     /// whether root/.txtodo/oplog.db exists; false = never opened yet
     #[prost(bool, tag = "5")]
     pub has_state: bool,
+    #[prost(enumeration = "WorkspaceLoadState", tag = "6")]
+    pub load_state: i32,
+    /// why the last open failed; empty unless load_state is FAILED
+    #[prost(string, tag = "7")]
+    pub load_error: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
@@ -1017,6 +1078,45 @@ impl SkewStatus {
             "SKEW_STATUS_OK" => Some(Self::Ok),
             "SKEW_STATUS_BEHIND" => Some(Self::Behind),
             "SKEW_STATUS_AHEAD" => Some(Self::Ahead),
+            _ => None,
+        }
+    }
+}
+/// One entry in the device-global workspace registry.
+/// How far one registered workspace is through being opened by this daemon (task
+/// daemon-early-bind): the daemon binds its socket first and opens workspaces in the background.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum WorkspaceLoadState {
+    /// not scheduled: the root is missing, or an older daemon
+    Unspecified = 0,
+    Queued = 1,
+    Loading = 2,
+    Ready = 3,
+    Failed = 4,
+}
+impl WorkspaceLoadState {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "WORKSPACE_LOAD_STATE_UNSPECIFIED",
+            Self::Queued => "WORKSPACE_LOAD_STATE_QUEUED",
+            Self::Loading => "WORKSPACE_LOAD_STATE_LOADING",
+            Self::Ready => "WORKSPACE_LOAD_STATE_READY",
+            Self::Failed => "WORKSPACE_LOAD_STATE_FAILED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "WORKSPACE_LOAD_STATE_UNSPECIFIED" => Some(Self::Unspecified),
+            "WORKSPACE_LOAD_STATE_QUEUED" => Some(Self::Queued),
+            "WORKSPACE_LOAD_STATE_LOADING" => Some(Self::Loading),
+            "WORKSPACE_LOAD_STATE_READY" => Some(Self::Ready),
+            "WORKSPACE_LOAD_STATE_FAILED" => Some(Self::Failed),
             _ => None,
         }
     }
@@ -1845,6 +1945,28 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "MigrateIdentity"));
             self.inner.unary(req, path, codec).await
         }
+        /// `txtodo lint` for one document (task mcp-hygiene-parity): parse quirks and file hygiene, one
+        /// finding per problem, computed from the exact bytes the daemon holds. Read-only. The daemon
+        /// links txtodo-core, so this is how a client that must not (the MCP server) gets the same
+        /// findings the CLI prints.
+        pub async fn lint(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LintRequest>,
+        ) -> std::result::Result<tonic::Response<super::LintResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/txtodo.v1.Txtodo/Lint");
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "Lint"));
+            self.inner.unary(req, path, codec).await
+        }
         /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
         /// an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
         /// last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
@@ -2211,6 +2333,14 @@ pub mod txtodo_server {
             tonic::Response<super::MigrateIdentityResponse>,
             tonic::Status,
         >;
+        /// `txtodo lint` for one document (task mcp-hygiene-parity): parse quirks and file hygiene, one
+        /// finding per problem, computed from the exact bytes the daemon holds. Read-only. The daemon
+        /// links txtodo-core, so this is how a client that must not (the MCP server) gets the same
+        /// findings the CLI prints.
+        async fn lint(
+            &self,
+            request: tonic::Request<super::LintRequest>,
+        ) -> std::result::Result<tonic::Response<super::LintResponse>, tonic::Status>;
         /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
         /// an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
         /// last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
@@ -3694,6 +3824,49 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = MigrateIdentitySvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/Lint" => {
+                    #[allow(non_camel_case_types)]
+                    struct LintSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::LintRequest>
+                    for LintSvc<T> {
+                        type Response = super::LintResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::LintRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::lint(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = LintSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
