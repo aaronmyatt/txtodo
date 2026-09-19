@@ -49,9 +49,14 @@ multiplex every workspace's traffic — not done by this task).
 - `txtodod [--dir <workspace>]`. **True global mode** (`--dir` omitted, the new default): binds
   the one device-global socket (`$TXTODO_SOCKET` override, else `$XDG_DATA_HOME/txtodo/
   txtodod.sock`/platform equivalent — see `workspace_registry_paths.rs`), pid lock and JSON logs
-  alongside it, and opens every workspace the registry (`$TXTODO_REGISTRY_DB` override, else
-  `$XDG_DATA_HOME/txtodo/registry.db`) already knows about — 0 opened is normal until a human has
-  a way to register one (`cli-workspace-commands`, not built yet). **`--dir <workspace>` bridge**
+  alongside it, and binds the socket **first**, then opens every workspace the registry
+  (`$TXTODO_REGISTRY_DB` override, else `$XDG_DATA_HOME/txtodo/registry.db`) already knows about on
+  a background loader thread, most recently used first (task `daemon-early-bind`, 2026-09-20; pid
+  lock and logging come before even the registry). A request for a workspace that is still queued
+  or loading promotes it (its open starts at once, beside the loader's) and waits up to
+  `workspace_catalog::DEFAULT_LOAD_WAIT`, then `Unavailable("workspace loading")`; a selector-less
+  call is `Unavailable` while any open is pending. `workspace_load.rs` holds the per-workspace
+  Queued → Loading → Ready/Failed state; `workspace_catalog_load.rs` the loader and `ensure_open`. **`--dir <workspace>` bridge**
   (legacy, kept so the huge pre-existing single-workspace test suite and today's CLI need no
   changes): binds the *pre-existing* per-workspace locations instead — pid lock at
   `.txtodo/txtodod.pid`, socket at `.txtodo/txtodod.sock`, logs under `.txtodo/logs/

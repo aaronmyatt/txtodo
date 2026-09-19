@@ -41,7 +41,7 @@ pub(crate) async fn pair_accept_with_catalog(
     service: &crate::global_service::GlobalService,
     r: Request<pb::PairAcceptRequest>,
 ) -> Result<Response<pb::PairResult>, Status> {
-    let ws = service.catalog().resolve(r.get_ref().workspace.as_ref())?;
+    let ws = service.resolve(r.get_ref().workspace.as_ref()).await?;
     if let Some(offered_id) = code_workspace_id(&r.get_ref().code).map_err(wire_status)? {
         service
             .catalog()

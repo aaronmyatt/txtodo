@@ -28,3 +28,14 @@ pub(crate) fn start_boot_span(args: &crate::Args) -> tracing::Span {
         socket = tracing::field::Empty
     )
 }
+
+/// The background workspace loader started; split out of `main.rs::start_loader` for its
+/// cognitive-complexity budget (each `tracing` macro counts against its caller).
+pub(crate) fn log_loader_started(workspaces: usize) {
+    tracing::info!(workspaces, "workspace_loader_started");
+}
+
+/// The loader thread could not be spawned; requests still open their own workspace on demand.
+pub(crate) fn log_loader_failed(error: &std::io::Error) {
+    tracing::error!(error = %error, "workspace_loader_failed");
+}

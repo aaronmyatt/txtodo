@@ -77,6 +77,30 @@ async fn connect(socket: PathBuf) -> Client {
     }
 }
 
+/// Global mode binds its socket before it has opened any workspace (task `daemon-early-bind`), so
+/// a harness that then makes a selector-less call, or expects every seeded workspace to be live,
+/// first touches each registered one by path — a request promotes a queued workspace and waits for
+/// its open — and returns once all of them are open.
+pub async fn wait_until_all_open(client: &mut Client) {
+    let listed = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .unwrap_or_else(|e| panic!("workspace_list: {e}"))
+        .into_inner();
+    for info in listed.workspaces.into_iter().filter(|w| w.root_exists) {
+        client
+            .health(pb::HealthRequest {
+                workspace: Some(pb::WorkspaceSelector {
+                    selector: Some(pb::workspace_selector::Selector::Path(info.root.clone())),
+                }),
+            })
+            .await
+            // A workspace that cannot open (a test may register a broken one on purpose) has
+            // settled too: the error is the answer, not a reason to stop.
+            .ok();
+    }
+}
+
 impl Daemon {
     /// `start_with_mode(todo, "tagged")`: this harness's whole M3 acceptance suite is about
     /// `id:` tag adoption/stamping, which sidecar mode never does.

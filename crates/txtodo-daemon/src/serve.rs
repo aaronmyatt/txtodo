@@ -43,10 +43,12 @@ async fn serve_with<S: Txtodo>(
     svc: S,
     socket: &Path,
     shutdown: impl Future<Output = ()>,
+    after_bind: impl FnOnce(),
 ) -> Result<(), ServeError> {
     let listener = tokio::net::UnixListener::bind(socket)
         .map_err(|e| ServeError::Bind(socket.to_path_buf(), e))?;
     log_socket_bound(socket);
+    after_bind();
     let incoming = UnixListenerStream::new(listener);
     let result = tonic::transport::Server::builder()
         .concurrency_limit_per_connection(MAX_INFLIGHT_RPCS)
@@ -67,7 +69,7 @@ pub async fn serve(
     socket: &Path,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), ServeError> {
-    serve_with(TxtodoService::new(ws), socket, shutdown).await
+    serve_with(TxtodoService::new(ws), socket, shutdown, || {}).await
 }
 
 /// The real production entry point (`main.rs`): the one global socket, every call routed by
@@ -77,5 +79,17 @@ pub async fn serve_global(
     socket: &Path,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), ServeError> {
-    serve_with(GlobalService::new(catalog), socket, shutdown).await
+    serve_global_then(catalog, socket, shutdown, || {}).await
+}
+
+/// [`serve_global`], running `after_bind` the moment the socket is bound and `daemon_ready` is
+/// logged, before the first request is served: `main.rs` starts the background workspace loader
+/// there, so the daemon answers before it has opened anything (task `daemon-early-bind`).
+pub async fn serve_global_then(
+    catalog: Arc<WorkspaceCatalog>,
+    socket: &Path,
+    shutdown: impl Future<Output = ()>,
+    after_bind: impl FnOnce(),
+) -> Result<(), ServeError> {
+    serve_with(GlobalService::new(catalog), socket, shutdown, after_bind).await
 }

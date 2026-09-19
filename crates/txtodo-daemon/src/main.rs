@@ -259,11 +259,18 @@ fn start_dir_bridge(
     Ok(())
 }
 
-/// True global mode (`--dir` omitted): opens every already-registered workspace.
-fn start_global(catalog: &WorkspaceCatalog) {
-    let opened = catalog.open_all_registered();
-    eprintln!("txtodod: opened {opened} registered workspace(s)");
-    tracing::info!(opened, "workspaces_opened");
+/// True global mode (`--dir` omitted), run once the socket is bound: opens every queued workspace
+/// on the catalog's loader thread. A loader that cannot start is logged; requests still open their
+/// own workspace on demand, so the daemon stays usable.
+fn start_loader(
+    catalog: &Arc<WorkspaceCatalog>,
+    queued: Vec<(txtodo_store::WorkspaceId, PathBuf)>,
+) {
+    let workspaces = queued.len();
+    match catalog.spawn_loader(queued) {
+        Ok(_handle) => boot_log::log_loader_started(workspaces),
+        Err(e) => boot_log::log_loader_failed(&e),
+    }
 }
 
 /// Resolves until either a ctrl-c or (unix only) SIGTERM.
@@ -375,13 +382,22 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         clock,
     ));
 
-    match &args.dir {
-        Some(dir) => start_dir_bridge(dir, &catalog)?,
-        None => start_global(&catalog),
-    }
+    // The bridge opens its one directory before it binds (its whole test suite relies on that); the
+    // global daemon binds first and opens registered workspaces in the background, newest first.
+    let queued = match &args.dir {
+        Some(dir) => {
+            start_dir_bridge(dir, &catalog)?;
+            Vec::new()
+        }
+        None => catalog.queue_registered(),
+    };
     drop(_boot);
 
-    serve::serve_global(catalog, &socket, shutdown_signal()).await?;
+    let loader_catalog = Arc::clone(&catalog);
+    serve::serve_global_then(catalog, &socket, shutdown_signal(), move || {
+        start_loader(&loader_catalog, queued);
+    })
+    .await?;
     boot_log::log_stopped();
     Ok(())
 }

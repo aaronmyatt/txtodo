@@ -66,7 +66,8 @@ impl MultiWorkspaceDaemon {
             );
             std::thread::sleep(Duration::from_millis(20));
         }
-        let client = connect(socket).await;
+        let mut client = connect(socket).await;
+        super::wait_until_all_open(&mut client).await;
         (
             MultiWorkspaceDaemon {
                 child,

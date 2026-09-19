@@ -9,11 +9,13 @@
 
 use crate::clock::Clock;
 use crate::server::SharedWorkspace;
-use crate::workspace_catalog_open::{OpenedWorkspace, WorkspaceOpenArgs, open_workspace_full};
+use crate::workspace_catalog_open::{OpenedWorkspace, WorkspaceOpenArgs};
+use crate::workspace_load::LoadSlots;
 use crate::workspace_registry::WorkspaceRegistry;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use std::time::Duration;
 use tonic::Status;
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_proto::v1 as pb;
@@ -21,13 +23,31 @@ use txtodo_store::WorkspaceId;
 
 pub use crate::workspace_catalog_open::WorkspaceOpenArgs as OpenArgs;
 
+/// Runs just before a workspace's real open, with no catalog lock held — the injection point
+/// `with_open_hook` gives tests that need a slow or blockable open, in place of an environment
+/// switch a production build could also honor.
+pub(crate) type OpenHook = Arc<dyn Fn(&Path) + Send + Sync>;
+
 /// The device-global catalog plus the subset of it this process has actually opened.
+///
+/// Opening is state-tracked, not lock-serialized (task `daemon-early-bind`): `open` only ever holds
+/// finished workspaces, and `slots` tracks every registered one through Queued → Loading → Ready
+/// or Failed, so a slow open never blocks a call on a workspace that is already open.
 pub struct WorkspaceCatalog {
-    registry: Mutex<WorkspaceRegistry>,
-    open: RwLock<HashMap<WorkspaceId, OpenedWorkspace>>,
-    open_args: WorkspaceOpenArgs,
-    clock: Arc<dyn Clock>,
+    pub(crate) registry: Mutex<WorkspaceRegistry>,
+    pub(crate) open: RwLock<HashMap<WorkspaceId, OpenedWorkspace>>,
+    pub(crate) open_args: WorkspaceOpenArgs,
+    pub(crate) clock: Arc<dyn Clock>,
+    pub(crate) slots: LoadSlots,
+    /// How long a request for a workspace that is still loading waits before `Unavailable`.
+    pub(crate) load_wait: Duration,
+    pub(crate) open_hook: Option<OpenHook>,
 }
+
+/// Default bound on a request waiting for a workspace that is still loading: the client-side spawn
+/// timeout a cold daemon used to be given for the *whole* open pass, so a CLI call issued right
+/// after a cold start waits about as long as it did before the socket was bound early.
+pub const DEFAULT_LOAD_WAIT: Duration = Duration::from_secs(120);
 
 impl WorkspaceCatalog {
     /// Wraps a registry and the settings every workspace this catalog opens will share.
@@ -41,7 +61,28 @@ impl WorkspaceCatalog {
             open: RwLock::new(HashMap::new()),
             open_args,
             clock,
+            slots: LoadSlots::default(),
+            load_wait: DEFAULT_LOAD_WAIT,
+            open_hook: None,
         }
+    }
+
+    /// Overrides how long a request waits for a loading workspace (tests use milliseconds).
+    #[must_use]
+    pub fn with_load_wait(mut self, wait: Duration) -> WorkspaceCatalog {
+        self.load_wait = wait;
+        self
+    }
+
+    /// Runs `hook(root)` at the start of every workspace open, with no lock held. For tests that
+    /// need an open to be slow or to block until released.
+    #[must_use]
+    pub fn with_open_hook(
+        mut self,
+        hook: impl Fn(&Path) + Send + Sync + 'static,
+    ) -> WorkspaceCatalog {
+        self.open_hook = Some(Arc::new(hook));
+        self
     }
 
     /// Registers (idempotent) and opens `dir` directly — the `--dir` bridge `main.rs` uses so
@@ -65,7 +106,7 @@ impl WorkspaceCatalog {
             .count()
     }
 
-    fn list_registered(&self) -> Option<Vec<crate::workspace_registry::WorkspaceEntry>> {
+    pub(crate) fn list_registered(&self) -> Option<Vec<crate::workspace_registry::WorkspaceEntry>> {
         let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
         match registry.list() {
             Ok(entries) => Some(entries),
@@ -109,6 +150,7 @@ impl WorkspaceCatalog {
             .write()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id);
+        self.slots.forget(id);
         Ok(removed)
     }
 
@@ -227,6 +269,7 @@ impl WorkspaceCatalog {
                 opened.rekey(offered_id);
                 open.insert(offered_id, opened);
             }
+            self.slots.rekey(current_id, offered_id);
         }
         ws.read()
             .unwrap_or_else(PoisonError::into_inner)
@@ -274,7 +317,8 @@ impl WorkspaceCatalog {
         }
     }
 
-    /// Registers (idempotent) and opens `root`; returns the (possibly already-open) id.
+    /// Registers (idempotent) and opens `root`; returns the (possibly already-open) id. Blocks
+    /// until it is open, or until `load_wait` when another caller's open of it is still running.
     fn open_one(&self, root: &Path) -> Result<WorkspaceId, Status> {
         let id = {
             let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
@@ -282,23 +326,7 @@ impl WorkspaceCatalog {
                 Status::invalid_argument(format!("register {}: {e}", root.display()))
             })?
         };
-        if self
-            .open
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .contains_key(&id)
-        {
-            return Ok(id);
-        }
-        // Re-checked with the write lock held, in case of a race between the read check above and
-        // here — two concurrent callers naming the same not-yet-open root must not open it twice.
-        let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);
-        if open.contains_key(&id) {
-            return Ok(id);
-        }
-        let opened = open_workspace_full(root, id, &self.open_args, Arc::clone(&self.clock))
-            .map_err(|e| Status::internal(format!("open {}: {e}", root.display())))?;
-        open.insert(id, opened);
+        self.ensure_open(id, root)?;
         Ok(id)
     }
 
@@ -315,6 +343,33 @@ impl WorkspaceCatalog {
                 self.open_ws(id)
             }
             None => self.resolve_sole_open(),
+        }
+    }
+
+    /// The answer to `resolve` when it needs no open and no wait, else `None` (the caller then
+    /// resolves on a blocking thread): a workspace id that is already open, or no selector at all.
+    pub(crate) fn resolve_without_waiting(
+        &self,
+        selector: Option<&pb::WorkspaceSelector>,
+    ) -> Option<Result<SharedWorkspace, Status>> {
+        match selector.and_then(|s| s.selector.as_ref()) {
+            None => Some(self.resolve_sole_open()),
+            Some(pb::workspace_selector::Selector::WorkspaceId(text)) => {
+                let ulid = Ulid::parse(text)?;
+                self.open_ws(WorkspaceId::new(ulid)).ok().map(Ok)
+            }
+            // Every CLI/desktop call names its workspace by path: match it against the roots
+            // already open (one `canonicalize`, no registry write) so the common case stays off the
+            // blocking pool. A miss just takes the slow path, which registers and opens.
+            Some(pb::workspace_selector::Selector::Path(path)) => {
+                let canonical = std::fs::canonicalize(path).ok()?;
+                let open = self.open.read().unwrap_or_else(PoisonError::into_inner);
+                open.values()
+                    .find(|o| {
+                        o.ws.read().unwrap_or_else(PoisonError::into_inner).root() == canonical
+                    })
+                    .map(|o| Ok(Arc::clone(&o.ws)))
+            }
         }
     }
 
@@ -350,6 +405,11 @@ impl WorkspaceCatalog {
     /// Unset/absent selector: the single-workspace bridge every `--dir`-started daemon (and
     /// today's whole test suite, which never sets `.workspace` on any request) relies on.
     fn resolve_sole_open(&self) -> Result<SharedWorkspace, Status> {
+        // While any open is still ahead, the count of open workspaces is still growing: 0 would say
+        // "none open", 1 would succeed by luck, then 2 would turn "ambiguous". Say so instead.
+        if self.slots.pending() > 0 {
+            return Err(Status::unavailable("workspace loading"));
+        }
         let open = self.open.read().unwrap_or_else(PoisonError::into_inner);
         match open.len() {
             0 => Err(Status::failed_precondition(

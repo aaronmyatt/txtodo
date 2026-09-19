@@ -103,8 +103,10 @@ pub mod watch_task;
 pub mod watcher;
 pub mod workspace;
 pub mod workspace_catalog;
+mod workspace_catalog_load;
 mod workspace_catalog_open;
 mod workspace_error;
+pub mod workspace_load;
 mod workspace_migrate;
 mod workspace_mint;
 mod workspace_offer_grpc;
@@ -168,6 +170,8 @@ mod state_goldens;
 mod state_tests;
 #[cfg(test)]
 mod sync_ops_tests;
+#[cfg(test)]
+mod workspace_catalog_load_tests;
 #[cfg(test)]
 mod workspace_catalog_tests;
 #[cfg(test)]

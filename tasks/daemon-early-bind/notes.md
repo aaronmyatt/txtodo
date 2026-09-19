@@ -53,3 +53,31 @@ line, plus the ordering and promotion below.
 
 - Bound for the wait (30s?) and whether `Unavailable` should carry a retry-after.
 - Whether to also seed `last_active_ms` from `txtodo workspace list` history. Probably not.
+
+## As built (2026-09-20)
+
+- Pid lock and logging now come first in `main.rs::run` (5509169); the loser of the lock exits 0.
+- `workspace_load.rs`: one slot per registered workspace, Queued -> Loading -> Ready/Failed.
+  `acquire` is the only way to reach Loading, so one open per root however many callers ask. A
+  dropped ticket marks the slot Failed, never Loading forever.
+- `workspace_catalog_load.rs`: `ensure_open` (fast path if already open, else promote/share/wait),
+  `queue_registered` (newest first by root `todo.txt` mtime, else `added_at`), `spawn_loader` (one
+  thread, enters the caller's tokio runtime because an open spawns tasks).
+- `WorkspaceCatalog::open` only holds finished workspaces; the open write lock is taken for the one
+  insert. `GlobalService::resolve` answers an open workspace or a selector-less call at once and
+  sends anything that may open or wait to the blocking pool.
+- Wait bound is `DEFAULT_LOAD_WAIT` = 120 s (the old client spawn timeout), not 30 s: a CLI call
+  right after a cold start waits about as long as it did before the socket bound early. Tests inject
+  a short one with `with_load_wait`; the slow open is `with_open_hook`.
+- `--dir` bridge still opens its directory before binding (its whole test suite relies on that).
+- Test harnesses that make a selector-less call against a global daemon call
+  `wait_until_all_open` first.
+
+## Known gaps
+
+- On this machine one workspace open took 20 s+ while fseventsd was behind a large `target/` churn
+  (starting the watcher is the slow part), so the catalog tests use a 900 s patience. A real cold
+  boot may look better or worse than the 129 s measured before; `scripts/cold-boot-timing.sh` is
+  the way to measure it.
+- The CLI does not retry `Unavailable("workspace loading")`; it now surfaces after 120 s.
+- Ordering does not use `last_active_ms` until the registry line lands.
