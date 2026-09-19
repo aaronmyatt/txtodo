@@ -7,6 +7,7 @@
 //! identity therefore survives; only the text changes.
 
 use crate::actor::{Commit, CommitTail, FileActor};
+use crate::fastid::fast_id_of;
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
 use crate::id_strip::strip_own_id;
 use crate::reconcile::change_ops;
@@ -70,15 +71,30 @@ impl FileActor {
         Ok(report)
     }
 
-    /// Migrated already: Sidecar with fingerprint rows. Not "no own tags left" — a line that
-    /// mentions another `id:<ULID>` in its prose reads as tagged again once its real tag is gone,
-    /// and must be left alone.
+    /// Migrated already: Sidecar, fingerprint rows, and no task line still carrying its own
+    /// identity as a tag. Rows alone are not enough: any commit under Sidecar lands them, so a
+    /// still-tagged document that committed once after the workspace flipped would be skipped
+    /// forever, and its dry run would say nothing is left (root todo id:01M2WK5DQQNW7WBM6E9AP6AFA9).
+    /// Nor is "no `id:` word left" the test — a line that quotes some other `id:<ULID>` in its
+    /// prose reads as tagged, and must be left alone.
     fn is_migrated(&self) -> Result<bool, ActorError> {
-        Ok(self.cfg.identity_mode == IdentityMode::Sidecar
-            && !self
-                .lock_store()
-                .live_fingerprints(&self.cfg.path)?
-                .is_empty())
+        if self.cfg.identity_mode != IdentityMode::Sidecar {
+            return Ok(false);
+        }
+        let has_rows = !self
+            .lock_store()
+            .live_fingerprints(&self.cfg.path)?
+            .is_empty();
+        Ok(has_rows && !self.carries_own_tag())
+    }
+
+    /// A task line whose first `id:` word is the very id this document holds for it: the tag the
+    /// migration exists to strip. A line quoting a different id does not count.
+    fn carries_own_tag(&self) -> bool {
+        (0..self.state.len()).any(|i| match self.state.entry_at(i) {
+            Some(Entry::Task { id, line }) => fast_id_of(&line) == Some(id),
+            _ => false,
+        })
     }
 
     fn task_count(&self) -> usize {

@@ -219,6 +219,36 @@ async fn a_tagged_document_opened_as_sidecar_keeps_its_ids_until_migrated() {
 }
 
 #[tokio::test]
+async fn a_tagged_document_that_committed_under_sidecar_is_still_migrated() {
+    let dir = tempfile::tempdir().unwrap();
+    seed(dir.path());
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    drop(open(dir.path(), &store, &clock, IdentityMode::Tagged).spawn());
+    let handle = open(dir.path(), &store, &clock, IdentityMode::Sidecar).spawn();
+    // Any commit under Sidecar lands fingerprint rows for every task, tags or no tags.
+    handle
+        .apply(
+            vec![Mutation::Add {
+                line: "2026-09-19 call mum".into(),
+            }],
+            Principal::User { device: device() },
+        )
+        .await
+        .unwrap();
+    assert!(disk(dir.path()).contains(&format!("id:{A}")));
+    assert_eq!(fingerprint_tasks(&store).len(), 3);
+
+    let dry = handle.migrate_to_sidecar(true).await.unwrap();
+    let got = handle.migrate_to_sidecar(false).await.unwrap();
+
+    assert_eq!((dry.stripped, got.stripped), (2, 2));
+    let text = disk(dir.path());
+    assert!(!text.contains(&format!("id:{A}")) && !text.contains(&format!("id:{B}")));
+    assert!(text.ends_with("call mum\n"), "{text}");
+}
+
+#[tokio::test]
 async fn the_loro_mirror_still_agrees_with_the_state() {
     let dir = tempfile::tempdir().unwrap();
     seed(dir.path());
