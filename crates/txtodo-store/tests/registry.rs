@@ -25,7 +25,7 @@ fn entry(n: u128, root: &str, added_at_ms: u64) -> NewWorkspaceEntry {
 }
 
 #[test]
-fn migrating_lands_the_schema_at_one() {
+fn migrating_lands_the_schema_and_reopening_is_idempotent() {
     let dir = tempfile::tempdir().unwrap();
     let _registry = open(dir.path());
     // No public accessor for the registry's own schema version — `open` succeeding twice below
@@ -168,4 +168,56 @@ fn the_registry_persists_across_a_fresh_open_restart_durability() {
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, workspace(1));
     assert_eq!(listed[0].root, "/home/a/project");
+}
+
+#[test]
+fn an_existing_v1_registry_gains_last_active_without_losing_a_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("registry.db");
+    // A registry exactly as the pre-`last_active_ms` build left it: schema 1, one row.
+    let old = rusqlite::Connection::open(&path).unwrap();
+    old.execute_batch(include_str!("../registry_migrations/0001.sql"))
+        .unwrap();
+    old.execute(
+        "INSERT INTO workspaces (id, root, added_at, removed_at) VALUES (?1, '/home/a/old', 500, NULL)",
+        rusqlite::params![workspace(7).ulid().to_u128().to_be_bytes().to_vec()],
+    )
+    .unwrap();
+    drop(old);
+
+    let registry = Registry::open(&path).unwrap();
+
+    let row = registry.get(workspace(7)).unwrap().expect("row survives");
+    assert_eq!((row.root.as_str(), row.added_at_ms), ("/home/a/old", 500));
+    assert_eq!(row.last_active_ms, None, "never touched: NULL, not zero");
+}
+
+#[test]
+fn touch_records_recency_on_an_active_row_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    registry.insert(&entry(1, "/home/a/one", 1_000)).unwrap();
+    registry.insert(&entry(2, "/home/a/two", 1_000)).unwrap();
+
+    assert!(registry.touch(workspace(1), 9_000).unwrap());
+    assert_eq!(
+        registry.get(workspace(1)).unwrap().unwrap().last_active_ms,
+        Some(9_000)
+    );
+    assert_eq!(
+        registry.list_active().unwrap()[1].last_active_ms,
+        None,
+        "the other row is untouched"
+    );
+
+    assert!(
+        !registry.touch(workspace(404), 9_000).unwrap(),
+        "unknown id"
+    );
+    registry.remove(workspace(2), 2_000).unwrap();
+    assert!(!registry.touch(workspace(2), 9_500).unwrap(), "removed id");
+    assert_eq!(
+        registry.get(workspace(2)).unwrap().unwrap().last_active_ms,
+        None
+    );
 }

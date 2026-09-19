@@ -18,11 +18,13 @@ use crate::ops::wall_i64;
 
 /// The schema version this build writes and expects, for the registry database specifically —
 /// independent of [`crate::Store`]'s own `SCHEMA_VERSION`, since it is a different file.
-const REGISTRY_SCHEMA_VERSION: i64 = 1;
+const REGISTRY_SCHEMA_VERSION: i64 = 2;
 /// Every registry migration in order, embedded so the binary is self-contained; mirrors
 /// [`crate::Store`]'s own `MIGRATIONS` array.
-const REGISTRY_MIGRATIONS: [(i64, &str); 1] =
-    [(1, include_str!("../registry_migrations/0001.sql"))];
+const REGISTRY_MIGRATIONS: [(i64, &str); 2] = [
+    (1, include_str!("../registry_migrations/0001.sql")),
+    (2, include_str!("../registry_migrations/0002.sql")),
+];
 
 /// Most rows one `list_active` read returns; a human manages far fewer workspaces than this.
 pub const MAX_WORKSPACES_PER_READ: usize = 4_096;
@@ -63,6 +65,9 @@ pub struct WorkspaceRow {
     /// deleted — removing a workspace is a catalog change, not a data-destruction operation, and
     /// this table never touches (or even names) the workspace's own `.txtodo/` state.
     pub removed_at_ms: Option<u64>,
+    /// Unix milliseconds this workspace was last resolved for a request (`Registry::touch`), if it
+    /// ever was. Only recency, never identity: the daemon opens the most recently used first.
+    pub last_active_ms: Option<u64>,
 }
 
 /// Everything [`Registry::insert`] needs, bundled so the call stays under the arg-count budget —
@@ -90,11 +95,14 @@ fn id_of(blob: &[u8]) -> Option<WorkspaceId> {
 
 const INSERT: &str =
     "INSERT INTO workspaces (id, root, added_at, removed_at) VALUES (?1, ?2, ?3, NULL)";
-const SELECT_ACTIVE_BY_ROOT: &str =
-    "SELECT id, root, added_at, removed_at FROM workspaces WHERE root = ?1 AND removed_at IS NULL";
-const SELECT_ONE: &str = "SELECT id, root, added_at, removed_at FROM workspaces WHERE id = ?1";
-const SELECT_ACTIVE: &str = "SELECT id, root, added_at, removed_at FROM workspaces \
+const SELECT_ACTIVE_BY_ROOT: &str = "SELECT id, root, added_at, removed_at, last_active_ms \
+     FROM workspaces WHERE root = ?1 AND removed_at IS NULL";
+const SELECT_ONE: &str =
+    "SELECT id, root, added_at, removed_at, last_active_ms FROM workspaces WHERE id = ?1";
+const SELECT_ACTIVE: &str = "SELECT id, root, added_at, removed_at, last_active_ms FROM workspaces \
      WHERE removed_at IS NULL ORDER BY added_at, id LIMIT ?1";
+const TOUCH: &str =
+    "UPDATE workspaces SET last_active_ms = ?2 WHERE id = ?1 AND removed_at IS NULL";
 const SELECT_FOR_REMOVE: &str = "SELECT root, added_at FROM workspaces WHERE id = ?1";
 const UPSERT_REMOVE: &str = "INSERT INTO workspaces (id, root, added_at, removed_at) \
      VALUES (?1, ?2, ?3, ?4) \
@@ -102,15 +110,16 @@ const UPSERT_REMOVE: &str = "INSERT INTO workspaces (id, root, added_at, removed
 
 /// One raw row exactly as every `SELECT` above returns it, bundled into a tuple so the decoder
 /// below stays under the arg-count budget (mirrors `devices.rs`'s `RawRow`).
-type RawRow = (Vec<u8>, String, i64, Option<i64>);
+type RawRow = (Vec<u8>, String, i64, Option<i64>, Option<i64>);
 
 fn row_of(raw: RawRow) -> Result<WorkspaceRow, StoreError> {
-    let (id, root, added_at, removed_at) = raw;
+    let (id, root, added_at, removed_at, last_active) = raw;
     Ok(WorkspaceRow {
         id: id_of(&id).ok_or(StoreError::BadWorkspaceId(id.len()))?,
         root,
         added_at_ms: u64::try_from(added_at).unwrap_or(0),
         removed_at_ms: removed_at.map(|v| u64::try_from(v).unwrap_or(0)),
+        last_active_ms: last_active.map(|v| u64::try_from(v).unwrap_or(0)),
     })
 }
 
@@ -205,6 +214,17 @@ impl Registry {
         Ok(out)
     }
 
+    /// Records that `id` was just used, at `at_ms`. `false` for an unknown or removed id. The
+    /// daemon throttles how often it calls this (about once per 30 s per workspace): it is a write
+    /// to a database every request would otherwise hit.
+    pub fn touch(&mut self, id: WorkspaceId, at_ms: u64) -> Result<bool, StoreError> {
+        let changed = self
+            .conn
+            .execute(TOUCH, params![id_blob(id), wall_i64(at_ms)])
+            .map_err(StoreError::query("touch workspace"))?;
+        Ok(changed > 0)
+    }
+
     /// Tombstones `id` (sets `removed_at`) if it is currently known, following the crate's upsert
     /// idiom (mirrors [`crate::Store::remove_device`]): idempotent — removing an already-removed
     /// id just replaces `removed_at` again and still reports `true`; only a wholly unknown id
@@ -241,5 +261,6 @@ fn read_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<RawRow> {
         r.get::<_, String>(1)?,
         r.get::<_, i64>(2)?,
         r.get::<_, Option<i64>>(3)?,
+        r.get::<_, Option<i64>>(4)?,
     ))
 }
