@@ -73,6 +73,19 @@ line, plus the ordering and promotion below.
 - Test harnesses that make a selector-less call against a global daemon call
   `wait_until_all_open` first.
 
+- Reporting (this pass): `WorkspaceList`/`WorkspaceAdd` carry `load_state`/`load_error`; `Health` carries
+  device totals, and a selector-less `Health` while anything is pending answers with the totals alone
+  (a named workspace is promoted and waited for like any other call, so `txtodo doctor` still gets
+  a full answer). `last_active_ms` (store migration 0002) is bumped, at most once per 30 s per
+  workspace, on every resolve and is the first key of the load order.
+- Desktop: `wait_until_ready` probes `workspace_list` (answers the moment the socket is bound);
+  `universal_tasks`/`op_log_all` skip workspaces that are not Ready instead of promoting them; the
+  switcher shows queued/opening/failed and refreshes while any is pending; `getFile`/`listFiles`
+  retry on `Unavailable: workspace loading` and MainView shows "Opening this workspace".
+- `scripts/cold-boot-timing.sh` measures the first answer and each workspace's Ready time; run it
+  by hand (it restarts the real daemon) or with `TXTODO_SOCKET` + `TXTODO_REGISTRY_DB` set for an
+  isolated one.
+
 ## Known gaps
 
 - On this machine one workspace open took 20 s+ while fseventsd was behind a large `target/` churn
@@ -80,4 +93,6 @@ line, plus the ordering and promotion below.
   boot may look better or worse than the 129 s measured before; `scripts/cold-boot-timing.sh` is
   the way to measure it.
 - The CLI does not retry `Unavailable("workspace loading")`; it now surfaces after 120 s.
-- Ordering does not use `last_active_ms` until the registry line lands.
+- Nothing in this pass stopped the running launchd daemon being the old binary; the walker and
+  early-bind fixes only take effect once it is reinstalled (`just install-daemon`, `just repoint-service`).
+- The cold-launch check by hand (last sub-line) is still a human step.
