@@ -71,6 +71,16 @@ jobs:
       - name: test (windows)
         if: runner.os == 'Windows'
         run: cargo test --workspace --exclude txtodo-daemon --exclude txtodo-cli --exclude txtodo-mcp
+      # Every real-txtodod integration test across txtodo-cli/txtodo-mcp/txtodo-tui/apps/desktop
+      # is #[ignore]d (2026-09-19): each spawns a real daemon and apps/desktop's own
+      # support::TXTODOD_BIN can trigger a full daemon/sync/iroh recompile under a different
+      # feature resolution, measured once at ~14 minutes for 2 tests — by far the slowest tests
+      # in the workspace. Kept out of the step above so a plain `cargo test` stays fast; this
+      # step is the only place they run. Skipped on Windows: every file involved is
+      # `#![cfg(unix)]` (ADR 0010) or already excluded above, so there is nothing to run there.
+      - name: test (ignored — CI-only real-txtodod tests)
+        if: runner.os != 'Windows'
+        run: cargo test --workspace --exclude txtodo-daemon -- --ignored
       - name: boundaries + file length + assertions
         if: runner.os != 'Windows'
         run: |
