@@ -4,8 +4,11 @@
 //! prints it. `archive`'s reorder goes out as guarded `MoveToEnd` mutations (`archive_plan.rs`). A
 //! diff no mutation can express (blank-line removal, mid-file inserts, any other move, every edit
 //! in sidecar mode) goes out as one `Replace` of the whole document, naming the hash the command
-//! read: the daemon refuses it if the document changed since, instead of overwriting.
+//! read: the daemon refuses it if the document changed since, instead of overwriting. A mutation
+//! batch that addresses a line by number alone (sidecar text has no `id:` to check) leads with a
+//! `RequireBase` on the same hash (`base_guard.rs`).
 
+use crate::base_guard::guarded;
 use crate::client::Daemon;
 use crate::config::Paths;
 use crate::{CliError, Ctx, store};
@@ -101,7 +104,7 @@ fn push_document(
     };
     match plan {
         Some(mutations) if !mutations.is_empty() => {
-            daemon.apply(original.doc, mutations)?;
+            daemon.apply(original.doc, guarded(&original.hash, mutations))?;
             Ok(())
         }
         Some(_) => Ok(()),

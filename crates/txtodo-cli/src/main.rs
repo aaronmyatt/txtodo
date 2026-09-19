@@ -3,6 +3,7 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)] // the CLI is the output path (plan §0)
 
 mod archive_plan;
+mod base_guard;
 mod bundle;
 mod cli;
 mod client;

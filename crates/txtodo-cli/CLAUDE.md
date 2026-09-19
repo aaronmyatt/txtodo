@@ -58,7 +58,8 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   resolved path and, when set, whether it currently validates (`sync_dir_problem` in JSON).
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
-  adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `bundle`
+  adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `base_guard` (`RequireBase` for
+  line-number-only batches), `bundle`
   (`export`/`import`, plan M8 `cli-bundle`), `commands::{add, list, edit, archive, text, fileops, hygiene,
   history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
@@ -74,8 +75,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   mid-file inserts, any other move, every edit in sidecar mode) goes out as one `Replace` of the
   whole document, naming the hash the command read (`Daemon::snapshot`): the daemon refuses it
   (`FAILED_PRECONDITION`, nothing written) if the document changed since, instead of overwriting
-  another writer's `Apply`. The command's own output was already printed by then; the error says
-  nothing was written.
+  another writer's `Apply`. A mutation batch that addresses a line by number alone (sidecar text
+  has no `id:` to check) leads with a `RequireBase` on that same hash (`base_guard.rs`); one whose
+  lines carry ids checks itself, and pure appends need nothing. The command's own output was
+  already printed by then; the error says nothing was written.
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
 - todo.sh parity is a test: `tests/todosh_parity.rs` (direct mode). `tests/daemon_mode.rs` spawns a

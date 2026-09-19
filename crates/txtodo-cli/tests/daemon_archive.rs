@@ -178,7 +178,15 @@ fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
     // No `id:` in sidecar text, so `pri` on a line that is not the last is a whole-line change no
     // mutation can address (on a one-line file it would pass as a delete plus an append).
     txtodo(dir.path(), &["pri", "1", "A"]);
+    // `del` names its line by number alone, so it goes out led by a `RequireBase` on the hash the
+    // command read (`base_guard.rs`); the real daemon must accept that hash while nothing moved.
+    txtodo(dir.path(), &["del", "2"]);
     let text = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
     assert!(text.starts_with("(A) "), "{text}");
+    assert_eq!(
+        text.lines().nth(1),
+        Some(""),
+        "`del` leaves a blank: {text:?}"
+    );
     assert_all_through_the_socket(dir.path());
 }
