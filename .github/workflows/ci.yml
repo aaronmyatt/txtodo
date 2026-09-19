@@ -63,14 +63,17 @@ jobs:
       - name: lint (windows)
         if: runner.os == 'Windows'
         run: cargo clippy --workspace --all-targets --exclude txtodo-cli --exclude txtodo-daemon --exclude txtodo-mcp -- -D warnings
+      # --no-fail-fast on every test step: without it cargo stops at the first failing test binary
+      # and hides every binary after it (a red run only ever showed one failure at a time).
+      # https://doc.rust-lang.org/cargo/commands/cargo-test.html#test-options
       # The daemon's real-socket integration tests run in their own Linux job below; the matrix
       # keeps the rest fast. Windows also drops the CLI and MCP server (no unix socket).
       - name: test
         if: runner.os != 'Windows'
-        run: cargo test --workspace --exclude txtodo-daemon
+        run: cargo test --workspace --exclude txtodo-daemon --no-fail-fast
       - name: test (windows)
         if: runner.os == 'Windows'
-        run: cargo test --workspace --exclude txtodo-daemon --exclude txtodo-cli --exclude txtodo-mcp
+        run: cargo test --workspace --exclude txtodo-daemon --exclude txtodo-cli --exclude txtodo-mcp --no-fail-fast
       # Every real-txtodod integration test across txtodo-cli/txtodo-mcp/txtodo-tui/apps/desktop
       # is #[ignore]d (2026-09-19): each spawns a real daemon and apps/desktop's own
       # support::TXTODOD_BIN can trigger a full daemon/sync/iroh recompile under a different
@@ -80,7 +83,7 @@ jobs:
       # `#![cfg(unix)]` (ADR 0010) or already excluded above, so there is nothing to run there.
       - name: test (ignored — CI-only real-txtodod tests)
         if: runner.os != 'Windows'
-        run: cargo test --workspace --exclude txtodo-daemon -- --ignored
+        run: cargo test --workspace --exclude txtodo-daemon --no-fail-fast -- --ignored
       - name: boundaries + file length + assertions
         if: runner.os != 'Windows'
         run: |
