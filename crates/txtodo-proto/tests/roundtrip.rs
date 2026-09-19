@@ -8,9 +8,9 @@ use txtodo_proto::v1::{
     Add, AgentPrincipal, ApplyRequest, ApplyResponse, Change, CheckoutRequest, Complete, Delete,
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
-    HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, SkewStatus,
-    SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest, WatchRequest, mutation,
-    sync_status_response,
+    HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, Replace,
+    SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest,
+    WatchRequest, mutation, sync_status_response,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -72,6 +72,10 @@ fn every_mutation_variant_survives_encode_decode() {
             leave_blank: true,
         }),
         mutation::Kind::MoveToEnd(MoveToEnd { task: task() }),
+        mutation::Kind::Replace(Replace {
+            base_hash: vec![7; 32],
+            contents: b"(A) buy ducks\r\nwalk the dog".to_vec(),
+        }),
     ];
     for kind in kinds {
         let req = ApplyRequest {

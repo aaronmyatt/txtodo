@@ -242,9 +242,22 @@ pub struct MoveToEnd {
     #[prost(message, optional, tag = "1")]
     pub task: ::core::option::Option<TaskRef>,
 }
+/// Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
+/// `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
+/// holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
+/// The daemon reconciles `contents` against its projection exactly as it would an external edit, so
+/// untouched lines keep their identity. Must be the only mutation in its `Apply` batch. For a diff
+/// no other mutation can express (the CLI's fallback, txtodo-cli `daemon_mode.rs`).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Replace {
+    #[prost(bytes = "vec", tag = "1")]
+    pub base_hash: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "2")]
+    pub contents: ::prost::alloc::vec::Vec<u8>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Mutation {
-    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6")]
+    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7")]
     pub kind: ::core::option::Option<mutation::Kind>,
 }
 /// Nested message and enum types in `Mutation`.
@@ -263,6 +276,8 @@ pub mod mutation {
         Delete(super::Delete),
         #[prost(message, tag = "6")]
         MoveToEnd(super::MoveToEnd),
+        #[prost(message, tag = "7")]
+        Replace(super::Replace),
     }
 }
 /// Who is applying. M3 knows users only; M6 fills `agent`.

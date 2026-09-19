@@ -297,6 +297,13 @@ message Delete { TaskRef task = 1; bool leave_blank = 2; } // todo.sh leaves a b
 // Moves a task within its own file to sit after the last other task (archiving: a completed task
 // stays in todo.txt, pushed to the bottom, instead of moving to a second file).
 message MoveToEnd { TaskRef task = 1; }
+// Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
+// `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
+// holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
+// The daemon reconciles `contents` against its projection exactly as it would an external edit, so
+// untouched lines keep their identity. Must be the only mutation in its `Apply` batch. For a diff
+// no other mutation can express (the CLI's fallback, txtodo-cli `daemon_mode.rs`).
+message Replace { bytes base_hash = 1; bytes contents = 2; }
 
 message Mutation {
   oneof kind {
@@ -306,6 +313,7 @@ message Mutation {
     Move move = 4;
     Delete delete = 5;
     MoveToEnd move_to_end = 6;
+    Replace replace = 7;
   }
 }
 
