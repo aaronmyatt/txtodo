@@ -23,6 +23,7 @@ import {
 	WidgetType
 } from "@codemirror/view";
 import { completedLineInfo, findRefTag, resolveRefIndicator, type FileProgress, type RefIndicator } from "./lineInfo";
+import { hintOffset } from "./lineLength";
 
 const idTagMatcher = new MatchDecorator({
 	regexp: /\bid:\S+/g,
@@ -180,23 +181,18 @@ export function lineDecorations(containingPath: string, filesByPath: ReadonlyMap
 
 /** root todo 9: "add line length hints to the clients... to encourage keeping todo entries
  * readable" — a plain todo.txt line has no wrap, so a very long one is easy to write without
- * noticing. 100 matches the line-width budget this project's own Rust code is held to
- * (`.claude/budgets.json`'s `lineWidth`), not a todo.txt-format rule; purely advisory, nothing
- * here stops a longer line from being typed or saved. */
-const LINE_LENGTH_HINT = 100;
-
+ * noticing. The measure (visible characters, the hidden `id:` tag not counted) and the 100 limit
+ * live in `./lineLength`; purely advisory, nothing here stops a longer line from being typed or
+ * saved. */
 function buildLongLineHint(view: EditorView): DecorationSet {
 	const builder = new RangeSetBuilder<Decoration>();
 	for (const { from, to } of view.visibleRanges) {
 		let pos = from;
 		while (pos <= to) {
 			const line = view.state.doc.lineAt(pos);
-			if (line.length > LINE_LENGTH_HINT) {
-				builder.add(
-					line.from + LINE_LENGTH_HINT,
-					line.to,
-					Decoration.mark({ class: "cm-todotxt-long-line" })
-				);
+			const past = hintOffset(line.text);
+			if (past !== null) {
+				builder.add(line.from + past, line.to, Decoration.mark({ class: "cm-todotxt-long-line" }));
 			}
 			pos = line.to + 1;
 		}
@@ -204,7 +200,7 @@ function buildLongLineHint(view: EditorView): DecorationSet {
 	return builder.finish();
 }
 
-/** Marks the part of a line past `LINE_LENGTH_HINT` with a subtle underline — see that constant's
+/** Marks the part of a line past the hint with a subtle underline — see `buildLongLineHint`'s
  * own doc. Viewport-bounded and re-built on doc/viewport change, same shape as `lineDecorations`. */
 export const longLineHint: Extension = ViewPlugin.fromClass(
 	class {
