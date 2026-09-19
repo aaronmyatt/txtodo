@@ -111,6 +111,9 @@ async fn switch_workspace_inner(
     let client = guard.as_mut().ok_or("daemon not connected")?;
     client.switch_workspace(&path);
     drop(guard);
+    // The shared `Change` stream was opened against the old workspace's selector; the frontend's
+    // remount (`{#key $currentWorkspaceRoot}`) calls `watch()` again and gets one on the new one.
+    state.watch.lock().await.stop();
     *state.current_workspace.lock().await = Some(path);
     Ok(())
 }

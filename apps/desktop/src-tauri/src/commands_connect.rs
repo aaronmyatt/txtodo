@@ -38,10 +38,11 @@ pub(crate) async fn connect_and_store(
 }
 
 /// A fresh connection needs a fresh `watch` stream too — see `commands.rs::watch_inner`'s own doc.
+/// Also stops the old forwarder, whose stream died with the connection it was opened on.
 /// Split out of `connect_and_store` to keep that function's cognitive-complexity budget (each
 /// `.await` point in its body counts, regardless of how little the awaited callee itself does).
 async fn reset_watch_stream(state: &AppState) {
-    *state.watch_started.lock().await = false;
+    state.watch.lock().await.stop();
 }
 
 /// `TXTODO_NO_AUTOSTART=1` (task `desktop-autostart-env-respect`): honored here, not inside

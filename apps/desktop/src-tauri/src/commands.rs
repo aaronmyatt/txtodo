@@ -28,7 +28,7 @@ use crate::dto::{
 };
 use crate::state::AppState;
 use crate::status::DaemonStatus;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use txtodo_proto::v1 as pb;
 
 /// Updates the shared status and mirrors it to the frontend as a `daemon-status` event.
@@ -184,7 +184,7 @@ async fn get_file_inner(
 /// them) is forwarding as `daemon-change` events; returns once it is established, not when it
 /// ends. Safe, and cheap, to call more than once (e.g. once per open `FileView`/`DetailView`
 /// mount or path switch, as every caller does): only the first live call after a connection opens
-/// a stream and spawns its forwarder — see `AppState::watch_started`'s own doc for why a second
+/// a stream and spawns its forwarder — see `AppState::watch`'s own doc for why a second
 /// forwarder is a real bug (tasks/desktop-concurrent-edit-loss root cause 3), not a redundant
 /// no-op.
 #[tracing::instrument(name = "ipc.watch", skip_all)]
@@ -195,22 +195,25 @@ pub async fn watch(app: AppHandle, state: State<'_, AppState>) -> Result<(), Str
 
 async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     ensure_connected(&app, &state).await?;
-    let mut started = state.watch_started.lock().await;
-    if *started {
+    let mut slot = state.watch.lock().await;
+    if slot.is_running() {
         return Ok(());
     }
     let mut guard = state.client.lock().await;
     let client = guard.as_mut().ok_or("daemon not connected")?;
     let mut stream = client.watch(Vec::new()).await.map_err(|e| e.to_string())?;
     drop(guard);
-    *started = true;
-    drop(started);
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
+    let generation = slot.claim_generation();
+    let forwarder_app = app.clone();
+    let task = tauri::async_runtime::spawn(async move {
         while let Ok(Some(change)) = stream.message().await {
-            let _ = app.emit("daemon-change", ChangeDto::from(change));
+            let _ = forwarder_app.emit("daemon-change", ChangeDto::from(change));
         }
+        // The stream ended (daemon restart or a dropped connection): free the slot so the next
+        // `watch()` opens a new one. Blocks on the lock until `install` below has run.
+        forwarder_app.state::<AppState>().watch.lock().await.ended(generation);
     });
+    slot.install(generation, task);
     Ok(())
 }
 

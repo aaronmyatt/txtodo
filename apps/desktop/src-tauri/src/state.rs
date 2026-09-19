@@ -7,7 +7,61 @@ use crate::daemon::DaemonClient;
 use crate::status::DaemonStatus;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
+use tauri::async_runtime::JoinHandle;
 use tokio::sync::Mutex;
+
+/// The one shared `Change` stream's forwarder task, if a live one exists. `commands.rs::watch_inner`
+/// installs it; a reconnect (`commands_connect`) or a workspace switch (`commands_workspace`) stops
+/// it, since its stream belongs to the old connection or the old workspace; and the forwarder
+/// itself clears it when its stream ends (daemon restart), so the next `watch()` opens a fresh one
+/// instead of trusting a flag nobody reset (root todo ids 01M2WK5DQQFAD15221N11V026W and
+/// 01M2WK5DQQQRNTPEAAQW9SV7HG).
+#[derive(Default)]
+pub struct WatchSlot {
+    /// Bumped on every install, so a forwarder that outlives its slot (aborted, or ended just as
+    /// a newer one was installed) cannot clear its successor.
+    generation: u64,
+    task: Option<JoinHandle<()>>,
+}
+
+impl WatchSlot {
+    /// True while a forwarder is installed and its stream has not ended.
+    pub fn is_running(&self) -> bool {
+        self.task.is_some()
+    }
+
+    /// The generation the next installed forwarder must carry into `install`/`ended`. Claimed
+    /// before the task is spawned and held until `install`, under one lock, so a stream that ends
+    /// at once waits for `install` rather than racing it.
+    pub fn claim_generation(&mut self) -> u64 {
+        self.generation += 1;
+        self.generation
+    }
+
+    /// Makes `task` the running forwarder for `generation` (from `claim_generation`).
+    pub fn install(&mut self, generation: u64, task: JoinHandle<()>) {
+        debug_assert_eq!(generation, self.generation, "install without a fresh claim");
+        self.task = Some(task);
+    }
+
+    /// Aborts the running forwarder, if any: its stream targets a connection or workspace that is
+    /// no longer the current one.
+    pub fn stop(&mut self) {
+        // A bumped generation also disarms a forwarder that is between `message()` and `ended`.
+        self.generation += 1;
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+
+    /// The forwarder of `generation` saw its stream end. Clears the slot only when nothing newer
+    /// was installed meanwhile.
+    pub fn ended(&mut self, generation: u64) {
+        if generation == self.generation {
+            self.task = None;
+        }
+    }
+}
 
 /// State handed to every Tauri command via `tauri::State`.
 pub struct AppState {
@@ -31,13 +85,14 @@ pub struct AppState {
     /// the global-shortcut handler that reads it is a synchronous, non-async callback
     /// (`tauri_plugin_global_shortcut`'s `on_shortcut`), so it needs a lock-free read.
     pub main_popover_dirty: AtomicBool,
-    /// Whether `watch`'s one shared `Change` stream + forwarder task has already been started for
-    /// `client`'s current connection (tasks/desktop-concurrent-edit-loss root cause 3: every
-    /// `FileView`/`DetailView` mount or path-switch used to call `watch()` again, each opening its
-    /// own never-cancelled forwarder, so one daemon change fired several `refreshDoc`s). Reset to
-    /// `false` at the top of `connect_and_store` so a reconnect (cold boot or manual Retry) always
-    /// gets a fresh stream against the new client, not a stale flag left over from a dead one.
-    pub watch_started: Mutex<bool>,
+    /// `watch`'s one shared `Change` stream + forwarder task for `client`'s current connection and
+    /// current workspace (tasks/desktop-concurrent-edit-loss root cause 3: every `FileView`/
+    /// `DetailView` mount or path-switch used to call `watch()` again, each opening its own
+    /// never-cancelled forwarder, so one daemon change fired several `refreshDoc`s). A reconnect
+    /// (cold boot or manual Retry) and `switch_workspace` both stop it, so the next `watch()`
+    /// opens a fresh stream against the new client/workspace instead of a stale one; the
+    /// forwarder clears it itself when its stream ends.
+    pub watch: Mutex<WatchSlot>,
 }
 
 impl AppState {
@@ -50,7 +105,7 @@ impl AppState {
             client: Mutex::new(None),
             current_workspace,
             main_popover_dirty: AtomicBool::new(false),
-            watch_started: Mutex::new(false),
+            watch: Mutex::new(WatchSlot::default()),
         }
     }
 }
