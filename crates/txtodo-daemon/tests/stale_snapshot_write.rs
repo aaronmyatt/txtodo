@@ -1,8 +1,10 @@
 //! The CLI's whole-file fallback, against a real `txtodod`. `txtodo-cli`'s `daemon_mode.rs` sends
-//! a diff as guarded `Apply` mutations, but a diff no mutation can express (`do` + auto-archive
-//! moves lines, blank removal, a mid-file insert) is written straight over the real file from the
-//! bytes it read earlier (`push_document`). This models that race: agent A snapshots the file,
-//! agent B `Apply`s an add through the daemon, then A writes its stale-based file.
+//! a diff as guarded `Apply` mutations, but a diff no mutation can express is written straight
+//! over the real file from the bytes it read earlier (`push_document`). `archive`'s reorder no
+//! longer takes that path (`archive_plan.rs`), but blank-line removal still does: archive drops
+//! blanks and no mutation removes one. So do edits in sidecar mode, which has no `id:` tags to
+//! match lines by. This models the race: agent A snapshots the file, agent B `Apply`s an add
+//! through the daemon, then A writes its stale-based file.
 //! Desired outcome: B's add survives. Run with:
 //!   cargo test -p txtodo-daemon --test stale_snapshot_write -- --nocapture --include-ignored
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
@@ -47,9 +49,9 @@ fn add_req(line: &str) -> pb::ApplyRequest {
 }
 
 #[tokio::test]
-#[ignore = "known gap, see module doc: CLI whole-file fallback can overwrite a concurrent Apply"]
-async fn a_whole_file_write_from_a_stale_snapshot_keeps_a_concurrent_apply() {
-    let mut d = Daemon::start("one\ntwo\nthree\n").await;
+#[ignore = "known gap, see module doc: the CLI whole-file fallback can overwrite a concurrent Apply"]
+async fn blank_removal_from_a_stale_snapshot_keeps_a_concurrent_apply() {
+    let mut d = Daemon::start("one\n\ntwo\n").await;
     // What `daemon.get` hands the CLI before it runs the command on a scratch copy.
     let snapshot = String::from_utf8(d.daemon_bytes().await).unwrap();
 
@@ -61,16 +63,13 @@ async fn a_whole_file_write_from_a_stale_snapshot_keeps_a_concurrent_apply() {
         .await
         .unwrap();
 
-    // Agent A finishes `do 1` + archive on its scratch copy, then writes the file: the task moves
-    // to the bottom, which `plan_mutations` cannot express.
-    let mut lines: Vec<String> = snapshot.lines().map(str::to_owned).collect();
-    let first = lines.remove(0);
-    lines.push(format!("x 2026-09-19 {first}"));
-    d.external_write(&(lines.join("\n") + "\n"));
+    // Agent A runs `archive` on its scratch copy, which drops the blank line, then writes the file.
+    let kept: Vec<&str> = snapshot.lines().filter(|l| !l.is_empty()).collect();
+    d.external_write(&(kept.join("\n") + "\n"));
 
     let after = d.settle().await;
     assert!(
-        after.lines().any(|l| l.starts_with("x 2026-09-19 one")),
+        !after.lines().any(str::is_empty),
         "A's own change landed:\n{after}"
     );
     assert!(
