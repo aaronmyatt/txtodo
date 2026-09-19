@@ -128,20 +128,16 @@ impl DaemonClient {
     }
 
     /// Probes the daemon up to [`MAX_CONNECT_RETRIES`] times, [`RETRY_BACKOFF`] apart, so a
-    /// freshly spawned daemon has time to bind the socket before the first real call. With a
-    /// workspace selected that is a `Health` call; with none, `Health` would be refused (an
-    /// unselected call needs exactly one open workspace), so the registry-level `workspace_list`
-    /// — never selector-scoped — is the probe instead.
+    /// freshly spawned daemon has time to bind the socket before the first real call. The probe is
+    /// the registry-level `workspace_list`, never selector-scoped: it answers the moment the socket
+    /// is bound, whereas a workspace-scoped `Health` would wait for that workspace's open (the
+    /// daemon binds first and opens in the background, task `daemon-early-bind`) and an unselected
+    /// one is refused while anything is still opening.
     pub async fn wait_until_ready(&mut self) -> Result<(), DaemonError> {
         let mut last: Option<DaemonError> = None;
         for attempt in 0..MAX_CONNECT_RETRIES {
-            let probe = if self.selector.is_some() {
-                self.health().await.map(drop)
-            } else {
-                self.workspace_list().await.map(drop)
-            };
-            match probe {
-                Ok(()) => return Ok(()),
+            match self.workspace_list().await {
+                Ok(_) => return Ok(()),
                 Err(e) => last = Some(e),
             }
             if attempt + 1 < MAX_CONNECT_RETRIES {
@@ -149,16 +145,6 @@ impl DaemonClient {
             }
         }
         Err(last.unwrap_or(DaemonError::Timeout))
-    }
-
-    /// Liveness only; used by [`DaemonClient::wait_until_ready`].
-    async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
-        let workspace = self.selector.clone();
-        Ok(self
-            .inner
-            .health(pb::HealthRequest { workspace })
-            .await?
-            .into_inner())
     }
 
     /// Every synced document with its current projection hash.

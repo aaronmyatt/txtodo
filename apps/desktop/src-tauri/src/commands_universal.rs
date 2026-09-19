@@ -11,6 +11,7 @@
 //! both happen in the frontend, over the flat list this command returns.
 
 use crate::commands::ensure_connected;
+use crate::dto::is_ready_or_unknown;
 use crate::dto_universal::UniversalTaskDto;
 use crate::state::AppState;
 use tauri::{AppHandle, State};
@@ -37,7 +38,9 @@ async fn universal_tasks_inner(
 
     let mut tasks = Vec::new();
     for ws in workspaces {
-        if !ws.root_exists {
+        // A workspace the daemon is still opening is skipped, not promoted (see
+        // `is_ready_or_unknown`); the frontend shows it as loading from `list_workspaces`.
+        if !ws.root_exists || !is_ready_or_unknown(&ws) {
             continue;
         }
         let selector = pb::WorkspaceSelector {

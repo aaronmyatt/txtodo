@@ -17,6 +17,7 @@
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
+	import { openingWorkspace } from "$lib/stores/loading";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
 	import PinToggle from "./PinToggle.svelte";
@@ -127,6 +128,10 @@
 
 	<RejectedEditBanner />
 
+	{#if $openingWorkspace > 0}
+		<p class="opening" role="status">Opening this workspace&hellip;</p>
+	{/if}
+
 	{#if rootKnown && !$currentWorkspaceRoot}
 		<p class="no-workspace">
 			No workspace selected. Open the workspace list (top left) to pick one, or add a folder.
@@ -146,6 +151,12 @@
 </main>
 
 <style>
+	.opening {
+		margin: 0.5rem 1rem;
+		color: var(--color-text-muted, inherit);
+		font-size: 0.85rem;
+	}
+
 	.no-workspace {
 		margin: 2rem 1rem;
 		color: var(--muted, #6b7280);

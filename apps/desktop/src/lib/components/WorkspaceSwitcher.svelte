@@ -42,6 +42,18 @@
 		workspaces = await listWorkspaces();
 	}
 
+	// While the daemon is still opening workspaces (task daemon-early-bind) keep the list fresh so
+	// "opening…" turns into a plain entry by itself; stops as soon as nothing is pending or the
+	// sidebar closes.
+	const pending = $derived(workspaces.some((w) => w.load_state === "queued" || w.load_state === "loading"));
+	$effect(() => {
+		if (!open || !pending) return;
+		const timer = setInterval(() => {
+			refresh().catch(() => {});
+		}, 2000);
+		return () => clearInterval(timer);
+	});
+
 	function focusableElements(): HTMLElement[] {
 		if (!asideRef) return [];
 		const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -205,6 +217,11 @@
 							>
 								{ws.root}
 								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
+								{#if ws.load_state === "queued" || ws.load_state === "loading"}
+									<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
+								{:else if ws.load_state === "failed"}
+									<span class="load-label failed" title={ws.load_error}>failed to open</span>
+								{/if}
 							</button>
 							{#if ws.root !== $currentWorkspaceRoot}
 								<button
@@ -337,6 +354,17 @@
 		margin-left: 0.4em;
 		font-size: 0.75em;
 		opacity: 0.8;
+	}
+
+	.load-label {
+		margin-left: 0.4em;
+		font-size: 0.75em;
+		opacity: 0.8;
+	}
+
+	.load-label.failed {
+		color: var(--color-danger);
+		opacity: 1;
 	}
 
 	.entry:hover:not(:disabled) {

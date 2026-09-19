@@ -120,10 +120,12 @@ export interface StoredWorkspace {
 	added_at_ms: number;
 	root_exists: boolean;
 	has_state: boolean;
+	load_state: "queued" | "loading" | "ready" | "failed" | "unknown";
+	load_error: string;
 }
 
 export const workspaces: StoredWorkspace[] = [
-	{ id: fakeUlid(), root: WORKSPACE_ROOT, added_at_ms: NOW_MS - 7 * 86_400_000, root_exists: true, has_state: true }
+	{ id: fakeUlid(), root: WORKSPACE_ROOT, added_at_ms: NOW_MS - 7 * 86_400_000, root_exists: true, has_state: true, load_state: "ready", load_error: "" }
 ];
 
 export let currentWorkspaceRoot = WORKSPACE_ROOT;

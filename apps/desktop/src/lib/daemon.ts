@@ -3,6 +3,7 @@
 // crosses through these `invoke` calls (design §7).
 // Ref: https://v2.tauri.app/develop/calling-rust/ and https://v2.tauri.app/develop/calling-frontend/
 import { invoke, listen, type UnlistenFn } from "./tauriShim";
+import { retryWhileLoading } from "./loadingRetry";
 
 /** Mirrors `desktop_lib::status::DaemonStatus` (serde `rename_all = "snake_case"`). */
 export type DaemonStatus = "connected" | "connecting" | "spawning" | "dead";
@@ -18,7 +19,7 @@ export interface FileInfo {
 
 /** Every synced document with its current projection hash (`ListFiles`). */
 export function listFiles(): Promise<FileInfo[]> {
-	return invoke("list_files");
+	return retryWhileLoading(() => invoke<FileInfo[]>("list_files"));
 }
 
 /** Current connectivity state to `txtodod`, queryable without waiting for an event. */
@@ -45,7 +46,7 @@ export interface FileContents {
 
 /** The exact bytes the daemon holds for one workspace-relative document path. */
 export function getFile(path: string): Promise<FileContents> {
-	return invoke("get_file", { path });
+	return retryWhileLoading(() => invoke<FileContents>("get_file", { path }));
 }
 
 /** A line addressed by line number and/or ULID task id (`""` when the line has none yet). Mirrors `desktop_lib::dto::TaskRefDto`. */
@@ -214,6 +215,10 @@ export interface WorkspaceInfo {
 	added_at_ms: number;
 	root_exists: boolean;
 	has_state: boolean;
+	/** How far the daemon is through opening it (task daemon-early-bind); "unknown" from an older daemon. */
+	load_state: "queued" | "loading" | "ready" | "failed" | "unknown";
+	/** Why the last open failed; empty unless `load_state` is "failed". */
+	load_error: string;
 }
 
 /** Every registered workspace, oldest first. */

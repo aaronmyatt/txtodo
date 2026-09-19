@@ -5,7 +5,7 @@
 
 use crate::commands::ensure_connected;
 use crate::daemon::DaemonClient;
-use crate::dto::{AggregatedOpLogEntryDto, OpLogEntryDto};
+use crate::dto::{AggregatedOpLogEntryDto, OpLogEntryDto, is_ready_or_unknown};
 use crate::state::AppState;
 use tauri::{AppHandle, State};
 use txtodo_proto::v1 as pb;
@@ -62,7 +62,9 @@ async fn op_log_all_inner(
 
     let mut merged = Vec::new();
     for ws in workspaces {
-        if ws.root_exists {
+        // Only a workspace the daemon has finished opening: a fan-out must not promote every
+        // workspace (see `is_ready_or_unknown`).
+        if ws.root_exists && is_ready_or_unknown(&ws) {
             merged.extend(op_log_one_workspace(client, ws).await);
         }
     }

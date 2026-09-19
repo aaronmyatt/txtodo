@@ -92,7 +92,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			const root = (args?.root as string).trim();
 			let ws = workspaces.find((w) => w.root === root);
 			if (!ws) {
-				ws = { id: fakeUlid(), root, added_at_ms: NOW_MS, root_exists: true, has_state: false };
+				ws = { id: fakeUlid(), root, added_at_ms: NOW_MS, root_exists: true, has_state: false, load_state: "ready", load_error: "" };
 				workspaces.push(ws);
 			}
 			return { ...ws } as T;
