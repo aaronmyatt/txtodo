@@ -8,6 +8,9 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 // Unix-only: see tests/daemon_spawn.rs's own doc comment (task desktop-windows-daemon-tests) for
 // why -- same support::TXTODOD_BIN dependency, same fix.
+//
+// #[ignore]d (2026-09-19): CI-only, see tests/daemon_spawn.rs's own doc comment for the full
+// rationale.
 #![cfg(unix)]
 
 mod support;
@@ -27,6 +30,7 @@ fn seeded_dir(seed: &str) -> tempfile::TempDir {
     dir
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn get_file_for_reaches_another_workspace_without_moving_the_clients_own_selector() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
