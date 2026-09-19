@@ -139,26 +139,33 @@ mod unix_impl {
         Ok(())
     }
 
-    /// Whether a persistent, non-stale boot-time unit is already installed for `cfg`'s target
-    /// (ADR 0025: the global daemon only — `cfg.extra_args` non-empty means a legacy `--dir`
-    /// bridge, which never gets one).
+    /// Whether the boot-time unit owns this target and is up or coming up, so waiting for it beats
+    /// racing it with an ad-hoc spawn (ADR 0025: the global daemon only — `cfg.extra_args` non-empty
+    /// is a legacy `--dir` bridge, which never gets a unit).
     ///
-    /// Also `false` whenever `cfg.extra_env` is non-empty: only a hermetic test/harness sets it (to
-    /// redirect the spawned child at an isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB`), unrelated to
-    /// whatever unit is installed against the real `$HOME`. Found the hard way: without this,
-    /// `tests/ensure_daemon.rs` timed out waiting on the test's own never-to-be-bound socket instead
-    /// of spawning against it, on any machine with a real installed service.
+    /// Requires all of: the unit file exists and is not stale; the service manager has it loaded
+    /// (`service::is_loaded` — after `txtodo daemon stop` the file is still there and nothing will
+    /// ever bind the socket, so waiting used to cost every client its full timeout); and `cfg.socket`
+    /// is the device-global default socket (`binary_path::unit_owns_socket` — a caller isolating
+    /// itself with `$TXTODO_SOCKET`/`$XDG_DATA_HOME`, or a hermetic harness via `extra_env`, dials a
+    /// socket the real unit will never bind).
     fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
         if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return false;
         }
-        let Some(txtodod) = resolve_binary_path(cfg) else {
+        let (Some(txtodod), Ok(home)) = (
+            crate::binary_path::resolve_binary(cfg.daemon_bin.as_ref()),
+            crate::service::home_dir(),
+        ) else {
             return false;
         };
-        let Ok(home) = crate::service::home_dir() else {
+        let xdg = std::env::var_os("XDG_DATA_HOME");
+        if !crate::binary_path::unit_owns_socket(&cfg.socket, &home, xdg.as_deref()) {
             return false;
-        };
+        }
         already_installed_at(&home, &txtodod)
+            && crate::service::render(&home, &txtodod)
+                .is_some_and(|rendered| crate::service::is_loaded(&rendered))
     }
 
     /// The pure half of [`already_installed_as_service`], `home` injected rather than read from
@@ -193,9 +200,7 @@ mod unix_impl {
     /// Spawns `txtodod` with a fixed argv (no shell string) and reaps it on a background thread
     /// so it never lingers as a zombie once it exits; the daemon outlives this call.
     fn spawn_daemon(cfg: &LaunchConfig) -> Result<(), LaunchError> {
-        let program = cfg
-            .daemon_bin
-            .clone()
+        let program = crate::binary_path::resolve_binary(cfg.daemon_bin.as_ref())
             .unwrap_or_else(|| PathBuf::from("txtodod"));
         let mut command = Command::new(program);
         command.stdout(Stdio::null()).stderr(Stdio::null());
@@ -231,7 +236,7 @@ mod unix_impl {
         if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return;
         }
-        let Some(txtodod) = resolve_binary_path(cfg) else {
+        let Some(txtodod) = crate::binary_path::resolve_binary(cfg.daemon_bin.as_ref()) else {
             return;
         };
         let Ok(home) = crate::service::home_dir() else {
@@ -260,23 +265,6 @@ mod unix_impl {
             let _ = crate::service::install(&home, &rendered, force);
         }
         let _ = crate::service::start(&rendered);
-    }
-
-    fn resolve_binary_path(cfg: &LaunchConfig) -> Option<PathBuf> {
-        if let Some(bin) = &cfg.daemon_bin {
-            return Some(bin.clone());
-        }
-        which_on_path("txtodod")
-    }
-
-    /// The same `$PATH` search a bare `Command::new("txtodod")` performs, needed here because the
-    /// rendered service file wants a concrete path, not a bare program name.
-    fn which_on_path(program: &str) -> Option<PathBuf> {
-        std::env::var_os("PATH").and_then(|paths| {
-            std::env::split_paths(&paths)
-                .map(|dir| dir.join(program))
-                .find(|p| p.is_file())
-        })
     }
 
     /// Client-side no-double-spawn guard: an exclusive lock beside `sock`, held for the duration

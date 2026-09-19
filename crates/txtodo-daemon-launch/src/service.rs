@@ -173,23 +173,32 @@ fn installed_program_path(body: &str) -> Option<PathBuf> {
 }
 
 /// Whether the unit already installed at `r.path` is stale: it exists on disk, but the binary
-/// path it records no longer exists (task `daemon-stale-service-repair`) — e.g. a debug binary
+/// path it records no longer exists (task `daemon-stale-service-repair`), or it still carries the
+/// old unconditional `KeepAlive` (`has_unconditional_keepalive`) — e.g. a debug binary
 /// inside a git worktree that has since been deleted. `KeepAlive`/`Restart=on-failure` can retry
 /// an exec against a missing binary forever without ever succeeding, and nothing short of
 /// reinstalling the unit file itself can fix that.
 ///
 /// Deliberately narrow (see `tasks/daemon-stale-service-repair/notes.md`'s design notes): only
-/// "the recorded binary is gone" counts as stale. A unit whose binary exists but differs from
-/// what would be rendered today is left alone — that may be a human's deliberate customization,
-/// not a bug to silently overwrite. No unit installed at all is "not installed", not "stale".
+/// "the recorded binary is gone" and the one known-bad `KeepAlive` shape count as stale. A unit
+/// whose binary exists but differs from what would be rendered today is left alone — that may be
+/// a human's deliberate customization, not a bug to silently overwrite. No unit installed at all
+/// is "not installed", not "stale".
 pub fn is_stale(r: &Rendered) -> bool {
     let Ok(body) = std::fs::read_to_string(&r.path) else {
         return false;
     };
-    match installed_program_path(&body) {
-        Some(path) => !path.is_file(),
-        None => false,
-    }
+    let binary_gone = installed_program_path(&body).is_some_and(|path| !path.is_file());
+    binary_gone || has_unconditional_keepalive(&body)
+}
+
+/// True for a launchd plist written by a build that predates `KeepAlive.SuccessfulExit=false`:
+/// `<key>KeepAlive</key>` followed directly by `<true/>`. That shape respawns a daemon that lost
+/// the pid lock forever, so it is repaired like a dead binary path (root todo
+/// id:01M2VV1ZXDK24H3P6Z4DJ2P8YM) — a specific known-bad shape, not a human's customization.
+fn has_unconditional_keepalive(body: &str) -> bool {
+    let mut lines = body.lines().map(str::trim).filter(|l| !l.is_empty());
+    lines.any(|l| l == "<key>KeepAlive</key>") && lines.next() == Some("<true/>")
 }
 
 /// `$HOME` (or `%USERPROFILE%`), or an error if neither is set.
@@ -256,7 +265,12 @@ pub fn install(home: &Path, r: &Rendered, force: bool) -> Result<InstallOutcome,
     })
 }
 
-/// Loads and starts the service (launchd `bootstrap`+`kickstart -k`, or systemd `enable --now`).
+/// Loads and starts the service: launchd `bootstrap` for a unit that is not loaded (its
+/// `RunAtLoad` starts it), `kickstart -k` for one that already is; systemd `enable --now`.
+///
+/// Bootstrap alone, never bootstrap then kickstart: `kickstart -k` SIGTERMs the job `RunAtLoad` has
+/// just started and starts it again, so a fresh `txtodo daemon start` showed `runs = 2` and last
+/// exit -15, and the daemon's cold open was paid twice (root todo id:01M2WX72DCCZC1AJFDDX1WZ7EE).
 pub fn start(r: &Rendered) -> Result<(), ServiceError> {
     if !r.path.exists() {
         return Err(ServiceError::Message(format!(
@@ -265,16 +279,14 @@ pub fn start(r: &Rendered) -> Result<(), ServiceError> {
         )));
     }
     if cfg!(target_os = "macos") {
-        // https://keith.github.io/xcode-man-pages/launchctl.1.html — bootstrap loads, kickstart runs now
         let domain = format!("gui/{}", uid());
-        run_ctl(
-            "launchctl",
-            &["bootstrap", &domain, &r.path.to_string_lossy()],
-        )?;
-        run_ctl(
-            "launchctl",
-            &["kickstart", "-k", &format!("{domain}/{}", r.label)],
-        )
+        let commands =
+            launchd_start_commands(&domain, r, launchd_has(&format!("{domain}/{}", r.label)));
+        for args in &commands {
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            run_ctl("launchctl", &args)?;
+        }
+        Ok(())
     } else {
         run_ctl("systemctl", &["--user", "daemon-reload"])?;
         run_ctl(
@@ -282,6 +294,46 @@ pub fn start(r: &Rendered) -> Result<(), ServiceError> {
             &["--user", "enable", "--now", &format!("{}.service", r.label)],
         )
     }
+}
+
+/// The `launchctl` invocations `start` runs. https://keith.github.io/xcode-man-pages/launchctl.1.html
+fn launchd_start_commands(domain: &str, r: &Rendered, loaded: bool) -> Vec<Vec<String>> {
+    if loaded {
+        return vec![vec![
+            "kickstart".to_owned(),
+            "-k".to_owned(),
+            format!("{domain}/{}", r.label),
+        ]];
+    }
+    vec![vec![
+        "bootstrap".to_owned(),
+        domain.to_owned(),
+        r.path.to_string_lossy().into_owned(),
+    ]]
+}
+
+/// Whether the service manager has this unit loaded and running or starting: launchd has the job
+/// registered, or systemd reports it `active`/`activating`. False when service control is disabled
+/// (`TXTODO_NO_SERVICE=1`) or the manager cannot be asked. `ensure_daemon` waits for a unit that is
+/// loaded — it is on its way up — and spawns its own daemon for one that is merely installed, such
+/// as after `txtodo daemon stop`, which used to make every client wait out its full timeout.
+pub fn is_loaded(r: &Rendered) -> bool {
+    if crate::service_disabled() {
+        return false;
+    }
+    if cfg!(target_os = "macos") {
+        return launchd_has(&format!("gui/{}/{}", uid(), r.label));
+    }
+    Command::new("systemctl")
+        .args(["--user", "is-active", &format!("{}.service", r.label)])
+        .output()
+        .is_ok_and(|o| systemd_state_is_loaded(&String::from_utf8_lossy(&o.stdout)))
+}
+
+/// `systemctl is-active` prints one word; these two mean the unit is up or on its way up.
+/// https://www.freedesktop.org/software/systemd/man/latest/systemctl.html#is-active%20PATTERN%E2%80%A6
+fn systemd_state_is_loaded(stdout: &str) -> bool {
+    matches!(stdout.trim(), "active" | "activating")
 }
 
 /// Stops and unloads the service.

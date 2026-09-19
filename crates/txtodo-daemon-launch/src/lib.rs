@@ -28,6 +28,7 @@
 #![forbid(unsafe_code)]
 
 mod autostart;
+mod binary_path;
 pub mod service;
 mod spawn;
 

@@ -14,8 +14,17 @@
     </array>
     <key>RunAtLoad</key>
     <true/>
+    <!-- Restart only after a failure (a non-zero exit or a crash): a daemon that lost the pid lock
+         because another txtodod already serves exits 0 and must stay stopped, not be respawned
+         forever (33 "already running" exits in launchd.err.log on 2026-09-19). ThrottleInterval
+         keeps a crash loop from spinning. Ref: launchd.plist(5), KeepAlive / SuccessfulExit. -->
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>StandardOutPath</key>
     <string>{{LOGDIR}}/launchd.out.log</string>
     <key>StandardErrorPath</key>

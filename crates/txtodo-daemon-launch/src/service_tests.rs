@@ -215,3 +215,97 @@ fn wait_until_gives_up_at_the_timeout() {
         "the wait must be bounded by its timeout, not hang"
     );
 }
+
+const OLD_PLIST: &str = "<plist><dict>\n  <key>RunAtLoad</key>\n  <true/>\n  <key>KeepAlive</key>\n  <true/>\n</dict></plist>";
+
+#[test]
+fn the_shipped_launchd_template_restarts_only_after_a_failure() {
+    assert!(
+        LAUNCHD_TEMPLATE.contains("<key>SuccessfulExit</key>")
+            && LAUNCHD_TEMPLATE.contains("<key>ThrottleInterval</key>"),
+        "KeepAlive is a dict with SuccessfulExit=false, throttled"
+    );
+    assert!(
+        !has_unconditional_keepalive(LAUNCHD_TEMPLATE),
+        "the new template must not read as the old shape"
+    );
+}
+
+#[test]
+fn the_old_unconditional_keepalive_reads_as_stale_but_a_customised_one_does_not() {
+    assert!(has_unconditional_keepalive(OLD_PLIST));
+    assert!(!has_unconditional_keepalive(
+        "<key>KeepAlive</key>\n<dict><key>SuccessfulExit</key><false/></dict>"
+    ));
+    assert!(!has_unconditional_keepalive(
+        "<key>RunAtLoad</key>\n<true/>"
+    ));
+}
+
+#[test]
+fn a_unit_on_disk_with_the_old_keepalive_is_stale_even_though_its_binary_exists() {
+    let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let bin = home.path().join("txtodod");
+    std::fs::write(&bin, b"#!/bin/sh\n").unwrap_or_else(|e| panic!("write bin: {e}"));
+    let Some(mut rendered) = render(home.path(), &bin) else {
+        return; // no service integration on this platform
+    };
+    if !rendered.body.contains("<key>KeepAlive</key>") {
+        return; // systemd: Restart=on-failure was never the unconditional shape
+    }
+    rendered.body = rendered.body.replace(
+        "<key>KeepAlive</key>\n    <dict>\n        <key>SuccessfulExit</key>\n        <false/>\n    </dict>",
+        "<key>KeepAlive</key>\n    <true/>",
+    );
+    install(home.path(), &rendered, false).unwrap_or_else(|e| panic!("install: {e}"));
+    assert!(is_stale(&rendered));
+}
+
+#[test]
+fn launchd_start_bootstraps_a_fresh_unit_once_and_only_kickstarts_a_loaded_one() {
+    let r = Rendered {
+        label: "com.txtodo.txtodod".to_owned(),
+        path: PathBuf::from("/h/Library/LaunchAgents/com.txtodo.txtodod.plist"),
+        body: String::new(),
+    };
+    // Bootstrap runs the job (RunAtLoad); a kickstart -k after it would kill and restart it.
+    assert_eq!(
+        launchd_start_commands("gui/501", &r, false),
+        vec![vec![
+            "bootstrap".to_owned(),
+            "gui/501".to_owned(),
+            "/h/Library/LaunchAgents/com.txtodo.txtodod.plist".to_owned()
+        ]]
+    );
+    assert_eq!(
+        launchd_start_commands("gui/501", &r, true),
+        vec![vec![
+            "kickstart".to_owned(),
+            "-k".to_owned(),
+            "gui/501/com.txtodo.txtodod".to_owned()
+        ]]
+    );
+}
+
+#[test]
+fn systemd_active_and_activating_count_as_loaded_and_nothing_else_does() {
+    for up in ["active", "activating\n"] {
+        assert!(systemd_state_is_loaded(up), "{up:?}");
+    }
+    for down in ["inactive", "failed", "deactivating", "", "unknown"] {
+        assert!(!systemd_state_is_loaded(down), "{down:?}");
+    }
+}
+
+#[test]
+fn a_disabled_service_is_never_loaded() {
+    let r = Rendered {
+        label: "com.txtodo.does-not-exist".to_owned(),
+        path: PathBuf::new(),
+        body: String::new(),
+    };
+    // The repo's `.cargo/config.toml` sets TXTODO_NO_SERVICE=1 for every test run.
+    if crate::service_disabled() {
+        assert!(!is_loaded(&r));
+    }
+}
