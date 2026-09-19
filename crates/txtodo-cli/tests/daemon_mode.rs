@@ -131,6 +131,10 @@ fn wait_for_log(dir: &Path, pred: impl Fn(&str) -> bool) -> String {
     }
 }
 
+// CI-only: spawns a real txtodod per test (SOCKET_WAIT/RECONCILE_WAIT polling), which is what
+// makes this file slow under a plain `cargo test`. Run in CI via `cargo test -- --ignored`
+// (.github/workflows/ci.yml); not `#[ignore]`d for flakiness or a broken precondition.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn add_and_pri_go_through_the_daemon() {
     let dir = tempfile::tempdir().unwrap();
@@ -156,6 +160,7 @@ fn add_and_pri_go_through_the_daemon() {
     );
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn del_leaves_a_blank_and_log_shows_only_user_ops() {
     let dir = tempfile::tempdir().unwrap();
@@ -183,6 +188,7 @@ fn del_leaves_a_blank_and_log_shows_only_user_ops() {
     );
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn a_direct_write_is_reconciled_as_an_external_edit() {
     let dir = tempfile::tempdir().unwrap();
@@ -234,6 +240,7 @@ fn conflicts_without_a_daemon_say_so() {
     }
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
     let dir = tempfile::tempdir().unwrap();
@@ -275,6 +282,7 @@ fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
 // by txtodo-daemon's pairing_grpc_tests.rs (see that crate's own notes on why a two-real-process
 // test is out of scope here).
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn device_list_reports_none_before_any_pairing() {
     let dir = tempfile::tempdir().unwrap();
@@ -293,6 +301,7 @@ fn device_list_reports_none_before_any_pairing() {
     );
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn device_remove_refuses_the_last_device_in_an_unpaired_workspace() {
     let dir = tempfile::tempdir().unwrap();
@@ -309,6 +318,7 @@ fn device_remove_refuses_the_last_device_in_an_unpaired_workspace() {
     assert!(err.contains("cannot remove the last device"), "{err}");
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn device_remove_without_yes_needs_the_id_typed_back() {
     let dir = tempfile::tempdir().unwrap();
@@ -338,6 +348,7 @@ fn device_remove_without_yes_needs_the_id_typed_back() {
 
 // --- plan M4 tasks/model-hlc-skew-guard + tasks/sync-keystore: `txtodo doctor` extensions ---
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired() {
     let dir = tempfile::tempdir().unwrap();

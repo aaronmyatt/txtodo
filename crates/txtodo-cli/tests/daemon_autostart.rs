@@ -70,6 +70,9 @@ fn run_txtodo(workspace: &Path, state_dir: &Path, home: &Path, args: &[&str]) ->
         .unwrap_or_else(|e| panic!("spawn txtodo: {e}"))
 }
 
+// CI-only: spawns a real txtodod and polls its socket, which is what makes this test slow under
+// a plain `cargo test`. Run in CI via `cargo test -- --ignored` (.github/workflows/ci.yml).
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn log_cold_starts_the_global_daemon_with_no_manual_daemon_start() {
     let workspace = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
