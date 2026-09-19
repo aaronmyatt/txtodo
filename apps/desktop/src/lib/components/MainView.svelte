@@ -16,6 +16,7 @@
 	import { currentWorkspaceRoot, pendingUniversalNav } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
+	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
 	import PinToggle from "./PinToggle.svelte";
@@ -123,6 +124,8 @@
 			<a href="/help" class="help-link" aria-label="Help">?</a>
 		</div>
 	</div>
+
+	<RejectedEditBanner />
 
 	{#if rootKnown && !$currentWorkspaceRoot}
 		<p class="no-workspace">

@@ -27,6 +27,7 @@
 	} from "$lib/todotxt/decorations";
 	import { computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
+	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import type { DetailParams } from "$lib/types";
 
 	interface Props {
@@ -55,6 +56,11 @@
 	let view: EditorView | undefined;
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let loadError = $state("");
+	// The daemon's refusal of this instance's last commit. Kept apart from `loadError` because
+	// `refreshDoc` clears that one on every successful fetch, which used to erase a refusal the
+	// moment the path-switch effect repainted; this one only clears on a later successful commit or
+	// a discard (root todo id:01M2WK5DQQ9A3V3M4F2CJN0KMX).
+	let commitError = $state("");
 	// Testability hook only (tasks/desktop-visual-regression): the perf test waits on
 	// `[data-line-count='10000']` to know the 10k-line fixture has actually reached the editor,
 	// rather than guessing a fixed sleep. Kept to a single `$state` + one line in the template —
@@ -202,27 +208,50 @@
 		// via `refreshDoc` below — no manual repaint here.
 	}
 
-	/** Blur/Cmd-S: commits the buffer against *this* instance's current `path`. (The file-switch
-	 * `$effect` below calls `applyBufferDelta` directly instead, against the path being left,
-	 * since by the time it runs `path` already holds the destination.) */
+	/** The one way a buffer goes back to the daemon — blur, Cmd-S, a file switch and an unmount all
+	 * come through here, against the path the buffer belongs to (not necessarily `path`: by the
+	 * time the switch effect runs, `path` already holds the destination). Returns the daemon's
+	 * refusal, or `null` on success. A refusal is parked in `rejectedEdits` with the exact text,
+	 * so a caller that has no editor left to keep it in (switch, unmount) still leaves the human a
+	 * way to get it back; `keptInEditor` skips that for a caller whose buffer stays on screen. A
+	 * success clears any older refusal of the same file. */
+	async function commitOutgoing(
+		targetPath: string,
+		base: string,
+		next: string,
+		keptInEditor = false
+	): Promise<string | null> {
+		try {
+			await applyBufferDelta(targetPath, base, next);
+			rejectedEdits.clear(targetPath);
+			return null;
+		} catch (e) {
+			const error = String(e);
+			if (!keptInEditor) rejectedEdits.record({ path: targetPath, text: next, error });
+			return error;
+		}
+	}
+
+	/** Blur/Cmd-S: commits the buffer against *this* instance's current `path`. */
 	async function commit(): Promise<void> {
 		if (!view || !dirty) return;
-		const targetPath = path;
-		const base = baseline;
 		const next = view.state.doc.toString();
 		setDirty(false);
 		applyEditableGate(); // a pending review that arrived mid-edit is only enforced once clean
-		try {
-			await applyBufferDelta(targetPath, base, next);
-		} catch (e) {
-			// Keep the buffer dirty and untouched: the edit was rejected, not applied. Calling
-			// refreshDoc() here would silently overwrite the human's text with the daemon's
-			// pre-edit content and, since it clears loadError right after fetching, erase this
-			// very error too (root cause 4, tasks/desktop-concurrent-edit-loss/notes.md) — restore
-			// dirty so the human can fix the text and re-commit, or Escape to discard it.
-			setDirty(true);
-			loadError = String(e);
+		const error = await commitOutgoing(path, baseline, next, true);
+		if (error === null) {
+			commitError = "";
+			return;
 		}
+		// Keep the buffer dirty and untouched: the edit was rejected, not applied. Calling
+		// refreshDoc() here would silently overwrite the human's text with the daemon's
+		// pre-edit content (root cause 4, tasks/desktop-concurrent-edit-loss/notes.md) — restore
+		// dirty so the human can fix the text and re-commit, or Escape to discard it. The gate
+		// went read-only above while the buffer was clean, so re-run it now that it is dirty again
+		// (root todo id:01M2WK5DQQ1QXXTGR306Y6PGBK).
+		setDirty(true);
+		applyEditableGate();
+		commitError = error;
 	}
 
 	/** Escape: discards (no `Apply`, no op-log entry), reverting the buffer to `baseline`. */
@@ -230,6 +259,7 @@
 		if (!view || !dirty) return;
 		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: baseline } });
 		setDirty(false);
+		commitError = "";
 		applyEditableGate();
 	}
 
@@ -324,7 +354,8 @@
 		// `$effect` below). The `Apply` call outlives the component; nothing here awaits it, since
 		// `onDestroy` can't block teardown.
 		if (dirty && view) {
-			applyBufferDelta(path, baseline, view.state.doc.toString()).catch(() => {});
+			// A refusal lands in `rejectedEdits` (the banner in MainView outlives this component).
+			void commitOutgoing(path, baseline, view.state.doc.toString());
 		}
 		view?.destroy();
 	});
@@ -356,9 +387,12 @@
 			const oldBaseline = baseline;
 			const bufferAtSwitch = wasDirty && view ? view.state.doc.toString() : "";
 			if (wasDirty) setDirty(false);
+			// A refusal is parked in `rejectedEdits` (the buffer is about to be replaced by
+			// `newPath`'s text) and shown on `commitError`, which `refreshDoc` below leaves alone.
+			commitError = "";
 			const settle = wasDirty
-				? applyBufferDelta(oldPath, oldBaseline, bufferAtSwitch).catch((e) => {
-						loadError = String(e);
+				? commitOutgoing(oldPath, oldBaseline, bufferAtSwitch).then((error) => {
+						if (error !== null) commitError = error;
 					})
 				: Promise.resolve();
 
@@ -375,6 +409,9 @@
 <div class="file-view" class:fill style={`--depth: ${depth};`} data-line-count={docLineCount}>
 	{#if loadError}
 		<p class="error" role="alert">{loadError}</p>
+	{/if}
+	{#if commitError}
+		<p class="error" role="alert">{commitError}</p>
 	{/if}
 
 	<div class="editor-shell" bind:this={containerEl}></div>
