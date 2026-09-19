@@ -178,6 +178,49 @@ export function lineDecorations(containingPath: string, filesByPath: ReadonlyMap
 	);
 }
 
+/** root todo 9: "add line length hints to the clients... to encourage keeping todo entries
+ * readable" — a plain todo.txt line has no wrap, so a very long one is easy to write without
+ * noticing. 100 matches the line-width budget this project's own Rust code is held to
+ * (`.claude/budgets.json`'s `lineWidth`), not a todo.txt-format rule; purely advisory, nothing
+ * here stops a longer line from being typed or saved. */
+const LINE_LENGTH_HINT = 100;
+
+function buildLongLineHint(view: EditorView): DecorationSet {
+	const builder = new RangeSetBuilder<Decoration>();
+	for (const { from, to } of view.visibleRanges) {
+		let pos = from;
+		while (pos <= to) {
+			const line = view.state.doc.lineAt(pos);
+			if (line.length > LINE_LENGTH_HINT) {
+				builder.add(
+					line.from + LINE_LENGTH_HINT,
+					line.to,
+					Decoration.mark({ class: "cm-todotxt-long-line" })
+				);
+			}
+			pos = line.to + 1;
+		}
+	}
+	return builder.finish();
+}
+
+/** Marks the part of a line past `LINE_LENGTH_HINT` with a subtle underline — see that constant's
+ * own doc. Viewport-bounded and re-built on doc/viewport change, same shape as `lineDecorations`. */
+export const longLineHint: Extension = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+		constructor(view: EditorView) {
+			this.decorations = buildLongLineHint(view);
+		}
+		update(update: ViewUpdate) {
+			if (update.docChanged || update.viewportChanged) {
+				this.decorations = buildLongLineHint(update.view);
+			}
+		}
+	},
+	{ decorations: (v) => v.decorations }
+);
+
 /** Structural (non-token) styling this view owns directly; token colours live in `todotxtLanguage`.
  * CM6's own default theme hardcodes the editor background/caret to white/black
  * (https://github.com/codemirror/view/blob/main/src/theme.ts), so `&` (the `.cm-editor` root —
@@ -199,5 +242,9 @@ export const mainViewBaseTheme = EditorView.baseTheme({
 		fontSize: "0.85em",
 		opacity: "0.7",
 		userSelect: "none"
+	},
+	".cm-todotxt-long-line": {
+		textDecoration: "underline wavy var(--color-text-muted)",
+		textDecorationSkipInk: "none"
 	}
 });

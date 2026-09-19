@@ -18,7 +18,13 @@
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo } from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
-	import { addLinePlaceholder, idTagsHidden, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
+	import {
+		addLinePlaceholder,
+		idTagsHidden,
+		lineDecorations,
+		longLineHint,
+		mainViewBaseTheme
+	} from "$lib/todotxt/decorations";
 	import { computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import type { DetailParams } from "$lib/types";
@@ -113,6 +119,7 @@
 			mainViewBaseTheme,
 			idTagsHidden, // always hidden — §3.1
 			addLinePlaceholder,
+			longLineHint, // root todo 9
 			lineDecoCompartment.of(lineDecorations(dirOf(path), filesByPath)),
 			hoverLineCompartment.of([]),
 			EditorView.domEventHandlers({
