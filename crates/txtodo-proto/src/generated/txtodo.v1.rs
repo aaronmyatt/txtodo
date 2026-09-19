@@ -255,9 +255,19 @@ pub struct Replace {
     #[prost(bytes = "vec", tag = "2")]
     pub contents: ::prost::alloc::vec::Vec<u8>,
 }
+/// A precondition, not a change: the whole `Apply` batch is refused (FAILED_PRECONDITION, nothing
+/// written) unless the document's hash is still `base_hash`, or if the file on disk holds an edit
+/// the daemon has not reconciled yet. For a batch that addresses lines by number alone, where the
+/// text carries no `id:` to catch a shifted line (sidecar mode, `TaskRef.task_id` empty). Must be
+/// the first mutation of its batch, and the only one of its kind.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RequireBase {
+    #[prost(bytes = "vec", tag = "1")]
+    pub base_hash: ::prost::alloc::vec::Vec<u8>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Mutation {
-    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
     pub kind: ::core::option::Option<mutation::Kind>,
 }
 /// Nested message and enum types in `Mutation`.
@@ -278,6 +288,8 @@ pub mod mutation {
         MoveToEnd(super::MoveToEnd),
         #[prost(message, tag = "7")]
         Replace(super::Replace),
+        #[prost(message, tag = "8")]
+        RequireBase(super::RequireBase),
     }
 }
 /// Who is applying. M3 knows users only; M6 fills `agent`.

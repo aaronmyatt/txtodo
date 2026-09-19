@@ -304,6 +304,12 @@ message MoveToEnd { TaskRef task = 1; }
 // untouched lines keep their identity. Must be the only mutation in its `Apply` batch. For a diff
 // no other mutation can express (the CLI's fallback, txtodo-cli `daemon_mode.rs`).
 message Replace { bytes base_hash = 1; bytes contents = 2; }
+// A precondition, not a change: the whole `Apply` batch is refused (FAILED_PRECONDITION, nothing
+// written) unless the document's hash is still `base_hash`, or if the file on disk holds an edit
+// the daemon has not reconciled yet. For a batch that addresses lines by number alone, where the
+// text carries no `id:` to catch a shifted line (sidecar mode, `TaskRef.task_id` empty). Must be
+// the first mutation of its batch, and the only one of its kind.
+message RequireBase { bytes base_hash = 1; }
 
 message Mutation {
   oneof kind {
@@ -314,6 +320,7 @@ message Mutation {
     Delete delete = 5;
     MoveToEnd move_to_end = 6;
     Replace replace = 7;
+    RequireBase require_base = 8;
   }
 }
 

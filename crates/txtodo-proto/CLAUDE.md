@@ -32,6 +32,8 @@ same way its passphrase already does.
 `Mutation.Replace { base_hash, contents }` (field 7): a whole-document compare-and-swap, refused
 (`FAILED_PRECONDITION`, nothing written) unless the document's hash is still `base_hash`. It is
 the CLI's fallback for a diff no other mutation can express, and must be alone in its `Apply`.
+`Mutation.RequireBase { base_hash }` (field 8): the same hash check as a leading precondition on
+an ordinary `Apply` batch, for batches that address lines by number with no `id:` to check (sidecar).
 `HealthResponse` carries `key_store_backend` (plan M4 tasks/sync-keystore) and four LAN-transport
 fields (`lan_relay_disabled`/`lan_endpoint_bound`/`lan_discovery_active`/`lan_group_key_present`,
 fields 8-11 — `key_store_backend` already held field 7) so `txtodo doctor` can report both.

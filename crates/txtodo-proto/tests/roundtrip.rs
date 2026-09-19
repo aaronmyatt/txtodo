@@ -9,7 +9,7 @@ use txtodo_proto::v1::{
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
     HistoryResponse, ListFilesResponse, Move, MoveToEnd, Mutation, OpSummary, Progress, Replace,
-    SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest,
+    RequireBase, SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest,
     WatchRequest, mutation, sync_status_response,
 };
 
@@ -75,6 +75,9 @@ fn every_mutation_variant_survives_encode_decode() {
         mutation::Kind::Replace(Replace {
             base_hash: vec![7; 32],
             contents: b"(A) buy ducks\r\nwalk the dog".to_vec(),
+        }),
+        mutation::Kind::RequireBase(RequireBase {
+            base_hash: vec![9; 32],
         }),
     ];
     for kind in kinds {
