@@ -266,3 +266,39 @@ async fn undo_restores_bytes_exactly_and_checkout_renders_the_past() {
         "before anything"
     );
 }
+
+#[tokio::test]
+async fn an_export_heals_a_disagreeing_mirror_instead_of_refusing_it_forever() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(
+        dir.path().join("todo.txt"),
+        format!("(A) buy ducks id:{A}\n"),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let mut actor = open(dir.path(), &store, &clock);
+    // A mirror hydrated from other text: the shape an unchecked `EditText` flush can leave behind.
+    let other = crate::state::DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap_or_else(|e| panic!("{e}")),
+        &txtodo_core::parse_file(b"something else id:01ARZ3NDEKTSV4RRFFQ69G5FAB\n"),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    actor.mirror = crate::mirror::Mirror::from_state(&other, 1).unwrap_or_else(|e| panic!("{e}"));
+    assert!(!actor.mirror.agrees_with(&actor.state));
+
+    // A peer that has seen nothing: the version of an empty document.
+    let nothing = crate::state::DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap_or_else(|e| panic!("{e}")),
+        &txtodo_core::parse_file(b""),
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let since = crate::mirror::Mirror::from_state(&nothing, 2)
+        .unwrap_or_else(|e| panic!("{e}"))
+        .version();
+
+    let bytes = actor.on_export(&since).unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(!bytes.is_empty());
+    assert!(actor.mirror.agrees_with(&actor.state));
+}

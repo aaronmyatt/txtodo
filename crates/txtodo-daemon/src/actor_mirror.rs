@@ -41,10 +41,18 @@ pub(crate) fn loro_peer(device: DeviceId) -> u64 {
 
 impl FileActor {
     /// The Loro updates a peer at `since` is missing.
-    pub(crate) fn on_export(&self, since: &[u8]) -> Result<Vec<u8>, ActorError> {
+    pub(crate) fn on_export(&mut self, since: &[u8]) -> Result<Vec<u8>, ActorError> {
+        // `after_flush` walks the whole list only for batches that reshape it, so a field or text
+        // edit can leave the mirror disagreeing until something looks. This is the export-time
+        // look: heal first (a converge keeps the lineage, a rebuild is its last resort), so one
+        // bad text edit does not block this document's sync until an unrelated insert or move
+        // (root todo id:01M2WK5DQQF0XXZXJP18JDWYDT). One walk per export, off the commit hot path.
+        if !self.mirror.agrees_with(&self.state) {
+            self.log_export_disagreed();
+            self.converge_mirror();
+        }
         // A mirror every heal failed on (`resync_mirror`'s last resort included) must never
-        // reach a peer: refuse the export rather than ship a known-wrong document. One walk per
-        // export, off the commit hot path.
+        // reach a peer: refuse the export rather than ship a known-wrong document.
         if !self.mirror.agrees_with(&self.state) {
             return Err(ActorError::Mirror(
                 "mirror disagrees with the state; export refused".to_owned(),
@@ -56,6 +64,10 @@ impl FileActor {
             .map_err(|e| ActorError::Mirror(e.to_string()))?;
         debug_assert!(!bytes.is_empty());
         Ok(bytes)
+    }
+
+    fn log_export_disagreed(&self) {
+        tracing::error!(file = %self.cfg.path, "mirror_export_disagreed_converging");
     }
 
     /// The store-transaction extras a commit tail asks for.
