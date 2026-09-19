@@ -214,6 +214,65 @@ fn first_add_in_a_brand_new_directory_auto_registers_it_with_no_separate_step() 
     assert!(out.contains(&ws_dir.path().display().to_string()), "{out}");
 }
 
+/// Registers `alive`/`dead` (both real dirs at the time of `add`), then removes `dead`'s directory
+/// from disk so its registration's `root_exists` goes false — the fixture both prune tests share.
+fn register_one_alive_one_dead(
+    daemon: &GlobalDaemon,
+    alive: &Path,
+    dead: &tempfile::TempDir,
+) -> PathBuf {
+    std::fs::write(alive.join("todo.txt"), "").unwrap();
+    std::fs::write(dead.path().join("todo.txt"), "").unwrap();
+    txtodo(daemon, alive, &["workspace", "add"]);
+    txtodo(daemon, dead.path(), &["workspace", "add"]);
+    dead.path().to_path_buf()
+}
+
+/// tasks/test-registry-leak-cleanup: `workspace prune` (no `--yes`) lists only the dead
+/// registration, names it by its now-gone path, never lists the still-real one, and changes
+/// nothing in the registry.
+#[test]
+fn prune_dry_run_lists_only_dead_registrations_and_changes_nothing() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let alive_dir = tempfile::tempdir().unwrap();
+    let dead_dir = tempfile::tempdir().unwrap();
+    let dead_path = register_one_alive_one_dead(&daemon, alive_dir.path(), &dead_dir);
+    drop(dead_dir); // the registered root no longer exists on disk from here on
+
+    let out = stdout(&txtodo(&daemon, alive_dir.path(), &["workspace", "prune"]));
+    assert!(out.contains(&dead_path.display().to_string()), "{out}");
+    assert!(
+        !out.contains(&alive_dir.path().display().to_string()),
+        "the live workspace must never be listed as prune-worthy: {out}"
+    );
+    assert!(out.contains("--yes"), "dry run by default: {out}");
+
+    let list = stdout(&txtodo(&daemon, alive_dir.path(), &["workspace", "list"]));
+    assert_eq!(list.lines().count(), 2, "dry run changed nothing: {list}");
+}
+
+/// tasks/test-registry-leak-cleanup: `workspace prune --yes` removes exactly the dead
+/// registration, leaving the still-real one in the registry.
+#[test]
+fn prune_yes_removes_only_dead_registrations() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let alive_dir = tempfile::tempdir().unwrap();
+    let dead_dir = tempfile::tempdir().unwrap();
+    register_one_alive_one_dead(&daemon, alive_dir.path(), &dead_dir);
+    drop(dead_dir);
+
+    txtodo(&daemon, alive_dir.path(), &["workspace", "prune", "--yes"]);
+
+    let out = stdout(&txtodo(&daemon, alive_dir.path(), &["workspace", "list"]));
+    assert_eq!(out.lines().count(), 1, "only the dead one removed: {out}");
+    assert!(
+        out.contains(&alive_dir.path().display().to_string()),
+        "{out}"
+    );
+}
+
 /// todo `ref:cli-doctor-multi-workspace`: `txtodo doctor` from one workspace reports every *other*
 /// registered workspace too, not just the cwd's — one `workspace` row per entry, alongside the
 /// seven fixed checks the cwd's own workspace already gets in full depth.
