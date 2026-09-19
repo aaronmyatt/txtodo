@@ -2,7 +2,10 @@
 //! side effect) and the report of what a file carries.
 
 use crate::{CliError, Ctx, json, store};
-use txtodo_core::{Edit, File, LineKind, OwnedLine, Prefix, Quirks, apply, emit_prefix};
+use txtodo_core::{
+    Edit, File, LINE_LENGTH_HINT, LineKind, OwnedLine, Prefix, Quirks, apply, emit_prefix,
+    over_length_hint,
+};
 
 /// The strict spelling of a line: canonical prefix, single spaces, no trailing whitespace, a
 /// completed line's priority moved to `pri:`. `None` when the line is already canonical or opaque.
@@ -77,15 +80,15 @@ pub fn run_fmt(ctx: &Ctx) -> Result<(), CliError> {
 }
 
 /// root todo 9: "add line length hints to the clients... to encourage keeping todo entries
-/// readable" — 100 matches the line-width budget this project's own Rust code is held to
-/// (`.claude/budgets.json`'s `lineWidth`), not a todo.txt-format rule; purely advisory, `lint`
-/// only reports it, nothing rejects or rewrites a longer line.
-const LINE_LENGTH_HINT: usize = 100;
-
-/// `Some` past [`LINE_LENGTH_HINT`], `None` otherwise.
+/// readable"; purely advisory, `lint` only reports it, nothing rejects or rewrites a longer line.
+/// The measure (visible chars, the line's own `id:` tag not counted) and the 100 limit are
+/// `txtodo_core`'s, shared with the TUI and the desktop editor. A non-UTF-8 line is already
+/// reported as such and has no character length.
 fn length_hint(line: &OwnedLine) -> Option<String> {
-    let len = line.bytes().len();
-    (len > LINE_LENGTH_HINT).then(|| format!("{len} chars, over the {LINE_LENGTH_HINT}-char hint"))
+    let len = over_length_hint(line.raw()?)?;
+    Some(format!(
+        "{len} chars, over the {LINE_LENGTH_HINT}-char hint"
+    ))
 }
 
 /// Every finding for one line (1-based `number`): the parse/quirks check plus the length hint.
@@ -202,6 +205,17 @@ mod tests {
     }
 
     /// root todo 9: a line past the 100-char hint is reported, a line at or under it is not.
+    #[test]
+    fn findings_counts_chars_and_not_the_lines_own_id_tag() {
+        // 60 CJK chars are 180 bytes: only a char count leaves them under the hint.
+        let cjk = "字".repeat(60);
+        // 75 visible chars plus a 30-char id tag and its blank: 105 raw, 75 as a human sees it.
+        let tagged = format!("{} id:01J9K3H5Z7Q8X2M4N6P8R0T2V4", "a".repeat(75));
+        let text = format!("{cjk}\n{tagged}\n");
+        let file = txtodo_core::parse_file(text.as_bytes());
+        assert_eq!(findings(&file), vec![]);
+    }
+
     #[test]
     fn findings_reports_lines_over_the_length_hint_only() {
         let exactly_100 = "a".repeat(100);
