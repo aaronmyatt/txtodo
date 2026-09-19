@@ -8,7 +8,8 @@ Plan M1 shape (frozen): `parse_line`, `tokenize`, `parse_file`, `File::to_bytes`
 Grown details (2026-09-11): `parse_line_with_schemes`, `tokenize_with_schemes`, `urls::{DEFAULT_SCHEMES, is_url}`,
 `Quirks` (u16 bitset, `ALL` names), `ParseError { rule, byte, message }`, `Ulid`, `Date::{new, parse}`, `Priority`,
 `OwnedLine::{from_bytes, raw, parse, ending, quirks}`, `Prefix` + `emit_prefix` + `description_start` (formatter),
-`line_length::{LINE_LENGTH_HINT, over_length_hint, visible_chars}` (2026-09-20: the one advisory
+`lint_findings` (what `txtodo lint` reports, moved here so the daemon's `Lint` RPC runs the same
+check), `line_length::{LINE_LENGTH_HINT, over_length_hint, visible_chars}` (2026-09-20: the one advisory
 line-length measure — visible `char`s, own `id:` tag not counted — that `txtodo lint`, the TUI and
 the desktop editor share), `Edit::{set_priority, clear_priority, set_description, set_tag, remove_tag, append, prepend, complete, uncomplete}`
 (`Result<_, EditError>` where input is validated), `LineDiff`, `TextEdit`, `is_valid_slug`, `SLUG_MAX_LEN`.
