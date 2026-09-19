@@ -76,15 +76,40 @@ pub fn run_fmt(ctx: &Ctx) -> Result<(), CliError> {
     Ok(())
 }
 
+/// root todo 9: "add line length hints to the clients... to encourage keeping todo entries
+/// readable" — 100 matches the line-width budget this project's own Rust code is held to
+/// (`.claude/budgets.json`'s `lineWidth`), not a todo.txt-format rule; purely advisory, `lint`
+/// only reports it, nothing rejects or rewrites a longer line.
+const LINE_LENGTH_HINT: usize = 100;
+
+/// `Some` past [`LINE_LENGTH_HINT`], `None` otherwise.
+fn length_hint(line: &OwnedLine) -> Option<String> {
+    let len = line.bytes().len();
+    (len > LINE_LENGTH_HINT).then(|| format!("{len} chars, over the {LINE_LENGTH_HINT}-char hint"))
+}
+
+/// Every finding for one line (1-based `number`): the parse/quirks check plus the length hint.
+/// Split out of `findings` to keep that function's cognitive-complexity budget — a loop body
+/// this branchy counts against the *caller*, not just the callee, so the whole per-line shape
+/// has to move, not just the new check.
+fn line_findings(number: usize, line: &OwnedLine) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    match line.parse() {
+        None => out.push((number, "not valid UTF-8".to_string())),
+        Some(l) if !l.quirks.is_empty() => out.push((number, l.quirks.to_string())),
+        Some(_) => {}
+    }
+    if let Some(finding) = length_hint(line) {
+        out.push((number, finding));
+    }
+    out
+}
+
 /// Per-line findings: `(number, description)`, then file-level ones with number 0.
 pub fn findings(file: &File) -> Vec<(usize, String)> {
     let mut out: Vec<(usize, String)> = Vec::new();
     for (i, line) in file.lines.iter().enumerate() {
-        match line.parse() {
-            None => out.push((i + 1, "not valid UTF-8".to_string())),
-            Some(l) if !l.quirks.is_empty() => out.push((i + 1, l.quirks.to_string())),
-            Some(_) => {}
-        }
+        out.extend(line_findings(i + 1, line));
     }
     if file.bom {
         out.push((0, "byte order mark".to_string()));
@@ -174,5 +199,18 @@ mod tests {
             "line 1 text, line 3 ending, line 4 ending"
         );
         assert_eq!(file.to_bytes(), b"\xEF\xBB\xBFa\r\nb\r\nc\r\n\xFF\r\n");
+    }
+
+    /// root todo 9: a line past the 100-char hint is reported, a line at or under it is not.
+    #[test]
+    fn findings_reports_lines_over_the_length_hint_only() {
+        let exactly_100 = "a".repeat(100);
+        let over_100 = "a".repeat(101);
+        let text = format!("{exactly_100}\n{over_100}\n");
+        let file = txtodo_core::parse_file(text.as_bytes());
+        assert_eq!(
+            findings(&file),
+            vec![(2, "101 chars, over the 100-char hint".to_string())]
+        );
     }
 }
