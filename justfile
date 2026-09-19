@@ -138,6 +138,25 @@ stage-desktop-sidecar:
     cp "target/release/txtodod${ext}" "apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
     echo "staged apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
 
+# `--bundles app` skips the DMG (a second copy): https://v2.tauri.app/reference/cli/#build
+# `cargo metadata` gives the real target dir, worktree or not:
+# https://doc.rust-lang.org/cargo/commands/cargo-metadata.html
+# `ditto` keeps the code signature and extended attributes, `cp -R` may not: https://ss64.com/mac/ditto.html
+# `osascript` asks a running copy to quit before it is replaced: https://ss64.com/mac/osascript.html
+# Build the desktop app, install it over /Applications/txtodo.app, delete the target/ copy (macOS only)
+install-desktop: stage-desktop-sidecar
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=$(cargo metadata --format-version 1 --no-deps | jq -r .target_directory)
+    (cd apps/desktop && npm run tauri build -- --bundles app)
+    built="$target/release/bundle/macos/txtodo.app"
+    [ -d "$built" ] || { echo "no bundle at $built"; exit 1; }
+    osascript -e 'if application id "com.txtodo.desktop" is running then tell application id "com.txtodo.desktop" to quit'
+    rm -rf /Applications/txtodo.app
+    ditto "$built" /Applications/txtodo.app
+    rm -rf "$built"
+    echo "installed /Applications/txtodo.app (removed $built)"
+
 # Install `txtodo` + `txtodod` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that survives
 # `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit ended up
 # pointing at (a deleted or rebuilt-under-it binary). Both, not just the daemon: `txtodo daemon
