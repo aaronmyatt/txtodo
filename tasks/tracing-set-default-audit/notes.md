@@ -43,3 +43,16 @@ since the interferers are in other files. Fixed by moving it to its own test bin
 Still open: the other six files in the list. Any of them that shares a test binary with tests
 hitting the same callsites can do the same; the cheap check is the loop above, and the cheap fix
 is the same move.
+
+### 2026-09-20: static pass and a partial stress run
+
+- `crates/txtodo-tui/tests/sentinel_no_secrets.rs` and `crates/txtodo-store/tests/no_secrets_sentinel.rs`
+  are their own test binaries with two tests each. 180 runs of each binary under 6 parallel loops
+  showed 0 failures. Only their own two tests can interfere, and it did not reproduce.
+- `txtodo-sync`, `txtodo-crdt` and the two daemon files (`security_m8_tests.rs`,
+  `lan_session_security_tests.rs`) live in `src/` and share the lib test binary with 186, 27 and 247
+  other tests, so they are exposed the way `txtodo-model` was. Filtered runs (`no_secrets` alone,
+  180 runs) pass but prove nothing, since the interferers are excluded. An unfiltered stress run
+  did not finish here: the sync lib binary is slow, and the daemon lib takes about 7 minutes a run.
+- Not fixed, not confirmed. The `txtodo-model` fix (move the test to its own integration binary)
+  needs the test to use only public API, which the daemon's `security_m8_tests.rs` does not.
