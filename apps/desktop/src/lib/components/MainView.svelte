@@ -111,13 +111,16 @@
 	<SkillHintBanner />
 
 	<div class="top-nav">
-		<h1>txtodo</h1>
-		<div class="top-nav-actions">
+		<div class="top-nav-left">
 			<WorkspaceSwitcher />
+			<h1>txtodo</h1>
+		</div>
+		<div class="top-nav-actions">
 			<ThemeToggle />
 			<PinToggle />
 			<a href="/universal">Universal view</a>
 			<a href="/devices">Devices &amp; agents</a>
+			<a href="/help" class="help-link" aria-label="Help">?</a>
 		</div>
 	</div>
 
@@ -151,10 +154,28 @@
 		padding: 0.75rem 1rem 0;
 	}
 
+	.top-nav-left {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.top-nav-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+	}
+
+	.help-link {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		text-decoration: none;
+		color: inherit;
 	}
 
 	.main-view {
