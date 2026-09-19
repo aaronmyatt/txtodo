@@ -57,6 +57,7 @@ pub fn resolve_request(state: &AppState, resolution: Resolution) -> Option<pb::R
             task_id: flag.task_id.clone(),
         }),
         resolution: pb::Resolution::from(resolution) as i32,
+        agent: None, // the human on this device
     })
 }
 
