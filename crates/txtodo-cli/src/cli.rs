@@ -211,6 +211,12 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<commands::device::Action>,
     },
+    /// Identity of tasks across edits (daemon mode): `migrate` strips `id:` tags from a workspace
+    /// that still has them (ADR 0019).
+    Identity {
+        #[command(subcommand)]
+        action: commands::identity::Action,
+    },
     /// Pair with another device: no CODE starts a handshake and shows a QR/code; CODE (scanned or
     /// pasted from the other device) joins it and shows the six-word SAS to compare (daemon mode,
     /// plan M4, design §4).

@@ -133,6 +133,9 @@ impl FileActor {
             ActorMsg::SyncOps { ops, reply } => {
                 let _ = reply.send(self.on_sync_ops(ops));
             }
+            ActorMsg::MigrateToSidecar { dry_run, reply } => {
+                let _ = reply.send(self.on_migrate_to_sidecar(dry_run));
+            }
             _ => {}
         }
     }

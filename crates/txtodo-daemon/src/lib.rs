@@ -36,6 +36,7 @@ mod global_service_helpers;
 pub mod handle;
 mod health_grpc;
 pub mod history;
+mod id_strip;
 mod identity_assign;
 mod identity_fingerprint;
 mod identity_levenshtein;
@@ -48,6 +49,8 @@ mod lan_session;
 mod lan_session_dispatch;
 mod lan_session_shared;
 pub mod lan_status;
+mod migrate_grpc;
+pub mod migrate_sidecar;
 pub mod mirror;
 mod mirror_converge;
 mod move_coordinator;
@@ -86,6 +89,7 @@ pub mod server;
 mod server_actors;
 pub mod state;
 pub mod stats;
+mod stored_ids;
 mod sync_ops;
 pub mod telemetry;
 pub mod textedit;
@@ -100,6 +104,7 @@ pub mod workspace;
 pub mod workspace_catalog;
 mod workspace_catalog_open;
 mod workspace_error;
+mod workspace_migrate;
 mod workspace_mint;
 mod workspace_offer_grpc;
 pub mod workspace_offer_registry;
@@ -137,6 +142,8 @@ mod lan_session_security_tests;
 #[cfg(test)]
 mod lan_session_tests;
 #[cfg(test)]
+mod migrate_sidecar_tests;
+#[cfg(test)]
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;
@@ -162,6 +169,8 @@ mod state_tests;
 mod sync_ops_tests;
 #[cfg(test)]
 mod workspace_catalog_tests;
+#[cfg(test)]
+mod workspace_migrate_tests;
 #[cfg(test)]
 mod workspace_offer_grpc_tests;
 #[cfg(test)]

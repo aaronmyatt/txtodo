@@ -6,7 +6,7 @@ use crate::actor_mirror::loro_peer;
 use crate::expected::{Hash, hex8};
 use crate::handle::{ActorError, Applied, Change};
 use crate::mirror::Mirror;
-use crate::reconcile::{Reconciled, reconcile, task_of};
+use crate::reconcile::{Reconciled, reconcile};
 use crate::reconcile_sidecar::{Side, reconcile_sidecar};
 use crate::state::DocState;
 use crate::write::read_or_empty;
@@ -93,36 +93,6 @@ impl FileActor {
             return Ok(());
         }
         self.on_external_change().map(|_| ())
-    }
-
-    /// Every line's task id for `file`: read straight off the text in tagged mode, or reconstructed
-    /// from the fingerprints this same commit's `CommitExtras` landed last time in sidecar mode
-    /// (`None` overall when they no longer line up with `file`'s task-line count — a caller should
-    /// fall back to reconciling from scratch, same as a parse failure).
-    fn stored_ids(&self, file: &File) -> Result<Option<Vec<Option<TaskId>>>, ActorError> {
-        if self.cfg.identity_mode == IdentityMode::Tagged {
-            return Ok(Some(
-                file.lines.iter().map(crate::fastid::fast_id_of).collect(),
-            ));
-        }
-        let rows = self.lock_store().live_fingerprints(&self.cfg.path)?;
-        let mut rows = rows.into_iter();
-        let mut ids = Vec::with_capacity(file.lines.len());
-        for line in &file.lines {
-            if task_of(line).is_none() {
-                ids.push(None);
-                continue;
-            }
-            let Some(row) = rows.next() else {
-                return Ok(None);
-            };
-            ids.push(Some(row.task));
-        }
-        Ok(if rows.next().is_some() {
-            None
-        } else {
-            Some(ids)
-        })
     }
 
     /// Design §4.3 steps 2–7 on one device.

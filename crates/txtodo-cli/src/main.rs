@@ -6,6 +6,7 @@ mod bundle;
 mod cli;
 mod client;
 mod client_bundle;
+mod client_identity;
 mod client_pairing;
 #[cfg(test)]
 mod client_tests;
@@ -156,6 +157,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Checkout { .. } => "checkout",
         Command::Conflicts { .. } => "conflicts",
         Command::Device { .. } => "device",
+        Command::Identity { .. } => "identity",
         Command::Pair { .. } => "pair",
         Command::Doctor { .. } => "doctor",
         Command::Daemon { .. } => "daemon",
@@ -214,6 +216,7 @@ fn dispatch_daemon_inner(
             commands::refdir::run_prune(daemon, *orphans, *yes, ctx.json)
         }
         Command::Device { action } => commands::device::run(daemon, action.as_ref(), ctx.json),
+        Command::Identity { action } => commands::identity::run(daemon, action, ctx.json),
         Command::Workspace { action } => {
             commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
         }

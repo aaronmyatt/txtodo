@@ -651,6 +651,34 @@ pub struct DeviceRemoveRequest {
     pub workspace: ::core::option::Option<WorkspaceSelector>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MigrateIdentityRequest {
+    #[prost(bool, tag = "1")]
+    pub dry_run: bool,
+    #[prost(message, optional, tag = "2")]
+    pub workspace: ::core::option::Option<WorkspaceSelector>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MigrateIdentityResponse {
+    /// documents visited
+    #[prost(uint32, tag = "1")]
+    pub files: u32,
+    /// task lines across them
+    #[prost(uint32, tag = "2")]
+    pub tasks: u32,
+    /// lines whose own id: tag was (or, on a dry run, would be) removed
+    #[prost(uint32, tag = "3")]
+    pub stripped: u32,
+    /// "<path>: <why>" per document that could not be migrated
+    #[prost(string, repeated, tag = "4")]
+    pub failures: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// the workspace was Tagged when the call arrived
+    #[prost(bool, tag = "5")]
+    pub was_tagged: bool,
+    /// lines that repeated an earlier line's id and were given a fresh one
+    #[prost(uint32, tag = "6")]
+    pub renumbered: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceRemoveResponse {
     /// false when the device was unknown
     #[prost(bool, tag = "1")]
@@ -1763,6 +1791,33 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "DeviceRemove"));
             self.inner.unary(req, path, codec).await
         }
+        /// Converts a Tagged workspace to Sidecar identity in place (docs/adr/0019, tasks/sidecar-migrate-tagged):
+        /// every document's own `id:` tags are stripped through ordinary edit ops and its ids kept as
+        /// fingerprints. `dry_run` only counts. Safe to repeat; a partly-done run resumes.
+        pub async fn migrate_identity(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MigrateIdentityRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MigrateIdentityResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/MigrateIdentity",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "MigrateIdentity"));
+            self.inner.unary(req, path, codec).await
+        }
         /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
         /// an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
         /// last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
@@ -2117,6 +2172,16 @@ pub mod txtodo_server {
             request: tonic::Request<super::DeviceRemoveRequest>,
         ) -> std::result::Result<
             tonic::Response<super::DeviceRemoveResponse>,
+            tonic::Status,
+        >;
+        /// Converts a Tagged workspace to Sidecar identity in place (docs/adr/0019, tasks/sidecar-migrate-tagged):
+        /// every document's own `id:` tags are stripped through ordinary edit ops and its ids kept as
+        /// fingerprints. `dry_run` only counts. Safe to repeat; a partly-done run resumes.
+        async fn migrate_identity(
+            &self,
+            request: tonic::Request<super::MigrateIdentityRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MigrateIdentityResponse>,
             tonic::Status,
         >;
         /// The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
@@ -3557,6 +3622,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = DeviceRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/MigrateIdentity" => {
+                    #[allow(non_camel_case_types)]
+                    struct MigrateIdentitySvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::MigrateIdentityRequest>
+                    for MigrateIdentitySvc<T> {
+                        type Response = super::MigrateIdentityResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::MigrateIdentityRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::migrate_identity(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = MigrateIdentitySvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

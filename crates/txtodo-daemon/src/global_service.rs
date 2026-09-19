@@ -280,6 +280,18 @@ impl Txtodo for GlobalService {
             .await
     }
 
+    async fn migrate_identity(
+        &self,
+        r: Request<pb::MigrateIdentityRequest>,
+    ) -> Result<Response<pb::MigrateIdentityResponse>, Status> {
+        let ws = self.catalog.resolve(r.get_ref().workspace.as_ref())?;
+        let span = rpc_span("migrate_identity", &ws);
+        TxtodoService::new(ws)
+            .migrate_identity(r)
+            .instrument(span)
+            .await
+    }
+
     async fn sync_status(
         &self,
         r: Request<pb::SyncStatusRequest>,

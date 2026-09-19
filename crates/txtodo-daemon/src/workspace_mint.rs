@@ -41,7 +41,7 @@ pub(crate) fn load_or_mint_identity_mode(
     Ok(mode)
 }
 
-fn encode_identity_mode(mode: IdentityMode) -> [u8; 1] {
+pub(crate) fn encode_identity_mode(mode: IdentityMode) -> [u8; 1] {
     match mode {
         IdentityMode::Tagged => [0],
         IdentityMode::Sidecar => [1],

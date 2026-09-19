@@ -12,6 +12,7 @@ pub mod env;
 pub mod fileops;
 pub mod history;
 pub mod hygiene;
+pub mod identity;
 pub mod list;
 pub mod mcp;
 pub mod pair;

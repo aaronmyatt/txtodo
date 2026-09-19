@@ -46,7 +46,7 @@ pub struct Workspace {
     identity: Arc<DeviceIdentity>,
     /// How every document in this workspace establishes task identity: minted once, at first
     /// open, and fixed for the workspace's lifetime (`load_or_mint_identity_mode`).
-    identity_mode: IdentityMode,
+    pub(crate) identity_mode: IdentityMode,
     actors: BTreeMap<FilePath, ActorHandle>,
     started_at_ms: u64,
     stats: Arc<Stats>,

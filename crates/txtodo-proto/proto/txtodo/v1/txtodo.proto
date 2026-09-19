@@ -132,6 +132,11 @@ service Txtodo {
   // an already-removed device rotates nothing and says so.
   rpc DeviceRemove(DeviceRemoveRequest) returns (DeviceRemoveResponse);
 
+  // Converts a Tagged workspace to Sidecar identity in place (docs/adr/0019, tasks/sidecar-migrate-tagged):
+  // every document's own `id:` tags are stripped through ordinary edit ops and its ids kept as
+  // fingerprints. `dry_run` only counts. Safe to repeat; a partly-done run resumes.
+  rpc MigrateIdentity(MigrateIdentityRequest) returns (MigrateIdentityResponse);
+
   // The TUI's `s` sync indicator (plan M10, tasks/tui): every non-removed peer with its lag, plus
   // an approximate count of local ops not yet reflected in the most-out-of-touch peer's own
   // last-seen timestamp (see SyncStatusResponse's own doc for why this is approximate, not a
@@ -562,6 +567,20 @@ message DeviceListResponse { repeated Device devices = 1; }
 message DeviceRemoveRequest {
   string id = 1;   // ULID text
   WorkspaceSelector workspace = 2;
+}
+
+message MigrateIdentityRequest {
+  bool dry_run = 1;
+  WorkspaceSelector workspace = 2;
+}
+
+message MigrateIdentityResponse {
+  uint32 files = 1;              // documents visited
+  uint32 tasks = 2;              // task lines across them
+  uint32 stripped = 3;           // lines whose own id: tag was (or, on a dry run, would be) removed
+  repeated string failures = 4;  // "<path>: <why>" per document that could not be migrated
+  bool was_tagged = 5;           // the workspace was Tagged when the call arrived
+  uint32 renumbered = 6;         // lines that repeated an earlier line's id and were given a fresh one
 }
 
 message DeviceRemoveResponse {

@@ -187,6 +187,13 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<Applied, ActorError>>,
     },
+    /// Tagged → Sidecar migration of this document (`migrate_sidecar.rs`).
+    MigrateToSidecar {
+        /// Only count what would change.
+        dry_run: bool,
+        /// Result channel.
+        reply: oneshot::Sender<Result<crate::migrate_sidecar::Migrated, ActorError>>,
+    },
     /// The open needs_review flags.
     Conflicts {
         /// Result channel.

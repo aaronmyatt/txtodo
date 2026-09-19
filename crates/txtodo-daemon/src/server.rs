@@ -2,12 +2,10 @@
 //! typed values (`convert.rs`), send one message to the right actor, map the reply. No file or
 //! store access here except History. Ref: <https://docs.rs/tonic/latest/tonic/transport/server/>.
 //!
-//! No `rpc{method,workspace}` span lives here (root todo.txt `logging-daemon-datapath`):
-//! `TxtodoService` is reused unmodified only by whitebox tests that construct one directly
-//! against a single already-open `Workspace`, bypassing the catalog (`serve::serve`, not
-//! `serve::serve_global`); every production RPC instead goes through `GlobalService`
-//! (`global_service.rs`), whose own span wraps the delegated call into this file's methods too —
-//! see that module's doc for why a second span here would just double-count the same work.
+//! No `rpc{method,workspace}` span lives here (root todo.txt `logging-daemon-datapath`): every
+//! production RPC goes through `GlobalService` (`global_service.rs`), whose span already wraps the
+//! call into these methods; whitebox tests that build a `TxtodoService` directly (`serve::serve`)
+//! skip the catalog, and a second span here would only double-count.
 
 use crate::convert::{
     file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
@@ -313,6 +311,13 @@ impl Txtodo for TxtodoService {
         r: Request<pb::DeviceRemoveRequest>,
     ) -> Result<Response<pb::DeviceRemoveResponse>, Status> {
         self.device_remove_impl(r).await
+    }
+
+    async fn migrate_identity(
+        &self,
+        r: Request<pb::MigrateIdentityRequest>,
+    ) -> Result<Response<pb::MigrateIdentityResponse>, Status> {
+        self.migrate_identity_impl(r).await
     }
 
     async fn sync_status(
