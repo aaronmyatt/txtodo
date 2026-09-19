@@ -81,9 +81,12 @@ jobs:
       # in the workspace. Kept out of the step above so a plain `cargo test` stays fast; this
       # step is the only place they run. Skipped on Windows: every file involved is
       # `#![cfg(unix)]` (ADR 0010) or already excluded above, so there is nothing to run there.
+      # Named packages, not `--workspace`: other crates' #[ignore]s are deliberate and would
+      # fail or crawl here (txtodo-sync's upstream-bug tests, txtodo-crdt's 1000-run `just sim`
+      # sweep, txtodo-daemon-launch's simulated_reboot needing a real launchd/systemd session).
       - name: test (ignored — CI-only real-txtodod tests)
         if: runner.os != 'Windows'
-        run: cargo test --workspace --exclude txtodo-daemon --no-fail-fast -- --ignored
+        run: cargo test -p txtodo-cli -p txtodo-mcp -p txtodo-tui -p desktop --no-fail-fast -- --ignored
       - name: boundaries + file length + assertions
         if: runner.os != 'Windows'
         run: |
@@ -153,8 +156,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # https://github.com/taiki-e/cargo-llvm-cov#continuous-integration
       - uses: taiki-e/install-action@cargo-llvm-cov
+      # Three steps, one merged number: the plain run leaves the real-txtodod tests out (they are
+      # #[ignore]d, see the check job), which alone cost ~2 points of line coverage, so the
+      # second run adds exactly those, and `report` gates the merged total.
+      # https://github.com/taiki-e/cargo-llvm-cov#merge-coverages-generated-under-different-test-conditions
+      - name: coverage (workspace)
+        run: cargo llvm-cov --workspace --no-report
+      - name: coverage (ignored real-txtodod tests)
+        run: cargo llvm-cov -p txtodo-cli -p txtodo-mcp -p txtodo-tui -p desktop --no-report -- --ignored
       - name: coverage floor (budgets.json.coveragePercent)
-        run: cargo llvm-cov --workspace --fail-under-lines $(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).coveragePercent')
+        run: cargo llvm-cov report --fail-under-lines $(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).coveragePercent')
 
   deny:
     runs-on: ubuntu-latest
