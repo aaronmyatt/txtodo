@@ -5,8 +5,8 @@ use rmcp::ErrorData;
 use rmcp::model::CallToolResult;
 
 use crate::backend::{
-    AddArgs, ArchiveArgs, BatchArgs, DeleteArgs, EditArgs, McpBackend, MoveArgs, WorkspaceArg,
-    move_anchor,
+    AddArgs, ArchiveArgs, BatchArgs, ConflictsResolveArgs, DeleteArgs, EditArgs, McpBackend,
+    MoveArgs, WorkspaceArg, move_anchor,
 };
 use crate::error::McpError;
 use crate::tools::json_result;
@@ -38,6 +38,18 @@ pub async fn move_task(
 ) -> Result<CallToolResult, ErrorData> {
     let anchor = move_anchor(args.before, args.after)?;
     json_result(&backend.move_task(args.id, anchor, args.workspace).await?)
+}
+
+/// `todo_conflicts_resolve`: attributed to this session's agent (`ResolveRequest.agent`).
+pub async fn conflicts_resolve(
+    backend: &dyn McpBackend,
+    args: ConflictsResolveArgs,
+) -> Result<CallToolResult, ErrorData> {
+    json_result(
+        &backend
+            .conflicts_resolve(args.id, args.side, args.file, args.workspace)
+            .await?,
+    )
 }
 
 /// `todo_delete`. `confirm` is asserted here — before the backend is even called — not merely

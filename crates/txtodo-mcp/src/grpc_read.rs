@@ -80,7 +80,7 @@ pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<T
         .filter(|r| !r.raw.trim().is_empty())
         .collect();
     if let Some(q) = &args.query {
-        rows.retain(|r| parse::matches_minimal_query(r, q));
+        rows.retain(|r| parse::matches_query(&r.raw, q));
     }
     if let Some(limit) = args.limit.filter(|&l| l > 0) {
         rows.truncate(limit as usize);
@@ -88,9 +88,9 @@ pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<T
     Ok(rows)
 }
 
-/// `todo_search`: case-insensitive substring over `raw`. Design §8 calls for a tantivy full-text
-/// index "owned by the daemon backend" — no such index exists yet (see the crate's As-built
-/// notes), so this is the honest placeholder until that infrastructure lands.
+/// `todo_search`: the same matching as `todo_list`'s `query` and `txtodo list` (`parse::matches_query`).
+/// Design §8 calls for a tantivy full-text index "owned by the daemon backend" — no such index
+/// exists yet (see the crate's As-built notes), so this is the honest placeholder until it lands.
 pub async fn search(
     client: TxtodoClient<Channel>,
     text: String,
@@ -107,10 +107,9 @@ pub async fn search(
         },
     )
     .await?;
-    let needle = text.to_lowercase();
     Ok(rows
         .into_iter()
-        .filter(|r| r.raw.to_lowercase().contains(&needle))
+        .filter(|r| parse::matches_query(&r.raw, &text))
         .collect())
 }
 

@@ -5,7 +5,8 @@ use rmcp::ErrorData;
 use rmcp::model::CallToolResult;
 
 use crate::backend::{
-    GetTarget, HistoryArgs, ListArgs, McpBackend, RawArgs, SearchArgs, WorkspaceArg,
+    ConflictsListArgs, GetTarget, HistoryArgs, LintArgs, ListArgs, McpBackend, RawArgs, SearchArgs,
+    WorkspaceArg,
 };
 use crate::error::McpError;
 use crate::tools::json_result;
@@ -29,6 +30,19 @@ pub async fn get(backend: &dyn McpBackend, target: GetTarget) -> Result<CallTool
         return Err(McpError::invalid_params("todo_get needs id or line").into());
     }
     json_result(&backend.get(target).await?)
+}
+
+/// `todo_lint`: read-only findings, the same a `txtodo lint` prints.
+pub async fn lint(backend: &dyn McpBackend, args: LintArgs) -> Result<CallToolResult, ErrorData> {
+    json_result(&backend.lint(args.file, args.workspace).await?)
+}
+
+/// `todo_conflicts_list`.
+pub async fn conflicts_list(
+    backend: &dyn McpBackend,
+    args: ConflictsListArgs,
+) -> Result<CallToolResult, ErrorData> {
+    json_result(&backend.conflicts_list(args.file, args.workspace).await?)
 }
 
 /// `todo_history`.

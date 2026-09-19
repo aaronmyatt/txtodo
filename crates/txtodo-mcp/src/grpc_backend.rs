@@ -12,8 +12,9 @@ use txtodo_proto::v1 as pb;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::{
-    ApplyOutcome, FieldPatch, FileMeta, GetTarget, Hlc, ListArgs, McpBackend, MoveAnchor,
-    OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg, WorkspaceInfo,
+    ApplyOutcome, ConflictFlag, ConflictSide, FieldPatch, FileMeta, GetTarget, Hlc, LintFinding,
+    ListArgs, McpBackend, MoveAnchor, OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
+    WorkspaceInfo,
 };
 use crate::error::McpError;
 use crate::grpc_write::GrpcCtx;
@@ -159,7 +160,7 @@ impl McpBackend for GrpcMcpBackend {
         anchor: MoveAnchor,
         workspace: WorkspaceArg,
     ) -> Result<TaskRow, McpError> {
-        grpc_write::move_task(self.ctx(), id, anchor, workspace).await
+        crate::grpc_move::move_task(self.ctx(), id, anchor, workspace).await
     }
 
     async fn delete(
@@ -228,6 +229,32 @@ impl McpBackend for GrpcMcpBackend {
         workspace: WorkspaceArg,
     ) -> Result<(), McpError> {
         grpc_notes::notes_set(self.client(), id, text, workspace).await
+    }
+
+    async fn lint(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<LintFinding>, McpError> {
+        crate::grpc_hygiene::lint(self.client(), file, workspace).await
+    }
+
+    async fn conflicts_list(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<ConflictFlag>, McpError> {
+        crate::grpc_hygiene::conflicts_list(self.client(), file, workspace).await
+    }
+
+    async fn conflicts_resolve(
+        &self,
+        id: TaskId,
+        side: ConflictSide,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError> {
+        crate::grpc_hygiene::conflicts_resolve(self.ctx(), id, side, file, workspace).await
     }
 
     async fn list_files(&self, workspace: WorkspaceArg) -> Result<Vec<FileMeta>, McpError> {

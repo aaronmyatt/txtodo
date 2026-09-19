@@ -8,8 +8,7 @@ use txtodo_proto::v1 as pb;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::{
-    ApplyOutcome, FieldPatch, Hlc, MoveAnchor, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
-    move_anchor,
+    ApplyOutcome, FieldPatch, Hlc, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg, move_anchor,
 };
 use crate::error::McpError;
 use crate::grpc_convert::{hex, workspace_selector};
@@ -39,7 +38,7 @@ pub fn today_local() -> String {
     jiff::Zoned::now().strftime("%Y-%m-%d").to_string()
 }
 
-async fn apply_one(
+pub(crate) async fn apply_one(
     ctx: GrpcCtx,
     path: &str,
     mutation: pb::Mutation,
@@ -190,24 +189,6 @@ pub(crate) fn apply_patch(raw: &str, patch: &FieldPatch) -> String {
     line
 }
 
-/// `todo_move`. Design §6.3 wants a same-file reorder by anchor task; the only daemon Move
-/// mutation relocates a task *across files* (plan M7) with no before/after position argument
-/// (`apply_route.rs`: "Move must be its own Apply batch", and `to_path` names a destination
-/// document, not a line). A same-file reorder needs a new daemon RPC/op — the one gap in this
-/// tool table with no existing daemon equivalent (mcp-server-tools notes.md's escape hatch);
-/// flagged here rather than built, since adding daemon ops is out of this task's scope.
-pub async fn move_task(
-    _ctx: GrpcCtx,
-    _id: TaskId,
-    _anchor: MoveAnchor,
-    _workspace: WorkspaceArg,
-) -> Result<TaskRow, McpError> {
-    Err(McpError::daemon(
-        "todo_move (same-file reorder by anchor) has no daemon equivalent yet; see this crate's \
-         As-built notes for what a follow-on daemon RPC would need",
-    ))
-}
-
 /// `todo_delete`. `confirm` is asserted, never trusted (design §6.3 invariant).
 pub async fn delete(
     ctx: GrpcCtx,
@@ -332,7 +313,7 @@ async fn apply_batch_op(ctx: GrpcCtx, op: TodoOp, workspace: WorkspaceArg) -> Re
             edit(ctx, id, patch, workspace).await?;
         }
         TodoOp::TodoMove { id, before, after } => {
-            move_task(ctx, id, move_anchor(before, after)?, workspace).await?;
+            crate::grpc_move::move_task(ctx, id, move_anchor(before, after)?, workspace).await?;
         }
         TodoOp::TodoDelete { id, confirm } => {
             delete(ctx, id, confirm, workspace).await?;

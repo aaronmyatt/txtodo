@@ -99,6 +99,31 @@ pub struct OpSummary {
     pub summary: String,
 }
 
+/// One `todo_lint` finding, the shape `txtodo lint --json` prints: `line` is 1-based, 0 for a
+/// whole-file finding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LintFinding {
+    /// 1-based line number; 0 for a whole-file finding (BOM, missing trailing newline).
+    pub line: u32,
+    /// What is wrong, in the words `txtodo lint` uses.
+    pub finding: String,
+}
+
+/// One open merge-conflict flag (`todo_conflicts_list`): two devices rewrote the same task offline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConflictFlag {
+    /// The task's id.
+    pub id: TaskId,
+    /// The 1-based line it sits on now; 0 when it is no longer in the file.
+    pub line: u32,
+    /// This device's description when the two sides diverged.
+    pub mine: String,
+    /// The peer's description when the two sides diverged.
+    pub theirs: String,
+    /// Unix milliseconds the flag was raised.
+    pub raised_at_ms: u64,
+}
+
 /// One synced document (`todo_list`'s implicit file listing, and the `todotxt://` resource list).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileMeta {
@@ -231,6 +256,26 @@ pub trait McpBackend: Send + Sync {
         text: String,
         workspace: WorkspaceArg,
     ) -> Result<(), McpError>;
+    /// `todo_lint` → daemon gRPC `Lint`: the same findings `txtodo lint` prints. Read-only.
+    async fn lint(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<LintFinding>, McpError>;
+    /// `todo_conflicts_list` → daemon gRPC `ListConflicts`.
+    async fn conflicts_list(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<Vec<ConflictFlag>, McpError>;
+    /// `todo_conflicts_resolve` → daemon gRPC `ResolveConflict`, attributed to this session's agent.
+    async fn conflicts_resolve(
+        &self,
+        id: TaskId,
+        side: ConflictSide,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError>;
     /// Every synced document (the `todotxt://` resource list; not in notes.md's trait sketch, see
     /// the module doc).
     async fn list_files(&self, workspace: WorkspaceArg) -> Result<Vec<FileMeta>, McpError>;

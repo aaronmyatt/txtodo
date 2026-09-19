@@ -11,6 +11,8 @@ pub mod error;
 pub mod global_socket;
 pub mod grpc_backend;
 mod grpc_convert;
+mod grpc_hygiene;
+mod grpc_move;
 mod grpc_notes;
 mod grpc_read;
 mod grpc_write;

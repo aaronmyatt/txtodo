@@ -113,31 +113,20 @@ pub fn find_by_id<'a>(text: &'a str, id: &str) -> Option<(u32, &'a str)> {
         .find(|(_, raw)| raw.split_whitespace().any(|w| w == format!("id:{id}")))
 }
 
-/// A best-effort stand-in for the design §8 query language (see the module doc): supports
-/// `+project`, `@context`, bare substring terms, and `not done` / `done`. Every recognised token
-/// must match (conjunction); an unrecognised token is treated as a substring term over `raw`.
-pub fn matches_minimal_query(row: &TaskRow, query: &str) -> bool {
-    let tokens: Vec<&str> = query.split_whitespace().collect();
-    let mut i = 0;
-    while i < tokens.len() {
-        let t = tokens[i];
-        let ok = match t {
-            "not" if tokens.get(i + 1) == Some(&"done") => {
-                i += 1;
-                !row.done
-            }
-            "done" => row.done,
-            _ if t.starts_with('+') => row.projects.iter().any(|p| p == &t[1..]),
-            _ if t.starts_with('@') => row.contexts.iter().any(|c| c == &t[1..]),
-            "and" | "or" => true, // connectives are decorative in this stand-in; every term ANDs
-            _ => row.raw.to_lowercase().contains(&t.to_lowercase()),
-        };
-        if !ok {
-            return false;
-        }
-        i += 1;
-    }
-    true
+/// `txtodo list TERM...`'s matching, the todo.sh `filtercommand` semantics (root todo
+/// id:01M2T868JD32M84JQQ2ABASXW4): `query` is split on whitespace, every term must match (AND), a
+/// term is a case-insensitive substring of the line, and a term with a leading `-` (and something
+/// after it) excludes lines containing the rest. An empty query keeps every line. Mirrors
+/// `txtodo-cli`'s `commands::list::matches` — this crate may not depend on that binary, so the
+/// vectors in the tests below are the same, and MCP search agrees with CLI search.
+pub fn matches_query(raw: &str, query: &str) -> bool {
+    let hay = raw.to_lowercase();
+    query
+        .split_whitespace()
+        .all(|term| match term.strip_prefix('-') {
+            Some(neg) if !neg.is_empty() => !hay.contains(&neg.to_lowercase()),
+            _ => hay.contains(&term.to_lowercase()),
+        })
 }
 
 /// `raw` + (a space, unless `text` opens with a sentence delimiter) + `text` (todo.sh `append`).
@@ -255,15 +244,33 @@ mod tests {
         assert_eq!(found, Some((1, "a id:01J one")));
     }
 
+    const QUERY_LINE: &str = "(A) 2026-09-11 Draft Milk +work @laptop id:01J";
+
     #[test]
-    fn minimal_query_matches_project_context_done_and_substrings() {
-        let row = parse_row(1, "(A) 2026-09-11 Draft +work @laptop id:01J");
-        assert!(matches_minimal_query(&row, "+work"));
-        assert!(matches_minimal_query(&row, "@laptop"));
-        assert!(matches_minimal_query(&row, "not done"));
-        assert!(matches_minimal_query(&row, "Draft"));
-        assert!(!matches_minimal_query(&row, "+other"));
-        assert!(!matches_minimal_query(&row, "done"));
+    fn a_term_is_a_case_insensitive_substring_including_project_and_context() {
+        assert!(matches_query(QUERY_LINE, "milk"));
+        assert!(matches_query(QUERY_LINE, "+work"));
+        assert!(matches_query(QUERY_LINE, "@LAPTOP"));
+    }
+
+    #[test]
+    fn every_term_must_match() {
+        assert!(matches_query(QUERY_LINE, "draft milk"));
+        assert!(!matches_query(QUERY_LINE, "milk eggs"));
+    }
+
+    #[test]
+    fn a_leading_dash_excludes_and_a_lone_dash_is_a_substring() {
+        assert!(!matches_query(QUERY_LINE, "-milk"));
+        assert!(matches_query(QUERY_LINE, "-eggs"));
+        assert!(matches_query(QUERY_LINE, "draft -eggs"));
+        assert!(matches_query("a - b", "-"));
+    }
+
+    #[test]
+    fn no_terms_keeps_every_line() {
+        assert!(matches_query(QUERY_LINE, ""));
+        assert!(matches_query(QUERY_LINE, "   "));
     }
 
     #[test]

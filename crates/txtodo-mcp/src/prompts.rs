@@ -2,8 +2,8 @@
 //! the relevant resources in. Each embeds real backend data rather than only a `ResourceLink`, but
 //! stays honest about `txtodo-query`'s absence (see `parse.rs`'s module doc) — `plan_today` and
 //! `weekly_review` embed the file as-is rather than claiming a `due<=today` filter that does not
-//! exist yet; `triage_inbox`'s `@context` filter is real (`parse::matches_minimal_query` supports
-//! it), so it does filter.
+//! exist yet; `triage_inbox`'s `@context` filter is real (`parse::matches_query`, the same matching as
+//! `txtodo list`), so it does filter.
 
 use rmcp::ErrorData;
 use rmcp::model::{

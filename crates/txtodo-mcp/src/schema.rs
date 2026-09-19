@@ -28,8 +28,9 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 
 use crate::backend::{
-    AddArgs, ArchiveArgs, BatchArgs, DeleteArgs, EditArgs, GetTarget, HistoryArgs, IdArgs,
-    ListArgs, McpBackend, MoveArgs, NotesGetArgs, NotesSetArgs, RawArgs, SearchArgs,
+    AddArgs, ArchiveArgs, BatchArgs, ConflictsListArgs, ConflictsResolveArgs, DeleteArgs, EditArgs,
+    GetTarget, HistoryArgs, IdArgs, LintArgs, ListArgs, McpBackend, MoveArgs, NotesGetArgs,
+    NotesSetArgs, RawArgs, SearchArgs,
 };
 use crate::{prompts, resources, tools_read, tools_write};
 
@@ -160,13 +161,61 @@ impl McpServer {
         fields(tool = "todo_move", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "Reorder a task before/after another (same-file; see the As-built notes for the current limitation)."
+        description = "Reorder a task immediately before or after another task in the same file."
     )]
     pub async fn todo_move(
         &self,
         Parameters(args): Parameters<MoveArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         tools_write::move_task(self.backend.as_ref(), args).await
+    }
+
+    /// `todo_lint`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_lint", principal = %self.backend.principal())
+    )]
+    #[tool(
+        description = "Report parse quirks and file hygiene of a document, as `txtodo lint` does. Read-only."
+    )]
+    pub async fn todo_lint(
+        &self,
+        Parameters(args): Parameters<LintArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools_read::lint(self.backend.as_ref(), args).await
+    }
+
+    /// `todo_conflicts_list`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_conflicts_list", principal = %self.backend.principal())
+    )]
+    #[tool(
+        description = "List open merge-conflict flags (two devices rewrote the same task): the task, both texts."
+    )]
+    pub async fn todo_conflicts_list(
+        &self,
+        Parameters(args): Parameters<ConflictsListArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools_read::conflicts_list(self.backend.as_ref(), args).await
+    }
+
+    /// `todo_conflicts_resolve`.
+    #[tracing::instrument(
+        name = "mcp.call",
+        skip_all,
+        fields(tool = "todo_conflicts_resolve", principal = %self.backend.principal())
+    )]
+    #[tool(
+        description = "Resolve one conflicted task keeping mine, theirs or merged (the file as it is). Attributed to the agent."
+    )]
+    pub async fn todo_conflicts_resolve(
+        &self,
+        Parameters(args): Parameters<ConflictsResolveArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools_write::conflicts_resolve(self.backend.as_ref(), args).await
     }
 
     /// `todo_delete`.
