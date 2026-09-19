@@ -121,11 +121,53 @@ mod unix_impl {
         }
         let _guard = SpawnGuard::acquire(&cfg.socket).await?;
         if !probe_live(&cfg.socket).await {
-            spawn_daemon(cfg)?;
-            wait_until_live(&cfg.socket, cfg.spawn_timeout).await?;
-            install_persistent_service_best_effort(cfg);
+            if already_installed_as_service(cfg) {
+                // The boot unit owns this target already (ADR 0025) and should already be
+                // starting on its own via `RunAtLoad`/`WantedBy` — wait for it instead of racing
+                // it with a second, ad-hoc bare-PATH `txtodod` (root todo 2: seen holding the pid
+                // lock right next to a still-booting boot-unit instance). No active kickstart
+                // here: `launchctl kickstart -k` kills-and-restarts, which would abort an
+                // already-booting instance mid-`open_all_registered` and pay its full workspace-
+                // open cost twice — worse than waiting.
+                wait_until_live(&cfg.socket, cfg.spawn_timeout).await?;
+            } else {
+                spawn_daemon(cfg)?;
+                wait_until_live(&cfg.socket, cfg.spawn_timeout).await?;
+                install_persistent_service_best_effort(cfg);
+            }
         }
         Ok(())
+    }
+
+    /// Whether a persistent, non-stale boot-time unit is already installed for `cfg`'s target
+    /// (ADR 0025: the global daemon only — `cfg.extra_args` non-empty means a legacy `--dir`
+    /// bridge, which never gets one).
+    fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
+        if !cfg.extra_args.is_empty() {
+            return false;
+        }
+        let Some(txtodod) = resolve_binary_path(cfg) else {
+            return false;
+        };
+        let Ok(home) = crate::service::home_dir() else {
+            return false;
+        };
+        already_installed_at(&home, &txtodod)
+    }
+
+    /// The pure half of [`already_installed_as_service`], `home` injected rather than read from
+    /// `$HOME` — the same "inject the env-derived path" shape `service_tests.rs`'s own tests use
+    /// via `render(home.path(), ...)`, needed here because this crate forbids `unsafe` so tests
+    /// cannot override the real process-wide `HOME` in-process either. A *stale* installed unit
+    /// (`crate::service::is_stale` — a dead binary path, or the pre-fix `KeepAlive` shape) reads
+    /// as "not installed": it can never come up on its own, so falling through to the ad-hoc
+    /// spawn (which then repairs it via `install_persistent_service_best_effort`) is still
+    /// correct there.
+    fn already_installed_at(home: &Path, txtodod: &Path) -> bool {
+        let Some(rendered) = crate::service::render(home, txtodod) else {
+            return false;
+        };
+        rendered.path.exists() && !crate::service::is_stale(&rendered)
     }
 
     async fn probe_live(sock: &Path) -> bool {
@@ -258,6 +300,61 @@ mod unix_impl {
             .map_err(|_join_err| LaunchError::Lock(io::Error::other("spawn lock task panicked")))?
             .map_err(LaunchError::Lock)?;
             Ok(SpawnGuard { _file: file })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn a_legacy_dir_bridge_target_is_never_treated_as_installed() {
+            let cfg = LaunchConfig::new("/tmp/does-not-matter.sock").with_dir("/some/workspace");
+            assert!(
+                !already_installed_as_service(&cfg),
+                "ADR 0025: only the global daemon ever gets the boot-time unit"
+            );
+        }
+
+        #[test]
+        fn nothing_installed_is_not_installed() {
+            let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+            assert!(!already_installed_at(
+                home.path(),
+                Path::new("/bin/txtodod")
+            ));
+        }
+
+        #[test]
+        fn a_real_installed_unit_is_installed() {
+            let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+            let real_bin = home.path().join("txtodod");
+            std::fs::write(&real_bin, b"#!/bin/sh\n").unwrap_or_else(|e| panic!("write bin: {e}"));
+            let rendered = crate::service::render(home.path(), &real_bin)
+                .unwrap_or_else(|| panic!("supported platform"));
+            crate::service::install(home.path(), &rendered, false)
+                .unwrap_or_else(|e| panic!("install: {e}"));
+
+            assert!(already_installed_at(home.path(), &real_bin));
+        }
+
+        #[test]
+        fn a_stale_installed_unit_is_not_treated_as_installed() {
+            let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+            let gone_bin = home.path().join("worktree-txtodod");
+            std::fs::write(&gone_bin, b"#!/bin/sh\n").unwrap_or_else(|e| panic!("write bin: {e}"));
+            let rendered = crate::service::render(home.path(), &gone_bin)
+                .unwrap_or_else(|| panic!("supported platform"));
+            crate::service::install(home.path(), &rendered, false)
+                .unwrap_or_else(|e| panic!("install: {e}"));
+            std::fs::remove_file(&gone_bin)
+                .unwrap_or_else(|e| panic!("simulate worktree deletion: {e}"));
+
+            assert!(
+                !already_installed_at(home.path(), &gone_bin),
+                "a stale unit can never come up on its own; fall through to the ad-hoc spawn \
+                 (which repairs it) instead of waiting on it forever"
+            );
         }
     }
 }
