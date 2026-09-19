@@ -22,7 +22,6 @@
 //! only for one consistent house style with the `mcp.call` convention, not because tauri requires
 //! it.
 
-use crate::daemon::{self, DaemonClient, DaemonError};
 use crate::dto::{
     ApplyResultDto, ChangeDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto,
     ResolutionDto, ReviewFlagDto, TaskRefDto,
@@ -41,56 +40,6 @@ pub(crate) async fn set_status(app: &AppHandle, state: &AppState, status: Daemon
     let _ = app.emit("daemon-status", status);
 }
 
-/// Spawns/dials the daemon and stores the connected client, narrating the attempt through
-/// `daemon-status` events. Never panics: failures come back as a `DaemonError` and land on
-/// `DaemonStatus::Dead` in the caller. `pub(crate)` so `lib.rs` can kick off the first connect
-/// from `setup` without going through the command-invoke machinery.
-///
-/// Honors `TXTODO_NO_AUTOSTART=1` (task `desktop-autostart-env-respect`): every other client
-/// (`txtodo`, `txtodo-tui`, `txtodo-mcp`) already skips `ensure_daemon` under it, and Desktop had
-/// been the one silent exception. Checked here, not inside `daemon::ensure_daemon` itself — same
-/// call-site convention `txtodo_daemon_launch::autostart_disabled`'s own doc prescribes. Both the
-/// cold-boot path (`lib.rs`'s `.setup()`) and the manual Retry button (`retry_connect_inner`) go
-/// through this one function, so the var's effect is uniform: with it set and no daemon already
-/// reachable, `wait_until_ready` below simply times out and this returns `Err`, landing on the
-/// existing `DaemonStatus::Dead`/reconnect-banner UI (`ref:desktop-cold-boot-dead-status`)
-/// instead of autospawning.
-pub(crate) async fn connect_and_store(
-    app: &AppHandle,
-    state: &AppState,
-) -> Result<(), DaemonError> {
-    set_status(app, state, DaemonStatus::Spawning).await;
-    reset_watch_stream(state).await;
-    let sock = state.config.resolved_global_socket();
-    if !txtodo_daemon_launch::autostart_disabled() {
-        daemon::ensure_daemon(&state.config).await?;
-    }
-    set_status(app, state, DaemonStatus::Connecting).await;
-    // No workspace selected yet means no selector: the daemon is dialed, and its registry
-    // browsed, without the app ever naming a directory of its own.
-    let selector = state
-        .current_workspace
-        .lock()
-        .await
-        .as_ref()
-        .map(|workspace| pb::WorkspaceSelector {
-            selector: Some(pb::workspace_selector::Selector::Path(
-                workspace.display().to_string(),
-            )),
-        });
-    let mut client = DaemonClient::connect(&sock, selector).await?;
-    client.wait_until_ready().await?;
-    *state.client.lock().await = Some(client);
-    set_status(app, state, DaemonStatus::Connected).await;
-    Ok(())
-}
-
-/// A fresh connection needs a fresh `watch` stream too — see `watch_inner`'s own doc. Split out of
-/// `connect_and_store` to keep that function's cognitive-complexity budget.
-async fn reset_watch_stream(state: &AppState) {
-    *state.watch_started.lock().await = false;
-}
-
 /// Ensures a client is stored, connecting/spawning first if this is the first call. `pub(crate)`
 /// (not private) so the sibling `commands_*` modules (split out of this file the way
 /// `crates/txtodo-daemon/src/server.rs` splits into `notes.rs`/`tokens.rs`/`pairing_grpc.rs`/
@@ -100,9 +49,9 @@ pub(crate) async fn ensure_connected(app: &AppHandle, state: &AppState) -> Resul
     if state.client.lock().await.is_some() {
         return Ok(());
     }
-    connect_and_store(app, state).await.map_err(|e| {
-        e.to_string() // recorded by connect_and_store's own Dead transition below
-    })
+    crate::commands_connect::connect_and_store(app, state)
+        .await
+        .map_err(|e| e.to_string()) // recorded by connect_and_store's own Dead transition below
 }
 
 /// Current connectivity state; also pushed as a `daemon-status` event on every change. Queried
@@ -177,7 +126,10 @@ async fn retry_connect_inner(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<DaemonStatus, String> {
-    if connect_and_store(&app, &state).await.is_err() {
+    if crate::commands_connect::connect_and_store(&app, &state)
+        .await
+        .is_err()
+    {
         set_status(&app, &state, DaemonStatus::Dead).await;
     }
     Ok(*state.status.lock().await)

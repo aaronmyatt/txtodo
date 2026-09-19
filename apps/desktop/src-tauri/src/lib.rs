@@ -6,6 +6,7 @@
 
 mod commands;
 mod commands_activity;
+mod commands_connect;
 mod commands_notes;
 mod commands_pairing;
 mod commands_tokens;
@@ -72,7 +73,7 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let state = handle.state::<AppState>();
-                if let Err(e) = commands::connect_and_store(&handle, &state).await {
+                if let Err(e) = commands_connect::connect_and_store(&handle, &state).await {
                     log_startup_connect_failed(&e);
                     commands::set_status(&handle, &state, status::DaemonStatus::Dead).await;
                 }
@@ -118,9 +119,9 @@ pub fn run() {
 }
 
 /// The startup daemon-connect attempt (`.setup()`, above) used to discard its `Result` entirely
-/// (`let _ = commands::connect_and_store(...).await`) — a failed boot connect left no trace
-/// anywhere, not even a log line, since nothing else observes this background task. Logged here,
-/// and (task `desktop-cold-boot-dead-status`) `.setup()`'s own error branch now also sets
+/// (`let _ = commands_connect::connect_and_store(...).await`) — a failed boot connect left no
+/// trace anywhere, not even a log line, since nothing else observes this background task. Logged
+/// here, and (task `desktop-cold-boot-dead-status`) `.setup()`'s own error branch now also sets
 /// `DaemonStatus::Dead` directly — `connect_and_store` itself only ever sets `Spawning`/
 /// `Connecting`/`Connected` (see its own `set_status` calls), never `Dead` on its own error path,
 /// so without this the UI was left on whatever status it last painted until a human noticed and
