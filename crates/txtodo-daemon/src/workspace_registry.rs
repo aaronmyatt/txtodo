@@ -34,6 +34,9 @@ pub struct WorkspaceEntry {
     /// Whether `root/.txtodo/oplog.db` exists — i.e. whether this workspace already has op
     /// history a later `daemon-workspace-actor` pass would adopt rather than create fresh.
     pub has_state: bool,
+    /// Unix milliseconds this workspace was last resolved for a request, if ever
+    /// (`WorkspaceRegistry::touch`): the primary key of the most-recently-used-first load order.
+    pub last_active_ms: Option<u64>,
 }
 
 /// The device-global workspace catalog.
@@ -138,6 +141,16 @@ impl WorkspaceRegistry {
         Ok(self.registry.remove(id, clock.now_ms())?)
     }
 
+    /// Records that `id` was just used (task `daemon-early-bind`); `false` for an unknown or removed
+    /// id. Callers throttle: this is a write.
+    pub fn touch(
+        &mut self,
+        id: WorkspaceId,
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.touch(id, clock.now_ms())?)
+    }
+
     /// One active entry by id, for a wire selector that already names one
     /// (`WorkspaceSelector.workspace_id` resolution, task `daemon-global-socket`). `None` for an
     /// unknown or already-removed id — resolution treats those the same as "never heard of it".
@@ -186,5 +199,6 @@ fn entry_of(row: WorkspaceRow) -> WorkspaceEntry {
         added_at_ms: row.added_at_ms,
         root_exists,
         has_state,
+        last_active_ms: row.last_active_ms,
     }
 }

@@ -7,10 +7,7 @@
 //! call into these methods; whitebox tests that build a `TxtodoService` directly (`serve::serve`)
 //! skip the catalog, and a second span here would only double-count.
 
-use crate::convert::{
-    file_kind_of, parse_mutation, parse_path, parse_principal, parse_resolution, parse_task_ref,
-    to_flag,
-};
+use crate::convert::{file_kind_of, parse_mutation, parse_path, parse_principal};
 use crate::handle::{ActorHandle, WATCH_CAP};
 use crate::workspace::Workspace;
 use std::pin::Pin;
@@ -183,27 +180,21 @@ impl Txtodo for TxtodoService {
         &self,
         r: Request<pb::ConflictsRequest>,
     ) -> Result<Response<pb::ConflictsResponse>, Status> {
-        let h = self.actor(&r.get_ref().path)?;
-        let rows = h.conflicts().await.map_err(status_of)?;
-        Ok(Response::new(pb::ConflictsResponse {
-            flags: rows.iter().map(to_flag).collect(),
-        }))
+        self.list_conflicts_impl(r).await
     }
 
     async fn resolve_conflict(
         &self,
         r: Request<pb::ResolveRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let req = r.into_inner();
-        let h = self.actor(&req.path)?;
-        let task = parse_task_ref(req.task)?;
-        let resolution = parse_resolution(req.resolution)?;
-        let device = self.workspace().device();
-        let a = h
-            .resolve(task, resolution, Principal::User { device })
-            .await
-            .map_err(status_of)?;
-        Ok(Response::new(applied_of(a)))
+        self.resolve_conflict_impl(r).await
+    }
+
+    async fn lint(
+        &self,
+        r: Request<pb::LintRequest>,
+    ) -> Result<Response<pb::LintResponse>, Status> {
+        self.lint_impl(r).await
     }
 
     async fn health(

@@ -35,6 +35,7 @@ impl TxtodoService {
                 .map_err(|e| Status::internal(format!("cannot switch to sidecar identity: {e}")))?;
             (was_tagged, handles)
         };
+        let paired_peers = self.paired_peer_count();
         let report = migrate_documents(handles, dry_run).await;
         let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
         Ok(Response::new(pb::MigrateIdentityResponse {
@@ -48,6 +49,27 @@ impl TxtodoService {
                 .collect(),
             was_tagged,
             renumbered: count(report.renumbered),
+            paired_peers,
         }))
+    }
+
+    /// Other, non-removed devices paired into this device's sync group. A still-Tagged peer
+    /// rejects the tag-stripping edits and sends `id:` text back, so the CLI names this before it
+    /// asks for confirmation (task `sidecar-migrate-tagged`, "Single device only"). A store error
+    /// counts as none: this is a warning, not a gate.
+    fn paired_peer_count(&self) -> u32 {
+        let ws = self.workspace();
+        let self_device = ws.device();
+        let rows = ws
+            .identity_store()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .list_devices()
+            .unwrap_or_default();
+        let peers = rows
+            .iter()
+            .filter(|r| r.device != self_device && r.removed_at_ms.is_none())
+            .count();
+        u32::try_from(peers).unwrap_or(u32::MAX)
     }
 }

@@ -250,6 +250,58 @@ fn move_to_end_anchors_after_the_last_other_task_and_is_a_no_op_when_already_las
 }
 
 #[test]
+fn move_before_anchors_after_the_predecessor_of_the_target() {
+    const C: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
+    let bytes = format!("first id:{A}\nsecond id:{B}\nthird id:{C}\n");
+    let s = DocState::from_tagged_file(
+        FilePath::new("todo.txt").unwrap(),
+        &parse_file(bytes.as_bytes()),
+    )
+    .unwrap();
+    let file = FilePath::new("todo.txt").unwrap();
+    let ops = |task: TaskRef, before: TaskRef| {
+        mutation_ops(&s, &Mutation::MoveBefore { task, before }, &mut mint())
+    };
+
+    // The first task lands before the third: right after the second.
+    assert_eq!(
+        ops(line(1, Some(A)), line(3, Some(C))).unwrap(),
+        vec![OpKind::Move {
+            task: id(A),
+            after: Some(id(B)),
+            to_file: file.clone()
+        }]
+    );
+    // Before the very first: no predecessor, so the top.
+    assert_eq!(
+        ops(line(3, Some(C)), line(1, Some(A))).unwrap(),
+        vec![OpKind::Move {
+            task: id(C),
+            after: None,
+            to_file: file.clone()
+        }]
+    );
+    // Already right before its target: anchors to its own predecessor, a true no-op.
+    assert_eq!(
+        ops(line(2, Some(B)), line(3, Some(C))).unwrap(),
+        vec![OpKind::Move {
+            task: id(B),
+            after: Some(id(A)),
+            to_file: file
+        }]
+    );
+    // Before itself is refused, and a stale id is refused like every other mutation.
+    assert!(matches!(
+        ops(line(2, Some(B)), line(2, Some(B))),
+        Err(MutationError::Unsupported(_))
+    ));
+    assert!(matches!(
+        ops(line(1, Some(A)), line(3, Some(A))),
+        Err(MutationError::Stale { .. })
+    ));
+}
+
+#[test]
 fn peek_line_reads_the_id_bytes_and_ref_slug_without_mutating() {
     let bytes = format!("(A) roadmap +work ref:q4-roadmap id:{A}\n\nwalk the dog id:{B}\n");
     assert_eq!(

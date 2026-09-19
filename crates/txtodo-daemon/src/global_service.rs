@@ -22,7 +22,9 @@ use txtodo_proto::v1::{self as pb};
 // Re-exported (not just `use`d) so `crate::global_service::rpc_span`/`to_workspace_info` — the
 // paths `pairing_grpc.rs`/`workspace_offer_grpc.rs` already call them by — keep resolving after
 // this split; `parse_workspace_id` has no outside caller, so a plain `use` is enough for it.
-pub(crate) use crate::global_service_helpers::{parse_workspace_id, rpc_span, to_workspace_info};
+pub(crate) use crate::global_service_helpers::{
+    HasWorkspace, parse_workspace_id, rpc_span, to_workspace_info, totals_only, with_totals,
+};
 
 /// The service actually bound to the one global socket. `Clone` is a cheap `Arc` clone.
 #[derive(Clone)]
@@ -39,6 +41,18 @@ impl GlobalService {
     /// needs the catalog too (split out for `server.rs`'s file budget).
     pub(crate) fn catalog(&self) -> &Arc<WorkspaceCatalog> {
         &self.catalog
+    }
+
+    /// `resolve`, then the per-call `TxtodoService` scoped to that workspace and its `rpc` span:
+    /// the three lines every workspace-scoped handler below would otherwise repeat.
+    async fn scoped<T: HasWorkspace>(
+        &self,
+        method: &'static str,
+        r: &Request<T>,
+    ) -> Result<(TxtodoService, tracing::Span), Status> {
+        let ws = self.resolve(r.get_ref().workspace()).await?;
+        let span = rpc_span(method, &ws);
+        Ok((TxtodoService::new(ws), span))
     }
 
     /// `WorkspaceCatalog::resolve` for an async handler. An already-open workspace or a selector-
@@ -66,18 +80,16 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::ListFilesRequest>,
     ) -> Result<Response<pb::ListFilesResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("list_files", &ws);
-        TxtodoService::new(ws).list_files(r).instrument(span).await
+        let (svc, span) = self.scoped("list_files", &r).await?;
+        svc.list_files(r).instrument(span).await
     }
 
     async fn get_file(
         &self,
         r: Request<pb::GetFileRequest>,
     ) -> Result<Response<pb::FileContents>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("get_file", &ws);
-        TxtodoService::new(ws).get_file(r).instrument(span).await
+        let (svc, span) = self.scoped("get_file", &r).await?;
+        svc.get_file(r).instrument(span).await
     }
 
     type WatchStream = <TxtodoService as Txtodo>::WatchStream;
@@ -86,54 +98,47 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("watch", &ws);
-        TxtodoService::new(ws).watch(r).instrument(span).await
+        let (svc, span) = self.scoped("watch", &r).await?;
+        svc.watch(r).instrument(span).await
     }
 
     async fn apply(
         &self,
         r: Request<pb::ApplyRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("apply", &ws);
-        TxtodoService::new(ws).apply(r).instrument(span).await
+        let (svc, span) = self.scoped("apply", &r).await?;
+        svc.apply(r).instrument(span).await
     }
 
     async fn history(
         &self,
         r: Request<pb::HistoryRequest>,
     ) -> Result<Response<pb::HistoryResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("history", &ws);
-        TxtodoService::new(ws).history(r).instrument(span).await
+        let (svc, span) = self.scoped("history", &r).await?;
+        svc.history(r).instrument(span).await
     }
 
     async fn undo(
         &self,
         r: Request<pb::UndoRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("undo", &ws);
-        TxtodoService::new(ws).undo(r).instrument(span).await
+        let (svc, span) = self.scoped("undo", &r).await?;
+        svc.undo(r).instrument(span).await
     }
 
     async fn checkout(
         &self,
         r: Request<pb::CheckoutRequest>,
     ) -> Result<Response<pb::FileContents>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("checkout", &ws);
-        TxtodoService::new(ws).checkout(r).instrument(span).await
+        let (svc, span) = self.scoped("checkout", &r).await?;
+        svc.checkout(r).instrument(span).await
     }
 
     async fn list_conflicts(
         &self,
         r: Request<pb::ConflictsRequest>,
     ) -> Result<Response<pb::ConflictsResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("list_conflicts", &ws);
-        let svc = TxtodoService::new(ws);
+        let (svc, span) = self.scoped("list_conflicts", &r).await?;
         svc.list_conflicts(r).instrument(span).await
     }
 
@@ -141,9 +146,7 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::ResolveRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("resolve_conflict", &ws);
-        let svc = TxtodoService::new(ws);
+        let (svc, span) = self.scoped("resolve_conflict", &r).await?;
         svc.resolve_conflict(r).instrument(span).await
     }
 
@@ -151,45 +154,47 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::HealthRequest>,
     ) -> Result<Response<pb::HealthResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("health", &ws);
-        TxtodoService::new(ws).health(r).instrument(span).await
+        // Health never waits on a workspace that is still opening: a selector-less call while any
+        // open is pending answers with the totals alone. A named workspace is resolved (and so
+        // promoted and waited for) like any other call.
+        let totals = self.catalog.load_totals();
+        if r.get_ref().workspace.is_none() && self.catalog.load_pending() > 0 {
+            return Ok(Response::new(totals_only(totals)));
+        }
+        let (svc, span) = self.scoped("health", &r).await?;
+        let resp = svc.health(r).instrument(span).await?;
+        Ok(Response::new(with_totals(resp.into_inner(), totals)))
     }
 
     async fn get_notes(
         &self,
         r: Request<pb::GetNotesRequest>,
     ) -> Result<Response<pb::NotesDoc>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("get_notes", &ws);
-        TxtodoService::new(ws).get_notes(r).instrument(span).await
+        let (svc, span) = self.scoped("get_notes", &r).await?;
+        svc.get_notes(r).instrument(span).await
     }
 
     async fn edit_notes(
         &self,
         r: Request<pb::NotesEditRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("edit_notes", &ws);
-        TxtodoService::new(ws).edit_notes(r).instrument(span).await
+        let (svc, span) = self.scoped("edit_notes", &r).await?;
+        svc.edit_notes(r).instrument(span).await
     }
 
     async fn ref_dir(
         &self,
         r: Request<pb::RefDirRequest>,
     ) -> Result<Response<pb::RefDirInfo>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("ref_dir", &ws);
-        TxtodoService::new(ws).ref_dir(r).instrument(span).await
+        let (svc, span) = self.scoped("ref_dir", &r).await?;
+        svc.ref_dir(r).instrument(span).await
     }
 
     async fn prune_orphans(
         &self,
         r: Request<pb::PruneOrphansRequest>,
     ) -> Result<Response<pb::PruneOrphansResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("prune_orphans", &ws);
-        let svc = TxtodoService::new(ws);
+        let (svc, span) = self.scoped("prune_orphans", &r).await?;
         svc.prune_orphans(r).instrument(span).await
     }
 
@@ -197,9 +202,8 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::PairOfferRequest>,
     ) -> Result<Response<pb::PairOfferResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("pair_offer", &ws);
-        TxtodoService::new(ws).pair_offer(r).instrument(span).await
+        let (svc, span) = self.scoped("pair_offer", &r).await?;
+        svc.pair_offer(r).instrument(span).await
     }
 
     async fn pair_accept(
@@ -214,9 +218,7 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::PairConfirmRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("pair_confirm_sas", &ws);
-        let svc = TxtodoService::new(ws);
+        let (svc, span) = self.scoped("pair_confirm_sas", &r).await?;
         svc.pair_confirm_sas(r).instrument(span).await
     }
 
@@ -224,9 +226,7 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::PairAwaitPeerRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("pair_await_peer", &ws);
-        let svc = TxtodoService::new(ws);
+        let (svc, span) = self.scoped("pair_await_peer", &r).await?;
         svc.pair_await_peer(r).instrument(span).await
     }
 
@@ -234,33 +234,24 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::TokenCreateRequest>,
     ) -> Result<Response<pb::Token>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("token_create", &ws);
-        TxtodoService::new(ws)
-            .token_create(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("token_create", &r).await?;
+        svc.token_create(r).instrument(span).await
     }
 
     async fn token_list(
         &self,
         r: Request<pb::TokenListRequest>,
     ) -> Result<Response<pb::TokenListResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("token_list", &ws);
-        TxtodoService::new(ws).token_list(r).instrument(span).await
+        let (svc, span) = self.scoped("token_list", &r).await?;
+        svc.token_list(r).instrument(span).await
     }
 
     async fn token_revoke(
         &self,
         r: Request<pb::TokenRevokeRequest>,
     ) -> Result<Response<pb::TokenRevokeResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("token_revoke", &ws);
-        TxtodoService::new(ws)
-            .token_revoke(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("token_revoke", &r).await?;
+        svc.token_revoke(r).instrument(span).await
     }
 
     type OpLogStreamStream = <TxtodoService as Txtodo>::OpLogStreamStream;
@@ -269,66 +260,56 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::OpLogRequest>,
     ) -> Result<Response<Self::OpLogStreamStream>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("op_log_stream", &ws);
-        TxtodoService::new(ws)
-            .op_log_stream(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("op_log_stream", &r).await?;
+        svc.op_log_stream(r).instrument(span).await
     }
 
     async fn device_list(
         &self,
         r: Request<pb::DeviceListRequest>,
     ) -> Result<Response<pb::DeviceListResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("device_list", &ws);
-        TxtodoService::new(ws).device_list(r).instrument(span).await
+        let (svc, span) = self.scoped("device_list", &r).await?;
+        svc.device_list(r).instrument(span).await
     }
 
     async fn device_remove(
         &self,
         r: Request<pb::DeviceRemoveRequest>,
     ) -> Result<Response<pb::DeviceRemoveResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("device_remove", &ws);
-        TxtodoService::new(ws)
-            .device_remove(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("device_remove", &r).await?;
+        svc.device_remove(r).instrument(span).await
     }
 
     async fn migrate_identity(
         &self,
         r: Request<pb::MigrateIdentityRequest>,
     ) -> Result<Response<pb::MigrateIdentityResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("migrate_identity", &ws);
-        TxtodoService::new(ws)
-            .migrate_identity(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("migrate_identity", &r).await?;
+        svc.migrate_identity(r).instrument(span).await
+    }
+
+    async fn lint(
+        &self,
+        r: Request<pb::LintRequest>,
+    ) -> Result<Response<pb::LintResponse>, Status> {
+        let (svc, span) = self.scoped("lint", &r).await?;
+        svc.lint(r).instrument(span).await
     }
 
     async fn sync_status(
         &self,
         r: Request<pb::SyncStatusRequest>,
     ) -> Result<Response<pb::SyncStatusResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("sync_status", &ws);
-        TxtodoService::new(ws).sync_status(r).instrument(span).await
+        let (svc, span) = self.scoped("sync_status", &r).await?;
+        svc.sync_status(r).instrument(span).await
     }
 
     async fn debug_set_group_key(
         &self,
         r: Request<pb::DebugSetGroupKeyRequest>,
     ) -> Result<Response<pb::DebugSetGroupKeyResponse>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("debug_set_group_key", &ws);
-        TxtodoService::new(ws)
-            .debug_set_group_key(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("debug_set_group_key", &r).await?;
+        svc.debug_set_group_key(r).instrument(span).await
     }
 
     type BundleExportStream = <TxtodoService as Txtodo>::BundleExportStream;
@@ -337,12 +318,8 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::BundleExportRequest>,
     ) -> Result<Response<Self::BundleExportStream>, Status> {
-        let ws = self.resolve(r.get_ref().workspace.as_ref()).await?;
-        let span = rpc_span("bundle_export", &ws);
-        TxtodoService::new(ws)
-            .bundle_export(r)
-            .instrument(span)
-            .await
+        let (svc, span) = self.scoped("bundle_export", &r).await?;
+        svc.bundle_export(r).instrument(span).await
     }
 
     async fn bundle_import(
@@ -365,7 +342,8 @@ impl Txtodo for GlobalService {
         let entry = self
             .catalog
             .add_registered(Path::new(&r.into_inner().root))?;
-        Ok(Response::new(to_workspace_info(entry)))
+        let state = self.catalog.load_state(entry.id);
+        Ok(Response::new(to_workspace_info(entry, state)))
     }
 
     async fn workspace_remove(
@@ -385,7 +363,10 @@ impl Txtodo for GlobalService {
             .catalog
             .list_registered_entries()?
             .into_iter()
-            .map(to_workspace_info)
+            .map(|entry| {
+                let state = self.catalog.load_state(entry.id);
+                to_workspace_info(entry, state)
+            })
             .collect();
         Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
     }

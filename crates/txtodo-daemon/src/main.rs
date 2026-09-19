@@ -7,6 +7,7 @@
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
 mod boot_log;
+mod signals;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -273,27 +274,6 @@ fn start_loader(
     }
 }
 
-/// Resolves until either a ctrl-c or (unix only) SIGTERM.
-async fn shutdown_signal() {
-    let ctrl_c = tokio::signal::ctrl_c();
-    #[cfg(unix)]
-    {
-        let mut term =
-            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
-                Ok(s) => s,
-                Err(_) => {
-                    let _ = ctrl_c.await;
-                    return;
-                }
-            };
-        tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = ctrl_c.await;
-    }
-}
-
 /// Pid lock + log init + stale-socket removal — the very first thing `run` does, so a losing
 /// second instance exits in milliseconds (before the registry, identity, relay or any workspace
 /// opens: the 2026-09-19 300% CPU boot storm was four daemons each rebuilding every Loro mirror
@@ -394,7 +374,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     drop(_boot);
 
     let loader_catalog = Arc::clone(&catalog);
-    serve::serve_global_then(catalog, &socket, shutdown_signal(), move || {
+    serve::serve_global_then(catalog, &socket, signals::shutdown_signal(), move || {
         start_loader(&loader_catalog, queued);
     })
     .await?;

@@ -174,7 +174,7 @@ fn response_of(
 /// `sync-pairing-relay`, ADR 0026 follow-up, `tasks/sync-pairing-relay/notes.md`'s design decision
 /// option (a)) — `None` when relay isn't configured, or `relay.rs` hasn't finished binding yet; an
 /// offer built from `None` simply carries no relay fields, exactly like today's LAN-only offer.
-fn relay_rendezvous(ws: &Workspace) -> Option<([u8; 32], String)> {
+pub(crate) fn relay_rendezvous(ws: &Workspace) -> Option<([u8; 32], String)> {
     let endpoint = ws.relay_state().get()?;
     let url = ws.lan_status().relay_url();
     (!url.is_empty()).then(|| (endpoint.node_id_bytes(), url))

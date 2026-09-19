@@ -16,7 +16,7 @@ use tonic::Code;
 use txtodo_model::IdentityMode;
 use txtodo_proto::v1::{self as pb, workspace_selector::Selector};
 
-fn open_args() -> OpenArgs {
+pub(crate) fn open_args() -> OpenArgs {
     let identity_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let identity = Arc::new(
         DeviceIdentity::open_in_memory(identity_dir.path(), &FakeClock::new(1_000))
@@ -35,25 +35,25 @@ fn open_args() -> OpenArgs {
 
 /// A door a slow open waits at until the test lets it through.
 #[derive(Default)]
-struct Gate {
+pub(crate) struct Gate {
     open: Mutex<bool>,
     changed: Condvar,
 }
 
 impl Gate {
-    fn wait(&self) {
+    pub(crate) fn wait(&self) {
         let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         while !*open {
             open = self.changed.wait(open).unwrap_or_else(|e| e.into_inner());
         }
     }
-    fn release(&self) {
+    pub(crate) fn release(&self) {
         *self.open.lock().unwrap_or_else(|e| e.into_inner()) = true;
         self.changed.notify_all();
     }
 }
 
-fn workspace(name: &str) -> tempfile::TempDir {
+pub(crate) fn workspace(name: &str) -> tempfile::TempDir {
     let dir = tempfile::Builder::new()
         .prefix(name)
         .tempdir()
@@ -62,14 +62,14 @@ fn workspace(name: &str) -> tempfile::TempDir {
     dir
 }
 
-fn select(path: &Path) -> pb::WorkspaceSelector {
+pub(crate) fn select(path: &Path) -> pb::WorkspaceSelector {
     pb::WorkspaceSelector {
         selector: Some(Selector::Path(path.display().to_string())),
     }
 }
 
 /// A catalog whose opens call `hook(root)` first; `registered` are added to the registry only.
-fn catalog_with(
+pub(crate) fn catalog_with(
     registered: &[&Path],
     hook: impl Fn(&Path) + Send + Sync + 'static,
 ) -> (tempfile::TempDir, Arc<WorkspaceCatalog>) {
@@ -97,7 +97,7 @@ fn catalog_waiting(
     (registry_dir, Arc::new(catalog))
 }
 
-fn state_of(catalog: &WorkspaceCatalog, root: &Path) -> Option<LoadState> {
+pub(crate) fn state_of(catalog: &WorkspaceCatalog, root: &Path) -> Option<LoadState> {
     let id = catalog
         .list_registered_entries()
         .unwrap_or_default()
@@ -112,7 +112,7 @@ fn state_of(catalog: &WorkspaceCatalog, root: &Path) -> Option<LoadState> {
 /// taken more than 20 s: this only bounds a hang, it is never a performance assertion.
 const PATIENCE: Duration = Duration::from_secs(900);
 
-fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
+pub(crate) fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
     let start = Instant::now();
     while !done() {
         assert!(start.elapsed() < PATIENCE, "timed out: {what}");

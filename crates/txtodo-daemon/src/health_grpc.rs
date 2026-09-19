@@ -20,6 +20,12 @@ impl TxtodoService {
             now_ms.saturating_sub(last_event_ms)
         };
         let lan = ws.lan_status();
+        // The same helper `PairOffer` reads, so the id a human puts on an allowlist can never
+        // disagree with the one a pairing offer carries (root todo `cli-relay-node-id`).
+        let (relay_bound, relay_node_id) = crate::pairing_grpc::relay_rendezvous(&ws)
+            .map_or((false, String::new()), |(id, _url)| {
+                (true, id.iter().map(|b| format!("{b:02x}")).collect())
+            });
         Ok(Response::new(pb::HealthResponse {
             watcher_alive,
             documents: u32::try_from(ws.paths().count()).unwrap_or(u32::MAX),
@@ -35,6 +41,9 @@ impl TxtodoService {
             relay_url: lan.relay_url(),
             relay_last_outcome: lan.relay_last_outcome(),
             pairing_last_carrier: ws.pairing_lan().carrier(),
+            relay_node_id,
+            relay_bound,
+            ..pb::HealthResponse::default()
         }))
     }
 }

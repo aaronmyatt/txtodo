@@ -65,7 +65,8 @@ pub(crate) async fn accept_offer(
         workspace_id,
         std::path::Path::new(&req.local_dir),
     )?;
-    Ok(Response::new(to_workspace_info(entry)))
+    let state = service.catalog().load_state(entry.id);
+    Ok(Response::new(to_workspace_info(entry, state)))
 }
 
 pub(crate) async fn decline_offer(

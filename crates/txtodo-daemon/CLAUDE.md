@@ -77,6 +77,11 @@ multiplex every workspace's traffic — not done by this task).
   job once sync moves to a device-set-scoped `Link` per ADR 0025. `OpenedWorkspace` holds
   everything that must stay alive for one open workspace's background work (watcher, LAN, relay,
   file-carrier tasks) and stops them all on `Drop`.
+- Load state on the wire (task `daemon-early-bind`, 2026-09-20): `WorkspaceList`/`WorkspaceAdd`
+  carry each workspace's `load_state`; `Health` carries device-level `workspaces_*` totals and, for
+  a selector-less call while any open is pending, answers with the totals alone instead of waiting
+  (a named workspace is promoted and waited for like any other call). `Lint` (task
+  `mcp-hygiene-parity`) runs `txtodo_core::lint_findings` over the document's bytes.
 - `global_service.rs`: `GlobalService`, the `Txtodo` impl actually bound to the socket in
   production — every method resolves `req.workspace` via the catalog, then delegates to a freshly
   scoped `TxtodoService` (unchanged; see below). `TxtodoService` itself still implements `Txtodo`

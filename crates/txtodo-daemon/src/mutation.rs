@@ -3,6 +3,8 @@
 //! client that read the file before someone else changed it gets `Stale`, never the wrong line.
 
 use crate::expected::Hash;
+pub use crate::mutation_moves::{PeekedLine, peek_line};
+use crate::mutation_moves::{move_before_ops, move_ops, move_to_end_ops};
 use crate::reconcile::change_ops;
 use crate::state::{DocState, Entry, id_of};
 use std::fmt;
@@ -67,6 +69,16 @@ pub enum Mutation {
     MoveToEnd {
         /// The line.
         task: TaskRef,
+    },
+    /// Moves the line within its own file to sit immediately before another task (task
+    /// `mcp-move-reorder`): the same-file relocation `MoveToEnd` is the "after the last task"
+    /// case of. A blank line between the two stays where it was. Refused if `before` is the task
+    /// itself; a no-op when the task already sits right before `before`.
+    MoveBefore {
+        /// The line to move.
+        task: TaskRef,
+        /// The task it lands in front of.
+        before: TaskRef,
     },
     /// Replaces the whole document, but only if it still hashes to `base` (`replace.rs`): the
     /// caller's compare-and-swap for a diff no other mutation can express. Must be alone in its
@@ -187,6 +199,7 @@ fn mutation_kind(m: &Mutation) -> &'static str {
         Mutation::Move { .. } => "move",
         Mutation::Delete { .. } => "delete",
         Mutation::MoveToEnd { .. } => "move_to_end",
+        Mutation::MoveBefore { .. } => "move_before",
         Mutation::Replace { .. } => "replace",
         Mutation::RequireBase { .. } => "require_base",
     }
@@ -228,6 +241,7 @@ fn mutation_ops_inner(
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),
         Mutation::MoveToEnd { task } => move_to_end_ops(state, task),
+        Mutation::MoveBefore { task, before } => move_before_ops(state, task, before),
         // The actor takes a lone `Replace` before any op is derived (`replace.rs`); one reaching
         // here rode in a batch with other mutations.
         Mutation::Replace { .. } => Err(MutationError::Unsupported(
@@ -298,81 +312,6 @@ fn edit_ops(
         .line_of(id)
         .ok_or(MutationError::NoLine(task.line_number))?;
     Ok(change_ops(&old, &new, id))
-}
-
-/// The source half of a cross-file `Move`: this document only ever records that the task left
-/// (`OpKind::Move` with no in-file `after` — `to` is a different document, so no position here is
-/// meaningful). `crate::move_coordinator` resolves the destination anchor and inserts the line
-/// there as its own `Add`; see that module for the full, two-actor operation and the `ref:`
-/// directory relocation that rides along with it.
-fn move_ops(state: &DocState, task: &TaskRef, to: &FilePath) -> Result<Vec<OpKind>, MutationError> {
-    let (_, id) = resolve(state, task)?;
-    Ok(vec![OpKind::Move {
-        task: id,
-        after: None,
-        to_file: to.clone(),
-    }])
-}
-
-/// The archive half of `Mutation::MoveToEnd`: appends the task after whichever other task is
-/// currently last, so archiving several tasks in original relative order lands them at the bottom
-/// in that same order (`DocState::move_task`'s same-file branch does the actual reorder).
-fn move_to_end_ops(state: &DocState, task: &TaskRef) -> Result<Vec<OpKind>, MutationError> {
-    let (i, id) = resolve(state, task)?;
-    let last = state.task_before(state.len());
-    // Already last: anchor to its own predecessor instead, so the reorder is a true no-op.
-    let after = if last == Some(id) {
-        state.task_before(i)
-    } else {
-        last
-    };
-    Ok(vec![OpKind::Move {
-        task: id,
-        after,
-        to_file: state.path().clone(),
-    }])
-}
-
-/// A task line read without mutating anything: its id, full raw bytes and `ref:` slug (if any).
-/// `crate::move_coordinator` uses this to capture what a cross-file `Move` carries before it
-/// touches either document.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeekedLine {
-    /// The task's id.
-    pub id: TaskId,
-    /// The line's exact bytes (no ending), `id:` tag included.
-    pub line: String,
-    /// Its `ref:` tag value, when it has one valid per plan §3.2.1.
-    pub ref_slug: Option<String>,
-}
-
-/// Resolves `task` against `bytes` (a document's current projection, e.g. from `ActorHandle::get`)
-/// without any actor round trip: read-only, so a caller may inspect a line before deciding what
-/// mutation to send. `MutationError::Stale` on a mismatched id, exactly like [`resolve`].
-pub fn peek_line(bytes: &[u8], task: &TaskRef) -> Result<PeekedLine, MutationError> {
-    let n = task.line_number;
-    let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
-    let file = txtodo_core::parse_file(bytes);
-    let line = file.lines.get(i).ok_or(MutationError::NoLine(n))?;
-    let parsed = line.parse().ok_or(MutationError::NoLine(n))?;
-    let LineKind::Task(t) = parsed.kind else {
-        return Err(MutationError::Blank(n));
-    };
-    let found = t.id().map(TaskId::new).ok_or(MutationError::NoLine(n))?;
-    if let Some(expected) = task.task_id
-        && expected != found
-    {
-        return Err(MutationError::Stale {
-            line_number: n,
-            expected,
-            found,
-        });
-    }
-    Ok(PeekedLine {
-        id: found,
-        line: line.raw().unwrap_or_default().to_owned(),
-        ref_slug: t.ref_slug().map(str::to_owned),
-    })
 }
 
 /// Validates client text into a task line (LF ending; the state re-ends it on insert).

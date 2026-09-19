@@ -16,6 +16,7 @@ mod bundle_wire;
 pub mod clock;
 mod commit;
 mod conflict_row;
+mod conflicts_grpc;
 pub mod control_channel;
 mod control_dispatch;
 mod control_session;
@@ -57,6 +58,7 @@ mod move_coordinator;
 #[cfg(test)]
 mod move_coordinator_tests;
 pub mod mutation;
+mod mutation_moves;
 mod notes;
 pub mod notes_actor;
 pub mod notes_history;
@@ -104,7 +106,9 @@ pub mod watcher;
 pub mod workspace;
 pub mod workspace_catalog;
 mod workspace_catalog_load;
+mod workspace_catalog_offers;
 mod workspace_catalog_open;
+mod workspace_discover;
 mod workspace_error;
 pub mod workspace_load;
 mod workspace_migrate;
@@ -172,6 +176,8 @@ mod state_tests;
 mod sync_ops_tests;
 #[cfg(test)]
 mod workspace_catalog_load_tests;
+#[cfg(test)]
+mod workspace_catalog_state_tests;
 #[cfg(test)]
 mod workspace_catalog_tests;
 #[cfg(test)]

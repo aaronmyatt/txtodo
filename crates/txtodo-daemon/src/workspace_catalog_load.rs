@@ -12,15 +12,34 @@ use std::time::{Instant, UNIX_EPOCH};
 use tonic::Status;
 use txtodo_store::WorkspaceId;
 
-/// How recently a workspace was used, in unix milliseconds: the newest write to its root
-/// `todo.txt` (one `stat`, nothing opened), else the time it was registered.
+/// How recently a workspace was used, in unix milliseconds: `last_active_ms` when a request ever
+/// resolved it, else the newest write to its root `todo.txt` (one `stat`, nothing opened), else
+/// the time it was registered.
 fn recency_ms(entry: &WorkspaceEntry) -> u64 {
-    std::fs::metadata(entry.root.join("todo.txt"))
-        .and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .and_then(|d| u64::try_from(d.as_millis()).ok())
-        .unwrap_or(entry.added_at_ms)
+    entry.last_active_ms.unwrap_or_else(|| {
+        std::fs::metadata(entry.root.join("todo.txt"))
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .and_then(|d| u64::try_from(d.as_millis()).ok())
+            .unwrap_or(entry.added_at_ms)
+    })
+}
+
+/// How often one workspace's `last_active_ms` is written back to the registry.
+const TOUCH_EVERY_MS: u64 = 30_000;
+
+/// Device-level counts for `Health`: how many workspaces are registered and where each stands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LoadTotals {
+    /// Active registered workspaces.
+    pub registered: u32,
+    /// Open and serving.
+    pub ready: u32,
+    /// Queued or loading.
+    pub loading: u32,
+    /// Open failed.
+    pub failed: u32,
 }
 
 impl WorkspaceCatalog {
@@ -62,6 +81,51 @@ impl WorkspaceCatalog {
             .insert(id, opened);
         log_opened(id, root, started.elapsed().as_millis());
         Ok(())
+    }
+
+    /// Records that a request just resolved `ws`, at most once per `TOUCH_EVERY_MS` per workspace,
+    /// so the next cold boot opens it early. Best effort: a registry failure is logged only.
+    pub(crate) fn note_use(&self, ws: &crate::server::SharedWorkspace) {
+        let id = ws
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .workspace_id();
+        let now = self.clock.now_ms();
+        {
+            let mut last = self
+                .last_touch
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            if last
+                .get(&id)
+                .is_some_and(|at| now.saturating_sub(*at) < TOUCH_EVERY_MS)
+            {
+                return;
+            }
+            last.insert(id, now);
+        }
+        let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Err(e) = registry.touch(id, self.clock.as_ref()) {
+            log_touch_failed(id, &e);
+        }
+    }
+
+    /// `WorkspaceList`/`Health` totals, from the registry and the load slots; nothing opened.
+    pub fn load_totals(&self) -> LoadTotals {
+        let mut totals = LoadTotals {
+            registered: self
+                .list_registered()
+                .map_or(0, |e| u32::try_from(e.len()).unwrap_or(u32::MAX)),
+            ..LoadTotals::default()
+        };
+        for (_, state) in self.slots.snapshot() {
+            match state {
+                LoadState::Ready => totals.ready += 1,
+                LoadState::Queued | LoadState::Loading => totals.loading += 1,
+                LoadState::Failed(_) => totals.failed += 1,
+            }
+        }
+        totals
     }
 
     /// `id`'s load state, or `None` for a workspace this process never queued or opened.
@@ -122,6 +186,13 @@ impl WorkspaceCatalog {
         }
         ticket.finish(outcome.map_err(|s| s.message().to_owned()));
     }
+}
+
+fn log_touch_failed(
+    id: WorkspaceId,
+    error: &crate::workspace_registry_error::WorkspaceRegistryError,
+) {
+    tracing::warn!(workspace = %id, error = %error, "workspace_touch_failed");
 }
 
 fn log_opened(id: WorkspaceId, root: &Path, ms: u128) {
