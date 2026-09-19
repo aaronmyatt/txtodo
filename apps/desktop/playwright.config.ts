@@ -12,6 +12,9 @@ const PORT = 4373;
 export default defineConfig({
 	testDir: "./e2e",
 	timeout: 30_000,
+	// tasks/test-registry-leak-cleanup: suite-wide safety net behind every spec's own per-test
+	// dispose() — see globalTeardown.ts's own doc.
+	globalTeardown: "./e2e/globalTeardown.ts",
 	// Each spec spawns its own daemon + e2e_bridge (tasks/desktop-playwright-tests/notes.md: "no
 	// test may depend on another's side effects") on a freely-chosen port from `fixtures.ts`'s
 	// counter; running specs in parallel workers is fine; the shared dev-server webServer is not

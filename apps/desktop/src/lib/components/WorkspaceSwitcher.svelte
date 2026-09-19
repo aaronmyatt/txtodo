@@ -195,9 +195,16 @@
 				{/if}
 				<ul>
 					{#each workspaces as ws (ws.id)}
-						<li class:current={ws.root === $currentWorkspaceRoot}>
-							<button type="button" class="entry" onclick={() => pick(ws.root)} disabled={busy}>
+						<li class:current={ws.root === $currentWorkspaceRoot} class:missing={!ws.root_exists}>
+							<button
+								type="button"
+								class="entry"
+								onclick={() => pick(ws.root)}
+								disabled={busy}
+								title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
+							>
 								{ws.root}
+								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
 							</button>
 							{#if ws.root !== $currentWorkspaceRoot}
 								<button
@@ -316,6 +323,20 @@
 
 	li.current .entry {
 		font-weight: 600;
+	}
+
+	/* tasks/test-registry-leak-cleanup: a dead (deleted or never-real) temp-dir registration
+	   stays greyed out and labeled rather than hidden, matching `txtodo workspace list`'s own
+	   `[missing]` annotation — still pickable/removable, just visually deprioritized so leaked
+	   entries don't read as equally-live choices. */
+	li.missing .entry {
+		opacity: 0.5;
+	}
+
+	.missing-label {
+		margin-left: 0.4em;
+		font-size: 0.75em;
+		opacity: 0.8;
 	}
 
 	.entry:hover:not(:disabled) {
