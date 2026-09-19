@@ -55,7 +55,7 @@ fn which_on_path(program: &str) -> Option<PathBuf> {
 /// `txtodo_workspace_paths::global_socket_path` with no `$TXTODO_SOCKET` set — this crate may not
 /// depend on that one (`.claude/budgets.json`'s `allowedDeps`), so `txtodo-cli`'s tests pin the two
 /// together.
-pub(crate) fn default_global_socket(home: &Path, xdg_data_home: Option<&OsStr>) -> PathBuf {
+pub fn default_global_socket(home: &Path, xdg_data_home: Option<&OsStr>) -> PathBuf {
     let base = xdg_data_home
         .filter(|v| !v.is_empty())
         .map_or_else(|| home.join(".local/share"), PathBuf::from);

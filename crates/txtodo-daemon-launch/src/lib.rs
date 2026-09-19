@@ -33,4 +33,5 @@ pub mod service;
 mod spawn;
 
 pub use autostart::{autostart_disabled, service_disabled};
+pub use binary_path::default_global_socket;
 pub use spawn::{LaunchConfig, LaunchError, ensure_daemon};
