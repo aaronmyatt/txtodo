@@ -211,7 +211,12 @@ async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), S
         }
         // The stream ended (daemon restart or a dropped connection): free the slot so the next
         // `watch()` opens a new one. Blocks on the lock until `install` below has run.
-        forwarder_app.state::<AppState>().watch.lock().await.ended(generation);
+        forwarder_app
+            .state::<AppState>()
+            .watch
+            .lock()
+            .await
+            .ended(generation);
     });
     slot.install(generation, task);
     Ok(())
