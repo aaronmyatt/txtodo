@@ -6,7 +6,9 @@
 // The measure is what a human sees: Unicode scalar values (a code point, so an emoji is 1, not the
 // 2 UTF-16 units `String.length` gives it), without the line's own `id:` tag and the blanks in
 // front of it — the editor hides the tag (`idTagsHidden`), and a 30-char tag on a 75-char line
-// must not flag it. Advisory only: nothing here stops a longer line being typed or saved.
+// must not flag it. Advisory only: nothing here stops a longer line being typed or saved. One known
+// difference from the Rust measure: the editor hides any `id:<word>` (its `idTagsHidden` matcher),
+// core only a well-formed `id:<ULID>`, so a malformed tag is invisible here but counted there.
 import { findIdTagRanges, type IdTagRange } from "./lineInfo";
 
 /** root todo 9: "add line length hints to the clients... to encourage keeping todo entries
