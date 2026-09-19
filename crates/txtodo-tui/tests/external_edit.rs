@@ -4,6 +4,10 @@
 //!
 //! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
 //! `src/daemon.rs`'s own unit tests were just gated for.
+//!
+//! `#[ignore]`d (2026-09-19): spawns a real daemon per test; CI-only, see `tests/
+//! daemon_autostart.rs`'s own doc comment for the full rationale shared across this crate's
+//! real-daemon tests.
 #![cfg(unix)]
 
 mod support;
@@ -13,6 +17,7 @@ use std::time::Duration;
 use txtodo_tui::app::reconnect_watch;
 use txtodo_tui::state::AppState;
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn external_edit_appears_on_watch_without_a_manual_refresh() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -42,6 +47,7 @@ async fn external_edit_appears_on_watch_without_a_manual_refresh() {
     assert!(text.contains("call mom"), "{text:?}");
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn a_dropped_watch_reconnects_and_rebaselines() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -94,6 +100,7 @@ async fn a_dropped_watch_reconnects_and_rebaselines() {
     assert_eq!(state.lines[2].raw, "water the plants");
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn reconnect_is_bounded_when_the_daemon_is_gone() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n").await;

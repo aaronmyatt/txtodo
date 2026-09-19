@@ -3,10 +3,14 @@
 //! handler were proven in their own crates' tests; this is the one thing only this crate can
 //! prove, that its own thin client actually calls the real RPC and gets a real, well-formed
 //! response back).
+//!
+//! `#[ignore]`d (2026-09-19): spawns a real daemon; CI-only, see `tests/daemon_autostart.rs`'s
+//! own doc comment for the full rationale shared across this crate's real-daemon tests.
 #![cfg(unix)]
 
 mod support;
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn sync_status_round_trips_against_a_real_daemon_with_no_peers() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;

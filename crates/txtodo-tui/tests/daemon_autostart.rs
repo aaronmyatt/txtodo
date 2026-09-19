@@ -15,6 +15,11 @@
 //! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
 //! `src/daemon.rs`'s own unit tests and this crate's other real-daemon integration tests are
 //! gated for.
+//!
+//! `#[ignore]`d (2026-09-19): spawns a real daemon per test; CI-only like every sibling client's
+//! own real-daemon test (`crates/txtodo-cli/tests/daemon_mode.rs`, `crates/txtodo-mcp/tests/
+//! daemon_autostart.rs`, `apps/desktop/src-tauri/tests/daemon_spawn.rs`). Run in CI via `cargo
+//! test -- --ignored` (`.github/workflows/ci.yml`).
 #![cfg(unix)]
 
 mod support;
@@ -52,6 +57,7 @@ fn kill(pid: u32) {
         .status();
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn connect_path_spawns_a_missing_daemon_and_becomes_ready() {
     let workspace = temp_workspace_no_daemon();
@@ -99,6 +105,7 @@ async fn connect_path_spawns_a_missing_daemon_and_becomes_ready() {
 /// workspaces (proving the `Path` selector really does route each `Daemon` to its own workspace
 /// on the shared daemon, not just that a second spawn is skipped), and asserts the pid file names
 /// the identical process both times.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn a_second_workspace_reuses_the_already_running_global_daemon() {
     let workspace_a = temp_workspace_no_daemon();

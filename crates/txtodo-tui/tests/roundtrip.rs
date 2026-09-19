@@ -5,6 +5,10 @@
 //!
 //! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
 //! `src/daemon.rs`'s own unit tests were just gated for.
+//!
+//! `#[ignore]`d (2026-09-19): spawns a real daemon per test; CI-only, see `tests/
+//! daemon_autostart.rs`'s own doc comment for the full rationale shared across this crate's
+//! real-daemon tests.
 #![cfg(unix)]
 
 mod support;
@@ -29,6 +33,7 @@ async fn press(
     }
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn dd_deletes_a_line_through_apply_and_repaints() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\n").await;
@@ -63,6 +68,7 @@ async fn dd_deletes_a_line_through_apply_and_repaints() {
     assert_eq!(state.lines[1].raw, "call mom");
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn space_completes_a_line_through_apply() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -89,6 +95,7 @@ async fn space_completes_a_line_through_apply() {
     );
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn i_edit_and_enter_saves_through_apply() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -129,6 +136,7 @@ async fn i_edit_and_enter_saves_through_apply() {
     assert_eq!(_real.disk(), "buy milk +errand\n");
 }
 
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn apply_is_visible_on_a_separate_watch_stream() {
     // "repaint via Watch": a second, independent client watching the same path sees the change
