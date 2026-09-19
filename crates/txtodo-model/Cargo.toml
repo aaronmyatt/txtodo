@@ -19,7 +19,7 @@ tracing = "0.1"
 [dev-dependencies]
 # https://docs.rs/proptest — Hlc total order and monotone tick
 proptest = "1"
-# https://docs.rs/tracing-subscriber — test-only local JSON capture for `hlc_no_secrets_tests.rs`
+# https://docs.rs/tracing-subscriber — test-only local JSON capture for `tests/hlc_no_secrets.rs`
 # (root todo.txt `logging-flow-test`); this crate may not depend on `txtodo-telemetry`
 # (`.claude/budgets.json`'s `allowedDeps` — see tasks/logging-flow-test/notes.md), so the same
 # `LogSink`/`capturing_dispatch` shape is reimplemented locally against the shared workspace pin.

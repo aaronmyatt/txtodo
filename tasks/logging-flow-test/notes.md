@@ -71,7 +71,7 @@ true }` under `[dev-dependencies]`.
   task's description text — `apply`'s span fields are `file`/`kind` only) and `lww::write_if_newer`
   with a `LoroValue::String` sentinel value (its own doc: "Never logs `value` — an LWW register may
   hold a task description"). Local `LogSink`/`capturing_dispatch`.
-- **txtodo-model** (`src/hlc_no_secrets_tests.rs`, in-crate): **deviation, documented deliberately**
+- **txtodo-model** (`tests/hlc_no_secrets.rs`, own test binary): **deviation, documented deliberately**
   — `hlc.rs` (the one instrumented file) carries no free-text data path at all: every field
   logged (`wall_ms`, `counter`, `device`, `peer_ms`, `local_ms`, skew fields) is a number or a
   `DeviceId` (a ULID, not secret). There is no task description/note body/token analog to inject a
@@ -157,7 +157,7 @@ in the expected order. See "As built" below for the actual locked-in sequence on
 
 | Crate | Covered how | Test file |
 |---|---|---|
-| txtodo-model | New — structural field-whitelist test (deviation, see below) | `crates/txtodo-model/src/hlc_no_secrets_tests.rs` |
+| txtodo-model | New — structural field-whitelist test (deviation, see below) | `crates/txtodo-model/tests/hlc_no_secrets.rs` |
 | txtodo-store | New — sentinel-laden `Op::Insert`/`Projection` through `commit_change`/`heads`/`get_projection` | `crates/txtodo-store/tests/no_secrets_sentinel.rs` |
 | txtodo-crdt | New — sentinel description through `to_loro::apply`/`lww::write_if_newer` | `crates/txtodo-crdt/src/no_secrets_tests.rs` |
 | txtodo-sync | New — sentinel `Op` through `seal_ops`/`open_ops`/`Session::on_ops`/`committed`, plus a wrong-group-key rejected round | `crates/txtodo-sync/src/no_secrets_tests.rs` |

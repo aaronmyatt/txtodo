@@ -8,15 +8,21 @@
 //! captured through a local, in-memory JSON dispatch shaped like [`crate`]'s own production layer
 //! would be (this crate may not depend on `txtodo-telemetry`, `.claude/budgets.json`'s
 //! `allowedDeps` — see the notes.md boundary finding).
+//!
+//! Its own integration-test binary, not a `#[cfg(test)]` module in `src/`: tracing's callsite
+//! interest cache is process-global, so `hlc_tests.rs`/`op_tests.rs` exercising these same
+//! callsites on sibling threads dropped this test's events (~10% of runs under load, always the
+//! "logged something" sanity check). `rebuild_interest_cache()` did not cure it (measured, same
+//! rate) and a mutex cannot either, since the interfering tests live in other files. Alone in
+//! its process nothing else emits: 0 failures in 720 runs under the same load.
+//! See `tasks/mcp-smoke-span-flake/notes.md` and `tasks/tracing-set-default-audit/notes.md`.
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
 use tracing_subscriber::layer::SubscriberExt;
 
-use crate::DeviceId;
-use crate::hlc::{Hlc, HlcError, MAX_PEER_SKEW_AHEAD_MS, Skew};
-use txtodo_core::Ulid;
+use txtodo_model::{DeviceId, Hlc, HlcError, MAX_PEER_SKEW_AHEAD_MS, Skew, Ulid};
 
 /// A sentinel kept for symmetry with every other crate's test in this task — trivially absent
 /// here (nothing in `hlc.rs` ever carries free text), but cheap insurance against a future field
