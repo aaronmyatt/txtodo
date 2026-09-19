@@ -27,7 +27,10 @@ pub fn daemon_bin() -> &'static Path {
     BIN.get_or_init(|| {
         let target_dir = workspace_root().join("target");
         let bin = target_dir.join("debug").join("txtodod");
-        if !bin.is_file() {
+        // Non-empty, not just present: apps/desktop's build.rs leaves a 0-byte executable placeholder
+        // at target/debug/txtodod (tauri's externalBin copy) which CI's `--exclude txtodo-daemon`
+        // never overwrites; exec of it is ENOEXEC on linux and a silent no-op on macOS.
+        if !bin.metadata().is_ok_and(|m| m.len() > 0) {
             let status = Command::new(env!("CARGO"))
                 .args(["build", "-p", "txtodo-daemon", "--bin", "txtodod"])
                 .current_dir(workspace_root())
@@ -35,7 +38,11 @@ pub fn daemon_bin() -> &'static Path {
                 .unwrap_or_else(|e| panic!("cargo build txtodod: {e}"));
             assert!(status.success(), "cargo build txtodod failed");
         }
-        assert!(bin.is_file(), "{} not built", bin.display());
+        assert!(
+            bin.metadata().is_ok_and(|m| m.len() > 0),
+            "{} is missing or empty after `cargo build -p txtodo-daemon`",
+            bin.display()
+        );
         bin
     })
 }

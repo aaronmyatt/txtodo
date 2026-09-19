@@ -22,9 +22,8 @@ use std::process::{Child, ChildStdout, Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
-/// Generous: real mDNS discovery plus the pairing relay's own retry burst
-/// (`pairing_lan.rs::RETRY_INTERVAL`) typically finishes in a few seconds
-/// (`lan_loopback_converge.rs`'s own measurements), but a shared CI runner can be slow.
+/// Generous: real mDNS discovery plus the pairing relay's retry burst (`pairing_lan.rs::
+/// RETRY_INTERVAL`) takes a few seconds (`lan_loopback_converge.rs`), and a CI runner can be slow.
 const PAIR_CONVERGE_WAIT: Duration = Duration::from_secs(30);
 
 fn txtodod_binary() -> PathBuf {
@@ -34,7 +33,8 @@ fn txtodod_binary() -> PathBuf {
         dir.pop();
     }
     let bin = dir.join(format!("txtodod{}", std::env::consts::EXE_SUFFIX));
-    if !bin.exists() {
+    // Non-empty, not just present: a 0-byte tauri sidecar placeholder can sit here (see bundle.rs).
+    if !bin.metadata().is_ok_and(|m| m.len() > 0) {
         let status = Command::new(env!("CARGO"))
             .args([
                 "build",

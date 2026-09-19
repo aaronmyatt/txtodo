@@ -24,7 +24,10 @@ fn txtodod_binary() -> PathBuf {
         dir.pop();
     }
     let bin = dir.join(format!("txtodod{}", std::env::consts::EXE_SUFFIX));
-    if !bin.exists() {
+    // Non-empty, not just present: apps/desktop's build.rs leaves a 0-byte executable placeholder
+    // at target/debug/txtodod (tauri's externalBin copy) which CI's `--exclude txtodo-daemon`
+    // never overwrites; exec of it is ENOEXEC on linux and a silent no-op on macOS.
+    if !bin.metadata().is_ok_and(|m| m.len() > 0) {
         let status = Command::new(env!("CARGO"))
             .args([
                 "build",
