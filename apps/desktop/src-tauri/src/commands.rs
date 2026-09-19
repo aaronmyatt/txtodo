@@ -310,6 +310,7 @@ async fn resolve_inner(
         task: Some(task.into()),
         resolution: pb::Resolution::from(resolution) as i32,
         workspace: None,
+        agent: None, // the human on this device
     };
     let resp = client.resolve(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))

@@ -339,6 +339,7 @@ async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, Ap
             task: Some(r.task.into()),
             resolution: pb::Resolution::from(r.resolution) as i32,
             workspace: None,
+            agent: None,
         })
         .await?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
