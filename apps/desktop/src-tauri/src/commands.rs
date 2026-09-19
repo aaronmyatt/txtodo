@@ -60,6 +60,7 @@ pub(crate) async fn connect_and_store(
     state: &AppState,
 ) -> Result<(), DaemonError> {
     set_status(app, state, DaemonStatus::Spawning).await;
+    reset_watch_stream(state).await;
     let sock = state.config.resolved_global_socket();
     if !txtodo_daemon_launch::autostart_disabled() {
         daemon::ensure_daemon(&state.config).await?;
@@ -82,6 +83,12 @@ pub(crate) async fn connect_and_store(
     *state.client.lock().await = Some(client);
     set_status(app, state, DaemonStatus::Connected).await;
     Ok(())
+}
+
+/// A fresh connection needs a fresh `watch` stream too — see `watch_inner`'s own doc. Split out of
+/// `connect_and_store` to keep that function's cognitive-complexity budget.
+async fn reset_watch_stream(state: &AppState) {
+    *state.watch_started.lock().await = false;
 }
 
 /// Ensures a client is stored, connecting/spawning first if this is the first call. `pub(crate)`
@@ -220,28 +227,32 @@ async fn get_file_inner(
     Ok(FileContentsDto::from(resp))
 }
 
-/// Starts a `Watch` stream for `paths` (every document when empty) and forwards each `Change`
-/// as a `daemon-change` event; returns once the stream is established, not when it ends.
+/// Ensures the one shared `Change` stream (every document — every caller's own `onDaemonChange`
+/// listener already filters to the path it cares about, so one daemon-wide stream serves all of
+/// them) is forwarding as `daemon-change` events; returns once it is established, not when it
+/// ends. Safe, and cheap, to call more than once (e.g. once per open `FileView`/`DetailView`
+/// mount or path switch, as every caller does): only the first live call after a connection opens
+/// a stream and spawns its forwarder — see `AppState::watch_started`'s own doc for why a second
+/// forwarder is a real bug (tasks/desktop-concurrent-edit-loss root cause 3), not a redundant
+/// no-op.
 #[tracing::instrument(name = "ipc.watch", skip_all)]
 #[tauri::command]
-pub async fn watch(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    paths: Vec<String>,
-) -> Result<(), String> {
-    watch_inner(app, state, paths).await
+pub async fn watch(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    watch_inner(app, state).await
 }
 
-async fn watch_inner(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    paths: Vec<String>,
-) -> Result<(), String> {
+async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     ensure_connected(&app, &state).await?;
+    let mut started = state.watch_started.lock().await;
+    if *started {
+        return Ok(());
+    }
     let mut guard = state.client.lock().await;
     let client = guard.as_mut().ok_or("daemon not connected")?;
-    let mut stream = client.watch(paths).await.map_err(|e| e.to_string())?;
+    let mut stream = client.watch(Vec::new()).await.map_err(|e| e.to_string())?;
     drop(guard);
+    *started = true;
+    drop(started);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Ok(Some(change)) = stream.message().await {

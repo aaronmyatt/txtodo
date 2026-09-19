@@ -21,7 +21,7 @@
 		getFile,
 		listFiles,
 		onDaemonChange,
-		watchPaths,
+		watch,
 		workspaceRoot,
 		type FileInfo,
 		type TaskRef
@@ -148,7 +148,7 @@
 			const [root] = await Promise.all([workspaceRoot(), refreshFiles()]);
 			workspaceRootPath = root;
 			await loadParentLine();
-			await watchPaths([current.file]);
+			await watch();
 			const unlisten = await onDaemonChange((change) => {
 				if (change.path === current.file) loadParentLine();
 				refreshFiles();
@@ -234,7 +234,7 @@
 		if (current.file !== watchedFor) {
 			watchedFor = current.file;
 			loadParentLine();
-			watchPaths([current.file]);
+			watch();
 		}
 	});
 </script>

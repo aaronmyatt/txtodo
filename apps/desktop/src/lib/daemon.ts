@@ -137,18 +137,15 @@ export interface Change {
 	review: ReviewFlag[];
 }
 
-/** Starts (or restarts) a `Watch` stream scoped to `paths` (every document when empty); each
- * change is forwarded as a `daemon-change` event (see `onDaemonChange`). Resolves once the stream
- * is established, not when it ends — safe to call more than once (e.g. once per open document).
+/** Ensures the one shared `Watch` stream (every document) is forwarding each change as a
+ * `daemon-change` event (see `onDaemonChange`) — every listener filters to the path(s) it cares
+ * about itself. Resolves once the stream is established, not when it ends — safe, and cheap, to
+ * call more than once (e.g. once per open document): the backend only opens the stream on the
+ * first call after a connection (tasks/desktop-concurrent-edit-loss root cause 3 — this used to
+ * open one never-cancelled forwarder per call, so one change fired several `refreshDoc`s).
  * Ref: https://v2.tauri.app/develop/calling-rust/ */
-export function watch(paths: string[] = []): Promise<void> {
-	return invoke("watch", { paths });
-}
-
-/** Alias for {@link watch} taking a required `paths` array; kept for `FileView.svelte`'s call
- * sites so neither needs renaming. */
-export function watchPaths(paths: string[]): Promise<void> {
-	return watch(paths);
+export function watch(): Promise<void> {
+	return invoke("watch");
 }
 
 /** Subscribes to `daemon-change` events forwarded from an active `watch()` stream. */

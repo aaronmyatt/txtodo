@@ -1,6 +1,7 @@
 <script lang="ts">
-	// THE reusable file-rendering component (tasks/desktop-main-view). Binds to `watch([path])`,
-	// rebuilds from `get_file(path)` on each matching `Change`, and renders a CM6 `EditorView`
+	// THE reusable file-rendering component (tasks/desktop-main-view). Binds to the one shared
+	// `watch()` stream, rebuilds from `get_file(path)` on each matching `Change`, and renders a
+	// CM6 `EditorView`
 	// (blanks included — design §2.6: blanks are entries) that is directly editable, like a plain
 	// text file: click to drop a cursor, type, blur/Cmd-S commits. No popover, no separate "raw
 	// mode" — the whole document is always the live buffer; `path`'s own doc comment on `dirty`
@@ -15,7 +16,7 @@
 	import { Decoration, EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
-	import { applyMutations, getFile, listFiles, onDaemonChange, watchPaths, type FileInfo } from "$lib/daemon";
+	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo } from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import { addLinePlaceholder, idTagsHidden, lineDecorations, mainViewBaseTheme } from "$lib/todotxt/decorations";
 	import { computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
@@ -207,8 +208,13 @@
 		try {
 			await applyBufferDelta(targetPath, base, next);
 		} catch (e) {
+			// Keep the buffer dirty and untouched: the edit was rejected, not applied. Calling
+			// refreshDoc() here would silently overwrite the human's text with the daemon's
+			// pre-edit content and, since it clears loadError right after fetching, erase this
+			// very error too (root cause 4, tasks/desktop-concurrent-edit-loss/notes.md) — restore
+			// dirty so the human can fix the text and re-commit, or Escape to discard it.
+			setDirty(true);
 			loadError = String(e);
-			await refreshDoc(); // re-sync from the daemon rather than leave a possibly-stale view
 		}
 	}
 
@@ -242,6 +248,12 @@
 		if (view) view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(path), filesByPath)) });
 	}
 
+	// Bumped at the start of every `refreshDoc` call; a call's own number stops meaning "the latest
+	// request" the moment a later call starts. Lets a stale/out-of-order response (two `Watch`
+	// changes firing close together, or one `getFile` round trip simply finishing after a newer
+	// one) detect that it's been superseded and skip repainting with old content.
+	let refreshSeq = 0;
+
 	/**
 	 * Replaces the whole document with fresh `get_file` bytes — the Watch feed is "here's what
 	 * changed," not a diff, so we never try to patch the doc from `Change.ops` ourselves
@@ -257,8 +269,13 @@
 		// guard only holds off the *document* repaint until the dirty buffer has been committed or
 		// discarded.
 		if (dirty) return;
+		const seq = ++refreshSeq;
 		try {
 			const contents = await getFile(path);
+			// Re-check both guards: `dirty` can turn true, and a newer `refreshDoc` call can start
+			// and finish, while this `getFile` round trip is in flight (root cause 2,
+			// tasks/desktop-concurrent-edit-loss/notes.md) — either means this response is stale.
+			if (!view || dirty || seq !== refreshSeq) return;
 			loadError = "";
 			baseline = contents.text;
 			const current = view.state.doc.toString();
@@ -266,6 +283,7 @@
 				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: contents.text } });
 			}
 		} catch (e) {
+			if (seq !== refreshSeq) return; // a newer refresh already superseded this one
 			loadError = String(e);
 		}
 	}
@@ -279,7 +297,7 @@
 		(async () => {
 			await refreshFilesByPath();
 			await refreshDoc();
-			await watchPaths([path]);
+			await watch();
 			const unlisten = await onDaemonChange((change) => {
 				if (change.path === path) refreshDoc();
 			});
@@ -341,7 +359,7 @@
 				if (!view) return;
 				view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(newPath), filesByPath)) });
 				refreshDoc();
-				watchPaths([newPath]);
+				watch();
 			});
 		}
 	});

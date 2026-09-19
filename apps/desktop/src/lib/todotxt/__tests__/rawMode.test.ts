@@ -78,6 +78,13 @@ describe("computeDelta — adds", () => {
 		const next = `${LINE_A}\nwater the plants\n`;
 		expect(computeDelta(baseline, next)).toEqual([{ kind: "add", line: "water the plants" }]);
 	});
+
+	// tasks/desktop-concurrent-edit-loss root cause 1: a trailing `\n` is a terminator, not its own
+	// blank line — `next` here (typed on the "Add a line…" row, no trailing newline yet) must not
+	// produce a phantom `delete` alongside the `add`, or the delete lands on the line just added.
+	it("emits only Add when typing a new last line, no phantom trailing-newline delete", () => {
+		expect(computeDelta("a\nb\n", "a\nb\nnew")).toEqual([{ kind: "add", line: "new" }]);
+	});
 });
 
 describe("computeDelta — deletes", () => {

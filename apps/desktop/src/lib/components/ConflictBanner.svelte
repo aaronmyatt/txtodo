@@ -38,7 +38,7 @@
 
 	onMount(async () => {
 		await syncFromDaemon();
-		await watch([path]);
+		await watch();
 		unlisten = await onDaemonChange((change) => {
 			if (change.path === path && change.review.length > 0) {
 				pendingConflicts.addFlags(path, change.review);

@@ -11,8 +11,13 @@
 
 const BRIDGE_URL = (globalThis as { __E2E_BRIDGE_URL__?: string }).__E2E_BRIDGE_URL__ ?? "http://127.0.0.1:4567";
 
-/** Paths most recently passed to `watch(paths)`; `./event.ts`'s polling loop reads this. */
-export const watchedPaths: string[] = [];
+/** Paths any component has shown interest in via `get_file`/`list_conflicts`, this harness's
+ * stand-in for "the paths a real `Watch` stream would report changes for". The real backend now
+ * watches every document with one shared stream (tasks/desktop-concurrent-edit-loss root cause 3)
+ * and leaves filtering to each listener's own `onDaemonChange` callback, so `watch()` no longer
+ * takes a `paths` argument to read a watched-paths set from — `./event.ts`'s polling loop reads
+ * this instead. */
+export const watchedPaths = new Set<string>();
 
 async function callBridge(cmd: string, args: Record<string, unknown>): Promise<unknown> {
 	const res = await fetch(`${BRIDGE_URL}/invoke`, {
@@ -34,11 +39,13 @@ export async function invoke<T>(cmd: string, args: Record<string, unknown> = {})
 			return "connected" as T; // e2e_bridge only starts serving once a real daemon answered Health
 		case "retry_connect":
 			return "connected" as T;
-		case "watch": {
-			const paths = (args.paths as string[] | undefined) ?? [];
-			watchedPaths.length = 0;
-			watchedPaths.push(...paths);
-			return undefined as T;
+		case "watch":
+			return undefined as T; // no-op: see `watchedPaths`' own doc for how paths are tracked now
+		case "get_file":
+		case "list_conflicts": {
+			const path = args.path as string | undefined;
+			if (path) watchedPaths.add(path);
+			return (await callBridge(cmd, args)) as T;
 		}
 		case "workspace_root":
 			// tasks/desktop-visual-regression: forwarded to the bridge (see e2e_bridge.rs's

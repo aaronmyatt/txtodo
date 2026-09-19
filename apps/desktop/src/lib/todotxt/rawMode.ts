@@ -29,9 +29,19 @@ function taskIdOf(line: string): string {
 }
 
 /** todo.txt lines never embed a literal `\n`, so a plain split is exact; `""` splits to `[]`
- * (an empty document has zero lines, not one empty line). */
+ * (an empty document has zero lines, not one empty line). A trailing `\n` is a terminator, not a
+ * blank line of its own — `text.split("\n")` disagrees (it turns one trailing `\n` into an extra
+ * `""` element), so the naive split's last element is dropped when `text` ends with `\n`. Mirrors
+ * `txtodo-core/src/file.rs`'s `split_lines` exactly (verified line by line against its byte-
+ * iterator loop, including the `"\n"` → one blank line and `"a\n\n"` → `["a", ""]` edge cases) —
+ * desync here is exactly root cause 1 of `tasks/desktop-concurrent-edit-loss/notes.md`: a phantom
+ * trailing blank line the daemon never had, positionally deleted out from under a just-added or
+ * just-appended-by-someone-else real line. */
 function splitLines(text: string): string[] {
-	return text === "" ? [] : text.split("\n");
+	if (text === "") return [];
+	const parts = text.split("\n");
+	if (text.endsWith("\n")) parts.pop();
+	return parts;
 }
 
 interface BaselineLine {

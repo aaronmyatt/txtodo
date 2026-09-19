@@ -31,6 +31,13 @@ pub struct AppState {
     /// the global-shortcut handler that reads it is a synchronous, non-async callback
     /// (`tauri_plugin_global_shortcut`'s `on_shortcut`), so it needs a lock-free read.
     pub main_popover_dirty: AtomicBool,
+    /// Whether `watch`'s one shared `Change` stream + forwarder task has already been started for
+    /// `client`'s current connection (tasks/desktop-concurrent-edit-loss root cause 3: every
+    /// `FileView`/`DetailView` mount or path-switch used to call `watch()` again, each opening its
+    /// own never-cancelled forwarder, so one daemon change fired several `refreshDoc`s). Reset to
+    /// `false` at the top of `connect_and_store` so a reconnect (cold boot or manual Retry) always
+    /// gets a fresh stream against the new client, not a stale flag left over from a dead one.
+    pub watch_started: Mutex<bool>,
 }
 
 impl AppState {
@@ -43,6 +50,7 @@ impl AppState {
             client: Mutex::new(None),
             current_workspace,
             main_popover_dirty: AtomicBool::new(false),
+            watch_started: Mutex::new(false),
         }
     }
 }

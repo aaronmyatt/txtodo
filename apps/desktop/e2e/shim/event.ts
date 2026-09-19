@@ -5,8 +5,9 @@
 // by the Tauri bridge as Tauri events. `e2e_bridge` (apps/desktop/src-tauri/src/bin/e2e_bridge.rs)
 // deliberately doesn't implement that stream — plain request/response HTTP handlers cover the six
 // Playwright scenarios with far less surface. Instead, this module polls `get_file`/
-// `list_conflicts` for whatever paths the app most recently `watch()`ed and synthesizes a
-// `daemon-change` event when something differs. This is still "real reconciliation, not mocks"
+// `list_conflicts` for whatever paths the app has shown interest in (`./core.ts`'s `watchedPaths`)
+// and synthesizes a `daemon-change` event when something differs. This is still "real
+// reconciliation, not mocks"
 // (the notes' own bar): every byte and every conflict flag it observes came from a real `txtodod`
 // acting on a real file — only the *transport* from daemon to browser is polling instead of a
 // push stream, which is invisible to the component code under test ($lib/daemon.ts's
