@@ -2,10 +2,11 @@
 //! `mcp-hygiene-parity`), moved out of `server.rs` for its line budget — the same `impl
 //! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`.
 
-use crate::convert::{applied_of, parse_resolution, parse_task_ref, status_of, to_flag};
+use crate::convert::{
+    applied_of, parse_principal, parse_resolution, parse_task_ref, status_of, to_flag,
+};
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
-use txtodo_model::Principal;
 use txtodo_proto::v1 as pb;
 
 impl TxtodoService {
@@ -30,9 +31,10 @@ impl TxtodoService {
         let h = self.actor(&req.path)?;
         let task = parse_task_ref(req.task)?;
         let resolution = parse_resolution(req.resolution)?;
-        let device = self.workspace().device();
+        // Unset agent = the user on this device; an MCP agent's resolution is attributed to it.
+        let principal = parse_principal(req.agent, self.workspace().device())?;
         let a = h
-            .resolve(task, resolution, Principal::User { device })
+            .resolve(task, resolution, principal)
             .await
             .map_err(status_of)?;
         Ok(Response::new(applied_of(a)))

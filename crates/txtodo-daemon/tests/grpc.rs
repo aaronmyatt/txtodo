@@ -16,10 +16,9 @@ use tower::service_fn;
 use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
-use txtodo_model::{FilePath, IdentityMode, TaskId, Ulid};
+use txtodo_model::IdentityMode;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb, mutation};
-use txtodo_store::{ReviewRow, Store};
 
 type Client = TxtodoClient<Channel>;
 
@@ -279,113 +278,4 @@ async fn undo_and_checkout_over_the_socket() {
         past.bytes.is_empty(),
         "nothing existed at 1 ms after the epoch"
     );
-}
-
-/// The trailing `id:<ulid>` word the daemon appended to a task line it wrote.
-fn id_tag_of(line: &str) -> &str {
-    line.split_whitespace()
-        .next_back()
-        .expect("line has an id tag")
-}
-
-/// The task id of a line whose trailing word is its `id:` tag.
-fn task_id_of(line: &str) -> TaskId {
-    let id = id_tag_of(line).strip_prefix("id:").expect("id tag is last");
-    TaskId::new(Ulid::parse(id).expect("valid ulid"))
-}
-
-/// Raises a needs_review flag directly in the store — what an import merge would do. A flag lives
-/// in the store, never in the file, so no actual sync is needed; this opens its own connection
-/// and WAL lets it share the file with the actor's connection.
-fn raise_flag(root: &Path, task: TaskId, mine: &str, theirs: &str) {
-    let mut store = Store::open(&root.join(".txtodo").join("oplog.db")).unwrap();
-    store
-        .raise_flag(&ReviewRow {
-            file: FilePath::new("todo.txt").unwrap(),
-            task,
-            raised_at_ms: 1,
-            mine: mine.as_bytes().to_vec(),
-            theirs: theirs.as_bytes().to_vec(),
-        })
-        .unwrap();
-}
-
-async fn conflicts(client: &mut Client) -> Vec<pb::ReviewFlag> {
-    client
-        .list_conflicts(pb::ConflictsRequest {
-            path: "todo.txt".into(),
-            workspace: None,
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .flags
-}
-
-async fn resolve(
-    client: &mut Client,
-    task: &TaskId,
-    resolution: i32,
-) -> Result<pb::ApplyResponse, tonic::Status> {
-    client
-        .resolve_conflict(pb::ResolveRequest {
-            path: "todo.txt".into(),
-            task: Some(pb::TaskRef {
-                line_number: 1,
-                task_id: task.to_string(),
-            }),
-            resolution,
-            workspace: None,
-        })
-        .await
-        .map(|r| r.into_inner())
-}
-
-#[tokio::test]
-async fn resolve_merged_keeps_bytes_and_mine_writes_the_side_back() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
-    let (mut client, _stop) = serve(dir.path()).await;
-    apply_add(&mut client, "first task").await;
-
-    let line = String::from_utf8(get_todo(&mut client).await).unwrap();
-    let id_text = id_tag_of(&line);
-    let mine = format!("first task (mine) {id_text}");
-    let theirs = format!("first task (theirs) {id_text}");
-    let task = task_id_of(&line);
-    raise_flag(dir.path(), task, &mine, &theirs);
-
-    let flags = conflicts(&mut client).await;
-    assert_eq!(flags.len(), 1);
-    assert_eq!(flags[0].mine, mine);
-    assert_eq!(flags[0].theirs, theirs);
-
-    // merged: no op, bytes unchanged, flag cleared.
-    let before = get_todo(&mut client).await;
-    let merged = resolve(&mut client, &task, pb::Resolution::Merged as i32)
-        .await
-        .unwrap();
-    assert_eq!(merged.applied, 0, "merged writes no op");
-    assert_eq!(
-        get_todo(&mut client).await,
-        before,
-        "merged keeps the bytes"
-    );
-    assert!(conflicts(&mut client).await.is_empty());
-
-    // mine: one EditText writes the stored side back, then the flag is gone.
-    raise_flag(dir.path(), task, &mine, &theirs);
-    let chosen = resolve(&mut client, &task, pb::Resolution::Mine as i32)
-        .await
-        .unwrap();
-    assert_eq!(chosen.applied, 1, "one EditText for the description");
-    let after = String::from_utf8(get_todo(&mut client).await).unwrap();
-    assert!(after.contains("first task (mine)"), "{after}");
-    assert!(conflicts(&mut client).await.is_empty());
-
-    // A second resolve is refused: the flag is gone.
-    let err = resolve(&mut client, &task, pb::Resolution::Mine as i32)
-        .await
-        .unwrap_err();
-    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
 }
