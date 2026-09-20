@@ -1,0 +1,19 @@
+2026-09-20 model: WorkspaceLayout {refs_dir, todo_file}, legacy() and new_workspace() presets, path validation +m11 @model id:01M2Y78223ZVQH3CKZ93Z3Y0V9
+2026-09-20 proto: WorkspaceInfo carries refs_dir and todo_file, additive, its own commit +m11 @proto id:01M2Y7822361FQS8TEVBDADG8H
+2026-09-20 daemon: a root-list ref resolves to <refs_dir>/<slug> in one helper (RefDir, notes, ensure, rename) +m11 @daemon @test id:01M2Y78223ZS3AS5V0BNKNENDS
+2026-09-20 daemon: moving a line between the root list and a ref list relocates its dir to the right place +m11 @daemon @test id:01M2Y78223X6MW71GV2Y4ST4H2
+2026-09-20 daemon: prune scans refs_dir only, so crates/ and docs/ are never orphan candidates +m11 @daemon @test id:01M2Y78223K09V6EP7DXRJEWTX
+2026-09-20 daemon: the root list's name comes from todo_file; nested lists stay todo.txt +m11 @daemon @test id:01M2Y78223S9WWDKG66DJZ4B4D
+2026-09-20 txtodo-cli: workspace layout [--refs-dir P] [--todo-file P] shows or sets; open, sub, notes follow it +m11 @cli @test id:01M2Y782230GMFCYJ0CQ2XXWDC
+2026-09-20 txtodo-cli: doctor reports the layout and any ref dir found outside refs_dir +m11 @cli id:01M2Y78223MAJ68TBY3XRKH60R
+2026-09-20 txtodo-tui: root list and ref dirs resolve through the workspace layout +m11 @tui @test id:01M2Y78223S1HJVZ9NVDNV50F3
+2026-09-20 txtodo-mcp: todo_notes_get/set and the root list tools resolve through the workspace layout +m11 @mcp @test id:01M2Y78223TWSQB591PM6F5QRC
+2026-09-20 apps/desktop: ROOT_PATH stops being a constant; the root list and notes follow the layout +m11 @desktop @test id:01M2Y78223EPKB5CBWJ92P5GFK
+2026-09-20 Decide: where the layout is stored (A txtodo.toml synced beside todo.txt, B registry + pairing offer); I'd take A +m11 @human @daemon id:01M2Y782237MJ7E9ED86Y5A663
+2026-09-20 Decide: existing workspaces when the default flips (A pin what is on disk at first open, B move to tasks/); I'd take A +m11 @human @daemon id:01M2Y78223QY4XTXZP4VK1MB2R
+2026-09-20 daemon: read and hot-reload the layout from its store; a bad file keeps the last good layout +m11 @daemon @test id:01M2Y78223P07TA1E6F95H590T
+2026-09-20 daemon: first open of a workspace with no layout pins where its ref dirs are, else tasks for a new one +m11 @daemon @test id:01M2Y78223JRB1G5N9226WEGTF
+2026-09-20 daemon: a layout change is refused while ref dirs exist, unless asked to move them +m11 @daemon @test id:01M2Y782230C4DP197VV1ENX9W
+2026-09-20 daemon: the layout syncs; two devices converge on one folder after a change on one +m11 @daemon @test id:01M2Y78224P7J4N9PC39WSA5MP
+2026-09-20 ADR: supersede ADR 0012's default; update specs/ref-directories.md rule 2 and plan 3.2 together +m11 @docs id:01M2Y78224HCYQ7S3JBZSV8JCY
+2026-09-20 Check on this repo: txtodo open N and txtodo sub N add resolve to tasks/<slug> +m11 @cli @test id:01M2Y78224RW5K9VKBDEEMZMRY
