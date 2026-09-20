@@ -4,6 +4,7 @@
 
 mod archive_plan;
 mod base_guard;
+mod buildinfo;
 mod bundle;
 mod cli;
 mod client;

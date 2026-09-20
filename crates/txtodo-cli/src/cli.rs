@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 
 /// todo.sh-compatible todo.txt tool. Commands and aliases match todo.sh; line numbers are the ids.
 #[derive(Debug, Parser)]
-#[command(name = "txtodo", version, about)]
+#[command(name = "txtodo", version = crate::buildinfo::VERSION_LINE, about)]
 pub struct Cli {
     /// Todo directory (overrides $TXTODO_TODO_DIR and config `todo_dir`).
     #[arg(long, global = true, value_name = "DIR")]

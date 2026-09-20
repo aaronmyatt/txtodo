@@ -56,6 +56,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `txtodo-sync` (`check-boundaries.sh`), so it only resolves/validates the path with plain
   `std::fs`; wiring a real `FileCarrier` to it is the daemon's job. `txtodo env` reports the
   resolved path and, when set, whether it currently validates (`sync_dir_problem` in JSON).
+- `--version` and the first line of `doctor` print `txtodo 0.0.2 (2026-09-20)`: version plus release
+  date (task version-info). `build.rs` includes `build-support/buildinfo.rs` with `#[path]`, which
+  resolves the date (`$TXTODO_RELEASE_DATE`, else the last commit's date, else `unknown`);
+  `buildinfo.rs` reads it with `env!` and tests the fallback order.
 - Module map: `config`, `store` (read, atomic write), `clock`, `json`, `error` (CliError),
   `client` (gRPC over the socket, own current-thread runtime), `daemon_mode` (scratch-copy
   adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `base_guard` (`RequireBase` for

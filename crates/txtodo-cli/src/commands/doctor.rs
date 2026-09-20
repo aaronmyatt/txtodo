@@ -342,6 +342,8 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
             .collect();
         println!("[{}]", rows.join(","));
     } else {
+        // Which build is answering, before what it found (task version-info).
+        println!("txtodo {}", crate::buildinfo::VERSION_LINE);
         for c in &checks {
             println!("{:<8} {:<5} {}", c.name, c.status.label(), c.detail);
         }
