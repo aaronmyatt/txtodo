@@ -55,9 +55,11 @@ the file unsorted.
 
 Open:
 
-- The reopen line is `@human`: there is no reopen mutation on the wire (MCP's `todo_uncomplete`
-  sends an `Edit`), so "reopen moves the line above the first done line" needs a new
-  `Mutation.Reopen`, and the placement was the agent's own pick in this file.
+- Reopen: decided 2026-09-20 by a human, option A. Add `Mutation.Reopen` to the wire; a reopened
+  line moves to the end of the open block, above the first done line. Not built yet: four lines in
+  `todo.txt` (proto first, then daemon, MCP's `todo_uncomplete`, then a check of the TUI and the
+  desktop for an un-complete action). Today MCP's `todo_uncomplete` sends an `Edit`, so the line
+  stays where it is.
 - In daemon mode the CLI still sends `Edit` plus `MoveToEnd` (or one `Replace` under Sidecar), not
   `Complete`. The file is the same; the op log says edit and move, not complete.
 - The whole daemon test suite was not re-run after the `Complete` change, only the tests that

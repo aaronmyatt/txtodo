@@ -13,7 +13,7 @@
 2026-09-20 Default workspace: a managed per-user todo list, created on first run, that syncs across devices whatever the OS path +m11 @daemon @desktop @cli ref:default-workspace
 2026-09-20 Version + release date in every app, warn on app/daemon mismatch +m11 @cli @tui @desktop @daemon ref:version-info @human — only the release.yml and justfile patch is left: git apply tasks/version-info/gate.patch
 2026-09-20 Workspace layout: refs default to <root>/tasks; list file and refs folder settable +m11 @daemon @cli @desktop ref:workspace-layout
-2026-09-20 Complete moves a task to the bottom of its own file, once, in every client +m11 @daemon @cli @tui @desktop ref:complete-to-bottom @human — only the reopen line is left, and it needs a call: see tasks/complete-to-bottom/todo.txt
+2026-09-20 Complete moves a task to the bottom of its own file, once, in every client +m11 @daemon @cli @tui @desktop ref:complete-to-bottom — reopen decided 2026-09-20 (A: a new Mutation.Reopen, the line moves above the first done line); its four lines are open in tasks/complete-to-bottom/todo.txt
 2026-09-20 Record each change's source (cli, tui, desktop, mcp) in the local op log and show it in activity +m6 @daemon @mcp ref:op-source
 2026-09-20 Apply dry_run: the daemon returns the unified diff a batch would make, and structured errors +m6 @daemon @mcp ref:apply-dry-run
 (D) 2026-09-20 Decide: does anyone besides you need to enrol themselves? No: skip accounts/ and relay enroll, use the static allowlist (B). Yes: build them (A). I'd take B +m8 @relay @human
