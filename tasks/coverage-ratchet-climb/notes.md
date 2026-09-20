@@ -67,3 +67,25 @@ single fix. `commands.testCoverage` in the same file was updated to match (`--fa
 `pairing_lan.rs`'s 18.82% is notable: it's not un-exercised, it's a file with several
 `#[ignore]`d real-network tests (documented pre-existing flakes, unrelated to coverage) that
 would otherwise hit more of it.
+
+## 2026-09-20: what moved, what did not
+
+Done, not measured (a full `llvm-cov` run takes hours on this machine, so no number is claimed):
+
+- `crates/txtodo-daemon/tests/mcp_backend.rs` (`03d476d`): the real `GrpcMcpBackend` against an
+  in-process daemon. `txtodo-mcp` may not depend on the daemon, but the daemon may depend on
+  `txtodo-mcp`, so this is where a real-daemon MCP test can run without a built binary. It walks
+  add, list, search, get, edit, move, complete, archive, delete, batch, raw, notes, lint and history:
+  most of `grpc_read.rs`, `grpc_write.rs`, `grpc_move.rs`, `grpc_notes.rs`, `grpc_hygiene.rs` and
+  `grpc_backend.rs`.
+- `crates/txtodo-mcp/tests/smoke.rs::every_tool_routes_to_its_own_backend_method` (`8d235ad`): all
+  18 tools through the JSON-RPC layer; reaches `tools_write.rs` (0% before) and `tools_read.rs`.
+- Still 0% in that line: `main.rs` and most of `transport.rs` (process and socket wiring).
+
+Generated code (the `(C)` line): `ignore-generated.patch` beside this file adds
+`--ignore-filename-regex 'src/generated/'` to CI's `report` step. It is a patch, not applied,
+because `.github/**`, `justfile` and `budgets.json` are frozen paths: changing what the gate counts
+is a human's call. `justfile`'s `coverage` recipe and `budgets.json`'s `commands.testCoverage` want
+the same flag (and the justfile still says 80 where budgets.json says 72).
+
+Not started: the daemon `(A)`, sync `(B)` and desktop `(B)` lines.

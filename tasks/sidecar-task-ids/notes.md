@@ -57,6 +57,9 @@ Still broken or not proven:
   it sends no `task_ids`, and both clients fall back to the `id:` regex, so nothing changes for this
   repo's own Sidecar workspace yet.
 - Desktop notes under Sidecar were not looked at in the running app.
-- The MCP real-daemon test is `#[ignore]`d (it needs a built `txtodod`), so CI does not run it.
+- Correction, same day: the MCP real-daemon test is `#[ignore]`d for a plain `cargo test`, but CI's
+  check job runs `cargo test -p txtodo-mcp -- --ignored` after a full build, so CI does run it. Not
+  seen green on CI yet. `crates/txtodo-daemon/tests/mcp_backend.rs` (`03d476d`) drives the same
+  backend in-process, with no built binary needed.
 - `locate_by_id` still reads every todo file of the workspace to find one id. Slow on a big
   workspace; a daemon-side "where is task X" RPC would fix it. Not part of this line.

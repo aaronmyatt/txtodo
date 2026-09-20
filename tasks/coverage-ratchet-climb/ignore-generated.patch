@@ -1,0 +1,14 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -164,8 +164,10 @@
+         run: cargo llvm-cov --workspace --no-report --no-fail-fast
+       - name: coverage (ignored real-txtodod tests)
+         run: cargo llvm-cov -p txtodo-cli -p txtodo-mcp -p txtodo-tui -p desktop --no-report --no-fail-fast -- --ignored
++      # Generated prost/tonic code is not hand-written logic: leave it out of the line count.
++      # https://github.com/taiki-e/cargo-llvm-cov#exclude-file-from-coverage
+       - name: coverage floor (budgets.json.coveragePercent)
+-        run: cargo llvm-cov report --fail-under-lines $(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).coveragePercent')
++        run: cargo llvm-cov report --ignore-filename-regex 'src/generated/' --fail-under-lines $(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).coveragePercent')
+ 
+   deny:
+     runs-on: ubuntu-latest
