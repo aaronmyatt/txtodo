@@ -39,7 +39,5 @@ line existed to defend the `--lan` case, and `--lan` goes away.
 
 Still open:
 
-- The `txtodo-cli` line: `txtodo mcp` still accepts `--lan` and passes it through, where the MCP
-  binary now refuses it. Not done here: another session held the tree, so the fence would not hand
-  over a second crate.
+- (done later the same day) `txtodo mcp` lost `--lan` too, and README's `mcp` row with it.
 - A browser client on another local port (MCP Inspector) gets 403. No `--allow-origin`.
