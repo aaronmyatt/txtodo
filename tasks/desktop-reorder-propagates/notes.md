@@ -42,3 +42,35 @@ Today it does not: the file keeps the old order and the next repaint puts the li
 
 - The TUI has no reorder action at all, so there is nothing to propagate there. A `J`/`K` "move
   task down/up" over `MoveBefore` is a new feature; it is its own root line.
+
+## As built (2026-09-20)
+
+- Bridge `a3c8276`: `MutationDto::Replace`; `DaemonError::apply_text` starts a `FAILED_PRECONDITION`
+  refusal with `failed-precondition:`. tonic 0.14 prints a code as prose, so there was nothing
+  stable to match before. The e2e bridge answers the same text.
+- Frontend `3bb7f54`: `todotxt/saveBuffer.ts` (`saveBuffer`, `isReorderOnly`, `matchEndings`,
+  `isStaleBase`); `FileView.svelte` keeps `baselineHash`, saves through `saveBuffer`, and adopts
+  the saved text as the baseline after a `Replace` (the reply carries the new hash), so a second
+  quick move is not refused for naming the old hash.
+- Daemon test: `tests/replace_apply.rs::sidecar_replace_with_moved_lines_keeps_each_lines_identity`
+  reads `GetFile`'s `task_ids` before and after a reordering `Replace`: ids follow their lines.
+- Side effect, wanted: under Sidecar an edited line used to become delete + append (it jumped to
+  the bottom and lost its history). With `Replace` it stays where it is and keeps its id.
+
+Still broken or not proven:
+
+- Playwright was not run (it starts browsers; ask first). `e2e/inline-edit.spec.ts` line 43 says
+  "a delta, not a whole-file replace"; the file on disk is the same either way, but nobody has
+  watched that spec pass since the change.
+- The 300 ms reorder save is wired in `FileView.svelte` with no test of the timer itself.
+- Tagged mode: a save that adds a line gets its `id:` stamped by the daemon. If the human types on
+  during that round trip, the next `Replace` sends the line without the tag and the daemon sees a
+  new task. Sidecar, the default, has no tag to lose.
+- The installed daemon must know `Replace` (it has since `437368b`); an older one answers
+  `Unimplemented`/invalid, which is not a stale base, so the save fails loudly, not silently.
+
+Check by hand (2 minutes):
+
+1. Open a workspace in the desktop app, put the caret on a line, press Alt+Up.
+2. Within a second `cat todo.txt` shows the new order; the line does not jump back.
+3. Edit a word on a line, press Cmd-S: the line stays in place in the file.

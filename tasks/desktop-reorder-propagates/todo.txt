@@ -1,4 +1,4 @@
-2026-09-20 src-tauri: MutationDto::Replace (base_hash hex, contents) mapped to pb Replace; unit test +m11 @desktop @test @doing by:claude
-2026-09-20 frontend: replace mutation in daemon.ts and the mock; FileView keeps the baseline hash +m11 @desktop
-2026-09-20 FileView: save with Replace, fall back to computeDelta when the base is stale; vitest on the pure part +m11 @desktop @test
-2026-09-20 FileView: a reorder-only change saves after a 300 ms debounce, typed text still waits for blur or Cmd-S; vitest +m11 @desktop @test
+x 2026-09-20 2026-09-20 src-tauri: MutationDto::Replace (base_hash hex, contents) mapped to pb Replace; unit test +m11 @desktop @test — shipped in a3c8276: Replace in the bridge plus a stable failed-precondition: token for a refused apply (tonic's text is prose), same text from the e2e bridge
+x 2026-09-20 2026-09-20 frontend: replace mutation in daemon.ts and the mock; FileView keeps the baseline hash +m11 @desktop — shipped in 3bb7f54: replace in daemon.ts and the mock (the mock refuses a stale base too); FileView keeps baselineHash with baseline
+x 2026-09-20 2026-09-20 FileView: save with Replace, fall back to computeDelta when the base is stale; vitest on the pure part +m11 @desktop @test — shipped in 3bb7f54: todotxt/saveBuffer.ts with 12 vitest cases, CRLF files keep their ending; known gap: Playwright (inline-edit, save, conflict specs) not run, I did not ask to
+x 2026-09-20 2026-09-20 FileView: a reorder-only change saves after a 300 ms debounce, typed text still waits for blur or Cmd-S; vitest +m11 @desktop @test — shipped in 3bb7f54: isReorderOnly is unit-tested; known gap: the timer wiring in FileView is covered by svelte-check only, a human should move a line with Alt+Up and watch the file
