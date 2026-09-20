@@ -51,12 +51,10 @@ jobs:
       # Windows has no unix-domain sockets (ADR 0010), so the CLI's and MCP server's daemon
       # clients and the whole txtodo-daemon crate are unix-only there; every other crate checks
       # on all three runners.
-      - name: typecheck
-        if: runner.os != 'Windows'
-        run: cargo check --workspace --all-targets
-      - name: typecheck (windows)
-        if: runner.os == 'Windows'
-        run: cargo check --workspace --all-targets --exclude txtodo-cli --exclude txtodo-daemon --exclude txtodo-mcp
+      # No separate `cargo check` step: clippy runs the same compiler passes plus its own lints,
+      # and `-D warnings` here fails on rustc warnings too (a Windows-only `dead_code` once passed
+      # `cargo check` as a warning and only went red a step later).
+      # https://doc.rust-lang.org/clippy/usage.html
       - name: lint
         if: runner.os != 'Windows'
         run: cargo clippy --workspace --all-targets -- -D warnings
