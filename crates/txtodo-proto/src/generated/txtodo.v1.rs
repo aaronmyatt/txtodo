@@ -844,6 +844,11 @@ pub struct WorkspaceInfo {
     /// why the last open failed; empty unless load_state is FAILED
     #[prost(string, tag = "7")]
     pub load_error: ::prost::alloc::string::String,
+    /// True for this device's default workspace (task default-workspace): the per-user list every
+    /// device registers under one reserved workspace id. It cannot be removed. False from an older
+    /// daemon, which a client reads as "no default known".
+    #[prost(bool, tag = "8")]
+    pub is_default: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
