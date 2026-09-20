@@ -5,7 +5,8 @@
 # release's real assets, currently v0.0.2 — each binary's cosign sigstore signature was verified
 # against release.yml's own OIDC identity before stamping (2026-09-18).
 #
-# Ships all three release binaries (RELEASE_CI.patch.md's macos-aarch64/macos-x86_64 legs):
+# Ships all three release binaries (RELEASE_CI.patch.md's macos-{aarch64,x86_64} and static
+# linux-{aarch64,x86_64}-musl legs):
 # `txtodo` (the CLI, todo.sh-compatible commands), `txtodod` (the sync daemon) and `txtodo-tui`
 # (the ratatui client) — matching what a real release actually publishes, not just the CLI alone.
 #
@@ -42,6 +43,35 @@ class Txtodo < Formula
       resource "txtodo-tui" do
         url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodo-tui-macos-x86_64"
         sha256 "54dd0afbe668a956328f389765778075aedd90e6ace6126ad772bde80a8eee8c"
+      end
+    end
+  end
+
+  # Linux ships the fully static musl builds: no libc dependency, so one binary works on any
+  # distro Homebrew supports. The glibc build (txtodo-linux-x86_64-gnu) is deliberately not used.
+  on_linux do
+    on_arm do
+      url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodo-linux-aarch64-musl"
+      sha256 "3c15f5c1c584a5c810e6a41285edd99b90aeeb8562b9664e063383e3cb6214bf"
+      resource "txtodod" do
+        url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodod-linux-aarch64-musl"
+        sha256 "307f512902c6ac3d34986c0ad90b3f65adc6ec7b3614a957bca9272e29c280e7"
+      end
+      resource "txtodo-tui" do
+        url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodo-tui-linux-aarch64-musl"
+        sha256 "4297e4eeaf056177cf3c2cda75e8a37f2898ade76896ed018c4dcd674e95f7f8"
+      end
+    end
+    on_intel do
+      url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodo-linux-x86_64-musl"
+      sha256 "64275b7c10b19eae24c2b7acfb1c01eb88d4b7ed04c42afd414d5dae741b0e15"
+      resource "txtodod" do
+        url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodod-linux-x86_64-musl"
+        sha256 "f70ec8629789005f8ee3cb2f30a0f19bbe92f399db4cd1a7f342be6cb6fb0325"
+      end
+      resource "txtodo-tui" do
+        url "https://github.com/aaronmyatt/txtodo/releases/download/v0.0.2/txtodo-tui-linux-x86_64-musl"
+        sha256 "49a638477aff4506a0a671c55f216356977eb77d60c18c6f0a27a76b894fe021"
       end
     end
   end
