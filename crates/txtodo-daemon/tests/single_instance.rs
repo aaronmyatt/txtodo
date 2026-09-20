@@ -4,8 +4,11 @@
 //! daemons on one device each paid the whole cold open before three learned they had lost — the
 //! 300% CPU boot storm of 2026-09-19.
 //!
-//! Observable proof without timing: the loser's stderr never carries the `opened N registered
-//! workspace(s)` line `start_global` prints once its open pass ends, and it names the running pid.
+//! Observable proof without timing: the loser is given a registry of its own, naming a workspace
+//! only it knows, and that workspace's directory never gains a `.txtodo/` state folder (every open
+//! creates one). It also names the running pid. An earlier version asserted that stderr lacked a
+//! log line, which the same change had deleted, so it could not fail (code review 2026-09-20,
+//! finding 10); and the winner opens the shared workspace itself, so that one proves nothing.
 //! It also exits 0 (root todo id:01M2VV1ZXDK24H3P6Z4DJ2P8YM): there is nothing for launchd's
 //! `KeepAlive.SuccessfulExit=false` or systemd's `Restart=on-failure` to retry.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
@@ -24,12 +27,13 @@ use txtodo_daemon::workspace_registry::WorkspaceRegistry;
 const EXIT_WAIT: Duration = Duration::from_secs(30);
 const SOCKET_WAIT: Duration = Duration::from_secs(120);
 
-/// Spawns a global-mode `txtodod` whose registry, socket, pid lock and logs all live in `dir`.
-fn spawn_global(dir: &std::path::Path) -> Child {
+/// Spawns a global-mode `txtodod` whose socket, pid lock and logs live in `dir`, reading the
+/// workspace registry at `registry`.
+fn spawn_global(dir: &std::path::Path, registry: &std::path::Path) -> Child {
     // https://doc.rust-lang.org/std/process/struct.Command.html#method.env
     Command::new(env!("CARGO_BIN_EXE_txtodod"))
         .args(["--no-lan", "--no-relay"])
-        .env("TXTODO_REGISTRY_DB", dir.join("registry.db"))
+        .env("TXTODO_REGISTRY_DB", registry)
         .env("TXTODO_SOCKET", dir.join("txtodod.sock"))
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -37,43 +41,61 @@ fn spawn_global(dir: &std::path::Path) -> Child {
         .expect("spawn txtodod")
 }
 
-#[test]
-fn a_second_daemon_exits_on_the_pid_lock_without_opening_any_workspace() {
-    let state = tempfile::tempdir().expect("tempdir");
+/// A seeded workspace, registered in the registry database at `registry`.
+fn registered_workspace(registry: &std::path::Path) -> tempfile::TempDir {
     let workspace = tempfile::tempdir().expect("tempdir");
     std::fs::write(workspace.path().join("todo.txt"), "seed\n").expect("seed todo.txt");
-    WorkspaceRegistry::open(&state.path().join("registry.db"))
+    WorkspaceRegistry::open(registry)
         .expect("open registry")
         .add(workspace.path(), &SystemClock)
         .expect("register workspace");
+    workspace
+}
 
-    let mut first = spawn_global(state.path());
-    let socket = state.path().join("txtodod.sock");
+/// Polls `done` until it holds, failing with `what` after `limit`.
+fn wait_until(what: &str, limit: Duration, mut done: impl FnMut() -> bool) {
     let start = Instant::now();
-    while !socket.exists() {
-        assert!(start.elapsed() < SOCKET_WAIT, "first daemon never bound");
-        std::thread::sleep(Duration::from_millis(20));
-    }
-
-    let mut second = spawn_global(state.path());
-    let start = Instant::now();
-    let status = loop {
-        if let Some(status) = second.try_wait().expect("poll second daemon") {
-            break status;
-        }
-        assert!(
-            start.elapsed() < EXIT_WAIT,
-            "the second daemon should exit on the pid lock, but is still running"
-        );
+    while !done() {
+        assert!(start.elapsed() < limit, "timed out: {what}");
         std::thread::sleep(Duration::from_millis(10));
-    };
+    }
+}
+
+/// Waits for `child` to exit and returns its status and everything it wrote to stderr.
+fn exit_of(mut child: Child) -> (std::process::ExitStatus, String) {
+    let mut status = None;
+    wait_until(
+        "the second daemon to exit on the pid lock",
+        EXIT_WAIT,
+        || {
+            status = child.try_wait().expect("poll second daemon");
+            status.is_some()
+        },
+    );
     let mut stderr = String::new();
-    second
+    child
         .stderr
         .take()
         .expect("piped stderr")
         .read_to_string(&mut stderr)
         .expect("read stderr");
+    (status.expect("exited"), stderr)
+}
+
+#[test]
+fn a_second_daemon_exits_on_the_pid_lock_without_opening_any_workspace() {
+    let state = tempfile::tempdir().expect("tempdir");
+    let registry = state.path().join("registry.db");
+    let workspace = registered_workspace(&registry);
+    // The loser's own registry and workspace: only the loser could ever open this one.
+    let losers_registry = state.path().join("loser-registry.db");
+    let losers_workspace = registered_workspace(&losers_registry);
+
+    let mut first = spawn_global(state.path(), &registry);
+    let socket = state.path().join("txtodod.sock");
+    wait_until("the first daemon to bind", SOCKET_WAIT, || socket.exists());
+
+    let (status, stderr) = exit_of(spawn_global(state.path(), &losers_registry));
 
     assert!(
         status.success(),
@@ -84,9 +106,14 @@ fn a_second_daemon_exits_on_the_pid_lock_without_opening_any_workspace() {
         "the loser should name the pid lock: {stderr}"
     );
     assert!(
-        !stderr.contains("registered workspace"),
-        "the loser opened workspaces before it lost the lock: {stderr}"
+        !losers_workspace.path().join(".txtodo").exists(),
+        "the loser opened its workspace before it lost the lock: {stderr}"
     );
+    // Positive control for the check above: an open does leave a `.txtodo/` folder. The winner
+    // opens its registered workspace in the background, so that one gains it.
+    wait_until("the winner to open its workspace", SOCKET_WAIT, || {
+        workspace.path().join(".txtodo").exists()
+    });
     assert!(
         socket.exists(),
         "the loser must not remove the live daemon's socket"
