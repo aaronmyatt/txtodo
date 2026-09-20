@@ -699,6 +699,10 @@ message WorkspaceInfo {
   bool has_state = 5;        // whether root/.txtodo/oplog.db exists; false = never opened yet
   WorkspaceLoadState load_state = 6;
   string load_error = 7;     // why the last open failed; empty unless load_state is FAILED
+  // True for this device's default workspace (task default-workspace): the per-user list every
+  // device registers under one reserved workspace id. It cannot be removed. False from an older
+  // daemon, which a client reads as "no default known".
+  bool is_default = 8;
 }
 
 message WorkspaceAddRequest {
