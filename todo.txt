@@ -1,4 +1,4 @@
-2026-09-20 Sidecar identity: desktop notes and every id-addressed MCP tool can't resolve a task (both regex id: from file text); daemon should return task_id per line +m11 @daemon @desktop @mcp
+2026-09-20 Sidecar identity: the daemon returns a task_id per line, desktop notes and MCP id tools use it +m11 @daemon @desktop @mcp ref:sidecar-task-ids @doing by:claude
 (A) 2026-09-20 Run txtodo workspace prune --yes to drop the ~124 dead test rows from the registry (their folders are gone) +test @daemon @human
 (A) 2026-09-20 Apply the Nix check change to release.yml with git apply tasks/release-engineering/nix-check.patch; the next tag proves it +m10 @release @ci @human
 (A) 2026-09-20 Check the macOS keychain prompt: run txtodod --key-store os, reinstall the binary, see if it prompts again; note it in tasks/relay-id-keystore +m8 @daemon @human
