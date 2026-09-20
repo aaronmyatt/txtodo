@@ -37,7 +37,6 @@ cask "txtodo-desktop" do
   desc "Todo.sh-compatible desktop app with encrypted multi-device sync"
   homepage "https://github.com/aaronmyatt/txtodo"
 
-  depends_on :macos
   # Defense in depth for task `desktop-daemon-sidecar-bundle`: the primary fix is bundling
   # `txtodod` into the app itself as a Tauri sidecar (see `apps/desktop/src-tauri/tauri.conf.json`'s
   # `bundle.externalBin` and `daemon/spawn.rs`'s sidecar-first resolution), but a Homebrew install
@@ -47,6 +46,7 @@ cask "txtodo-desktop" do
   # reference, not `"aaronmyatt/tap/txtodo"` (that longer form is for a *different* tap).
   # Ref: https://docs.brew.sh/Cask-Cookbook#depends_on
   depends_on formula: "txtodo"
+  depends_on :macos
 
   # `productName` in apps/desktop/src-tauri/tauri.conf.json is what `tauri build` actually names
   # the bundle — renamed from "desktop" to "txtodo" as part of the app's branding pass, so this
