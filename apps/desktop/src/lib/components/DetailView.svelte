@@ -28,6 +28,7 @@
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
 	import { dirOf, findRefTag, joinPath } from "$lib/todotxt/lineInfo";
+	import { taskIdAt } from "$lib/todotxt/taskIds";
 	import type { DetailParams } from "$lib/types";
 	import Breadcrumb from "./Breadcrumb.svelte";
 	import ConflictBanner from "./ConflictBanner.svelte";
@@ -84,8 +85,7 @@
 			const lines = contents.text.split("\n");
 			const text = lines[current.line - 1] ?? "";
 			parentLine = text;
-			const idMatch = /\bid:(\S+)/.exec(text);
-			parentTaskId = idMatch ? idMatch[1] : "";
+			parentTaskId = taskIdAt(contents, current.line);
 		} catch (e) {
 			loadError = String(e);
 		}
@@ -277,17 +277,13 @@
 				<!-- still loading -->
 			{:else if !parentTaskId}
 				<!-- `GetNotes`/`EditNotes` resolve a task by task_id alone
-				     (crates/txtodo-daemon/src/notes.rs::locate_task), never by line_number — unlike
-				     Edit/Complete/Delete, which resolve by line_number and treat an absent task_id as
-				     harmless (crates/txtodo-daemon/src/mutation.rs::resolve). Under this workspace's
-				     `identity_mode` (plan: sidecar is now the default, tasks/sidecar-identity/notes.md),
-				     an existing task's id isn't written into the file, and the desktop has no RPC today
-				     that resolves an arbitrary existing line to its task_id without one already visible
-				     — so notes genuinely aren't reachable here yet, not a bug in this view. -->
+				     (crates/txtodo-daemon/src/notes.rs::locate_task), never by line_number. The id comes
+				     from `GetFile`'s `task_ids` (`taskIdAt`, task sidecar-task-ids), so a Sidecar line
+				     with no `id:` tag resolves too. This branch is left for a daemon older than that
+				     field reading a Sidecar workspace: no id in the reply, none in the text. -->
 				<p class="empty-state">
-					Notes aren't available for this task yet: it has no id this app can resolve in the
-					workspace's current identity mode. A task created with a hand-written
-					<code>id:</code> tag (or in "tagged" mode) can use notes normally.
+					Notes aren't available for this task: the running daemon did not say which task this
+					line is. It is likely an older build; reinstall or restart <code>txtodod</code>.
 				</p>
 			{:else}
 				<NotesEditor task={parentTaskRef} />

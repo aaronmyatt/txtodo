@@ -48,7 +48,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			const path = args?.path as string;
 			const f = files.get(path);
 			if (!f) throw new Error(`mock daemon: unknown path "${path}"`);
-			return { path: f.path, text: f.text, hash: hashOf(f) } as T;
+			return { path: f.path, text: f.text, hash: hashOf(f), task_ids: [] } as T;
 		}
 		case "apply":
 			return applyMutations(args?.path as string, args?.mutations as Mutation[]) as unknown as T;

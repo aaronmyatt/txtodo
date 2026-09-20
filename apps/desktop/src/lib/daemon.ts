@@ -42,6 +42,9 @@ export interface FileContents {
 	path: string;
 	text: string;
 	hash: string;
+	/** One entry per line of `text`: the line's task id, `""` for a blank line. Absent or empty
+	 * from a daemon older than the field (task sidecar-task-ids) — use `taskIdAt`, not this. */
+	task_ids?: string[];
 }
 
 /** The exact bytes the daemon holds for one workspace-relative document path. */

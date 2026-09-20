@@ -62,6 +62,10 @@ pub struct FileContentsDto {
     pub text: String,
     /// Hex blake3 of the projection.
     pub hash: String,
+    /// One entry per line of `text`: the line's task id (ULID text), `""` for a blank line. Under
+    /// Sidecar identity a line has no `id:` tag, so this is where the frontend gets the id for a
+    /// `TaskRef` (task sidecar-task-ids). Empty from a daemon older than the field.
+    pub task_ids: Vec<String>,
 }
 
 impl From<pb::FileContents> for FileContentsDto {
@@ -70,6 +74,7 @@ impl From<pb::FileContents> for FileContentsDto {
             path: f.path,
             text: String::from_utf8_lossy(&f.bytes).into_owned(),
             hash: hex(&f.hash),
+            task_ids: f.task_ids,
         }
     }
 }
