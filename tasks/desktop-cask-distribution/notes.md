@@ -99,3 +99,16 @@ agent's call — flagged `@human` on the sub-task, not silently assumed either w
 - **Not done, correctly @human-gated**: the Apple code-signing/notarization decision (todo.txt's
   own `@human` line) and actually pushing anything to `aaronmyatt/homebrew-tap` (needs a real
   desktop release to point at first, same as the formula's own original staging).
+
+## Update (2026-09-20)
+
+- **The bundle name changed.** `productName` in `tauri.conf.json` went from `desktop` to `txtodo`
+  after v0.0.2: the v0.0.2 `.dmg` holds `desktop.app`, v0.0.3's holds `txtodo.app` (both mounted
+  and checked). The cask's `app` stanza follows it, so it changed with the v0.0.3 bump. The tap's
+  `autobump.yml` now mounts each `.dmg` and fails a bump if the cask's `app` is not inside.
+- **Item 5's question is answered: `brew bump` does not handle the cask (or the formula).** The tap
+  stamps both with `update-formula.sh`/`update-cask.sh`, one release tag in one pass. See
+  `tasks/brew-distribution/notes.md`'s "Update (2026-09-20)".
+- **Cask install is still untried.** Tap CI never runs `brew install --cask`, and an
+  `/Applications/txtodo.app` that Homebrew did not install blocks it until moved aside.
+

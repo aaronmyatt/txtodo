@@ -105,10 +105,12 @@ v0.0.3 was cut to give the autobump a second real release to fire against. It co
   12 formula and 2 cask url/sha256 pairs moved, checks the cask's `app` is inside each `.dmg`, and
   opens a PR from `bump/<tag>`. It needs the repo setting "Allow GitHub Actions to create and
   approve pull requests" (a human turned it on). A PR opened with the default token does not start
-  `tests.yml`, so it has no CI and has to be read by hand.
+  `tests.yml`; a later push to its branch by a person does, which is how PR #2 got its full
+  install test.
 - **The formula gained `on_linux`** (the static musl builds). `brew test-bot` runs `readall`, which
   loads every formula for every OS/arch, so a formula with no Linux url failed both test-bot legs.
-  12 pairs now; test-bot is green on `main`. No install has been tried on a real Linux machine.
+  12 pairs now; test-bot is green on `main`. PR #2's Ubuntu leg fetched, installed, audited and ran
+  `brew test` on x86_64 Linux; arm64 Linux and any machine of yours are untried.
 - **Found only by reading the first PR (#2, "txtodo v0.0.3"):** it predated `on_linux` (Linux urls
   still v0.0.2; now stamped), and the cask still said `app "desktop.app"`. `productName` went
   from `desktop` to `txtodo` after v0.0.2: the v0.0.2 `.dmg` holds `desktop.app`, v0.0.3's holds
@@ -119,7 +121,11 @@ v0.0.3 was cut to give the autobump a second real release to fire against. It co
   `stamp-cask-sha.py`. `brew style` also installs `shellcheck`, `shfmt` and `actionlint` on its own.
 - **Scripts:** `deploy/homebrew/` here is the source of truth. The tap's `bin/` copies differ only
   in the path to `Formula/`/`Casks/`. Change both.
-- **Still open, human:** read and merge tap PR #2, then `brew upgrade` and check all three binaries
-  and the cask report 0.0.3. Try the Linux install. The Gatekeeper and macOS-floor questions in
-  `tasks/desktop-cask-distribution/notes.md`. Rebase the tap's dependabot PR #1. Root line
-  `01M2Q1BREWAUTOBUMPCHECK01` stays open until someone has read the PR.
+- **Result:** PR #2 was read and merged (`b30a3cc`, 2026-09-20). `brew install
+  aaronmyatt/tap/txtodo` gave 0.0.3, and all three binaries report 0.0.3 by full path. A bare
+  `txtodo --version` still said 0.0.2: `~/.local/bin` (dev symlinks into `target/release/`) is
+  ahead of `/opt/homebrew/bin` on `PATH`. Root line `01M2Q1BREWAUTOBUMPCHECK01` is closed.
+- **Still open, human:** `brew install --cask aaronmyatt/tap/txtodo-desktop` (move an existing
+  `/Applications/txtodo.app` aside first; CI never installs the cask). The Linux arm64 install. The
+  Gatekeeper and macOS-floor questions in `tasks/desktop-cask-distribution/notes.md`. Rebase the
+  tap's dependabot PR #1. The first scheduled, unattended bump is still unseen.
