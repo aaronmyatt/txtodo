@@ -1,4 +1,4 @@
-(A) 2026-09-20 Apply the Nix check change to release.yml with git apply tasks/release-engineering/nix-check.patch; the next tag proves it +m10 @release @ci @human
+x (A) 2026-09-20 Apply the Nix check change to release.yml with git apply tasks/release-engineering/nix-check.patch; the next tag proves it +m10 @release @ci @human
 (A) 2026-09-20 Check the macOS keychain prompt: run txtodod --key-store os, reinstall the binary, see if it prompts again; note it in tasks/relay-id-keystore +m8 @daemon @human
 (A) 2026-09-17 Verify aaronmyatt/homebrew-tap's autobump.yml (brew bump --open-pr) correctly bumps all 3 resources' urls/sha256s, not just the top-level url — needs a second real txtodo release tag to fire against; check the PR it opens by hand +ci @brew ref:brew-distribution @human — needs a second real txtodo release tag to fire against
 2026-09-20 txtodod: bind the socket first, open workspaces in the background most recently used first, and open a requested one at once +m11 @daemon @desktop ref:daemon-early-bind @human — only the cold-launch check by hand is left, see tasks/daemon-early-bind/todo.txt
