@@ -7,9 +7,11 @@ import { openingWorkspace } from "./stores/loading";
 /** The daemon's exact message for a workspace that is queued or loading. */
 const LOADING_MESSAGE = "workspace loading";
 
-/** One second between tries, five minutes at most: past the daemon's own wait bound several times over. */
+/** One second between tries, five minutes in all. The bound is a deadline, not a count of tries
+ * (code review 2026-09-20, finding 6): one try can sit in the daemon for its own wait bound, about
+ * two minutes, so 300 tries was about ten hours, not the five minutes it was meant to be. */
 export const LOADING_RETRY_MS = 1000;
-export const LOADING_MAX_TRIES = 300;
+export const LOADING_DEADLINE_MS = 5 * 60 * 1000;
 
 export function isWorkspaceLoading(error: unknown): boolean {
 	return String(error).includes(LOADING_MESSAGE);
@@ -17,16 +19,29 @@ export function isWorkspaceLoading(error: unknown): boolean {
 
 const realSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/** Runs `call`, retrying while it fails with "workspace loading"; `openingWorkspace` counts this
- * call as waiting for as long as it is retrying. `sleep` is injectable for tests. */
-export async function retryWhileLoading<T>(call: () => Promise<T>, sleep: (ms: number) => Promise<void> = realSleep): Promise<T> {
+/** Time source and sleep, injectable so a test needs no real timers.
+ * performance.now(): https://developer.mozilla.org/en-US/docs/Web/API/Performance/now (monotonic:
+ * a wall-clock change mid-wait must not stretch or cut the deadline). */
+export interface RetryClock {
+	now: () => number;
+	sleep: (ms: number) => Promise<void>;
+}
+
+const realClock: RetryClock = { now: () => performance.now(), sleep: realSleep };
+
+/** Runs `call`, retrying while it fails with "workspace loading" until `LOADING_DEADLINE_MS` has
+ * passed since the first try; `openingWorkspace` counts this call as waiting for as long as it is
+ * retrying. The time a try spends inside the daemon counts toward the deadline. */
+export async function retryWhileLoading<T>(call: () => Promise<T>, clock: RetryClock = realClock): Promise<T> {
 	let waiting = false;
+	const giveUpAt = clock.now() + LOADING_DEADLINE_MS;
+	const sleep = clock.sleep;
 	try {
-		for (let attempt = 0; ; attempt++) {
+		for (;;) {
 			try {
 				return await call();
 			} catch (e) {
-				if (!isWorkspaceLoading(e) || attempt + 1 >= LOADING_MAX_TRIES) throw e;
+				if (!isWorkspaceLoading(e) || clock.now() + LOADING_RETRY_MS > giveUpAt) throw e;
 				if (!waiting) {
 					waiting = true;
 					openingWorkspace.update((n) => n + 1);
