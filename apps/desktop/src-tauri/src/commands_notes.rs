@@ -26,8 +26,7 @@ async fn get_notes_inner(
     task: TaskRefDto,
 ) -> Result<NotesDocDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client
         .get_notes(task.into())
         .await
@@ -55,8 +54,7 @@ async fn edit_notes_inner(
     new_text: String,
 ) -> Result<ApplyResultDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let req = pb::NotesEditRequest {
         task: Some(task.into()),
         new_text,

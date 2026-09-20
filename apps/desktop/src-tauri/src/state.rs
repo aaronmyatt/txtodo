@@ -1,6 +1,7 @@
 //! Tauri-managed state: the daemon config, the current connectivity status, and the (possibly
-//! absent) connected client. `tokio::sync::Mutex` (not `std::sync::Mutex`) because commands hold
-//! the guard across `.await` points while making an RPC.
+//! absent) connected client. `tokio::sync::Mutex` (not `std::sync::Mutex`) because the guard is
+//! taken in async code. No command holds the `client` guard across its RPC: see
+//! [`AppState::client_snapshot`].
 
 use crate::config::DesktopConfig;
 use crate::daemon::DaemonClient;
@@ -96,6 +97,20 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// A clone of the connected client; the lock is released before this returns. Every command
+    /// makes its RPC on the clone (code review 2026-09-20, finding 5): a call on a workspace that
+    /// is still loading can sit in the daemon for up to two minutes, and while a command held this
+    /// lock across it, every other command, the switcher's 2 s `list_workspaces` poll included,
+    /// queued behind it and the window froze. The clone carries the selector of the moment, so a
+    /// call in flight keeps its workspace when the human switches.
+    pub async fn client_snapshot(&self) -> Result<DaemonClient, String> {
+        self.client
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| "daemon not connected".to_owned())
+    }
+
     /// Fresh state for `config`, starting `Connecting` with no client yet.
     pub fn new(config: DesktopConfig) -> AppState {
         let current_workspace = Mutex::new(config.workspace.clone());

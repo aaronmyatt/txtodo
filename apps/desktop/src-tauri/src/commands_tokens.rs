@@ -30,8 +30,7 @@ async fn token_create_inner(
     expires: String,
 ) -> Result<TokenDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let req = pb::TokenCreateRequest {
         name,
         scopes,
@@ -58,8 +57,7 @@ async fn token_list_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<TokenDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.token_list().await.map_err(|e| e.to_string())?;
     Ok(resp.tokens.into_iter().map(TokenDto::from).collect())
 }
@@ -81,8 +79,7 @@ async fn token_revoke_inner(
     id: String,
 ) -> Result<bool, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.token_revoke(id).await.map_err(|e| e.to_string())?;
     Ok(resp.revoked)
 }

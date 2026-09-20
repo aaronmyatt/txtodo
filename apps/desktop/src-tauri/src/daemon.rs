@@ -89,6 +89,12 @@ impl From<tonic::Status> for DaemonError {
 /// A client to `txtodod` over its ADR 0010 unix socket, dialed lazily — against the true global
 /// daemon as of ADR 0025/M11 (task `desktop-workspace-switcher`), so one client now serves every
 /// registered workspace by varying [`DaemonClient::selector`], not a fixed one dialed per socket.
+///
+/// `Clone` is cheap (a tonic `Channel` is a handle onto one shared connection,
+/// https://docs.rs/tonic/latest/tonic/transport/struct.Channel.html#multiplexing-requests): every
+/// command clones the client out of `AppState` and makes its RPC on the clone, so a slow call
+/// never holds the lock the others need (`AppState::client_snapshot`).
+#[derive(Clone)]
 pub struct DaemonClient {
     inner: pb::txtodo_client::TxtodoClient<tonic::transport::Channel>,
     sock: PathBuf,

@@ -23,8 +23,7 @@ async fn list_workspaces_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<WorkspaceInfoDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let workspaces = client.workspace_list().await.map_err(|e| e.to_string())?;
     Ok(workspaces.into_iter().map(WorkspaceInfoDto::from).collect())
 }
@@ -46,8 +45,7 @@ async fn add_workspace_inner(
     root: String,
 ) -> Result<WorkspaceInfoDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let info = client
         .workspace_add(&PathBuf::from(root))
         .await
@@ -80,8 +78,7 @@ async fn remove_workspace_inner(
         return Err("cannot remove the current workspace; switch away first".to_owned());
     }
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     client
         .workspace_remove(&id)
         .await

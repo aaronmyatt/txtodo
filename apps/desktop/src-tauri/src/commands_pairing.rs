@@ -23,8 +23,7 @@ async fn pair_offer_inner(
     state: State<'_, AppState>,
 ) -> Result<PairOfferDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.pair_offer().await.map_err(|e| e.to_string())?;
     Ok(PairOfferDto::from(resp))
 }
@@ -47,8 +46,7 @@ async fn pair_accept_inner(
     code: String,
 ) -> Result<PairResultDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.pair_accept(code).await.map_err(|e| e.to_string())?;
     Ok(PairResultDto::from(resp))
 }
@@ -69,8 +67,7 @@ async fn pair_confirm_sas_inner(
     state: State<'_, AppState>,
 ) -> Result<PairResultDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.pair_confirm_sas().await.map_err(|e| e.to_string())?;
     Ok(PairResultDto::from(resp))
 }

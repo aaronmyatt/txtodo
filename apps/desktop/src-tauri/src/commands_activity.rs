@@ -27,8 +27,7 @@ async fn op_log_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<OpLogEntryDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let entries = client.op_log().await.map_err(|e| e.to_string())?;
     Ok(entries.into_iter().map(OpLogEntryDto::from).collect())
 }
@@ -56,8 +55,7 @@ async fn op_log_all_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<AggregatedOpLogEntryDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let workspaces = client.workspace_list().await.map_err(|e| e.to_string())?;
 
     let mut merged = Vec::new();
@@ -65,7 +63,7 @@ async fn op_log_all_inner(
         // Only a workspace the daemon has finished opening: a fan-out must not promote every
         // workspace (see `is_ready_or_unknown`).
         if ws.root_exists && is_ready_or_unknown(&ws) {
-            merged.extend(op_log_one_workspace(client, ws).await);
+            merged.extend(op_log_one_workspace(&mut client, ws).await);
         }
     }
     merged.sort_by_key(|e: &AggregatedOpLogEntryDto| std::cmp::Reverse(e.at_ms));

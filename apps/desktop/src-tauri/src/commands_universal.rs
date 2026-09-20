@@ -32,8 +32,7 @@ async fn universal_tasks_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<UniversalTaskDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let workspaces = client.workspace_list().await.map_err(|e| e.to_string())?;
 
     let mut tasks = Vec::new();

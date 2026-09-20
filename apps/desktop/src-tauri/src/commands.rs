@@ -150,8 +150,7 @@ async fn list_files_inner(
     state: State<'_, AppState>,
 ) -> Result<Vec<FileInfoDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.list_files().await.map_err(|e| e.to_string())?;
     Ok(resp.files.into_iter().map(FileInfoDto::from).collect())
 }
@@ -173,8 +172,7 @@ async fn get_file_inner(
     path: String,
 ) -> Result<FileContentsDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client.get_file(&path).await.map_err(|e| e.to_string())?;
     Ok(FileContentsDto::from(resp))
 }
@@ -199,10 +197,8 @@ async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), S
     if slot.is_running() {
         return Ok(());
     }
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let mut stream = client.watch(Vec::new()).await.map_err(|e| e.to_string())?;
-    drop(guard);
     let generation = slot.claim_generation();
     let forwarder_app = app.clone();
     let task = tauri::async_runtime::spawn(async move {
@@ -269,8 +265,7 @@ async fn apply_inner(
             .unwrap_or_default();
         refuse_if_workspace_moved(workspace_root.as_deref(), &current)?;
     }
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let req = pb::ApplyRequest {
         path,
         mutations: mutations.into_iter().map(pb::Mutation::from).collect(),
@@ -302,8 +297,7 @@ async fn history_inner(
     limit: u32,
 ) -> Result<HistoryDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let req = pb::HistoryRequest {
         path,
         task_id,
@@ -336,8 +330,7 @@ async fn resolve_inner(
     resolution: ResolutionDto,
 ) -> Result<ApplyResultDto, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let req = pb::ResolveRequest {
         path,
         task: Some(task.into()),
@@ -367,8 +360,7 @@ async fn list_conflicts_inner(
     path: String,
 ) -> Result<Vec<ReviewFlagDto>, String> {
     ensure_connected(&app, &state).await?;
-    let mut guard = state.client.lock().await;
-    let client = guard.as_mut().ok_or("daemon not connected")?;
+    let mut client = state.client_snapshot().await?;
     let resp = client
         .list_conflicts(&path)
         .await
