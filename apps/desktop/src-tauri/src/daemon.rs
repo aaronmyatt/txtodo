@@ -61,6 +61,25 @@ impl fmt::Display for DaemonError {
 
 impl std::error::Error for DaemonError {}
 
+/// First word of [`DaemonError::apply_text`] for a `FAILED_PRECONDITION`. The frontend's
+/// `todotxt/saveBuffer.ts` matches it (`isStaleBase`); keep the two in step.
+pub const FAILED_PRECONDITION_TOKEN: &str = "failed-precondition:";
+
+impl DaemonError {
+    /// What the frontend sees when `apply` is refused. A `FAILED_PRECONDITION` (the document moved
+    /// under the caller: a stale `Replace` base, or a `TaskRef` whose line and id disagree) starts
+    /// with a stable token, so the editor can fall back to a per-line save without matching
+    /// tonic's prose. `tonic::Code`: https://docs.rs/tonic/latest/tonic/enum.Code.html
+    pub fn apply_text(&self) -> String {
+        match self {
+            DaemonError::Rpc(s) if s.code() == tonic::Code::FailedPrecondition => {
+                format!("{FAILED_PRECONDITION_TOKEN} {}", s.message())
+            }
+            other => other.to_string(),
+        }
+    }
+}
+
 impl From<tonic::Status> for DaemonError {
     fn from(status: tonic::Status) -> Self {
         DaemonError::Rpc(status)
@@ -345,5 +364,29 @@ impl DaemonClient {
             entries.push(entry);
         }
         Ok(entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_precondition_starts_with_the_stable_token() {
+        let stale = DaemonError::Rpc(tonic::Status::failed_precondition("the document changed"));
+        let text = stale.apply_text();
+        assert!(text.starts_with(FAILED_PRECONDITION_TOKEN), "{text}");
+        assert!(text.ends_with("the document changed"), "{text}");
+    }
+
+    #[test]
+    fn any_other_refusal_keeps_its_plain_text() {
+        let other = DaemonError::Rpc(tonic::Status::invalid_argument("bad line"));
+        assert_eq!(other.apply_text(), other.to_string());
+        assert!(!other.apply_text().contains(FAILED_PRECONDITION_TOKEN));
+        assert_eq!(
+            DaemonError::Timeout.apply_text(),
+            DaemonError::Timeout.to_string()
+        );
     }
 }

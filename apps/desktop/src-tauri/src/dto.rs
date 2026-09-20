@@ -24,6 +24,20 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// The inverse of [`hex`]. Anything that is not an even run of hex digits decodes to no bytes at
+/// all: as a `Replace` base that matches no document, so the daemon refuses the write
+/// (`FAILED_PRECONDITION`, nothing written) rather than this bridge guessing.
+/// `u8::from_str_radix`: https://doc.rust-lang.org/std/primitive.u8.html#method.from_str_radix
+pub(crate) fn unhex(text: &str) -> Vec<u8> {
+    if !text.is_ascii() || !text.len().is_multiple_of(2) {
+        return Vec::new();
+    }
+    (0..text.len() / 2)
+        .map(|i| u8::from_str_radix(&text[2 * i..2 * i + 2], 16))
+        .collect::<Result<Vec<u8>, _>>()
+        .unwrap_or_default()
+}
+
 /// One synced document (`ListFiles`).
 #[derive(Debug, Clone, Serialize)]
 pub struct FileInfoDto {
@@ -255,6 +269,17 @@ pub enum MutationDto {
         /// `todo.sh` leaves a blank line by default.
         leave_blank: bool,
     },
+    /// The whole document, compare-and-swap (`pb::Replace`, daemon `replace.rs`): refused unless
+    /// the document's hash is still `base_hash`, else reconciled like an external edit, so an
+    /// untouched line keeps its identity and a moved line is a move. The editor saves with it
+    /// (task desktop-reorder-propagates): per-line mutations cannot say "this line moved". Must be
+    /// the only mutation of its `apply` call.
+    Replace {
+        /// Hex blake3 the buffer was edited from (`FileContentsDto.hash`).
+        base_hash: String,
+        /// The new document text.
+        contents: String,
+    },
 }
 
 impl From<MutationDto> for pb::Mutation {
@@ -276,6 +301,13 @@ impl From<MutationDto> for pb::Mutation {
             MutationDto::Delete { task, leave_blank } => pb::mutation::Kind::Delete(pb::Delete {
                 task: Some(task.into()),
                 leave_blank,
+            }),
+            MutationDto::Replace {
+                base_hash,
+                contents,
+            } => pb::mutation::Kind::Replace(pb::Replace {
+                base_hash: unhex(&base_hash),
+                contents: contents.into_bytes(),
             }),
         };
         pb::Mutation { kind: Some(kind) }
@@ -301,5 +333,33 @@ impl From<ResolutionDto> for pb::Resolution {
             ResolutionDto::Theirs => pb::Resolution::Theirs,
             ResolutionDto::Merged => pb::Resolution::Merged,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unhex_inverts_hex_and_refuses_anything_else() {
+        let bytes: Vec<u8> = (0u8..=255).collect();
+        assert_eq!(unhex(&hex(&bytes)), bytes);
+        assert_eq!(unhex("ABcd"), vec![0xab, 0xcd]);
+        assert!(unhex("abc").is_empty(), "odd length");
+        assert!(unhex("zz").is_empty(), "not hex");
+        assert!(unhex("é0").is_empty(), "not ascii");
+    }
+
+    #[test]
+    fn a_replace_mutation_carries_the_decoded_base_and_the_text_bytes() {
+        // The frontend sends `{ kind: "replace", ... }` (serde tag, same as every other arm).
+        let json = r#"{"kind":"replace","base_hash":"0aff","contents":"b\na\n"}"#;
+        let dto: MutationDto = serde_json::from_str(json).unwrap_or_else(|e| panic!("{e}"));
+        let pb::Mutation { kind } = dto.into();
+        let Some(pb::mutation::Kind::Replace(r)) = kind else {
+            panic!("expected Replace");
+        };
+        assert_eq!(r.base_hash, vec![0x0a, 0xff]);
+        assert_eq!(r.contents, b"b\na\n");
     }
 }

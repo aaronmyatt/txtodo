@@ -249,7 +249,7 @@ async fn apply_inner(
         agent: None, // unset = the user on this device
         workspace: None,
     };
-    let resp = client.apply(req).await.map_err(|e| e.to_string())?;
+    let resp = client.apply(req).await.map_err(|e| e.apply_text())?;
     Ok(ApplyResultDto::from(resp))
 }
 

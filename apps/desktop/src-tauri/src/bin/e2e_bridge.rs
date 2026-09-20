@@ -289,7 +289,10 @@ async fn cmd_apply(client: &mut DaemonClient, args: Value) -> Result<Value, ApiE
         agent: None,
         workspace: None,
     };
-    let resp = client.apply(pb_req).await?;
+    let resp = client
+        .apply(pb_req)
+        .await
+        .map_err(|e| ApiError(e.apply_text()))?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
 }
 
