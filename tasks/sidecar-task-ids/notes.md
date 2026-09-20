@@ -40,3 +40,23 @@ The daemon already knows each line's id (`DocState` holds an `Entry::Task { id, 
 ## Known gaps
 
 - The CLI and the TUI still address by line number plus `RequireBase`. Not part of this line.
+
+## As built (2026-09-20)
+
+- proto `FileContents.task_ids` (field 4) and the regenerated code: 2 commits before `c7b0e8e`.
+- daemon `c7b0e8e`: `contents.rs` (`Contents.task_ids`, from `DocState::line_ids`, same actor turn
+  as the bytes). `tests/get_file_task_ids.rs`: Sidecar and Tagged, and the id drives `Apply` and
+  `EditNotes`.
+- desktop `f193dc2`: `todotxt/taskIds.ts::taskIdAt`; `DetailView` notes use it.
+- mcp `43a94f2`, `943774d`: `doc.rs::FileDoc`. When the daemon sent ids, a leftover `id:` word in
+  the text is a plain tag (it lands last in `kv`), not the identity.
+
+Still broken or not proven:
+
+- The installed daemon (launchd, `~/.cargo/bin/txtodod`) is the old build. Until it is reinstalled
+  it sends no `task_ids`, and both clients fall back to the `id:` regex, so nothing changes for this
+  repo's own Sidecar workspace yet.
+- Desktop notes under Sidecar were not looked at in the running app.
+- The MCP real-daemon test is `#[ignore]`d (it needs a built `txtodod`), so CI does not run it.
+- `locate_by_id` still reads every todo file of the workspace to find one id. Slow on a big
+  workspace; a daemon-side "where is task X" RPC would fix it. Not part of this line.

@@ -1,4 +1,4 @@
-2026-09-20 src-tauri: MutationDto::Replace (base_hash hex, contents) mapped to pb Replace; unit test +m11 @desktop @test
+2026-09-20 src-tauri: MutationDto::Replace (base_hash hex, contents) mapped to pb Replace; unit test +m11 @desktop @test @doing by:claude
 2026-09-20 frontend: replace mutation in daemon.ts and the mock; FileView keeps the baseline hash +m11 @desktop
 2026-09-20 FileView: save with Replace, fall back to computeDelta when the base is stale; vitest on the pure part +m11 @desktop @test
 2026-09-20 FileView: a reorder-only change saves after a 300 ms debounce, typed text still waits for blur or Cmd-S; vitest +m11 @desktop @test
