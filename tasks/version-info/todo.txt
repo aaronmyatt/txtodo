@@ -1,4 +1,4 @@
-2026-09-20 txtodo-tui: --version likewise; dim "v0.0.2 · 2026-09-20" in the status bar, dropped when narrow +m11 @tui
+2026-09-20 txtodo-tui: --version likewise; dim "v0.0.2 · 2026-09-20" in the status bar, dropped when narrow +m11 @tui @doing by:claude
 2026-09-20 proto: Health.release_date, additive, its own commit (Health.version already exists) +m11 @proto
 2026-09-20 txtodod: --version likewise; fill Health.release_date; log both in daemon_starting +m11 @daemon
 2026-09-20 apps/desktop: small muted "v0.0.2 · 2026-09-20" in the main view corner and on Help +m11 @desktop
