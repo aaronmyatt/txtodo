@@ -129,6 +129,38 @@ pub fn matches_query(raw: &str, query: &str) -> bool {
         })
 }
 
+/// A typed token a caller asked for by name: `todotxt://project/<name>`, `todotxt://context/<name>`
+/// and `triage_inbox`'s context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Token<'a> {
+    /// `+name`.
+    Project(&'a str),
+    /// `@name`.
+    Context(&'a str),
+}
+
+impl Token<'_> {
+    /// The `todo_list` query that narrows the rows first. It is `matches_query`, a substring
+    /// match, so it only ever keeps too much; [`Token::is_on`] decides.
+    pub fn query(&self) -> String {
+        match self {
+            Token::Project(name) => format!("+{name}"),
+            Token::Context(name) => format!("@{name}"),
+        }
+    }
+
+    /// Whether `row` carries exactly this token (code review 2026-09-20, finding 7). A substring
+    /// is not enough for a typed lookup: `project/work` must not return `+workshop`, `context/home`
+    /// must not return a line holding `bob@home.com`, and `triage_inbox` must not pull `@inbox-old`.
+    /// `todo_list` and `todo_search` keep the substring match, for parity with `txtodo list`.
+    pub fn is_on(&self, row: &TaskRow) -> bool {
+        match self {
+            Token::Project(name) => row.projects.iter().any(|p| p == name),
+            Token::Context(name) => row.contexts.iter().any(|c| c == name),
+        }
+    }
+}
+
 /// `raw` + (a space, unless `text` opens with a sentence delimiter) + `text` (todo.sh `append`).
 pub fn append(raw: &str, text: &str) -> String {
     const SENTENCE_DELIMITERS: [char; 4] = [',', '.', ':', ';'];
@@ -242,6 +274,32 @@ mod tests {
         let text = "a id:01J one\nb id:01J99 two\n";
         let found = find_by_id(text, "01J");
         assert_eq!(found, Some((1, "a id:01J one")));
+    }
+
+    #[test]
+    fn a_typed_token_matches_the_whole_word_not_a_substring() {
+        let work = parse_row(1, "fix the door +work @home");
+        let workshop = parse_row(2, "sand the bench +workshop mail bob@home.com @inbox-old");
+        assert!(Token::Project("work").is_on(&work));
+        assert!(
+            !Token::Project("work").is_on(&workshop),
+            "+workshop is not +work"
+        );
+        assert!(Token::Context("home").is_on(&work));
+        assert!(
+            !Token::Context("home").is_on(&workshop),
+            "bob@home.com is not @home"
+        );
+        assert!(
+            !Token::Context("inbox").is_on(&workshop),
+            "@inbox-old is not @inbox"
+        );
+        // The narrowing query is the substring one, so it keeps both; `is_on` decides.
+        assert_eq!(Token::Project("work").query(), "+work");
+        assert!(matches_query(
+            &workshop.raw,
+            &Token::Project("work").query()
+        ));
     }
 
     const QUERY_LINE: &str = "(A) 2026-09-11 Draft Milk +work @laptop id:01J";

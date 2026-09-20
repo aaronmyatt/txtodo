@@ -10,8 +10,9 @@ use rmcp::model::{
     GetPromptResult, ListPromptsResult, Prompt, PromptArgument, PromptMessage, Role,
 };
 
-use crate::backend::{ListArgs, McpBackend};
+use crate::backend::McpBackend;
 use crate::error::McpError;
+use crate::parse::Token;
 
 const PLAN_TODAY: &str = "plan_today";
 const WEEKLY_REVIEW: &str = "weekly_review";
@@ -92,14 +93,7 @@ async fn triage_inbox(
     context: Option<String>,
 ) -> Result<GetPromptResult, ErrorData> {
     let context = context.unwrap_or_else(|| "inbox".into());
-    let rows = backend
-        .list(ListArgs {
-            query: Some(format!("@{context}")),
-            file: None,
-            limit: None,
-            workspace: None,
-        })
-        .await?;
+    let rows = crate::resources::rows_with_token(backend, Token::Context(&context), None).await?;
     let instructions =
         format!("Triage these @{context} tasks: assign a project, priority, or delete them:");
     let json = serde_json::to_string(&rows).unwrap_or_default();

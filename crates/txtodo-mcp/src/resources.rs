@@ -16,8 +16,9 @@ use rmcp::model::{
     ResourceContents, ResourceTemplate,
 };
 
-use crate::backend::{GetTarget, ListArgs, McpBackend, WorkspaceArg};
+use crate::backend::{GetTarget, ListArgs, McpBackend, TaskRow, WorkspaceArg};
 use crate::error::McpError;
+use crate::parse::Token;
 
 const SCHEME: &str = "todotxt";
 
@@ -75,8 +76,8 @@ pub async fn read(backend: &dyn McpBackend, uri: &str) -> Result<ReadResourceRes
     let (path, workspace) = split_workspace_query(tail);
     let text = match path.split_once('/') {
         Some(("task", id)) => task_json(backend, id, workspace).await?,
-        Some(("project", name)) => filtered_json(backend, &format!("+{name}"), workspace).await?,
-        Some(("context", name)) => filtered_json(backend, &format!("@{name}"), workspace).await?,
+        Some(("project", name)) => filtered_json(backend, Token::Project(name), workspace).await?,
+        Some(("context", name)) => filtered_json(backend, Token::Context(name), workspace).await?,
         _ if path == "workspaces" => workspaces_json(backend).await?,
         _ if path == "history" || path.starts_with("history?") => {
             history_json(backend, &path, workspace).await?
@@ -128,18 +129,30 @@ async fn task_json(
 
 async fn filtered_json(
     backend: &dyn McpBackend,
-    query: &str,
+    token: Token<'_>,
     workspace: WorkspaceArg,
 ) -> Result<String, McpError> {
-    let rows = backend
+    let rows = rows_with_token(backend, token, workspace).await?;
+    Ok(serde_json::to_string(&rows).unwrap_or_default())
+}
+
+/// The rows of `todo.txt` carrying exactly `token`: `todo_list`'s substring query narrows them,
+/// [`Token::is_on`] keeps the exact ones (`+work` is not `+workshop`). Shared with `triage_inbox`.
+pub(crate) async fn rows_with_token(
+    backend: &dyn McpBackend,
+    token: Token<'_>,
+    workspace: WorkspaceArg,
+) -> Result<Vec<TaskRow>, McpError> {
+    let mut rows = backend
         .list(ListArgs {
-            query: Some(query.to_owned()),
+            query: Some(token.query()),
             file: None,
             limit: None,
             workspace,
         })
         .await?;
-    Ok(serde_json::to_string(&rows).unwrap_or_default())
+    rows.retain(|row| token.is_on(row));
+    Ok(rows)
 }
 
 /// `todotxt://workspaces` (`todo_list_workspaces`): the device-global registry, unscoped.
