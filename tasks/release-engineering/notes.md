@@ -129,3 +129,10 @@ run `--version` before the release is published.
   9fbce3b483...ba56eb6). That is evidence the flake is reproducible; it is not a release gate.
 - What is left: rewrite the job in `RELEASE_CI.patch.md`, a human applies it to `release.yml`
   (`.github/**` is frozen), then the test-tag dry run (full asset set, duplicate tag rejected).
+- Patch: `tasks/release-engineering/nix-check.patch` swaps the `reproducibility-gate` job in
+  `.github/workflows/release.yml` for `nix-check` (build, then run `--version`). Apply with
+  `git apply tasks/release-engineering/nix-check.patch`. `RELEASE_CI.patch.md` is the old staging
+  copy and still shows the hash-match job; it is history now.
+- `nix-check` stays out of `publish`'s `needs` until it has passed on one real tag, the same
+  reason the old job was kept out. A failing Nix build should not block a release before it has
+  ever passed once.

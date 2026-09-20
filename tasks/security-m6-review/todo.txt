@@ -1,3 +1,4 @@
+2026-09-20 Review and sign off tasks/security-m6-review/findings-draft.md (F1 to F5, payloadKB 512) +m6 @security @human
 2026-09-12 Test: MCP HTTP binds 127.0.0.1 by default; a non-loopback bind errors unless --lan is passed +m6 @security @test
 2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text, root-key bytes or caveat values +m6 @security @test
 2026-09-12 Test: an unauthenticated MCP HTTP request is rejected even with --lan bound to the LAN +m6 @security @test

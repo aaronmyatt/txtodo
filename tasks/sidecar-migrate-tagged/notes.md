@@ -91,3 +91,10 @@ in the log. Wall time about 1.7 s.
   keep it. Harmless in Sidecar mode; the dry-run count on a migrated workspace no longer reports
   them because migrated documents are skipped.
 - Every other device in the sync group must migrate too before the follow-up removes Tagged.
+
+## As run 2026-09-20
+
+- The live run was committed in `f7f8225`: 1820 `id:` tags stripped across 174 files, 1870 lines
+  changed each way.
+- A dry run afterwards still reports 22 tags in 185 files. Probably files written after the run, but
+  the dry run is what says which. The first open line re-runs the migrate for them.

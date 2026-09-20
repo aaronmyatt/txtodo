@@ -1,0 +1,93 @@
+--- a/.github/workflows/release.yml	2026-09-20 11:20:29
++++ b/.github/workflows/release.yml	2026-09-20 11:20:29
+@@ -1,6 +1,6 @@
+ # .github/workflows/release.yml — tag-triggered release: cross-compiled binaries via
+-# cargo-zigbuild, an SBOM (cargo-cyclonedx), Sigstore keyless signing (cosign), a Nix-vs-zigbuild
+-# reproducibility gate on the Linux glibc artifact, and a GitHub Release carrying all of it.
++# cargo-zigbuild, an SBOM (cargo-cyclonedx), Sigstore keyless signing (cosign), a Nix build check
++# (builds and runs --version), and a GitHub Release carrying all of it.
+ # Design §11/§12; tasks/release-engineering/notes.md.
+ #
+ # ADR 0010 (no Unix domain sockets on Windows) already drops txtodo-cli/txtodo-daemon/txtodo-mcp
+@@ -362,26 +362,14 @@
+           name: bom
+           path: bom.json
+ 
+-  # Reproducibility gate (notes.md acceptance): the Nix build of the linux-x86_64-gnu target must
+-  # hash-match the cargo-zigbuild artifact for the same tag, before the release is published.
+-  #
+-  # KNOWN RISK (flagged for a human, not swept under the rug): Nix's own `nix build .#txtodo`
+-  # normally uses nixpkgs' native stdenv gcc/ld — a genuinely different C toolchain/linker from
+-  # zig, and the two are not guaranteed to produce byte-identical output even from identical
+-  # rustc 1.95.0 input (different default section ordering/alignment from a different linker).
+-  # deploy/nix/packages.nix's default `txtodo` package is deliberately the plain native build
+-  # (that's what `nix build .#txtodo` in the acceptance test / `nix develop` workflow means, and
+-  # it IS Nix-reproducible: two clean builds of it hash-match — verified locally, see the PR/
+-  # worktree report). This gate additionally needs the *Nix* build to go through zig with the
+-  # exact same target+glibc-version cargo-zigbuild used, or the comparison below will almost
+-  # certainly fail on a linker difference that has nothing to do with non-determinism. Until a
+-  # human decides how to wire that (e.g. a dedicated flake output that forces
+-  # CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER to the same zig wrapper as
+-  # .cargo/zig/zigcc-x86_64-linux-gnu.sh, at the same .2.17 glibc pin), this job is left in place
+-  # but should be expected to fail until that wiring lands — do not silently loosen it to a
+-  # "same size" or "runs --version" check to make it pass.
+-  reproducibility-gate:
+-    needs: build
++  # Nix check (decided 2026-09-20, option B): `nix build .#txtodo` succeeds and the result runs
++  # `--version`. It does not have to hash-match the cargo-zigbuild artifact. Nix builds with
++  # nixpkgs' native gcc/ld and cargo-zigbuild links with zig: two different C toolchains, so the
++  # outputs are not guaranteed to be byte-identical even from the same rustc, and may never match.
++  # What still holds is that two clean Nix builds of one source hash-match (checked locally, not
++  # re-checked here). This job is not in `publish`'s `needs` until it has passed on one real tag.
++  nix-check:
++    needs: reject-duplicate-tag
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+@@ -390,23 +378,17 @@
+         with:
+           extra_nix_config: |
+             experimental-features = nix-command flakes
+-      - uses: actions/download-artifact@v4
+-        with:
+-          name: dist-linux-x86_64-gnu
+-          path: dist
+       - name: nix build .#txtodo (glibc, x86_64-linux)
+         run: nix build .#txtodo -o nix-result
+-      - name: compare hashes
++      - name: the Nix build runs --version
+         run: |
+           set -euo pipefail
+-          nix_hash=$(sha256sum nix-result/bin/txtodo | awk '{print $1}')
+-          zig_hash=$(sha256sum dist/txtodo-linux-x86_64-gnu | awk '{print $1}')
+-          echo "nix:  $nix_hash"
+-          echo "zig:  $zig_hash"
+-          if [ "$nix_hash" != "$zig_hash" ]; then
+-            echo "::error::Nix build and cargo-zigbuild artifact do not hash-match — see the KNOWN RISK comment on this job"
+-            exit 1
+-          fi
++          out=$(./nix-result/bin/txtodo --version)
++          echo "$out"
++          case "$out" in
++            txtodo\ *) ;;
++            *) echo "::error::unexpected --version output: $out"; exit 1 ;;
++          esac
+ 
+   # Sigstore keyless signing: publish signature + certificate to the transparency log for every
+   # release artifact (binaries + bom.json). https://docs.sigstore.dev/cosign/keyless/
+@@ -437,12 +419,9 @@
+ 
+   # Publish. Binaries + bom.json + .sig/.bundle files, tag-triggered, immutable (reject-duplicate-
+   # tag already ran first).
+-  # reproducibility-gate deliberately NOT in `needs` (2026-09-17, first real release):
+-  # that job's own comment already flags it as expected to fail until a human wires Nix
+-  # through the same zig linker cargo-zigbuild uses -- blocking every release on a known-
+-  # broken gate would mean this workflow could never publish anything at all. The gate
+-  # still runs and still reports pass/fail in the Actions UI; it's informational for now,
+-  # not a release blocker. Revisit once the zig-wiring the comment describes lands.
++  # nix-check deliberately NOT in `needs` yet (2026-09-20): it replaces the old hash-match gate and
++  # has not run on a real tag. It still runs and reports pass/fail in the Actions UI. Add it to
++  # `needs` once it has passed on one real release tag.
+   publish:
+     needs: [build, build-desktop, wasm, sbom, sign]
+     runs-on: ubuntu-latest
