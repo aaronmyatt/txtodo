@@ -174,11 +174,20 @@ async fn complete_archive_delete_and_history_address_a_sidecar_task_by_id() {
     let ids: Vec<String> = rows.iter().rev().map(|r| r.id.clone().unwrap()).collect();
 
     // Complete and uncomplete; completing twice is a no-op, not an error.
+    // `three` was line 1. Completing moves it to the bottom of its file in the same batch (task
+    // complete-to-bottom): the id is unchanged and the returned row carries the new line number.
     let done = mcp.complete(ids[2].clone(), true, None).await.unwrap();
     assert!(done.done);
+    assert_eq!(done.line, 3, "the done line is last now");
+    assert_eq!(done.id.as_deref(), Some(ids[2].as_str()));
+    assert!(
+        disk(dir.path()).starts_with("two\none\nx "),
+        "{}",
+        disk(dir.path())
+    );
     assert!(mcp.complete(ids[2].clone(), true, None).await.unwrap().done);
-    let archived = mcp.archive("todo.txt".into(), None).await.unwrap();
-    assert!(archived.applied > 0, "the done line moved to the bottom");
+    // The explicit full sort still works; here there is nothing left for it to reorder.
+    mcp.archive("todo.txt".into(), None).await.unwrap();
     let after = mcp.list(ListArgs::default()).await.unwrap();
     assert_eq!(after[2].id.as_deref(), Some(ids[2].as_str()));
     let undone = mcp.complete(ids[2].clone(), false, None).await.unwrap();
