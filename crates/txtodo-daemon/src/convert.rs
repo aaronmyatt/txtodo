@@ -131,6 +131,9 @@ pub fn parse_mutation(m: pb::Mutation) -> Result<Mutation, Status> {
         mutation::Kind::MoveToEnd(m) => Mutation::MoveToEnd {
             task: parse_task_ref(m.task)?,
         },
+        mutation::Kind::Reopen(r) => Mutation::Reopen {
+            task: parse_task_ref(r.task)?,
+        },
         mutation::Kind::MoveBefore(m) => Mutation::MoveBefore {
             task: parse_task_ref(m.task)?,
             before: parse_task_ref(m.before)?,

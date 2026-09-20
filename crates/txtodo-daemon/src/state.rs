@@ -367,7 +367,7 @@ impl DocState {
 }
 
 /// Whether a task line starts `x ` (completed); `false` for anything else, blanks included.
-fn is_completed(line: &OwnedLine) -> bool {
+pub(crate) fn is_completed(line: &OwnedLine) -> bool {
     matches!(line.parse().map(|l| l.kind), Some(LineKind::Task(t)) if t.completed)
 }
 

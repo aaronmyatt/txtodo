@@ -5,6 +5,7 @@
 use crate::expected::Hash;
 pub use crate::mutation_moves::{PeekedLine, peek_line};
 use crate::mutation_moves::{move_before_ops, move_ops, move_to_end_ops};
+use crate::mutation_reopen::reopen_ops;
 use crate::reconcile::change_ops;
 use crate::state::{DocState, Entry, id_of};
 use std::fmt;
@@ -79,6 +80,14 @@ pub enum Mutation {
         task: TaskRef,
         /// The task it lands in front of.
         before: TaskRef,
+    },
+    /// Reopens a completed task (task complete-to-bottom): clears the `x` and the completion
+    /// date, turns `pri:X` back into `(X)`, and moves the line to the end of the open block, just
+    /// above the first done line, so open lines stay on top. No move when it already sits there,
+    /// and nothing at all when the line was never done (`mutation_reopen.rs`).
+    Reopen {
+        /// The line.
+        task: TaskRef,
     },
     /// Replaces the whole document, but only if it still hashes to `base` (`replace.rs`): the
     /// caller's compare-and-swap for a diff no other mutation can express. Must be alone in its
@@ -200,6 +209,7 @@ fn mutation_kind(m: &Mutation) -> &'static str {
         Mutation::Delete { .. } => "delete",
         Mutation::MoveToEnd { .. } => "move_to_end",
         Mutation::MoveBefore { .. } => "move_before",
+        Mutation::Reopen { .. } => "reopen",
         Mutation::Replace { .. } => "replace",
         Mutation::RequireBase { .. } => "require_base",
     }
@@ -250,6 +260,7 @@ fn mutation_ops_inner(
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),
         Mutation::MoveToEnd { task } => move_to_end_ops(state, task),
+        Mutation::Reopen { task } => reopen_ops(state, task),
         Mutation::MoveBefore { task, before } => move_before_ops(state, task, before),
         // The actor takes a lone `Replace` before any op is derived (`replace.rs`); one reaching
         // here rode in a batch with other mutations.

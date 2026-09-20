@@ -61,6 +61,7 @@ mod move_coordinator;
 mod move_coordinator_tests;
 pub mod mutation;
 mod mutation_moves;
+mod mutation_reopen;
 mod notes;
 pub mod notes_actor;
 pub mod notes_history;
@@ -157,6 +158,8 @@ mod migrate_sidecar_tests;
 mod mirror_tests;
 #[cfg(test)]
 mod mutation_tests;
+#[cfg(test)]
+mod mutation_reopen_tests;
 #[cfg(test)]
 mod notes_actor_tests;
 #[cfg(test)]
