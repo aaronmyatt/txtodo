@@ -1,12 +1,12 @@
-2026-09-12 Add Maestro to the mobile CI workflow with emulator/simulator bootstrap and a pinned job retry policy +m9 @test id:01M2B4ZWCBM8JQMGDQH4H03ABX
-2026-09-12 Port the M7 Playwright scenario into a Maestro flow YAML shared by Android and iOS (tap/assert rendered attributed text) +m9 @test id:01M2B4ZWCB7RNQ2T1C5PTVMBB1
-2026-09-12 Flow: single tap opens the edit popover with the raw line incl id:01M2B4ZWCCRF96RTWB0SKQVR16 Save changes only that line +m9 @test
-2026-09-12 Flow: double-tap opens detail, first keystroke into empty notes.md creates the directory +m9 @test id:01M2B4ZWCC1BXW1JWYBVRKHBJR
-2026-09-12 Flow: sub-list line double-tap nests the breadcrumb (todo.txt › 2 › q4-roadmap/todo.txt › 3) +m9 @test id:01M2B4ZWCCHEBRT0BYKS5YK07A
-2026-09-12 Flow: conflict banner + review sheet (keep mine/theirs/merged) after a second daemon injects concurrent ops +m9 @test id:01M2B4ZWCCGBMK5RN7EXCN41WY
-2026-09-12 Assert rendered attributed text: id: hidden by default, completed line struck through (tokenize, not re-parse) +m9 @test id:01M2B4ZWCC7WSYJARMCPJSHX18
-2026-09-12 LAN convergence: pair phone + desktop on LAN via QR, assert the op lands ≤ 2 s (hard budget) +m9 @test id:01M2B4ZWCCG5N55S30W9YYBSDK
-2026-09-12 Relay convergence: pair over relay in the M8 two-network setup, assert transport=relay and ≤ 30 s (hard budget) +m9 @test id:01M2B4ZWCCPRZ20W5BMD2CECA7
-2026-09-12 Wire the ≤ 2 s and ≤ 30 s budgets into CI as hard failures, never warnings or skips +m9 @test id:01M2B4ZWCC6A0PRGWK20SEPJSR
-2026-09-12 Test: the same Maestro flow passes on Android and iOS, and the conflict sheet appears on both +m9 @test id:01M2B4ZWCC3TQCMA962B1AXY76
-2026-09-12 Complete the parent line in ./todo.txt +m9 @test id:01M2B4ZWCC2HZ9R1FQAVVN6DG0
+2026-09-12 Add Maestro to the mobile CI workflow with emulator/simulator bootstrap and a pinned job retry policy +m9 @test
+2026-09-12 Port the M7 Playwright scenario into a Maestro flow YAML shared by Android and iOS (tap/assert rendered attributed text) +m9 @test
+2026-09-12 Flow: single tap opens the edit popover with the raw line incl Save changes only that line +m9 @test
+2026-09-12 Flow: double-tap opens detail, first keystroke into empty notes.md creates the directory +m9 @test
+2026-09-12 Flow: sub-list line double-tap nests the breadcrumb (todo.txt › 2 › q4-roadmap/todo.txt › 3) +m9 @test
+2026-09-12 Flow: conflict banner + review sheet (keep mine/theirs/merged) after a second daemon injects concurrent ops +m9 @test
+2026-09-12 Assert rendered attributed text: id: hidden by default, completed line struck through (tokenize, not re-parse) +m9 @test
+2026-09-12 LAN convergence: pair phone + desktop on LAN via QR, assert the op lands ≤ 2 s (hard budget) +m9 @test
+2026-09-12 Relay convergence: pair over relay in the M8 two-network setup, assert transport=relay and ≤ 30 s (hard budget) +m9 @test
+2026-09-12 Wire the ≤ 2 s and ≤ 30 s budgets into CI as hard failures, never warnings or skips +m9 @test
+2026-09-12 Test: the same Maestro flow passes on Android and iOS, and the conflict sheet appears on both +m9 @test
+2026-09-12 Complete the parent line in ./todo.txt +m9 @test

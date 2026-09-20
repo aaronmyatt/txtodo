@@ -1,14 +1,14 @@
-2026-09-16 Complete the parent line in ./todo.txt +m11 @telemetry id:01M2M6KFD1VCK3D2R6ARME12X8
-x 2026-09-16 2026-09-16 root Cargo.toml workspace.dependencies wiring: done (commit f080510). .claude/budgets.json allowedDeps x4 redirected — each consumer crate (daemon/cli/tui/mcp, items 174/181/182/183) adds its own entry when it adds the txtodo-telemetry dep id:01M2S0SX3Z4JTD7MJGPMDZQNJK
-x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-telemetry: done, all green. -p txtodo-daemon portion redirected to logging-daemon-boot (todo.txt:174) alongside its thin re-export id:01M2S0SX3ZCHGM80MA6H9G2A2X
-x 2026-09-16 2026-09-16 crates/txtodo-daemon/src/telemetry.rs thin re-export: redirected — absorbed into logging-daemon-boot (todo.txt:174), which already owns this exact swap id:01M2S0SX3ZKJJTHECH0Q5S3T58
-x 2026-09-16 2026-09-16 Append As built section to tasks/logging-telemetry-crate/notes.md +m11 @telemetry id:01M2M6KFCQJW9JK1VN7DMAC9NX
-x 2026-09-16 2026-09-16 Test proving the schema: service field present on every emitted line, using testing::LogSink +m11 @telemetry @test id:01M2M6KFC5VAQNJQ1YYA1EBQC4
-x 2026-09-16 2026-09-16 Fix the drifted boot field name (workspace vs dir at main.rs:332), pick one and document the decision in notes.md +m11 @telemetry id:01M2M6KFAYV3ZK65FRK5FHKC8D
-x 2026-09-16 2026-09-16 pub mod testing: move LogSink MakeWriter out of daemon/src/lan_session_security_tests.rs:26-60 into txtodo-telemetry::testing +m11 @telemetry id:01M2M6KFAM6PD9JYV7J0TF0Y73
-x 2026-09-16 2026-09-16 Move prune() and its existing test from daemon/src/telemetry.rs into txtodo-telemetry, parameterized on file prefix +m11 @telemetry id:01M2M6KFABST5ETGKE2ZGJ6K2J
-x 2026-09-16 2026-09-16 Stamp a service field on every emitted line (JSON + pretty layers) via a MakeWriter wrapper +m11 @telemetry id:01M2M6KFA3F5VX2WKWPGF8Z1VQ
-x 2026-09-16 2026-09-16 TXTODO_LOG EnvFilter default info, keep loro=warn/loro_internal=warn directives +m11 @telemetry id:01M2M6KF9SKJ6Z1PDD67TS9B55
-x 2026-09-16 2026-09-16 Add a pretty stderr fmt layer alongside the JSON file layer, same EnvFilter +m11 @telemetry id:01M2M6KF9GVZQEXBHVCCADYAGM
-x 2026-09-16 2026-09-16 Lift the JSON rolling-file layer from crates/txtodo-daemon/src/telemetry.rs:23-43 into txtodo-telemetry::init, param on service name +m11 @telemetry id:01M2M6KF96V0Y7H0H2N8J098Y8
-x 2026-09-16 2026-09-16 New crates/txtodo-telemetry/Cargo.toml + src/lib.rs: leaf crate, workspace deps only (tracing, tracing-subscriber, tracing-appender) +m11 @telemetry id:01M2M6KF8WS8V8QP4N9N5VQ2MH
+2026-09-16 Complete the parent line in ./todo.txt +m11 @telemetry
+x 2026-09-16 2026-09-16 root Cargo.toml workspace.dependencies wiring: done (commit f080510). .claude/budgets.json allowedDeps x4 redirected — each consumer crate (daemon/cli/tui/mcp, items 174/181/182/183) adds its own entry when it adds the txtodo-telemetry dep
+x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-telemetry: done, all green. -p txtodo-daemon portion redirected to logging-daemon-boot (todo.txt:174) alongside its thin re-export
+x 2026-09-16 2026-09-16 crates/txtodo-daemon/src/telemetry.rs thin re-export: redirected — absorbed into logging-daemon-boot (todo.txt:174), which already owns this exact swap
+x 2026-09-16 2026-09-16 Append As built section to tasks/logging-telemetry-crate/notes.md +m11 @telemetry
+x 2026-09-16 2026-09-16 Test proving the schema: service field present on every emitted line, using testing::LogSink +m11 @telemetry @test
+x 2026-09-16 2026-09-16 Fix the drifted boot field name (workspace vs dir at main.rs:332), pick one and document the decision in notes.md +m11 @telemetry
+x 2026-09-16 2026-09-16 pub mod testing: move LogSink MakeWriter out of daemon/src/lan_session_security_tests.rs:26-60 into txtodo-telemetry::testing +m11 @telemetry
+x 2026-09-16 2026-09-16 Move prune() and its existing test from daemon/src/telemetry.rs into txtodo-telemetry, parameterized on file prefix +m11 @telemetry
+x 2026-09-16 2026-09-16 Stamp a service field on every emitted line (JSON + pretty layers) via a MakeWriter wrapper +m11 @telemetry
+x 2026-09-16 2026-09-16 TXTODO_LOG EnvFilter default info, keep loro=warn/loro_internal=warn directives +m11 @telemetry
+x 2026-09-16 2026-09-16 Add a pretty stderr fmt layer alongside the JSON file layer, same EnvFilter +m11 @telemetry
+x 2026-09-16 2026-09-16 Lift the JSON rolling-file layer from crates/txtodo-daemon/src/telemetry.rs:23-43 into txtodo-telemetry::init, param on service name +m11 @telemetry
+x 2026-09-16 2026-09-16 New crates/txtodo-telemetry/Cargo.toml + src/lib.rs: leaf crate, workspace deps only (tracing, tracing-subscriber, tracing-appender) +m11 @telemetry

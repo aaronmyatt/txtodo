@@ -1,5 +1,5 @@
-x 2026-09-11 2026-09-11 Cargo.toml features: default = ["std"]; std = []; crate root #![cfg_attr(not(feature = "std"), no_std)] + extern crate alloc +m1 @core id:01M2B4ZVV0JHFFSTY5DK4XY5YH
-x 2026-09-11 2026-09-11 Replace std:: paths with core::/alloc:: throughout (String, Vec, format!, ToString); std::error::Error impl behind cfg(feature = "std") +m1 @core id:01M2B4ZVV0BNPFKGT8YNEM0Q2J
-x 2026-09-11 2026-09-11 CI step: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf (rustup target add) proves no std leaks +m1 @core @ci id:01M2B4ZVV0RQ4V532YZXJG35KW
-x 2026-09-11 2026-09-11 just check gains the no_std build; budgets.json commands.noStd records it +m1 @core id:01M2B4ZVV0F75PP7F9EB1CBV0B
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core id:01M2B4ZVV0YZP23N8K5XW8HH1R
+x 2026-09-11 2026-09-11 Cargo.toml features: default = ["std"]; std = []; crate root #![cfg_attr(not(feature = "std"), no_std)] + extern crate alloc +m1 @core
+x 2026-09-11 2026-09-11 Replace std:: paths with core::/alloc:: throughout (String, Vec, format!, ToString); std::error::Error impl behind cfg(feature = "std") +m1 @core
+x 2026-09-11 2026-09-11 CI step: cargo build -p txtodo-core --no-default-features --target thumbv7em-none-eabihf (rustup target add) proves no std leaks +m1 @core @ci
+x 2026-09-11 2026-09-11 just check gains the no_std build; budgets.json commands.noStd records it +m1 @core
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core

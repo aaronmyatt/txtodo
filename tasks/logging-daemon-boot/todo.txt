@@ -1,9 +1,9 @@
-x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-daemon all green +m11 @daemon @test id:01M2MC0R6EV40N69B8YBP2K1Y2 — fmt/clippy clean; test: 207 unit + every integration binary green except pairing_relay.rs's pre-existing, documented, real-network flake (unrelated to this change, see notes.md)
-x 2026-09-16 2026-09-16 Migrate security_m8_tests.rs off lan_session_security_tests re-exports onto txtodo_telemetry::testing directly +m11 @daemon @test id:01M2MC0R65S4VVE9SS0HX061WQ
-x 2026-09-16 2026-09-16 Migrate lan_session_security_tests.rs off its local LogSink/capturing_dispatch onto txtodo_telemetry::testing +m11 @daemon @test id:01M2MC0R5WNMCTRKNYKD32BHCB
-x 2026-09-16 2026-09-16 Fix workspace_catalog.rs:183 prose log message into a snake_case event name +m11 @daemon id:01M2MC0R5KQTXFPWJ4YYF6CPHC
-x 2026-09-16 2026-09-16 Convert the txtodod stopped eprintln at main.rs:394 into a daemon_stopped tracing event +m11 @daemon id:01M2MC0R59MTXNK8NJ4DA9ABTY
-x 2026-09-16 2026-09-16 Convert the txtodod ready eprintln at main.rs:340 into a daemon_ready tracing event +m11 @daemon id:01M2MC0R4Z4YSKSRKJGYMT6S3B
-x 2026-09-16 2026-09-16 daemon.boot span at main.rs run() with version/mode/socket fields, entered for the boot sequence only +m11 @daemon id:01M2MC0R4NTD878W9RZ1RY2ZJB
-x 2026-09-16 2026-09-16 Swap telemetry.rs to a thin re-export of txtodo_telemetry::init("txtodod", ...) +m11 @daemon id:01M2MC0R4BYKSYACPQ5HM0KFMF
-x 2026-09-16 2026-09-16 Add txtodo-telemetry to daemon Cargo.toml and .claude/budgets.json allowedDeps +m11 @daemon id:01M2MC0FNNHCPG977A7AESHM3H
+x 2026-09-16 2026-09-16 cargo fmt/clippy/test -p txtodo-daemon all green +m11 @daemon @test — fmt/clippy clean; test: 207 unit + every integration binary green except pairing_relay.rs's pre-existing, documented, real-network flake (unrelated to this change, see notes.md)
+x 2026-09-16 2026-09-16 Migrate security_m8_tests.rs off lan_session_security_tests re-exports onto txtodo_telemetry::testing directly +m11 @daemon @test
+x 2026-09-16 2026-09-16 Migrate lan_session_security_tests.rs off its local LogSink/capturing_dispatch onto txtodo_telemetry::testing +m11 @daemon @test
+x 2026-09-16 2026-09-16 Fix workspace_catalog.rs:183 prose log message into a snake_case event name +m11 @daemon
+x 2026-09-16 2026-09-16 Convert the txtodod stopped eprintln at main.rs:394 into a daemon_stopped tracing event +m11 @daemon
+x 2026-09-16 2026-09-16 Convert the txtodod ready eprintln at main.rs:340 into a daemon_ready tracing event +m11 @daemon
+x 2026-09-16 2026-09-16 daemon.boot span at main.rs run() with version/mode/socket fields, entered for the boot sequence only +m11 @daemon
+x 2026-09-16 2026-09-16 Swap telemetry.rs to a thin re-export of txtodo_telemetry::init("txtodod", ...) +m11 @daemon
+x 2026-09-16 2026-09-16 Add txtodo-telemetry to daemon Cargo.toml and .claude/budgets.json allowedDeps +m11 @daemon

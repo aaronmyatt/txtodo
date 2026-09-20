@@ -1,6 +1,6 @@
-x 2026-09-16 2026-09-16 cargo fmt/clippy/test green, write As built notes, mark root todo.txt line 36 done +m11 @desktop id:01M2MX30DPZS80G0XNP91EBVR6
-x 2026-09-16 2026-09-16 instrument daemon/spawn.rs ensure_daemon +m11 @desktop id:01M2MX30DC63Q2TYHG32PCD7RF
-x 2026-09-16 2026-09-16 instrument commands_universal.rs and commands_workspace.rs tauri commands +m11 @desktop id:01M2MX30D1AKPAW51CF4TWZFS7
-x 2026-09-16 2026-09-16 instrument commands_activity/notes/pairing/tokens.rs tauri commands +m11 @desktop id:01M2MX30CPSAHD2CX13Q19KQYT
-x 2026-09-16 2026-09-16 instrument all commands.rs tauri commands + add ui_log command +m11 @desktop id:01M2MX30CC10NEZTQWDFQBDNC8
-x 2026-09-16 2026-09-16 install txtodo_telemetry::init in lib.rs run(), fix connect_and_store silent discard +m11 @desktop id:01M2MX30BW2QPTP693RDRE4M5C
+x 2026-09-16 2026-09-16 cargo fmt/clippy/test green, write As built notes, mark root todo.txt line 36 done +m11 @desktop
+x 2026-09-16 2026-09-16 instrument daemon/spawn.rs ensure_daemon +m11 @desktop
+x 2026-09-16 2026-09-16 instrument commands_universal.rs and commands_workspace.rs tauri commands +m11 @desktop
+x 2026-09-16 2026-09-16 instrument commands_activity/notes/pairing/tokens.rs tauri commands +m11 @desktop
+x 2026-09-16 2026-09-16 instrument all commands.rs tauri commands + add ui_log command +m11 @desktop
+x 2026-09-16 2026-09-16 install txtodo_telemetry::init in lib.rs run(), fix connect_and_store silent discard +m11 @desktop

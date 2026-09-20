@@ -1,4 +1,4 @@
-x 2026-09-11 2026-09-11 crates/txtodo-core/tests/edge_cases.rs: one #[test] per row of design §2.4, named after the row (email_at_is_not_a_context, url_is_not_a_tag, …) +m1 @core @test id:01M2B4ZVT39VM7D9C5CNK82XKX
-x 2026-09-11 2026-09-11 Each test asserts the parsed fields AND the token kinds AND the views (contexts/projects/tags) for its line +m1 @core @test id:01M2B4ZVT3C4JVEPFY0F8PBVT7
-x 2026-09-11 2026-09-11 Add the CRLF row as a parse_file test on a two-line CRLF input +m1 @core @test id:01M2B4ZVT3MHWMAG20QE00STJS
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test id:01M2B4ZVT3F9HEZ3F4NAHCPV38
+x 2026-09-11 2026-09-11 crates/txtodo-core/tests/edge_cases.rs: one #[test] per row of design §2.4, named after the row (email_at_is_not_a_context, url_is_not_a_tag, …) +m1 @core @test
+x 2026-09-11 2026-09-11 Each test asserts the parsed fields AND the token kinds AND the views (contexts/projects/tags) for its line +m1 @core @test
+x 2026-09-11 2026-09-11 Add the CRLF row as a parse_file test on a two-line CRLF input +m1 @core @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core @test

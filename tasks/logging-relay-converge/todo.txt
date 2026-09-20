@@ -1,5 +1,5 @@
-x 2026-09-16 2026-09-16 verify: cargo fmt/clippy/test -p relay green, no_txtodo_deps.rs still passes +m11 @relay id:01M2MYCNHMR37RGWW7QE60W6AT
-x 2026-09-16 2026-09-16 deploy/systemd/relay.service: note JSON file log now also controlled by RELAY_LOG/TXTODO_LOG +m11 @relay id:01M2MYCNH85PAGZA415NVGQABZ
-x 2026-09-16 2026-09-16 docs/relay.md: document Logging section (RELAY_LOG/TXTODO_LOG, file location) +m11 @relay id:01M2MYCNGV7YABT3HSS1X687FN
-x 2026-09-16 2026-09-16 relay/Cargo.toml: add tracing-appender dep, tracing-subscriber json feature +m11 @relay id:01M2MYCNGEK2P5G59N83QWM6GY
-x 2026-09-16 2026-09-16 relay/main.rs: reimplement JSON-file+pretty-stderr init locally (no txtodo-telemetry dep), RELAY_LOG then TXTODO_LOG precedence +m11 @relay id:01M2MYCNFW3AVR3YMR2TJ15YYZ
+x 2026-09-16 2026-09-16 verify: cargo fmt/clippy/test -p relay green, no_txtodo_deps.rs still passes +m11 @relay
+x 2026-09-16 2026-09-16 deploy/systemd/relay.service: note JSON file log now also controlled by RELAY_LOG/TXTODO_LOG +m11 @relay
+x 2026-09-16 2026-09-16 docs/relay.md: document Logging section (RELAY_LOG/TXTODO_LOG, file location) +m11 @relay
+x 2026-09-16 2026-09-16 relay/Cargo.toml: add tracing-appender dep, tracing-subscriber json feature +m11 @relay
+x 2026-09-16 2026-09-16 relay/main.rs: reimplement JSON-file+pretty-stderr init locally (no txtodo-telemetry dep), RELAY_LOG then TXTODO_LOG precedence +m11 @relay

@@ -1,16 +1,16 @@
-x 2026-09-12 2026-09-12 Register a long-term X25519 public key per device during pairing; this must land before rotation has anything to wrap to +m4 @sync id:01M2B4ZWJSK5CGVYAZVZD6CWVX
-2026-09-12 devices table or meta entries holding device id, name, static public key, last seen and key epoch +m4 @store id:01M2B4ZWJTZP49HMXWS9KFXZQZ
-x 2026-09-12 2026-09-12 rotate.rs: close epoch N locally first, then generate N+1, then wrap one grant per remaining device +m4 @sync id:01M2B4ZWJT56A0EAR9YWPM0C0D
-2026-09-12 Stop advertising to and accepting sessions from the removed device only after the epoch is closed +m4 @sync — blocked: needs the devices table (to know who's removed) plus daemon-level discovery/session wiring, neither built yet; off-limits this session id:01M2B4ZWJTSEG7FBR8QH5NRA23
-x 2026-09-12 2026-09-12 Refuse to remove this device and refuse to remove the last device, with distinct messages +m4 @sync id:01M2B4ZWJTVKKGZZENVZK6YHTJ
-2026-09-12 Removing an already-removed device rotates nothing and says so; rotation is idempotent +m4 @sync — blocked: validate_removal(removing, this_device, devices_before: usize) only takes a device *count*, not a set, so it cannot tell "already removed" from "never existed"; needs the devices table (line above) first id:01M2B4ZWJT90QZCQYSDXXACG3S
-2026-09-12 CLI txtodo device list: id, name, last seen, key epoch, and a marker for this device +m4 @cli — blocked: txtodo-cli cannot reach txtodo-sync/txtodo-store directly (allowedDeps); needs a new gRPC method on txtodo-daemon (off-limits this session) id:01M2B4ZWJTME83JZ541K8EY4V7
-2026-09-12 CLI txtodo device remove requires confirmation naming the device; --yes exists for scripts and is not the default +m4 @cli — blocked: same CLI/daemon surface as the line above id:01M2B4ZWJTS00TRF2GK58PQMY0
-2026-09-12 CLI prints that the removed device keeps history already synced and rotation only covers future ops +m4 @cli @security — blocked: same CLI/daemon surface id:01M2B4ZWJT2WTC84WZFP8THZGD
-x 2026-09-12 2026-09-12 Justify MAX_RETAINED_KEY_EPOCHS against the rotation rate in ./notes.md rather than picking a number +m4 @sync @security id:01M2B4ZWJTW2CY52JH8JP85365
-2026-09-12 Test: after rotation an op sealed by a remaining device does not open under the old key +m4 @sync @test id:01M2B4ZWJTJSZ6G0M3T5V797BG
-x 2026-09-12 2026-09-12 Test: the removed device has no grant for the new epoch, asserted on the grant set not on a failed decrypt +m4 @sync @test @security id:01M2B4ZWJTSKWJ8GZZ3DXPC3PG
-2026-09-12 Test: a device offline during rotation returns, finds its grant and reads new ops +m4 @sync @test id:01M2B4ZWJTYBB5RCVBQR5DSX8W
-2026-09-12 Test: ops sealed before the rotation still open under the retained old epoch +m4 @sync @test id:01M2B4ZWJT5J28Y1QXEWAJR1RT
-2026-09-12 Tests: remove self, remove last device, remove twice each fail or no-op distinctly +m4 @sync @test — remove-self/remove-last-device are covered by the already-tested validate_removal; remove-twice is blocked on the devices table, same as the idempotency line above id:01M2B4ZWJT5EMK26FCATS5G2SD
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @cli id:01M2B4ZWJT381VY8ZZ4HFSDJMJ
+x 2026-09-12 2026-09-12 Register a long-term X25519 public key per device during pairing; this must land before rotation has anything to wrap to +m4 @sync
+2026-09-12 devices table or meta entries holding device id, name, static public key, last seen and key epoch +m4 @store
+x 2026-09-12 2026-09-12 rotate.rs: close epoch N locally first, then generate N+1, then wrap one grant per remaining device +m4 @sync
+2026-09-12 Stop advertising to and accepting sessions from the removed device only after the epoch is closed +m4 @sync — blocked: needs the devices table (to know who's removed) plus daemon-level discovery/session wiring, neither built yet; off-limits this session
+x 2026-09-12 2026-09-12 Refuse to remove this device and refuse to remove the last device, with distinct messages +m4 @sync
+2026-09-12 Removing an already-removed device rotates nothing and says so; rotation is idempotent +m4 @sync — blocked: validate_removal(removing, this_device, devices_before: usize) only takes a device *count*, not a set, so it cannot tell "already removed" from "never existed"; needs the devices table (line above) first
+2026-09-12 CLI txtodo device list: id, name, last seen, key epoch, and a marker for this device +m4 @cli — blocked: txtodo-cli cannot reach txtodo-sync/txtodo-store directly (allowedDeps); needs a new gRPC method on txtodo-daemon (off-limits this session)
+2026-09-12 CLI txtodo device remove requires confirmation naming the device; --yes exists for scripts and is not the default +m4 @cli — blocked: same CLI/daemon surface as the line above
+2026-09-12 CLI prints that the removed device keeps history already synced and rotation only covers future ops +m4 @cli @security — blocked: same CLI/daemon surface
+x 2026-09-12 2026-09-12 Justify MAX_RETAINED_KEY_EPOCHS against the rotation rate in ./notes.md rather than picking a number +m4 @sync @security
+2026-09-12 Test: after rotation an op sealed by a remaining device does not open under the old key +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: the removed device has no grant for the new epoch, asserted on the grant set not on a failed decrypt +m4 @sync @test @security
+2026-09-12 Test: a device offline during rotation returns, finds its grant and reads new ops +m4 @sync @test
+2026-09-12 Test: ops sealed before the rotation still open under the retained old epoch +m4 @sync @test
+2026-09-12 Tests: remove self, remove last device, remove twice each fail or no-op distinctly +m4 @sync @test — remove-self/remove-last-device are covered by the already-tested validate_removal; remove-twice is blocked on the devices table, same as the idempotency line above
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @cli

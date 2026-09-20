@@ -1,7 +1,7 @@
-x 2026-09-12 2026-09-11 Dependency ask: tracing, tracing-subscriber (json + env-filter), tracing-appender (rolling) +m3 @daemon id:01M2B4ZW2HGWYCV0Y76BAPW9AA
-x 2026-09-12 2026-09-11 telemetry.rs: init(logs_dir) installs a JSON layer writing .txtodo/logs/txtodod.log.YYYY-MM-DD with daily rotation; RUST_LOG-style filter defaults to info +m3 @daemon id:01M2B4ZW2HWR9CPQN5NC5FTAFB
-x 2026-09-12 2026-09-11 Span reconcile{file} around read → reconcile → append → write; events ops_derived{count}, projection_written{bytes, hash}, ignored_own_write{reason} +m3 @daemon id:01M2B4ZW2HCFW3K762X5Q4DCG3
-x 2026-09-12 2026-09-11 Retention: LOG_KEEP_FILES = 7; older files pruned at startup, count asserted afterwards +m3 @daemon id:01M2B4ZW2HGWZYHG10ETYTB0J5
-x 2026-09-12 2026-09-11 Never log line text, tokens or payload bytes — ids, counts and hashes only (plan §5 security checklist); a test greps the events for a sentinel task text +m3 @daemon @security id:01M2B4ZW2HX6PTWAMKZEZ1CHVH
-x 2026-09-12 2026-09-11 Tests: a capturing subscriber sees span reconcile with field file; prune keeps exactly 7 of 10 fixture files; log lines parse as JSON +m3 @daemon @test id:01M2B4ZW2HSCENTCHHXGN0XZ4G
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon id:01M2B4ZW2HSZ2RPC1ACWE8NXMG
+x 2026-09-12 2026-09-11 Dependency ask: tracing, tracing-subscriber (json + env-filter), tracing-appender (rolling) +m3 @daemon
+x 2026-09-12 2026-09-11 telemetry.rs: init(logs_dir) installs a JSON layer writing .txtodo/logs/txtodod.log.YYYY-MM-DD with daily rotation; RUST_LOG-style filter defaults to info +m3 @daemon
+x 2026-09-12 2026-09-11 Span reconcile{file} around read → reconcile → append → write; events ops_derived{count}, projection_written{bytes, hash}, ignored_own_write{reason} +m3 @daemon
+x 2026-09-12 2026-09-11 Retention: LOG_KEEP_FILES = 7; older files pruned at startup, count asserted afterwards +m3 @daemon
+x 2026-09-12 2026-09-11 Never log line text, tokens or payload bytes — ids, counts and hashes only (plan §5 security checklist); a test greps the events for a sentinel task text +m3 @daemon @security
+x 2026-09-12 2026-09-11 Tests: a capturing subscriber sees span reconcile with field file; prune keeps exactly 7 of 10 fixture files; log lines parse as JSON +m3 @daemon @test
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon

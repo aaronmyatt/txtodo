@@ -1,11 +1,11 @@
-2026-09-12 Note in ./notes.md which assertions are unit level in txtodo-sync and which are integration level here, so neither set is deleted as redundant +m4 @sync @test id:01M2B4ZWN7GWB1G65E6DWKS9DP
-2026-09-12 Tampering Link implementation that captures a frame, flips a chosen byte and forwards it +m4 @sync @test id:01M2B4ZWN7NM3HPKGKM7J27H20
-2026-09-12 Test: a flipped byte inside the signed op payload fails signature verification +m4 @sync @test @security id:01M2B4ZWN7QNA2QT86SC8382DR
-2026-09-12 Test: a flipped byte in the AEAD ciphertext fails the tag and never reaches decryption +m4 @sync @test @security id:01M2B4ZWN76G2EA8K7Y6MC9H7R
-2026-09-12 Test: a flipped byte in the cleartext key_epoch header gives an unknown-epoch error +m4 @sync @test @security id:01M2B4ZWN785DK143Z5DM12FPH
-2026-09-12 Test: a peer holding the group id but not the key gets past discovery and fails at the first sealed batch +m4 @sync @test @security id:01M2B4ZWN7A03YQD1TK0GAAYPV
-2026-09-12 Test: a peer from another group is dropped before a connection opens +m4 @sync @test @security id:01M2B4ZWN75DY4JHRHGXJ4WRKR
-2026-09-12 After every rejection assert the victim's op count is unchanged, the projection is unchanged and todo.txt is byte-identical +m4 @sync @test id:01M2B4ZWN7YEQGNGGT4AD1MM1B
-2026-09-12 Assert the rejection reason reaches the daemon JSON logs with the peer and the cause +m4 @sync @test @security id:01M2B4ZWN75Z7RNVT923A8E00Y
-2026-09-12 Grep the import path for log-and-continue on a verification error; a rejected batch must propagate +m4 @sync @security id:01M2B4ZWN74M1S0J1WQG4JF2YC
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @test id:01M2B4ZWN85SD9J02AZRH8ZJB3
+2026-09-12 Note in ./notes.md which assertions are unit level in txtodo-sync and which are integration level here, so neither set is deleted as redundant +m4 @sync @test
+2026-09-12 Tampering Link implementation that captures a frame, flips a chosen byte and forwards it +m4 @sync @test
+2026-09-12 Test: a flipped byte inside the signed op payload fails signature verification +m4 @sync @test @security
+2026-09-12 Test: a flipped byte in the AEAD ciphertext fails the tag and never reaches decryption +m4 @sync @test @security
+2026-09-12 Test: a flipped byte in the cleartext key_epoch header gives an unknown-epoch error +m4 @sync @test @security
+2026-09-12 Test: a peer holding the group id but not the key gets past discovery and fails at the first sealed batch +m4 @sync @test @security
+2026-09-12 Test: a peer from another group is dropped before a connection opens +m4 @sync @test @security
+2026-09-12 After every rejection assert the victim's op count is unchanged, the projection is unchanged and todo.txt is byte-identical +m4 @sync @test
+2026-09-12 Assert the rejection reason reaches the daemon JSON logs with the peer and the cause +m4 @sync @test @security
+2026-09-12 Grep the import path for log-and-continue on a verification error; a rejected batch must propagate +m4 @sync @security
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @test

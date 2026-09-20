@@ -1,13 +1,13 @@
-2026-09-12 apps/desktop/src/Popover.svelte: extract the single-line CM6 popover (chips, strict-mode validation, footer, Enter/Esc) so main view and quick-add share it +m7 @desktop id:01M2B4ZW5QX170Y6X6JEBP9YCJ
-2026-09-12 apps/desktop/src/MainView.svelte: re-wire the edit popover to mount the extracted Popover.svelte with initialLine=raw and onSave=apply_line +m7 @desktop id:01M2B4ZW5QPNVJBKMB45BEHVTJ
-2026-09-12 apps/desktop/src/QuickAdd.svelte: a small always-on-top window mounting Popover.svelte with initialLine="" and anchor=null (no Line N footer) +m7 @desktop id:01M2B4ZW5Q35QP7G16D5HNSG0M
-2026-09-12 apps/desktop/src-tauri/main.rs: tray icon + menu entry via Tauri 2 system tray (https://v2.tauri.app/learn/system-tray/) opening the quick-add window +m7 @desktop id:01M2B4ZW5QXT6WN16MDGTR8HJM — superseded by tasks/desktop-always-on/ (tray built there, wired to Open/Quick Add/Quit instead of quick-add-only)
-2026-09-12 apps/desktop/src-tauri/main.rs: register Cmd/Ctrl+Shift+Space via @tauri-apps/plugin-global-shortcut; handler focuses the quick-add input and never touches the file +m7 @desktop id:01M2B4ZW5QWMC0A82TRBGZ7HEW
-2026-09-12 apps/desktop/src-tauri/main.rs: re-register the shortcut when the quick-add window hides so it never silently dies after first use +m7 @desktop id:01M2B4ZW5QPZKMQY76KQBZR8GM
-2026-09-12 apps/desktop/src/QuickAdd.svelte: onSave sends the raw line through the same apply_line Tauri command; daemon stamps creation date + id: +m7 @desktop id:01M2B4ZW5QMT1PND9XTXGPX88M
-2026-09-12 apps/desktop/src/QuickAdd.svelte: Esc/cancel closes with no op-log entry; empty or identical submit is a no-op +m7 @desktop id:01M2B4ZW5QV2AVCA36E5E2ETH3
-2026-09-12 apps/desktop/src-tauri/main.rs: guard the hotkey — if the main popover is open and dirty, focus the main window instead of opening a second quick-add +m7 @desktop id:01M2B4ZW5QQS385DQKAMVRCX76
-2026-09-12 Test: invoke the hotkey/direct command while another app is focused; the quick-add window opens with an empty focused input +m7 @desktop @test id:01M2B4ZW5Q6FTM1DYKDE3Q1C83
-2026-09-12 Test: Enter writes exactly one line through the daemon; on-disk byte diff shows only that line with stamped date + id: +m7 @desktop @test id:01M2B4ZW5QRA03H3GE0KJM8VQD
-2026-09-12 Test: Esc and empty submit write nothing (assert no new op-log entry); main view and quick-add mount the same Popover.svelte component +m7 @desktop @test id:01M2B4ZW5QBTQW4388WY0FTVP6
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW5QZP37GX58PBDVG51Q
+2026-09-12 apps/desktop/src/Popover.svelte: extract the single-line CM6 popover (chips, strict-mode validation, footer, Enter/Esc) so main view and quick-add share it +m7 @desktop
+2026-09-12 apps/desktop/src/MainView.svelte: re-wire the edit popover to mount the extracted Popover.svelte with initialLine=raw and onSave=apply_line +m7 @desktop
+2026-09-12 apps/desktop/src/QuickAdd.svelte: a small always-on-top window mounting Popover.svelte with initialLine="" and anchor=null (no Line N footer) +m7 @desktop
+2026-09-12 apps/desktop/src-tauri/main.rs: tray icon + menu entry via Tauri 2 system tray (https://v2.tauri.app/learn/system-tray/) opening the quick-add window +m7 @desktop — superseded by tasks/desktop-always-on/ (tray built there, wired to Open/Quick Add/Quit instead of quick-add-only)
+2026-09-12 apps/desktop/src-tauri/main.rs: register Cmd/Ctrl+Shift+Space via @tauri-apps/plugin-global-shortcut; handler focuses the quick-add input and never touches the file +m7 @desktop
+2026-09-12 apps/desktop/src-tauri/main.rs: re-register the shortcut when the quick-add window hides so it never silently dies after first use +m7 @desktop
+2026-09-12 apps/desktop/src/QuickAdd.svelte: onSave sends the raw line through the same apply_line Tauri command; daemon stamps creation date + id: +m7 @desktop
+2026-09-12 apps/desktop/src/QuickAdd.svelte: Esc/cancel closes with no op-log entry; empty or identical submit is a no-op +m7 @desktop
+2026-09-12 apps/desktop/src-tauri/main.rs: guard the hotkey — if the main popover is open and dirty, focus the main window instead of opening a second quick-add +m7 @desktop
+2026-09-12 Test: invoke the hotkey/direct command while another app is focused; the quick-add window opens with an empty focused input +m7 @desktop @test
+2026-09-12 Test: Enter writes exactly one line through the daemon; on-disk byte diff shows only that line with stamped date + id: +m7 @desktop @test
+2026-09-12 Test: Esc and empty submit write nothing (assert no new op-log entry); main view and quick-add mount the same Popover.svelte component +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop

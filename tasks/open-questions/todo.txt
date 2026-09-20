@@ -1,5 +1,5 @@
-x 2026-09-11 2026-09-11 Create docs/questions.md with the header and per-question template from notes.md +m0 @docs id:01M2B4ZWE2CD757C8PN97B3EQZ
-x 2026-09-11 2026-09-11 Add Q1 ref-dir attachments (default no), Q2 sidecar weights (M10), Q3 rec: core or plugin (plugin) +m0 @docs id:01M2B4ZWE20D8VTEQ3YWYYA2JZ
-x 2026-09-11 2026-09-11 Add Q4 iOS Local Network vs relay-only, Q5 public relay vs self-host +m0 @docs id:01M2B4ZWE2ETTDPGEPVF52PJPP
-x 2026-09-11 2026-09-11 Cross-link: each +questions line in ./todo.txt gets ref:open-questions +m0 @docs id:01M2B4ZWE2371WVT66WMBR4TKB
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs id:01M2B4ZWE232DXA12J2Q4GT4E2
+x 2026-09-11 2026-09-11 Create docs/questions.md with the header and per-question template from notes.md +m0 @docs
+x 2026-09-11 2026-09-11 Add Q1 ref-dir attachments (default no), Q2 sidecar weights (M10), Q3 rec: core or plugin (plugin) +m0 @docs
+x 2026-09-11 2026-09-11 Add Q4 iOS Local Network vs relay-only, Q5 public relay vs self-host +m0 @docs
+x 2026-09-11 2026-09-11 Cross-link: each +questions line in ./todo.txt gets ref:open-questions +m0 @docs
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @docs

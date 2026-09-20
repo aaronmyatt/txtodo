@@ -1,16 +1,16 @@
-x 2026-09-12 2026-09-12 KeyId enum DeviceSigning DeviceStatic Group(epoch) and trait KeyStore get put delete, no string keys +m4 @sync id:01M2B4ZWKD2763MX53K47J4VEW
-x 2026-09-12 2026-09-12 Secret type with zeroize on drop and a manual Debug printing Secret(<redacted>), never a derive +m4 @sync @security id:01M2B4ZWKDVWBV1V4K6SXQEP8C
-x 2026-09-12 2026-09-12 os.rs: keyring backend, one entry per KeyId; unavailable is a typed error naming the backend and the reason +m4 @sync id:01M2B4ZWKDSAXD2KD505KM7M62
-x 2026-09-12 2026-09-12 file.rs: Argon2id header with ARGON2_MEMORY_KIB ITERATIONS PARALLELISM stored per file, sealed with XChaCha20-Poly1305 +m4 @sync id:01M2B4ZWKD6SWNQP5XV78B65Z7
-x 2026-09-12 2026-09-12 Create the key file 0600 at creation, and refuse to open a group- or world-readable file rather than repairing it +m4 @sync @security id:01M2B4ZWKEHF6FNECPFPAZH8TT
-2026-09-12 config key_store = auto | os | file; auto never writes a key file on its own, it stops and says what to do +m4 @cli @security — blocked: needs whichever process actually opens the keystore at startup (the daemon; off-limits this session) to read the config and call resolve() id:01M2B4ZWKEY6SXHY89QQ4XWD56
-2026-09-12 Prompt the passphrase without echo and zeroize it; never a key in an argv, an env var or an error message +m4 @cli @security — blocked: depends on the same config-wiring decision above (which process prompts, CLI or daemon) id:01M2B4ZWKE53SYVM73DG6F6NGT
-x 2026-09-12 2026-09-12 MAX_STORED_EPOCHS defined once and imported by the crypto task, not duplicated as a second number +m4 @sync id:01M2B4ZWKE56H2PD477MKX9VBG
-2026-09-12 txtodo doctor reports the active key backend by name +m4 @cli — blocked: txtodo-cli cannot reach txtodo-sync directly (allowedDeps); needs a new gRPC method on txtodo-daemon (off-limits this session) id:01M2B4ZWKEKE3T26CJEXGHHNSC
-x 2026-09-12 2026-09-12 In-memory KeyStore for tests; no test touches the real Keychain or pops a dialog in CI +m4 @sync @test id:01M2B4ZWKE4HC4WGMTC466ANPC
-x 2026-09-12 2026-09-12 Test: auto with the OS backend unavailable errors and no key file appears on disk +m4 @sync @test @security id:01M2B4ZWKEDW9XXGJ494BGTQZ5
-x 2026-09-12 2026-09-12 Test: a group-readable key file is refused, not repaired +m4 @sync @test @security id:01M2B4ZWKEG9BD5NW63EB755YC
-x 2026-09-12 2026-09-12 Test: a file written with low Argon2 parameters still opens after the constants are raised +m4 @sync @test id:01M2B4ZWKEMSZQ7G14RT6BA7B9
-x 2026-09-12 2026-09-12 Test: Secret's Debug output contains no key bytes +m4 @sync @test @security id:01M2B4ZWKEEC9ZGKQA1E7NPCSR
-x 2026-09-12 2026-09-12 Test: round-trip every KeyId variant through the in-memory store, exhaustively +m4 @sync @test id:01M2B4ZWKEGRXY8BVGNP8P6RJA
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync id:01M2B4ZWKE5T2BNRFHR3867VD2
+x 2026-09-12 2026-09-12 KeyId enum DeviceSigning DeviceStatic Group(epoch) and trait KeyStore get put delete, no string keys +m4 @sync
+x 2026-09-12 2026-09-12 Secret type with zeroize on drop and a manual Debug printing Secret(<redacted>), never a derive +m4 @sync @security
+x 2026-09-12 2026-09-12 os.rs: keyring backend, one entry per KeyId; unavailable is a typed error naming the backend and the reason +m4 @sync
+x 2026-09-12 2026-09-12 file.rs: Argon2id header with ARGON2_MEMORY_KIB ITERATIONS PARALLELISM stored per file, sealed with XChaCha20-Poly1305 +m4 @sync
+x 2026-09-12 2026-09-12 Create the key file 0600 at creation, and refuse to open a group- or world-readable file rather than repairing it +m4 @sync @security
+2026-09-12 config key_store = auto | os | file; auto never writes a key file on its own, it stops and says what to do +m4 @cli @security — blocked: needs whichever process actually opens the keystore at startup (the daemon; off-limits this session) to read the config and call resolve()
+2026-09-12 Prompt the passphrase without echo and zeroize it; never a key in an argv, an env var or an error message +m4 @cli @security — blocked: depends on the same config-wiring decision above (which process prompts, CLI or daemon)
+x 2026-09-12 2026-09-12 MAX_STORED_EPOCHS defined once and imported by the crypto task, not duplicated as a second number +m4 @sync
+2026-09-12 txtodo doctor reports the active key backend by name +m4 @cli — blocked: txtodo-cli cannot reach txtodo-sync directly (allowedDeps); needs a new gRPC method on txtodo-daemon (off-limits this session)
+x 2026-09-12 2026-09-12 In-memory KeyStore for tests; no test touches the real Keychain or pops a dialog in CI +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: auto with the OS backend unavailable errors and no key file appears on disk +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: a group-readable key file is refused, not repaired +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: a file written with low Argon2 parameters still opens after the constants are raised +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: Secret's Debug output contains no key bytes +m4 @sync @test @security
+x 2026-09-12 2026-09-12 Test: round-trip every KeyId variant through the in-memory store, exhaustively +m4 @sync @test
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync

@@ -1,7 +1,7 @@
-x 2026-09-16 2026-09-16 verify fmt/clippy/test green incl todosh_parity and daemon_mode tests +m11 @cli id:01M2MVCKZVV6PB94D6Z5GCYFHR
-x 2026-09-16 2026-09-16 wire init_telemetry sink matrix (quiet stderr warn+ default, JSON file on TXTODO_LOG) +m11 @cli id:01M2MVCKZEVPSATEBG1945NDQV
-x 2026-09-16 2026-09-16 convert 3 eprintln! diagnostics in commands/edit.rs to tracing events +m11 @cli id:01M2MVCKZ33S8WAM6D7RM3QN6C
-x 2026-09-16 2026-09-16 add mutation-plan event in daemon_mode.rs plan_mutations +m11 @cli id:01M2MVCKYQGM1V58H30ZVN9MVT
-x 2026-09-16 2026-09-16 add mode-decision event in client.rs select +m11 @cli id:01M2MVCKYAEPHFFBA6C5FH10YM
-x 2026-09-16 2026-09-16 add cli.command span (dispatch/dispatch_daemon wrapper+inner split, command_name) +m11 @cli id:01M2MVCKXXQCA7RSD044G8E4TB
-x 2026-09-16 2026-09-16 wire txtodo-telemetry dep + budgets.json allowedDeps for cli slice +m11 @cli id:01M2MVCKXD0YD2TYG6TBXS99JS
+x 2026-09-16 2026-09-16 verify fmt/clippy/test green incl todosh_parity and daemon_mode tests +m11 @cli
+x 2026-09-16 2026-09-16 wire init_telemetry sink matrix (quiet stderr warn+ default, JSON file on TXTODO_LOG) +m11 @cli
+x 2026-09-16 2026-09-16 convert 3 eprintln! diagnostics in commands/edit.rs to tracing events +m11 @cli
+x 2026-09-16 2026-09-16 add mutation-plan event in daemon_mode.rs plan_mutations +m11 @cli
+x 2026-09-16 2026-09-16 add mode-decision event in client.rs select +m11 @cli
+x 2026-09-16 2026-09-16 add cli.command span (dispatch/dispatch_daemon wrapper+inner split, command_name) +m11 @cli
+x 2026-09-16 2026-09-16 wire txtodo-telemetry dep + budgets.json allowedDeps for cli slice +m11 @cli

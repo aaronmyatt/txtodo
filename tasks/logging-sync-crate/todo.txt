@@ -1,5 +1,5 @@
-x 2026-09-16 2026-09-16 lan_link.rs recv IDLE_TIMEOUT vs peer-close disambiguation +m11 @sync id:01M2MJD5DC1H3YF674881J3D9A
-x 2026-09-16 2026-09-16 frame.rs decode + aead.rs seal/open events +m11 @sync id:01M2MJD5D14EKWD8XY3ETWCTAW
-x 2026-09-16 2026-09-16 pairing.rs offer/accept events +m11 @sync id:01M2MJD5CPG04JFPD5WQB3DT89
-x 2026-09-16 2026-09-16 workspace_session.rs hello/on_hello/on_ops/committed state-transition events +m11 @sync id:01M2MJD5C9A12WD91J3N7MZXNZ
-x 2026-09-16 2026-09-16 tracing dep + session_error/crypto_error kind() helpers + session.rs link_hello/on_link_hello +m11 @sync id:01M2MJD5BT09DQ7TJPD4QCM4PT
+x 2026-09-16 2026-09-16 lan_link.rs recv IDLE_TIMEOUT vs peer-close disambiguation +m11 @sync
+x 2026-09-16 2026-09-16 frame.rs decode + aead.rs seal/open events +m11 @sync
+x 2026-09-16 2026-09-16 pairing.rs offer/accept events +m11 @sync
+x 2026-09-16 2026-09-16 workspace_session.rs hello/on_hello/on_ops/committed state-transition events +m11 @sync
+x 2026-09-16 2026-09-16 tracing dep + session_error/crypto_error kind() helpers + session.rs link_hello/on_link_hello +m11 @sync

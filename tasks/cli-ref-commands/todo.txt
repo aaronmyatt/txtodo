@@ -1,10 +1,10 @@
-2026-09-12 open <line>: resolve and print the ref path, read-only, no write on a dangling or ref-less line +m5 @cli id:01M2B4ZVRM37B1XRRATG4P1RMD
-2026-09-12 notes <line>: GetNotes/EditNotes over the socket and $EDITOR, with the daemon's one-op-batch lazy creation first +m5 @cli id:01M2B4ZVRMCACTB9T0ZEHH07X4
-2026-09-12 sub <line> <cmd>: re-exec the CLI scoped to the ref dir, preserving every flag (todo.sh -d equivalence, rule 12) +m5 @cli id:01M2B4ZVRMVTCP3T8JMXCXNHVF
-2026-09-12 prune --orphans [--yes]: list dirs no line points to via the tree model; delete only with --yes +m5 @cli id:01M2B4ZVRMTCYAFHDSWFMKSG79
-2026-09-12 Typed errors for bad line, blank line, and no-ref on notes/sub, in the existing CLI error style +m5 @cli id:01M2B4ZVRMAJHW1NTGKPYC49ME
-2026-09-12 Test: open performs no filesystem write and prints the would-be path for a ref-less line +m5 @cli @test id:01M2B4ZVRMA9GY73JNMS3286C4
-2026-09-12 Test: notes on a ref-less line creates tag + dir in one op batch before the editor opens +m5 @cli @test id:01M2B4ZVRMM9A1Z5E6TZV0J9XF
-2026-09-12 Test: sub 2 ls lists the sub-list, byte-compatible with todo.sh -d <ref>/todo.cfg +m5 @cli @test id:01M2B4ZVRM0DDYF7ZH12SHHER9
-2026-09-12 Test: prune lists an orphan, refuses without --yes, deletes with --yes +m5 @cli @test id:01M2B4ZVRM6ERJCHR2VWSABEH5
-2026-09-12 Complete the parent line in ./todo.txt +m5 @cli id:01M2B4ZVRM6KBQQFCF7XBH50WN
+2026-09-12 open <line>: resolve and print the ref path, read-only, no write on a dangling or ref-less line +m5 @cli
+2026-09-12 notes <line>: GetNotes/EditNotes over the socket and $EDITOR, with the daemon's one-op-batch lazy creation first +m5 @cli
+2026-09-12 sub <line> <cmd>: re-exec the CLI scoped to the ref dir, preserving every flag (todo.sh -d equivalence, rule 12) +m5 @cli
+2026-09-12 prune --orphans [--yes]: list dirs no line points to via the tree model; delete only with --yes +m5 @cli
+2026-09-12 Typed errors for bad line, blank line, and no-ref on notes/sub, in the existing CLI error style +m5 @cli
+2026-09-12 Test: open performs no filesystem write and prints the would-be path for a ref-less line +m5 @cli @test
+2026-09-12 Test: notes on a ref-less line creates tag + dir in one op batch before the editor opens +m5 @cli @test
+2026-09-12 Test: sub 2 ls lists the sub-list, byte-compatible with todo.sh -d <ref>/todo.cfg +m5 @cli @test
+2026-09-12 Test: prune lists an orphan, refuses without --yes, deletes with --yes +m5 @cli @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @cli

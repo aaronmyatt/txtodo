@@ -1,14 +1,14 @@
-x 2026-09-12 2026-09-12 Add iroh and mdns-sd to txtodo-sync with a cargo deny pass and human sign-off; check allowedDeps first +m4 @sync id:01M2B4ZWKSE1NVEQMZ9HWKM7KP
-x 2026-09-12 2026-09-12 link.rs: trait Link { send(Frame), recv() -> Frame } so the session state machine never sees a socket +m4 @sync id:01M2B4ZWKSK9TDTJXQFPWD0BRC
-x 2026-09-12 2026-09-12 endpoint.rs: one iroh endpoint constructor with relay explicitly disabled and the reason in a comment +m4 @sync id:01M2B4ZWKS1CB1HFECS3QXZBC4
-x 2026-09-12 2026-09-12 discovery.rs: advertise _txtodo._udp with TXT device, group and proto; never the group key +m4 @sync id:01M2B4ZWKSP6PPQQ9RGNV169ZQ
-x 2026-09-12 2026-09-12 Drop our own advertisement by DeviceId and drop other groups before opening a connection +m4 @sync id:01M2B4ZWKSFC88AHNFF1RA5RCC
-2026-09-12 MAX_LAN_PEERS and MAX_BACKOFF_MS consts, asserted; the retry loop has an explicit iteration cap +m4 @sync — consts and backoff_ms() done and tested; the retry loop itself waits on endpoint.rs's connect (blocked), so there is nothing to cap yet id:01M2B4ZWKSJB6YYD7M96ZCGS05
-x 2026-09-12 2026-09-12 Debounce peer re-announcements with the slice's own copy, not the daemon's debounce.rs +m4 @sync id:01M2B4ZWKSVQM50BYTWSYPN2SS
-2026-09-12 LinkError names the peer and what was attempted; network input is validated, never asserted +m4 @sync — Link is deliberately peer-agnostic (one link, one driver; see CLAUDE.md); this is really about the real transport's Link impl, not yet built id:01M2B4ZWKS0P8484M5QP9XSGXS
-2026-09-12 txtodo doctor reports the transport mode so relay-off is visible without reading code +m4 @cli — blocked: txtodo-cli's allowedDeps reach only txtodo-core/txtodo-proto, never txtodo-sync directly; needs a new gRPC method on txtodo-daemon (off-limits this session) to surface it id:01M2B4ZWKSA4ZZJKCHA102RGRK
-x 2026-09-12 2026-09-12 Test: the configured relay set is empty, so an iroh upgrade that changes the default fails here +m4 @sync @test @security id:01M2B4ZWKSDSJQQYYQ0JZDPM26
-2026-09-12 Test: two loopback endpoints discover each other and exchange Hello, driven off the callback with a timeout not a sleep +m4 @sync @test — blocked: upstream noq-proto/iroh refuses 127.0.0.1<->[::ffff:127.0.0.1] on connect; wrote the connect/accept/stream half against a real Frame (endpoint_tests.rs), #[ignore]d, see notes.md. Discovery half (two real mdns-sd daemons resolving each other) is done in discovery_tests.rs; the Hello-exchange half needs the blocked connect. id:01M2B4ZWKS53QRTGME35WEKAAX
-x 2026-09-12 2026-09-12 Tests: a peer in another group is never connected to; our own advertisement is ignored +m4 @sync @test id:01M2B4ZWKSN8BHAB6VCFKCF4WT
-x 2026-09-12 2026-09-12 Test: the peer past MAX_LAN_PEERS is dropped with a log line, not pushed +m4 @sync @test id:01M2B4ZWKSNCT90VB16Q1E8273
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync id:01M2B4ZWKS5YW9WFY8JRE0FV46
+x 2026-09-12 2026-09-12 Add iroh and mdns-sd to txtodo-sync with a cargo deny pass and human sign-off; check allowedDeps first +m4 @sync
+x 2026-09-12 2026-09-12 link.rs: trait Link { send(Frame), recv() -> Frame } so the session state machine never sees a socket +m4 @sync
+x 2026-09-12 2026-09-12 endpoint.rs: one iroh endpoint constructor with relay explicitly disabled and the reason in a comment +m4 @sync
+x 2026-09-12 2026-09-12 discovery.rs: advertise _txtodo._udp with TXT device, group and proto; never the group key +m4 @sync
+x 2026-09-12 2026-09-12 Drop our own advertisement by DeviceId and drop other groups before opening a connection +m4 @sync
+2026-09-12 MAX_LAN_PEERS and MAX_BACKOFF_MS consts, asserted; the retry loop has an explicit iteration cap +m4 @sync — consts and backoff_ms() done and tested; the retry loop itself waits on endpoint.rs's connect (blocked), so there is nothing to cap yet
+x 2026-09-12 2026-09-12 Debounce peer re-announcements with the slice's own copy, not the daemon's debounce.rs +m4 @sync
+2026-09-12 LinkError names the peer and what was attempted; network input is validated, never asserted +m4 @sync — Link is deliberately peer-agnostic (one link, one driver; see CLAUDE.md); this is really about the real transport's Link impl, not yet built
+2026-09-12 txtodo doctor reports the transport mode so relay-off is visible without reading code +m4 @cli — blocked: txtodo-cli's allowedDeps reach only txtodo-core/txtodo-proto, never txtodo-sync directly; needs a new gRPC method on txtodo-daemon (off-limits this session) to surface it
+x 2026-09-12 2026-09-12 Test: the configured relay set is empty, so an iroh upgrade that changes the default fails here +m4 @sync @test @security
+2026-09-12 Test: two loopback endpoints discover each other and exchange Hello, driven off the callback with a timeout not a sleep +m4 @sync @test — blocked: upstream noq-proto/iroh refuses 127.0.0.1<->[::ffff:127.0.0.1] on connect; wrote the connect/accept/stream half against a real Frame (endpoint_tests.rs), #[ignore]d, see notes.md. Discovery half (two real mdns-sd daemons resolving each other) is done in discovery_tests.rs; the Hello-exchange half needs the blocked connect.
+x 2026-09-12 2026-09-12 Tests: a peer in another group is never connected to; our own advertisement is ignored +m4 @sync @test
+x 2026-09-12 2026-09-12 Test: the peer past MAX_LAN_PEERS is dropped with a log line, not pushed +m4 @sync @test
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync

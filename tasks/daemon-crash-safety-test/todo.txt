@@ -1,5 +1,5 @@
-x 2026-09-12 2026-09-11 tests/crash.rs (cfg(unix)): loop CRASH_ITERATIONS = 20 with a seeded StdRng: start daemon, trigger a large external edit, SIGKILL after a random 0-30 ms, restart on the same dir +m3 @daemon @test id:01M2B4ZVZT100GWJZ6VK39Y998
-x 2026-09-12 2026-09-11 After restart: file bytes ∈ { old projection, new projection } (never partial); PRAGMA integrity_check == ok; op seq is contiguous; Health reports ready +m3 @daemon @test id:01M2B4ZVZT7ZMRWAH7AYNWBK7V
-x 2026-09-12 2026-09-11 If the file is the old bytes the pending ops must not exist in the store, or if they do the daemon reconciles once and writes the new bytes — assert one of the two, never a third state +m3 @daemon @test id:01M2B4ZVZT81RH3Q9BZXCCXG9S
-x 2026-09-12 2026-09-11 Store-side unit test: a transaction that appends ops and a projection is atomic under a simulated failure between the two statements (rollback leaves neither) +m3 @store @test id:01M2B4ZVZTXPVFKKHKYHYFATWW
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test id:01M2B4ZVZTVXFA95BKYZKGRS9P
+x 2026-09-12 2026-09-11 tests/crash.rs (cfg(unix)): loop CRASH_ITERATIONS = 20 with a seeded StdRng: start daemon, trigger a large external edit, SIGKILL after a random 0-30 ms, restart on the same dir +m3 @daemon @test
+x 2026-09-12 2026-09-11 After restart: file bytes ∈ { old projection, new projection } (never partial); PRAGMA integrity_check == ok; op seq is contiguous; Health reports ready +m3 @daemon @test
+x 2026-09-12 2026-09-11 If the file is the old bytes the pending ops must not exist in the store, or if they do the daemon reconciles once and writes the new bytes — assert one of the two, never a third state +m3 @daemon @test
+x 2026-09-12 2026-09-11 Store-side unit test: a transaction that appends ops and a projection is atomic under a simulated failure between the two statements (rollback leaves neither) +m3 @store @test
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test

@@ -1,13 +1,13 @@
-2026-09-12 Test: MCP HTTP binds 127.0.0.1 by default; a non-loopback bind errors unless --lan is passed +m6 @security @test id:01M2B4ZWH1ZGM0BDV5P2M7A74T
-2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text, root-key bytes or caveat values +m6 @security @test id:01M2B4ZWH1BV854A2HBV7M1HXF
-2026-09-12 Test: an unauthenticated MCP HTTP request is rejected even with --lan bound to the LAN +m6 @security @test id:01M2B4ZWH19912F9V9KB1SW1S0
-2026-09-12 Re-check no-secrets-in-logs against the new MCP paths (HTTP middleware and stdio wiring are new logging surface) +m6 @security id:01M2B4ZWH1J6XB4A127136DJEV
-2026-09-12 Audit: the macaroon root key exists only via KeyStore::get(KeyId::TokenRoot) and is never written outside the store +m6 @security id:01M2B4ZWH1ZXT343TECYWVGVVY
-2026-09-12 State the --lan threat model (bearer over LAN plaintext) in RATCHET.md; do not imply encryption that does not exist +m6 @security @docs id:01M2B4ZWH1N9H4NWSBT0ANJZ8C
-2026-09-12 Re-run the ref-slug fuzz target for a bounded session after M5's ref work and record the result +m6 @security @test id:01M2B4ZWH18FXWA2ARTG5F8VYK
-2026-09-12 Pin MAX_LINE_BYTES in txtodo-core (unit-suffixed, same precedent as FILE_PATH_MAX_BYTES) as the per-line bound the budget derives from +m6 @security id:01M2B4ZWH1B5EM34KKT3N9N11A
-2026-09-12 Derive payloadKB from MAX_LINE_BYTES × list limit and the history row size; recommend 512 and land it via /setup (frozen path) +m6 @security id:01M2B4ZWH1XGZWY4M7KJB0SFH8
-2026-09-12 Update stack.md's payload-budget note in the same /setup pass so budget and mapping agree +m6 @security @docs id:01M2B4ZWH10PATTEG3X0022A2V
-2026-09-12 Write the dated M6 findings section in RATCHET.md: pass / fail / deferred-to-M8 per item, each with its test +m6 @security @docs id:01M2B4ZWH15PD0QYHMAXE838ZF
-2026-09-12 Defer the relay op-type-leak item to M8 with a todo.txt line in the owning milestone +m6 @security id:01M2B4ZWH15AFWQ262EFCFRYWK
-2026-09-12 Complete the parent line in ./todo.txt +m6 @security id:01M2B4ZWH1DEPEZKPE6HFRFECN
+2026-09-12 Test: MCP HTTP binds 127.0.0.1 by default; a non-loopback bind errors unless --lan is passed +m6 @security @test
+2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text, root-key bytes or caveat values +m6 @security @test
+2026-09-12 Test: an unauthenticated MCP HTTP request is rejected even with --lan bound to the LAN +m6 @security @test
+2026-09-12 Re-check no-secrets-in-logs against the new MCP paths (HTTP middleware and stdio wiring are new logging surface) +m6 @security
+2026-09-12 Audit: the macaroon root key exists only via KeyStore::get(KeyId::TokenRoot) and is never written outside the store +m6 @security
+2026-09-12 State the --lan threat model (bearer over LAN plaintext) in RATCHET.md; do not imply encryption that does not exist +m6 @security @docs
+2026-09-12 Re-run the ref-slug fuzz target for a bounded session after M5's ref work and record the result +m6 @security @test
+2026-09-12 Pin MAX_LINE_BYTES in txtodo-core (unit-suffixed, same precedent as FILE_PATH_MAX_BYTES) as the per-line bound the budget derives from +m6 @security
+2026-09-12 Derive payloadKB from MAX_LINE_BYTES × list limit and the history row size; recommend 512 and land it via /setup (frozen path) +m6 @security
+2026-09-12 Update stack.md's payload-budget note in the same /setup pass so budget and mapping agree +m6 @security @docs
+2026-09-12 Write the dated M6 findings section in RATCHET.md: pass / fail / deferred-to-M8 per item, each with its test +m6 @security @docs
+2026-09-12 Defer the relay op-type-leak item to M8 with a todo.txt line in the owning milestone +m6 @security
+2026-09-12 Complete the parent line in ./todo.txt +m6 @security

@@ -1,12 +1,12 @@
-2026-09-12 txtodo-mcp/src/token.rs: Scope enum — Read, Write(Add/Complete/Edit/Delete), Raw — plus Restrictor Project/Context/File per design §6.2 +m6 @mcp id:01M2B4ZWATQ408R70Q187DXBZX
-2026-09-12 txtodo-mcp/src/matrix.rs: const MATRIX table of every (scope set × tool) pair with expected allow/deny — exhaustive, no default row +m6 @mcp id:01M2B4ZWATJY2BBQFDQDTKH5BJ
-2026-09-12 Test: iterate the whole MATRIX and assert each pair matches its row; a new tool or scope fails coverage until a row is added +m6 @mcp @test id:01M2B4ZWATZDGXQVWFN752KY40
-2026-09-12 txtodo-mcp/src/matrix.rs: write:delete requires confirm:true — the delete-without-confirm row is deny regardless of scope +m6 @mcp id:01M2B4ZWATAA06M9XF2BVD5P4S
-2026-09-12 txtodo-mcp/src/token.rs: restrictor caveats intersect the base scope — a non-matching task is deny even when the base scope allows it +m6 @mcp id:01M2B4ZWATXNCMSRJWT158ZD9E
-2026-09-12 txtodo-mcp/src/token.rs: attenuate is monotone — it may only remove scope or tighten a restrictor, never return a superset of the parent Scope +m6 @mcp @security id:01M2B4ZWATYMZ1Q20KJX8Z34VB
-2026-09-12 Test: root -> read + project:+work: read +work allow, read +other deny, add +work deny, add +other deny +m6 @mcp @test id:01M2B4ZWAT1FZWWF4TKEN7MGPN
-2026-09-12 Test: root -> write:add + context:@phone: add @phone allow, add @laptop deny +m6 @mcp @test id:01M2B4ZWAT8SDS9RE86K030WKF
-2026-09-12 Test: root -> raw: line-level read/write allow, structured todo_add deny — raw is its own row, not a superset +m6 @mcp @test id:01M2B4ZWATAT69T12XXVGT31N3
-2026-09-12 Test: every widening attempt — read-only + write:add, +work + +other, expired + longer expiry — fails to mint +m6 @mcp @test @security id:01M2B4ZWATGSHXMP6W1DAZ55WP
-2026-09-12 Test: a token tampered to remove a caveat fails macaroon verification, so caveat deletion is never a widening path +m6 @mcp @test @security id:01M2B4ZWATVA51D8MDVKY5FJGM
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp id:01M2B4ZWATT68BSWYH9R5Z2HZF
+2026-09-12 txtodo-mcp/src/token.rs: Scope enum — Read, Write(Add/Complete/Edit/Delete), Raw — plus Restrictor Project/Context/File per design §6.2 +m6 @mcp
+2026-09-12 txtodo-mcp/src/matrix.rs: const MATRIX table of every (scope set × tool) pair with expected allow/deny — exhaustive, no default row +m6 @mcp
+2026-09-12 Test: iterate the whole MATRIX and assert each pair matches its row; a new tool or scope fails coverage until a row is added +m6 @mcp @test
+2026-09-12 txtodo-mcp/src/matrix.rs: write:delete requires confirm:true — the delete-without-confirm row is deny regardless of scope +m6 @mcp
+2026-09-12 txtodo-mcp/src/token.rs: restrictor caveats intersect the base scope — a non-matching task is deny even when the base scope allows it +m6 @mcp
+2026-09-12 txtodo-mcp/src/token.rs: attenuate is monotone — it may only remove scope or tighten a restrictor, never return a superset of the parent Scope +m6 @mcp @security
+2026-09-12 Test: root -> read + project:+work: read +work allow, read +other deny, add +work deny, add +other deny +m6 @mcp @test
+2026-09-12 Test: root -> write:add + context:@phone: add @phone allow, add @laptop deny +m6 @mcp @test
+2026-09-12 Test: root -> raw: line-level read/write allow, structured todo_add deny — raw is its own row, not a superset +m6 @mcp @test
+2026-09-12 Test: every widening attempt — read-only + write:add, +work + +other, expired + longer expiry — fails to mint +m6 @mcp @test @security
+2026-09-12 Test: a token tampered to remove a caveat fails macaroon verification, so caveat deletion is never a widening path +m6 @mcp @test @security
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

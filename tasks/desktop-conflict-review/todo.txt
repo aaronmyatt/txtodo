@@ -1,13 +1,13 @@
-2026-09-12 apps/desktop/src/lib/types.ts: ConflictEntry { line, task_id, mine, theirs, merged } and ResolveChoice "mine" | "theirs" | "merged" +m7 @desktop id:01M2B4ZW3HNCWY4CV5PAC9CKJK
-2026-09-12 Subscribe to the Watch stream for Change ops carrying the needs_review flag; hold pendingConflicts keyed by task_id in the app store +m7 @desktop id:01M2B4ZW3HRJMXR3RWGVJK34WD
-2026-09-12 ConflictBanner.svelte: show the count of pending needs_review lines; clicking opens the review sheet; dismiss must never clear the flag +m7 @desktop id:01M2B4ZW3HRH428AKRQFVP3R6S
-2026-09-12 ConflictReviewSheet.svelte: role=dialog aria-modal, focus trap, Esc closes (plan §3.3); show the task text + DiffView + three resolve buttons +m7 @desktop id:01M2B4ZW3JG9N00FW727113WC5
-2026-09-12 DiffView.svelte: char-level diff between mine and theirs via the txtodo-ffi wasm core diff_text binding +m7 @desktop id:01M2B4ZW3J1K4TH7XPNSYNSFBT
-2026-09-12 Resolution: resolve("mine"|"theirs"|"merged") writes the chosen text as a new Apply(Edit) op — same path as the popover; the op clears the flag +m7 @desktop id:01M2B4ZW3JH5CA6KMRCV6RK2PH
-2026-09-12 "merged" is a preview only — never written until the human taps "keep merged"; the op log keeps the interleave +m7 @desktop id:01M2B4ZW3J3ENQAA4GW02KCETJ
-2026-09-12 Resurrect state (§4.7 delete|edit): show "resurrected by a concurrent edit" when tombstoned locally and edited on the peer +m7 @desktop id:01M2B4ZW3JNZD8GFACVFQ1NPKP
-2026-09-12 Empty state: no pending conflicts → banner hidden; banner count must agree with `txtodo conflicts` +m7 @desktop id:01M2B4ZW3J3HXDJ3DZE2DM8HTA
-2026-09-12 Test: inject concurrent same-word EditText ops via a second daemon → banner count increments and the sheet shows the char diff +m7 @desktop @test id:01M2B4ZW3JF77QA1S5MDACRRP0
-2026-09-12 Test: resolving each of mine/theirs/merged writes the chosen line, clears the flag, and removes the entry from the banner count +m7 @desktop @test id:01M2B4ZW3JFAZGJTESRZ350J9B
-2026-09-12 Test: dismissing the banner leaves the flag set and the task still listed by `txtodo conflicts` +m7 @desktop @test id:01M2B4ZW3JR1XH8PX9DFNQWRQR
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW3JTNXC9JE95E9MBWDF
+2026-09-12 apps/desktop/src/lib/types.ts: ConflictEntry { line, task_id, mine, theirs, merged } and ResolveChoice "mine" | "theirs" | "merged" +m7 @desktop
+2026-09-12 Subscribe to the Watch stream for Change ops carrying the needs_review flag; hold pendingConflicts keyed by task_id in the app store +m7 @desktop
+2026-09-12 ConflictBanner.svelte: show the count of pending needs_review lines; clicking opens the review sheet; dismiss must never clear the flag +m7 @desktop
+2026-09-12 ConflictReviewSheet.svelte: role=dialog aria-modal, focus trap, Esc closes (plan §3.3); show the task text + DiffView + three resolve buttons +m7 @desktop
+2026-09-12 DiffView.svelte: char-level diff between mine and theirs via the txtodo-ffi wasm core diff_text binding +m7 @desktop
+2026-09-12 Resolution: resolve("mine"|"theirs"|"merged") writes the chosen text as a new Apply(Edit) op — same path as the popover; the op clears the flag +m7 @desktop
+2026-09-12 "merged" is a preview only — never written until the human taps "keep merged"; the op log keeps the interleave +m7 @desktop
+2026-09-12 Resurrect state (§4.7 delete|edit): show "resurrected by a concurrent edit" when tombstoned locally and edited on the peer +m7 @desktop
+2026-09-12 Empty state: no pending conflicts → banner hidden; banner count must agree with `txtodo conflicts` +m7 @desktop
+2026-09-12 Test: inject concurrent same-word EditText ops via a second daemon → banner count increments and the sheet shows the char diff +m7 @desktop @test
+2026-09-12 Test: resolving each of mine/theirs/merged writes the chosen line, clears the flag, and removes the entry from the banner count +m7 @desktop @test
+2026-09-12 Test: dismissing the banner leaves the flag set and the task still listed by `txtodo conflicts` +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop

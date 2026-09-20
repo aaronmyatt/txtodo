@@ -1,16 +1,16 @@
-2026-09-12 Decide macaroon crate vs minimal HMAC-chained impl; record the choice and rationale in the token.rs doc comment +m6 @mcp id:01M2B4ZWBRVA2SR5FKZY9AJWRD
-2026-09-12 crates/txtodo-mcp/Cargo.toml: add the chosen dep (macaroon, or hmac + sha2); human sign-off + cargo deny pass +m6 @mcp id:01M2B4ZWBRZJS4YMZ2327RPPEM
-2026-09-12 crates/txtodo-mcp/src/token.rs: Token { id, root_key_id, caveats, sig } and the Caveat enum (Scope/Project/Context/File/Expires/Quarantine) +m6 @mcp id:01M2B4ZWBR7ZW9RZDWF4X49JJC
-2026-09-12 crates/txtodo-mcp/src/token.rs: Scope enum Read/WriteAdd/WriteComplete/WriteEdit/WriteDelete/Raw matching design §6.2 exactly +m6 @mcp id:01M2B4ZWBRF1B62923BRS7ZJ6C
-2026-09-12 token::mint(root, id, caveats) -> Token; chained HMAC over the ordered caveats +m6 @mcp id:01M2B4ZWBRXHS3WV5TWF7HNA3A
-2026-09-12 token::attenuate(&token, caveat) -> Token; appends one caveat and re-chains, id unchanged +m6 @mcp id:01M2B4ZWBRS0E7EK05DPT3YM9Z
-2026-09-12 token::verify(token, root, revoked, now) -> Result<Auth, VerifyError> intersecting scopes and checking expires/revocation/chain +m6 @mcp id:01M2B4ZWBRH9XNNWF39T9SQTWG
-2026-09-12 Caveat values parsed at the boundary: project starts +, context starts @, file via FilePath::new; malformed is a typed error +m6 @mcp id:01M2B4ZWBRKW9Y30TTDVC6CN4P
-2026-09-12 Token Debug/Display redacts sig and caveats; only token_id is ever printable (CLAUDE.md §3) +m6 @mcp @security id:01M2B4ZWBRWQYB0HWZPTG5TPAF
-2026-09-12 txtodo-sync KeyId gains TokenRoot; daemon reads the root key via KeyStore::get as a zeroized Secret and passes bytes in +m6 @sync @daemon id:01M2B4ZWBRQWF659Q2DT8Q4C8H
-2026-09-12 txtodo-store meta table: token_revocations key (postcard TokenId set) and token:<id> metadata entries for list +m6 @daemon id:01M2B4ZWBRGYNPX1K0KSRXQ7EW
-2026-09-12 txtodo.proto: TokenCreate/TokenList/TokenRevoke/TokenAttenuate RPCs + Token* messages; regenerate and commit the artifact alone +m6 @proto id:01M2B4ZWBRVWCRZXJKZ3NF3VV7
-2026-09-12 crates/txtodo-cli: txtodo token create|list|revoke|attenuate subcommand over gRPC +m6 @cli id:01M2B4ZWBRN8XTAGQPETA6747S
-2026-09-12 Test: mint→attenuate→verify yields exactly the narrowed scope; proptest over caveat sequences proves attenuation never widens +m6 @mcp @test id:01M2B4ZWBRKWTT2BWGDP3CXDZX
-2026-09-12 Test: expired, revoked (root + every derivative) and tampered tokens fail verify with the distinct VerifyError variant +m6 @mcp @test id:01M2B4ZWBRRRZTMSMTANDQDSNR
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @cli id:01M2B4ZWBRJ215SYQ0E89S36T2
+2026-09-12 Decide macaroon crate vs minimal HMAC-chained impl; record the choice and rationale in the token.rs doc comment +m6 @mcp
+2026-09-12 crates/txtodo-mcp/Cargo.toml: add the chosen dep (macaroon, or hmac + sha2); human sign-off + cargo deny pass +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/token.rs: Token { id, root_key_id, caveats, sig } and the Caveat enum (Scope/Project/Context/File/Expires/Quarantine) +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/token.rs: Scope enum Read/WriteAdd/WriteComplete/WriteEdit/WriteDelete/Raw matching design §6.2 exactly +m6 @mcp
+2026-09-12 token::mint(root, id, caveats) -> Token; chained HMAC over the ordered caveats +m6 @mcp
+2026-09-12 token::attenuate(&token, caveat) -> Token; appends one caveat and re-chains, id unchanged +m6 @mcp
+2026-09-12 token::verify(token, root, revoked, now) -> Result<Auth, VerifyError> intersecting scopes and checking expires/revocation/chain +m6 @mcp
+2026-09-12 Caveat values parsed at the boundary: project starts +, context starts @, file via FilePath::new; malformed is a typed error +m6 @mcp
+2026-09-12 Token Debug/Display redacts sig and caveats; only token_id is ever printable (CLAUDE.md §3) +m6 @mcp @security
+2026-09-12 txtodo-sync KeyId gains TokenRoot; daemon reads the root key via KeyStore::get as a zeroized Secret and passes bytes in +m6 @sync @daemon
+2026-09-12 txtodo-store meta table: token_revocations key (postcard TokenId set) and token:<id> metadata entries for list +m6 @daemon
+2026-09-12 txtodo.proto: TokenCreate/TokenList/TokenRevoke/TokenAttenuate RPCs + Token* messages; regenerate and commit the artifact alone +m6 @proto
+2026-09-12 crates/txtodo-cli: txtodo token create|list|revoke|attenuate subcommand over gRPC +m6 @cli
+2026-09-12 Test: mint→attenuate→verify yields exactly the narrowed scope; proptest over caveat sequences proves attenuation never widens +m6 @mcp @test
+2026-09-12 Test: expired, revoked (root + every derivative) and tampered tokens fail verify with the distinct VerifyError variant +m6 @mcp @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp @cli

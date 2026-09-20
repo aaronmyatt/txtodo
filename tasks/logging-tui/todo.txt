@@ -1,8 +1,8 @@
-x 2026-09-16 2026-09-16 verify fmt/clippy/test green for txtodo-tui and txtodo-telemetry, confirm no stderr writes +m11 @tui id:01M2MVPRGJMF5RW7HZXBET0A3J
-x 2026-09-16 2026-09-16 instrument daemon.rs connect + wait_until_ready wrapper+inner split +m11 @tui id:01M2MVPRG7SHRCZQYXGN68Z259
-x 2026-09-16 2026-09-16 instrument app.rs reconnect_watch wrapper+inner split +m11 @tui id:01M2MVPRFWNA33RP5P899K3MS0
-x 2026-09-16 2026-09-16 instrument app.rs perform (Action to RPC) wrapper+inner split +m11 @tui id:01M2MVPRFGM8D36FEETSP11K4A
-x 2026-09-16 2026-09-16 instrument app.rs run_loop (select! loop) wrapper+inner split +m11 @tui id:01M2MVPRF2D7E2ZXBNSTAC3Z5A
-x 2026-09-16 2026-09-16 call init_file_only from app.rs async_main, hold LogGuard +m11 @tui id:01M2MVPREP9V5SCFHYGHCY112P
-x 2026-09-16 2026-09-16 wire txtodo-telemetry dep + budgets.json allowedDeps for tui slice +m11 @tui id:01M2MVPRE8EFCW87XMECCWV3CD
-x 2026-09-16 2026-09-16 add txtodo_telemetry::init_file_only (shared build_json_layer, no stderr layer) +m11 @tui id:01M2MVPRDRGNMCADJJ32N9K5Z6
+x 2026-09-16 2026-09-16 verify fmt/clippy/test green for txtodo-tui and txtodo-telemetry, confirm no stderr writes +m11 @tui
+x 2026-09-16 2026-09-16 instrument daemon.rs connect + wait_until_ready wrapper+inner split +m11 @tui
+x 2026-09-16 2026-09-16 instrument app.rs reconnect_watch wrapper+inner split +m11 @tui
+x 2026-09-16 2026-09-16 instrument app.rs perform (Action to RPC) wrapper+inner split +m11 @tui
+x 2026-09-16 2026-09-16 instrument app.rs run_loop (select! loop) wrapper+inner split +m11 @tui
+x 2026-09-16 2026-09-16 call init_file_only from app.rs async_main, hold LogGuard +m11 @tui
+x 2026-09-16 2026-09-16 wire txtodo-telemetry dep + budgets.json allowedDeps for tui slice +m11 @tui
+x 2026-09-16 2026-09-16 add txtodo_telemetry::init_file_only (shared build_json_layer, no stderr layer) +m11 @tui

@@ -1,9 +1,9 @@
-2026-09-12 apps/desktop/src main view component: read-only CM6 EditorView with real line numbers and blank lines shown +m7 @desktop id:01M2B4ZW53V58RSWVG6VMS4ZC4
-2026-09-12 Bind EditorView to the daemon Watch stream, rebuilding doc state from GetFile bytes on each Change hash +m7 @desktop id:01M2B4ZW53NXJ3NT53X8AEW0Q8
-2026-09-12 Theme: map plan §3.1 token names to colours, mute completed lines, strike the description but not x or dates +m7 @desktop id:01M2B4ZW534KHBYGFDJM4CD7TR
-2026-09-12 Zero-width widget decoration for hidden id: tags plus a header toggle that shows them +m7 @desktop id:01M2B4ZW53SNGYHE3ES9EKA57C
-2026-09-12 Trailing n/m and notes-icon decorations from the tree progress (ListFiles/Watch progress), not document text +m7 @desktop id:01M2B4ZW53RPWSEJZF6ARKRRWV
-2026-09-12 Hover pencil affordance on the line, wired to open the edit popover with the line's TaskRef +m7 @desktop id:01M2B4ZW538BV6H7XZ331PYYEW
-2026-09-12 "Add a line" trailing row calling Apply(Add) and letting the daemon stamp the creation date and id: +m7 @desktop id:01M2B4ZW54GTPDZ6HTY9W6YAGK
-2026-09-12 Test: 10k-line first paint ≤ 500 ms and a Watch change from a second daemon repaints the line in place +m7 @desktop @test id:01M2B4ZW54PF9PA3DJM65F62R6
-2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW54GV5PTZYCF4ZCVPCR
+2026-09-12 apps/desktop/src main view component: read-only CM6 EditorView with real line numbers and blank lines shown +m7 @desktop
+2026-09-12 Bind EditorView to the daemon Watch stream, rebuilding doc state from GetFile bytes on each Change hash +m7 @desktop
+2026-09-12 Theme: map plan §3.1 token names to colours, mute completed lines, strike the description but not x or dates +m7 @desktop
+2026-09-12 Zero-width widget decoration for hidden id: tags plus a header toggle that shows them +m7 @desktop
+2026-09-12 Trailing n/m and notes-icon decorations from the tree progress (ListFiles/Watch progress), not document text +m7 @desktop
+2026-09-12 Hover pencil affordance on the line, wired to open the edit popover with the line's TaskRef +m7 @desktop
+2026-09-12 "Add a line" trailing row calling Apply(Add) and letting the daemon stamp the creation date and id: +m7 @desktop
+2026-09-12 Test: 10k-line first paint ≤ 500 ms and a Watch change from a second daemon repaints the line in place +m7 @desktop @test
+2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop

@@ -1,7 +1,7 @@
-2026-09-11 Dependency ask: prost, tonic, tonic-build (ADR 0006); generated Rust is committed alone as a generated artifact +m3 @proto id:01M2B4ZWEMTRA5475NVQZGZRBZ
-x 2026-09-11 2026-09-11 proto/txtodo/v1/txtodo.proto: service Txtodo with ListFiles GetFile Watch(stream) Apply History Undo Checkout; Mutation oneof add complete edit move delete; every message has a version-safe shape (no required fields) +m3 @proto id:01M2B4ZWEMZ8MR4YWYF8V01BN2
-2026-09-11 just proto recipe runs tonic-build into src/generated/; CI step fails if regeneration differs (justfile and .github are frozen: ask) +m3 @proto @ci id:01M2B4ZWENDD88SY41AKKEMXXW
-x 2026-09-11 2026-09-11 Daemon server: tonic over a tokio UnixListener at <workspace>/.txtodo/txtodod.sock (ADR 0010); socket removed on clean shutdown; named pipes noted as M10 +m3 @daemon id:01M2B4ZWENFYRGF570RW70YA3H
-x 2026-09-11 2026-09-11 Handlers are thin: validate the request into typed values, send one ActorMsg, map the reply; no file or store access in the gRPC layer +m3 @daemon id:01M2B4ZWENDNP9KJWFD2FSCETR
-x 2026-09-11 2026-09-11 Tests: proto round trip for every message; a tonic client over a temp socket calls ListFiles on an empty workspace and gets an empty list +m3 @proto @daemon @test id:01M2B4ZWEN738MB8QH7752J5MT
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @proto @daemon id:01M2B4ZWENNXSBPZ1VF33STN7J
+2026-09-11 Dependency ask: prost, tonic, tonic-build (ADR 0006); generated Rust is committed alone as a generated artifact +m3 @proto
+x 2026-09-11 2026-09-11 proto/txtodo/v1/txtodo.proto: service Txtodo with ListFiles GetFile Watch(stream) Apply History Undo Checkout; Mutation oneof add complete edit move delete; every message has a version-safe shape (no required fields) +m3 @proto
+2026-09-11 just proto recipe runs tonic-build into src/generated/; CI step fails if regeneration differs (justfile and .github are frozen: ask) +m3 @proto @ci
+x 2026-09-11 2026-09-11 Daemon server: tonic over a tokio UnixListener at <workspace>/.txtodo/txtodod.sock (ADR 0010); socket removed on clean shutdown; named pipes noted as M10 +m3 @daemon
+x 2026-09-11 2026-09-11 Handlers are thin: validate the request into typed values, send one ActorMsg, map the reply; no file or store access in the gRPC layer +m3 @daemon
+x 2026-09-11 2026-09-11 Tests: proto round trip for every message; a tonic client over a temp socket calls ListFiles on an empty workspace and gets an empty list +m3 @proto @daemon @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @proto @daemon

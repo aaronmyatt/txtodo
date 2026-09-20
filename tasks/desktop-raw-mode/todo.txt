@@ -1,11 +1,11 @@
-x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: bind Cmd/Ctrl+E in a CM6 keymap to flip EditorView.editable on/off and reconfigure contentAttributes with data-raw +m7 @desktop id:01M2B4ZW61C10BR89Q83VNCS82
-x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: raw-mode visual state via data-raw (border/background) plus a visible badge and aria-pressed so colour is not the only signal (plan §3.3) +m7 @desktop id:01M2B4ZW61E7MC4MSQZC3TQYZR
-x 2026-09-13 2026-09-12 apps/desktop/src/raw-mode.ts: computeDelta(lastFromWatch, next) as a line diff, never a raw string replace; export it for direct unit testing +m7 @desktop id:01M2B4ZW616ECYC6WX15SZG0JE
-x 2026-09-13 2026-09-12 apps/desktop/src/raw-mode.ts: commitRaw() submits the delta through applyExternalEdit (the daemon-external-edit-tests reconcile path), never writing the file directly +m7 @desktop id:01M2B4ZW6119HZ02RNJAYD2K4T
-x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: on blur or Cmd/Ctrl+S call commitRaw(); an identical buffer is a no-op with no op-log entry +m7 @desktop id:01M2B4ZW617D2ACBJB2GWW8SPB
-x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: on needs_review surface the existing conflict banner + review sheet (M4 three variants); never silently keep the raw buffer +m7 @desktop id:01M2B4ZW610S6BMHWBS04C6RPG
-x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: refuse to enter raw mode while needs_review is showing; commit or discard before a file switch (breadcrumb) +m7 @desktop id:01M2B4ZW61419QCWQ7PMY90XZ4
-x 2026-09-13 2026-09-12 Test: one-line raw edit reconciles via the daemon and the Watch stream re-renders the read-only view +m7 @desktop @test id:01M2B4ZW61PJW4VFBSB9P55Z2J
-x 2026-09-13 2026-09-12 Test: a concurrent external edit during raw mode raises the conflict sheet rather than overwriting +m7 @desktop @test id:01M2B4ZW61EY5NTZ1CTSN4BZRA
-x 2026-09-13 2026-09-12 Test: identical save writes nothing; Esc discards without an op entry; computeDelta returns empty for an unchanged buffer +m7 @desktop @test id:01M2B4ZW61GGYD8NQBR6RGNYPA
-x 2026-09-13 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW61W8G4DP64B0BFXQK9
+x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: bind Cmd/Ctrl+E in a CM6 keymap to flip EditorView.editable on/off and reconfigure contentAttributes with data-raw +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: raw-mode visual state via data-raw (border/background) plus a visible badge and aria-pressed so colour is not the only signal (plan §3.3) +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/raw-mode.ts: computeDelta(lastFromWatch, next) as a line diff, never a raw string replace; export it for direct unit testing +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/raw-mode.ts: commitRaw() submits the delta through applyExternalEdit (the daemon-external-edit-tests reconcile path), never writing the file directly +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: on blur or Cmd/Ctrl+S call commitRaw(); an identical buffer is a no-op with no op-log entry +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: on needs_review surface the existing conflict banner + review sheet (M4 three variants); never silently keep the raw buffer +m7 @desktop
+x 2026-09-13 2026-09-12 apps/desktop/src/MainView.svelte: refuse to enter raw mode while needs_review is showing; commit or discard before a file switch (breadcrumb) +m7 @desktop
+x 2026-09-13 2026-09-12 Test: one-line raw edit reconciles via the daemon and the Watch stream re-renders the read-only view +m7 @desktop @test
+x 2026-09-13 2026-09-12 Test: a concurrent external edit during raw mode raises the conflict sheet rather than overwriting +m7 @desktop @test
+x 2026-09-13 2026-09-12 Test: identical save writes nothing; Esc discards without an op entry; computeDelta returns empty for an unchanged buffer +m7 @desktop @test
+x 2026-09-13 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop

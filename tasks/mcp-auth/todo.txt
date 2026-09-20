@@ -1,14 +1,14 @@
-2026-09-12 crates/txtodo-mcp/src/auth.rs: AuthContext { token_id, name, scope, filter, quarantine } and the AuthError variants +m6 @mcp id:01M2B4ZW9JMC42B0QDV0NPCPYY
-2026-09-12 crates/txtodo-mcp/src/auth.rs: TokenVerifier trait; txtodo-mcp calls verify, the daemon supplies the root key and revocation set +m6 @mcp id:01M2B4ZW9JD4BR8QNG39Q6QRWM
-2026-09-12 HTTP middleware parses Authorization: Bearer <token> on every rmcp request; missing/malformed/expired/revoked -> 401 with WWW-Authenticate +m6 @mcp id:01M2B4ZW9JP1C3ZZHZ7ET4CBX4
-2026-09-12 Insufficient scope -> 403, distinct from 401; verification once per request before mcp-server-tools dispatch +m6 @mcp id:01M2B4ZW9J5R6KC3D51N7HPG8M
-2026-09-12 crates/txtodo-daemon: implement TokenVerifier against the keystore root key, the store revocation set, and clock.rs now +m6 @daemon id:01M2B4ZW9J11T6X7Q0EN5CXFCZ
-2026-09-12 stdio server resolves the token at start: --token, else config default_stdio_token, else refuse to start with a typed error +m6 @mcp @cli id:01M2B4ZW9JPSQAT3X7AQKVH2HY
-2026-09-12 crates/txtodo-cli/src/config.rs: add default_stdio_token Option<String> to Config; keep absent-means-default and deny_unknown_fields +m6 @cli id:01M2B4ZW9JVC986036P5XNZFDM
-2026-09-12 crates/txtodo-cli: parse --token on the mcp subcommand; explicit --token wins over default_stdio_token +m6 @cli id:01M2B4ZW9JFX157X02EVRT1J95
-2026-09-12 Log token_id only everywhere auth is touched; never token text, root key bytes or caveat values (CLAUDE.md §3) +m6 @mcp @security id:01M2B4ZW9JAX02M6GDZBPMNY88
-2026-09-12 Test: valid Bearer accepted with the expected AuthContext; garbage, revoked and expired tokens return 401 +m6 @mcp @test id:01M2B4ZW9J9SCRQXKPH08F0M3H
-2026-09-12 Test: a valid token lacking a required scope returns 403, not 401 +m6 @mcp @test id:01M2B4ZW9JRJYP200K78V4VQMZ
-2026-09-12 Test: stdio without --token uses default_stdio_token; explicit --token wins; neither refuses to start +m6 @mcp @test id:01M2B4ZW9KK6DAW0ZZ7EV9CG6D
-2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text or caveat values +m6 @mcp @security @test id:01M2B4ZW9KTK424XM3ASVK3GVQ
-2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp id:01M2B4ZW9KRS80YJD30PSKJGMK
+2026-09-12 crates/txtodo-mcp/src/auth.rs: AuthContext { token_id, name, scope, filter, quarantine } and the AuthError variants +m6 @mcp
+2026-09-12 crates/txtodo-mcp/src/auth.rs: TokenVerifier trait; txtodo-mcp calls verify, the daemon supplies the root key and revocation set +m6 @mcp
+2026-09-12 HTTP middleware parses Authorization: Bearer <token> on every rmcp request; missing/malformed/expired/revoked -> 401 with WWW-Authenticate +m6 @mcp
+2026-09-12 Insufficient scope -> 403, distinct from 401; verification once per request before mcp-server-tools dispatch +m6 @mcp
+2026-09-12 crates/txtodo-daemon: implement TokenVerifier against the keystore root key, the store revocation set, and clock.rs now +m6 @daemon
+2026-09-12 stdio server resolves the token at start: --token, else config default_stdio_token, else refuse to start with a typed error +m6 @mcp @cli
+2026-09-12 crates/txtodo-cli/src/config.rs: add default_stdio_token Option<String> to Config; keep absent-means-default and deny_unknown_fields +m6 @cli
+2026-09-12 crates/txtodo-cli: parse --token on the mcp subcommand; explicit --token wins over default_stdio_token +m6 @cli
+2026-09-12 Log token_id only everywhere auth is touched; never token text, root key bytes or caveat values (CLAUDE.md §3) +m6 @mcp @security
+2026-09-12 Test: valid Bearer accepted with the expected AuthContext; garbage, revoked and expired tokens return 401 +m6 @mcp @test
+2026-09-12 Test: a valid token lacking a required scope returns 403, not 401 +m6 @mcp @test
+2026-09-12 Test: stdio without --token uses default_stdio_token; explicit --token wins; neither refuses to start +m6 @mcp @test
+2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text or caveat values +m6 @mcp @security @test
+2026-09-12 Complete the parent line in ./todo.txt +m6 @mcp

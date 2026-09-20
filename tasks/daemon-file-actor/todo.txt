@@ -1,8 +1,8 @@
-x 2026-09-11 2026-09-11 actor.rs: FileActor { path, state: Vec<TaskState>, projection: Vec<u8>, hash, store, expected } on one tokio task; ActorMsg enum ExternalChange Apply Get Undo Checkout Subscribe with reply channels +m3 @daemon id:01M2B4ZW0GDRZCZQFKGT0YTWS3
-x 2026-09-11 2026-09-11 Mailbox is a bounded mpsc (ACTOR_MAILBOX_CAP = 256); senders await backpressure, never drop +m3 @daemon id:01M2B4ZW0GA26CNVHCKW288B9Q
-x 2026-09-12 2026-09-11 TaskState { id: TaskId, line: OwnedLine, deleted: bool } in file order; blanks kept as their own variant so materialise() is byte-faithful +m3 @daemon id:01M2B4ZW0HX5V2HRMY7WDPM4FD
-x 2026-09-11 2026-09-11 write_projection(): bytes → temp beside file → fsync → rename → store.put_projection → hash; same pattern as txtodo-cli store.rs, copied not shared; append the duplicate to ABSTRACTIONS.md +m3 @daemon id:01M2B4ZW0HG30Z1YYHCTQ7957A
-x 2026-09-11 2026-09-11 Change broadcast: tokio broadcast channel (WATCH_CAP = 64); a Lagged subscriber is sent a full FileContents instead of failing +m3 @daemon id:01M2B4ZW0HJBMQ08GPV6NHG3FA
-x 2026-09-11 2026-09-11 Workspace registry: BTreeMap<FilePath, ActorHandle> with MAX_DOCUMENTS asserted; ListFiles reads it +m3 @daemon id:01M2B4ZW0H8GSPSMB602QD8JZ3
-x 2026-09-11 2026-09-11 Tests: two concurrent Apply calls serialise (op seq strictly increasing, one write each); Get bytes == disk bytes after every message +m3 @daemon @test id:01M2B4ZW0H0AHKW7Q5HZPJAE4W
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon id:01M2B4ZW0HVR7P3X6E2G50CC3J
+x 2026-09-11 2026-09-11 actor.rs: FileActor { path, state: Vec<TaskState>, projection: Vec<u8>, hash, store, expected } on one tokio task; ActorMsg enum ExternalChange Apply Get Undo Checkout Subscribe with reply channels +m3 @daemon
+x 2026-09-11 2026-09-11 Mailbox is a bounded mpsc (ACTOR_MAILBOX_CAP = 256); senders await backpressure, never drop +m3 @daemon
+x 2026-09-12 2026-09-11 TaskState { id: TaskId, line: OwnedLine, deleted: bool } in file order; blanks kept as their own variant so materialise() is byte-faithful +m3 @daemon
+x 2026-09-11 2026-09-11 write_projection(): bytes → temp beside file → fsync → rename → store.put_projection → hash; same pattern as txtodo-cli store.rs, copied not shared; append the duplicate to ABSTRACTIONS.md +m3 @daemon
+x 2026-09-11 2026-09-11 Change broadcast: tokio broadcast channel (WATCH_CAP = 64); a Lagged subscriber is sent a full FileContents instead of failing +m3 @daemon
+x 2026-09-11 2026-09-11 Workspace registry: BTreeMap<FilePath, ActorHandle> with MAX_DOCUMENTS asserted; ListFiles reads it +m3 @daemon
+x 2026-09-11 2026-09-11 Tests: two concurrent Apply calls serialise (op seq strictly increasing, one write each); Get bytes == disk bytes after every message +m3 @daemon @test
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon

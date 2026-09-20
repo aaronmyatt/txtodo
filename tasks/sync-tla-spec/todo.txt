@@ -1,12 +1,12 @@
-2026-09-12 Write specs/sync.tla modelling Device, oplog, applied and file with Init/AddOp/SyncOps/Next +m10 @specs id:01M2B4ZWNV17VQAE0ADPVFH7CK
-2026-09-12 specs/sync.tla: AddOp and SyncOps operators using Apply/FoldApply over a line sequence and a finite NewOps set +m10 @specs id:01M2B4ZWNVTQMXDABC6R9TGMVN
-2026-09-12 specs/sync.tla: TypeOK, Convergence (under weak fairness) and NoLoss invariants +m10 @specs id:01M2B4ZWNVMXGN92BP581MB5S7
-2026-09-12 specs/sync.cfg: Device={d1,d2,d3}, MaxOps=4, SPECIFICATION plus the three invariants/properties +m10 @specs id:01M2B4ZWNVCXGBAVE2C6SCFJZB
-2026-09-12 specs/sync-drop.tla: mutant module where one device never applies received ops (must fail NoLoss) +m10 @specs id:01M2B4ZWNVSGZY6PMR6RCQ0845
-2026-09-12 .github/workflows/ci.yml: tlc job downloading the pinned tla2tools.jar by checksum and running tlc Sync +m10 @specs @ci id:01M2B4ZWNV08PZ25DCNR5923Q8
-2026-09-12 CI: add the SyncDrop must-fail step asserting TLC prints a NoLoss counterexample +m10 @specs @ci id:01M2B4ZWNV8KK1TQTVVDGCR13E
-2026-09-12 Cross-check: Convergence in the spec matches the M4 simulator assertion in crates/txtodo-crdt/tests/sim.rs and comment the linkage +m10 @specs id:01M2B4ZWNVDW1Q5HTBFS0D6CYT
-2026-09-12 Test: tlc Sync on the 3-device/4-op model passes TypeOK, Convergence and NoLoss with no deadlock +m10 @specs @test id:01M2B4ZWNV9E7231BRK748DJYQ
-2026-09-12 Test: SyncDrop fails NoLoss and TLC emits a counterexample trace +m10 @specs @test id:01M2B4ZWNVXMPRN7S4ZQBVC0AM
-2026-09-12 Test: a larger MaxOps=8 model job still terminates within the CI budget +m10 @specs @test id:01M2B4ZWNV87J0XCHN33HD0W7S
-2026-09-12 Complete the parent line in ./todo.txt +m10 @specs id:01M2B4ZWNVS8D663VWR66YRRKM
+2026-09-12 Write specs/sync.tla modelling Device, oplog, applied and file with Init/AddOp/SyncOps/Next +m10 @specs
+2026-09-12 specs/sync.tla: AddOp and SyncOps operators using Apply/FoldApply over a line sequence and a finite NewOps set +m10 @specs
+2026-09-12 specs/sync.tla: TypeOK, Convergence (under weak fairness) and NoLoss invariants +m10 @specs
+2026-09-12 specs/sync.cfg: Device={d1,d2,d3}, MaxOps=4, SPECIFICATION plus the three invariants/properties +m10 @specs
+2026-09-12 specs/sync-drop.tla: mutant module where one device never applies received ops (must fail NoLoss) +m10 @specs
+2026-09-12 .github/workflows/ci.yml: tlc job downloading the pinned tla2tools.jar by checksum and running tlc Sync +m10 @specs @ci
+2026-09-12 CI: add the SyncDrop must-fail step asserting TLC prints a NoLoss counterexample +m10 @specs @ci
+2026-09-12 Cross-check: Convergence in the spec matches the M4 simulator assertion in crates/txtodo-crdt/tests/sim.rs and comment the linkage +m10 @specs
+2026-09-12 Test: tlc Sync on the 3-device/4-op model passes TypeOK, Convergence and NoLoss with no deadlock +m10 @specs @test
+2026-09-12 Test: SyncDrop fails NoLoss and TLC emits a counterexample trace +m10 @specs @test
+2026-09-12 Test: a larger MaxOps=8 model job still terminates within the CI budget +m10 @specs @test
+2026-09-12 Complete the parent line in ./todo.txt +m10 @specs

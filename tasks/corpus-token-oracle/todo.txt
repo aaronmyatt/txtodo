@@ -1,7 +1,7 @@
-x 2026-09-11 2026-09-11 Wait for corpus-seed +m0 @corpus id:01M2B4ZVXFX6MEQXBGYC82F4RS
-x 2026-09-11 2026-09-11 Write corpus/tokens.schema.json for the oracle format in notes.md +m0 @corpus id:01M2B4ZVXF1RYBDPQ9JP7TW38M
-x 2026-09-11 2026-09-11 Write corpus/edge-cases.tokens.json by hand, then lenient, tags, refs, structure +m0 @corpus id:01M2B4ZVXFD22DCJD3CZK4B48J
-x 2026-09-11 2026-09-11 Write the oracles for crlf, bom, no-trailing-newline, mixed-endings (line ending bytes are Whitespace spans) +m0 @corpus id:01M2B4ZVXF4VB51RPWEK27KF6C
-x 2026-09-11 2026-09-11 Add .claude/scripts/check-corpus-oracle.sh: every line's spans cover [0,len) contiguously and kinds are in the enum +m0 @corpus id:01M2B4ZVXFJBJA6Y305TC84HBJ
-x 2026-09-11 2026-09-11 Make just corpus run that script until txtodo-core exists, then M1 swaps in the real round-trip test +m0 @corpus id:01M2B4ZVXFX7RHP8QF2HTVB4YS
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @corpus id:01M2B4ZVXFT7NQJJYMS6W58PY4
+x 2026-09-11 2026-09-11 Wait for corpus-seed +m0 @corpus
+x 2026-09-11 2026-09-11 Write corpus/tokens.schema.json for the oracle format in notes.md +m0 @corpus
+x 2026-09-11 2026-09-11 Write corpus/edge-cases.tokens.json by hand, then lenient, tags, refs, structure +m0 @corpus
+x 2026-09-11 2026-09-11 Write the oracles for crlf, bom, no-trailing-newline, mixed-endings (line ending bytes are Whitespace spans) +m0 @corpus
+x 2026-09-11 2026-09-11 Add .claude/scripts/check-corpus-oracle.sh: every line's spans cover [0,len) contiguously and kinds are in the enum +m0 @corpus
+x 2026-09-11 2026-09-11 Make just corpus run that script until txtodo-core exists, then M1 swaps in the real round-trip test +m0 @corpus
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m0 @corpus

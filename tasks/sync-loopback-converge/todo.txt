@@ -1,13 +1,13 @@
-x 2026-09-13 2026-09-12 Reuse txtodo-daemon/tests/support Daemon helper for both processes; do not extract a cross-slice harness here +m4 @sync @test id:01M2B4ZWM3XMVCSV6DDAJK5ZZ2
-x 2026-09-13 2026-09-12 Append a line to ABSTRACTIONS.md noting the spawn-harness copy count has grown to five +m4 @docs id:01M2B4ZWM3SWR66RVRVAFYBBM9
-2026-09-12 Test-only seam to confirm the pairing SAS without a TTY prompt, guarded so it cannot ship enabled +m4 @sync @test id:01M2B4ZWM3C356Y510CDZDZRPH
-x 2026-09-13 2026-09-12 Every test run uses a fresh random group id so parallel runs and a developer's own daemon never join +m4 @sync @test id:01M2B4ZWM3JH17P9S2ZRYCHVHM
-x 2026-09-13 2026-09-12 Start the convergence clock after both daemons report ready, not at spawn +m4 @sync @test id:01M2B4ZWM3J0WZS5ABXM5HRCE1
-x 2026-09-13 2026-09-12 Poll to a 2 s deadline with a bounded loop and fail at the deadline; never sleep-then-assert +m4 @sync @test id:01M2B4ZWM4TA6G0CME5GY9EG7H
-x 2026-09-13 2026-09-12 Print the measured convergence time on success so drift is visible before it fails +m4 @sync @test id:01M2B4ZWM4VCHJBRD83NMCMYFT
-2026-09-12 Assert both todo.txt files are byte-identical and both op logs hold the same op set +m4 @sync @test id:01M2B4ZWM4V36CGY5TB46VXVKK
-x 2026-09-13 2026-09-12 Drive the edit as a real external file write, through the watcher and reconciler +m4 @sync @test id:01M2B4ZWM4YRK0XF3DFTSTT7TW
-x 2026-09-13 2026-09-12 Assert convergence in both directions in the same test +m4 @sync @test id:01M2B4ZWM4BJY0YG35CY1QW7CD
-2026-09-12 Second variant dialling a known address, so the sync path is covered where multicast is unavailable +m4 @sync @test id:01M2B4ZWM4KSB17YY0V4J785Z5
-2026-09-12 Skip with a visible message when multicast is unavailable; never fail and never silently pass +m4 @sync @test id:01M2B4ZWM44T90ZJ6YPHX90YVE
-2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @test id:01M2B4ZWM4M4A80VMKX8WZCMDY
+x 2026-09-13 2026-09-12 Reuse txtodo-daemon/tests/support Daemon helper for both processes; do not extract a cross-slice harness here +m4 @sync @test
+x 2026-09-13 2026-09-12 Append a line to ABSTRACTIONS.md noting the spawn-harness copy count has grown to five +m4 @docs
+2026-09-12 Test-only seam to confirm the pairing SAS without a TTY prompt, guarded so it cannot ship enabled +m4 @sync @test
+x 2026-09-13 2026-09-12 Every test run uses a fresh random group id so parallel runs and a developer's own daemon never join +m4 @sync @test
+x 2026-09-13 2026-09-12 Start the convergence clock after both daemons report ready, not at spawn +m4 @sync @test
+x 2026-09-13 2026-09-12 Poll to a 2 s deadline with a bounded loop and fail at the deadline; never sleep-then-assert +m4 @sync @test
+x 2026-09-13 2026-09-12 Print the measured convergence time on success so drift is visible before it fails +m4 @sync @test
+2026-09-12 Assert both todo.txt files are byte-identical and both op logs hold the same op set +m4 @sync @test
+x 2026-09-13 2026-09-12 Drive the edit as a real external file write, through the watcher and reconciler +m4 @sync @test
+x 2026-09-13 2026-09-12 Assert convergence in both directions in the same test +m4 @sync @test
+2026-09-12 Second variant dialling a known address, so the sync path is covered where multicast is unavailable +m4 @sync @test
+2026-09-12 Skip with a visible message when multicast is unavailable; never fail and never silently pass +m4 @sync @test
+2026-09-12 Complete the parent line in ./todo.txt +m4 @sync @test

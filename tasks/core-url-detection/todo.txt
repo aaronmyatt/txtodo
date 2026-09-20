@@ -1,5 +1,5 @@
-x 2026-09-11 2026-09-11 urls.rs: pub const DEFAULT_SCHEMES: &[&str] = [http https mailto ftp ssh file tel sms] +m1 @core id:01M2B4ZVWYT3JZPEJVS5BNNPEH
-x 2026-09-11 2026-09-11 urls.rs: pub fn is_url(word: &str, schemes: &[&str]) -> bool — ASCII-case-insensitive scheme, then a colon, then ≥ 1 more byte +m1 @core id:01M2B4ZVWYJH8PN686QY7Y7BPY
-x 2026-09-11 2026-09-11 Unit tests: every default scheme, mailto:x, tel:+1, HTTPS://upper, empty scheme list, the word note followed by a colon is not a URL, a:b:c is not a URL +m1 @core @test id:01M2B4ZVWYW1748DHJJEVZR38R
-x 2026-09-11 2026-09-11 Thread schemes through parse_line/tokenize as a &[&str] parameter with a default-using convenience wrapper +m1 @core id:01M2B4ZVWYD0X90PVEYYNXQFHD
-x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core id:01M2B4ZVWYT327Z38VZSTGS431
+x 2026-09-11 2026-09-11 urls.rs: pub const DEFAULT_SCHEMES: &[&str] = [http https mailto ftp ssh file tel sms] +m1 @core
+x 2026-09-11 2026-09-11 urls.rs: pub fn is_url(word: &str, schemes: &[&str]) -> bool — ASCII-case-insensitive scheme, then a colon, then ≥ 1 more byte +m1 @core
+x 2026-09-11 2026-09-11 Unit tests: every default scheme, mailto:x, tel:+1, HTTPS://upper, empty scheme list, the word note followed by a colon is not a URL, a:b:c is not a URL +m1 @core @test
+x 2026-09-11 2026-09-11 Thread schemes through parse_line/tokenize as a &[&str] parameter with a default-using convenience wrapper +m1 @core
+x 2026-09-11 2026-09-11 Complete the parent line in ./todo.txt +m1 @core

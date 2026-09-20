@@ -1,11 +1,11 @@
-2026-09-12 Enable state.rs::move_task for to_file != self.path: remove from source, allow the destination actor to insert after a destination id +m5 @daemon id:01M2B4ZW1YSQKRJWWW5WDK5YW4
-2026-09-12 Enable Mutation::Move in mutation.rs; resolve `after` against the destination document, not the source +m5 @daemon id:01M2B4ZW1YS4TE9WFCHC1VWD9N
-2026-09-12 Make history/recover select ops where the op's file OR to_file equals this actor's path, so the destination hydrates the move +m5 @daemon id:01M2B4ZW1Y5H03JJ8DEKRY971T
-2026-09-12 Write the op first, move the directory second; on move failure roll the op back and tell the user +m5 @daemon id:01M2B4ZW1YQ83MCYXPPDRHG6F7
-2026-09-12 Compute the ref dir's new parent from to_file, applying the collision rule with daemon-ref-creation's exclusive-create logic +m5 @daemon id:01M2B4ZW1Y2S0R23QQFV7JNP53
-2026-09-12 Flag the third rollback copy in ABSTRACTIONS.md (rename, cross-file move); do not extract +m5 @daemon @docs id:01M2B4ZW1YX31Y5GF7VXZG2YEY
-2026-09-12 Test: cross-file move lands the line and moves the dir beside the destination, with -2 on collision +m5 @daemon @test id:01M2B4ZW1YYQSD47W42PMCYBMW
-2026-09-12 Test: a destination actor hydrates a move whose Op.file is not its own path +m5 @daemon @test id:01M2B4ZW1YT8ZGE6NSGNRX9HCH
-2026-09-12 Test: simulated dir-move failure rolls the op back and leaves the source byte-identical +m5 @daemon @test id:01M2B4ZW1Y7EBE08SHZJK8BG0M
-2026-09-12 Test: crash between op-write and dir-move leaves a dangling ref, not an orphan +m5 @daemon @test id:01M2B4ZW1YM80AT4RYFXP7E52J
-2026-09-12 Complete the parent line in ./todo.txt +m5 @daemon id:01M2B4ZW1YXHKS1R8BGPG3TGF9
+2026-09-12 Enable state.rs::move_task for to_file != self.path: remove from source, allow the destination actor to insert after a destination id +m5 @daemon
+2026-09-12 Enable Mutation::Move in mutation.rs; resolve `after` against the destination document, not the source +m5 @daemon
+2026-09-12 Make history/recover select ops where the op's file OR to_file equals this actor's path, so the destination hydrates the move +m5 @daemon
+2026-09-12 Write the op first, move the directory second; on move failure roll the op back and tell the user +m5 @daemon
+2026-09-12 Compute the ref dir's new parent from to_file, applying the collision rule with daemon-ref-creation's exclusive-create logic +m5 @daemon
+2026-09-12 Flag the third rollback copy in ABSTRACTIONS.md (rename, cross-file move); do not extract +m5 @daemon @docs
+2026-09-12 Test: cross-file move lands the line and moves the dir beside the destination, with -2 on collision +m5 @daemon @test
+2026-09-12 Test: a destination actor hydrates a move whose Op.file is not its own path +m5 @daemon @test
+2026-09-12 Test: simulated dir-move failure rolls the op back and leaves the source byte-identical +m5 @daemon @test
+2026-09-12 Test: crash between op-write and dir-move leaves a dangling ref, not an orphan +m5 @daemon @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @daemon

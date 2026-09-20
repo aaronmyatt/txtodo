@@ -1,7 +1,7 @@
-2026-09-12 ListFiles message gains per-node Progress { done, total } and parent/child edges from ref tags plus directory layout +m5 @proto @daemon id:01M2B4ZWEWWT165DM4MN8TJHS9
-2026-09-12 Wire ListFiles to model-workspace-tree's progress(ref), not a reimplementation in the proto layer +m5 @proto @daemon id:01M2B4ZWEWFVZKQK2G42DJSS5D
-2026-09-12 Watch emits a progress change per invalidates(op, file) invalidation, no full re-list +m5 @proto @daemon id:01M2B4ZWEW5WTGVC17SQVB55KH
-2026-09-12 New field numbers only in txtodo.proto; regen check green (tasks/proto-grpc) +m5 @proto id:01M2B4ZWEW0EP23GKW025DR6H4
-2026-09-12 Test: ListFiles on the 3-level fixture returns rule-5 progress with done.txt lines and no recursive counter +m5 @proto @test id:01M2B4ZWEWGFBR4B1XNJZTSSC5
-2026-09-12 Test: Watch emits on a completion in <ref>/todo.txt and stays quiet on a non-structural EditText +m5 @proto @test id:01M2B4ZWEW52GBEM9B64N794FY
-2026-09-12 Complete the parent line in ./todo.txt +m5 @proto @daemon id:01M2B4ZWEWXZPTSPRA37FFH05T
+2026-09-12 ListFiles message gains per-node Progress { done, total } and parent/child edges from ref tags plus directory layout +m5 @proto @daemon
+2026-09-12 Wire ListFiles to model-workspace-tree's progress(ref), not a reimplementation in the proto layer +m5 @proto @daemon
+2026-09-12 Watch emits a progress change per invalidates(op, file) invalidation, no full re-list +m5 @proto @daemon
+2026-09-12 New field numbers only in txtodo.proto; regen check green (tasks/proto-grpc) +m5 @proto
+2026-09-12 Test: ListFiles on the 3-level fixture returns rule-5 progress with done.txt lines and no recursive counter +m5 @proto @test
+2026-09-12 Test: Watch emits on a completion in <ref>/todo.txt and stays quiet on a non-structural EditText +m5 @proto @test
+2026-09-12 Complete the parent line in ./todo.txt +m5 @proto @daemon

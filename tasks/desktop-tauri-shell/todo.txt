@@ -1,8 +1,8 @@
-x 2026-09-12 2026-09-12 Scaffold apps/desktop/ with Tauri 2 + Svelte and the src-tauri Rust shell crate +m7 @desktop id:01M2B4ZW6MTRRMTC9DTZJFZDP8
-x 2026-09-12 2026-09-12 Add txtodo-proto as a dep of src-tauri and generate the gRPC client from the shared proto (no hand-rolled types) +m7 @desktop id:01M2B4ZW6M41FHF7PYV8FVDKH1
-x 2026-09-12 2026-09-12 daemon_client module: detect the socket path from shared config, connect_lazy, bounded retry and connect timeout +m7 @desktop id:01M2B4ZW6MS4ZW05J0BFR436F9
-x 2026-09-12 2026-09-12 Spawn txtodo daemon start (or the binary) when the socket is absent, with a spawn timeout and a no-double-spawn guard +m7 @desktop id:01M2B4ZW6M86ABRD55XHG37MZX
-x 2026-09-12 2026-09-12 Tauri commands wrapping ListFiles GetFile Watch Apply History as typed calls over the gRPC client +m7 @desktop id:01M2B4ZW6MW3X5VHMKFQC6E2Y4
-x 2026-09-12 2026-09-12 Surface daemon-absent/disconnected as a reconnect banner to the frontend, never a crash +m7 @desktop id:01M2B4ZW6MPCGFYPBN57MJ6WXJ
-x 2026-09-12 2026-09-12 Test: fresh install spawns txtodod and ListFiles succeeds; an already-running daemon is reused, not duplicated +m7 @desktop @test id:01M2B4ZW6MJXG613A6GAGN2WND
-x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop id:01M2B4ZW6MKNA1FKBRF4NERJBQ
+x 2026-09-12 2026-09-12 Scaffold apps/desktop/ with Tauri 2 + Svelte and the src-tauri Rust shell crate +m7 @desktop
+x 2026-09-12 2026-09-12 Add txtodo-proto as a dep of src-tauri and generate the gRPC client from the shared proto (no hand-rolled types) +m7 @desktop
+x 2026-09-12 2026-09-12 daemon_client module: detect the socket path from shared config, connect_lazy, bounded retry and connect timeout +m7 @desktop
+x 2026-09-12 2026-09-12 Spawn txtodo daemon start (or the binary) when the socket is absent, with a spawn timeout and a no-double-spawn guard +m7 @desktop
+x 2026-09-12 2026-09-12 Tauri commands wrapping ListFiles GetFile Watch Apply History as typed calls over the gRPC client +m7 @desktop
+x 2026-09-12 2026-09-12 Surface daemon-absent/disconnected as a reconnect banner to the frontend, never a crash +m7 @desktop
+x 2026-09-12 2026-09-12 Test: fresh install spawns txtodod and ListFiles succeeds; an already-running daemon is reused, not duplicated +m7 @desktop @test
+x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop

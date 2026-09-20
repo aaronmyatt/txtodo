@@ -1,5 +1,5 @@
-2026-09-11 Test seam: txtodod --fake-clock-ms <start> and a test-only AdvanceClock RPC, both behind cfg(feature = "test-seam") enabled only via the daemon dev-dependencies; absent from release builds +m3 @daemon @test id:01M2B4ZW2SE4Y8NAJC2C054XSR
-x 2026-09-12 2026-09-11 undo after an external edit restores the previous bytes exactly; a second undo restores the state before that; a third undo (of the undo) re-applies the edit +m3 @daemon @test id:01M2B4ZW2SVDSX4X2SANV59RWV
-x 2026-09-12 2026-09-11 checkout at a time between op 1 and op 2 renders exactly the intermediate bytes to stdout; --file done.txt renders that document +m3 @daemon @test id:01M2B4ZW2SXAZK349KE4Y5V7KF
-x 2026-09-12 2026-09-11 checkout without --stdout writes a temp path, prints it, and never touches the workspace file +m3 @daemon @test id:01M2B4ZW2S4JDYNCKKQ4HFR995
-x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test id:01M2B4ZW2S7XSVQDE4GBDS6QET
+2026-09-11 Test seam: txtodod --fake-clock-ms <start> and a test-only AdvanceClock RPC, both behind cfg(feature = "test-seam") enabled only via the daemon dev-dependencies; absent from release builds +m3 @daemon @test
+x 2026-09-12 2026-09-11 undo after an external edit restores the previous bytes exactly; a second undo restores the state before that; a third undo (of the undo) re-applies the edit +m3 @daemon @test
+x 2026-09-12 2026-09-11 checkout at a time between op 1 and op 2 renders exactly the intermediate bytes to stdout; --file done.txt renders that document +m3 @daemon @test
+x 2026-09-12 2026-09-11 checkout without --stdout writes a temp path, prints it, and never touches the workspace file +m3 @daemon @test
+x 2026-09-12 2026-09-11 Complete the parent line in ./todo.txt +m3 @daemon @test

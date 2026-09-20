@@ -1,4 +1,4 @@
-x 2026-09-18 2026-09-18 Complete the parent line in ../../todo.txt +m11 @desktop id:01M2SMMRR9ZMG4DG8GZFNJP12H — done: see root todo.txt ref:desktop-autostart-env-respect
-x 2026-09-18 2026-09-18 Decide: wire TXTODO_NO_AUTOSTART into apps/desktop/src-tauri/src/daemon/autostart.rs, or explicitly scope the docs to exclude Desktop +m11 @desktop @human id:01M2SMMRR92YF9886F0XBKTMMZ — decided: wire it in (human choice, 2026-09-18)
-x 2026-09-18 2026-09-18 If wiring in: Desktop respects the env var and falls back to the existing Dead/reconnect-banner UI (ref:desktop-cold-boot-dead-status) instead of autospawning +m11 @desktop @daemon id:01M2SMMRR9THDYKCYSX6W1K0TC — done: commit 5e32cb6
-x 2026-09-18 2026-09-18 If documenting the exception: update autostart.rs's doc comment and the env var's user-facing docs to state Desktop is excluded and why +m11 @desktop @docs id:01M2SMMRR94Y4FAVRJPN8QFNGV — n/a: wired in instead (item 1's decision)
+x 2026-09-18 2026-09-18 Complete the parent line in ../../todo.txt +m11 @desktop — done: see root todo.txt ref:desktop-autostart-env-respect
+x 2026-09-18 2026-09-18 Decide: wire TXTODO_NO_AUTOSTART into apps/desktop/src-tauri/src/daemon/autostart.rs, or explicitly scope the docs to exclude Desktop +m11 @desktop @human — decided: wire it in (human choice, 2026-09-18)
+x 2026-09-18 2026-09-18 If wiring in: Desktop respects the env var and falls back to the existing Dead/reconnect-banner UI (ref:desktop-cold-boot-dead-status) instead of autospawning +m11 @desktop @daemon — done: commit 5e32cb6
+x 2026-09-18 2026-09-18 If documenting the exception: update autostart.rs's doc comment and the env var's user-facing docs to state Desktop is excluded and why +m11 @desktop @docs — n/a: wired in instead (item 1's decision)
