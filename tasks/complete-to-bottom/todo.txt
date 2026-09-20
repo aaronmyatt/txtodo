@@ -1,4 +1,3 @@
-2026-09-20 daemon: Complete also moves the line to the end of its file, one batch; already last is a no-op +m11 @daemon @test @doing by:claude
 2026-09-20 daemon: the reopen mutation moves the line to the end of the open block, above the first done line +m11 @daemon @test
 2026-09-20 daemon: an external edit that completes a line is never moved; test a hand edit and a hand-moved done line +m11 @daemon @test
 2026-09-20 txtodo-cli: do stops re-sorting every done line; daemon mode relies on Complete, --no-daemon moves that line only +m11 @cli @test
@@ -7,3 +6,4 @@
 2026-09-20 txtodo-mcp: todo_complete says the line moved to the bottom (ids stay valid, line numbers do not) +m11 @mcp @test
 2026-09-20 apps/desktop: check how a tick completes (text edit or Complete), make it Complete, keep the caret on its row +m11 @desktop @test
 2026-09-20 skill: txtodo-backlog 3.2 says Complete already moves the line, drop the per-completion archive; reinstall it +m11 @docs
+x 2026-09-20 2026-09-20 daemon: Complete also moves the line to the end of its file, one batch; already last is a no-op +m11 @daemon @test — shipped: the unit tests were written first; m5_acceptance, mcp_backend, concurrent_apply, grpc, activity and external_edits_sidecar pass; known gap: the whole daemon suite was not re-run (it takes 5 to 14 minutes here)
