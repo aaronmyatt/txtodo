@@ -41,3 +41,28 @@ bundled `txtodod` from before early bind, and nothing showed that it was old.
 
 - A dev build shows the last commit's date, and a dirty tree looks the same as the commit.
 - Equal version and date with different code (two builds of one commit) is not caught.
+
+## As built (2026-09-20)
+
+- `build-support/buildinfo.rs` (`4e3cc6c`): included with `#[path]` by the build scripts of
+  txtodo-cli, txtodo-tui, txtodo-daemon and apps/desktop/src-tauri. `check-boundaries.sh` accepts
+  it. It reruns when `$TXTODO_RELEASE_DATE` changes or when HEAD moves (it asks git for
+  `logs/HEAD`, so a worktree works). The fallback order is tested from txtodo-cli.
+- `--version`: `txtodo 0.0.2 (2026-09-20)`, `txtodo-tui ...`, `txtodod ...`. A build with
+  `TXTODO_RELEASE_DATE=2026-01-02` showed that date.
+- TUI (`afec5a5`): the dim label at the right edge of the status line, only when the line fits.
+- proto `7de7c0c`/`c343a8f`: `HealthResponse.release_date` (21). Daemon: `Health` (full and
+  totals-only) and the two boot log lines.
+- Desktop (`323dea2`, `81056e9`): `build_info` command, `VersionInfo.svelte` (label in the top bar
+  and on Help, banner with the other banners), `versionInfo.ts::daemonMismatch`.
+- `txtodo doctor`: first line is the version line; a `version` row after the fixed seven warns on
+  a mismatch.
+- `scripts/check-version-sync.sh`: passes here, fails on a drifted copy.
+
+Left for a human, as `gate.patch` beside this file (`git apply tasks/version-info/gate.patch`):
+`release.yml` sets `TXTODO_RELEASE_DATE` from the tagged commit in the build and build-desktop
+jobs and the smoke test fails a binary whose `--version` lacks it; `justfile` runs the version-sync
+script in `boundaries`. Both are frozen paths.
+
+Not proven: nobody has looked at the label or the banner in the app or a real terminal, and the
+banner is computed once at mount.
