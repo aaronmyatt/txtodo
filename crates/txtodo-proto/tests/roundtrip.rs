@@ -248,11 +248,16 @@ fn the_early_bind_and_relay_fields_round_trip_and_default_to_absent() {
         workspaces_failed: 1,
         relay_node_id: "ab".repeat(32),
         relay_bound: true,
+        release_date: "2026-09-20".into(),
         ..HealthResponse::default()
     };
     round_trip(&health);
     let none = HealthResponse::default();
     assert!(none.relay_node_id.is_empty() && !none.relay_bound);
+    assert!(
+        none.release_date.is_empty(),
+        "an older daemon sends no date"
+    );
 
     round_trip(&MigrateIdentityResponse {
         paired_peers: 2,

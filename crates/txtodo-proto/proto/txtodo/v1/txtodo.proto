@@ -428,6 +428,11 @@ message HealthResponse {
   // endpoint has not bound yet — absence is a real state, like `relay_url` above.
   string relay_node_id = 19;
   bool relay_bound = 20;
+  // The daemon build's release date, `YYYY-MM-DD` or `unknown` (task version-info), beside
+  // `version` above. A client compares both with its own and warns when they differ: an app
+  // talking to an older daemon was the bug that started this. Empty from a daemon older than the
+  // field, which is itself the answer "this daemon is an older build".
+  string release_date = 21;
 }
 
 // --- notes.md (plan M5, design §7) ---
