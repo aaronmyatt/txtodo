@@ -1,5 +1,4 @@
 2026-09-20 model: WorkspaceLayout {refs_dir, todo_file}, default todo.txt and tasks; . stays a valid refs_dir (beside the list) for a workspace that sets it; path validation +m11 @model
-2026-09-20 proto: WorkspaceInfo carries refs_dir and todo_file, additive, its own commit +m11 @proto
 2026-09-20 daemon: a root-list ref resolves to <refs_dir>/<slug> in one helper (RefDir, notes, ensure, rename) +m11 @daemon @test
 2026-09-20 daemon: moving a line between the root list and a ref list relocates its dir to the right place +m11 @daemon @test
 2026-09-20 daemon: prune scans refs_dir only, so crates/ and docs/ are never orphan candidates +m11 @daemon @test
@@ -18,3 +17,4 @@
 x 2026-09-20 2026-09-20 Decide: existing workspaces when the default flips (A pin what is on disk at first open, B move to tasks/) +m11 @daemon — decided 2026-09-20 by a human: neither; the project is young and no other device syncs yet, so the default just flips to tasks/ and a one-off script updates the workspaces on this machine (scripts/migrate-refs-to-tasks.sh)
 x 2026-09-20 2026-09-20 Decide: where the layout is stored (A txtodo.toml synced beside todo.txt, B registry + pairing offer) +m11 @daemon — decided 2026-09-20 by a human: A, a txtodo.toml at the workspace root, synced like notes.md; this accepts the toml crate in the daemon
 x 2026-09-20 2026-09-20 scripts/migrate-refs-to-tasks.sh: one-off for this machine, moves a root list's ref folders from beside the list into tasks/ +m11 @ops — shipped: dry run by default, --yes applies, refuses while a txtodod runs, skips a slug that exists in both places; proven on a throwaway registry and workspace; on this machine today it finds 0 folders to move, all 13 registered workspaces already use tasks/ or have no refs
+x 2026-09-20 2026-09-20 proto: WorkspaceInfo carries refs_dir and todo_file, additive, its own commit +m11 @proto — shipped in 9034177, generated in 705df7f (fields 9, 10); known gap: every struct literal of WorkspaceInfo, ApplyRequest, ApplyResponse and OpLogEntry in other crates stops compiling until each crate adds the fields, so main does not build between the proto and the crate commits

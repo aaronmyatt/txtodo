@@ -1,7 +1,7 @@
 2026-09-20 store: ops gain a nullable local-only source column, additive migration; never in Op, its hash or signature +m6 @store @test
-2026-09-20 proto: ApplyRequest.source and OpLogEntry.source, additive, one commit; unknown values kept, length-capped +m6 @proto
 2026-09-20 daemon: stamp source on the ops a mutation commits; sync ops get "sync", disk edits "external"; serve it in OpLogStream +m6 @daemon @test
 2026-09-20 txtodo-cli: send source cli; txtodo log shows it, and --json carries it +m6 @cli @test
 2026-09-20 txtodo-tui: send source tui +m6 @tui
 2026-09-20 txtodo-mcp: send source mcp +m6 @mcp
 2026-09-20 apps/desktop: send source desktop; the activity view shows it +m6 @desktop @test
+x 2026-09-20 2026-09-20 proto: ApplyRequest.source and OpLogEntry.source, additive, one commit; unknown values kept, length-capped +m6 @proto — shipped in 1742982, generated in 705df7f (ApplyRequest 5, OpLogEntry 4); not capped or read yet, that is the daemon line

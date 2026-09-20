@@ -1,5 +1,5 @@
-2026-09-20 proto: ApplyRequest.dry_run and ApplyResponse.diff (unified diff), additive, its own commit +m6 @proto
 2026-09-20 daemon: dry_run runs the real mutation path and stops before the commit: no op, no write, no HLC tick +m6 @daemon @test
 2026-09-20 daemon: errors carry the 1-based line number and the spec rule that failed, as structured details +m6 @daemon @test
 2026-09-20 txtodo-mcp: todo_batch dry_run calls Apply with dry_run and returns the diff; drop the no-RPC stub +m6 @mcp @test
 2026-09-20 txtodo-mcp: after a dry run the store hash is unchanged, asserted against a real daemon, not a fake channel +m6 @mcp @test
+x 2026-09-20 2026-09-20 proto: ApplyRequest.dry_run and ApplyResponse.diff (unified diff), additive, its own commit +m6 @proto — shipped in 8082b49, generated in 705df7f (ApplyRequest 6, ApplyResponse 5), round-trip test in 9cdf9f6
