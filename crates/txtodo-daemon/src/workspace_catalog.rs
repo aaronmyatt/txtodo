@@ -45,6 +45,9 @@ pub struct WorkspaceCatalog {
     /// When each workspace's `last_active_ms` was last written, so a busy one costs one registry
     /// write per `TOUCH_EVERY_MS`, not one per request.
     pub(crate) last_touch: Mutex<HashMap<WorkspaceId, u64>>,
+    /// The default workspace's id, once `ensure_default_workspace` registered it (task
+    /// default-workspace). Unset in a `--dir` bridge daemon, which has none.
+    pub(crate) default: std::sync::OnceLock<WorkspaceId>,
 }
 
 /// Default bound on a request waiting for a workspace that is still loading: the client-side spawn
@@ -68,6 +71,7 @@ impl WorkspaceCatalog {
             load_wait: DEFAULT_LOAD_WAIT,
             open_hook: None,
             last_touch: Mutex::new(HashMap::new()),
+            default: std::sync::OnceLock::new(),
         }
     }
 
@@ -144,6 +148,11 @@ impl WorkspaceCatalog {
     /// open (stopping its watcher/LAN/relay/file-carrier tasks via `OpenedWorkspace`'s `Drop`) —
     /// never touches `root/.txtodo/` on disk. `false` for an unknown id.
     pub fn remove_registered(&self, id: WorkspaceId) -> Result<bool, Status> {
+        if self.registered_default() == Some(id) {
+            return Err(Status::failed_precondition(
+                "the default workspace cannot be removed; pick another workspace instead",
+            ));
+        }
         let removed = {
             let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
             registry
@@ -238,6 +247,11 @@ impl WorkspaceCatalog {
         selector: Option<&pb::WorkspaceSelector>,
     ) -> Option<Result<SharedWorkspace, Status>> {
         match selector.and_then(|s| s.selector.as_ref()) {
+            // The default when it is already open; else the slow path, which opens and waits.
+            None if self.registered_default().is_some() => self
+                .registered_default()
+                .and_then(|id| self.open_ws(id).ok())
+                .map(Ok),
             None => Some(self.resolve_sole_open()),
             Some(pb::workspace_selector::Selector::WorkspaceId(text)) => {
                 let ulid = Ulid::parse(text)?;
@@ -289,6 +303,11 @@ impl WorkspaceCatalog {
     /// Unset/absent selector: the single-workspace bridge every `--dir`-started daemon (and
     /// today's whole test suite, which never sets `.workspace` on any request) relies on.
     fn resolve_sole_open(&self) -> Result<SharedWorkspace, Status> {
+        // A registered default answers every selector-less call (task default-workspace), loading
+        // or not: it is opened lazily like any named workspace, waiting up to `load_wait`.
+        if let Some(id) = self.registered_default() {
+            return self.resolve_id(&id.to_string());
+        }
         // While any open is still ahead, the count of open workspaces is still growing: 0 would say
         // "none open", 1 would succeed by luck, then 2 would turn "ambiguous". Say so instead.
         if self.slots.pending() > 0 {

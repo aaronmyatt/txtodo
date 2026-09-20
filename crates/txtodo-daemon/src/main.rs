@@ -261,6 +261,15 @@ fn start_dir_bridge(
     Ok(())
 }
 
+/// The user's default workspace: created on first run, and queued first by the caller. A failure is
+/// logged and never fatal: every other workspace still opens.
+fn register_default_workspace(catalog: &WorkspaceCatalog, env: &RegistryEnv) {
+    let dir = workspace_registry_paths::default_workspace_dir_for(env);
+    if let Err(e) = catalog.ensure_default_workspace(&dir) {
+        tracing::warn!(dir = %dir.display(), error = %e, "default_workspace_unavailable");
+    }
+}
+
 /// True global mode (`--dir` omitted), run once the socket is bound: opens every queued workspace
 /// on the catalog's loader thread. A loader that cannot start is logged; requests still open their
 /// own workspace on demand, so the daemon stays usable.
@@ -371,7 +380,10 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
             start_dir_bridge(dir, &catalog)?;
             Vec::new()
         }
-        None => catalog.queue_registered(),
+        None => {
+            register_default_workspace(&catalog, &env);
+            catalog.queue_registered()
+        }
     };
     drop(_boot);
 

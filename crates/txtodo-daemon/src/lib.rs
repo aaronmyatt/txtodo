@@ -26,6 +26,7 @@ mod control_session;
 pub mod convert;
 pub mod debounce;
 pub mod debug_hooks;
+mod default_workspace;
 pub mod device_identity;
 pub mod device_relay;
 mod device_remove;
@@ -139,6 +140,8 @@ mod bundle_tests;
 mod control_dispatch_tests;
 #[cfg(test)]
 mod control_session_tests;
+#[cfg(test)]
+mod default_workspace_tests;
 #[cfg(test)]
 mod device_relay_tests;
 #[cfg(test)]

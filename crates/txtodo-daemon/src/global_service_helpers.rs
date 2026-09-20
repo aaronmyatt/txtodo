@@ -29,7 +29,7 @@ pub(crate) fn to_workspace_info(e: WorkspaceEntry, state: Option<LoadState>) -> 
         load_state: load_state as i32,
         load_error,
         // Wired to the real values by the default-workspace and workspace-layout daemon lines.
-        is_default: false,
+        is_default: e.id == crate::default_workspace::default_workspace_id(),
         refs_dir: String::new(),
         todo_file: String::new(),
     }

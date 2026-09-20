@@ -168,7 +168,10 @@ impl WorkspaceCatalog {
             return Vec::new();
         };
         let mut live: Vec<WorkspaceEntry> = entries.into_iter().filter(|e| e.root_exists).collect();
-        live.sort_by_key(|e| std::cmp::Reverse(recency_ms(e)));
+        // The default first (task default-workspace), so the app is usable at once; the rest most
+        // recently used first.
+        let default = self.registered_default();
+        live.sort_by_key(|e| (Some(e.id) != default, std::cmp::Reverse(recency_ms(e))));
         for entry in &live {
             self.slots.queue(entry.id);
         }
