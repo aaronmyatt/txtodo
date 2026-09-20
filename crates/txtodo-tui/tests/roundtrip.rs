@@ -95,6 +95,37 @@ async fn space_completes_a_line_through_apply() {
     );
 }
 
+/// Task complete-to-bottom against a real daemon: the done line goes to the bottom of the file and
+/// the cursor stays on row 0, where the next open task now is.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn space_moves_the_done_line_down_and_the_cursor_stays_on_its_row() {
+    let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+
+    press(
+        &mut daemon,
+        &mut input,
+        &mut state,
+        crossterm::event::KeyCode::Char(' '),
+    )
+    .await;
+
+    assert_eq!(state.cursor, 0);
+    assert_eq!(state.lines[0].raw, "call mom", "the next task slid up");
+    assert!(state.lines[1].completed, "{:?}", state.lines[1].raw);
+    assert!(
+        state.lines[1].raw.ends_with("buy milk"),
+        "{:?}",
+        state.lines[1].raw
+    );
+}
+
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn i_edit_and_enter_saves_through_apply() {
