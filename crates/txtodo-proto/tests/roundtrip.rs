@@ -115,8 +115,10 @@ fn responses_and_streams_round_trip() {
     });
     round_trip(&FileContents {
         path: "todo.txt".into(),
-        bytes: b"(A) x\r\n".to_vec(),
+        bytes: b"(A) x\r\n\r\n".to_vec(),
         hash: vec![2; 32],
+        // One entry per line: a task line's ULID text, "" for the blank line after it.
+        task_ids: vec!["01M2T868JD32M84JQQ2ABASXW4".into(), String::new()],
     });
     round_trip(&Change {
         path: "todo.txt".into(),

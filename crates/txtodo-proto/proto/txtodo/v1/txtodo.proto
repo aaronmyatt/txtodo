@@ -228,6 +228,11 @@ message FileContents {
   string path = 1;
   bytes bytes = 2;
   bytes hash = 3;
+  // One entry per line of `bytes`, in file order: the line's task id as ULID text, "" for a blank
+  // line (task sidecar-task-ids). Under Sidecar identity a line carries no `id:` tag, so this is
+  // the only way a client learns the id a `TaskRef` or `GetNotes` needs. Empty from `Checkout` and
+  // from a daemon older than this field; a client then falls back to the `id:` tag in the text.
+  repeated string task_ids = 4;
 }
 
 message WatchRequest {
