@@ -306,6 +306,40 @@ async fn sidecar_mode_replaces_too_and_drops_a_blank_line() {
     );
 }
 
+/// What the desktop editor sends when a line is moved (task desktop-reorder-propagates): the same
+/// lines in a new order, plus one edited in the same save. Each line keeps its task id, so its
+/// history and notes follow it; sidecar text has no `id:` to show that, `GetFile`'s ids do.
+#[tokio::test]
+async fn sidecar_replace_with_moved_lines_keeps_each_lines_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "one\ntwo\nthree\n").unwrap();
+    let (mut client, _stop) = serve_in(dir.path(), IdentityMode::Sidecar).await;
+    let get = pb::GetFileRequest {
+        path: "todo.txt".into(),
+        workspace: None,
+    };
+    let before = client.get_file(get.clone()).await.unwrap().into_inner();
+    let ids = before.task_ids.clone();
+    assert_eq!(ids.len(), 3);
+
+    // `three` moves to the top, and `two` is edited on the way.
+    client
+        .apply(apply_req(vec![replace(
+            &before.hash,
+            "three\none\ntwo +p\n",
+        )]))
+        .await
+        .unwrap();
+    let after = client.get_file(get).await.unwrap().into_inner();
+    assert_eq!(after.bytes, b"three\none\ntwo +p\n");
+    assert_eq!(
+        std::fs::read(dir.path().join("todo.txt")).unwrap(),
+        after.bytes
+    );
+    let moved = vec![ids[2].clone(), ids[0].clone(), ids[1].clone()];
+    assert_eq!(after.task_ids, moved, "ids follow their lines");
+}
+
 /// Agent A read `a b c` and means to edit `b` (line 2). Agent B then deletes line 1, so line 2 is
 /// `c`: with no id to disagree, only the base hash can refuse A's edit.
 #[tokio::test]
