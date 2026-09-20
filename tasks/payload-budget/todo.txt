@@ -1,0 +1,4 @@
+2026-09-20 txtodo-mcp: cap each returned line at 4096 bytes on a character boundary and mark it truncated; writes are not refused +m6 @mcp @test
+2026-09-20 txtodo-mcp: todo_list returns at most 50 rows per call and says when there are more +m6 @mcp @test
+2026-09-20 txtodo-mcp: the whole-file resource pages at 512 KiB per response +m6 @mcp @test
+2026-09-20 budgets.json payloadKB 512 and stack.md's payload note, together, after the three above +m6 @docs
