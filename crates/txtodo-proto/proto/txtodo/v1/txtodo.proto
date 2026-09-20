@@ -703,6 +703,11 @@ message WorkspaceInfo {
   // device registers under one reserved workspace id. It cannot be removed. False from an older
   // daemon, which a client reads as "no default known".
   bool is_default = 8;
+  // The workspace's layout (task workspace-layout): where the root list and the ref directories
+  // live, both relative to `root` with `/` separators. Empty from an older daemon, which a client
+  // reads as the defaults, `todo.txt` and `tasks`.
+  string refs_dir = 9;
+  string todo_file = 10;
 }
 
 message WorkspaceAddRequest {
