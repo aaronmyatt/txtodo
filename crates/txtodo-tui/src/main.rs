@@ -10,7 +10,7 @@ fn main() -> std::process::ExitCode {
     // real daemon connection that fails loudly on a CI runner with no daemon — a real gap found
     // on this project's first tagged release, task `release-engineering`.
     if std::env::args().nth(1).as_deref() == Some("--version") {
-        println!("txtodo-tui {}", env!("CARGO_PKG_VERSION"));
+        println!("txtodo-tui {}", txtodo_tui::buildinfo::VERSION_LINE);
         return std::process::ExitCode::SUCCESS;
     }
     txtodo_tui::app::main()

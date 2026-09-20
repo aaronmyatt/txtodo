@@ -5,7 +5,7 @@
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Line;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
 use crate::state::{AppState, EditTarget};
@@ -20,7 +20,10 @@ pub fn draw(frame: &mut Frame, state: &AppState) {
     let mut list_state = ListState::default().with_selected(Some(state.cursor));
     frame.render_stateful_widget(list::list_widget(state), list_area, &mut list_state);
 
-    frame.render_widget(Paragraph::new(status_line(state)), status_area);
+    frame.render_widget(
+        Paragraph::new(status_line(state, status_area.width)),
+        status_area,
+    );
 
     if state.sync_visible {
         draw_overlay(frame, list_area, sync::render(&state.sync));
@@ -47,14 +50,28 @@ fn edit_label(target: &EditTarget) -> &'static str {
     }
 }
 
-fn status_line(state: &AppState) -> Line<'static> {
+/// The path, the `id:` toggle and the skill hint on the left; this build's version and date on the
+/// right, dim. The version is the first thing to go: it is shown only when the whole line still
+/// fits in `width` columns with a gap, so a narrow terminal loses nothing it needs.
+/// `Line::width`: https://docs.rs/ratatui/latest/ratatui/text/struct.Line.html#method.width
+fn status_line(state: &AppState, width: u16) -> Line<'static> {
     let id = if state.show_id { "id:on" } else { "id:off" };
     let hint = if state.skill_hint {
         " \u{b7} no agent playbook installed; run `txtodo skill install`"
     } else {
         ""
     };
-    Line::from(format!(" {} \u{b7} {id}{hint}", state.path))
+    let left = format!(" {} \u{b7} {id}{hint}", state.path);
+    let version = format!("{} ", crate::buildinfo::UI_LABEL);
+    let used = Line::from(left.as_str()).width() + Line::from(version.as_str()).width();
+    let Some(gap) = usize::from(width).checked_sub(used).filter(|gap| *gap >= 2) else {
+        return Line::from(left);
+    };
+    Line::from(vec![
+        Span::raw(left),
+        Span::raw(" ".repeat(gap)),
+        Span::styled(version, Style::new().add_modifier(Modifier::DIM)),
+    ])
 }
 
 /// A one-line strip anchored to the bottom of `area` — good enough for the sync indicator and
@@ -98,16 +115,34 @@ mod tests {
     #[test]
     fn status_line_omits_hint_by_default() {
         let state = AppState::fixture();
-        let text = status_line(&state).to_string();
+        let text = status_line(&state, 120).to_string();
         assert!(!text.contains("skill install"));
         assert!(text.contains("id:off"));
+    }
+
+    #[test]
+    fn status_line_shows_the_version_dim_at_the_right_edge_when_it_fits() {
+        let state = AppState::fixture();
+        let line = status_line(&state, 120);
+        assert_eq!(line.width(), 120, "padded out to the right edge");
+        let last = line.spans.last().unwrap_or_else(|| panic!("spans"));
+        assert_eq!(last.content.trim_end(), crate::buildinfo::UI_LABEL);
+        assert!(last.style.add_modifier.contains(Modifier::DIM));
+    }
+
+    #[test]
+    fn a_narrow_terminal_drops_the_version_first() {
+        let state = AppState::fixture();
+        let narrow = status_line(&state, 30).to_string();
+        assert!(!narrow.contains(crate::buildinfo::UI_LABEL));
+        assert!(narrow.contains("id:off"), "the rest stays: {narrow}");
     }
 
     #[test]
     fn status_line_shows_hint_when_needed() {
         let mut state = AppState::fixture();
         state.skill_hint = true;
-        let text = status_line(&state).to_string();
+        let text = status_line(&state, 120).to_string();
         assert!(text.contains("no agent playbook installed; run `txtodo skill install`"));
     }
 }

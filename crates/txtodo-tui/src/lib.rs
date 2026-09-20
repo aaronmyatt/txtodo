@@ -4,6 +4,7 @@
 //! opens `todo.txt` itself — every byte comes from the daemon's `GetFile`/`Watch`.
 #![forbid(unsafe_code)]
 
+pub mod buildinfo;
 pub mod paint;
 pub mod skill_hint;
 pub mod state;
