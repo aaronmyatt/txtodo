@@ -254,8 +254,26 @@ impl crate::server::TxtodoService {
         rows.sort_by_key(|s| std::cmp::Reverse(s.seq));
         rows.truncate(limit);
         debug_assert!(rows.len() <= limit);
+        // One query over the rows' seq span, for the client that made each change (task op-source).
+        let sources = match (
+            rows.iter().map(|s| s.seq).min(),
+            rows.iter().map(|s| s.seq).max(),
+        ) {
+            (Some(first), Some(last)) => store
+                .sources_between(first, last)
+                .map_err(|e| tonic::Status::internal(e.to_string()))?,
+            _ => std::collections::BTreeMap::new(),
+        };
+        let ops = rows
+            .iter()
+            .map(|s| {
+                let mut summary = crate::convert::to_summary(s);
+                summary.source = sources.get(&s.seq).cloned().unwrap_or_default();
+                summary
+            })
+            .collect();
         Ok(tonic::Response::new(txtodo_proto::v1::HistoryResponse {
-            ops: rows.iter().map(crate::convert::to_summary).collect(),
+            ops,
         }))
     }
 }

@@ -127,3 +127,30 @@ async fn a_dry_run_leaves_no_source_behind() {
         .unwrap();
     assert_eq!(op_log(&mut client).await, before);
 }
+
+#[tokio::test]
+async fn history_carries_the_source_too() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "seed\n").unwrap();
+    let (mut client, _stop) = serve_in(dir.path(), IdentityMode::Sidecar).await;
+    client
+        .apply(req(vec![add("from the cli")], "cli", false))
+        .await
+        .unwrap();
+    client
+        .apply(req(vec![add("from nobody")], "", false))
+        .await
+        .unwrap();
+
+    let ops = client
+        .history(pb::HistoryRequest {
+            path: "todo.txt".into(),
+            ..pb::HistoryRequest::default()
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .ops;
+    assert_eq!(ops[0].source, "", "no source named, none invented");
+    assert_eq!(ops[1].source, "cli");
+}

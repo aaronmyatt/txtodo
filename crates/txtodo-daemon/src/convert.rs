@@ -297,6 +297,8 @@ pub fn to_summary(s: &Stored) -> pb::OpSummary {
             .map(|t| t.to_string())
             .unwrap_or_default(),
         summary: summary_of(&s.op.kind),
+        // Local to this device's log, so not on the op: the caller that has the store fills it.
+        source: String::new(),
     }
 }
 
