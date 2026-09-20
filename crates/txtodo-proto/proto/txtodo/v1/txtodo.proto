@@ -360,6 +360,9 @@ message ApplyRequest {
   // Which client sent this: "cli", "tui", "desktop", "mcp" (task op-source). Kept in this device's
   // op log only, never in the synced op. Free text: an unknown value is kept, length-capped.
   string source = 5;
+  // Run the real mutation path and stop before the commit (task apply-dry-run): no op, no write,
+  // no clock tick. The response carries the unified diff the batch would make.
+  bool dry_run = 6;
 }
 
 message ApplyResponse {
@@ -367,6 +370,8 @@ message ApplyResponse {
   bytes hash = 2;             // projection hash after the write
   uint64 hlc_wall_ms = 3;
   uint32 hlc_counter = 4;
+  // Unified diff of the document, workspace-relative path in the headers. Set only on a dry run.
+  string diff = 5;
 }
 
 message HistoryRequest {
