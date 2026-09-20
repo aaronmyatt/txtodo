@@ -1,5 +1,5 @@
 2026-09-20 daemon: the reopen mutation moves the line to the end of the open block, above the first done line +m11 @daemon @test @human — there is no reopen mutation on the wire today (MCP's todo_uncomplete sends an Edit), so this needs a new Mutation.Reopen in the proto, and notes.md says the placement (end of the open block) was the agent's own pick: confirm both, or say reopen leaves the line where it is
-2026-09-20 txtodo-cli: do stops re-sorting every done line; daemon mode relies on Complete, --no-daemon moves that line only +m11 @cli @test
+2026-09-20 txtodo-cli: do stops re-sorting every done line; daemon mode relies on Complete, --no-daemon moves that line only +m11 @cli @test @doing by:claude
 2026-09-20 txtodo-cli: archive stays as the explicit sort-all-done and drop-blanks command; -A stays accepted +m11 @cli
 2026-09-20 txtodo-tui: Space completes; the selection stays on its row so the next task slides under it +m11 @tui @test
 2026-09-20 txtodo-mcp: todo_complete says the line moved to the bottom (ids stay valid, line numbers do not) +m11 @mcp @test
