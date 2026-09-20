@@ -236,7 +236,16 @@ fn mutation_ops_inner(
                 .line_of(id)
                 .ok_or(MutationError::NoLine(task.line_number))?;
             let new = txtodo_core::apply(&old, &Edit::new().complete(*today));
-            Ok(change_ops(&old, &new, id))
+            let mut ops = change_ops(&old, &new, id);
+            // Completing also moves the line to the end of its own file, in the same batch, once
+            // (task complete-to-bottom): every client sends this one mutation, so they all agree
+            // and none re-implements it. Nothing moves when the completion changed nothing (the
+            // line was done already) or the line is already the last task, so neither case adds
+            // an op. An external edit that types `x ` is reconciled as the edit it is, never here.
+            if !ops.is_empty() && state.task_before(state.len()) != Some(id) {
+                ops.extend(move_to_end_ops(state, task)?);
+            }
+            Ok(ops)
         }
         Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
         Mutation::Move { task, to } => move_ops(state, task, to),

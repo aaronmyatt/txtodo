@@ -225,9 +225,9 @@ fn task_ref(line_number: u32, task_id: TaskId) -> pb::TaskRef {
 }
 
 /// Archive (rule 7): the completed line moves to the bottom of the same file, its `ref:` tag
-/// intact — this daemon's archiving mechanics are exactly Complete + MoveToEnd (see
-/// `daemon_mode.rs` on the CLI side); no code path here ever touches the directory, since the line
-/// never leaves todo.txt. Returns the archived line's task id (unchanged).
+/// intact. `Complete` does the move itself, in the same batch (task complete-to-bottom; it used to
+/// take a second `MoveToEnd`); no code path here ever touches the directory, since the line never
+/// leaves todo.txt. Returns the archived line's task id (unchanged).
 async fn archive_line_one(client: &mut Client, line: TaskId) -> TaskId {
     apply(
         client,
@@ -238,16 +238,13 @@ async fn archive_line_one(client: &mut Client, line: TaskId) -> TaskId {
         }),
     )
     .await;
-    let completed_line = get(client, "todo.txt").await;
-    assert!(completed_line.contains("ref:roadmap"), "{completed_line}");
-    apply(
-        client,
-        "todo.txt",
-        mutation::Kind::MoveToEnd(pb::MoveToEnd {
-            task: Some(task_ref(1, line)),
-        }),
-    )
-    .await;
+    let after = get(client, "todo.txt").await;
+    let last = after.lines().last().unwrap_or_default();
+    assert!(
+        last.starts_with("x 2026-09-13"),
+        "the done line is last: {after}"
+    );
+    assert!(last.contains("ref:roadmap"), "{after}");
     line
 }
 

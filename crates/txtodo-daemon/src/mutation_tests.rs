@@ -118,6 +118,56 @@ fn complete_clears_priority_first_then_marks_done() {
     );
 }
 
+/// Task complete-to-bottom: completing moves the line to the end of its own file, in the same
+/// batch, once. The last op of the batch is the move, after whichever task is last now.
+#[test]
+fn complete_also_moves_the_line_after_the_last_task() {
+    let s = state();
+    let today = Date::new(2026, 9, 12).unwrap();
+    let ops = mutation_ops(
+        &s,
+        &Mutation::Complete {
+            task: line(1, Some(A)),
+            today,
+        },
+        &mut mint(),
+    )
+    .unwrap();
+    let Some(OpKind::Move {
+        task,
+        after,
+        to_file,
+    }) = ops.last()
+    else {
+        panic!("the batch ends with the move: {ops:?}");
+    };
+    assert_eq!(*task, id(A));
+    assert_eq!(*after, Some(id(B)), "after the task that is last now");
+    assert_eq!(to_file, s.path(), "its own file, never another list");
+}
+
+/// A line that is already last does not move, and completing a done line again changes nothing:
+/// neither adds a move to the op log.
+#[test]
+fn completing_the_last_task_or_a_done_task_adds_no_move() {
+    let s = state();
+    let today = Date::new(2026, 9, 12).unwrap();
+    let last = mutation_ops(
+        &s,
+        &Mutation::Complete {
+            task: line(3, Some(B)),
+            today,
+        },
+        &mut mint(),
+    )
+    .unwrap();
+    assert!(!last.is_empty(), "it is completed");
+    assert!(
+        !last.iter().any(|o| matches!(o, OpKind::Move { .. })),
+        "already last: {last:?}"
+    );
+}
+
 #[test]
 fn edit_replaces_the_line_but_must_keep_the_id() {
     let s = state();
