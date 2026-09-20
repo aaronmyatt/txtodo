@@ -99,6 +99,12 @@ pub struct FileContents {
     pub bytes: ::prost::alloc::vec::Vec<u8>,
     #[prost(bytes = "vec", tag = "3")]
     pub hash: ::prost::alloc::vec::Vec<u8>,
+    /// One entry per line of `bytes`, in file order: the line's task id as ULID text, "" for a blank
+    /// line (task sidecar-task-ids). Under Sidecar identity a line carries no `id:` tag, so this is
+    /// the only way a client learns the id a `TaskRef` or `GetNotes` needs. Empty from `Checkout` and
+    /// from a daemon older than this field; a client then falls back to the `id:` tag in the text.
+    #[prost(string, repeated, tag = "4")]
+    pub task_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WatchRequest {
