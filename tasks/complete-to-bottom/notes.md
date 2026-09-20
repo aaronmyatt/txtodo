@@ -36,3 +36,30 @@ the file unsorted.
   and would not move. The desktop line checks this first.
 - The backlog skill and the repo CLAUDE.md both tell agents to archive after each completion. That
   becomes unneeded and misleading once this lands.
+
+## As built (2026-09-20)
+
+- Daemon `e2d5b96`: `Mutation::Complete` appends a `Move` after the last task, in the same batch.
+  No move when the completion changed nothing or the line is already last, so neither adds an op.
+  `9a558e2`: two real-daemon tests show a hand-typed `x ` and a hand-moved done line stay put (no
+  code needed: the reconciler never goes through `Mutation::Complete`).
+- CLI `399cdc0`: `do` moves only what it completed (`edit.rs::move_to_end`); `-A` leaves even that
+  in place; `archive` is unchanged. The real-daemon test now expects `c, d, x:a, x:b`.
+- TUI `5cde47c`: tests only. Space already sent `Complete` and `rebaseline` already kept the row.
+- MCP `cbc4da7`, `6f860b7`: the `todo_complete` description says the line moves; the returned row
+  has the new line number and the same id.
+- Desktop `e968078`: the main list has no tick (a human types `x `, a text edit, which by design
+  does not move). The detail view's Mark done sends `Complete`, so the view now follows its task by
+  id; pinned to a line number it would have shown another task.
+- Playbook 3.2 and `AGENTS.md`.
+
+Open:
+
+- The reopen line is `@human`: there is no reopen mutation on the wire (MCP's `todo_uncomplete`
+  sends an `Edit`), so "reopen moves the line above the first done line" needs a new
+  `Mutation.Reopen`, and the placement was the agent's own pick in this file.
+- In daemon mode the CLI still sends `Edit` plus `MoveToEnd` (or one `Replace` under Sidecar), not
+  `Complete`. The file is the same; the op log says edit and move, not complete.
+- The whole daemon test suite was not re-run after the `Complete` change, only the tests that
+  complete a task.
+- The global skill file and the root `CLAUDE.md` copy still carry the old 3.2.
