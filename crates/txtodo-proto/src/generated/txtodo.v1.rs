@@ -139,6 +139,10 @@ pub struct OpSummary {
     /// one-line human summary, truncated by the daemon
     #[prost(string, tag = "9")]
     pub summary: ::prost::alloc::string::String,
+    /// Which client made the change (task op-source): "cli", "tui", "desktop", "mcp", "sync",
+    /// "external". Empty for an op logged before the daemon kept it. Local to this device's log.
+    #[prost(string, tag = "10")]
+    pub source: ::prost::alloc::string::String,
 }
 /// One needs_review flag: the description each side had when they diverged (plan M4).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
