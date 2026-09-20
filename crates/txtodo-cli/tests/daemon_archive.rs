@@ -109,10 +109,11 @@ fn do_archives_through_move_to_end_never_a_whole_file_write() {
     }
     txtodo(dir.path(), &["do", "1"]);
     assert_eq!(tasks(dir.path()), ["b", "c", "d", "x:a"]);
-    // A done line already sits at the bottom, and `b` was above it: archive keeps that order, so
-    // the plan has to move `a` again, behind `b`.
+    // Task complete-to-bottom: `do` moves the line it completed and nothing else, so `b` lands
+    // after `a`, which is already down there. (`do` used to run a full archive, which re-sorted
+    // every done line into its old order and put `b` back above `a`.)
     txtodo(dir.path(), &["do", "1"]);
-    assert_eq!(tasks(dir.path()), ["c", "d", "x:b", "x:a"]);
+    assert_eq!(tasks(dir.path()), ["c", "d", "x:a", "x:b"]);
     assert_all_through_the_socket(dir.path());
 }
 

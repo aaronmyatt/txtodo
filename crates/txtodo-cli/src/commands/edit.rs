@@ -1,7 +1,6 @@
 //! Single-line mutations with todo.sh semantics: `do`, `pri`, `depri`, `del`. `do` goes through
 //! `core::Edit::complete` (the `pri:` rule); the rest are the same raw-text edits todo.sh makes.
 
-use crate::commands::archive;
 use crate::{CliError, Ctx, store};
 use txtodo_core::{Edit, File, OwnedLine, apply};
 
@@ -58,7 +57,27 @@ fn log_already_done(item: &str) {
     tracing::warn!(item, "cli.already_done");
 }
 
-/// `do ITEM#...`: complete via the core (priority becomes `pri:P`), then archive unless disabled.
+/// Moves the lines `do` just completed (`indices`, any order) to the end of the file, in their
+/// old relative order (task complete-to-bottom). Only those lines: a done line a human put
+/// somewhere else stays there, and blank lines stay too, which the old `archive` after every `do`
+/// did not respect. `txtodo archive` is still the explicit "sort every done line, drop blanks".
+fn move_to_end(file: &mut txtodo_core::File, mut indices: Vec<usize>) {
+    indices.sort_unstable();
+    indices.dedup();
+    let before = file.lines.len();
+    let mut moved = Vec::with_capacity(indices.len());
+    // Back to front, so each removal leaves the indices still to come untouched.
+    for idx in indices.into_iter().rev() {
+        moved.push(file.lines.remove(idx));
+    }
+    for line in moved.into_iter().rev() {
+        store::append_line(file, line.bytes().to_vec());
+    }
+    debug_assert_eq!(file.lines.len(), before, "lines only move");
+}
+
+/// `do ITEM#...`: complete via the core (priority becomes `pri:P`), then move the completed lines
+/// to the end of the file unless `-A` says to leave them where they are.
 /// An already-done item is reported (todo.sh 2.14 prints it to stderr; here it becomes a tracing
 /// event, see root todo.txt `logging-cli`) and fails the run.
 pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
@@ -69,6 +88,7 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     }
     let mut file = store::read(&ctx.paths.todo)?;
     let mut failed = false;
+    let mut completed = Vec::new();
     for item in &items {
         let idx = get(&file, item, USAGE)?;
         if file.lines[idx].bytes().starts_with(b"x ") {
@@ -80,11 +100,12 @@ pub fn run_do(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
         debug_assert!(file.lines[idx].bytes().starts_with(b"x "), "completed");
         println!("{item} {}", raw_of(&file.lines[idx]));
         println!("TODO: {item} marked as done.");
+        completed.push(idx);
+    }
+    if ctx.auto_archive {
+        move_to_end(&mut file, completed);
     }
     store::write(&ctx.paths.todo, &file)?;
-    if ctx.auto_archive {
-        archive::run(ctx)?;
-    }
     if failed {
         Err(CliError::Reported)
     } else {
@@ -296,5 +317,20 @@ three
             (priority_prefix("(a) x"), priority_prefix("(A)x")),
             (Some('a'), None)
         );
+    }
+
+    /// Task complete-to-bottom: `do` moves the lines it completed, and only those. The done line a
+    /// human left in the middle and the blank line both stay where they are.
+    #[test]
+    fn move_to_end_moves_only_the_named_lines_in_their_old_order() {
+        let mut file = txtodo_core::parse_file(b"x c\nx old done\n\nopen\nx a\n");
+        move_to_end(&mut file, vec![4, 0]);
+        assert_eq!(file.to_bytes(), b"x old done\n\nopen\nx c\nx a\n");
+        let mut last_unterminated = txtodo_core::parse_file(b"x a\nopen");
+        move_to_end(&mut last_unterminated, vec![0]);
+        assert_eq!(last_unterminated.to_bytes(), b"open\nx a\n");
+        let mut none = txtodo_core::parse_file(b"a\nb\n");
+        move_to_end(&mut none, Vec::new());
+        assert_eq!(none.to_bytes(), b"a\nb\n");
     }
 }

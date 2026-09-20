@@ -26,7 +26,7 @@ pub struct Cli {
     /// Do not stamp `id:` on added tasks (overrides config `id_tags`).
     #[arg(long, global = true)]
     pub no_id: bool,
-    /// Do not archive after `do` (todo.sh -A).
+    /// Leave a line where it is after `do`, instead of moving it to the end (todo.sh -A).
     #[arg(short = 'A', long, global = true)]
     pub no_archive: bool,
     /// Ignore a running daemon and edit the files directly (M2 behaviour).
@@ -60,7 +60,8 @@ pub enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
-    /// Move completed lines to the bottom of the file and drop blank lines.
+    /// Move every completed line to the bottom of the file and drop blank lines: the explicit
+    /// full sort. `do` alone only moves the line it completed.
     Archive,
     /// Remove a task's priority.
     #[command(visible_alias = "dp")]
@@ -79,7 +80,8 @@ pub enum Command {
         /// Text to remove from the line instead of deleting it.
         term: Option<String>,
     },
-    /// Mark tasks done: `x`, today's date, priority kept as `pri:`; then archive.
+    /// Mark tasks done: `x`, today's date, priority kept as `pri:`; then move them to the end of
+    /// the file (`-A` leaves them in place). Other done lines and blank lines are not touched.
     Do {
         /// Line numbers, comma or space separated.
         #[arg(required = true, num_args = 1..)]
