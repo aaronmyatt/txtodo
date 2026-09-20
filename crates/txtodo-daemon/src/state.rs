@@ -174,14 +174,9 @@ impl DocState {
     /// Counts task lines and completions, blanks excluded (plan §3.2.5's `ListFiles` progress).
     pub fn task_counts(&self) -> TaskCounts {
         let mut counts = TaskCounts::default();
-        for entry in &self.entries {
-            let Entry::Task { line, .. } = entry else {
-                continue;
-            };
+        for (_, line) in self.task_lines() {
             counts.total += 1;
-            if is_completed(line) {
-                counts.completed += 1;
-            }
+            counts.completed += usize::from(is_completed(line));
         }
         counts
     }
@@ -214,10 +209,14 @@ impl DocState {
 
     /// Every task's id and line, in file order (blanks skipped): item `i` is task-line index `i`.
     pub fn task_lines(&self) -> impl Iterator<Item = (TaskId, &OwnedLine)> {
-        self.entries.iter().filter_map(|e| match e {
-            Entry::Task { id, line } => Some((*id, line)),
-            Entry::Blank(_) => None,
-        })
+        self.entries
+            .iter()
+            .filter_map(|e| Some((e.id()?, e.line())))
+    }
+
+    /// Every line's task id in file order, `None` for a blank line (`GetFile`'s `task_ids`).
+    pub fn line_ids(&self) -> impl Iterator<Item = Option<TaskId>> + '_ {
+        self.entries.iter().map(Entry::id)
     }
 
     /// Replaces the entry at `i` (fields.rs rewrites lines in place).

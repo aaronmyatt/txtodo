@@ -94,6 +94,7 @@ impl Txtodo for TxtodoService {
         let c = h.get().await.map_err(status_of)?;
         Ok(Response::new(pb::FileContents {
             path: h.path().to_string(),
+            task_ids: c.task_id_texts(),
             bytes: c.bytes,
             hash: c.hash.to_vec(),
         }))
@@ -173,6 +174,7 @@ impl Txtodo for TxtodoService {
             path: h.path().to_string(),
             bytes,
             hash,
+            task_ids: Vec::new(), // a past render: its lines are not today's tasks
         }))
     }
 

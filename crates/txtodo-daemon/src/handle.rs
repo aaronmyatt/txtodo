@@ -19,14 +19,7 @@ pub const ACTOR_MAILBOX_CAP: usize = 256;
 /// Change events buffered per subscriber before it is told it lagged.
 pub const WATCH_CAP: usize = 64;
 
-/// A document's current bytes and hash.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Contents {
-    /// Exact projection bytes.
-    pub bytes: Vec<u8>,
-    /// blake3 of `bytes`.
-    pub hash: Hash,
-}
+pub use crate::contents::Contents;
 
 /// What an Apply or Undo produced.
 #[derive(Debug, Clone, PartialEq, Eq)]

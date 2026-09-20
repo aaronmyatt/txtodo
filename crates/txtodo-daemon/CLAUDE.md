@@ -82,6 +82,10 @@ multiplex every workspace's traffic — not done by this task).
   a selector-less call while any open is pending, answers with the totals alone instead of waiting
   (a named workspace is promoted and waited for like any other call). `Lint` (task
   `mcp-hygiene-parity`) runs `txtodo_core::lint_findings` over the document's bytes.
+- `GetFile` answers one task id per line (task `sidecar-task-ids`, 2026-09-20): `contents.rs`'s
+  `Contents.task_ids`, read from `DocState::line_ids` in the same actor turn as the bytes, goes out
+  as `FileContents.task_ids` (ULID text, `""` for a blank line). Under Sidecar identity it is the
+  only way a client learns the id a `TaskRef`/`GetNotes`/`EditNotes` needs. `Checkout` sends none.
 - `global_service.rs`: `GlobalService`, the `Txtodo` impl actually bound to the socket in
   production — every method resolves `req.workspace` via the catalog, then delegates to a freshly
   scoped `TxtodoService` (unchanged; see below). `TxtodoService` itself still implements `Txtodo`

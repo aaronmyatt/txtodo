@@ -17,6 +17,7 @@ pub mod clock;
 mod commit;
 mod conflict_row;
 mod conflicts_grpc;
+mod contents;
 pub mod control_channel;
 mod control_dispatch;
 mod control_session;

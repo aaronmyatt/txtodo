@@ -181,6 +181,7 @@ impl FileActor {
                 let _ = reply.send(Contents {
                     bytes: self.projection.clone(),
                     hash: self.hash,
+                    task_ids: self.state.line_ids().collect(),
                 });
             }
             // Handled in `handle`, before this function is reached — never here.
