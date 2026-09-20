@@ -115,3 +115,17 @@ fence will not hand over a second crate while the tree is dirty. What I read for
   design", with a test that pins it.
 - **5, the rest** "Opening this workspace…" still shows only after the daemon's own wait. That is
   option A (a fail-fast flag on the request): a wire change, a human's call.
+
+## As built, the rest (2026-09-20, after the other session committed)
+
+- 9 `fix(daemon): a selector-less Health never fails`: narrower than the finding asked, see the
+  Progress section for why.
+- 10 `2ca6093`, 11 `a106db7`, 12 and 13 `cd0d889`, 15 `aa4d5c3` plus lines in the other commits.
+- 14 closed with no change, by design (Progress section).
+- Finding 11's test found one more thing: `OpenedWorkspace` kept the root as the caller spelled it,
+  so on macOS (`/var` is a symlink) the path fast path never matched and every call took the
+  blocking-pool slow path. The root is canonical now.
+
+Left for a human: finding 5's "Opening this workspace" banner (option A, a wire flag), and a hand
+check of findings 1 and 3 under real launchd (`txtodo daemon stop`, kill the ad-hoc daemon, see a
+client spawn one; SIGTERM a daemon mid-open, see it exit within 5 s).
