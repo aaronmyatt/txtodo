@@ -22,7 +22,7 @@ workspace).
 - Created empty. A seed task would be added once per device and come back from sync as duplicates.
 - Two devices that each already have tasks in their default converge to the union of both.
 
-## Design (proposed, pending the decisions in todo.txt)
+## Design (the three decisions below are made, 2026-09-20)
 
 - Identity: a reserved `WorkspaceId` (non-zero ULID timestamp, unlike the all-zero link sentinel)
   that every device registers with `WorkspaceRegistry::adopt` for its default. Sync frames are keyed
@@ -50,7 +50,14 @@ workspace).
   permanent, and changing it later is a migration, so pick it once (a non-zero ULID timestamp, so
   it can never be the all-zero link sentinel) and record it in the ADR line. The registry line
   needs no new column now.
-- Still waiting: what no `--dir` means for the CLI, TUI and MCP.
+- 2026-09-20, no `--dir`: A. The CLI, TUI and MCP use the current folder when it is a workspace,
+  else the default workspace. Today's habit keeps working (`cd` into a repo, `txtodo add` writes
+  there), and outside any workspace a command lands in the default instead of failing. Cost
+  accepted: the same command writes to different places depending on where you stand, so a client
+  that fell back to the default should say so. "Is a workspace" needs one definition shared by the
+  three clients; the client line owns it.
+- All three decisions are made. Nothing in `todo.txt` waits on a human now, except the ADR's
+  wording.
 
 ## Open
 
