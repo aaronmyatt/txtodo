@@ -25,6 +25,10 @@ Identity mode (tagged vs. sidecar, `docs/questions.md` Q2) added 2026-09-13.
   the store column, not in `Op`, so there is nothing to strip. Golden in `goldens/op_signing.postcard`.
 - `TextEdit` mirrors `txtodo_core::TextEdit` with `From` both ways; `Principal` displays as
   `you@dev` / `agent:name@dev` / `external@dev`.
+- `WorkspaceLayout { refs_dir, todo_file }` (task `workspace-layout`): where the root list and the
+  ref dirs of its lines live, defaults `todo.txt` and `tasks`, `.` for refs beside the list.
+  `new` validates (relative, `/` only, no `..`, no `:`, not under `.txtodo`); `ref_dir_of(slug)` is
+  the one place a slug becomes a directory. Pure data: the daemon reads `<root>/txtodo.toml`.
 - Codec: `serde` derives everywhere; `postcard` is the payload format (store BLOB, M4 wire).
 
 ## Invariants
