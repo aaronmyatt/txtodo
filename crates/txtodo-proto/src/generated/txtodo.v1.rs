@@ -459,6 +459,12 @@ pub struct HealthResponse {
     pub relay_node_id: ::prost::alloc::string::String,
     #[prost(bool, tag = "20")]
     pub relay_bound: bool,
+    /// The daemon build's release date, `YYYY-MM-DD` or `unknown` (task version-info), beside
+    /// `version` above. A client compares both with its own and warns when they differ: an app
+    /// talking to an older daemon was the bug that started this. Empty from a daemon older than the
+    /// field, which is itself the answer "this daemon is an older build".
+    #[prost(string, tag = "21")]
+    pub release_date: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
