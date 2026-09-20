@@ -110,6 +110,13 @@ impl WorkspaceCatalog {
         if current_id == offered_id {
             return Ok(current_id);
         }
+        // The default keeps its reserved id (task default-workspace): pairing carries it like any
+        // other workspace, and an initiator's other workspace reaches this device through the
+        // ordinary offer, beside the default, never in place of it.
+        if self.registered_default() == Some(current_id) {
+            tracing::info!(offered = %offered_id, "pairing_kept_default_workspace_id");
+            return Ok(current_id);
+        }
         self.rekey_registry(current_id, offered_id, &root)?;
         {
             let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);

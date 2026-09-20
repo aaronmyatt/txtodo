@@ -150,3 +150,42 @@ async fn the_default_is_queued_before_a_more_recently_used_workspace() {
     assert_eq!(queued[0].0, default_workspace_id());
     assert_eq!(queued[1].0, other_id);
 }
+
+#[tokio::test]
+async fn pairing_never_rekeys_the_default_off_its_reserved_id() {
+    let (state, catalog) = catalog();
+    let dir = state.path().join("default");
+    let id = catalog.ensure_default_workspace(&dir).unwrap();
+    let ws = catalog.resolve(None).unwrap();
+    let offered = txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(0x77));
+
+    // An initiator whose code names some other workspace: the default stays as it is.
+    assert_eq!(
+        catalog.adopt_offered_workspace_id(&ws, offered).unwrap(),
+        id
+    );
+    assert_eq!(ws.read().unwrap().workspace_id(), id);
+    let ids: Vec<_> = catalog
+        .list_registered_entries()
+        .unwrap()
+        .iter()
+        .map(|e| e.id)
+        .collect();
+    assert_eq!(ids, vec![id], "no row was released or added");
+    // A code naming the default itself is a plain no-op, as before.
+    assert_eq!(catalog.adopt_offered_workspace_id(&ws, id).unwrap(), id);
+}
+
+#[tokio::test]
+async fn a_non_default_workspace_is_still_rekeyed_to_the_offered_id() {
+    let (_state, catalog) = catalog();
+    let other = tempfile::tempdir().unwrap();
+    std::fs::write(other.path().join("todo.txt"), "x\n").unwrap();
+    catalog.open_dir_bridge(other.path()).unwrap();
+    let ws = catalog.resolve(None).unwrap();
+    let offered = txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(0x77));
+    assert_eq!(
+        catalog.adopt_offered_workspace_id(&ws, offered).unwrap(),
+        offered
+    );
+}
