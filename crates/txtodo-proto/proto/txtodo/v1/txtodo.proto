@@ -357,6 +357,9 @@ message ApplyRequest {
   repeated Mutation mutations = 2;
   AgentPrincipal agent = 3;   // unset = the user on this device
   WorkspaceSelector workspace = 4;
+  // Which client sent this: "cli", "tui", "desktop", "mcp" (task op-source). Kept in this device's
+  // op log only, never in the synced op. Free text: an unknown value is kept, length-capped.
+  string source = 5;
 }
 
 message ApplyResponse {
@@ -580,6 +583,9 @@ message OpLogEntry {
   string principal = 1;    // "you@dev" / "agent:name@dev" / "external@dev" — same as OpSummary
   string op = 2;           // one-line human summary, same shape as OpSummary.summary
   uint64 at_ms = 3;
+  // Where the change came from: "cli", "tui", "desktop", "mcp", "sync" (an op from another device),
+  // "external" (an edit seen on disk). Empty for an op logged before this field existed.
+  string source = 4;
 }
 
 // --- devices (plan M4 tasks/sync-device-remove, tasks/model-hlc-skew-guard) ---
