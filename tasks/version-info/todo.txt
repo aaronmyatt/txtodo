@@ -1,4 +1,4 @@
-2026-09-20 buildinfo: shared build-script file that resolves the release date (env, else commit date) +m11 @build
+2026-09-20 buildinfo: shared build-script file that resolves the release date (env, else commit date) +m11 @build @doing by:claude
 2026-09-20 txtodo-cli: --version prints "txtodo 0.0.2 (2026-09-20)"; doctor prints the same line +m11 @cli
 2026-09-20 txtodo-tui: --version likewise; dim "v0.0.2 · 2026-09-20" in the status bar, dropped when narrow +m11 @tui
 2026-09-20 proto: Health.release_date, additive, its own commit (Health.version already exists) +m11 @proto
