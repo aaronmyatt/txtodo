@@ -28,7 +28,7 @@ fn row(n: u128, raised_at_ms: u64, mine: &str, theirs: &str) -> ReviewRow {
 fn raise_lists_the_flag_oldest_first_and_clear_removes_it_idempotently() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
-    assert_eq!(store.user_version().unwrap(), 7);
+    assert_eq!(store.user_version().unwrap(), 8);
     store
         .raise_flag(&row(2, 200, "b mine", "b theirs"))
         .unwrap();
@@ -114,6 +114,7 @@ fn commit_change_with_lands_the_clear_and_the_mirror_with_the_commit() {
         clear: Some((task(1), 200)),
         mirror: Some(b"mirror-at-commit".to_vec()),
         fingerprints: Vec::new(),
+        source: None,
     };
     let range = store
         .commit_change_with(&[], &projection, None, &extras)

@@ -25,7 +25,10 @@ pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;
 pub use identity::{FingerprintRow, MAX_FINGERPRINTS_PER_READ};
 pub use identity_store::IdentityStore;
-pub use ops::{MAX_APPEND_BATCH, MAX_OPS_PER_READ, Seq, SeqRange, Stored, kind_tag};
+pub use ops::{
+    MAX_APPEND_BATCH, MAX_OPS_PER_READ, MAX_SOURCE_BYTES, Seq, SeqRange, Stored, cap_source,
+    kind_tag,
+};
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 pub use registry::{
     MAX_WORKSPACES_PER_READ, NewWorkspaceEntry, Registry, WorkspaceId, WorkspaceRow,
@@ -36,9 +39,9 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 /// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
-const MIGRATIONS: [(i64, &str); 7] = [
+const MIGRATIONS: [(i64, &str); 8] = [
     (1, include_str!("../migrations/0001.sql")),
     (2, include_str!("../migrations/0002.sql")),
     (3, include_str!("../migrations/0003.sql")),
@@ -46,6 +49,7 @@ const MIGRATIONS: [(i64, &str); 7] = [
     (5, include_str!("../migrations/0005.sql")),
     (6, include_str!("../migrations/0006.sql")),
     (7, include_str!("../migrations/0007.sql")),
+    (8, include_str!("../migrations/0008.sql")),
 ];
 
 /// The first 8 hex digits of a blake3 hash, enough to correlate log lines without logging the

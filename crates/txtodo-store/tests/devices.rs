@@ -32,7 +32,7 @@ fn new_device(n: u128, key: u8, paired_at_ms: u64) -> NewDevice {
 fn migrating_to_devices_lands_the_schema_at_seven() {
     let dir = tempfile::tempdir().unwrap();
     let store = open(dir.path());
-    assert_eq!(store.user_version().unwrap(), 7);
+    assert_eq!(store.user_version().unwrap(), 8);
 }
 
 #[test]

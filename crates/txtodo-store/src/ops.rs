@@ -37,8 +37,28 @@ pub const MAX_OPS_PER_READ: usize = 10_000;
 /// a memory bound, not a feature limit.
 pub const MAX_OP_IDS_FOR_DEDUPE: usize = 500_000;
 
-const INSERT_OP: &str = "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)";
+/// Longest `source` the log keeps, in bytes (task op-source). A client the daemon does not know
+/// keeps whatever it sent, cut at a char boundary to this.
+pub const MAX_SOURCE_BYTES: usize = 32;
+
+/// `source` cut to at most `MAX_SOURCE_BYTES`, never inside a UTF-8 character.
+/// Ref: https://doc.rust-lang.org/std/primitive.str.html#method.is_char_boundary
+pub fn cap_source(source: &str) -> &str {
+    if source.len() <= MAX_SOURCE_BYTES {
+        return source;
+    }
+    let mut end = MAX_SOURCE_BYTES;
+    while !source.is_char_boundary(end) {
+        end -= 1;
+    }
+    debug_assert!(end <= MAX_SOURCE_BYTES);
+    &source[..end]
+}
+
+const INSERT_OP: &str = "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload, source) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)";
+const SELECT_SOURCES: &str =
+    "SELECT seq, source FROM ops WHERE seq BETWEEN ?1 AND ?2 AND source IS NOT NULL";
 const SELECT_SINCE: &str =
     "SELECT seq, payload FROM ops WHERE file = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3";
 const SELECT_BETWEEN: &str = "SELECT seq, payload FROM ops WHERE file = ?1 \
@@ -83,8 +103,14 @@ fn decode_row(seq: i64, payload: Vec<u8>) -> Result<Stored, StoreError> {
     Ok(Stored { seq: Seq(seq), op })
 }
 
-/// Validates a batch and inserts every row on `conn`; the caller owns the transaction.
-pub(crate) fn insert_ops(conn: &Connection, ops: &[Op]) -> Result<SeqRange, StoreError> {
+/// Validates a batch and inserts every row on `conn`, each stamped with `source` (local to this
+/// device's log, never in the payload); the caller owns the transaction.
+pub(crate) fn insert_ops(
+    conn: &Connection,
+    ops: &[Op],
+    source: Option<&str>,
+) -> Result<SeqRange, StoreError> {
+    let source = source.map(cap_source).filter(|s| !s.is_empty());
     if ops.is_empty() {
         return Err(StoreError::EmptyBatch);
     }
@@ -108,6 +134,7 @@ pub(crate) fn insert_ops(conn: &Connection, ops: &[Op]) -> Result<SeqRange, Stor
             op.file.as_str(),
             kind_tag(&op.kind),
             payload,
+            source,
         ])
         .map_err(StoreError::query("insert op"))?;
         last = conn.last_insert_rowid();
@@ -128,13 +155,47 @@ pub(crate) fn insert_ops(conn: &Connection, ops: &[Op]) -> Result<SeqRange, Stor
 impl Store {
     /// Appends `ops` in one transaction; either all rows land or none. Returns their seqs.
     pub fn append(&mut self, ops: &[Op]) -> Result<SeqRange, StoreError> {
+        self.append_with_source(ops, None)
+    }
+
+    /// `append`, stamping every row with `source` (task op-source): which client made the change,
+    /// or "sync" / "external". Local to this log; a sync peer never sees it.
+    pub fn append_with_source(
+        &mut self,
+        ops: &[Op],
+        source: Option<&str>,
+    ) -> Result<SeqRange, StoreError> {
         let tx = self
             .conn
             .transaction()
             .map_err(StoreError::query("begin append"))?;
-        let range = insert_ops(&tx, ops)?;
+        let range = insert_ops(&tx, ops, source)?;
         tx.commit().map_err(StoreError::query("commit append"))?;
         Ok(range)
+    }
+
+    /// The source of every row with `first <= seq <= last` that has one. A row written before the
+    /// column existed, or by a caller that named none, is absent.
+    pub fn sources_between(
+        &self,
+        first: Seq,
+        last: Seq,
+    ) -> Result<std::collections::BTreeMap<Seq, String>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(SELECT_SOURCES)
+            .map_err(StoreError::query("prepare sources"))?;
+        let rows = stmt
+            .query_map(params![first.0, last.0], |r| {
+                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(StoreError::query("query sources"))?;
+        let mut out = std::collections::BTreeMap::new();
+        for row in rows {
+            let (seq, source) = row.map_err(StoreError::query("read source"))?;
+            out.insert(Seq(seq), source);
+        }
+        Ok(out)
     }
 
     /// Ops for `file` with `seq > since`, oldest first, at most `MAX_OPS_PER_READ`.

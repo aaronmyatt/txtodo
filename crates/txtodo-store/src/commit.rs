@@ -29,6 +29,9 @@ pub struct CommitExtras {
     /// commit's new projection, upserted alongside it so identity and content never part ways
     /// across a crash. Empty in tagged mode — nothing to track.
     pub fingerprints: Vec<FingerprintRow>,
+    /// Which client made this change (task op-source), stamped on every op this commit appends.
+    /// Local to this device's log: never in an op's payload, hash or signature.
+    pub source: Option<String>,
 }
 
 /// Lands the flag clear, the mirror snapshot and/or the fingerprints on `tx`; the caller owns the
@@ -143,7 +146,7 @@ impl Store {
         let range = if ops.is_empty() {
             None
         } else {
-            Some(insert_ops(&tx, ops)?)
+            Some(insert_ops(&tx, ops, extras.source.as_deref())?)
         };
         upsert_projection(&tx, projection)?;
         let key = prev_hash_key(&projection.file);
