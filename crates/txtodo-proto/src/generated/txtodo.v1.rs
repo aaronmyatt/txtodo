@@ -261,6 +261,14 @@ pub struct MoveBefore {
     #[prost(message, optional, tag = "2")]
     pub before: ::core::option::Option<TaskRef>,
 }
+/// Reopens a completed task (task complete-to-bottom): clears the `x` and the completion date, turns
+/// `pri:X` back into `(X)`, and moves the line to the end of the open block, just above the first
+/// done line, so open lines stay on top. No move when it is already there.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Reopen {
+    #[prost(message, optional, tag = "1")]
+    pub task: ::core::option::Option<TaskRef>,
+}
 /// Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
 /// `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
 /// holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
@@ -286,7 +294,7 @@ pub struct RequireBase {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Mutation {
-    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9")]
+    #[prost(oneof = "mutation::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10")]
     pub kind: ::core::option::Option<mutation::Kind>,
 }
 /// Nested message and enum types in `Mutation`.
@@ -311,6 +319,8 @@ pub mod mutation {
         RequireBase(super::RequireBase),
         #[prost(message, tag = "9")]
         MoveBefore(super::MoveBefore),
+        #[prost(message, tag = "10")]
+        Reopen(super::Reopen),
     }
 }
 /// Who is applying. M3 knows users only; M6 fills `agent`.
@@ -332,6 +342,14 @@ pub struct ApplyRequest {
     pub agent: ::core::option::Option<AgentPrincipal>,
     #[prost(message, optional, tag = "4")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// Which client sent this: "cli", "tui", "desktop", "mcp" (task op-source). Kept in this device's
+    /// op log only, never in the synced op. Free text: an unknown value is kept, length-capped.
+    #[prost(string, tag = "5")]
+    pub source: ::prost::alloc::string::String,
+    /// Run the real mutation path and stop before the commit (task apply-dry-run): no op, no write,
+    /// no clock tick. The response carries the unified diff the batch would make.
+    #[prost(bool, tag = "6")]
+    pub dry_run: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ApplyResponse {
@@ -345,6 +363,9 @@ pub struct ApplyResponse {
     pub hlc_wall_ms: u64,
     #[prost(uint32, tag = "4")]
     pub hlc_counter: u32,
+    /// Unified diff of the document, workspace-relative path in the headers. Set only on a dry run.
+    #[prost(string, tag = "5")]
+    pub diff: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct HistoryRequest {
@@ -675,6 +696,10 @@ pub struct OpLogEntry {
     pub op: ::prost::alloc::string::String,
     #[prost(uint64, tag = "3")]
     pub at_ms: u64,
+    /// Where the change came from: "cli", "tui", "desktop", "mcp", "sync" (an op from another device),
+    /// "external" (an edit seen on disk). Empty for an op logged before this field existed.
+    #[prost(string, tag = "4")]
+    pub source: ::prost::alloc::string::String,
 }
 /// A device this workspace has paired with. `txtodo device list` and `txtodo doctor`'s per-peer
 /// clock line both read this one shape.
@@ -849,6 +874,13 @@ pub struct WorkspaceInfo {
     /// daemon, which a client reads as "no default known".
     #[prost(bool, tag = "8")]
     pub is_default: bool,
+    /// The workspace's layout (task workspace-layout): where the root list and the ref directories
+    /// live, both relative to `root` with `/` separators. Empty from an older daemon, which a client
+    /// reads as the defaults, `todo.txt` and `tasks`.
+    #[prost(string, tag = "9")]
+    pub refs_dir: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub todo_file: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
