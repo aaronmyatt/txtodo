@@ -214,32 +214,6 @@ pub fn set_kv(raw: &str, key: &str, value: Option<&str>) -> String {
     out.join(" ")
 }
 
-/// Reopens a completed line: strips `x ` and its completion date, restoring `pri:X` (if any) to a
-/// leading `(X) ` (todo.sh `pri:` preservation, in reverse) and dropping the `pri:` tag.
-pub fn uncomplete_line(raw: &str) -> String {
-    let row = parse_row(0, raw);
-    if !row.done {
-        return raw.to_owned();
-    }
-    let mut body = raw.strip_prefix("x ").unwrap_or(raw).to_owned();
-    if let Some(completed) = &row.completed {
-        let with_space = format!("{completed} ");
-        if let Some(after) = body.strip_prefix(with_space.as_str()) {
-            body = after.to_owned();
-        }
-    }
-    if let Some(p) = row
-        .kv
-        .iter()
-        .find(|(k, _)| k == "pri")
-        .map(|(_, v)| v.clone())
-    {
-        body = set_kv(&body, "pri", None);
-        body = format!("({p}) {body}");
-    }
-    body
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,16 +337,5 @@ mod tests {
             "task due:2026-09-20"
         );
         assert_eq!(set_kv("task due:2026-09-14", "due", None), "task");
-    }
-
-    #[test]
-    fn uncomplete_restores_priority_from_pri_tag() {
-        let restored = uncomplete_line("x 2026-09-12 2026-09-11 Draft pri:B id:01J");
-        assert_eq!(restored, "(B) 2026-09-11 Draft id:01J");
-    }
-
-    #[test]
-    fn uncomplete_is_a_no_op_on_an_open_task() {
-        assert_eq!(uncomplete_line("(A) open task"), "(A) open task");
     }
 }

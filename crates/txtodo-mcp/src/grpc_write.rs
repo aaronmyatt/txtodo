@@ -50,6 +50,9 @@ pub(crate) async fn apply_one(
         mutations: vec![mutation],
         agent: ctx.agent,
         workspace: workspace_selector(workspace),
+        // The activity log tells an MCP agent's change from a CLI or desktop one (task op-source).
+        source: "mcp".to_owned(),
+        dry_run: false,
     };
     let rep = client.apply(req).await.map_err(status)?;
     Ok(rep.into_inner())
@@ -130,10 +133,11 @@ pub async fn complete(
             })),
         }
     } else {
+        // The daemon clears the `x`, restores `(X)` from `pri:X`, and moves the line to the end of
+        // the open block (task complete-to-bottom), so an Edit here would leave it in place.
         pb::Mutation {
-            kind: Some(pb::mutation::Kind::Edit(pb::Edit {
+            kind: Some(pb::mutation::Kind::Reopen(pb::Reopen {
                 task: Some(task_ref),
-                new_line: parse::uncomplete_line(&row.raw),
             })),
         }
     };

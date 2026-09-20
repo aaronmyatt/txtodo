@@ -136,7 +136,9 @@ impl McpServer {
         skip_all,
         fields(tool = "todo_uncomplete", principal = %self.backend.principal())
     )]
-    #[tool(description = "Reopen a completed task, restoring its pri: tag as a priority.")]
+    #[tool(
+        description = "Reopen a completed task, restoring its pri: tag as a priority. The line moves up to the end of the open tasks, above the first done line (ids stay valid, line numbers do not)."
+    )]
     pub async fn todo_uncomplete(
         &self,
         Parameters(IdArgs { id, workspace }): Parameters<IdArgs>,
