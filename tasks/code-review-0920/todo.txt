@@ -1,4 +1,4 @@
-2026-09-20 daemon: selector-less Health always answers totals only +m11 @daemon
+2026-09-20 daemon: selector-less Health always answers totals only +m11 @daemon @doing by:claude
 2026-09-20 Test: single_instance.rs asserts on a deleted log line; check oplog.db +m11 @daemon @test
 2026-09-20 daemon: path fast path read-locks every open workspace; keep the root +m11 @daemon @perf
 2026-09-20 daemon: Health counts workspaces without a registry query and stats +m11 @daemon @perf
