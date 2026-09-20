@@ -29,6 +29,10 @@ pub(crate) struct CommitTail {
     pub(crate) clear: Option<(TaskId, u64)>,
     /// Store the mirror snapshot in the store transaction (an import).
     pub(crate) persist_mirror: bool,
+    /// Which client made the change, stamped on every op of the commit (task op-source): a
+    /// client's own name, `"sync"` for ops from another device, `"external"` for a disk edit.
+    /// Kept in this device's op log only, never in an op.
+    pub(crate) source: Option<String>,
 }
 
 impl Default for CommitTail {
@@ -38,6 +42,7 @@ impl Default for CommitTail {
             flush: true,
             clear: None,
             persist_mirror: false,
+            source: None,
         }
     }
 }

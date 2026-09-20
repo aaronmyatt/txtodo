@@ -91,6 +91,7 @@ impl FileActor {
             clear: tail.clear,
             mirror,
             fingerprints: self.fingerprints_for(next),
+            source: tail.source.clone(),
         })
     }
 

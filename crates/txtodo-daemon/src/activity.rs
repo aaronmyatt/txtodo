@@ -39,6 +39,24 @@ fn newest_rows(service: &TxtodoService) -> Result<Vec<txtodo_store::Stored>, Sta
     Ok(rows)
 }
 
+/// The source of each of `rows`, read in one query over their seq span.
+fn sources_of(
+    service: &TxtodoService,
+    rows: &[txtodo_store::Stored],
+) -> Result<std::collections::BTreeMap<txtodo_store::Seq, String>, Status> {
+    let (Some(first), Some(last)) = (
+        rows.iter().map(|s| s.seq).min(),
+        rows.iter().map(|s| s.seq).max(),
+    ) else {
+        return Ok(std::collections::BTreeMap::new());
+    };
+    let ws = service.workspace();
+    let store = ws.store().lock().unwrap_or_else(PoisonError::into_inner);
+    store
+        .sources_between(first, last)
+        .map_err(|e| Status::internal(e.to_string()))
+}
+
 impl TxtodoService {
     /// Streams the op log newest-first for the activity pane: one bounded read across every
     /// tracked file, not a live tail (`Watch` already covers push updates for a client that wants
@@ -48,6 +66,7 @@ impl TxtodoService {
         _r: Request<pb::OpLogRequest>,
     ) -> Result<Response<OpLogStream>, Status> {
         let rows = newest_rows(self)?;
+        let sources = sources_of(self, &rows)?;
         let entries: Vec<pb::OpLogEntry> = rows
             .iter()
             .map(|s| {
@@ -56,6 +75,8 @@ impl TxtodoService {
                     principal: summary.principal,
                     op: summary.summary,
                     at_ms: summary.hlc_wall_ms,
+                    // Empty for an op logged before the column existed (task op-source).
+                    source: sources.get(&s.seq).cloned().unwrap_or_default(),
                 }
             })
             .collect();

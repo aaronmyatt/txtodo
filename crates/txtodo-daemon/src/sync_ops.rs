@@ -51,7 +51,10 @@ impl FileActor {
             bytes,
             write,
             snapshot: false,
-            tail: CommitTail::default(),
+            tail: CommitTail {
+                source: Some("sync".to_owned()),
+                ..CommitTail::default()
+            },
         })?;
         Ok(())
     }

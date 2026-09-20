@@ -21,10 +21,11 @@ impl FileActor {
         &mut self,
         mutations: &[Mutation],
         principal: &Principal,
+        source: Option<String>,
     ) -> Option<Result<Applied, ActorError>> {
         match mutations {
             [Mutation::Replace { base, contents }] => {
-                Some(self.on_replace(*base, contents, principal))
+                Some(self.on_replace(*base, contents, principal, source))
             }
             _ if mutations
                 .iter()
@@ -71,9 +72,10 @@ impl FileActor {
         base: Hash,
         contents: &[u8],
         principal: &Principal,
+        source: Option<String>,
     ) -> Result<Applied, ActorError> {
         self.check_base(base)?;
-        let change = self.commit_replacement(contents, principal)?;
+        let change = self.commit_replacement(contents, principal, source)?;
         let applied = u32::try_from(change.ops.len()).unwrap_or(u32::MAX);
         debug_assert_eq!(change.hash, self.hash, "the commit landed");
         Ok(Applied {

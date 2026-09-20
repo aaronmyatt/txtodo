@@ -67,6 +67,7 @@ impl FileActor {
                 flush: false,
                 clear: None,
                 persist_mirror: true,
+                source: Some("sync".to_owned()),
             },
         })?;
         debug_assert!(
@@ -196,6 +197,7 @@ impl FileActor {
                 flush: true,
                 clear: Some((id, self.clock.now_ms())),
                 persist_mirror: false,
+                source: None,
             },
         })?;
         debug_assert!(self.on_conflicts()?.iter().all(|c| c.row.task != id));

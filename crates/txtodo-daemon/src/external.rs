@@ -109,7 +109,7 @@ impl FileActor {
             device: self.cfg.device,
         };
         let reconciled = self.derive_reconciled_ops(&bytes, &principal)?;
-        let change = self.commit_reconciled(reconciled)?;
+        let change = self.commit_reconciled(reconciled, Some("external".to_owned()))?;
         Ok(Some(change))
     }
 
@@ -119,10 +119,11 @@ impl FileActor {
         &mut self,
         contents: &[u8],
         principal: &Principal,
+        source: Option<String>,
     ) -> Result<Change, ActorError> {
         let mut reconciled = self.derive_reconciled_ops(contents, principal)?;
         reconciled.write_back = reconciled.target != self.projection;
-        self.commit_reconciled(reconciled)
+        self.commit_reconciled(reconciled, source)
     }
 
     /// True (and logged) when `bytes` is a write this actor itself made — current or recent
@@ -136,14 +137,21 @@ impl FileActor {
         true
     }
 
-    fn commit_reconciled(&mut self, r: ReconciledChange) -> Result<Change, ActorError> {
+    fn commit_reconciled(
+        &mut self,
+        r: ReconciledChange,
+        source: Option<String>,
+    ) -> Result<Change, ActorError> {
         self.commit(Commit {
             ops: r.ops,
             next: r.next,
             bytes: r.target,
             write: r.write_back,
             snapshot: !r.exact,
-            tail: CommitTail::default(),
+            tail: CommitTail {
+                source,
+                ..CommitTail::default()
+            },
         })
     }
 

@@ -95,6 +95,8 @@ async fn a_mutation_appears_with_its_principal_and_a_real_timestamp() {
             }],
             agent: None,
             workspace: None,
+            source: "cli".into(),
+            ..pb::ApplyRequest::default()
         })
         .await
         .unwrap_or_else(|e| panic!("apply: {e}"));
@@ -102,6 +104,10 @@ async fn a_mutation_appears_with_its_principal_and_a_real_timestamp() {
     let entries = drain(&mut client).await;
     assert!(!entries.is_empty());
     assert!(entries[0].principal.starts_with("you@"), "{:?}", entries[0]);
+    assert_eq!(
+        entries[0].source, "cli",
+        "the client that sent it (task op-source)"
+    );
     assert!(
         entries[0].at_ms > 0,
         "a real timestamp, not a fabricated one"
