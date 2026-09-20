@@ -110,6 +110,53 @@ async fn a_workspace_a_request_used_loads_before_one_only_its_file_mtime_favours
     );
 }
 
+/// Code review 2026-09-20, finding 13: `last_active_ms` used to win outright, so a workspace whose
+/// `todo.txt` was edited today in an editor loaded after one a request touched a week ago.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_file_edited_today_loads_before_a_workspace_a_request_used_a_week_ago() {
+    const DAY_MS: u64 = 86_400_000;
+    let now_ms = u64::try_from(
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis(),
+    )
+    .unwrap_or_default();
+    let edited_today = workspace("edited-today-");
+    let used_last_week = workspace("used-last-week-");
+    let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("open registry: {e}"));
+    let clock = Arc::new(FakeClock::new(now_ms - 30 * DAY_MS));
+    for root in [edited_today.path(), used_last_week.path()] {
+        registry
+            .add(root, clock.as_ref())
+            .unwrap_or_else(|e| panic!("register: {e}"));
+    }
+    let catalog = WorkspaceCatalog::new(registry, open_args(), Arc::clone(&clock) as _);
+
+    // A request used the first a month ago and the second a week ago...
+    catalog
+        .resolve(Some(&select(edited_today.path())))
+        .unwrap_or_else(|e| panic!("resolve: {e}"));
+    clock.advance_ms(23 * DAY_MS);
+    catalog
+        .resolve(Some(&select(used_last_week.path())))
+        .unwrap_or_else(|e| panic!("resolve: {e}"));
+    // ...and the second's file is old, while the first's was written just now (by `workspace`).
+    std::fs::File::options()
+        .write(true)
+        .open(used_last_week.path().join("todo.txt"))
+        .and_then(|f| f.set_modified(SystemTime::now() - Duration::from_secs(40 * 86_400)))
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    assert_eq!(
+        catalog.queue_registered()[0].1,
+        edited_today.path().canonicalize().unwrap_or_default(),
+        "the file edited today is the one in use"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn lint_runs_the_cli_check_over_the_documents_bytes() {
     use crate::global_service::GlobalService;
@@ -189,4 +236,42 @@ async fn a_selector_less_health_answers_with_no_or_several_open_workspaces() {
         (two_open.workspaces_registered, two_open.workspaces_ready),
         (2, 2)
     );
+}
+
+/// Code review 2026-09-20, finding 11: the path fast path compared roots by taking a read lock on
+/// every open workspace, so one workspace held under a write lock (a slow registration, a
+/// migration) stalled a request that named a different one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_write_locked_workspace_does_not_stall_a_path_lookup_of_another() {
+    let (busy, other) = (workspace("busy-"), workspace("other-"));
+    let (_registry_dir, catalog) = catalog_with(&[], |_| {});
+    let mut opened = Vec::new();
+    for dir in [&busy, &other] {
+        let catalog = Arc::clone(&catalog);
+        let selector = select(dir.path());
+        let ws = tokio::task::spawn_blocking(move || catalog.resolve(Some(&selector)))
+            .await
+            .unwrap_or_else(|e| panic!("open task: {e}"))
+            .unwrap_or_else(|e| panic!("open: {e}"));
+        opened.push(ws);
+    }
+    let _held = opened[0].write().unwrap_or_else(|e| e.into_inner());
+
+    // On its own thread: before the fix this blocked on `busy`'s lock and never reported back.
+    // A path that is not open has to be compared with every open root, `busy`'s included (the
+    // map's order is random, so only this lookup is sure to reach `busy`); then `other` itself.
+    let not_open = workspace("not-open-");
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    let lookup_catalog = Arc::clone(&catalog);
+    let selectors = (select(not_open.path()), select(other.path()));
+    std::thread::spawn(move || {
+        let miss = lookup_catalog.resolve_without_waiting(Some(&selectors.0));
+        let hit = lookup_catalog.resolve_without_waiting(Some(&selectors.1));
+        let _ = done_tx.send((miss.is_none(), matches!(hit, Some(Ok(_)))));
+    });
+    let (missed, found) = done_rx
+        .recv_timeout(Duration::from_secs(30))
+        .unwrap_or_else(|_| panic!("a path lookup waited on `busy`'s write lock"));
+    assert!(missed, "a path that is not open takes the slow path");
+    assert!(found, "`other` is open, so the fast path answers it");
 }

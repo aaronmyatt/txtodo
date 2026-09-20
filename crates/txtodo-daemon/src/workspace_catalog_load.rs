@@ -12,18 +12,24 @@ use std::time::{Instant, UNIX_EPOCH};
 use tonic::Status;
 use txtodo_store::WorkspaceId;
 
-/// How recently a workspace was used, in unix milliseconds: `last_active_ms` when a request ever
-/// resolved it, else the newest write to its root `todo.txt` (one `stat`, nothing opened), else
-/// the time it was registered.
+/// How recently a workspace was used, in unix milliseconds: the newer of `last_active_ms` (a
+/// request resolved it) and the last write to its root `todo.txt` (one `stat`, nothing opened);
+/// the time it was registered when it has neither. The newer of the two, not `last_active_ms`
+/// first (code review 2026-09-20, finding 13): a file edited today in an editor is in use today,
+/// whatever a month-old request says.
+/// `Metadata::modified`: https://doc.rust-lang.org/std/fs/struct.Metadata.html#method.modified
 fn recency_ms(entry: &WorkspaceEntry) -> u64 {
-    entry.last_active_ms.unwrap_or_else(|| {
-        std::fs::metadata(entry.root.join("todo.txt"))
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .and_then(|d| u64::try_from(d.as_millis()).ok())
-            .unwrap_or(entry.added_at_ms)
-    })
+    let edited_ms = std::fs::metadata(entry.root.join("todo.txt"))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .and_then(|d| u64::try_from(d.as_millis()).ok());
+    // `None` orders below every `Some`, so this is the newer of whichever exist.
+    // https://doc.rust-lang.org/std/option/enum.Option.html#impl-Ord-for-Option%3CT%3E
+    entry
+        .last_active_ms
+        .max(edited_ms)
+        .unwrap_or(entry.added_at_ms)
 }
 
 /// How often one workspace's `last_active_ms` is written back to the registry.
@@ -121,12 +127,18 @@ impl WorkspaceCatalog {
         }
     }
 
-    /// `WorkspaceList`/`Health` totals, from the registry and the load slots; nothing opened.
+    /// `WorkspaceList`/`Health` totals, from the registry and the load slots; nothing opened and
+    /// no file touched: the registered count is the registry's rows, not `list_registered`, which
+    /// stats every root twice.
     pub fn load_totals(&self) -> LoadTotals {
+        let registered = self
+            .registry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .count_active()
+            .unwrap_or(0);
         let mut totals = LoadTotals {
-            registered: self
-                .list_registered()
-                .map_or(0, |e| u32::try_from(e.len()).unwrap_or(u32::MAX)),
+            registered: u32::try_from(registered).unwrap_or(u32::MAX),
             ..LoadTotals::default()
         };
         for (_, state) in self.slots.snapshot() {
@@ -173,6 +185,8 @@ impl WorkspaceCatalog {
         let catalog = Arc::clone(self);
         // An open spawns tokio tasks (the watcher's drain loop, LAN, relay): this thread is not a
         // runtime thread, so it enters the caller's runtime for its whole life.
+        // `Handle::current`: https://docs.rs/tokio/latest/tokio/runtime/struct.Handle.html#method.current
+        // `Handle::enter`: https://docs.rs/tokio/latest/tokio/runtime/struct.Handle.html#method.enter
         let runtime = tokio::runtime::Handle::current();
         std::thread::Builder::new()
             .name("txtodod-loader".to_owned())

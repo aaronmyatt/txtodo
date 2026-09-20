@@ -162,6 +162,12 @@ impl WorkspaceRegistry {
             .map(entry_of))
     }
 
+    /// How many workspaces are active: the rows alone, none of [`Self::list`]'s two `stat` calls
+    /// per entry. `Health` asks this on every call (code review 2026-09-20, finding 12).
+    pub fn count_active(&self) -> Result<usize, WorkspaceRegistryError> {
+        Ok(self.registry.list_active()?.len())
+    }
+
     /// Every active workspace, with a cheap existence check per entry.
     pub fn list(&self) -> Result<Vec<WorkspaceEntry>, WorkspaceRegistryError> {
         Ok(self
