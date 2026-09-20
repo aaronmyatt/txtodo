@@ -8,6 +8,7 @@ use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use crate::backend::Hlc;
 use crate::backend::{FileMeta, GetTarget, ListArgs, OpSummary, RefPath, TaskId, TaskRow};
 use crate::backend::{WorkspaceArg, WorkspaceInfo};
+use crate::doc::FileDoc;
 use crate::error::McpError;
 use crate::grpc_convert::{file_meta, op_summary, workspace_info, workspace_selector};
 use crate::parse;
@@ -19,19 +20,31 @@ fn status(s: tonic::Status) -> McpError {
     McpError::daemon(s.message().to_owned())
 }
 
-/// Whole-file bytes as UTF-8 text (lossy — a byte-exact round trip is the CLI's job, not this read
-/// path's).
-pub async fn get_file_text(
+/// The whole file: UTF-8 text (lossy — a byte-exact round trip is the CLI's job, not this read
+/// path's) plus the daemon's task id per line (`FileContents.task_ids`, task sidecar-task-ids).
+pub async fn get_file_doc(
     mut client: TxtodoClient<Channel>,
     path: &str,
     workspace: WorkspaceArg,
-) -> Result<String, McpError> {
+) -> Result<FileDoc, McpError> {
     let req = pb::GetFileRequest {
         path: path.to_owned(),
         workspace: workspace_selector(workspace),
     };
-    let rep = client.get_file(req).await.map_err(status)?;
-    Ok(String::from_utf8_lossy(&rep.into_inner().bytes).into_owned())
+    let rep = client.get_file(req).await.map_err(status)?.into_inner();
+    Ok(FileDoc {
+        text: String::from_utf8_lossy(&rep.bytes).into_owned(),
+        task_ids: rep.task_ids,
+    })
+}
+
+/// Just the text, for callers that never address a task by id (resources, prompts, `todo_raw`).
+pub async fn get_file_text(
+    client: TxtodoClient<Channel>,
+    path: &str,
+    workspace: WorkspaceArg,
+) -> Result<String, McpError> {
+    Ok(get_file_doc(client, path, workspace).await?.text)
 }
 
 /// Every synced document (`ListFiles`).
@@ -73,12 +86,9 @@ pub async fn list_workspaces(
 /// `todo_list`.
 pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<TaskRow>, McpError> {
     let path = args.file.clone().unwrap_or_else(|| DEFAULT_TODO.to_owned());
-    let text = get_file_text(client, &path, args.workspace.clone()).await?;
-    let mut rows: Vec<TaskRow> = parse::lines(&text)
-        .into_iter()
-        .map(|(n, l)| parse::parse_row(n, l))
-        .filter(|r| !r.raw.trim().is_empty())
-        .collect();
+    let doc = get_file_doc(client, &path, args.workspace.clone()).await?;
+    let mut rows = doc.rows();
+    rows.retain(|r| !r.raw.trim().is_empty());
     if let Some(q) = &args.query {
         rows.retain(|r| parse::matches_query(&r.raw, q));
     }
@@ -123,15 +133,15 @@ pub async fn get(client: TxtodoClient<Channel>, target: GetTarget) -> Result<Tas
         return Err(McpError::invalid_params("todo_get needs id or line"));
     };
     let path = target.file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
-    let text = get_file_text(client, &path, target.workspace).await?;
-    row_at_line(&text, line)
+    let doc = get_file_doc(client, &path, target.workspace).await?;
+    row_at_line(&doc, line)
 }
 
-fn row_at_line(text: &str, line: u32) -> Result<TaskRow, McpError> {
-    parse::lines(text)
+fn row_at_line(doc: &FileDoc, line: u32) -> Result<TaskRow, McpError> {
+    parse::lines(&doc.text)
         .into_iter()
         .find(|(n, _)| *n == line)
-        .map(|(n, raw)| parse::parse_row(n, raw))
+        .map(|(n, raw)| doc.row(n, raw))
         .ok_or_else(|| McpError::not_found(format!("no line {line}")).with_line(line))
 }
 
@@ -146,9 +156,9 @@ pub async fn locate_by_id(
 ) -> Result<(RefPath, u32, TaskRow), McpError> {
     let files = list_files(client.clone(), workspace.clone()).await?;
     for f in files.iter().filter(|f| f.kind == "todo") {
-        let text = get_file_text(client.clone(), &f.path, workspace.clone()).await?;
-        if let Some((line, raw)) = parse::find_by_id(&text, id) {
-            return Ok((f.path.clone(), line, parse::parse_row(line, raw)));
+        let doc = get_file_doc(client.clone(), &f.path, workspace.clone()).await?;
+        if let Some((line, raw)) = doc.find_by_id(id) {
+            return Ok((f.path.clone(), line, doc.row(line, raw)));
         }
     }
     Err(McpError::not_found(format!("no task id:{id}")))
@@ -203,9 +213,9 @@ mod tests {
 
     #[test]
     fn row_at_line_finds_and_reports_a_missing_line() {
-        let text = "a\nb\nc\n";
-        assert_eq!(row_at_line(text, 2).map(|r| r.raw), Ok("b".to_owned()));
-        let err = row_at_line(text, 9).unwrap_err();
+        let doc = FileDoc::from_text("a\nb\nc\n");
+        assert_eq!(row_at_line(&doc, 2).map(|r| r.raw), Ok("b".to_owned()));
+        let err = row_at_line(&doc, 9).unwrap_err();
         assert_eq!(err.line, Some(9));
         assert_eq!(err.code, "not_found");
     }

@@ -14,6 +14,14 @@ Tools per design §6.3, resources §6.4, `token` module.
   `txtodo_daemon_launch::ensure_daemon` before dialing the socket (task daemon-always-available);
   `grpc_backend.rs`/`global_socket.rs` stay pure and still don't import that crate.
 
+## Task ids
+
+A task's id comes from the daemon, not from the line: `GetFile` answers one id per line
+(`FileContents.task_ids`, task `sidecar-task-ids`) and `doc.rs`'s `FileDoc` pairs them with the text.
+Under Sidecar identity a line has no `id:` tag, so `TaskRow.id` and every id-addressed tool depend on
+it. The first `id:` word in the text is only the fallback for a daemon that sent no ids.
+`tests/sidecar_id_tools.rs` (`#[ignore]`d, needs a built `txtodod`) drives the tools under Sidecar.
+
 ## Tools MCP never mirrors
 
 The registered tool set is a closed allow-list (`tests/smoke.rs`'s `EXPECTED_TOOLS`, an exact match).

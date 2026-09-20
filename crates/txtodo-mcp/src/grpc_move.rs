@@ -6,8 +6,9 @@
 use txtodo_proto::v1 as pb;
 
 use crate::backend::{MoveAnchor, TaskId, TaskRow, WorkspaceArg};
+use crate::doc::FileDoc;
 use crate::error::McpError;
-use crate::grpc_read::{get_file_text, locate_by_id};
+use crate::grpc_read::{get_file_doc, locate_by_id};
 use crate::grpc_write::{GrpcCtx, apply_one};
 use crate::parse;
 
@@ -19,9 +20,9 @@ fn task_ref(line: u32, id: &str) -> pb::TaskRef {
 }
 
 /// The mutation that puts task `id` (on `line`) next to `anchor`, or `None` when it already sits
-/// there. Pure: reads only `text`, the document as the daemon holds it.
+/// there. Pure: reads only `doc`, the document as the daemon holds it.
 pub(crate) fn move_mutation(
-    text: &str,
+    doc: &FileDoc,
     id: &str,
     line: u32,
     anchor: &MoveAnchor,
@@ -32,7 +33,8 @@ pub(crate) fn move_mutation(
             "a task cannot be moved next to itself",
         ));
     }
-    let (anchor_line, _) = parse::find_by_id(text, anchor_id)
+    let (anchor_line, _) = doc
+        .find_by_id(anchor_id)
         .ok_or_else(|| McpError::not_found(format!("anchor {anchor_id} is not in this file")))?;
     let task = Some(task_ref(line, id));
     match anchor {
@@ -41,13 +43,13 @@ pub(crate) fn move_mutation(
             before: Some(task_ref(anchor_line, anchor_id)),
         }))),
         MoveAnchor::After(_) => {
-            let next = parse::lines(text)
+            let next = parse::lines(&doc.text)
                 .into_iter()
                 .find(|(n, raw)| *n > anchor_line && !raw.trim().is_empty());
             let Some((n, raw)) = next else {
                 return Ok(Some(pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task })));
             };
-            let next_id = parse::parse_row(n, raw).id.unwrap_or_default();
+            let next_id = doc.row(n, raw).id.unwrap_or_default();
             if next_id == id {
                 return Ok(None); // already right after the anchor
             }
@@ -67,9 +69,9 @@ pub async fn move_task(
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     let (path, line, _row) = locate_by_id(ctx.client.clone(), &id, workspace.clone()).await?;
-    let text = get_file_text(ctx.client.clone(), &path, workspace.clone()).await?;
+    let doc = get_file_doc(ctx.client.clone(), &path, workspace.clone()).await?;
     let client = ctx.client.clone();
-    if let Some(kind) = move_mutation(&text, &id, line, &anchor)? {
+    if let Some(kind) = move_mutation(&doc, &id, line, &anchor)? {
         let mutation = pb::Mutation { kind: Some(kind) };
         apply_one(ctx, &path, mutation, workspace.clone()).await?;
     }
@@ -84,7 +86,8 @@ mod tests {
     const TEXT: &str = "a id:01\nb id:02\n\nc id:03\n";
 
     fn kind(id: &str, line: u32, anchor: MoveAnchor) -> Option<pb::mutation::Kind> {
-        move_mutation(TEXT, id, line, &anchor).unwrap_or_else(|e| panic!("{e:?}"))
+        move_mutation(&FileDoc::from_text(TEXT), id, line, &anchor)
+            .unwrap_or_else(|e| panic!("{e:?}"))
     }
 
     #[test]
@@ -123,7 +126,8 @@ mod tests {
 
     #[test]
     fn a_missing_anchor_or_itself_is_refused() {
-        assert!(move_mutation(TEXT, "03", 4, &MoveAnchor::Before("99".into())).is_err());
-        assert!(move_mutation(TEXT, "03", 4, &MoveAnchor::Before("03".into())).is_err());
+        let doc = FileDoc::from_text(TEXT);
+        assert!(move_mutation(&doc, "03", 4, &MoveAnchor::Before("99".into())).is_err());
+        assert!(move_mutation(&doc, "03", 4, &MoveAnchor::Before("03".into())).is_err());
     }
 }

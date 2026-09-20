@@ -12,7 +12,7 @@ use crate::backend::{
 };
 use crate::error::McpError;
 use crate::grpc_convert::{hex, workspace_selector};
-use crate::grpc_read::{DEFAULT_TODO, get_file_text, locate_by_id};
+use crate::grpc_read::{DEFAULT_TODO, get_file_doc, locate_by_id};
 use crate::parse;
 
 /// The gRPC channel plus the principal every mutation is stamped with (design §6.2's `agent`
@@ -98,12 +98,12 @@ async fn find_added_row(
     text: &str,
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
-    let after = get_file_text(client, path, workspace).await?;
-    parse::lines(&after)
+    let after = get_file_doc(client, path, workspace).await?;
+    parse::lines(&after.text)
         .into_iter()
         .rev()
         .find(|(_, raw)| raw.contains(text.trim()))
-        .map(|(n, raw)| parse::parse_row(n, raw))
+        .map(|(n, raw)| after.row(n, raw))
         .ok_or_else(|| McpError::daemon("added task could not be re-read"))
 }
 
@@ -225,12 +225,12 @@ pub async fn archive(
     file: RefPath,
     workspace: WorkspaceArg,
 ) -> Result<ApplyOutcome, McpError> {
-    let text = get_file_text(ctx.client.clone(), &file, workspace.clone()).await?;
-    let mut completed: Vec<(u32, String)> = parse::lines(&text)
+    let doc = get_file_doc(ctx.client.clone(), &file, workspace.clone()).await?;
+    let mut completed: Vec<(u32, String)> = doc
+        .rows()
         .into_iter()
-        .map(|(n, l)| (n, parse::parse_row(n, l)))
-        .filter(|(_, r)| r.done)
-        .map(|(n, r)| (n, r.id.unwrap_or_default()))
+        .filter(|r| r.done)
+        .map(|r| (r.line, r.id.unwrap_or_default()))
         .collect();
     completed.sort_by_key(|(line, _)| *line);
     let mut applied = 0u32;
