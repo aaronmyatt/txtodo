@@ -1,10 +1,10 @@
-2026-09-20 proto: Health.release_date, additive, its own commit (Health.version already exists) +m11 @proto @doing by:claude
-2026-09-20 txtodod: --version likewise; fill Health.release_date; log both in daemon_starting +m11 @daemon
+2026-09-20 txtodod: --version likewise; fill Health.release_date; log both in daemon_starting +m11 @daemon @doing by:claude
 2026-09-20 apps/desktop: small muted "v0.0.2 · 2026-09-20" in the main view corner and on Help +m11 @desktop
 2026-09-20 apps/desktop: daemon banner names both versions when the daemon is not the app's build +m11 @desktop @test
 2026-09-20 txtodo doctor: warn when the CLI and the running daemon differ in version or date +m11 @cli @test
 2026-09-20 release.yml: export TXTODO_RELEASE_DATE from the tag; smoke test checks --version shows it +m11 @release
 2026-09-20 scripts/check-version-sync.sh: Cargo, tauri.conf.json and package.json versions agree; in just check +m11 @build
+x 2026-09-20 2026-09-20 proto: Health.release_date, additive, its own commit (Health.version already exists) +m11 @proto — shipped: field 21 and the regenerated code, round-trip test; every HealthResponse literal uses ..default(), so nothing else had to change
 x 2026-09-20 2026-09-20 txtodo-tui: --version likewise; dim "v0.0.2 · 2026-09-20" in the status bar, dropped when narrow +m11 @tui — shipped: txtodo-tui 0.0.2 (2026-09-20), and the dim label at the right edge of the status line with tests for wide and narrow; known gap: not looked at in a real terminal
 x 2026-09-20 2026-09-20 buildinfo: shared build-script file that resolves the release date (env, else commit date) +m11 @build — shipped: build-support/buildinfo.rs, included with #[path] (check-boundaries.sh accepts it); it reruns when the env var changes or HEAD moves; the fallback order is tested from txtodo-cli
 x 2026-09-20 2026-09-20 txtodo-cli: --version prints "txtodo 0.0.2 (2026-09-20)"; doctor prints the same line +m11 @cli — shipped: txtodo 0.0.2 (2026-09-20) from --version and as doctor's first line; a build with TXTODO_RELEASE_DATE=2026-01-02 showed that date; known gap: doctor --json has no version row yet, the mismatch line adds it
