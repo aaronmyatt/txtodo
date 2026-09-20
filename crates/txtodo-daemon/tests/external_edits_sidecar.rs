@@ -172,3 +172,41 @@ async fn todo_sh_do_marks_done_in_place() {
     let k = kinds(&d.history().await);
     assert!(k.contains(&"set_field".to_owned()), "{k:?}");
 }
+
+/// Task complete-to-bottom: only the `Complete` action moves a line. Typing `x ` in an editor is
+/// an edit like any other, so the line stays where the human left it and nothing is written back.
+#[tokio::test]
+async fn a_hand_completed_line_is_not_moved() {
+    let mut d = sidecar(TODO).await;
+    let before = d.disk();
+    let edited = before.replacen(
+        "(A) 2026-09-11 buy ducks",
+        "x 2026-09-20 2026-09-11 buy ducks",
+        1,
+    );
+    d.external_write(&edited);
+    let after = d.settle().await;
+    assert_eq!(after, edited, "the done line stays on line 1");
+    assert_eq!(d.writes_since().await, 0, "the daemon wrote nothing back");
+    assert!(
+        !kinds(&d.history().await).contains(&"move".to_owned()),
+        "no move was recorded"
+    );
+}
+
+/// A done line a human moved somewhere else stays there: completing is one move at that moment,
+/// not a rule the daemon keeps true on every write.
+#[tokio::test]
+async fn a_hand_moved_done_line_stays_where_it_was_put() {
+    let mut d = sidecar(TODO).await;
+    let before = d.disk();
+    let mut lines: Vec<&str> = before.lines().collect();
+    let done = lines.pop().expect("the last line is the done one");
+    assert!(done.starts_with("x "), "{done}");
+    lines.insert(0, done);
+    let edited = lines.join("\n") + "\n";
+    d.external_write(&edited);
+    let after = d.settle().await;
+    assert_eq!(after, edited, "the done line stays on top");
+    assert_eq!(d.writes_since().await, 0, "the daemon wrote nothing back");
+}
