@@ -319,3 +319,45 @@ async fn a_request_gives_up_at_its_bound_with_unavailable_and_the_open_carries_o
     wait_for("the open to finish", || catalog.load_pending() == 0);
     assert_eq!(state_of(&catalog, ws.path()), Some(LoadState::Ready));
 }
+
+/// Code review 2026-09-20, finding 2: a `WorkspaceRemove` that lands while the workspace is still
+/// opening found nothing to drop, and the open then inserted it anyway: watcher, actors and routes
+/// stayed live for a workspace the registry no longer had, and `resolve_sole_open` counted it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_workspace_removed_while_it_opens_is_not_inserted_afterwards() {
+    let slow = workspace("removed-");
+    let gate = Arc::new(Gate::default());
+    let hook_gate = Arc::clone(&gate);
+    let (_registry_dir, catalog) = catalog_with(&[slow.path()], move |_| hook_gate.wait());
+    let id = catalog
+        .list_registered_entries()
+        .unwrap_or_else(|e| panic!("list: {e}"))[0]
+        .id;
+    let opening = {
+        let catalog = Arc::clone(&catalog);
+        let selector = select(slow.path());
+        tokio::task::spawn_blocking(move || catalog.resolve(Some(&selector)).map(|_| ()))
+    };
+    wait_for("the open to start", || {
+        catalog.load_state(id) == Some(LoadState::Loading)
+    });
+
+    let removed = catalog
+        .remove_registered(id)
+        .unwrap_or_else(|e| panic!("remove: {e}"));
+    assert!(removed, "the registry had it");
+    gate.release();
+    let outcome = opening
+        .await
+        .unwrap_or_else(|e| panic!("open task failed: {e}"));
+
+    let err = outcome.expect_err("the caller is told, not handed a removed workspace");
+    assert_eq!(err.code(), Code::NotFound, "{err}");
+    let still_open = catalog
+        .open
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(&id);
+    assert!(!still_open, "a removed workspace must not be left open");
+    assert_eq!(catalog.load_state(id), None, "and it has no load slot");
+}

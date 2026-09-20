@@ -75,10 +75,21 @@ impl WorkspaceCatalog {
         let started = Instant::now();
         let opened = open_workspace_full(root, id, &self.open_args, Arc::clone(&self.clock))
             .map_err(|e| Status::internal(format!("open {}: {e}", root.display())))?;
-        self.open
-            .write()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(id, opened);
+        {
+            // A `WorkspaceRemove` may have landed while this open ran. `remove_registered` forgets
+            // the slot first and drops from `open` second, so checking the slot under this write
+            // lock is enough: either the slot is already gone (insert nothing), or this insert
+            // lands before that drop and the drop takes it out again.
+            let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);
+            if self.slots.state(id).is_none() {
+                drop(open);
+                drop(opened); // stops its watcher and sync tasks (`OpenedWorkspace`'s `Drop`)
+                return Err(Status::not_found(format!(
+                    "workspace {id} was removed while it was opening"
+                )));
+            }
+            open.insert(id, opened);
+        }
         log_opened(id, root, started.elapsed().as_millis());
         Ok(())
     }

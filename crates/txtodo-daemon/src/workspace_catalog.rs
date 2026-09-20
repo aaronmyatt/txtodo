@@ -150,11 +150,13 @@ impl WorkspaceCatalog {
                 .remove(id, self.clock.as_ref())
                 .map_err(|e| Status::internal(format!("remove workspace {id}: {e}")))?
         };
+        // Slot first, `open` second: `run_open` relies on this order (see its comment) so an open
+        // that finishes during a remove is never left inserted.
+        self.slots.forget(id);
         self.open
             .write()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&id);
-        self.slots.forget(id);
         Ok(removed)
     }
 
