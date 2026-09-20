@@ -73,3 +73,31 @@ pub fn capturing_dispatch(sink: LogSink, service: &'static str) -> tracing::Disp
         );
     tracing::Dispatch::new(subscriber)
 }
+
+/// Installs, once per process, a global default subscriber that wants every level and throws every
+/// event away. Call it before `set_default(&capturing_dispatch(..))` in any test that shares its
+/// binary with tests that log with no subscriber of their own (task tracing-set-default-audit).
+///
+/// Why: tracing caches, per callsite and per process, whether anyone is interested, and keeps one
+/// process-wide max level. A sibling test thread with no subscriber can cache "nobody" for a
+/// callsite, or race the max level down, and the capturing test's thread-local dispatch then never
+/// sees the event: it captures nothing, and a "no secret in the logs" check passes on empty logs.
+/// A global subscriber that is always interested keeps both open; the thread-local dispatch still
+/// decides where this thread's bytes go.
+///
+/// Never a panic: when another test already installed a global default, `set_global_default`
+/// answers `Err` and that one stays.
+/// Ref: https://docs.rs/tracing/latest/tracing/subscriber/fn.set_global_default.html
+/// Ref: https://docs.rs/tracing/latest/tracing/callsite/fn.rebuild_interest_cache.html
+pub fn pin_global_trace_floor() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        use tracing_subscriber::Layer as _;
+        let subscriber = tracing_subscriber::registry().with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::sink as fn() -> std::io::Sink)
+                .with_filter(tracing_subscriber::filter::LevelFilter::TRACE),
+        );
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    });
+}
