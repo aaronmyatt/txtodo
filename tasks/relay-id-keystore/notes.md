@@ -32,5 +32,21 @@ fresh on every start, and a relay `access.allowlist` entry goes stale each time.
 
 - macOS may prompt for keychain access. If the prompt returns after every reinstall (the binary
   changes), that is a cost of A. The last line checks it.
+- Checked by hand 2026-09-20 on macOS: **yes, the prompt returns after a reinstall.**
+  - Run 1 (`txtodod --dir . --key-store os`): no prompt. It wrote `txtodo` / `device/relay-identity`
+    to the login keychain. The binary that creates an item is trusted for it.
+  - Rebuilt (one small edit, new ad-hoc CDHash), run 2: macOS asked "txtodod wants to use your
+    confidential information stored in "txtodo" in your keychain" and wanted the login password.
+  - Why: our builds are ad-hoc signed (`Signature=adhoc`, no team id), so the item's access list
+    pins the exact code hash. Every new build is a stranger. "Always Allow" only lasts until the
+    next build.
+  - Cost of A, then: one password prompt per reinstall, per keychain item. Under launchd nobody may
+    be at the screen to answer it; what the daemon does while the prompt sits there is not checked.
+  - Way out, not done: sign with a stable Developer ID so the access list pins the signer, not the
+    hash. Ref: https://developer.apple.com/documentation/security/keychain_services/access_control_lists
+  - Two false starts first: a run with no `--key-store` is in memory and never touches the
+    keychain, and a second daemon quits on the pidfile lock before it opens the keystore. Neither
+    shows a prompt, and neither is a test.
+  - Not in a runbook yet: there is none (`relay-kamal-deploy` line 7 is still open). Put it there.
 - This unblocks the Kamal deploy (`relay-kamal-deploy`), which is low priority and still needs a
   droplet, DNS and secrets.
