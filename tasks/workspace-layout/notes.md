@@ -46,7 +46,24 @@ ADR supersedes it in part. Rule 2 of `specs/ref-directories.md` and plan section
   to learn it. B (a registry row carried once in the pairing offer) was rejected: a later change
   on one device would never reach the others.
 
-## Decisions waiting (one Decide line left)
+- 2026-09-20, existing workspaces when the default flips: neither A (pin what is on disk at first
+  open) nor B (a `txtodo refs migrate` command). The project is in its early days and no other
+  device syncs these workspaces yet, so the default simply flips to `tasks/` for every workspace,
+  and a one-off script updates this machine: `scripts/migrate-refs-to-tasks.sh` (dry run by
+  default, `--yes` applies, refuses while a `txtodod` runs). Run on 2026-09-20 it finds nothing to
+  move: all 13 registered workspaces already keep their refs under `tasks/` or have none.
+  What this removes from the plan: the pin-at-first-open line, the `legacy()` fallback the Design
+  section's "Order" bullet describes, and the pin race under Known gaps. `refs_dir = "."` stays a
+  valid value for a workspace that sets it in `txtodo.toml`.
+  Cost accepted: a workspace made elsewhere with ADR 0012's layout would lose sight of its ref
+  folders until the script (or a hand move) runs there. The daemon keys a document's history by
+  its path, so a folder the script moves starts a fresh history; the file bytes are untouched.
+
+## Decisions waiting
+
+None. Both Decide lines are closed.
+
+## The two Decide lines as they were asked
 
 1. Where the layout is stored. A: `txtodo.toml` at the workspace root, synced like `notes.md`; the
    `toml` crate is already in the tree through txtodo-cli, and adding it to the daemon needs a
