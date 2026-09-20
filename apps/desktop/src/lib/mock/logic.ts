@@ -27,7 +27,8 @@ export type Mutation =
 	| { kind: "complete"; task: TaskRef; today: string }
 	| { kind: "edit"; task: TaskRef; new_line: string }
 	| { kind: "move"; task: TaskRef; to_path: string }
-	| { kind: "delete"; task: TaskRef; leave_blank: boolean };
+	| { kind: "delete"; task: TaskRef; leave_blank: boolean }
+	| { kind: "replace"; base_hash: string; contents: string };
 
 function stampNewLine(line: string): string {
 	const hasDate = /^(\(\w\) )?\d{4}-\d{2}-\d{2}\b/.test(line);
@@ -62,6 +63,9 @@ function applyOneMutation(lines: string[], m: Mutation): string[] {
 				else lines.splice(idx, 1);
 			}
 			return lines;
+		case "replace":
+			// The whole document; `applyMutations` has already checked the base hash.
+			return m.contents.split("\n");
 	}
 }
 
@@ -77,6 +81,8 @@ function summarize(m: Mutation): string {
 			return `moved line ${m.task.line_number} to ${m.to_path}`;
 		case "delete":
 			return `deleted line ${m.task.line_number}`;
+		case "replace":
+			return "replaced the document";
 	}
 }
 
@@ -90,6 +96,10 @@ export interface ApplyResult {
 export function applyMutations(path: string, mutations: Mutation[]): ApplyResult {
 	const f = files.get(path);
 	if (!f) throw new Error(`mock daemon: unknown path "${path}"`);
+	// The real daemon refuses a `Replace` whose base is stale (`FAILED_PRECONDITION`); the bridge
+	// turns that into this token (`$lib/todotxt/saveBuffer.ts::FAILED_PRECONDITION_TOKEN`).
+	const stale = mutations.some((m) => m.kind === "replace" && m.base_hash !== hashOf(f));
+	if (stale) throw "failed-precondition: the document changed since it was read";
 	let lines = f.text.split("\n");
 	for (const m of mutations) lines = applyOneMutation(lines, m);
 	f.text = lines.join("\n");

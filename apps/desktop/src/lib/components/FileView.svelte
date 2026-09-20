@@ -25,7 +25,7 @@
 		longLineHint,
 		mainViewBaseTheme
 	} from "$lib/todotxt/decorations";
-	import { computeDelta, isNoOpSave } from "$lib/todotxt/rawMode";
+	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import type { DetailParams } from "$lib/types";
@@ -74,6 +74,14 @@
 	// same invariant tasks/desktop-raw-mode's notes.md documented for the mode this replaced).
 	let dirty = $state(false);
 	let baseline = "";
+	// The hash `GetFile` gave with `baseline`: the base a `Replace` save names, so the daemon can
+	// refuse it when the document moved on (`$lib/todotxt/saveBuffer.ts`). Always set together
+	// with `baseline`, never alone.
+	let baselineHash = "";
+	// A pending "the human only moved a line" save (task desktop-reorder-propagates): a reorder
+	// reaches the file at once, typed text still waits for blur or Cmd-S.
+	const REORDER_SAVE_DELAY_MS = 300;
+	let reorderTimer: ReturnType<typeof setTimeout> | undefined;
 	// Pending needs_review flags for this instance's own `path` (design §4.7's store, already fed
 	// by `ConflictBanner`'s `Watch` subscription): the document being edited is the *reconciled
 	// projection*, so a pending flag means it isn't stable yet — read-only until it's resolved.
@@ -146,7 +154,9 @@
 			EditorView.updateListener.of((u) => {
 				if (!u.docChanged) return;
 				docLineCount = u.state.doc.lines;
-				setDirty(u.state.doc.toString() !== baseline);
+				const text = u.state.doc.toString();
+				setDirty(text !== baseline);
+				scheduleReorderSave(text);
 			})
 		];
 	}
@@ -196,16 +206,17 @@
 		return false;
 	}
 
-	/** Computes the delta and applies it via the exact same `Apply` path every other edit in this
-	 * app uses (tasks/desktop-raw-mode's rawMode.ts module doc) — never a whole-string write. A
-	 * no-op save short-circuits before even building a delta. */
-	async function applyBufferDelta(targetPath: string, base: string, next: string): Promise<void> {
-		if (isNoOpSave(base, next)) return;
-		const mutations = computeDelta(base, next);
-		if (mutations.length === 0) return;
-		await applyMutations(targetPath, mutations);
-		// The daemon's own `Change` for `targetPath` repaints the view (and refreshes `baseline`)
-		// via `refreshDoc` below — no manual repaint here.
+	/** A change that only moved lines saves after a short pause, without waiting for blur; any
+	 * other edit cancels the pending save (typed text must never reach the disk half-written).
+	 * setTimeout: https://developer.mozilla.org/en-US/docs/Web/API/Window/setTimeout */
+	function scheduleReorderSave(text: string) {
+		clearTimeout(reorderTimer);
+		reorderTimer = undefined;
+		if (!isReorderOnly(baseline, text)) return;
+		reorderTimer = setTimeout(() => {
+			reorderTimer = undefined;
+			void commit();
+		}, REORDER_SAVE_DELAY_MS);
 	}
 
 	/** The one way a buffer goes back to the daemon — blur, Cmd-S, a file switch and an unmount all
@@ -217,12 +228,15 @@
 	 * success clears any older refusal of the same file. */
 	async function commitOutgoing(
 		targetPath: string,
-		base: string,
+		base: Baseline,
 		next: string,
 		keptInEditor = false
 	): Promise<string | null> {
 		try {
-			await applyBufferDelta(targetPath, base, next);
+			// `Replace` first (a moved line is a move), the per-line delta when the base is stale:
+			// `$lib/todotxt/saveBuffer.ts`. The daemon's `Change` repaints the view via `refreshDoc`.
+			const outcome = await saveBuffer(applyMutations, targetPath, base, next);
+			adoptSaved(targetPath, base, next, outcome);
 			rejectedEdits.clear(targetPath);
 			return null;
 		} catch (e) {
@@ -232,13 +246,28 @@
 		}
 	}
 
+	/** After a `Replace` the daemon holds exactly `next`, so it is the new baseline even when the
+	 * human typed on during the round trip and `refreshDoc` (which skips a dirty buffer) did not
+	 * run. Without this the next save would name the old hash and be refused. Only while this
+	 * instance still shows `targetPath` and no refresh moved the baseline meanwhile. The per-line
+	 * fallback merges with someone else's change, so its result is not `next`: `refreshDoc` owns
+	 * that case. */
+	function adoptSaved(targetPath: string, base: Baseline, next: string, outcome: SaveOutcome) {
+		if (outcome.how !== "replace" || targetPath !== path || baselineHash !== base.hash) return;
+		baseline = next;
+		baselineHash = outcome.hash;
+		if (view) setDirty(view.state.doc.toString() !== baseline);
+	}
+
 	/** Blur/Cmd-S: commits the buffer against *this* instance's current `path`. */
 	async function commit(): Promise<void> {
+		clearTimeout(reorderTimer);
+		reorderTimer = undefined;
 		if (!view || !dirty) return;
 		const next = view.state.doc.toString();
 		setDirty(false);
 		applyEditableGate(); // a pending review that arrived mid-edit is only enforced once clean
-		const error = await commitOutgoing(path, baseline, next, true);
+		const error = await commitOutgoing(path, { text: baseline, hash: baselineHash }, next, true);
 		if (error === null) {
 			commitError = "";
 			return;
@@ -315,6 +344,7 @@
 			if (!view || dirty || seq !== refreshSeq) return;
 			loadError = "";
 			baseline = contents.text;
+			baselineHash = contents.hash;
 			const current = view.state.doc.toString();
 			if (current !== contents.text) {
 				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: contents.text } });
@@ -355,8 +385,9 @@
 		// `onDestroy` can't block teardown.
 		if (dirty && view) {
 			// A refusal lands in `rejectedEdits` (the banner in MainView outlives this component).
-			void commitOutgoing(path, baseline, view.state.doc.toString());
+			void commitOutgoing(path, { text: baseline, hash: baselineHash }, view.state.doc.toString());
 		}
+		clearTimeout(reorderTimer);
 		view?.destroy();
 	});
 
@@ -384,7 +415,9 @@
 			// by the time this effect runs `path` (and hence a plain `commit()` call) already means
 			// the destination, not the file the buffer belongs to.
 			const wasDirty = dirty;
-			const oldBaseline = baseline;
+			const oldBaseline = { text: baseline, hash: baselineHash };
+			clearTimeout(reorderTimer);
+			reorderTimer = undefined;
 			const bufferAtSwitch = wasDirty && view ? view.state.doc.toString() : "";
 			if (wasDirty) setDirty(false);
 			// A refusal is parked in `rejectedEdits` (the buffer is about to be replaced by

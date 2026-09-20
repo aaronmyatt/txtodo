@@ -68,7 +68,10 @@ export type Mutation =
 	| { kind: "complete"; task: TaskRef; today: string }
 	| { kind: "edit"; task: TaskRef; new_line: string }
 	| { kind: "move"; task: TaskRef; to_path: string }
-	| { kind: "delete"; task: TaskRef; leave_blank: boolean };
+	| { kind: "delete"; task: TaskRef; leave_blank: boolean }
+	// The whole document, compare-and-swap against `base_hash` (`FileContents.hash`). Must be the
+	// only mutation of its `applyMutations` call. See `$lib/todotxt/saveBuffer.ts`.
+	| { kind: "replace"; base_hash: string; contents: string };
 
 /** The one `MutationDto` variant the edit popover needs, as its own type so callers don't have to
  * narrow `Mutation`'s union. Structurally identical to `Mutation`'s `"edit"` arm. */
