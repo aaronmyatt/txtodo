@@ -333,7 +333,7 @@ Single-workspace-scoped for now: the gateway and every token below target whiche
 ### 6.1 Transports
 
 - **stdio**: `txtodo mcp --stdio`, for local agents (Claude Code, Cursor, an editor plugin) that spawn a subprocess.
-- **Streamable HTTP**: `http://127.0.0.1:8636/mcp` (8636 spells TODO on a phone keypad). Optionally bound to the LAN and advertised over mDNS as `_txtodo-mcp._tcp`, so an agent on your desktop can find the daemon on your phone.
+- **Streamable HTTP**: `http://127.0.0.1:8636/mcp` (8636 spells TODO on a phone keypad). Loopback only: no flag or config binds another address, and nothing is advertised over mDNS (decided 2026-09-20; the earlier `--lan` bind and the `_txtodo-mcp._tcp` service type are gone). Loopback is not private on its own, since any browser tab can reach it, so the server answers only a loopback `Host` and an absent or same-server `Origin`; anything else gets 403.
 - Both are the same server; the daemon is the only thing behind them.
 
 ### 6.2 Auth: scoped capability tokens

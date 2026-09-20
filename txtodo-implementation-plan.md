@@ -60,7 +60,7 @@ This document is written for a coding agent. It is deliberately explicit. Read `
 | 7 | Desktop UI: **Tauri 2** + **Svelte 5** + **CodeMirror 6**. The main view is a read-only CodeMirror document with a custom todo.txt language (Lezer grammar generated from `specs/todotxt.abnf`). | CM6 gives line numbers, wrapping, virtualisation, search, and decorations for free; the "interactive text file" feel is native to it. |
 | 8 | Mobile UI: iOS SwiftUI over a `UITextView` with `NSTextStorage` highlighting; Android Jetpack Compose `BasicTextField` with `AnnotatedString`. Both highlight using `txtodo_core::tokenize` via uniffi so token boundaries are identical everywhere. | The core owns the grammar; UIs only paint. |
 | 9 | ~~Task identity: `id:<ULID>` tag, tagged mode only for M1–M7. Sidecar (purist) mode is M10.~~ **Reversed 2026-09-13** (`docs/questions.md` Q2): sidecar mode (no `id:` tag; identity by fingerprint re-matching, `crates/txtodo-model/src/identity.rs` + `crates/txtodo-daemon/src/identity_*.rs`/`reconcile_sidecar.rs`) is the default for every new workspace; tagged mode is now the opt-in (`--identity-mode tagged`, or auto-detected when a workspace already carries `id:` tags). Both are fully built and tested, not just tagged. | A plain, unmanaged todo.txt should work with `txtodo` with zero `id:` metadata written into it (user request, superseding "ship the robust path first"). |
-| 10 | Ports and names: MCP HTTP on `127.0.0.1:8636`; gRPC on the socket only; metrics on `127.0.0.1:8637`. mDNS services `_txtodo._udp` (sync) and `_txtodo-mcp._tcp` (MCP). Daemon binary `txtodod`, CLI `txtodo`, config at `$XDG_CONFIG_HOME/txtodo/config.toml`, state at `<workspace>/.txtodo/`. | Fixed so docs and tests can rely on them. |
+| 10 | Ports and names: MCP HTTP on `127.0.0.1:8636`; gRPC on the socket only; metrics on `127.0.0.1:8637`. mDNS service `_txtodo._udp` (sync); MCP is never advertised (it is loopback only since 2026-09-20, `tasks/mcp-local-only`). Daemon binary `txtodod`, CLI `txtodo`, config at `$XDG_CONFIG_HOME/txtodo/config.toml`, state at `<workspace>/.txtodo/`. | Fixed so docs and tests can rely on them. |
 | 11 | Dates: the daemon's local date at write time for `creation_date` and `completion_date`, formatted `YYYY-MM-DD`. No time zones in the file, ever. | Spec. |
 | 12 | Detail files: the `ref:` directory convention in §3.2. | Agreed in design review. |
 
@@ -382,7 +382,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 **Tasks.**
 
 - `txtodo-mcp` using `rmcp`: tools, resources, prompts exactly as the design doc §6.3–6.4, plus `todo_notes_get {id}` / `todo_notes_set {id, text}` and `file` parameters accepting a ref path (`q4-roadmap/todo.txt`).
-- Transports: stdio (`txtodo mcp --stdio`) and Streamable HTTP on `127.0.0.1:8636/mcp`; `--lan` flag binds `0.0.0.0` and advertises `_txtodo-mcp._tcp`.
+- Transports: stdio (`txtodo mcp --stdio`) and Streamable HTTP on `127.0.0.1:8636/mcp`, loopback only, with a `Host` and `Origin` check (403 for a foreign one). There is no `--lan` and no mDNS advertisement (decided 2026-09-20, `tasks/mcp-local-only`).
 - Tokens: macaroon-style (`macaroon` crate or a minimal HMAC-chained implementation in `txtodo-mcp::token`): root secret in the keystore; caveats `scope=…`, `project=…`, `context=…`, `file=…`, `expires=…`, `quarantine=@ctx`. `txtodo token create|list|revoke|attenuate`. Revocation list in the store.
 - Bearer auth on HTTP; stdio inherits a token from `--token` or the config's `default_stdio_token`.
 - Every mutation passes through the daemon's `Apply` with `Principal::Agent`. Quarantine caveat appends the context to `todo_add` lines. Rate limit: 60 mutations/min/token, 10 deletes/min/token, exceeding ⇒ token paused + notification event.
@@ -442,7 +442,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Performance budgets** (fail CI if exceeded, measured on the Linux runner): parse 100 k lines ≤ 150 ms; reconcile a single external line edit in a 10 k-line file ≤ 20 ms; sync 1 000 ops between two loopback daemons ≤ 500 ms; daemon idle RSS ≤ 50 MB with a 10 k-line workspace.
 
-**Security checklist** (review before M4, M6, M8 close): no secrets in logs; keys only in keystore; every network message versioned, authenticated, encrypted; MCP HTTP refuses non-loopback unless `--lan`; tokens never logged; path traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types.
+**Security checklist** (review before M4, M6, M8 close): no secrets in logs; keys only in keystore; every network message versioned, authenticated, encrypted; MCP HTTP never binds a non-loopback address and refuses a foreign `Host` or `Origin`; tokens never logged; path traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types.
 
 **Observability from M3 onward:** `tracing` spans `reconcile{file}`, `sync.session{peer}`, `mcp.call{tool,principal}`; JSON logs to `.txtodo/logs/` with rotation; `txtodo doctor --verbose` dumps the last 100 events.
 

@@ -1,6 +1,6 @@
 # 0010 — Fixed ports, service names and paths (txtodo naming)
 
-- Status: accepted
+- Status: accepted; the `_txtodo-mcp._tcp` service type is superseded by ADR 0028 (MCP is loopback only)
 - Date: 2026-09-11
 - Deciders: project owner (plan §1, decision 010; do not relitigate)
 
