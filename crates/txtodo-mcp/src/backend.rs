@@ -27,7 +27,7 @@ pub type TaskId = String;
 /// One parsed todo.txt line (design §6.3): `raw` plus the fields the tool table promises.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskRow {
-    /// The `id:` tag's value, when present.
+    /// The task's id as the daemon holds it (a ULID); under Sidecar identity no `id:` tag shows it.
     pub id: Option<TaskId>,
     /// 1-based line number, blanks included.
     pub line: u32,

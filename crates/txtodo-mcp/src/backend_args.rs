@@ -47,7 +47,7 @@ pub struct SearchArgs {
 /// least one is required.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GetTarget {
-    /// The task's `id:` tag.
+    /// The task's id, as `TaskRow.id` gave it.
     pub id: Option<TaskId>,
     /// A 1-based line number, blanks included.
     pub line: Option<u32>,
