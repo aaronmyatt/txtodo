@@ -160,6 +160,9 @@ pub(crate) fn apply_of(state: &AppState, mutation: pb::Mutation) -> pb::ApplyReq
         path: state.path.clone(),
         mutations: vec![mutation],
         agent: None,
+        // The activity log tells a TUI change from a CLI or desktop one (task op-source).
+        source: "tui".to_owned(),
+        dry_run: false,
     }
 }
 
@@ -195,6 +198,17 @@ mod tests {
             req.mutations[0].kind,
             Some(pb::mutation::Kind::Complete(_))
         ));
+    }
+
+    #[test]
+    fn every_apply_names_the_tui_as_its_source() {
+        let mut state = AppState::fixture();
+        let mut input = Input::default();
+        let Some(Action::Apply(req)) = input.on_key(&mut state, key(' ')) else {
+            panic!("expected Apply")
+        };
+        assert_eq!(req.source, "tui");
+        assert!(!req.dry_run);
     }
 
     #[test]
