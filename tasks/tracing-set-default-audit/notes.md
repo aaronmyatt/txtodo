@@ -56,3 +56,30 @@ is the same move.
   did not finish here: the sync lib binary is slow, and the daemon lib takes about 7 minutes a run.
 - Not fixed, not confirmed. The `txtodo-model` fix (move the test to its own integration binary)
   needs the test to use only public API, which the daemon's `security_m8_tests.rs` does not.
+
+### 2026-09-20 (later): read every file, plan for the rest
+
+What each file has today:
+
+| file | own binary | global TRACE floor | "logged something" check |
+|---|---|---|---|
+| model `tests/hlc_no_secrets.rs` | yes | no | yes |
+| tui `tests/sentinel_no_secrets.rs` | yes | no | yes |
+| store `tests/no_secrets_sentinel.rs` | yes | no | yes |
+| sync `src/no_secrets_tests.rs` | no | yes | yes |
+| crdt `src/no_secrets_tests.rs` | no | yes | yes |
+| daemon `src/lan_session_security_tests.rs` | no | **no** | yes |
+| daemon `src/security_m8_tests.rs` | no | **no** | **no** |
+
+- `sync` and `crdt` already pin a process-wide TRACE subscriber (`ensure_global_floor_at_trace`)
+  before they capture. With a global subscriber that is always interested, a sibling thread with no
+  subscriber of its own can no longer cache "not interested" for a callsite. So both are mitigated,
+  by a fix this audit did not know about.
+- `security_m8_tests.rs` is the real finding: it has no floor and no check that anything was
+  logged, so a run that captured nothing passes. It can be green and prove nothing.
+- `lan_session_security_tests.rs` has the check but no floor: exposed the way `txtodo-model` was,
+  and it would flake, not pass silently.
+
+Plan: one shared `txtodo_telemetry::testing::pin_global_trace_floor()` (the daemon may depend on
+telemetry; `sync` and `crdt` may not, so they keep their local copy). The two daemon files call it,
+and `security_m8` gains the "logged something" check.
