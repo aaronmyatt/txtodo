@@ -173,8 +173,8 @@ async fn a_pre_registered_workspace_resolves_by_path_and_by_no_selector() {
         .into_inner();
     assert_eq!(by_path.documents, 1);
 
-    // Exactly one workspace is open (opened at startup via open_all_registered): the
-    // single-open-workspace bridge applies even with no --dir at all.
+    // No selector: the default workspace answers (task default-workspace), not the one registered
+    // above. Its empty `todo.txt` is one document too, which is why this count matches.
     let by_none = client
         .health(pb::HealthRequest { workspace: None })
         .await
@@ -221,8 +221,9 @@ async fn a_second_directory_auto_registers_then_scoped_calls_need_a_selector() {
         .into_inner();
     assert_eq!(resp.documents, 1);
 
-    // Now two workspaces are open: an unselected workspace-scoped call is ambiguous...
-    // (`resolve_sole_open` runs before the request's task is looked at, so an empty one is enough.)
+    // Now three workspaces are registered, the default among them, so an unselected call is not
+    // ambiguous: it lands in the default (task default-workspace). It reaches the handler, which
+    // refuses the empty task, rather than failing in `resolve_sole_open`.
     let err = client
         .get_notes(pb::GetNotesRequest {
             task: None,
@@ -230,18 +231,16 @@ async fn a_second_directory_auto_registers_then_scoped_calls_need_a_selector() {
         })
         .await
         .unwrap_err();
-    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
 
-    // ...except `Health`, which never fails (commit 204448c): unselected, it answers the device
-    // totals alone, with none of one workspace's own details (`documents` stays 0).
+    // `Health` unselected answers for the default workspace too, with the device totals beside it.
     let totals = client
         .health(pb::HealthRequest { workspace: None })
         .await
         .unwrap_or_else(|e| panic!("selector-less health with two workspaces open: {e}"))
         .into_inner();
-    assert_eq!(totals.workspaces_registered, 2);
-    assert_eq!(totals.workspaces_ready, 2);
-    assert_eq!(totals.documents, 0);
+    assert_eq!(totals.workspaces_registered, 3, "two here plus the default");
+    assert_eq!(totals.workspaces_ready, 3);
 
     // ...but either one still resolves correctly by its own path selector.
     for dir in [&dir_a, &dir_b] {
@@ -255,13 +254,13 @@ async fn a_second_directory_auto_registers_then_scoped_calls_need_a_selector() {
         assert_eq!(resp.documents, 1);
     }
 
-    // registry.db now really does carry both roots (not just an in-memory illusion).
+    // registry.db now really does carry every root (not just an in-memory illusion).
     let registry = WorkspaceRegistry::open(&daemon.registry_db())
         .unwrap_or_else(|e| panic!("reopen registry: {e}"));
     assert_eq!(
         registry.list().unwrap_or_else(|e| panic!("{e}")).len(),
-        2,
-        "both the pre-registered and the auto-registered workspace persisted"
+        3,
+        "the pre-registered, the auto-registered and the default workspace persisted"
     );
 }
 
@@ -364,8 +363,8 @@ async fn the_registry_survives_a_real_process_restart() {
         .workspaces;
     assert_eq!(
         listed.len(),
-        2,
-        "both workspaces survived the restart: {listed:?}"
+        3,
+        "both workspaces and the default survived the restart: {listed:?}"
     );
 
     for dir in [&dir_a, &dir_b] {
@@ -383,4 +382,41 @@ async fn the_registry_survives_a_real_process_restart() {
             .into_inner();
         assert_eq!(resp.documents, 1);
     }
+}
+
+/// Task default-workspace: a fresh profile has a default workspace with an empty `todo.txt`, and an
+/// `Apply` that names no workspace lands in it, not in any other registered one.
+#[tokio::test]
+async fn a_selector_less_add_lands_in_the_default_workspace() {
+    let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let default_todo = registry_dir.path().join("default").join("todo.txt");
+    let (_daemon, mut client) = GlobalDaemon::start(registry_dir).await;
+    // A selector-less call promotes the default and waits for its open.
+    client
+        .apply(pb::ApplyRequest {
+            path: "todo.txt".into(),
+            mutations: vec![pb::Mutation {
+                kind: Some(pb::mutation::Kind::Add(pb::Add {
+                    line: "first task".into(),
+                })),
+            }],
+            ..pb::ApplyRequest::default()
+        })
+        .await
+        .unwrap_or_else(|e| panic!("selector-less apply: {e}"));
+    let text = std::fs::read_to_string(&default_todo).unwrap_or_else(|e| panic!("read: {e}"));
+    assert!(text.contains("first task"), "{text:?}");
+
+    let listed = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .unwrap_or_else(|e| panic!("workspace_list: {e}"))
+        .into_inner()
+        .workspaces;
+    assert_eq!(
+        listed.len(),
+        1,
+        "only the default exists on a fresh profile"
+    );
+    assert!(listed[0].is_default);
 }
