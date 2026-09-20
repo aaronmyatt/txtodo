@@ -13,7 +13,7 @@ Priority is low (D), set 2026-09-20. Two things stood in the way of real cross-n
   acceptance line does that.
 - An unstable relay identity (2026-09-20). `txtodod` started with no `--key-store` (how launchd and
   the desktop start it) mints a fresh relay identity on every start, so an `access.allowlist` entry
-  goes stale at each restart. The fix is the root Decide on the default `--key-store`. Do not seed
+  goes stale at each restart. The fix is decided (A, 2026-09-20): default `--key-store` to auto; see `tasks/relay-id-keystore`. Do not seed
   the allowlist before it lands.
 
 Accounts is deferred (2026-09-20; see the root Decide on who needs to enrol). Only phase 1, the
