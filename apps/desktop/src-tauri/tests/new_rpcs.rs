@@ -117,6 +117,7 @@ async fn add_task_and_get_id(client: &mut DaemonClient, line: &str) -> String {
             }],
             agent: None,
             workspace: None,
+            ..pb::ApplyRequest::default()
         })
         .await
         .unwrap_or_else(|e| panic!("apply: {e}"));
@@ -302,6 +303,7 @@ async fn op_log_drains_the_stream_into_a_vec() {
             }],
             agent: None,
             workspace: None,
+            ..pb::ApplyRequest::default()
         })
         .await
         .expect("apply should reach the daemon");

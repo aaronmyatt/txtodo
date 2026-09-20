@@ -271,6 +271,9 @@ async fn apply_inner(
         mutations: mutations.into_iter().map(pb::Mutation::from).collect(),
         agent: None, // unset = the user on this device
         workspace: None,
+        // The activity log tells a desktop change from a CLI or TUI one (task op-source).
+        source: "desktop".to_owned(),
+        dry_run: false,
     };
     let resp = client.apply(req).await.map_err(|e| e.apply_text())?;
     Ok(ApplyResultDto::from(resp))

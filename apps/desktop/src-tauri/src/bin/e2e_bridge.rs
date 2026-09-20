@@ -288,6 +288,8 @@ async fn cmd_apply(client: &mut DaemonClient, args: Value) -> Result<Value, ApiE
         mutations: r.mutations.into_iter().map(pb::Mutation::from).collect(),
         agent: None,
         workspace: None,
+        source: "desktop".to_owned(),
+        dry_run: false,
     };
     let resp = client
         .apply(pb_req)
