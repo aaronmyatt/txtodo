@@ -2,7 +2,13 @@
 //! `gen/schemas/` for editor autocompletion. Ref: https://v2.tauri.app/reference/config/
 use std::path::PathBuf;
 
+// The release date every txtodo binary shows (task version-info), shared with the other crates'
+// build scripts: `build-support/buildinfo.rs` sets `TXTODO_RELEASE_DATE` for `env!`.
+#[path = "../../../build-support/buildinfo.rs"]
+mod buildinfo;
+
 fn main() {
+    buildinfo::emit();
     ensure_sidecar_placeholder();
     tauri_build::build()
 }

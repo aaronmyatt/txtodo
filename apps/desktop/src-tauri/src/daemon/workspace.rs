@@ -36,4 +36,16 @@ impl DaemonClient {
             .into_inner()
             .workspaces)
     }
+
+    /// The daemon's own version and release date: a selector-less `Health`, which the daemon
+    /// answers at once with the device totals even while workspaces are still opening, so this
+    /// never waits on an open (task version-info). An older daemon sends an empty date.
+    pub async fn daemon_build(&mut self) -> Result<(String, String), DaemonError> {
+        let health = self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner();
+        Ok((health.version, health.release_date))
+    }
 }
