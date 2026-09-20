@@ -62,7 +62,9 @@ impl McpServer {
         skip_all,
         fields(tool = "todo_list", principal = %self.backend.principal())
     )]
-    #[tool(description = "List tasks, filtered by an optional query and file, capped at limit.")]
+    #[tool(
+        description = "List tasks, filtered by an optional query, done (true or false) and file, capped at limit."
+    )]
     pub async fn todo_list(
         &self,
         Parameters(args): Parameters<ListArgs>,

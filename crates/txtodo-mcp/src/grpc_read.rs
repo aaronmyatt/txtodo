@@ -88,7 +88,7 @@ pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<T
     let path = args.file.clone().unwrap_or_else(|| DEFAULT_TODO.to_owned());
     let doc = get_file_doc(client, &path, args.workspace.clone()).await?;
     let mut rows = doc.rows();
-    rows.retain(|r| !r.raw.trim().is_empty());
+    rows.retain(|r| !r.raw.trim().is_empty() && keeps_done(args.done, r.done));
     if let Some(q) = &args.query {
         rows.retain(|r| parse::matches_query(&r.raw, q));
     }
@@ -96,6 +96,11 @@ pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<T
         rows.truncate(limit as usize);
     }
     Ok(rows)
+}
+
+/// `ListArgs.done`: absent keeps every row, else only rows whose completion matches it.
+fn keeps_done(wanted: Option<bool>, row_done: bool) -> bool {
+    wanted.is_none_or(|done| done == row_done)
 }
 
 /// `todo_search`: the same matching as `todo_list`'s `query` and `txtodo list` (`parse::matches_query`).
@@ -111,6 +116,7 @@ pub async fn search(
         client,
         ListArgs {
             query: None,
+            done: None,
             file,
             limit: None,
             workspace,
@@ -210,6 +216,13 @@ pub async fn raw_read(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_done_filter_keeps_open_done_or_both() {
+        assert!(keeps_done(None, true) && keeps_done(None, false));
+        assert!(keeps_done(Some(true), true) && !keeps_done(Some(true), false));
+        assert!(keeps_done(Some(false), false) && !keeps_done(Some(false), true));
+    }
 
     #[test]
     fn row_at_line_finds_and_reports_a_missing_line() {

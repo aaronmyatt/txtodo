@@ -22,8 +22,15 @@ pub struct ListArgs {
     /// Whitespace-separated terms with `txtodo list`'s matching: every term must match, a term is
     /// a case-insensitive substring of the line (`+project` and `@context` included), and a
     /// leading `-` excludes lines containing the rest — see [`crate::parse::matches_query`]. The
-    /// design §8 query language (`txtodo-query`) is still a stub.
+    /// design §8 query language (`txtodo-query`) is still a stub. `done` and `not done` are plain
+    /// words here, as in `txtodo list`; filter on completion with the `done` field below.
     pub query: Option<String>,
+    /// `true`: only completed tasks. `false`: only open ones. Absent: both. This replaces the
+    /// `done` / `not done` query words the old stub matcher understood, which became ordinary
+    /// substrings when the query took `txtodo list`'s semantics (code review 2026-09-20, finding
+    /// 8): `query: "not done +work"` then returned almost nothing, silently.
+    #[serde(default)]
+    pub done: Option<bool>,
     /// Workspace-relative ref path; defaults to `todo.txt`.
     pub file: Option<RefPath>,
     /// Caps the number of rows returned; 0/absent = daemon default.

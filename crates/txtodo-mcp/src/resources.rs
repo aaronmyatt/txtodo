@@ -146,6 +146,7 @@ pub(crate) async fn rows_with_token(
     let mut rows = backend
         .list(ListArgs {
             query: Some(token.query()),
+            done: None,
             file: None,
             limit: None,
             workspace,
