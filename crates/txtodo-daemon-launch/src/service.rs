@@ -4,6 +4,7 @@
 //! conversion). Nothing here prints — this is a library, and `ensure_daemon`'s own best-effort
 //! install/start call (`spawn.rs`) must stay silent on the hot path.
 
+use crate::service_state::{launchd_job_is_up, systemd_state_is_loaded};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -312,8 +313,9 @@ fn launchd_start_commands(domain: &str, r: &Rendered, loaded: bool) -> Vec<Vec<S
     ]]
 }
 
-/// Whether the service manager has this unit loaded and running or starting: launchd has the job
-/// registered, or systemd reports it `active`/`activating`. False when service control is disabled
+/// Whether the service manager has this unit running or starting: launchd reports the job's state
+/// as running (a job that is loaded but exited 0 is not: `service_state::launchd_job_is_up`), or
+/// systemd reports it `active`/`activating`. False when service control is disabled
 /// (`TXTODO_NO_SERVICE=1`) or the manager cannot be asked. `ensure_daemon` waits for a unit that is
 /// loaded — it is on its way up — and spawns its own daemon for one that is merely installed, such
 /// as after `txtodo daemon stop`, which used to make every client wait out its full timeout.
@@ -322,18 +324,15 @@ pub fn is_loaded(r: &Rendered) -> bool {
         return false;
     }
     if cfg!(target_os = "macos") {
-        return launchd_has(&format!("gui/{}/{}", uid(), r.label));
+        return Command::new("launchctl")
+            .args(["print", &format!("gui/{}/{}", uid(), r.label)])
+            .output()
+            .is_ok_and(|o| launchd_job_is_up(&String::from_utf8_lossy(&o.stdout)));
     }
     Command::new("systemctl")
         .args(["--user", "is-active", &format!("{}.service", r.label)])
         .output()
         .is_ok_and(|o| systemd_state_is_loaded(&String::from_utf8_lossy(&o.stdout)))
-}
-
-/// `systemctl is-active` prints one word; these two mean the unit is up or on its way up.
-/// https://www.freedesktop.org/software/systemd/man/latest/systemctl.html#is-active%20PATTERN%E2%80%A6
-fn systemd_state_is_loaded(stdout: &str) -> bool {
-    matches!(stdout.trim(), "active" | "activating")
 }
 
 /// Stops and unloads the service.

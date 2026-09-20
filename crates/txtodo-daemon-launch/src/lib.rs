@@ -30,6 +30,7 @@
 mod autostart;
 mod binary_path;
 pub mod service;
+mod service_state;
 mod spawn;
 
 pub use autostart::{autostart_disabled, service_disabled};
