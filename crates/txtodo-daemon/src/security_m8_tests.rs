@@ -22,7 +22,7 @@ use txtodo_sync::{
     seal_ops,
 };
 
-use txtodo_telemetry::testing::{LogSink, capturing_dispatch};
+use txtodo_telemetry::testing::{LogSink, capturing_dispatch, pin_global_trace_floor};
 
 use crate::bundle_export::{ExportCtx, export_into};
 use crate::bundle_import::{ImportCtx, import_from_chunks};
@@ -204,6 +204,11 @@ async fn bundle_export_import_cycle(passphrase: &[u8], plaintext_line: &str) -> 
 
 fn assert_no_secret_leaked(sink: &LogSink, secrets: &[(&str, &[u8])]) {
     let logs = sink.captured_text();
+    // Without this, a run that captured nothing passes every check below and proves nothing.
+    assert!(
+        !logs.is_empty(),
+        "sanity: the relay, file-carrier and bundle round actually logged something"
+    );
     for (name, bytes) in secrets {
         assert!(
             !bytes.is_empty(),
@@ -220,6 +225,9 @@ fn assert_no_secret_leaked(sink: &LogSink, secrets: &[(&str, &[u8])]) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle() {
+    // Same reason as `lan_session_security_tests.rs`: sibling tests in this binary log with no
+    // subscriber of their own (task tracing-set-default-audit).
+    pin_global_trace_floor();
     let sink = LogSink::new();
     let dispatch = capturing_dispatch(sink.clone(), SERVICE);
     let _guard = tracing::dispatcher::set_default(&dispatch);

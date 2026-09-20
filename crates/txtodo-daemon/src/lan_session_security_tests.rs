@@ -15,7 +15,7 @@ use txtodo_sync::{
     Frame, GroupId, GroupKey, GroupKeys, KeyId, Link, Message, OriginRange, PROTOCOL_VERSION,
     SealFor, channel_link_pair, seal,
 };
-use txtodo_telemetry::testing::{LogSink, capturing_dispatch};
+use txtodo_telemetry::testing::{LogSink, capturing_dispatch, pin_global_trace_floor};
 
 use crate::clock::{Clock, FakeClock};
 use crate::lan_session::drive_session;
@@ -165,6 +165,10 @@ fn assert_no_secret_leaked(sink: &LogSink, group_key: &[u8], device_statics: &[V
 
 #[tokio::test(flavor = "multi_thread")]
 async fn no_secrets_appear_in_logs_across_a_real_pair_and_sync() {
+    // 247 other tests share this binary and log with no subscriber of their own; without the pin
+    // one of them can leave a callsite cached as unwanted and this test captures nothing
+    // (task tracing-set-default-audit).
+    pin_global_trace_floor();
     let sink = LogSink::new();
     let dispatch = capturing_dispatch(sink.clone(), SERVICE);
     let clock = Arc::new(FakeClock::new(1_000));
