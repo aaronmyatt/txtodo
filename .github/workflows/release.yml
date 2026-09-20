@@ -103,6 +103,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # The date every binary shows beside its version (task version-info). The tagged commit's
+      # own date, so two builds of one tag agree; build-support/buildinfo.rs reads the variable.
+      # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
+      - name: release date from the tagged commit
+        shell: bash
+        run: echo "TXTODO_RELEASE_DATE=$(git show -s --format=%cs HEAD)" >> "$GITHUB_ENV"
       # rust-toolchain.toml pins 1.95.0; the action honours it (same as ci.yml).
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -197,7 +203,12 @@ jobs:
         run: |
           set -euo pipefail
           for f in dist/*; do
-            "./$f" --version
+            out=$("./$f" --version)
+            echo "$out"
+            case "$out" in
+              *"($TXTODO_RELEASE_DATE)"*) ;;
+              *) echo "::error::$f --version does not show the release date $TXTODO_RELEASE_DATE"; exit 1 ;;
+            esac
           done
 
       - uses: actions/upload-artifact@v4
@@ -230,6 +241,12 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      # The date every binary shows beside its version (task version-info). The tagged commit's
+      # own date, so two builds of one tag agree; build-support/buildinfo.rs reads the variable.
+      # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
+      - name: release date from the tagged commit
+        shell: bash
+        run: echo "TXTODO_RELEASE_DATE=$(git show -s --format=%cs HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
