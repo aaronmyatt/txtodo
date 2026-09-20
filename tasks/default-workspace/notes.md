@@ -36,6 +36,15 @@ workspace).
 - Nothing synced holds a path: `FilePath` is workspace-relative with `/` separators, and offers
   carry a name. The audit line checks bundle export and notes too.
 
+## Decided
+
+- 2026-09-20, location: A. The default workspace lives under txtodo's own data dir
+  (`.../txtodo/default`, beside `registry.db`), resolved per OS by `txtodo-workspace-paths`. Not a
+  visible folder in the home directory. Cost accepted: Finder does not show it, and cleaning
+  `~/.local/share` by hand would delete real tasks, so `txtodo workspace default` prints the path
+  and `doctor` reports it. This unblocks the `workspace-paths: default_workspace_dir(env)` line.
+- Still waiting: identity across devices (reserved id or offer/accept) and what no `--dir` means.
+
 ## Open
 
 - Case-insensitive filesystems (macOS default, Windows) against case-sensitive Linux: `ref:` slugs
