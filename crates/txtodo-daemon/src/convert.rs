@@ -22,6 +22,35 @@ pub fn parse_path(s: &str) -> Result<FilePath, Status> {
 /// An actor error onto the wire status it deserves. Lives here, not in `server.rs`, purely to
 /// keep that file within its line budget.
 pub(crate) fn status_of(e: ActorError) -> Status {
+    let details = match &e {
+        ActorError::Mutation(m) => Some((m.line(), m.spec_rule())),
+        _ => None,
+    };
+    let mut status = status_kind(e);
+    if let Some((line, rule)) = details {
+        attach_details(&mut status, line, rule);
+    }
+    status
+}
+
+/// Metadata key carrying the 1-based line a refused mutation is about (task apply-dry-run:
+/// structured errors), the same in a dry run and a real apply. `txtodo-mcp` reads the same literal.
+pub const ERROR_LINE_KEY: &str = "x-txtodo-error-line";
+/// Metadata key carrying the `specs/todotxt.abnf` rule a refusal enforces.
+pub const ERROR_RULE_KEY: &str = "x-txtodo-error-rule";
+
+fn attach_details(status: &mut Status, line: Option<u32>, rule: Option<&'static str>) {
+    use tonic::metadata::{Ascii, MetadataValue};
+    let ascii = |s: &str| s.parse::<MetadataValue<Ascii>>().ok();
+    if let Some(v) = line.and_then(|n| ascii(&n.to_string())) {
+        status.metadata_mut().insert(ERROR_LINE_KEY, v);
+    }
+    if let Some(v) = rule.and_then(ascii) {
+        status.metadata_mut().insert(ERROR_RULE_KEY, v);
+    }
+}
+
+fn status_kind(e: ActorError) -> Status {
     match e {
         ActorError::Mutation(MutationError::Stale { .. } | MutationError::StaleBase) => {
             Status::failed_precondition(e.to_string())
@@ -233,7 +262,25 @@ pub(crate) fn applied_of(a: crate::handle::Applied) -> pb::ApplyResponse {
         hash: a.hash.to_vec(),
         hlc_wall_ms: a.hlc.wall_ms,
         hlc_counter: u32::from(a.hlc.counter),
+        diff: String::new(),
     }
+}
+
+/// A dry run as the wire sees it: no clock stamp, since nothing was ticked, and the diff set.
+pub(crate) fn preview_of(p: crate::handle::Preview) -> pb::ApplyResponse {
+    pb::ApplyResponse {
+        applied: p.applied,
+        hash: p.hash.to_vec(),
+        hlc_wall_ms: 0,
+        hlc_counter: 0,
+        diff: p.diff,
+    }
+}
+
+/// The client name from `ApplyRequest.source`: empty is "not said", anything else is kept as the
+/// client wrote it (the store cuts it to `MAX_SOURCE_BYTES`).
+pub(crate) fn source_of(source: &str) -> Option<String> {
+    (!source.is_empty()).then(|| source.to_owned())
 }
 
 /// A stored op as the wire sees it.

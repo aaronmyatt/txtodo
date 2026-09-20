@@ -20,6 +20,7 @@ pub const ACTOR_MAILBOX_CAP: usize = 256;
 pub const WATCH_CAP: usize = 64;
 
 pub use crate::contents::Contents;
+pub use crate::handle_apply::Preview;
 
 /// What an Apply or Undo produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,8 +133,20 @@ pub enum ActorMsg {
         mutations: Vec<Mutation>,
         /// Who asks.
         principal: Principal,
+        /// Which client asks (task op-source); stamped on the ops in this device's log only.
+        source: Option<String>,
         /// Result channel.
         reply: oneshot::Sender<Result<Applied, ActorError>>,
+    },
+    /// The same mutations, run through the real path and stopped before the commit (task
+    /// apply-dry-run): no op, no write, no clock tick.
+    Preview {
+        /// What to do, in order.
+        mutations: Vec<Mutation>,
+        /// Who asks.
+        principal: Principal,
+        /// Result channel.
+        reply: oneshot::Sender<Result<Preview, ActorError>>,
     },
     /// Current bytes.
     Get {
@@ -295,20 +308,6 @@ impl ActorHandle {
     /// Tells the actor the file changed on disk.
     pub async fn external_change(&self) -> Result<(), ActorError> {
         self.send(ActorMsg::ExternalChange).await
-    }
-
-    /// Applies mutations.
-    pub async fn apply(
-        &self,
-        mutations: Vec<Mutation>,
-        principal: Principal,
-    ) -> Result<Applied, ActorError> {
-        self.ask(|reply| ActorMsg::Apply {
-            mutations,
-            principal,
-            reply,
-        })
-        .await?
     }
 
     /// Current bytes and hash.

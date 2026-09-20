@@ -169,6 +169,32 @@ impl fmt::Display for MutationError {
 
 impl std::error::Error for MutationError {}
 
+impl MutationError {
+    /// The 1-based line the refusal is about, when it is about one (task apply-dry-run: structured
+    /// errors). Sent to a client as `x-txtodo-error-line`.
+    pub fn line(&self) -> Option<u32> {
+        let n = match self {
+            MutationError::NoLine(n) | MutationError::Blank(n) => *n,
+            MutationError::Stale { line_number, .. } => *line_number,
+            _ => return None,
+        };
+        u32::try_from(n).ok()
+    }
+
+    /// The rule of `specs/todotxt.abnf` the refusal enforces, when one applies. Sent to a client as
+    /// `x-txtodo-error-rule`. A stale line or a limit is not a grammar rule, so it names none.
+    pub fn spec_rule(&self) -> Option<&'static str> {
+        match self {
+            MutationError::Blank(_) => Some("specs/todotxt.abnf#blank"),
+            MutationError::NoLine(_) | MutationError::NotATask(_) => {
+                Some("specs/todotxt.abnf#line")
+            }
+            MutationError::IdChanged(_) => Some("specs/todotxt.abnf#id-tag"),
+            _ => None,
+        }
+    }
+}
+
 /// Resolves a `TaskRef` against the state: the entry index and its id. `task.task_id` (parsed by
 /// the caller from the last text it read) is a staleness guard against a concurrent edit; only
 /// meaningful in tagged mode, where that text is really the daemon's own id — a client's parse of

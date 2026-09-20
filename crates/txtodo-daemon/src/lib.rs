@@ -4,6 +4,7 @@
 
 mod activity;
 pub mod actor;
+mod actor_apply;
 mod actor_mirror;
 mod apply_route;
 pub mod args_parse;
@@ -37,6 +38,7 @@ pub mod file_carrier;
 pub mod global_service;
 mod global_service_helpers;
 pub mod handle;
+mod handle_apply;
 mod health_grpc;
 pub mod history;
 mod id_strip;
@@ -103,6 +105,7 @@ pub mod textedit;
 mod tokens;
 mod tree;
 pub mod tree_dirty;
+mod unified_diff;
 pub mod walker;
 mod watch_forward;
 pub mod watch_task;
@@ -157,9 +160,9 @@ mod migrate_sidecar_tests;
 #[cfg(test)]
 mod mirror_tests;
 #[cfg(test)]
-mod mutation_tests;
-#[cfg(test)]
 mod mutation_reopen_tests;
+#[cfg(test)]
+mod mutation_tests;
 #[cfg(test)]
 mod notes_actor_tests;
 #[cfg(test)]
@@ -179,7 +182,11 @@ mod state_goldens;
 #[cfg(test)]
 mod state_tests;
 #[cfg(test)]
+mod status_details_tests;
+#[cfg(test)]
 mod sync_ops_tests;
+#[cfg(test)]
+mod unified_diff_tests;
 #[cfg(test)]
 mod workspace_catalog_load_tests;
 #[cfg(test)]

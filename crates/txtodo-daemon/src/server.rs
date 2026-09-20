@@ -54,7 +54,7 @@ impl TxtodoService {
 // `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` in progress.rs,
 // `status_of`/`applied_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for
 // the line budget.
-use crate::convert::{applied_of, status_of};
+use crate::convert::{applied_of, preview_of, source_of, status_of};
 use crate::watch_forward::forward_changes;
 
 #[tonic::async_trait]
@@ -136,7 +136,12 @@ impl Txtodo for TxtodoService {
             .into_iter()
             .map(parse_mutation)
             .collect::<Result<Vec<_>, _>>()?;
-        let a = self.route_apply(path, mutations, principal).await?;
+        if req.dry_run {
+            let p = self.route_preview(path, mutations, principal).await?;
+            return Ok(Response::new(preview_of(p)));
+        }
+        let source = source_of(&req.source);
+        let a = self.route_apply(path, mutations, principal, source).await?;
         Ok(Response::new(applied_of(a)))
     }
 

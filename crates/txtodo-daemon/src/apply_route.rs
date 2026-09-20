@@ -5,7 +5,7 @@
 //! — this crate does not support that batch shape.
 
 use crate::convert::status_of;
-use crate::handle::{ActorError, Applied};
+use crate::handle::{ActorError, Applied, Preview};
 use crate::move_coordinator;
 use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::server::TxtodoService;
@@ -19,12 +19,13 @@ impl TxtodoService {
         path: FilePath,
         mutations: Vec<Mutation>,
         principal: Principal,
+        source: Option<String>,
     ) -> Result<Applied, Status> {
         match <[Mutation; 1]>::try_from(mutations) {
             Ok([Mutation::Move { task, to }]) => self.apply_move(&path, task, to, principal).await,
             Ok([other]) => self
                 .actor_by_path(&path)?
-                .apply(vec![other], principal)
+                .apply_from(vec![other], principal, source)
                 .await
                 .map_err(status_of),
             Err(mutations) if mutations.iter().any(|m| matches!(m, Mutation::Move { .. })) => {
@@ -34,10 +35,30 @@ impl TxtodoService {
             }
             Err(mutations) => self
                 .actor_by_path(&path)?
-                .apply(mutations, principal)
+                .apply_from(mutations, principal, source)
                 .await
                 .map_err(status_of),
         }
+    }
+
+    /// The dry run of `route_apply` (task apply-dry-run): the addressed document's own actor plans
+    /// the batch and returns its diff. A cross-file `Move` is refused, since it coordinates two
+    /// actors and a directory and has no single diff to show.
+    pub(crate) async fn route_preview(
+        &self,
+        path: FilePath,
+        mutations: Vec<Mutation>,
+        principal: Principal,
+    ) -> Result<Preview, Status> {
+        if mutations.iter().any(|m| matches!(m, Mutation::Move { .. })) {
+            return Err(status_of(ActorError::Mutation(MutationError::Unsupported(
+                "a dry run of a cross-file Move",
+            ))));
+        }
+        self.actor_by_path(&path)?
+            .preview(mutations, principal)
+            .await
+            .map_err(status_of)
     }
 
     /// The cross-file half of `route_apply`: resolves both actors and moves the task and its

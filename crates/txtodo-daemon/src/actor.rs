@@ -6,17 +6,16 @@ use crate::clock::Clock;
 use crate::expected::{ExpectedWrites, Hash, hex8};
 use crate::external::tracing_stub_error;
 use crate::handle::{
-    ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Applied, Change, Contents, WATCH_CAP,
+    ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Change, Contents, WATCH_CAP,
 };
 use crate::mirror::Mirror;
-use crate::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
 use crate::state::DocState;
 use crate::tree_dirty::TreeDirty;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, mpsc};
 use txtodo_core::File;
-use txtodo_model::{DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal, TaskId};
+use txtodo_model::{DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, Principal};
 use txtodo_store::{Projection, Store};
 
 /// A checkpoint is written every this many ops (design §4.4 "every N ops").
@@ -62,6 +61,7 @@ fn actor_msg_kind(msg: &ActorMsg) -> &'static str {
     match msg {
         ActorMsg::ExternalChange => "external_change",
         ActorMsg::Apply { .. } => "apply",
+        ActorMsg::Preview { .. } => "preview",
         ActorMsg::Get { .. } => "get",
         ActorMsg::Progress { .. } => "progress",
         ActorMsg::Subscribe { .. } => "subscribe",
@@ -169,14 +169,7 @@ impl FileActor {
                     tracing_stub_error(&self.cfg.path, &e);
                 }
             }
-            ActorMsg::Apply {
-                mutations,
-                principal,
-                reply,
-            } => {
-                tracing::debug!(mutations = mutations.len(), "actor_apply");
-                let _ = reply.send(self.on_apply(mutations, principal));
-            }
+            batch @ (ActorMsg::Apply { .. } | ActorMsg::Preview { .. }) => self.handle_batch(batch),
             ActorMsg::Get { reply } => {
                 let _ = reply.send(Contents {
                     bytes: self.projection.clone(),
@@ -221,48 +214,6 @@ impl FileActor {
         self.store
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    fn on_apply(
-        &mut self,
-        mutations: Vec<Mutation>,
-        principal: Principal,
-    ) -> Result<Applied, ActorError> {
-        if mutations.len() > MAX_MUTATIONS_PER_APPLY {
-            return Err(MutationError::TooMany(mutations.len()).into());
-        }
-        self.guard_batch(&mutations)?;
-        if let Some(replaced) = self.replace_batch(&mutations, &principal) {
-            return replaced;
-        }
-        let mut next = self.state.clone();
-        let mut ops = Vec::new();
-        let clock = Arc::clone(&self.clock);
-        let mut mint = || TaskId::new(clock.new_ulid());
-        let hlc = self.tick()?;
-        for m in &mutations {
-            for kind in mutation_ops(&next, m, &mut mint)? {
-                let op = self.stamped(kind, hlc, &principal);
-                next.apply(&op)?;
-                ops.push(op);
-            }
-        }
-        let bytes = next.to_bytes();
-        let write = bytes != self.projection;
-        let change = self.commit(Commit {
-            ops,
-            next,
-            bytes,
-            write,
-            snapshot: false,
-            tail: CommitTail::default(),
-        })?;
-        let applied = u32::try_from(change.ops.len()).unwrap_or(u32::MAX);
-        Ok(Applied {
-            applied,
-            hash: change.hash,
-            hlc: self.hlc,
-        })
     }
 
     /// One HLC tick per batch, before it applies; a failed batch has harmlessly spent a tick.

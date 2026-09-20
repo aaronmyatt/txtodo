@@ -161,6 +161,7 @@ fn applied_of(a: Applied) -> pb::ApplyResponse {
         hash: a.hash.to_vec(),
         hlc_wall_ms: a.hlc.wall_ms,
         hlc_counter: u32::from(a.hlc.counter),
+        diff: String::new(),
     }
 }
 
