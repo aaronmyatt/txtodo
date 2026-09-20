@@ -24,8 +24,10 @@ The daemon already knows each line's id (`DocState` holds an `Entry::Task { id, 
   actor turn, so they always describe the same lines. `Checkout` (a historical render) sends none.
 - MCP: `get_file_text` becomes a `FileDoc { text, task_ids }`; rows take the daemon's id first and
   the text tag only as the fallback. `find_by_id` looks in the ids first.
-- Desktop: `FileContentsDto.task_ids` to the frontend; `DetailView` and `rawMode` take the id of
-  line N from it, the regex stays as the fallback.
+- Desktop: `FileContentsDto.task_ids` to the frontend; `DetailView` takes the id of line N from it
+  (`todotxt/taskIds.ts::taskIdAt`), the regex stays as the fallback. `rawMode.ts` is left alone:
+  its problem is matching an edited buffer line to a baseline line, which ids on the baseline do
+  not solve. That is `tasks/desktop-reorder-propagates` (save with `Replace`).
 - Slice fence: proto, daemon, mcp, desktop land as four commits, in that order.
 
 ## Rejected
