@@ -19,6 +19,7 @@ use txtodo_daemon::device_identity::DeviceIdentity;
 use txtodo_daemon::device_relay::DeviceRelay;
 use txtodo_daemon::file_carrier::DeviceFileCarrier;
 use txtodo_daemon::pidfile::{PidError, PidFile};
+use txtodo_daemon::runtime_exit::{SHUTDOWN_GRACE, block_on_then_shut_down};
 use txtodo_daemon::serve;
 use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use txtodo_daemon::workspace_registry::WorkspaceRegistry;
@@ -164,7 +165,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(run(args)) {
+    match block_on_then_shut_down(rt, run(args), SHUTDOWN_GRACE) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("txtodod: {e}");

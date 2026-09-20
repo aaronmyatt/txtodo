@@ -88,6 +88,7 @@ mod relay_fallback;
 mod relay_fallback_tests;
 mod relay_state;
 mod replace;
+pub mod runtime_exit;
 pub mod serve;
 pub mod server;
 mod server_actors;
