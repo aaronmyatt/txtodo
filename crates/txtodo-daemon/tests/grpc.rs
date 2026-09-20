@@ -74,6 +74,7 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
         mutations: vec![add(line)],
         agent: None,
         workspace: None,
+        ..pb::ApplyRequest::default()
     };
     client
         .apply(req)

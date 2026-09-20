@@ -76,6 +76,7 @@ fn apply_req(kinds: Vec<mutation::Kind>) -> pb::ApplyRequest {
             .collect(),
         agent: None,
         workspace: None,
+        ..pb::ApplyRequest::default()
     }
 }
 

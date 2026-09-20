@@ -116,6 +116,7 @@ async fn the_id_from_get_file_addresses_the_task_for_apply_and_notes() {
             }],
             agent: None,
             workspace: None,
+            ..pb::ApplyRequest::default()
         })
         .await
         .unwrap();

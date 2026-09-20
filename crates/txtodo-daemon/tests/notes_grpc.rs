@@ -64,6 +64,7 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
         }],
         agent: None,
         workspace: None,
+        ..pb::ApplyRequest::default()
     };
     client
         .apply(req)

@@ -64,6 +64,7 @@ async fn apply(client: &mut Client, path: &str, kind: mutation::Kind) -> pb::App
         mutations: vec![pb::Mutation { kind: Some(kind) }],
         agent: None,
         workspace: None,
+        ..pb::ApplyRequest::default()
     };
     client
         .apply(req)

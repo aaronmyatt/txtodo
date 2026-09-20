@@ -186,6 +186,7 @@ fn request(kind: mutation::Kind) -> pb::ApplyRequest {
         mutations: vec![pb::Mutation { kind: Some(kind) }],
         agent: None,
         workspace: None,
+        ..pb::ApplyRequest::default()
     }
 }
 

@@ -55,17 +55,21 @@ fn moved_after(ops: &[OpKind]) -> Option<Option<TaskId>> {
 
 #[test]
 fn a_reopened_line_goes_above_the_first_done_line() {
-    let s = state(&[
-        open("open one", A),
-        done("done one", B),
-        done("target", C),
-    ]);
+    let s = state(&[open("open one", A), done("done one", B), done("target", C)]);
     let ops = reopen(&s, 3);
-    assert_eq!(moved_after(&ops), Some(Some(id(A))), "right after the open block");
+    assert_eq!(
+        moved_after(&ops),
+        Some(Some(id(A))),
+        "right after the open block"
+    );
     assert!(
         ops.iter().any(|op| matches!(
             op,
-            OpKind::SetField { field: Field::Completed, value: FieldValue::Bool(false), .. }
+            OpKind::SetField {
+                field: Field::Completed,
+                value: FieldValue::Bool(false),
+                ..
+            }
         )),
         "the x is cleared: {ops:?}"
     );
