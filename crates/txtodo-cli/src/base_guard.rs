@@ -17,6 +17,7 @@ fn addressed(kind: &mutation::Kind) -> Option<&pb::TaskRef> {
         mutation::Kind::Move(m) => m.task.as_ref(),
         mutation::Kind::Delete(m) => m.task.as_ref(),
         mutation::Kind::MoveToEnd(m) => m.task.as_ref(),
+        mutation::Kind::Reopen(m) => m.task.as_ref(),
         // Two lines: report one that lacks an id if either does, since that is the one the guard
         // exists for.
         mutation::Kind::MoveBefore(m) => [m.task.as_ref(), m.before.as_ref()]
@@ -104,6 +105,19 @@ mod tests {
             !leads_with_guard(&guarded(&HASH, append)),
             "an append addresses no line"
         );
+    }
+
+    #[test]
+    fn a_reopen_by_line_number_is_led_by_the_guard() {
+        let reopen = vec![pb::Mutation {
+            kind: Some(mutation::Kind::Reopen(pb::Reopen {
+                task: Some(pb::TaskRef {
+                    line_number: 3,
+                    task_id: String::new(),
+                }),
+            })),
+        }];
+        assert!(leads_with_guard(&guarded(&HASH, reopen)));
     }
 
     #[test]

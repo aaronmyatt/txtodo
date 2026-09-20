@@ -222,6 +222,9 @@ impl Daemon {
             mutations,
             agent: None,
             workspace: self.selector.clone(),
+            // The activity log tells a CLI change from a TUI or desktop one (task op-source).
+            source: "cli".to_owned(),
+            dry_run: false,
         };
         let rep = self
             .rt
