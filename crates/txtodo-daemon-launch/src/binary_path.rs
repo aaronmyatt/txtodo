@@ -1,5 +1,10 @@
 //! Which `txtodod` a client launches or writes into a service unit, and which socket the boot unit
 //! owns — split out of `spawn.rs` for its file budget.
+//!
+//! The `#[cfg(any(unix, test))]` helpers are called only from `spawn.rs`'s `#[cfg(unix)] mod
+//! unix_impl`, so a Windows lib build would flag them `dead_code` (an error under CI's clippy
+//! `-D warnings`). `test` keeps them compiled for this file's tests on every platform.
+//! Ref: https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg-attribute
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -11,6 +16,7 @@ use std::path::{Path, PathBuf};
 /// The `$PATH` copy alone is unsafe: it can be a symlink into a checkout's `target/release`, so a
 /// rebuild swaps the binary under a running daemon, and an ad-hoc spawn or a repaired unit points
 /// at it (root todo id:01M2WX72DCYZK18VFRCX4YC5Y1).
+#[cfg(any(unix, test))]
 pub(crate) fn resolve_binary(daemon_bin: Option<&PathBuf>) -> Option<PathBuf> {
     if let Some(bin) = daemon_bin {
         return Some(bin.clone());
@@ -23,6 +29,7 @@ pub(crate) fn resolve_binary(daemon_bin: Option<&PathBuf>) -> Option<PathBuf> {
 
 /// A real `txtodod` file next to `exe`, if there is one. Not a symlink (its target may be a build
 /// directory), and never inside a macOS `.app` bundle (an updater replaces that binary).
+#[cfg(any(unix, test))]
 pub(crate) fn sibling_txtodod(exe: &Path) -> Option<PathBuf> {
     let dir = exe.parent()?;
     let in_bundle = dir
@@ -42,6 +49,7 @@ pub(crate) fn sibling_txtodod(exe: &Path) -> Option<PathBuf> {
 
 /// The same `$PATH` search a bare `Command::new("txtodod")` performs, needed here because the
 /// rendered service file wants a concrete path, not a bare program name.
+#[cfg(any(unix, test))]
 fn which_on_path(program: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)
@@ -66,6 +74,7 @@ pub fn default_global_socket(home: &Path, xdg_data_home: Option<&OsStr>) -> Path
 /// isolates itself with `TXTODO_SOCKET` or `XDG_DATA_HOME` (a test, a second install) dials some
 /// other socket, and a unit installed against the real `$HOME` says nothing about it — waiting for
 /// that unit would wait on a socket nothing will bind (root todo id:01M2WK5DQQ500JATEN1C410KWG).
+#[cfg(any(unix, test))]
 pub(crate) fn unit_owns_socket(socket: &Path, home: &Path, xdg_data_home: Option<&OsStr>) -> bool {
     socket == default_global_socket(home, xdg_data_home)
 }
