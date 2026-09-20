@@ -250,6 +250,9 @@ message OpSummary {
   string kind = 7;          // store kind tag: insert, set_field, edit_text, move, ...
   string task_id = 8;       // ULID text, empty for blank ops
   string summary = 9;       // one-line human summary, truncated by the daemon
+  // Which client made the change (task op-source): "cli", "tui", "desktop", "mcp", "sync",
+  // "external". Empty for an op logged before the daemon kept it. Local to this device's log.
+  string source = 10;
 }
 
 // One needs_review flag: the description each side had when they diverged (plan M4).
