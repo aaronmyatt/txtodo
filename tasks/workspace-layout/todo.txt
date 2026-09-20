@@ -9,11 +9,11 @@
 2026-09-20 txtodo-tui: root list and ref dirs resolve through the workspace layout +m11 @tui @test
 2026-09-20 txtodo-mcp: todo_notes_get/set and the root list tools resolve through the workspace layout +m11 @mcp @test
 2026-09-20 apps/desktop: ROOT_PATH stops being a constant; the root list and notes follow the layout +m11 @desktop @test
-2026-09-20 Decide: where the layout is stored (A txtodo.toml synced beside todo.txt, B registry + pairing offer); I'd take A +m11 @human @daemon
 2026-09-20 Decide: existing workspaces when the default flips (A pin what is on disk at first open, B move to tasks/); I'd take A +m11 @human @daemon
-2026-09-20 daemon: read and hot-reload the layout from its store; a bad file keeps the last good layout +m11 @daemon @test
+2026-09-20 daemon: read and hot-reload the layout from <root>/txtodo.toml (decided); a bad or missing file keeps the last good layout; add the toml crate to the daemon and run cargo deny check +m11 @daemon @test
 2026-09-20 daemon: first open of a workspace with no layout pins where its ref dirs are, else tasks for a new one +m11 @daemon @test
 2026-09-20 daemon: a layout change is refused while ref dirs exist, unless asked to move them +m11 @daemon @test
-2026-09-20 daemon: the layout syncs; two devices converge on one folder after a change on one +m11 @daemon @test
+2026-09-20 daemon: txtodo.toml syncs like notes.md (decided); two devices converge on one folder after a change on one +m11 @daemon @test
 2026-09-20 ADR: supersede ADR 0012's default; update specs/ref-directories.md rule 2 and plan 3.2 together +m11 @docs
 2026-09-20 Check on this repo: txtodo open N and txtodo sub N add resolve to tasks/<slug> +m11 @cli @test
+x 2026-09-20 2026-09-20 Decide: where the layout is stored (A txtodo.toml synced beside todo.txt, B registry + pairing offer) +m11 @daemon — decided 2026-09-20 by a human: A, a txtodo.toml at the workspace root, synced like notes.md; this accepts the toml crate in the daemon

@@ -36,7 +36,17 @@ ADR supersedes it in part. Rule 2 of `specs/ref-directories.md` and plan section
 - Changing the layout of a live workspace moves every ref dir with the same collision rule as a
   cross-file move (`move_ref_dir`), or is refused. Setting it without moving would orphan them all.
 
-## Decisions waiting (the two Decide lines)
+## Decided
+
+- 2026-09-20, where the layout is stored: A. A `txtodo.toml` at the workspace root, synced like
+  `notes.md`. A change on one device reaches the others, and the file is visible, diffable and
+  lives in git with the workspace. Costs accepted: the daemon gains the `toml` crate (already in
+  the tree through txtodo-cli; `Cargo.toml` is a frozen path, and `cargo deny check` still has to
+  pass), and a new file type enters sync, so the walker, the watcher and the sync path each have
+  to learn it. B (a registry row carried once in the pairing offer) was rejected: a later change
+  on one device would never reach the others.
+
+## Decisions waiting (one Decide line left)
 
 1. Where the layout is stored. A: `txtodo.toml` at the workspace root, synced like `notes.md`; the
    `toml` crate is already in the tree through txtodo-cli, and adding it to the daemon needs a
