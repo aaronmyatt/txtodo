@@ -1,4 +1,4 @@
-2026-09-20 daemon-launch: a launchd job loaded but exited 0 must not count as up +m11 @service
+2026-09-20 daemon-launch: a launchd job loaded but exited 0 must not count as up +m11 @service @doing by:claude
 2026-09-20 daemon: do not insert a workspace removed while it was opening +m11 @daemon
 2026-09-20 daemon: shutdown must not wait 120 s on spawn_blocking resolves +m11 @daemon
 2026-09-20 apps/desktop: key rejectedEdits by workspace and path +m11 @desktop
