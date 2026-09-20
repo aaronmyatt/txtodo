@@ -5,15 +5,23 @@ implementer needs that the plan doesn't repeat.
 
 ## Blocked on, and not by this task
 
-Real cross-network relay sync does not work yet, for a reason that has nothing to do with hosting:
-this device's always-on control channel and a workspace's own relay endpoint bind under one
-persisted relay identity, and a real relay server refuses the second — *"Another endpoint connected
-with the same endpoint id."* Reproduced 2026-09-15; `relay_converge.rs` and `pairing_relay.rs` are
-`#[ignore]`d with the finding. The fix is root todo 18 (`daemon-shared-sync-link`).
+Priority is low (D), set 2026-09-20. Two things stood in the way of real cross-network relay sync.
 
-**So: the droplet can be stood up and the allowlist proven in isolation, but the end-to-end
-"two machines on different networks sync" acceptance line cannot pass until todo 18 lands.** Don't
-let a green deploy read as a working system.
+- The endpoint-id collision (2026-09-15): a real relay refused the second endpoint with *"Another
+  endpoint connected with the same endpoint id."* The shared per-device relay endpoint (root todo
+  18, `daemon-shared-sync-link`) closed on 2026-09-15. It is not proven on a real relay; the last
+  acceptance line does that.
+- An unstable relay identity (2026-09-20). `txtodod` started with no `--key-store` (how launchd and
+  the desktop start it) mints a fresh relay identity on every start, so an `access.allowlist` entry
+  goes stale at each restart. The fix is the root Decide on the default `--key-store`. Do not seed
+  the allowlist before it lands.
+
+Accounts is deferred (2026-09-20; see the root Decide on who needs to enrol). Only phase 1, the
+static allowlist, needs deploying. The phase 2 flip below waits on that decision.
+
+**So: the droplet can be stood up and the allowlist proven in isolation, but "two machines on
+different networks sync" cannot be trusted until the relay identity is stable.** Don't let a green
+deploy read as a working system.
 
 ## Why the WebSocket proof is item 1
 

@@ -1,0 +1,4 @@
+2026-09-20 txtodo-mcp: remove --lan and the mDNS advertisement; --http binds 127.0.0.1 only, no flag changes it +m6 @mcp @test
+2026-09-20 txtodo-mcp: HTTP checks Host and Origin (DNS-rebinding guard); a foreign Origin gets 403 +m6 @mcp @test
+2026-09-20 txtodo-cli: txtodo mcp help and config lose --lan and any bind option; check the flags still pass through +m6 @cli
+2026-09-20 docs: design 6.1 and the MCP docs say loopback only, no LAN; drop the _txtodo-mcp._tcp service type +m6 @docs

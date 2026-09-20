@@ -71,8 +71,8 @@ cosign verify-blob --bundle txtodo.bundle txtodo-x86_64-linux-musl
 
 On a `v*` tag: build matrix (macos native, linux glibc, linux musl, windows-gnu, wasm) via
 `cargo-zigbuild` → generate `bom.json` → `cosign sign-blob` each artifact → `gh release create` with
-the binaries, SBOM, and `.sig`/bundle files. Reproducibility gate: the Nix build of the same tag must
-hash-match the Linux glibc artifact before the release is published.
+the binaries, SBOM, and `.sig`/bundle files. Nix check (relaxed 2026-09-20, see Decision below): the Nix build of the same tag must succeed and
+run `--version` before the release is published.
 
 ## Placement/dependencies
 
@@ -104,7 +104,7 @@ hash-match the Linux glibc artifact before the release is published.
 - `cosign verify-blob` succeeds for every released artifact against the bundle produced at sign time.
 - A `v0.1.0` tag publishes a GitHub Release carrying the binaries, `bom.json`, and the `.sig`/bundle
   files; re-tagging the same version is rejected (immutable).
-- The Nix-built Linux glibc binary hash-matches the zigbuilt artifact for the same tag.
+- The Nix build of the same tag succeeds and its binary runs `--version`. No hash match is required.
 
 ## Frozen paths touched
 
@@ -118,3 +118,14 @@ hash-match the Linux glibc artifact before the release is published.
 - Nix flakes: https://nixos.org/manual/nix/stable/command-ref/new-cli/nix3-flake · crane: https://crane.dev/
 - cargo-zigbuild: https://github.com/rust-cross/cargo-zigbuild · CycloneDX: https://cyclonedx.org/
 - Sigstore / cosign: https://docs.sigstore.dev/ · cosign sign-blob: https://github.com/sigstore/cosign
+
+## Decision 2026-09-20: relax the Nix check (option B)
+
+- The gate that the Nix build hash-matches the zigbuilt Linux glibc artifact is dropped. The check
+  is now: `nix build .#txtodo` succeeds and the result runs `--version`.
+- Why: the two builds use different C toolchains (Nix's gcc and ld, zig's linker). They are not
+  guaranteed byte-identical even from the same rustc, and may never match.
+- What stays: the two-clean-builds determinism check inside Nix already passed (both builds hashed
+  9fbce3b483...ba56eb6). That is evidence the flake is reproducible; it is not a release gate.
+- What is left: rewrite the job in `RELEASE_CI.patch.md`, a human applies it to `release.yml`
+  (`.github/**` is frozen), then the test-tag dry run (full asset set, duplicate tag rejected).
