@@ -83,3 +83,21 @@ What each file has today:
 Plan: one shared `txtodo_telemetry::testing::pin_global_trace_floor()` (the daemon may depend on
 telemetry; `sync` and `crdt` may not, so they keep their local copy). The two daemon files call it,
 and `security_m8` gains the "logged something" check.
+
+## As built (2026-09-20)
+
+- `1a6f62a`: `txtodo_telemetry::testing::pin_global_trace_floor()` and `tests/pin_floor.rs`.
+- `e4acf5e`: both daemon files call it first; `security_m8_tests.rs` now asserts it logged something.
+  That check passes, so the test did capture logs before too; it just never said so.
+- Unfiltered runs of the whole daemon lib test binary (265 tests, the sentinel tests beside their
+  siblings): 3 runs, both sentinel tests `ok` in each. One run is 4 to 9 minutes here.
+
+Still not proven:
+
+- 3 runs is a sanity check, not a stress run. `txtodo-model` failed about 1 run in 10 before its
+  fix, so 3 clean runs say little. The fix is the same one `sync` and `crdt` already rely on.
+- `sync` and `crdt` were read, not stress-run. They have the floor and the check, so a miss would
+  fail loudly, not pass silently.
+- `model`, `tui` and `store` have no floor. They are their own test binaries with one or two tests,
+  and the 2026-09-20 stress run of `tui` and `store` was clean. `store` and `model` may not depend
+  on telemetry, so they would need a local copy if one ever flakes.
