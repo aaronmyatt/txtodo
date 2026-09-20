@@ -59,6 +59,7 @@
 				<li>
 					<span class="principal">{entry.principal}</span>
 					<span class="op">{entry.op}</span>
+					{#if entry.source}<span class="source">{entry.source}</span>{/if}
 					<span class="time">{relativeTime(entry.at_ms)}</span>
 				</li>
 			{/each}
@@ -100,6 +101,10 @@
 	}
 	.op {
 		flex: 1;
+	}
+	.source {
+		color: var(--color-text-muted);
+		white-space: nowrap;
 	}
 	.time {
 		color: var(--color-text-muted);

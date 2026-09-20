@@ -13,6 +13,9 @@ pub struct OpLogEntryDto {
     pub op: String,
     /// Unix ms.
     pub at_ms: u64,
+    /// Which client made the change: `cli`, `tui`, `desktop`, `mcp`, `sync`, `external`; empty for
+    /// an op logged before the daemon kept it (task op-source).
+    pub source: String,
 }
 
 impl From<pb::OpLogEntry> for OpLogEntryDto {
@@ -21,6 +24,7 @@ impl From<pb::OpLogEntry> for OpLogEntryDto {
             principal: e.principal,
             op: e.op,
             at_ms: e.at_ms,
+            source: e.source,
         }
     }
 }
@@ -37,6 +41,8 @@ pub struct AggregatedOpLogEntryDto {
     pub op: String,
     /// Unix ms.
     pub at_ms: u64,
+    /// Which client made the change; see `OpLogEntryDto::source`.
+    pub source: String,
     /// ULID text of the workspace this entry came from.
     pub workspace_id: String,
     /// That workspace's canonicalized absolute root path.

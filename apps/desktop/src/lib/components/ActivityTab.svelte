@@ -61,6 +61,7 @@
 					<span class="workspace-chip" title={entry.workspace_root}>{shortRoot(entry.workspace_root)}</span>
 					<span class="principal" class:agent={isAgent(entry.principal)}>{entry.principal}</span>
 					<span class="op">{entry.op}</span>
+					{#if entry.source}<span class="source">{entry.source}</span>{/if}
 					<span class="time">{relativeTime(entry.at_ms)}</span>
 				</li>
 			{/each}
@@ -133,6 +134,11 @@
 		min-width: 8rem;
 	}
 
+	.source {
+		color: var(--color-text-muted);
+		white-space: nowrap;
+		font-size: 0.85rem;
+	}
 	.time {
 		color: var(--color-text-muted);
 		white-space: nowrap;

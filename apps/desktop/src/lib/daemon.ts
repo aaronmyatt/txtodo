@@ -274,6 +274,8 @@ export interface AggregatedOpLogEntry {
 	op: string;
 	/** Unix ms. */
 	at_ms: number;
+	/** `cli` / `tui` / `desktop` / `mcp` / `sync` / `external`; empty or absent for an old op. */
+	source?: string;
 	workspace_id: string;
 	workspace_root: string;
 }

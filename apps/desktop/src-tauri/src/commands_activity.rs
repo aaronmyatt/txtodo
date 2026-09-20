@@ -91,6 +91,7 @@ async fn op_log_one_workspace(
             principal: e.principal,
             op: e.op,
             at_ms: e.at_ms,
+            source: e.source,
             workspace_id: ws.workspace_id.clone(),
             workspace_root: ws.root.clone(),
         })
