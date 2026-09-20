@@ -22,6 +22,7 @@
 	import FileView from "./FileView.svelte";
 	import PinToggle from "./PinToggle.svelte";
 	import SkillHintBanner from "./SkillHintBanner.svelte";
+	import VersionInfo from "./VersionInfo.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -123,10 +124,12 @@
 			<a href="/universal">Universal view</a>
 			<a href="/devices">Devices &amp; agents</a>
 			<a href="/help" class="help-link" aria-label="Help">?</a>
+			<VersionInfo />
 		</div>
 	</div>
 
 	<RejectedEditBanner />
+	<VersionInfo banner />
 
 	{#if $openingWorkspace > 0}
 		<p class="opening" role="status">Opening this workspace&hellip;</p>

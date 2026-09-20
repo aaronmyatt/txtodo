@@ -3,6 +3,7 @@
 // crosses through these `invoke` calls (design §7).
 // Ref: https://v2.tauri.app/develop/calling-rust/ and https://v2.tauri.app/develop/calling-frontend/
 import { invoke, listen, type UnlistenFn } from "./tauriShim";
+import type { BuildInfo } from "./versionInfo";
 import { retryWhileLoading } from "./loadingRetry";
 
 /** Mirrors `desktop_lib::status::DaemonStatus` (serde `rename_all = "snake_case"`). */
@@ -89,6 +90,11 @@ export interface ApplyResult {
 	hash: string;
 	hlc_wall_ms: number;
 	hlc_counter: number;
+}
+
+/** This app's build and, when it answers, the daemon's (`commands_version.rs::build_info`). */
+export function buildInfo(): Promise<BuildInfo> {
+	return invoke("build_info");
 }
 
 /** Intent-level mutations on one workspace-relative document; the daemon turns them into ops.

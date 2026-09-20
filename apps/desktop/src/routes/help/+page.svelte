@@ -4,6 +4,7 @@
 	// direct transcription of this app's own shortcuts/features, not a generic template; keep it
 	// in sync by hand when a keymap or feature changes (no generator exists for this yet).
 	import ThemeToggle from "$lib/components/ThemeToggle.svelte";
+	import VersionInfo from "$lib/components/VersionInfo.svelte";
 </script>
 
 <main class="help-page">
@@ -12,6 +13,7 @@
 		<ThemeToggle />
 	</div>
 	<h1>Help</h1>
+	<p><VersionInfo /></p>
 
 	<section>
 		<h2>Editing</h2>
