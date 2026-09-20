@@ -28,13 +28,35 @@ fn hlc_text(op: &pb::OpSummary) -> String {
 
 fn op_json(op: &pb::OpSummary) -> String {
     format!(
-        r#"{{"seq":{},"hlc":{},"principal":{},"kind":{},"task":{},"summary":{}}}"#,
+        r#"{{"seq":{},"hlc":{},"principal":{},"source":{},"kind":{},"task":{},"summary":{}}}"#,
         op.seq,
         json::str(&hlc_text(op)),
         json::str(&op.principal),
+        json::str(&op.source),
         json::str(&op.kind),
         json::str(&op.task_id),
         json::str(&op.summary)
+    )
+}
+
+/// One op as a line of output: JSON, or the aligned text `txtodo log` prints.
+fn op_line(op: &pb::OpSummary, as_json: bool) -> String {
+    if as_json {
+        return op_json(op);
+    }
+    format!(
+        "{:>6}  {}  {:<32}  {:<8}  {:<12}  {}",
+        op.seq,
+        hlc_text(op),
+        op.principal,
+        // `-` for an op logged before the daemon kept a source (task op-source).
+        if op.source.is_empty() {
+            "-"
+        } else {
+            &op.source
+        },
+        op.kind,
+        op.summary
     )
 }
 
@@ -42,20 +64,8 @@ fn print_ops(ops: &[pb::OpSummary], as_json: bool) {
     let out = std::io::stdout();
     let mut w = out.lock();
     for op in ops {
-        let line = if as_json {
-            op_json(op)
-        } else {
-            format!(
-                "{:>6}  {}  {:<32}  {:<12}  {}",
-                op.seq,
-                hlc_text(op),
-                op.principal,
-                op.kind,
-                op.summary
-            )
-        };
         // stdout closing early (a pipe to head) is not an error worth reporting.
-        let _ = writeln!(w, "{line}");
+        let _ = writeln!(w, "{}", op_line(op, as_json));
     }
 }
 
@@ -183,5 +193,28 @@ mod tests {
         assert_eq!(a % 1000, 999, "the whole second is included");
         assert!(parse_local_datetime_ms("yesterday").is_none());
         assert_eq!(hex(&[0, 255]), "00ff");
+    }
+
+    fn op(source: &str) -> pb::OpSummary {
+        pb::OpSummary {
+            seq: 7,
+            principal: "you@dev".into(),
+            kind: "insert".into(),
+            summary: "buy ducks".into(),
+            source: source.into(),
+            ..pb::OpSummary::default()
+        }
+    }
+
+    #[test]
+    fn the_text_line_shows_the_source_and_a_dash_when_there_is_none() {
+        assert!(op_line(&op("mcp"), false).contains("  mcp       insert"));
+        assert!(op_line(&op(""), false).contains("  -         insert"));
+    }
+
+    #[test]
+    fn json_carries_the_source() {
+        assert!(op_line(&op("cli"), true).contains(r#""source":"cli""#));
+        assert!(op_line(&op(""), true).contains(r#""source":"""#));
     }
 }
