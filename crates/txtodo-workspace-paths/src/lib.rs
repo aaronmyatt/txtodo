@@ -144,6 +144,32 @@ pub fn global_log_dir(env: &RegistryEnv) -> PathBuf {
     global_state_dir(env).join("logs")
 }
 
+/// The workspace root a client should name to the daemon when the user gave no `--dir`: the
+/// nearest ancestor of `start` (itself included) that already holds a `.txtodo/` directory, else
+/// `start` unchanged (a first run in a fresh directory still registers that directory).
+///
+/// Why: a `Path` selector auto-registers whatever directory it names
+/// (`txtodo-daemon`'s `WorkspaceCatalog::resolve`). A client that names its raw cwd therefore
+/// registers `tasks/<slug>/`, `apps/desktop/` and every git worktree as a workspace of its own,
+/// and once 2+ are open every selector-less call is "ambiguous".
+///
+/// The walk stops after a directory holding `.git` (a directory in a clone, a file in a linked
+/// worktree): a worktree is its own checkout, not a sub-directory of the clone that contains it.
+/// Same idea as how git finds its own root: <https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-toplevel>
+pub fn workspace_root_from(start: &Path) -> PathBuf {
+    for dir in start.ancestors() {
+        if dir.join(".txtodo").is_dir() {
+            return dir.to_path_buf();
+        }
+        // `Path::exists` follows symlinks and is true for both a `.git` dir and a `.git` file.
+        // Ref: https://doc.rust-lang.org/std/path/struct.Path.html#method.exists
+        if dir.join(".git").exists() {
+            break;
+        }
+    }
+    start.to_path_buf()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +285,43 @@ mod tests {
             PathBuf::from("/tmp/isolated-a/txtodod.pid")
         );
         assert_eq!(global_log_dir(&e), PathBuf::from("/tmp/isolated-a/logs"));
+    }
+
+    /// A fresh directory tree under the OS temp dir (this crate has no dependencies, so no
+    /// `tempfile`). `mk` lists directories to create, relative to the returned root.
+    fn tree(name: &str, mk: &[&str]) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("txtodo-wp-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in mk {
+            std::fs::create_dir_all(root.join(d)).expect("create test dir");
+        }
+        root
+    }
+
+    #[test]
+    fn subdirectory_of_a_workspace_resolves_up_to_its_root() {
+        let root = tree("up", &[".txtodo", "tasks/slug"]);
+        assert_eq!(workspace_root_from(&root.join("tasks/slug")), root);
+        assert_eq!(workspace_root_from(&root), root);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_directory_with_no_workspace_above_it_stays_as_named() {
+        let root = tree("fresh", &["a/b"]);
+        assert_eq!(workspace_root_from(&root.join("a/b")), root.join("a/b"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A linked git worktree carries `.git` (a file there, a dir here: both count) and must not be
+    /// folded into the clone that happens to contain it.
+    #[test]
+    fn a_git_boundary_stops_the_walk() {
+        let root = tree("git", &[".txtodo", "wt/.git", "wt/sub"]);
+        assert_eq!(
+            workspace_root_from(&root.join("wt/sub")),
+            root.join("wt/sub")
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
