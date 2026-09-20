@@ -91,9 +91,14 @@ export interface ApplyResult {
 	hlc_counter: number;
 }
 
-/** Intent-level mutations on one workspace-relative document; the daemon turns them into ops. */
-export function applyMutations(path: string, mutations: Mutation[]): Promise<ApplyResult> {
-	return invoke("apply", { path, mutations });
+/** Intent-level mutations on one workspace-relative document; the daemon turns them into ops.
+ * `workspaceRoot` is the root the caller's buffer was read under: the bridge refuses the call
+ * (`workspace-changed:`) when the app has switched workspace since, so a buffer saved during a
+ * switch can never land in the other workspace's file. Omit it for a call that has no buffer.
+ * Tauri maps this camelCase key to the command's `workspace_root` argument:
+ * https://v2.tauri.app/develop/calling-rust/#passing-arguments */
+export function applyMutations(path: string, mutations: Mutation[], workspaceRoot?: string): Promise<ApplyResult> {
+	return invoke("apply", { path, mutations, workspaceRoot: workspaceRoot ?? null });
 }
 
 /** Whole-line replacement on one workspace-relative document (`Apply`); the daemon derives

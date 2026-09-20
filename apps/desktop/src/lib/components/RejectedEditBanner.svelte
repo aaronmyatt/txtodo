@@ -15,11 +15,11 @@
 	}
 </script>
 
-{#each $rejectedEdits as edit (edit.path)}
+{#each $rejectedEdits as edit (`${edit.workspace}\n${edit.path}`)}
 	<div class="banner" role="alert">
 		<span>Your edit to {edit.path} was not saved: {edit.error}</span>
 		<button type="button" onclick={() => copyEdit(edit)}>Copy edit</button>
-		<button type="button" class="dismiss" onclick={() => rejectedEdits.clear(edit.path)} aria-label="Dismiss">×</button>
+		<button type="button" class="dismiss" onclick={() => rejectedEdits.clear(edit.workspace, edit.path)} aria-label="Dismiss">×</button>
 	</div>
 {/each}
 

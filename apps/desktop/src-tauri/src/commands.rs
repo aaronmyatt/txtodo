@@ -230,8 +230,27 @@ pub async fn apply(
     state: State<'_, AppState>,
     path: String,
     mutations: Vec<MutationDto>,
+    workspace_root: Option<String>,
 ) -> Result<ApplyResultDto, String> {
-    apply_inner(app, state, path, mutations).await
+    apply_inner(app, state, path, mutations, workspace_root).await
+}
+
+/// First word of the refusal [`refuse_if_workspace_moved`] gives. The frontend only shows it.
+pub const WORKSPACE_CHANGED_TOKEN: &str = "workspace-changed:";
+
+/// An editor buffer belongs to the workspace it was read from. A workspace switch remounts the
+/// editor, and the outgoing buffer is saved after this bridge has already moved its selector
+/// (code review 2026-09-20, finding 4): every workspace has a `todo.txt`, and under Sidecar
+/// identity a per-line mutation names a line by number alone, so without this check the save
+/// could land in the other workspace's file. `expected` is the root the buffer was read under;
+/// `None` (a caller that has no buffer, such as quick-add) is never refused.
+fn refuse_if_workspace_moved(expected: Option<&str>, current: &str) -> Result<(), String> {
+    match expected {
+        Some(root) if root != current => Err(format!(
+            "{WORKSPACE_CHANGED_TOKEN} this edit was made in {root}, the app now shows {current}"
+        )),
+        _ => Ok(()),
+    }
 }
 
 async fn apply_inner(
@@ -239,8 +258,17 @@ async fn apply_inner(
     state: State<'_, AppState>,
     path: String,
     mutations: Vec<MutationDto>,
+    workspace_root: Option<String>,
 ) -> Result<ApplyResultDto, String> {
     ensure_connected(&app, &state).await?;
+    {
+        let current = state.current_workspace.lock().await;
+        let current = current
+            .as_ref()
+            .map(|w| w.display().to_string())
+            .unwrap_or_default();
+        refuse_if_workspace_moved(workspace_root.as_deref(), &current)?;
+    }
     let mut guard = state.client.lock().await;
     let client = guard.as_mut().ok_or("daemon not connected")?;
     let req = pb::ApplyRequest {
@@ -350,3 +378,23 @@ async fn list_conflicts_inner(
 
 // `ui_log` and its level-fanout helpers moved to `commands_ui_log.rs` (task `desktop-stack-gaps`,
 // file-budget split — see that file's own module doc).
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_edit_made_in_another_workspace_is_refused_with_the_token() {
+        let refused = refuse_if_workspace_moved(Some("/ws/a"), "/ws/b");
+        let text = refused.expect_err("the selector moved to another workspace");
+        assert!(text.starts_with(WORKSPACE_CHANGED_TOKEN), "{text}");
+        assert!(text.contains("/ws/a") && text.contains("/ws/b"), "{text}");
+    }
+
+    #[test]
+    fn the_same_workspace_or_no_claim_at_all_goes_through() {
+        assert_eq!(refuse_if_workspace_moved(Some("/ws/a"), "/ws/a"), Ok(()));
+        assert_eq!(refuse_if_workspace_moved(None, "/ws/b"), Ok(()));
+        assert_eq!(refuse_if_workspace_moved(None, ""), Ok(()));
+    }
+}

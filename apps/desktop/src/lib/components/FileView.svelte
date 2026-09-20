@@ -16,7 +16,8 @@
 	import { Decoration, EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
-	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo } from "$lib/daemon";
+	import { get } from "svelte/store";
+	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo, type Mutation } from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import {
 		addLinePlaceholder,
@@ -28,6 +29,7 @@
 	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
+	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 
 	interface Props {
@@ -78,6 +80,10 @@
 	// refuse it when the document moved on (`$lib/todotxt/saveBuffer.ts`). Always set together
 	// with `baseline`, never alone.
 	let baselineHash = "";
+	// The workspace root `baseline` was read under. A workspace switch remounts this component,
+	// and its unmount save runs after the bridge has moved on to the new workspace: the save names
+	// this root so the bridge can refuse it, and a refusal is parked under it (finding 4).
+	let baselineWorkspace = "";
 	// A pending "the human only moved a line" save (task desktop-reorder-propagates): a reorder
 	// reaches the file at once, typed text still waits for blur or Cmd-S.
 	const REORDER_SAVE_DELAY_MS = 300;
@@ -232,16 +238,18 @@
 		next: string,
 		keptInEditor = false
 	): Promise<string | null> {
+		const workspace = baselineWorkspace;
+		const apply = (p: string, m: Mutation[]) => applyMutations(p, m, workspace);
 		try {
 			// `Replace` first (a moved line is a move), the per-line delta when the base is stale:
 			// `$lib/todotxt/saveBuffer.ts`. The daemon's `Change` repaints the view via `refreshDoc`.
-			const outcome = await saveBuffer(applyMutations, targetPath, base, next);
+			const outcome = await saveBuffer(apply, targetPath, base, next);
 			adoptSaved(targetPath, base, next, outcome);
-			rejectedEdits.clear(targetPath);
+			rejectedEdits.clear(workspace, targetPath);
 			return null;
 		} catch (e) {
 			const error = String(e);
-			if (!keptInEditor) rejectedEdits.record({ path: targetPath, text: next, error });
+			if (!keptInEditor) rejectedEdits.record({ workspace, path: targetPath, text: next, error });
 			return error;
 		}
 	}
@@ -345,6 +353,7 @@
 			loadError = "";
 			baseline = contents.text;
 			baselineHash = contents.hash;
+			baselineWorkspace = get(currentWorkspaceRoot);
 			const current = view.state.doc.toString();
 			if (current !== contents.text) {
 				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: contents.text } });
