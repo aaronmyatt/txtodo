@@ -28,9 +28,9 @@ ADR supersedes it in part. Rule 2 of `specs/ref-directories.md` and plan section
   no drive letter, not under `.txtodo`. Fuzz these like slugs.
 - The layout decides synced paths, so it has to be the same on every device. A device-local setting
   could put one task's folder in two places. That is why where it is stored is a decision.
-- Order: the daemon resolves against a `WorkspaceLayout` it is handed, and falls back to
-  `legacy()` (beside the file) until the pin-at-first-open line lands. Only then does a new
-  workspace get `tasks`. That way no existing workspace loses its notes in between.
+- Order (changed 2026-09-20, see Decided): a workspace with no `txtodo.toml` gets the defaults,
+  `todo.txt` and `tasks`. There is no `legacy()` fallback and no pin at first open; the one-off
+  script moved (or found nothing to move on) this machine before the default flips.
 - `prune` must scan `refs_dir`, not the whole root. Today's scan of root-level dirs would call
   `crates/` and `docs/` orphans once refs live in `tasks/`.
 - Changing the layout of a live workspace moves every ref dir with the same collision rule as a
@@ -76,9 +76,7 @@ None. Both Decide lines are closed.
 
 ## Known gaps
 
-- Pin race: a fresh device that opens before sync arrives has no ref dirs, so it could write
-  `tasks` while the device with real dirs wrote `.`. The pin should be written only by a device
-  that has dirs, and an empty one waits for sync. Not solved here.
+- (Gone with the 2026-09-20 decision: the pin race. Nothing is pinned any more.)
 - `todo_file` in a subdirectory (`lists/todo.txt`) with `refs_dir = "."` puts refs in `lists/`.
   That follows rule 2, but it is untested.
 - `apps/desktop` and the TUI cache the root path; a live layout change needs a reload signal.
