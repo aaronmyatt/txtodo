@@ -51,6 +51,7 @@ impl WatchSlot {
         // A bumped generation also disarms a forwarder that is between `message()` and `ended`.
         self.generation += 1;
         if let Some(task) = self.task.take() {
+            // https://docs.rs/tauri/latest/tauri/async_runtime/struct.JoinHandle.html#method.abort
             task.abort();
         }
     }

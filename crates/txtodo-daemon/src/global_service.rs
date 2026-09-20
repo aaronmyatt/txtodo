@@ -59,6 +59,7 @@ impl GlobalService {
     /// less call answers at once; anything else may have to open or wait for a workspace, which is
     /// blocking work, so it runs on the blocking pool and never ties up a runtime worker — one
     /// slow open must not stall calls on workspaces that are ready (task `daemon-early-bind`).
+    /// <https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html>
     pub(crate) async fn resolve(
         &self,
         selector: Option<&pb::WorkspaceSelector>,
