@@ -107,6 +107,16 @@ async fn tool_list_is_the_exact_set() {
     let mut expected: Vec<&str> = EXPECTED_TOOLS.to_vec();
     expected.sort_unstable();
     assert_eq!(names, expected, "the registered tool set is an exact match");
+    // Task complete-to-bottom: completing moves the line, so an agent must be told that line
+    // numbers it read before are stale and the id is what stays valid.
+    let complete = tools.tools.iter().find(|t| t.name == "todo_complete");
+    let description = complete
+        .and_then(|t| t.description.as_deref())
+        .unwrap_or_default();
+    assert!(
+        description.contains("bottom") && description.contains("id stays valid"),
+        "todo_complete says where the line went: {description}"
+    );
     client.cancel().await.expect("client cancels cleanly");
     server_task.await.expect("server task joins");
 }

@@ -120,7 +120,9 @@ impl McpServer {
         skip_all,
         fields(tool = "todo_complete", principal = %self.backend.principal())
     )]
-    #[tool(description = "Mark a task done, preserving its priority as a pri: tag.")]
+    #[tool(
+        description = "Mark a task done, preserving its priority as a pri: tag. The done line moves to the bottom of its file, so line numbers change: the id stays valid, and the returned row has the new line."
+    )]
     pub async fn todo_complete(
         &self,
         Parameters(IdArgs { id, workspace }): Parameters<IdArgs>,
