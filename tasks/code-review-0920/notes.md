@@ -86,3 +86,32 @@ Numbered like the lines in `todo.txt`.
 
 `@service` line 1 (txtodo-daemon-launch) · `@daemon` lines 2, 3, 9–14 · `@desktop` lines 4–6
 (unfenced) · `@mcp` lines 7–8. One Cargo crate lease per agent session.
+
+## Progress 2026-09-20 (second session)
+
+Done, one commit each, test first where a test could show it: 1 (`2c52fa4`), 2 (`922f799`, the
+test failed before the fix), 3 (`bb51e4c`), 4 (`958205f`), 5 (`7901016`, option B), 6 (`d2e3140`),
+7 (`3f55049`), 8 (`d513ed4`, a `done` field on `todo_list`, not magic query words).
+
+Stopped at 9: another agent session held an uncommitted change in this checkout, and the slice
+fence will not hand over a second crate while the tree is dirty. What I read for the rest:
+
+- **9** The fix idea in this file ("always totals only with no selector") would break callers.
+  `tests/support/mod.rs::health()` and the `--dir` bridge send no selector and read
+  workspace-level fields (LAN flags, relay outcome). Smaller fix: a selector-less Health never
+  fails. Keep today's answer when exactly one workspace is open, and answer totals only when
+  `scoped()` errors (0 or 2+ open, or the race to `Unavailable`). Harness:
+  `workspace_catalog_state_tests.rs` already builds a `GlobalService` in-process.
+  `global_service.rs` is at 394 of 400 lines.
+- **13** `max(last_active_ms, mtime)` is right, but
+  `a_workspace_a_request_used_loads_before_one_only_its_file_mtime_favours` will flip: its
+  `FakeClock` starts at 1 000 ms (1970) and the file mtime is real time, so the mtime always wins.
+  Give that test a `FakeClock` set near the real now.
+- **14** Checked, as asked: `fast_id_of` does return the first `id:` word. But `id_strip.rs`
+  defines "own tag" as exactly that first word and leaves a later tag alone on purpose, and in
+  Tagged mode a line's identity is its first `id:` word, so "own tag is second" can only happen
+  after a hand edit under Sidecar, where the tag is inert. Making `carries_own_tag` stricter
+  without changing `strip_own_id` would make the migrate never finish. I would close 14 as "by
+  design", with a test that pins it.
+- **5, the rest** "Opening this workspace…" still shows only after the daemon's own wait. That is
+  option A (a fail-fast flag on the request): a wire change, a human's call.
