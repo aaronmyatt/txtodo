@@ -38,6 +38,7 @@ fn sample_op() -> OpSummary {
         kind: "edit_text".into(),
         task_id: String::new(),
         summary: "buy ducks".into(),
+        source: "cli".into(),
     }
 }
 
