@@ -1,6 +1,6 @@
 // Vitest: https://vitest.dev/api/
 import { describe, expect, it } from "vitest";
-import { taskIdAt } from "../taskIds";
+import { lineOfTask, taskIdAt } from "../taskIds";
 
 const A = "01M2T868JD32M84JQQ2ABASXW4";
 const B = "01M2T868JD32M84JQQ2ABASXW5";
@@ -28,5 +28,19 @@ describe("taskIdAt", () => {
 		expect(taskIdAt({ text: `one id:${A}\ntwo\n` }, 1)).toBe(A);
 		expect(taskIdAt({ text: `one id:${A}\ntwo\n`, task_ids: [] }, 1)).toBe(A);
 		expect(taskIdAt({ text: `one id:${A}\ntwo\n` }, 2)).toBe("");
+	});
+});
+
+describe("lineOfTask", () => {
+	it("follows a task to its new line after it moved (a completed line goes to the bottom)", () => {
+		const after = { text: "two\nthree\nx 2026-09-20 one\n", task_ids: [B, "01C", A] };
+		expect(lineOfTask(after, A, 1)).toBe(3);
+		expect(lineOfTask(after, B, 2)).toBe(1);
+	});
+
+	it("keeps the old line when there is nothing to follow by", () => {
+		expect(lineOfTask({ text: "one\n" }, A, 1)).toBe(1); // an older daemon: no ids
+		expect(lineOfTask({ text: "one\n", task_ids: [B] }, A, 1)).toBe(1); // the task is gone
+		expect(lineOfTask({ text: "one\n\n", task_ids: [A, ""] }, "", 2)).toBe(2); // no id known yet
 	});
 });

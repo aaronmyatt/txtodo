@@ -30,3 +30,16 @@ export function taskIdAt(contents: LinesWithIds, lineNumber: number): string {
 	const match = ID_TAG.exec(line);
 	return match ? match[1] : "";
 }
+
+/**
+ * The 1-based line `taskId` sits on now, or `fallbackLine` when the daemon sent no ids or the task
+ * is gone. A view pinned to a line number goes stale the moment that line moves, and completing a
+ * task moves it to the bottom of its file (task complete-to-bottom); the id is what stays true.
+ *
+ * Array.prototype.indexOf: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/indexOf
+ */
+export function lineOfTask(contents: LinesWithIds, taskId: string, fallbackLine: number): number {
+	if (!taskId || !contents.task_ids) return fallbackLine;
+	const index = contents.task_ids.indexOf(taskId);
+	return index === -1 ? fallbackLine : index + 1;
+}

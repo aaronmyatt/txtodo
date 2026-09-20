@@ -28,7 +28,7 @@
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
 	import { dirOf, findRefTag, joinPath } from "$lib/todotxt/lineInfo";
-	import { taskIdAt } from "$lib/todotxt/taskIds";
+	import { lineOfTask, taskIdAt } from "$lib/todotxt/taskIds";
 	import type { DetailParams } from "$lib/types";
 	import Breadcrumb from "./Breadcrumb.svelte";
 	import ConflictBanner from "./ConflictBanner.svelte";
@@ -66,7 +66,11 @@
 	let parentDirty = $state(false);
 	let parentBaseline = "";
 
-	const parentTaskRef = $derived<TaskRef>({ line_number: current.line, task_id: parentTaskId });
+	// The line the pinned task is on now. It starts as the line the human opened, then follows the
+	// task by id: completing moves the line to the bottom of its file (task complete-to-bottom),
+	// and any other reorder would strand a view that only knew a line number.
+	let parentLineNumber = $state(0);
+	const parentTaskRef = $derived<TaskRef>({ line_number: parentLineNumber || current.line, task_id: parentTaskId });
 	const refTag = $derived(findRefTag(parentLine));
 	const refDir = $derived(refTag ? joinPath(dirOf(current.file), refTag.slug) : null);
 	const subListPath = $derived(refDir ? joinPath(refDir, "todo.txt") : null);
@@ -83,9 +87,11 @@
 			const contents = await getFile(current.file);
 			loadError = "";
 			const lines = contents.text.split("\n");
-			const text = lines[current.line - 1] ?? "";
-			parentLine = text;
-			parentTaskId = taskIdAt(contents, current.line);
+			// First load: the id of the line that was opened. Later loads: wherever that id is now.
+			const lineNumber = lineOfTask(contents, parentTaskId, parentLineNumber || current.line);
+			parentLineNumber = lineNumber;
+			parentLine = lines[lineNumber - 1] ?? "";
+			parentTaskId = taskIdAt(contents, lineNumber);
 		} catch (e) {
 			loadError = String(e);
 		}
@@ -229,10 +235,17 @@
 	// (MainView keeps one DetailView instance alive across pushes — see its template).
 	// svelte-ignore state_referenced_locally -- intentional: tracks current.file's *previous*
 	// value to detect a change, not a live derivation of it (same pattern as FileView.svelte).
-	let watchedFor = current.file;
+	// The step, not only its file: two levels can share a file and differ in the line. A new step
+	// is a new task, so the id and line this instance was following are dropped first; otherwise
+	// `loadParentLine` would look for the old task's id in the new step's file.
+	const stepKey = (step: DetailParams) => `${step.file}\n${step.line}`;
+	// svelte-ignore state_referenced_locally -- intentional, as the note above says
+	let watchedFor = stepKey(current);
 	$effect(() => {
-		if (current.file !== watchedFor) {
-			watchedFor = current.file;
+		if (stepKey(current) !== watchedFor) {
+			watchedFor = stepKey(current);
+			parentTaskId = "";
+			parentLineNumber = 0;
 			loadParentLine();
 			watch();
 		}
