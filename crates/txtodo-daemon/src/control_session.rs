@@ -104,7 +104,7 @@ fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKey
 /// This device's currently-active workspaces, as `(id, display name)` pairs — the name is derived
 /// from the root directory's basename purely for an accept-side prompt (stage 6), never persisted
 /// or used as identity.
-fn outbound_offers(registry: &Mutex<WorkspaceRegistry>) -> Vec<(WorkspaceId, String)> {
+pub(crate) fn outbound_offers(registry: &Mutex<WorkspaceRegistry>) -> Vec<(WorkspaceId, String)> {
     let registry = registry.lock().unwrap_or_else(PoisonError::into_inner);
     registry
         .list()

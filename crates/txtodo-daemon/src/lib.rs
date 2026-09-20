@@ -141,6 +141,8 @@ mod control_dispatch_tests;
 #[cfg(test)]
 mod control_session_tests;
 #[cfg(test)]
+mod default_workspace_audit_tests;
+#[cfg(test)]
 mod default_workspace_tests;
 #[cfg(test)]
 mod device_relay_tests;
