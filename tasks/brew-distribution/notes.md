@@ -63,7 +63,8 @@ mechanism every tap uses) plus `tests.yml`/`dependabot.yml`, all for free. The s
 formula was replaced with the real one above; `update-formula.sh` was copied in as
 `bin/update-formula.sh`, documented as a fallback in case `autobump`'s per-resource handling of
 this formula's two `resource` blocks doesn't hold up on its first real run — genuinely unproven
-either way without a real upstream release to bump against. Pushed to
+either way without a real upstream release to bump against. (It did not hold up, and the fallback
+became the mechanism: see "Update (2026-09-20)" below.) Pushed to
 <https://github.com/aaronmyatt/homebrew-tap> — see `BREW_TAP.patch.md` for the full status and
 what's still open.
 
@@ -77,7 +78,7 @@ run for real against the live tap and pass — installed `txtodo`/`txtodod`/`txt
 
 `autobump.yml`'s multi-resource handling is still unproven (needs a second real release to fire) —
 that's the only remaining gap, tracked as its own follow-up
-(`id:01M2Q1BREWAUTOBUMPCHECK01`, root todo.txt).
+(`id:01M2Q1BREWAUTOBUMPCHECK01`, root todo.txt). (Answered 2026-09-20: it cannot do it. See below.)
 
 ## Cask sibling added (task desktop-cask-distribution, 2026-09-17)
 
@@ -86,3 +87,39 @@ Casks/txtodo-desktop.rb`, `deploy/homebrew/update-cask.sh`, and a unified `updat
 wrapper that stamps both the formula and the cask from one release tag in one pass. See
 `tasks/desktop-cask-distribution/notes.md` and `BREW_TAP.patch.md`'s own "Cask addition" section
 for the full account — not duplicated here.
+
+## Update (2026-09-20): `brew bump` replaced, formula gains Linux
+
+v0.0.3 was cut to give the autobump a second real release to fire against. It could not do the job.
+
+- **`brew bump` cannot bump this formula.** It had failed daily since 09-18 on its Ubuntu runner
+  ("formula requires at least a URL": every `url` sat inside `on_macos`, so the formula would not
+  load on Linux). On a macOS runner it got as far as downloading the v0.0.3 asset, then died with
+  `Could not find 'url' stanza!` and a warning that the formula's resources "may need to be
+  updated". Its rewriter only knows a top-level `url`; ours are nested in `on_macos`/`on_arm` and
+  there are two `resource` blocks. So the answer to `01M2Q1BREWAUTOBUMPCHECK01` is no.
+- **Replacement: the tap's `autobump.yml`.** Daily, on demand, and on a change to the file. It finds
+  the latest release (skips if the tap is on it or `bump/<tag>` exists), downloads the macOS and
+  static Linux assets and the `.dmg`s, verifies every Sigstore `.bundle` against that tag's own
+  `release.yml` identity, stamps with `bin/update-formula.sh` and `bin/update-cask.sh`, checks all
+  12 formula and 2 cask url/sha256 pairs moved, checks the cask's `app` is inside each `.dmg`, and
+  opens a PR from `bump/<tag>`. It needs the repo setting "Allow GitHub Actions to create and
+  approve pull requests" (a human turned it on). A PR opened with the default token does not start
+  `tests.yml`, so it has no CI and has to be read by hand.
+- **The formula gained `on_linux`** (the static musl builds). `brew test-bot` runs `readall`, which
+  loads every formula for every OS/arch, so a formula with no Linux url failed both test-bot legs.
+  12 pairs now; test-bot is green on `main`. No install has been tried on a real Linux machine.
+- **Found only by reading the first PR (#2, "txtodo v0.0.3"):** it predated `on_linux` (Linux urls
+  still v0.0.2; now stamped), and the cask still said `app "desktop.app"`. `productName` went
+  from `desktop` to `txtodo` after v0.0.2: the v0.0.2 `.dmg` holds `desktop.app`, v0.0.3's holds
+  `txtodo.app` (both mounted and checked). Fixed on the branch; the workflow now fails a bump on
+  that mismatch.
+- **`brew style` traps:** its shell formatter deletes any heredoc body containing a line that
+  starts with `if ` (`brew style --fix` truncated `update-cask.sh`), so the Python moved to
+  `stamp-cask-sha.py`. `brew style` also installs `shellcheck`, `shfmt` and `actionlint` on its own.
+- **Scripts:** `deploy/homebrew/` here is the source of truth. The tap's `bin/` copies differ only
+  in the path to `Formula/`/`Casks/`. Change both.
+- **Still open, human:** read and merge tap PR #2, then `brew upgrade` and check all three binaries
+  and the cask report 0.0.3. Try the Linux install. The Gatekeeper and macOS-floor questions in
+  `tasks/desktop-cask-distribution/notes.md`. Rebase the tap's dependabot PR #1. Root line
+  `01M2Q1BREWAUTOBUMPCHECK01` stays open until someone has read the PR.

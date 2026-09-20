@@ -1,106 +1,69 @@
 # BREW_TAP.patch.md — status and remaining steps
 
-Backlog item `id:01M2Q1BREWDISTRIBUTION01` (`brew-distribution`, plan M10). Unlike this repo's
-other `*.patch.md` handoffs (`RELEASE_CI.patch.md`, `RELAY_CONVERGE_CI.patch.md`), the reason parts
-of this needed a human wasn't a frozen path — a Homebrew tap has to live in its **own** GitHub repo
-(`brew tap <user>/<name>` expects a repo literally named `homebrew-<name>`), which an agent has no
-filesystem access to create by itself. The human (`aaronmyatt`) asked for the repo to be created
-directly, so steps 1-2 below are done, not staged.
+Backlog item `id:01M2Q1BREWDISTRIBUTION01` (`brew-distribution`, plan M10) and its cask sibling
+(`desktop-cask-distribution`). Unlike this repo's other `*.patch.md` handoffs, nothing here is
+staged any more: the tap is a real repo, `aaronmyatt/homebrew-tap`
+(<https://github.com/aaronmyatt/homebrew-tap>, `brew tap aaronmyatt/tap`), and everything below is
+pushed. Last updated 2026-09-20, after v0.0.3.
 
 ## Correction to the root `todo.txt` line's own assumption
 
-That line says the tap repo is `txtodo/homebrew-tap`. There is no `txtodo` GitHub org — this
-project's real identity is the user `aaronmyatt` (`gh repo view` confirms `aaronmyatt/txtodo`).
-Everything below uses `aaronmyatt/homebrew-tap` (`brew tap aaronmyatt/tap`), Homebrew's own
-single-tap-per-user convention (<https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap>).
+That line says the tap repo is `txtodo/homebrew-tap`. There is no `txtodo` GitHub org — the
+project's real identity is the user `aaronmyatt`. Everything uses `aaronmyatt/homebrew-tap`,
+Homebrew's own single-tap-per-user convention
+(<https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap>).
 
-## Done
+## What is live
 
-1. **Tap repo created and seeded**: <https://github.com/aaronmyatt/homebrew-tap>, via `gh repo
-   create aaronmyatt/homebrew-tap --public` + `brew tap-new aaronmyatt/tap` (Homebrew's own official
-   scaffold — `Formula/`, a README, and **real, standard CI for free**:
-   `.github/workflows/tests.yml` (`brew test-bot` on every formula PR), `autobump.yml` (daily `brew
-   bump --open-pr` against upstream releases), `dependabot.yml`). The scaffold's generated
-   `Formula/txtodo.rb` was replaced with this commit's `deploy/homebrew/Formula/txtodo.rb`
-   verbatim (`brew style`/`brew audit --strict` both pass clean, verified against a local test tap
-   before pushing — see `tasks/brew-distribution/notes.md`'s "As built" section), and
-   `deploy/homebrew/update-formula.sh` was copied in as `bin/update-formula.sh`, documented in the
-   tap's own README as a fallback tool, not the primary mechanism (see "Version bumps" below).
-2. **`url`/`sha256` in the pushed formula are still placeholders** — pending the main repo's first
-   real tagged release (`RELEASE_CI.patch.md`, itself still pending a human applying it and pushing
-   a tag). Nothing to fetch or bump yet.
+- **`Formula/txtodo.rb`**: `txtodo`, `txtodod` and `txtodo-tui`, stamped against v0.0.2 on `main`
+  (v0.0.3 is in PR #2, below). macOS gets the native builds (`on_macos`), Linux the fully static musl
+  builds (`on_linux`), each split into `on_arm`/`on_intel` with `txtodod`/`txtodo-tui` as `resource`
+  blocks: 12 url/sha256 pairs. The `on_linux` blocks exist because Homebrew's `readall` (run by
+  `brew test-bot` on every OS/arch) refuses a formula that has no url on Linux. **No install has
+  been tried on a real Linux machine**; only "the formula loads there" is proven.
+- **`Casks/txtodo-desktop.rb`**: the Tauri app, `on_arm`/`on_intel`, `depends_on formula: "txtodo"`.
+  The `app` stanza follows `productName` in `tauri.conf.json`: `desktop.app` through v0.0.2,
+  `txtodo.app` from v0.0.3 (checked by mounting both `.dmg`s).
+- **Version bumps: `.github/workflows/autobump.yml`** (daily 04:25 UTC, on demand, and on a change to
+  the file). It replaced the `brew tap-new` scaffold's `brew bump --open-pr`, which cannot rewrite
+  this formula: on a Linux runner it could not even load it ("formula requires at least a URL"),
+  and on a macOS runner it died with `Could not find 'url' stanza!` (its rewriter only knows a
+  top-level `url`, and it warns that this formula's resources "may need to be updated"). The
+  workflow instead: finds the latest release, skips if the tap is on it or `bump/<tag>` exists,
+  downloads the macOS and musl assets and `.dmg`s, verifies every Sigstore `.bundle` against that
+  tag's own `release.yml` identity, stamps with `bin/update-formula.sh` and `bin/update-cask.sh`,
+  checks all 12 formula and 2 cask url/sha256 pairs moved, checks the cask's `app` is inside each
+  `.dmg`, then opens a PR from `bump/<tag>`.
+- **Scripts**: the source of truth is `deploy/homebrew/` here (`update-formula.sh`,
+  `update-cask.sh`, `stamp-cask-sha.py`, and `update-release.sh` to run both). The tap's `bin/`
+  copies are identical except for the path to `Formula/`/`Casks/`; change both. The cask's sha
+  stamper is a separate `.py` because `brew style`'s shell formatter deletes any heredoc body that
+  contains a line starting with `if ` (`brew style --fix` truncates the script).
+- **Tap CI**: `brew test-bot` is green on `main` on both macOS and Ubuntu.
 
-## Version bumps: two mechanisms, deliberately not choosing between them yet
+## What the first real bump run showed (2026-09-20)
 
-- **Primary: `autobump.yml`** (already pushed, running on its own daily cron). `brew bump
-  --open-pr` auto-detects a new upstream GitHub release via `livecheck` and opens a PR updating
-  `url`/`sha256` — zero custom code, the standard mechanism every other Homebrew tap uses. Not yet
-  proven against *this* formula's shape: two `resource` blocks (`txtodod`, `txtodo-tui`) inside
-  `on_arm`/`on_intel`, not the common single-`url` case `brew bump` is best-tested against. First
-  real proof needs a real upstream release to bump against.
-- **Fallback: `bin/update-formula.sh <tag> <assets-dir>`** (pushed alongside it). Network-free,
-  deterministic, already validated for real against this repo's own locally-built binaries (see
-  `tasks/brew-distribution/notes.md`). If `autobump.yml`'s first real run mishandles the
-  multi-resource shape, wire this script into a small custom workflow instead — triggered by a
-  `repository_dispatch` `aaronmyatt/txtodo`'s own `release.yml` sends on every successful release,
-  or the same daily-cron shape `autobump.yml` already uses:
-  ```yaml
-  - run: gh release download "$TAG" --repo aaronmyatt/txtodo --pattern '*macos*' --dir assets
-  - run: ./bin/update-formula.sh "$TAG" assets
-  - run: git commit -am "txtodo $TAG" && git push
-  ```
+v0.0.3 was cut to give the autobump something to fire against. The answer to
+`01M2Q1BREWAUTOBUMPCHECK01`'s question is **no: `brew bump` does not bump all 3 resources for this
+formula shape** (see above), so it was replaced, not tuned. The replacement's first run opened
+`aaronmyatt/homebrew-tap` PR #2, "txtodo v0.0.3". Two things only surfaced by reading that PR: it
+predated the `on_linux` blocks (its Linux urls were still v0.0.2, now stamped), and the cask still
+said `app "desktop.app"` while the v0.0.3 `.dmg` holds `txtodo.app` (fixed on the branch; the
+workflow now fails a bump on that mismatch).
 
 ## Still open, needs a human
 
-- **A real `aaronmyatt/txtodo` release** (`RELEASE_CI.patch.md` applied + a tag pushed) — nothing
-  above can be proven end-to-end without one. `brew install aaronmyatt/tap/txtodo
-  --build-from-source`, `brew audit aaronmyatt/tap/txtodo`, `brew test aaronmyatt/tap/txtodo`, and
-  whichever bump mechanism is chosen, all wait on this.
-- **Cosign verification at bump time, not install time**: whichever bump mechanism ends up used
-  should `cosign verify-blob` each asset's `.bundle` (`RELEASE_CI.patch.md`'s `sign` job produces
-  one per binary) *before* pinning its sha256 into the formula, so a compromised release asset can
-  never get a hash committed to the tap at all. `autobump.yml`'s stock `brew bump` doesn't do this;
-  wiring it in (a custom step, or falling back to `update-formula.sh` plus an explicit verify step)
-  is real, separate work once there's a real release to verify against.
-
-## Cask addition (task desktop-cask-distribution, 2026-09-17)
-
-Adds a Homebrew Cask for `apps/desktop` (Tauri) alongside the existing formula — a `.app`/`.dmg`
-install into `/Applications`, not a `bin/` binary, so it lives in `Casks/`, not `Formula/`.
-
-- **CI**: `.github/workflows/release.yml` gained a `build-desktop` job (2 legs: `macos-aarch64`
-  native, `macos-x86_64` cross-linked from the same arm64 runner — mirrors the CLI matrix's own
-  two macOS legs) producing `desktop-<leg>.dmg`, wired into `sign`/`publish`'s existing `needs` so
-  it's cosign-signed and published the same way every other release asset is. Verified locally:
-  `tauri build --target <triple> --bundles app,dmg` produces a real `desktop.app`/`.dmg` for both
-  architectures on this machine.
-- **`Casks/txtodo-desktop.rb`** (staged here, not yet pushed): `on_arm`/`on_intel` url/sha256
-  pairs, `app "desktop.app"` (the real `productName` from `tauri.conf.json` — not renamed, see the
-  cask's own comment), a `zap` stanza for the three App Support/Cache/Preferences/Saved-State
-  locations keyed by `com.txtodo.desktop`. Placeholder `version "0.0.0"`/all-zero hashes, same as
-  the formula's own placeholder stage before v0.0.1. `brew style` and `brew audit --strict` both
-  pass clean against a local throwaway tap, removed after (same discipline `tasks/
-  brew-distribution/notes.md` used for the formula).
-- **`deploy/homebrew/update-cask.sh`**: the cask's counterpart to `bin/update-formula.sh`,
-  network-free, validated for real against real locally-built `.dmg` bundles (two distinctly
-  hashed test files) — stamps `version` plus each arch's own sha256 with no cross-contamination,
-  fails cleanly (exit 1, names the missing path) when an asset is absent. Not yet copied into the
-  tap repo as `bin/update-cask.sh` — do that alongside pushing the cask itself.
-- **Apple Gatekeeper — still entirely unresolved, human-only**: no code signing identity, no
-  notarization. The cask installs a real, cosign-provenance-verifiable `.app`, but a fresh Mac's
-  Gatekeeper will still flag it "unidentified developer" until a human provisions an Apple
-  Developer ID cert + notarytool credentials (`tasks/desktop-cask-distribution/notes.md`'s open
-  question: ship unsigned first with that warning, or block the cask on the cert). Not decided
-  here — flagged, not assumed either way.
-- **`autobump.yml`'s cask handling**: not tested this pass either (no live release to bump
-  against, same gap `01M2Q1BREWAUTOBUMPCHECK01` already tracks for the formula) — a cask's
-  simpler shape (no `resource` blocks) makes it *more* likely `brew bump --open-pr` handles it
-  cleanly than the formula's multi-resource case, but that's an expectation, not a proof.
-
-## Still open, needs a human (cask-specific, in addition to the formula's own list above)
-
-- Push `Casks/txtodo-desktop.rb` and `update-cask.sh` to `aaronmyatt/homebrew-tap` once there's a
-  real desktop release to point them at.
-- The Apple code-signing/notarization decision above.
-- Confirm Tauri 2's real minimum macOS version (this session had no network access to check
-  v2.tauri.app's own docs) and tighten the cask's bare `depends_on :macos` to that floor.
+- **Review and merge tap PR #2**, then `brew update && brew upgrade txtodo && txtodo --version &&
+  txtodod --version && txtodo-tui --version` (expect 0.0.3) and a `brew install --cask
+  aaronmyatt/tap/txtodo-desktop`. A PR opened with the default `GITHUB_TOKEN` does not start
+  `tests.yml`, so it has no CI; that is why this check is manual.
+- **Try the Linux install** on a real Linux machine (`brew install aaronmyatt/tap/txtodo`).
+- **Apple Gatekeeper**: no code-signing identity, no notarization. A fresh Mac flags the app
+  "unidentified developer" until a human provisions an Apple Developer ID cert and `notarytool`
+  credentials (`tasks/desktop-cask-distribution/notes.md`'s open question: ship unsigned first, or
+  block the cask on the cert).
+- **Tauri's minimum macOS version**: unconfirmed, so the cask's `depends_on :macos` has no floor.
+- **Repo setting the workflow depends on**: Settings > Actions > General > "Allow GitHub Actions to
+  create and approve pull requests" (turned on 2026-09-20).
+- **Dependabot PR #1** on the tap (bumps three pinned actions) is unreviewed and predates these
+  fixes, so its test-bot run failed before them; it needs a rebase to re-run.
