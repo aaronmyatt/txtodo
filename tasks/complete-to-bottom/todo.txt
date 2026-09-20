@@ -1,4 +1,4 @@
-2026-09-20 daemon: Complete also moves the line to the end of its file, one batch; already last is a no-op +m11 @daemon @test
+2026-09-20 daemon: Complete also moves the line to the end of its file, one batch; already last is a no-op +m11 @daemon @test @doing by:claude
 2026-09-20 daemon: the reopen mutation moves the line to the end of the open block, above the first done line +m11 @daemon @test
 2026-09-20 daemon: an external edit that completes a line is never moved; test a hand edit and a hand-moved done line +m11 @daemon @test
 2026-09-20 txtodo-cli: do stops re-sorting every done line; daemon mode relies on Complete, --no-daemon moves that line only +m11 @cli @test
