@@ -4,11 +4,9 @@
 //! `$TXTODO_RELEASE_DATE`, else the last commit's date, else `unknown`.
 
 /// The workspace version. https://doc.rust-lang.org/cargo/reference/environment-variables.html
-/// Test-only until `doctor` compares it with the daemon's (a later line of task version-info).
-#[cfg(test)]
+/// `doctor` compares it with the daemon's (`commands/doctor_version.rs`).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// `YYYY-MM-DD`, or `unknown` for a build with neither source. Test-only for now, like `VERSION`.
-#[cfg(test)]
+/// `YYYY-MM-DD`, or `unknown` for a build with neither source.
 pub const RELEASE_DATE: &str = env!("TXTODO_RELEASE_DATE");
 /// What follows the program's name in `--version` and at the top of `doctor`.
 /// `concat!` takes literals and `env!` only: https://doc.rust-lang.org/std/macro.concat.html
