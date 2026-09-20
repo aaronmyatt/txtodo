@@ -1,5 +1,3 @@
-2026-09-20 apps/desktop: no client mutex held across a 120 s call; show Opening +m11 @desktop
-2026-09-20 apps/desktop: bound retryWhileLoading by a deadline, not tries +m11 @desktop
 2026-09-20 mcp: project/context resources and triage_inbox match exact tokens +m11 @mcp
 2026-09-20 mcp: todo_list lost done / not done; restore it or document it +m11 @mcp
 2026-09-20 daemon: selector-less Health always answers totals only +m11 @daemon
@@ -9,6 +7,8 @@
 2026-09-20 daemon: load order uses the newer of last_active_ms and file mtime +m11 @daemon
 2026-09-20 daemon: carries_own_tag misses a line that quotes another id first +m11 @daemon
 2026-09-20 Add the doc URLs CLAUDE.md asks for on the new tokio and retry code +m11 @docs
+x 2026-09-20 2026-09-20 apps/desktop: no client mutex held across a 120 s call; show Opening +m11 @desktop — shipped: option B, AppState::client_snapshot, 21 call sites; known gap: 'Opening this workspace' still only shows after the daemon's own wait, that needs option A (a fail-fast request flag on the wire), a human's call; no test drives two commands at once
+x 2026-09-20 2026-09-20 apps/desktop: bound retryWhileLoading by a deadline, not tries +m11 @desktop — shipped: LOADING_DEADLINE_MS (5 min, performance.now), test with a fake clock where each try blocks 2 min
 x 2026-09-20 2026-09-20 apps/desktop: key rejectedEdits by workspace and path +m11 @desktop — shipped: the store keys on workspace + path, and the bridge refuses an apply whose buffer was read under another workspace; known gap: no e2e test drives a switch with a dirty buffer, and the e2e bridge does not take the workspace_root guard
 x 2026-09-20 2026-09-20 daemon: shutdown must not wait 120 s on spawn_blocking resolves +m11 @daemon — shipped: runtime_exit::block_on_then_shut_down (5 s grace), test: a task parked 60 s, exit in 0.2 s; known gap: waiters are abandoned, not woken, and the real SIGTERM path under launchd was not run by hand
 x 2026-09-20 2026-09-20 daemon: do not insert a workspace removed while it was opening +m11 @daemon — shipped: the test failed first (the open succeeded after the remove), then passed; the opener gets NotFound
