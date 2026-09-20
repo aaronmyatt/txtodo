@@ -43,7 +43,14 @@ workspace).
   visible folder in the home directory. Cost accepted: Finder does not show it, and cleaning
   `~/.local/share` by hand would delete real tasks, so `txtodo workspace default` prints the path
   and `doctor` reports it. This unblocks the `workspace-paths: default_workspace_dir(env)` line.
-- Still waiting: identity across devices (reserved id or offer/accept) and what no `--dir` means.
+- 2026-09-20, identity: A. One reserved `WorkspaceId`, a constant in the code, that every device
+  registers its default under (`WorkspaceRegistry::adopt`). Sync frames are keyed by workspace id,
+  so two paired devices sync their defaults with no offer to accept and no rekey. Unrelated users
+  share the constant, which is harmless: they never pair. Cost accepted: the constant is
+  permanent, and changing it later is a migration, so pick it once (a non-zero ULID timestamp, so
+  it can never be the all-zero link sentinel) and record it in the ADR line. The registry line
+  needs no new column now.
+- Still waiting: what no `--dir` means for the CLI, TUI and MCP.
 
 ## Open
 

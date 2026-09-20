@@ -1,7 +1,6 @@
-2026-09-20 Decide: how devices agree it is one workspace. A: a reserved WorkspaceId every device registers for its default, so nothing is negotiated. B: mark the row default and adopt the peer's id through the existing offer/accept and rekey. I would take A +m11 @daemon @human
 2026-09-20 Decide: which workspace the CLI, TUI and MCP use with no --dir. A: cwd if it is a workspace, else the default workspace. B: always the default unless --dir is given. I would take A +m11 @cli @human
 2026-09-20 workspace-paths: default_workspace_dir(env) for macOS, Linux and Windows, honouring XDG_DATA_HOME, LOCALAPPDATA and a TXTODO_DEFAULT_WORKSPACE override, with tests +m11 @daemon
-2026-09-20 registry: mark and look up the default workspace (a column or the reserved id, per the identity decision), idempotent, additive migration if a column +m11 @daemon
+2026-09-20 registry: look up the default workspace by the reserved WorkspaceId (decided: no column, no migration); registering it is idempotent +m11 @daemon
 2026-09-20 proto: WorkspaceInfo.is_default, additive, its own commit before the daemon uses it +m11 @proto
 2026-09-20 daemon: on start create the default directory with an empty todo.txt (no seed task, so two devices never each add one), register it, load it first, refuse to remove it +m11 @daemon @test
 2026-09-20 daemon: a selector-less call resolves to the default workspace when one is registered, else today's sole-open rule; test: a no-selector add lands in it +m11 @daemon @test
@@ -11,4 +10,5 @@
 2026-09-20 apps/desktop: with no workspace picked open the default (the No workspace selected message goes), quick-add targets it by explicit selector, the switcher labels it Default and hides remove +m11 @desktop
 2026-09-20 apps/desktop e2e: a fresh profile shows the default workspace selected and quick-add lands in its todo.txt +m11 @desktop @test
 2026-09-20 Write the ADR recording the location and identity decisions +m11 @docs
+x 2026-09-20 2026-09-20 Decide: how devices agree it is one workspace. A: a reserved WorkspaceId every device registers for its default, so nothing is negotiated. B: mark the row default and adopt the peer's id through the existing offer/accept and rekey +m11 @daemon — decided 2026-09-20 by a human: A, one reserved WorkspaceId fixed in the code; a permanent constant, changing it later means a migration
 x 2026-09-20 2026-09-20 Decide: where the default workspace lives. A: under the txtodo data dir (.../txtodo/default, beside registry.db, already resolved per OS). B: a visible folder such as ~/txtodo +m11 — decided 2026-09-20 by a human: A, under the txtodo data dir; txtodo workspace default prints the path, since Finder will not show it
