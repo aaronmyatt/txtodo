@@ -313,6 +313,10 @@ message MoveToEnd { TaskRef task = 1; }
 // the same-file relocation `MoveToEnd` is the "after the last task" case of. Refused if `before`
 // is the task itself or is not in this file.
 message MoveBefore { TaskRef task = 1; TaskRef before = 2; }
+// Reopens a completed task (task complete-to-bottom): clears the `x` and the completion date, turns
+// `pri:X` back into `(X)`, and moves the line to the end of the open block, just above the first
+// done line, so open lines stay on top. No move when it is already there.
+message Reopen { TaskRef task = 1; }
 // Replaces the whole document with `contents`, but only if its hash is still `base_hash` (the
 // `FileContents.hash` the caller edited from): a compare-and-swap. A stale base, or a file on disk
 // holding an edit the daemon has not reconciled yet, is FAILED_PRECONDITION and changes nothing.
@@ -338,6 +342,7 @@ message Mutation {
     Replace replace = 7;
     RequireBase require_base = 8;
     MoveBefore move_before = 9;
+    Reopen reopen = 10;
   }
 }
 
