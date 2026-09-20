@@ -91,7 +91,7 @@ These need a running `txtodo daemon` for this workspace.
 | Command | Description |
 |---|---|
 | `daemon <start\|stop\|status\|install\|uninstall> [--force]` | Manage the `txtodod` service for this workspace. |
-| `mcp [--stdio] [--http] [--lan] [--token TOKEN]` | Serve the Model Context Protocol surface for this workspace. |
+| `mcp [--stdio] [--http] [--token TOKEN]` | Serve the Model Context Protocol surface for this workspace. |
 | `doctor [--verbose]` | Check socket, watcher, files, clock and config; exit 1 on any failure. |
 | `skill install [--only claude\|agents]` | Install the agent playbook for working this backlog. |
 | `env` | Print the resolved paths and config. |

@@ -243,13 +243,10 @@ pub enum Command {
         /// Serve over stdin/stdout.
         #[arg(long)]
         stdio: bool,
-        /// Serve Streamable HTTP on 127.0.0.1:8636/mcp (or 0.0.0.0 with --lan).
+        /// Serve Streamable HTTP on 127.0.0.1:8636/mcp. Loopback only; no flag widens it.
         #[arg(long)]
         http: bool,
-        /// With --http: bind every interface and advertise _txtodo-mcp._tcp via mDNS.
-        #[arg(long)]
-        lan: bool,
-        /// Attached to every mutation as the agent principal; required with --lan.
+        /// Attached to every mutation as the agent principal.
         #[arg(long)]
         token: Option<String>,
     },

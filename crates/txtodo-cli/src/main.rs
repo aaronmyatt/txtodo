@@ -88,12 +88,9 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     match &cli.command {
         Command::Doctor { verbose } => return commands::doctor::run(&ctx, *verbose),
         Command::Daemon { action, force } => return commands::service::run(&ctx, *action, *force),
-        Command::Mcp {
-            stdio,
-            http,
-            lan,
-            token,
-        } => return commands::mcp::run(&ctx, *stdio, *http, *lan, token.as_deref()),
+        Command::Mcp { stdio, http, token } => {
+            return commands::mcp::run(&ctx, *stdio, *http, token.as_deref());
+        }
         Command::Skill { action } => return commands::skill::run(action),
         _ => {}
     }

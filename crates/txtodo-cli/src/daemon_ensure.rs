@@ -126,7 +126,6 @@ mod tests {
         assert!(!needs_daemon(&Command::Mcp {
             stdio: true,
             http: false,
-            lan: false,
             token: None
         }));
     }
