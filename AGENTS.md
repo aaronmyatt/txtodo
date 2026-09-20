@@ -17,13 +17,14 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
   workspace is also an MCP resource (`todotxt://...`), so enumerate the whole `ref:` tree
   (root → `tasks/*/todo.txt` → any nested `ref:`) rather than discovering it lazily mid-loop.
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
-  already `x` done and which are already claimed (`@doing`).
+  already `x` done, which carry `@human` (a decision only a human makes), and which are already
+  claimed (`@doing`).
 
 ## 2. Flesh out sub-todos and notes
 
 Before looping, thin or missing detail is a blocker, not something to improvise mid-task:
 
-- For each unclaimed, non-`x` line with a `ref:` whose `tasks/<slug>/todo.txt` is
+- For each unclaimed, non-`x`, non-`@human` line with a `ref:` whose `tasks/<slug>/todo.txt` is
   missing, empty, or clearly just a restatement of the parent line, break it down into real
   sub-steps with `todo_add`/`todo_batch` before executing any of them.
 - `todo_notes_get` the ref's `notes.md`. If it has no design context (approach, rejected
@@ -54,7 +55,7 @@ Drive this phase with `/loop` (or an equivalent repeat-until-done driver). Trave
 **file order**, not priority or milestone — top to bottom, depth-first into any `ref:` subtree
 before moving on to the next top-level line:
 
-1. Find the first line, in file order, that is not `x` and not already claimed
+1. Find the first line, in file order, that is not `x`, not `@human`, and not already claimed
    (`@doing`) by someone else.
 2. If it has a `ref:`, recurse into `tasks/<slug>/todo.txt` and fully clear that sub-backlog
    (steps below, applied inside that file) before returning to close the parent line.
@@ -66,7 +67,8 @@ before moving on to the next top-level line:
    moved on. As you work, `todo_notes_set` to append what you decided and why, in the backlog's
    existing voice: short, plain, honest about what's still broken rather than padded with what
    went well. Big architectural calls (new wire formats, new crate boundaries, anything that would
-   need an ADR by this project's convention) are not yours to decide alone
+   need an ADR by this project's convention) are not yours to decide alone — add `@human` with the
+   open question and stop on that line; don't let it block siblings.
 5. **Close**: `todo_complete` the line, then `todo_edit` (append) a one-line summary in the
    existing style — what shipped, and any known gap named honestly rather than left implicit, e.g.
    `— real device-to-device pairing works; known gap: no shared identity across LAN/relay yet`.
@@ -85,17 +87,20 @@ Write through immediately at every state change (claim, note update, completion)
 edits to the end of a work session or the end of the loop. A crash or interruption mid-task should
 leave the file honestly reflecting where things stand, not silently ahead of reality.
 
-### 3.2 Sort done items to bottom
+### 3.2 Done items sit at the bottom
 
-After completing a line (step 5), archive that file: `todo_archive` (MCP) or `txtodo archive`
-(CLI). This moves `x` lines to the bottom of the *same* file, keeping active work at the top and
-history at the bottom, without a second file. Do this immediately per completion, per file — not
-once at the end of the whole loop, since a later step may re-read the file's order to find "the
-first non-done line" (step 1).
+Completing a line moves it to the bottom of its own file: `todo_complete` (MCP) and `txtodo do`
+(CLI) both do it, once, at that moment. Active work stays at the top and history at the bottom,
+without a second file, and with nothing for you to run. Two things follow:
 
-Note: this is a convention this skill imposes going forward. Older lines in this repo's own
-`todo.txt`/`tasks/*/todo.txt` predate it and are interleaved chronologically rather than
-done-sorted — don't reflow historical lines just to satisfy the convention; apply it prospectively.
+- Line numbers change when you complete a line. Find a line again by its id or its text before you
+  append to it; never reuse the number you completed.
+- Do not archive after each completion. `todo_archive` / `txtodo archive` is the explicit full
+  sort: it moves every done line down and drops blank lines, including done lines a human placed
+  somewhere on purpose. Run it only when someone asks for that.
+
+Older lines in this repo's own `todo.txt`/`tasks/*/todo.txt` predate this and are interleaved
+chronologically rather than done-sorted; don't reflow them.
 
 ## 4. Stay current
 

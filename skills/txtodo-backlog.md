@@ -85,17 +85,20 @@ Write through immediately at every state change (claim, note update, completion)
 edits to the end of a work session or the end of the loop. A crash or interruption mid-task should
 leave the file honestly reflecting where things stand, not silently ahead of reality.
 
-### 3.2 Sort done items to bottom
+### 3.2 Done items sit at the bottom
 
-After completing a line (step 5), archive that file: `todo_archive` (MCP) or `txtodo archive`
-(CLI). This moves `x` lines to the bottom of the *same* file, keeping active work at the top and
-history at the bottom, without a second file. Do this immediately per completion, per file — not
-once at the end of the whole loop, since a later step may re-read the file's order to find "the
-first non-done line" (step 1).
+Completing a line moves it to the bottom of its own file: `todo_complete` (MCP) and `txtodo do`
+(CLI) both do it, once, at that moment. Active work stays at the top and history at the bottom,
+without a second file, and with nothing for you to run. Two things follow:
 
-Note: this is a convention this skill imposes going forward. Older lines in this repo's own
-`todo.txt`/`tasks/*/todo.txt` predate it and are interleaved chronologically rather than
-done-sorted — don't reflow historical lines just to satisfy the convention; apply it prospectively.
+- Line numbers change when you complete a line. Find a line again by its id or its text before you
+  append to it; never reuse the number you completed.
+- Do not archive after each completion. `todo_archive` / `txtodo archive` is the explicit full
+  sort: it moves every done line down and drops blank lines, including done lines a human placed
+  somewhere on purpose. Run it only when someone asks for that.
+
+Older lines in this repo's own `todo.txt`/`tasks/*/todo.txt` predate this and are interleaved
+chronologically rather than done-sorted; don't reflow them.
 
 ## 4. Stay current
 
