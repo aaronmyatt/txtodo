@@ -8858,7 +8858,6 @@ dependencies = [
  "axum",
  "hyper-util",
  "jiff",
- "mdns-sd",
  "rmcp",
  "schemars 1.2.2",
  "serde",

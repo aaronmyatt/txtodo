@@ -15,17 +15,14 @@ use tokio_util::sync::CancellationToken;
 use txtodo_mcp::global_socket;
 use txtodo_mcp::grpc_backend::{GrpcMcpBackend, SOCKET_REL};
 use txtodo_mcp::schema::McpServer;
-use txtodo_mcp::transport::{self, MCP_LAN, MCP_LOOPBACK, MCP_PORT};
+use txtodo_mcp::transport::{self, MCP_PORT};
 
 /// Which transport to serve, and how.
 enum Mode {
     /// `--stdio`.
     Stdio,
-    /// `--http [--lan]`.
-    Http {
-        /// Bind every interface and advertise `_txtodo-mcp._tcp`, instead of loopback-only.
-        lan: bool,
-    },
+    /// `--http`: Streamable HTTP on loopback. Nothing widens it (task mcp-local-only).
+    Http,
 }
 
 /// Which daemon socket to dial (mcp-multi-workspace-gateway): the pre-existing per-workspace
@@ -40,7 +37,7 @@ enum Target {
     Global,
 }
 
-/// `txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--lan] [--token <id>]`.
+/// `txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--token <id>]`.
 struct Args {
     target: Target,
     mode: Mode,
@@ -49,14 +46,14 @@ struct Args {
 
 fn parse_args() -> Result<Args, String> {
     let mut args = std::env::args_os().skip(1);
-    let (mut dir, mut global, mut mode, mut token, mut lan) = (None, false, None, None, false);
+    let (mut dir, mut global, mut mode, mut token) = (None, false, None, None);
     while let Some(a) = args.next() {
         match a.to_str() {
             Some("--dir") => dir = args.next().map(PathBuf::from),
             Some("--global") => global = true,
             Some("--stdio") => mode = Some(Mode::Stdio),
-            Some("--http") => mode = Some(Mode::Http { lan: false }),
-            Some("--lan") => lan = true,
+            Some("--http") => mode = Some(Mode::Http),
+            Some("--lan") => return Err(LAN_REMOVED.to_owned()),
             Some("--token") => token = args.next().and_then(|v| v.into_string().ok()),
             _ => return Err(format!("unknown argument {a:?}")),
         }
@@ -67,16 +64,7 @@ fn parse_args() -> Result<Args, String> {
         (None, true) => Target::Global,
         (None, false) => return Err(usage()),
     };
-    let mode = match (mode.ok_or_else(usage)?, lan, &token) {
-        (Mode::Stdio, true, _) => {
-            return Err("--lan --stdio is a usage error: stdio has no network".to_owned());
-        }
-        (Mode::Http { .. }, true, None) => {
-            return Err("--lan without --token would bind 0.0.0.0 with no bearer auth configured; refusing to start".to_owned());
-        }
-        (Mode::Http { .. }, lan, _) => Mode::Http { lan },
-        (stdio, false, _) => stdio,
-    };
+    let mode = mode.ok_or_else(usage)?;
     Ok(Args {
         target,
         mode,
@@ -85,9 +73,12 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn usage() -> String {
-    "usage: txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--lan] [--token <id>]"
-        .to_owned()
+    "usage: txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--token <id>]".to_owned()
 }
+
+/// What `--lan` answers now. It used to bind every interface and advertise over mDNS.
+const LAN_REMOVED: &str = "--lan was removed: the MCP server is reachable from this device only \
+     (127.0.0.1); see tasks/mcp-local-only";
 
 /// Best-effort daemon autostart before dialing `socket` (task `daemon-always-available`, item 5):
 /// builds whichever `LaunchConfig` shape matches this run's `Target` (a legacy `--dir <workspace>`
@@ -155,28 +146,16 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let server = McpServer::new(Arc::new(backend));
     match args.mode {
         Mode::Stdio => transport::serve_stdio(server).await?,
-        Mode::Http { lan } => serve_http(server, lan, args.token.as_deref()).await?,
+        Mode::Http => serve_http(server).await?,
     }
     Ok(())
 }
 
-async fn serve_http(
-    server: McpServer,
-    lan: bool,
-    token: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = std::net::SocketAddr::new(if lan { MCP_LAN } else { MCP_LOOPBACK }, MCP_PORT);
+async fn serve_http(server: McpServer) -> Result<(), Box<dyn std::error::Error>> {
     let ct = CancellationToken::new();
-    let _daemon = lan
-        .then(|| transport::advertise_lan("txtodo-mcp.local.", MCP_PORT))
-        .transpose()?;
-    debug_assert!(
-        !lan || token.is_some(),
-        "--lan without --token was refused earlier"
-    );
     let shutdown = shutdown_signal(ct.clone());
     tokio::select! {
-        result = transport::serve_http(server, addr, ct) => result?,
+        result = transport::serve_http(server, MCP_PORT, ct) => result?,
         () = shutdown => {}
     }
     Ok(())

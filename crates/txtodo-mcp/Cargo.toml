@@ -57,9 +57,6 @@ jiff = "0.2"
 async-trait = "0.1"
 # https://docs.rs/tracing — structured logs for the MCP surface (matches txtodo-daemon's setup).
 tracing = "0.1"
-# https://docs.rs/mdns-sd — advertises `_txtodo-mcp._tcp` for `--lan` (design §6.1). Same crate
-# crates/txtodo-sync's discovery.rs uses for `_txtodo._udp`, so the workspace has one mDNS library.
-mdns-sd = "0.21"
 # JSON-rolling-file + pretty-stderr tracing init, shared with every other txtodo binary (tasks/
 # logging-mcp-call-span). `txtodo-mcp` is a leaf-adjacent binary crate: `.claude/budgets.json`'s
 # `allowedDeps` lists this alongside txtodo-proto/txtodo-query.

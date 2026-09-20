@@ -1,12 +1,15 @@
 //! `txtodo mcp --stdio` and Streamable HTTP on `127.0.0.1:8636/mcp` (mcp-transports notes.md).
-//! One [`crate::schema::McpServer`], two entry points; `--lan` (bind + mDNS) is two independent
-//! facts a caller composes: bind [`MCP_LAN`] instead of [`MCP_LOOPBACK`], and call
-//! [`advertise_lan`].
+//! One [`crate::schema::McpServer`], two entry points.
+//!
+//! The MCP surface is reachable from this device only (task mcp-local-only, decided 2026-09-20).
+//! Stdio has no network. HTTP binds [`MCP_LOOPBACK`] and no flag widens it: `--lan`, the
+//! every-interface bind and the `_txtodo-mcp._tcp` mDNS advertisement are gone. Loopback alone is
+//! not private: any browser tab can send a request to `127.0.0.1`, and a hostile page can rebind a
+//! name to it. So the HTTP service also checks the `Host` and `Origin` headers ([`http_router`]).
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
-use mdns_sd::{ServiceDaemon, ServiceInfo};
 use rmcp::ServiceExt;
 use rmcp::transport::io::stdio;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
@@ -19,13 +22,22 @@ use crate::schema::McpServer;
 pub const MCP_PORT: u16 = 8636;
 /// The Streamable HTTP path; never the default, always set explicitly.
 pub const MCP_PATH: &str = "/mcp";
-/// mDNS service type `--lan` advertises (design §6.1). Bare, RFC 6763 form — [`advertise_lan`]
-/// appends the `.local.` domain mdns-sd needs to register it.
-pub const MCP_SERVICE: &str = "_txtodo-mcp._tcp";
-/// Default bind: loopback only.
+/// The only address the HTTP transport binds.
 pub const MCP_LOOPBACK: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-/// `--lan` bind: every interface.
-pub const MCP_LAN: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
+/// `Host` values the HTTP service answers (with or without the port): the DNS-rebinding guard. A
+/// page that rebinds `evil.example` to 127.0.0.1 still sends `Host: evil.example`, and gets 403.
+pub const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "localhost", "::1"];
+
+/// Browser origins the HTTP service answers: only a page served from this server's own address.
+/// A request with no `Origin` (every non-browser MCP client) passes; any other origin gets 403.
+/// Origins compare as (scheme, host, port), RFC 6454: https://www.rfc-editor.org/rfc/rfc6454#section-5
+pub fn loopback_origins(port: u16) -> Vec<String> {
+    vec![
+        format!("http://127.0.0.1:{port}"),
+        format!("http://localhost:{port}"),
+        format!("http://[::1]:{port}"),
+    ]
+}
 
 /// Why a transport stopped before a client asked it to.
 #[derive(Debug)]
@@ -68,23 +80,35 @@ pub async fn serve_stdio(server: McpServer) -> Result<(), TransportError> {
     Ok(())
 }
 
-/// Serves `server` over Streamable HTTP at `http://{addr}{MCP_PATH}` until `ct` is cancelled.
-/// <https://docs.rs/rmcp/latest/rmcp/transport/streamable_http_server/>
-pub async fn serve_http(
-    server: McpServer,
-    addr: SocketAddr,
-    ct: CancellationToken,
-) -> Result<(), TransportError> {
-    // `StreamableHttpServerConfig` is `#[non_exhaustive]`, so build the default and mutate the one
-    // field this server cares about rather than a struct-update literal.
+/// rmcp's Streamable HTTP service nested at [`MCP_PATH`], answering only a loopback `Host` and
+/// an absent or loopback `Origin` (403 otherwise). rmcp does the checks; this names the lists
+/// rather than leaning on its defaults, whose `Origin` list is empty, which means "not checked".
+/// <https://docs.rs/rmcp/latest/rmcp/transport/streamable_http_server/struct.StreamableHttpServerConfig.html>
+pub fn http_router(server: McpServer, port: u16, ct: CancellationToken) -> axum::Router {
+    // `StreamableHttpServerConfig` is `#[non_exhaustive]`, so build the default and set fields
+    // rather than use a struct-update literal.
     let mut config = StreamableHttpServerConfig::default();
-    config.cancellation_token = ct.clone();
+    config.cancellation_token = ct;
+    config.allowed_hosts = LOOPBACK_HOSTS.iter().map(|h| (*h).to_owned()).collect();
+    config.allowed_origins = loopback_origins(port);
     let service: StreamableHttpService<McpServer, LocalSessionManager> = StreamableHttpService::new(
         move || Ok(server.clone()),
         Arc::new(LocalSessionManager::default()),
         config,
     );
-    let router = axum::Router::new().nest_service(MCP_PATH, service);
+    axum::Router::new().nest_service(MCP_PATH, service)
+}
+
+/// Serves `server` over Streamable HTTP at `http://127.0.0.1:{port}{MCP_PATH}` until `ct` is
+/// cancelled. The address is not a parameter: nothing can make this listen beyond loopback.
+/// <https://docs.rs/rmcp/latest/rmcp/transport/streamable_http_server/>
+pub async fn serve_http(
+    server: McpServer,
+    port: u16,
+    ct: CancellationToken,
+) -> Result<(), TransportError> {
+    let addr = SocketAddr::new(MCP_LOOPBACK, port);
+    let router = http_router(server, port, ct.clone());
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .map_err(|e| TransportError::PortInUse(addr, e))?;
@@ -92,21 +116,6 @@ pub async fn serve_http(
         .with_graceful_shutdown(async move { ct.cancelled_owned().await })
         .await
         .map_err(TransportError::Http)
-}
-
-/// Advertises `_txtodo-mcp._tcp` on `port` via mDNS (`--lan`'s second fact). The same `mdns-sd`
-/// crate `crates/txtodo-sync/src/discovery.rs` uses for `_txtodo._udp`, so the workspace has one
-/// mDNS library, not two. The TXT record repeats `port` explicitly (mDNS's SRV record already
-/// carries it) so a phone finds the right endpoint even if a future build changes the default.
-pub fn advertise_lan(host_name: &str, port: u16) -> Result<ServiceDaemon, mdns_sd::Error> {
-    let daemon = ServiceDaemon::new()?;
-    let service_type = format!("{MCP_SERVICE}.local.");
-    let props: [(&str, String); 1] = [("port", port.to_string())];
-    let info = ServiceInfo::new(&service_type, "txtodo-mcp", host_name, "", port, &props[..])?
-        .enable_addr_auto();
-    daemon.register(info)?;
-    debug_assert!(!MCP_SERVICE.is_empty(), "the service type is never empty");
-    Ok(daemon)
 }
 
 #[cfg(test)]
@@ -117,7 +126,10 @@ mod tests {
     fn constants_match_the_design() {
         assert_eq!(MCP_PORT, 8636);
         assert_eq!(MCP_PATH, "/mcp");
-        assert_eq!(MCP_SERVICE, "_txtodo-mcp._tcp");
-        assert_ne!(MCP_LOOPBACK, MCP_LAN);
+        assert!(
+            MCP_LOOPBACK.is_loopback(),
+            "the only bind address is loopback"
+        );
+        assert!(loopback_origins(MCP_PORT).contains(&"http://127.0.0.1:8636".to_owned()));
     }
 }
