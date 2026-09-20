@@ -1,0 +1,10 @@
+2026-09-20 buildinfo: shared build-script file that resolves the release date (env, else commit date) +m11 @build id:01M2Y6QG2SX6WBDTV8FP1S1TJ1
+2026-09-20 txtodo-cli: --version prints "txtodo 0.0.2 (2026-09-20)"; doctor prints the same line +m11 @cli id:01M2Y6QG2SZ3ZFECG3AES6SSZ2
+2026-09-20 txtodo-tui: --version likewise; dim "v0.0.2 · 2026-09-20" in the status bar, dropped when narrow +m11 @tui id:01M2Y6QG2SVB1YHV3GVM4CA6RS
+2026-09-20 proto: Health.release_date, additive, its own commit (Health.version already exists) +m11 @proto id:01M2Y6QG2SFPPENNGFPP6GWFKR
+2026-09-20 txtodod: --version likewise; fill Health.release_date; log both in daemon_starting +m11 @daemon id:01M2Y6QG2S1N8MZS2VHZBQWPNF
+2026-09-20 apps/desktop: small muted "v0.0.2 · 2026-09-20" in the main view corner and on Help +m11 @desktop id:01M2Y6QG2S4JB7BFEZTVZMJHZ7
+2026-09-20 apps/desktop: daemon banner names both versions when the daemon is not the app's build +m11 @desktop @test id:01M2Y6QG2S5CCJ2K8V3HQ2EPKK
+2026-09-20 txtodo doctor: warn when the CLI and the running daemon differ in version or date +m11 @cli @test id:01M2Y6QG2S9XW7MC8PZ064W13K
+2026-09-20 release.yml: export TXTODO_RELEASE_DATE from the tag; smoke test checks --version shows it +m11 @release id:01M2Y6QG2STH77RKHWPS9SBFH2
+2026-09-20 scripts/check-version-sync.sh: Cargo, tauri.conf.json and package.json versions agree; in just check +m11 @build id:01M2Y6QG2SR06SE94MSWXK12FV

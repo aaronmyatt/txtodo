@@ -1,0 +1,15 @@
+2026-09-20 daemon-launch: a launchd job loaded but exited 0 must not count as up +m11 @service id:01M2Y6MHS7FF1QXAY2DQ6DHRF4
+2026-09-20 daemon: do not insert a workspace removed while it was opening +m11 @daemon id:01M2Y6MHS7Z514BW0DJVJ4VX00
+2026-09-20 daemon: shutdown must not wait 120 s on spawn_blocking resolves +m11 @daemon id:01M2Y6MHS78X778EAGQKWT66T2
+2026-09-20 apps/desktop: key rejectedEdits by workspace and path +m11 @desktop id:01M2Y6MHS7S40GJMPHTB82VGK1
+2026-09-20 apps/desktop: no client mutex held across a 120 s call; show Opening +m11 @desktop id:01M2Y6MHS7NBR4A03E9VHTW1DA
+2026-09-20 apps/desktop: bound retryWhileLoading by a deadline, not tries +m11 @desktop id:01M2Y6MHS701FW1D4G2NBFA065
+2026-09-20 mcp: project/context resources and triage_inbox match exact tokens +m11 @mcp id:01M2Y6MHS7788EQNKJ176DJY6T
+2026-09-20 mcp: todo_list lost done / not done; restore it or document it +m11 @mcp id:01M2Y6MHS7FD6Y8SVZ7WAFSJ3N
+2026-09-20 daemon: selector-less Health always answers totals only +m11 @daemon id:01M2Y6MHS7G5S0HZAK2Q5R2CGA
+2026-09-20 Test: single_instance.rs asserts on a deleted log line; check oplog.db +m11 @daemon @test id:01M2Y6MHS7MPYXPV7NESAZT86S
+2026-09-20 daemon: path fast path read-locks every open workspace; keep the root +m11 @daemon @perf id:01M2Y6MHS741DX6YW9YRR2YRTJ
+2026-09-20 daemon: Health counts workspaces without a registry query and stats +m11 @daemon @perf id:01M2Y6MHS7GT3AQ3QQXRRQRWSA
+2026-09-20 daemon: load order uses the newer of last_active_ms and file mtime +m11 @daemon id:01M2Y6MHS7XMJBZMDRA3ARFK6G
+2026-09-20 daemon: carries_own_tag misses a line that quotes another id first +m11 @daemon id:01M2Y6MHS74633ZWN14BK30P9Q
+2026-09-20 Add the doc URLs CLAUDE.md asks for on the new tokio and retry code +m11 @docs id:01M2Y6MHS7HS7B65NSNYCCA06H
