@@ -244,15 +244,14 @@ impl WorkspaceCatalog {
                 self.open_ws(WorkspaceId::new(ulid)).ok().map(Ok)
             }
             // Every CLI/desktop call names its workspace by path: match it against the roots
-            // already open (one `canonicalize`, no registry write) so the common case stays off the
-            // blocking pool. A miss just takes the slow path, which registers and opens.
+            // already open (one `canonicalize`, no registry write, no workspace lock: the root is
+            // kept on the open handle) so the common case stays off the blocking pool. A miss just
+            // takes the slow path, which registers and opens.
             Some(pb::workspace_selector::Selector::Path(path)) => {
                 let canonical = std::fs::canonicalize(path).ok()?;
                 let open = self.open.read().unwrap_or_else(PoisonError::into_inner);
                 open.values()
-                    .find(|o| {
-                        o.ws.read().unwrap_or_else(PoisonError::into_inner).root() == canonical
-                    })
+                    .find(|o| o.root == canonical)
                     .map(|o| Ok(Arc::clone(&o.ws)))
             }
         }

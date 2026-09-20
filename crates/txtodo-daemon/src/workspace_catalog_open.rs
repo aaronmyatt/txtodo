@@ -61,6 +61,11 @@ pub struct WorkspaceOpenArgs {
 pub struct OpenedWorkspace {
     /// The live workspace, cloned out to callers by `WorkspaceCatalog::resolve`.
     pub ws: SharedWorkspace,
+    /// `ws`'s canonical root, copied out once at open. The catalog's path lookup compares against
+    /// this and never takes `ws`'s lock: a workspace held under a write lock must not stall a
+    /// request that names another one (code review 2026-09-20, finding 11). A root never changes
+    /// while its workspace is open.
+    pub(crate) root: std::path::PathBuf,
     id: txtodo_store::WorkspaceId,
     device_relay: Option<Arc<DeviceRelay>>,
     device_file_carrier: Option<Arc<DeviceFileCarrier>>,
@@ -166,8 +171,13 @@ pub fn open_workspace_full(
         args.device_relay.clone(),
         args.relay_dial_peer,
     );
+    // Canonical even when the caller opened it through a symlink (macOS `/var`, `/tmp`): the path
+    // lookup canonicalizes what the client sent, and comparing that with a raw root never matched.
+    // https://doc.rust-lang.org/std/fs/fn.canonicalize.html
+    let canonical_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     Ok(OpenedWorkspace {
         ws,
+        root: canonical_root,
         id,
         device_relay: args.device_relay.clone(),
         device_file_carrier: args.device_file_carrier.clone(),
