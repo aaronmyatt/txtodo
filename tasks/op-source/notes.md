@@ -24,3 +24,15 @@ to other devices, but it changes the sync wire format; rejected as too costly fo
 - Attribution does not follow the op. On device B, a change made by the CLI on device A shows as
   `sync`, with the device from `Principal`. That is the price of option A.
 - The source is a claim by the client. Any local caller can send any string.
+
+## As built (2026-09-20)
+
+- Store `97393f8`: migration 0008, nullable `ops.source`, `append_with_source`, `CommitExtras.source`, `sources_between`; `cap_source` cuts to 32 bytes on a char boundary.
+- Proto: `ApplyRequest.source` (5), `OpLogEntry.source` (4), and later `OpSummary.source` (10), which `txtodo log` needed because it reads `History`, not `OpLogStream`.
+- Daemon: client name from Apply; `sync` for imports and peer ops; `external` for a disk edit; a Replace carries its caller's name (the CLI's sidecar fallback). Served on `OpLogStream` and `History`.
+- Clients: CLI, TUI, desktop and MCP each send their name. `txtodo log` has a source column (`-` when none) and `--json` a `source` key. Both desktop activity lists show it.
+
+Known gaps:
+
+- The Watch stream, Undo, conflict Resolve and ref-dir ops leave source empty.
+- No test for the `sync` and `external` values; the desktop display has not been looked at in the app.
