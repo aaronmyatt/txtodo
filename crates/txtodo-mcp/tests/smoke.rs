@@ -221,6 +221,90 @@ fn _construction_reference(u: &str) -> (ReadResourceRequestParams, GetPromptRequ
 #[allow(dead_code)]
 fn _client_handler_reference<T: ClientHandler>() {}
 
+/// `(tool, arguments, the one backend method it must reach)`, every registered tool at least once;
+/// `todo_raw` twice, since its arguments pick a read or a write.
+fn tool_routes() -> Vec<(&'static str, serde_json::Value, &'static str)> {
+    let id = "01M2T868JD32M84JQQ2ABASXW4";
+    vec![
+        ("todo_list", json!({"query": "milk", "limit": 3}), "list"),
+        ("todo_search", json!({"text": "milk"}), "search"),
+        ("todo_get", json!({"id": id}), "get"),
+        ("todo_add", json!({"text": "buy milk"}), "add"),
+        ("todo_complete", json!({"id": id}), "complete"),
+        ("todo_uncomplete", json!({"id": id}), "complete"),
+        (
+            "todo_edit",
+            json!({"id": id, "patch": {"append": "+p"}}),
+            "edit",
+        ),
+        (
+            "todo_move",
+            json!({"id": id, "before": "01M2T868JD32M84JQQ2ABASXW5"}),
+            "move_task",
+        ),
+        ("todo_delete", json!({"id": id, "confirm": true}), "delete"),
+        ("todo_archive", json!({}), "archive"),
+        ("todo_batch", json!({"ops": [], "dry_run": true}), "batch"),
+        ("todo_history", json!({"id": id}), "history"),
+        (
+            "todo_raw",
+            json!({"file": "todo.txt", "lines": [1]}),
+            "raw_read",
+        ),
+        (
+            "todo_raw",
+            json!({"file": "todo.txt", "line": 1, "text": "x"}),
+            "raw_write",
+        ),
+        ("todo_notes_get", json!({"id": id}), "notes_get"),
+        (
+            "todo_notes_set",
+            json!({"id": id, "text": "# n"}),
+            "notes_set",
+        ),
+        ("todo_lint", json!({}), "lint"),
+        ("todo_conflicts_list", json!({}), "conflicts_list"),
+        (
+            "todo_conflicts_resolve",
+            json!({"id": id, "side": "mine"}),
+            "conflicts_resolve",
+        ),
+    ]
+}
+
+/// Every tool, called through the real JSON-RPC layer, reaches the one backend method it is meant
+/// to: the argument schema parses, and nothing is routed to a neighbour (`todo_uncomplete` to
+/// `complete`, `todo_raw` to a read or a write by its arguments). tasks/coverage-ratchet-climb:
+/// `tools_write.rs` had no test reaching it at all.
+#[tokio::test]
+async fn every_tool_routes_to_its_own_backend_method() {
+    let _serial = SERIAL.lock().await;
+    let (backend, client, server_task) = connect().await;
+    let routes = tool_routes();
+    for (tool, args, expected) in routes {
+        backend
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        let args = args.as_object().cloned().expect("object literal");
+        let result = client
+            .peer()
+            .call_tool(CallToolRequestParams::new(tool).with_arguments(args))
+            .await
+            .unwrap_or_else(|e| panic!("{tool}: {e}"));
+        assert_ne!(result.is_error, Some(true), "{tool} reported an error");
+        let calls = backend
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert_eq!(calls, [expected], "{tool} reached the wrong backend method");
+    }
+    client.cancel().await.expect("client cancels cleanly");
+    server_task.await.expect("server task joins");
+}
+
 /// tasks/logging-mcp-call-span: proves the `mcp.call{tool,principal}` span (plan §5,
 /// `txtodo-implementation-plan.md:447`) actually lands on a JSON log line with the right name and
 /// fields — not just "it compiled". `txtodo_telemetry::testing::LogSink` is the shared capture
