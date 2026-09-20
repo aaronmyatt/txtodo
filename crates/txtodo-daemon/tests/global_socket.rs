@@ -6,7 +6,8 @@
 //! a `path` selector for a pre-registered workspace works, an absent selector also works (the
 //! single-open-workspace bridge), an unknown `workspace_id` selector fails cleanly (never panics,
 //! never hangs), and a second, never-registered directory auto-registers via a `path` selector,
-//! after which an absent selector becomes ambiguous while named selectors still resolve.
+//! after which an absent selector becomes ambiguous for workspace-scoped calls (`Health` alone
+//! answers the device totals instead) while named selectors still resolve.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 // A unix-domain socket is the daemon's only transport (ADR 0010); this cannot run on Windows.
@@ -203,7 +204,7 @@ async fn an_unknown_workspace_id_selector_fails_cleanly_not_a_hang_or_panic() {
 }
 
 #[tokio::test]
-async fn a_second_unregistered_directory_auto_registers_and_then_no_selector_is_ambiguous() {
+async fn a_second_directory_auto_registers_then_scoped_calls_need_a_selector() {
     let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let dir_a = seed_workspace(&registry_dir.path().join("registry.db"));
     let (daemon, mut client) = GlobalDaemon::start(registry_dir).await;
@@ -220,12 +221,27 @@ async fn a_second_unregistered_directory_auto_registers_and_then_no_selector_is_
         .into_inner();
     assert_eq!(resp.documents, 1);
 
-    // Now two workspaces are open: an unselected call is ambiguous...
+    // Now two workspaces are open: an unselected workspace-scoped call is ambiguous...
+    // (`resolve_sole_open` runs before the request's task is looked at, so an empty one is enough.)
     let err = client
-        .health(pb::HealthRequest { workspace: None })
+        .get_notes(pb::GetNotesRequest {
+            task: None,
+            workspace: None,
+        })
         .await
         .unwrap_err();
     assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+
+    // ...except `Health`, which never fails (commit 204448c): unselected, it answers the device
+    // totals alone, with none of one workspace's own details (`documents` stays 0).
+    let totals = client
+        .health(pb::HealthRequest { workspace: None })
+        .await
+        .unwrap_or_else(|e| panic!("selector-less health with two workspaces open: {e}"))
+        .into_inner();
+    assert_eq!(totals.workspaces_registered, 2);
+    assert_eq!(totals.workspaces_ready, 2);
+    assert_eq!(totals.documents, 0);
 
     // ...but either one still resolves correctly by its own path selector.
     for dir in [&dir_a, &dir_b] {
