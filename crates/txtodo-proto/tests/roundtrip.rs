@@ -9,9 +9,9 @@ use txtodo_proto::v1::{
     Device, DeviceListRequest, DeviceListResponse, DeviceRemoveRequest, DeviceRemoveResponse, Edit,
     FileContents, FileInfo, FileKind, GetFileRequest, HealthResponse, HistoryRequest,
     HistoryResponse, LintFinding, LintRequest, LintResponse, ListFilesResponse,
-    MigrateIdentityResponse, Move, MoveBefore, MoveToEnd, Mutation, OpSummary, Progress, Replace,
-    RequireBase, SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode, UndoRequest,
-    WatchRequest, WorkspaceInfo, WorkspaceLoadState, mutation, sync_status_response,
+    MigrateIdentityResponse, Move, MoveBefore, MoveToEnd, Mutation, OpSummary, Progress, Reopen,
+    Replace, RequireBase, SkewStatus, SyncStatusRequest, SyncStatusResponse, TaskRef, TreeNode,
+    UndoRequest, WatchRequest, WorkspaceInfo, WorkspaceLoadState, mutation, sync_status_response,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -80,6 +80,7 @@ fn every_mutation_variant_survives_encode_decode() {
         mutation::Kind::RequireBase(RequireBase {
             base_hash: vec![9; 32],
         }),
+        mutation::Kind::Reopen(Reopen { task: task() }),
     ];
     for kind in kinds {
         let req = ApplyRequest {
@@ -92,6 +93,8 @@ fn every_mutation_variant_survives_encode_decode() {
                 name: "claude".into(),
             }),
             workspace: None,
+            source: "cli".into(),
+            dry_run: true,
         };
         round_trip(&req);
         let decoded = ApplyRequest::decode(req.encode_to_vec().as_slice()).unwrap();
@@ -133,6 +136,7 @@ fn responses_and_streams_round_trip() {
         hash: vec![4; 32],
         hlc_wall_ms: 5,
         hlc_counter: 6,
+        diff: "--- a/todo.txt\n+++ b/todo.txt\n".into(),
     });
     round_trip(&HealthResponse {
         watcher_alive: true,
