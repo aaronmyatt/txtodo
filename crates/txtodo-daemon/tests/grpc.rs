@@ -223,6 +223,14 @@ async fn history_health_and_error_codes_over_the_socket() {
     assert_eq!(health.documents, 1);
     assert!(health.writes_total >= 2, "adoption write + apply write");
     assert_eq!(health.version, env!("CARGO_PKG_VERSION"));
+    // The build's release date rides beside the version (task version-info): a client compares
+    // both with its own to tell it is talking to another build.
+    assert_eq!(health.release_date, txtodo_daemon::buildinfo::RELEASE_DATE);
+    assert!(
+        health.release_date == "unknown" || health.release_date.len() == 10,
+        "a date or unknown: {}",
+        health.release_date
+    );
 
     let missing = client
         .get_file(pb::GetFileRequest {

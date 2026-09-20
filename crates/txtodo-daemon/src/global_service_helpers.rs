@@ -45,7 +45,8 @@ pub(crate) fn with_totals(mut resp: pb::HealthResponse, t: LoadTotals) -> pb::He
 pub(crate) fn totals_only(t: LoadTotals) -> pb::HealthResponse {
     with_totals(
         pb::HealthResponse {
-            version: env!("CARGO_PKG_VERSION").to_owned(),
+            version: crate::buildinfo::VERSION.to_owned(),
+            release_date: crate::buildinfo::RELEASE_DATE.to_owned(),
             ..pb::HealthResponse::default()
         },
         t,

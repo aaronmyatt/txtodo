@@ -9,7 +9,13 @@
 /// (`ref:daemon-ready-log-ordering`).
 pub(crate) fn log_starting(socket: &std::path::Path, registry_path: &std::path::Path) {
     tracing::Span::current().record("socket", socket.display().to_string().as_str());
-    tracing::info!(socket = %socket.display(), registry = %registry_path.display(), "daemon_starting");
+    tracing::info!(
+        socket = %socket.display(),
+        registry = %registry_path.display(),
+        version = txtodo_daemon::buildinfo::VERSION,
+        release_date = txtodo_daemon::buildinfo::RELEASE_DATE,
+        "daemon_starting"
+    );
 }
 
 /// Was a bare `eprintln!` (bypassed the subscriber) — split out, same reason as `log_starting`.
@@ -23,7 +29,7 @@ pub(crate) fn start_boot_span(args: &crate::Args) -> tracing::Span {
     let mode = args.dir.as_ref().map_or("global", |_| "dir-bridge");
     tracing::info_span!(
         "daemon.boot",
-        version = env!("CARGO_PKG_VERSION"),
+        version = txtodo_daemon::buildinfo::VERSION,
         mode,
         socket = tracing::field::Empty
     )

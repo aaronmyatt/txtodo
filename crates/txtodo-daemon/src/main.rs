@@ -150,7 +150,7 @@ fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(ArgsOutcome::Run(a)) => a,
         Ok(ArgsOutcome::ShowVersion) => {
-            println!("txtodod {}", env!("CARGO_PKG_VERSION"));
+            println!("txtodod {}", txtodo_daemon::buildinfo::VERSION_LINE);
             return ExitCode::SUCCESS;
         }
         Err(msg) => {
@@ -298,7 +298,8 @@ fn lock_and_start_logging(
     let logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
     tracing::info!(
         dir = ?args.dir.as_ref().map(|d| d.display().to_string()),
-        version = env!("CARGO_PKG_VERSION"),
+        version = txtodo_daemon::buildinfo::VERSION,
+        release_date = txtodo_daemon::buildinfo::RELEASE_DATE,
         "starting"
     );
     if socket.exists() {
