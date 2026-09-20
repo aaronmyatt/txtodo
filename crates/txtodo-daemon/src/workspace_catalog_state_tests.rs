@@ -149,3 +149,44 @@ async fn lint_runs_the_cli_check_over_the_documents_bytes() {
         .expect_err("no such document");
     assert_eq!(missing.code(), tonic::Code::NotFound);
 }
+
+/// Code review 2026-09-20, finding 9: with no selector, `Health` went on to `resolve_sole_open`,
+/// which refuses 0 or 2+ open workspaces ("ambiguous"). The totals are about the device, not about
+/// one workspace, so a selector-less `Health` must always answer: the one open workspace's details
+/// when there is exactly one (what the `--dir` bridge and the tests read), else the totals alone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_selector_less_health_answers_with_no_or_several_open_workspaces() {
+    use crate::global_service::GlobalService;
+    use txtodo_proto::v1::txtodo_server::Txtodo;
+
+    let (one, two) = (workspace("health-one-"), workspace("health-two-"));
+    let (_registry_dir, catalog) = catalog_with(&[], |_| {});
+    let service = GlobalService::new(Arc::clone(&catalog));
+    let ask = || tonic::Request::new(pb::HealthRequest { workspace: None });
+
+    let none_open = service
+        .health(ask())
+        .await
+        .unwrap_or_else(|e| panic!("health with nothing open must still answer: {e}"))
+        .into_inner();
+    assert_eq!(none_open.workspaces_ready, 0);
+    assert!(!none_open.version.is_empty());
+
+    for dir in [&one, &two] {
+        let catalog = Arc::clone(&catalog);
+        let selector = select(dir.path());
+        tokio::task::spawn_blocking(move || catalog.resolve(Some(&selector)).map(|_| ()))
+            .await
+            .unwrap_or_else(|e| panic!("open task: {e}"))
+            .unwrap_or_else(|e| panic!("open: {e}"));
+    }
+    let two_open = service
+        .health(ask())
+        .await
+        .unwrap_or_else(|e| panic!("health with two open must still answer: {e}"))
+        .into_inner();
+    assert_eq!(
+        (two_open.workspaces_registered, two_open.workspaces_ready),
+        (2, 2)
+    );
+}

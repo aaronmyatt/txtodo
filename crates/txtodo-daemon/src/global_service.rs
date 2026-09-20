@@ -154,14 +154,19 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::HealthRequest>,
     ) -> Result<Response<pb::HealthResponse>, Status> {
-        // Health never waits on a workspace that is still opening: a selector-less call while any
-        // open is pending answers with the totals alone. A named workspace is resolved (and so
-        // promoted and waited for) like any other call.
+        // A selector-less Health never waits and never fails: the totals are about the device. It
+        // adds the one open workspace's details when there is exactly one (the `--dir` bridge),
+        // and is the totals alone while any open is pending or when 0 or 2+ are open, which
+        // `resolve_sole_open` refuses as ambiguous. A named workspace is resolved like any call.
         let totals = self.catalog.load_totals();
-        if r.get_ref().workspace.is_none() && self.catalog.load_pending() > 0 {
+        let unnamed = r.get_ref().workspace.is_none();
+        if unnamed && self.catalog.load_pending() > 0 {
             return Ok(Response::new(totals_only(totals)));
         }
-        let (svc, span) = self.scoped("health", &r).await?;
+        let (svc, span) = match self.scoped("health", &r).await {
+            Err(_) if unnamed => return Ok(Response::new(totals_only(totals))),
+            scoped => scoped?,
+        };
         let resp = svc.health(r).instrument(span).await?;
         Ok(Response::new(with_totals(resp.into_inner(), totals)))
     }
