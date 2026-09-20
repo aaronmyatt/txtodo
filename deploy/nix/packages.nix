@@ -40,6 +40,14 @@ let
     inherit src;
     strictDeps = true;
     doCheck = false; # `cargo test --workspace` is CI's job (ci.yml); this builds binaries only
+
+    # .cargo/config.toml points x86_64-unknown-linux-gnu at a zig wrapper (.cargo/zig/*.sh) for local
+    # cross-checks. The filter above drops those scripts and the sandbox has no zig, so without this
+    # a native Nix build dies with "linker .cargo/zig/zigcc-x86_64-linux-gnu.sh not found". A
+    # CARGO_TARGET_<TRIPLE>_LINKER env var outranks the config file:
+    # https://doc.rust-lang.org/cargo/reference/config.html#hierarchical-structure
+    # https://doc.rust-lang.org/cargo/reference/environment-variables.html#configuration-environment-variables
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER = "cc";
   };
 
   mkBin = { pname, crate }:
