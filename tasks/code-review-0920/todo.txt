@@ -1,5 +1,4 @@
-2026-09-20 daemon: do not insert a workspace removed while it was opening +m11 @daemon @doing by:claude
-2026-09-20 daemon: shutdown must not wait 120 s on spawn_blocking resolves +m11 @daemon
+2026-09-20 daemon: shutdown must not wait 120 s on spawn_blocking resolves +m11 @daemon @doing by:claude
 2026-09-20 apps/desktop: key rejectedEdits by workspace and path +m11 @desktop
 2026-09-20 apps/desktop: no client mutex held across a 120 s call; show Opening +m11 @desktop
 2026-09-20 apps/desktop: bound retryWhileLoading by a deadline, not tries +m11 @desktop
@@ -12,4 +11,5 @@
 2026-09-20 daemon: load order uses the newer of last_active_ms and file mtime +m11 @daemon
 2026-09-20 daemon: carries_own_tag misses a line that quotes another id first +m11 @daemon
 2026-09-20 Add the doc URLs CLAUDE.md asks for on the new tokio and retry code +m11 @docs
+x 2026-09-20 2026-09-20 daemon: do not insert a workspace removed while it was opening +m11 @daemon — shipped: the test failed first (the open succeeded after the remove), then passed; the opener gets NotFound
 x 2026-09-20 2026-09-20 daemon-launch: a launchd job loaded but exited 0 must not count as up +m11 @service — shipped: service_state::launchd_job_is_up reads the job's own state line (running or spawn scheduled); known gap: the parser is tested against the real output shape, the launchctl call itself is not driven, check by hand on macOS
