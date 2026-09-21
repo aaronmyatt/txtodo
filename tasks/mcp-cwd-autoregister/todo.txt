@@ -1,0 +1,3 @@
+2026-09-21 mcp: with no --dir and no --global, serve the cwd without registering it
+2026-09-21 Make workspace_root_from and is_workspace_dir agree on what a workspace is
+2026-09-21 test: a stray todo.txt folder never reaches outbound_offers @test

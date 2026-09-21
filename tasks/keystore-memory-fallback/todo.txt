@@ -1,0 +1,3 @@
+2026-09-21 Say what the memory keystore really costs: device and group keys too
+2026-09-21 Refuse to start relay or LAN sync on a memory keystore
+2026-09-21 Guard TXTODO_TEST_KEYSTORE_MEMORY so cargo run cannot pick it up

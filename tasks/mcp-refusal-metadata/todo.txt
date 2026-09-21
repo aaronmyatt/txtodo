@@ -1,0 +1,3 @@
+2026-09-21 Carry spec_rule as a String, not an allow-list of three literals
+2026-09-21 conflicts_resolve and the notes tools delegate to grpc_write::status
+2026-09-21 test: a refusal surfaces line and spec_rule through the MCP layer @test

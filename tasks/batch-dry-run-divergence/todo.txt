@@ -1,0 +1,3 @@
+2026-09-21 Refuse a dry-run batch that names the same task id twice
+2026-09-21 Route the real batch through the same grouped-by-id plan, or document the divergence
+2026-09-21 unified_diff: emit the real no-newline marker instead of prose
