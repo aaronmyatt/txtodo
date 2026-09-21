@@ -61,17 +61,34 @@ async fn add_list_remove_round_trip_and_add_is_idempotent() {
     let (mut client, pid, _state_dir) = connected().await;
     let dir = temp_workspace();
 
-    assert!(client.workspace_list().await.unwrap().is_empty());
+    // A fresh daemon always registers the reserved default workspace (task
+    // `default-workspace`) — "empty" here means "no workspace but the default", not zero.
+    assert!(
+        client
+            .workspace_list()
+            .await
+            .unwrap()
+            .iter()
+            .all(|w| w.is_default)
+    );
     let first = client.workspace_add(dir.path()).await.unwrap();
     let again = client.workspace_add(dir.path()).await.unwrap();
     assert_eq!(first.workspace_id, again.workspace_id, "idempotent add");
 
     let listed = client.workspace_list().await.unwrap();
-    assert_eq!(listed.len(), 1);
-    assert_eq!(listed[0].workspace_id, first.workspace_id);
+    let non_default: Vec<_> = listed.iter().filter(|w| !w.is_default).collect();
+    assert_eq!(non_default.len(), 1);
+    assert_eq!(non_default[0].workspace_id, first.workspace_id);
 
     assert!(client.workspace_remove(&first.workspace_id).await.unwrap());
-    assert!(client.workspace_list().await.unwrap().is_empty());
+    assert!(
+        client
+            .workspace_list()
+            .await
+            .unwrap()
+            .iter()
+            .all(|w| w.is_default)
+    );
     // Registry::remove is an idempotent upsert-tombstone: an already-removed (but once-known) id
     // still returns true. false is reserved for an id this registry never heard of at all.
     assert!(
@@ -113,14 +130,20 @@ async fn switch_workspace_retargets_every_call_with_no_reconnect() {
 /// open, so readiness for an unbound client is probed through the registry instead. This is what
 /// keeps a Finder-launched app (no workspace, nothing registered yet) from landing on "Daemon:
 /// dead".
+///
+/// A fresh daemon still registers exactly one workspace on its own — the reserved default (task
+/// `default-workspace`) — so "empty registry" here means "no workspace the user themselves
+/// added", not zero rows.
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
-async fn an_unbound_client_is_ready_and_lists_an_empty_registry() {
+async fn an_unbound_client_is_ready_and_lists_only_the_default_workspace() {
     let (mut client, pid, _state_dir) = connected().await;
     client
         .wait_until_ready()
         .await
         .unwrap_or_else(|e| panic!("an unbound client must be ready: {e}"));
-    assert!(client.workspace_list().await.unwrap().is_empty());
+    let listed = client.workspace_list().await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(listed[0].is_default);
     kill(pid);
 }
