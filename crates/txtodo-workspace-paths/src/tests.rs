@@ -218,6 +218,12 @@ fn a_folder_with_state_or_a_todo_txt_is_a_workspace_and_an_empty_one_is_not() {
     std::fs::write(root.join("plain/todo.txt"), "x\n").unwrap();
     assert!(is_workspace_dir(&root.join("stateful")));
     assert!(is_workspace_dir(&root.join("plain")));
+    std::fs::write(root.join("empty/txtodo.toml"), "todo_file = \"work.txt\"\n").unwrap();
+    assert!(
+        is_workspace_dir(&root.join("empty")),
+        "a layout file makes it one"
+    );
+    std::fs::remove_file(root.join("empty/txtodo.toml")).unwrap();
     assert!(!is_workspace_dir(&root.join("empty")));
     let _ = std::fs::remove_dir_all(&root);
 }

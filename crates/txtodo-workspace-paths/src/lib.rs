@@ -220,11 +220,14 @@ impl WorkspaceChoice {
     }
 }
 
-/// Whether `dir` is a workspace: the daemon has kept state there (`.txtodo/`), or it is a plain
-/// todo.txt folder (`todo.txt` beside the client, the todo.sh habit). One definition for the CLI,
-/// TUI and MCP, so the same folder is never a workspace to one and not to another.
+/// Whether `dir` is a workspace: the daemon has kept state there (`.txtodo/`), it holds a layout
+/// file (`txtodo.toml`, whose `todo_file` may name a root list that is not `todo.txt`), or it is a
+/// plain todo.txt folder (`todo.txt` beside the client, the todo.sh habit). One definition for the
+/// CLI, TUI and MCP, so the same folder is never a workspace to one and not to another.
 pub fn is_workspace_dir(dir: &Path) -> bool {
-    dir.join(".txtodo").is_dir() || dir.join("todo.txt").is_file()
+    dir.join(".txtodo").is_dir()
+        || dir.join("txtodo.toml").is_file()
+        || dir.join("todo.txt").is_file()
 }
 
 /// The workspace a client should use when given no `--dir`: `start`'s workspace root (see
