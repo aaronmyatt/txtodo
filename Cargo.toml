@@ -51,3 +51,10 @@ print_stderr = "deny"
 todo = "deny"
 unimplemented = "deny"
 dbg_macro = "deny"
+
+# Dev-build speed (task rust-build-speed). `[profile.*]` only takes effect from the workspace
+# root — see apps/desktop/src-tauri/Cargo.toml's own comment on this, which is what pointed here.
+[profile.dev]
+# Keeps file:line in panic backtraces (https://doc.rust-lang.org/cargo/reference/profiles.html#debug)
+# while dropping the full variable/type debug info that's most of the compile-time cost.
+debug = "line-tables-only"

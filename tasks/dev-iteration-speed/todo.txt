@@ -1,0 +1,2 @@
+x 2026-09-21 2026-09-21 adopt cargo-nextest as just test / budgets.json commands.test +build @rust — ~10x on txtodo-core (1.33s vs 13.46s); full workspace: 1211 passed in 91.44s via just test; wired into justfile + budgets.json commands.test, CI left untouched (own separate scope, see notes.md)
+x 2026-09-21 2026-09-21 add just cold-build opt-in recipe for sccache+incremental=0 +build @rust — ~12x on repeated clean build (4.93s vs 58.97s, 100% hit) but only with incremental off, so kept opt-in via just cold-build rather than a .cargo/config.toml default; verified it builds

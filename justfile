@@ -14,8 +14,11 @@ lint:
 typecheck:
     cargo check --workspace --all-targets
 
+# cargo-nextest: ~10x faster than `cargo test` on this workspace (task rust-build-speed follow-up,
+# 1.33s vs 13.46s on txtodo-core's 69 tests) — no doc-tests in this workspace to lose by switching.
+# https://nexte.st/docs/installation/pre-built-binaries/
 test:
-    cargo test --workspace
+    cargo nextest run --workspace
 
 # line coverage against the floor in budgets.json (rustup toolchain: Homebrew cargo lacks llvm-profdata)
 coverage:
@@ -47,6 +50,17 @@ fuzz-seed:
     cat corpus/*.txt | grep -v '^$' | awk '{ print > ("crates/txtodo-core/fuzz/corpus/parse_line/seed-" NR ".txt") }'
     cp corpus/*.txt crates/txtodo-core/fuzz/corpus/parse_file/
     printf 'q4-roadmap' > crates/txtodo-core/fuzz/corpus/slug/valid.txt; printf '../escape' > crates/txtodo-core/fuzz/corpus/slug/traversal.txt
+
+# Opt-in, not the default build path (task rust-build-speed follow-up): sccache only caches
+# non-incremental compiles, so this disables incremental for the run — a real ~12x win on a
+# rebuild whose crate content already sits in the cache (measured 4.93s vs 58.97s for
+# txtodo-daemon after `cargo clean -p txtodo-daemon`), but the normal edit-one-file loop wants
+# incremental compilation instead, not this. Use when starting fresh in a new worktree/branch
+# that shares dependency versions with one already built elsewhere on this machine.
+# https://github.com/mozilla/sccache
+cold-build *args:
+    sccache --start-server 2>/dev/null || true
+    RUSTC_WRAPPER=sccache CARGO_INCREMENTAL=0 cargo build {{args}}
 
 bench:
     cargo bench --workspace
