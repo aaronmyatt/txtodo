@@ -125,10 +125,9 @@ pub fn select(dir: &Path, no_daemon: bool, env: &crate::config::Env) -> Result<M
     Daemon::connect(socket, Some(selector)).map(|d| Mode::Daemon(Box::new(d)))
 }
 
-/// Emits the daemon-vs-direct mode decision — split into its own function so the tracing macro's
-/// own expansion doesn't push `select`'s branches over the cognitive-complexity budget (same
-/// pattern `txtodo-telemetry`'s `emit_info_event`/`emit_warn_event` tests use, root todo.txt
-/// `logging-cli`). Neither argument is ever a path or other user text — fixed labels only.
+/// Emits the daemon-vs-direct mode decision, split out so the tracing macro's expansion does not
+/// push `select` over the complexity budget (root todo.txt `logging-cli`). Fixed labels only,
+/// never a path or user text.
 fn log_mode_selected(mode: &'static str, reason: &'static str) {
     tracing::debug!(mode, reason, "cli.mode_selected");
 }
@@ -222,8 +221,7 @@ impl Daemon {
             mutations,
             agent: None,
             workspace: self.selector.clone(),
-            // The activity log tells a CLI change from a TUI or desktop one (task op-source).
-            source: "cli".to_owned(),
+            source: "cli".to_owned(), // shown in the activity log (task op-source)
             dry_run: false,
         };
         let rep = self
