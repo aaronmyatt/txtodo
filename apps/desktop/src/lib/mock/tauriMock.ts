@@ -89,6 +89,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockEditNotes((args?.task as TaskRef).task_id, args?.newText as string) as unknown as T;
 		case "workspace_root":
 			return currentWorkspaceRoot as T;
+		case "workspace_layout":
+			return { refs_dir: "tasks", todo_file: "todo.txt", note: "", outside_refs_dir: [] } as T;
 		case "list_workspaces":
 			return workspaces.map((w) => ({ ...w })) as T;
 		case "add_workspace": {

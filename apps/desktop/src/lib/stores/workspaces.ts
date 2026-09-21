@@ -5,8 +5,13 @@
 // import, same rationale as $lib/stores/conflicts.ts: this stays unit-testable without mocking
 // invoke/listen, even though today it's too small a store to need its own test file.
 import { writable } from "svelte/store";
+import { DEFAULT_LAYOUT, type RefLayout } from "$lib/todotxt/lineInfo";
 
 export const currentWorkspaceRoot = writable<string>("");
+
+/** The current workspace's layout, refetched whenever the workspace changes (MainView). Starts on
+ * the daemon's default so the first paint composes `tasks/<slug>` before the answer arrives. */
+export const workspaceLayoutStore = writable<RefLayout>(DEFAULT_LAYOUT);
 
 /** One detail level the universal view (ADR 0025, task desktop-universal-view) asked MainView to
  * open after switching workspaces — consumed exactly once by MainView's own

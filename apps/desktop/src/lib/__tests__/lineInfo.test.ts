@@ -10,6 +10,9 @@ import {
 	findRefTag,
 	joinPath,
 	resolveRefIndicator,
+	BESIDE_THE_LIST,
+	DEFAULT_LAYOUT,
+	refDirFor,
 	type FileProgress
 } from "../todotxt/lineInfo";
 
@@ -137,5 +140,27 @@ describe("resolveRefIndicator", () => {
 			done: 0,
 			total: 1
 		});
+	});
+});
+
+describe("refDirFor (task workspace-layout)", () => {
+	it("puts a root line's ref dir under refs_dir and a nested list's beside it", () => {
+		expect(refDirFor(DEFAULT_LAYOUT, "todo.txt", "roadmap")).toBe("tasks/roadmap");
+		expect(refDirFor(DEFAULT_LAYOUT, "tasks/roadmap/todo.txt", "outline")).toBe("tasks/roadmap/outline");
+	});
+
+	it("keeps ADR 0012's placement for refs_dir '.', and follows a custom folder", () => {
+		expect(refDirFor(BESIDE_THE_LIST, "todo.txt", "roadmap")).toBe("roadmap");
+		expect(refDirFor({ refs_dir: "work/refs", todo_file: "todo.txt" }, "todo.txt", "a")).toBe("work/refs/a");
+	});
+
+	it("resolves an indicator through the layout", () => {
+		const files = new Map([["tasks/q4/todo.txt", { path: "tasks/q4/todo.txt", done: 1, total: 4 }]]);
+		expect(resolveRefIndicator("todo.txt", "q4", files, DEFAULT_LAYOUT)).toEqual({
+			kind: "progress",
+			done: 1,
+			total: 4
+		});
+		expect(resolveRefIndicator("todo.txt", "q4", files)).toBeNull(); // beside the list: nothing there
 	});
 });

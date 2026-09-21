@@ -240,6 +240,20 @@ export interface WorkspaceInfo {
 	is_default?: boolean;
 }
 
+/** The current workspace's layout (task workspace-layout). Mirrors `WorkspaceLayoutDto`. */
+export interface WorkspaceLayout {
+	refs_dir: string;
+	todo_file: string;
+	/** Why `txtodo.toml` is not the layout in force; empty when it is. */
+	note: string;
+	outside_refs_dir: string[];
+}
+
+/** Where the current workspace keeps its root list and its `ref:` folders. */
+export function workspaceLayout(): Promise<WorkspaceLayout> {
+	return invoke("workspace_layout");
+}
+
 /** Every registered workspace, oldest first. */
 export function listWorkspaces(): Promise<WorkspaceInfo[]> {
 	return invoke("list_workspaces");

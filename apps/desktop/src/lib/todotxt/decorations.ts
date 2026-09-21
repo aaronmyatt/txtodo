@@ -24,6 +24,8 @@ import {
 } from "@codemirror/view";
 import { completedLineInfo, findRefTag, resolveRefIndicator, type FileProgress, type RefIndicator } from "./lineInfo";
 import { hintOffset } from "./lineLength";
+import { get } from "svelte/store";
+import { workspaceLayoutStore } from "$lib/stores/workspaces";
 
 const idTagMatcher = new MatchDecorator({
 	regexp: /\bid:\S+/g,
@@ -144,7 +146,7 @@ function buildLineDecorations(
 
 			const ref = findRefTag(line.text);
 			if (ref) {
-				const indicator = resolveRefIndicator(containingPath, ref.slug, filesByPath);
+				const indicator = resolveRefIndicator(containingPath, ref.slug, filesByPath, get(workspaceLayoutStore));
 				if (indicator) {
 					builder.add(line.to, line.to, Decoration.widget({ widget: new RefIndicatorWidget(indicator), side: 1 }));
 				}

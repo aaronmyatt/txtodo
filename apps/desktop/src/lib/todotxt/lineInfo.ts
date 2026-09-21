@@ -77,6 +77,27 @@ export function dirOf(path: string): string {
 	return i === -1 ? "" : path.slice(0, i);
 }
 
+/** Where a workspace keeps its root list and the folder for its `ref:` lines (task
+ * workspace-layout): the daemon's `WorkspaceLayout`. `refs_dir` `"."` means beside the list. */
+export interface RefLayout {
+	refs_dir: string;
+	todo_file: string;
+}
+
+/** What the daemon starts a workspace with; used until the real layout has been fetched. */
+export const DEFAULT_LAYOUT: RefLayout = { refs_dir: "tasks", todo_file: "todo.txt" };
+
+/** ADR 0012's placement, refs beside the list. The default for pure callers that name no layout. */
+export const BESIDE_THE_LIST: RefLayout = { refs_dir: ".", todo_file: "todo.txt" };
+
+/** The workspace-relative directory of `slug` for a line in `containingPath`: under `refs_dir`
+ * for the root list, beside the file for a nested list. Mirrors the daemon's
+ * `WorkspaceLayout::ref_dir_for`, the one place a slug becomes a directory. */
+export function refDirFor(layout: RefLayout, containingPath: string, slug: string): string {
+	if (containingPath !== layout.todo_file) return joinPath(dirOf(containingPath), slug);
+	return joinPath(layout.refs_dir === "." ? dirOf(layout.todo_file) : layout.refs_dir, slug);
+}
+
 /** Joins a (possibly empty) workspace-relative directory with a child name. */
 export function joinPath(dir: string, name: string): string {
 	return dir === "" ? name : `${dir}/${name}`;
@@ -91,9 +112,10 @@ export function joinPath(dir: string, name: string): string {
 export function resolveRefIndicator(
 	containingPath: string,
 	slug: string,
-	filesByPath: ReadonlyMap<string, FileProgress>
+	filesByPath: ReadonlyMap<string, FileProgress>,
+	layout: RefLayout = BESIDE_THE_LIST
 ): RefIndicator | null {
-	const dir = joinPath(dirOf(containingPath), slug);
+	const dir = refDirFor(layout, containingPath, slug);
 	const todo = filesByPath.get(joinPath(dir, "todo.txt"));
 	if (todo) return { kind: "progress", done: todo.done, total: todo.total };
 	const notes = filesByPath.get(joinPath(dir, "notes.md"));

@@ -9,11 +9,12 @@
 		onDaemonStatus,
 		retryConnect,
 		setMainPopoverDirty,
+		workspaceLayout,
 		workspaceRoot,
 		type DaemonStatus
 	} from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
-	import { currentWorkspaceRoot, pendingUniversalNav } from "$lib/stores/workspaces";
+	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
@@ -75,6 +76,11 @@
 		const root = $currentWorkspaceRoot;
 		if (!root || root === lastRoot) return;
 		lastRoot = root;
+		// Where this workspace keeps its `ref:` folders (task workspace-layout): the nested-list
+		// paths and the ref indicators are composed from it. A failed fetch keeps the default.
+		workspaceLayout()
+			.then((layout) => workspaceLayoutStore.set(layout))
+			.catch(() => {});
 		const pending = get(pendingUniversalNav);
 		if (pending && pending.workspaceRoot === root) {
 			detail = [{ file: pending.file, line: pending.line, workspaceRoot: pending.workspaceRoot }];

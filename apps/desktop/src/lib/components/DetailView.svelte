@@ -27,7 +27,8 @@
 		type TaskRef
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
-	import { dirOf, findRefTag, joinPath } from "$lib/todotxt/lineInfo";
+	import { findRefTag, joinPath, refDirFor } from "$lib/todotxt/lineInfo";
+	import { workspaceLayoutStore } from "$lib/stores/workspaces";
 	import { lineOfTask, taskIdAt } from "$lib/todotxt/taskIds";
 	import type { DetailParams } from "$lib/types";
 	import Breadcrumb from "./Breadcrumb.svelte";
@@ -72,7 +73,7 @@
 	let parentLineNumber = $state(0);
 	const parentTaskRef = $derived<TaskRef>({ line_number: parentLineNumber || current.line, task_id: parentTaskId });
 	const refTag = $derived(findRefTag(parentLine));
-	const refDir = $derived(refTag ? joinPath(dirOf(current.file), refTag.slug) : null);
+	const refDir = $derived(refTag ? refDirFor($workspaceLayoutStore, current.file, refTag.slug) : null);
 	const subListPath = $derived(refDir ? joinPath(refDir, "todo.txt") : null);
 	const subListInfo = $derived(subListPath ? (filesByPath.get(subListPath) ?? null) : null);
 	const absoluteRefDir = $derived(
