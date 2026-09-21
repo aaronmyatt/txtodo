@@ -22,7 +22,7 @@
 //! Rule 5 is normative on this point, so "surely it should sum the grandchildren" is a bug, not a
 //! reading of the spec.
 
-use crate::{Field, FilePath, OpKind, TaskId};
+use crate::{Field, FilePath, OpKind, TaskId, WorkspaceLayout};
 use std::collections::BTreeMap;
 
 /// Deepest `ref:` nesting the tree will model. specs/ref-directories.md rule 2's nesting is
@@ -94,10 +94,18 @@ impl NodeId {
     /// The child directory this node would have for `slug` (rule 2: beside the file holding the
     /// line, i.e. inside this node's own directory). `None` only when `slug` itself is not a valid
     /// path segment, which `Task::ref_slug`'s grammar check already rules out for a real tag.
-    fn child(&self, slug: &str) -> Option<NodeId> {
-        let joined = match &self.0 {
-            Some(dir) => format!("{}/{slug}", dir.as_str()),
-            None => slug.to_owned(),
+    ///
+    /// The node holding the workspace's root list takes its child directories from the workspace
+    /// layout (`refs_dir`, task workspace-layout); every other node, a nested list, keeps them
+    /// beside its own file.
+    fn child(&self, slug: &str, layout: &WorkspaceLayout) -> Option<NodeId> {
+        let joined = if *self == NodeId::of_file(&layout.root_list()) {
+            layout.ref_dir_of(slug)
+        } else {
+            match &self.0 {
+                Some(dir) => format!("{}/{slug}", dir.as_str()),
+                None => slug.to_owned(),
+            }
         };
         FilePath::new(&joined).ok().map(NodeId::dir)
     }
@@ -159,6 +167,15 @@ impl WorkspaceTree {
     /// synthesised (empty progress, no owner) when absent, so a caller never has to special-case
     /// it.
     pub fn build(inputs: Vec<NodeInput>) -> Result<WorkspaceTree, TreeError> {
+        WorkspaceTree::build_with_layout(inputs, &WorkspaceLayout::beside_the_list())
+    }
+
+    /// `build`, with the root list's `ref:` directories placed by `layout` (task
+    /// workspace-layout): under `layout.refs_dir()`, or beside the list when it is `.`.
+    pub fn build_with_layout(
+        inputs: Vec<NodeInput>,
+        layout: &WorkspaceLayout,
+    ) -> Result<WorkspaceTree, TreeError> {
         if inputs.len() > MAX_TRACKED_REFS {
             return Err(TreeError::TooMany(inputs.len()));
         }
@@ -181,7 +198,7 @@ impl WorkspaceTree {
             .collect();
         nodes.entry(NodeId::root()).or_default();
         for input in &inputs {
-            link_children(&mut nodes, &input.id, &input.ref_tags);
+            link_children(&mut nodes, &input.id, &input.ref_tags, layout);
         }
         debug_assert!(nodes.len() <= MAX_TRACKED_REFS + 1, "root plus every input");
         Ok(WorkspaceTree { nodes })
@@ -223,9 +240,14 @@ impl WorkspaceTree {
 /// For each of `parent`'s `ref:` tags whose target directory was actually discovered, records the
 /// edge (in `parent`'s children map) and the target's owner. A tag naming an undiscovered
 /// directory is a dangling edge (rule 9) and is silently skipped.
-fn link_children(nodes: &mut BTreeMap<NodeId, Node>, parent: &NodeId, tags: &[RefTag]) {
+fn link_children(
+    nodes: &mut BTreeMap<NodeId, Node>,
+    parent: &NodeId,
+    tags: &[RefTag],
+    layout: &WorkspaceLayout,
+) {
     for tag in tags {
-        let Some(child) = parent.child(&tag.slug) else {
+        let Some(child) = parent.child(&tag.slug, layout) else {
             continue;
         };
         if !nodes.contains_key(&child) {

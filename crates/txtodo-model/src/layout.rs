@@ -147,6 +147,16 @@ impl WorkspaceLayout {
         })
     }
 
+    /// ADR 0012's layout: `todo.txt` at the root, ref dirs beside it (`refs_dir = "."`). Not the
+    /// default (that is `tasks`); a caller that has not yet been given a layout, and the tests
+    /// written against the old placement, use this.
+    pub fn beside_the_list() -> WorkspaceLayout {
+        WorkspaceLayout {
+            refs_dir: BESIDE_THE_LIST.to_owned(),
+            todo_file: default_todo_file(),
+        }
+    }
+
     /// The folder for the ref dirs of root-list lines, as written (`tasks`, or `.`).
     pub fn refs_dir(&self) -> &str {
         &self.refs_dir

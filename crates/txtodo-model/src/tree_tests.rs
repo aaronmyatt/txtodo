@@ -255,3 +255,79 @@ proptest! {
         }
     }
 }
+
+/// Task workspace-layout: the root list's `ref:` directories sit under `refs_dir`, and a nested
+/// list's stay beside its own file.
+mod layout {
+    use super::*;
+    use crate::WorkspaceLayout;
+
+    fn owner(n: u128) -> TaskId {
+        TaskId::new(crate::Ulid::from_u128(n))
+    }
+
+    fn input(dir: Option<&str>, tags: &[(u128, &str)]) -> NodeInput {
+        NodeInput {
+            id: dir.map_or_else(NodeId::root, |d| NodeId::dir(FilePath::new(d).unwrap())),
+            progress: Progress::default(),
+            ref_tags: tags
+                .iter()
+                .map(|(o, s)| RefTag {
+                    owner: owner(*o),
+                    slug: (*s).to_owned(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_root_tag_resolves_under_refs_dir_and_a_nested_tag_stays_beside_its_file() {
+        let layout = WorkspaceLayout::default();
+        let tree = WorkspaceTree::build_with_layout(
+            vec![
+                input(None, &[(1, "roadmap")]),
+                input(Some("tasks/roadmap"), &[(2, "outline")]),
+                input(Some("tasks/roadmap/outline"), &[]),
+            ],
+            &layout,
+        )
+        .unwrap();
+        let roadmap = NodeId::dir(FilePath::new("tasks/roadmap").unwrap());
+        assert_eq!(tree.owner(&roadmap), Some(owner(1)));
+        assert_eq!(
+            tree.owner(&NodeId::dir(
+                FilePath::new("tasks/roadmap/outline").unwrap()
+            )),
+            Some(owner(2)),
+            "the nested list's own ref sits beside it, not under refs_dir again"
+        );
+        assert_eq!(tree.orphans().count(), 0);
+    }
+
+    #[test]
+    fn a_folder_beside_the_list_is_an_orphan_under_the_default_layout() {
+        // `crates/` next to todo.txt is not a ref dir once refs live in `tasks/`.
+        let tree = WorkspaceTree::build_with_layout(
+            vec![input(None, &[(1, "roadmap")]), input(Some("roadmap"), &[])],
+            &WorkspaceLayout::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            tree.owner(&NodeId::dir(FilePath::new("roadmap").unwrap())),
+            None
+        );
+    }
+
+    #[test]
+    fn build_keeps_the_old_beside_the_list_placement() {
+        let tree = WorkspaceTree::build(vec![
+            input(None, &[(1, "roadmap")]),
+            input(Some("roadmap"), &[]),
+        ])
+        .unwrap();
+        assert_eq!(
+            tree.owner(&NodeId::dir(FilePath::new("roadmap").unwrap())),
+            Some(owner(1))
+        );
+    }
+}
