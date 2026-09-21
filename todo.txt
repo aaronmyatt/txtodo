@@ -272,3 +272,4 @@ x 2026-09-21 2026-09-15 txtodo relay enroll <email> then --code NNNNNN: request 
 x 2026-09-21 2026-09-20 Complete moves a task to the bottom of its own file, once, in every client +m11 @daemon @cli @tui @desktop ref:complete-to-bottom — reopen decided 2026-09-20 (A: a new Mutation.Reopen, the line moves above the first done line); its four lines are open in tasks/complete-to-bottom/todo.txt — see tasks/complete-to-bottom/notes.md; known gap: no TUI or desktop action un-completes, so none sends Reopen
 x 2026-09-21 2026-09-20 Apply dry_run: the daemon returns the unified diff a batch would make, and structured errors +m6 @daemon @mcp ref:apply-dry-run — see tasks/apply-dry-run/notes.md; known gap: todo_move cannot be previewed
 2026-09-21 daemon: notes.md sync (actor, recovery, LAN apply) +m11 @daemon ref:notes-sync
+2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli

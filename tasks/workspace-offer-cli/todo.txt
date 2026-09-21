@@ -1,0 +1,4 @@
+2026-09-21 cli: `txtodo workspace offers` lists pending offers (wraps WorkspacePendingOffers) +m11 @cli
+2026-09-21 cli: `txtodo workspace accept <id> [--dir <path>]` (wraps WorkspaceAcceptOffer) +m11 @cli
+2026-09-21 cli: `txtodo workspace decline <id>` (wraps WorkspaceDeclineOffer) +m11 @cli
+2026-09-21 tui: surface pending workspace offers and an accept/decline action +m11 @tui
