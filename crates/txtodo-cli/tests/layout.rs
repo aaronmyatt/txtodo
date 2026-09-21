@@ -205,3 +205,79 @@ fn workspace_layout_move_relocates_the_dirs_and_open_and_doctor_follow() {
         .unwrap_or_else(|| panic!("{doctor}"));
     assert!(row.contains("refs_dir = stuff"), "{row}");
 }
+
+fn custom_workspace() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("txtodo.toml"), "todo_file = \"work.txt\"\n").unwrap();
+    std::fs::write(dir.path().join("work.txt"), "plan the launch\n").unwrap();
+    dir
+}
+
+#[test]
+fn a_custom_root_list_is_what_add_list_and_open_use_through_the_daemon() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    let ws = custom_workspace();
+
+    let add = txtodo(&daemon, ws.path(), &["add", "book the vet"]);
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let work = std::fs::read_to_string(ws.path().join("work.txt")).unwrap();
+    assert!(
+        work.contains("book the vet") && work.contains("plan the launch"),
+        "{work}"
+    );
+    assert!(!ws.path().join("todo.txt").exists(), "no todo.txt was made");
+
+    assert!(stdout(&txtodo(&daemon, ws.path(), &["list"])).contains("plan the launch"));
+    let notes = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(ws.path())
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", ws.path().join("none.toml"))
+        .env("TXTODO_SOCKET", &daemon.socket)
+        .env("EDITOR", "true")
+        .args(["notes", "1"])
+        .output()
+        .unwrap();
+    assert!(
+        notes.status.success(),
+        "{}",
+        String::from_utf8_lossy(&notes.stderr)
+    );
+    assert!(
+        ws.path().join("tasks/plan-the-launch").is_dir(),
+        "the root list's refs are in tasks/"
+    );
+    assert!(
+        stdout(&txtodo(&daemon, ws.path(), &["open", "1"]))
+            .trim_end()
+            .ends_with("tasks/plan-the-launch")
+    );
+}
+
+#[test]
+fn a_custom_root_list_is_what_direct_file_mode_edits() {
+    let ws = custom_workspace();
+    let out = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(ws.path())
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", ws.path().join("none.toml"))
+        .env("XDG_DATA_HOME", ws.path().join(".global-home"))
+        .args(["--no-daemon", "add", "direct one"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        std::fs::read_to_string(ws.path().join("work.txt"))
+            .unwrap()
+            .contains("direct one")
+    );
+    assert!(!ws.path().join("todo.txt").exists());
+}
