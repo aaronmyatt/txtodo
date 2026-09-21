@@ -1,0 +1,3 @@
+2026-09-21 daemon: wire NotesActor into Workspace::register/recovery so an on-disk notes.md is seeded at daemon startup +m11 @daemon
+2026-09-21 daemon: lan_apply resolves a notes path via get_or_create_actor instead of silently dropping the op +m11 @daemon @sync
+2026-09-21 test: extend nested_ref_sync (or a new test) asserting notes.md converges across two daemons, root and nested +m11 @daemon @test
