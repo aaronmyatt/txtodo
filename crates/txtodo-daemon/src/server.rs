@@ -1,8 +1,6 @@
 //! The gRPC service on the unix socket (ADR 0006). Handlers are thin: parse the request into
 //! typed values (`convert.rs`), send one message to the right actor, map the reply. Ref:
-//! <https://docs.rs/tonic/latest/tonic/transport/server/>.
-//!
-//! No `rpc{method,workspace}` span here: `GlobalService` wraps every production RPC in one.
+//! <https://docs.rs/tonic/latest/tonic/transport/server/>. No `rpc{method,workspace}` span here: `GlobalService` wraps every production RPC in one.
 
 use crate::convert::{file_kind_of, parse_mutation, parse_path, parse_principal};
 use crate::handle::{ActorHandle, WATCH_CAP};
