@@ -15,7 +15,7 @@ use crate::backend::{
 };
 use crate::error::McpError;
 use crate::grpc_convert::{hex, workspace_selector};
-use crate::grpc_read::{DEFAULT_TODO, locate_by_id};
+use crate::grpc_read::{file_or_root, locate_by_id};
 use crate::grpc_write::GrpcCtx;
 
 fn status(s: tonic::Status) -> McpError {
@@ -28,9 +28,10 @@ pub async fn lint(
     file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<Vec<LintFinding>, McpError> {
+    let path = file_or_root(client.clone(), file, &workspace).await;
     let rep = client
         .lint(pb::LintRequest {
-            path: file.unwrap_or_else(|| DEFAULT_TODO.to_owned()),
+            path,
             workspace: workspace_selector(workspace),
         })
         .await
@@ -68,7 +69,7 @@ pub async fn conflicts_list(
     file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<Vec<ConflictFlag>, McpError> {
-    let path = file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
+    let path = file_or_root(client.clone(), file, &workspace).await;
     Ok(flags(&mut client, &path, workspace)
         .await?
         .into_iter()

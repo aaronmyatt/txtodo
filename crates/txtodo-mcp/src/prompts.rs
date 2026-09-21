@@ -64,9 +64,7 @@ async fn plan_today(
     backend: &dyn McpBackend,
     file: Option<String>,
 ) -> Result<GetPromptResult, ErrorData> {
-    let text = backend
-        .get_file(file.unwrap_or_else(|| "todo.txt".into()), None)
-        .await?;
+    let text = backend.get_file(file, None).await?;
     let instructions =
         "Prioritise today's actionable tasks (skip anything already done or blocked):";
     Ok(GetPromptResult::new(vec![
@@ -79,8 +77,7 @@ async fn weekly_review(
     backend: &dyn McpBackend,
     file: Option<String>,
 ) -> Result<GetPromptResult, ErrorData> {
-    let path = file.unwrap_or_else(|| "todo.txt".into());
-    let text = backend.get_file(path, None).await?;
+    let text = backend.get_file(file, None).await?;
     let instructions = "Summarise this week: what's done, what's stuck, what to carry forward:";
     Ok(GetPromptResult::new(vec![
         PromptMessage::new_text(Role::User, instructions),

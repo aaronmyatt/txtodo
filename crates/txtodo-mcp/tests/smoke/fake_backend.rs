@@ -93,7 +93,11 @@ impl McpBackend for FakeBackend {
         self.record("delete");
         Ok(())
     }
-    async fn archive(&self, _file: RefPath, _w: WorkspaceArg) -> Result<ApplyOutcome, McpError> {
+    async fn archive(
+        &self,
+        _file: Option<RefPath>,
+        _w: WorkspaceArg,
+    ) -> Result<ApplyOutcome, McpError> {
         self.record("archive");
         Ok(ApplyOutcome::default())
     }
@@ -184,7 +188,7 @@ impl McpBackend for FakeBackend {
             kind: "todo",
         }])
     }
-    async fn get_file(&self, _file: RefPath, _w: WorkspaceArg) -> Result<String, McpError> {
+    async fn get_file(&self, _file: Option<RefPath>, _w: WorkspaceArg) -> Result<String, McpError> {
         self.record("get_file");
         Ok("(A) 2026-09-11 Draft +work id:01J\n".to_owned())
     }

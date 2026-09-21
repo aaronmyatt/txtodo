@@ -82,7 +82,7 @@ pub async fn read(backend: &dyn McpBackend, uri: &str) -> Result<ReadResourceRes
         _ if path == "history" || path.starts_with("history?") => {
             history_json(backend, &path, workspace).await?
         }
-        _ => backend.get_file(path.to_owned(), workspace).await?,
+        _ => backend.get_file(Some(path.to_owned()), workspace).await?,
     };
     Ok(ReadResourceResult::new(vec![ResourceContents::text(
         text, uri,

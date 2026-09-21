@@ -12,7 +12,7 @@ use crate::backend::{
 };
 use crate::error::McpError;
 use crate::grpc_convert::{hex, workspace_selector};
-use crate::grpc_read::{DEFAULT_TODO, get_file_doc, locate_by_id};
+use crate::grpc_read::{file_or_root, get_file_doc, locate_by_id};
 use crate::parse;
 
 /// The gRPC channel plus the principal every mutation is stamped with (design §6.2's `agent`
@@ -85,7 +85,7 @@ pub async fn add(
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     validate_add_text(&text)?;
-    let path = file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
+    let path = file_or_root(ctx.client.clone(), file, &workspace).await;
     let mutation = pb::Mutation {
         kind: Some(pb::mutation::Kind::Add(pb::Add { line: text.clone() })),
     };
@@ -245,9 +245,10 @@ pub async fn delete(
 /// `TaskRef` needs tracking here as earlier moves close up the gap they leave behind.
 pub async fn archive(
     ctx: GrpcCtx,
-    file: RefPath,
+    file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<ApplyOutcome, McpError> {
+    let file = file_or_root(ctx.client.clone(), file, &workspace).await;
     let doc = get_file_doc(ctx.client.clone(), &file, workspace.clone()).await?;
     let mut completed: Vec<(u32, String)> = doc
         .rows()

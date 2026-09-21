@@ -144,3 +144,47 @@ async fn id_addressed_tools_resolve_a_sidecar_task() {
     let notes = backend.notes_get(two_id, w()).await.expect("notes_get");
     assert_eq!(notes, "# two\n");
 }
+
+/// Task workspace-layout: with `todo_file = "work.txt"` in `txtodo.toml`, a tool that names no
+/// file adds to, lists and reads `work.txt`, not a `todo.txt` that does not exist.
+#[tokio::test]
+#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
+async fn tools_with_no_file_use_the_layouts_root_list() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let socket = tmp.path().join("txtodod.sock");
+    let ws = tmp.path().join("ws");
+    std::fs::create_dir_all(&ws).expect("mkdir ws");
+    std::fs::write(ws.join("txtodo.toml"), "todo_file = \"work.txt\"\n").expect("seed toml");
+    std::fs::write(ws.join("work.txt"), "").expect("seed work.txt");
+    let daemon = std::process::Command::new(daemon_binary())
+        .env("TXTODO_SOCKET", &socket)
+        .env("TXTODO_REGISTRY_DB", tmp.path().join("registry.db"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn txtodod");
+    let _guard = KillOnDrop(daemon);
+    wait_for_socket(&socket).await;
+    let backend = GrpcMcpBackend::connect_unix(&socket, None)
+        .await
+        .expect("connect to the global socket");
+    let w = || Some(ws.to_string_lossy().into_owned());
+
+    backend
+        .add("plan the launch".into(), None, w())
+        .await
+        .expect("add");
+    let rows = backend
+        .list(ListArgs {
+            workspace: w(),
+            ..ListArgs::default()
+        })
+        .await
+        .expect("list");
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let text = backend.get_file(None, w()).await.expect("get_file");
+    assert!(text.contains("plan the launch"), "{text}");
+    let on_disk = std::fs::read_to_string(ws.join("work.txt")).expect("read work.txt");
+    assert!(on_disk.contains("plan the launch"), "{on_disk}");
+    assert!(!ws.join("todo.txt").exists(), "no todo.txt was invented");
+}

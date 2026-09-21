@@ -211,7 +211,7 @@ pub trait McpBackend: Send + Sync {
     /// crate's "As built" notes.
     async fn archive(
         &self,
-        file: RefPath,
+        file: Option<RefPath>,
         workspace: WorkspaceArg,
     ) -> Result<ApplyOutcome, McpError>;
     /// `todo_batch`. `dry_run: true` writes nothing and returns the daemon's unified diff of what
@@ -280,7 +280,11 @@ pub trait McpBackend: Send + Sync {
     /// the module doc).
     async fn list_files(&self, workspace: WorkspaceArg) -> Result<Vec<FileMeta>, McpError>;
     /// A whole file's bytes as text (`todotxt://todo.txt`; see module doc).
-    async fn get_file(&self, file: RefPath, workspace: WorkspaceArg) -> Result<String, McpError>;
+    async fn get_file(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<String, McpError>;
     /// `todo_list_workspaces` resource → daemon gRPC `WorkspaceList`. Device-global, unscoped by
     /// any `WorkspaceSelector` — the registry listing is not itself one of the workspaces it lists.
     async fn list_workspaces(&self) -> Result<Vec<WorkspaceInfo>, McpError>;

@@ -11,7 +11,7 @@
 use crate::backend::{ApplyOutcome, RefPath, TaskId, TodoOp, WorkspaceArg};
 use crate::error::McpError;
 use crate::grpc_convert::workspace_selector;
-use crate::grpc_read::{DEFAULT_TODO, locate_by_id};
+use crate::grpc_read::{file_or_root, locate_by_id};
 use crate::grpc_write::{GrpcCtx, apply_patch, status, validate_add_text};
 use txtodo_proto::v1 as pb;
 
@@ -39,7 +39,7 @@ async fn planned(
         async move { locate_by_id(client, &id, workspace).await }
     };
     Ok(match op {
-        TodoOp::TodoAdd { text, file } => Some(add_plan(text, file)?),
+        TodoOp::TodoAdd { text, file } => Some(add_plan(ctx, text, file, workspace).await?),
         TodoOp::TodoComplete { id } => {
             let (path, _, row) = locate(id.clone()).await?;
             (!row.done).then(|| {
@@ -134,10 +134,16 @@ pub(crate) async fn preview(
     })
 }
 
-/// An add needs no lookup: the file (default `todo.txt`) and the line as the tool would send it.
-fn add_plan(text: String, file: Option<RefPath>) -> Result<(RefPath, pb::Mutation), McpError> {
+/// An add needs no lookup of the line: the file (default the root list) and the line as the tool
+/// would send it.
+async fn add_plan(
+    ctx: &GrpcCtx,
+    text: String,
+    file: Option<RefPath>,
+    workspace: &WorkspaceArg,
+) -> Result<(RefPath, pb::Mutation), McpError> {
     validate_add_text(&text)?;
-    let path = file.unwrap_or_else(|| DEFAULT_TODO.to_owned());
+    let path = file_or_root(ctx.client.clone(), file, workspace).await;
     Ok((
         path,
         mutation(pb::mutation::Kind::Add(pb::Add { line: text })),

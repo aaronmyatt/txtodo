@@ -72,8 +72,7 @@ pub async fn archive(
     backend: &dyn McpBackend,
     args: ArchiveArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    let file = args.file.unwrap_or_else(|| "todo.txt".to_owned());
-    json_result(&backend.archive(file, args.workspace).await?)
+    json_result(&backend.archive(args.file, args.workspace).await?)
 }
 
 /// `todo_batch`.

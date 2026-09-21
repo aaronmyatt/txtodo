@@ -174,7 +174,7 @@ impl McpBackend for GrpcMcpBackend {
 
     async fn archive(
         &self,
-        file: RefPath,
+        file: Option<RefPath>,
         workspace: WorkspaceArg,
     ) -> Result<ApplyOutcome, McpError> {
         grpc_write::archive(self.ctx(), file, workspace).await
@@ -261,7 +261,12 @@ impl McpBackend for GrpcMcpBackend {
         grpc_read::list_files(self.client(), workspace).await
     }
 
-    async fn get_file(&self, file: RefPath, workspace: WorkspaceArg) -> Result<String, McpError> {
+    async fn get_file(
+        &self,
+        file: Option<RefPath>,
+        workspace: WorkspaceArg,
+    ) -> Result<String, McpError> {
+        let file = grpc_read::file_or_root(self.client(), file, &workspace).await;
         grpc_read::get_file_text(self.client(), &file, workspace).await
     }
 
