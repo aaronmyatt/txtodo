@@ -26,9 +26,16 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   `DaemonClient`): `connect`/`wait_until_ready`/`get_file`/`watch`/`apply`/`list_conflicts`/
   `resolve`/`sync_status`.
 - `input::Input` — pure vim-key dispatch (`AppState` + one `KeyEvent` -> an optional
-  `action::Action`), daemon-free and fully unit tested; `app::{run, perform, reconnect_watch,
-  main}` is the async glue that actually sends an `Action` to a real `Daemon` and drives the
-  terminal. `app.rs` also polls `Daemon::sync_status` on a 1 s tick (`SYNC_STATUS_INTERVAL`),
+  `action::Action`), daemon-free and fully unit tested (`input_tests.rs`, split out for the
+  400-line file cap). **root todo 9**: `J`/`K` build a `MoveBefore`/`MoveToEnd` mutation that
+  swaps the selected line with its neighbor, then advance/retreat `state.cursor` so it keeps
+  tracking the moved line once the daemon's repaint lands — unlike desktop's drag reorder (task
+  `desktop-reorder-propagates`), which sends a whole-document `Replace` because its buffer has no
+  ids under Sidecar; the TUI already renders one `LineState` per line with `line_number`/`task_id`,
+  so a same-file `MoveBefore` per line addresses both ends of the swap directly. `app::{run,
+  perform, reconnect_watch, main}` is the async glue that actually sends an `Action` to a real
+  `Daemon` and drives the terminal. `app.rs` also polls `Daemon::sync_status` on a 1 s tick
+  (`SYNC_STATUS_INTERVAL`),
   mapping the response into `AppState.sync` via `to_sync_snapshot` — best-effort: a failed poll
   leaves the previous snapshot in place rather than erroring the event loop. **`tasks/
   daemon-always-available`**: `app::async_main` now calls `txtodo_daemon_launch::ensure_daemon`
@@ -42,17 +49,18 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   for the legacy per-workspace bridge daemon this crate's own test harness still spawns (hermetic,
   one workspace per daemon, unambiguous with `selector: None`). The `ensure_daemon` result is deliberately
   ignored; `wait_until_ready`'s own error is still the one message a user sees.
-- Tests: 48 unit tests (`cargo test -p txtodo-tui --lib`) covering every module above against
-  `AppState::fixture()`/hand-built drafts, no daemon needed. 8 integration tests
+- Tests: 61 unit tests (`cargo test -p txtodo-tui --lib`) covering every module above against
+  `AppState::fixture()`/hand-built drafts, no daemon needed. Integration tests
   (`tests/roundtrip.rs`, `tests/external_edit.rs`, `tests/sync_status.rs`) spawn a real `txtodod`
   (via `tests/support`, which locates/builds `target/debug/txtodod` by path since
   `CARGO_BIN_EXE_txtodod` is only set for a binary in its *own* package) and drive
   `Daemon`/`app::perform`/`app::reconnect_watch` directly: `dd`/`Space`/`i`+save round-trip
-  through `Apply` and are visible on a real `Watch` stream; an external file write appears on
-  `Watch` without a manual refresh; a dropped `Watch` reconnects (bounded) and re-baselines;
-  reconnecting past the bound with no daemon at all fails rather than looping forever;
-  `sync_status` round-trips against a real daemon with no peers (the two-loopback-daemon,
-  real-peer version of this test is still open — `tasks/tui/todo.txt`).
+  through `Apply` and are visible on a real `Watch` stream; `J`/`K` reorder a line against a real
+  daemon and land on disk in the new order; an external file write appears on `Watch` without a
+  manual refresh; a dropped `Watch` reconnects (bounded) and re-baselines; reconnecting past the
+  bound with no daemon at all fails rather than looping forever; `sync_status` round-trips against
+  a real daemon with no peers (the two-loopback-daemon, real-peer version of this test is still
+  open — `tasks/tui/todo.txt`).
 
 ## Invariants
 - Thin client: talks to the daemon, never parses the file — every byte painted comes from

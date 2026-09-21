@@ -115,6 +115,12 @@ impl Input {
             KeyCode::Char(' ') => {
                 return toggle_complete(state).map(|m| Action::Apply(apply_of(state, m)));
             }
+            KeyCode::Char('J') => {
+                return move_selected_down(state).map(|m| Action::Apply(apply_of(state, m)));
+            }
+            KeyCode::Char('K') => {
+                return move_selected_up(state).map(|m| Action::Apply(apply_of(state, m)));
+            }
             _ => {
                 self.list.on_key(state, key);
             }
@@ -153,6 +159,51 @@ fn delete_selected(state: &AppState) -> Option<pb::Mutation> {
     })
 }
 
+/// The `TaskRef` for the line at `idx`, if any.
+fn task_ref_at(state: &AppState, idx: usize) -> Option<pb::TaskRef> {
+    let line = state.lines.get(idx)?;
+    Some(pb::TaskRef {
+        line_number: line.line_number,
+        task_id: line.task_ref_id().to_owned(),
+    })
+}
+
+/// `J`: builds the `MoveBefore`/`MoveToEnd` mutation that puts the selected line right after the
+/// line below it (a no-op on the Add-a-line row or the last line), then advances the cursor so it
+/// keeps tracking the moved line once the daemon's refresh lands.
+fn move_selected_down(state: &mut AppState) -> Option<pb::Mutation> {
+    if state.on_add_line_row() || state.cursor + 1 >= state.lines.len() {
+        return None;
+    }
+    let task = task_ref_at(state, state.cursor)?;
+    let kind = match task_ref_at(state, state.cursor + 2) {
+        Some(before) => pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+            task: Some(task),
+            before: Some(before),
+        }),
+        None => pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task: Some(task) }),
+    };
+    state.move_down();
+    Some(pb::Mutation { kind: Some(kind) })
+}
+
+/// `K`: builds the `MoveBefore` mutation that puts the selected line right before the line above
+/// it (a no-op on the first line or the Add-a-line row), then moves the cursor to follow it.
+fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
+    if state.on_add_line_row() || state.cursor == 0 {
+        return None;
+    }
+    let task = task_ref_at(state, state.cursor)?;
+    let before = task_ref_at(state, state.cursor - 1)?;
+    state.move_up();
+    Some(pb::Mutation {
+        kind: Some(pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+            task: Some(task),
+            before: Some(before),
+        })),
+    })
+}
+
 /// Wraps one mutation as a single-mutation `ApplyRequest` against the open document.
 pub(crate) fn apply_of(state: &AppState, mutation: pb::Mutation) -> pb::ApplyRequest {
     pb::ApplyRequest {
@@ -173,129 +224,5 @@ pub(crate) fn today_local() -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crossterm::event::KeyModifiers;
-
-    fn key(c: char) -> KeyEvent {
-        KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
-    }
-
-    fn enter() -> KeyEvent {
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)
-    }
-
-    #[test]
-    fn space_on_a_line_produces_a_complete_apply_action() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        let action = input.on_key(&mut state, key(' ')).expect("space acts");
-        let Action::Apply(req) = action else {
-            panic!("expected Apply")
-        };
-        assert_eq!(req.path, "todo.txt");
-        assert!(matches!(
-            req.mutations[0].kind,
-            Some(pb::mutation::Kind::Complete(_))
-        ));
-    }
-
-    #[test]
-    fn every_apply_names_the_tui_as_its_source() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        let Some(Action::Apply(req)) = input.on_key(&mut state, key(' ')) else {
-            panic!("expected Apply")
-        };
-        assert_eq!(req.source, "tui");
-        assert!(!req.dry_run);
-    }
-
-    #[test]
-    fn dd_deletes_the_selected_line() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        assert!(
-            input.on_key(&mut state, key('d')).is_none(),
-            "first d waits"
-        );
-        let action = input.on_key(&mut state, key('d')).expect("second d fires");
-        let Action::Apply(req) = action else {
-            panic!("expected Apply")
-        };
-        assert!(matches!(
-            req.mutations[0].kind,
-            Some(pb::mutation::Kind::Delete(_))
-        ));
-    }
-
-    #[test]
-    fn dd_on_the_add_line_row_does_nothing() {
-        let mut state = AppState::fixture();
-        state.move_last();
-        let mut input = Input::default();
-        input.on_key(&mut state, key('d'));
-        assert!(input.on_key(&mut state, key('d')).is_none());
-    }
-
-    #[test]
-    fn i_opens_the_editor_and_enter_commits_an_edit() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        assert!(input.on_key(&mut state, key('i')).is_none());
-        assert!(state.editing.is_some());
-        input.on_key(&mut state, key('!'));
-        let action = input.on_key(&mut state, enter()).expect("enter commits");
-        assert!(matches!(action, Action::Apply(_)));
-        assert!(state.editing.is_none());
-    }
-
-    #[test]
-    fn esc_cancels_the_editor_without_an_action() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        input.on_key(&mut state, key('i'));
-        let action = input.on_key(&mut state, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(action.is_none());
-        assert!(state.editing.is_none());
-    }
-
-    #[test]
-    fn colon_q_enter_quits() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        input.on_key(&mut state, key(':'));
-        input.on_key(&mut state, key('q'));
-        let action = input.on_key(&mut state, enter());
-        assert_eq!(action, Some(Action::Quit));
-    }
-
-    #[test]
-    fn colon_anything_else_is_a_silent_no_op() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        input.on_key(&mut state, key(':'));
-        input.on_key(&mut state, key('x'));
-        let action = input.on_key(&mut state, enter());
-        assert_eq!(action, None);
-        assert!(!state.should_quit);
-    }
-
-    #[test]
-    fn r_opens_the_conflicts_pane_and_m_resolves_mine() {
-        let mut state = AppState::fixture();
-        let mut input = Input::default();
-        input.on_key(&mut state, key('r'));
-        assert!(state.conflicts_open);
-        let action = input.on_key(&mut state, key('m')).expect("m resolves");
-        assert!(matches!(action, Action::Resolve(_)));
-    }
-
-    #[test]
-    fn today_local_is_iso_calendar_shape() {
-        let s = today_local();
-        assert_eq!(s.len(), 10);
-        assert_eq!(s.as_bytes()[4], b'-');
-        assert_eq!(s.as_bytes()[7], b'-');
-    }
-}
+#[path = "input_tests.rs"]
+mod tests;

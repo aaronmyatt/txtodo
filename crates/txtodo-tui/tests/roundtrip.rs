@@ -126,6 +126,62 @@ async fn space_moves_the_done_line_down_and_the_cursor_stays_on_its_row() {
     );
 }
 
+/// root todo 9: `J` reorders the selected line to sit right after its neighbor, through a real
+/// `MoveBefore` mutation and repaint.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn capital_j_reorders_the_line_after_its_neighbor() {
+    let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+
+    press(
+        &mut daemon,
+        &mut input,
+        &mut state,
+        crossterm::event::KeyCode::Char('J'),
+    )
+    .await;
+
+    assert_eq!(state.lines[0].raw, "call mom");
+    assert_eq!(state.lines[1].raw, "buy milk");
+    assert_eq!(state.lines[2].raw, "walk dog");
+    assert_eq!(state.cursor, 1, "cursor follows the moved line");
+    assert_eq!(_real.disk(), "call mom\nbuy milk\nwalk dog\n");
+}
+
+/// The `K` half of the same feature: reorders the selected line before its neighbor.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn capital_k_reorders_the_line_before_its_neighbor() {
+    let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    state.cursor = 1; // "call mom"
+    let mut input = Input::default();
+
+    press(
+        &mut daemon,
+        &mut input,
+        &mut state,
+        crossterm::event::KeyCode::Char('K'),
+    )
+    .await;
+
+    assert_eq!(state.lines[0].raw, "call mom");
+    assert_eq!(state.lines[1].raw, "buy milk");
+    assert_eq!(state.lines[2].raw, "walk dog");
+    assert_eq!(state.cursor, 0, "cursor follows the moved line");
+    assert_eq!(_real.disk(), "call mom\nbuy milk\nwalk dog\n");
+}
+
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn i_edit_and_enter_saves_through_apply() {
