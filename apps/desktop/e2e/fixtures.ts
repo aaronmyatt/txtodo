@@ -4,7 +4,15 @@
 // (tasks/desktop-playwright-tests/notes.md). Each spec calls `spawnDaemon(fixture)` for its own
 // fresh workspace — "no test may depend on another's side effects" (that file's own rule).
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,7 +67,16 @@ export interface DaemonHandle {
  * new sidecar-by-default identity mode (see tasks/desktop-detail-view/notes.md's "As built" for
  * the full explanation).
  */
-export type FixtureName = "todo" | "popover" | "nested" | "notes-create" | "conflict" | "ten-k";
+export type FixtureName =
+	| "todo"
+	| "popover"
+	| "nested"
+	| "notes-create"
+	| "conflict"
+	| "ten-k"
+	// A fresh profile: no workspace of its own, so the app opens the daemon's default one
+	// (task default-workspace). `dir` is that default workspace's directory.
+	| "fresh";
 
 function seed(dir: string, fixture: FixtureName): void {
 	switch (fixture) {
@@ -90,6 +107,8 @@ function seed(dir: string, fixture: FixtureName): void {
 			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
 			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
 			return;
+		case "fresh":
+			return; // nothing to seed: the daemon creates the default workspace itself
 		case "ten-k":
 			// tasks/desktop-visual-regression: the 10k-line fixture shared by the main-view snapshot
 			// and the first-paint perf budget — see tenKFixture.ts's module doc for why it's a
@@ -147,8 +166,9 @@ export async function debugRaiseConflict(
  * the daemon's startup adoption of the seeded file. */
 export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 	ensureBuilt();
-	const dir = mkdtempSync(join(tmpdir(), tmpPrefix()));
-	seed(dir, fixture);
+	const fresh = fixture === "fresh";
+	const dir = fresh ? "" : mkdtempSync(join(tmpdir(), tmpPrefix()));
+	if (!fresh) seed(dir, fixture);
 	const port = pickPort();
 
 	// A SEPARATE tempdir for this fixture's isolated global-mode daemon state (socket, registry.db,
@@ -157,7 +177,11 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 	// listing is exactly `{todo.txt, .txtodo}` before any user action, so anything the daemon's
 	// *global* state creates must live outside the workspace tree entirely, not just outside
 	// `.txtodo/`.
-	const globalDir = mkdtempSync(join(tmpdir(), tmpPrefix("global-")));
+	// `realpathSync`: macOS tmp dirs sit behind a `/var` -> `/private/var` symlink, and the daemon
+	// reports a workspace by its canonical root, so a spec comparing `dir` to it needs the same form.
+	const globalDir = realpathSync(mkdtempSync(join(tmpdir(), tmpPrefix("global-"))));
+	// A fresh profile's workspace is the default one, which the daemon makes beside its socket.
+	const workspaceDir = fresh ? join(globalDir, "default") : dir;
 
 	const proc: ChildProcess = spawn(join(TARGET_DEBUG, "e2e_bridge"), [], {
 		env: {
@@ -166,7 +190,7 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 			// (apps/desktop/src-tauri/src/config.rs) — prepending target/debug here is simpler
 			// than adding a bridge-only env override for a binary that already resolves via PATH.
 			PATH: `${TARGET_DEBUG}:${process.env.PATH ?? ""}`,
-			TXTODO_WORKSPACE: dir,
+			...(fresh ? {} : { TXTODO_WORKSPACE: dir }),
 			E2E_BRIDGE_PORT: String(port),
 			TXTODO_E2E_GLOBAL_DIR: globalDir
 		},
@@ -180,12 +204,12 @@ export async function spawnDaemon(fixture: FixtureName): Promise<DaemonHandle> {
 
 	return {
 		port,
-		dir,
+		dir: workspaceDir,
 		dispose() {
 			killDaemon(globalDir);
 			proc.kill("SIGKILL");
 			try {
-				rmSync(dir, { recursive: true, force: true });
+				if (!fresh) rmSync(dir, { recursive: true, force: true });
 			} catch {
 				// best-effort cleanup only
 			}
