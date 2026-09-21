@@ -20,7 +20,7 @@ fn ref_dir_path(layout: &WorkspaceLayout, owner: &FilePath, slug: &str) -> FileP
 /// Whether `dir` may be offered to `prune`: with refs under `refs_dir`, only what sits inside it,
 /// so `crates/` and `docs/` beside the list are never orphans (task workspace-layout). With refs
 /// beside the list (`.`) every directory is a candidate, as before.
-fn is_prune_candidate(layout: &WorkspaceLayout, dir: &str) -> bool {
+pub(crate) fn is_prune_candidate(layout: &WorkspaceLayout, dir: &str) -> bool {
     layout.refs_beside_list() || dir.starts_with(&format!("{}/", layout.refs_dir()))
 }
 

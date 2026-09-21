@@ -204,6 +204,14 @@ impl Txtodo for GlobalService {
         svc.prune_orphans(r).instrument(span).await
     }
 
+    async fn workspace_layout(
+        &self,
+        r: Request<pb::WorkspaceLayoutRequest>,
+    ) -> Result<Response<pb::WorkspaceLayoutInfo>, Status> {
+        let (svc, span) = self.scoped("workspace_layout", &r).await?;
+        svc.workspace_layout(r).instrument(span).await
+    }
+
     async fn pair_offer(
         &self,
         r: Request<pb::PairOfferRequest>,

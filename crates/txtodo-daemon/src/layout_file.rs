@@ -48,7 +48,7 @@ pub fn parse(text: &str) -> Result<WorkspaceLayout, String> {
 /// This build reads a root list only from `todo.txt`: the watcher, the walker and every client name
 /// that file. A different `todo_file` is valid data but not yet honoured, so it is refused with a
 /// message instead of being half applied.
-fn supported(layout: WorkspaceLayout) -> Result<WorkspaceLayout, String> {
+pub(crate) fn supported(layout: WorkspaceLayout) -> Result<WorkspaceLayout, String> {
     if layout.todo_file() == WorkspaceLayout::default().todo_file() {
         Ok(layout)
     } else {

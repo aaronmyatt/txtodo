@@ -96,6 +96,7 @@ has_workspace!(
     pb::ResolveRequest,
     pb::HealthRequest,
     pb::PruneOrphansRequest,
+    pb::WorkspaceLayoutRequest,
     pb::PairConfirmRequest,
     pb::PairAwaitPeerRequest,
     pb::ApplyRequest,

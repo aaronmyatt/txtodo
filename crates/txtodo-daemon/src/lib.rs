@@ -57,6 +57,7 @@ mod lan_session_shared;
 pub mod lan_status;
 pub mod layout_file;
 mod layout_reload;
+mod layout_rpc;
 pub mod layout_state;
 mod migrate_grpc;
 pub mod migrate_sidecar;

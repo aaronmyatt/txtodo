@@ -239,6 +239,13 @@ impl Txtodo for TxtodoService {
         self.prune_orphans_impl(r).await
     }
 
+    async fn workspace_layout(
+        &self,
+        r: Request<pb::WorkspaceLayoutRequest>,
+    ) -> Result<Response<pb::WorkspaceLayoutInfo>, Status> {
+        self.workspace_layout_impl(r).await
+    }
+
     async fn pair_offer(
         &self,
         r: Request<pb::PairOfferRequest>,
