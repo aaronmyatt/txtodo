@@ -206,3 +206,46 @@ fn outside_a_workspace_todo_dir_is_the_default_workspace() {
         "{out}"
     );
 }
+
+/// Task default-workspace: `workspace default` prints the directory Finder will not show, with no
+/// daemon running, and `--json` says whether it exists yet.
+#[test]
+fn workspace_default_prints_the_path_without_a_daemon() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let default = dir.path().join("the-default");
+    let out = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_DEFAULT_WORKSPACE", &default)
+            .env("TXTODO_NO_AUTOSTART", "1")
+            .args(["workspace", "default"]),
+    );
+    assert_eq!(out.trim(), default.display().to_string());
+    let json = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_DEFAULT_WORKSPACE", &default)
+            .env("TXTODO_NO_AUTOSTART", "1")
+            .args(["--json", "workspace", "default"]),
+    );
+    assert!(json.contains(r#""exists":false"#), "{json}");
+}
+
+/// `doctor` reports it too, as its own row.
+#[test]
+fn doctor_reports_where_the_default_workspace_lives() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::write(dir.path().join("todo.txt"), "").expect("seed todo.txt");
+    let default = dir.path().join("the-default");
+    let out = txtodo(dir.path())
+        .env("TXTODO_DEFAULT_WORKSPACE", &default)
+        .env("TXTODO_NO_AUTOSTART", "1")
+        .args(["--no-daemon", "doctor"])
+        .output()
+        .expect("txtodo runs");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let row = text
+        .lines()
+        .find(|l| l.starts_with("default"))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(row.contains(&default.display().to_string()), "{row}");
+    assert!(row.contains("not created yet"), "{row}");
+}

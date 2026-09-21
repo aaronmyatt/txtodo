@@ -117,7 +117,10 @@ fn announce_default_workspace(ctx: &Ctx, command: &Command) {
     if !ctx.paths.default_workspace
         || matches!(
             command,
-            Command::Doctor { .. } | Command::Daemon { .. } | Command::Skill { .. }
+            Command::Doctor { .. }
+                | Command::Daemon { .. }
+                | Command::Skill { .. }
+                | Command::Workspace { .. }
         )
     {
         return;
