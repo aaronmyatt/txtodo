@@ -22,6 +22,7 @@ let
   #   - txtodo-store/src/lib.rs           -> txtodo-store/migrations/*.sql
   #   - txtodo-store/src/registry.rs      -> txtodo-store/registry_migrations/*.sql
   #   - txtodo-sync/src/eff_wordlist.rs   -> txtodo-sync/src/wordlists/*.txt
+  #   - txtodo-cli/src/commands/skill.rs  -> skills/txtodo-backlog.md
   # Keep crane's own filter and additionally allow exactly those directories through.
   # lib.cleanSourceWith / lib.hasInfix: https://nixos.org/manual/nixpkgs/stable/#sec-functions-library-filesystem
   src = pkgs.lib.cleanSourceWith {
@@ -32,7 +33,8 @@ let
       || pkgs.lib.hasInfix "/deploy/systemd/" path
       || pkgs.lib.hasInfix "/migrations/" path
       || pkgs.lib.hasInfix "/registry_migrations/" path
-      || pkgs.lib.hasInfix "/wordlists/" path;
+      || pkgs.lib.hasInfix "/wordlists/" path
+      || pkgs.lib.hasInfix "/skills/" path;
     name = "txtodo-workspace-source";
   };
 
