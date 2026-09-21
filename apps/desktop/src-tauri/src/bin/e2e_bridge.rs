@@ -61,8 +61,6 @@ type Shared = Arc<BridgeState>;
 
 #[tokio::main]
 async fn main() {
-    let workspace = std::env::var("TXTODO_WORKSPACE")
-        .unwrap_or_else(|_| panic!("e2e_bridge: TXTODO_WORKSPACE must be set"));
     let port: u16 = std::env::var("E2E_BRIDGE_PORT")
         .ok()
         .and_then(|s| s.parse().ok())
@@ -79,6 +77,11 @@ async fn main() {
     // registry.db, identity.db, pidfile, logs) must never appear inside the workspace tree at all.
     let global_state_dir = std::env::var("TXTODO_E2E_GLOBAL_DIR")
         .unwrap_or_else(|_| panic!("e2e_bridge: TXTODO_E2E_GLOBAL_DIR must be set"));
+    // `TXTODO_WORKSPACE` picks the workspace; without it the bridge stands in for a fresh profile
+    // and uses the default workspace, which the daemon creates beside its socket (task
+    // default-workspace: `txtodo_workspace_paths::default_workspace_dir_for`).
+    let workspace = std::env::var("TXTODO_WORKSPACE")
+        .unwrap_or_else(|_| format!("{global_state_dir}/default"));
     let mut cfg = DesktopConfig::new(workspace.clone());
     cfg.global_socket_override = Some(PathBuf::from(&global_state_dir).join("txtodod.sock"));
     cfg.global_registry_override = Some(PathBuf::from(&global_state_dir).join("registry.db"));
@@ -99,6 +102,15 @@ async fn main() {
         .wait_until_ready()
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: wait_until_ready: {e}"));
+    // `wait_until_ready` only lists the registry, so nothing has opened this workspace yet. A call
+    // that carries the selector does (it promotes the workspace and waits for its open); without it
+    // `.txtodo/` may not exist when a fixture reaches for the store straight away
+    // (`debug_raise_conflict`). Task default-workspace made this visible: an unselected call now
+    // goes to the default workspace instead of opening the sole registered one.
+    client
+        .list_files()
+        .await
+        .unwrap_or_else(|e| panic!("e2e_bridge: opening the workspace: {e}"));
     let shared: Shared = Arc::new(BridgeState {
         client: Mutex::new(client),
         workspace: PathBuf::from(workspace),

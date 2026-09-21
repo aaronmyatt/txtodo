@@ -28,6 +28,14 @@ pub fn global_state_dir() -> PathBuf {
     txtodo_workspace_paths::global_state_dir(&env)
 }
 
+/// The user's default workspace directory (task default-workspace): where the daemon creates it,
+/// resolved through the same shared function so the two cannot disagree. The app starts on it when
+/// nothing else names a workspace.
+pub fn default_workspace_dir() -> PathBuf {
+    let env = RegistryEnv::from_process().unwrap_or_default();
+    txtodo_workspace_paths::default_workspace_dir_for(&env)
+}
+
 /// The bundled sidecar's expected path, if one exists (task `desktop-daemon-sidecar-bundle`):
 /// beside this process' own executable, named `txtodod` (`.exe` on Windows). Tauri's
 /// `externalBin` bundling (`tauri.conf.json`'s `bundle.externalBin: ["binaries/txtodod"]`) copies

@@ -68,10 +68,8 @@
 	// `Breadcrumb` shows the owning project. `get()` (not `$pendingUniversalNav`) is deliberate: a
 	// one-shot read on the root change that triggered it, not a second reactive dependency that
 	// would re-run this effect on every unrelated store write.
-	// The app never assumes a workspace: until one is linked or picked in the sidebar the root is
-	// empty and the main view says so instead of asking the daemon about a directory of its own.
-	// `rootKnown` keeps that message from flashing before the first `workspaceRoot()` answer.
-	let rootKnown = $state(false);
+	// With nothing picked the app opens the default workspace (task default-workspace), so there is
+	// always a root: the main view stays empty only until the first `workspaceRoot()` answer.
 	let lastRoot = "";
 	$effect(() => {
 		const root = $currentWorkspaceRoot;
@@ -88,9 +86,7 @@
 
 	onMount(() => {
 		daemonStatus().then((s) => (status = s));
-		workspaceRoot()
-			.then((r) => ($currentWorkspaceRoot = r))
-			.finally(() => (rootKnown = true));
+		workspaceRoot().then((r) => ($currentWorkspaceRoot = r));
 		// A freshly created OS-level window always starts un-pinned; re-apply whatever was stored
 		// from a previous session (task desktop-always-on).
 		void applyStoredPin();
@@ -135,12 +131,7 @@
 		<p class="opening" role="status">Opening this workspace&hellip;</p>
 	{/if}
 
-	{#if rootKnown && !$currentWorkspaceRoot}
-		<p class="no-workspace">
-			No workspace selected. Open the workspace list (top left) to pick one, or add a folder.
-			Workspaces you use from the CLI or TUI show up there automatically.
-		</p>
-	{:else}
+	{#if $currentWorkspaceRoot}
 	{#key $currentWorkspaceRoot}
 		{#if detail.length === 0}
 			<ConflictBanner path={ROOT_PATH} />
@@ -160,10 +151,6 @@
 		font-size: 0.85rem;
 	}
 
-	.no-workspace {
-		margin: 2rem 1rem;
-		color: var(--muted, #6b7280);
-	}
 	.top-nav {
 		display: flex;
 		align-items: baseline;

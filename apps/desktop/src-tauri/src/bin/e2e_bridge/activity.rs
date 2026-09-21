@@ -32,6 +32,7 @@ pub(crate) async fn cmd_op_log_all(client: &mut DaemonClient) -> Result<Value, A
             principal: e.principal,
             op: e.op,
             at_ms: e.at_ms,
+            source: e.source,
             workspace_id: ws.workspace_id.clone(),
             workspace_root: ws.root.clone(),
         }));

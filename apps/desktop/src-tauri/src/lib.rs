@@ -64,9 +64,9 @@ pub fn run() {
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
-            app.manage(AppState::new(DesktopConfig::with_optional_workspace(
-                workspace_override(),
-            )));
+            // No explicit workspace: start on the default one (task default-workspace).
+            let start = workspace_override().or_else(|| Some(config::default_workspace_dir()));
+            app.manage(AppState::new(DesktopConfig::with_optional_workspace(start)));
             quick_add::create_window(app.handle())?;
             quick_add::register_shortcut(app.handle())?;
             tray::create_tray(app.handle())?;
@@ -157,7 +157,8 @@ fn install_hide_not_quit(app: &tauri::AppHandle) {
 }
 
 /// An explicit workspace to start on: `TXTODO_WORKSPACE` if set (dev/test override), else none —
-/// never the launch directory, which is `/` for an app opened from Finder or the dock.
+/// never the launch directory, which is `/` for an app opened from Finder or the dock. The caller
+/// then falls back to the default workspace.
 fn workspace_override() -> Option<PathBuf> {
     std::env::var_os("TXTODO_WORKSPACE").map(PathBuf::from)
 }

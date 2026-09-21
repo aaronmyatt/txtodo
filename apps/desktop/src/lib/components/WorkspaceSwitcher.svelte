@@ -215,6 +215,7 @@
 								disabled={busy}
 								title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
 							>
+								{#if ws.is_default}<span class="default-label">Default</span>{/if}
 								{ws.root}
 								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
 								{#if ws.load_state === "queued" || ws.load_state === "loading"}
@@ -223,7 +224,7 @@
 									<span class="load-label failed" title={ws.load_error}>failed to open</span>
 								{/if}
 							</button>
-							{#if ws.root !== $currentWorkspaceRoot}
+							{#if ws.root !== $currentWorkspaceRoot && !ws.is_default}
 								<button
 									type="button"
 									class="remove"
@@ -371,6 +372,10 @@
 		background: var(--color-hover-overlay);
 	}
 
+	.default-label {
+		font-weight: 600;
+		margin-right: 0.4rem;
+	}
 	.remove {
 		background: transparent;
 		border: none;

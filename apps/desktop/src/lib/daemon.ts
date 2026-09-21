@@ -236,6 +236,8 @@ export interface WorkspaceInfo {
 	load_state: "queued" | "loading" | "ready" | "failed" | "unknown";
 	/** Why the last open failed; empty unless `load_state` is "failed". */
 	load_error: string;
+	/** The user's default workspace (task default-workspace): labelled, and never removable. */
+	is_default?: boolean;
 }
 
 /** Every registered workspace, oldest first. */

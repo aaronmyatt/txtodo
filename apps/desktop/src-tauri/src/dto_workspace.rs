@@ -22,6 +22,9 @@ pub struct WorkspaceInfoDto {
     pub load_state: &'static str,
     /// Why the last open failed; empty unless `load_state` is `"failed"`.
     pub load_error: String,
+    /// True for the user's default workspace (task default-workspace): shown as "Default" and
+    /// never removable.
+    pub is_default: bool,
 }
 
 /// Whether a fan-out (`universal_tasks`, `op_log_all`) may query `w` now. A workspace the daemon
@@ -55,6 +58,7 @@ impl From<pb::WorkspaceInfo> for WorkspaceInfoDto {
             has_state: w.has_state,
             load_state: load_state_name(w.load_state),
             load_error: w.load_error,
+            is_default: w.is_default,
         }
     }
 }
