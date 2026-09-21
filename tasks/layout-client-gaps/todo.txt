@@ -1,0 +1,11 @@
+2026-09-21 daemon: fill WorkspaceInfo.refs_dir and todo_file from the live layout @daemon
+2026-09-21 cli: txtodo conflicts still defaults to the literal todo.txt @cli
+2026-09-21 cli: workspace layout --move alone silently does nothing @cli
+2026-09-21 cli: --todo-file help still says only todo.txt is supported @cli
+2026-09-21 cli: the list footer prefix differs between daemon and direct mode @cli
+2026-09-21 cli: doctor drops a failed layout probe instead of reporting it @cli
+2026-09-21 tui: fall back to todo.txt only on Unimplemented, not on every error @tui
+2026-09-21 mcp: file_or_root swallows every layout RPC error and retargets todo.txt @mcp
+2026-09-21 mcp: resource URIs still hardcode todotxt://todo.txt @mcp
+2026-09-21 test: cover blame, undo, checkout and sub under a custom root list @cli @test
+2026-09-21 test: a desktop e2e whose todo_file is not todo.txt @desktop @test

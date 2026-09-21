@@ -276,3 +276,22 @@ x 2026-09-21 2026-09-21 rust build speed: dev-profile + linker tuning ref:rust-b
 x 2026-09-21 2026-09-21 dev iteration speed: nextest adopted, sccache opt-in recipe ref:dev-iteration-speed — see tasks/dev-iteration-speed/notes.md; nextest wired into just test + budgets.json (~10x), sccache kept opt-in via just cold-build (~12x, needs incremental off)
 x 2026-09-21 2026-09-20 txtodo-tui: J and K move the selected task down and up (MoveBefore), so the TUI can reorder too +m11 @tui — shipped: input.rs's move_selected_down/up build MoveBefore (or MoveToEnd on the last line) against the neighbor line, cursor follows the moved line; 6 unit tests (input_tests.rs, split out for the file-length cap) plus 2 real-daemon round-trip tests (tests/roundtrip.rs) proving the reorder lands on disk; no-op on the Add-a-line row and both ends of the list; known gap: no manual run in a real terminal yet
 x 2026-09-21 2026-09-19 Migrate an existing Tagged workspace to Sidecar identity in place (this repo's own todo.txt is stuck Tagged): seed fingerprints from the id: tags, strip them, flip the mode +m11 @daemon @cli  ref:sidecar-migrate-tagged -- built and rehearsed on a copy; the live run is the  item in tasks/sidecar-migrate-tagged/todo.txt @human — only the live migrate run in tasks/sidecar-migrate-tagged/todo.txt is left, and it rewrites this repo's own files — live run committed 2026-09-20 (f7f8225: 1820 tags stripped in 174 files); 22 tags remain, see tasks/sidecar-migrate-tagged — re-run 2026-09-21: committed feb625a, 22 tags stripped in 4 files, 0 remain; see tasks/sidecar-migrate-tagged
+2026-09-21 clients: the workspace layout is only half honoured +m11 @cli @tui @mcp @daemon ref:layout-client-gaps
+2026-09-21 txtodo.toml has a second, unvalidated parser in the CLI +m11 @cli @specs @security ref:layout-toml-validation
+2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients
+2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path
+2026-09-21 daemon: layout reload fails open and swallows its errors +m11 @daemon ref:layout-reload-safety
+2026-09-21 The memory keystore fallback drops device and group keys, not just the relay id +m8 @daemon @security ref:keystore-memory-fallback
+2026-09-21 mcp: no flags registers the cwd as a workspace and offers its name to peers +m6 @mcp @security ref:mcp-cwd-autoregister
+2026-09-21 The default workspace merges on pairing with no accept step +m8 @daemon @security @human ref:default-workspace-pairing-consent
+2026-09-21 todo_batch dry run can preview a diff the real batch will not write +m6 @mcp ref:batch-dry-run-divergence
+2026-09-21 mcp: refusals outside todo_edit lose their line and spec rule +m6 @mcp ref:mcp-refusal-metadata
+2026-09-21 op source is blank on the paths that do not go through Apply +m11 @daemon ref:op-source-gaps
+2026-09-21 Clients recompute the default workspace instead of asking the daemon +m11 @desktop @test ref:default-workspace-client-agreement
+2026-09-21 tui: J/K on or beside a blank line exits the TUI with an error +m11 @tui
+2026-09-21 daemon: peek_line rejects a line-0-plus-id TaskRef, so todo_move alone cannot use ids +m11 @daemon
+2026-09-21 Docs still describe ref dirs beside the list and cwd as the no --dir fallback +m11 @docs ref:layout-doc-drift
+2026-09-21 just test needs nextest but nothing installs it and CI still runs cargo test +ci @setup ref:nextest-adoption
+2026-09-21 The 400-line cap counts comments, so three commits deleted rationale to fit +ratchet @setup
+2026-09-21 cli: daemon-mode do sends Edit plus MoveToEnd, so the op log never says complete +m11 @cli
+2026-09-21 backlog: stale @doing claims on root lines 1 and 3, and a CI line 305918b already fixed +m11 @backlog

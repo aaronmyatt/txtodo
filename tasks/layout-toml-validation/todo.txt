@@ -1,0 +1,4 @@
+2026-09-21 cli: validate todo_file the way WorkspaceLayout::new does, direct mode included @cli
+2026-09-21 cli: take the root list from the WorkspaceLayout RPC, not its own parse @cli
+2026-09-21 specs: put the layout validation rules in ref-directories.md, not only ADR 0030 @specs
+2026-09-21 docs: log the two txtodo.toml parsers in ABSTRACTIONS.md @docs

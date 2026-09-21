@@ -1,0 +1,4 @@
+2026-09-21 Refuse a layout change when ref_tags cannot be read, instead of assuming zero
+2026-09-21 Propagate register_root_list failures out of the WorkspaceLayout RPC
+2026-09-21 Leave a doctor note when txtodo.toml is deleted but its layout stays in force
+2026-09-21 Read the workspace layout once per tree rebuild

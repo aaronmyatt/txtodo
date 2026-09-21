@@ -1,0 +1,4 @@
+2026-09-21 desktop: refetch the layout when a daemon-change touches txtodo.toml @desktop
+2026-09-21 desktop: sequence the layout fetch so an out-of-order reply cannot win @desktop
+2026-09-21 desktop: QuickAdd captures into todo.txt before its first fetch lands @desktop
+2026-09-21 tui: re-read the root list on a layout change instead of caching it @tui
