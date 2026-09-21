@@ -275,7 +275,7 @@ async fn batch_raw_and_lint_work_under_sidecar() {
         .clone()
         .unwrap();
 
-    // A dry run applies nothing; the real run applies each op in order.
+    // A dry run writes nothing but returns the daemon's diff; the real run applies each op in order.
     let ops = vec![
         TodoOp::TodoAdd {
             text: "two".into(),
@@ -284,7 +284,7 @@ async fn batch_raw_and_lint_work_under_sidecar() {
         TodoOp::TodoComplete { id: one.clone() },
     ];
     let dry = mcp.batch(ops.clone(), true, None).await.unwrap();
-    assert_eq!(dry.applied, 0);
+    assert!(dry.applied > 0 && dry.diff.is_some(), "{dry:?}");
     assert_eq!(disk(dir.path()), "one\n");
     let real = mcp.batch(ops, false, None).await.unwrap();
     assert_eq!(real.applied, 2);
