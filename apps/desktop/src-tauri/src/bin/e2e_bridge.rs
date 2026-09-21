@@ -80,8 +80,8 @@ async fn main() {
     // `TXTODO_WORKSPACE` picks the workspace; without it the bridge stands in for a fresh profile
     // and uses the default workspace, which the daemon creates beside its socket (task
     // default-workspace: `txtodo_workspace_paths::default_workspace_dir_for`).
-    let workspace = std::env::var("TXTODO_WORKSPACE")
-        .unwrap_or_else(|_| format!("{global_state_dir}/default"));
+    let workspace =
+        std::env::var("TXTODO_WORKSPACE").unwrap_or_else(|_| format!("{global_state_dir}/default"));
     let mut cfg = DesktopConfig::new(workspace.clone());
     cfg.global_socket_override = Some(PathBuf::from(&global_state_dir).join("txtodod.sock"));
     cfg.global_registry_override = Some(PathBuf::from(&global_state_dir).join("registry.db"));
@@ -245,8 +245,9 @@ async fn invoke(
     invoke_core(state, req).await
 }
 
-const WORKSPACE_CMDS: [&str; 4] = [
+const WORKSPACE_CMDS: [&str; 5] = [
     "list_workspaces",
+    "workspace_layout",
     "add_workspace",
     "remove_workspace",
     "switch_workspace",

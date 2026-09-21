@@ -3,7 +3,7 @@
 //! `commands_activity.rs` already are.
 
 use crate::commands::ensure_connected;
-use crate::dto::WorkspaceInfoDto;
+use crate::dto::{WorkspaceInfoDto, WorkspaceLayoutDto};
 use crate::state::AppState;
 use std::path::PathBuf;
 use tauri::{AppHandle, State};
@@ -26,6 +26,19 @@ async fn list_workspaces_inner(
     let mut client = state.client_snapshot().await?;
     let workspaces = client.workspace_list().await.map_err(|e| e.to_string())?;
     Ok(workspaces.into_iter().map(WorkspaceInfoDto::from).collect())
+}
+
+/// The current workspace's layout, so the app composes a `ref:` directory the way the daemon does.
+#[tracing::instrument(name = "ipc.workspace_layout", skip_all)]
+#[tauri::command]
+pub async fn workspace_layout(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<WorkspaceLayoutDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let layout = client.workspace_layout().await.map_err(|e| e.to_string())?;
+    Ok(WorkspaceLayoutDto::from(layout))
 }
 
 /// Registers `root` (idempotent) without switching to it or opening it.

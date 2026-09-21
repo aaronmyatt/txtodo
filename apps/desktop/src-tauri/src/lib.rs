@@ -98,6 +98,7 @@ pub fn run() {
             commands_version::build_info,
             commands_window::set_pinned,
             commands_workspace::list_workspaces,
+            commands_workspace::workspace_layout,
             commands_workspace::add_workspace,
             commands_workspace::remove_workspace,
             commands_workspace::switch_workspace,

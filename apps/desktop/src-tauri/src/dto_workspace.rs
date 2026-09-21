@@ -27,6 +27,31 @@ pub struct WorkspaceInfoDto {
     pub is_default: bool,
 }
 
+/// Where a workspace keeps its root list and the folder for its `ref:` lines (task
+/// workspace-layout); `WorkspaceLayoutInfo` on the wire.
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceLayoutDto {
+    /// Relative to the workspace root; `"."` means beside the list.
+    pub refs_dir: String,
+    /// The root list's path.
+    pub todo_file: String,
+    /// Why `txtodo.toml` is not the layout in force; empty when it is.
+    pub note: String,
+    /// Folders holding a todo.txt or notes.md that sit outside `refs_dir` and nothing points at.
+    pub outside_refs_dir: Vec<String>,
+}
+
+impl From<pb::WorkspaceLayoutInfo> for WorkspaceLayoutDto {
+    fn from(l: pb::WorkspaceLayoutInfo) -> WorkspaceLayoutDto {
+        WorkspaceLayoutDto {
+            refs_dir: l.refs_dir,
+            todo_file: l.todo_file,
+            note: l.note,
+            outside_refs_dir: l.outside_refs_dir,
+        }
+    }
+}
+
 /// Whether a fan-out (`universal_tasks`, `op_log_all`) may query `w` now. A workspace the daemon
 /// has not finished opening is skipped rather than promoted: asking for it would queue-jump every
 /// workspace the daemon is still opening in its own most-recently-used order. `Unspecified` (an

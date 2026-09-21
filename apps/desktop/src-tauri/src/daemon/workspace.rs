@@ -37,6 +37,16 @@ impl DaemonClient {
             .workspaces)
     }
 
+    /// The current workspace's layout (task workspace-layout): where the root list's `ref:`
+    /// directories live. Carries this connection's selector, so it is the picked workspace's.
+    pub async fn workspace_layout(&mut self) -> Result<pb::WorkspaceLayoutInfo, DaemonError> {
+        let req = pb::WorkspaceLayoutRequest {
+            workspace: self.selector.clone(),
+            ..pb::WorkspaceLayoutRequest::default()
+        };
+        Ok(self.inner.workspace_layout(req).await?.into_inner())
+    }
+
     /// The daemon's own version and release date: a selector-less `Health`, which the daemon
     /// answers at once with the device totals even while workspaces are still opening, so this
     /// never waits on an open (task version-info). An older daemon sends an empty date.

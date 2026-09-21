@@ -4,7 +4,7 @@
 //! restated over this bridge's own `DaemonClient`.
 
 use desktop_lib::daemon::DaemonClient;
-use desktop_lib::dto::WorkspaceInfoDto;
+use desktop_lib::dto::{WorkspaceInfoDto, WorkspaceLayoutDto};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -27,6 +27,10 @@ pub(crate) async fn dispatch_workspace_cmd(
             let dtos: Vec<WorkspaceInfoDto> =
                 workspaces.into_iter().map(WorkspaceInfoDto::from).collect();
             Ok(serde_json::to_value(dtos)?)
+        }
+        "workspace_layout" => {
+            let layout = client.workspace_layout().await?;
+            Ok(serde_json::to_value(WorkspaceLayoutDto::from(layout))?)
         }
         "add_workspace" => {
             let r: RootReq = parse(args)?;
