@@ -85,6 +85,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         config,
         json: cli.json,
     };
+    announce_default_workspace(&ctx, &cli.command);
     let _log_guard = init_telemetry(&ctx.paths.dir);
     match &cli.command {
         Command::Doctor { verbose } => return commands::doctor::run(&ctx, *verbose),
@@ -93,6 +94,10 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             return commands::mcp::run(&ctx, *stdio, *http, token.as_deref());
         }
         Command::Skill { action } => return commands::skill::run(action),
+        // A path, not a daemon question: answered even when no daemon is running.
+        Command::Workspace {
+            action: Some(commands::workspace::Action::Default),
+        } => return commands::workspace::run_default(&env, cli.json),
         _ => {}
     }
     match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
@@ -102,6 +107,32 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => dispatch_daemon(&ctx, &mut daemon, &cli.command),
     }
+}
+
+/// Says which workspace a command is about to use when it fell back to the default one (task
+/// default-workspace): the same command means a different list depending on where you stand, so
+/// it must not be silent. Also makes the directory, so direct-file mode has somewhere to write on a
+/// machine where no daemon has run yet. Commands about the daemon or workspaces themselves skip it.
+fn announce_default_workspace(ctx: &Ctx, command: &Command) {
+    if !ctx.paths.default_workspace
+        || matches!(
+            command,
+            Command::Doctor { .. } | Command::Daemon { .. } | Command::Skill { .. }
+        )
+    {
+        return;
+    }
+    if let Err(e) = std::fs::create_dir_all(&ctx.paths.dir) {
+        eprintln!(
+            "txtodo: cannot create the default workspace {}: {e}",
+            ctx.paths.dir.display()
+        );
+        return;
+    }
+    eprintln!(
+        "txtodo: no workspace here, using the default workspace ({}); `txtodo workspace default` prints it",
+        ctx.paths.dir.display()
+    );
 }
 
 /// The CLI's own sink matrix (root todo.txt `logging-cli`), distinct from `txtodo-mcp`/`txtodod`'s

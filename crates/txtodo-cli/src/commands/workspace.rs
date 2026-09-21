@@ -4,6 +4,7 @@
 //! return an `Unimplemented` `ClientError::Rpc` against one, surfaced as a normal error).
 
 use crate::client::Daemon;
+use crate::config::Env;
 use crate::{CliError, Ctx, json};
 use clap::Subcommand;
 use txtodo_proto::v1 as pb;
@@ -25,6 +26,9 @@ pub enum Action {
     /// id, root, added time, and whether it still exists / has state on disk.
     #[command(visible_alias = "ls")]
     List,
+    /// Prints the default workspace's directory (the folder Finder will not show), and whether it
+    /// exists yet. Needs no daemon.
+    Default,
     /// Un-registers every workspace whose root no longer exists on disk (tasks/test-registry-leak-
     /// cleanup): lists them, deleting only with `--yes`. Never touches a root that still exists,
     /// unlike a plain `remove`, which un-registers by id regardless.
@@ -47,7 +51,24 @@ pub fn run(
         Some(Action::Add { dir }) => run_add(ctx, daemon, dir.as_deref(), as_json),
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
+        Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
     }
+}
+
+/// `workspace default`: the path, and whether the directory exists yet. Resolved through
+/// `config::default_workspace_dir`, which is the daemon's own function, so the two cannot disagree.
+pub fn run_default(env: &Env, as_json: bool) -> Result<(), CliError> {
+    let dir = crate::config::default_workspace_dir(env);
+    if as_json {
+        println!(
+            r#"{{"path":{},"exists":{}}}"#,
+            json::str(&dir.display().to_string()),
+            dir.is_dir()
+        );
+    } else {
+        println!("{}", dir.display());
+    }
+    Ok(())
 }
 
 /// How far the daemon is through opening this workspace (task `daemon-early-bind`): `queued`,
@@ -64,9 +85,10 @@ fn load_state_name(w: &pb::WorkspaceInfo) -> &'static str {
 
 fn info_json(w: &pb::WorkspaceInfo) -> String {
     format!(
-        r#"{{"id":{},"root":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
+        r#"{{"id":{},"root":{},"is_default":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
         json::str(&w.workspace_id),
         json::str(&w.root),
+        w.is_default,
         w.added_at_ms,
         w.root_exists,
         w.has_state,
@@ -84,7 +106,11 @@ fn info_text(w: &pb::WorkspaceInfo) -> String {
         "failed" => " [failed to open]",
         _ => "",
     };
-    format!("{}  {}{missing}{state}{load}", w.workspace_id, w.root)
+    let default = if w.is_default { " [default]" } else { "" };
+    format!(
+        "{}  {}{default}{missing}{state}{load}",
+        w.workspace_id, w.root
+    )
 }
 
 /// `workspace add [DIR]`: registers `dir` (default: the resolved `--dir`/cwd), never opens it.

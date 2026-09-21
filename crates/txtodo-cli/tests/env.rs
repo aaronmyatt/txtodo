@@ -43,6 +43,8 @@ fn line(text: &str, key: &str) -> String {
 #[test]
 fn defaults_to_cwd_and_reports_missing_config() {
     let dir = tempfile::tempdir().expect("tempdir");
+    // A folder with a todo.txt is a workspace, so the cwd is what a client means.
+    std::fs::write(dir.path().join("todo.txt"), "").expect("seed todo.txt");
     let out = stdout(txtodo(dir.path()).args(["env"]));
     let cwd = dir.path().canonicalize().expect("canonical");
     assert_eq!(
@@ -185,4 +187,22 @@ fn json_env_is_one_object_and_bad_config_fails() {
         .expect("runs");
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("cannot read config"));
+}
+
+/// Task default-workspace: outside any workspace, with nothing naming a directory, `todo_dir` is
+/// the default workspace, not the folder the command ran in.
+#[test]
+fn outside_a_workspace_todo_dir_is_the_default_workspace() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let default = dir.path().join("elsewhere-default");
+    let out = stdout(
+        txtodo(dir.path())
+            .env("TXTODO_DEFAULT_WORKSPACE", &default)
+            .args(["env"]),
+    );
+    assert_eq!(
+        line(&out, "todo_dir"),
+        default.display().to_string(),
+        "{out}"
+    );
 }

@@ -16,7 +16,8 @@ const SENTINEL: &str = "ZZ-SENTINEL-ZZ";
 fn txtodo(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_txtodo"))
         .current_dir(dir)
-        .env_remove("TXTODO_TODO_DIR")
+        // Against `dir` by name: an empty folder is no workspace, and would fall back to the default.
+        .env("TXTODO_TODO_DIR", dir)
         .env("TXTODO_CONFIG", dir.join("none.toml"))
         // Isolates from any ambient *global* daemon on the machine running this suite (see
         // `tests/daemon_mode.rs::txtodo`'s own comment on this exact hazard).

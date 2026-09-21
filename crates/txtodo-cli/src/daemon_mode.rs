@@ -58,6 +58,8 @@ pub fn run_via_daemon(
     let scratch_ctx = Ctx {
         paths: Paths {
             dir: scratch.path().to_path_buf(),
+            default_workspace: false,
+            default_dir: ctx.paths.default_dir.clone(),
             todo: scratch.path().join("todo.txt"),
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),

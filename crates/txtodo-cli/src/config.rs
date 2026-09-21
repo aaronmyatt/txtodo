@@ -60,6 +60,13 @@ pub fn global_socket_path(env: &Env) -> PathBuf {
     txtodo_workspace_paths::global_socket_path(&registry_env, None)
 }
 
+/// The default workspace's directory on this machine (task default-workspace): the daemon's own
+/// resolution, through the shared `txtodo-workspace-paths`.
+pub fn default_workspace_dir(env: &Env) -> PathBuf {
+    let registry_env = txtodo_workspace_paths::RegistryEnv::new(env.vars.clone(), env.cwd.clone());
+    txtodo_workspace_paths::default_workspace_dir_for(&registry_env)
+}
+
 /// How a workspace establishes task identity (docs/questions.md Q2). This crate's own copy —
 /// `txtodo-model::IdentityMode` isn't a dependency this crate may take — but the same two values,
 /// spelled the same way as the daemon's own `--identity-mode` flag.
@@ -211,6 +218,11 @@ impl Config {
 pub struct Paths {
     /// The todo directory.
     pub dir: PathBuf,
+    /// True when nothing named a directory and the current folder is no workspace, so `dir` is the
+    /// user's default workspace (task default-workspace). The CLI then says so.
+    pub default_workspace: bool,
+    /// Where the default workspace lives on this machine, whether or not it is in use here.
+    pub default_dir: PathBuf,
     /// `<dir>/todo.txt`.
     pub todo: PathBuf,
     /// `<dir>/report.txt`.
@@ -253,13 +265,22 @@ pub struct ResolveFlags<'a> {
     pub relay: Option<&'a str>,
 }
 
-/// `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > cwd.
+/// `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > the current folder when it is a workspace >
+/// the default workspace (task default-workspace).
 pub fn resolve(env: &Env, flags: ResolveFlags<'_>, config: &Config, config_file: PathBuf) -> Paths {
-    let dir = flags
+    let named = flags
         .dir
         .or_else(|| env.var("TXTODO_TODO_DIR"))
-        .or(config.todo_dir.as_deref())
-        .map_or_else(|| env.cwd.clone(), |d| env.absolute(d));
+        .or(config.todo_dir.as_deref());
+    let (dir, default_workspace) = match named {
+        Some(d) => (env.absolute(d), false),
+        None => {
+            let registry_env =
+                txtodo_workspace_paths::RegistryEnv::new(env.vars.clone(), env.cwd.clone());
+            let choice = txtodo_workspace_paths::choose_workspace(&registry_env, &env.cwd);
+            (choice.path().to_path_buf(), choice.is_default())
+        }
+    };
     debug_assert!(
         dir.is_absolute() || env.cwd.as_os_str().is_empty(),
         "dir is absolute"
@@ -270,6 +291,8 @@ pub fn resolve(env: &Env, flags: ResolveFlags<'_>, config: &Config, config_file:
         todo: dir.join("todo.txt"),
         report: dir.join("report.txt"),
         dir,
+        default_workspace,
+        default_dir: default_workspace_dir(env),
         config: config_file,
         sync_dir,
         relay_url,

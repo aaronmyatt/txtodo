@@ -72,6 +72,12 @@ fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 
+/// The `workspace list` rows other than the default workspace, which every global daemon now
+/// creates and registers on its own (task default-workspace).
+fn non_default_rows(list: &str) -> Vec<&str> {
+    list.lines().filter(|l| !l.contains("[default]")).collect()
+}
+
 #[test]
 fn add_remove_list_round_trip_and_add_is_idempotent() {
     let state_dir = tempfile::tempdir().unwrap();
@@ -82,8 +88,13 @@ fn add_remove_list_round_trip_and_add_is_idempotent() {
     let empty = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
     assert!(empty.status.success(), "{}", stdout(&empty));
     assert!(
-        stdout(&empty).contains("no registered workspaces"),
+        non_default_rows(&stdout(&empty)).is_empty(),
         "{}",
+        stdout(&empty)
+    );
+    assert!(
+        stdout(&empty).contains("[default]"),
+        "the default is listed: {}",
         stdout(&empty)
     );
 
@@ -109,7 +120,7 @@ fn add_remove_list_round_trip_and_add_is_idempotent() {
     );
     let list = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
     assert_eq!(
-        stdout(&list).lines().count(),
+        non_default_rows(&stdout(&list)).len(),
         1,
         "still one entry: {}",
         stdout(&list)
@@ -119,7 +130,7 @@ fn add_remove_list_round_trip_and_add_is_idempotent() {
     assert!(remove.status.success(), "{}", stdout(&remove));
     let after = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
     assert!(
-        stdout(&after).contains("no registered workspaces"),
+        non_default_rows(&stdout(&after)).is_empty(),
         "{}",
         stdout(&after)
     );
@@ -152,7 +163,7 @@ fn a_todo_command_with_no_per_dir_socket_reaches_the_global_daemon() {
 
     let list = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
     assert_eq!(
-        stdout(&list).lines().count(),
+        non_default_rows(&stdout(&list)).len(),
         1,
         "auto-registered exactly once: {}",
         stdout(&list)
@@ -171,7 +182,14 @@ fn first_add_in_a_brand_new_directory_auto_registers_it_with_no_separate_step() 
     let ws_dir = tempfile::tempdir().unwrap();
     assert!(!ws_dir.path().join("todo.txt").exists());
 
-    let add = txtodo(&daemon, ws_dir.path(), &["add", "first", "task"]);
+    // Named with --dir: a folder with no todo.txt is no workspace, so with no --dir this would
+    // land in the default workspace instead (see the test below).
+    let dir_arg = ws_dir.path().display().to_string();
+    let add = txtodo(
+        &daemon,
+        ws_dir.path(),
+        &["--dir", &dir_arg, "add", "first", "task"],
+    );
     assert!(
         add.status.success(),
         "{}",
@@ -186,11 +204,45 @@ fn first_add_in_a_brand_new_directory_auto_registers_it_with_no_separate_step() 
     let list = txtodo(&daemon, ws_dir.path(), &["workspace", "list"]);
     let out = stdout(&list);
     assert_eq!(
-        out.lines().count(),
+        non_default_rows(&out).len(),
         1,
         "auto-registered, no manual step: {out}"
     );
     assert!(out.contains(&ws_dir.path().display().to_string()), "{out}");
+}
+
+/// Task default-workspace: outside any workspace and with no --dir, a command lands in the default
+/// workspace and says so, instead of registering the folder it happens to run in.
+#[test]
+fn a_command_outside_any_workspace_lands_in_the_default_and_says_so() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let elsewhere = tempfile::tempdir().unwrap();
+
+    let add = txtodo(&daemon, elsewhere.path(), &["add", "goes", "to", "default"]);
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let notice = String::from_utf8_lossy(&add.stderr).into_owned();
+    assert!(notice.contains("using the default workspace"), "{notice}");
+    assert!(
+        !elsewhere.path().join("todo.txt").exists(),
+        "nothing written where it ran"
+    );
+
+    let default_todo = state_dir.path().join("default").join("todo.txt");
+    assert!(
+        std::fs::read_to_string(default_todo)
+            .unwrap()
+            .contains("goes to default")
+    );
+    let list = stdout(&txtodo(&daemon, elsewhere.path(), &["workspace", "list"]));
+    assert!(
+        non_default_rows(&list).is_empty(),
+        "the folder was not registered: {list}"
+    );
 }
 
 /// Registers `alive`/`dead` (both real dirs at the time of `add`), then removes `dead`'s directory
@@ -228,7 +280,11 @@ fn prune_dry_run_lists_only_dead_registrations_and_changes_nothing() {
     assert!(out.contains("--yes"), "dry run by default: {out}");
 
     let list = stdout(&txtodo(&daemon, alive_dir.path(), &["workspace", "list"]));
-    assert_eq!(list.lines().count(), 2, "dry run changed nothing: {list}");
+    assert_eq!(
+        non_default_rows(&list).len(),
+        2,
+        "dry run changed nothing: {list}"
+    );
 }
 
 /// tasks/test-registry-leak-cleanup: `workspace prune --yes` removes exactly the dead
@@ -245,7 +301,11 @@ fn prune_yes_removes_only_dead_registrations() {
     txtodo(&daemon, alive_dir.path(), &["workspace", "prune", "--yes"]);
 
     let out = stdout(&txtodo(&daemon, alive_dir.path(), &["workspace", "list"]));
-    assert_eq!(out.lines().count(), 1, "only the dead one removed: {out}");
+    assert_eq!(
+        non_default_rows(&out).len(),
+        1,
+        "only the dead one removed: {out}"
+    );
     assert!(
         out.contains(&alive_dir.path().display().to_string()),
         "{out}"
@@ -282,7 +342,11 @@ fn doctor_reports_every_other_registered_workspace() {
         String::from_utf8_lossy(&doctor_a.stderr)
     );
     let out = stdout(&doctor_a);
-    let workspace_rows: Vec<&str> = out.lines().filter(|l| l.starts_with("workspace")).collect();
+    // The default workspace is one more registered workspace; this test is about a and b.
+    let workspace_rows: Vec<&str> = out
+        .lines()
+        .filter(|l| l.starts_with("workspace") && !l.contains("/default"))
+        .collect();
     assert_eq!(
         workspace_rows.len(),
         1,
