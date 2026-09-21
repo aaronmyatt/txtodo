@@ -49,7 +49,7 @@ fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 
 /// Shows and focuses the main window — the tray's "Open" item, and the counterpart to `lib.rs`'s
 /// hide-on-close handler (which only hides, never destroys, the window this brings back).
-fn show_main_window(app: &AppHandle) {
+pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();

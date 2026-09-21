@@ -114,7 +114,15 @@ pub fn run() {
             commands_activity::op_log,
             commands_activity::op_log_all,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!())
+        .map(|app| {
+            app.run(|handle, event| {
+                #[cfg(target_os = "macos")]
+                if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = event {
+                    tray::show_main_window(handle);
+                }
+            });
+        });
     if let Err(e) = result {
         eprintln!("desktop: {e}");
         std::process::exit(1);
