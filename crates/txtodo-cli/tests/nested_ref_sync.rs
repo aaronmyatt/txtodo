@@ -117,7 +117,8 @@ fn create_ref_dir(root: &Path) -> PathBuf {
     assert!(add.status.success(), "{}", stderr(&add));
     let notes = txtodo(root, &["notes", "1"]);
     assert!(notes.status.success(), "{}", stderr(&notes));
-    let ref_dir = root.join(ref_slug(root));
+    // The default layout keeps the root list's ref dirs in `tasks/` (task workspace-layout).
+    let ref_dir = root.join("tasks").join(ref_slug(root));
     assert!(ref_dir.is_dir(), "{}", ref_dir.display());
     ref_dir
 }
