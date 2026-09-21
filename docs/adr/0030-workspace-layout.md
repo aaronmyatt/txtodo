@@ -41,8 +41,8 @@ A line in any other list keeps its ref dirs beside its own file, so nesting is u
 - A workspace made elsewhere with ADR 0012's layout loses sight of its ref folders until it sets
   `refs_dir = "."` or moves them. The daemon keys a document's history by its path, so a moved folder
   starts a fresh history; the bytes are untouched.
-- `todo_file` other than `todo.txt` is validated and stored but refused: the watcher, the walker and
-  every client name `todo.txt`. Honouring it is follow-up work.
+- `todo_file` names the root list only. Nested lists stay `todo.txt`. The daemon (walker, watcher,
+  tree, export), the CLI, the TUI, the desktop and MCP all read the root list's name from the layout.
 - `txtodo.toml` is not yet synced between devices, so two devices can hold different layouts. Notes
   have the same limit today (a `notes.md` edited on disk is not an op).
 - The desktop refetches the layout when the workspace changes, not when the file does.

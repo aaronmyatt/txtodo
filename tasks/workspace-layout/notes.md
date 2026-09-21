@@ -88,11 +88,13 @@ None. Both Decide lines are closed.
 - Prune offers only dirs inside `refs_dir`. The refs folder is created lazily.
 - CLI: `txtodo workspace layout [--refs-dir P] [--todo-file P] [--move]`, and `doctor` rows; `open`, `sub` and `notes` already used the daemon's `RefDirInfo.dir`.
 - Desktop: a `workspace_layout` command, a store refetched on each workspace change, and `refDirFor`, used by the ref indicators and the detail view.
+- `todo_file` (2026-09-21): the walker, watcher, tree and export take the root list's name (`walk_with`, an `extra` document on the workspace); the CLI reads it from `txtodo.toml` in direct mode and from the layout RPC in daemon mode; the TUI, the desktop (main view, quick-add, universal view) and MCP (file defaults, archive, prompts) ask the layout RPC. Nested lists stay `todo.txt`. Tests: `tests/layout_todo_file.rs` (daemon), CLI `tests/layout.rs`, a TUI real-daemon test, a desktop `root_list_for` test, an MCP real-daemon test.
 - ADR 0030; `specs/ref-directories.md` rule 2 and plan 3.2 changed together.
 
 Known gaps:
 
-- `todo_file` other than `todo.txt` is validated and stored but refused by the daemon.
+- `todo_file` in a subdirectory is untested end to end in the clients.
+- MCP resource URIs (`todotxt://todo.txt`) still name the file in the URI; only the tool and prompt defaults follow the layout.
 - `txtodo.toml` is not synced between devices. Notes have the same limit today: a `notes.md` edited on disk is not an op, and a `notes.md` op is dropped by a receiver with no actor for it.
 - The desktop refetches the layout on a workspace change, not when the file changes. Its visual-regression goldens (light and dark) fail and were not regenerated.
 - The daemon installed on this machine is the old build; this repo behaves as described only after `just install-daemon`.
