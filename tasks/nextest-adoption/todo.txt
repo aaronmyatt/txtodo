@@ -1,0 +1,3 @@
+2026-09-21 Install cargo-nextest in the setup path, or revert just test to cargo test
+2026-09-21 docs/testing-guide.md teaches cargo test only, recipes included
+2026-09-21 CI jobs still run cargo test, so local and CI use different runners @ci
