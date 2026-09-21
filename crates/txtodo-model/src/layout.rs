@@ -16,6 +16,8 @@ const DEFAULT_TODO_FILE: &str = "todo.txt";
 const DEFAULT_REFS_DIR: &str = "tasks";
 /// A `refs_dir` of `.` puts ref dirs beside the list file (ADR 0012's layout).
 const BESIDE_THE_LIST: &str = ".";
+/// A `notes.md` is prose, so it can never be the root list.
+const NOTES_FILE_NAME: &str = "notes.md";
 /// The daemon's own state directory; nothing a user names may live inside it. Compared without
 /// regard to case, since macOS and Windows filesystems fold it.
 const STATE_DIR: &str = ".txtodo";
@@ -30,6 +32,8 @@ pub enum LayoutError {
         /// The underlying reason.
         source: FilePathError,
     },
+    /// `todo_file` names a `notes.md`, which is prose, never the root list.
+    NotesFile(String),
     /// A drive letter or another `:` (a Windows path, or one that cannot sync to Windows).
     Colon {
         /// Which setting.
@@ -65,6 +69,9 @@ impl fmt::Display for LayoutError {
                 )
             }
             LayoutError::NotAFile(v) => write!(f, "todo_file {v:?} must name a file"),
+            LayoutError::NotesFile(v) => {
+                write!(f, "todo_file {v:?} is a notes.md, not a task list")
+            }
         }
     }
 }
@@ -137,6 +144,9 @@ impl WorkspaceLayout {
             return Err(LayoutError::NotAFile(todo_file.to_owned()));
         }
         check("todo_file", todo_file)?;
+        if todo_file.rsplit('/').next() == Some(NOTES_FILE_NAME) {
+            return Err(LayoutError::NotesFile(todo_file.to_owned()));
+        }
         let todo_file = FilePath::new(todo_file).map_err(|source| LayoutError::Path {
             setting: "todo_file",
             source,
@@ -170,6 +180,18 @@ impl WorkspaceLayout {
     /// The root list as a validated path.
     pub fn root_list(&self) -> FilePath {
         self.todo_file.clone()
+    }
+
+    /// The root list, when its name is not one the walker finds on its own (`todo.txt`, at any
+    /// depth): a daemon has to be told about it, or it would never be discovered or watched.
+    pub fn custom_root_list(&self) -> Option<FilePath> {
+        let name = self
+            .todo_file
+            .as_str()
+            .rsplit('/')
+            .next()
+            .unwrap_or_default();
+        (name != DEFAULT_TODO_FILE).then(|| self.todo_file.clone())
     }
 
     /// True when ref dirs sit beside the list file (`refs_dir = "."`), ADR 0012's layout.
@@ -309,5 +331,26 @@ mod tests {
         );
         assert_eq!(l.refs_parent_of(&root), "tasks");
         assert_eq!(beside.refs_parent_of(&root), "");
+    }
+
+    #[test]
+    fn only_a_root_list_the_walker_would_miss_is_custom() {
+        assert_eq!(WorkspaceLayout::default().custom_root_list(), None);
+        let sub = WorkspaceLayout::new("tasks", "lists/todo.txt").unwrap();
+        assert_eq!(
+            sub.custom_root_list(),
+            None,
+            "the name is one the walker finds anywhere"
+        );
+        let work = WorkspaceLayout::new("tasks", "lists/work.txt").unwrap();
+        assert_eq!(work.custom_root_list().unwrap().as_str(), "lists/work.txt");
+    }
+
+    #[test]
+    fn a_notes_file_is_never_the_root_list() {
+        assert!(matches!(
+            WorkspaceLayout::new("tasks", "docs/notes.md"),
+            Err(LayoutError::NotesFile(_))
+        ));
     }
 }

@@ -95,11 +95,11 @@ impl NodeId {
     /// line, i.e. inside this node's own directory). `None` only when `slug` itself is not a valid
     /// path segment, which `Task::ref_slug`'s grammar check already rules out for a real tag.
     ///
-    /// The node holding the workspace's root list takes its child directories from the workspace
-    /// layout (`refs_dir`, task workspace-layout); every other node, a nested list, keeps them
-    /// beside its own file.
+    /// The root node, which stands for the workspace's root list wherever the layout puts that
+    /// file, takes its child directories from the layout (`refs_dir`, task workspace-layout);
+    /// every other node, a nested list, keeps them beside its own file.
     fn child(&self, slug: &str, layout: &WorkspaceLayout) -> Option<NodeId> {
-        let joined = if *self == NodeId::of_file(&layout.root_list()) {
+        let joined = if self.is_root() {
             layout.ref_dir_of(slug)
         } else {
             match &self.0 {
