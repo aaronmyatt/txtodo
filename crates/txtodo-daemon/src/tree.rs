@@ -203,9 +203,10 @@ mod tests {
     fn write_fixture(root: &Path) {
         std::fs::write(root.join("todo.txt"), "(A) Q4 roadmap ref:q4-roadmap\n")
             .unwrap_or_else(|e| panic!("{e}"));
-        std::fs::create_dir_all(root.join("q4-roadmap")).unwrap_or_else(|e| panic!("{e}"));
+        // The default layout keeps the root list's ref dirs in `tasks/` (task workspace-layout).
+        std::fs::create_dir_all(root.join("tasks/q4-roadmap")).unwrap_or_else(|e| panic!("{e}"));
         std::fs::write(
-            root.join("q4-roadmap/todo.txt"),
+            root.join("tasks/q4-roadmap/todo.txt"),
             "buy ducks\nx 2020-01-01 completed thing\nx 2020-01-01 archived thing\n",
         )
         .unwrap_or_else(|e| panic!("{e}"));
@@ -228,7 +229,7 @@ mod tests {
             tree.progress(&NodeId::root()),
             Some(Progress { done: 0, total: 1 })
         );
-        let child = NodeId::dir(txtodo_model::FilePath::new("q4-roadmap").unwrap());
+        let child = NodeId::dir(txtodo_model::FilePath::new("tasks/q4-roadmap").unwrap());
         assert_eq!(
             tree.progress(&child),
             Some(Progress { done: 2, total: 3 }),
@@ -249,7 +250,7 @@ mod tests {
         assert!(!svc.workspace().tree_dirty.is_dirty());
 
         let handle = svc
-            .actor_by_path(&txtodo_model::FilePath::new("q4-roadmap/todo.txt").unwrap())
+            .actor_by_path(&txtodo_model::FilePath::new("tasks/q4-roadmap/todo.txt").unwrap())
             .unwrap_or_else(|e| panic!("{e}"));
         let principal = user(&svc.workspace());
         handle
@@ -266,7 +267,7 @@ mod tests {
             "an Insert invalidates"
         );
 
-        let child = NodeId::dir(txtodo_model::FilePath::new("q4-roadmap").unwrap());
+        let child = NodeId::dir(txtodo_model::FilePath::new("tasks/q4-roadmap").unwrap());
         let tree = svc.workspace_tree().await.unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(
             tree.progress(&child),

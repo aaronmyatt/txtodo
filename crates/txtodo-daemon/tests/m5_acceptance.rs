@@ -168,15 +168,16 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::write(root.join("todo.txt"), "(A) Q4 roadmap ref:q4-roadmap\n").unwrap();
-    std::fs::create_dir_all(root.join("q4-roadmap")).unwrap();
+    // The default layout keeps the root list's ref dirs in `tasks/` (task workspace-layout).
+    std::fs::create_dir_all(root.join("tasks/q4-roadmap")).unwrap();
     std::fs::write(
-        root.join("q4-roadmap/todo.txt"),
+        root.join("tasks/q4-roadmap/todo.txt"),
         "(A) sync section ref:sync-section\nbuy ducks\nx 2020-01-01 old task\n",
     )
     .unwrap();
-    std::fs::create_dir_all(root.join("q4-roadmap/sync-section")).unwrap();
+    std::fs::create_dir_all(root.join("tasks/q4-roadmap/sync-section")).unwrap();
     std::fs::write(
-        root.join("q4-roadmap/sync-section/todo.txt"),
+        root.join("tasks/q4-roadmap/sync-section/todo.txt"),
         "leaf task one\nx 2020-01-01 leaf task two\n",
     )
     .unwrap();
@@ -198,7 +199,7 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     let q4 = tree
         .children
         .iter()
-        .find(|c| c.dir == "q4-roadmap")
+        .find(|c| c.dir == "tasks/q4-roadmap")
         .expect("q4-roadmap is a child of the root");
     assert_eq!(
         q4.progress.as_ref().map(|p| (p.done, p.total)),
@@ -209,7 +210,7 @@ async fn progress_on_a_3_level_fixture_is_non_recursive_per_rule_5() {
     let sync = q4
         .children
         .iter()
-        .find(|c| c.dir == "q4-roadmap/sync-section")
+        .find(|c| c.dir == "tasks/q4-roadmap/sync-section")
         .expect("sync-section is a child of q4-roadmap, not of the root");
     assert_eq!(
         sync.progress.as_ref().map(|p| (p.done, p.total)),
@@ -281,7 +282,7 @@ async fn archiving_and_deleting_keep_the_directory_and_prune_finds_the_orphan() 
         })
         .await
         .unwrap_or_else(|e| panic!("ref_dir: {e}"));
-    let ref_dir_path = root.join("roadmap");
+    let ref_dir_path = root.join("tasks/roadmap");
     assert!(ref_dir_path.is_dir(), "ensure created the directory");
     // A real `notes ITEM#` writes notes.md right after `ensure` (see cli-ref-commands); a bare
     // directory with nothing tracked in it yet is a documented gap in the tree cache (it holds no
@@ -333,7 +334,7 @@ async fn prune_finds_and_only_execute_deletes(client: &mut Client, dir: &Path) {
         .await
         .unwrap_or_else(|e| panic!("prune (list): {e}"))
         .into_inner();
-    assert_eq!(listed.dirs, vec!["roadmap".to_owned()]);
+    assert_eq!(listed.dirs, vec!["tasks/roadmap".to_owned()]);
     assert!(!listed.executed);
     assert!(dir.is_dir(), "listing alone never deletes");
 
@@ -345,7 +346,7 @@ async fn prune_finds_and_only_execute_deletes(client: &mut Client, dir: &Path) {
         .await
         .unwrap_or_else(|e| panic!("prune (execute): {e}"))
         .into_inner();
-    assert_eq!(executed.dirs, vec!["roadmap".to_owned()]);
+    assert_eq!(executed.dirs, vec!["tasks/roadmap".to_owned()]);
     assert!(executed.executed);
     assert!(!dir.exists(), "--yes actually deletes");
 }
