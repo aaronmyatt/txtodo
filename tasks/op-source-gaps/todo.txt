@@ -1,0 +1,3 @@
+2026-09-21 Pass ApplyRequest.source through the cross-file Move path
+2026-09-21 Share one sources-for-rows helper between activity and history
+2026-09-21 test: the desktop op log records source desktop after an apply @test

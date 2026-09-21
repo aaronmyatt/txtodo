@@ -1,0 +1,3 @@
+2026-09-21 Pass path, not dirOf(path), to lineDecorations in FileView
+2026-09-21 Re-run the visual e2e specs, then regenerate the light and dark goldens
+2026-09-21 Make the mock workspace_layout agree with the mock file tree

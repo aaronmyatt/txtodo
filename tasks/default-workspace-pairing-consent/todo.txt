@@ -1,0 +1,2 @@
+2026-09-21 Decide: does the default workspace sync on a pairing, or need its own accept @human
+2026-09-21 PairAccept tells the caller when the offered id was not adopted

@@ -1,0 +1,3 @@
+2026-09-21 desktop: select the default workspace by its reserved id, not a recomputed path
+2026-09-21 desktop: the e2e bridge derives the default workspace from the shared helper
+2026-09-21 test: workspace_registry asserts an exact count, not all() @test
