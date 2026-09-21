@@ -23,6 +23,13 @@ function newTopLevelEntries(): string[] {
 	return readdirSync(daemon.dir).filter((f) => f !== "todo.txt" && f !== ".txtodo");
 }
 
+/** The ref dirs the daemon has made: the default layout keeps them in `tasks/` (task
+ * workspace-layout), a folder that does not exist until the first one is made. */
+function newRefDirs(): string[] {
+	const tasks = join(daemon.dir, "tasks");
+	return existsSync(tasks) ? readdirSync(tasks) : [];
+}
+
 test("first keystroke into empty notes lazily creates the ref: directory", async ({ page }) => {
 	const line = page.locator(".cm-line", { hasText: "plan the roadmap" }).first();
 	await line.dblclick();
@@ -32,16 +39,18 @@ test("first keystroke into empty notes lazily creates the ref: directory", async
 
 	// Negative: opening the detail view alone must not have created anything yet.
 	expect(newTopLevelEntries()).toEqual([]);
+	expect(newRefDirs()).toEqual([]);
 
 	await notesEditor.click();
 	await page.keyboard.type("first note");
 
 	// NotesEditor.svelte debounces its save 500ms — poll a real condition, not a fixed sleep
 	// (notes.md: "conflict injection must be deterministic", the same principle applies here).
-	await expect.poll(() => newTopLevelEntries().length, { timeout: 5000 }).toBe(1);
+	await expect.poll(() => newRefDirs().length, { timeout: 5000 }).toBe(1);
+	expect(newTopLevelEntries()).toEqual(["tasks"]);
 
-	const slug = newTopLevelEntries()[0];
-	const notesPath = join(daemon.dir, slug, "notes.md");
+	const slug = newRefDirs()[0];
+	const notesPath = join(daemon.dir, "tasks", slug, "notes.md");
 	await expect.poll(() => existsSync(notesPath)).toBe(true);
 	expect(readFileSync(notesPath, "utf8")).toBe("first note");
 

@@ -91,8 +91,9 @@ function seed(dir: string, fixture: FixtureName): void {
 				join(dir, "todo.txt"),
 				"(A) plan the roadmap ref:q4-roadmap id:01ARZ3NDEKTSV4RRFFQ69G5FA2\n"
 			);
-			mkdirSync(join(dir, "q4-roadmap"));
-			writeFileSync(join(dir, "q4-roadmap", "todo.txt"), "(B) draft the outline\n");
+			// The default layout keeps the root list's ref dirs in `tasks/` (task workspace-layout).
+			mkdirSync(join(dir, "tasks", "q4-roadmap"), { recursive: true });
+			writeFileSync(join(dir, "tasks", "q4-roadmap", "todo.txt"), "(B) draft the outline\n");
 			return;
 		}
 		case "notes-create":
@@ -117,8 +118,8 @@ function seed(dir: string, fixture: FixtureName): void {
 			// resolves on the very first screen instead of silently rendering nothing
 			// (`$lib/todotxt/lineInfo.ts::resolveRefIndicator` returns `null` for a dangling ref).
 			writeFileSync(join(dir, "todo.txt"), generateTenKLines());
-			mkdirSync(join(dir, TEN_K_REF_SLUG));
-			writeFileSync(join(dir, TEN_K_REF_SLUG, "todo.txt"), "x 2026-01-01 done sub-task\n(B) open sub-task\n");
+			mkdirSync(join(dir, "tasks", TEN_K_REF_SLUG), { recursive: true });
+			writeFileSync(join(dir, "tasks", TEN_K_REF_SLUG, "todo.txt"), "x 2026-01-01 done sub-task\n(B) open sub-task\n");
 			return;
 	}
 }

@@ -121,7 +121,7 @@ test("navigating away (breadcrumb Home) commits a dirty buffer before the view u
 }) => {
 	daemon = await spawnDaemon("nested");
 	await gotoWithDaemon(page, daemon);
-	const subListPath = join(daemon.dir, "q4-roadmap", "todo.txt");
+	const subListPath = join(daemon.dir, "tasks", "q4-roadmap", "todo.txt");
 
 	await page.locator(".cm-line", { hasText: "plan the roadmap" }).first().dblclick();
 	const subListContent = page.locator("section.sublist .editor-shell .cm-content");
