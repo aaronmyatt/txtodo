@@ -118,7 +118,11 @@ pub fn run() {
         .map(|app| {
             app.run(|handle, event| {
                 #[cfg(target_os = "macos")]
-                if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = event {
+                if let tauri::RunEvent::Reopen {
+                    has_visible_windows: false,
+                    ..
+                } = event
+                {
                     tray::show_main_window(handle);
                 }
             });
