@@ -1,0 +1,4 @@
+2026-09-21 Tauri command + daemon.ts binding for the RefDir RPC (ensure the ref, return its dir) +m11 @desktop
+2026-09-21 DetailView: with no ref: or an empty sub-list, show an empty sub-list section with an add-line input +m11 @desktop
+2026-09-21 First submit creates the ref via RefDir, then adds the line to the new todo.txt with applyMutations; opening the view alone writes nothing +m11 @desktop
+2026-09-21 e2e: a task with no ref: gets a sub-task from the detail view; tasks/<slug>/todo.txt exists afterwards, and nothing is written before the first submit +m11 @desktop @test
