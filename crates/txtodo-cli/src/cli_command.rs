@@ -165,9 +165,9 @@ pub(crate) enum Command {
         /// Print to stdout instead of a temp file.
         #[arg(long)]
         stdout: bool,
-        /// Which document.
-        #[arg(long, default_value = "todo.txt")]
-        file: String,
+        /// Which document; the workspace's root list by default.
+        #[arg(long)]
+        file: Option<String>,
     },
     /// Open needs_review flags and resolve them (daemon mode): `list` (default) or `resolve`.
     Conflicts {

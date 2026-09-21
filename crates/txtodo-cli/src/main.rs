@@ -74,7 +74,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         config_file,
     );
     debug_assert!(
-        paths.todo.ends_with("todo.txt"),
+        paths.todo.ends_with(&paths.todo_file),
         "resolve names the todo file"
     );
     let ctx = Ctx {
@@ -237,9 +237,10 @@ fn dispatch_daemon_inner(
         Command::Log { file, n } => {
             commands::history::run_log(daemon, file.as_deref(), *n, ctx.json)
         }
-        Command::Blame { item } => commands::history::run_blame(daemon, item, ctx.json),
-        Command::Undo { steps } => commands::history::run_undo(daemon, *steps, ctx.json),
+        Command::Blame { item } => commands::history::run_blame(ctx, daemon, item),
+        Command::Undo { steps } => commands::history::run_undo(ctx, daemon, *steps),
         Command::Checkout { at, stdout, file } => {
+            let file = file.as_deref().unwrap_or(&ctx.paths.todo_file);
             commands::history::run_checkout(daemon, at, file, *stdout)
         }
         Command::Conflicts { action } => {
@@ -247,7 +248,7 @@ fn dispatch_daemon_inner(
         }
         Command::Pair { code } => commands::pair::run(ctx, daemon, code.as_deref()),
         Command::Open { item } => commands::refdir::run_open(ctx, daemon, item),
-        Command::Notes { item } => commands::refdir::run_notes(daemon, item),
+        Command::Notes { item } => commands::refdir::run_notes(ctx, daemon, item),
         Command::Sub { item, cmd } => commands::refdir::run_sub(ctx, daemon, item, cmd),
         Command::Prune { orphans, yes } => {
             commands::refdir::run_prune(daemon, *orphans, *yes, ctx.json)

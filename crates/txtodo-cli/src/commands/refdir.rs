@@ -25,16 +25,16 @@ fn task_ref(item: &str, usage: &'static str) -> Result<pb::TaskRef, CliError> {
 /// `ensure = false` on the `RefDir` call is the whole negative-space guarantee.
 pub fn run_open(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
     let task = task_ref(item, "open ITEM#")?;
-    let info = daemon.ref_dir("todo.txt", task, false)?;
+    let info = daemon.ref_dir(&ctx.paths.todo_file, task, false)?;
     println!("{}", ctx.paths.dir.join(&info.dir).display());
     Ok(())
 }
 
 /// `notes ITEM#`: lazily creates the `ref:` directory (rule 4, one op batch, before `$EDITOR`
 /// opens per the M5 acceptance wording), then opens `$EDITOR` on its `notes.md`.
-pub fn run_notes(daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
+pub fn run_notes(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
     let task = task_ref(item, "notes ITEM#")?;
-    let info = daemon.ref_dir("todo.txt", task, true)?;
+    let info = daemon.ref_dir(&ctx.paths.todo_file, task, true)?;
     let bare = pb::TaskRef {
         line_number: 0,
         task_id: info.task_id,
@@ -79,13 +79,13 @@ fn edit_in_editor(current: &[u8]) -> Result<String, CliError> {
 /// write would, since the tag already exists and `ensure` can mint no new one.
 pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Result<(), CliError> {
     let task = task_ref(item, "sub ITEM# COMMAND...")?;
-    let probe = daemon.ref_dir("todo.txt", task.clone(), false)?;
+    let probe = daemon.ref_dir(&ctx.paths.todo_file, task.clone(), false)?;
     if !probe.has_ref_tag {
         return Err(CliError::Message(format!(
             "txtodo: line {item} has no ref: tag; run `txtodo notes {item}` first"
         )));
     }
-    let info = daemon.ref_dir("todo.txt", task, true)?;
+    let info = daemon.ref_dir(&ctx.paths.todo_file, task, true)?;
     let dir = ctx.paths.dir.join(&info.dir);
     let exe = std::env::current_exe().map_err(CliError::Io)?;
     let status = std::process::Command::new(exe)

@@ -60,6 +60,22 @@ pub fn global_socket_path(env: &Env) -> PathBuf {
     txtodo_workspace_paths::global_socket_path(&registry_env, None)
 }
 
+/// The workspace's root list: `todo_file` from `<dir>/txtodo.toml`, else `todo.txt`. The daemon
+/// validates the file when it reads it; a client that cannot read it just uses the default, so a
+/// broken file never stops a command. Ref: <https://docs.rs/toml/latest/toml/fn.from_str.html>
+fn root_list_name(dir: &Path) -> String {
+    #[derive(serde::Deserialize)]
+    struct Layout {
+        todo_file: Option<String>,
+    }
+    std::fs::read_to_string(dir.join("txtodo.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<Layout>(&text).ok())
+        .and_then(|l| l.todo_file)
+        .filter(|f| !f.is_empty())
+        .unwrap_or_else(|| "todo.txt".to_owned())
+}
+
 /// The default workspace's directory on this machine (task default-workspace): the daemon's own
 /// resolution, through the shared `txtodo-workspace-paths`.
 pub fn default_workspace_dir(env: &Env) -> PathBuf {
@@ -223,8 +239,11 @@ pub struct Paths {
     pub default_workspace: bool,
     /// Where the default workspace lives on this machine, whether or not it is in use here.
     pub default_dir: PathBuf,
-    /// `<dir>/todo.txt`.
+    /// `<dir>/<todo_file>`: the workspace's root list (`todo_file` in `<dir>/txtodo.toml`,
+    /// default `todo.txt`).
     pub todo: PathBuf,
+    /// The root list's path relative to `dir`, as the daemon names it.
+    pub todo_file: String,
     /// `<dir>/report.txt`.
     pub report: PathBuf,
     /// The config file that was (or would have been) read.
@@ -287,8 +306,10 @@ pub fn resolve(env: &Env, flags: ResolveFlags<'_>, config: &Config, config_file:
     );
     let sync_dir = resolve_sync_dir(env, flags.sync_dir, config);
     let relay_url = resolve_relay_url(env, flags.relay, config);
+    let todo_file = root_list_name(&dir);
     let paths = Paths {
-        todo: dir.join("todo.txt"),
+        todo: dir.join(&todo_file),
+        todo_file,
         report: dir.join("report.txt"),
         dir,
         default_workspace,

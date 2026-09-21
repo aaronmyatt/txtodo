@@ -17,12 +17,14 @@ use std::path::Path;
 use txtodo_core::{File, LineDiff, LineKind, OwnedLine, diff_lines, parse_file};
 use txtodo_proto::v1::{self as pb, mutation};
 
-/// The documents the CLI edits, at the workspace root.
-pub const DOCS: [&str; 1] = ["todo.txt"];
+/// What the root list is called inside the scratch copy a command runs against; the daemon's own
+/// name for it (`Paths::todo_file`) is only used when talking to the daemon.
+const SCRATCH_DOC: &str = "todo.txt";
 
 /// A document as the daemon held it before the command ran.
 struct Original {
-    doc: &'static str,
+    /// The daemon's path for it.
+    doc: String,
     bytes: Vec<u8>,
     /// The daemon's hash of `bytes`, empty when it does not know the document yet.
     hash: Vec<u8>,
@@ -37,16 +39,16 @@ pub fn run_via_daemon(
 ) -> Result<(), CliError> {
     let scratch = tempfile::tempdir().map_err(CliError::Io)?;
     let listed: Vec<String> = daemon.list_files()?.into_iter().map(|f| f.path).collect();
-    let mut originals: Vec<Original> = Vec::with_capacity(DOCS.len());
-    for doc in DOCS {
-        let known = listed.iter().any(|k| k == doc);
+    let mut originals: Vec<Original> = Vec::with_capacity(1);
+    for doc in [ctx.paths.todo_file.clone()] {
+        let known = listed.iter().any(|k| *k == doc);
         let (bytes, hash) = if known {
-            daemon.snapshot(doc)?
+            daemon.snapshot(&doc)?
         } else {
             (Vec::new(), Vec::new())
         };
         if !bytes.is_empty() {
-            std::fs::write(scratch.path().join(doc), &bytes).map_err(CliError::Io)?;
+            std::fs::write(scratch.path().join(SCRATCH_DOC), &bytes).map_err(CliError::Io)?;
         }
         originals.push(Original {
             doc,
@@ -60,7 +62,8 @@ pub fn run_via_daemon(
             dir: scratch.path().to_path_buf(),
             default_workspace: false,
             default_dir: ctx.paths.default_dir.clone(),
-            todo: scratch.path().join("todo.txt"),
+            todo: scratch.path().join(SCRATCH_DOC),
+            todo_file: SCRATCH_DOC.to_owned(),
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),
             // Sync is a separate, device-global folder, unrelated to this scratch todo-dir copy —
@@ -92,7 +95,7 @@ fn push_document(
     scratch: &Path,
     original: &Original,
 ) -> Result<(), CliError> {
-    let new = match std::fs::read(scratch.join(original.doc)) {
+    let new = match std::fs::read(scratch.join(SCRATCH_DOC)) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(CliError::Io(e)),
@@ -107,15 +110,15 @@ fn push_document(
     };
     match plan {
         Some(mutations) if !mutations.is_empty() => {
-            daemon.apply(original.doc, guarded(&original.hash, mutations))?;
+            daemon.apply(&original.doc, guarded(&original.hash, mutations))?;
             Ok(())
         }
         Some(_) => Ok(()),
         None if original.known => {
-            daemon.apply(original.doc, vec![replace(&original.hash, new)])?;
+            daemon.apply(&original.doc, vec![replace(&original.hash, new)])?;
             Ok(())
         }
-        None => store::write(&ctx.paths.dir.join(original.doc), &parse_file(&new))
+        None => store::write(&ctx.paths.dir.join(&original.doc), &parse_file(&new))
             .map_err(CliError::Store),
     }
 }

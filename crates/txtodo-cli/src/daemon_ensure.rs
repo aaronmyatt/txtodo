@@ -75,7 +75,7 @@ mod tests {
         assert!(needs_daemon(&Command::Checkout {
             at: "2026-01-01T00:00".to_owned(),
             stdout: false,
-            file: "todo.txt".to_owned()
+            file: None
         }));
     }
 

@@ -164,7 +164,7 @@ fn skill_check() -> Check {
 /// Opens todo.txt for append without writing.
 fn files_check(ctx: &Ctx) -> Check {
     let mut problems = Vec::new();
-    for (name, path) in [("todo.txt", &ctx.paths.todo)] {
+    for (name, path) in [(ctx.paths.todo_file.as_str(), &ctx.paths.todo)] {
         if !path.exists() {
             problems.push(format!("{name} missing (created on first add)"));
             continue;

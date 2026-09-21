@@ -3,7 +3,7 @@
 //! mode they fail with the fix.
 
 use crate::client::Daemon;
-use crate::{CliError, json};
+use crate::{CliError, Ctx, json};
 use std::io::Write;
 use txtodo_core::{LineKind, parse_file};
 use txtodo_proto::v1 as pb;
@@ -90,9 +90,10 @@ pub fn run_log(
 }
 
 /// `blame <line>`: for the task at that line of todo.txt, the newest op per kind.
-pub fn run_blame(daemon: &mut Daemon, item: &str, as_json: bool) -> Result<(), CliError> {
+pub fn run_blame(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
+    let as_json = ctx.json;
     let n: usize = item.parse().map_err(|_| CliError::Usage("blame ITEM#"))?;
-    let bytes = daemon.get("todo.txt")?;
+    let bytes = daemon.get(&ctx.paths.todo_file)?;
     let file = parse_file(&bytes);
     let line = n
         .checked_sub(1)
@@ -106,7 +107,7 @@ pub fn run_blame(daemon: &mut Daemon, item: &str, as_json: bool) -> Result<(), C
         return Err(CliError::Message(format!("TODO: No task {n}.")));
     };
     let ops = daemon.history(pb::HistoryRequest {
-        path: "todo.txt".into(),
+        path: ctx.paths.todo_file.clone(),
         task_id,
         limit: 1_000,
         before_seq: 0,
@@ -131,8 +132,9 @@ pub fn run_blame(daemon: &mut Daemon, item: &str, as_json: bool) -> Result<(), C
 }
 
 /// `undo [--steps N]`.
-pub fn run_undo(daemon: &mut Daemon, steps: u32, as_json: bool) -> Result<(), CliError> {
-    let rep = daemon.undo("todo.txt", steps.max(1))?;
+pub fn run_undo(ctx: &Ctx, daemon: &mut Daemon, steps: u32) -> Result<(), CliError> {
+    let as_json = ctx.json;
+    let rep = daemon.undo(&ctx.paths.todo_file, steps.max(1))?;
     if as_json {
         println!(
             r#"{{"applied":{},"hash":{}}}"#,
