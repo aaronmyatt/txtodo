@@ -64,6 +64,10 @@ service Txtodo {
   // Lists workspace directories no `ref:` tag points to (rule 10); deletes them only when
   // `execute` is set. `txtodo prune --orphans` (list) / `--orphans --yes` (execute).
   rpc PruneOrphans(PruneOrphansRequest) returns (PruneOrphansResponse);
+  // The workspace's layout (task workspace-layout): where the root list and the ref: directories of
+  // its lines live. Reads it, or with `set` changes it, writing `<root>/txtodo.toml`. A change is
+  // refused (FAILED_PRECONDITION) while ref dirs sit in the old place, unless `move_dirs` moves them.
+  rpc WorkspaceLayout(WorkspaceLayoutRequest) returns (WorkspaceLayoutInfo);
 
   // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
   // These three target the device-global registry itself, not an already-open workspace, so
@@ -501,6 +505,26 @@ message PruneOrphansRequest {
 message PruneOrphansResponse {
   repeated string dirs = 1;   // workspace-relative orphan directories found
   bool executed = 2;          // true when `dirs` were actually deleted (echoes the request)
+}
+
+message WorkspaceLayoutRequest {
+  WorkspaceSelector workspace = 1;
+  bool set = 2;          // false = read only; the fields below are ignored
+  string refs_dir = 3;   // empty = keep the current one
+  string todo_file = 4;  // empty = keep the current one
+  bool move_dirs = 5;    // move the ref dirs to the new place instead of refusing
+}
+
+message WorkspaceLayoutInfo {
+  string refs_dir = 1;   // relative to the workspace root; "." means beside the list
+  string todo_file = 2;
+  // Why <root>/txtodo.toml is not the layout in force (a bad file, or a change refused while ref
+  // dirs sit in the old place); empty when they agree.
+  string note = 3;
+  uint32 moved = 4;      // ref dirs moved by this call
+  // Directories holding a todo.txt or notes.md that no line points at and that sit outside
+  // `refs_dir`: ref dirs left where an older layout put them.
+  repeated string outside_refs_dir = 5;
 }
 
 // --- pairing (plan M4, design §4) ---
