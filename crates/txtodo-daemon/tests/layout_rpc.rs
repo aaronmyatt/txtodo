@@ -162,7 +162,7 @@ async fn a_change_is_refused_while_a_ref_dir_exists_and_moves_them_when_asked() 
 }
 
 #[tokio::test]
-async fn an_unsafe_path_or_another_todo_file_is_refused_and_changes_nothing() {
+async fn an_unsafe_path_or_a_notes_file_is_refused_and_changes_nothing() {
     let (dir, mut client, _stop) = served("plan the launch\n").await;
     for bad in ["../up", "/abs", ".txtodo/x", "C:/x"] {
         let e = layout(&mut client, set(bad, false)).await.unwrap_err();
@@ -172,13 +172,17 @@ async fn an_unsafe_path_or_another_todo_file_is_refused_and_changes_nothing() {
         &mut client,
         pb::WorkspaceLayoutRequest {
             set: true,
-            todo_file: "work.txt".into(),
+            todo_file: "docs/notes.md".into(),
             ..Default::default()
         },
     )
     .await
     .unwrap_err();
-    assert_eq!(e.code(), Code::InvalidArgument);
+    assert_eq!(
+        e.code(),
+        Code::InvalidArgument,
+        "a notes.md is prose, not the root list"
+    );
     assert!(!dir.path().join("txtodo.toml").exists());
 }
 
@@ -191,4 +195,37 @@ async fn a_folder_outside_refs_dir_that_nothing_points_at_is_reported() {
         .await
         .unwrap();
     assert_eq!(info.outside_refs_dir, vec!["docs".to_owned()]);
+}
+
+#[tokio::test]
+async fn setting_todo_file_makes_the_named_list_the_root_list() {
+    let (dir, mut client, _stop) = served("plan the launch\n").await;
+    let info = layout(
+        &mut client,
+        pb::WorkspaceLayoutRequest {
+            set: true,
+            todo_file: "lists/work.txt".into(),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(info.todo_file, "lists/work.txt");
+    // The file was made, empty, and is a registered document now.
+    assert_eq!(
+        std::fs::read(dir.path().join("lists/work.txt")).unwrap(),
+        b""
+    );
+    let files = client
+        .list_files(pb::ListFilesRequest { workspace: None })
+        .await
+        .unwrap()
+        .into_inner()
+        .files;
+    assert!(
+        files.iter().any(|f| f.path == "lists/work.txt"),
+        "{files:?}"
+    );
+    let toml = std::fs::read_to_string(dir.path().join("txtodo.toml")).unwrap();
+    assert!(toml.contains("todo_file = \"lists/work.txt\""), "{toml}");
 }

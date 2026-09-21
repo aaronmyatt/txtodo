@@ -39,9 +39,15 @@ fn bad_toml_and_unsafe_paths_are_refused_with_the_file_named() {
 }
 
 #[test]
-fn a_different_todo_file_is_refused_until_the_daemon_honours_it() {
-    let e = parse("todo_file = \"work.txt\"").unwrap_err();
-    assert!(e.contains("not supported yet"), "{e}");
+fn a_different_todo_file_is_now_honoured_and_a_notes_file_is_not() {
+    let layout = parse("todo_file = \"lists/work.txt\"").unwrap();
+    assert_eq!(layout.todo_file(), "lists/work.txt");
+    assert_eq!(
+        layout.custom_root_list().unwrap().as_str(),
+        "lists/work.txt"
+    );
+    let e = parse("todo_file = \"docs/notes.md\"").unwrap_err();
+    assert!(e.starts_with(LAYOUT_FILE) && e.contains("notes.md"), "{e}");
 }
 
 #[test]
