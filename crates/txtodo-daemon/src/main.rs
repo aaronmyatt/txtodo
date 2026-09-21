@@ -7,17 +7,19 @@
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
 mod boot_log;
+mod identity_setup;
 mod signals;
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 use txtodo_daemon::args_parse::{parse_identity_mode, parse_key_store_mode, parse_relay_dial_peer};
-use txtodo_daemon::clock::{Clock, SystemClock};
+use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::device_identity::DeviceIdentity;
 use txtodo_daemon::device_relay::DeviceRelay;
 use txtodo_daemon::file_carrier::DeviceFileCarrier;
+
+use crate::identity_setup::build_identity;
 use txtodo_daemon::pidfile::{PidError, PidFile};
 use txtodo_daemon::runtime_exit::{SHUTDOWN_GRACE, block_on_then_shut_down};
 use txtodo_daemon::serve;
@@ -25,7 +27,7 @@ use txtodo_daemon::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use txtodo_daemon::workspace_registry::WorkspaceRegistry;
 use txtodo_daemon::workspace_registry_paths::{self, RegistryEnv};
 use txtodo_model::IdentityMode;
-use txtodo_sync::{KeyStoreMode, Secret};
+use txtodo_sync::KeyStoreMode;
 
 /// `txtodod [--dir <workspace>] [--identity-mode <tagged|sidecar>] [--key-store <auto|os|file>]
 /// [--relay <url>] [--no-relay]`; nothing is guessed from the cwd. `--dir` is the legacy
@@ -36,8 +38,9 @@ struct Args {
     /// A brand-new workspace's mode when nothing on disk is tagged; `Sidecar` if omitted.
     identity_mode: IdentityMode,
     /// Which sync-keystore backend to resolve (plan M4 `sync-keystore`); `None` (flag omitted)
-    /// keeps the pre-existing in-memory placeholder — `auto`/`os` touch the real OS keychain,
-    /// which most CI/headless environments can't reach.
+    /// means `auto` (task `relay-id-keystore`): try the real OS keychain, falling back to an
+    /// in-memory keystore with a warning if none is reachable, rather than refusing to start.
+    /// An explicit `auto`/`os`/`file` behaves as it always has, including `auto`'s refusal.
     key_store_mode: Option<KeyStoreMode>,
     /// The explicit `--relay <url>` flag; `None` no longer means relay is off — `relay::
     /// resolve_relay_url` (this file's `run`) is the real decision now.
@@ -128,24 +131,6 @@ fn parse_args() -> Result<ArgsOutcome, String> {
     }))
 }
 
-/// Reads a passphrase for `--key-store file` as one line from stdin — never a CLI argument or
-/// environment variable (CLAUDE.md §3.1), so `ps`/shell history never carries it. The `String`'s
-/// buffer moves directly into `Secret` (zeroized on drop) via `into_bytes`, no extra copy.
-/// **Known gap**: does not suppress terminal echo (needs `rpassword`, not added without sign-off —
-/// see tasks/sync-keystore/notes.md's "As built"); the CLAUDE.md §3.1 properties still hold.
-fn prompt_file_passphrase() -> Result<Secret, Box<dyn std::error::Error>> {
-    eprint!("txtodod: key_store = \"file\" passphrase: ");
-    std::io::stderr().flush().ok();
-    let mut line = String::new();
-    std::io::stdin().read_line(&mut line)?;
-    let kept = line.trim_end_matches(['\n', '\r']).len();
-    line.truncate(kept);
-    if line.is_empty() {
-        return Err("no passphrase read from stdin; key_store = \"file\" needs one".into());
-    }
-    Ok(Secret::new(line.into_bytes()))
-}
-
 fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(ArgsOutcome::Run(a)) => a,
@@ -199,29 +184,6 @@ fn resolve_state_dir(
             .map(Path::to_path_buf)
             .ok_or("cannot resolve the device-global data directory")?,
     })
-}
-
-/// Builds this process's one shared [`DeviceIdentity`] (ADR 0021) at `state_dir`, prompting once
-/// for a `file`-keystore passphrase (`--key-store` omitted keeps the in-memory placeholder).
-fn build_identity(
-    args: &Args,
-    state_dir: &Path,
-    clock: &dyn Clock,
-) -> Result<DeviceIdentity, Box<dyn std::error::Error>> {
-    let Some(key_store_mode) = args.key_store_mode else {
-        return Ok(DeviceIdentity::open_in_memory(state_dir, clock)?);
-    };
-    let file_passphrase = if key_store_mode == KeyStoreMode::File {
-        Some(prompt_file_passphrase()?)
-    } else {
-        None
-    };
-    Ok(DeviceIdentity::open(
-        state_dir,
-        clock,
-        key_store_mode,
-        file_passphrase,
-    )?)
 }
 
 /// `WorkspaceOpenArgs` from the CLI flags plus the identity/relay/file-carrier `run` already

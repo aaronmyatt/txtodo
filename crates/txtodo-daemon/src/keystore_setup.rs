@@ -17,7 +17,8 @@ use std::sync::Arc;
 
 use txtodo_sync::{
     DEVICE_STATIC_KEY_BYTES, DeviceSigningKey, DeviceStaticSecret, FileKeyStore, KeyId, KeyStore,
-    KeyStoreError, KeyStoreMode, OsKeyStore, ResolvedBackend, SIGNING_KEY_BYTES, Secret,
+    KeyStoreError, KeyStoreMode, MemoryKeyStore, OsKeyStore, ResolvedBackend, SIGNING_KEY_BYTES,
+    Secret,
 };
 
 use crate::workspace_error::WorkspaceError;
@@ -32,14 +33,21 @@ pub(crate) const KEYSTORE_FILE: &str = "keystore";
 /// Resolves `mode` against `scope` (a fixed device-level string since ADR 0021 — one group per
 /// device now, so no per-workspace-group scoping is needed to keep OS-keystore entries from
 /// colliding), using `state_dir/KEYSTORE_FILE` for the file backend and `file_passphrase` to open
-/// or create it. `auto` never falls back to a file on its own initiative
-/// (`KeyStoreError::AutoNeedsChoice`) — the one rule the task notes call out by name. The passphrase
-/// prompt itself lives in `txtodo-cli`; this function only consumes one if given.
+/// or create it. `auto` never falls back to a *file* backend on its own initiative — the one rule
+/// the task notes call out by name — but since task `relay-id-keystore` (decided 2026-09-21,
+/// option A) a *defaulted* `auto` (`--key-store` was never given: `defaulted = true`) that finds no
+/// OS keychain falls back to an in-memory keystore with a loud warning instead of refusing to
+/// start, so flipping the daemon's default from no-flag/in-memory to no-flag/auto never turns a
+/// working headless box into one that won't boot. An *explicit* `--key-store auto` still refuses
+/// (`KeyStoreError::AutoNeedsChoice`) — the human asked for the OS keychain by name, so silently
+/// downgrading it would hide a real misconfiguration. The passphrase prompt itself lives in
+/// `txtodo-cli`; this function only consumes one if given.
 pub(crate) fn resolve_key_store(
     state_dir: &Path,
     scope: &str,
     mode: KeyStoreMode,
     file_passphrase: Option<Secret>,
+    defaulted: bool,
 ) -> Result<(Arc<dyn KeyStore + Send + Sync>, &'static str), WorkspaceError> {
     let keystore_path = state_dir.join(KEYSTORE_FILE);
     let open_file = move || -> Result<FileKeyStore, KeyStoreError> {
@@ -74,9 +82,29 @@ pub(crate) fn resolve_key_store(
                 Arc::new(OsKeyStore::new(scope.to_owned())),
                 ResolvedBackend::Os.name(),
             )),
-            Err(reason) => Err(KeyStoreError::AutoNeedsChoice { reason }.into()),
+            Err(reason) => {
+                on_auto_probe_failure(reason, defaulted)?;
+                Ok((Arc::new(MemoryKeyStore::default()), "memory"))
+            }
         },
     }
+}
+
+/// The pure half of the defaulted-`auto`-falls-back-to-memory decision (task `relay-id-keystore`),
+/// split out so it is unit-testable without a real OS keychain — `OsKeyStore::probe` itself has no
+/// test seam, per this crate's own "never OS-keychain-reachability-dependent" rule for tests.
+/// `Ok(())` means "log the warning and use memory"; `Err` means "refuse, unchanged from before".
+pub(crate) fn on_auto_probe_failure(reason: String, defaulted: bool) -> Result<(), KeyStoreError> {
+    if !defaulted {
+        return Err(KeyStoreError::AutoNeedsChoice { reason });
+    }
+    tracing::warn!(
+        reason = %reason,
+        "no OS keychain found and --key-store was not set; falling back to an in-memory \
+         keystore for this run — the relay identity will not survive a restart. Pass \
+         --key-store file to persist it, or fix the OS keychain and pass --key-store os."
+    );
+    Ok(())
 }
 
 /// Loads this device's long-term X25519 static keypair from the keystore, or mints and stores one

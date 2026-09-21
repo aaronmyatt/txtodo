@@ -78,12 +78,16 @@ pub struct DeviceIdentity {
 impl DeviceIdentity {
     /// Production entry point: resolves a real OS- or file-backed keystore per `key_store_mode`
     /// (plan M4 `sync-keystore`'s own resolver, reused as-is against a fixed device-level scope
-    /// instead of a per-workspace group id).
+    /// instead of a per-workspace group id). `defaulted` is true when `--key-store` was not given
+    /// at all (`main.rs` then passes `KeyStoreMode::Auto` here to mean "try the OS keychain, but
+    /// don't refuse to start over it") — see `keystore_setup::resolve_key_store`'s doc for what
+    /// that changes.
     pub fn open(
         state_dir: &Path,
         clock: &dyn Clock,
         key_store_mode: KeyStoreMode,
         file_passphrase: Option<Secret>,
+        defaulted: bool,
     ) -> Result<DeviceIdentity, WorkspaceError> {
         let store = open_store(state_dir)?;
         let (key_store, key_store_backend) = crate::keystore_setup::resolve_key_store(
@@ -91,6 +95,7 @@ impl DeviceIdentity {
             OS_KEYCHAIN_SCOPE,
             key_store_mode,
             file_passphrase,
+            defaulted,
         )?;
         Self::finish_open(store, clock, key_store, key_store_backend)
     }

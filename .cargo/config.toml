@@ -55,3 +55,13 @@ linker = ".cargo/zig/zigcc-x86_64-windows-gnu.sh"
 # https://doc.rust-lang.org/cargo/reference/config.html#env
 [env]
 TXTODO_NO_SERVICE = "1"
+# Task relay-id-keystore: txtodod with no --key-store flag now defaults to `auto` (try the OS
+# keychain, warn and fall back to memory if there is none) instead of always being in-memory. A
+# spawned test daemon inherits this from whatever test process spawned it (plain process env
+# inheritance, the same as TXTODO_NO_SERVICE above), so every real-daemon integration test across
+# this workspace (txtodo-daemon, txtodo-cli, txtodo-tui, txtodo-mcp, apps/desktop) that spawns
+# txtodod with no --key-store flag stays free of real OS keychain probing — this crate's own tests
+# rule ("never OS-keychain-reachability-dependent") extended workspace-wide instead of re-plumbed
+# per test harness. A test that explicitly passes --key-store <auto|os|file> is unaffected (the
+# explicit flag always wins; see crates/txtodo-daemon/src/identity_setup.rs::build_identity).
+TXTODO_TEST_KEYSTORE_MEMORY = "1"

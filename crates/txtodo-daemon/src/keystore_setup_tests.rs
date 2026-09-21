@@ -3,9 +3,9 @@
 //! actually depends on (`txtodo-sync`'s `holepunch_tests.rs` proves the other half: that binding
 //! with the same seed twice yields the same `node_id_bytes()`).
 
-use txtodo_sync::{FileKeyStore, MemoryKeyStore, Secret};
+use txtodo_sync::{FileKeyStore, KeyStoreError, MemoryKeyStore, Secret};
 
-use crate::keystore_setup::load_or_mint_relay_identity;
+use crate::keystore_setup::{load_or_mint_relay_identity, on_auto_probe_failure};
 
 #[test]
 fn mints_once_and_then_stays_stable() {
@@ -39,4 +39,20 @@ fn survives_a_real_keystore_file_reopen() {
     let reopened = FileKeyStore::open(&path, &passphrase).unwrap();
     let loaded = load_or_mint_relay_identity(&reopened).unwrap();
     assert_eq!(minted, loaded);
+}
+
+/// task `relay-id-keystore`: an explicit `--key-store auto` still refuses when the OS keychain
+/// probe fails — unchanged from before this task.
+#[test]
+fn explicit_auto_still_refuses_with_no_keychain() {
+    let err = on_auto_probe_failure("no D-Bus session".to_owned(), false).unwrap_err();
+    assert!(matches!(err, KeyStoreError::AutoNeedsChoice { .. }));
+}
+
+/// A *defaulted* `auto` (`--key-store` never given) falls back to memory instead (decided
+/// 2026-09-21, option A) — the whole point of flipping the default without breaking headless boxes
+/// that work fine today.
+#[test]
+fn defaulted_auto_falls_back_instead_of_refusing() {
+    assert!(on_auto_probe_failure("no D-Bus session".to_owned(), true).is_ok());
 }
