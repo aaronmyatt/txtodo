@@ -18,7 +18,7 @@ use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
 use txtodo_model::IdentityMode;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
-use txtodo_proto::v1::{self as pb, mutation};
+use txtodo_proto::v1::{self as pb};
 
 type Client = TxtodoClient<Channel>;
 
