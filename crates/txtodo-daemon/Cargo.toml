@@ -61,6 +61,10 @@ postcard = { version = "1", features = ["alloc"] }
 data-encoding = "2"
 # https://docs.rs/serde — derives for the bundle's own wire records (bundle_wire.rs)
 serde = { version = "1", features = ["derive"] }
+# https://docs.rs/toml — the workspace layout file <root>/txtodo.toml (task workspace-layout,
+# decided 2026-09-20: the layout is stored there and synced beside todo.txt). Already in the tree
+# through txtodo-cli (`toml = "1"`), so this adds an edge, not a new crate.
+toml = "1"
 # https://docs.rs/prost — encodes BundleManifest to bytes for the bundle's clear header frame
 prost = "0.14"
 
