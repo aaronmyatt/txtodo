@@ -381,3 +381,18 @@ fn peek_line_reads_the_id_bytes_and_ref_slug_without_mutating() {
         })
     );
 }
+
+#[test]
+fn line_zero_with_an_id_addresses_the_task_by_id_alone() {
+    let s = state();
+    assert_eq!(resolve(&s, &line(0, Some(B))).unwrap(), (2, id(B)));
+    assert_eq!(resolve(&s, &line(0, Some(A))).unwrap(), (0, id(A)));
+    // An id that is not in this document is its own refusal, not "no line 0".
+    let other = "01ARZ3NDEKTSV4RRFFQ69G5FAZ";
+    assert_eq!(
+        resolve(&s, &line(0, Some(other))),
+        Err(MutationError::UnknownTask(id(other)))
+    );
+    // Line 0 with no id still names nothing.
+    assert_eq!(resolve(&s, &line(0, None)), Err(MutationError::NoLine(0)));
+}

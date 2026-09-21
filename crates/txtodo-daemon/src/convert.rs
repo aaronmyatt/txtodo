@@ -115,10 +115,12 @@ pub(crate) fn parse_task_ref(t: Option<pb::TaskRef>) -> Result<TaskRef, Status> 
     let t = t.ok_or_else(|| Status::invalid_argument("mutation needs a task ref"))?;
     let line_number =
         usize::try_from(t.line_number).map_err(|_| Status::invalid_argument("line number"))?;
-    if line_number == 0 {
+    let task_id = parse_ulid_opt(&t.task_id)?.map(TaskId::new);
+    // Line 0 with an id addresses the task by id alone (task apply-dry-run): a batch whose earlier
+    // mutations shift line numbers cannot know the later numbers, but every task has an id.
+    if line_number == 0 && task_id.is_none() {
         return Err(Status::invalid_argument("line numbers start at 1"));
     }
-    let task_id = parse_ulid_opt(&t.task_id)?.map(TaskId::new);
     Ok(TaskRef {
         line_number,
         task_id,

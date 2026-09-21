@@ -133,6 +133,8 @@ pub enum MutationError {
     /// A batch mixed a cross-file `Move` with other mutations, or named an op this crate does
     /// not support (`NotesEdit`, undelete-via-`SetField`; see this crate's CLAUDE.md).
     Unsupported(&'static str),
+    /// A `TaskRef` naming a task by id alone (line 0) found no such task in the document.
+    UnknownTask(TaskId),
     /// More than `MAX_MUTATIONS_PER_APPLY`.
     TooMany(usize),
 }
@@ -156,6 +158,7 @@ impl fmt::Display for MutationError {
                 f,
                 "the document changed since it was read; nothing was written, re-read and retry"
             ),
+            MutationError::UnknownTask(id) => write!(f, "no task {id} in this document"),
             MutationError::NotATask(t) => write!(f, "{t:?} is not a task line"),
             MutationError::IdChanged(t) => write!(f, "the edit must keep id {t}"),
             MutationError::Unsupported(what) => write!(f, "{what} is not supported yet"),
@@ -201,6 +204,13 @@ impl MutationError {
 /// sidecar-mode text carries no such thing, id: substrings there are just ordinary words.
 pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), MutationError> {
     let n = task.line_number;
+    // Line 0 names the task by its id alone, wherever earlier mutations in the batch left it.
+    if n == 0
+        && let Some(id) = task.task_id
+    {
+        let i = state.index_of(id).ok_or(MutationError::UnknownTask(id))?;
+        return Ok((i, id));
+    }
     let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
     let entry = state.entry_at(i).ok_or(MutationError::NoLine(n))?;
     let found = match entry {

@@ -243,3 +243,62 @@ async fn a_dry_run_of_a_replace_is_refused_and_writes_nothing() {
     let (text, _) = read(&mut client).await;
     assert_eq!(text, SEED);
 }
+
+fn complete_by_id(task_id: &str) -> mutation::Kind {
+    mutation::Kind::Complete(pb::Complete {
+        task: Some(pb::TaskRef {
+            line_number: 0,
+            task_id: task_id.into(),
+        }),
+        today: "2026-09-20".into(),
+    })
+}
+
+/// A batch whose earlier mutations move lines cannot know the later line numbers, so a task can be
+/// addressed by id alone (line 0 plus its id). The preview and the real apply agree on the result.
+#[tokio::test]
+async fn a_batch_can_address_tasks_by_id_alone() {
+    let (_dir, mut client, _stop) = seeded().await;
+    let ids = client
+        .get_file(pb::GetFileRequest {
+            path: "todo.txt".into(),
+            workspace: None,
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .task_ids;
+    // Completing the first task sends it to the bottom, so by number the second would now be line 1.
+    let batch = vec![complete_by_id(&ids[0]), complete_by_id(&ids[1])];
+
+    let dry = client
+        .apply(req(batch.clone(), "", true))
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(dry.diff.contains("+x 2026-09-20 buy ducks"), "{}", dry.diff);
+    assert!(
+        dry.diff.contains("+x 2026-09-20 walk the dog"),
+        "{}",
+        dry.diff
+    );
+
+    let real = client
+        .apply(req(batch, "", false))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(dry.hash, real.hash);
+
+    // An id that is not in the document is refused, and names itself.
+    let err = client
+        .apply(req(
+            vec![complete_by_id("01ARZ3NDEKTSV4RRFFQ69G5FAZ")],
+            "",
+            true,
+        ))
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), Code::InvalidArgument);
+    assert!(err.message().contains("no task"), "{}", err.message());
+}
