@@ -130,7 +130,7 @@ txtodo/
 
 **Detail view.**
 
-- Header: back, breadcrumb `todo.txt › line N` (nested: `todo.txt › 2 › q4-roadmap/todo.txt › 3`).
+- Header: back, breadcrumb `todo.txt › line N` (nested: `todo.txt › 2 › tasks/q4-roadmap/todo.txt › 3`).
 - The parent line pinned at the top, highlighted, with the same click-to-edit popover.
 - Section `<ref>/notes.md`: a plain-text/markdown editor. No WYSIWYG. Light markdown highlighting (headings, list markers, code fences) is fine.
 - Section `<ref>/todo.txt`: the same file-view component as the top level, fully recursive (its lines can be clicked, double-clicked, and have their own `ref:`). Header shows `n of m done`.
@@ -140,7 +140,7 @@ txtodo/
 ### 3.2 The `ref:` directory convention (normative; mirror to `specs/ref-directories.md`)
 
 1. **Tag.** Key `ref`, value = a *slug*: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, not `.` or `..`. Absolute paths and parent traversal are rejected by the parser as a quirk `invalid_ref` and treated as no ref.
-2. **Resolution.** The slug names a directory in the same directory as the file containing the line. `~/todo/todo.txt` line with `ref:q4-roadmap` → `~/todo/q4-roadmap/`. Nesting follows naturally: a line in `~/todo/q4-roadmap/todo.txt` with `ref:sync-section` → `~/todo/q4-roadmap/sync-section/`.
+2. **Resolution.** For a line in the workspace's root list, the slug names a directory in the workspace's refs folder: `refs_dir` in `<root>/txtodo.toml`, default `tasks`. `~/todo/todo.txt` line with `ref:q4-roadmap` → `~/todo/tasks/q4-roadmap/`. For a line in any other list, the slug names a directory in the same directory as that file, so nesting follows naturally: a line in `~/todo/tasks/q4-roadmap/todo.txt` with `ref:sync-section` → `~/todo/tasks/q4-roadmap/sync-section/`. `refs_dir = "."` puts the root list's ref directories beside it, the layout ADR 0012 first described.
 3. **Contents.** Any of `todo.txt`, `notes.md`. All optional. Nothing else is managed or synced by txtodo (other files are left alone).
 4. **Creation is lazy.** The tag is added and the directory created on the first write into the detail view's notes or sub-list. Slug = kebab-case of the description's plain words, truncated to 40 chars; on collision append `-2`, `-3`. The user can rename the slug in the edit popover; the daemon renames the directory atomically and rewrites the tag in the same op.
 5. **Progress.** `done = completed lines in <ref>/todo.txt`; `total = task lines in <ref>/todo.txt`; blank lines excluded. Displayed as `open/total` on the parent line's indicator and `done of total` in the detail header.
