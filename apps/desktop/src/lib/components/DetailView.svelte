@@ -1,8 +1,9 @@
 <script lang="ts">
 	// Detail view (tasks/desktop-detail-view, plan §3.2, design §7): pinned parent line, breadcrumb,
-	// footer, and exactly one of {notes editor, recursive sub-list} — a task either has sub-tasks or
-	// is summed up in a note, never both at once (whichever the sub-list already has tasks wins;
-	// notes is the default otherwise). A page, not a modal — `MainView.svelte` swaps this in for its
+	// footer, the recursive sub-list when it has tasks, and the notes editor always — under the
+	// sub-list as a collapsible section that starts open when notes.md has text (task
+	// desktop-notes-hidden: "exactly one of" hid every ref's notes, since each has both files).
+	// A page, not a modal — `MainView.svelte` swaps this in for its
 	// whole content area rather than overlaying it (plan §3.3).
 	//
 	// Everything shown here comes from the daemon's tree/`Watch` (design §2.6, plan §3.2 rule 2):
@@ -24,6 +25,7 @@
 		watch,
 		workspaceRoot,
 		type FileInfo,
+		type NotesDoc,
 		type TaskRef
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
@@ -58,6 +60,11 @@
 	let loadError = $state("");
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let workspaceRootPath = $state("");
+	// What the daemon said about notes.md: the path it actually read (shown in the footer, so a
+	// client/daemon layout disagreement is visible) and whether the collapsed section starts open.
+	let notesPath = $state("");
+	let notesOpen = $state(false);
+	let notesSeen = false;
 
 	// The pinned parent line edits directly, the same as FileView's own document (click, type,
 	// blur/Enter commits) — no popover. `parentDirty`/`parentBaseline` mirror FileView.svelte's
@@ -79,6 +86,16 @@
 	const absoluteRefDir = $derived(
 		refDir && workspaceRootPath ? `${workspaceRootPath}/${refDir}` : (workspaceRootPath ?? "")
 	);
+	const hasSubList = $derived(subListInfo !== null && subListInfo.total > 0);
+
+	function onNotesLoaded(doc: NotesDoc) {
+		notesPath = doc.path;
+		// Open once, on the first answer: a later reload must not fight the human's own toggle.
+		if (!notesSeen) {
+			notesSeen = true;
+			notesOpen = doc.text.trim() !== "";
+		}
+	}
 	const allSubTasksDone = $derived(
 		subListInfo !== null && subListInfo.total > 0 && subListInfo.done === subListInfo.total
 	);
@@ -279,14 +296,15 @@
 		{/if}
 	</section>
 
-	{#if subListInfo && subListInfo.total > 0}
+	{#if hasSubList && subListInfo}
 		<section class="sublist" aria-label="Sub-list">
 			<h2>{subListInfo.done} of {subListInfo.total} done</h2>
 			<FileView path={subListPath ?? ""} {depth} onDetailRequest={onNavigateInto} />
 		</section>
-	{:else}
-		<section class="notes" aria-label="Notes">
-			<h2>Notes</h2>
+	{/if}
+
+	<section class="notes" aria-label="Notes">
+		{#snippet notesBody()}
 			{#if !parentLine}
 				<!-- still loading -->
 			{:else if !parentTaskId}
@@ -300,13 +318,26 @@
 					line is. It is likely an older build; reinstall or restart <code>txtodod</code>.
 				</p>
 			{:else}
-				<NotesEditor task={parentTaskRef} />
+				<NotesEditor task={parentTaskRef} onLoaded={onNotesLoaded} />
 			{/if}
-		</section>
-	{/if}
+		{/snippet}
+		{#if hasSubList}
+			<details bind:open={notesOpen}>
+				<summary><h2>Notes</h2></summary>
+				{@render notesBody()}
+			</details>
+		{:else}
+			<h2>Notes</h2>
+			{@render notesBody()}
+		{/if}
+	</section>
 
 	<footer class="detail-footer">
-		<span class="dir">{absoluteRefDir}</span>
+		<!-- No `ref:` and no path from the daemon yet: the folder does not exist until the first
+		     notes edit creates it, so say that rather than show the workspace root. -->
+		<span class="dir">
+			{notesPath || (refTag ? absoluteRefDir : "Notes file is created when you type")}
+		</span>
 	</footer>
 </div>
 
@@ -354,6 +385,14 @@
 
 	.mark-done-offer {
 		align-self: flex-start;
+	}
+
+	.notes summary {
+		cursor: pointer;
+	}
+
+	.notes summary h2 {
+		display: inline;
 	}
 
 	.empty-state {

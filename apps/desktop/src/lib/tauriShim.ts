@@ -7,6 +7,7 @@
 import { invoke as tauriInvoke, type InvokeArgs, type InvokeOptions } from "@tauri-apps/api/core";
 import { listen as tauriListen, type EventCallback, type EventName, type Options, type UnlistenFn } from "@tauri-apps/api/event";
 import { mockInvoke, mockListen } from "./mock/tauriMock";
+import { friendlySchemaError } from "./schemaTooNew";
 
 // BUGFIX (found while running tasks/desktop-visual-regression's Playwright suite): a plain
 // Chromium browser (no Tauri runtime) never has `window.__TAURI_INTERNALS__`, so `hasTauri()`
@@ -70,7 +71,9 @@ export function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOption
 			// `error` is the stringified failure only — never the original `args`, which may carry
 			// real task/note text (e.g. `apply`'s `mutations`, `edit_notes`'s `newText`).
 			logToRust("warn", "ui_invoke_err", { command: cmd, ms, request_id: requestId, error: String(err) });
-			throw err;
+			// Logged raw above, shown plain below: every screen that prints a failed call's text gets
+			// the schema refusal reworded here, once, instead of each one matching it.
+			throw friendlySchemaError(err) ?? err;
 		}
 	);
 }

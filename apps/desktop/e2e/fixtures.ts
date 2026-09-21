@@ -94,6 +94,8 @@ function seed(dir: string, fixture: FixtureName): void {
 			// The default layout keeps the root list's ref dirs in `tasks/` (task workspace-layout).
 			mkdirSync(join(dir, "tasks", "q4-roadmap"), { recursive: true });
 			writeFileSync(join(dir, "tasks", "q4-roadmap", "todo.txt"), "(B) draft the outline\n");
+			// Both files, as every ref in a real backlog has (task desktop-notes-hidden).
+			writeFileSync(join(dir, "tasks", "q4-roadmap", "notes.md"), "Q4 goals: ship the outline first.\n");
 			return;
 		}
 		case "notes-create":

@@ -15,11 +15,13 @@
 	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { markdown } from "@codemirror/lang-markdown";
-	import { editNotes, getNotes, type TaskRef } from "$lib/daemon";
+	import { editNotes, getNotes, type NotesDoc, type TaskRef } from "$lib/daemon";
 
 	const SAVE_DEBOUNCE_MS = 500;
 
-	let { task }: { task: TaskRef } = $props();
+	// `onLoaded` hands the daemon's answer to the parent, which shows `path` in its footer and opens a
+	// collapsed notes section when there is text (task desktop-notes-hidden).
+	let { task, onLoaded }: { task: TaskRef; onLoaded?: (doc: NotesDoc) => void } = $props();
 
 	let containerEl: HTMLDivElement | undefined;
 	let view: EditorView | undefined;
@@ -34,6 +36,7 @@
 			loadError = "";
 			lastSavedText = doc.text;
 			view?.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc.text } });
+			onLoaded?.(doc);
 		} catch (e) {
 			loadError = String(e);
 		}
