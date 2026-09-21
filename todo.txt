@@ -273,3 +273,4 @@ x 2026-09-21 2026-09-20 Complete moves a task to the bottom of its own file, onc
 x 2026-09-21 2026-09-20 Apply dry_run: the daemon returns the unified diff a batch would make, and structured errors +m6 @daemon @mcp ref:apply-dry-run — see tasks/apply-dry-run/notes.md; known gap: todo_move cannot be previewed
 2026-09-21 daemon: notes.md sync (actor, recovery, LAN apply) +m11 @daemon ref:notes-sync
 2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli
+2026-09-21 remote workspace auto-mirror + remote flag across clients +m11 @daemon @cli @tui @desktop ref:remote-workspace-mirror
