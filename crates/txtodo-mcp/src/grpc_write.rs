@@ -27,8 +27,27 @@ pub struct GrpcCtx {
     pub agent: Option<pb::AgentPrincipal>,
 }
 
-fn status(s: tonic::Status) -> McpError {
-    McpError::daemon(s.message().to_owned())
+/// The daemon's refusal as an `McpError`, with the line and spec rule it sent as metadata (task
+/// apply-dry-run: structured errors). The keys are `txtodo-daemon`'s `ERROR_LINE_KEY` and
+/// `ERROR_RULE_KEY`; this crate may not depend on it, so the strings are repeated here.
+pub(crate) fn status(s: tonic::Status) -> McpError {
+    let mut error = McpError::daemon(s.message().to_owned());
+    let meta = |key: &str| s.metadata().get(key).and_then(|v| v.to_str().ok());
+    if let Some(line) = meta("x-txtodo-error-line").and_then(|v| v.parse().ok()) {
+        error = error.with_line(line);
+    }
+    // The rule ids the daemon sends, kept as `&'static str` (`McpError::spec_rule`).
+    let rule = [
+        "specs/todotxt.abnf#blank",
+        "specs/todotxt.abnf#line",
+        "specs/todotxt.abnf#id-tag",
+    ]
+    .into_iter()
+    .find(|known| meta("x-txtodo-error-rule") == Some(known));
+    match rule {
+        Some(rule) => error.with_spec_rule(rule),
+        None => error,
+    }
 }
 
 /// Today, local date, `YYYY-MM-DD` (ADR 0011: local date, never a time zone) — the same source
@@ -278,10 +297,10 @@ fn outcome_from(applied: u32, last: Option<pb::ApplyResponse>) -> ApplyOutcome {
     }
 }
 
-/// `todo_batch`. `dry_run: true` never calls `Apply` — see [`crate::backend::McpBackend::batch`]'s
-/// doc for why. Each op reuses its single-tool counterpart above, sequentially: it is not one
-/// atomic multi-mutation `Apply`, since ops may target different files and `apply_route.rs` never
-/// allows a `Move` alongside anything else in one batch. `workspace` applies to every op.
+/// `todo_batch`. `dry_run: true` asks the daemon for the diff (`grpc_dry_run.rs`). A real run reuses
+/// each op's single-tool counterpart above, sequentially: it is not one atomic multi-mutation
+/// `Apply`, since ops may target different files and `apply_route.rs` never allows a `Move`
+/// alongside anything else in one batch. `workspace` applies to every op.
 pub async fn batch(
     ctx: GrpcCtx,
     ops: Vec<TodoOp>,
@@ -289,7 +308,7 @@ pub async fn batch(
     workspace: WorkspaceArg,
 ) -> Result<ApplyOutcome, McpError> {
     if dry_run {
-        return Ok(ApplyOutcome::default());
+        return crate::grpc_dry_run::preview(ctx, ops, workspace).await;
     }
     let mut applied = 0u32;
     for op in ops {

@@ -12,6 +12,7 @@ pub mod error;
 pub mod global_socket;
 pub mod grpc_backend;
 mod grpc_convert;
+mod grpc_dry_run;
 pub use grpc_convert::set_default_workspace;
 mod grpc_hygiene;
 mod grpc_move;

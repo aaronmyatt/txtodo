@@ -62,20 +62,38 @@ fn some_ops() -> Vec<crate::backend::TodoOp> {
     ]
 }
 
-/// Root todo id:01M2B4ZWQDH20SS2N1S48CPERX: `todo_batch` with `dry_run` leaves the store's hash
-/// unchanged. A dry run never calls `Apply` (or any RPC), so the document — and its hash — cannot
-/// move; a transport that fails every call proves that, and the control below proves the harness
-/// would notice a call.
+/// Task apply-dry-run: a dry run now asks the daemon for the diff, so with no daemon it fails at
+/// the transport, where the old stub answered `Ok(applied: 0)` without ever calling one.
 #[tokio::test]
-async fn a_dry_run_batch_makes_no_rpc_so_the_store_hash_cannot_change() {
-    let outcome = batch(ctx_that_cannot_reach_a_daemon(), some_ops(), true, None)
+async fn a_dry_run_batch_asks_the_daemon_for_its_diff() {
+    let adds = vec![crate::backend::TodoOp::TodoAdd {
+        text: "Draft the roadmap".to_owned(),
+        file: None,
+    }];
+    let err = batch(ctx_that_cannot_reach_a_daemon(), adds, true, None)
         .await
-        .unwrap_or_else(|e| panic!("a dry run must not touch the daemon: {e:?}"));
-    assert_eq!(outcome.applied, 0);
-    assert!(
-        outcome.hash.is_none() && outcome.hlc.is_none(),
-        "no write happened, so no post-write hash or HLC is reported"
+        .expect_err("a dry run needs the daemon to plan it");
+    assert_eq!(err.code, "daemon", "{err:?}");
+}
+
+/// A move cannot be previewed yet, so a batch holding one is refused before anything is asked of
+/// the daemon or written.
+#[tokio::test]
+async fn a_dry_run_batch_with_a_move_is_refused() {
+    let mut ops = some_ops();
+    ops.insert(
+        0,
+        crate::backend::TodoOp::TodoMove {
+            id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned(),
+            before: None,
+            after: Some("01ARZ3NDEKTSV4RRFFQ69G5FAW".to_owned()),
+        },
     );
+    let err = batch(ctx_that_cannot_reach_a_daemon(), ops, true, None)
+        .await
+        .expect_err("a move cannot be previewed");
+    assert_eq!(err.code, "invalid_params", "{err:?}");
+    assert!(err.message.contains("todo_move"), "{err:?}");
 }
 
 #[tokio::test]

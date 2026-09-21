@@ -73,8 +73,8 @@ pub struct ApplyOutcome {
     pub hash: Option<String>,
     /// The HLC of the write, when one happened.
     pub hlc: Option<Hlc>,
-    /// Set only by a real diff renderer ([mcp-batch-dry-run](../../../tasks/mcp-batch-dry-run));
-    /// always `None` here — see [`McpBackend::batch`]'s doc.
+    /// The unified diff a `dry_run` `todo_batch` would make, computed by the daemon; `None` for a
+    /// real run, and for a dry run that would change nothing.
     pub diff: Option<String>,
 }
 
@@ -214,10 +214,10 @@ pub trait McpBackend: Send + Sync {
         file: RefPath,
         workspace: WorkspaceArg,
     ) -> Result<ApplyOutcome, McpError>;
-    /// `todo_batch`. `dry_run: true` is accepted but never calls `Apply` — [mcp-batch-dry-run]
-    /// (../../../tasks/mcp-batch-dry-run/notes.md) owns diff rendering, so a dry run here reports
-    /// `applied: 0` and no diff rather than pretending to preview one. `workspace` applies to
-    /// every op in `ops` (`BatchArgs`'s own doc).
+    /// `todo_batch`. `dry_run: true` writes nothing and returns the daemon's unified diff of what
+    /// the batch would change (`ApplyOutcome::diff`); a batch holding a `todo_move` is refused,
+    /// since a move cannot be previewed yet. `workspace` applies to every op in `ops`
+    /// (`BatchArgs`'s own doc).
     async fn batch(
         &self,
         ops: Vec<TodoOp>,
