@@ -310,6 +310,8 @@ export function opLogAll(): Promise<AggregatedOpLogEntry[]> {
 export interface UniversalTask {
 	workspace_id: string;
 	workspace_root: string;
+	/** The workspace's root list (its layout's `todo_file`), which `line_number` counts in. */
+	root_list: string;
 	line_number: number;
 	priority: string | null;
 	contexts: string[];

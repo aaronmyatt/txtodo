@@ -90,3 +90,67 @@ async fn get_file_for_reaches_another_workspace_without_moving_the_clients_own_s
 
     kill(pid);
 }
+
+/// Task workspace-layout: the universal view reads each workspace's own root list, named by the
+/// `todo_file` in its `txtodo.toml`, without moving the client's own selector.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn root_list_for_names_each_workspaces_own_todo_file() {
+    let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let mut cfg = DesktopConfig::new(state_dir.path());
+    cfg.daemon_bin = Some(TXTODOD_BIN.clone());
+    cfg.global_socket_override = Some(state_dir.path().join("txtodod.sock"));
+    cfg.global_registry_override = Some(state_dir.path().join("registry.db"));
+    let sock = desktop_lib::daemon::ensure_daemon(&cfg)
+        .await
+        .unwrap_or_else(|e| panic!("ensure_daemon: {e}"));
+
+    let plain = seeded_dir("(A) in the default list");
+    let named = temp_workspace();
+    std::fs::write(
+        named.path().join("txtodo.toml"),
+        "todo_file = \"work.txt\"\n",
+    )
+    .unwrap_or_else(|e| panic!("write txtodo.toml: {e}"));
+    std::fs::write(named.path().join("work.txt"), "(B) in the named list\n")
+        .unwrap_or_else(|e| panic!("write work.txt: {e}"));
+
+    let selector_plain = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            plain.path().display().to_string(),
+        )),
+    };
+    let mut client = DaemonClient::connect(&sock, Some(selector_plain.clone()))
+        .await
+        .unwrap_or_else(|e| panic!("connect: {e}"));
+    let pid = wait_for_global_pid(state_dir.path());
+    client
+        .workspace_add(plain.path())
+        .await
+        .expect("register plain");
+    let registered = client
+        .workspace_add(named.path())
+        .await
+        .expect("register named");
+
+    let selector_named = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::WorkspaceId(
+            registered.workspace_id,
+        )),
+    };
+    assert_eq!(
+        client.root_list_for(selector_named.clone()).await,
+        "work.txt"
+    );
+    assert_eq!(client.root_list_for(selector_plain).await, "todo.txt");
+    let list = client
+        .get_file_for(selector_named, "work.txt")
+        .await
+        .expect("get_file_for named");
+    assert_eq!(
+        String::from_utf8_lossy(&list.bytes).trim(),
+        "(B) in the named list"
+    );
+
+    kill(pid);
+}

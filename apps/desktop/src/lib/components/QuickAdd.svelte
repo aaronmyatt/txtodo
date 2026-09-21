@@ -13,12 +13,23 @@
 	import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import { onDestroy, onMount } from "svelte";
-	import { applyMutations } from "$lib/daemon";
+	import { applyMutations, workspaceLayout } from "$lib/daemon";
 	import EditPopover from "./EditPopover.svelte";
 
 	// Quick-add always appends to the root file — there is no "current file" concept for a
-	// global, no-document-behind-it popover (notes.md: "no document behind it").
-	const ROOT_PATH = "todo.txt";
+	// global, no-document-behind-it popover (notes.md: "no document behind it"). Which file that is
+	// comes from the workspace's layout (`todo_file`), refetched on every show since the workspace
+	// can change while this window is hidden. This window has its own JS context, so the main
+	// window's layout store is not shared.
+	let rootPath = $state("todo.txt");
+
+	async function refreshRootPath() {
+		try {
+			rootPath = (await workspaceLayout()).todo_file;
+		} catch {
+			// Keep the last known root list: a failed fetch must not stop a capture.
+		}
+	}
 
 	// Bumped on every `quick-add-shown` event (emitted by the Rust shortcut handler right after
 	// showing+focusing this window) so `{#key}` remounts `EditPopover` with a fresh, empty,
@@ -36,7 +47,7 @@
 	 * submit never reaches here: `EditPopover`'s own `isNoOpEdit(initialLine, next)` check (against
 	 * `initialLine = ""`) already turns that into a plain cancel. */
 	async function handleSave(line: string) {
-		await applyMutations(ROOT_PATH, [{ kind: "add", line }]);
+		await applyMutations(rootPath, [{ kind: "add", line }]);
 		await hide();
 	}
 
@@ -45,8 +56,10 @@
 	}
 
 	onMount(async () => {
+		void refreshRootPath();
 		unlisten = await listen("quick-add-shown", () => {
 			showCount++;
+			void refreshRootPath();
 		});
 	});
 
@@ -58,7 +71,7 @@
 <div class="quick-add">
 	{#key showCount}
 		<EditPopover
-			path={ROOT_PATH}
+			path={rootPath}
 			initialLine=""
 			taskRef={null}
 			anchor={null}

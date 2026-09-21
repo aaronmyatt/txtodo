@@ -47,7 +47,8 @@ async fn universal_tasks_inner(
                 ws.workspace_id.clone(),
             )),
         };
-        let Ok(contents) = client.get_file_for(selector, "todo.txt").await else {
+        let root_list = client.root_list_for(selector.clone()).await;
+        let Ok(contents) = client.get_file_for(selector, &root_list).await else {
             continue; // this workspace's own failure never blocks the others
         };
         tasks.extend(
@@ -56,6 +57,7 @@ async fn universal_tasks_inner(
                 .map(|t| UniversalTaskDto {
                     workspace_id: ws.workspace_id.clone(),
                     workspace_root: ws.root.clone(),
+                    root_list: root_list.clone(),
                     line_number: t.line_number,
                     priority: t.priority,
                     contexts: t.contexts,

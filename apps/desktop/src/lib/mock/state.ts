@@ -152,6 +152,7 @@ export function universalTasksDto() {
 			return {
 				workspace_id: owner.id,
 				workspace_root: owner.root,
+				root_list: "todo.txt",
 				line_number: 0, // not meaningful in this mock: same seeded doc for every workspace
 				priority: priorityMatch?.[1] ?? null,
 				contexts: [...line.matchAll(/@\S+/g)].map((m) => m[0]),

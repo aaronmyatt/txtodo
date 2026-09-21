@@ -13,6 +13,9 @@ pub struct UniversalTaskDto {
     pub workspace_id: String,
     /// Canonicalized absolute path; display-only, mirrors `WorkspaceInfoDto::root`.
     pub workspace_root: String,
+    /// The workspace's root list, relative to its root (its layout's `todo_file`): the file
+    /// `line_number` counts in, so a click-through opens the right document.
+    pub root_list: String,
     /// 1-based over every line, blanks included — same convention as `TaskRefDto::line_number`.
     pub line_number: u32,
     /// `A`-`Z`, uppercase; absent when the line has no priority.

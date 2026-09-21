@@ -56,7 +56,7 @@
 		try {
 			await switchWorkspace(task.workspace_root);
 			pendingUniversalNav.set({
-				file: "todo.txt",
+				file: task.root_list,
 				line: task.line_number,
 				workspaceRoot: task.workspace_root
 			});

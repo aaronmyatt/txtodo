@@ -47,6 +47,20 @@ impl DaemonClient {
         Ok(self.inner.workspace_layout(req).await?.into_inner())
     }
 
+    /// The root list of `selector`'s workspace (its layout's `todo_file`), without touching this
+    /// client's own selector: the universal view reads every workspace's list. An older daemon
+    /// that does not know the RPC has only ever had `todo.txt`.
+    pub async fn root_list_for(&mut self, selector: pb::WorkspaceSelector) -> String {
+        let req = pb::WorkspaceLayoutRequest {
+            workspace: Some(selector),
+            ..pb::WorkspaceLayoutRequest::default()
+        };
+        match self.inner.workspace_layout(req).await {
+            Ok(resp) => resp.into_inner().todo_file,
+            Err(_) => "todo.txt".to_owned(),
+        }
+    }
+
     /// The daemon's own version and release date: a selector-less `Health`, which the daemon
     /// answers at once with the device totals even while workspaces are still opening, so this
     /// never waits on an open (task version-info). An older daemon sends an empty date.

@@ -14,6 +14,7 @@
 		type DaemonStatus
 	} from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
+	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
 	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
@@ -27,9 +28,9 @@
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
-	// Component contract says `<FileView path="todo.txt" depth={0}/>` explicitly; we take that at
-	// face value rather than round-tripping through `list_files` just to confirm the obvious.
-	const ROOT_PATH = "todo.txt";
+	// The root list is `todo_file` from the workspace's layout (task workspace-layout), `todo.txt`
+	// until the answer arrives; nested lists stay `todo.txt`.
+	const ROOT_PATH = $derived($workspaceLayoutStore.todo_file);
 
 	let status = $state<DaemonStatus>("connecting");
 
@@ -78,6 +79,8 @@
 		lastRoot = root;
 		// Where this workspace keeps its `ref:` folders (task workspace-layout): the nested-list
 		// paths and the ref indicators are composed from it. A failed fetch keeps the default.
+		// Reset first, so the new workspace never opens the previous one's root list.
+		workspaceLayoutStore.set(DEFAULT_LAYOUT);
 		workspaceLayout()
 			.then((layout) => workspaceLayoutStore.set(layout))
 			.catch(() => {});
@@ -138,7 +141,7 @@
 	{/if}
 
 	{#if $currentWorkspaceRoot}
-	{#key $currentWorkspaceRoot}
+	{#key `${$currentWorkspaceRoot}|${ROOT_PATH}`}
 		{#if detail.length === 0}
 			<ConflictBanner path={ROOT_PATH} />
 
