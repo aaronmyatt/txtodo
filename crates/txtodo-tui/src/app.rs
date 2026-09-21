@@ -54,6 +54,17 @@ pub fn main() -> ExitCode {
     rt.block_on(async_main())
 }
 
+/// The current folder when it is a workspace, else the user's default one (task
+/// default-workspace), and the status-line label that says so when it is the default.
+fn pick_workspace(cwd: std::path::PathBuf) -> (std::path::PathBuf, Option<String>) {
+    let choice = match RegistryEnv::from_process() {
+        Ok(env) => choose_workspace(&env, &cwd),
+        Err(_) => WorkspaceChoice::Here(cwd),
+    };
+    let label = choice.is_default().then(|| "default workspace".to_owned());
+    (choice.path().to_path_buf(), label)
+}
+
 #[allow(clippy::print_stderr)] // see `main`'s doc
 async fn async_main() -> ExitCode {
     let cwd = match std::env::current_dir() {
@@ -63,14 +74,7 @@ async fn async_main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // The current folder when it is a workspace, else the user's default one (task
-    // default-workspace). The status line says so when it is the default.
-    let choice = match RegistryEnv::from_process() {
-        Ok(env) => choose_workspace(&env, &cwd),
-        Err(_) => WorkspaceChoice::Here(cwd),
-    };
-    let workspace = choice.path().to_path_buf();
-    let label = choice.is_default().then(|| "default workspace".to_owned());
+    let (workspace, label) = pick_workspace(cwd);
     // File-only sink (root todo.txt logging-tui): `run` below enters raw mode + an alternate
     // screen (`ratatui::init()`) and only leaves it on return, so any stderr write for the rest of
     // this function's lifetime would corrupt the render — `init_file_only` never installs a
@@ -107,7 +111,8 @@ async fn async_main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    match run_in(&mut daemon, "todo.txt", label).await {
+    let root_list = daemon.root_list().await;
+    match run_in(&mut daemon, &root_list, label).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("txtodo-tui: {e}");

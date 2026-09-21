@@ -178,6 +178,19 @@ impl Daemon {
         Ok(self.inner.get_file(req).await?.into_inner())
     }
 
+    /// The workspace's root list, relative to its root (`todo_file` in `txtodo.toml`): the document
+    /// the TUI opens. An older daemon that does not know the RPC has only ever had `todo.txt`.
+    pub async fn root_list(&mut self) -> String {
+        let req = pb::WorkspaceLayoutRequest {
+            workspace: self.selector.clone(),
+            ..pb::WorkspaceLayoutRequest::default()
+        };
+        match self.inner.workspace_layout(req).await {
+            Ok(resp) => resp.into_inner().todo_file,
+            Err(_) => "todo.txt".to_owned(),
+        }
+    }
+
     /// A change per reconcile or apply for `paths` (every document when empty).
     pub async fn watch(
         &mut self,

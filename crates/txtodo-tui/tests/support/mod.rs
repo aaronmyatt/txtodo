@@ -66,8 +66,16 @@ impl RealDaemon {
     /// Writes `todo` as `todo.txt`, spawns `txtodod --dir <tmp>`, waits for the socket, and
     /// returns once a real [`Daemon`] client is ready to talk to it.
     pub async fn start(todo: &str) -> (RealDaemon, Daemon) {
+        Self::start_with_files(&[("todo.txt", todo)]).await
+    }
+
+    /// `start`, for a workspace seeded with any files (a `txtodo.toml` and a differently named
+    /// root list, say).
+    pub async fn start_with_files(files: &[(&str, &str)]) -> (RealDaemon, Daemon) {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
-        std::fs::write(dir.path().join("todo.txt"), todo).unwrap_or_else(|e| panic!("{e}"));
+        for (name, text) in files {
+            std::fs::write(dir.path().join(name), text).unwrap_or_else(|e| panic!("{e}"));
+        }
         let child = Command::new(daemon_bin())
             .args(["--dir", &dir.path().to_string_lossy()])
             .stdout(Stdio::null())

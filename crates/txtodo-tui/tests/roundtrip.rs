@@ -266,3 +266,18 @@ async fn apply_is_visible_on_a_separate_watch_stream() {
         "the Complete mutation produced a real op"
     );
 }
+
+/// Task workspace-layout: the TUI opens the root list the layout names, not a hard-coded todo.txt.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn the_root_list_is_the_layouts_todo_file() {
+    let (_real, mut daemon) = support::RealDaemon::start_with_files(&[
+        ("txtodo.toml", "todo_file = \"work.txt\"\n"),
+        ("work.txt", "plan the launch\n"),
+    ])
+    .await;
+    let root = daemon.root_list().await;
+    assert_eq!(root, "work.txt");
+    let file = daemon.get_file(&root).await.unwrap();
+    assert_eq!(file.bytes, b"plan the launch\n");
+}
