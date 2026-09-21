@@ -29,15 +29,19 @@ enum Mode {
 /// bridge (`--dir <workspace>`, unchanged — reaches only whatever workspace(s) that directory's
 /// own daemon has opened), or the device-global socket (`--global`, new — reaches every workspace
 /// the device's one `txtodod` already has open, the mode a `workspace` tool/resource arg is
-/// actually useful against). Mutually exclusive; exactly one is required.
+/// actually useful against). `--dir` and `--global` are mutually exclusive; neither is `Auto`.
 enum Target {
     /// `--dir <workspace>`.
     Dir(PathBuf),
     /// `--global`.
     Global,
+    /// Neither flag (task default-workspace): the global daemon, aimed at the folder this server
+    /// was started in when that is a workspace, else at the user's default workspace.
+    Auto,
 }
 
-/// `txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--token <id>]`.
+/// `txtodo-mcp [--dir <workspace> | --global] --stdio|--http [--token <id>]`; with neither flag it
+/// serves the current folder if that is a workspace, else the default one.
 struct Args {
     target: Target,
     mode: Mode,
@@ -62,7 +66,9 @@ fn parse_args() -> Result<Args, String> {
         (Some(_), true) => return Err("--dir and --global are mutually exclusive".to_owned()),
         (Some(dir), false) => Target::Dir(dir.canonicalize().map_err(|e| e.to_string())?),
         (None, true) => Target::Global,
-        (None, false) => return Err(usage()),
+        // Neither flag (task default-workspace): the global daemon, and the folder this server was
+        // started in when it is a workspace, else the user's default workspace.
+        (None, false) => Target::Auto,
     };
     let mode = mode.ok_or_else(usage)?;
     Ok(Args {
@@ -73,7 +79,7 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn usage() -> String {
-    "usage: txtodo-mcp (--dir <workspace> | --global) --stdio|--http [--token <id>]".to_owned()
+    "usage: txtodo-mcp [--dir <workspace> | --global] --stdio|--http [--token <id>]".to_owned()
 }
 
 /// What `--lan` answers now. It used to bind every interface and advertise over mDNS.
@@ -94,7 +100,7 @@ async fn ensure_daemon_for_target(target: &Target, socket: &Path) {
     }
     let cfg = match target {
         Target::Dir(dir) => txtodo_daemon_launch::LaunchConfig::new(socket).with_dir(dir),
-        Target::Global => txtodo_daemon_launch::LaunchConfig::new(socket),
+        Target::Global | Target::Auto => txtodo_daemon_launch::LaunchConfig::new(socket),
     };
     let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
 }
@@ -130,7 +136,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // to put `.txtodo/logs/` under.
     let (socket, log_dir) = match &args.target {
         Target::Dir(dir) => (dir.join(SOCKET_REL), dir.join(".txtodo/logs")),
-        Target::Global => (global_socket::path(), global_socket::log_dir()),
+        Target::Global | Target::Auto => (global_socket::path(), global_socket::log_dir()),
     };
     // JSON rolling-file + pretty-stderr layer (never stdout — `transport::serve_stdio` owns
     // stdin/stdout for the MCP protocol itself, see `transport.rs`'s `rmcp::transport::io::stdio`
@@ -140,6 +146,9 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // `--global` mirrors that placement beside the global socket instead. `_log_guard` must
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
+    if matches!(args.target, Target::Auto) {
+        aim_at_the_current_workspace();
+    }
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
     ensure_daemon_for_target(&args.target, &socket).await;
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
@@ -149,6 +158,26 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         Mode::Http => serve_http(server).await?,
     }
     Ok(())
+}
+
+/// With neither `--dir` nor `--global`: calls that name no `workspace` mean the folder this server
+/// was started in when it is a workspace, else the default workspace (task default-workspace) —
+/// and stderr says which. stdout is the MCP protocol, so it is never used here.
+#[allow(clippy::print_stderr)]
+fn aim_at_the_current_workspace() {
+    let env = txtodo_workspace_paths::RegistryEnv::from_process().unwrap_or_default();
+    let cwd = std::env::current_dir().unwrap_or_default();
+    match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
+        txtodo_workspace_paths::WorkspaceChoice::Here(dir) => {
+            txtodo_mcp::set_default_workspace(dir.display().to_string());
+        }
+        txtodo_workspace_paths::WorkspaceChoice::Default(dir) => {
+            eprintln!(
+                "txtodo-mcp: no workspace here, using the default workspace ({})",
+                dir.display()
+            );
+        }
+    }
 }
 
 async fn serve_http(server: McpServer) -> Result<(), Box<dyn std::error::Error>> {

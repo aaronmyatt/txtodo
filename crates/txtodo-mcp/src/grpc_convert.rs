@@ -47,6 +47,22 @@ pub fn op_summary(o: pb::OpSummary) -> OpSummary {
     }
 }
 
+/// The folder this server was started in, when that folder is a workspace (task default-workspace):
+/// what a call that names no `workspace` means. Set once at startup by `main.rs`; unset, an absent
+/// `workspace` stays absent and the daemon answers with its default workspace. A process-wide
+/// value because one MCP server is one process with one working folder.
+static DEFAULT_WORKSPACE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Makes `path` the workspace a call with no `workspace` arg means. The first call wins.
+pub fn set_default_workspace(path: String) {
+    let _ = DEFAULT_WORKSPACE.set(path);
+}
+
+/// `workspace`, or `default` when the call named none.
+fn or_default_workspace(workspace: WorkspaceArg, default: Option<&str>) -> WorkspaceArg {
+    workspace.or_else(|| default.map(str::to_owned))
+}
+
 /// Turns an MCP-level `workspace` arg into the wire `WorkspaceSelector`: a 26-character Crockford
 /// base32 string (a `WorkspaceId` ULID's own encoding) is treated as `workspace_id`, anything else
 /// as `path` — mirrors the daemon's own `WorkspaceSelector` oneof (`txtodo.proto`'s doc), sniffed
@@ -54,7 +70,7 @@ pub fn op_summary(o: pb::OpSummary) -> OpSummary {
 /// (`budgets.json`'s `allowedDeps`). `None` stays `None` — the daemon's own "sole open workspace"
 /// fallback (`workspace_catalog.rs::resolve_sole_open`).
 pub fn workspace_selector(workspace: WorkspaceArg) -> Option<pb::WorkspaceSelector> {
-    let value = workspace?;
+    let value = or_default_workspace(workspace, DEFAULT_WORKSPACE.get().map(String::as_str))?;
     let selector = if is_ulid(&value) {
         pb::workspace_selector::Selector::WorkspaceId(value)
     } else {
@@ -109,5 +125,27 @@ mod tests {
         assert_eq!(file_meta(&info).map(|m| m.kind), Some("todo"));
         info.kind = pb::FileKind::Unspecified as i32;
         assert!(file_meta(&info).is_none());
+    }
+}
+
+#[cfg(test)]
+mod default_workspace_tests {
+    use super::*;
+
+    #[test]
+    fn a_named_workspace_wins_and_an_absent_one_takes_the_default() {
+        assert_eq!(
+            or_default_workspace(Some("/named".into()), Some("/here")),
+            Some("/named".to_owned())
+        );
+        assert_eq!(
+            or_default_workspace(None, Some("/here")),
+            Some("/here".to_owned())
+        );
+        assert_eq!(
+            or_default_workspace(None, None),
+            None,
+            "no default: left to the daemon"
+        );
     }
 }
