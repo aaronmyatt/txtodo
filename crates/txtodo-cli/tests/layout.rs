@@ -146,3 +146,62 @@ fn sub_on_a_line_with_no_ref_creates_it_in_tasks() {
         "nothing beside the list"
     );
 }
+
+#[test]
+fn workspace_layout_shows_and_sets_the_layout_and_doctor_reports_it() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    let ws = workspace("(A) plan the launch ref:plan\n");
+    std::fs::create_dir_all(ws.path().join("tasks/plan")).unwrap();
+    std::fs::write(ws.path().join("tasks/plan/todo.txt"), "draft\n").unwrap();
+
+    let shown = stdout(&txtodo(&daemon, ws.path(), &["workspace", "layout"]));
+    assert!(
+        shown.contains("refs_dir  = tasks") && shown.contains("todo_file = todo.txt"),
+        "{shown}"
+    );
+
+    // A live ref dir is in the way, so a change is refused and nothing is written.
+    let refused = txtodo(
+        &daemon,
+        ws.path(),
+        &["workspace", "layout", "--refs-dir", "stuff"],
+    );
+    assert!(!refused.status.success());
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("ref dir"),
+        "{}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+    assert!(!ws.path().join("txtodo.toml").exists());
+
+    // Asked to move them, it moves them, writes the file, and open follows.
+    let moved = stdout(&txtodo(
+        &daemon,
+        ws.path(),
+        &["workspace", "layout", "--refs-dir", "stuff", "--move"],
+    ));
+    assert!(
+        moved.contains("refs_dir  = stuff") && moved.contains("moved 1"),
+        "{moved}"
+    );
+    assert!(ws.path().join("stuff/plan/todo.txt").is_file());
+    assert!(!ws.path().join("tasks/plan").exists());
+    assert!(
+        std::fs::read_to_string(ws.path().join("txtodo.toml"))
+            .unwrap()
+            .contains("stuff")
+    );
+    assert!(
+        stdout(&txtodo(&daemon, ws.path(), &["open", "1"]))
+            .trim_end()
+            .ends_with("stuff/plan")
+    );
+
+    let doctor = stdout(&txtodo(&daemon, ws.path(), &["doctor"]));
+    let row = doctor
+        .lines()
+        .find(|l| l.starts_with("layout"))
+        .unwrap_or_else(|| panic!("{doctor}"));
+    assert!(row.contains("refs_dir = stuff"), "{row}");
+}

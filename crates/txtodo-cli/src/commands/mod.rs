@@ -14,6 +14,7 @@ pub mod fileops;
 pub mod history;
 pub mod hygiene;
 pub mod identity;
+pub mod layout;
 pub mod list;
 pub mod mcp;
 pub mod pair;

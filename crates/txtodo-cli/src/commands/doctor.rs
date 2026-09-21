@@ -161,21 +161,6 @@ fn skill_check() -> Check {
     }
 }
 
-/// Where the default workspace lives (Finder will not show it); never a FAIL, the daemon makes it.
-fn default_workspace_check(ctx: &Ctx) -> Check {
-    let dir = &ctx.paths.default_dir;
-    let state = if dir.join("todo.txt").is_file() {
-        "exists"
-    } else {
-        "not created yet; the daemon makes it on start"
-    };
-    check(
-        "default",
-        Status::Ok,
-        format!("{} ({state})", dir.display()),
-    )
-}
-
 /// Opens todo.txt for append without writing.
 fn files_check(ctx: &Ctx) -> Check {
     let mut problems = Vec::new();
@@ -346,7 +331,10 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
         &ctx.paths.dir,
     ));
     checks.push(skill_check());
-    checks.push(default_workspace_check(ctx));
+    checks.extend(super::layout::doctor_checks(
+        ctx,
+        state.daemon.as_deref_mut(),
+    ));
     if ctx.json {
         let rows: Vec<String> = checks
             .iter()

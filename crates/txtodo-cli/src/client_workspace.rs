@@ -39,6 +39,22 @@ impl Daemon {
         Ok(rep.into_inner().workspaces)
     }
 
+    /// The workspace's layout (task workspace-layout): reads it, or changes it with `set`.
+    pub fn workspace_layout(
+        &mut self,
+        req: pb::WorkspaceLayoutRequest,
+    ) -> Result<pb::WorkspaceLayoutInfo, ClientError> {
+        let req = pb::WorkspaceLayoutRequest {
+            workspace: self.selector.clone(),
+            ..req
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_layout(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Health for a specific registered workspace by id, regardless of this connection's own
     /// resolved `self.selector` — `txtodo doctor`'s per-entry probe of every *other* registered
     /// workspace. Temporarily swaps the selector rather than opening a second connection.

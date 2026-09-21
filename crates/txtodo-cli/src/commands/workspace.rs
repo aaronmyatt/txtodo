@@ -26,6 +26,21 @@ pub enum Action {
     /// id, root, added time, and whether it still exists / has state on disk.
     #[command(visible_alias = "ls")]
     List,
+    /// Shows where this workspace keeps its root list and its `ref:` folders, or changes them
+    /// (written to `txtodo.toml`). A change is refused while ref dirs sit in the old place, unless
+    /// `--move` moves them.
+    Layout {
+        /// Folder for the ref dirs of root-list lines, relative to the workspace (`.` = beside the
+        /// list). Omitted keeps the current one.
+        #[arg(long)]
+        refs_dir: Option<String>,
+        /// The root list's path. Only `todo.txt` is supported today.
+        #[arg(long)]
+        todo_file: Option<String>,
+        /// Move the ref dirs to the new place instead of refusing.
+        #[arg(long = "move")]
+        move_dirs: bool,
+    },
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
     Default,
@@ -52,6 +67,19 @@ pub fn run(
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
         Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
+        Some(Action::Layout {
+            refs_dir,
+            todo_file,
+            move_dirs,
+        }) => super::layout::run(
+            daemon,
+            super::layout::Change {
+                refs_dir: refs_dir.as_deref(),
+                todo_file: todo_file.as_deref(),
+                move_dirs: *move_dirs,
+            },
+            as_json,
+        ),
     }
 }
 
