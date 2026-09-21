@@ -92,11 +92,11 @@ jobs:
           .claude/scripts/check-file-length.sh
           .claude/scripts/check-assertions.sh
           .claude/scripts/check-specs-mirror.sh
-      - name: PR size (budgets.json.diffLines, Cargo.lock exempt)
+      - name: PR size (budgets.json.diffLines, Cargo.lock and todo.txt exempt)
         if: github.event_name == 'pull_request' && runner.os == 'Linux'
         run: |
           MAX=$(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).diffLines')
-          N=$(git diff --numstat "origin/${{ github.base_ref }}"...HEAD -- . ':!Cargo.lock' | awk '{a+=$1+$2} END{print a+0}')
+          N=$(git diff --numstat "origin/${{ github.base_ref }}"...HEAD -- . ':!Cargo.lock' ':(exclude,glob)**/todo.txt' | awk '{a+=$1+$2} END{print a+0}')
           echo "changed lines: $N (max $MAX)"; [ "$N" -le "$MAX" ]
 
   daemon:

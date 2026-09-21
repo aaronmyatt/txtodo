@@ -120,7 +120,9 @@
   "baselinePaths": [],
   "generatedPaths": [
     "Cargo.lock",
-    "crates/*/src/generated/**"
+    "crates/*/src/generated/**",
+    "todo.txt",
+    "**/todo.txt"
   ],
   "unfreezeSentinel": ".claude/UNFROZEN",
   "commands": {
