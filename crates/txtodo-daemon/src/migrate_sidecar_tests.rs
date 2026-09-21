@@ -32,6 +32,7 @@ fn open(dir: &Path, store: &SharedStore, clock: &Arc<FakeClock>, mode: IdentityM
         stats: Arc::new(Stats::default()),
         identity_mode: mode,
         tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
+        layout: crate::layout_state::SharedLayout::default(),
     };
     let clock: Arc<dyn crate::clock::Clock> = clock.clone();
     FileActor::open(cfg, Arc::clone(store), clock).unwrap_or_else(|e| panic!("open actor: {e}"))

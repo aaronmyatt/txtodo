@@ -71,6 +71,8 @@ pub struct Workspace {
     /// `set_workspace_id`'s doc). Freshly minted as a placeholder here since most tests in this
     /// crate open a `Workspace` with no registry at all.
     workspace_id: Mutex<WorkspaceId>,
+    /// Where the root list and its ref dirs live (task workspace-layout), shared with every actor.
+    layout: crate::layout_state::SharedLayout,
 }
 
 impl Workspace {
@@ -149,6 +151,7 @@ impl Workspace {
             stats: Arc::new(Stats::default()),
             notes: NotesRegistry::new(),
             workspace_id: Mutex::new(placeholder_workspace_id),
+            layout: crate::layout_state::SharedLayout::default(),
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
             lan_status: LanStatus::default(),
@@ -178,11 +181,17 @@ impl Workspace {
             stats: Arc::clone(&self.stats),
             identity_mode: self.identity_mode,
             tree_dirty: Arc::clone(&self.tree_dirty),
+            layout: self.layout.clone(),
         };
         let actor = FileActor::open(cfg, Arc::clone(&self.store), Arc::clone(&self.clock))
             .map_err(|e| WorkspaceError::Actor(path.clone(), Box::new(e)))?;
         self.actors.insert(path, actor.spawn());
         Ok(true)
+    }
+
+    /// The layout handle shared with every actor: where the root list's ref dirs live.
+    pub fn layout(&self) -> &crate::layout_state::SharedLayout {
+        &self.layout
     }
 
     /// The actor for a document, if registered.

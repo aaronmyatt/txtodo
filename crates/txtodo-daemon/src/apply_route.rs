@@ -73,7 +73,8 @@ impl TxtodoService {
         let source = self.actor_by_path(from)?;
         let dest = self.actor_by_path(&to)?;
         let root = self.workspace().root().to_path_buf();
-        move_coordinator::move_task_across_files(&source, &dest, task, principal, &root)
+        let layout = self.workspace().layout().get();
+        move_coordinator::move_task_across_files(&source, &dest, task, principal, (&root, &layout))
             .await
             .map_err(status_of)
     }

@@ -221,6 +221,11 @@ pub(crate) enum Claim {
 }
 
 pub(crate) fn try_create_dir(dir: &Path) -> io::Result<Claim> {
+    // The folder that holds ref dirs (`tasks/`, task workspace-layout) may not exist yet; only the
+    // last step must be exclusive, since that is the claim.
+    if let Some(parent) = dir.parent() {
+        fs::create_dir_all(parent)?;
+    }
     match fs::create_dir(dir) {
         Ok(()) => Ok(Claim::Created),
         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(Claim::Taken),
@@ -238,6 +243,12 @@ pub(crate) fn move_ref_dir(
     dest_parent: &Path,
     base_slug: &str,
 ) -> Result<String, RefDirError> {
+    // The destination's ref folder (`tasks/`) may not exist yet.
+    fs::create_dir_all(dest_parent).map_err(|source| RefDirError::Io {
+        op: "create directory",
+        path: dest_parent.to_path_buf(),
+        source,
+    })?;
     for attempt in 0..=MAX_SLUG_COLLISIONS {
         let candidate = suffixed(base_slug, attempt);
         let dest = dest_parent.join(&candidate);

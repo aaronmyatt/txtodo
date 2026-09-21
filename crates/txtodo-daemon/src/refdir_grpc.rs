@@ -7,19 +7,21 @@
 use crate::convert::{parse_path, parse_task_ref, status_of};
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
-use txtodo_model::{FilePath, Principal};
+use txtodo_model::{FilePath, Principal, WorkspaceLayout};
 use txtodo_proto::v1 as pb;
 
 /// `<owner's directory>/<slug>`, workspace-relative — the same directory `refdir_ops.rs::own_dir`
 /// joins the slug onto, expressed on `FilePath` strings like `notes.rs::ref_notes_path` (which adds
 /// `/notes.md` on top of exactly this).
-fn ref_dir_path(owner: &FilePath, slug: &str) -> FilePath {
-    let p = owner.as_str();
-    let joined = match p.rfind('/') {
-        Some(i) => format!("{}/{slug}", &p[..i]),
-        None => slug.to_owned(),
-    };
-    FilePath::new(&joined).unwrap_or_else(|_| owner.clone())
+fn ref_dir_path(layout: &WorkspaceLayout, owner: &FilePath, slug: &str) -> FilePath {
+    FilePath::new(&layout.ref_dir_for(owner, slug)).unwrap_or_else(|_| owner.clone())
+}
+
+/// Whether `dir` may be offered to `prune`: with refs under `refs_dir`, only what sits inside it,
+/// so `crates/` and `docs/` beside the list are never orphans (task workspace-layout). With refs
+/// beside the list (`.`) every directory is a candidate, as before.
+fn is_prune_candidate(layout: &WorkspaceLayout, dir: &str) -> bool {
+    layout.refs_beside_list() || dir.starts_with(&format!("{}/", layout.refs_dir()))
 }
 
 impl TxtodoService {
@@ -39,7 +41,7 @@ impl TxtodoService {
             .await
             .map_err(status_of)?;
         if !req.ensure || query.has_ref_tag {
-            let dir = ref_dir_path(&path, &query.slug);
+            let dir = ref_dir_path(&self.workspace().layout().get(), &path, &query.slug);
             let dir_exists = self.workspace().root().join(dir.as_str()).exists();
             return Ok(Response::new(pb::RefDirInfo {
                 task_id: query.task_id.to_string(),
@@ -56,7 +58,7 @@ impl TxtodoService {
             .map_err(status_of)?;
         Ok(Response::new(pb::RefDirInfo {
             task_id: query.task_id.to_string(),
-            dir: ref_dir_path(&path, &created.slug).to_string(),
+            dir: ref_dir_path(&self.workspace().layout().get(), &path, &created.slug).to_string(),
             slug: created.slug,
             has_ref_tag: true,
             dir_exists: true,
@@ -73,9 +75,11 @@ impl TxtodoService {
     ) -> Result<Response<pb::PruneOrphansResponse>, Status> {
         let execute = r.into_inner().execute;
         let tree = self.workspace_tree().await?;
+        let layout = self.workspace().layout().get();
         let mut dirs: Vec<String> = tree
             .orphans()
             .filter_map(|id| id.as_dir().map(ToString::to_string))
+            .filter(|d| is_prune_candidate(&layout, d))
             .collect();
         dirs.sort();
         if execute {
@@ -104,10 +108,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ref_dir_path_joins_beside_the_owner_and_at_the_root() {
+    fn ref_dir_path_joins_beside_the_owner_and_by_the_layout_at_the_root() {
+        let beside = WorkspaceLayout::beside_the_list();
         let nested = FilePath::new("q4/todo.txt").unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!(ref_dir_path(&nested, "buy-ducks").as_str(), "q4/buy-ducks");
+        assert_eq!(
+            ref_dir_path(&beside, &nested, "buy-ducks").as_str(),
+            "q4/buy-ducks"
+        );
         let root = FilePath::new("todo.txt").unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!(ref_dir_path(&root, "buy-ducks").as_str(), "buy-ducks");
+        assert_eq!(
+            ref_dir_path(&beside, &root, "buy-ducks").as_str(),
+            "buy-ducks"
+        );
+        let tasks = WorkspaceLayout::default();
+        assert_eq!(
+            ref_dir_path(&tasks, &root, "buy-ducks").as_str(),
+            "tasks/buy-ducks"
+        );
     }
 }

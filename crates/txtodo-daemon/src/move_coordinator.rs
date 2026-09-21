@@ -15,7 +15,7 @@ use crate::refdir::{move_ref_dir, ref_tag_edit};
 use crate::state::{self, StateError};
 use std::path::{Path, PathBuf};
 use txtodo_core::{LineEnding, OwnedLine};
-use txtodo_model::{FilePath, Principal, TaskId};
+use txtodo_model::{FilePath, Principal, TaskId, WorkspaceLayout};
 
 /// Moves `task` from `source`'s document to `dest`'s, appending it at the destination's end, and
 /// relocates its `ref:` directory (if any) to sit beside the destination file, applying the
@@ -27,7 +27,7 @@ pub async fn move_task_across_files(
     dest: &ActorHandle,
     task: TaskRef,
     principal: Principal,
-    root: &Path,
+    (root, layout): (&Path, &WorkspaceLayout),
 ) -> Result<Applied, ActorError> {
     let contents = source.get().await?;
     let peeked = mutation::peek_line(&contents.bytes, &task)?;
@@ -48,8 +48,14 @@ pub async fn move_task_across_files(
         return Err(e);
     }
     if let Some(slug) = &peeked.ref_slug
-        && let Err(e) =
-            relocate_ref_dir(source.path(), dest, (peeked.id, slug), root, &principal).await
+        && let Err(e) = relocate_ref_dir(
+            source.path(),
+            dest,
+            (peeked.id, slug),
+            (root, layout),
+            &principal,
+        )
+        .await
     {
         let _ = remove_by_task_id(dest, peeked.id, &principal).await;
         let _ = reinsert_at_source(source, &peeked.line, &principal).await;
@@ -76,11 +82,8 @@ async fn reinsert_at_source(
 }
 
 /// The absolute directory `file` sits in.
-fn dir_of(root: &Path, file: &FilePath) -> PathBuf {
-    let abs = root.join(file.as_str());
-    abs.parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| root.to_path_buf())
+fn dir_of(root: &Path, layout: &WorkspaceLayout, file: &FilePath) -> PathBuf {
+    root.join(layout.refs_parent_of(file))
 }
 
 /// Moves the task's `ref:` directory (if it exists on disk — a dangling ref, rule 9, has nothing
@@ -90,14 +93,14 @@ async fn relocate_ref_dir(
     source_path: &FilePath,
     dest: &ActorHandle,
     (id, slug): (TaskId, &str),
-    root: &Path,
+    (root, layout): (&Path, &WorkspaceLayout),
     principal: &Principal,
 ) -> Result<(), ActorError> {
-    let src_dir = dir_of(root, source_path).join(slug);
+    let src_dir = dir_of(root, layout, source_path).join(slug);
     if !src_dir.exists() {
         return Ok(());
     }
-    let dest_parent = dir_of(root, dest.path());
+    let dest_parent = dir_of(root, layout, dest.path());
     let final_slug = move_ref_dir(&src_dir, &dest_parent, slug)?;
     if final_slug != slug {
         rewrite_ref_tag(dest, id, &final_slug, principal).await?;

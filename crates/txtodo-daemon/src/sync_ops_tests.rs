@@ -34,6 +34,7 @@ fn cfg(dir: &Path) -> ActorConfig {
         stats: Arc::new(Stats::default()),
         identity_mode: IdentityMode::Tagged,
         tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
+        layout: crate::layout_state::SharedLayout::default(),
     }
 }
 

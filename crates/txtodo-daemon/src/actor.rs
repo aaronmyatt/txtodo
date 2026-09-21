@@ -44,6 +44,8 @@ pub struct ActorConfig {
     pub identity_mode: IdentityMode,
     /// Shared workspace-tree staleness flag (plan M5, `tree.rs`).
     pub tree_dirty: Arc<TreeDirty>,
+    /// Where this workspace keeps its ref dirs (task workspace-layout), shared with the workspace.
+    pub layout: crate::layout_state::SharedLayout,
 }
 
 pub(crate) use crate::commit::{Commit, CommitTail};

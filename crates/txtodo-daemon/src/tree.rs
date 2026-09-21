@@ -133,7 +133,9 @@ impl TxtodoService {
                 ref_tags: Vec::new(),
             });
         }
-        WorkspaceTree::build(inputs).map_err(|e| Status::internal(format!("{e:?}")))
+        let layout = self.workspace().layout().get();
+        WorkspaceTree::build_with_layout(inputs, &layout)
+            .map_err(|e| Status::internal(format!("{e:?}")))
     }
 
     /// One `todo.txt`'s node: its own counters (rule 5) and its own `ref:` tags (rule 7: an

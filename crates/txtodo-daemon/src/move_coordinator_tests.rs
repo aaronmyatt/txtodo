@@ -40,6 +40,7 @@ fn open_at(
         stats: Arc::new(Stats::default()),
         identity_mode: IdentityMode::Tagged,
         tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
+        layout: crate::layout_state::SharedLayout::default(),
     };
     FileActor::open(cfg, Arc::clone(store), Arc::clone(clock)).unwrap_or_else(|e| panic!("{e}"))
 }
@@ -76,9 +77,15 @@ async fn move_relocates_the_line_and_its_ref_directory() {
     let clock = fake_clock();
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
     let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
-    move_task_across_files(&source, &dest, task_ref(), user(), root)
-        .await
-        .unwrap_or_else(|e| panic!("{e}"));
+    move_task_across_files(
+        &source,
+        &dest,
+        task_ref(),
+        user(),
+        (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(read(root, "todo.txt"), "", "the line left the source");
     let moved = read(root, "sub/other.txt");
     assert!(
@@ -108,9 +115,15 @@ async fn a_slug_collision_at_the_destination_gets_dash_2() {
     let clock = fake_clock();
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
     let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
-    move_task_across_files(&source, &dest, task_ref(), user(), root)
-        .await
-        .unwrap_or_else(|e| panic!("{e}"));
+    move_task_across_files(
+        &source,
+        &dest,
+        task_ref(),
+        user(),
+        (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
     assert!(read(root, "sub/other.txt").contains("ref:project-2"));
     assert!(root.join("sub/project-2").is_dir());
     assert!(root.join("sub/project").is_dir(), "left alone, not ours");
@@ -136,7 +149,14 @@ async fn a_failed_move_rolls_back_and_the_source_is_byte_identical() {
     let source = open_at(root, "todo.txt", &store, &clock).spawn();
     let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
     std::fs::set_permissions(root.join("sub"), std::fs::Permissions::from_mode(0o555)).unwrap();
-    let result = move_task_across_files(&source, &dest, task_ref(), user(), root).await;
+    let result = move_task_across_files(
+        &source,
+        &dest,
+        task_ref(),
+        user(),
+        (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
+    )
+    .await;
     std::fs::set_permissions(root.join("sub"), std::fs::Permissions::from_mode(0o755)).unwrap();
     assert!(result.is_err(), "{result:?}");
     assert_eq!(

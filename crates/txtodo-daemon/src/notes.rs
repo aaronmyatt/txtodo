@@ -16,7 +16,7 @@ use crate::mutation::TaskRef;
 use crate::notes_lookup::TaskLineInfo;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
-use txtodo_model::{FilePath, Principal, TaskId};
+use txtodo_model::{FilePath, Principal, TaskId, WorkspaceLayout};
 use txtodo_proto::v1 as pb;
 
 impl TxtodoService {
@@ -41,7 +41,7 @@ impl TxtodoService {
                 hash: hash_of(&[]).to_vec(),
             }));
         };
-        let notes_path = ref_notes_path(&owner, &slug);
+        let notes_path = ref_notes_path(&self.workspace().layout().get(), &owner, &slug);
         let actor = self
             .workspace()
             .notes_actor(&notes_path)
@@ -80,7 +80,7 @@ impl TxtodoService {
         let slug = self
             .slug_for(&owner, task_id, info, principal.clone())
             .await?;
-        let notes_path = ref_notes_path(&owner, &slug);
+        let notes_path = ref_notes_path(&self.workspace().layout().get(), &owner, &slug);
         let actor = self
             .workspace()
             .notes_actor(&notes_path)
@@ -137,16 +137,12 @@ impl TxtodoService {
     }
 }
 
-/// `<owner's directory>/<slug>/notes.md`, workspace-relative — the same directory
-/// `refdir_ops.rs::own_dir` joins the slug onto, expressed on `FilePath` strings instead of
-/// absolute paths since the notes actor is addressed by workspace-relative path like every other
-/// document.
-fn ref_notes_path(owner: &FilePath, slug: &str) -> FilePath {
-    let p = owner.as_str();
-    let joined = match p.rfind('/') {
-        Some(i) => format!("{}/{slug}/notes.md", &p[..i]),
-        None => format!("{slug}/notes.md"),
-    };
+/// `<the ref dir of slug>/notes.md`, workspace-relative — the directory
+/// `WorkspaceLayout::ref_dir_for` names (beside the owner for a nested list, by the layout for the
+/// root list), expressed on `FilePath` strings since the notes actor is addressed by
+/// workspace-relative path like every other document.
+fn ref_notes_path(layout: &WorkspaceLayout, owner: &FilePath, slug: &str) -> FilePath {
+    let joined = format!("{}/notes.md", layout.ref_dir_for(owner, slug));
     let path = FilePath::new(&joined);
     debug_assert!(
         path.is_ok(),
@@ -170,16 +166,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ref_notes_path_joins_beside_the_owner_and_at_the_root() {
+    fn ref_notes_path_joins_beside_the_owner_and_by_the_layout_at_the_root() {
+        let beside = WorkspaceLayout::beside_the_list();
         let nested = FilePath::new("q4/todo.txt").unwrap();
         assert_eq!(
-            ref_notes_path(&nested, "buy-ducks").as_str(),
+            ref_notes_path(&beside, &nested, "buy-ducks").as_str(),
             "q4/buy-ducks/notes.md"
         );
         let root = FilePath::new("todo.txt").unwrap();
         assert_eq!(
-            ref_notes_path(&root, "buy-ducks").as_str(),
+            ref_notes_path(&beside, &root, "buy-ducks").as_str(),
             "buy-ducks/notes.md"
+        );
+        assert_eq!(
+            ref_notes_path(&WorkspaceLayout::default(), &root, "buy-ducks").as_str(),
+            "tasks/buy-ducks/notes.md"
         );
     }
 }

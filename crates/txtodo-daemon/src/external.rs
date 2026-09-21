@@ -26,7 +26,7 @@ pub(crate) fn tracing_stub_error(path: &FilePath, e: &ActorError) {
 /// seven `_tests.rs` files that build one by struct literal, all outside this task's file scope).
 /// One daemon now opens several workspaces (ADR 0025), so this distinguishes which one a
 /// `reconcile` span belongs to — the span's pre-existing `file` field alone no longer does.
-fn workspace_root(cfg: &ActorConfig) -> std::path::PathBuf {
+pub(crate) fn workspace_root(cfg: &ActorConfig) -> std::path::PathBuf {
     let mut root = cfg.disk.clone();
     for _ in cfg.path.as_str().split('/') {
         root.pop();

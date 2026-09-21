@@ -12,7 +12,7 @@ use crate::refdir::{
 };
 use crate::state::StateError;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use txtodo_core::OwnedLine;
 use txtodo_model::{Principal, TaskId};
 
@@ -81,13 +81,12 @@ impl FileActor {
         Ok(())
     }
 
-    /// The directory this file's own path sits in.
+    /// The directory that holds the ref dirs of this file's lines: beside the file for a nested
+    /// list, `refs_dir` (or the list's own folder) for the workspace's root list (task
+    /// workspace-layout).
     fn own_dir(&self) -> PathBuf {
-        self.cfg
-            .disk
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| self.cfg.disk.clone())
+        let parent = self.cfg.layout.get().refs_parent_of(&self.cfg.path);
+        crate::external::workspace_root(&self.cfg).join(parent)
     }
 
     /// Lazy `ref:` creation (plan §3.2 rule 4, root todo.txt task 14): if `task` already has a
