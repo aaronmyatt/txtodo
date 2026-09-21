@@ -219,6 +219,52 @@ async fn complete_archive_delete_and_history_address_a_sidecar_task_by_id() {
     );
 }
 
+/// Task complete-to-bottom: `todo_uncomplete` sends `Reopen`, so the line rises to the end of the
+/// open block, above the first done line, instead of staying where the completion left it.
+#[tokio::test]
+async fn uncomplete_moves_the_line_above_the_done_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "a\nb\nc\n").unwrap();
+    let (mcp, _stop) = backend_on(dir.path(), IdentityMode::Sidecar).await;
+    let rows = mcp.list(ListArgs::default()).await.unwrap();
+    let id_of = |text: &str| {
+        rows.iter()
+            .find(|r| r.raw == text)
+            .and_then(|r| r.id.clone())
+            .unwrap_or_else(|| panic!("no row {text}"))
+    };
+    let (a, b) = (id_of("a"), id_of("b"));
+
+    mcp.complete(a.clone(), true, None).await.unwrap();
+    mcp.complete(b.clone(), true, None).await.unwrap();
+    let lines: Vec<String> = disk(dir.path()).lines().map(str::to_owned).collect();
+    assert_eq!(lines[0], "c", "{lines:?}");
+    assert!(
+        lines[1].ends_with(" a") && lines[2].ends_with(" b"),
+        "{lines:?}"
+    );
+
+    // `b` was completed last, so it sits at the bottom; reopening it lifts it above `a`.
+    let undone = mcp.complete(b.clone(), false, None).await.unwrap();
+    assert!(!undone.done);
+    assert_eq!(
+        undone.line, 2,
+        "right after the open task, above the done one"
+    );
+    assert_eq!(
+        undone.id.as_deref(),
+        Some(b.as_str()),
+        "the id survives the move"
+    );
+    let lines: Vec<String> = disk(dir.path()).lines().map(str::to_owned).collect();
+    assert_eq!(
+        (lines[0].as_str(), lines[1].as_str()),
+        ("c", "b"),
+        "{lines:?}"
+    );
+    assert!(lines[2].ends_with(" a"), "{lines:?}");
+}
+
 #[tokio::test]
 async fn batch_raw_and_lint_work_under_sidecar() {
     let dir = tempfile::tempdir().unwrap();
