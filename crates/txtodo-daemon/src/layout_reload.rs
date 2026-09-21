@@ -58,6 +58,28 @@ async fn refs_in_the_old_place(
         .count()
 }
 
+/// Makes the root list the layout names a real, watched document: creates it empty when missing
+/// (its folder too) and starts its actor. Needed when `todo_file` changes on a live workspace, since
+/// the walker only finds a custom name once it has been told the name.
+pub(crate) fn register_root_list(ws: &SharedWorkspace) {
+    let (path, abs) = {
+        let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let path = guard.layout().get().root_list();
+        let abs = guard.root().join(path.as_str());
+        (path, abs)
+    };
+    if !abs.exists() {
+        if let Some(parent) = abs.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&abs, b"");
+    }
+    let mut guard = ws
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _ = guard.register(path);
+}
+
 fn apply(ws: &SharedWorkspace, shared: &SharedLayout, new: WorkspaceLayout, in_use: usize) {
     if new == shared.get() {
         shared.set_note(None);
@@ -68,8 +90,12 @@ fn apply(ws: &SharedWorkspace, shared: &SharedLayout, new: WorkspaceLayout, in_u
         log_kept(&why);
         shared.set_note(Some(why));
     } else {
+        let list_changed = new.todo_file() != shared.get().todo_file();
         shared.set(new);
         shared.set_note(None);
+        if list_changed {
+            register_root_list(ws);
+        }
         let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.tree_dirty.mark();
         log_applied();

@@ -23,7 +23,7 @@ pub type SharedWorkspace = Arc<RwLock<Workspace>>;
 /// The service. `Clone` is a cheap `Arc` clone, handed to `forward_changes`'s spawned tasks.
 #[derive(Clone)]
 pub struct TxtodoService {
-    ws: SharedWorkspace,
+    pub(crate) ws: SharedWorkspace,
 }
 
 impl TxtodoService {
@@ -73,11 +73,12 @@ impl Txtodo for TxtodoService {
                 progress,
             });
         }
-        let tree = self.workspace_tree().await?;
-        Ok(Response::new(pb::ListFilesResponse {
-            tree: Some(crate::tree::to_pb_tree(&tree, &files)),
-            files,
-        }))
+        let (tree, layout) = (
+            self.workspace_tree().await?,
+            self.workspace().layout().get(),
+        );
+        let tree = Some(crate::tree::to_pb_tree(&tree, &files, &layout));
+        Ok(Response::new(pb::ListFilesResponse { tree, files }))
     }
 
     async fn get_file(

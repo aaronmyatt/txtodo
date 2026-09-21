@@ -5,7 +5,7 @@
 use crate::clock::Clock;
 use crate::debounce::Debouncer;
 use crate::server::SharedWorkspace;
-use crate::walker::{is_in_skipped_dir, walk};
+use crate::walker::{is_in_skipped_dir, walk_with};
 use crate::watcher::{RawEvent, Routed, ingest, start as start_notify};
 use std::path::Path;
 use std::sync::Arc;
@@ -71,7 +71,8 @@ async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::R
             ev = rx.recv() => match ev {
                 Some(ev) => {
                     read(&ws).stats().saw_event(clock.now_ms());
-                    ingest(&mut deb, ev, clock.now_instant())
+                    let extra = read(&ws).extra_document();
+                    ingest(&mut deb, ev, clock.now_instant(), extra.as_deref())
                 }
                 None => return,
             },
@@ -101,7 +102,9 @@ fn discover(ws: &SharedWorkspace, dir: &Path) {
     // The walk is plain filesystem I/O: run it before taking the write lock, which only the
     // registration of anything new needs. A walk error here is a directory vanishing between
     // event and walk; the next event retries.
-    let Ok(found) = walk(dir).inspect_err(|e| log_discover_failed(dir, e)) else {
+    let extra = read(ws).extra_document();
+    let Ok(found) = walk_with(dir, extra.as_deref()).inspect_err(|e| log_discover_failed(dir, e))
+    else {
         return;
     };
     let mut guard = ws

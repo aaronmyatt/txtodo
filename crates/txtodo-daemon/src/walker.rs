@@ -76,10 +76,16 @@ pub fn is_notes_document(name: &str) -> bool {
 /// thin span wrapper around `walk_inner` (`#[instrument]` on the real body overflows).
 #[tracing::instrument(skip_all, fields(root = %root.display()))]
 pub fn walk(root: &Path) -> Result<Vec<FilePath>, WalkError> {
-    walk_inner(root)
+    walk_inner(root, None)
 }
 
-fn walk_inner(root: &Path) -> Result<Vec<FilePath>, WalkError> {
+/// `walk`, also finding `extra`: an absolute path of a document whose name the walker would not
+/// find on its own, the workspace's root list when `todo_file` names one (task workspace-layout).
+pub fn walk_with(root: &Path, extra: Option<&Path>) -> Result<Vec<FilePath>, WalkError> {
+    walk_inner(root, extra)
+}
+
+fn walk_inner(root: &Path, extra: Option<&Path>) -> Result<Vec<FilePath>, WalkError> {
     let mut found = Vec::new();
     let mut stack: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
     // Bounded: every directory is pushed once and popped once; the file cap bounds `found`.
@@ -96,7 +102,7 @@ fn walk_inner(root: &Path) -> Result<Vec<FilePath>, WalkError> {
                 path: dir.clone(),
                 source,
             })?;
-            visit(root, &entry, depth, &mut stack, &mut found)?;
+            visit((root, extra), &entry, depth, &mut stack, &mut found)?;
         }
     }
     found.sort();
@@ -112,7 +118,7 @@ fn log_walk_complete(found: usize) {
 }
 
 fn visit(
-    root: &Path,
+    (root, extra): (&Path, Option<&Path>),
     entry: &std::fs::DirEntry,
     depth: usize,
     stack: &mut Vec<(PathBuf, usize)>,
@@ -134,7 +140,7 @@ fn visit(
         }
         return Ok(());
     }
-    if meta.is_file() && is_document_name(name) {
+    if meta.is_file() && (is_document_name(name) || extra == Some(path.as_path())) {
         if found.len() == WALK_MAX_FILES {
             return Err(WalkError::TooMany(found.len() + 1));
         }
@@ -318,5 +324,26 @@ mod tests {
             .unwrap_or_else(|e| panic!("{e}"));
         assert_eq!(walk(r).unwrap_or_else(|e| panic!("{e}")).len(), 1);
         assert!(is_document_name("todo.txt") && !is_document_name("todo.cfg"));
+    }
+
+    #[test]
+    fn walk_with_finds_the_named_extra_document_and_nothing_else_new() {
+        let r = tempfile::tempdir().unwrap();
+        let r = r.path();
+        touch(&r.join("lists/work.txt"));
+        touch(&r.join("lists/other.txt"));
+        touch(&r.join("todo.txt"));
+        let names = |extra: Option<&Path>| -> Vec<String> {
+            walk_with(r, extra)
+                .unwrap()
+                .iter()
+                .map(ToString::to_string)
+                .collect()
+        };
+        assert_eq!(names(None), ["todo.txt"], "an unknown name is invisible");
+        assert_eq!(
+            names(Some(&r.join("lists/work.txt"))),
+            ["lists/work.txt", "todo.txt"]
+        );
     }
 }

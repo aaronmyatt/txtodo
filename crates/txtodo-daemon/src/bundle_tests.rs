@@ -62,6 +62,7 @@ fn export_ctx(ws: &Workspace) -> ExportCtx {
         store: ws.store().clone(),
         device: ws.device(),
         signing,
+        extra_document: ws.extra_document(),
     }
 }
 

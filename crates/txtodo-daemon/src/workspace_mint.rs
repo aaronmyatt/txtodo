@@ -24,7 +24,7 @@ pub(crate) fn basename(path: &FilePath) -> &str {
 /// minted, like the device/group id.
 pub(crate) fn load_or_mint_identity_mode(
     store: &mut Store,
-    root: &Path,
+    (root, extra): (&Path, Option<&Path>),
     default: IdentityMode,
 ) -> Result<IdentityMode, WorkspaceError> {
     if let Some(bytes) = store.meta_get(IDENTITY_MODE_KEY)?
@@ -32,7 +32,7 @@ pub(crate) fn load_or_mint_identity_mode(
     {
         return Ok(mode);
     }
-    let mode = if any_document_is_tagged(root)? {
+    let mode = if any_document_is_tagged(root, extra)? {
         IdentityMode::Tagged
     } else {
         default
@@ -58,8 +58,8 @@ fn decode_identity_mode(bytes: &[u8]) -> Option<IdentityMode> {
 
 /// Whether any already-discoverable document in `root` carries at least one `id:` tag — decides a
 /// brand-new workspace's identity mode (never re-checked once minted).
-fn any_document_is_tagged(root: &Path) -> Result<bool, WorkspaceError> {
-    for rel in walker::walk(root)? {
+fn any_document_is_tagged(root: &Path, extra: Option<&Path>) -> Result<bool, WorkspaceError> {
+    for rel in walker::walk_with(root, extra)? {
         if walker::is_notes_document(basename(&rel)) {
             continue;
         }

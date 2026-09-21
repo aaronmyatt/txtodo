@@ -4,7 +4,7 @@
 //! travels with the workspace. The hot reload in `layout_reload.rs` sees the same file and finds the
 //! layout already in force.
 
-use crate::layout_file::{self, LAYOUT_FILE};
+use crate::layout_file::LAYOUT_FILE;
 use crate::server::TxtodoService;
 use std::path::{Path, PathBuf};
 use tonic::{Request, Response, Status};
@@ -39,8 +39,12 @@ impl TxtodoService {
                 let slugs: Vec<&str> = tags.iter().map(|t| t.slug.as_str()).collect();
                 moved = relocate(&root, (&current, &new), &slugs, req.move_dirs)?;
                 write_layout_file(&root, &new)?;
+                let list_changed = new.todo_file() != current.todo_file();
                 shared.set(new);
                 shared.set_note(None);
+                if list_changed {
+                    crate::layout_reload::register_root_list(&self.ws);
+                }
                 self.workspace().tree_dirty.mark();
             }
         }
@@ -83,9 +87,7 @@ fn requested(
     };
     let refs_dir = pick(&req.refs_dir, current.refs_dir());
     let todo_file = pick(&req.todo_file, current.todo_file());
-    let layout = WorkspaceLayout::new(&refs_dir, &todo_file)
-        .map_err(|e| Status::invalid_argument(e.to_string()))?;
-    layout_file::supported(layout).map_err(Status::invalid_argument)
+    WorkspaceLayout::new(&refs_dir, &todo_file).map_err(|e| Status::invalid_argument(e.to_string()))
 }
 
 /// Moves each of `slugs`' directories from where `old` puts them to where `new` will, when they

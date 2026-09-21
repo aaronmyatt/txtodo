@@ -37,26 +37,11 @@ struct Raw {
 /// Parses a layout file's text. Unknown keys are ignored, so a newer file still loads.
 pub fn parse(text: &str) -> Result<WorkspaceLayout, String> {
     let raw: Raw = toml::from_str(text).map_err(|e| format!("{LAYOUT_FILE}: {e}"))?;
-    let layout = WorkspaceLayout::new(
+    WorkspaceLayout::new(
         raw.refs_dir.as_deref().unwrap_or_default(),
         raw.todo_file.as_deref().unwrap_or_default(),
     )
-    .map_err(|e| format!("{LAYOUT_FILE}: {e}"))?;
-    supported(layout)
-}
-
-/// This build reads a root list only from `todo.txt`: the watcher, the walker and every client name
-/// that file. A different `todo_file` is valid data but not yet honoured, so it is refused with a
-/// message instead of being half applied.
-pub(crate) fn supported(layout: WorkspaceLayout) -> Result<WorkspaceLayout, String> {
-    if layout.todo_file() == WorkspaceLayout::default().todo_file() {
-        Ok(layout)
-    } else {
-        Err(format!(
-            "{LAYOUT_FILE}: todo_file = {:?} is not supported yet; the root list is todo.txt",
-            layout.todo_file()
-        ))
-    }
+    .map_err(|e| format!("{LAYOUT_FILE}: {e}"))
 }
 
 /// Reads `<root>/txtodo.toml`.

@@ -12,7 +12,17 @@ impl Workspace {
     /// Walks `dir` (the root or a newly created subdirectory) and registers every document found.
     /// Returns how many actors were started.
     pub fn discover(&mut self, dir: &Path) -> Result<usize, WorkspaceError> {
-        self.register_discovered(dir, walker::walk(dir)?)
+        let extra = self.extra_document();
+        self.register_discovered(dir, walker::walk_with(dir, extra.as_deref())?)
+    }
+
+    /// The root list's absolute path when its name is not one the walker finds on its own
+    /// (`todo_file` in `txtodo.toml`, task workspace-layout); `None` for `todo.txt`.
+    pub fn extra_document(&self) -> Option<std::path::PathBuf> {
+        self.layout()
+            .get()
+            .custom_root_list()
+            .map(|p| self.root().join(p.as_str()))
     }
 
     /// The registering half of [`Self::discover`], for a caller that already walked `dir` — the

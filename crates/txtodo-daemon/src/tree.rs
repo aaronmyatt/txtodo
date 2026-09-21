@@ -23,7 +23,7 @@ use crate::server::TxtodoService;
 use crate::walker;
 use std::path::Path;
 use tonic::Status;
-use txtodo_model::{NodeId, Op, Progress, RefTag, WorkspaceTree, invalidates};
+use txtodo_model::{NodeId, Op, Progress, RefTag, WorkspaceLayout, WorkspaceTree, invalidates};
 use txtodo_proto::v1 as pb;
 
 use crate::tree_dirty::TreeDirty;
@@ -43,14 +43,28 @@ pub(crate) fn mark_dirty_for(dirty: &TreeDirty, ops: &[Op]) {
 /// (`ListFiles`, plan M5). Recurses one level per tree depth, asserted against
 /// `txtodo_model::MAX_TREE_DEPTH` (`__CLAUDE.md` §3: "no recursion unless depth is asserted
 /// against a cap") — `WorkspaceTree::build` already refuses anything deeper.
-pub(crate) fn to_pb_tree(tree: &WorkspaceTree, files: &[pb::FileInfo]) -> pb::TreeNode {
-    build_node(tree, &NodeId::root(), files, 0)
+pub(crate) fn to_pb_tree(
+    tree: &WorkspaceTree,
+    files: &[pb::FileInfo],
+    layout: &WorkspaceLayout,
+) -> pb::TreeNode {
+    build_node(tree, &NodeId::root(), (files, layout), 0)
+}
+
+/// The tree node a document belongs to: the root for the workspace's root list wherever the layout
+/// puts it, else the directory the file sits in.
+pub(crate) fn node_of(layout: &WorkspaceLayout, path: &txtodo_model::FilePath) -> NodeId {
+    if *path == layout.root_list() {
+        NodeId::root()
+    } else {
+        NodeId::of_file(path)
+    }
 }
 
 fn build_node(
     tree: &WorkspaceTree,
     id: &NodeId,
-    files: &[pb::FileInfo],
+    (files, layout): (&[pb::FileInfo], &WorkspaceLayout),
     depth: usize,
 ) -> pb::TreeNode {
     debug_assert!(
@@ -60,12 +74,12 @@ fn build_node(
     let dir = id.as_dir().map(ToString::to_string).unwrap_or_default();
     let own_files = files
         .iter()
-        .filter(|f| NodeId::of_file(&file_path_of(f)) == *id)
+        .filter(|f| node_of(layout, &file_path_of(f)) == *id)
         .cloned()
         .collect();
     let children = tree
         .children(id)
-        .map(|(_, child)| build_node(tree, child, files, depth + 1))
+        .map(|(_, child)| build_node(tree, child, (files, layout), depth + 1))
         .collect();
     pb::TreeNode {
         dir,
@@ -117,6 +131,7 @@ impl TxtodoService {
     /// `workspace.rs`'s module doc), each with its own rule-5 progress and `ref:` tags.
     async fn rebuild_workspace_tree(&self) -> Result<WorkspaceTree, Status> {
         let handles = self.all_actors();
+        let layout = self.workspace().layout().get();
         let mut inputs = Vec::with_capacity(handles.len() + 1);
         for h in &handles {
             debug_assert_eq!(
@@ -124,9 +139,15 @@ impl TxtodoService {
                 pb::FileKind::Todo,
                 "no other actor kind"
             );
-            inputs.push(self.node_input_for(h).await?);
+            // With a root list named by `todo_file`, a `todo.txt` beside the workspace root would
+            // share the root's node; it is left out of the tree rather than clobber it.
+            let node = node_of(&layout, h.path());
+            if node.is_root() && *h.path() != layout.root_list() {
+                continue;
+            }
+            inputs.push(self.node_input_for(h, node).await?);
         }
-        for dir in notes_only_dirs(self.workspace().root(), &handles) {
+        for dir in notes_only_dirs(self.workspace().root(), &handles, &layout) {
             inputs.push(txtodo_model::NodeInput {
                 id: dir,
                 progress: Progress::default(),
@@ -140,11 +161,15 @@ impl TxtodoService {
 
     /// One `todo.txt`'s node: its own counters (rule 5) and its own `ref:` tags (rule 7: an
     /// archived line keeps its tag).
-    async fn node_input_for(&self, todo: &ActorHandle) -> Result<txtodo_model::NodeInput, Status> {
+    async fn node_input_for(
+        &self,
+        todo: &ActorHandle,
+        id: NodeId,
+    ) -> Result<txtodo_model::NodeInput, Status> {
         let pb_progress = self.progress_for(todo).await?;
         let ref_tags: Vec<RefTag> = todo.ref_tags().await.map_err(status_of)?;
         Ok(txtodo_model::NodeInput {
-            id: NodeId::of_file(todo.path()),
+            id,
             progress: Progress {
                 done: pb_progress.done,
                 total: pb_progress.total,
@@ -157,8 +182,8 @@ impl TxtodoService {
 /// Directories that hold a `notes.md` but no registered `todo.txt` actor of their own —
 /// otherwise invisible to `rebuild_workspace_tree`, which only sees registered actors. A bounded
 /// walk from `root`, run only while the tree is dirty (never per op).
-fn notes_only_dirs(root: &Path, handles: &[ActorHandle]) -> Vec<NodeId> {
-    let known: Vec<NodeId> = handles.iter().map(|h| NodeId::of_file(h.path())).collect();
+fn notes_only_dirs(root: &Path, handles: &[ActorHandle], layout: &WorkspaceLayout) -> Vec<NodeId> {
+    let known: Vec<NodeId> = handles.iter().map(|h| node_of(layout, h.path())).collect();
     let Ok(found) = walker::walk(root) else {
         return Vec::new();
     };

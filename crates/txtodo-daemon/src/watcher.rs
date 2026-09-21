@@ -57,11 +57,22 @@ fn glob_match(glob: &str, name: &str) -> bool {
 /// wrapper around `ingest_inner`; the two events live in their own tiny functions since an
 /// inline `tracing::debug!` here pushes `#[instrument]`'s own expansion over budget.
 #[tracing::instrument(skip_all, fields(dir_created = ev.dir_created))]
-pub fn ingest(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Routed> {
-    ingest_inner(deb, ev, now)
+pub fn ingest(
+    deb: &mut Debouncer,
+    ev: RawEvent,
+    now: Instant,
+    extra: Option<&Path>,
+) -> Option<Routed> {
+    ingest_inner(deb, ev, now, extra)
 }
 
-fn ingest_inner(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Routed> {
+/// `extra` is the root list's absolute path when its name is not a document name (`todo_file`).
+fn ingest_inner(
+    deb: &mut Debouncer,
+    ev: RawEvent,
+    now: Instant,
+    extra: Option<&Path>,
+) -> Option<Routed> {
     if ev.dir_created {
         let routed = (!is_ignored(&ev.path)).then_some(Routed::Directory(ev.path));
         log_directory_event(routed.is_some());
@@ -73,7 +84,8 @@ fn ingest_inner(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Route
         .and_then(|n| n.to_str())
         .unwrap_or_default();
     let is_layout = name == crate::layout_file::LAYOUT_FILE;
-    if is_ignored(&ev.path) || !(is_document_name(name) || is_layout) {
+    let is_extra = extra == Some(ev.path.as_path());
+    if is_ignored(&ev.path) || !(is_document_name(name) || is_layout || is_extra) {
         return None;
     }
     // A dropped event on overflow is a flood, not a save; the next event for the path repairs it.
@@ -149,22 +161,26 @@ mod tests {
             dir_created: d,
         };
         assert_eq!(
-            ingest(&mut deb, ev("/w/q4", true), t0),
+            ingest(&mut deb, ev("/w/q4", true), t0, None),
             Some(Routed::Directory(PathBuf::from("/w/q4")))
         );
-        assert_eq!(ingest(&mut deb, ev("/w/.txtodo", true), t0), None);
+        assert_eq!(ingest(&mut deb, ev("/w/.txtodo", true), t0, None), None);
         for i in 0..5u64 {
             assert_eq!(
                 ingest(
                     &mut deb,
                     ev("/w/todo.txt", false),
-                    t0 + Duration::from_millis(i * 10)
+                    t0 + Duration::from_millis(i * 10),
+                    None
                 ),
                 None
             );
         }
-        assert_eq!(ingest(&mut deb, ev("/w/other.txt", false), t0), None);
-        assert_eq!(ingest(&mut deb, ev("/w/.todo.txt.swp", false), t0), None);
+        assert_eq!(ingest(&mut deb, ev("/w/other.txt", false), t0, None), None);
+        assert_eq!(
+            ingest(&mut deb, ev("/w/.todo.txt.swp", false), t0, None),
+            None
+        );
         assert_eq!(deb.pending(), 1);
         assert!(
             deb.drain_due(t0 + Duration::from_millis(40 + DEBOUNCE_MS - 1))
@@ -184,13 +200,28 @@ mod tests {
             path: PathBuf::from(p),
             dir_created: false,
         };
-        assert_eq!(ingest(&mut deb, ev("/w/other.toml"), t0), None);
+        assert_eq!(ingest(&mut deb, ev("/w/other.toml"), t0, None), None);
         assert_eq!(
             deb.pending(),
             0,
             "an unrelated toml never reaches the debounce"
         );
-        assert_eq!(ingest(&mut deb, ev("/w/txtodo.toml"), t0), None);
+        assert_eq!(ingest(&mut deb, ev("/w/txtodo.toml"), t0, None), None);
         assert_eq!(deb.pending(), 1, "the layout file does");
+    }
+
+    #[test]
+    fn a_custom_root_list_is_debounced_only_when_the_workspace_names_it() {
+        let t0 = Instant::now();
+        let mut deb = Debouncer::default();
+        let ev = RawEvent {
+            path: PathBuf::from("/w/work.txt"),
+            dir_created: false,
+        };
+        let extra = PathBuf::from("/w/work.txt");
+        assert_eq!(ingest(&mut deb, ev.clone(), t0, None), None);
+        assert_eq!(deb.pending(), 0, "an unknown name is ignored");
+        assert_eq!(ingest(&mut deb, ev, t0, Some(&extra)), None);
+        assert_eq!(deb.pending(), 1, "the named root list is watched");
     }
 }

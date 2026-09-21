@@ -32,6 +32,9 @@ pub(crate) struct ExportCtx {
     pub(crate) store: std::sync::Arc<Mutex<Store>>,
     pub(crate) device: DeviceId,
     pub(crate) signing: DeviceSigningKey,
+    /// The root list's absolute path when its name is not a document name (`todo_file`), so an
+    /// export does not silently leave the workspace's main list out.
+    pub(crate) extra_document: Option<PathBuf>,
 }
 
 impl ExportCtx {
@@ -142,7 +145,8 @@ pub(crate) fn export_into(
 
 /// Every `todo.txt`/`notes.md` under the root, its exact bytes hashed for [`pb::FileHash`].
 fn build_manifest(ctx: &ExportCtx) -> Result<pb::BundleManifest, BundleExportError> {
-    let paths = walker::walk(&ctx.root).map_err(BundleExportError::Walk)?;
+    let paths = walker::walk_with(&ctx.root, ctx.extra_document.as_deref())
+        .map_err(BundleExportError::Walk)?;
     let mut files = Vec::with_capacity(paths.len());
     for path in &paths {
         let bytes = read_file(&ctx.root, path)?;
@@ -172,7 +176,9 @@ fn build_manifest(ctx: &ExportCtx) -> Result<pb::BundleManifest, BundleExportErr
 /// travel too so a sidecar-mode importer's `recover()` takes the fast, no-reconcile path instead
 /// of minting brand-new ops for a document it just received (`bundle_import.rs`'s module doc).
 fn write_blobs(ctx: &ExportCtx, writer: &mut ChunkWriter) -> Result<(), BundleExportError> {
-    for path in walker::walk(&ctx.root).map_err(BundleExportError::Walk)? {
+    for path in walker::walk_with(&ctx.root, ctx.extra_document.as_deref())
+        .map_err(BundleExportError::Walk)?
+    {
         let bytes = read_file(&ctx.root, &path)?;
         writer.write_record(&BundleTailRecord::Blob {
             path: path.to_string(),

@@ -179,6 +179,7 @@ async fn bundle_export_import_cycle(passphrase: &[u8], plaintext_line: &str) -> 
         store: ws_a.store().clone(),
         device: ws_a.device(),
         signing: bundle_signing,
+        extra_document: None,
     };
     let mut frames = Vec::new();
     let mut emit = |data: Vec<u8>| {

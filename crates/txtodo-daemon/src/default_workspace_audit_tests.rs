@@ -64,6 +64,7 @@ async fn a_bundle_export_holds_no_absolute_path_in_the_clear() {
         store: ws.store().clone(),
         device: ws.device(),
         signing,
+        extra_document: None,
     };
     let mut frames: Vec<Vec<u8>> = Vec::new();
     export_into(&ctx, b"passphrase", &mut |data| {
