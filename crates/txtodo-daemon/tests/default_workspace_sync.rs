@@ -9,6 +9,7 @@ mod support;
 
 use std::time::{Duration, Instant};
 use support::multi::{MultiWorkspaceDaemon, debug_set_group_key, file_at, seed_group_id_at};
+use txtodo_proto::v1 as pb;
 
 const CONVERGE_DEADLINE: Duration = Duration::from_secs(60);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -71,4 +72,41 @@ async fn two_devices_defaults_at_different_paths_converge_to_the_union() {
         );
         tokio::time::sleep(POLL_INTERVAL).await;
     }
+}
+
+/// A fresh profile has a default workspace with an empty `todo.txt`, and an `Apply` that names no
+/// workspace lands in it.
+#[tokio::test]
+async fn a_selector_less_add_lands_in_the_default_workspace() {
+    let state_dir = tempfile::tempdir().expect("state dir");
+    let default_todo = state_dir.path().join("default").join("todo.txt");
+    let sync_dir = tempfile::tempdir().expect("sync tempdir");
+    let (_daemon, mut client) = MultiWorkspaceDaemon::start(state_dir, sync_dir.path()).await;
+    client
+        .apply(pb::ApplyRequest {
+            path: "todo.txt".into(),
+            mutations: vec![pb::Mutation {
+                kind: Some(pb::mutation::Kind::Add(pb::Add {
+                    line: "first task".into(),
+                })),
+            }],
+            ..pb::ApplyRequest::default()
+        })
+        .await
+        .expect("selector-less apply");
+    let text = std::fs::read_to_string(&default_todo).expect("read the default's todo.txt");
+    assert!(text.contains("first task"), "{text:?}");
+
+    let listed = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .expect("workspace_list")
+        .into_inner()
+        .workspaces;
+    assert_eq!(
+        listed.len(),
+        1,
+        "only the default exists on a fresh profile"
+    );
+    assert!(listed[0].is_default);
 }
