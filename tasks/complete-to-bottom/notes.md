@@ -53,15 +53,11 @@ the file unsorted.
   id; pinned to a line number it would have shown another task.
 - Playbook 3.2 and `AGENTS.md`.
 
+- Reopen (2026-09-21): `Mutation.Reopen` is on the wire (`a3727a5`). The daemon (`mutation_reopen.rs`) clears the `x`, restores `(X)` from `pri:X`, and moves the line above the first done line; no move when it is already there, and nothing for a line that is not done. It sorts the x-clearing ops ahead of the priority ops: `change_ops` puts the priority first, which is right for completing but would fold a restored `(B)` back into `pri:B` and lose it. MCP's `todo_uncomplete` sends it (`28bd62d`). No TUI or desktop action un-completes today, so neither sends it.
+
 Open:
 
-- Reopen: decided 2026-09-20 by a human, option A. Add `Mutation.Reopen` to the wire; a reopened
-  line moves to the end of the open block, above the first done line. Not built yet: four lines in
-  `todo.txt` (proto first, then daemon, MCP's `todo_uncomplete`, then a check of the TUI and the
-  desktop for an un-complete action). Today MCP's `todo_uncomplete` sends an `Edit`, so the line
-  stays where it is.
-- In daemon mode the CLI still sends `Edit` plus `MoveToEnd` (or one `Replace` under Sidecar), not
-  `Complete`. The file is the same; the op log says edit and move, not complete.
-- The whole daemon test suite was not re-run after the `Complete` change, only the tests that
-  complete a task.
+- The TUI's Space always sends Complete; on a done line it does nothing. Sending Reopen there is an optional follow-up.
+- In daemon mode the CLI still sends `Edit` plus `MoveToEnd` (or one `Replace` under Sidecar), not `Complete`. The file is the same; the op log says edit and move, not complete.
+- The whole daemon test suite was not re-run after the `Complete` change, only the tests that complete a task.
 - The global skill file and the root `CLAUDE.md` copy still carry the old 3.2.
