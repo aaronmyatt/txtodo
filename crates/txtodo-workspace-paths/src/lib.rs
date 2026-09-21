@@ -196,5 +196,48 @@ pub fn workspace_root_from(start: &Path) -> PathBuf {
     start.to_path_buf()
 }
 
+/// Which workspace a client with no `--dir` means (task `default-workspace`, decided 2026-09-20):
+/// the current folder when it is a workspace, else the user's default workspace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceChoice {
+    /// The folder the client runs in (or the workspace root above it).
+    Here(PathBuf),
+    /// No workspace here: the default workspace's directory. A client says so out loud.
+    Default(PathBuf),
+}
+
+impl WorkspaceChoice {
+    /// The directory to name to the daemon (or to work in directly).
+    pub fn path(&self) -> &Path {
+        match self {
+            WorkspaceChoice::Here(p) | WorkspaceChoice::Default(p) => p,
+        }
+    }
+
+    /// True when the client fell back to the default workspace.
+    pub fn is_default(&self) -> bool {
+        matches!(self, WorkspaceChoice::Default(_))
+    }
+}
+
+/// Whether `dir` is a workspace: the daemon has kept state there (`.txtodo/`), or it is a plain
+/// todo.txt folder (`todo.txt` beside the client, the todo.sh habit). One definition for the CLI,
+/// TUI and MCP, so the same folder is never a workspace to one and not to another.
+pub fn is_workspace_dir(dir: &Path) -> bool {
+    dir.join(".txtodo").is_dir() || dir.join("todo.txt").is_file()
+}
+
+/// The workspace a client should use when given no `--dir`: `start`'s workspace root (see
+/// [`workspace_root_from`]) when that is a workspace, else the default workspace
+/// ([`default_workspace_dir_for`], which follows an isolated daemon's `$TXTODO_SOCKET`).
+pub fn choose_workspace(env: &RegistryEnv, start: &Path) -> WorkspaceChoice {
+    let root = workspace_root_from(start);
+    if is_workspace_dir(&root) {
+        WorkspaceChoice::Here(root)
+    } else {
+        WorkspaceChoice::Default(default_workspace_dir_for(env))
+    }
+}
+
 #[cfg(test)]
 mod tests;

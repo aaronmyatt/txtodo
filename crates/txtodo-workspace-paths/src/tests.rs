@@ -211,3 +211,54 @@ fn a_git_boundary_stops_the_walk() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_folder_with_state_or_a_todo_txt_is_a_workspace_and_an_empty_one_is_not() {
+    let root = tree("ws", &["stateful/.txtodo", "plain", "empty"]);
+    std::fs::write(root.join("plain/todo.txt"), "x\n").unwrap();
+    assert!(is_workspace_dir(&root.join("stateful")));
+    assert!(is_workspace_dir(&root.join("plain")));
+    assert!(!is_workspace_dir(&root.join("empty")));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_client_uses_the_folder_it_is_in_when_it_is_a_workspace() {
+    let root = tree("here", &[".txtodo", "tasks/slug"]);
+    let e = env(&[("XDG_DATA_HOME", "/xdg-data")]);
+    // A sub-folder of a workspace means the workspace root.
+    let choice = choose_workspace(&e, &root.join("tasks/slug"));
+    assert_eq!(choice, WorkspaceChoice::Here(root.clone()));
+    assert!(!choice.is_default());
+    assert_eq!(choice.path(), root);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_client_outside_any_workspace_falls_back_to_the_default() {
+    let root = tree("out", &["a/b"]);
+    let e = env(&[("XDG_DATA_HOME", "/xdg-data")]);
+    let choice = choose_workspace(&e, &root.join("a/b"));
+    assert_eq!(
+        choice,
+        WorkspaceChoice::Default(PathBuf::from("/xdg-data/txtodo/default"))
+    );
+    assert!(choice.is_default());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn the_fallback_follows_an_isolated_daemon_and_the_override() {
+    let root = tree("iso", &["a"]);
+    let e = env(&[("TXTODO_SOCKET", "/tmp/iso/txtodod.sock")]);
+    assert_eq!(
+        choose_workspace(&e, &root.join("a")).path(),
+        PathBuf::from("/tmp/iso/default")
+    );
+    let e = env(&[("TXTODO_DEFAULT_WORKSPACE", "/mine")]);
+    assert_eq!(
+        choose_workspace(&e, &root.join("a")).path(),
+        PathBuf::from("/mine")
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
