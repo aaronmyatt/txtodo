@@ -80,3 +80,19 @@ None. Both Decide lines are closed.
 - `todo_file` in a subdirectory (`lists/todo.txt`) with `refs_dir = "."` puts refs in `lists/`.
   That follows rule 2, but it is untested.
 - `apps/desktop` and the TUI cache the root path; a live layout change needs a reload signal.
+
+## As built (2026-09-21)
+
+- Model: `WorkspaceLayout` (`layout.rs`) with `refs_parent_of` and `ref_dir_for`, the one place a slug becomes a directory; `WorkspaceTree::build_with_layout` places the root list's children by it.
+- Daemon: a `SharedLayout` on the `Workspace` and every `ActorConfig`; `layout_file.rs` reads `<root>/txtodo.toml` (the `toml` crate, an edge in `Cargo.lock` only, `cargo deny check` passes); `layout_reload.rs` hot-reloads it from the watcher (a change is refused while ref dirs sit in the old place; a bad or deleted file keeps the last good layout, with a note); `layout_rpc.rs` is the `WorkspaceLayout` RPC that reads it or sets it, moving dirs all-or-nothing when asked. A workspace with no file starts on `tasks/`, which flipped every real workspace.
+- Prune offers only dirs inside `refs_dir`. The refs folder is created lazily.
+- CLI: `txtodo workspace layout [--refs-dir P] [--todo-file P] [--move]`, and `doctor` rows; `open`, `sub` and `notes` already used the daemon's `RefDirInfo.dir`.
+- Desktop: a `workspace_layout` command, a store refetched on each workspace change, and `refDirFor`, used by the ref indicators and the detail view.
+- ADR 0030; `specs/ref-directories.md` rule 2 and plan 3.2 changed together.
+
+Known gaps:
+
+- `todo_file` other than `todo.txt` is validated and stored but refused by the daemon.
+- `txtodo.toml` is not synced between devices. Notes have the same limit today: a `notes.md` edited on disk is not an op, and a `notes.md` op is dropped by a receiver with no actor for it.
+- The desktop refetches the layout on a workspace change, not when the file changes. Its visual-regression goldens (light and dark) fail and were not regenerated.
+- The daemon installed on this machine is the old build; this repo behaves as described only after `just install-daemon`.
