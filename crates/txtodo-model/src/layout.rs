@@ -177,6 +177,32 @@ impl WorkspaceLayout {
         self.refs_dir == BESIDE_THE_LIST
     }
 
+    /// The directory that holds the ref dirs of the lines in `owner`, relative to the workspace
+    /// root (`""` is the root itself): `refs_dir` for the root list, or the list's own folder when
+    /// refs sit beside it; every other list, a nested one, keeps them beside its own file.
+    pub fn refs_parent_of(&self, owner: &FilePath) -> String {
+        let beside = |file: &str| match file.rsplit_once('/') {
+            Some((dir, _)) => dir.to_owned(),
+            None => String::new(),
+        };
+        if owner != &self.todo_file {
+            beside(owner.as_str())
+        } else if self.refs_beside_list() {
+            beside(self.todo_file.as_str())
+        } else {
+            self.refs_dir.clone()
+        }
+    }
+
+    /// The ref dir of slug `slug` for a line in `owner`, workspace-relative: `refs_parent_of`
+    /// joined with the slug. The one place a slug becomes a directory (task workspace-layout).
+    pub fn ref_dir_for(&self, owner: &FilePath, slug: &str) -> String {
+        match self.refs_parent_of(owner).as_str() {
+            "" => slug.to_owned(),
+            parent => format!("{parent}/{slug}"),
+        }
+    }
+
     /// The directory that holds the ref dir of slug `slug` for a line in the root list, relative
     /// to the workspace root: `<refs_dir>/<slug>`, or `<list's folder>/<slug>` when refs sit beside
     /// the list. The slug is not validated here (`Task::ref_slug` already did).
@@ -264,5 +290,24 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(e.contains("todo_file") && e.contains("C:/x"), "{e}");
+    }
+
+    #[test]
+    fn a_ref_dir_follows_the_list_that_owns_the_line() {
+        let root = FilePath::new("todo.txt").unwrap();
+        let nested = FilePath::new("tasks/auth/todo.txt").unwrap();
+        let l = WorkspaceLayout::default();
+        assert_eq!(l.ref_dir_for(&root, "auth"), "tasks/auth");
+        assert_eq!(l.ref_dir_for(&nested, "login"), "tasks/auth/login");
+        let beside = WorkspaceLayout::beside_the_list();
+        assert_eq!(beside.ref_dir_for(&root, "auth"), "auth");
+        assert_eq!(beside.ref_dir_for(&nested, "login"), "tasks/auth/login");
+        let sub = WorkspaceLayout::new(".", "lists/todo.txt").unwrap();
+        assert_eq!(
+            sub.ref_dir_for(&FilePath::new("lists/todo.txt").unwrap(), "a"),
+            "lists/a"
+        );
+        assert_eq!(l.refs_parent_of(&root), "tasks");
+        assert_eq!(beside.refs_parent_of(&root), "");
     }
 }
