@@ -119,6 +119,12 @@ fn log_discover_failed(dir: &Path, error: &dyn std::fmt::Display) {
 /// A debounced document path: its actor gets `ExternalChange`; an unknown document in a known
 /// directory is registered, which adopts the file.
 async fn route_document(ws: &SharedWorkspace, path: &Path) {
+    // `txtodo.toml` is not a document: it changes where ref dirs live (task workspace-layout).
+    let root = read(ws).root().to_path_buf();
+    if crate::layout_reload::is_layout_file(&root, path) {
+        crate::layout_reload::reload_layout(ws).await;
+        return;
+    }
     let handle = read(ws).actor_for_disk(path).cloned();
     match handle {
         Some(h) => {

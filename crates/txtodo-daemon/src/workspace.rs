@@ -151,7 +151,7 @@ impl Workspace {
             stats: Arc::new(Stats::default()),
             notes: NotesRegistry::new(),
             workspace_id: Mutex::new(placeholder_workspace_id),
-            layout: crate::layout_state::SharedLayout::default(),
+            layout: crate::layout_state::SharedLayout::new(crate::layout_file::initial(root)),
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
             lan_status: LanStatus::default(),

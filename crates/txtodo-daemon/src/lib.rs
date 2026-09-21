@@ -55,6 +55,8 @@ mod lan_session;
 mod lan_session_dispatch;
 mod lan_session_shared;
 pub mod lan_status;
+pub mod layout_file;
+mod layout_reload;
 pub mod layout_state;
 mod migrate_grpc;
 pub mod migrate_sidecar;
@@ -162,7 +164,11 @@ mod lan_session_security_tests;
 #[cfg(test)]
 mod lan_session_tests;
 #[cfg(test)]
+mod layout_file_tests;
+#[cfg(test)]
 mod layout_refs_tests;
+#[cfg(test)]
+mod layout_reload_tests;
 #[cfg(test)]
 mod migrate_sidecar_tests;
 #[cfg(test)]

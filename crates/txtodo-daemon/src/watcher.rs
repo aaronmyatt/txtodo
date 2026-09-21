@@ -72,7 +72,8 @@ fn ingest_inner(deb: &mut Debouncer, ev: RawEvent, now: Instant) -> Option<Route
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or_default();
-    if is_ignored(&ev.path) || !is_document_name(name) {
+    let is_layout = name == crate::layout_file::LAYOUT_FILE;
+    if is_ignored(&ev.path) || !(is_document_name(name) || is_layout) {
         return None;
     }
     // A dropped event on overflow is a flood, not a save; the next event for the path repairs it.
@@ -173,5 +174,23 @@ mod tests {
             deb.drain_due(t0 + Duration::from_millis(40 + DEBOUNCE_MS)),
             vec![PathBuf::from("/w/todo.txt")]
         );
+    }
+
+    #[test]
+    fn the_layout_file_is_debounced_like_a_document_and_other_toml_is_not() {
+        let t0 = Instant::now();
+        let mut deb = Debouncer::default();
+        let ev = |p: &str| RawEvent {
+            path: PathBuf::from(p),
+            dir_created: false,
+        };
+        assert_eq!(ingest(&mut deb, ev("/w/other.toml"), t0), None);
+        assert_eq!(
+            deb.pending(),
+            0,
+            "an unrelated toml never reaches the debounce"
+        );
+        assert_eq!(ingest(&mut deb, ev("/w/txtodo.toml"), t0), None);
+        assert_eq!(deb.pending(), 1, "the layout file does");
     }
 }
