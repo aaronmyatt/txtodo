@@ -298,3 +298,22 @@ fn move_before_and_lint_round_trip() {
         ],
     });
 }
+
+#[test]
+fn the_layout_messages_round_trip() {
+    use txtodo_proto::v1::{WorkspaceLayoutInfo, WorkspaceLayoutRequest};
+    round_trip(&WorkspaceLayoutRequest {
+        workspace: None,
+        set: true,
+        refs_dir: "tasks".into(),
+        todo_file: "todo.txt".into(),
+        move_dirs: true,
+    });
+    round_trip(&WorkspaceLayoutInfo {
+        refs_dir: "tasks".into(),
+        todo_file: "todo.txt".into(),
+        note: "refused".into(),
+        moved: 2,
+        outside_refs_dir: vec!["old/plan".into()],
+    });
+}
