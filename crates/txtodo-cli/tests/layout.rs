@@ -147,40 +147,40 @@ fn sub_on_a_line_with_no_ref_creates_it_in_tasks() {
     );
 }
 
-#[test]
-fn workspace_layout_shows_and_sets_the_layout_and_doctor_reports_it() {
+fn with_a_live_ref_dir() -> (tempfile::TempDir, tempfile::TempDir, GlobalDaemon) {
     let state = tempfile::tempdir().unwrap();
     let daemon = GlobalDaemon::spawn(state.path());
     let ws = workspace("(A) plan the launch ref:plan\n");
     std::fs::create_dir_all(ws.path().join("tasks/plan")).unwrap();
     std::fs::write(ws.path().join("tasks/plan/todo.txt"), "draft\n").unwrap();
+    (state, ws, daemon)
+}
 
+#[test]
+fn workspace_layout_shows_the_layout_and_refuses_a_change_under_a_live_ref_dir() {
+    let (_state, ws, daemon) = with_a_live_ref_dir();
     let shown = stdout(&txtodo(&daemon, ws.path(), &["workspace", "layout"]));
     assert!(
         shown.contains("refs_dir  = tasks") && shown.contains("todo_file = todo.txt"),
         "{shown}"
     );
 
-    // A live ref dir is in the way, so a change is refused and nothing is written.
     let refused = txtodo(
         &daemon,
         ws.path(),
         &["workspace", "layout", "--refs-dir", "stuff"],
     );
     assert!(!refused.status.success());
-    assert!(
-        String::from_utf8_lossy(&refused.stderr).contains("ref dir"),
-        "{}",
-        String::from_utf8_lossy(&refused.stderr)
-    );
+    let why = String::from_utf8_lossy(&refused.stderr).into_owned();
+    assert!(why.contains("ref dir"), "{why}");
     assert!(!ws.path().join("txtodo.toml").exists());
+}
 
-    // Asked to move them, it moves them, writes the file, and open follows.
-    let moved = stdout(&txtodo(
-        &daemon,
-        ws.path(),
-        &["workspace", "layout", "--refs-dir", "stuff", "--move"],
-    ));
+#[test]
+fn workspace_layout_move_relocates_the_dirs_and_open_and_doctor_follow() {
+    let (_state, ws, daemon) = with_a_live_ref_dir();
+    let args = ["workspace", "layout", "--refs-dir", "stuff", "--move"];
+    let moved = stdout(&txtodo(&daemon, ws.path(), &args));
     assert!(
         moved.contains("refs_dir  = stuff") && moved.contains("moved 1"),
         "{moved}"
