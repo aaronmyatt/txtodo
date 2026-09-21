@@ -1,14 +1,9 @@
 //! `GlobalService`: the tonic `Txtodo` impl actually wired to the one global socket
 //! (ADR 0025, task `daemon-global-socket`). Every method resolves the request's `WorkspaceSelector`
-//! against a `WorkspaceCatalog`, then delegates to `TxtodoService` — which keeps its existing,
-//! unmodified single-workspace behaviour: every other module in this crate that reads
-//! `self.workspace()`/`self.actor()`/etc. needs zero changes, since `TxtodoService::new(ws)` is
-//! reconstructed fresh, per call, already scoped to the resolved workspace. `TxtodoService` itself
-//! still implements `Txtodo` directly too, unchanged — kept for the whitebox tests that construct
-//! one against a single already-open `Workspace` directly, bypassing the catalog entirely
-//! (`serve::serve`, as opposed to this file's consumer, `serve::serve_global`). Every method also
-//! wraps its delegated call in an `rpc{method,workspace}` span (`rpc_span`) — this is the one
-//! place that sees every RPC, so the span lives here, not duplicated in `server.rs`.
+//! against a `WorkspaceCatalog`, then delegates to a `TxtodoService` built fresh for the resolved
+//! workspace. `TxtodoService` still implements `Txtodo` directly, for the whitebox tests that
+//! bypass the catalog (`serve::serve`). Every method wraps its call in an `rpc{method,workspace}`
+//! span (`rpc_span`): this is the one place that sees every RPC.
 
 use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
@@ -19,9 +14,8 @@ use tracing::Instrument;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
 
-// Re-exported (not just `use`d) so `crate::global_service::rpc_span`/`to_workspace_info` — the
-// paths `pairing_grpc.rs`/`workspace_offer_grpc.rs` already call them by — keep resolving after
-// this split; `parse_workspace_id` has no outside caller, so a plain `use` is enough for it.
+// Re-exported so `crate::global_service::rpc_span`/`to_workspace_info`, the paths
+// `pairing_grpc.rs`/`workspace_offer_grpc.rs` call them by, keep resolving after this split.
 pub(crate) use crate::global_service_helpers::{
     HasWorkspace, parse_workspace_id, rpc_span, to_workspace_info, totals_only, with_totals,
 };
@@ -55,10 +49,8 @@ impl GlobalService {
         Ok((TxtodoService::new(ws), span))
     }
 
-    /// `WorkspaceCatalog::resolve` for an async handler. An already-open workspace or a selector-
-    /// less call answers at once; anything else may have to open or wait for a workspace, which is
-    /// blocking work, so it runs on the blocking pool and never ties up a runtime worker — one
-    /// slow open must not stall calls on workspaces that are ready (task `daemon-early-bind`).
+    /// `WorkspaceCatalog::resolve` for an async handler. An open workspace answers at once; anything
+    /// else may block on an open, so it runs on the blocking pool (task `daemon-early-bind`).
     /// <https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html>
     pub(crate) async fn resolve(
         &self,

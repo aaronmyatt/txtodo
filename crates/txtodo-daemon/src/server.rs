@@ -1,11 +1,8 @@
 //! The gRPC service on the unix socket (ADR 0006). Handlers are thin: parse the request into
-//! typed values (`convert.rs`), send one message to the right actor, map the reply. No file or
-//! store access here except History. Ref: <https://docs.rs/tonic/latest/tonic/transport/server/>.
+//! typed values (`convert.rs`), send one message to the right actor, map the reply. Ref:
+//! <https://docs.rs/tonic/latest/tonic/transport/server/>.
 //!
-//! No `rpc{method,workspace}` span lives here (root todo.txt `logging-daemon-datapath`): every
-//! production RPC goes through `GlobalService` (`global_service.rs`), whose span already wraps the
-//! call into these methods; whitebox tests that build a `TxtodoService` directly (`serve::serve`)
-//! skip the catalog, and a second span here would only double-count.
+//! No `rpc{method,workspace}` span here: `GlobalService` wraps every production RPC in one.
 
 use crate::convert::{file_kind_of, parse_mutation, parse_path, parse_principal};
 use crate::handle::{ActorHandle, WATCH_CAP};
@@ -22,11 +19,10 @@ use txtodo_proto::v1::{self as pb};
 /// Concurrent RPCs per connection.
 pub const MAX_INFLIGHT_RPCS: usize = 64;
 
-/// The workspace behind a lock: the watcher task registers new documents, RPCs read.
+/// The workspace behind a lock (the watcher registers documents, RPCs read).
 pub type SharedWorkspace = Arc<RwLock<Workspace>>;
 
-/// The service. `Clone` is a cheap `Arc` clone (`SharedWorkspace`), used to hand a live handle to
-/// `forward_changes`'s spawned tasks (plan M5's `Watch` progress, `tree.rs`).
+/// The service. `Clone` is a cheap `Arc` clone, handed to `forward_changes`'s spawned tasks.
 #[derive(Clone)]
 pub struct TxtodoService {
     ws: SharedWorkspace,
