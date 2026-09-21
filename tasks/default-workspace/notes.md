@@ -66,3 +66,11 @@ workspace).
 - What an existing user's first launch does when they already have workspaces registered: the
   default is added beside them and is not auto-selected over their last pick.
 - Moving the default's directory later is out of scope.
+- CI regression found 2026-09-21 (line 17): `apps/desktop/src-tauri/tests/workspace_registry.rs`'s
+  `add_list_remove_round_trip_and_add_is_idempotent` and
+  `an_unbound_client_is_ready_and_lists_an_empty_registry` both assert
+  `client.workspace_list().await.unwrap().is_empty()` on a fresh client — true before this task,
+  false now that every daemon always registers the default. Broke in f73d31e9's own CI run
+  (2026-09-20) and has stayed red since (confirmed still failing on 2026-09-21's push). Not
+  covered by any line above; those are new tests for the feature, not a fix for these two old
+  ones.
