@@ -11,6 +11,7 @@ use std::time::Duration;
 use crossterm::event::{Event, KeyEventKind};
 use tokio::sync::mpsc;
 use txtodo_proto::v1 as pb;
+use txtodo_workspace_paths::{RegistryEnv, WorkspaceChoice, choose_workspace};
 
 use crate::action::Action;
 use crate::daemon::{
@@ -55,13 +56,21 @@ pub fn main() -> ExitCode {
 
 #[allow(clippy::print_stderr)] // see `main`'s doc
 async fn async_main() -> ExitCode {
-    let workspace = match std::env::current_dir() {
+    let cwd = match std::env::current_dir() {
         Ok(dir) => dir,
         Err(e) => {
             eprintln!("txtodo-tui: cannot resolve the current directory: {e}");
             return ExitCode::FAILURE;
         }
     };
+    // The current folder when it is a workspace, else the user's default one (task
+    // default-workspace). The status line says so when it is the default.
+    let choice = match RegistryEnv::from_process() {
+        Ok(env) => choose_workspace(&env, &cwd),
+        Err(_) => WorkspaceChoice::Here(cwd),
+    };
+    let workspace = choice.path().to_path_buf();
+    let label = choice.is_default().then(|| "default workspace".to_owned());
     // File-only sink (root todo.txt logging-tui): `run` below enters raw mode + an alternate
     // screen (`ratatui::init()`) and only leaves it on return, so any stderr write for the rest of
     // this function's lifetime would corrupt the render — `init_file_only` never installs a
@@ -98,7 +107,7 @@ async fn async_main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    match run(&mut daemon, "todo.txt").await {
+    match run_in(&mut daemon, "todo.txt", label).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("txtodo-tui: {e}");
@@ -110,8 +119,18 @@ async fn async_main() -> ExitCode {
 /// The real event loop: baselines from `GetFile`, then handles terminal input, `Watch` events and
 /// bounded `Watch`-drop reconnects (design edge cases) until `:q` or the input channel closes.
 pub async fn run(daemon: &mut Daemon, path: &str) -> Result<(), DaemonError> {
+    run_in(daemon, path, None).await
+}
+
+/// `run`, naming the workspace in the status line when it is worth naming (the default one).
+pub async fn run_in(
+    daemon: &mut Daemon,
+    path: &str,
+    workspace_label: Option<String>,
+) -> Result<(), DaemonError> {
     let file = daemon.get_file(path).await?;
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
+    state.workspace_label = workspace_label;
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
 
     let mut terminal = ratatui::init();

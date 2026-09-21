@@ -188,6 +188,9 @@ pub struct AppState {
     /// startup, against the real `$HOME` — pure-rendering callers (fixtures, tests) never touch
     /// the filesystem.
     pub skill_hint: bool,
+    /// Names the workspace in the status line when it is not the folder the user started in: `Some`
+    /// for the default workspace (task default-workspace), `None` otherwise.
+    pub workspace_label: Option<String>,
 }
 
 impl AppState {
@@ -213,6 +216,7 @@ impl AppState {
             command: None,
             should_quit: false,
             skill_hint: false,
+            workspace_label: None,
         }
     }
 

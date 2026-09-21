@@ -61,7 +61,11 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
     } else {
         ""
     };
-    let left = format!(" {} \u{b7} {id}{hint}", state.path);
+    let workspace = state
+        .workspace_label
+        .as_deref()
+        .map_or_else(String::new, |label| format!(" \u{b7} {label}"));
+    let left = format!(" {}{workspace} \u{b7} {id}{hint}", state.path);
     let version = format!("{} ", crate::buildinfo::UI_LABEL);
     let used = Line::from(left.as_str()).width() + Line::from(version.as_str()).width();
     let Some(gap) = usize::from(width).checked_sub(used).filter(|gap| *gap >= 2) else {
@@ -136,6 +140,22 @@ mod tests {
         let narrow = status_line(&state, 30).to_string();
         assert!(!narrow.contains(crate::buildinfo::UI_LABEL));
         assert!(narrow.contains("id:off"), "the rest stays: {narrow}");
+    }
+
+    #[test]
+    fn status_line_names_the_default_workspace() {
+        let mut state = AppState::fixture();
+        assert!(
+            !status_line(&state, 120)
+                .to_string()
+                .contains("default workspace")
+        );
+        state.workspace_label = Some("default workspace".to_owned());
+        assert!(
+            status_line(&state, 120)
+                .to_string()
+                .contains("todo.txt \u{b7} default workspace")
+        );
     }
 
     #[test]
