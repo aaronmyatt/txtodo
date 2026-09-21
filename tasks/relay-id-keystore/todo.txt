@@ -1,4 +1,3 @@
-2026-09-20 txtodo doctor: names the keystore backend in use and fails when the relay identity is in memory only +m8 @cli @test
 2026-09-20 txtodod: the relay node id is the same across two starts (file backend in the test, OS keychain by hand on macOS) +m8 @daemon @test
 2026-09-20 apps/desktop: the sidecar spawn passes no --key-store, so it inherits the default; check it keeps the relay node id +m8 @desktop @test
 2026-09-20 txtodod: a denied or unanswered keychain read fails loud at start; never a silent fresh in-memory relay id +m8 @daemon @test
@@ -7,3 +6,4 @@ x 2026-09-20 2026-09-20 Check on macOS whether the keychain prompt returns after
 x 2026-09-21 2026-09-20 Decide: a defaulted auto on a box with no keychain (headless Linux). A: run in memory as today, warn in the log and doctor. B: refuse to start. I'd take A +m8 @daemon @human — decided 2026-09-21 by a human: A, run in memory and warn loudly (log + doctor) rather than refuse to start; keeps a working headless daemon working when the default flips
 x 2026-09-21 2026-09-20 txtodod: --key-store defaults to auto (the OS keychain) when the flag is absent; an explicit flag still wins +m8 @daemon @test — shipped: main.rs's build_identity defaults --key-store to auto (identity_setup.rs); an explicit flag is passed through unchanged
 x 2026-09-21 2026-09-20 txtodod: a defaulted auto that finds no keychain follows the decision above; an explicit --key-store auto still refuses +m8 @daemon @test — shipped: keystore_setup.rs's on_auto_probe_failure (defaulted -> memory + tracing::warn!, explicit -> KeyStoreError::AutoNeedsChoice unchanged); 2 unit tests
+x 2026-09-21 2026-09-20 txtodo doctor: names the keystore backend in use and fails when the relay identity is in memory only +m8 @cli @test — shipped: doctor.rs's keystore_check FAILs on backend == "memory" (was always Ok when non-empty); 4 unit tests in doctor_tests.rs (split out for the file-length cap)

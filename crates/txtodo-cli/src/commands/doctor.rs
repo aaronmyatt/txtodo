@@ -228,9 +228,17 @@ fn config_check(ctx: &Ctx) -> Check {
 }
 
 /// The resolved sync-keystore backend (plan M4 `sync-keystore`), by name, straight from Health —
-/// "a human should be able to answer where are my keys? without reading code."
+/// "a human should be able to answer where are my keys? without reading code." `"memory"` (task
+/// `relay-id-keystore`) means no persisted relay identity: a FAIL, since the daemon only logs it
+/// once, at startup, and a stale relay allowlist entry is the invisible cost later.
 fn keystore_check(health: Option<&pb::HealthResponse>) -> Check {
     match health {
+        Some(h) if h.key_store_backend == "memory" => check(
+            "keystore",
+            Status::Fail,
+            "backend: memory; the relay identity will not survive a restart; fix the OS \
+             keychain (--key-store auto/os) or pass --key-store file to persist it",
+        ),
         Some(h) if !h.key_store_backend.is_empty() => check(
             "keystore",
             Status::Ok,
@@ -386,3 +394,7 @@ fn print_recent_log(logs: &Path) {
         println!("{line}");
     }
 }
+
+#[cfg(test)]
+#[path = "doctor_tests.rs"]
+mod tests;
