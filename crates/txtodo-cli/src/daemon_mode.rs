@@ -39,24 +39,23 @@ pub fn run_via_daemon(
 ) -> Result<(), CliError> {
     let scratch = tempfile::tempdir().map_err(CliError::Io)?;
     let listed: Vec<String> = daemon.list_files()?.into_iter().map(|f| f.path).collect();
-    let mut originals: Vec<Original> = Vec::with_capacity(1);
-    for doc in [ctx.paths.todo_file.clone()] {
-        let known = listed.iter().any(|k| *k == doc);
-        let (bytes, hash) = if known {
-            daemon.snapshot(&doc)?
-        } else {
-            (Vec::new(), Vec::new())
-        };
-        if !bytes.is_empty() {
-            std::fs::write(scratch.path().join(SCRATCH_DOC), &bytes).map_err(CliError::Io)?;
-        }
-        originals.push(Original {
-            doc,
-            bytes,
-            hash,
-            known,
-        });
+    // One document today: the workspace's root list, under its own name for the daemon.
+    let doc = ctx.paths.todo_file.clone();
+    let known = listed.contains(&doc);
+    let (bytes, hash) = if known {
+        daemon.snapshot(&doc)?
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    if !bytes.is_empty() {
+        std::fs::write(scratch.path().join(SCRATCH_DOC), &bytes).map_err(CliError::Io)?;
     }
+    let originals = [Original {
+        doc,
+        bytes,
+        hash,
+        known,
+    }];
     let scratch_ctx = Ctx {
         paths: Paths {
             dir: scratch.path().to_path_buf(),
