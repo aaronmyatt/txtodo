@@ -573,6 +573,42 @@ pub struct PruneOrphansResponse {
     pub executed: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceLayoutRequest {
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// false = read only; the fields below are ignored
+    #[prost(bool, tag = "2")]
+    pub set: bool,
+    /// empty = keep the current one
+    #[prost(string, tag = "3")]
+    pub refs_dir: ::prost::alloc::string::String,
+    /// empty = keep the current one
+    #[prost(string, tag = "4")]
+    pub todo_file: ::prost::alloc::string::String,
+    /// move the ref dirs to the new place instead of refusing
+    #[prost(bool, tag = "5")]
+    pub move_dirs: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceLayoutInfo {
+    /// relative to the workspace root; "." means beside the list
+    #[prost(string, tag = "1")]
+    pub refs_dir: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub todo_file: ::prost::alloc::string::String,
+    /// Why <root>/txtodo.toml is not the layout in force (a bad file, or a change refused while ref
+    /// dirs sit in the old place); empty when they agree.
+    #[prost(string, tag = "3")]
+    pub note: ::prost::alloc::string::String,
+    /// ref dirs moved by this call
+    #[prost(uint32, tag = "4")]
+    pub moved: u32,
+    /// Directories holding a todo.txt or notes.md that no line points at and that sit outside
+    /// `refs_dir`: ref dirs left where an older layout put them.
+    #[prost(string, repeated, tag = "5")]
+    pub outside_refs_dir: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairOfferRequest {
     #[prost(message, optional, tag = "1")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
@@ -1576,6 +1612,33 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "PruneOrphans"));
             self.inner.unary(req, path, codec).await
         }
+        /// The workspace's layout (task workspace-layout): where the root list and the ref: directories of
+        /// its lines live. Reads it, or with `set` changes it, writing `<root>/txtodo.toml`. A change is
+        /// refused (FAILED_PRECONDITION) while ref dirs sit in the old place, unless `move_dirs` moves them.
+        pub async fn workspace_layout(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceLayoutRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceLayoutInfo>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceLayout",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceLayout"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Registers `root` (idempotent: an already-active root returns its existing id, never a
         /// duplicate row) without opening or touching it beyond a path canonicalization.
         pub async fn workspace_add(
@@ -2245,6 +2308,16 @@ pub mod txtodo_server {
             request: tonic::Request<super::PruneOrphansRequest>,
         ) -> std::result::Result<
             tonic::Response<super::PruneOrphansResponse>,
+            tonic::Status,
+        >;
+        /// The workspace's layout (task workspace-layout): where the root list and the ref: directories of
+        /// its lines live. Reads it, or with `set` changes it, writing `<root>/txtodo.toml`. A change is
+        /// refused (FAILED_PRECONDITION) while ref dirs sit in the old place, unless `move_dirs` moves them.
+        async fn workspace_layout(
+            &self,
+            request: tonic::Request<super::WorkspaceLayoutRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceLayoutInfo>,
             tonic::Status,
         >;
         /// Registers `root` (idempotent: an already-active root returns its existing id, never a
@@ -3120,6 +3193,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = PruneOrphansSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceLayout" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceLayoutSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceLayoutRequest>
+                    for WorkspaceLayoutSvc<T> {
+                        type Response = super::WorkspaceLayoutInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceLayoutRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_layout(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceLayoutSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
