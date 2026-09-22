@@ -21,6 +21,10 @@ test.afterEach(() => {
 test("double-click opens the detail view with pinned parent and sub-list", async ({ page }) => {
 	const line = page.locator(".cm-line", { hasText: "plan the roadmap" }).first();
 	await expect(line).toBeVisible();
+	// The ref indicator resolves `tasks/q4-roadmap/todo.txt` from the root list's own path (task
+	// desktop-ref-indicator-path: a `dirOf(path)` at the call site used to break every indicator
+	// under the default layout).
+	await expect(page.locator(".cm-todotxt-ref-indicator").first()).toContainText("0/1");
 	await line.dblclick();
 
 	await expect(page.locator("section.parent")).toContainText("plan the roadmap");

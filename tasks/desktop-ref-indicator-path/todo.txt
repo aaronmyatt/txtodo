@@ -1,3 +1,3 @@
-2026-09-21 Pass path, not dirOf(path), to lineDecorations in FileView
-2026-09-21 Re-run the visual e2e specs, then regenerate the light and dark goldens
-2026-09-21 Make the mock workspace_layout agree with the mock file tree
+2026-09-21 Re-run the visual e2e specs, then regenerate the light and dark goldens @human — the visual goldens (light+dark) must be regenerated and reviewed by a human per playwright.config.ts: npx playwright test e2e/visual --update-snapshots with TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_SERVICE=1; the render is fixed (line 1), so the goldens can now be taken
+x 2026-09-23 2026-09-21 Pass path, not dirOf(path), to lineDecorations in FileView — FileView passes path/newPath; e2e/detail.spec.ts asserts the 0/1 indicator on the nested fixture
+x 2026-09-23 2026-09-21 Make the mock workspace_layout agree with the mock file tree — mock workspace_layout says refs_dir '.' (MOCK_REFS_DIR), matching the seeded release-notes/ tree; mockRefDir composes from it

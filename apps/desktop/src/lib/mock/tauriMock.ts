@@ -8,6 +8,7 @@
 import {
 	applyMutations,
 	mockEditNotes,
+	MOCK_REFS_DIR,
 	mockRefDir,
 	mockGetNotes,
 	mockPairAccept,
@@ -93,7 +94,10 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "workspace_root":
 			return currentWorkspaceRoot as T;
 		case "workspace_layout":
-			return { refs_dir: "tasks", todo_file: "todo.txt", note: "", outside_refs_dir: [] } as T;
+			// `"."`: the seeded tree keeps `release-notes/` beside the list (state.ts), so the layout
+			// must say so or DetailView composes `tasks/release-notes/todo.txt` and finds nothing
+			// (task desktop-ref-indicator-path).
+			return { refs_dir: MOCK_REFS_DIR, todo_file: "todo.txt", note: "", outside_refs_dir: [] } as T;
 		case "list_workspaces":
 			return workspaces.map((w) => ({ ...w })) as T;
 		case "add_workspace": {

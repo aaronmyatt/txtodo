@@ -9,8 +9,7 @@
 (D) 2026-09-19 Desktop UI/UX revamp from the c2-prompt mockups: ink/paper theme, header search bar, prompt-bar Quick Add with the live logo mark, Universal and Settings pages +m11 @desktop ref:desktop-ui-revamp — deferred 2026-09-19 (human call): design signed off, build deprioritised for now; plan and mockup map in tasks/desktop-ui-revamp/notes.md id:01M2WSN2PZ701CR2QFX7ZG5ZTD
 2026-09-11 Web PWA with the WASM core in a Web Worker, OPFS storage, WebSocket sync +m10 @web — deferred 2026-09-17 (human call): a whole new app/platform (real design + 12-item sub-backlog already in tasks/web-pwa/, zero code), comparable in size to the desktop effort; human prioritized getting to distribution/brew work instead
 (E) 2026-09-11 WASM component plugin host with the design §9 hooks +m10 @plugins @human — needs a wasm runtime dependency (Cargo.toml is frozen) and an ADR for which runtime and which design §9 hooks come first — parked 2026-09-20: no dependency and no ADR until revived; to revive, pick a runtime and write the ADR first
-x 2026-09-23 2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients — see tasks/layout-hot-reload-clients/notes.md
-2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path @doing by:claude
+2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path — 2026-09-23: render fixed and mock aligned; what is left is the @human golden regeneration (tasks/desktop-ref-indicator-path line 2)
 2026-09-21 daemon: layout reload fails open and swallows its errors +m11 @daemon ref:layout-reload-safety
 2026-09-21 The memory keystore fallback drops device and group keys, not just the relay id +m8 @daemon @security ref:keystore-memory-fallback
 2026-09-21 mcp: no flags registers the cwd as a workspace and offers its name to peers +m6 @mcp @security ref:mcp-cwd-autoregister
@@ -26,6 +25,7 @@ x 2026-09-23 2026-09-21 A live txtodo.toml change never reaches the desktop or T
 2026-09-21 The 400-line cap counts comments, so three commits deleted rationale to fit +ratchet @setup
 2026-09-21 cli: daemon-mode do sends Edit plus MoveToEnd, so the op log never says complete +m11 @cli
 (D) 2026-09-15 Deploy relay + accounts onto one DigitalOcean droplet via Kamal: kamal-proxy terminates TLS for both hostnames, iroh-relay runs behind it with no tls block and QUIC address discovery off; real cross-network use still blocked by root todo 18's endpoint-id collision +m8 @relay @ops ref:relay-kamal-deploy @human — a real droplet, DNS and secrets; not something an agent can do from here — update 2026-09-20: low priority; blocked by the stable relay id (relay-id-keystore), not by todo 18; accounts deferred
+x 2026-09-23 2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients — see tasks/layout-hot-reload-clients/notes.md
 x 2026-09-23 2026-09-21 txtodo.toml has a second, unvalidated parser in the CLI +m11 @cli @specs @security ref:layout-toml-validation — see tasks/layout-toml-validation/notes.md
 x 2026-09-23 2026-09-21 clients: the workspace layout is only half honoured +m11 @cli @tui @mcp @daemon ref:layout-client-gaps — see tasks/layout-client-gaps/notes.md
 x 2026-09-23 2026-09-21 daemon: notes.md sync (actor, recovery, LAN apply) +m11 @daemon ref:notes-sync — see tasks/notes-sync/notes.md

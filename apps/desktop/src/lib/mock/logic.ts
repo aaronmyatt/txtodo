@@ -175,14 +175,18 @@ function slugFor(line: string, taskId: string): string {
 	return words.length > 0 ? words.join("-") : taskId.toLowerCase();
 }
 
+/** Where the mock keeps a root-list line's ref dirs: beside the list, matching the seeded
+ * `release-notes/` tree in state.ts. One constant, read by `workspace_layout` and `ref_dir`. */
+export const MOCK_REFS_DIR = ".";
+
 export function mockRefDir(path: string, task: TaskRef, ensure: boolean) {
 	const f = files.get(path);
 	if (!f) throw new Error(`mock daemon: unknown path "${path}"`);
 	const line = f.text.split("\n")[task.line_number - 1] ?? "";
 	const existing = /\bref:(\S+)/.exec(line)?.[1];
 	const slug = existing ?? slugFor(line, task.task_id);
-	// The mock's own `workspace_layout` says refs live in `tasks/` (see tauriMock.ts).
-	const dir = `tasks/${slug}`;
+	// Composed the way `refDirFor` does from the mock's own `workspace_layout` answer.
+	const dir = MOCK_REFS_DIR === "." ? slug : `${MOCK_REFS_DIR}/${slug}`;
 	const subList = `${dir}/todo.txt`;
 	if (ensure) {
 		if (existing === undefined) applyMutations(path, [{ kind: "edit", task, new_line: `${line} ref:${slug}` }]);

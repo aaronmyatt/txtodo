@@ -140,7 +140,7 @@
 			idTagsHidden, // always hidden — §3.1
 			addLinePlaceholder,
 			longLineHint, // root todo 9
-			lineDecoCompartment.of(lineDecorations(dirOf(path), filesByPath)),
+			lineDecoCompartment.of(lineDecorations(path, filesByPath)),
 			hoverLineCompartment.of([]),
 			EditorView.domEventHandlers({
 				mousemove: handleMouseMove,
@@ -319,7 +319,7 @@
 	async function refreshFilesByPath() {
 		const files = await listFiles();
 		filesByPath = new Map(files.map((f) => [f.path, f]));
-		if (view) view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(path), filesByPath)) });
+		if (view) view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(path, filesByPath)) });
 	}
 
 	// Bumped at the start of every `refreshDoc` call; a call's own number stops meaning "the latest
@@ -440,7 +440,7 @@
 
 			settle.then(() => {
 				if (!view) return;
-				view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(dirOf(newPath), filesByPath)) });
+				view.dispatch({ effects: lineDecoCompartment.reconfigure(lineDecorations(newPath, filesByPath)) });
 				refreshDoc();
 				watch();
 			});
