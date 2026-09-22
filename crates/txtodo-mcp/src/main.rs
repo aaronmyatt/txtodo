@@ -100,7 +100,10 @@ async fn ensure_daemon_for_target(target: &Target, socket: &Path) {
     }
     let cfg = match target {
         Target::Dir(dir) => txtodo_daemon_launch::LaunchConfig::new(socket).with_dir(dir),
-        Target::Global | Target::Auto => txtodo_daemon_launch::LaunchConfig::new(socket),
+        // `with_upgrade_to` (task daemon-auto-upgrade): a live global daemon older than this
+        // build is restarted with the newer `txtodod` first. A `--dir` bridge daemon never is.
+        Target::Global | Target::Auto => txtodo_daemon_launch::LaunchConfig::new(socket)
+            .with_upgrade_to(env!("CARGO_PKG_VERSION")),
     };
     let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
 }
