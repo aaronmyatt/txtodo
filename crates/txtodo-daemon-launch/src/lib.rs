@@ -32,7 +32,10 @@ mod binary_path;
 pub mod service;
 mod service_state;
 mod spawn;
+mod upgrade;
+#[cfg(unix)]
+mod upgrade_unix;
 
 pub use autostart::{autostart_disabled, service_disabled};
 pub use binary_path::default_global_socket;
-pub use spawn::{LaunchConfig, LaunchError, ensure_daemon};
+pub use spawn::{Ensured, LaunchConfig, LaunchError, ensure_daemon};

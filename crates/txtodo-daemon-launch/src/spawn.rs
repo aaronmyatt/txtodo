@@ -25,6 +25,10 @@ pub struct LaunchConfig {
     pub extra_env: Vec<(String, String)>,
     /// Upper bound on waiting for the socket to appear after spawning.
     pub spawn_timeout: Duration,
+    /// The client's own version (task `daemon-auto-upgrade`): when a *global* daemon is already
+    /// live but older than this, and the resolved `txtodod` binary is newer than it too,
+    /// [`ensure_daemon`] restarts the daemon with that binary. `None` never restarts anything.
+    pub upgrade_to: Option<String>,
 }
 
 impl LaunchConfig {
@@ -54,7 +58,16 @@ impl LaunchConfig {
             extra_args: Vec::new(),
             extra_env: Vec::new(),
             spawn_timeout: LaunchConfig::DEFAULT_SPAWN_TIMEOUT,
+            upgrade_to: None,
         }
+    }
+
+    /// Asks [`ensure_daemon`] to restart a live global daemon older than `version` (the caller's
+    /// own `CARGO_PKG_VERSION`) — see [`LaunchConfig::upgrade_to`].
+    #[must_use]
+    pub fn with_upgrade_to(mut self, version: impl Into<String>) -> LaunchConfig {
+        self.upgrade_to = Some(version.into());
+        self
     }
 
     /// Targets a legacy per-workspace bridge daemon (`txtodod --dir <workspace>`) instead of the
@@ -65,6 +78,23 @@ impl LaunchConfig {
         self.extra_args = vec!["--dir".to_owned(), workspace.as_ref().display().to_string()];
         self
     }
+}
+
+/// What [`ensure_daemon`] found or did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ensured {
+    /// A daemon already answered on the socket and was left alone.
+    AlreadyLive,
+    /// No daemon answered; one was spawned (or the boot unit's own start was waited on).
+    Spawned,
+    /// A live daemon was older than the client and was restarted with the newer binary
+    /// (task `daemon-auto-upgrade`): the version that ran, and the binary's version now.
+    Upgraded {
+        /// The version file the old daemon left beside its pid.
+        from: String,
+        /// What the spawned binary's `--version` reported.
+        to: String,
+    },
 }
 
 /// Everything that can go wrong ensuring a daemon exists.
@@ -99,8 +129,8 @@ pub use stub::ensure_daemon;
 pub use unix_impl::ensure_daemon;
 
 #[cfg(unix)]
-mod unix_impl {
-    use super::{LaunchConfig, LaunchError};
+pub(crate) mod unix_impl {
+    use super::{Ensured, LaunchConfig, LaunchError};
     use std::fs::{File, OpenOptions};
     use std::io;
     use std::path::{Path, PathBuf};
@@ -115,12 +145,15 @@ mod unix_impl {
     /// `tracing` span here (unlike `apps/desktop`'s own copy) — this crate stays dependency-free
     /// beyond `tokio` so `txtodo-mcp`/`txtodo-tui` (whose `allowedDeps` lists are deliberately
     /// short) can depend on it cheaply; callers that want a span wrap this call themselves.
-    pub async fn ensure_daemon(cfg: &LaunchConfig) -> Result<(), LaunchError> {
+    pub async fn ensure_daemon(cfg: &LaunchConfig) -> Result<Ensured, LaunchError> {
         if probe_live(&cfg.socket).await {
-            return Ok(());
+            return crate::upgrade_unix::upgrade_if_older(cfg).await;
         }
         let _guard = SpawnGuard::acquire(&cfg.socket).await?;
-        if !probe_live(&cfg.socket).await {
+        if probe_live(&cfg.socket).await {
+            return Ok(Ensured::AlreadyLive);
+        }
+        {
             if already_installed_as_service(cfg) {
                 // The boot unit owns this target already (ADR 0025) and should already be
                 // starting on its own via `RunAtLoad`/`WantedBy` — wait for it instead of racing
@@ -136,7 +169,7 @@ mod unix_impl {
                 install_persistent_service_best_effort(cfg);
             }
         }
-        Ok(())
+        Ok(Ensured::Spawned)
     }
 
     /// Whether the boot-time unit owns this target and is up or coming up, so waiting for it beats
@@ -149,7 +182,7 @@ mod unix_impl {
     /// is the device-global default socket (`binary_path::unit_owns_socket` — a caller isolating
     /// itself with `$TXTODO_SOCKET`/`$XDG_DATA_HOME`, or a hermetic harness via `extra_env`, dials a
     /// socket the real unit will never bind).
-    fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
+    pub(crate) fn already_installed_as_service(cfg: &LaunchConfig) -> bool {
         if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return false;
         }
@@ -182,11 +215,11 @@ mod unix_impl {
         rendered.path.exists() && !crate::service::is_stale(&rendered)
     }
 
-    async fn probe_live(sock: &Path) -> bool {
+    pub(crate) async fn probe_live(sock: &Path) -> bool {
         tokio::net::UnixStream::connect(sock).await.is_ok()
     }
 
-    async fn wait_until_live(sock: &Path, timeout: Duration) -> Result<(), LaunchError> {
+    pub(crate) async fn wait_until_live(sock: &Path, timeout: Duration) -> Result<(), LaunchError> {
         let start = Instant::now();
         while !probe_live(sock).await {
             if start.elapsed() >= timeout {
@@ -199,7 +232,7 @@ mod unix_impl {
 
     /// Spawns `txtodod` with a fixed argv (no shell string) and reaps it on a background thread
     /// so it never lingers as a zombie once it exits; the daemon outlives this call.
-    fn spawn_daemon(cfg: &LaunchConfig) -> Result<(), LaunchError> {
+    pub(crate) fn spawn_daemon(cfg: &LaunchConfig) -> Result<(), LaunchError> {
         let program = crate::binary_path::resolve_binary(cfg.daemon_bin.as_ref())
             .unwrap_or_else(|| PathBuf::from("txtodod"));
         let mut command = Command::new(program);
@@ -232,7 +265,7 @@ mod unix_impl {
     /// nothing else ever notices — every previous caller here treated "already installed" as
     /// good enough. `crate::service::is_stale` is checked first so a merely-already-installed,
     /// still-valid unit (the common case) is never force-overwritten.
-    fn install_persistent_service_best_effort(cfg: &LaunchConfig) {
+    pub(crate) fn install_persistent_service_best_effort(cfg: &LaunchConfig) {
         if crate::service_disabled() || !cfg.extra_args.is_empty() || !cfg.extra_env.is_empty() {
             return;
         }
@@ -271,12 +304,12 @@ mod unix_impl {
     /// of the absent-check-then-spawn so two `ensure_daemon` callers (in this process or another)
     /// never both decide to spawn a daemon for the same socket.
     /// Ref: <https://doc.rust-lang.org/std/fs/struct.File.html#method.lock>
-    struct SpawnGuard {
+    pub(crate) struct SpawnGuard {
         _file: File,
     }
 
     impl SpawnGuard {
-        async fn acquire(sock: &Path) -> Result<SpawnGuard, LaunchError> {
+        pub(crate) async fn acquire(sock: &Path) -> Result<SpawnGuard, LaunchError> {
             let dir = sock
                 .parent()
                 .map(Path::to_path_buf)
@@ -382,7 +415,7 @@ mod stub {
     use super::{LaunchConfig, LaunchError};
 
     /// Always fails: no transport is wired up for this platform yet.
-    pub async fn ensure_daemon(_cfg: &LaunchConfig) -> Result<(), LaunchError> {
+    pub async fn ensure_daemon(_cfg: &LaunchConfig) -> Result<super::Ensured, LaunchError> {
         Err(LaunchError::UnsupportedPlatform)
     }
 }
