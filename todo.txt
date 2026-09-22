@@ -1,3 +1,4 @@
+2026-09-22 each client should optimistically upgrade the daemon to the latest versin known to it
 2026-09-21 desktop: start a sub-list on a task with no ref: yet (DetailView shows one only when todo.txt has tasks) +m11 @desktop ref:desktop-sublist-start
 2026-09-20 Default workspace: a managed per-user todo list, created on first run, that syncs across devices whatever the OS path +m11 @daemon @desktop @cli ref:default-workspace — all three decisions made 2026-09-20 (A, A, A), ready to build by:claude
 2026-09-20 Workspace layout: refs default to <root>/tasks; list file and refs folder settable +m11 @daemon @cli @desktop ref:workspace-layout — both decisions made 2026-09-20 (layout in a synced txtodo.toml; no pinning, a one-off script for this machine), ready to build

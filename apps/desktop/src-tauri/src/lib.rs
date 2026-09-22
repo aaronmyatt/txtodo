@@ -63,24 +63,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .setup(|app| {
-            // No explicit workspace: start on the default one (task default-workspace).
-            let start = workspace_override().or_else(|| Some(config::default_workspace_dir()));
-            app.manage(AppState::new(DesktopConfig::with_optional_workspace(start)));
-            quick_add::create_window(app.handle())?;
-            quick_add::register_shortcut(app.handle())?;
-            tray::create_tray(app.handle())?;
-            install_hide_not_quit(app.handle());
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let state = handle.state::<AppState>();
-                if let Err(e) = commands_connect::connect_and_store(&handle, &state).await {
-                    log_startup_connect_failed(&e);
-                    commands::set_status(&handle, &state, status::DaemonStatus::Dead).await;
-                }
-            });
-            Ok(())
-        })
+        .setup(setup)
         .invoke_handler(tauri::generate_handler![
             commands::daemon_status,
             commands::retry_connect,
@@ -131,6 +114,29 @@ pub fn run() {
         eprintln!("desktop: {e}");
         std::process::exit(1);
     }
+}
+
+/// `.setup()` body, pulled out of [`run`] to keep it under clippy's `too_many_lines` budget.
+/// Manages [`AppState`], creates the quick-add window/shortcut and tray, and starts the first
+/// daemon connect in the background.
+/// Ref: https://docs.rs/tauri/2/tauri/struct.Builder.html#method.setup
+fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // No explicit workspace: start on the default one (task default-workspace).
+    let start = workspace_override().or_else(|| Some(config::default_workspace_dir()));
+    app.manage(AppState::new(DesktopConfig::with_optional_workspace(start)));
+    quick_add::create_window(app.handle())?;
+    quick_add::register_shortcut(app.handle())?;
+    tray::create_tray(app.handle())?;
+    install_hide_not_quit(app.handle());
+    let handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        let state = handle.state::<AppState>();
+        if let Err(e) = commands_connect::connect_and_store(&handle, &state).await {
+            log_startup_connect_failed(&e);
+            commands::set_status(&handle, &state, status::DaemonStatus::Dead).await;
+        }
+    });
+    Ok(())
 }
 
 /// The startup daemon-connect attempt (`.setup()`, above) used to discard its `Result` entirely

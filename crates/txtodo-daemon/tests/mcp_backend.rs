@@ -187,7 +187,7 @@ async fn complete_archive_delete_and_history_address_a_sidecar_task_by_id() {
     );
     assert!(mcp.complete(ids[2].clone(), true, None).await.unwrap().done);
     // The explicit full sort still works; here there is nothing left for it to reorder.
-    mcp.archive("todo.txt".into(), None).await.unwrap();
+    mcp.archive(Some("todo.txt".into()), None).await.unwrap();
     let after = mcp.list(ListArgs::default()).await.unwrap();
     assert_eq!(after[2].id.as_deref(), Some(ids[2].as_str()));
     let undone = mcp.complete(ids[2].clone(), false, None).await.unwrap();
@@ -340,7 +340,7 @@ async fn notes_and_the_file_listing_work_under_sidecar() {
             .iter()
             .any(|f| f.path == "todo.txt" && f.kind == "todo")
     );
-    let text = mcp.get_file("todo.txt".into(), None).await.unwrap();
+    let text = mcp.get_file(Some("todo.txt".into()), None).await.unwrap();
     assert_eq!(text, disk(dir.path()));
     assert!(mcp.conflicts_list(None, None).await.unwrap().is_empty());
     assert!(mcp.principal().contains("test-agent"));
