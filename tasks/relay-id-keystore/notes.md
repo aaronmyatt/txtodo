@@ -103,3 +103,16 @@ fresh on every start, and a relay `access.allowlist` entry goes stale each time.
     *unanswered* prompt (the human never responds) is a real hang, not a fast failure — the
     `keyring` crate's calls are blocking with no timeout, and fixing that is a bigger change (a
     timeout wrapper around every keystore read) this session didn't attempt. Flagged, not solved.
+
+## Update (2026-09-23)
+
+- The unanswered-prompt hang is closed: `keystore_timeout.rs` wraps `OsKeyStore` (and its probe)
+  in a 20 s bound on a helper thread. A timed-out call is `KeyStoreError::Backend { reason: "the OS
+  keychain did not answer the read within 20s (a permission prompt nobody answered?)" }`, which
+  already propagates to a loud startup error; a defaulted `auto` whose probe times out takes the
+  existing memory fallback with its warning. The parked thread is leaked on purpose.
+- Lines 1 and 2 (the by-hand macOS checks) are marked `@human`: they touch the real login keychain
+  and need someone at the prompt; every automated test forces the memory keystore.
+- Seen in passing: the desktop Playwright suite on this Mac hit exactly this hang (a rebuilt
+  `txtodod` prompting under a test runner) — `TXTODO_TEST_KEYSTORE_MEMORY=1` in the Playwright env
+  is the workaround; noted in `tasks/desktop-sublist-start/notes.md`.

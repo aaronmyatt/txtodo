@@ -48,6 +48,7 @@ mod identity_fingerprint;
 mod identity_levenshtein;
 mod import;
 mod keystore_setup;
+mod keystore_timeout;
 pub mod lan;
 mod lan_apply;
 mod lan_peers;

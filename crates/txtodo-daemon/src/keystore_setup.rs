@@ -21,6 +21,7 @@ use txtodo_sync::{
     Secret,
 };
 
+use crate::keystore_timeout::{KEYCHAIN_TIMEOUT, TimeoutKeyStore, bounded};
 use crate::workspace_error::WorkspaceError;
 
 /// File name of the encrypted-file keystore backend, under whichever `state_dir`
@@ -62,11 +63,8 @@ pub(crate) fn resolve_key_store(
         }
     };
     match mode {
-        KeyStoreMode::Os => match OsKeyStore::probe(scope) {
-            Ok(()) => Ok((
-                Arc::new(OsKeyStore::new(scope.to_owned())),
-                ResolvedBackend::Os.name(),
-            )),
+        KeyStoreMode::Os => match probe_os(scope) {
+            Ok(()) => Ok((os_key_store(scope), ResolvedBackend::Os.name())),
             Err(reason) => Err(KeyStoreError::Unavailable {
                 backend: "os",
                 reason,
@@ -77,17 +75,31 @@ pub(crate) fn resolve_key_store(
             let store = open_file()?;
             Ok((Arc::new(store), ResolvedBackend::File.name()))
         }
-        KeyStoreMode::Auto => match OsKeyStore::probe(scope) {
-            Ok(()) => Ok((
-                Arc::new(OsKeyStore::new(scope.to_owned())),
-                ResolvedBackend::Os.name(),
-            )),
+        KeyStoreMode::Auto => match probe_os(scope) {
+            Ok(()) => Ok((os_key_store(scope), ResolvedBackend::Os.name())),
             Err(reason) => {
                 on_auto_probe_failure(reason, defaulted)?;
                 Ok((Arc::new(MemoryKeyStore::default()), "memory"))
             }
         },
     }
+}
+
+/// `OsKeyStore::probe`, bounded (task `relay-id-keystore`): an unanswered keychain prompt counts
+/// as "no keychain" after `KEYCHAIN_TIMEOUT` instead of hanging startup forever — an explicit
+/// `os` then fails loud with the reason, a defaulted `auto` falls back with the warning below.
+fn probe_os(scope: &str) -> Result<(), String> {
+    let scope = scope.to_owned();
+    bounded("probe", KEYCHAIN_TIMEOUT, move || OsKeyStore::probe(&scope))?
+}
+
+/// The OS backend behind the same bound, so a later read that prompts again (each keychain item
+/// has its own access list) errors out of startup instead of parking it.
+fn os_key_store(scope: &str) -> Arc<dyn KeyStore + Send + Sync> {
+    Arc::new(TimeoutKeyStore::new(
+        OsKeyStore::new(scope.to_owned()),
+        KEYCHAIN_TIMEOUT,
+    ))
 }
 
 /// The pure half of the defaulted-`auto`-falls-back-to-memory decision (task `relay-id-keystore`),
