@@ -281,3 +281,84 @@ fn a_custom_root_list_is_what_direct_file_mode_edits() {
     );
     assert!(!ws.path().join("todo.txt").exists());
 }
+
+/// Task layout-client-gaps: the history and ref commands read the root list by its layout name,
+/// so under `todo_file = "work.txt"` blame/undo/checkout/sub/conflicts answer about `work.txt`
+/// instead of a silent empty result for a `todo.txt` that does not exist; and daemon mode's
+/// footer names the file the way direct mode does.
+#[test]
+fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    // A tagged line: `blame` reads the task id from the text, which a sidecar workspace never
+    // carries (a pre-existing blame limit, not this test's subject).
+    let ws = tempfile::tempdir().unwrap();
+    std::fs::write(ws.path().join("txtodo.toml"), "todo_file = \"work.txt\"\n").unwrap();
+    std::fs::write(
+        ws.path().join("work.txt"),
+        "plan the launch id:01ARZ3NDEKTSV4RRFFQ69G5FAV\n",
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
+        let out = txtodo(&daemon, ws.path(), args);
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        stdout(&out)
+    };
+
+    let listed = run(&["list"]);
+    assert!(
+        listed.contains("WORK:"),
+        "daemon-mode footer names work.txt: {listed}"
+    );
+    run(&["add", "book the vet"]);
+    assert!(
+        !run(&["blame", "2"]).trim().is_empty(),
+        "blame finds line 2 of work.txt"
+    );
+    assert!(run(&["undo"]).contains("undid 1 op"));
+    let work = std::fs::read_to_string(ws.path().join("work.txt")).unwrap();
+    assert!(
+        !work.contains("book the vet"),
+        "undo reverted the add on work.txt: {work}"
+    );
+    assert!(run(&["checkout", "2099-01-01T00:00", "--stdout"]).contains("plan the launch"));
+    assert!(
+        run(&["conflicts"]).contains("conflict"),
+        "conflicts reads work.txt, not todo.txt"
+    );
+
+    let notes = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(ws.path())
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", ws.path().join("none.toml"))
+        .env("TXTODO_SOCKET", &daemon.socket)
+        .env("EDITOR", "true")
+        .args(["notes", "1"])
+        .output()
+        .unwrap();
+    assert!(notes.status.success());
+    run(&["sub", "1", "add", "second step"]);
+    let on_disk = std::fs::read_to_string(ws.path().join("tasks/plan-the-launch/todo.txt"))
+        .unwrap_or_default();
+    assert!(on_disk.contains("second step"), "{on_disk}");
+    // Under the global daemon the ref dir is a workspace of its own, registered by `sub`'s first
+    // call; its new `todo.txt` is written to disk and adopted by the watcher, so `ls` may lag.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    let mut sub_ls = run(&["sub", "1", "ls"]);
+    while !sub_ls.contains("second step") && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        sub_ls = run(&["sub", "1", "ls"]);
+    }
+    assert!(
+        sub_ls.contains("second step"),
+        "sub ls never adopted the add: {sub_ls}"
+    );
+    assert!(
+        !ws.path().join("todo.txt").exists(),
+        "nothing ever made a todo.txt"
+    );
+}

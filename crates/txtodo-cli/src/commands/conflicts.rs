@@ -6,7 +6,7 @@
 //! tasks/crdt-needs-review/notes.md); "merged" keeps what is in the file and writes nothing.
 
 use crate::client::Daemon;
-use crate::{CliError, json};
+use crate::{CliError, Ctx, json};
 use clap::Subcommand;
 use txtodo_core::{LineKind, parse_file};
 use txtodo_proto::v1 as pb;
@@ -17,9 +17,9 @@ pub enum Action {
     /// Open flags, one block per task: the line, then a unified diff of the two texts.
     #[command(visible_alias = "ls")]
     List {
-        /// Which document (workspace-relative).
-        #[arg(long, default_value = "todo.txt")]
-        file: String,
+        /// Which document (workspace-relative); the workspace's root list by default.
+        #[arg(long)]
+        file: Option<String>,
     },
     /// Keep one side of a conflicted task and clear its flag — both or neither.
     Resolve {
@@ -27,9 +27,9 @@ pub enum Action {
         line: u32,
         /// Which side to keep: this device's text, the peer's, or the file as merged.
         side: Side,
-        /// Which document (workspace-relative).
-        #[arg(long, default_value = "todo.txt")]
-        file: String,
+        /// Which document (workspace-relative); the workspace's root list by default.
+        #[arg(long)]
+        file: Option<String>,
     },
 }
 
@@ -67,11 +67,21 @@ fn wire(side: Side) -> pb::Resolution {
 }
 
 /// Entry: `txtodo conflicts` with no subcommand is `list` (notes: an alias for muscle memory).
-pub fn run(daemon: &mut Daemon, action: Option<&Action>, as_json: bool) -> Result<(), CliError> {
+/// `--file` defaults to the workspace's root list (`Paths::todo_file`, task layout-client-gaps),
+/// the same document every other daemon-mode command reads — not the literal `todo.txt`.
+pub fn run(
+    ctx: &Ctx,
+    daemon: &mut Daemon,
+    action: Option<&Action>,
+    as_json: bool,
+) -> Result<(), CliError> {
+    let root = ctx.paths.todo_file.as_str();
     match action {
-        None => run_list(daemon, "todo.txt", as_json),
-        Some(Action::List { file }) => run_list(daemon, file, as_json),
-        Some(Action::Resolve { line, side, file }) => run_resolve(daemon, *line, *side, file),
+        None => run_list(daemon, root, as_json),
+        Some(Action::List { file }) => run_list(daemon, file.as_deref().unwrap_or(root), as_json),
+        Some(Action::Resolve { line, side, file }) => {
+            run_resolve(daemon, *line, *side, file.as_deref().unwrap_or(root))
+        }
     }
 }
 

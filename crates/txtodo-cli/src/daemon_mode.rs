@@ -17,9 +17,17 @@ use std::path::Path;
 use txtodo_core::{File, LineDiff, LineKind, OwnedLine, diff_lines, parse_file};
 use txtodo_proto::v1::{self as pb, mutation};
 
-/// What the root list is called inside the scratch copy a command runs against; the daemon's own
-/// name for it (`Paths::todo_file`) is only used when talking to the daemon.
-const SCRATCH_DOC: &str = "todo.txt";
+/// What the root list is called inside the scratch copy a command runs against: the daemon's own
+/// file name for it (`work.txt` for a `todo_file = "lists/work.txt"` layout), so the footer and
+/// `move`'s message name the file the same way direct mode does (`list::prefix` reads the stem;
+/// task layout-client-gaps). `doc` is the daemon's workspace-relative path.
+fn scratch_doc(doc: &str) -> String {
+    Path::new(doc)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "todo.txt".to_owned())
+}
 
 /// A document as the daemon held it before the command ran.
 struct Original {
@@ -47,8 +55,9 @@ pub fn run_via_daemon(
     } else {
         (Vec::new(), Vec::new())
     };
+    let scratch_name = scratch_doc(&doc);
     if !bytes.is_empty() {
-        std::fs::write(scratch.path().join(SCRATCH_DOC), &bytes).map_err(CliError::Io)?;
+        std::fs::write(scratch.path().join(&scratch_name), &bytes).map_err(CliError::Io)?;
     }
     let originals = [Original {
         doc,
@@ -61,8 +70,8 @@ pub fn run_via_daemon(
             dir: scratch.path().to_path_buf(),
             default_workspace: false,
             default_dir: ctx.paths.default_dir.clone(),
-            todo: scratch.path().join(SCRATCH_DOC),
-            todo_file: SCRATCH_DOC.to_owned(),
+            todo: scratch.path().join(&scratch_name),
+            todo_file: scratch_name.clone(),
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),
             // Sync is a separate, device-global folder, unrelated to this scratch todo-dir copy —
@@ -94,7 +103,7 @@ fn push_document(
     scratch: &Path,
     original: &Original,
 ) -> Result<(), CliError> {
-    let new = match std::fs::read(scratch.join(SCRATCH_DOC)) {
+    let new = match std::fs::read(scratch.join(scratch_doc(&original.doc))) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(CliError::Io(e)),
@@ -360,6 +369,23 @@ mod tests {
             kinds("a\n", "a\n\n"),
             None,
             "a trailing blank with no delete to pair with"
+        );
+    }
+}
+
+#[cfg(test)]
+mod scratch_name_tests {
+    use super::scratch_doc;
+
+    #[test]
+    fn the_scratch_copy_takes_the_daemon_documents_file_name() {
+        assert_eq!(scratch_doc("todo.txt"), "todo.txt");
+        assert_eq!(scratch_doc("work.txt"), "work.txt");
+        assert_eq!(scratch_doc("lists/work.txt"), "work.txt");
+        assert_eq!(
+            scratch_doc(""),
+            "todo.txt",
+            "an empty path keeps the old name"
         );
     }
 }

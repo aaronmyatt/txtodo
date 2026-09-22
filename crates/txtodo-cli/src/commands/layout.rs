@@ -16,7 +16,9 @@ pub struct Change<'a> {
 
 /// `workspace layout [--refs-dir P] [--todo-file P] [--move]`.
 pub fn run(daemon: &mut Daemon, change: Change<'_>, as_json: bool) -> Result<(), CliError> {
-    let set = change.refs_dir.is_some() || change.todo_file.is_some();
+    // `--move` alone is a change too (task layout-client-gaps): the daemon only reads `move_dirs`
+    // inside `set`, so without this a bare `--move` printed the layout and moved nothing.
+    let set = change.refs_dir.is_some() || change.todo_file.is_some() || change.move_dirs;
     let info = daemon.workspace_layout(pb::WorkspaceLayoutRequest {
         set,
         refs_dir: change.refs_dir.unwrap_or_default().to_owned(),
@@ -49,13 +51,22 @@ pub fn run(daemon: &mut Daemon, change: Change<'_>, as_json: bool) -> Result<(),
     Ok(())
 }
 
-/// The default workspace's directory and the layout, as `doctor` rows; never a FAIL.
+/// The default workspace's directory and the layout, as `doctor` rows; never a FAIL. A daemon
+/// that cannot answer the layout call gets a WARN row naming the error (task layout-client-gaps)
+/// rather than no row at all, which used to read as "no daemon".
 pub fn doctor_checks(ctx: &Ctx, daemon: Option<&mut Daemon>) -> Vec<Check> {
     let mut checks = vec![default_workspace_check(ctx)];
-    if let Some(Ok(info)) =
-        daemon.map(|d| d.workspace_layout(pb::WorkspaceLayoutRequest::default()))
-    {
-        checks.push(layout_check(&info));
+    match daemon.map(|d| d.workspace_layout(pb::WorkspaceLayoutRequest::default())) {
+        Some(Ok(info)) => checks.push(layout_check(&info)),
+        Some(Err(e)) => checks.push(check(
+            "layout",
+            Status::Warn,
+            format!(
+                "the daemon could not answer the layout call ({e}); clients fall back to \
+                 todo.txt and tasks/ meanwhile — an older daemon? `txtodo daemon install --force`"
+            ),
+        )),
+        None => {}
     }
     checks
 }

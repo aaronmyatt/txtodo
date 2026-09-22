@@ -35,7 +35,8 @@ pub enum Action {
         /// list). Omitted keeps the current one.
         #[arg(long)]
         refs_dir: Option<String>,
-        /// The root list's path. Only `todo.txt` is supported today.
+        /// The root list's path, relative to the workspace (e.g. `work.txt`); the daemon creates
+        /// it when missing. Omitted keeps the current one.
         #[arg(long)]
         todo_file: Option<String>,
         /// Move the ref dirs to the new place instead of refusing.

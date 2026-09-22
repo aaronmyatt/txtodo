@@ -249,7 +249,7 @@ fn dispatch_daemon_inner(
             commands::history::run_checkout(daemon, at, file, *stdout)
         }
         Command::Conflicts { action } => {
-            commands::conflicts::run(daemon, action.as_ref(), ctx.json)
+            commands::conflicts::run(ctx, daemon, action.as_ref(), ctx.json)
         }
         Command::Pair { code } => commands::pair::run(ctx, daemon, code.as_deref()),
         Command::Open { item } => commands::refdir::run_open(ctx, daemon, item),
