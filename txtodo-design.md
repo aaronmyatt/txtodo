@@ -147,7 +147,7 @@ Nothing else. Attribution ("which agent added this"), history, and sync state li
 
 A task that needs more than one line gets a directory, not a richer line.
 
-- `ref:<slug>` names a directory beside the file containing the line (`~/todo/todo.txt` + `ref:q4-roadmap` → `~/todo/q4-roadmap/`). Slug: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, no traversal.
+- `ref:<slug>` names a directory. For a line in the workspace's root list it lives in the workspace's refs folder — `refs_dir` in `<root>/txtodo.toml`, default `tasks` (`~/todo/todo.txt` + `ref:q4-roadmap` → `~/todo/tasks/q4-roadmap/`; `refs_dir = "."` puts it beside the list, ADR 0012's original placement). For a line in any other list it sits beside that list, so nesting follows naturally. The root list itself is `todo_file` in the same `txtodo.toml`, default `todo.txt` (ADR 0030). Slug: `[a-z0-9][a-z0-9._-]*`, max 64 chars, no `/`, no traversal.
 - The directory may hold `todo.txt` and `notes.md`. All optional; the sub-list is a full todo.txt file, so it highlights, archives, syncs and nests exactly like the top level.
 - Creation is lazy: the tag is added and the directory created on the first keystroke into either notes or sub-list. Slug defaults to kebab-case of the description; collisions get `-2`, `-3`.
 - Progress on the parent line = open/total across `<ref>/todo.txt`. Completing the parent is never automatic; the UI offers it when nothing is open.

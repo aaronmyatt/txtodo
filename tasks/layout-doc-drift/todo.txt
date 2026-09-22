@@ -1,4 +1,4 @@
-2026-09-21 txtodo-design.md 2.6 still puts ref dirs beside the file
-2026-09-21 README: the no --dir fallback, txtodo.toml, and the workspace command table
-2026-09-21 CLAUDE.md 3.2 contradicts the skill on archiving, and skill install cannot refresh it
-2026-09-21 Correct the closed workspace-layout lines that say the daemon refuses any other todo_file
+x 2026-09-23 2026-09-21 txtodo-design.md 2.6 still puts ref dirs beside the file — §2.6 now states refs_dir/todo_file and both layouts
+x 2026-09-23 2026-09-21 README: the no --dir fallback, txtodo.toml, and the workspace command table — README: the workspace-or-default fallback, a txtodo.toml section, workspace layout/default/prune and offers/accept/decline rows
+x 2026-09-23 2026-09-21 CLAUDE.md 3.2 contradicts the skill on archiving, and skill install cannot refresh it — CLAUDE.md is now the txtodo:skill block rendered from skills/txtodo-backlog.md; txtodo skill install gained --only claude-md (and installs it by default)
+x 2026-09-23 2026-09-21 Correct the closed workspace-layout lines that say the daemon refuses any other todo_file — both closed lines carry a dated correction

@@ -44,3 +44,11 @@ The `--todo-file` clap help says the same false thing; that one is filed under
 
 Not proposing a docs rewrite. Each bullet is a specific stale sentence with a file:line — fix those
 and stop.
+
+## As built (2026-09-23)
+
+All four stale sentences fixed where the notes pointed. CLAUDE.md is no longer a hand copy: it is
+the marked block `txtodo skill install --only claude-md` writes (a third target, on by default), so
+it cannot drift from `skills/txtodo-backlog.md` again unless someone edits it by hand. The
+installed `~/.claude/skills/.../SKILL.md` on this machine still holds the older wording until
+`txtodo skill install` is run again.

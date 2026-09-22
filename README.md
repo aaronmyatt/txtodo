@@ -27,7 +27,7 @@ cargo build --workspace --release
 txtodo [--dir DIR] [--sync-dir DIR] [--relay URL] [--json] [--no-id] [-A|--no-archive] [--no-daemon] <COMMAND>
 ```
 
-- `--dir DIR` — todo directory for this run (overrides `$TXTODO_TODO_DIR` and config `todo_dir`).
+- `--dir DIR` — todo directory for this run (overrides `$TXTODO_TODO_DIR` and config `todo_dir`). With none of those, the current folder is used when it is a workspace (it holds `.txtodo/`, `txtodo.toml` or `todo.txt`, or sits under one that does), else your default workspace (`txtodo workspace default` prints it) — and the command says so.
 - `--sync-dir DIR` — file-carrier sync folder (overrides `$TXTODO_SYNC_DIR` and config `sync_dir`).
 - `--relay URL` — relay URL (overrides `$TXTODO_RELAY_URL` and config `relay_url`).
 - `--json` — one JSON object per line on listing commands.
@@ -84,7 +84,8 @@ These need a running `txtodo daemon` for this workspace.
 | `sub ITEM# CMD...` | Run CMD with its directory scoped to a line's `ref:` sub-list. |
 | `prune --orphans [--yes]` | List `ref:` directories no line points to; delete only with `--yes`. |
 | `bundle export\|import` | Move the whole workspace as one encrypted file (sneakernet carrier). |
-| `workspace [list\|add\|remove ID]` | Manage the device-global daemon's workspace registry. |
+| `workspace [list\|add\|remove ID\|layout\|default\|prune]` | Manage the device-global daemon's workspace registry; `layout` shows or sets this workspace's `txtodo.toml`, `default` prints the default workspace's path, `prune` drops registrations whose folder is gone. |
+| `workspace offers\|accept ID --dir DIR\|decline ID` | Workspaces a paired device offered: list them, adopt one into a folder, or drop the offer. |
 
 ### Service and diagnostics
 
@@ -98,7 +99,16 @@ These need a running `txtodo daemon` for this workspace.
 
 ## Configuration
 
-Resolved in this order: `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > current directory.
+Resolved in this order: `--dir` > `$TXTODO_TODO_DIR` > config `todo_dir` > the current folder when it is a workspace > your default workspace (ADR 0029). Inside a workspace, a sub-folder resolves to the workspace above it.
+
+Per workspace, `<root>/txtodo.toml` (ADR 0030) names the root list and where `ref:` folders go; both default and both optional:
+
+```toml
+todo_file = "todo.txt"   # any workspace-relative file name; nested lists stay todo.txt
+refs_dir = "tasks"       # "." keeps ref folders beside the list
+```
+
+`txtodo workspace layout --refs-dir DIR --todo-file FILE [--move]` writes it for you and refuses a change while ref folders still sit in the old place (`--move` moves them).
 
 Config file: `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME`/`%APPDATA%`/`~/.config`, then
 `txtodo/config.toml`:
