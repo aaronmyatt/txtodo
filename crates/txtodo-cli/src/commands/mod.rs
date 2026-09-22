@@ -23,3 +23,4 @@ pub mod service;
 pub mod skill;
 pub mod text;
 pub mod workspace;
+pub mod workspace_offers;

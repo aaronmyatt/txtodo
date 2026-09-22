@@ -1,4 +1,4 @@
-(A) 2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli
+(A) 2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli @doing by:claude
 (A) 2026-09-21 remote workspace auto-mirror + remote flag across clients +m11 @daemon @cli @tui @desktop ref:remote-workspace-mirror
 (A) 2026-09-22 daemon/sync: push-on-commit live sync over one long-lived peer link +m11 @daemon @sync ref:sync-live-push
 2026-09-22 each client should optimistically upgrade the daemon to the latest versin known to it

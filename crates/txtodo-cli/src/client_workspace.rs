@@ -68,3 +68,58 @@ impl Daemon {
         result
     }
 }
+
+/// Workspace offer RPCs (task `workspace-offer-cli`): the pending offers a paired peer sent this
+/// device, and accepting or declining one. Registry-level like the three above — no selector.
+impl Daemon {
+    /// Every workspace a peer offered that this device has not yet accepted or declined.
+    pub fn workspace_pending_offers(
+        &mut self,
+    ) -> Result<Vec<pb::PendingWorkspaceOffer>, ClientError> {
+        let rep = self
+            .rt
+            .block_on(
+                self.client
+                    .workspace_pending_offers(pb::WorkspacePendingOffersRequest {}),
+            )
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner().offers)
+    }
+
+    /// Adopts a pending offer's workspace id into the registry at `local_dir`. The daemon
+    /// canonicalizes the path and consumes the offer whether or not the adopt succeeds.
+    pub fn workspace_accept_offer(
+        &mut self,
+        offering_device: &str,
+        workspace_id: &str,
+        local_dir: &str,
+    ) -> Result<pb::WorkspaceInfo, ClientError> {
+        let req = pb::WorkspaceAcceptOfferRequest {
+            offering_device: offering_device.to_owned(),
+            workspace_id: workspace_id.to_owned(),
+            local_dir: local_dir.to_owned(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_accept_offer(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
+    /// Discards a pending offer; `false` when there was no such offer.
+    pub fn workspace_decline_offer(
+        &mut self,
+        offering_device: &str,
+        workspace_id: &str,
+    ) -> Result<bool, ClientError> {
+        let req = pb::WorkspaceDeclineOfferRequest {
+            offering_device: offering_device.to_owned(),
+            workspace_id: workspace_id.to_owned(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_decline_offer(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner().declined)
+    }
+}

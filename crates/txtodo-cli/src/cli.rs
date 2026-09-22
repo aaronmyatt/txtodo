@@ -280,7 +280,7 @@ pub enum Command {
         action: bundle::Action,
     },
     /// Manages the device-global daemon's workspace registry (ADR 0025): `list` (default),
-    /// `add [DIR]`, `remove <id>`.
+    /// `add [DIR]`, `remove <id>`; and a peer's workspace offers: `offers`, `accept`, `decline`.
     Workspace {
         #[command(subcommand)]
         action: Option<commands::workspace::Action>,

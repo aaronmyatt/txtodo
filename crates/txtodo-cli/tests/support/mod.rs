@@ -57,3 +57,5 @@ pub fn txtodod_binary() -> PathBuf {
 fn is_built(bin: &Path) -> bool {
     bin.metadata().is_ok_and(|m| m.len() > 0)
 }
+
+pub mod global_daemon;

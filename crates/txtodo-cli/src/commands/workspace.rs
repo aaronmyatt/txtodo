@@ -1,5 +1,6 @@
 //! `txtodo workspace add|remove|list` (ADR 0025, task `cli-workspace-commands`): manages the
-//! device-global daemon's workspace registry. Needs the true global daemon — a legacy
+//! device-global daemon's workspace registry. `offers|accept|decline` (task
+//! `workspace-offer-cli`) live in `workspace_offers.rs`; only their clap variants are here. Needs the true global daemon — a legacy
 //! `--dir`-bridge daemon has no registry to answer these with (`Daemon::workspace_add`/etc.
 //! return an `Unimplemented` `ClientError::Rpc` against one, surfaced as a normal error).
 
@@ -41,6 +42,29 @@ pub enum Action {
         #[arg(long = "move")]
         move_dirs: bool,
     },
+    /// Workspaces a paired peer offered this device, not yet accepted or declined: one row per
+    /// offer, workspace id first.
+    Offers,
+    /// Adopts a pending offer at `--dir`: same workspace id as the peer, so the two sync as one
+    /// workspace. `--from` picks the device when several peers offer the same id.
+    Accept {
+        /// The offered workspace's id (ULID text, from `workspace offers`).
+        id: String,
+        /// The local directory to adopt it into (required until a default location exists).
+        #[arg(long)]
+        dir: String,
+        /// The offering device's id, when more than one device offers this workspace.
+        #[arg(long)]
+        from: Option<String>,
+    },
+    /// Discards a pending offer.
+    Decline {
+        /// The offered workspace's id (ULID text, from `workspace offers`).
+        id: String,
+        /// The offering device's id, when more than one device offers this workspace.
+        #[arg(long)]
+        from: Option<String>,
+    },
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
     Default,
@@ -66,6 +90,13 @@ pub fn run(
         Some(Action::Add { dir }) => run_add(ctx, daemon, dir.as_deref(), as_json),
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
+        Some(Action::Offers) => super::workspace_offers::run_offers(daemon, as_json),
+        Some(Action::Accept { id, dir, from }) => {
+            super::workspace_offers::run_accept(daemon, id, from.as_deref(), dir, as_json)
+        }
+        Some(Action::Decline { id, from }) => {
+            super::workspace_offers::run_decline(daemon, id, from.as_deref(), as_json)
+        }
         Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
         Some(Action::Layout {
             refs_dir,
