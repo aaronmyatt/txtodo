@@ -34,3 +34,19 @@ document (`walker::is_notes_document` → `Ok(false)`, no actor). Consequences:
 - Concurrent-edit conflict story for notes.md: does it get the same `needs_review` line-level
   flag `todo.txt` uses, or does whole-document `EditNotes` need its own conflict model (two
   concurrent full-text edits don't line up the way two line edits do)?
+
+## As built (2026-09-23)
+
+- Decided: no `FileActor` for notes; the existing `NotesActor` gained the two missing behaviours.
+  `open` reconciles disk against the stored projection (or, right after pairing, the shipped
+  mirror's text) and commits the difference as one `NotesEdit` op from `Principal::External`, so
+  a hand-written notes.md has something for a peer's `Want`. `import_ops` applies a peer's
+  `NotesEdit` batch like `FileActor::on_sync_ops` (state, store, disk, mirror; all or nothing).
+- `Workspace::register_discovered` opens every discovered notes.md so the seed happens at daemon
+  start; a notes file that will not open is logged, never fatal to the workspace.
+- `lan_apply::commit_notes_file` is the receiving side; the directory is made first.
+- Proven by `tests/nested_ref_sync.rs` (root and nested notes.md converge over real LAN).
+- Open: the conflict story. Two concurrent whole-document edits merge char-wise through the
+  mirror on the `import_updates` path, but the LAN op path applies edits in arrival order with
+  no `needs_review` flag; a hand edit on disk while the daemon runs is still not watched (no
+  notes watcher, as before).

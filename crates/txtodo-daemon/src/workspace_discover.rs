@@ -41,10 +41,25 @@ impl Workspace {
         for rel in found {
             let abs = dir.join(rel.as_str());
             let path = walker::relative(self.root(), &abs)?;
+            if walker::is_notes_document(crate::workspace_mint::basename(&path)) {
+                self.seed_notes(&path);
+                continue;
+            }
             if self.register(path)? {
                 started += 1;
             }
         }
         Ok(started)
+    }
+
+    /// Opens a discovered `notes.md`'s actor now rather than on its first `GetNotes` (task
+    /// notes-sync): `NotesActor::open` commits a seed op for bytes the store has never seen, and
+    /// without that a hand-written notes.md has nothing for a peer to fetch. Never fatal: a
+    /// notes file that will not open (too large, unreadable) is logged and left for `GetNotes`
+    /// to report; it must not stop the workspace from opening.
+    fn seed_notes(&self, path: &FilePath) {
+        if let Err(e) = self.notes_actor(path) {
+            tracing::warn!(file = %path, error = %e, "notes_seed_failed");
+        }
     }
 }

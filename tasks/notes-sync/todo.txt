@@ -1,3 +1,3 @@
-2026-09-21 daemon: wire NotesActor into Workspace::register/recovery so an on-disk notes.md is seeded at daemon startup +m11 @daemon
-2026-09-21 daemon: lan_apply resolves a notes path via get_or_create_actor instead of silently dropping the op +m11 @daemon @sync
-2026-09-21 test: extend nested_ref_sync (or a new test) asserting notes.md converges across two daemons, root and nested +m11 @daemon @test
+x 2026-09-23 2026-09-21 daemon: wire NotesActor into Workspace::register/recovery so an on-disk notes.md is seeded at daemon startup +m11 @daemon — NotesActor::open now seeds one NotesEdit op (Principal::External) for disk bytes the store has not seen, baselined on the projection or a pairing-shipped mirror; register_discovered opens every notes.md at startup, never fatally
+x 2026-09-23 2026-09-21 daemon: lan_apply resolves a notes path via get_or_create_actor instead of silently dropping the op +m11 @daemon @sync — lan_apply::commit_notes_file routes a NotesEdit batch through NotesActor::import_ops (whole batch or nothing), making the parent dir first
+x 2026-09-23 2026-09-21 test: extend nested_ref_sync (or a new test) asserting notes.md converges across two daemons, root and nested +m11 @daemon @test — nested_ref_sync now asserts notes.md at the root and in child/ converge; unit tests in notes_actor.rs cover the seed-once and import paths

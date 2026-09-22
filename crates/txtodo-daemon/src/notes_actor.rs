@@ -51,36 +51,44 @@ pub struct NotesActor {
 }
 
 impl NotesActor {
-    /// Opens the document: trusts the store's projection when its hash matches what is on disk
-    /// (ours), otherwise adopts whatever is on disk (a foreign edit, or the very first open) —
-    /// the notes analogue of `FileActor::open`'s recovery, simplified because no watcher replays
-    /// external edits onto this actor (see the module doc). The Loro mirror is restored from its
-    /// last persisted snapshot plus the ops since, so lineage survives a restart (design §4.4);
-    /// with no snapshot yet it hydrates fresh, a new lineage, same as `Mirror::from_state`'s case.
+    /// Opens the document from what the store already holds — its projection, or, right after
+    /// pairing shipped a mirror snapshot and no projection yet, the mirror's own text — then
+    /// reconciles what is on disk against that the way `FileActor::recover` does for `todo.txt`
+    /// (task notes-sync): bytes that differ (a file written by hand, an older build, or the very
+    /// first open of a non-empty file) are committed as one `NotesEdit` op from this device, so
+    /// a peer's `Want` can fetch them. Before this, `open` adopted foreign bytes into `state` with
+    /// no op, and a hand-written notes.md never synced. The Loro mirror is restored from its last
+    /// persisted snapshot plus the ops since, so lineage survives a restart (design §4.4); with
+    /// no snapshot yet it hydrates fresh, a new lineage, same as `Mirror::from_state`'s case.
     pub fn open(
         cfg: NotesActorConfig,
         store: SharedStore,
         clock: Arc<dyn Clock>,
     ) -> Result<NotesActor, ActorError> {
         let disk_bytes = std::fs::read(&cfg.disk).unwrap_or_default();
-        let (state_bytes, mirror_snapshot) = {
+        let (projection, mirror_snapshot) = {
             let guard = store.lock().unwrap_or_else(PoisonError::into_inner);
-            let projection = guard.get_projection(&cfg.path)?;
-            let state_bytes = match &projection {
-                Some(p) if hash_of(&disk_bytes) == p.hash => p.bytes.clone(),
-                _ => disk_bytes,
-            };
-            (state_bytes, guard.get_mirror(&cfg.path)?)
+            let projection = guard.get_projection(&cfg.path)?.map(|p| p.bytes);
+            (projection, guard.get_mirror(&cfg.path)?)
+        };
+        let peer = loro_peer(cfg.device);
+        let (mirror, state_bytes) = match mirror_snapshot {
+            Some((snap, since)) => {
+                let mirror = Self::restore_mirror(&store, &cfg.path, &snap, since, peer)?;
+                let bytes = projection.unwrap_or_else(|| mirror.text().into_bytes());
+                (mirror, bytes)
+            }
+            None => {
+                let bytes = projection.unwrap_or_default();
+                let state = NotesState::from_bytes(cfg.path.clone(), &bytes)?;
+                let mirror = NotesMirror::from_state(&state, peer).map_err(mirror_err)?;
+                (mirror, bytes)
+            }
         };
         let state = NotesState::from_bytes(cfg.path.clone(), &state_bytes)?;
         let bytes = state.to_bytes();
         let hash = hash_of(&bytes);
-        let peer = loro_peer(cfg.device);
-        let mirror = match mirror_snapshot {
-            Some((snap, since)) => Self::restore_mirror(&store, &cfg.path, &snap, since, peer)?,
-            None => NotesMirror::from_state(&state, peer).map_err(mirror_err)?,
-        };
-        Ok(NotesActor {
+        let mut actor = NotesActor {
             hlc: Hlc::zero(cfg.device),
             state,
             mirror,
@@ -89,7 +97,13 @@ impl NotesActor {
             cfg,
             store,
             clock,
-        })
+        };
+        if hash_of(&disk_bytes) != actor.hash {
+            let device = actor.cfg.device;
+            let disk_text = String::from_utf8_lossy(&disk_bytes).into_owned();
+            actor.edit(&disk_text, Principal::External { device })?;
+        }
+        Ok(actor)
     }
 
     /// The persisted mirror plus the ops committed since it was taken (bounded paging, same shape
@@ -172,6 +186,21 @@ impl NotesActor {
             hash: self.hash,
             hlc,
         })
+    }
+
+    /// Applies a peer's `NotesEdit` ops (task notes-sync), in the order they arrived, the way
+    /// `FileActor::on_sync_ops` applies a peer's task ops: the batch commits whole or not at all,
+    /// and the merged text lands in the store, on disk and in the Loro mirror. Ops for another
+    /// path are refused by `NotesState::apply`.
+    pub fn import_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
+        if ops.is_empty() {
+            return Ok(());
+        }
+        let mut next = self.state.clone();
+        for op in &ops {
+            next.apply(op)?;
+        }
+        self.commit(ops, next)
     }
 
     /// The mirror's version, for a peer to export updates since.
@@ -272,4 +301,92 @@ impl NotesActor {
 
 fn mirror_err(e: crate::notes_mirror::NotesMirrorError) -> ActorError {
     ActorError::Mirror(e.to_string())
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use super::*;
+    use crate::clock::FakeClock;
+    use std::sync::Mutex;
+    use txtodo_model::Ulid;
+    use txtodo_store::Store;
+
+    fn setup(dir: &std::path::Path, n: u128) -> (SharedStore, Arc<dyn Clock>, NotesActorConfig) {
+        let store: SharedStore = Arc::new(Mutex::new(
+            Store::open(&dir.join(format!("oplog-{n}.db"))).unwrap_or_else(|e| panic!("{e}")),
+        ));
+        let clock: Arc<dyn Clock> = Arc::new(FakeClock::new(1_000 + n as u64));
+        let cfg = NotesActorConfig {
+            path: FilePath::new("tasks/abc/notes.md").unwrap_or_else(|e| panic!("{e}")),
+            disk: dir.join(format!("dev{n}/tasks/abc/notes.md")),
+            device: DeviceId::new(Ulid::from_u128(n)),
+        };
+        std::fs::create_dir_all(cfg.disk.parent().unwrap_or(dir)).unwrap_or_else(|e| panic!("{e}"));
+        (store, clock, cfg)
+    }
+
+    fn ops_for(store: &SharedStore, path: &FilePath) -> Vec<Op> {
+        let guard = store.lock().unwrap_or_else(PoisonError::into_inner);
+        guard
+            .for_file(path, Seq(0))
+            .unwrap_or_else(|e| panic!("{e}"))
+            .into_iter()
+            .map(|s| s.op)
+            .collect()
+    }
+
+    #[test]
+    fn a_hand_written_notes_md_is_seeded_as_one_op_on_open_and_only_once() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let (store, clock, cfg) = setup(dir.path(), 1);
+        std::fs::write(&cfg.disk, "# Written by hand\n").unwrap_or_else(|e| panic!("{e}"));
+        let actor = NotesActor::open(cfg.clone(), Arc::clone(&store), Arc::clone(&clock))
+            .unwrap_or_else(|e| panic!("open: {e}"));
+        assert_eq!(actor.contents().0, b"# Written by hand\n");
+        let ops = ops_for(&store, &cfg.path);
+        assert_eq!(ops.len(), 1, "one seed op for the peer to fetch");
+        assert!(matches!(ops[0].principal, Principal::External { .. }));
+        drop(actor);
+        // A reopen with the file unchanged mints nothing more.
+        let _again = NotesActor::open(cfg.clone(), Arc::clone(&store), clock)
+            .unwrap_or_else(|e| panic!("reopen: {e}"));
+        assert_eq!(ops_for(&store, &cfg.path).len(), 1);
+    }
+
+    #[test]
+    fn a_peers_ops_import_into_a_fresh_actor_and_land_on_disk() {
+        let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+        let (store_a, clock_a, cfg_a) = setup(dir.path(), 1);
+        let mut a = NotesActor::open(cfg_a.clone(), Arc::clone(&store_a), clock_a)
+            .unwrap_or_else(|e| panic!("{e}"));
+        a.edit(
+            "first\n",
+            Principal::User {
+                device: cfg_a.device,
+            },
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        a.edit(
+            "first\nsecond\n",
+            Principal::User {
+                device: cfg_a.device,
+            },
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let ops = ops_for(&store_a, &cfg_a.path);
+        assert_eq!(ops.len(), 2);
+
+        let (store_b, clock_b, cfg_b) = setup(dir.path(), 2);
+        let mut b = NotesActor::open(cfg_b.clone(), Arc::clone(&store_b), clock_b)
+            .unwrap_or_else(|e| panic!("{e}"));
+        b.import_ops(ops).unwrap_or_else(|e| panic!("import: {e}"));
+        assert_eq!(b.contents().0, b"first\nsecond\n");
+        let on_disk = std::fs::read_to_string(&cfg_b.disk).unwrap_or_default();
+        assert_eq!(on_disk, "first\nsecond\n");
+        assert_eq!(
+            ops_for(&store_b, &cfg_b.path).len(),
+            2,
+            "the batch is in b's log too"
+        );
+    }
 }

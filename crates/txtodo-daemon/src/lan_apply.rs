@@ -133,6 +133,9 @@ fn group_ops_by_file(ops: Vec<Op>) -> BTreeMap<FilePath, Vec<Op>> {
 }
 
 fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<Op>) -> bool {
+    if crate::walker::is_notes_document(crate::workspace_mint::basename(&path)) {
+        return commit_notes_file(ws, &path, ops);
+    }
     let Some(handle) = get_or_create_actor(ws, &path) else {
         return false;
     };
@@ -140,6 +143,31 @@ fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<O
         Ok(()) => true,
         Err(e) => {
             log_refused(&path, &e);
+            false
+        }
+    }
+}
+
+/// A peer's `NotesEdit` ops for one `notes.md` (task notes-sync): the directory is made if this
+/// device has never seen it (a nested ref arriving fresh), the notes actor is opened (seeding
+/// any bytes already on disk first) and the batch lands through `NotesActor::import_ops`. Used
+/// to be dropped silently: `Workspace::register` never builds a `FileActor` for a notes path.
+fn commit_notes_file(ws: &SharedWorkspace, path: &FilePath, ops: Vec<Op>) -> bool {
+    if !ensure_parent_dir(ws, path) {
+        return false;
+    }
+    let cell = match read(ws).notes_actor(path) {
+        Ok(cell) => cell,
+        Err(e) => {
+            log_refused(path, &e);
+            return false;
+        }
+    };
+    let mut actor = cell.lock().unwrap_or_else(PoisonError::into_inner);
+    match actor.import_ops(ops) {
+        Ok(()) => true,
+        Err(e) => {
+            log_refused(path, &e);
             false
         }
     }

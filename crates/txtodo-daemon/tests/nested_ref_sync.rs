@@ -11,26 +11,13 @@
 //! `notes.md`) → `child/grandchild/` (`todo.txt`). Copied inline rather than shared
 //! (constitution §7, and the task notes' own "do not create a shared fixture module").
 //!
-//! **`notes.md` is deliberately excluded from the convergence assertions — a real, pre-existing gap,
-//! not this test cutting a corner.** Two independent reasons, traced while writing this test:
-//! 1. A `notes.md` written directly to disk (as this fixture does, and as any tool other than
-//!    txtodo's own `EditNotes` RPC would) never becomes an `Op` at all — `NotesActor`/
-//!    `NotesRegistry` are opened lazily, only on a `GetNotes`/`EditNotes` call
-//!    (`crates/txtodo-daemon/src/notes_registry.rs`), and nothing at startup diffs a pre-existing
-//!    on-disk `notes.md` into a seed op the way `FileActor::recover` does for `todo.txt`.
-//!    Device A itself has nothing to transmit for it, regardless of LAN sync.
-//! 2. Even if it did: `Workspace::register()` (`crates/txtodo-daemon/src/workspace.rs`) refuses to
-//!    build an actor for a notes document, returning `Ok(false)` with no error — so
-//!    `lan_apply.rs`'s `get_or_create_actor`, called for an incoming op routed to a `notes.md` path
-//!    on a fresh receiving device, would find no actor after a successful-looking `register()` call
-//!    and silently drop that op's commit (no warning logged; the peer would just never see an ack).
-//!
-//! `child/notes.md` is still included in the on-disk fixture (matching the task notes' shape and
-//! proving the walk itself does not choke on it — `walker::is_notes_document` still means the file
-//! at least gets *seen*), but this test does not assert it reaches device B: asserting either
-//! outcome ("it converges" or "it never will") would misrepresent an unfixed gap as this test's own
-//! finding. Flagged to the human as a real, separate gap in the notes-sync pipeline, unrelated to
-//! `sync-lan-transport`'s own wiring.
+//! **`notes.md` converges too, root and nested (task notes-sync, 2026-09-23).** It used to be
+//! excluded from the assertions for two real gaps, both closed by that task: a notes.md written
+//! straight to disk never became an op (`NotesActor::open` now commits a seed `NotesEdit` for
+//! bytes the store has not seen, and `Workspace::register_discovered` opens every discovered
+//! notes.md at startup instead of waiting for a `GetNotes`), and a receiving device dropped an
+//! incoming notes op because `Workspace::register` builds no `FileActor` for a notes path
+//! (`lan_apply.rs::commit_notes_file` now routes it through the notes actor's `import_ops`).
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stderr)]
 #![cfg(unix)]
 
@@ -74,6 +61,11 @@ fn nested_ref_fixture() -> Vec<(&'static str, String)> {
                 task_id(2),
                 task_id(3)
             ),
+        ),
+        (
+            "notes.md",
+            "# Root notes\n\nAlso written straight to disk (task notes-sync: root and nested).\n"
+                .to_owned(),
         ),
         (
             "child/notes.md",
@@ -135,9 +127,10 @@ async fn fresh_device_reproduces_the_whole_nested_ref_tree() {
 
     // What A actually holds on disk after adoption — not the literal input strings — is the truth
     // B is compared against, same reasoning `wait_for_convergence` uses elsewhere in this crate.
+    // `notes.md` included, root and nested (task notes-sync): the seed op `NotesActor::open`
+    // mints for a hand-written file is what makes them converge like every `todo.txt`.
     let want: Vec<(&str, String)> = fixture
         .iter()
-        .filter(|(path, _)| *path != "child/notes.md")
         .map(|(path, _)| (*path, a.disk_file(path)))
         .collect();
 
