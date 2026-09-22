@@ -18,7 +18,7 @@ use crate::daemon::{
     Daemon, DaemonError, MAX_RECONNECT_ATTEMPTS, global_socket_path, workspace_selector,
 };
 use crate::input::Input;
-use crate::state::{AppState, PeerStatus, SyncSnapshot};
+use crate::state::AppState;
 use crate::ui::screen::draw;
 
 /// How often the `s` indicator refreshes from a real `SyncStatus` call (`ui/sync.rs`'s own
@@ -229,8 +229,14 @@ async fn handle_watch_message(
     reconnects: &mut u32,
 ) -> Result<(), DaemonError> {
     if let Ok(Some(change)) = change {
+        let layout_changed = crate::app_layout::is_layout_change(&change);
         apply_change(state, change);
         *reconnects = 0;
+        if layout_changed
+            && let Some(fresh) = crate::app_layout::follow_root_list(daemon, state).await?
+        {
+            *watch = fresh;
+        }
     } else {
         log_watch_dropped();
         *watch = reconnect_watch(daemon, state, reconnects).await?;
@@ -373,29 +379,5 @@ fn to_conflict_item(flag: pb::ReviewFlag) -> crate::state::ConflictItem {
         line_number: flag.line_number,
         mine: flag.mine,
         theirs: flag.theirs,
-    }
-}
-
-/// Refreshes `state.sync` from a real `SyncStatus` call. Best-effort: a failed call (transient
-/// daemon hiccup) leaves the previous snapshot in place rather than erroring the whole event
-/// loop — the same "colours are never the only signal" spirit as `ui/sync.rs` itself, just applied
-/// to a stale-but-present reading instead of a missing one.
-pub(crate) async fn refresh_sync_status(daemon: &mut Daemon, state: &mut AppState) {
-    if let Ok(resp) = daemon.sync_status().await {
-        state.sync = to_sync_snapshot(resp);
-    }
-}
-
-fn to_sync_snapshot(resp: pb::SyncStatusResponse) -> SyncSnapshot {
-    SyncSnapshot {
-        peers: resp
-            .peers
-            .into_iter()
-            .map(|p| PeerStatus {
-                device: p.device,
-                lag_ms: p.lag_ms,
-            })
-            .collect(),
-        pending_ops: u32::try_from(resp.pending_ops).unwrap_or(u32::MAX),
     }
 }

@@ -1,11 +1,11 @@
-//! `app.rs`'s workspace-offer half (task `workspace-offer-cli`): performs the `o` pane's
-//! accept/decline actions and refreshes its list on the status tick. Its own file only for
-//! `app.rs`'s line budget.
+//! `app.rs`'s status-tick half: the `o` pane's accept/decline actions and offer list (task
+//! `workspace-offer-cli`) and the `s` indicator's `SyncStatus` refresh, both driven by
+//! `refresh_on_tick`. Its own file only for `app.rs`'s line budget.
 
 use txtodo_proto::v1 as pb;
 
 use crate::daemon::{Daemon, DaemonError};
-use crate::state::AppState;
+use crate::state::{AppState, PeerStatus, SyncSnapshot};
 use crate::state_offers::OfferItem;
 
 /// Sends an accept or decline, then re-reads the pending list so the pane shows the result. An
@@ -34,7 +34,7 @@ pub async fn perform_decline(
 /// The status tick: the `s` indicator and the pending offers together, so `run_loop_inner`'s
 /// select arm stays one call.
 pub async fn refresh_on_tick(daemon: &mut Daemon, state: &mut AppState) {
-    crate::app::refresh_sync_status(daemon, state).await;
+    refresh_sync_status(daemon, state).await;
     refresh_offers(daemon, state).await;
 }
 
@@ -53,5 +53,29 @@ fn to_offer_item(o: pb::PendingWorkspaceOffer) -> OfferItem {
         device: o.offering_device,
         workspace_id: o.workspace_id,
         name: o.name,
+    }
+}
+
+/// Refreshes `state.sync` from a real `SyncStatus` call. Best-effort: a failed call (transient
+/// daemon hiccup) leaves the previous snapshot in place rather than erroring the whole event
+/// loop — the same "colours are never the only signal" spirit as `ui/sync.rs` itself, just applied
+/// to a stale-but-present reading instead of a missing one.
+pub async fn refresh_sync_status(daemon: &mut Daemon, state: &mut AppState) {
+    if let Ok(resp) = daemon.sync_status().await {
+        state.sync = to_sync_snapshot(resp);
+    }
+}
+
+fn to_sync_snapshot(resp: pb::SyncStatusResponse) -> SyncSnapshot {
+    SyncSnapshot {
+        peers: resp
+            .peers
+            .into_iter()
+            .map(|p| PeerStatus {
+                device: p.device,
+                lag_ms: p.lag_ms,
+            })
+            .collect(),
+        pending_ops: u32::try_from(resp.pending_ops).unwrap_or(u32::MAX),
     }
 }
