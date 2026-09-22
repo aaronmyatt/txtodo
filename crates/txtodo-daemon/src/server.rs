@@ -115,6 +115,10 @@ impl Txtodo for TxtodoService {
             let sub = h.subscribe().await.map_err(status_of)?;
             tokio::spawn(forward_changes(self.clone(), h, sub, tx.clone()));
         }
+        // Every subscriber, whichever documents it named: a layout change moves every document's
+        // ref dirs and can rename the root list (task layout-hot-reload-clients).
+        let layout_sub = self.workspace().layout().subscribe();
+        tokio::spawn(crate::watch_forward::forward_layout_changes(layout_sub, tx));
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
 

@@ -229,3 +229,39 @@ async fn setting_todo_file_makes_the_named_list_the_root_list() {
     let toml = std::fs::read_to_string(dir.path().join("txtodo.toml")).unwrap();
     assert!(toml.contains("todo_file = \"lists/work.txt\""), "{toml}");
 }
+
+/// Task layout-hot-reload-clients: a layout change reaches every `Watch` subscriber as a `Change`
+/// for `txtodo.toml`, whether the RPC set it or the file changed on disk — the client's cue to
+/// refetch the layout instead of composing paths from a stale one.
+#[tokio::test]
+async fn a_layout_change_is_announced_on_the_watch_stream() {
+    let (dir, mut client, _stop) = served("plan the launch\n").await;
+    let mut watch = client
+        .watch(pb::WatchRequest {
+            paths: vec!["todo.txt".into()],
+            workspace: None,
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    layout(&mut client, set("stuff", false)).await.unwrap();
+    let change = tokio::time::timeout(std::time::Duration::from_secs(5), watch.message())
+        .await
+        .expect("a change arrives")
+        .unwrap()
+        .expect("stream open");
+    assert_eq!(change.path, "txtodo.toml");
+    assert!(change.ops.is_empty() && change.hash.is_empty());
+
+    // The same for a change that `WorkspaceLayout::set` makes on a live handle, which is what
+    // the watcher's hot reload of the file ends in (no watcher runs in this in-process harness).
+    std::fs::write(dir.path().join("txtodo.toml"), "refs_dir = \"other\"\n").unwrap();
+    layout(&mut client, set("other", false)).await.unwrap();
+    let again = tokio::time::timeout(std::time::Duration::from_secs(5), watch.message())
+        .await
+        .expect("a second change arrives")
+        .unwrap()
+        .expect("stream open");
+    assert_eq!(again.path, "txtodo.toml");
+}

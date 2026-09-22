@@ -3,7 +3,12 @@
 //! `FileActor` in it, so a layout read from `txtodo.toml` reaches all of them at once.
 
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use tokio::sync::broadcast;
 use txtodo_model::WorkspaceLayout;
+
+/// Layout-change notifications a `Watch` subscriber can miss before it is told to resync — a
+/// layout changes a handful of times in a workspace's life, never in bursts.
+const CHANGED_CAP: usize = 8;
 
 #[derive(Debug)]
 struct Inner {
@@ -11,6 +16,9 @@ struct Inner {
     /// Why the file's layout is not the one in force (a bad file, or a change refused while ref
     /// dirs still sit in the old place); `None` when the file and the layout agree.
     note: Mutex<Option<String>>,
+    /// Fires on every `set` (task layout-hot-reload-clients): the `Watch` RPC forwards it as a
+    /// `Change` for `txtodo.toml`, so a client refetches the layout instead of keeping a stale one.
+    changed: broadcast::Sender<()>,
 }
 
 /// A cheap-to-clone handle on the workspace's current layout.
@@ -23,7 +31,13 @@ impl SharedLayout {
         SharedLayout(Arc::new(Inner {
             layout: RwLock::new(layout),
             note: Mutex::new(None),
+            changed: broadcast::channel(CHANGED_CAP).0,
         }))
+    }
+
+    /// A receiver that gets `()` after every later `set` — the seam the `Watch` RPC subscribes.
+    pub fn subscribe(&self) -> broadcast::Receiver<()> {
+        self.0.changed.subscribe()
     }
 
     /// The current layout, by value: a caller never holds the lock across an await.
@@ -35,13 +49,15 @@ impl SharedLayout {
             .clone()
     }
 
-    /// Replaces the layout for everything sharing this handle.
+    /// Replaces the layout for everything sharing this handle, then tells every subscriber.
     pub fn set(&self, layout: WorkspaceLayout) {
         *self
             .0
             .layout
             .write()
             .unwrap_or_else(PoisonError::into_inner) = layout;
+        // No subscriber is not an error: nothing is watching this workspace right now.
+        let _ = self.0.changed.send(());
     }
 
     /// Why the layout file is not in force, if it is not.
