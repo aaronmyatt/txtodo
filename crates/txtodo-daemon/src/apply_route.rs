@@ -26,7 +26,10 @@ impl TxtodoService {
         source: Option<String>,
     ) -> Result<Applied, Status> {
         match <[Mutation; 1]>::try_from(mutations) {
-            Ok([Mutation::Move { task, to }]) => self.apply_move(&path, task, to, principal).await,
+            Ok([Mutation::Move { task, to }]) => {
+                let origin = move_coordinator::Origin { principal, source };
+                self.apply_move(&path, task, to, origin).await
+            }
             Ok([other]) => self
                 .actor_or_new_list(&path, std::slice::from_ref(&other))?
                 .apply_from(vec![other], principal, source)
@@ -101,13 +104,13 @@ impl TxtodoService {
         from: &FilePath,
         task: TaskRef,
         to: FilePath,
-        principal: Principal,
+        origin: move_coordinator::Origin,
     ) -> Result<Applied, Status> {
         let source = self.actor_by_path(from)?;
         let dest = self.actor_by_path(&to)?;
         let root = self.workspace().root().to_path_buf();
         let layout = self.workspace().layout().get();
-        move_coordinator::move_task_across_files(&source, &dest, task, principal, (&root, &layout))
+        move_coordinator::move_task_across_files(&source, &dest, task, origin, (&root, &layout))
             .await
             .map_err(status_of)
     }

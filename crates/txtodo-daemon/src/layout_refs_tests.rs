@@ -19,6 +19,14 @@ fn device() -> DeviceId {
     DeviceId::new(Ulid::from_u128(9))
 }
 
+/// A move by `user()` with no client named.
+fn origin() -> crate::move_coordinator::Origin {
+    crate::move_coordinator::Origin {
+        principal: user(),
+        source: None,
+    }
+}
+
 fn user() -> Principal {
     Principal::User { device: device() }
 }
@@ -134,7 +142,7 @@ async fn moving_a_line_between_the_root_list_and_a_ref_list_relocates_its_dir() 
         &source,
         &dest,
         first_line(Some(ID)),
-        user(),
+        origin(),
         (root, &layout.get()),
     )
     .await
@@ -147,7 +155,7 @@ async fn moving_a_line_between_the_root_list_and_a_ref_list_relocates_its_dir() 
         &dest,
         &source,
         first_line(Some(ID)),
-        user(),
+        origin(),
         (root, &layout.get()),
     )
     .await

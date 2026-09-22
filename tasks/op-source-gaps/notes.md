@@ -41,3 +41,10 @@ field down. As it stands a `..Default::default()` refactor that drops it is invi
 `tasks/complete-to-bottom/todo.txt:5` closed with "daemon mode still sends Edit plus MoveToEnd …
 so the op log says edit and move". That directly degrades this work — `txtodo log` will never show
 a `complete` op from the CLI — and is filed as its own root line.
+
+## As built (2026-09-23)
+
+All three closed. The cross-file move now records the request's source on every commit it makes
+(`Origin` bundles principal and source, keeping the coordinator under the parameter budget); the
+two `sources_between` blocks are one `activity::sources_for_rows`; the desktop op-log test pins
+`source = "desktop"`. Still blank by design (tasks/op-source): Undo, Resolve and ref-dir ops.

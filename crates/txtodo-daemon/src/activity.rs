@@ -39,9 +39,12 @@ fn newest_rows(service: &TxtodoService) -> Result<Vec<txtodo_store::Stored>, Sta
     Ok(rows)
 }
 
-/// The source of each of `rows`, read in one query over their seq span.
-fn sources_of(
-    service: &TxtodoService,
+/// The source of each of `rows`, read in one query over their seq span — the one place both the
+/// activity stream and `History` map rows to the client that made them (task op-source-gaps).
+/// Empty for no rows; an op logged before the column existed has no entry, which callers render
+/// as `""`.
+pub(crate) fn sources_for_rows(
+    store: &txtodo_store::Store,
     rows: &[txtodo_store::Stored],
 ) -> Result<std::collections::BTreeMap<txtodo_store::Seq, String>, Status> {
     let (Some(first), Some(last)) = (
@@ -50,11 +53,18 @@ fn sources_of(
     ) else {
         return Ok(std::collections::BTreeMap::new());
     };
-    let ws = service.workspace();
-    let store = ws.store().lock().unwrap_or_else(PoisonError::into_inner);
     store
         .sources_between(first, last)
         .map_err(|e| Status::internal(e.to_string()))
+}
+
+fn sources_of(
+    service: &TxtodoService,
+    rows: &[txtodo_store::Stored],
+) -> Result<std::collections::BTreeMap<txtodo_store::Seq, String>, Status> {
+    let ws = service.workspace();
+    let store = ws.store().lock().unwrap_or_else(PoisonError::into_inner);
+    sources_for_rows(&store, rows)
 }
 
 impl TxtodoService {

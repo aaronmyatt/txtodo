@@ -17,6 +17,14 @@ fn device() -> DeviceId {
     DeviceId::new(Ulid::from_u128(11))
 }
 
+/// A move by `user()` with no client named — the shape every test here needs.
+fn origin() -> crate::move_coordinator::Origin {
+    crate::move_coordinator::Origin {
+        principal: user(),
+        source: None,
+    }
+}
+
 fn user() -> Principal {
     Principal::User { device: device() }
 }
@@ -81,7 +89,7 @@ async fn move_relocates_the_line_and_its_ref_directory() {
         &source,
         &dest,
         task_ref(),
-        user(),
+        origin(),
         (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
     )
     .await
@@ -119,7 +127,7 @@ async fn a_slug_collision_at_the_destination_gets_dash_2() {
         &source,
         &dest,
         task_ref(),
-        user(),
+        origin(),
         (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
     )
     .await
@@ -153,7 +161,7 @@ async fn a_failed_move_rolls_back_and_the_source_is_byte_identical() {
         &source,
         &dest,
         task_ref(),
-        user(),
+        origin(),
         (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
     )
     .await;
@@ -167,5 +175,46 @@ async fn a_failed_move_rolls_back_and_the_source_is_byte_identical() {
     assert!(
         root.join("project").is_dir(),
         "its ref: directory never left"
+    );
+}
+
+/// Task op-source-gaps: the client named by the request is stamped on every commit a cross-file
+/// move makes — the source's departure and the destination's insert — so `txtodo log` and the
+/// activity pane show `mcp`, not a hole, for a moved task.
+#[tokio::test]
+async fn a_move_records_the_requests_source_on_both_documents() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("todo.txt"), format!("(A) roadmap id:{ID}\n")).unwrap();
+    let store = shared_store(root);
+    let clock = fake_clock();
+    let source = open_at(root, "todo.txt", &store, &clock).spawn();
+    let dest = open_at(root, "sub/other.txt", &store, &clock).spawn();
+    let before = store
+        .lock()
+        .unwrap()
+        .last_seq()
+        .unwrap()
+        .unwrap_or(txtodo_store::Seq(0));
+    move_task_across_files(
+        &source,
+        &dest,
+        task_ref(),
+        crate::move_coordinator::Origin {
+            principal: user(),
+            source: Some("mcp".to_owned()),
+        },
+        (root, &txtodo_model::WorkspaceLayout::beside_the_list()),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{e}"));
+    let guard = store.lock().unwrap();
+    let last = guard.last_seq().unwrap().unwrap_or(before);
+    let sources = guard
+        .sources_between(txtodo_store::Seq(before.0 + 1), last)
+        .unwrap();
+    assert!(
+        sources.len() >= 2 && sources.values().all(|s| s == "mcp"),
+        "every op the move appended names the client: {sources:?}"
     );
 }
