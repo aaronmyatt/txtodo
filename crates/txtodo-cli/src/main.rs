@@ -100,6 +100,11 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         } => return commands::workspace::run_default(&env, cli.json),
         _ => {}
     }
+    if !cli.no_daemon
+        && let Some((from, to)) = daemon_ensure::upgrade_running_daemon(&env)
+    {
+        eprintln!("txtodo: restarted the older daemon {from} with this build's txtodod ({to})");
+    }
     match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
         client::Mode::Direct if daemon_ensure::needs_daemon(&cli.command) && !cli.no_daemon => {
             daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)

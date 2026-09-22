@@ -58,6 +58,44 @@ pub fn ensure_daemon_then_dispatch(
     }
 }
 
+/// Task `daemon-auto-upgrade`: before any command that may talk to the global daemon, restart it
+/// when it is older than this CLI (`txtodo_daemon_launch::ensure_daemon` with `upgrade_to`,
+/// which also checks the `txtodod` binary it would spawn is newer). Returns the `(from, to)`
+/// versions when a restart happened, for `main` to say so on stderr. Only when the global socket
+/// already answers: a stale socket file or none at all is left to `client::select`, so a plain
+/// `txtodo add` with no daemon anywhere stays direct-file mode and never waits on a spawn here.
+pub fn upgrade_running_daemon(env: &Env) -> Option<(String, String)> {
+    if txtodo_daemon_launch::autostart_disabled() {
+        return None;
+    }
+    let socket = config::global_socket_path(env);
+    if !socket_answers(&socket) {
+        return None;
+    }
+    let cfg =
+        txtodo_daemon_launch::LaunchConfig::new(socket).with_upgrade_to(crate::buildinfo::VERSION);
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .ok()?;
+    match rt.block_on(txtodo_daemon_launch::ensure_daemon(&cfg)) {
+        Ok(txtodo_daemon_launch::Ensured::Upgraded { from, to }) => Some((from, to)),
+        _ => None,
+    }
+}
+
+/// A cheap synchronous liveness probe: does anything accept on `socket`?
+/// Ref: <https://doc.rust-lang.org/std/os/unix/net/struct.UnixStream.html#method.connect>
+#[cfg(unix)]
+fn socket_answers(socket: &std::path::Path) -> bool {
+    std::os::unix::net::UnixStream::connect(socket).is_ok()
+}
+
+#[cfg(not(unix))]
+fn socket_answers(_socket: &std::path::Path) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

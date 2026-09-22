@@ -115,3 +115,53 @@ fn log_cold_starts_the_global_daemon_with_no_manual_daemon_start() {
             .status();
     }
 }
+
+/// Task `daemon-auto-upgrade`: the next command against a running global daemon whose
+/// `txtodod.version` is older than this CLI restarts it with the `txtodod` beside this binary
+/// and says so on stderr. The "older" daemon is the real build with its version file rewritten —
+/// see `crates/txtodo-daemon-launch/tests/upgrade.rs` for the mechanism's own tests.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[test]
+fn a_command_restarts_a_running_daemon_older_than_this_cli() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    std::fs::write(workspace.path().join("todo.txt"), "buy milk\n")
+        .unwrap_or_else(|e| panic!("write todo.txt: {e}"));
+    let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (workspace, state, home) = (workspace.path(), state_dir.path(), home.path());
+
+    let cold = run_txtodo(workspace, state, home, &["log", "-n", "5"]);
+    assert!(
+        cold.status.success(),
+        "{}",
+        String::from_utf8_lossy(&cold.stderr)
+    );
+    let pid_path = state.join("txtodod.pid");
+    let pid_before =
+        std::fs::read_to_string(&pid_path).unwrap_or_else(|e| panic!("read pid file: {e}"));
+    std::fs::write(state.join("txtodod.version"), "0.0.1")
+        .unwrap_or_else(|e| panic!("rewrite version: {e}"));
+
+    let out = run_txtodo(workspace, state, home, &["list"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("restarted the older daemon 0.0.1"),
+        "stderr: {stderr}"
+    );
+    let pid_after =
+        std::fs::read_to_string(&pid_path).unwrap_or_else(|e| panic!("read pid file: {e}"));
+    assert_ne!(pid_before, pid_after, "a new txtodod process");
+    assert_ne!(
+        std::fs::read_to_string(state.join("txtodod.version")).unwrap_or_default(),
+        "0.0.1",
+        "the new daemon wrote its real version"
+    );
+
+    if let Ok(pid) = pid_after.trim().parse::<u32>() {
+        let _ = Command::new("kill")
+            .arg("-KILL")
+            .arg(pid.to_string())
+            .status();
+    }
+}
