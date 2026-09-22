@@ -72,6 +72,19 @@ fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 
+/// `doctor` against a test daemon: the in-memory keystore row is the one FAIL allowed (see the
+/// call site); anything else failing is a real regression and the whole report is the message.
+fn assert_only_keystore_fails(doctor_out: &str) {
+    let other_fails: Vec<&str> = doctor_out
+        .lines()
+        .filter(|l| l.contains(" FAIL ") && !l.starts_with("keystore"))
+        .collect();
+    assert!(
+        other_fails.is_empty(),
+        "unexpected FAIL rows {other_fails:?} in:\n{doctor_out}"
+    );
+}
+
 /// The `workspace list` rows other than the default workspace, which every global daemon now
 /// creates and registers on its own (task default-workspace).
 fn non_default_rows(list: &str) -> Vec<&str> {
@@ -336,12 +349,11 @@ fn doctor_reports_every_other_registered_workspace() {
     );
 
     let doctor_a = txtodo(&daemon, dir_a.path(), &["doctor"]);
-    assert!(
-        doctor_a.status.success(),
-        "{}",
-        String::from_utf8_lossy(&doctor_a.stderr)
-    );
     let out = stdout(&doctor_a);
+    // The test daemon runs on the in-memory keystore (`.cargo/config.toml`'s
+    // `TXTODO_TEST_KEYSTORE_MEMORY`), which `doctor` deliberately FAILs (task relay-id-keystore),
+    // so exit 1 is expected here; that row must be the only FAIL, and stdout names any other.
+    assert_only_keystore_fails(&out);
     // The default workspace is one more registered workspace; this test is about a and b.
     let workspace_rows: Vec<&str> = out
         .lines()

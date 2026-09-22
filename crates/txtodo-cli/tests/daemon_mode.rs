@@ -332,20 +332,28 @@ fn doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired() {
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
     let _daemon = Daemon::spawn(dir.path());
     let out = txtodo(dir.path(), &["doctor"]);
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
     let text = stdout(&out);
-    // The test daemon is spawned with no --key-store flag, so it resolves to the same in-memory
-    // placeholder `Workspace::open`/`open_with_default_mode` always have (see txtodo-daemon's
-    // main.rs doc: omitting the flag must never touch the real OS keychain).
-    assert!(text.contains("keystore"), "{text}");
+    // The test daemon runs on the in-memory keystore (`.cargo/config.toml`'s
+    // `TXTODO_TEST_KEYSTORE_MEMORY`, never the real OS keychain), and since task
+    // relay-id-keystore `doctor` FAILs that backend by design — so exit 1 is the expected
+    // outcome here, and the keystore row must be the only FAIL in the report.
     assert!(
-        text.contains("key_store=memory") || text.contains("backend: memory"),
-        "{text}"
+        !out.status.success(),
+        "doctor must exit 1 on a memory keystore:\n{text}"
     );
+    let keystore_row = text
+        .lines()
+        .find(|l| l.starts_with("keystore"))
+        .unwrap_or_else(|| panic!("no keystore row in:\n{text}"));
+    assert!(
+        keystore_row.contains("FAIL") && keystore_row.contains("backend: memory"),
+        "{keystore_row}"
+    );
+    let other_fails: Vec<&str> = text
+        .lines()
+        .filter(|l| l.contains(" FAIL ") && !l.starts_with("keystore"))
+        .collect();
+    assert!(other_fails.is_empty(), "{other_fails:?} in:\n{text}");
     assert!(
         !text.contains("peer "),
         "no peers before any pairing: {text}"

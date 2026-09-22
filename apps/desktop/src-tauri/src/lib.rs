@@ -100,6 +100,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .map(|app| {
             app.run(|handle, event| {
+                // Dock-icon click with every window hidden is the only event handled here, and
+                // it is macOS-only; on other targets the callback has nothing to do.
+                // Ref: https://docs.rs/tauri/latest/tauri/enum.RunEvent.html#variant.Reopen
                 #[cfg(target_os = "macos")]
                 if let tauri::RunEvent::Reopen {
                     has_visible_windows: false,
@@ -108,6 +111,8 @@ pub fn run() {
                 {
                     tray::show_main_window(handle);
                 }
+                #[cfg(not(target_os = "macos"))]
+                let _ = (handle, event);
             });
         });
     if let Err(e) = result {
