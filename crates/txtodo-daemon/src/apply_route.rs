@@ -9,8 +9,12 @@ use crate::handle::{ActorError, Applied, Preview};
 use crate::move_coordinator;
 use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::server::TxtodoService;
+use std::path::Path;
+use std::sync::PoisonError;
 use tonic::Status;
 use txtodo_model::{FilePath, Principal};
+
+use crate::handle::ActorHandle;
 
 impl TxtodoService {
     /// Applies `mutations` against the document at `path`.
@@ -24,7 +28,7 @@ impl TxtodoService {
         match <[Mutation; 1]>::try_from(mutations) {
             Ok([Mutation::Move { task, to }]) => self.apply_move(&path, task, to, principal).await,
             Ok([other]) => self
-                .actor_by_path(&path)?
+                .actor_or_new_list(&path, std::slice::from_ref(&other))?
                 .apply_from(vec![other], principal, source)
                 .await
                 .map_err(status_of),
@@ -34,11 +38,40 @@ impl TxtodoService {
                 ))))
             }
             Err(mutations) => self
-                .actor_by_path(&path)?
+                .actor_or_new_list(&path, &mutations)?
                 .apply_from(mutations, principal, source)
                 .await
                 .map_err(status_of),
         }
+    }
+
+    /// The addressed document's actor — registering a brand-new list first when every mutation
+    /// is an `Add`, the file does not exist yet and its directory already does (one `RefDir {
+    /// ensure }` just claimed; task desktop-sublist-start). A sub-list's first line then arrives
+    /// through `Apply` the way a nested file's first op arrives over the LAN
+    /// (`lan_apply::get_or_create_actor`), and no client has to write the file itself (design
+    /// §7). Any other unknown path stays `not_found`, so a typo never creates a document.
+    fn actor_or_new_list(
+        &self,
+        path: &FilePath,
+        mutations: &[Mutation],
+    ) -> Result<ActorHandle, Status> {
+        if let Ok(actor) = self.actor_by_path(path) {
+            return Ok(actor);
+        }
+        let disk = self.workspace().root().join(path.as_str());
+        let dir_exists = disk.parent().is_some_and(Path::is_dir);
+        let all_adds = mutations.iter().all(|m| matches!(m, Mutation::Add { .. }));
+        if disk.exists() || !dir_exists || !all_adds {
+            return Err(Status::not_found(format!("no document {path}")));
+        }
+        self.ws
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .register(path.clone())
+            .map_err(|e| Status::internal(format!("register {path}: {e}")))?;
+        tracing::info!(file = %path, "apply_registered_new_list");
+        self.actor_by_path(path)
     }
 
     /// The dry run of `route_apply` (task apply-dry-run): the addressed document's own actor plans
