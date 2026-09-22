@@ -183,9 +183,19 @@ pub fn default_workspace_dir_for(env: &RegistryEnv) -> PathBuf {
 /// worktree): a worktree is its own checkout, not a sub-directory of the clone that contains it.
 /// Same idea as how git finds its own root: <https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---show-toplevel>
 pub fn workspace_root_from(start: &Path) -> PathBuf {
+    // The nearest `.txtodo/` wins outright: a daemon has kept state there. Otherwise the
+    // *farthest* folder up to the boundary that [`is_workspace_dir`] accepts — a `todo.txt` or a
+    // `txtodo.toml` — is the root: every `todo.txt` under a workspace root is one of its lists
+    // (`specs/ref-directories.md` rule 11), so `tasks/<slug>/` in a checkout no daemon has
+    // opened yet is that checkout's sub-list, not a workspace of its own (task
+    // mcp-cwd-autoregister: the two definitions used to disagree here).
+    let mut farthest: Option<&Path> = None;
     for dir in start.ancestors() {
         if dir.join(".txtodo").is_dir() {
             return dir.to_path_buf();
+        }
+        if dir.join("txtodo.toml").is_file() || dir.join("todo.txt").is_file() {
+            farthest = Some(dir);
         }
         // `Path::exists` follows symlinks and is true for both a `.git` dir and a `.git` file.
         // Ref: https://doc.rust-lang.org/std/path/struct.Path.html#method.exists
@@ -193,7 +203,7 @@ pub fn workspace_root_from(start: &Path) -> PathBuf {
             break;
         }
     }
-    start.to_path_buf()
+    farthest.map_or_else(|| start.to_path_buf(), Path::to_path_buf)
 }
 
 /// Which workspace a client with no `--dir` means (task `default-workspace`, decided 2026-09-20):

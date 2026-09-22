@@ -268,3 +268,30 @@ fn the_fallback_follows_an_isolated_daemon_and_the_override() {
     );
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// Task mcp-cwd-autoregister: the root walk and `is_workspace_dir` agree. In a checkout no
+/// daemon has opened, a ref dir's `todo.txt` belongs to the root list above it, and a folder
+/// with no list at all inside such a workspace still resolves to that workspace.
+#[test]
+fn a_fresh_checkouts_sub_list_and_bare_folder_resolve_to_its_root() {
+    let root = tree("fresh-root", &["tasks/plan", "docs"]);
+    std::fs::write(root.join("todo.txt"), "root ref:plan\n").unwrap();
+    std::fs::write(root.join("tasks/plan/todo.txt"), "step\n").unwrap();
+    assert_eq!(workspace_root_from(&root.join("tasks/plan")), root);
+    assert_eq!(workspace_root_from(&root.join("docs")), root);
+    assert_eq!(workspace_root_from(&root), root);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A `.txtodo/` below a list (the old per-ref-dir daemon) still wins as the nearest state.
+#[test]
+fn nearest_daemon_state_beats_a_farther_list() {
+    let root = tree("nearest-state", &["tasks/plan/.txtodo"]);
+    std::fs::write(root.join("todo.txt"), "root\n").unwrap();
+    std::fs::write(root.join("tasks/plan/todo.txt"), "step\n").unwrap();
+    assert_eq!(
+        workspace_root_from(&root.join("tasks/plan")),
+        root.join("tasks/plan")
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
