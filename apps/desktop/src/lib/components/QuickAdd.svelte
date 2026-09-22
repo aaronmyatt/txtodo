@@ -18,16 +18,26 @@
 
 	// Quick-add always appends to the root file — there is no "current file" concept for a
 	// global, no-document-behind-it popover (notes.md: "no document behind it"). Which file that is
-	// comes from the workspace's layout (`todo_file`), refetched on every show since the workspace
-	// can change while this window is hidden. This window has its own JS context, so the main
-	// window's layout store is not shared.
-	let rootPath = $state("todo.txt");
+	// comes from the workspace's layout (`todo_file`), asked for again right before every save
+	// (task layout-hot-reload-clients): a capture typed before the first answer, or after the
+	// layout changed, used to land in a file the main view never shows. This window has its own
+	// JS context, so the main window's layout store is not shared. `null` until the first answer.
+	let rootPath = $state<string | null>(null);
+	let saveError = $state("");
+
+	/** The root list right now; throws when the daemon cannot say, so a capture is never written
+	 * to a guessed file. */
+	async function currentRootPath(): Promise<string> {
+		const path = (await workspaceLayout()).todo_file || "todo.txt";
+		rootPath = path;
+		return path;
+	}
 
 	async function refreshRootPath() {
 		try {
-			rootPath = (await workspaceLayout()).todo_file;
+			await currentRootPath();
 		} catch {
-			// Keep the last known root list: a failed fetch must not stop a capture.
+			// Only the label: the save asks again and shows its own error.
 		}
 	}
 
@@ -47,8 +57,14 @@
 	 * submit never reaches here: `EditPopover`'s own `isNoOpEdit(initialLine, next)` check (against
 	 * `initialLine = ""`) already turns that into a plain cancel. */
 	async function handleSave(line: string) {
-		await applyMutations(rootPath, [{ kind: "add", line }]);
-		await hide();
+		saveError = "";
+		try {
+			const path = await currentRootPath();
+			await applyMutations(path, [{ kind: "add", line }]);
+			await hide();
+		} catch (e) {
+			saveError = String(e);
+		}
 	}
 
 	async function handleCancel() {
@@ -71,7 +87,7 @@
 <div class="quick-add">
 	{#key showCount}
 		<EditPopover
-			path={rootPath}
+			path={rootPath ?? "todo.txt"}
 			initialLine=""
 			taskRef={null}
 			anchor={null}
@@ -79,9 +95,18 @@
 			onCancel={handleCancel}
 		/>
 	{/key}
+	{#if saveError}
+		<p class="error" role="alert">Could not add: {saveError}</p>
+	{/if}
 </div>
 
 <style>
+	.error {
+		margin: 0.25rem 0.5rem;
+		font-size: 0.85rem;
+		color: var(--color-danger, #b91c1c);
+	}
+
 	.quick-add {
 		display: flex;
 		width: 100%;

@@ -30,6 +30,24 @@ interface ReviewFlag {
 
 const POLL_MS = 150;
 
+/** The `Change.path` the real daemon uses to announce a layout change (task
+ * layout-hot-reload-clients); this shim synthesizes the same event from a `workspace_layout` poll. */
+const LAYOUT_CHANGE_PATH = "txtodo.toml";
+
+interface WorkspaceLayout {
+	refs_dir: string;
+	todo_file: string;
+}
+
+async function currentLayout(): Promise<string | null> {
+	try {
+		const layout = await invoke<WorkspaceLayout>("workspace_layout", {});
+		return `${layout.refs_dir}\n${layout.todo_file}`;
+	} catch {
+		return null;
+	}
+}
+
 async function currentHash(path: string): Promise<string | null> {
 	try {
 		const file = await invoke<FileContents>("get_file", { path });
@@ -61,9 +79,18 @@ export function listen<T>(event: string, cb: (event: EventPayload<T>) => void): 
 		let stopped = false;
 		const lastHash = new Map<string, string | null>();
 		const lastConflictIds = new Map<string, Set<string>>();
+		// `undefined` until the first poll: the baseline, never a change (same rule as the files).
+		let lastLayout: string | null | undefined;
 
 		const tick = async () => {
 			if (stopped) return;
+			// The real `Watch` stream carries a `txtodo.toml` change whenever the daemon's layout
+			// changes (an RPC set, or a hot reload of the file); here it is a layout poll.
+			const layout = await currentLayout();
+			if (lastLayout !== undefined && layout !== lastLayout) {
+				cb({ payload: { path: LAYOUT_CHANGE_PATH, hash: "", ops: [], review: [] } as T });
+			}
+			lastLayout = layout;
 			for (const path of watchedPaths) {
 				const [hash, conflicts] = await Promise.all([currentHash(path), currentConflictIds(path)]);
 				const seenBefore = lastHash.has(path);

@@ -9,8 +9,8 @@
 (D) 2026-09-19 Desktop UI/UX revamp from the c2-prompt mockups: ink/paper theme, header search bar, prompt-bar Quick Add with the live logo mark, Universal and Settings pages +m11 @desktop ref:desktop-ui-revamp — deferred 2026-09-19 (human call): design signed off, build deprioritised for now; plan and mockup map in tasks/desktop-ui-revamp/notes.md id:01M2WSN2PZ701CR2QFX7ZG5ZTD
 2026-09-11 Web PWA with the WASM core in a Web Worker, OPFS storage, WebSocket sync +m10 @web — deferred 2026-09-17 (human call): a whole new app/platform (real design + 12-item sub-backlog already in tasks/web-pwa/, zero code), comparable in size to the desktop effort; human prioritized getting to distribution/brew work instead
 (E) 2026-09-11 WASM component plugin host with the design §9 hooks +m10 @plugins @human — needs a wasm runtime dependency (Cargo.toml is frozen) and an ADR for which runtime and which design §9 hooks come first — parked 2026-09-20: no dependency and no ADR until revived; to revive, pick a runtime and write the ADR first
-2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients
-2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path
+x 2026-09-23 2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients — see tasks/layout-hot-reload-clients/notes.md
+2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path @doing by:claude
 2026-09-21 daemon: layout reload fails open and swallows its errors +m11 @daemon ref:layout-reload-safety
 2026-09-21 The memory keystore fallback drops device and group keys, not just the relay id +m8 @daemon @security ref:keystore-memory-fallback
 2026-09-21 mcp: no flags registers the cwd as a workspace and offers its name to peers +m6 @mcp @security ref:mcp-cwd-autoregister

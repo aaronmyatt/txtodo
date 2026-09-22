@@ -4,15 +4,7 @@
 	// edits directly (click a line, type — no popover; see FileView.svelte's own module doc).
 	import { onMount } from "svelte";
 	import { get } from "svelte/store";
-	import {
-		daemonStatus,
-		onDaemonStatus,
-		retryConnect,
-		setMainPopoverDirty,
-		workspaceLayout,
-		workspaceRoot,
-		type DaemonStatus
-	} from "$lib/daemon";
+	import { daemonStatus, onDaemonStatus, retryConnect, setMainPopoverDirty, workspaceLayout, workspaceRoot, type DaemonStatus, onDaemonChange } from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
 	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
 	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
@@ -26,6 +18,7 @@
 	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import VersionInfo from "./VersionInfo.svelte";
 	import { layoutFallbackMessage } from "$lib/layoutFallback";
+	import { LAYOUT_CHANGE_PATH } from "$lib/todotxt/lineInfo";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -73,21 +66,36 @@
 	// would re-run this effect on every unrelated store write.
 	// With nothing picked the app opens the default workspace (task default-workspace), so there is
 	// always a root: the main view stays empty only until the first `workspaceRoot()` answer.
+	// Bumped at the start of every layout fetch (task layout-hot-reload-clients): a reply whose
+	// number is no longer the latest lost to a newer fetch (a second workspace pick in quick
+	// succession) and must not win — the same idiom as FileView's `refreshSeq`.
+	let layoutSeq = 0;
+	/** Where this workspace keeps its `ref:` folders and what its root list is called (task
+	 * workspace-layout): the nested-list paths and the ref indicators are composed from it. A
+	 * failed fetch keeps the default but says so (task desktop-notes-hidden): an older daemon
+	 * without the RPC resolves ref folders elsewhere than this client. */
+	async function fetchLayout(): Promise<void> {
+		const seq = ++layoutSeq;
+		try {
+			const layout = await workspaceLayout();
+			if (seq !== layoutSeq) return;
+			workspaceLayoutStore.set(layout);
+			workspaceLayoutError.set("");
+		} catch (e) {
+			if (seq !== layoutSeq) return;
+			workspaceLayoutError.set(String(e));
+		}
+	}
+
 	let lastRoot = "";
 	$effect(() => {
 		const root = $currentWorkspaceRoot;
 		if (!root || root === lastRoot) return;
 		lastRoot = root;
-		// Where this workspace keeps its `ref:` folders (task workspace-layout): the nested-list
-		// paths and the ref indicators are composed from it. A failed fetch keeps the default.
 		// Reset first, so the new workspace never opens the previous one's root list.
-		// A failed fetch keeps the default but says so (task desktop-notes-hidden): an older daemon
-		// without the RPC resolves ref folders elsewhere than this client, and nothing else shows it.
 		workspaceLayoutStore.set(DEFAULT_LAYOUT);
 		workspaceLayoutError.set("");
-		workspaceLayout()
-			.then((layout) => workspaceLayoutStore.set(layout))
-			.catch((e) => workspaceLayoutError.set(String(e)));
+		void fetchLayout();
 		const pending = get(pendingUniversalNav);
 		if (pending && pending.workspaceRoot === root) {
 			detail = [{ file: pending.file, line: pending.line, workspaceRoot: pending.workspaceRoot }];
@@ -106,8 +114,15 @@
 		const unlisten = onDaemonStatus((s) => {
 			status = s;
 		});
+		// The daemon announces a layout change (the RPC, or a hot reload of `txtodo.toml`) as a
+		// change for that file on the same stream every document change rides (task
+		// layout-hot-reload-clients); the store is refetched, never patched from the event.
+		const unlistenLayout = onDaemonChange((change) => {
+			if (change.path === LAYOUT_CHANGE_PATH) void fetchLayout();
+		});
 		return () => {
 			unlisten.then((f) => f());
+			unlistenLayout.then((f) => f());
 		};
 	});
 </script>

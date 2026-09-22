@@ -37,3 +37,17 @@ Nothing here is a data-loss bug on its own — the writes land in a real file, j
 user is looking at. It reads as "my task vanished", which is worse than an error.
 
 See [[layout-client-gaps]].
+
+## As built (2026-09-23)
+
+- Daemon: `SharedLayout::set` now notifies and the `Watch` RPC forwards it as a `Change` with
+  path `txtodo.toml` (no hash/ops) on every stream, whatever documents were named.
+- Desktop: `MainView` refetches the layout on that notice, sequenced (`layoutSeq`); `QuickAdd`
+  asks for the layout right before each save and shows an error rather than writing to a guessed
+  file. The e2e shim (`e2e/shim/event.ts`) polls `workspace_layout` and synthesizes the notice.
+- TUI: `app_layout::follow_root_list` switches document and Watch stream when the root list moved.
+- Found on the way: on macOS a workspace opened by a symlinked spelling (`/tmp/x`) never saw
+  its watcher events (`/private/tmp/x/...`), so no hot reload and no external-edit pickup;
+  `watch_task::under_root` now respells event paths onto the root.
+- Not done: the desktop does not re-open the detail stack on a layout change (the root list
+  remounts, the detail view keeps its old file path until the next navigation).

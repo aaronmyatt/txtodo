@@ -93,6 +93,10 @@ export const BESIDE_THE_LIST: RefLayout = { refs_dir: ".", todo_file: "todo.txt"
 /** The workspace-relative directory of `slug` for a line in `containingPath`: under `refs_dir`
  * for the root list, beside the file for a nested list. Mirrors the daemon's
  * `WorkspaceLayout::ref_dir_for`, the one place a slug becomes a directory. */
+/** The `Change.path` the daemon uses to say "the workspace's layout changed, refetch it" (task
+ * layout-hot-reload-clients): `txtodo.toml` is not a document, so no hash or ops come with it. */
+export const LAYOUT_CHANGE_PATH = "txtodo.toml";
+
 export function refDirFor(layout: RefLayout, containingPath: string, slug: string): string {
 	if (containingPath !== layout.todo_file) return joinPath(dirOf(containingPath), slug);
 	return joinPath(layout.refs_dir === "." ? dirOf(layout.todo_file) : layout.refs_dir, slug);
