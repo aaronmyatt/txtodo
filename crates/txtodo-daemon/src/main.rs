@@ -266,6 +266,13 @@ fn lock_and_start_logging(
     // The lock file lives here, and nothing else has created the directory yet.
     std::fs::create_dir_all(state_dir)?;
     let pid = PidFile::acquire(&state_dir.join("txtodod.pid"))?;
+    // The running build's version beside the pid lock, so a client can compare it with its own
+    // without an RPC and restart an older daemon (task daemon-auto-upgrade, read by
+    // `txtodo_daemon_launch::ensure_daemon`). Plain text, no trailing newline.
+    std::fs::write(
+        state_dir.join("txtodod.version"),
+        txtodo_daemon::buildinfo::VERSION,
+    )?;
     let logs = txtodo_daemon::telemetry::init(&state_dir.join("logs"))?;
     tracing::info!(
         dir = ?args.dir.as_ref().map(|d| d.display().to_string()),
