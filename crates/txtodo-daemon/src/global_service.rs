@@ -14,10 +14,10 @@ use tracing::Instrument;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
 
-// Re-exported so `crate::global_service::rpc_span`/`to_workspace_info`, the paths
+// Re-exported so `crate::global_service::rpc_span`/`workspace_info`, the paths
 // `pairing_grpc.rs`/`workspace_offer_grpc.rs` call them by, keep resolving after this split.
 pub(crate) use crate::global_service_helpers::{
-    HasWorkspace, parse_workspace_id, rpc_span, to_workspace_info, totals_only, with_totals,
+    HasWorkspace, parse_workspace_id, rpc_span, totals_only, with_totals, workspace_info,
 };
 
 /// The service actually bound to the one global socket. `Clone` is a cheap `Arc` clone.
@@ -348,8 +348,7 @@ impl Txtodo for GlobalService {
         let entry = self
             .catalog
             .add_registered(Path::new(&r.into_inner().root))?;
-        let state = self.catalog.load_state(entry.id);
-        Ok(Response::new(to_workspace_info(entry, state)))
+        Ok(Response::new(workspace_info(&self.catalog, entry)))
     }
 
     async fn workspace_remove(
@@ -369,10 +368,7 @@ impl Txtodo for GlobalService {
             .catalog
             .list_registered_entries()?
             .into_iter()
-            .map(|entry| {
-                let state = self.catalog.load_state(entry.id);
-                to_workspace_info(entry, state)
-            })
+            .map(|entry| workspace_info(&self.catalog, entry))
             .collect();
         Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
     }

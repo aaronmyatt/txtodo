@@ -1,18 +1,56 @@
 //! Free functions `global_service.rs`'s dispatch impl uses, split out purely for that file's line
 //! budget (same pattern `workspace_error.rs`/`workspace_mint.rs` use out of `workspace.rs`).
 
+use std::sync::PoisonError;
+
 use crate::server::SharedWorkspace;
+use crate::workspace_catalog::WorkspaceCatalog;
 use crate::workspace_catalog_load::LoadTotals;
 use crate::workspace_load::LoadState;
 use crate::workspace_registry::WorkspaceEntry;
 use tonic::Status;
-use txtodo_model::Ulid;
+use txtodo_model::{Ulid, WorkspaceLayout};
 use txtodo_proto::v1::{self as pb};
 use txtodo_store::WorkspaceId;
 
+/// One registry entry as the wire `WorkspaceInfo`, with its load state and layout filled in from
+/// `catalog` — every `WorkspaceList`/`WorkspaceAdd`/`WorkspaceAcceptOffer` reply goes through here.
+pub(crate) fn workspace_info(
+    catalog: &WorkspaceCatalog,
+    entry: WorkspaceEntry,
+) -> pb::WorkspaceInfo {
+    let state = catalog.load_state(entry.id);
+    let layout = layout_of(catalog, &entry);
+    to_workspace_info(entry, state, &layout)
+}
+
+/// The workspace's layout for its `WorkspaceInfo` (task layout-client-gaps): the live one when
+/// the workspace is already open, else what its `txtodo.toml` says (or the defaults) — so a
+/// client that trusts `WorkspaceList` opens the right root list without a second
+/// `WorkspaceLayout` call. Never waits on an open.
+pub(crate) fn layout_of(catalog: &WorkspaceCatalog, e: &WorkspaceEntry) -> WorkspaceLayout {
+    let selector = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::WorkspaceId(
+            e.id.to_string(),
+        )),
+    };
+    if let Some(Ok(ws)) = catalog.resolve_without_waiting(Some(&selector)) {
+        return ws
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .layout()
+            .get();
+    }
+    crate::layout_file::initial(&e.root)
+}
+
 /// `state` is the daemon's own load state for `e` (`None` for a root it never scheduled: missing on
 /// disk, or registered just now and not yet asked for).
-pub(crate) fn to_workspace_info(e: WorkspaceEntry, state: Option<LoadState>) -> pb::WorkspaceInfo {
+pub(crate) fn to_workspace_info(
+    e: WorkspaceEntry,
+    state: Option<LoadState>,
+    layout: &WorkspaceLayout,
+) -> pb::WorkspaceInfo {
     let (load_state, load_error) = match state {
         None => (pb::WorkspaceLoadState::Unspecified, String::new()),
         Some(LoadState::Queued) => (pb::WorkspaceLoadState::Queued, String::new()),
@@ -28,10 +66,9 @@ pub(crate) fn to_workspace_info(e: WorkspaceEntry, state: Option<LoadState>) -> 
         has_state: e.has_state,
         load_state: load_state as i32,
         load_error,
-        // Wired to the real values by the default-workspace and workspace-layout daemon lines.
         is_default: e.id == crate::default_workspace::default_workspace_id(),
-        refs_dir: String::new(),
-        todo_file: String::new(),
+        refs_dir: layout.refs_dir().to_owned(),
+        todo_file: layout.todo_file().to_owned(),
     }
 }
 

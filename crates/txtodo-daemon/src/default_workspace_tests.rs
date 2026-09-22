@@ -73,7 +73,7 @@ fn the_default_is_marked_default_in_the_workspace_list() {
         .list_registered_entries()
         .unwrap()
         .into_iter()
-        .map(|e| to_workspace_info(e, None))
+        .map(|e| to_workspace_info(e, None, &txtodo_model::WorkspaceLayout::default()))
         .collect();
     assert_eq!(infos.len(), 2);
     assert_eq!(infos.iter().filter(|i| i.is_default).count(), 1);

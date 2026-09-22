@@ -383,3 +383,53 @@ async fn the_registry_survives_a_real_process_restart() {
         assert_eq!(resp.documents, 1);
     }
 }
+
+/// Task layout-client-gaps: `WorkspaceList` carries each workspace's layout, so a client that
+/// trusts it (instead of a second `WorkspaceLayout` call per entry) opens the right root list.
+#[tokio::test]
+async fn workspace_list_carries_each_workspaces_layout() {
+    let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let registry_db = registry_dir.path().join("registry.db");
+    let custom = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    std::fs::write(
+        custom.path().join("txtodo.toml"),
+        "todo_file = \"work.txt\"\n",
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(custom.path().join("work.txt"), "plan\n").unwrap_or_else(|e| panic!("{e}"));
+    {
+        let mut registry =
+            WorkspaceRegistry::open(&registry_db).unwrap_or_else(|e| panic!("open registry: {e}"));
+        registry
+            .add(custom.path(), &SystemClock)
+            .unwrap_or_else(|e| panic!("register: {e}"));
+    }
+    let plain = seed_workspace(&registry_db);
+    let (_daemon, mut client) = GlobalDaemon::start(registry_dir).await;
+
+    let listed = client
+        .workspace_list(pb::WorkspaceListRequest {})
+        .await
+        .unwrap_or_else(|e| panic!("workspace_list: {e}"))
+        .into_inner()
+        .workspaces;
+    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|e| panic!("{e}"));
+    let find = |root: &Path| {
+        let root = canon(root).display().to_string();
+        listed
+            .iter()
+            .find(|w| w.root == root)
+            .unwrap_or_else(|| panic!("{root} not listed in {listed:?}"))
+    };
+    let custom_info = find(custom.path());
+    assert_eq!(custom_info.todo_file, "work.txt");
+    assert_eq!(custom_info.refs_dir, "tasks");
+    let plain_info = find(plain.path());
+    assert_eq!(plain_info.todo_file, "todo.txt");
+    assert!(
+        listed
+            .iter()
+            .all(|w| !w.todo_file.is_empty() && !w.refs_dir.is_empty()),
+        "no entry reads as an older daemon: {listed:?}"
+    );
+}

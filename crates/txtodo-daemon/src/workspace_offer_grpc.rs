@@ -16,7 +16,8 @@ use txtodo_model::{DeviceId, Ulid};
 use txtodo_proto::v1::{self as pb};
 use txtodo_store::WorkspaceId;
 
-use crate::global_service::{GlobalService, to_workspace_info};
+use crate::global_service::GlobalService;
+use crate::global_service_helpers::workspace_info;
 use crate::workspace_offer_registry::PendingOffer;
 
 fn parse_device_id(text: &str) -> Result<DeviceId, Status> {
@@ -65,8 +66,7 @@ pub(crate) async fn accept_offer(
         workspace_id,
         std::path::Path::new(&req.local_dir),
     )?;
-    let state = service.catalog().load_state(entry.id);
-    Ok(Response::new(to_workspace_info(entry, state)))
+    Ok(Response::new(workspace_info(service.catalog(), entry)))
 }
 
 pub(crate) async fn decline_offer(
