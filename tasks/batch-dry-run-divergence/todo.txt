@@ -1,3 +1,3 @@
-2026-09-21 Refuse a dry-run batch that names the same task id twice
-2026-09-21 Route the real batch through the same grouped-by-id plan, or document the divergence
-2026-09-21 unified_diff: emit the real no-newline marker instead of prose
+x 2026-09-23 2026-09-21 Refuse a dry-run batch that names the same task id twice — grpc_dry_run::duplicate_task_id; plan_files refuses with the id named (a move is refused first, as before)
+x 2026-09-23 2026-09-21 Route the real batch through the same grouped-by-id plan, or document the divergence — routed: grpc_write::batch runs plan_files (one real Apply per file) whenever the batch is plannable (no duplicate id, no move); other batches keep the per-op path. tests/mcp_batch_dry_run.rs now asserts real.applied == dry.applied
+x 2026-09-23 2026-09-21 unified_diff: emit the real no-newline marker instead of prose — unified_diff emits '\ No newline at end of file' on the side that lacks it; a newline-only change shows the last line as -/+ like git

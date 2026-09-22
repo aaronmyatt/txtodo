@@ -46,3 +46,16 @@ a unified-diff token, and never emits `\ No newline at end of file`. The module 
 or silently gains a trailing newline. Either emit the standard marker or drop the claim.
 
 The LCS/hunk arithmetic itself is correct and bounded by `MAX_LCS_CELLS`.
+
+## As built (2026-09-23)
+
+- Both routes taken: a batch naming one task twice is refused by `plan_files` (dry run and the
+  grouped real run alike), and the real run uses the preview's plan — one `Apply` per file,
+  mutations addressed by id — whenever the batch is plannable. A batch with a `todo_move`, or a
+  task named twice, still runs the old per-op path (it re-reads between ops, so it stays correct);
+  those are exactly the batches `dry_run` refuses, so "what the preview shows is what the run
+  writes" holds for every batch that has a preview.
+- `unified_diff` speaks the real format now: `\ No newline at end of file`. `git apply` on a
+  dry-run diff should round-trip; not tried against a real `git apply` here.
+- Known gap: `applied` counts the daemon's ops (a completion is two), as the dry run always did;
+  the tool description does not spell that out.

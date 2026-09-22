@@ -4,9 +4,12 @@
 //! plus the id) because earlier ops in the batch move lines, and the mutations are grouped per file
 //! into one dry-run `Apply` each.
 //!
-//! Known limits: every op is read against the document as it is now, so two ops on the same task
-//! (complete it, then edit it) preview the edit from the pre-batch text; and `todo_move` cannot be
-//! previewed yet, so a batch holding one is refused rather than half shown.
+//! Every op is read against the document as it is now, so a batch that names one task twice
+//! (complete it, then edit it) is refused (task batch-dry-run-divergence): the second op would be
+//! planned from the pre-batch line and the diff shown would not be the diff written. `todo_move`
+//! cannot be previewed yet, so a batch holding one is refused rather than half shown. The real
+//! batch runs the same grouped plan (`grpc_write::batch`) whenever it could be previewed, so what
+//! dry_run shows is what a run writes.
 
 use crate::backend::{ApplyOutcome, RefPath, TaskId, TodoOp, WorkspaceArg};
 use crate::error::McpError;
@@ -89,16 +92,58 @@ async fn planned(
     })
 }
 
-/// The unified diff `ops` would make, one dry-run `Apply` per file, in the order the files first
-/// appear. The outcome has no hash or clock stamp: nothing was written.
-pub(crate) async fn preview(
-    ctx: GrpcCtx,
+/// The task id an op addresses, if it addresses one (`todo_add` names none).
+fn task_id_of(op: &TodoOp) -> Option<&TaskId> {
+    match op {
+        TodoOp::TodoAdd { .. } => None,
+        TodoOp::TodoComplete { id }
+        | TodoOp::TodoUncomplete { id }
+        | TodoOp::TodoEdit { id, .. }
+        | TodoOp::TodoMove { id, .. }
+        | TodoOp::TodoDelete { id, .. } => Some(id),
+    }
+}
+
+/// The first task id two ops of `ops` both name, if any. Such a batch cannot be planned against
+/// the pre-batch document: the second op's line would already have changed.
+pub(crate) fn duplicate_task_id(ops: &[TodoOp]) -> Option<&TaskId> {
+    let mut seen: Vec<&TaskId> = Vec::new();
+    for id in ops.iter().filter_map(task_id_of) {
+        if seen.contains(&id) {
+            return Some(id);
+        }
+        seen.push(id);
+    }
+    None
+}
+
+/// Whether `ops` can be planned as one `Apply` per file against the pre-batch document: no task
+/// named twice, and no `todo_move` (which still needs a per-op line lookup, see the module doc).
+pub(crate) fn plannable(ops: &[TodoOp]) -> bool {
+    duplicate_task_id(ops).is_none() && !ops.iter().any(|op| matches!(op, TodoOp::TodoMove { .. }))
+}
+
+/// `ops` as one mutation list per file, in the order the files first appear — the plan both the
+/// preview and the real grouped run send.
+pub(crate) async fn plan_files(
+    ctx: &GrpcCtx,
     ops: Vec<TodoOp>,
-    workspace: WorkspaceArg,
-) -> Result<ApplyOutcome, McpError> {
+    workspace: &WorkspaceArg,
+) -> Result<Vec<(RefPath, Vec<pb::Mutation>)>, McpError> {
+    if ops.iter().any(|op| matches!(op, TodoOp::TodoMove { .. })) {
+        return Err(McpError::invalid_params(
+            "todo_move cannot be previewed with dry_run yet; run the batch without it",
+        ));
+    }
+    if let Some(id) = duplicate_task_id(&ops) {
+        return Err(McpError::invalid_params(format!(
+            "todo_batch names task {id} twice; the second op would be planned from the line \
+             before the first changed it, so split it into two batches"
+        )));
+    }
     let mut files: Vec<(RefPath, Vec<pb::Mutation>)> = Vec::new();
     for op in ops {
-        let Some((path, m)) = planned(&ctx, op, &workspace).await? else {
+        let Some((path, m)) = planned(ctx, op, workspace).await? else {
             continue;
         };
         match files.iter_mut().find(|(p, _)| *p == path) {
@@ -106,6 +151,17 @@ pub(crate) async fn preview(
             None => files.push((path, vec![m])),
         }
     }
+    Ok(files)
+}
+
+/// The unified diff `ops` would make, one dry-run `Apply` per file, in the order the files first
+/// appear. The outcome has no hash or clock stamp: nothing was written.
+pub(crate) async fn preview(
+    ctx: GrpcCtx,
+    ops: Vec<TodoOp>,
+    workspace: WorkspaceArg,
+) -> Result<ApplyOutcome, McpError> {
+    let files = plan_files(&ctx, ops, &workspace).await?;
     let (mut applied, mut diff) = (0u32, String::new());
     for (path, mutations) in files {
         let req = pb::ApplyRequest {
@@ -148,4 +204,42 @@ async fn add_plan(
         path,
         mutation(pb::mutation::Kind::Add(pb::Add { line: text })),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{duplicate_task_id, plannable};
+    use crate::backend::{FieldPatch, TodoOp};
+
+    fn complete(id: &str) -> TodoOp {
+        TodoOp::TodoComplete { id: id.to_owned() }
+    }
+
+    #[test]
+    fn a_task_named_twice_is_found_and_makes_the_batch_unplannable() {
+        let edit = TodoOp::TodoEdit {
+            id: "A".to_owned(),
+            patch: FieldPatch::default(),
+        };
+        let add = TodoOp::TodoAdd {
+            text: "x".to_owned(),
+            file: None,
+        };
+        assert_eq!(
+            duplicate_task_id(&[complete("A"), edit.clone()]).map(String::as_str),
+            Some("A")
+        );
+        assert_eq!(
+            duplicate_task_id(&[complete("A"), complete("B"), add.clone()]),
+            None
+        );
+        assert!(plannable(&[complete("A"), complete("B"), add]));
+        assert!(!plannable(&[complete("A"), edit]));
+        let mv = TodoOp::TodoMove {
+            id: "C".to_owned(),
+            before: Some("B".to_owned()),
+            after: None,
+        };
+        assert!(!plannable(&[mv]), "a move still needs the per-op path");
+    }
 }

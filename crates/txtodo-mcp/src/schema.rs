@@ -259,7 +259,7 @@ impl McpServer {
         fields(tool = "todo_batch", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "Apply several operations in order. dry_run writes nothing and returns the unified diff the batch would make (todo_move cannot be previewed yet)."
+        description = "Apply several operations in order. dry_run writes nothing and returns the unified diff the batch would make; the real run then applies the same plan, one commit per file. A batch naming one task twice cannot be previewed (split it), and todo_move cannot be previewed yet."
     )]
     pub async fn todo_batch(
         &self,
