@@ -48,3 +48,15 @@ whatever the daemon does. This is the design gap to close first (line 1).
 
 - Whether an old daemon should be refused outright (version handshake) rather than warned about.
   `version-info` already warns on app/daemon version mismatch; check why it did not fire here.
+
+## As built (2026-09-23)
+
+- Cause 1 was fixed earlier (notes collapse under the sub-list). This pass closed the three
+  follow-ups: `MainView` shows `layoutFallbackMessage` when `workspace_layout` fails (store
+  `workspaceLayoutError`); `DetailView` renders an alert instead of an editor when the daemon
+  returns no notes path for a line that has `ref:` (`detailSections.ts::notesMode` = `unavailable`);
+  `NotesEditor` hides the editor on a load error. Section decisions live in
+  `src/lib/detailSections.ts` with unit tests.
+- Not decided still: refusing an old daemon outright. The auto-upgrade task
+  (`daemon-auto-upgrade`) now restarts an older daemon from any client, which removes most of
+  the cause-2 cases in practice.

@@ -13,6 +13,10 @@ export const currentWorkspaceRoot = writable<string>("");
  * the daemon's default so the first paint composes `tasks/<slug>` before the answer arrives. */
 export const workspaceLayoutStore = writable<RefLayout>(DEFAULT_LAYOUT);
 
+/** The last `workspace_layout` failure for the current workspace, `""` when it answered (task
+ * desktop-notes-hidden): MainView shows it instead of silently assuming `tasks/`. */
+export const workspaceLayoutError = writable<string>("");
+
 /** One detail level the universal view (ADR 0025, task desktop-universal-view) asked MainView to
  * open after switching workspaces — consumed exactly once by MainView's own
  * `$currentWorkspaceRoot` effect, which is what actually pushes it onto the detail stack (see

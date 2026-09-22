@@ -15,7 +15,7 @@
 	} from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
 	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
-	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore } from "$lib/stores/workspaces";
+	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
@@ -25,6 +25,7 @@
 	import PinToggle from "./PinToggle.svelte";
 	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import VersionInfo from "./VersionInfo.svelte";
+	import { layoutFallbackMessage } from "$lib/layoutFallback";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -80,10 +81,13 @@
 		// Where this workspace keeps its `ref:` folders (task workspace-layout): the nested-list
 		// paths and the ref indicators are composed from it. A failed fetch keeps the default.
 		// Reset first, so the new workspace never opens the previous one's root list.
+		// A failed fetch keeps the default but says so (task desktop-notes-hidden): an older daemon
+		// without the RPC resolves ref folders elsewhere than this client, and nothing else shows it.
 		workspaceLayoutStore.set(DEFAULT_LAYOUT);
+		workspaceLayoutError.set("");
 		workspaceLayout()
 			.then((layout) => workspaceLayoutStore.set(layout))
-			.catch(() => {});
+			.catch((e) => workspaceLayoutError.set(String(e)));
 		const pending = get(pendingUniversalNav);
 		if (pending && pending.workspaceRoot === root) {
 			detail = [{ file: pending.file, line: pending.line, workspaceRoot: pending.workspaceRoot }];
@@ -135,6 +139,9 @@
 
 	<RejectedEditBanner />
 	<VersionInfo banner />
+	{#if $workspaceLayoutError}
+		<p class="layout-fallback" role="status">{layoutFallbackMessage($workspaceLayoutError)}</p>
+	{/if}
 
 	{#if $openingWorkspace > 0}
 		<p class="opening" role="status">Opening this workspace&hellip;</p>
@@ -206,6 +213,14 @@
 		font-size: 1.25rem;
 		font-weight: 700;
 		letter-spacing: -0.02em;
+	}
+
+	.layout-fallback {
+		margin: 0.5rem 1rem;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--color-warning, #b45309);
+		border-radius: 4px;
+		font-size: 0.85rem;
 	}
 
 	.banner {

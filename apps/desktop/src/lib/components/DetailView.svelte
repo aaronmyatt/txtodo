@@ -31,6 +31,7 @@
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
 	import { findRefTag, joinPath, refDirFor } from "$lib/todotxt/lineInfo";
+	import { notesLayout, notesMode, subListMode } from "$lib/detailSections";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
 	import { lineOfTask, taskIdAt } from "$lib/todotxt/taskIds";
 	import type { DetailParams } from "$lib/types";
@@ -87,7 +88,14 @@
 	const absoluteRefDir = $derived(
 		refDir && workspaceRootPath ? `${workspaceRootPath}/${refDir}` : (workspaceRootPath ?? "")
 	);
-	const hasSubList = $derived(subListInfo !== null && subListInfo.total > 0);
+	const subListTotal = $derived(subListInfo?.total ?? 0);
+	const hasSubList = $derived(subListMode(subListTotal) === "tasks");
+	// The daemon answered `GetNotes` with no path although the line has a `ref:` tag: it resolved
+	// the folder elsewhere (an older daemon); an empty editor here would write a second notes.md.
+	let notesPathMissing = $state(false);
+	const notesState = $derived(
+		notesMode({ parentLine, parentTaskId, hasRefTag: refTag !== null, notesPathMissing })
+	);
 
 	// Starting a sub-list on a task that has none yet (task desktop-sublist-start): the section
 	// shows one add-line input instead of a FileView. Nothing is written until the first submit.
@@ -121,10 +129,11 @@
 
 	function onNotesLoaded(doc: NotesDoc) {
 		notesPath = doc.path;
+		notesPathMissing = doc.path === "";
 		// Open once, on the first answer: a later reload must not fight the human's own toggle.
 		if (!notesSeen) {
 			notesSeen = true;
-			notesOpen = doc.text.trim() !== "";
+			notesOpen = notesLayout(subListTotal, doc.text).open;
 		}
 	}
 	const allSubTasksDone = $derived(
@@ -352,9 +361,16 @@
 
 	<section class="notes" aria-label="Notes">
 		{#snippet notesBody()}
-			{#if !parentLine}
+			{#if notesState === "loading"}
 				<!-- still loading -->
-			{:else if !parentTaskId}
+			{:else if notesState === "unavailable"}
+				<p class="empty-state" role="alert">
+					Notes could not be loaded: the daemon found no <code>notes.md</code> for this task
+					even though its line carries <code>ref:{refTag?.slug}</code>. The running daemon
+					is likely older than this app and looks in a different folder; reinstall or restart
+					<code>txtodod</code>. Nothing was written.
+				</p>
+			{:else if notesState === "no-task-id"}
 				<!-- `GetNotes`/`EditNotes` resolve a task by task_id alone
 				     (crates/txtodo-daemon/src/notes.rs::locate_task), never by line_number. The id comes
 				     from `GetFile`'s `task_ids` (`taskIdAt`, task sidecar-task-ids), so a Sidecar line

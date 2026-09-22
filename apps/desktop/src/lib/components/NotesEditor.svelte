@@ -106,7 +106,10 @@
 	{#if saveError}
 		<p class="error" role="alert">Could not save notes: {saveError}</p>
 	{/if}
-	<div class="editor-shell" bind:this={containerEl}></div>
+	<!-- On a failed load the editor stays hidden (task desktop-notes-hidden): an empty editor
+	     over a document that did not load invites typing, and the first keystroke would save an
+	     empty-based text over whatever is really there. The shell must still exist for CM6. -->
+	<div class="editor-shell" class:hidden={loadError !== ""} bind:this={containerEl}></div>
 </div>
 
 <style>
@@ -114,6 +117,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.35rem;
+	}
+
+	.editor-shell.hidden {
+		display: none;
 	}
 
 	.editor-shell {
