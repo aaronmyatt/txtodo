@@ -17,10 +17,8 @@ use crate::error::McpError;
 use crate::grpc_convert::{hex, workspace_selector};
 use crate::grpc_read::{file_or_root, locate_by_id};
 use crate::grpc_write::GrpcCtx;
-
-fn status(s: tonic::Status) -> McpError {
-    McpError::daemon(s.message().to_owned())
-}
+// One mapping for every daemon failure, metadata included (task mcp-refusal-metadata).
+use crate::grpc_write::status;
 
 /// `todo_lint`.
 pub async fn lint(

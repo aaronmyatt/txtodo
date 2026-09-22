@@ -7,10 +7,8 @@ use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use crate::backend::{TaskId, WorkspaceArg};
 use crate::error::McpError;
 use crate::grpc_convert::workspace_selector;
-
-fn status(s: tonic::Status) -> McpError {
-    McpError::daemon(s.message().to_owned())
-}
+// One mapping for every daemon failure, metadata included (task mcp-refusal-metadata).
+use crate::grpc_write::status;
 
 /// `todo_notes_get` → daemon gRPC `GetNotes`. `line_number` is irrelevant here: `GetNotes`'s
 /// `parse_required_task_id` (`notes.rs`) resolves purely by `task_id`, unlike every other RPC's

@@ -1,3 +1,3 @@
-2026-09-21 Carry spec_rule as a String, not an allow-list of three literals
-2026-09-21 conflicts_resolve and the notes tools delegate to grpc_write::status
-2026-09-21 test: a refusal surfaces line and spec_rule through the MCP layer @test
+x 2026-09-23 2026-09-21 Carry spec_rule as a String, not an allow-list of three literals — McpError.spec_rule is Option<String>; grpc_write::status passes x-txtodo-error-rule through verbatim
+x 2026-09-23 2026-09-21 conflicts_resolve and the notes tools delegate to grpc_write::status — grpc_hygiene, grpc_notes and grpc_read all use grpc_write::status; the three private copies are gone
+x 2026-09-23 2026-09-21 test: a refusal surfaces line and spec_rule through the MCP layer @test — unit: grpc_write_tests::a_daemon_refusal_keeps_its_line_and_any_spec_rule; end to end: tests/mcp_batch_dry_run.rs raw_write on line 99 surfaces line 99 and specs/todotxt.abnf#line

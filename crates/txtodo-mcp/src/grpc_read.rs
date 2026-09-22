@@ -5,12 +5,14 @@ use tonic::transport::Channel;
 use txtodo_proto::v1 as pb;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
+// One mapping for every daemon failure, metadata included (task mcp-refusal-metadata).
 use crate::backend::Hlc;
 use crate::backend::{FileMeta, GetTarget, ListArgs, OpSummary, RefPath, TaskId, TaskRow};
 use crate::backend::{WorkspaceArg, WorkspaceInfo};
 use crate::doc::FileDoc;
 use crate::error::McpError;
 use crate::grpc_convert::{file_meta, op_summary, workspace_info, workspace_selector};
+use crate::grpc_write::status;
 use crate::parse;
 
 /// The root list of a daemon that predates the layout RPC (and of any workspace with no
@@ -48,10 +50,6 @@ fn root_or_default(todo_file: String) -> RefPath {
     } else {
         todo_file
     }
-}
-
-fn status(s: tonic::Status) -> McpError {
-    McpError::daemon(s.message().to_owned())
 }
 
 /// The whole file: UTF-8 text (lossy — a byte-exact round trip is the CLI's job, not this read

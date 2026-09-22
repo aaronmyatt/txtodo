@@ -26,3 +26,9 @@ actionable instead of a sentence. The daemon emits it. The MCP layer only half r
 
 Small, self-contained, and the kind of thing that silently rots — three copies of `status()` is
 already two too many.
+
+## As built (2026-09-23)
+
+All three closed. `spec_rule` is owned (`Option<String>`), the daemon's metadata is passed through
+by one `status()` (`grpc_write.rs`) that every gRPC body — reads, hygiene, notes, writes — now uses,
+and the mapping is tested both as a pure function and end to end against an in-process daemon.

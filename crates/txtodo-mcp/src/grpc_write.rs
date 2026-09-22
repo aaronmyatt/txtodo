@@ -27,27 +27,22 @@ pub struct GrpcCtx {
     pub agent: Option<pb::AgentPrincipal>,
 }
 
-/// The daemon's refusal as an `McpError`, with the line and spec rule it sent as metadata (task
-/// apply-dry-run: structured errors). The keys are `txtodo-daemon`'s `ERROR_LINE_KEY` and
-/// `ERROR_RULE_KEY`; this crate may not depend on it, so the strings are repeated here.
+/// The daemon's failure as an `McpError`, with the line and spec rule it sent as metadata (task
+/// apply-dry-run: structured errors) passed through verbatim — the daemon owns the rule list
+/// (`MutationError::spec_rule`), so nothing here allow-lists it (task mcp-refusal-metadata).
+/// The keys are `txtodo-daemon`'s `ERROR_LINE_KEY` and `ERROR_RULE_KEY`; this crate may not
+/// depend on it, so the strings are repeated here. The one `Status` → `McpError` mapping every
+/// gRPC body in this crate uses, reads and notes included.
 pub(crate) fn status(s: tonic::Status) -> McpError {
     let mut error = McpError::daemon(s.message().to_owned());
     let meta = |key: &str| s.metadata().get(key).and_then(|v| v.to_str().ok());
     if let Some(line) = meta("x-txtodo-error-line").and_then(|v| v.parse().ok()) {
         error = error.with_line(line);
     }
-    // The rule ids the daemon sends, kept as `&'static str` (`McpError::spec_rule`).
-    let rule = [
-        "specs/todotxt.abnf#blank",
-        "specs/todotxt.abnf#line",
-        "specs/todotxt.abnf#id-tag",
-    ]
-    .into_iter()
-    .find(|known| meta("x-txtodo-error-rule") == Some(known));
-    match rule {
-        Some(rule) => error.with_spec_rule(rule),
-        None => error,
+    if let Some(rule) = meta("x-txtodo-error-rule") {
+        error = error.with_spec_rule(rule);
     }
+    error
 }
 
 /// Today, local date, `YYYY-MM-DD` (ADR 0011: local date, never a time zone) — the same source

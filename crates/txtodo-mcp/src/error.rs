@@ -14,8 +14,11 @@ pub struct McpError {
     pub message: String,
     /// The offending 1-based line, when the error is line-specific.
     pub line: Option<u32>,
-    /// A rule id in `specs/todotxt.abnf` or `specs/ref-directories.md`, when applicable.
-    pub spec_rule: Option<&'static str>,
+    /// A rule id in `specs/todotxt.abnf` or `specs/ref-directories.md`, when applicable. Owned:
+    /// the daemon owns the list of rules (`MutationError::spec_rule`) and sends one as metadata;
+    /// this crate passes it through instead of allow-listing the ones it has heard of (task
+    /// mcp-refusal-metadata).
+    pub spec_rule: Option<String>,
 }
 
 impl McpError {
@@ -68,8 +71,8 @@ impl McpError {
 
     /// Attaches a spec rule id.
     #[must_use]
-    pub fn with_spec_rule(mut self, rule: &'static str) -> McpError {
-        self.spec_rule = Some(rule);
+    pub fn with_spec_rule(mut self, rule: impl Into<String>) -> McpError {
+        self.spec_rule = Some(rule.into());
         self
     }
 
@@ -79,7 +82,7 @@ impl McpError {
         if let Some(line) = self.line {
             obj["line"] = json!(line);
         }
-        if let Some(rule) = self.spec_rule {
+        if let Some(rule) = &self.spec_rule {
             obj["spec_rule"] = json!(rule);
         }
         obj

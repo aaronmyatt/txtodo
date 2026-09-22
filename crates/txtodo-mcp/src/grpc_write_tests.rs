@@ -104,3 +104,29 @@ async fn control_a_real_batch_does_reach_for_the_daemon() {
         "the unreachable channel must fail a real batch"
     );
 }
+
+/// Task mcp-refusal-metadata: whatever rule id the daemon sends comes through, not only the three
+/// this crate once allow-listed, and the line rides along.
+#[test]
+fn a_daemon_refusal_keeps_its_line_and_any_spec_rule() {
+    let mut s = tonic::Status::invalid_argument("line 4: bad priority");
+    s.metadata_mut().insert(
+        "x-txtodo-error-line",
+        "4".parse().unwrap_or_else(|e| panic!("{e}")),
+    );
+    s.metadata_mut().insert(
+        "x-txtodo-error-rule",
+        "specs/todotxt.abnf#priority"
+            .parse()
+            .unwrap_or_else(|e| panic!("{e}")),
+    );
+    let err = status(s);
+    assert_eq!(err.code, "daemon");
+    assert_eq!(err.line, Some(4));
+    assert_eq!(
+        err.spec_rule.as_deref(),
+        Some("specs/todotxt.abnf#priority")
+    );
+    let bare = status(tonic::Status::not_found("no such task"));
+    assert!(bare.line.is_none() && bare.spec_rule.is_none());
+}
