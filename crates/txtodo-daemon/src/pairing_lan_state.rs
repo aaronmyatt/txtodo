@@ -10,28 +10,17 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use txtodo_model::DeviceId;
-use txtodo_sync::{DiscoveredPeer, LanEndpoint, Nonce};
-
-/// The initiator's most recently produced sealed `PairingGrant`, cached so a joiner's retried
-/// `JoinerHello` (its response to the first one may simply have been lost — the network is best
-/// effort) still gets the grant resent even though `PairingRegistry::try_finalize_initiator`
-/// already cleared its own active-pairing state on success (`pairing_state.rs`'s own doc on why
-/// that clearing stays as-is: this cache is a network-layer retry concern, not that registry's).
-struct FinalizedGrant {
-    device: DeviceId,
-    nonce: Nonce,
-    sealed: Vec<u8>,
-}
+use txtodo_sync::{DiscoveredPeer, LanEndpoint};
 
 /// Cheap to clone: three `Arc<Mutex<_>>`s. Every workspace starts with all empty; `lan.rs`'s
 /// background task and `pairing_lan.rs`'s relay driver fill them in as they progress (an endpoint
-/// once bound, a sighting each time mDNS resolves one, a grant once this device finalizes as
-/// initiator), the same "never optimistic" discipline `LanStatus` already follows.
+/// once bound, a sighting each time mDNS resolves one), the same "never optimistic" discipline
+/// `LanStatus` already follows. The sealed grant is cached device-globally on `PairingRegistry`
+/// instead (`pairing_state.rs`), not here — see that field's doc for why per-workspace was wrong.
 #[derive(Clone, Default)]
 pub(crate) struct PairingLan {
     endpoint: Arc<Mutex<Option<Arc<LanEndpoint>>>>,
     sightings: Arc<Mutex<BTreeMap<DeviceId, DiscoveredPeer>>>,
-    finalized: Arc<Mutex<Option<FinalizedGrant>>>,
     /// Which carrier ("lan" or "relay") the most recently *completed* pairing actually used (plan
     /// M8 `sync-pairing-relay`), for `Health.pairing_last_carrier`/`txtodo doctor` — empty until a
     /// pairing has finished on this device at all, never optimistic.
@@ -71,30 +60,6 @@ impl PairingLan {
             .unwrap_or_else(PoisonError::into_inner)
             .get(&device)
             .cloned()
-    }
-
-    /// Caches a just-produced sealed grant, keyed by the joiner's device and the offer's nonce.
-    pub(crate) fn cache_grant(&self, device: DeviceId, nonce: Nonce, sealed: Vec<u8>) {
-        *self
-            .finalized
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = Some(FinalizedGrant {
-            device,
-            nonce,
-            sealed,
-        });
-    }
-
-    /// The cached grant for `(device, nonce)`, if one was produced — lets a retried `JoinerHello`
-    /// get the same grant resent even after `PairingRegistry`'s own active-pairing state has
-    /// already been cleared by the finalize that produced it.
-    pub(crate) fn cached_grant(&self, device: DeviceId, nonce: Nonce) -> Option<Vec<u8>> {
-        let guard = self
-            .finalized
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
-        let cached = guard.as_ref()?;
-        (cached.device == device && cached.nonce == nonce).then(|| cached.sealed.clone())
     }
 
     /// Records `carrier` ("lan" or "relay") as the carrier the most recently completed pairing

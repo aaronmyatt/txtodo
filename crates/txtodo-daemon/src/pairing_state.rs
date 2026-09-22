@@ -1,17 +1,10 @@
 //! This daemon's own pairing bookkeeping: at most one active [`PairingSession`]
-//! (`MAX_CONCURRENT_PAIRINGS`), its own `NonceRegistry`, and `PAIRING_WINDOW_MS` expiry —
-//! everything `pairing_grpc.rs` needs to drive `txtodo-sync`'s state machine from gRPC.
-//!
-//! The three original gRPC RPCs only ever reached this device's *own* daemon; the leg between two
-//! daemons (the joiner's public key reaching the initiator, and the sealed group key reaching the
-//! joiner back) now has a real transport: `pairing_lan.rs` drives the relay-seam methods below
+//! (`MAX_CONCURRENT_PAIRINGS`), its own `NonceRegistry`, `PAIRING_WINDOW_MS` expiry, and the
+//! device-global grant cache ([`FinalizedGrant`]) — everything `pairing_grpc.rs` needs to drive
+//! `txtodo-sync`'s state machine from gRPC. `pairing_lan.rs` drives the relay-seam methods below
 //! (`complete_as_initiator`, `joiner_public_key`, `mark_remote_confirmed`, `try_finalize_initiator`,
-//! `adopt_group_key`, plus the read-only [`PairingRegistry::snapshot`] and the peer-static-key
-//! bookkeeping) over the LAN `Link` `sync-lan-transport` built, on its own ALPN
-//! (`txtodo_sync::PAIRING_ALPN`) so a pairing connection is never confused with the group-keyed
-//! sync protocol. `pairing_grpc_tests.rs` still drives every method directly too (whitebox,
-//! same-process) — exactly how a real two-daemon test drives the same methods through a real
-//! socket instead.
+//! `adopt_group_key`, `snapshot`, the peer-static and grant-cache bookkeeping) over the LAN/relay
+//! `Link` on `txtodo_sync::PAIRING_ALPN`. `pairing_grpc_tests.rs` drives every method directly too.
 
 use std::sync::Mutex;
 
@@ -60,10 +53,19 @@ pub(crate) struct ActiveSnapshot {
     pub(crate) peer_device: Option<DeviceId>,
 }
 
+/// The initiator's last sealed `PairingGrant`, cached **device-globally** (`(device, nonce, sealed)`)
+/// so a retried `JoinerHello` is re-served the same bytes after `try_finalize_initiator` cleared
+/// `active`. Device-global, not per-workspace: the relay accept path routes each round to an
+/// arbitrary open workspace (`device_relay::WorkspaceRoutes::any`) while the session is already
+/// device-global (ADR 0021); a per-workspace cache missed whenever a retry landed on a different
+/// workspace, so the initiator answered `Rejected` off the cleared session and the joiner aborted.
+type FinalizedGrant = (DeviceId, Nonce, Vec<u8>);
+
 #[derive(Default)]
 struct Inner {
     nonces: NonceRegistry,
     active: Option<Active>,
+    finalized: Option<FinalizedGrant>,
 }
 
 /// Clears `active` and reports why it (or the lack of it) refuses the caller's next step:
@@ -99,12 +101,8 @@ fn ensure_capacity(active: &mut Option<Active>, now_ms: u64) -> Result<(), Pairi
     }
 }
 
-/// Fetches this workspace's current group key bytes, minting and storing a fresh one if none has
-/// ever been created (the first-ever pairing for a brand-new group). `getrandom` failure is not
-/// recoverable in a meaningful way (`device_identity.rs::load_or_mint_group` takes the same stance).
-/// Only called by [`PairingRegistry::try_finalize_initiator`] (see its own doc on why that is
-/// itself only exercised by `pairing_grpc_tests.rs` today).
-#[allow(dead_code)]
+/// Fetches the device group key bytes, minting and storing a fresh one for the first-ever pairing.
+/// `getrandom` failure is not meaningfully recoverable (`load_or_mint_group` takes the same stance).
 fn fetch_or_mint_group_key(key_store: &dyn KeyStore) -> Result<[u8; KEY_BYTES], PairingStateError> {
     if let Some(secret) = key_store.get(KeyId::Group(INITIAL_GROUP_EPOCH))? {
         let bytes: [u8; KEY_BYTES] = secret
@@ -224,7 +222,7 @@ impl PairingRegistry {
         now_ms: u64,
     ) -> Result<(), PairingStateError> {
         let mut inner = self.lock();
-        let Inner { active, nonces } = &mut *inner;
+        let Inner { active, nonces, .. } = &mut *inner;
         let entry = active_mut(active, now_ms)?;
         if entry.role != Role::Initiator {
             return Err(PairingStateError::WrongRole);
@@ -245,16 +243,11 @@ impl PairingRegistry {
         Ok(())
     }
 
-    /// Relay seam: once both sides have confirmed, the initiator wraps its group key (minting one
-    /// first if this is a brand-new group) **and** `own_static_public` — its own long-term X25519
-    /// static key (plan M4 `sync-device-remove`), bundled via [`PairingGrant`]/`wrap_grant` rather
-    /// than the bare `wrap_group_key`, so the joiner learns a static key it can be handed a
-    /// rotation grant to later, registered nowhere before this call. Returns `None` when not yet
-    /// ready, or when this daemon is not the initiator — the joiner has nothing to send. Clears
-    /// `active` on success, so `pairing_lan.rs`'s driver caches the returned sealed bytes itself
-    /// (network-layer retry concern, not this registry's) rather than calling this a second time.
-    /// Driven for real by `pairing_lan.rs`; `pairing_grpc_tests.rs` also drives it directly
-    /// (whitebox).
+    /// Relay seam: once both sides confirm, the initiator wraps its group key (minting one for a
+    /// brand-new group) and its own long-term static key into a sealed [`PairingGrant`]. Returns
+    /// `None` when not ready or not the initiator. Clears `active` on success and, atomically,
+    /// caches the sealed bytes device-globally ([`FinalizedGrant`]) so a retried `JoinerHello` is
+    /// re-served them via [`PairingRegistry::cached_grant`]. Driven by `pairing_lan.rs`; tests too.
     pub(crate) fn try_finalize_initiator(
         &self,
         key_store: &dyn KeyStore,
@@ -274,24 +267,35 @@ impl PairingRegistry {
             group_key,
             static_public: own_static_public.to_bytes(),
         };
-        let sealed = {
+        let (sealed, cached) = {
             let active = active_mut(&mut inner.active, now_ms)?;
-            active.session.wrap_grant(&grant)?
+            let sealed = active.session.wrap_grant(&grant)?;
+            // Cache atomically with the `active` clear below: no concurrent round can then see a
+            // cleared session and an empty cache at once and answer a spurious (fatal) `Rejected`.
+            let cached = active
+                .session
+                .peer_device()
+                .map(|device| (device, active.session.nonce(), sealed.clone()));
+            (sealed, cached)
         };
+        inner.finalized = cached;
         inner.active = None;
         Ok(Some(sealed))
     }
 
-    /// Relay seam: the joiner's side of the same finish — unwraps the initiator's
-    /// [`PairingGrant`], stores the group key, and this side's pairing finishes too. Returns the
-    /// initiator's `DeviceId` and long-term static public key so the caller
-    /// ([`crate::workspace::Workspace::adopt_group_key`]) can register it in the `devices` table.
-    /// The reverse direction (the initiator learning the joiner's static key) is
-    /// [`PairingRegistry::peer_static`] below, populated from the network by `pairing_lan.rs`'s
-    /// incoming `JoinerHello` handler rather than bundled in a grant, since the joiner sends its
-    /// static key before either side has confirmed (see `pairing_relay.rs`'s module doc on why
-    /// that is safe: it is no more secret than the ephemeral key exchanged the same way). Driven
-    /// for real by `pairing_lan.rs`; `pairing_grpc_tests.rs` also drives it directly (whitebox).
+    /// The device-global cached grant for `(device, nonce)`, if [`PairingRegistry::try_finalize_initiator`]
+    /// produced one — re-serves a retried `JoinerHello` the same sealed bytes after `active` was
+    /// cleared, on whichever open workspace the relay accept path routed the round to.
+    pub(crate) fn cached_grant(&self, device: DeviceId, nonce: Nonce) -> Option<Vec<u8>> {
+        let inner = self.lock();
+        let (d, n, sealed) = inner.finalized.as_ref()?;
+        (*d == device && *n == nonce).then(|| sealed.clone())
+    }
+
+    /// Relay seam: the joiner unwraps the initiator's [`PairingGrant`], stores the group key, and
+    /// returns the initiator's `DeviceId` and long-term static public key so the caller
+    /// (`Workspace::adopt_group_key`) can register it in the `devices` table. The reverse leg (the
+    /// initiator learning the joiner's static key) is [`PairingRegistry::set_peer_static`] below.
     pub(crate) fn adopt_group_key(
         &self,
         key_store: &dyn KeyStore,

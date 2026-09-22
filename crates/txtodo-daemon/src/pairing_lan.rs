@@ -276,8 +276,11 @@ fn log_reply(peer: DeviceId, carrier: &'static str, reply: &InitiatorReply, deli
 pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> InitiatorReply {
     let ws = read(ws);
     // Checked before requiring an active session: a successful finalize clears it (see
-    // `finalize_or_pending`'s doc), so a retry after that would otherwise see `NotActive`.
-    if let Some(sealed) = ws.pairing_lan().cached_grant(hello.device, hello.nonce) {
+    // `finalize_or_pending`'s doc), so a retry after that would otherwise see `NotActive`. The
+    // cache is device-global (`pairing()`, not the per-workspace `pairing_lan()`): the relay
+    // accept path routes each round to an arbitrary open workspace, so a per-workspace cache
+    // missed whenever a retry landed on a different one and this device hard-rejected the joiner.
+    if let Some(sealed) = ws.pairing().cached_grant(hello.device, hello.nonce) {
         return InitiatorReply::Grant(sealed);
     }
     let now_ms = ws.clock().now_ms();
@@ -304,7 +307,7 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
     if hello.confirmed {
         let _ = pairing.mark_remote_confirmed(now_ms);
     }
-    finalize_or_pending(&ws, hello.device, hello.nonce, now_ms)
+    finalize_or_pending(&ws, hello.device, now_ms)
 }
 
 /// No active session (expired window, wrong role, or none) — `debug`: routine for a stale retry.
@@ -344,15 +347,10 @@ fn log_finalize_failed(peer: DeviceId, e: &crate::pairing_state_error::PairingSt
     tracing::error!(%peer, error = %e, "pairing_initiator_finalize_failed");
 }
 
-fn finalize_or_pending(
-    ws: &Workspace,
-    device: DeviceId,
-    nonce: txtodo_sync::Nonce,
-    now_ms: u64,
-) -> InitiatorReply {
-    if let Some(sealed) = ws.pairing_lan().cached_grant(device, nonce) {
-        return InitiatorReply::Grant(sealed);
-    }
+/// `try_finalize_initiator` caches the sealed grant device-globally on success (keyed by the
+/// session's own peer/nonce, atomically with clearing `active`), so a retried `JoinerHello` is
+/// re-served it by `process_hello`'s top check above — no caching is done here.
+fn finalize_or_pending(ws: &Workspace, device: DeviceId, now_ms: u64) -> InitiatorReply {
     let sealed = match ws.pairing().try_finalize_initiator(
         ws.key_store().as_ref(),
         ws.device_static_public(),
@@ -366,7 +364,6 @@ fn finalize_or_pending(
     };
     match sealed {
         Some(sealed) => {
-            ws.pairing_lan().cache_grant(device, nonce, sealed.clone());
             register_joiner_device(ws, device, now_ms);
             InitiatorReply::Grant(sealed)
         }
