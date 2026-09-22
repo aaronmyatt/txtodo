@@ -46,3 +46,16 @@ Root line added 2026-09-22 after the version-info work: an installed app spawned
 
 - A restart drops every other client's `Watch` stream; the TUI reconnects (bounded), the desktop
   reconnects through its own status loop. Same effect as `txtodo daemon install --force` today.
+
+## As built (2026-09-23)
+
+- `txtodod` writes `txtodod.version` beside `txtodod.pid` (`main.rs::lock_and_start_logging`).
+- `txtodo-daemon-launch`: `LaunchConfig::with_upgrade_to`, `Ensured::{AlreadyLive, Spawned,
+  Upgraded}`; the decision in `upgrade.rs` (pure, unit tested), the restart in `upgrade_unix.rs`.
+  Real-daemon tests in `tests/upgrade.rs`: an older daemon is restarted, an equal/newer one and a
+  "newer client but not newer binary" case are left alone.
+- Clients: CLI (`daemon_ensure::upgrade_running_daemon`, before every non-`--no-daemon` command,
+  only when the global socket answers; stderr line on restart), TUI and MCP (startup), desktop
+  (`daemon/spawn.rs::to_launch_config`). All pass `CARGO_PKG_VERSION`.
+- Not done: no client shows the restart in a UI (TUI/desktop just reconnect); the service path
+  (`restart_service`) is exercised only by hand, tests run with `TXTODO_NO_SERVICE=1`.

@@ -43,7 +43,9 @@ mod unix_impl {
     /// `extra_args`), matching what `ensure_daemon`'s own best-effort persistent-service install
     /// expects.
     fn to_launch_config(cfg: &DesktopConfig, sock: &std::path::Path) -> LaunchConfig {
-        let mut launch = LaunchConfig::new(sock);
+        // `with_upgrade_to` (task daemon-auto-upgrade): a live global daemon older than this app
+        // is restarted with the bundled sidecar (or the resolved `txtodod`) before the app attaches.
+        let mut launch = LaunchConfig::new(sock).with_upgrade_to(env!("CARGO_PKG_VERSION"));
         launch.daemon_bin = cfg.daemon_bin.clone();
         launch.spawn_timeout = cfg.spawn_timeout;
         if let Some(s) = &cfg.global_socket_override {

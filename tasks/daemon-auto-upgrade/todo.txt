@@ -1,5 +1,5 @@
-2026-09-23 tui + mcp: pass their version to ensure_daemon +m11 @tui @mcp
-2026-09-23 desktop: pass its version through DesktopConfig into the launch config +m11 @desktop
+x 2026-09-23 2026-09-23 desktop: pass its version through DesktopConfig into the launch config +m11 @desktop — to_launch_config adds with_upgrade_to; the e2e bridge's bundled/overridden binary is the same build, so tests never restart
+x 2026-09-23 2026-09-23 tui + mcp: pass their version to ensure_daemon +m11 @tui @mcp — both pass env!(CARGO_PKG_VERSION) via with_upgrade_to; the mcp --dir bridge shape never restarts
 x 2026-09-23 2026-09-23 cli: pass its version on every daemon-mode command (ensure_daemon only ran when no socket existed) +m11 @cli — main.rs calls daemon_ensure::upgrade_running_daemon before select, only when the global socket answers; says so on stderr; CI-only test in tests/daemon_autostart.rs
 x 2026-09-23 2026-09-23 txtodod: write txtodod.version beside the pid file at startup, so a client can read the running version without gRPC +m11 @daemon — plain text beside txtodod.pid; never removed, the pid lock says whether it is current
 x 2026-09-23 2026-09-23 daemon-launch: LaunchConfig.upgrade_to; ensure_daemon restarts a running older global daemon with the resolved newer binary, never a downgrade; test against a real txtodod +m11 @daemon @test — crates/txtodo-daemon-launch/src/upgrade.rs + upgrade_unix.rs; ensure_daemon now returns Ensured::{AlreadyLive,Spawned,Upgraded}; tests/upgrade.rs restarts a real daemon whose version file was rewritten older
