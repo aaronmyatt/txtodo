@@ -63,7 +63,7 @@ impl McpServer {
         fields(tool = "todo_list", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "List tasks, filtered by an optional query, done (true or false) and file, capped at limit."
+        description = "List tasks, filtered by an optional query, done (true or false) and file. At most 50 rows per call (limit clamps lower); when more match, a second text block names the offset for the next page."
     )]
     pub async fn todo_list(
         &self,

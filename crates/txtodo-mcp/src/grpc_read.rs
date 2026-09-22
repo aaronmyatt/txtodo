@@ -140,6 +140,7 @@ pub async fn search(
             done: None,
             file,
             limit: None,
+            offset: None,
             workspace,
         },
     )

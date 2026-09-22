@@ -22,6 +22,10 @@ use crate::parse::Token;
 
 const SCHEME: &str = "todotxt";
 
+/// The most bytes of file text one resource read returns (task payload-budget): a longer file
+/// is paged, and the reply carries a second `ResourceContents` whose URI is the next page.
+pub const MAX_RESOURCE_BYTES: usize = 512 * 1024;
+
 /// `list_resources`: the always-present root file, plus `todo_list_workspaces`. Every synced ref
 /// path also gets a resource entry, so a workspace with sub-lists (`q4-roadmap/todo.txt`) is fully
 /// discoverable — but only when exactly one workspace is open: `rmcp::ServerHandler::list_resources`
@@ -82,11 +86,70 @@ pub async fn read(backend: &dyn McpBackend, uri: &str) -> Result<ReadResourceRes
         _ if path == "history" || path.starts_with("history?") => {
             history_json(backend, &path, workspace).await?
         }
-        _ => backend.get_file(Some(path.to_owned()), workspace).await?,
+        _ => {
+            let (file, offset) = split_offset(&path);
+            let text = backend
+                .get_file(Some(file.clone()), workspace.clone())
+                .await?;
+            return Ok(file_page(uri, &file, &text, offset, workspace.as_deref()));
+        }
     };
     Ok(ReadResourceResult::new(vec![ResourceContents::text(
         text, uri,
     )]))
+}
+
+/// `<file>?offset=<bytes>` → the file and the byte offset (0 when absent or unparsable).
+fn split_offset(path: &str) -> (String, usize) {
+    let Some((file, query)) = path.split_once('?') else {
+        return (path.to_owned(), 0);
+    };
+    let offset = query
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("offset="))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    (file.to_owned(), offset)
+}
+
+/// The page of `text` starting at byte `offset`, cut to [`MAX_RESOURCE_BYTES`] on a character
+/// boundary, and the offset of the next page when text remains.
+pub(crate) fn page_text(text: &str, offset: usize) -> (String, Option<usize>) {
+    let mut start = offset.min(text.len());
+    while !text.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (start + MAX_RESOURCE_BYTES).min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let next = (end < text.len()).then_some(end);
+    (text[start..end].to_owned(), next)
+}
+
+/// One page of a file resource: the text under the requested `uri`, plus a pointer at the next
+/// page's URI when the file goes on, so a client never gets a silently cut document.
+fn file_page(
+    uri: &str,
+    file: &str,
+    text: &str,
+    offset: usize,
+    workspace: Option<&str>,
+) -> ReadResourceResult {
+    let (page, next) = page_text(text, offset);
+    let mut contents = vec![ResourceContents::text(page, uri)];
+    if let Some(next) = next {
+        let ws = workspace.map_or_else(String::new, |w| format!("&workspace={w}"));
+        let next_uri = format!("{SCHEME}://{file}?offset={next}{ws}");
+        contents.push(ResourceContents::text(
+            format!(
+                "{} more bytes follow; read {next_uri} for the next page",
+                text.len() - next
+            ),
+            next_uri.clone(),
+        ));
+    }
+    ReadResourceResult::new(contents)
 }
 
 /// Splits the `?workspace=...` query param (if present) off the rest of `tail`, returning the
@@ -149,6 +212,7 @@ pub(crate) async fn rows_with_token(
             done: None,
             file: None,
             limit: None,
+            offset: None,
             workspace,
         })
         .await?;
@@ -207,6 +271,45 @@ mod tests {
         assert_eq!(
             split_workspace_query("history?since=5&workspace=/some/dir"),
             ("history?since=5".to_owned(), Some("/some/dir".to_owned()))
+        );
+    }
+}
+
+#[cfg(test)]
+mod paging_tests {
+    use super::*;
+
+    #[test]
+    fn a_small_file_is_one_page() {
+        let (page, next) = page_text("buy milk\n", 0);
+        assert_eq!(page, "buy milk\n");
+        assert_eq!(next, None);
+    }
+
+    #[test]
+    fn a_large_file_pages_at_the_cap_on_a_char_boundary() {
+        // 'é' is two bytes; a page ending inside one must step back.
+        let text = "é".repeat(MAX_RESOURCE_BYTES);
+        let (page, next) = page_text(&text, 0);
+        assert!(page.len() <= MAX_RESOURCE_BYTES);
+        assert_eq!(page.len() % 2, 0, "whole characters only");
+        let next = next.unwrap_or_else(|| panic!("more follows"));
+        assert_eq!(next, page.len());
+        let (rest, none) = page_text(&text, next);
+        assert_eq!(page.len() + rest.len(), text.len());
+        assert_eq!(none, None);
+    }
+
+    #[test]
+    fn offset_query_is_split_off_the_file_path() {
+        assert_eq!(split_offset("todo.txt"), ("todo.txt".to_owned(), 0));
+        assert_eq!(
+            split_offset("tasks/a/todo.txt?offset=524288"),
+            ("tasks/a/todo.txt".to_owned(), 524_288)
+        );
+        assert_eq!(
+            split_offset("todo.txt?offset=junk"),
+            ("todo.txt".to_owned(), 0)
         );
     }
 }

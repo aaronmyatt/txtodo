@@ -7,6 +7,25 @@
 use crate::backend::TaskRow;
 use crate::parse;
 
+/// The most bytes of one line's `raw` any tool or resource row carries (task payload-budget):
+/// a line is one line of human text and `txtodo lint`'s advisory hint is 100 characters, so
+/// 4 KiB is generous. Longer lines are cut on a character boundary and flagged
+/// `TaskRow.truncated`; nothing refuses a write and the file keeps the whole line.
+pub const MAX_ROW_BYTES: usize = 4096;
+
+/// Cuts `row.raw` to [`MAX_ROW_BYTES`] on a char boundary and flags it; a no-op for short lines.
+pub(crate) fn cap_raw(row: &mut TaskRow) {
+    if row.raw.len() <= MAX_ROW_BYTES {
+        return;
+    }
+    let mut end = MAX_ROW_BYTES;
+    while !row.raw.is_char_boundary(end) {
+        end -= 1;
+    }
+    row.raw.truncate(end);
+    row.truncated = true;
+}
+
 /// One document: its text and one task id per line.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileDoc {
@@ -39,6 +58,7 @@ impl FileDoc {
     /// `id:` word in a Sidecar line is plain text, not the identity: it moves to `kv` (last).
     pub fn row(&self, line: u32, raw: &str) -> TaskRow {
         let mut row = parse::parse_row(line, raw);
+        cap_raw(&mut row);
         if self.task_ids.is_empty() {
             return row;
         }
@@ -129,5 +149,31 @@ mod tests {
         assert_eq!(doc.rows()[0].id.as_deref(), Some(A));
         assert_eq!(doc.rows()[1].id, None);
         assert_eq!(doc.find_by_id(A).map(|(n, _)| n), Some(1));
+    }
+}
+
+#[cfg(test)]
+mod cap_tests {
+    use super::*;
+
+    #[test]
+    fn a_long_line_is_cut_on_a_char_boundary_and_flagged() {
+        let long = format!("(A) {} +proj", "é".repeat(MAX_ROW_BYTES));
+        let doc = FileDoc::from_text(format!("{long}\nshort\n"));
+        let rows = doc.rows();
+        assert!(rows[0].truncated);
+        assert!(rows[0].raw.len() <= MAX_ROW_BYTES);
+        assert!(rows[0].raw.is_char_boundary(rows[0].raw.len()));
+        assert_eq!(
+            rows[0].priority,
+            Some('A'),
+            "fields parse from the whole line"
+        );
+        assert_eq!(
+            rows[0].projects,
+            vec!["proj"],
+            "the tag past the cut still parses"
+        );
+        assert!(!rows[1].truncated);
     }
 }

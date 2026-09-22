@@ -92,7 +92,7 @@ exit $status
 
 ## Not mechanically enforced
 
-- **Response payload: N/A.** No HTTP surface until M6 (libraries, CLI, daemon over a unix socket). Re-justify when `txtodo-mcp` lands.
+- **Response payload: 512 KiB per MCP response** (`payloadKB`, task payload-budget): enforced by three constants in `txtodo-mcp`, not a check script — `doc::MAX_ROW_BYTES` (4 KiB per line, flagged `truncated`), `tools_read::MAX_LIST_ROWS` (50 rows per `todo_list`, a second text block names the next `offset`), `resources::MAX_RESOURCE_BYTES` (512 KiB per file read, a second contents item names the next page). Change a constant and `budgets.json` together.
 - **Swallowed errors:** `let _ = fallible()` and `.ok()` discard are legal; review greps for them. No clippy lint covers the intent without false positives.
 - **Bounded loops / collections:** review + assert. No mechanical form.
 - **Assertions ≥ 2:** heuristic reports, review decides (D3).

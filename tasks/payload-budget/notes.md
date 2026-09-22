@@ -35,3 +35,17 @@ which is a product rule nobody asked for.
 
 - Whether the daemon has its own ceiling on `todo_list`'s `limit` was not checked.
 - The row-size assumption (twice the line) is not measured against the real response shape.
+
+## As built (2026-09-23)
+
+- Line cap: `doc.rs::MAX_ROW_BYTES = 4096`, applied in `FileDoc::row` after parsing, so
+  `priority`/`projects`/`kv` still reflect the whole line; `TaskRow.truncated` marks the cut.
+- `todo_list`: `tools_read::MAX_LIST_ROWS = 50`, `ListArgs.offset`. The backend still returns
+  every filtered row (resources and prompts depend on that); the tool pages at its boundary and
+  appends a second text block only when rows were left out. `limit` above 50 clamps.
+- File resource: `resources::MAX_RESOURCE_BYTES = 512 KiB`; `todotxt://<file>?offset=N`; the
+  reply's second `ResourceContents` has the next page's URI and how many bytes remain.
+- `payloadKB = 512` in `budgets.json`; `.claude/stack.md` names the three constants.
+- Known gaps: `project/{name}`, `context/{name}` and `history` resources are not paged (history
+  is bounded by `HISTORY_MAX_LIMIT`); the daemon's own `todo_list` ceiling was still not checked
+  since the MCP side no longer relies on it; row size was not measured against real JSON.

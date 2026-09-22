@@ -1,4 +1,4 @@
-2026-09-20 txtodo-mcp: cap each returned line at 4096 bytes on a character boundary and mark it truncated; writes are not refused +m6 @mcp @test
-2026-09-20 txtodo-mcp: todo_list returns at most 50 rows per call and says when there are more +m6 @mcp @test
-2026-09-20 txtodo-mcp: the whole-file resource pages at 512 KiB per response +m6 @mcp @test
-2026-09-20 budgets.json payloadKB 512 and stack.md's payload note, together, after the three above +m6 @docs
+x 2026-09-23 2026-09-20 txtodo-mcp: cap each returned line at 4096 bytes on a character boundary and mark it truncated; writes are not refused +m6 @mcp @test — doc::MAX_ROW_BYTES + cap_raw in FileDoc::row; TaskRow.truncated (serde default); parsed fields still come from the whole line
+x 2026-09-23 2026-09-20 txtodo-mcp: todo_list returns at most 50 rows per call and says when there are more +m6 @mcp @test — tools_read::MAX_LIST_ROWS, ListArgs.offset; the JSON array shape is unchanged, a second text block names the next offset; internal callers (resources, prompts) still get every row
+x 2026-09-23 2026-09-20 txtodo-mcp: the whole-file resource pages at 512 KiB per response +m6 @mcp @test — resources::MAX_RESOURCE_BYTES; todotxt://<file>?offset=N pages, a second ResourceContents carries the next page's URI
+x 2026-09-23 2026-09-20 budgets.json payloadKB 512 and stack.md's payload note, together, after the three above +m6 @docs — budgets.json payloadKB 512 with the enforcement note, .claude/stack.md payload line; no check script, the three constants are the enforcement

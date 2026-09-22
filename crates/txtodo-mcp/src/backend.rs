@@ -50,6 +50,10 @@ pub struct TaskRow {
     /// Every other `key:value` tag, in line order (`id`/`due`/`pri` excluded — they have their own
     /// field above).
     pub kv: Vec<(String, String)>,
+    /// `raw` was cut to [`crate::doc::MAX_ROW_BYTES`] (task payload-budget); the parsed fields
+    /// above still come from the whole line, and the line on disk is untouched.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 /// One HLC timestamp (design §4.4): wall time plus the tie-breaking counter.

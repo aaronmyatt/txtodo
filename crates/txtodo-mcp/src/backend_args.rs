@@ -33,8 +33,13 @@ pub struct ListArgs {
     pub done: Option<bool>,
     /// Workspace-relative ref path; defaults to `todo.txt`.
     pub file: Option<RefPath>,
-    /// Caps the number of rows returned; 0/absent = daemon default.
+    /// Caps the number of rows returned: 0/absent = 50, and never more than 50 per call
+    /// (`tools_read::MAX_LIST_ROWS`, task payload-budget). A second text block in the result says
+    /// when rows were left out and which `offset` fetches the next page.
     pub limit: Option<u32>,
+    /// 0-based row offset into the filtered rows, for paging past `limit`.
+    #[serde(default)]
+    pub offset: Option<u32>,
     /// Which registered workspace this targets; see [`WorkspaceArg`].
     pub workspace: WorkspaceArg,
 }
