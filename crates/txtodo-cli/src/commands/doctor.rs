@@ -236,8 +236,10 @@ fn keystore_check(health: Option<&pb::HealthResponse>) -> Check {
         Some(h) if h.key_store_backend == "memory" => check(
             "keystore",
             Status::Fail,
-            "backend: memory; the relay identity will not survive a restart; fix the OS \
-             keychain (--key-store auto/os) or pass --key-store file to persist it",
+            "backend: memory; the device's static, signing and group keys and its relay \
+             identity are reminted at every start, so relay and LAN sync are off for this run \
+             and every paired peer must re-pair once keys persist; fix the OS keychain \
+             (--key-store auto/os) or pass --key-store file",
         ),
         Some(h) if !h.key_store_backend.is_empty() => check(
             "keystore",
