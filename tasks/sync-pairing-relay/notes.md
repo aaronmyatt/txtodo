@@ -123,3 +123,15 @@ while answering "can two devices pair with no shared LAN today"): `relay.rs`'s o
 `txtodo-daemon/CLAUDE.md` still called real pairing-over-relay "sync-pairing-relay's own
 not-yet-built task" — stale since this landed. Both corrected to say it's done and name
 `pairing_grpc.rs`/`pairing_relay_dial.rs`.
+
+## Update (2026-09-22): those lines are `info` now, and the real cause was a timeout
+
+The `debug!()` lines above were not enough: a real two-device pairing over n0's public relay from
+Asia failed with nothing at `info` on either side. Root cause was `txtodo_sync::IrohLink::recv`'s
+750 ms idle timeout (tuned for sync bursts) cutting off the joiner's one reply read — the initiator
+granted, the joiner never read it, and the CLI blamed the initiator. Fixed in `txtodo-sync`
+(`PAIRING_IDLE_TIMEOUT` 5 s, picked by ALPN); `pairing_joiner_{lan,relay}_connect_failed` and
+`pairing_joiner_{lan,relay}_round_no_reply` are `info` now, the initiator logs
+`pairing_initiator_grant_sent`, and the CLI says "no reply from the initiator's device" instead of
+"the initiator never confirmed". The two `_no_rendezvous_in_offer`/`_endpoint_not_bound` lines stay
+`debug` (routine, fire every round on a LAN-only offer).
