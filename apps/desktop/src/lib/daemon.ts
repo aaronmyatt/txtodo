@@ -211,6 +211,24 @@ export function editNotes(task: TaskRef, newText: string): Promise<ApplyResult> 
 	return invoke("edit_notes", { task, newText });
 }
 
+/** A line's `ref:` directory (`RefDir`; mirrors `desktop_lib::dto::RefDirInfoDto`). `dir` is
+ * workspace-relative: `<dir>/todo.txt` is the sub-list `applyMutations` writes to. */
+export interface RefDirInfo {
+	task_id: string;
+	slug: string;
+	dir: string;
+	has_ref_tag: boolean;
+	dir_exists: boolean;
+}
+
+/** Resolves (`ensure: false`) or claims (`ensure: true`: the `ref:` tag and the directory, one op
+ * batch, daemon-side) a task's `ref:` directory. The detail view calls the `ensure` form once,
+ * on the first sub-task of a task that has no sub-list yet (task desktop-sublist-start); this
+ * client never computes a slug or makes a directory itself (design §7). */
+export function refDir(path: string, task: TaskRef, ensure: boolean): Promise<RefDirInfo> {
+	return invoke("ref_dir", { path, task, ensure });
+}
+
 /** Absolute workspace root, for the detail view's footer (display only — see
  * `src-tauri/src/commands.rs::workspace_root`'s doc comment for why this is still design-§7-safe).
  * Reflects whichever workspace `switchWorkspace` last selected, not a fixed startup value. */

@@ -8,6 +8,7 @@
 import {
 	applyMutations,
 	mockEditNotes,
+	mockRefDir,
 	mockGetNotes,
 	mockPairAccept,
 	mockPairConfirm,
@@ -85,6 +86,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return opLog.map((e) => ({ principal: e.principal, op: e.summary, at_ms: e.at_ms })) as T;
 		case "get_notes":
 			return mockGetNotes((args?.task as TaskRef).task_id) as T;
+		case "ref_dir":
+			return mockRefDir(args?.path as string, args?.task as TaskRef, Boolean(args?.ensure)) as T;
 		case "edit_notes":
 			return mockEditNotes((args?.task as TaskRef).task_id, args?.newText as string) as unknown as T;
 		case "workspace_root":

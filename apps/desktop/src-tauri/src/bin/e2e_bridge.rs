@@ -49,6 +49,10 @@ use activity::cmd_op_log_all;
 mod conflict;
 use conflict::cmd_debug_raise_conflict;
 
+#[path = "e2e_bridge/refdir.rs"]
+mod refdir;
+use refdir::dispatch_notes_cmd;
+
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
 /// `crates/txtodo-daemon/tests/grpc.rs::raise_flag`).
@@ -262,8 +266,9 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         "history" => cmd_history(&mut client, req.args).await?,
         "list_conflicts" => cmd_list_conflicts(&mut client, req.args).await?,
         "resolve" => cmd_resolve(&mut client, req.args).await?,
-        "get_notes" => cmd_get_notes(&mut client, req.args).await?,
-        "edit_notes" => cmd_edit_notes(&mut client, req.args).await?,
+        "get_notes" | "edit_notes" | "ref_dir" => {
+            dispatch_notes_cmd(&mut client, &req.cmd, req.args).await?
+        }
         other => {
             return Err(ApiError(format!(
                 "e2e_bridge: unsupported command {other:?}"

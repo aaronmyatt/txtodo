@@ -3,7 +3,7 @@
 //! `ensure_connected` + lock + map-err-to-String pattern as every command there.
 
 use crate::commands::ensure_connected;
-use crate::dto::{ApplyResultDto, NotesDocDto, TaskRefDto};
+use crate::dto::{ApplyResultDto, NotesDocDto, RefDirInfoDto, TaskRefDto};
 use crate::state::AppState;
 use tauri::{AppHandle, State};
 use txtodo_proto::v1 as pb;
@@ -62,4 +62,25 @@ async fn edit_notes_inner(
     };
     let resp = client.edit_notes(req).await.map_err(|e| e.to_string())?;
     Ok(ApplyResultDto::from(resp))
+}
+
+/// A line's `ref:` directory, resolved or (with `ensure`) created by the daemon — what the detail
+/// view calls before the first sub-task of a task that has no sub-list yet (task
+/// desktop-sublist-start). Opening the view never calls this with `ensure`.
+#[tracing::instrument(name = "ipc.ref_dir", skip_all)]
+#[tauri::command]
+pub async fn ref_dir(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    task: TaskRefDto,
+    ensure: bool,
+) -> Result<RefDirInfoDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let resp = client
+        .ref_dir(&path, task.into(), ensure)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(RefDirInfoDto::from(resp))
 }

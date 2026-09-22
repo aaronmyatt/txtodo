@@ -12,7 +12,7 @@ use txtodo_proto::v1 as pb;
 // the line budget. Each sibling re-exports through here so callers keep a single `crate::dto::*`
 // import surface, unaware of the split.
 pub use crate::dto_activity::{AggregatedOpLogEntryDto, OpLogEntryDto};
-pub use crate::dto_notes::NotesDocDto;
+pub use crate::dto_notes::{NotesDocDto, RefDirInfoDto};
 pub use crate::dto_pairing::{PairOfferDto, PairResultDto};
 pub use crate::dto_tokens::TokenDto;
 pub use crate::dto_workspace::{WorkspaceInfoDto, WorkspaceLayoutDto, is_ready_or_unknown};

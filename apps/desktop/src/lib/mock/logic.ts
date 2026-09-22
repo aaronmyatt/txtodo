@@ -161,6 +161,36 @@ export function mockEditNotes(taskId: string, newText: string): ApplyResult {
 	return { applied: 1, hash: `mockhash-notes-${taskId}-${hashSeq}`, hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
 }
 
+// ---- ref: directories (`ref_dir`; task desktop-sublist-start) ----
+
+/** A slug the way the daemon would pick one: the line's first plain words, else the id. */
+function slugFor(line: string, taskId: string): string {
+	const words = line
+		.replace(/^(x \d{4}-\d{2}-\d{2} )?(\(\w\) )?(\d{4}-\d{2}-\d{2} )?/, "")
+		.split(/\s+/)
+		.filter((w) => w !== "" && !/[:@+]/.test(w))
+		.slice(0, 3)
+		.map((w) => w.toLowerCase().replace(/[^a-z0-9]+/g, ""))
+		.filter((w) => w !== "");
+	return words.length > 0 ? words.join("-") : taskId.toLowerCase();
+}
+
+export function mockRefDir(path: string, task: TaskRef, ensure: boolean) {
+	const f = files.get(path);
+	if (!f) throw new Error(`mock daemon: unknown path "${path}"`);
+	const line = f.text.split("\n")[task.line_number - 1] ?? "";
+	const existing = /\bref:(\S+)/.exec(line)?.[1];
+	const slug = existing ?? slugFor(line, task.task_id);
+	// The mock's own `workspace_layout` says refs live in `tasks/` (see tauriMock.ts).
+	const dir = `tasks/${slug}`;
+	const subList = `${dir}/todo.txt`;
+	if (ensure) {
+		if (existing === undefined) applyMutations(path, [{ kind: "edit", task, new_line: `${line} ref:${slug}` }]);
+		if (!files.has(subList)) files.set(subList, { path: subList, kind: "todo", hashSeq: 0, text: "" });
+	}
+	return { task_id: task.task_id, slug, dir, has_ref_tag: existing !== undefined, dir_exists: files.has(subList) };
+}
+
 // ---- capability tokens ----
 
 export function mockTokenCreate(args: Record<string, unknown> | undefined): StoredToken {

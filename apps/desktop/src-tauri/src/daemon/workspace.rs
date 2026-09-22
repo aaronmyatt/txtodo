@@ -73,3 +73,23 @@ impl DaemonClient {
         Ok((health.version, health.release_date))
     }
 }
+
+impl DaemonClient {
+    /// A line's `ref:` directory: resolved read-only, or claimed (tag + directory, one op batch,
+    /// daemon-side) with `ensure` — the detail view's "start a sub-list" step (task
+    /// desktop-sublist-start). The client never computes a slug or makes a directory itself.
+    pub async fn ref_dir(
+        &mut self,
+        path: &str,
+        task: pb::TaskRef,
+        ensure: bool,
+    ) -> Result<pb::RefDirInfo, DaemonError> {
+        let req = pb::RefDirRequest {
+            path: path.to_owned(),
+            task: Some(task),
+            ensure,
+            workspace: self.selector.clone(),
+        };
+        Ok(self.inner.ref_dir(req).await?.into_inner())
+    }
+}

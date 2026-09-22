@@ -88,6 +88,7 @@ pub fn run() {
             commands_universal::universal_tasks,
             commands_notes::get_notes,
             commands_notes::edit_notes,
+            commands_notes::ref_dir,
             commands_pairing::pair_offer,
             commands_pairing::pair_accept,
             commands_pairing::pair_confirm_sas,

@@ -22,6 +22,7 @@
 		getFile,
 		listFiles,
 		onDaemonChange,
+		refDir as refDirRpc,
 		watch,
 		workspaceRoot,
 		type FileInfo,
@@ -87,6 +88,36 @@
 		refDir && workspaceRootPath ? `${workspaceRootPath}/${refDir}` : (workspaceRootPath ?? "")
 	);
 	const hasSubList = $derived(subListInfo !== null && subListInfo.total > 0);
+
+	// Starting a sub-list on a task that has none yet (task desktop-sublist-start): the section
+	// shows one add-line input instead of a FileView. Nothing is written until the first submit.
+	let firstSubTask = $state("");
+	let startingSubList = $state(false);
+	let subListError = $state("");
+
+	/** First submit: `refDir(ensure)` claims the directory and the `ref:` tag (one op batch,
+	 * daemon-side), then the line goes into `<dir>/todo.txt` through the same `applyMutations`
+	 * every add uses — the daemon registers that not-yet-existing list on its first `Add`
+	 * (`crates/txtodo-daemon/src/apply_route.rs::actor_or_new_list`). The daemon's own `Change`
+	 * then repaints the parent line with its new tag and `refreshFiles` finds the sub-list, so
+	 * the FileView takes over from this input. */
+	async function startSubList(e: SubmitEvent) {
+		e.preventDefault();
+		const line = firstSubTask.trim();
+		if (!line || startingSubList) return;
+		startingSubList = true;
+		subListError = "";
+		try {
+			const info = await refDirRpc(current.file, parentTaskRef, true);
+			await applyMutations(joinPath(info.dir, "todo.txt"), [{ kind: "add", line }]);
+			firstSubTask = "";
+			await refreshFiles();
+		} catch (err) {
+			subListError = String(err);
+		} finally {
+			startingSubList = false;
+		}
+	}
 
 	function onNotesLoaded(doc: NotesDoc) {
 		notesPath = doc.path;
@@ -296,12 +327,28 @@
 		{/if}
 	</section>
 
-	{#if hasSubList && subListInfo}
-		<section class="sublist" aria-label="Sub-list">
+	<section class="sublist" aria-label="Sub-list">
+		{#if hasSubList && subListInfo}
 			<h2>{subListInfo.done} of {subListInfo.total} done</h2>
 			<FileView path={subListPath ?? ""} {depth} onDetailRequest={onNavigateInto} />
-		</section>
-	{/if}
+		{:else}
+			<h2>Sub-list</h2>
+			<!-- No sub-list yet (no `ref:`, or an empty todo.txt): one add-line row. The first
+			     submit creates the folder (see `startSubList`); opening the view writes nothing. -->
+			<form class="sublist-start" onsubmit={startSubList}>
+				<input
+					type="text"
+					aria-label="Add a sub-task"
+					placeholder="Add a sub-task"
+					bind:value={firstSubTask}
+					disabled={!parentTaskId || startingSubList}
+				/>
+			</form>
+			{#if subListError}
+				<p class="error" role="alert">{subListError}</p>
+			{/if}
+		{/if}
+	</section>
 
 	<section class="notes" aria-label="Notes">
 		{#snippet notesBody()}
@@ -385,6 +432,15 @@
 
 	.mark-done-offer {
 		align-self: flex-start;
+	}
+
+	.sublist-start input {
+		width: 100%;
+		font: inherit;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+		background: var(--color-surface);
 	}
 
 	.notes summary {
