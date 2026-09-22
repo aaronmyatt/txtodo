@@ -277,8 +277,13 @@ async fn retry_dial_and_send(
 /// loosened: the wrong-nonce security property itself (`process_hello`'s nonce/group check) is
 /// unchanged and untouched by this task, only this test's own ability to observe it over a real
 /// relay within 750 ms is what's blocked.
+///
+/// **Timeout fixed 2026-09-22** (`txtodo_sync::IrohLink` now picks a 5 s `PAIRING_IDLE_TIMEOUT`
+/// by ALPN) after the same 750 ms cut-off broke every real two-device pairing over this relay
+/// from Asia — the initiator granted, the joiner never read the reply. Still `#[ignore]`d for the
+/// same real-network variance its sibling above is; run with `--ignored` to exercise it.
 #[tokio::test]
-#[ignore = "a's reply is None on every attempt: IrohLink::recv()'s fixed 750ms idle timeout is too tight for this round trip over a real relay (a's own production dial path budgets 3s for the same kind of round trip) — confirmed via RUST_LOG=debug 2026-09-15, not the identity collision (that's fixed); see doc comment for the full finding"]
+#[ignore = "real-network variance against n0's public relay, same quarantine as its sibling above; the 750 ms recv timeout this test first exposed is fixed (PAIRING_IDLE_TIMEOUT, 2026-09-22) — run with --ignored"]
 async fn a_relay_dial_with_the_wrong_nonce_cannot_complete_a_pairing() {
     let _serialize = SERIALIZE_REAL_RELAY_TESTS.lock().await;
     let mut a = start_with_seeded_group_args(

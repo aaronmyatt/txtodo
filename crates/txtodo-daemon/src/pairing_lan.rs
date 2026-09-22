@@ -143,9 +143,8 @@ pub(crate) fn log_joiner_rejected(peer: DeviceId) {
 /// `pub(crate)`: `pairing_relay_dial.rs`'s racing joiner round calls this on a `Grant` reply.
 pub(crate) fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: &[u8]) {
     let now_ms = read(ws).clock().now_ms();
-    // `is_ready_to_send_key` reads this device's own session, which has no way to observe the
-    // initiator's confirmation except through this message: a non-empty `Grant` at all is only
-    // possible once the initiator's session was ready, so it doubles as that proof here.
+    // This device's own session can only learn the initiator confirmed through this message: a
+    // non-empty `Grant` is only possible once the initiator's session was ready, so it is the proof.
     let _ = read(ws).pairing().mark_remote_confirmed(now_ms);
     match read(ws).adopt_group_key(offer.group, sealed, now_ms) {
         Ok(()) => {
@@ -156,9 +155,8 @@ pub(crate) fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: 
     }
 }
 
-/// Best-effort, logged only: the initiator's relay node id/URL, if its `PairingOffer` carried one,
-/// is durably recorded against its device row. Only the initiator's own reachability — the reverse
-/// direction is not captured by this exchange at all, a documented gap, not a bug.
+/// Best-effort, logged only: records the initiator's relay node id/URL (if the offer carried one)
+/// against its device row. Only that direction — the reverse is a documented gap, not a bug.
 pub(crate) fn record_offer_relay_reachability(ws: &SharedWorkspace, offer: &PairingOffer) {
     let (Some(relay_node_id), Some(relay_url)) = (offer.relay_node_id, &offer.relay_url) else {
         return;
@@ -188,14 +186,14 @@ async fn wait_for_endpoint(ws: &SharedWorkspace) -> Option<Arc<LanEndpoint>> {
 }
 
 /// One connection attempt over LAN: dial, send `hello`, read one reply. `None` on any failure
-/// worth a retry (dial refused, link closed, a frame that didn't decode) — never a hard error,
-/// since the peer may simply not be reachable yet; logged at `debug`, not silently swallowed.
+/// worth a retry — logged at `info`, not `debug`: pairing is a rare, human-paced ceremony, and a
+/// joiner whose rounds fail silently looks exactly like an initiator that never confirmed.
 fn log_lan_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
-    tracing::debug!(%peer, error = %e, "pairing_joiner_lan_connect_failed");
+    tracing::info!(%peer, error = %e, "pairing_joiner_lan_connect_failed");
 }
 
 fn log_lan_round_no_reply(peer: DeviceId) {
-    tracing::debug!(%peer, "pairing_joiner_lan_round_no_reply");
+    tracing::info!(%peer, "pairing_joiner_lan_round_no_reply");
 }
 
 pub(crate) async fn attempt(
@@ -220,8 +218,7 @@ pub(crate) async fn attempt(
     reply
 }
 
-/// Blocks a dedicated thread on `link`'s synchronous `send`/`recv`. `pub(crate)`:
-/// `pairing_relay_dial.rs`'s relay half drives the identical burst over a relay-backed `IrohLink`.
+/// Blocks a dedicated thread on `link`'s synchronous `send`/`recv`; `pairing_relay_dial.rs` too.
 pub(crate) fn send_and_receive(mut link: IrohLink, hello: &JoinerHello) -> Option<InitiatorReply> {
     let frame = hello.encode().ok()?;
     link.send(frame).ok()?;
@@ -236,8 +233,8 @@ pub(crate) fn handle_incoming(ws: &SharedWorkspace, link: &mut dyn Link) {
 }
 
 /// [`handle_incoming`], naming which carrier this connection arrived over — `relay.rs`'s own
-/// accept loop calls this with `"relay"`. Records the carrier only when this round actually
-/// finalizes the pairing (`InitiatorReply::Grant`) — never optimistically.
+/// accept loop calls this with `"relay"`. Records (and logs, at `info`) the carrier only when this
+/// round actually finalizes the pairing (`InitiatorReply::Grant`) — never optimistically.
 pub(crate) fn handle_incoming_over(
     ws: &SharedWorkspace,
     link: &mut dyn Link,
@@ -250,14 +247,19 @@ pub(crate) fn handle_incoming_over(
         tracing::debug!("pairing_initiator_bad_hello_frame");
         return;
     };
+    let peer = hello.device;
     let reply = process_hello(ws, hello);
     if matches!(reply, InitiatorReply::Grant(_)) {
-        read(ws).pairing_lan().record_carrier(carrier);
+        record_grant_sent(ws, peer, carrier);
     }
-    let Ok(reply_frame) = reply.encode() else {
-        return;
-    };
-    let _ = link.send(reply_frame);
+    if let Ok(reply_frame) = reply.encode() {
+        let _ = link.send(reply_frame);
+    }
+}
+
+fn record_grant_sent(ws: &SharedWorkspace, peer: DeviceId, carrier: &'static str) {
+    read(ws).pairing_lan().record_carrier(carrier);
+    tracing::info!(%peer, carrier, "pairing_initiator_grant_sent");
 }
 
 /// `pub(crate)`: `pairing_lan_tests.rs` drives this directly — each `reject_*` below now logs its
@@ -327,8 +329,8 @@ fn reject_handshake_failed(
     InitiatorReply::Rejected
 }
 
-/// `error`: this downgrades to `Pending` on the wire (indistinguishable from "not ready yet"), so
-/// without this a keystore/crypto failure leaves the joiner retrying forever with no visible cause.
+/// `error`: on the wire this is just `Pending`, so without it a keystore/crypto failure leaves
+/// the joiner retrying with no visible cause.
 fn log_finalize_failed(peer: DeviceId, e: &crate::pairing_state_error::PairingStateError) {
     tracing::error!(%peer, error = %e, "pairing_initiator_finalize_failed");
 }
@@ -363,8 +365,7 @@ fn finalize_or_pending(
     }
 }
 
-/// Registers the joiner's long-term static key in this (initiator's) own `devices` table.
-/// Best-effort and logged only: a missing row can always be re-derived by re-pairing.
+/// Registers the joiner's static key in the initiator's `devices` table; best-effort, logged only.
 fn register_joiner_device(ws: &Workspace, device: DeviceId, now_ms: u64) {
     let Some(static_public) = ws.pairing().peer_static(now_ms) else {
         return;
@@ -376,8 +377,7 @@ fn register_joiner_device(ws: &Workspace, device: DeviceId, now_ms: u64) {
 
 impl Workspace {
     /// Registers a peer's long-term static public key in this workspace's own `devices` table —
-    /// symmetric with [`Workspace::adopt_group_key`]'s joiner-side registration. Split out here
-    /// (over `workspace.rs`'s budget), same as `device_remove.rs`'s own `impl Workspace` block.
+    /// symmetric with [`Workspace::adopt_group_key`]. Lives here for `workspace.rs`'s line budget.
     pub(crate) fn register_paired_device(
         &self,
         device: DeviceId,

@@ -89,18 +89,20 @@ fn log_relay_endpoint_not_bound() {
     tracing::debug!("pairing_joiner_relay_endpoint_not_bound");
 }
 
+/// `info`, not `debug`, for the two outcomes a human actually needs to see when a ceremony stalls
+/// (`pairing_lan.rs::attempt`'s LAN twins log the same way): a round that reached nobody, and a
+/// round that reached the initiator but never read its reply back.
 fn log_relay_connect_failed(e: &txtodo_sync::HolepunchError) {
-    tracing::debug!(error = %e, "pairing_joiner_relay_connect_failed");
+    tracing::info!(error = %e, "pairing_joiner_relay_connect_failed");
 }
 
 fn log_relay_round_no_reply() {
-    tracing::debug!("pairing_joiner_relay_round_no_reply");
+    tracing::info!("pairing_joiner_relay_round_no_reply");
 }
 
 /// The connect+dial half of [`relay_attempt`], split out purely to keep that function's own
-/// cognitive complexity under this workspace's budget (`clippy.toml`) — logs (at `debug`, see
-/// [`relay_attempt`]'s doc) every reason a round produced nothing, the same discipline
-/// `pairing_lan.rs::attempt` now applies to its own LAN half.
+/// cognitive complexity under this workspace's budget (`clippy.toml`) — logs every reason a round
+/// produced nothing, the same discipline `pairing_lan.rs::attempt` applies to its own LAN half.
 async fn relay_connect(
     ws: &SharedWorkspace,
     offer: &PairingOffer,
