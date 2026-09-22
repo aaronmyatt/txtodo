@@ -207,6 +207,26 @@ fn open_args(
     }
 }
 
+/// The bridge opens its one directory before it binds (its whole test suite relies on that); the
+/// global daemon binds first and opens registered workspaces in the background, newest first —
+/// this returns what it queued.
+fn open_or_queue(
+    args: &Args,
+    catalog: &WorkspaceCatalog,
+    env: &RegistryEnv,
+) -> Result<Vec<(txtodo_store::WorkspaceId, PathBuf)>, Box<dyn std::error::Error>> {
+    match &args.dir {
+        Some(dir) => {
+            start_dir_bridge(dir, catalog)?;
+            Ok(Vec::new())
+        }
+        None => {
+            register_default_workspace(catalog, env);
+            Ok(catalog.queue_registered())
+        }
+    }
+}
+
 /// The `--dir` bridge: registers/opens that one directory, plus (best-effort) anything else
 /// already registered. Its socket stays at the pre-existing `<dir>/.txtodo/...` location (see
 /// `run`'s `global_socket_path` call) so today's whole test suite keeps working unmodified.
@@ -343,18 +363,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     open.no_lan |= !built.sync_allowed;
     let catalog = Arc::new(WorkspaceCatalog::new(registry, open, clock));
 
-    // The bridge opens its one directory before it binds (its whole test suite relies on that); the
-    // global daemon binds first and opens registered workspaces in the background, newest first.
-    let queued = match &args.dir {
-        Some(dir) => {
-            start_dir_bridge(dir, &catalog)?;
-            Vec::new()
-        }
-        None => {
-            register_default_workspace(&catalog, &env);
-            catalog.queue_registered()
-        }
-    };
+    let queued = open_or_queue(&args, &catalog, &env)?;
     drop(_boot);
 
     let loader_catalog = Arc::clone(&catalog);
