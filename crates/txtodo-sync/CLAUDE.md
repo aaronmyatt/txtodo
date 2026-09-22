@@ -277,7 +277,9 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   learns the other side is gone rather than blocking forever. `IrohLink::send`/`recv` block a
   dedicated driver thread on a captured `tokio::runtime::Handle`; calling either from a plain tokio
   task (rather than `spawn_blocking`) would starve the runtime, not just this one link.
-- `IrohLink::recv`'s `IDLE_TIMEOUT` (750 ms) makes every LAN session short-lived by design: once
+- `IrohLink::recv`'s `IDLE_TIMEOUT` (750 ms; `PAIRING_IDLE_TIMEOUT` 5 s on `PAIRING_ALPN`, picked
+  by ALPN in `IrohLink::new` — a pairing round's one reply must cross a public relay both ways and
+  750 ms lost every real-relay pairing, 2026-09-22) makes every LAN session short-lived by design: once
   both sides go quiet the link reports `Closed` and the daemon's periodic redial opens a fresh one,
   which is what lets a local edit made *after* an earlier sync round still converge quickly without
   this crate needing any "watch the store for changes" plumbing of its own. The tradeoff — a new

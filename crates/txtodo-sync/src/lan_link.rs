@@ -196,6 +196,9 @@ pub struct IrohLink {
     /// construction so a caller accepting on one shared endpoint can route the connection without
     /// ever naming an `iroh` type itself (see [`IrohLink::alpn`]).
     alpn: Vec<u8>,
+    /// How long one `recv` waits for bytes before reporting `Closed` — chosen by ALPN at
+    /// construction ([`IDLE_TIMEOUT`] or [`PAIRING_IDLE_TIMEOUT`]).
+    idle_timeout: std::time::Duration,
 }
 
 /// Largest chunk read from the stream at once; bounds `inbox`'s growth between frame boundaries
@@ -209,6 +212,14 @@ const READ_CHUNK_BYTES: usize = 64 * 1024;
 /// after this one went idle, instead of one connection holding its slot forever.
 const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(750);
 
+/// [`IDLE_TIMEOUT`]'s pairing-ALPN counterpart. A pairing round is one `JoinerHello` → one
+/// `InitiatorReply`, and the reply may cross a public relay both ways plus the initiator's keystore
+/// read before it arrives — measured over 750 ms against n0's real relay from Asia (2026-09-22),
+/// so every joiner round read `Closed` before the initiator's `Grant` landed and the ceremony
+/// timed out looking like "the initiator never confirmed". Sync sessions keep the short value:
+/// their redial cadence depends on it (see [`IDLE_TIMEOUT`]); a pairing connection is one burst.
+const PAIRING_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 impl IrohLink {
     /// `pub(crate)` rather than private: `holepunch.rs` (plan M8 `sync-relay-enable`) wraps a
     /// relay-dialed connection the identical way — a `Link` over one QUIC connection's stream
@@ -219,6 +230,11 @@ impl IrohLink {
         recv: iroh::endpoint::RecvStream,
     ) -> IrohLink {
         let alpn = connection.alpn().to_vec();
+        let idle_timeout = if alpn == crate::endpoint::PAIRING_ALPN {
+            PAIRING_IDLE_TIMEOUT
+        } else {
+            IDLE_TIMEOUT
+        };
         IrohLink {
             _connection: connection,
             send,
@@ -228,6 +244,7 @@ impl IrohLink {
             handle: tokio::runtime::Handle::current(),
             inbox: Vec::new(),
             alpn,
+            idle_timeout,
         }
     }
 
@@ -271,12 +288,12 @@ impl IrohLink {
                 Err(other) => return Err(LinkError::Frame(other)),
             }
             let mut chunk = [0u8; READ_CHUNK_BYTES];
-            let read = tokio::time::timeout(IDLE_TIMEOUT, self.recv.read(&mut chunk));
+            let read = tokio::time::timeout(self.idle_timeout, self.recv.read(&mut chunk));
             match self.handle.block_on(read) {
                 Ok(Ok(Some(n))) => self.inbox.extend_from_slice(&chunk[..n]),
                 Ok(Ok(None)) => return Err(log_link_peer_closed()),
                 Ok(Err(e)) => return Err(LinkError::Io(e.to_string())),
-                Err(_elapsed) => return Err(log_link_idle_timeout()),
+                Err(_elapsed) => return Err(log_link_idle_timeout(self.idle_timeout)),
             }
         }
     }
@@ -291,7 +308,7 @@ fn log_link_peer_closed() -> LinkError {
 
 /// `IDLE_TIMEOUT` elapsed with no bytes at all — by design (module doc), not a real close; a
 /// caller is expected to redial. Distinct from `log_link_peer_closed` above.
-fn log_link_idle_timeout() -> LinkError {
-    tracing::debug!(millis = IDLE_TIMEOUT.as_millis(), "link_idle_timeout");
+fn log_link_idle_timeout(idle_timeout: std::time::Duration) -> LinkError {
+    tracing::debug!(millis = idle_timeout.as_millis(), "link_idle_timeout");
     LinkError::Closed
 }
