@@ -7,7 +7,7 @@ use crate::debounce::Debouncer;
 use crate::server::SharedWorkspace;
 use crate::walker::{is_in_skipped_dir, walk_with};
 use crate::watcher::{RawEvent, Routed, ingest, start as start_notify};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -60,6 +60,7 @@ fn log_watch_drain_stopped(root: &Path) {
 async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::Receiver<RawEvent>) {
     let mut deb = Debouncer::default();
     let root = read(&ws).root().to_path_buf();
+    let root_canon = root.canonicalize().ok().filter(|c| *c != root);
     // Ends when the notify side drops its sender (the watcher handle was dropped).
     loop {
         let wait = deb
@@ -81,13 +82,29 @@ async fn drain_loop(ws: SharedWorkspace, clock: Arc<dyn Clock>, rx: &mut mpsc::R
         // `notify` reports every directory a `cargo build` creates under `target/`; walking each
         // one is what starved every RPC on 2026-09-19, so skipped trees never reach `discover`.
         if let Some(Routed::Directory(dir)) = routed.filter(|r| !in_skipped_dir(&root, r)) {
-            discover(&ws, &dir);
+            discover(&ws, &under_root(&root, root_canon.as_deref(), dir));
         }
         for path in deb.drain_due(clock.now_instant()) {
             if !is_in_skipped_dir(&root, &path) {
-                route_document(&ws, &path).await;
+                route_document(&ws, &under_root(&root, root_canon.as_deref(), path)).await;
             }
         }
+    }
+}
+
+/// The event path spelled under `root`. macOS reports FSEvents under the real path
+/// (`/private/tmp/...`) while a workspace opened by a symlinked spelling keeps `/tmp/...` as its
+/// root; every comparison downstream (`is_layout_file`, `actor_for_disk`, `walker::relative`)
+/// is a prefix match on `root`, so a path under the canonical root is respelled onto it. Found
+/// when a `txtodo.toml` hot reload never fired for a workspace under `/tmp` (task
+/// layout-hot-reload-clients); external edits in such a workspace were silently missed too.
+fn under_root(root: &Path, root_canon: Option<&Path>, path: PathBuf) -> PathBuf {
+    if path.starts_with(root) {
+        return path;
+    }
+    match root_canon.and_then(|canon| path.strip_prefix(canon).ok()) {
+        Some(rel) => root.join(rel),
+        None => path,
     }
 }
 
@@ -139,5 +156,39 @@ async fn route_document(ws: &SharedWorkspace, path: &Path) {
                 discover(ws, parent);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::under_root;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn an_event_under_the_canonical_root_is_respelled_onto_the_root() {
+        let root = Path::new("/tmp/w");
+        let canon = Path::new("/private/tmp/w");
+        assert_eq!(
+            under_root(
+                root,
+                Some(canon),
+                PathBuf::from("/private/tmp/w/txtodo.toml")
+            ),
+            PathBuf::from("/tmp/w/txtodo.toml")
+        );
+        assert_eq!(
+            under_root(root, Some(canon), PathBuf::from("/tmp/w/a/todo.txt")),
+            PathBuf::from("/tmp/w/a/todo.txt"),
+            "already under the root: untouched"
+        );
+        assert_eq!(
+            under_root(root, None, PathBuf::from("/private/tmp/w/todo.txt")),
+            PathBuf::from("/private/tmp/w/todo.txt"),
+            "no canonical form known: left alone"
+        );
+        assert_eq!(
+            under_root(root, Some(canon), PathBuf::from("/elsewhere/todo.txt")),
+            PathBuf::from("/elsewhere/todo.txt")
+        );
     }
 }
