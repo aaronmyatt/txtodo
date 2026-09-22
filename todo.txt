@@ -1,3 +1,6 @@
+(A) 2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli
+(A) 2026-09-21 remote workspace auto-mirror + remote flag across clients +m11 @daemon @cli @tui @desktop ref:remote-workspace-mirror
+(A) 2026-09-22 daemon/sync: push-on-commit live sync over one long-lived peer link +m11 @daemon @sync ref:sync-live-push
 2026-09-22 each client should optimistically upgrade the daemon to the latest versin known to it
 2026-09-21 desktop: start a sub-list on a task with no ref: yet (DetailView shows one only when todo.txt has tasks) +m11 @desktop ref:desktop-sublist-start
 2026-09-20 Default workspace: a managed per-user todo list, created on first run, that syncs across devices whatever the OS path +m11 @daemon @desktop @cli ref:default-workspace — all three decisions made 2026-09-20 (A, A, A), ready to build by:claude
@@ -12,8 +15,6 @@
 (E) 2026-09-11 WASM component plugin host with the design §9 hooks +m10 @plugins @human — needs a wasm runtime dependency (Cargo.toml is frozen) and an ADR for which runtime and which design §9 hooks come first — parked 2026-09-20: no dependency and no ADR until revived; to revive, pick a runtime and write the ADR first
 (D) 2026-09-20 Cap MCP response sizes (line, rows, file resource) and set budgets.json payloadKB to 512 +m6 @mcp ref:payload-budget
 2026-09-21 daemon: notes.md sync (actor, recovery, LAN apply) +m11 @daemon ref:notes-sync
-2026-09-21 cli/tui: workspace offers/accept surface +m11 @cli @tui ref:workspace-offer-cli
-2026-09-21 remote workspace auto-mirror + remote flag across clients +m11 @daemon @cli @tui @desktop ref:remote-workspace-mirror
 2026-09-21 clients: the workspace layout is only half honoured +m11 @cli @tui @mcp @daemon ref:layout-client-gaps
 2026-09-21 txtodo.toml has a second, unvalidated parser in the CLI +m11 @cli @specs @security ref:layout-toml-validation
 2026-09-21 A live txtodo.toml change never reaches the desktop or TUI +m11 @desktop @tui ref:layout-hot-reload-clients
