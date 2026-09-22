@@ -166,3 +166,19 @@ Never edit or delete a prior entry.
 - Might become: `support::TwoDaemons::paired()` in crates/txtodo-daemon/tests/support returning
   two connected clients, plus a `converged_within(Duration)` assertion. One fixture, five lines
   unblocked — once docs/questions.md Q10 settles whether an agent session may run it.
+
+## 2026-09-23 — two `txtodo.toml` readers, five root-list fetchers
+
+- Duplicated: the daemon parses and validates `<root>/txtodo.toml` in
+  crates/txtodo-daemon/src/layout_file.rs (`WorkspaceLayout::new`, crates/txtodo-model/src/layout.rs)
+  and the CLI parses it again for direct-file mode in crates/txtodo-cli/src/config.rs:66
+  (`root_list_name`, now with its own copy of the rules in `valid_root_list` — `txtodo-cli` may not
+  depend on `txtodo-model`). Each client also fetches the root list over the `WorkspaceLayout` RPC on
+  its own: crates/txtodo-cli/src/commands/layout.rs (`adopt_root_list`), crates/txtodo-tui/src/daemon.rs
+  (`root_list`), crates/txtodo-mcp/src/grpc_read.rs (`file_or_root`), apps/desktop/src-tauri/src/daemon/workspace.rs
+  (`root_list_for`) — four copies of "Unimplemented means todo.txt, empty means todo.txt, anything
+  else is an error".
+- Might become: the validation rules in a tiny shared crate (or `txtodo-workspace-paths`, which every
+  client already depends on) so the CLI and the daemon share one `WorkspaceLayout::new`; and one
+  `root_list(&mut TxtodoClient)` helper next to the generated client in `txtodo-proto` for the four
+  fetchers. `specs/ref-directories.md` rule 2 now states the rules so the two parsers cannot drift silently.

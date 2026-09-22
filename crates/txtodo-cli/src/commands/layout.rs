@@ -3,9 +3,29 @@
 //! and writes `<root>/txtodo.toml`; this only asks and prints.
 
 use super::doctor::{Check, Status, check};
-use crate::client::Daemon;
+use crate::client::{ClientError, Daemon};
+use crate::config::Paths;
 use crate::{CliError, Ctx, json};
 use txtodo_proto::v1 as pb;
+
+/// Daemon mode's root list comes from the daemon (task layout-toml-validation): its
+/// `WorkspaceLayout` is the layout in force, which can differ from a hand-edited `txtodo.toml`
+/// the daemon refused (ref dirs still in the old place, an invalid value). The CLI's own parse
+/// stays direct mode's only. A daemon without the RPC (`Unimplemented`) keeps the local answer;
+/// any other failure is the command's error, never a silent wrong document.
+pub fn adopt_root_list(paths: &mut Paths, daemon: &mut Daemon) -> Result<(), CliError> {
+    match daemon.workspace_layout(pb::WorkspaceLayoutRequest::default()) {
+        Ok(info) if !info.todo_file.is_empty() => {
+            paths.todo = paths.dir.join(&info.todo_file);
+            paths.todo_file = info.todo_file;
+            paths.layout_note = None;
+            Ok(())
+        }
+        Ok(_) => Ok(()),
+        Err(ClientError::Rpc(s)) if s.code() == tonic::Code::Unimplemented => Ok(()),
+        Err(e) => Err(e.into()),
+    }
+}
 
 /// What `workspace layout` was asked to change; all `None` and `false` means "just show it".
 pub struct Change<'a> {

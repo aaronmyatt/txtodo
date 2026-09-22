@@ -1,4 +1,4 @@
-2026-09-21 cli: validate todo_file the way WorkspaceLayout::new does, direct mode included @cli
-2026-09-21 cli: take the root list from the WorkspaceLayout RPC, not its own parse @cli
-2026-09-21 specs: put the layout validation rules in ref-directories.md, not only ADR 0030 @specs
-2026-09-21 docs: log the two txtodo.toml parsers in ABSTRACTIONS.md @docs
+x 2026-09-23 2026-09-21 cli: validate todo_file the way WorkspaceLayout::new does, direct mode included @cli — config::valid_root_list mirrors WorkspaceLayout::new's rules (txtodo-cli may not depend on txtodo-model); a bad value is ignored with a stderr note (Paths.layout_note)
+x 2026-09-23 2026-09-21 cli: take the root list from the WorkspaceLayout RPC, not its own parse @cli — commands::layout::adopt_root_list runs before every daemon-mode dispatch; Unimplemented keeps the local parse, any other error is the command's
+x 2026-09-23 2026-09-21 specs: put the layout validation rules in ref-directories.md, not only ADR 0030 @specs — rule 2 in specs/ref-directories.md and plan §3.2 (mirror check green)
+x 2026-09-23 2026-09-21 docs: log the two txtodo.toml parsers in ABSTRACTIONS.md @docs — ABSTRACTIONS.md entry 2026-09-23: two toml readers, four root-list fetchers

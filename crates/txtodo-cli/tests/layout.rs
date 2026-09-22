@@ -282,6 +282,38 @@ fn a_custom_root_list_is_what_direct_file_mode_edits() {
     assert!(!ws.path().join("todo.txt").exists());
 }
 
+/// `txtodo notes ITEM` with a no-op `$EDITOR`: makes the line's ref dir lazily, nothing else.
+fn open_notes(daemon: &GlobalDaemon, ws: &Path, item: &str) {
+    let notes = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .current_dir(ws)
+        .env_remove("TXTODO_TODO_DIR")
+        .env("TXTODO_CONFIG", ws.join("none.toml"))
+        .env("TXTODO_SOCKET", &daemon.socket)
+        .env("EDITOR", "true")
+        .args(["notes", item])
+        .output()
+        .unwrap_or_else(|e| panic!("notes: {e}"));
+    assert!(
+        notes.status.success(),
+        "{}",
+        String::from_utf8_lossy(&notes.stderr)
+    );
+}
+
+/// `sub 1 ls` until it shows `want` or the deadline passes. Under the global daemon the ref dir
+/// is a workspace of its own, registered by `sub`'s first call; its new `todo.txt` is written to
+/// disk and adopted by the watcher, so the listing may lag the add.
+fn sub_ls_until(daemon: &GlobalDaemon, ws: &Path, want: &str) -> String {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    loop {
+        let out = stdout(&txtodo(daemon, ws, &["sub", "1", "ls"]));
+        if out.contains(want) || std::time::Instant::now() >= deadline {
+            return out;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+}
+
 /// Task layout-client-gaps: the history and ref commands read the root list by its layout name,
 /// so under `todo_file = "work.txt"` blame/undo/checkout/sub/conflicts answer about `work.txt`
 /// instead of a silent empty result for a `todo.txt` that does not exist; and daemon mode's
@@ -331,28 +363,12 @@ fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
         "conflicts reads work.txt, not todo.txt"
     );
 
-    let notes = Command::new(env!("CARGO_BIN_EXE_txtodo"))
-        .current_dir(ws.path())
-        .env_remove("TXTODO_TODO_DIR")
-        .env("TXTODO_CONFIG", ws.path().join("none.toml"))
-        .env("TXTODO_SOCKET", &daemon.socket)
-        .env("EDITOR", "true")
-        .args(["notes", "1"])
-        .output()
-        .unwrap();
-    assert!(notes.status.success());
+    open_notes(&daemon, ws.path(), "1");
     run(&["sub", "1", "add", "second step"]);
     let on_disk = std::fs::read_to_string(ws.path().join("tasks/plan-the-launch/todo.txt"))
         .unwrap_or_default();
     assert!(on_disk.contains("second step"), "{on_disk}");
-    // Under the global daemon the ref dir is a workspace of its own, registered by `sub`'s first
-    // call; its new `todo.txt` is written to disk and adopted by the watcher, so `ls` may lag.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-    let mut sub_ls = run(&["sub", "1", "ls"]);
-    while !sub_ls.contains("second step") && std::time::Instant::now() < deadline {
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        sub_ls = run(&["sub", "1", "ls"]);
-    }
+    let sub_ls = sub_ls_until(&daemon, ws.path(), "second step");
     assert!(
         sub_ls.contains("second step"),
         "sub ls never adopted the add: {sub_ls}"

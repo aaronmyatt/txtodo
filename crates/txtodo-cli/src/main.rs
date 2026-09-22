@@ -77,7 +77,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         paths.todo.ends_with(&paths.todo_file),
         "resolve names the todo file"
     );
-    let ctx = Ctx {
+    let mut ctx = Ctx {
         ids: config.id_tags() && !cli.no_id,
         auto_archive: !cli.no_archive,
         today: clock::today_local(),
@@ -86,6 +86,9 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         json: cli.json,
     };
     announce_default_workspace(&ctx, &cli.command);
+    if let Some(note) = &ctx.paths.layout_note {
+        eprintln!("{note}");
+    }
     let _log_guard = init_telemetry(&ctx.paths.dir);
     match &cli.command {
         Command::Doctor { verbose } => return commands::doctor::run(&ctx, *verbose),
@@ -110,7 +113,10 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
-        client::Mode::Daemon(mut daemon) => dispatch_daemon(&ctx, &mut daemon, &cli.command),
+        client::Mode::Daemon(mut daemon) => {
+            commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
+            dispatch_daemon(&ctx, &mut daemon, &cli.command)
+        }
     }
 }
 

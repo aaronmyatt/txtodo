@@ -43,3 +43,14 @@ creates and edits a document that is not the workspace's root list, and `txtodo 
   the same shape as the "five copies of the socket path" entry already at `ABSTRACTIONS.md:97`.
 
 See [[layout-client-gaps]], [[layout-doc-drift]].
+
+## As built (2026-09-23)
+
+- Direct mode validates `todo_file` with the daemon's rules (`config::valid_root_list`, unit
+  tested against the same cases) and ignores a bad value with one stderr line; it never writes
+  outside the workspace or to a `notes.md` any more.
+- Daemon mode no longer trusts its own parse: `adopt_root_list` takes the root list from the
+  `WorkspaceLayout` RPC before dispatch, so a hand-edited `txtodo.toml` the daemon refused cannot
+  make `txtodo add` write to a file that is not the root list. One extra RPC per command.
+- Rule 2 of the spec (and plan §3.2, mirrored) now states the rules; ABSTRACTIONS.md logs the
+  duplication. The rules themselves still live in two places by necessity (`allowedDeps`).

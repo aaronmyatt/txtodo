@@ -72,6 +72,7 @@ pub fn run_via_daemon(
             default_dir: ctx.paths.default_dir.clone(),
             todo: scratch.path().join(&scratch_name),
             todo_file: scratch_name.clone(),
+            layout_note: None,
             report: scratch.path().join("report.txt"),
             config: ctx.paths.config.clone(),
             // Sync is a separate, device-global folder, unrelated to this scratch todo-dir copy —
