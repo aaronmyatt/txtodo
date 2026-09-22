@@ -100,8 +100,11 @@ async fn async_main() -> ExitCode {
     // its own error here just means that message stays the single source of truth instead of a
     // second, less clear one racing it. No `.with_dir` (task `tui-global-socket-migration`): this
     // spawns the device-global daemon, matching `txtodo-cli`/`apps/desktop`'s own `LaunchConfig`.
+    // `with_upgrade_to` (task daemon-auto-upgrade): a live daemon older than this build is
+    // restarted with the newer `txtodod` before the TUI attaches to it.
     if !txtodo_daemon_launch::autostart_disabled() {
-        let cfg = txtodo_daemon_launch::LaunchConfig::new(&sock);
+        let cfg = txtodo_daemon_launch::LaunchConfig::new(&sock)
+            .with_upgrade_to(env!("CARGO_PKG_VERSION"));
         let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
     }
     if let Err(e) = daemon.wait_until_ready().await {
