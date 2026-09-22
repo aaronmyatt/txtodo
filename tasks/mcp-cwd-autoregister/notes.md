@@ -43,3 +43,18 @@ that says "do not add this to the registry if it is unknown" separates the two, 
 convenience without the leak.
 
 See [[layout-toml-validation]] (the other place two definitions drifted).
+
+## As built (2026-09-23)
+
+- The leak is closed at the MCP side: with no flags, the server serves the folder it runs in only
+  when the daemon's registry already lists it (registered earlier by the CLI/desktop); a folder
+  the daemon does not know is not registered by the server and the default workspace is served,
+  with a stderr line telling the human how to register it. The "serve without registering"
+  selector flag from the design sketch was not built: it needs a proto field and catalog support
+  for ephemeral opens, and the registered-only rule keeps the convenience for every workspace a
+  person has actually used.
+- One definition of the root: `workspace_root_from` prefers the nearest `.txtodo/`, else the
+  farthest `todo.txt`/`txtodo.toml` folder before a `.git` boundary. Two nested, unrelated
+  workspaces with no `.git` between them now resolve to the outer one — consistent with rule 11
+  (every list under a root is the root's), and the case the old rule got wrong (a fresh
+  checkout's `tasks/<slug>/`) is the common one.

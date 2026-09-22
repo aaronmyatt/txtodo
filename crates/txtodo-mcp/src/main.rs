@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
+use txtodo_mcp::backend::McpBackend;
 use txtodo_mcp::global_socket;
 use txtodo_mcp::grpc_backend::{GrpcMcpBackend, SOCKET_REL};
 use txtodo_mcp::schema::McpServer;
@@ -149,12 +150,12 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // `--global` mirrors that placement beside the global socket instead. `_log_guard` must
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
-    if matches!(args.target, Target::Auto) {
-        aim_at_the_current_workspace();
-    }
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
     ensure_daemon_for_target(&args.target, &socket).await;
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
+    if matches!(args.target, Target::Auto) {
+        aim_at_the_current_workspace(&backend).await;
+    }
     let server = McpServer::new(Arc::new(backend));
     match args.mode {
         Mode::Stdio => transport::serve_stdio(server).await?,
@@ -164,15 +165,28 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// With neither `--dir` nor `--global`: calls that name no `workspace` mean the folder this server
-/// was started in when it is a workspace, else the default workspace (task default-workspace) —
-/// and stderr says which. stdout is the MCP protocol, so it is never used here.
+/// was started in when it is a workspace *the daemon already knows* (registered by the CLI or the
+/// desktop), else the default workspace (task default-workspace) — and stderr says which. Never
+/// registers the folder itself (task mcp-cwd-autoregister): naming an unknown path would add it
+/// to the registry and announce its name to every paired peer, so a stray `todo.txt` folder an
+/// agent happens to start in stays private. stdout is the MCP protocol, so it is never used here.
 #[allow(clippy::print_stderr)]
-fn aim_at_the_current_workspace() {
+async fn aim_at_the_current_workspace(backend: &GrpcMcpBackend) {
     let env = txtodo_workspace_paths::RegistryEnv::from_process().unwrap_or_default();
     let cwd = std::env::current_dir().unwrap_or_default();
     match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
         txtodo_workspace_paths::WorkspaceChoice::Here(dir) => {
-            txtodo_mcp::set_default_workspace(dir.display().to_string());
+            let known = backend.list_workspaces().await.unwrap_or_default();
+            if is_registered(&known, &dir) {
+                txtodo_mcp::set_default_workspace(dir.display().to_string());
+            } else {
+                eprintln!(
+                    "txtodo-mcp: {} is a workspace the daemon does not know; using the default \
+                     workspace instead. To serve it, register it first: txtodo workspace add {}",
+                    dir.display(),
+                    dir.display()
+                );
+            }
         }
         txtodo_workspace_paths::WorkspaceChoice::Default(dir) => {
             eprintln!(
@@ -181,6 +195,16 @@ fn aim_at_the_current_workspace() {
             );
         }
     }
+}
+
+/// Whether `dir` is one of `known`'s roots. The registry stores canonicalized roots, so `dir` is
+/// compared both as given and canonicalized (macOS's `/tmp` → `/private/tmp`).
+fn is_registered(known: &[txtodo_mcp::backend::WorkspaceInfo], dir: &Path) -> bool {
+    let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    known
+        .iter()
+        .map(|w| Path::new(&w.root))
+        .any(|root| root == dir || root == canon)
 }
 
 async fn serve_http(server: McpServer) -> Result<(), Box<dyn std::error::Error>> {
