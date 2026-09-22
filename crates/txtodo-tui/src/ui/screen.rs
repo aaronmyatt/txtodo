@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
 use crate::state::{AppState, EditTarget};
-use crate::ui::{list, sync};
+use crate::ui::{list, offers, sync};
 
 /// Renders one frame: the line list, the status/sync line, and whichever overlay (`edit`/`r`
 /// pane/`:` command line) is active.
@@ -30,6 +30,9 @@ pub fn draw(frame: &mut Frame, state: &AppState) {
     }
     if state.conflicts_open {
         draw_conflicts(frame, list_area, state);
+    }
+    if state.offers.open {
+        offers::draw(frame, list_area, state);
     }
     if let Some(draft) = &state.editing {
         draw_overlay(
@@ -65,7 +68,11 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
         .workspace_label
         .as_deref()
         .map_or_else(String::new, |label| format!(" \u{b7} {label}"));
-    let left = format!(" {}{workspace} \u{b7} {id}{hint}", state.path);
+    let pending = match state.offers.items.len() {
+        0 => String::new(),
+        n => format!(" \u{b7} {n} workspace offer(s): o"),
+    };
+    let left = format!(" {}{workspace} \u{b7} {id}{pending}{hint}", state.path);
     let version = format!("{} ", crate::buildinfo::UI_LABEL);
     let used = Line::from(left.as_str()).width() + Line::from(version.as_str()).width();
     let Some(gap) = usize::from(width).checked_sub(used).filter(|gap| *gap >= 2) else {

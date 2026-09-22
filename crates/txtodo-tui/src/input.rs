@@ -10,7 +10,7 @@ use txtodo_proto::v1 as pb;
 use crate::action::Action;
 use crate::state::{AppState, Resolution};
 use crate::ui::edit::{self, OpenKey};
-use crate::ui::{conflicts, list};
+use crate::ui::{conflicts, list, offers};
 
 /// Owns the small bits of transient input state that span more than one keystroke (`gg`, `dd`) —
 /// facts about the keyboard, not the document, so they live here rather than in `AppState`.
@@ -35,6 +35,9 @@ impl Input {
         }
         if state.conflicts_open {
             return self.on_conflicts_key(state, key);
+        }
+        if state.offers.open {
+            return offers::on_key(state, key);
         }
         self.on_list_key(state, key)
     }
@@ -107,6 +110,7 @@ impl Input {
         match key.code {
             KeyCode::Char(':') => state.start_command(),
             KeyCode::Char('r') => state.toggle_conflicts(),
+            KeyCode::Char('o') => state.offers.toggle(),
             KeyCode::Char('s') => state.toggle_sync_visible(),
             KeyCode::Char('i') => edit::start(state, OpenKey::Insert),
             KeyCode::Char('a') => edit::start(state, OpenKey::Append),

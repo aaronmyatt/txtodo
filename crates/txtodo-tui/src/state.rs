@@ -6,6 +6,8 @@
 
 use txtodo_core::{TokenKind, Ulid, tokenize};
 
+use crate::state_offers::OffersPane;
+
 /// One line of the document as the UI needs it: the raw bytes (never mutated in place — every
 /// change is an `Apply`, design §7's invariant) plus the two facts widgets need without
 /// re-tokenizing on every keystroke.
@@ -191,6 +193,8 @@ pub struct AppState {
     /// Names the workspace in the status line when it is not the folder the user started in: `Some`
     /// for the default workspace (task default-workspace), `None` otherwise.
     pub workspace_label: Option<String>,
+    /// The `o` workspace-offers pane (task `workspace-offer-cli`).
+    pub offers: OffersPane,
 }
 
 impl AppState {
@@ -217,6 +221,7 @@ impl AppState {
             should_quit: false,
             skill_hint: false,
             workspace_label: None,
+            offers: OffersPane::default(),
         }
     }
 

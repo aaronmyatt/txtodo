@@ -19,8 +19,12 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   line editor, mapping a finished draft to an `Add`/`Edit` `Mutation`. `ui::conflicts::{on_key,
   move_down, move_up, resolve_request}` — the `r` pane, resolving through the daemon's own
   `ResolveConflict` RPC (mine/theirs/merged) rather than a hand-rolled `Apply`. `ui::sync::{render,
-  widget}` — the `s` indicator's pure rendering of a `SyncSnapshot`. `ui::screen::draw` — composes
-  all of the above into one `ratatui::Frame`.
+  widget}` — the `s` indicator's pure rendering of a `SyncSnapshot`. `ui::offers::{on_key, draw,
+  accept_request, decline_request}` + `state_offers::{OfferItem, OffersPane}` + `app_offers` — the
+  `o` workspace-offers pane (task `workspace-offer-cli`): `a` prompts for a local directory and
+  accepts into it (the daemon has no default location yet), `d` declines; the list refreshes on
+  the same 1 s tick as `s`, and the status line counts pending offers. `ui::screen::draw` —
+  composes all of the above into one `ratatui::Frame`.
 - `daemon::{Daemon, DaemonError, socket_path, MAX_RECONNECT_ATTEMPTS}` — the gRPC bridge to
   `txtodod` over the ADR 0010 unix socket (mirrors `apps/desktop/src-tauri/src/daemon.rs`'s
   `DaemonClient`): `connect`/`wait_until_ready`/`get_file`/`watch`/`apply`/`list_conflicts`/

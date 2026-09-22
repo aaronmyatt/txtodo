@@ -8,6 +8,7 @@ pub mod buildinfo;
 pub mod paint;
 pub mod skill_hint;
 pub mod state;
+pub mod state_offers;
 
 /// Widgets, each rendering a pure function of `&state::AppState` (design §7's per-row/pane split):
 /// `list` (line list + vim nav), `edit` (single-line editor), `conflicts` (`r` pane), `sync`
@@ -16,6 +17,7 @@ pub mod ui {
     pub mod conflicts;
     pub mod edit;
     pub mod list;
+    pub mod offers;
     pub mod screen;
     pub mod sync;
 }
@@ -25,3 +27,4 @@ pub mod daemon;
 pub mod input;
 
 pub mod app;
+pub mod app_offers;

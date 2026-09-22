@@ -244,6 +244,44 @@ impl Daemon {
     }
 }
 
+/// Workspace offer RPCs (task `workspace-offer-cli`), registry-level: no selector, like the CLI's
+/// own `client_workspace.rs`.
+impl Daemon {
+    /// Every workspace a paired peer offered that this device has not accepted or declined.
+    pub async fn workspace_pending_offers(
+        &mut self,
+    ) -> Result<Vec<pb::PendingWorkspaceOffer>, DaemonError> {
+        let req = pb::WorkspacePendingOffersRequest {};
+        Ok(self
+            .inner
+            .workspace_pending_offers(req)
+            .await?
+            .into_inner()
+            .offers)
+    }
+
+    /// Adopts an offer at `req.local_dir`; the daemon consumes the offer either way.
+    pub async fn workspace_accept_offer(
+        &mut self,
+        req: pb::WorkspaceAcceptOfferRequest,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        Ok(self.inner.workspace_accept_offer(req).await?.into_inner())
+    }
+
+    /// Discards an offer; `false` when there was none.
+    pub async fn workspace_decline_offer(
+        &mut self,
+        req: pb::WorkspaceDeclineOfferRequest,
+    ) -> Result<bool, DaemonError> {
+        Ok(self
+            .inner
+            .workspace_decline_offer(req)
+            .await?
+            .into_inner()
+            .declined)
+    }
+}
+
 /// Split out so the event macro doesn't count against `wait_until_ready`'s own `#[instrument]`
 /// budget — the same pattern `crates/txtodo-daemon/src/watcher.rs::log_directory_event` uses.
 /// Never logs the socket path or any RPC payload, only the bounded retry counter and outcome.

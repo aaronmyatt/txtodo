@@ -197,7 +197,7 @@ async fn run_loop_inner(
                 handle_watch_message(daemon, state, change, &mut watch, &mut reconnects).await?;
             }
             _ = sync_tick.tick() => {
-                refresh_sync_status(daemon, state).await;
+                crate::app_offers::refresh_on_tick(daemon, state).await;
             }
         }
         if state.should_quit {
@@ -302,6 +302,8 @@ fn action_kind(action: &Action) -> &'static str {
         Action::Quit => "quit",
         Action::Apply(_) => "apply",
         Action::Resolve(_) => "resolve",
+        Action::AcceptOffer(_) => "accept_offer",
+        Action::DeclineOffer(_) => "decline_offer",
     }
 }
 
@@ -317,6 +319,10 @@ async fn perform_inner(
             daemon.apply(req).await?;
             let file = daemon.get_file(&path).await?;
             rebaseline(state, &file);
+        }
+        Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
+        Action::DeclineOffer(req) => {
+            crate::app_offers::perform_decline(daemon, state, req).await?;
         }
         Action::Resolve(req) => {
             daemon.resolve(req).await?;
@@ -363,7 +369,7 @@ fn to_conflict_item(flag: pb::ReviewFlag) -> crate::state::ConflictItem {
 /// daemon hiccup) leaves the previous snapshot in place rather than erroring the whole event
 /// loop — the same "colours are never the only signal" spirit as `ui/sync.rs` itself, just applied
 /// to a stale-but-present reading instead of a missing one.
-async fn refresh_sync_status(daemon: &mut Daemon, state: &mut AppState) {
+pub(crate) async fn refresh_sync_status(daemon: &mut Daemon, state: &mut AppState) {
     if let Ok(resp) = daemon.sync_status().await {
         state.sync = to_sync_snapshot(resp);
     }
