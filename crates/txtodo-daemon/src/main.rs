@@ -309,9 +309,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 
     let built = build_identity(&args, &state_dir, clock.as_ref())?;
     let identity = Arc::new(built.identity);
-    // One shared relay endpoint per device (`daemon-shared-sync-link` stage 5), bound before any
-    // workspace opens; resolved once so `Health` agrees with the bind. Off, like LAN below, when
-    // the keystore cannot keep keys (task keystore-memory-fallback).
+    // One relay endpoint per device, bound before any workspace opens; off (like LAN below) on a
+    // keystore that cannot keep keys (task keystore-memory-fallback).
     let relay_url = built
         .sync_allowed
         .then(|| txtodo_daemon::relay::resolve_relay_url(args.relay_url.clone(), args.no_relay))
