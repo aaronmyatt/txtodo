@@ -13,6 +13,8 @@
 
 mod support;
 
+use txtodo_proto::v1 as pb;
+use txtodo_tui::action::Action;
 use txtodo_tui::app::perform;
 use txtodo_tui::input::Input;
 use txtodo_tui::state::AppState;
@@ -280,4 +282,65 @@ async fn the_root_list_is_the_layouts_todo_file() {
     assert_eq!(root, "work.txt");
     let file = daemon.get_file(&root).await.unwrap();
     assert_eq!(file.bytes, b"plan the launch\n");
+}
+
+/// Root todo "tui: J/K on or beside a blank line exits the TUI with an error": `J` past a blank
+/// line reorders through the daemon without addressing the blank, and a refusal the daemon does
+/// make (here: an `Apply` aimed at the blank line by hand) lands on the status line instead of
+/// ending the session.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn capital_j_past_a_blank_line_reorders_and_a_refusal_stays_in_the_loop() {
+    let (_real, mut daemon) = support::RealDaemon::start("buy milk\n\ncall mom\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+
+    let shift_j = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('J'),
+        crossterm::event::KeyModifiers::SHIFT,
+    );
+    let action = input
+        .on_key(&mut state, shift_j)
+        .unwrap_or_else(|| panic!("J acts"));
+    let keep_going = perform(&mut daemon, &mut state, action)
+        .await
+        .unwrap_or_else(|e| panic!("perform: {e}"));
+    assert!(
+        keep_going && state.last_error.is_none(),
+        "{:?}",
+        state.last_error
+    );
+    let raws: Vec<&str> = state.lines.iter().map(|l| l.raw.as_str()).collect();
+    assert_eq!(
+        raws,
+        ["", "call mom", "buy milk"],
+        "milk moved to the end, past the blank"
+    );
+
+    // The refusal path: a mutation that names the blank line, as the old J/K did.
+    let blank = pb::TaskRef {
+        line_number: 1,
+        task_id: String::new(),
+    };
+    let req = pb::ApplyRequest {
+        path: "todo.txt".to_owned(),
+        mutations: vec![pb::Mutation {
+            kind: Some(pb::mutation::Kind::Complete(pb::Complete {
+                task: Some(blank),
+                today: "2026-09-23".to_owned(),
+            })),
+        }],
+        source: "tui".to_owned(),
+        ..pb::ApplyRequest::default()
+    };
+    let keep_going = perform(&mut daemon, &mut state, Action::Apply(req))
+        .await
+        .unwrap_or_else(|e| panic!("a refusal must not be an error: {e}"));
+    assert!(keep_going);
+    let refused = state.last_error.clone().unwrap_or_default();
+    assert!(refused.contains("blank"), "{refused}");
 }

@@ -195,6 +195,9 @@ pub struct AppState {
     pub workspace_label: Option<String>,
     /// The `o` workspace-offers pane (task `workspace-offer-cli`).
     pub offers: OffersPane,
+    /// The daemon's last refusal of an action (a stale line, a blank line addressed), shown in
+    /// the status line until the next action succeeds. A refusal used to end the whole session.
+    pub last_error: Option<String>,
 }
 
 impl AppState {
@@ -222,6 +225,7 @@ impl AppState {
             skill_hint: false,
             workspace_label: None,
             offers: OffersPane::default(),
+            last_error: None,
         }
     }
 

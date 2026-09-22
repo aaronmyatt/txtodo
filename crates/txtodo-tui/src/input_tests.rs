@@ -55,14 +55,63 @@ fn capital_j_moves_before_the_line_after_next_and_the_cursor_follows() {
         panic!("expected MoveBefore");
     };
     assert_eq!(m.task.as_ref().unwrap().line_number, 1);
-    assert_eq!(m.before.as_ref().unwrap().line_number, 3, "the blank line");
-    assert_eq!(state.cursor, 1, "cursor follows the moved line");
+    assert_eq!(
+        m.before.as_ref().unwrap().line_number,
+        4,
+        "the next task after passport: the blank line is skipped, never addressed"
+    );
+    assert_eq!(
+        state.cursor, 2,
+        "cursor goes where the line lands: just before plants"
+    );
+}
+
+#[test]
+fn capital_j_and_k_on_a_blank_line_do_nothing() {
+    let mut state = AppState::fixture();
+    state.cursor = 2; // the blank line
+    let mut input = Input::default();
+    for c in ['J', 'K'] {
+        assert!(
+            input
+                .on_key(
+                    &mut state,
+                    KeyEvent::new(KeyCode::Char(c), KeyModifiers::SHIFT)
+                )
+                .is_none(),
+            "{c} on a blank line"
+        );
+        assert_eq!(state.cursor, 2, "and the cursor stays");
+    }
+}
+
+#[test]
+fn capital_k_skips_a_blank_line_above() {
+    let mut state = AppState::fixture();
+    state.cursor = 3; // plants; the line above it is blank, passport is above that
+    let mut input = Input::default();
+    let Some(Action::Apply(req)) = input.on_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('K'), KeyModifiers::SHIFT),
+    ) else {
+        panic!("expected Apply")
+    };
+    let Some(pb::mutation::Kind::MoveBefore(m)) = &req.mutations[0].kind else {
+        panic!("expected MoveBefore");
+    };
+    assert_eq!(m.task.as_ref().unwrap().line_number, 4);
+    assert_eq!(
+        m.before.as_ref().unwrap().line_number,
+        2,
+        "passport, not the blank"
+    );
+    assert_eq!(state.cursor, 1);
 }
 
 #[test]
 fn capital_j_on_the_second_to_last_line_produces_move_to_end() {
     let mut state = AppState::fixture();
-    state.cursor = 2; // the blank line; only the last line (plants) follows it
+    state.cursor = 1; // passport; past the blank, only the last task (plants) follows it
     let mut input = Input::default();
     let action = input
         .on_key(

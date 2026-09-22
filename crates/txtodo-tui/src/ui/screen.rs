@@ -72,7 +72,14 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
         0 => String::new(),
         n => format!(" \u{b7} {n} workspace offer(s): o"),
     };
-    let left = format!(" {}{workspace} \u{b7} {id}{pending}{hint}", state.path);
+    let error = state
+        .last_error
+        .as_deref()
+        .map_or_else(String::new, |e| format!(" \u{b7} refused: {e}"));
+    let left = format!(
+        " {}{workspace} \u{b7} {id}{pending}{error}{hint}",
+        state.path
+    );
     let version = format!("{} ", crate::buildinfo::UI_LABEL);
     let used = Line::from(left.as_str()).width() + Line::from(version.as_str()).width();
     let Some(gap) = usize::from(width).checked_sub(used).filter(|gap| *gap >= 2) else {
@@ -163,6 +170,19 @@ mod tests {
                 .to_string()
                 .contains("todo.txt \u{b7} default workspace")
         );
+    }
+
+    #[test]
+    fn status_line_shows_the_daemons_last_refusal() {
+        let mut state = AppState::fixture();
+        state.last_error = Some("line 3 is blank".to_owned());
+        assert!(
+            status_line(&state, 120)
+                .to_string()
+                .contains("refused: line 3 is blank")
+        );
+        state.last_error = None;
+        assert!(!status_line(&state, 120).to_string().contains("refused"));
     }
 
     #[test]

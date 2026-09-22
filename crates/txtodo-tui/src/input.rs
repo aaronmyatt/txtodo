@@ -163,43 +163,69 @@ fn delete_selected(state: &AppState) -> Option<pb::Mutation> {
     })
 }
 
-/// The `TaskRef` for the line at `idx`, if any.
+/// The `TaskRef` for the line at `idx`, if it is a task line. A blank line is never addressed:
+/// the daemon refuses a `TaskRef` to one (`specs/todotxt.abnf#blank`), and that refusal used to
+/// end the whole TUI session (root todo: "J/K on or beside a blank line exits the TUI").
 fn task_ref_at(state: &AppState, idx: usize) -> Option<pb::TaskRef> {
     let line = state.lines.get(idx)?;
+    if line.raw.trim().is_empty() {
+        return None;
+    }
     Some(pb::TaskRef {
         line_number: line.line_number,
         task_id: line.task_ref_id().to_owned(),
     })
 }
 
-/// `J`: builds the `MoveBefore`/`MoveToEnd` mutation that puts the selected line right after the
-/// line below it (a no-op on the Add-a-line row or the last line), then advances the cursor so it
-/// keeps tracking the moved line once the daemon's refresh lands.
+/// The index of the first task line at or after `from`, skipping blanks.
+fn next_task_from(state: &AppState, from: usize) -> Option<usize> {
+    (from..state.lines.len()).find(|&i| !state.lines[i].raw.trim().is_empty())
+}
+
+/// The index of the last task line at or before `from`, skipping blanks.
+fn prev_task_from(state: &AppState, from: usize) -> Option<usize> {
+    (0..=from)
+        .rev()
+        .find(|&i| !state.lines[i].raw.trim().is_empty())
+}
+
+/// `J`: builds the `MoveBefore`/`MoveToEnd` mutation that puts the selected task right after the
+/// next task below it, blank lines skipped (a no-op on a blank line, the Add-a-line row or the
+/// last task), then moves the cursor to where the task will land once the daemon's refresh does.
 fn move_selected_down(state: &mut AppState) -> Option<pb::Mutation> {
-    if state.on_add_line_row() || state.cursor + 1 >= state.lines.len() {
+    if state.on_add_line_row() {
         return None;
     }
     let task = task_ref_at(state, state.cursor)?;
-    let kind = match task_ref_at(state, state.cursor + 2) {
-        Some(before) => pb::mutation::Kind::MoveBefore(pb::MoveBefore {
-            task: Some(task),
-            before: Some(before),
-        }),
-        None => pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task: Some(task) }),
+    let next = next_task_from(state, state.cursor + 1)?;
+    let (kind, lands_at) = match next_task_from(state, next + 1) {
+        Some(after_next) => (
+            pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+                task: Some(task),
+                before: task_ref_at(state, after_next),
+            }),
+            after_next - 1,
+        ),
+        None => (
+            pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task: Some(task) }),
+            state.lines.len() - 1,
+        ),
     };
-    state.move_down();
+    state.cursor = lands_at;
     Some(pb::Mutation { kind: Some(kind) })
 }
 
-/// `K`: builds the `MoveBefore` mutation that puts the selected line right before the line above
-/// it (a no-op on the first line or the Add-a-line row), then moves the cursor to follow it.
+/// `K`: builds the `MoveBefore` mutation that puts the selected task right before the previous
+/// task above it, blank lines skipped (a no-op on a blank line, the first task or the Add-a-line
+/// row), then moves the cursor to where the task will land.
 fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
     if state.on_add_line_row() || state.cursor == 0 {
         return None;
     }
     let task = task_ref_at(state, state.cursor)?;
-    let before = task_ref_at(state, state.cursor - 1)?;
-    state.move_up();
+    let prev = prev_task_from(state, state.cursor - 1)?;
+    let before = task_ref_at(state, prev)?;
+    state.cursor = prev;
     Some(pb::Mutation {
         kind: Some(pb::mutation::Kind::MoveBefore(pb::MoveBefore {
             task: Some(task),

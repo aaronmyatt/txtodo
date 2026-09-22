@@ -333,7 +333,16 @@ async fn perform_inner(
         Action::Quit => return Ok(false),
         Action::Apply(req) => {
             let path = req.path.clone();
-            daemon.apply(req).await?;
+            // A refusal (a stale TaskRef, a line that changed underneath) is the daemon doing its
+            // job: it goes on the status line, never out of the loop. A transport error still does.
+            match daemon.apply(req).await {
+                Ok(_) => state.last_error = None,
+                Err(DaemonError::Rpc(status)) => {
+                    state.last_error = Some(status.message().to_owned());
+                    return Ok(true);
+                }
+                Err(e) => return Err(e),
+            }
             let file = daemon.get_file(&path).await?;
             rebaseline(state, &file);
         }
