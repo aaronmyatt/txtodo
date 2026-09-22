@@ -127,9 +127,13 @@ pub fn run() {
 /// daemon connect in the background.
 /// Ref: https://docs.rs/tauri/2/tauri/struct.Builder.html#method.setup
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    // No explicit workspace: start on the default one (task default-workspace).
-    let start = workspace_override().or_else(|| Some(config::default_workspace_dir()));
-    app.manage(AppState::new(DesktopConfig::with_optional_workspace(start)));
+    // No explicit workspace: none is named here. `connect_and_store` adopts the daemon's own
+    // default workspace once connected (task default-workspace-client-agreement) instead of
+    // recomputing its path from this process' environment, which can differ from a
+    // launchd-managed daemon's and would auto-register a second, near-identical root.
+    app.manage(AppState::new(DesktopConfig::with_optional_workspace(
+        workspace_override(),
+    )));
     quick_add::create_window(app.handle())?;
     quick_add::register_shortcut(app.handle())?;
     tray::create_tray(app.handle())?;

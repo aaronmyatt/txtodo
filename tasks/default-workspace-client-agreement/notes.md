@@ -38,3 +38,15 @@ Default-workspace *removal* is genuinely guarded server-side
 is fine.
 
 See [[default-workspace-pairing-consent]].
+
+## As built (2026-09-23)
+
+- The app no longer names a default directory at startup: after dialing with no selector it reads
+  `WorkspaceList`, switches to the `is_default` root the daemon reports, and only if the daemon
+  reports none (an older build) uses `config::default_workspace_dir`. The launchd-vs-GUI env
+  drift can no longer register a second root. Not reproduced by hand (the notes rated that
+  scenario low-confidence); the change removes the recomputation either way.
+- The bridge computes the fresh-profile default with the shared helper and fails loud if the
+  daemon's `is_default` root differs; `fixtures.ts` keeps `<globalDir>/default` for its own disk
+  assertions, which is the same directory by construction (`TXTODO_SOCKET` beside it).
+- The registry tests assert exactly one entry and that it is the default.

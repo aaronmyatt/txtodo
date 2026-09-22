@@ -63,14 +63,13 @@ async fn add_list_remove_round_trip_and_add_is_idempotent() {
 
     // A fresh daemon always registers the reserved default workspace (task
     // `default-workspace`) — "empty" here means "no workspace but the default", not zero.
-    assert!(
-        client
-            .workspace_list()
-            .await
-            .unwrap()
-            .iter()
-            .all(|w| w.is_default)
+    let only_default = client.workspace_list().await.unwrap();
+    assert_eq!(
+        only_default.len(),
+        1,
+        "exactly the default: {only_default:?}"
     );
+    assert!(only_default[0].is_default, "{only_default:?}");
     let first = client.workspace_add(dir.path()).await.unwrap();
     let again = client.workspace_add(dir.path()).await.unwrap();
     assert_eq!(first.workspace_id, again.workspace_id, "idempotent add");
@@ -81,14 +80,13 @@ async fn add_list_remove_round_trip_and_add_is_idempotent() {
     assert_eq!(non_default[0].workspace_id, first.workspace_id);
 
     assert!(client.workspace_remove(&first.workspace_id).await.unwrap());
-    assert!(
-        client
-            .workspace_list()
-            .await
-            .unwrap()
-            .iter()
-            .all(|w| w.is_default)
+    let only_default = client.workspace_list().await.unwrap();
+    assert_eq!(
+        only_default.len(),
+        1,
+        "exactly the default: {only_default:?}"
     );
+    assert!(only_default[0].is_default, "{only_default:?}");
     // Registry::remove is an idempotent upsert-tombstone: an already-removed (but once-known) id
     // still returns true. false is reserved for an id this registry never heard of at all.
     assert!(

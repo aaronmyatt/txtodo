@@ -31,10 +31,32 @@ pub(crate) async fn connect_and_store(
     reset_watch_stream(state).await;
     ensure_running(state).await?;
     set_status(app, state, DaemonStatus::Connecting).await;
-    let client = dial(state).await?;
+    let mut client = dial(state).await?;
+    adopt_daemon_default(&mut client, state).await;
     *state.client.lock().await = Some(client);
     set_status(app, state, DaemonStatus::Connected).await;
     Ok(())
+}
+
+/// With no workspace picked yet, the one the daemon flags `is_default` in its registry becomes
+/// the current workspace — by the daemon's own root, never a path recomputed from this process'
+/// environment (task default-workspace-client-agreement). A daemon too old to flag one falls
+/// back to the shared helper's answer, the previous behaviour. Nothing here registers a
+/// directory: the daemon reserved its default itself.
+async fn adopt_daemon_default(client: &mut DaemonClient, state: &AppState) {
+    if state.current_workspace.lock().await.is_some() {
+        return;
+    }
+    let root = match client.workspace_list().await {
+        Ok(list) => list
+            .into_iter()
+            .find(|w| w.is_default)
+            .map(|w| std::path::PathBuf::from(w.root)),
+        Err(_) => None,
+    }
+    .unwrap_or_else(crate::config::default_workspace_dir);
+    client.switch_workspace(&root);
+    *state.current_workspace.lock().await = Some(root);
 }
 
 /// A fresh connection needs a fresh `watch` stream too — see `commands.rs::watch_inner`'s own doc.

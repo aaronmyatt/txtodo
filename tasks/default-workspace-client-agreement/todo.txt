@@ -1,3 +1,3 @@
-2026-09-21 desktop: select the default workspace by its reserved id, not a recomputed path
-2026-09-21 desktop: the e2e bridge derives the default workspace from the shared helper
-2026-09-21 test: workspace_registry asserts an exact count, not all() @test
+x 2026-09-23 2026-09-21 desktop: select the default workspace by its reserved id, not a recomputed path — setup names no workspace; commands_connect::adopt_daemon_default takes the is_default entry's root from WorkspaceList after connecting (the shared helper is only the fallback for an older daemon). Not selected by id: every store keys on the root path, and the daemon's own root cannot drift
+x 2026-09-23 2026-09-21 desktop: the e2e bridge derives the default workspace from the shared helper — bin/e2e_bridge/default_workspace.rs: default_workspace_dir_for with the daemon's socket in view, then assert_default_agrees against WorkspaceList before serving; fresh spec green
+x 2026-09-23 2026-09-21 test: workspace_registry asserts an exact count, not all() @test — both all() assertions are len()==1 && is_default

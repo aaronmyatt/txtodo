@@ -26,8 +26,8 @@ use axum::{Json, Router};
 use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::{self, DaemonClient, DaemonError};
 use desktop_lib::dto::{
-    ApplyResultDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto, NotesDocDto,
-    ResolutionDto, ReviewFlagDto, TaskRefDto,
+    ApplyResultDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto, ResolutionDto,
+    ReviewFlagDto, TaskRefDto,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -52,6 +52,10 @@ use conflict::cmd_debug_raise_conflict;
 #[path = "e2e_bridge/refdir.rs"]
 mod refdir;
 use refdir::dispatch_notes_cmd;
+
+#[path = "e2e_bridge/default_workspace.rs"]
+mod default_workspace;
+use default_workspace::{assert_default_agrees, default_workspace_for};
 
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
@@ -82,10 +86,15 @@ async fn main() {
     let global_state_dir = std::env::var("TXTODO_E2E_GLOBAL_DIR")
         .unwrap_or_else(|_| panic!("e2e_bridge: TXTODO_E2E_GLOBAL_DIR must be set"));
     // `TXTODO_WORKSPACE` picks the workspace; without it the bridge stands in for a fresh profile
-    // and uses the default workspace, which the daemon creates beside its socket (task
-    // default-workspace: `txtodo_workspace_paths::default_workspace_dir_for`).
-    let workspace =
-        std::env::var("TXTODO_WORKSPACE").unwrap_or_else(|_| format!("{global_state_dir}/default"));
+    // and uses the default workspace — resolved through the same shared helper the daemon uses,
+    // seen through the socket override the daemon gets (task default-workspace-client-agreement),
+    // and cross-checked against the daemon's own `is_default` entry once it is up (below).
+    let fresh_profile = std::env::var("TXTODO_WORKSPACE").is_err();
+    let workspace = std::env::var("TXTODO_WORKSPACE").unwrap_or_else(|_| {
+        default_workspace_for(&global_state_dir)
+            .display()
+            .to_string()
+    });
     let mut cfg = DesktopConfig::new(workspace.clone());
     cfg.global_socket_override = Some(PathBuf::from(&global_state_dir).join("txtodod.sock"));
     cfg.global_registry_override = Some(PathBuf::from(&global_state_dir).join("registry.db"));
@@ -99,6 +108,9 @@ async fn main() {
     let selector = Some(pb::WorkspaceSelector {
         selector: Some(pb::workspace_selector::Selector::Path(workspace.clone())),
     });
+    if fresh_profile {
+        assert_default_agrees(&sock, &workspace).await;
+    }
     let mut client = DaemonClient::connect(&sock, selector)
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: connect: {e}"));
@@ -363,34 +375,6 @@ async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, Ap
             resolution: pb::Resolution::from(r.resolution) as i32,
             workspace: None,
             agent: None,
-        })
-        .await?;
-    Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
-}
-
-async fn cmd_get_notes(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
-    #[derive(Deserialize)]
-    struct Req {
-        task: TaskRefDto,
-    }
-    let r: Req = parse(args)?;
-    let resp = client.get_notes(r.task.into()).await?;
-    Ok(serde_json::to_value(NotesDocDto::from(resp))?)
-}
-
-async fn cmd_edit_notes(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
-    #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
-    struct Req {
-        task: TaskRefDto,
-        new_text: String,
-    }
-    let r: Req = parse(args)?;
-    let resp = client
-        .edit_notes(pb::NotesEditRequest {
-            task: Some(r.task.into()),
-            new_text: r.new_text,
-            workspace: None,
         })
         .await?;
     Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
