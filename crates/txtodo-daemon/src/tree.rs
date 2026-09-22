@@ -154,7 +154,8 @@ impl TxtodoService {
                 ref_tags: Vec::new(),
             });
         }
-        let layout = self.workspace().layout().get();
+        // The same binding as above (task layout-reload-safety): a hot reload landing between
+        // the two reads would assign node ids by one layout and place ref dirs by another.
         WorkspaceTree::build_with_layout(inputs, &layout)
             .map_err(|e| Status::internal(format!("{e:?}")))
     }

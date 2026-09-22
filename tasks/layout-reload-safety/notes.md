@@ -38,3 +38,10 @@ and well covered, including the "old list stops being the root list" case. The p
 the daemon's reload plumbing around it.
 
 See [[layout-client-gaps]].
+
+## As built (2026-09-23)
+
+All four closed in `layout_reload.rs`/`layout_rpc.rs`/`tree.rs`. The reload now fails closed on an
+unreadable root list; the RPC refuses a `todo_file` it cannot create before anything is written and
+reports a registration failure instead of returning OK; a deleted file under a non-default layout
+leaves a `doctor` note; the tree reads the layout once. Unit tests in `layout_reload_tests.rs`.

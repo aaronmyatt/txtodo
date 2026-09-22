@@ -102,7 +102,44 @@ async fn a_bad_or_deleted_file_keeps_the_last_good_layout() {
         "tasks",
         "deleting the file does not change what is in force"
     );
-    assert_eq!(note(&ws), None);
+    assert_eq!(
+        note(&ws),
+        None,
+        "the default needs no warning: a restart agrees"
+    );
+}
+
+/// Task layout-reload-safety: a deleted file whose layout was not the default leaves a note,
+/// since `layout_file::initial` falls back to the defaults on the next start.
+#[tokio::test]
+async fn deleting_the_file_under_a_non_default_layout_warns_about_the_next_start() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join(LAYOUT_FILE), "refs_dir = \".\"\n").unwrap();
+    let ws = open_with_a_ref_dir(dir.path());
+    assert_eq!(refs_dir(&ws), ".");
+
+    std::fs::remove_file(dir.path().join(LAYOUT_FILE)).unwrap();
+    reload_layout(&ws).await;
+    assert_eq!(refs_dir(&ws), ".", "still in force for this run");
+    let why = note(&ws).unwrap_or_default();
+    assert!(
+        why.contains("deleted") && why.contains("next start"),
+        "{why}"
+    );
+}
+
+/// Task layout-reload-safety: a `todo_file` that cannot be created (its name is taken by a
+/// directory) refuses the RPC change before anything is written or switched.
+#[test]
+fn a_root_list_that_cannot_be_made_is_an_error_not_a_shrug() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("work.txt")).unwrap();
+    let layout = txtodo_model::WorkspaceLayout::new("", "work.txt").unwrap();
+    let err = crate::layout_reload::create_root_list_file(dir.path(), &layout).unwrap_err();
+    assert!(err.to_string().contains("work.txt"), "{err}");
+    let fine = txtodo_model::WorkspaceLayout::new("", "lists/work.txt").unwrap();
+    crate::layout_reload::create_root_list_file(dir.path(), &fine).unwrap();
+    assert!(dir.path().join("lists/work.txt").is_file());
 }
 
 #[test]

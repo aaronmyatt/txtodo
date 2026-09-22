@@ -37,13 +37,20 @@ impl TxtodoService {
                     None => Vec::new(),
                 };
                 let slugs: Vec<&str> = tags.iter().map(|t| t.slug.as_str()).collect();
+                let list_changed = new.todo_file() != current.todo_file();
+                if list_changed {
+                    // Before the file and the switch: a root list that cannot be made refuses
+                    // the change instead of leaving a layout with no list (layout-reload-safety).
+                    crate::layout_reload::create_root_list_file(&root, &new)
+                        .map_err(|e| Status::failed_precondition(e.to_string()))?;
+                }
                 moved = relocate(&root, (&current, &new), &slugs, req.move_dirs)?;
                 write_layout_file(&root, &new)?;
-                let list_changed = new.todo_file() != current.todo_file();
                 shared.set(new);
                 shared.set_note(None);
                 if list_changed {
-                    crate::layout_reload::register_root_list(&self.ws);
+                    crate::layout_reload::register_root_list(&self.ws)
+                        .map_err(|e| Status::internal(e.to_string()))?;
                 }
                 self.workspace().tree_dirty.mark();
             }

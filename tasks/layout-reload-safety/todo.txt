@@ -1,4 +1,4 @@
-2026-09-21 Refuse a layout change when ref_tags cannot be read, instead of assuming zero
-2026-09-21 Propagate register_root_list failures out of the WorkspaceLayout RPC
-2026-09-21 Leave a doctor note when txtodo.toml is deleted but its layout stays in force
-2026-09-21 Read the workspace layout once per tree rebuild
+x 2026-09-23 2026-09-21 Refuse a layout change when ref_tags cannot be read, instead of assuming zero — refs_in_the_old_place returns Err; reload_layout then keeps the last good layout with a note naming the read failure
+x 2026-09-23 2026-09-21 Propagate register_root_list failures out of the WorkspaceLayout RPC — register_root_list returns RootListError; the RPC creates the file before writing the layout (FailedPrecondition on failure) and propagates a register failure; the watcher path logs and notes
+x 2026-09-23 2026-09-21 Leave a doctor note when txtodo.toml is deleted but its layout stays in force — a deleted txtodo.toml under a non-default layout leaves a note naming what the next start will do
+x 2026-09-23 2026-09-21 Read the workspace layout once per tree rebuild — rebuild_workspace_tree reuses its first layout binding
