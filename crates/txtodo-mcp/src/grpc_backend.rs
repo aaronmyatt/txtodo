@@ -266,7 +266,7 @@ impl McpBackend for GrpcMcpBackend {
         file: Option<RefPath>,
         workspace: WorkspaceArg,
     ) -> Result<String, McpError> {
-        let file = grpc_read::file_or_root(self.client(), file, &workspace).await;
+        let file = grpc_read::file_or_root(self.client(), file, &workspace).await?;
         grpc_read::get_file_text(self.client(), &file, workspace).await
     }
 

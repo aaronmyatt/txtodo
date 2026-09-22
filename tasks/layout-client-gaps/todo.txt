@@ -1,6 +1,6 @@
-2026-09-21 mcp: file_or_root swallows every layout RPC error and retargets todo.txt @mcp
-2026-09-21 mcp: resource URIs still hardcode todotxt://todo.txt @mcp
 2026-09-21 test: a desktop e2e whose todo_file is not todo.txt @desktop @test
+x 2026-09-23 2026-09-21 mcp: file_or_root swallows every layout RPC error and retargets todo.txt @mcp — file_or_root returns Result: Unimplemented (and an empty answer) read as todo.txt, everything else is the tool's error; every caller propagates it
+x 2026-09-23 2026-09-21 mcp: resource URIs still hardcode todotxt://todo.txt @mcp — the resource list was already built from ListFiles (no hardcoded URI); what still said todo.txt were the prompt descriptions, now 'the workspace's root list'. Module docs keep todotxt://todo.txt as an example only
 x 2026-09-23 2026-09-21 tui: fall back to todo.txt only on Unimplemented, not on every error @tui — Daemon::root_list returns Result; only Unimplemented (and an empty answer) read as todo.txt; app.rs exits with the error otherwise
 x 2026-09-23 2026-09-21 cli: txtodo conflicts still defaults to the literal todo.txt @cli — --file is Option, default Paths::todo_file; run() takes ctx
 x 2026-09-23 2026-09-21 cli: workspace layout --move alone silently does nothing @cli — set is true when --move is given

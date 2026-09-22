@@ -85,7 +85,7 @@ pub async fn add(
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     validate_add_text(&text)?;
-    let path = file_or_root(ctx.client.clone(), file, &workspace).await;
+    let path = file_or_root(ctx.client.clone(), file, &workspace).await?;
     let mutation = pb::Mutation {
         kind: Some(pb::mutation::Kind::Add(pb::Add { line: text.clone() })),
     };
@@ -248,7 +248,7 @@ pub async fn archive(
     file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<ApplyOutcome, McpError> {
-    let file = file_or_root(ctx.client.clone(), file, &workspace).await;
+    let file = file_or_root(ctx.client.clone(), file, &workspace).await?;
     let doc = get_file_doc(ctx.client.clone(), &file, workspace.clone()).await?;
     let mut completed: Vec<(u32, String)> = doc
         .rows()

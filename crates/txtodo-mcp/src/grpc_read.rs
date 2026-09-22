@@ -18,22 +18,35 @@ use crate::parse;
 const DEFAULT_TODO: &str = "todo.txt";
 
 /// `file`, or when the tool named none, the workspace's root list: `todo_file` from its layout
-/// (task workspace-layout). A daemon that cannot answer has only ever had `todo.txt`.
+/// (task workspace-layout). Only a daemon too old to know the RPC (`Unimplemented`) reads as
+/// `todo.txt`; any other failure (a workspace still loading, a transport error) is the tool's
+/// error, never a silent retarget to the wrong file (task layout-client-gaps). An empty answer
+/// is the default name, never an empty path.
 pub async fn file_or_root(
     mut client: TxtodoClient<Channel>,
     file: Option<RefPath>,
     workspace: &WorkspaceArg,
-) -> RefPath {
+) -> Result<RefPath, McpError> {
     if let Some(file) = file {
-        return file;
+        return Ok(file);
     }
     let req = pb::WorkspaceLayoutRequest {
         workspace: workspace_selector(workspace.clone()),
         ..pb::WorkspaceLayoutRequest::default()
     };
     match client.workspace_layout(req).await {
-        Ok(rep) => rep.into_inner().todo_file,
-        Err(_) => DEFAULT_TODO.to_owned(),
+        Ok(rep) => Ok(root_or_default(rep.into_inner().todo_file)),
+        Err(s) if s.code() == tonic::Code::Unimplemented => Ok(DEFAULT_TODO.to_owned()),
+        Err(s) => Err(status(s)),
+    }
+}
+
+/// `todo_file` as the daemon sent it, or `todo.txt` when it sent nothing.
+fn root_or_default(todo_file: String) -> RefPath {
+    if todo_file.is_empty() {
+        DEFAULT_TODO.to_owned()
+    } else {
+        todo_file
     }
 }
 
@@ -106,7 +119,7 @@ pub async fn list_workspaces(
 
 /// `todo_list`.
 pub async fn list(client: TxtodoClient<Channel>, args: ListArgs) -> Result<Vec<TaskRow>, McpError> {
-    let path = file_or_root(client.clone(), args.file.clone(), &args.workspace).await;
+    let path = file_or_root(client.clone(), args.file.clone(), &args.workspace).await?;
     let doc = get_file_doc(client, &path, args.workspace.clone()).await?;
     let mut rows = doc.rows();
     rows.retain(|r| !r.raw.trim().is_empty() && keeps_done(args.done, r.done));
@@ -160,7 +173,7 @@ pub async fn get(client: TxtodoClient<Channel>, target: GetTarget) -> Result<Tas
     let Some(line) = target.line else {
         return Err(McpError::invalid_params("todo_get needs id or line"));
     };
-    let path = file_or_root(client.clone(), target.file, &target.workspace).await;
+    let path = file_or_root(client.clone(), target.file, &target.workspace).await?;
     let doc = get_file_doc(client, &path, target.workspace).await?;
     row_at_line(&doc, line)
 }

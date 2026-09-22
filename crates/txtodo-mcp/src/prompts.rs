@@ -23,17 +23,17 @@ pub fn list() -> ListPromptsResult {
     let prompts = vec![
         Prompt::new(
             PLAN_TODAY,
-            Some("Prioritise today's actionable tasks from todo.txt"),
-            Some(vec![
-                PromptArgument::new("file").with_description("defaults to todo.txt"),
-            ]),
+            Some("Prioritise today's actionable tasks from the workspace's root list"),
+            Some(vec![PromptArgument::new("file").with_description(
+                "defaults to the workspace's root list (todo_file in its layout)",
+            )]),
         ),
         Prompt::new(
             WEEKLY_REVIEW,
             Some("Review the week: what shipped, what's stuck, what's next"),
-            Some(vec![
-                PromptArgument::new("file").with_description("defaults to todo.txt"),
-            ]),
+            Some(vec![PromptArgument::new("file").with_description(
+                "defaults to the workspace's root list (todo_file in its layout)",
+            )]),
         ),
         Prompt::new(
             TRIAGE_INBOX,

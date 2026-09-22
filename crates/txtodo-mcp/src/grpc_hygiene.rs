@@ -28,7 +28,7 @@ pub async fn lint(
     file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<Vec<LintFinding>, McpError> {
-    let path = file_or_root(client.clone(), file, &workspace).await;
+    let path = file_or_root(client.clone(), file, &workspace).await?;
     let rep = client
         .lint(pb::LintRequest {
             path,
@@ -69,7 +69,7 @@ pub async fn conflicts_list(
     file: Option<RefPath>,
     workspace: WorkspaceArg,
 ) -> Result<Vec<ConflictFlag>, McpError> {
-    let path = file_or_root(client.clone(), file, &workspace).await;
+    let path = file_or_root(client.clone(), file, &workspace).await?;
     Ok(flags(&mut client, &path, workspace)
         .await?
         .into_iter()

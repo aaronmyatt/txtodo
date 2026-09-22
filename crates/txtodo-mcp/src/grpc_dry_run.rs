@@ -143,7 +143,7 @@ async fn add_plan(
     workspace: &WorkspaceArg,
 ) -> Result<(RefPath, pb::Mutation), McpError> {
     validate_add_text(&text)?;
-    let path = file_or_root(ctx.client.clone(), file, workspace).await;
+    let path = file_or_root(ctx.client.clone(), file, workspace).await?;
     Ok((
         path,
         mutation(pb::mutation::Kind::Add(pb::Add { line: text })),
