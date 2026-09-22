@@ -1,11 +1,11 @@
-2026-09-21 tui: fall back to todo.txt only on Unimplemented, not on every error @tui
+2026-09-21 tui: fall back to todo.txt only on Unimplemented, not on every error @tui @doing by:claude
 2026-09-21 mcp: file_or_root swallows every layout RPC error and retargets todo.txt @mcp
 2026-09-21 mcp: resource URIs still hardcode todotxt://todo.txt @mcp
 2026-09-21 test: a desktop e2e whose todo_file is not todo.txt @desktop @test
-x 2026-09-23 2026-09-21 cli: txtodo conflicts still defaults to the literal todo.txt @cli
-x 2026-09-23 2026-09-21 cli: workspace layout --move alone silently does nothing @cli
-x 2026-09-23 2026-09-21 cli: --todo-file help still says only todo.txt is supported @cli
-x 2026-09-23 2026-09-21 cli: the list footer prefix differs between daemon and direct mode @cli
-x 2026-09-23 2026-09-21 cli: doctor drops a failed layout probe instead of reporting it @cli
-x 2026-09-23 2026-09-21 test: cover blame, undo, checkout and sub under a custom root list @cli @test
+x 2026-09-23 2026-09-21 cli: txtodo conflicts still defaults to the literal todo.txt @cli — --file is Option, default Paths::todo_file; run() takes ctx
+x 2026-09-23 2026-09-21 cli: workspace layout --move alone silently does nothing @cli — set is true when --move is given
+x 2026-09-23 2026-09-21 cli: --todo-file help still says only todo.txt is supported @cli — help now says any workspace-relative name, created if missing
+x 2026-09-23 2026-09-21 cli: the list footer prefix differs between daemon and direct mode @cli — the scratch copy is named after the daemon's document (scratch_doc), so prefix() agrees with direct mode
+x 2026-09-23 2026-09-21 cli: doctor drops a failed layout probe instead of reporting it @cli — a failed layout probe is a WARN row naming the error
+x 2026-09-23 2026-09-21 test: cover blame, undo, checkout and sub under a custom root list @cli @test — tests/layout.rs::blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list; sub's nested list is adopted async under the global daemon, the test polls
 x 2026-09-23 2026-09-21 daemon: fill WorkspaceInfo.refs_dir and todo_file from the live layout @daemon — global_service_helpers::workspace_info/layout_of: the live layout when the workspace is open, else its txtodo.toml (or defaults); tests/global_socket.rs asserts WorkspaceList carries work.txt
