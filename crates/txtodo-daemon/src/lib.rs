@@ -79,6 +79,7 @@ pub mod notes_state;
 mod pairing_grpc;
 mod pairing_lan;
 mod pairing_lan_state;
+mod pairing_register;
 mod pairing_relay_dial;
 mod pairing_state;
 mod pairing_state_error;

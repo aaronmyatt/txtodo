@@ -85,7 +85,7 @@ fn dispatch_control(link: IrohLink, ctx: &DispatchCtx, permit: OwnedSemaphorePer
 
 fn dispatch_pairing(link: IrohLink, device_relay: &DeviceRelay, permit: OwnedSemaphorePermit) {
     let Some(route) = device_relay.routes().any() else {
-        tracing::debug!("control_dispatch_pairing_no_open_workspace_dropping_incoming");
+        tracing::warn!("control_dispatch_pairing_no_open_workspace_dropping_incoming");
         return;
     };
     tokio::task::spawn_blocking(move || {

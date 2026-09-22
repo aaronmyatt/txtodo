@@ -250,16 +250,25 @@ pub(crate) fn handle_incoming_over(
     let peer = hello.device;
     let reply = process_hello(ws, hello);
     if matches!(reply, InitiatorReply::Grant(_)) {
-        record_grant_sent(ws, peer, carrier);
+        read(ws).pairing_lan().record_carrier(carrier);
     }
-    if let Ok(reply_frame) = reply.encode() {
-        let _ = link.send(reply_frame);
-    }
+    let Ok(reply_frame) = reply.encode() else {
+        return;
+    };
+    // `finish` before the link drops: over a relay the drop's QUIC close beat the reply every time.
+    let delivered = link.send(reply_frame).and_then(|()| link.finish()).is_ok();
+    log_reply(peer, carrier, &reply, delivered);
 }
 
-fn record_grant_sent(ws: &SharedWorkspace, peer: DeviceId, carrier: &'static str) {
-    read(ws).pairing_lan().record_carrier(carrier);
-    tracing::info!(%peer, carrier, "pairing_initiator_grant_sent");
+/// `info` for every reply, not just `Grant`: a `Pending`-answering initiator used to be silent,
+/// indistinguishable in its own log from one that never heard the joiner at all.
+fn log_reply(peer: DeviceId, carrier: &'static str, reply: &InitiatorReply, delivered: bool) {
+    let reply = match reply {
+        InitiatorReply::Pending => "pending",
+        InitiatorReply::Rejected => "rejected",
+        InitiatorReply::Grant(_) => "grant",
+    };
+    tracing::info!(%peer, carrier, reply, delivered, "pairing_initiator_replied");
 }
 
 /// `pub(crate)`: `pairing_lan_tests.rs` drives this directly — each `reject_*` below now logs its
@@ -372,29 +381,5 @@ fn register_joiner_device(ws: &Workspace, device: DeviceId, now_ms: u64) {
     };
     if let Err(e) = ws.register_paired_device(device, static_public, now_ms) {
         tracing::warn!(peer = %device, error = %e, "pairing_initiator_register_joiner_failed");
-    }
-}
-
-impl Workspace {
-    /// Registers a peer's long-term static public key in this workspace's own `devices` table —
-    /// symmetric with [`Workspace::adopt_group_key`]. Lives here for `workspace.rs`'s line budget.
-    pub(crate) fn register_paired_device(
-        &self,
-        device: DeviceId,
-        static_public: [u8; txtodo_sync::DEVICE_STATIC_KEY_BYTES],
-        now_ms: u64,
-    ) -> Result<(), txtodo_store::StoreError> {
-        let mut store = self
-            .store()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        store.register_device(&txtodo_store::NewDevice {
-            device,
-            name: String::new(),
-            static_public,
-            paired_at_ms: now_ms,
-            last_known_wall_ms: None,
-            key_epoch: 0,
-        })
     }
 }
