@@ -172,3 +172,21 @@ async fn a_dry_run_that_holds_a_move_is_refused_and_writes_nothing() {
     assert_eq!(err.code, "invalid_params", "{err:?}");
     assert_eq!(disk(dir.path()), SEED);
 }
+
+/// Task mcp-refusal-metadata: the daemon's refusal reaches the MCP caller with the offending line
+/// and the spec rule, not just a sentence — `raw_write` on a line that does not exist.
+#[tokio::test]
+async fn a_refusal_surfaces_its_line_and_spec_rule_through_the_mcp_layer() {
+    let (_dir, mcp, _stop, _ids) = seeded().await;
+    let err = mcp
+        .raw_write("todo.txt".to_owned(), 99, "x".to_owned(), None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.code, "daemon", "{err:?}");
+    assert_eq!(err.line, Some(99), "{err:?}");
+    assert_eq!(
+        err.spec_rule.as_deref(),
+        Some("specs/todotxt.abnf#line"),
+        "{err:?}"
+    );
+}
