@@ -23,6 +23,9 @@ pub enum Target {
     Claude,
     /// A marked section in this project's `AGENTS.md` (the cross-agent convention).
     Agents,
+    /// A marked section in this project's `CLAUDE.md` (what every Claude Code session here loads
+    /// first; task layout-doc-drift: it used to be a hand copy the tool could never refresh).
+    ClaudeMd,
 }
 
 /// `txtodo skill install [--only claude|agents]`.
@@ -41,12 +44,13 @@ pub fn run(action: &Action) -> Result<(), CliError> {
     let Action::Install { only } = action;
     let targets = match only {
         Some(t) => vec![*t],
-        None => vec![Target::Claude, Target::Agents],
+        None => vec![Target::Claude, Target::Agents, Target::ClaudeMd],
     };
     for target in targets {
         match target {
             Target::Claude => install_claude()?,
             Target::Agents => install_agents_at(Path::new("AGENTS.md"))?,
+            Target::ClaudeMd => install_agents_at(Path::new("CLAUDE.md"))?,
         }
     }
     Ok(())
