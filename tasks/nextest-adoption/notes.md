@@ -30,3 +30,12 @@ half-state we are in now is worse than either.
 
 `tasks/dev-iteration-speed/notes.md` and `tasks/rust-build-speed/notes.md` carry the wider
 iteration-speed context; read those first.
+
+## As built (2026-09-23)
+
+Adopted rather than reverted. `just test` fails loud with the install command when nextest is
+missing; `just install-nextest` installs it; the guide's recipes are nextest; CI installs it via
+`taiki-e/install-action@nextest` and runs `cargo nextest run` everywhere (`--run-ignored
+ignored-only` for the CI-only real-daemon step). Not verified: a green CI run with the new steps —
+push and watch the first one. `.claude/setup-state.json` still records nextest as "skipped"; that
+file is the human's setup record and was left alone.

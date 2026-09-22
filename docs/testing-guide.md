@@ -5,12 +5,19 @@ own doc comment, which always has the authoritative detail for that test.
 
 ## 1. Running the suite
 
+The runner is [cargo-nextest](https://nexte.st) (`just install-nextest`, once): one process per
+test, which is what `just test`, the agent gate and CI all run (task nextest-adoption), so a test
+that leans on process-global state — sockets, env, the registry — behaves the same everywhere.
+Plain `cargo test` still works for a quick single-crate run, but it shares one process across a
+crate's tests, so a pass there is not the whole story.
+
 ```bash
-cargo test --workspace          # everything
-cargo test -p txtodo-daemon     # one crate: lib tests + every tests/*.rs integration file
-cargo test -p txtodo-daemon --lib                    # just the lib's own unit tests
-cargo test -p txtodo-daemon --test pairing_lan       # one integration test file
-cargo test -p txtodo-daemon --test pairing_lan -- --nocapture   # see println!/log output live
+just test                                   # everything, the way CI runs it
+cargo nextest run -p txtodo-daemon          # one crate: lib tests + every tests/*.rs integration file
+cargo nextest run -p txtodo-daemon --lib                    # just the lib's own unit tests
+cargo nextest run -p txtodo-daemon --test pairing_lan       # one integration test file
+cargo nextest run -p txtodo-daemon --test pairing_lan --no-capture   # see println!/log output live
+cargo nextest run -p txtodo-daemon -E 'test(pairs_for_real)'         # by name: a filter expression
 ```
 
 Most crates are fast (well under a second). A handful spawn **real `txtodod` processes** and do
@@ -35,11 +42,13 @@ exactly why, and the test's own doc comment above it has the full story. Run one
 `--ignored` if you want to see it for yourself:
 
 ```bash
-cargo test -p txtodo-daemon --test idle_rss -- --ignored              # real, unfixed memory issue
-cargo test -p txtodo-daemon --test lan_sync_bench -- --ignored        # CPU-contention-sensitive bench
-cargo test -p txtodo-daemon --test pairing_relay -- --ignored         # two real-network-timing findings
-cargo test -p txtodo-daemon --test logging_flow_sequence -- --ignored # see §2 below
+cargo nextest run -p txtodo-daemon --test idle_rss --run-ignored ignored-only              # real, unfixed memory issue
+cargo nextest run -p txtodo-daemon --test lan_sync_bench --run-ignored ignored-only        # CPU-contention-sensitive bench
+cargo nextest run -p txtodo-daemon --test pairing_relay --run-ignored ignored-only         # two real-network-timing findings
+cargo nextest run -p txtodo-daemon --test logging_flow_sequence --run-ignored ignored-only # see §2 below
 ```
+
+(`cargo test ... -- --ignored` is the equivalent under plain cargo.)
 
 ## 2. The `logging_flow_sequence` LAN-pairing flake
 

@@ -18,7 +18,14 @@ typecheck:
 # 1.33s vs 13.46s on txtodo-core's 69 tests) — no doc-tests in this workspace to lose by switching.
 # https://nexte.st/docs/installation/pre-built-binaries/
 test:
+    @command -v cargo-nextest >/dev/null || { echo "cargo-nextest is not installed: run \`just install-nextest\` (or \`cargo install cargo-nextest --locked\`)"; exit 1; }
     cargo nextest run --workspace
+
+# The test runner `just test`, the agent gate (budgets.json commands.test) and CI all use (task
+# nextest-adoption): one process per test, so a test that leans on process-global state (sockets,
+# env, the registry) behaves the same everywhere. https://nexte.st/docs/installation/pre-built-binaries/
+install-nextest:
+    cargo install cargo-nextest --locked
 
 # line coverage against the floor in budgets.json (rustup toolchain: Homebrew cargo lacks llvm-profdata)
 coverage:
