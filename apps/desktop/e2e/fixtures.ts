@@ -76,7 +76,10 @@ export type FixtureName =
 	| "ten-k"
 	// A fresh profile: no workspace of its own, so the app opens the daemon's default one
 	// (task default-workspace). `dir` is that default workspace's directory.
-	| "fresh";
+	| "fresh"
+	// A workspace whose root list is `work.txt` (`txtodo.toml`, task workspace-layout): every
+	// client must read the layout instead of assuming `todo.txt` (task layout-client-gaps).
+	| "custom-root";
 
 function seed(dir: string, fixture: FixtureName): void {
 	switch (fixture) {
@@ -112,6 +115,10 @@ function seed(dir: string, fixture: FixtureName): void {
 			return;
 		case "fresh":
 			return; // nothing to seed: the daemon creates the default workspace itself
+		case "custom-root":
+			writeFileSync(join(dir, "txtodo.toml"), 'todo_file = "work.txt"\n');
+			writeFileSync(join(dir, "work.txt"), "(A) plan the launch id:01ARZ3NDEKTSV4RRFFQ69G5FA5\n");
+			return;
 		case "ten-k":
 			// tasks/desktop-visual-regression: the 10k-line fixture shared by the main-view snapshot
 			// and the first-paint perf budget — see tenKFixture.ts's module doc for why it's a

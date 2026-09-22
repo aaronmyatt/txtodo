@@ -56,3 +56,15 @@ most in need of a regression test. On the desktop side no frontend test ever see
 other than `todo.txt`; the fixtures seed none and the mock hardcodes it.
 
 See [[layout-toml-validation]], [[layout-hot-reload-clients]], [[layout-doc-drift]].
+
+## As built (2026-09-23)
+
+Every gap closed, one commit per crate (daemon, cli, tui, mcp, desktop). The rule from the design
+holds everywhere now: only `Code::Unimplemented` (a daemon without the layout RPC) reads as
+`todo.txt`; an empty `todo_file` reads as the default name; every other failure surfaces (the TUI
+exits with it, an MCP tool returns it, `doctor` shows a WARN row). `WorkspaceInfo` carries the
+layout so `WorkspaceList` alone is enough. Found while testing: under the global daemon, `txtodo
+sub` registers the ref dir as its own workspace and its new `todo.txt` is adopted by the watcher
+asynchronously, so `sub 1 ls` right after `sub 1 add` can lag (the test polls) — not a layout bug,
+but worth knowing. Not done: the desktop browser mock still says `refs_dir = "tasks"` while its
+seeded tree is `release-notes/` beside the list (desktop-ref-indicator-path owns that).
