@@ -20,6 +20,14 @@ pub trait Link: Send {
     fn send(&mut self, frame: Frame) -> Result<(), LinkError>;
     /// Blocks for the next frame from the peer.
     fn recv(&mut self) -> Result<Frame, LinkError>;
+    /// Ends this side's sends and blocks until the peer has acknowledged every frame sent so far
+    /// (bounded by the link's own idle timeout). Call it before dropping a link whose *last*
+    /// `send` must actually arrive: dropping an `IrohLink` closes its QUIC connection at once and
+    /// may discard bytes still queued (that lost every pairing reply over a real relay,
+    /// 2026-09-22). In-process links deliver on `send`, so the default is a no-op.
+    fn finish(&mut self) -> Result<(), LinkError> {
+        Ok(())
+    }
 }
 
 /// Why a `Link` operation failed. Every variant names what was attempted, never assumes the caller

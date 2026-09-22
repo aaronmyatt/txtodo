@@ -214,10 +214,10 @@ const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// [`IDLE_TIMEOUT`]'s pairing-ALPN counterpart. A pairing round is one `JoinerHello` → one
 /// `InitiatorReply`, and the reply may cross a public relay both ways plus the initiator's keystore
-/// read before it arrives — measured over 750 ms against n0's real relay from Asia (2026-09-22),
-/// so every joiner round read `Closed` before the initiator's `Grant` landed and the ceremony
-/// timed out looking like "the initiator never confirmed". Sync sessions keep the short value:
-/// their redial cadence depends on it (see [`IDLE_TIMEOUT`]); a pairing connection is one burst.
+/// read before it arrives; 750 ms was too tight for that from Asia against n0's relay (2026-09-22).
+/// Also bounds [`Link::finish`]'s wait for the peer's ack — the other half of the same incident:
+/// the initiator dropped its link right after `send`, and the QUIC close discarded the reply.
+/// Sync sessions keep the short value: their redial cadence depends on it (see [`IDLE_TIMEOUT`]).
 const PAIRING_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl IrohLink {
@@ -269,6 +269,22 @@ impl Link for IrohLink {
     #[tracing::instrument(skip_all)]
     fn recv(&mut self) -> Result<Frame, LinkError> {
         self.recv_inner()
+    }
+
+    /// `finish()` sends the stream's FIN; `stopped()` then resolves once the peer has acknowledged
+    /// every byte before it (or stopped the stream) — the only signal that makes dropping the
+    /// connection right afterwards safe. Bounded by the same idle timeout as `recv`.
+    /// Ref: <https://docs.rs/quinn/latest/quinn/struct.SendStream.html#method.stopped>
+    fn finish(&mut self) -> Result<(), LinkError> {
+        self.send
+            .finish()
+            .map_err(|e| LinkError::Io(e.to_string()))?;
+        let acked = tokio::time::timeout(self.idle_timeout, self.send.stopped());
+        match self.handle.block_on(acked) {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(LinkError::Io(e.to_string())),
+            Err(_elapsed) => Err(log_link_idle_timeout(self.idle_timeout)),
+        }
     }
 }
 
