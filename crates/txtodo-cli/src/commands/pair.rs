@@ -193,9 +193,13 @@ fn await_group_key(daemon: &mut Daemon) -> Result<&'static str, CliError> {
             return Ok(carrier_phrase(&health.pairing_last_carrier));
         }
         if start.elapsed() >= AWAIT_PEER_TIMEOUT {
+            // This side only ever sees "no group key landed": it cannot tell an unconfirmed
+            // initiator from a reply that never made it back, so the message must not guess.
             return Err(CliError::Message(
-                "txtodo: the initiator never confirmed within the pairing window. Nothing was \
-                 adopted on this device; run `txtodo pair <code>` again with a fresh code."
+                "txtodo: no reply from the initiator's device within the pairing window. Nothing \
+                 was adopted on this device. Check both daemons' logs for `pairing_` lines \
+                 (`txtodo doctor` shows where they are), then run `txtodo pair <code>` again with \
+                 a fresh code."
                     .to_owned(),
             ));
         }
