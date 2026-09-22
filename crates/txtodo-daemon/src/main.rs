@@ -307,11 +307,16 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let registry = WorkspaceRegistry::open(&registry_path)?;
     let clock = Arc::new(SystemClock);
 
-    let identity = Arc::new(build_identity(&args, &state_dir, clock.as_ref())?);
+    let built = build_identity(&args, &state_dir, clock.as_ref())?;
+    let identity = Arc::new(built.identity);
     // One shared relay endpoint per device (`daemon-shared-sync-link` stage 5), bound before the
     // control channel or any workspace opens. Resolved once (defaults to a public relay unless
-    // `--no-relay`) so `open_args`'s `Health` reporting below agrees with the actual bind.
-    let relay_url = txtodo_daemon::relay::resolve_relay_url(args.relay_url.clone(), args.no_relay);
+    // `--no-relay`) so `open_args`'s `Health` reporting below agrees with the actual bind. Off,
+    // like LAN below, when the keystore cannot keep keys (task keystore-memory-fallback).
+    let relay_url = built
+        .sync_allowed
+        .then(|| txtodo_daemon::relay::resolve_relay_url(args.relay_url.clone(), args.no_relay))
+        .flatten();
     let device_relay = match relay_url.clone() {
         Some(url) => DeviceRelay::bind(&identity, url).await,
         None => None,
@@ -330,17 +335,15 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let _file_carrier = device_file_carrier
         .clone()
         .map(txtodo_daemon::file_carrier::start);
-    let catalog = Arc::new(WorkspaceCatalog::new(
-        registry,
-        open_args(
-            &args,
-            identity,
-            relay_url,
-            device_relay,
-            device_file_carrier,
-        ),
-        clock,
-    ));
+    let mut open = open_args(
+        &args,
+        identity,
+        relay_url,
+        device_relay,
+        device_file_carrier,
+    );
+    open.no_lan |= !built.sync_allowed;
+    let catalog = Arc::new(WorkspaceCatalog::new(registry, open, clock));
 
     // The bridge opens its one directory before it binds (its whole test suite relies on that); the
     // global daemon binds first and opens registered workspaces in the background, newest first.

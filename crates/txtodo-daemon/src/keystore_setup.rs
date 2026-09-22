@@ -113,8 +113,11 @@ pub(crate) fn on_auto_probe_failure(reason: String, defaulted: bool) -> Result<(
     tracing::warn!(
         reason = %reason,
         "no OS keychain found and --key-store was not set; falling back to an in-memory \
-         keystore for this run — the relay identity will not survive a restart. Pass \
-         --key-store file to persist it, or fix the OS keychain and pass --key-store os."
+         keystore for this run. The device's static, signing and group keys and its relay \
+         identity are all reminted at the next start under the same device id, so every \
+         paired peer's handshake breaks and earlier group epochs cannot be opened: sync stays \
+         off for this run. Pass --key-store file to persist the keys, or fix the OS keychain \
+         and pass --key-store os."
     );
     Ok(())
 }

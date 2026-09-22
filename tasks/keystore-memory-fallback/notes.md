@@ -44,3 +44,17 @@ stops existing in release builds at all.
 
 `tasks/relay-id-keystore/notes.md` records a deferred signing decision. Worth re-reading before
 starting: if signing keys move out of this keystore the first two lines change shape.
+
+## As built (2026-09-23)
+
+- `identity_setup::build_identity` returns `BuiltIdentity { identity, sync_allowed }`;
+  `sync_allowed_for(backend, via_test_seam)` is the pure rule (unit tested): the `auto` fallback's
+  memory keystore turns relay and LAN off for the run (`main.rs`: no relay URL, `no_lan` forced),
+  the test seam's does not — hermetic pairing tests pair within one run and never restart.
+- The seam is `cfg!(debug_assertions)`-gated and logs when taken. Chosen over taking it out of
+  `.cargo/config.toml`'s `[env]`: that would mean re-plumbing every harness in five crates plus the
+  Playwright fixtures. Cost accepted: a debug `cargo run` still gets volatile keys, with a warning
+  and a `doctor` FAIL; a release build cannot.
+- Wording: the daemon's warning and `txtodo doctor`'s keystore row name the real cost.
+- Not done: `Health` has no explicit "sync disabled: volatile keys" flag; `lan_relay_disabled`
+  and `lan_endpoint_bound = false` are what a client sees.
