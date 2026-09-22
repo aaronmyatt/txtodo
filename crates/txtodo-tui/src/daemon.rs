@@ -179,15 +179,21 @@ impl Daemon {
     }
 
     /// The workspace's root list, relative to its root (`todo_file` in `txtodo.toml`): the document
-    /// the TUI opens. An older daemon that does not know the RPC has only ever had `todo.txt`.
-    pub async fn root_list(&mut self) -> String {
+    /// the TUI opens. Only a daemon too old to know the RPC (`Unimplemented`) reads as `todo.txt`;
+    /// every other failure (a workspace still loading, a transport error) is returned, so the TUI
+    /// never silently opens the wrong document (task layout-client-gaps). An empty answer is the
+    /// default name too, never an empty path.
+    pub async fn root_list(&mut self) -> Result<String, DaemonError> {
         let req = pb::WorkspaceLayoutRequest {
             workspace: self.selector.clone(),
             ..pb::WorkspaceLayoutRequest::default()
         };
         match self.inner.workspace_layout(req).await {
-            Ok(resp) => resp.into_inner().todo_file,
-            Err(_) => "todo.txt".to_owned(),
+            Ok(resp) => Ok(root_list_or_default(resp.into_inner().todo_file)),
+            Err(status) if status.code() == tonic::Code::Unimplemented => {
+                Ok(DEFAULT_ROOT_LIST.to_owned())
+            }
+            Err(status) => Err(DaemonError::Rpc(status)),
         }
     }
 
@@ -279,6 +285,18 @@ impl Daemon {
             .await?
             .into_inner()
             .declined)
+    }
+}
+
+/// The root list of a daemon older than the layout RPC, or of a layout that names none.
+const DEFAULT_ROOT_LIST: &str = "todo.txt";
+
+/// `todo_file` as the daemon sent it, or the default when it sent nothing.
+fn root_list_or_default(todo_file: String) -> String {
+    if todo_file.is_empty() {
+        DEFAULT_ROOT_LIST.to_owned()
+    } else {
+        todo_file
     }
 }
 

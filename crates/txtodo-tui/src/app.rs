@@ -114,7 +114,15 @@ async fn async_main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    let root_list = daemon.root_list().await;
+    // Only an `Unimplemented` answer falls back to `todo.txt`; anything else is the honest exit
+    // below rather than a wrong document opened silently (task layout-client-gaps).
+    let root_list = match daemon.root_list().await {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("txtodo-tui: could not read the workspace layout: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     match run_in(&mut daemon, &root_list, label).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

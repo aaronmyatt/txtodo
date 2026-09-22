@@ -276,7 +276,7 @@ async fn the_root_list_is_the_layouts_todo_file() {
         ("work.txt", "plan the launch\n"),
     ])
     .await;
-    let root = daemon.root_list().await;
+    let root = daemon.root_list().await.unwrap();
     assert_eq!(root, "work.txt");
     let file = daemon.get_file(&root).await.unwrap();
     assert_eq!(file.bytes, b"plan the launch\n");
