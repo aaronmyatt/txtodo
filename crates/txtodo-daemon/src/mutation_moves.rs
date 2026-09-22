@@ -87,9 +87,39 @@ pub struct PeekedLine {
     pub ref_slug: Option<String>,
 }
 
+/// `task` with a real line number: a `TaskRef` naming the task by id alone (line 0, the form
+/// `todo_move`/`todo_batch` send so earlier ops cannot stale it) is looked up in `contents` —
+/// the actor's own id list first (the only source under Sidecar identity), the text's `id:` tags
+/// otherwise. Any other `TaskRef` is returned as it is (task: "peek_line rejects a line-0-plus-id
+/// TaskRef, so todo_move alone cannot use ids").
+pub fn with_line_number(
+    contents: &crate::contents::Contents,
+    task: TaskRef,
+) -> Result<TaskRef, MutationError> {
+    if task.line_number != 0 {
+        return Ok(task);
+    }
+    let id = task.task_id.ok_or(MutationError::NoLine(0))?;
+    let by_actor = contents.task_ids.iter().position(|t| *t == Some(id));
+    let by_text = || {
+        txtodo_core::parse_file(&contents.bytes)
+            .lines
+            .iter()
+            .position(|l| crate::state::id_of(l) == Some(id))
+    };
+    let index = by_actor
+        .or_else(by_text)
+        .ok_or(MutationError::UnknownTask(id))?;
+    Ok(TaskRef {
+        line_number: index + 1,
+        task_id: Some(id),
+    })
+}
+
 /// Resolves `task` against `bytes` (a document's current projection, e.g. from `ActorHandle::get`)
 /// without any actor round trip: read-only, so a caller may inspect a line before deciding what
-/// mutation to send. `MutationError::Stale` on a mismatched id, exactly like [`resolve`].
+/// mutation to send. `MutationError::Stale` on a mismatched id, exactly like [`resolve`]. A
+/// line-0-plus-id `TaskRef` must go through [`with_line_number`] first.
 pub fn peek_line(bytes: &[u8], task: &TaskRef) -> Result<PeekedLine, MutationError> {
     let n = task.line_number;
     let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;

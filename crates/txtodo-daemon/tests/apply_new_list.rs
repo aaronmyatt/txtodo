@@ -128,3 +128,41 @@ async fn an_add_to_a_list_whose_directory_does_not_exist_is_still_not_found() {
     assert_eq!(err.code(), tonic::Code::NotFound, "{err}");
     assert!(!dir.path().join("nowhere").exists());
 }
+
+/// Root todo "peek_line rejects a line-0-plus-id TaskRef": a cross-file `Move` that names the
+/// task by id alone (line 0, the form `todo_move`/`todo_batch` send) now finds its line — here in
+/// tagged mode, from the text.
+#[tokio::test]
+async fn a_cross_file_move_addressed_by_id_alone_works() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("todo.txt"),
+        "keep me id:01ARZ3NDEKTSV4RRFFQ69G5FA1\nmove me id:01ARZ3NDEKTSV4RRFFQ69G5FA2\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.path().join("tasks/other")).unwrap();
+    std::fs::write(dir.path().join("tasks/other/todo.txt"), "already here\n").unwrap();
+    let (mut client, _stop) = serve(dir.path()).await;
+
+    let req = pb::ApplyRequest {
+        path: "todo.txt".into(),
+        mutations: vec![pb::Mutation {
+            kind: Some(mutation::Kind::Move(pb::Move {
+                task: Some(pb::TaskRef {
+                    line_number: 0,
+                    task_id: "01ARZ3NDEKTSV4RRFFQ69G5FA2".into(),
+                }),
+                to_path: "tasks/other/todo.txt".into(),
+            })),
+        }],
+        ..pb::ApplyRequest::default()
+    };
+    client
+        .apply(req)
+        .await
+        .unwrap_or_else(|e| panic!("move by id: {e}"));
+    let root = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
+    let other = std::fs::read_to_string(dir.path().join("tasks/other/todo.txt")).unwrap();
+    assert!(!root.contains("move me"), "{root}");
+    assert!(other.contains("move me"), "{other}");
+}

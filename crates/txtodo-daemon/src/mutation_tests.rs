@@ -396,3 +396,43 @@ fn line_zero_with_an_id_addresses_the_task_by_id_alone() {
     // Line 0 with no id still names nothing.
     assert_eq!(resolve(&s, &line(0, None)), Err(MutationError::NoLine(0)));
 }
+
+/// Task "peek_line rejects a line-0-plus-id TaskRef": a `Move` addressed by id alone gets its line
+/// from the actor's id list (Sidecar: no `id:` in the text) or from the text (Tagged).
+#[test]
+fn a_line_zero_task_ref_gets_its_line_from_the_ids_or_the_text() {
+    use crate::contents::Contents;
+    use crate::mutation_moves::with_line_number;
+    let tagged = Contents {
+        bytes: format!("(A) roadmap id:{A}\n\nwalk the dog id:{B}\n").into_bytes(),
+        hash: [0; 32],
+        task_ids: Vec::new(),
+    };
+    assert_eq!(
+        with_line_number(&tagged, line(0, Some(B))).unwrap(),
+        line(3, Some(B))
+    );
+    let sidecar = Contents {
+        bytes: b"(A) roadmap\n\nwalk the dog\n".to_vec(),
+        hash: [0; 32],
+        task_ids: vec![Some(id(A)), None, Some(id(B))],
+    };
+    assert_eq!(
+        with_line_number(&sidecar, line(0, Some(B))).unwrap(),
+        line(3, Some(B))
+    );
+    assert_eq!(
+        with_line_number(&sidecar, line(2, None)).unwrap(),
+        line(2, None),
+        "a real line number passes through"
+    );
+    let other = "01ARZ3NDEKTSV4RRFFQ69G5FAZ";
+    assert_eq!(
+        with_line_number(&sidecar, line(0, Some(other))),
+        Err(MutationError::UnknownTask(id(other)))
+    );
+    assert_eq!(
+        with_line_number(&sidecar, line(0, None)),
+        Err(MutationError::NoLine(0))
+    );
+}

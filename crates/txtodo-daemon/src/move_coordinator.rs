@@ -53,6 +53,9 @@ pub async fn move_task_across_files(
     (root, layout): (&Path, &WorkspaceLayout),
 ) -> Result<Applied, ActorError> {
     let contents = source.get().await?;
+    // `todo_move` names the task by id alone (line 0): give it its line first, from the actor's
+    // own id list (Sidecar) or the text (Tagged).
+    let task = crate::mutation_moves::with_line_number(&contents, task)?;
     let peeked = mutation::peek_line(&contents.bytes, &task)?;
     let to = dest.path().clone();
     let moved = origin

@@ -11,8 +11,8 @@
 (E) 2026-09-11 WASM component plugin host with the design §9 hooks +m10 @plugins @human — needs a wasm runtime dependency (Cargo.toml is frozen) and an ADR for which runtime and which design §9 hooks come first — parked 2026-09-20: no dependency and no ADR until revived; to revive, pick a runtime and write the ADR first
 2026-09-21 desktop: ref indicators resolve against the wrong directory +m11 @desktop ref:desktop-ref-indicator-path — 2026-09-23: render fixed and mock aligned; what is left is the @human golden regeneration (tasks/desktop-ref-indicator-path line 2)
 2026-09-21 The default workspace merges on pairing with no accept step +m8 @daemon @security @human ref:default-workspace-pairing-consent
-2026-09-21 daemon: peek_line rejects a line-0-plus-id TaskRef, so todo_move alone cannot use ids +m11 @daemon
-2026-09-21 Docs still describe ref dirs beside the list and cwd as the no --dir fallback +m11 @docs ref:layout-doc-drift
+x 2026-09-23 2026-09-21 daemon: peek_line rejects a line-0-plus-id TaskRef, so todo_move alone cannot use ids +m11 @daemon — mutation_moves::with_line_number gives a line-0-plus-id TaskRef its line (actor id list under Sidecar, text ids under Tagged) before the move coordinator peeks; unit + gRPC tests
+2026-09-21 Docs still describe ref dirs beside the list and cwd as the no --dir fallback +m11 @docs ref:layout-doc-drift @doing by:claude
 2026-09-21 just test needs nextest but nothing installs it and CI still runs cargo test +ci @setup ref:nextest-adoption
 2026-09-21 The 400-line cap counts comments, so three commits deleted rationale to fit +ratchet @setup
 2026-09-21 cli: daemon-mode do sends Edit plus MoveToEnd, so the op log never says complete +m11 @cli
