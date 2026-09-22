@@ -303,6 +303,9 @@ async fn op_log_drains_the_stream_into_a_vec() {
             }],
             agent: None,
             workspace: None,
+            // What `commands.rs::apply` and the e2e bridge stamp on every desktop write (task
+            // op-source); the entry below must carry it back (task op-source-gaps).
+            source: "desktop".into(),
             ..pb::ApplyRequest::default()
         })
         .await
@@ -318,6 +321,7 @@ async fn op_log_drains_the_stream_into_a_vec() {
         "exactly the just-applied op was added: {after:?}"
     );
     assert!(after[0].principal.starts_with("you@"), "{:?}", after[0]);
+    assert_eq!(after[0].source, "desktop", "{:?}", after[0]);
     assert!(
         after.windows(2).all(|w| w[0].at_ms >= w[1].at_ms),
         "newest first: {after:?}"
