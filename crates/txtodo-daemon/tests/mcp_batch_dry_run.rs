@@ -141,7 +141,15 @@ async fn the_real_batch_then_makes_what_the_dry_run_showed() {
     let (dir, mcp, _stop, ids) = seeded().await;
     let dry = mcp.batch(ops(&ids), true, None).await.unwrap();
     let real = mcp.batch(ops(&ids), false, None).await.unwrap();
-    assert_eq!(real.applied, 3);
+    // The run applies the plan the preview showed (task batch-dry-run-divergence): the same ops
+    // appended, one commit per file, so the two counts agree — and both count the daemon's ops,
+    // not the batch's tool calls (a completion is more than one op).
+    assert_eq!(real.applied, dry.applied, "{real:?} vs {dry:?}");
+    assert!(real.applied >= 3, "{real:?}");
+    assert!(
+        real.hash.is_some() && real.hlc.is_some(),
+        "a real write: {real:?}"
+    );
     assert!(real.diff.is_none(), "only a dry run carries a diff");
     let text = disk(dir.path());
     assert!(

@@ -57,9 +57,12 @@ fn far_apart_changes_are_separate_hunks_and_near_ones_merge() {
 
 #[test]
 fn a_change_only_in_the_final_newline_is_named_not_hidden() {
+    // The unified format's own token for it (task batch-dry-run-divergence: the old prose line
+    // was nothing `git apply` or `patch` reads), attached to the side that lacks the newline.
     let d = diff("a\nb", "a\nb\n");
     assert!(d.starts_with("--- a/todo.txt\n+++ b/todo.txt\n"), "{d}");
-    assert!(d.contains("final newline"), "{d}");
+    assert!(d.contains("-b\n\\ No newline at end of file\n+b\n"), "{d}");
+    assert!(!d.contains("final newline"), "{d}");
 }
 
 #[test]

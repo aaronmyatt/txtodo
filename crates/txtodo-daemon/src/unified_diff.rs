@@ -33,16 +33,43 @@ pub(crate) fn unified_diff(path: &str, old: &[u8], new: &[u8]) -> String {
         new.split_terminator('\n').collect(),
     );
     let mut out = format!("--- a/{path}\n+++ b/{path}\n");
-    let script = edit_script(&a, &b);
-    if script.iter().all(|(k, _)| *k == Kind::Same) {
-        // Same lines, different bytes: a trailing newline, or CRLF against LF.
-        out.push_str("\\ line endings or the final newline changed\n");
-        return out;
+    let mut script = edit_script(&a, &b);
+    let ends = Ends {
+        old_lines: a.len(),
+        new_lines: b.len(),
+        old_newline: old.ends_with('\n'),
+        new_newline: new.ends_with('\n'),
+    };
+    // Only the final newline (or a CRLF/LF change inside the last line) differs: the last line
+    // is shown as removed and added, so the `\ No newline at end of file` marker below has a
+    // side to attach to — what `git diff` prints for the same change.
+    if script.iter().all(|(k, _)| *k == Kind::Same)
+        && let Some((_, last)) = script.pop()
+    {
+        script.push((Kind::Del, last));
+        script.push((Kind::Add, last));
     }
     for (start, end) in hunks(&script) {
-        write_hunk(&mut out, &script, start, end);
+        write_hunk(&mut out, &script, start, end, &ends);
     }
     out
+}
+
+/// Where each document ends, for the `\ No newline at end of file` marker (the unified format's
+/// own token: https://www.gnu.org/software/diffutils/manual/html_node/Incomplete-Lines.html).
+struct Ends {
+    old_lines: usize,
+    new_lines: usize,
+    old_newline: bool,
+    new_newline: bool,
+}
+
+/// True when the line just written is the last of its document and that document has no
+/// trailing newline — the marker goes on the next line.
+fn incomplete(ends: &Ends, old_idx: Option<usize>, new_idx: Option<usize>) -> bool {
+    let old_last = old_idx.is_some_and(|i| i + 1 == ends.old_lines) && !ends.old_newline;
+    let new_last = new_idx.is_some_and(|i| i + 1 == ends.new_lines) && !ends.new_newline;
+    old_last || new_last
 }
 
 /// One entry per line of the merged document, in order.
@@ -121,7 +148,7 @@ fn hunks(script: &[(Kind, &str)]) -> Vec<(usize, usize)> {
     out
 }
 
-fn write_hunk(out: &mut String, script: &[(Kind, &str)], start: usize, end: usize) {
+fn write_hunk(out: &mut String, script: &[(Kind, &str)], start: usize, end: usize, ends: &Ends) {
     let count = |range: &[(Kind, &str)], keep: Kind| {
         range
             .iter()
@@ -144,12 +171,57 @@ fn write_hunk(out: &mut String, script: &[(Kind, &str)], start: usize, end: usiz
         first(old_before, old_len),
         first(new_before, new_len)
     );
+    let (mut old_idx, mut new_idx) = (old_before, new_before);
     for (kind, line) in &script[start..end] {
-        let sign = match kind {
-            Kind::Same => ' ',
-            Kind::Del => '-',
-            Kind::Add => '+',
+        let (sign, old_at, new_at) = match kind {
+            Kind::Same => (' ', Some(old_idx), Some(new_idx)),
+            Kind::Del => ('-', Some(old_idx), None),
+            Kind::Add => ('+', None, Some(new_idx)),
         };
+        old_idx += usize::from(old_at.is_some());
+        new_idx += usize::from(new_at.is_some());
         let _ = writeln!(out, "{sign}{line}");
+        if incomplete(ends, old_at, new_at) {
+            out.push_str("\\ No newline at end of file\n");
+        }
+    }
+}
+
+#[cfg(test)]
+mod newline_tests {
+    use super::unified_diff;
+
+    #[test]
+    fn a_missing_final_newline_gets_the_standard_marker_not_prose() {
+        let diff = unified_diff("todo.txt", b"a\nb\n", b"a\nb");
+        assert!(
+            diff.contains("-b\n+b\n\\ No newline at end of file\n"),
+            "{diff}"
+        );
+        assert!(!diff.contains("line endings"), "{diff}");
+        assert!(
+            diff.starts_with("--- a/todo.txt\n+++ b/todo.txt\n@@ -1,2 +1,2 @@\n"),
+            "{diff}"
+        );
+    }
+
+    #[test]
+    fn a_change_on_an_incomplete_last_line_marks_both_sides() {
+        let diff = unified_diff("todo.txt", b"a\nold", b"a\nnew");
+        assert!(
+            diff.contains("-old\n\\ No newline at end of file\n"),
+            "{diff}"
+        );
+        assert!(
+            diff.contains("+new\n\\ No newline at end of file\n"),
+            "{diff}"
+        );
+    }
+
+    #[test]
+    fn complete_documents_never_get_the_marker() {
+        let diff = unified_diff("todo.txt", b"a\nb\n", b"a\nc\n");
+        assert!(!diff.contains("No newline"), "{diff}");
+        assert!(diff.contains("-b\n+c\n"), "{diff}");
     }
 }
