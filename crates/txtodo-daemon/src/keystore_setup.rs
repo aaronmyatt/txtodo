@@ -21,6 +21,7 @@ use txtodo_sync::{
     Secret,
 };
 
+use crate::keystore_cache::CachedKeyStore;
 use crate::keystore_timeout::{KEYCHAIN_TIMEOUT, TimeoutKeyStore, bounded};
 use crate::workspace_error::WorkspaceError;
 
@@ -94,12 +95,13 @@ fn probe_os(scope: &str) -> Result<(), String> {
 }
 
 /// The OS backend behind the same bound, so a later read that prompts again (each keychain item
-/// has its own access list) errors out of startup instead of parking it.
+/// has its own access list) errors out of startup instead of parking it — and read-cached
+/// (`keystore_cache.rs`) so the keychain, and its prompt, is touched once per key per boot.
 fn os_key_store(scope: &str) -> Arc<dyn KeyStore + Send + Sync> {
-    Arc::new(TimeoutKeyStore::new(
+    Arc::new(CachedKeyStore::new(TimeoutKeyStore::new(
         OsKeyStore::new(scope.to_owned()),
         KEYCHAIN_TIMEOUT,
-    ))
+    )))
 }
 
 /// The pure half of the defaulted-`auto`-falls-back-to-memory decision (task `relay-id-keystore`),

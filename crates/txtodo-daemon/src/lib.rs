@@ -47,6 +47,7 @@ mod identity_assign;
 mod identity_fingerprint;
 mod identity_levenshtein;
 mod import;
+mod keystore_cache;
 mod keystore_setup;
 mod keystore_timeout;
 pub mod lan;
