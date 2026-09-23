@@ -32,6 +32,8 @@ mod binary_path;
 pub mod service;
 mod service_state;
 mod spawn;
+#[cfg(unix)]
+mod spawn_guard;
 // The restart is unix-only (`upgrade_unix.rs`), and so is every caller of the decision; on other
 // platforms the module would be dead code, which CI's Windows lint refuses.
 #[cfg(unix)]

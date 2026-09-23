@@ -131,8 +131,8 @@ pub use unix_impl::ensure_daemon;
 #[cfg(unix)]
 pub(crate) mod unix_impl {
     use super::{Ensured, LaunchConfig, LaunchError};
-    use std::fs::{File, OpenOptions};
-    use std::io;
+    // Re-exported: `upgrade_unix.rs` takes it from here with the other spawn helpers.
+    pub(crate) use crate::spawn_guard::SpawnGuard;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
     use std::time::{Duration, Instant};
@@ -298,38 +298,6 @@ pub(crate) mod unix_impl {
             let _ = crate::service::install(&home, &rendered, force);
         }
         let _ = crate::service::start(&rendered);
-    }
-
-    /// Client-side no-double-spawn guard: an exclusive lock beside `sock`, held for the duration
-    /// of the absent-check-then-spawn so two `ensure_daemon` callers (in this process or another)
-    /// never both decide to spawn a daemon for the same socket.
-    /// Ref: <https://doc.rust-lang.org/std/fs/struct.File.html#method.lock>
-    pub(crate) struct SpawnGuard {
-        _file: File,
-    }
-
-    impl SpawnGuard {
-        pub(crate) async fn acquire(sock: &Path) -> Result<SpawnGuard, LaunchError> {
-            let dir = sock
-                .parent()
-                .map(Path::to_path_buf)
-                .unwrap_or_else(std::env::temp_dir);
-            let path = dir.join("daemon-launch-spawn.lock");
-            let file = tokio::task::spawn_blocking(move || -> io::Result<File> {
-                std::fs::create_dir_all(&dir)?;
-                let file = OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(false)
-                    .open(&path)?;
-                file.lock()?;
-                Ok(file)
-            })
-            .await
-            .map_err(|_join_err| LaunchError::Lock(io::Error::other("spawn lock task panicked")))?
-            .map_err(LaunchError::Lock)?;
-            Ok(SpawnGuard { _file: file })
-        }
     }
 
     #[cfg(test)]
