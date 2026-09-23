@@ -18,6 +18,7 @@ mod clock;
 mod commands;
 mod complete_plan;
 mod config;
+mod config_root_list;
 mod daemon_ensure;
 mod daemon_mode;
 mod error;

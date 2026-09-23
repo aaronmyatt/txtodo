@@ -5,11 +5,11 @@
 //! Exit status 1 when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
+use crate::commands::doctor_clock::{clock_check, config_check};
 use crate::commands::doctor_transport::transport_check;
 use crate::commands::doctor_version::version_check;
 use crate::{CliError, Ctx, json};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 use txtodo_proto::v1 as pb;
 
 /// Most log lines `--verbose` prints.
@@ -188,42 +188,6 @@ fn files_check(ctx: &Ctx) -> Check {
         )
     } else {
         check("files", Status::Warn, problems.join("; "))
-    }
-}
-
-/// The wall clock must not be behind the newest op we know of.
-fn clock_check(health: Option<&pb::HealthResponse>) -> Check {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let now_ms = u64::try_from(now_ms).unwrap_or(u64::MAX);
-    match health {
-        Some(h) if now_ms < h.started_at_ms => check(
-            "clock",
-            Status::Warn,
-            format!(
-                "system clock ({now_ms} ms) is behind the daemon start ({} ms); check NTP",
-                h.started_at_ms
-            ),
-        ),
-        _ => check(
-            "clock",
-            Status::Ok,
-            format!("system clock {now_ms} ms since the epoch"),
-        ),
-    }
-}
-
-fn config_check(ctx: &Ctx) -> Check {
-    if ctx.paths.config.exists() {
-        check("config", Status::Ok, ctx.paths.config.display().to_string())
-    } else {
-        check(
-            "config",
-            Status::Ok,
-            format!("{} (missing, defaults apply)", ctx.paths.config.display()),
-        )
     }
 }
 
