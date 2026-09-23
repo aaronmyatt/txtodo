@@ -222,6 +222,8 @@ impl Daemon {
         let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
             .args(&args)
             .args(extra_args)
+            // Production redials every 15 s (`lan.rs::RESYNC_INTERVAL`); deadlines here assume 1 s.
+            .env("TXTODO_RESYNC_INTERVAL_MS", "1000")
             .envs(envs.iter().copied())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())

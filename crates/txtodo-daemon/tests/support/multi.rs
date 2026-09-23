@@ -54,6 +54,8 @@ impl MultiWorkspaceDaemon {
             .env("TXTODO_REGISTRY_DB", &registry_db)
             .env("TXTODO_SOCKET", &socket)
             .env("TXTODO_TEST_HOOKS", "1")
+            // Production redials every 15 s (`lan.rs::RESYNC_INTERVAL`); the deadlines here assume 1 s.
+            .env("TXTODO_RESYNC_INTERVAL_MS", "1000")
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()

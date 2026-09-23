@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use txtodo_model::DeviceId;
 use txtodo_sync::{DiscoveredPeer, PeerEvent, PeerTable, Sighting, backoff_ms};
 
+use crate::lan_session::read;
+use crate::server::SharedWorkspace;
+
 /// Shared across the run loop and every spawned dial task.
 pub(crate) type SharedDialState = Arc<Mutex<DialState>>;
 /// Every peer this device has ever resolved for real, kept for `lan.rs`'s `redial_known_peers`.
@@ -50,6 +53,17 @@ impl DialState {
 /// succeeds. `tests/lan_discovery.rs` polls for exactly this line.
 fn log_peer_found(peer: &DiscoveredPeer) {
     tracing::info!(peer = %peer.device, addresses = ?peer.addresses, "lan_peer_found");
+}
+
+/// Records `sighting` in `pairing_lan()`'s unfiltered address book, regardless of which group it
+/// claims — see `lan.rs::handle_sighting`'s call site and `pairing_lan_state.rs`'s module doc.
+pub(crate) fn remember_any_sighting(ws: &SharedWorkspace, sighting: &Sighting) {
+    let peer = DiscoveredPeer {
+        device: sighting.announcement.device,
+        node: sighting.announcement.node,
+        addresses: sighting.addresses.clone(),
+    };
+    read(ws).pairing_lan().remember(&peer);
 }
 
 pub(crate) fn remember_peer(known_peers: &KnownPeers, peer: &DiscoveredPeer) {

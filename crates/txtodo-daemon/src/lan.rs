@@ -31,7 +31,8 @@ use txtodo_sync::{
 
 use crate::clock::Clock;
 use crate::lan_peers::{
-    DialState, KnownPeers, SharedDialState, record_dial_outcome, remember_peer, worth_dialing,
+    DialState, KnownPeers, SharedDialState, record_dial_outcome, remember_any_sighting,
+    remember_peer, worth_dialing,
 };
 use crate::lan_session::{drive_session, read};
 use crate::server::SharedWorkspace;
@@ -45,11 +46,27 @@ pub const MAX_CONCURRENT_LAN_SESSIONS: usize = 16;
 pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often already-known peers are redialed — see the module doc on why this, together with
-/// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Was 1 s until 2026-09-23: with two
-/// daemons each redialing the other every second, plus the accept side, an unpaired pair ran ~3
-/// sessions a second (1164 in 7 min on one Mac), each one a keystore read. 15 s keeps a local edit
-/// converging within a human's patience while a dial storm can no longer pile up.
+/// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Was 1 s until 2026-09-23: two daemons
+/// each redialing the other every second ran ~3 sessions a second (1164 in 7 min on one Mac), each
+/// one a keystore read. 15 s still converges a local edit within a human's patience.
 const RESYNC_INTERVAL: Duration = Duration::from_secs(15);
+
+/// Overrides `RESYNC_INTERVAL`, in milliseconds. A test seam like `debug_hooks.rs`'s
+/// `TXTODO_TEST_HOOKS`: `tests/lan_loopback_converge.rs` asserts a second-direction edit lands
+/// within 2 s, which only a redial delivers, so the harnesses set this to 1000.
+pub const RESYNC_INTERVAL_ENV_VAR: &str = "TXTODO_RESYNC_INTERVAL_MS";
+
+/// How often `rebuild_on_group_change` looks for a pairing having changed this workspace's group:
+/// one cheap read, kept at 1 s when `RESYNC_INTERVAL` grew to 15 s — a freshly paired joiner is
+/// invisible to its peer until it re-advertises under the new group.
+const GROUP_CHECK_INTERVAL: Duration = Duration::from_secs(1);
+
+fn resync_interval() -> Duration {
+    std::env::var(RESYNC_INTERVAL_ENV_VAR)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(RESYNC_INTERVAL, Duration::from_millis)
+}
 
 /// The background LAN transport task; `abort()` on daemon shutdown.
 pub struct LanTransport {
@@ -122,7 +139,9 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
     let known_peers: KnownPeers =
         Arc::new(std::sync::Mutex::new(std::collections::BTreeMap::new()));
     let sessions = Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS));
-    let mut resync = tokio::time::interval(RESYNC_INTERVAL);
+    let mut group_check = tokio::time::interval(GROUP_CHECK_INTERVAL);
+    group_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut resync = tokio::time::interval(resync_interval());
     resync.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
@@ -137,7 +156,7 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                     return;
                 }
             }
-            _ = resync.tick() => {
+            _ = group_check.tick() => {
                 if let Some(rebuilt) = rebuild_on_group_change(&ctx, &endpoint).await {
                     discovery.shutdown();
                     discovery = rebuilt.discovery;
@@ -145,6 +164,8 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                     ctx.group = rebuilt.group;
                     table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
                 }
+            }
+            _ = resync.tick() => {
                 crate::relay_autodial::resync_and_dial(
                     &known_peers,
                     &ctx,
@@ -214,17 +235,6 @@ fn handle_sighting(
         );
     }
     true
-}
-
-/// Records `sighting` in `pairing_lan()`'s unfiltered address book, regardless of which group it
-/// claims — see `handle_sighting`'s call site and `pairing_lan_state.rs`'s module doc.
-fn remember_any_sighting(ws: &SharedWorkspace, sighting: &Sighting) {
-    let peer = DiscoveredPeer {
-        device: sighting.announcement.device,
-        node: sighting.announcement.node,
-        addresses: sighting.addresses.clone(),
-    };
-    read(ws).pairing_lan().remember(&peer);
 }
 
 async fn bind_endpoint() -> Option<LanEndpoint> {
