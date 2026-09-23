@@ -8,7 +8,7 @@
 //! (complete it, then edit it) is refused (task batch-dry-run-divergence): the second op would be
 //! planned from the pre-batch line and the diff shown would not be the diff written. `todo_move`
 //! cannot be previewed yet, so a batch holding one is refused rather than half shown. The real
-//! batch runs the same grouped plan (`grpc_write::batch`) whenever it could be previewed, so what
+//! batch runs the same grouped plan (`grpc_batch::batch`) whenever it could be previewed, so what
 //! dry_run shows is what a run writes.
 
 use crate::backend::{ApplyOutcome, RefPath, TaskId, TodoOp, WorkspaceArg};

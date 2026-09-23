@@ -186,7 +186,7 @@ impl McpBackend for GrpcMcpBackend {
         dry_run: bool,
         workspace: WorkspaceArg,
     ) -> Result<ApplyOutcome, McpError> {
-        grpc_write::batch(self.ctx(), ops, dry_run, workspace).await
+        crate::grpc_batch::batch(self.ctx(), ops, dry_run, workspace).await
     }
 
     async fn history(

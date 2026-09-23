@@ -2,6 +2,7 @@
 //! same pattern as `txtodo-daemon`'s `*_tests.rs` files.
 
 use crate::backend::FieldPatch;
+use crate::grpc_batch::batch;
 use crate::grpc_write::*;
 
 #[test]
