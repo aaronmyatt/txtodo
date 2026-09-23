@@ -313,12 +313,15 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
     finalize_or_pending(&ws, hello.device, hello.static_public, now_ms)
 }
 
-/// No active session (expired window, wrong role, or none) — `debug`: routine for a stale retry.
+/// No active session (expired window, wrong role, or none). `warn`, not `debug`: `Rejected` is
+/// fatal for the joiner (it stops retrying), and on 2026-09-23 the only trace of a pairing that
+/// died this way — the 120 s window expiring while keychain prompts blocked the SAS confirm — was
+/// `pairing_initiator_replied reply=rejected` with no reason anywhere in the log.
 fn reject_no_active_session(
     peer: DeviceId,
     e: &crate::pairing_state_error::PairingStateError,
 ) -> InitiatorReply {
-    tracing::debug!(%peer, error = %e, "pairing_initiator_rejected_no_active_session");
+    tracing::warn!(%peer, error = %e, "pairing_initiator_rejected_no_active_session");
     InitiatorReply::Rejected
 }
 
