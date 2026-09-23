@@ -1,9 +1,11 @@
-//! Edits the CLI cannot say as plain mutations, against a real `txtodod`. `do` + auto-archive must
-//! reach the daemon as guarded `MoveToEnd`s (`archive_plan.rs`, tagged mode: it needs `id:` tags in
-//! the text, which the default sidecar mode has none of); anything else, like dropping a blank line
-//! or any sidecar-mode edit, as a `Replace` naming the hash it read. Neither may be a direct write
-//! the daemon reconciles as an External edit, which can drop another writer's concurrent `Apply`.
-//! Every change here goes through the socket, so `log` must show no `external@` op.
+//! Edits the CLI cannot say as plain mutations, against a real `txtodod`. `do` must reach the
+//! daemon as one `Complete` per line (`complete_plan.rs`, in tagged and in the default sidecar
+//! mode: the daemon moves the line itself); an explicit `archive` as guarded `MoveToEnd`s
+//! (`archive_plan.rs`, tagged mode only: it needs `id:` tags in the text); anything else, like
+//! dropping a blank line or any other sidecar-mode edit, as a `Replace` naming the hash it read.
+//! None may be a direct write the daemon reconciles as an External edit, which can drop another
+//! writer's concurrent `Apply`. Every change here goes through the socket, so `log` must show no
+//! `external@` op.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -62,6 +64,8 @@ fn txtodo(dir: &Path, args: &[&str]) -> Output {
         .env_remove("TXTODO_TODO_DIR")
         .env("TXTODO_CONFIG", dir.join("none.toml"))
         .env("XDG_DATA_HOME", dir.join(".global-home"))
+        // The pretty stderr layer then carries `cli.mutation_plan`'s counts (`assert_one_complete`).
+        .env("TXTODO_LOG", "debug")
         .args(args)
         .output()
         .unwrap();
@@ -107,13 +111,59 @@ fn do_archives_through_move_to_end_never_a_whole_file_write() {
     for name in ["a", "b", "c", "d"] {
         txtodo(dir.path(), &["add", name]);
     }
-    txtodo(dir.path(), &["do", "1"]);
+    assert_one_complete(&txtodo(dir.path(), &["do", "1"]));
     assert_eq!(tasks(dir.path()), ["b", "c", "d", "x:a"]);
     // Task complete-to-bottom: `do` moves the line it completed and nothing else, so `b` lands
     // after `a`, which is already down there. (`do` used to run a full archive, which re-sorted
     // every done line into its old order and put `b` back above `a`.)
-    txtodo(dir.path(), &["do", "1"]);
+    assert_one_complete(&txtodo(dir.path(), &["do", "1"]));
     assert_eq!(tasks(dir.path()), ["c", "d", "x:a", "x:b"]);
+    assert_all_through_the_socket(dir.path());
+}
+
+/// Root todo "daemon-mode do sends Edit plus MoveToEnd, so the op log never says complete": the
+/// plan behind a `do` is exactly one mutation — the daemon's own `Complete`, which also moves the
+/// line — not an `Edit` and a `MoveToEnd` (tagged) or a whole-document `Replace` (sidecar).
+/// `$TXTODO_LOG=debug` puts `daemon_mode::log_mutation_plan`'s counts on stderr.
+fn assert_one_complete(out: &Output) {
+    let err = plain_stderr(out);
+    assert!(
+        err.contains("cli.mutation_plan expressible=true mutation_count=1"),
+        "one Complete, not Edit + MoveToEnd or a Replace: {err}"
+    );
+}
+
+/// The CLI's stderr minus the pretty layer's ANSI colour codes (`ESC [ ... m`), so a field reads
+/// as `name=value`. https://en.wikipedia.org/wiki/ANSI_escape_code#CSI_(Control_Sequence_Introducer)_sequences
+fn plain_stderr(out: &Output) -> String {
+    let mut plain = String::new();
+    let mut rest = String::from_utf8_lossy(&out.stderr).into_owned();
+    while let Some(start) = rest.find("\x1b[") {
+        plain.push_str(&rest[..start]);
+        let after = &rest[start..];
+        let end = after.find('m').map_or(after.len(), |m| m + 1);
+        rest = after[end..].to_owned();
+    }
+    plain.push_str(&rest);
+    plain
+}
+
+// CI-only: spawns a real txtodod (see `daemon_mode.rs`); run via `cargo test -- --ignored`.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[test]
+fn do_in_sidecar_mode_is_one_complete_too() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "").unwrap();
+    let _daemon = Daemon::spawn(dir.path(), "sidecar");
+    for name in ["a", "b", "c"] {
+        txtodo(dir.path(), &["add", name]);
+    }
+    // Two lines at once: the second is addressed where it sits once the first has moved.
+    assert_one_complete(&txtodo(dir.path(), &["do", "1"]));
+    assert_eq!(tasks(dir.path()), ["b", "c", "x:a"]);
+    let err = plain_stderr(&txtodo(dir.path(), &["do", "1", "2"]));
+    assert!(err.contains("mutation_count=2"), "{err}");
+    assert_eq!(tasks(dir.path()), ["x:a", "x:b", "x:c"]);
     assert_all_through_the_socket(dir.path());
 }
 

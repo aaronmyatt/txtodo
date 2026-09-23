@@ -37,6 +37,18 @@ fn replay(old: &File, muts: &[pb::Mutation]) -> Option<Lines> {
                 let at = task_index(&lines, e.task.as_ref())?;
                 lines[at] = e.new_line.clone().into_bytes();
             }
+            Kind::Complete(c) => {
+                let at = task_index(&lines, c.task.as_ref())?;
+                let done = crate::complete_plan::completed(&lines[at], &c.today)?;
+                // The daemon's `Complete` also moves a line it changed to the end of its file,
+                // unless it is the last task already (`mutation.rs`, task complete-to-bottom).
+                let changed = done != lines[at];
+                lines[at] = done;
+                if changed && at + 1 != tail(&lines) {
+                    let moved = lines.remove(at);
+                    lines.insert(tail(&lines), moved);
+                }
+            }
             Kind::Delete(d) => {
                 let at = task_index(&lines, d.task.as_ref())?;
                 if d.leave_blank {

@@ -16,6 +16,7 @@ mod client_tests;
 mod client_workspace;
 mod clock;
 mod commands;
+mod complete_plan;
 mod config;
 mod daemon_ensure;
 mod daemon_mode;

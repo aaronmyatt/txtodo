@@ -257,6 +257,9 @@ pub fn plan_mutations(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
 /// wrapping (here, the `log_mutation_plan` call) never pushes this already-branchy function over
 /// the cognitive-complexity budget.
 fn plan_mutations_inner(old: &File, new: &File) -> Option<Vec<pb::Mutation>> {
+    if let Some(completed) = crate::complete_plan::plan(old, new) {
+        return Some(completed);
+    }
     if let Some(archived) = crate::archive_plan::plan(old, new) {
         return Some(archived);
     }
@@ -388,5 +391,31 @@ mod scratch_name_tests {
             "todo.txt",
             "an empty path keeps the old name"
         );
+    }
+}
+
+#[cfg(test)]
+mod complete_tests {
+    use super::*;
+
+    const T0: &str = "call mum id:01ARZ3NDEKTSV4RRFFQ69G5FA0";
+    const T1: &str = "walk dog id:01ARZ3NDEKTSV4RRFFQ69G5FA1";
+
+    /// Root todo "daemon-mode do sends Edit plus MoveToEnd": `do` (complete, move to the end)
+    /// goes out as the daemon's own `Complete`, which moves the line itself, so the op log says
+    /// complete. `do -A` leaves the line in place, which only an `Edit` expresses.
+    #[test]
+    fn do_plans_as_one_complete_and_do_a_as_an_edit() {
+        let old = parse_file(format!("{T0}\n{T1}\n").as_bytes());
+        let done = parse_file(format!("{T1}\nx 2026-09-23 {T0}\n").as_bytes());
+        let plan = plan_mutations(&old, &done).unwrap_or_else(|| panic!("plannable"));
+        assert_eq!(plan.len(), 1);
+        assert!(matches!(
+            plan[0].kind,
+            Some(mutation::Kind::Complete(pb::Complete { ref today, .. })) if today == "2026-09-23"
+        ));
+        let in_place = parse_file(format!("x 2026-09-23 {T0}\n{T1}\n").as_bytes());
+        let plan = plan_mutations(&old, &in_place).unwrap_or_else(|| panic!("plannable"));
+        assert!(matches!(plan[0].kind, Some(mutation::Kind::Edit(_))));
     }
 }
