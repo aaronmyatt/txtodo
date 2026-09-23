@@ -5,7 +5,7 @@
 //! what runs. Never a downgrade, never a restart loop: the binary about to be spawned is asked
 //! for its own `--version` first, so a stale `$PATH` copy behind a newer client does nothing.
 //!
-//! The pure decision ([`decide`], [`parse_version`]) lives here for every platform; the restart
+//! The pure decision ([`decide`], [`parse_version`]) lives here, unix-only like its one caller; the restart
 //! itself is `spawn.rs`'s unix-only business.
 
 use std::path::Path;
