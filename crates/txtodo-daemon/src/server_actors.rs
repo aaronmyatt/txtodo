@@ -26,3 +26,9 @@ impl TxtodoService {
         ws.paths().filter_map(|p| ws.actor(p).cloned()).collect()
     }
 }
+
+/// This bare, single-workspace `TxtodoService` (whitebox tests only — production always goes
+/// through `GlobalService`) has no registry to answer the workspace-management RPCs with.
+pub(crate) fn no_registry() -> Status {
+    Status::unimplemented("workspace management needs the global daemon's registry")
+}

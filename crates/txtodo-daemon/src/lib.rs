@@ -182,6 +182,8 @@ mod mutation_reopen_tests;
 #[cfg(test)]
 mod mutation_tests;
 #[cfg(test)]
+mod mutation_tests_lines;
+#[cfg(test)]
 mod notes_actor_tests;
 #[cfg(test)]
 mod pairing_grpc_tests;

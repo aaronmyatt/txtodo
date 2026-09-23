@@ -49,6 +49,7 @@ impl TxtodoService {
 // `status_of`/`applied_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for
 // the line budget.
 use crate::convert::{applied_of, preview_of, source_of, status_of};
+use crate::server_actors::no_registry;
 use crate::watch_forward::forward_changes;
 
 #[tonic::async_trait]
@@ -395,10 +396,4 @@ impl Txtodo for TxtodoService {
     ) -> Result<Response<pb::WorkspaceDeclineOfferResponse>, Status> {
         Err(no_registry())
     }
-}
-
-/// This bare, single-workspace `TxtodoService` (whitebox tests only — production always goes
-/// through `GlobalService`) has no registry to answer the workspace-management RPCs with.
-pub(crate) fn no_registry() -> Status {
-    Status::unimplemented("workspace management needs the global daemon's registry")
 }
