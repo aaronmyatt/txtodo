@@ -354,8 +354,10 @@ fn doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired() {
         .filter(|l| l.contains(" FAIL ") && !l.starts_with("keystore"))
         .collect();
     assert!(other_fails.is_empty(), "{other_fails:?} in:\n{text}");
+    // A peer row starts the line (`peer <name>`); the keystore row's prose mentions "paired
+    // peer" too, so a substring check would match the wrong thing.
     assert!(
-        !text.contains("peer "),
+        !text.lines().any(|l| l.starts_with("peer ")),
         "no peers before any pairing: {text}"
     );
 }
