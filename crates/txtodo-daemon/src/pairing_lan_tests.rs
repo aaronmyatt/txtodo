@@ -10,6 +10,7 @@ use txtodo_sync::{GroupId, InitiatorReply, JoinerHello, PairingOffer};
 
 use crate::clock::{Clock, FakeClock};
 use crate::pairing_lan::{process_hello, record_offer_relay_reachability};
+use crate::pairing_state::PairingRegistry;
 use crate::server::SharedWorkspace;
 use crate::workspace::Workspace;
 
@@ -143,4 +144,81 @@ fn process_hello_rejects_a_group_or_nonce_mismatch() {
 
     let wrong_nonce = process_hello(&ws, hello(device(1), offer.group, [0u8; 16]));
     assert!(matches!(wrong_nonce, InitiatorReply::Rejected));
+}
+
+/// Drives a real handshake to the point of a ready-to-send, `confirmed: true` `JoinerHello` for
+/// `ws` (the initiator) — everything short of the final `process_hello` that finalizes it. A
+/// second `PairingRegistry` stands in for the joiner; it need not be a full `Workspace` to prove
+/// what this file's tests below need.
+fn ready_joiner_hello(ws: &SharedWorkspace, joiner_device: DeviceId, now_ms: u64) -> JoinerHello {
+    let offer = ws
+        .read()
+        .unwrap()
+        .pairing()
+        .begin_offer(
+            device(0),
+            GroupId(1),
+            "192.168.1.5:4242".to_string(),
+            now_ms,
+        )
+        .unwrap();
+    let joiner = PairingRegistry::new();
+    joiner.begin_accept(joiner_device, &offer, now_ms).unwrap();
+    let joiner_public = joiner.joiner_public_key(now_ms).unwrap();
+
+    let mut hello = hello(joiner_device, offer.group, offer.nonce);
+    hello.public_key = joiner_public;
+    hello.static_public = [0x42u8; 32];
+
+    // First hello only completes the handshake (`complete_as_initiator`) — `confirm_local` needs
+    // that done first, same as the real flow where the human only sees a SAS to confirm after it.
+    assert!(matches!(
+        process_hello(ws, hello.clone()),
+        InitiatorReply::Pending
+    ));
+    ws.read().unwrap().pairing().confirm_local(now_ms).unwrap();
+    hello.confirmed = true;
+    hello
+}
+
+fn registered_devices(ws: &SharedWorkspace) -> Vec<txtodo_store::DeviceRow> {
+    ws.read()
+        .unwrap()
+        .identity_store()
+        .lock()
+        .unwrap()
+        .list_devices()
+        .unwrap()
+}
+
+/// Regression: `register_joiner_device` used to read the peer's static key off pairing session
+/// state that `try_finalize_initiator` had already cleared by the time it ran — always `None`, so
+/// the initiator's `devices` table never actually got the joiner, silently, every time.
+#[test]
+fn process_hello_registers_the_joiner_in_the_initiators_devices_table() {
+    let ws = shared_workspace();
+    let now_ms = 1_000;
+    let joiner_device = device(1);
+    let hello = ready_joiner_hello(&ws, joiner_device, now_ms);
+
+    assert!(matches!(
+        process_hello(&ws, hello.clone()),
+        InitiatorReply::Grant(_)
+    ));
+    let devices = registered_devices(&ws);
+    assert_eq!(devices.len(), 1, "the initiator learned exactly one peer");
+    assert_eq!(devices[0].device, joiner_device);
+    assert_eq!(devices[0].static_public, hello.static_public);
+
+    // A retried hello (cache-path: `try_finalize_initiator` already cleared `active`) must still
+    // attempt registration — `register_device` is an upsert, so this must not duplicate the row.
+    assert!(matches!(
+        process_hello(&ws, hello),
+        InitiatorReply::Grant(_)
+    ));
+    assert_eq!(
+        registered_devices(&ws).len(),
+        1,
+        "upsert, not a duplicate row"
+    );
 }

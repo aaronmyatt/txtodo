@@ -78,6 +78,7 @@ pub mod notes_lookup;
 pub mod notes_mirror;
 pub mod notes_registry;
 pub mod notes_state;
+mod pairing_adopt;
 mod pairing_grpc;
 mod pairing_lan;
 mod pairing_lan_state;

@@ -19,7 +19,6 @@ use crate::notes_actor::NotesActorConfig;
 use crate::notes_registry::{NotesCell, NotesRegistry};
 use crate::pairing_lan_state::PairingLan;
 use crate::pairing_state::PairingRegistry;
-use crate::pairing_state_error::PairingStateError;
 use crate::relay_state::RelayState;
 use crate::stats::Stats;
 use crate::tree_dirty::TreeDirty;
@@ -30,7 +29,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use txtodo_model::{DeviceId, FilePath, IdentityMode, WorkspaceTree};
-use txtodo_store::{NewDevice, Store, WorkspaceId};
+use txtodo_store::{Store, WorkspaceId};
 use txtodo_sync::{DeviceStaticPublic, GroupId, KeyStore};
 
 /// Where the store lives under the workspace root (ADR 0010).
@@ -305,41 +304,6 @@ impl Workspace {
             device: self.device(),
         };
         self.notes.get_or_open(cfg, &self.store, &self.clock)
-    }
-    /// Finishes a pairing on the joiner's side: unwraps the sealed [`txtodo_sync::PairingGrant`]
-    /// the initiator sent, stores the group key under this device's keystore, registers the
-    /// initiator's static public key in the device-global `devices` table (plan M4
-    /// `sync-device-remove`; see `pairing_state.rs::adopt_group_key`'s doc for the leg it does
-    /// not), and adopts `group` as this device's own — atomically, so it never claims a group
-    /// without also holding its key. Called by `pairing_lan.rs::finish_joiner` in production and
-    /// by `pairing_grpc_tests.rs` directly (whitebox).
-    pub(crate) fn adopt_group_key(
-        &self,
-        group: GroupId,
-        sealed: &[u8],
-        now_ms: u64,
-    ) -> Result<(), PairingStateError> {
-        let (peer_device, peer_static) = self.identity.pairing().adopt_group_key(
-            self.identity.key_store().as_ref(),
-            sealed,
-            now_ms,
-        )?;
-        let mut store = self
-            .identity_store()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        store.meta_set(crate::device_identity::GROUP_ID_KEY, &group.0.to_be_bytes())?;
-        store.register_device(&NewDevice {
-            device: peer_device,
-            name: String::new(),
-            static_public: peer_static.to_bytes(),
-            paired_at_ms: now_ms,
-            last_known_wall_ms: None,
-            key_epoch: 0,
-        })?;
-        drop(store);
-        self.set_group(group);
-        Ok(())
     }
     /// Records `device`'s relay reachability, learned from its `PairingOffer` (task
     /// `daemon-workspace-identity-agreement` stage 2) — a separate call from

@@ -3,16 +3,16 @@
 //! device-global grant cache ([`FinalizedGrant`]) — everything `pairing_grpc.rs` needs to drive
 //! `txtodo-sync`'s state machine from gRPC. `pairing_lan.rs` drives the relay-seam methods below
 //! (`complete_as_initiator`, `joiner_public_key`, `mark_remote_confirmed`, `try_finalize_initiator`,
-//! `adopt_group_key`, `snapshot`, the peer-static and grant-cache bookkeeping) over the LAN/relay
+//! `preview_group_key`, `commit_group_key`, `snapshot`, the grant-cache bookkeeping) over the LAN/relay
 //! `Link` on `txtodo_sync::PAIRING_ALPN`. `pairing_grpc_tests.rs` drives every method directly too.
 
 use std::sync::Mutex;
 
 use txtodo_model::DeviceId;
 use txtodo_sync::{
-    DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, GroupId, KEY_BYTES, KeyId, KeyStore,
-    MAX_CONCURRENT_PAIRINGS, Nonce, NonceRegistry, PAIRING_WINDOW_MS, PairingError, PairingGrant,
-    PairingOffer, PairingSession, SAS_WORD_COUNT, Secret, X25519_PUBLIC_KEY_BYTES,
+    DeviceStaticPublic, GroupId, KEY_BYTES, KeyId, KeyStore, MAX_CONCURRENT_PAIRINGS, Nonce,
+    NonceRegistry, PAIRING_WINDOW_MS, PairingError, PairingGrant, PairingOffer, PairingSession,
+    SAS_WORD_COUNT, Secret, X25519_PUBLIC_KEY_BYTES,
 };
 
 pub(crate) use crate::pairing_state_error::PairingStateError;
@@ -36,11 +36,6 @@ struct Active {
     /// The joiner's own ephemeral public key, kept so a relay can hand it to the initiator's
     /// `complete_as_initiator`. Only ever set on the joiner's side.
     own_public: Option<[u8; X25519_PUBLIC_KEY_BYTES]>,
-    /// The peer's long-term static public key, learned from the network (`pairing_lan.rs`'s
-    /// `JoinerHello`) before both sides have confirmed. Only ever set on the initiator's side —
-    /// the joiner learns the initiator's static key later, bundled inside the sealed
-    /// [`PairingGrant`] itself, so it has no need to stash one here.
-    peer_static: Option<[u8; DEVICE_STATIC_KEY_BYTES]>,
 }
 
 /// A read-only snapshot of the active pairing, enough for the LAN relay driver (`pairing_lan.rs`)
@@ -157,7 +152,6 @@ impl PairingRegistry {
             role: Role::Initiator,
             opened_at_ms: now_ms,
             own_public: None,
-            peer_static: None,
         });
         Ok(offer)
     }
@@ -179,7 +173,6 @@ impl PairingRegistry {
             role: Role::Joiner,
             opened_at_ms: now_ms,
             own_public: Some(own_public),
-            peer_static: None,
         });
         Ok(sas)
     }
@@ -292,42 +285,56 @@ impl PairingRegistry {
         (*d == device && *n == nonce).then(|| sealed.clone())
     }
 
-    /// Relay seam: the joiner unwraps the initiator's [`PairingGrant`], stores the group key, and
-    /// returns the initiator's `DeviceId` and long-term static public key so the caller
-    /// (`Workspace::adopt_group_key`) can register it in the `devices` table. The reverse leg (the
-    /// initiator learning the joiner's static key) is [`PairingRegistry::set_peer_static`] below.
-    pub(crate) fn adopt_group_key(
+    /// Relay seam, step 1 of 2: the joiner unwraps the initiator's [`PairingGrant`] and returns the
+    /// group key plus the initiator's `DeviceId`/long-term static public key, **without**
+    /// committing anything durable yet — no key-store write, no clearing of `active`.
+    /// `unwrap_grant` is a pure `&self` read (an AEAD decrypt against already-established session
+    /// key material), so the caller (`Workspace::adopt_group_key`) can register the peer in its
+    /// local `devices` table first and only call [`Self::commit_group_key`] once that succeeds —
+    /// a failure in between leaves this pairing attempt retryable from scratch instead of
+    /// stranding an already-committed key with no matching device/group row.
+    pub(crate) fn preview_group_key(
         &self,
-        key_store: &dyn KeyStore,
         sealed: &[u8],
         now_ms: u64,
-    ) -> Result<(DeviceId, DeviceStaticPublic), PairingStateError> {
+    ) -> Result<([u8; KEY_BYTES], DeviceId, DeviceStaticPublic), PairingStateError> {
         let mut inner = self.lock();
-        let (group_key, peer_device, peer_static) = {
-            let active = active_mut(&mut inner.active, now_ms)?;
-            if active.role != Role::Joiner {
-                return Err(PairingStateError::WrongRole);
-            }
-            if !active.session.is_ready_to_send_key() {
-                return Err(PairingError::NotConfirmed.into());
-            }
-            let grant = active.session.unwrap_grant(sealed)?;
-            let peer_device = active
-                .session
-                .peer_device()
-                .ok_or(PairingStateError::NotActive)?;
-            (
-                grant.group_key,
-                peer_device,
-                DeviceStaticPublic::from_bytes(grant.static_public),
-            )
-        };
+        let active = active_mut(&mut inner.active, now_ms)?;
+        if active.role != Role::Joiner {
+            return Err(PairingStateError::WrongRole);
+        }
+        if !active.session.is_ready_to_send_key() {
+            return Err(PairingError::NotConfirmed.into());
+        }
+        let grant = active.session.unwrap_grant(sealed)?;
+        let peer_device = active
+            .session
+            .peer_device()
+            .ok_or(PairingStateError::NotActive)?;
+        Ok((
+            grant.group_key,
+            peer_device,
+            DeviceStaticPublic::from_bytes(grant.static_public),
+        ))
+    }
+
+    /// Relay seam, step 2 of 2: commits a group key already validated by
+    /// [`Self::preview_group_key`] — writes it to the keystore and clears `active`. The point of
+    /// no return; only call this once the caller's own durable bookkeeping has already succeeded.
+    pub(crate) fn commit_group_key(
+        &self,
+        key_store: &dyn KeyStore,
+        group_key: [u8; KEY_BYTES],
+        now_ms: u64,
+    ) -> Result<(), PairingStateError> {
+        let mut inner = self.lock();
+        active_mut(&mut inner.active, now_ms)?;
         key_store.put(
             KeyId::Group(INITIAL_GROUP_EPOCH),
             &Secret::new(group_key.to_vec()),
         )?;
         inner.active = None;
-        Ok((peer_device, peer_static))
+        Ok(())
     }
 
     /// A read-only [`ActiveSnapshot`] of whatever pairing is active, for `pairing_lan.rs` to
@@ -344,29 +351,6 @@ impl PairingRegistry {
             is_handshaken: active.session.is_handshaken(),
             peer_device: active.session.peer_device(),
         })
-    }
-
-    /// Records the joiner's long-term static public key, learned from its `JoinerHello` — the
-    /// reverse leg of the static-key exchange `adopt_group_key`'s doc names (the initiator learning
-    /// the joiner's key, rather than the other way around). Only meaningful on the initiator's
-    /// side; overwrites silently on a retried `JoinerHello`, which always resends the same key.
-    pub(crate) fn set_peer_static(
-        &self,
-        static_public: [u8; DEVICE_STATIC_KEY_BYTES],
-        now_ms: u64,
-    ) -> Result<(), PairingStateError> {
-        let mut inner = self.lock();
-        let active = active_mut(&mut inner.active, now_ms)?;
-        active.peer_static = Some(static_public);
-        Ok(())
-    }
-
-    /// The joiner's static public key recorded by [`PairingRegistry::set_peer_static`], if any —
-    /// read once both sides have confirmed, to register the joiner symmetrically in the
-    /// initiator's own `devices` table.
-    pub(crate) fn peer_static(&self, now_ms: u64) -> Option<[u8; DEVICE_STATIC_KEY_BYTES]> {
-        let mut inner = self.lock();
-        active_mut(&mut inner.active, now_ms).ok()?.peer_static
     }
 
     /// The SAS once this device's active pairing (as initiator) has handshaken with a peer, or

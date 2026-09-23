@@ -7,7 +7,13 @@ use txtodo_model::DeviceId;
 use crate::workspace::Workspace;
 
 impl Workspace {
-    /// Registers a peer's long-term static public key in this workspace's own `devices` table.
+    /// Registers a peer's long-term static public key in the device-global `devices` table (ADR
+    /// 0021 — the same table `adopt_group_key`'s joiner-side twin, `device_remove.rs` and
+    /// `devices_grpc.rs` all use via `identity_store()`). Previously locked `store()` instead — the
+    /// per-workspace oplog store, a different SQLite database nothing else reads a device row
+    /// from — so every registration through this path landed somewhere `txtodo device list`/
+    /// `devices_grpc.rs` never looked, silently. Caught by `pairing_lan_tests.rs`'s
+    /// `process_hello_registers_the_joiner_in_the_initiators_devices_table`.
     pub(crate) fn register_paired_device(
         &self,
         device: DeviceId,
@@ -15,7 +21,7 @@ impl Workspace {
         now_ms: u64,
     ) -> Result<(), txtodo_store::StoreError> {
         let mut store = self
-            .store()
+            .identity_store()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.register_device(&txtodo_store::NewDevice {

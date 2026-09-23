@@ -281,6 +281,10 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
     // accept path routes each round to an arbitrary open workspace, so a per-workspace cache
     // missed whenever a retry landed on a different one and this device hard-rejected the joiner.
     if let Some(sealed) = ws.pairing().cached_grant(hello.device, hello.nonce) {
+        // `register_device` is an upsert, so retrying this on every retried hello (not just the
+        // first) is safe and is how a transient failure below gets another chance instead of
+        // being silently dropped forever — see `register_joiner_device`'s own doc.
+        register_joiner_device(&ws, hello.device, hello.static_public, ws.clock().now_ms());
         return InitiatorReply::Grant(sealed);
     }
     let now_ms = ws.clock().now_ms();
@@ -303,11 +307,10 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
     } else if let Err(e) = pairing.complete_as_initiator(hello.device, hello.public_key, now_ms) {
         return reject_handshake_failed(hello.device, &e);
     }
-    let _ = pairing.set_peer_static(hello.static_public, now_ms);
     if hello.confirmed {
         let _ = pairing.mark_remote_confirmed(now_ms);
     }
-    finalize_or_pending(&ws, hello.device, now_ms)
+    finalize_or_pending(&ws, hello.device, hello.static_public, now_ms)
 }
 
 /// No active session (expired window, wrong role, or none) — `debug`: routine for a stale retry.
@@ -350,7 +353,12 @@ fn log_finalize_failed(peer: DeviceId, e: &crate::pairing_state_error::PairingSt
 /// `try_finalize_initiator` caches the sealed grant device-globally on success (keyed by the
 /// session's own peer/nonce, atomically with clearing `active`), so a retried `JoinerHello` is
 /// re-served it by `process_hello`'s top check above — no caching is done here.
-fn finalize_or_pending(ws: &Workspace, device: DeviceId, now_ms: u64) -> InitiatorReply {
+fn finalize_or_pending(
+    ws: &Workspace,
+    device: DeviceId,
+    static_public: [u8; txtodo_sync::DEVICE_STATIC_KEY_BYTES],
+    now_ms: u64,
+) -> InitiatorReply {
     let sealed = match ws.pairing().try_finalize_initiator(
         ws.key_store().as_ref(),
         ws.device_static_public(),
@@ -364,18 +372,26 @@ fn finalize_or_pending(ws: &Workspace, device: DeviceId, now_ms: u64) -> Initiat
     };
     match sealed {
         Some(sealed) => {
-            register_joiner_device(ws, device, now_ms);
+            register_joiner_device(ws, device, static_public, now_ms);
             InitiatorReply::Grant(sealed)
         }
         None => InitiatorReply::Pending,
     }
 }
 
-/// Registers the joiner's static key in the initiator's `devices` table; best-effort, logged only.
-fn register_joiner_device(ws: &Workspace, device: DeviceId, now_ms: u64) {
-    let Some(static_public) = ws.pairing().peer_static(now_ms) else {
-        return;
-    };
+/// Registers the joiner's static key (carried on every `JoinerHello`, including retries) in the
+/// initiator's `devices` table. Deliberately reads `static_public` straight off the hello rather
+/// than from `active` — by the time `try_finalize_initiator` returns success it has already
+/// cleared `active`, so a previous version of this read `PairingRegistry::peer_static` here and
+/// always got `None`: registration never actually ran. `register_device` is an upsert, so calling
+/// this again on a retried/cached hello (see `process_hello`) is safe and is how a failure here
+/// gets another chance instead of being silently and permanently dropped.
+fn register_joiner_device(
+    ws: &Workspace,
+    device: DeviceId,
+    static_public: [u8; txtodo_sync::DEVICE_STATIC_KEY_BYTES],
+    now_ms: u64,
+) {
     if let Err(e) = ws.register_paired_device(device, static_public, now_ms) {
         tracing::warn!(peer = %device, error = %e, "pairing_initiator_register_joiner_failed");
     }
