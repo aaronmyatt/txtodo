@@ -27,18 +27,19 @@ the per-OS resolution helper to reuse/generalize. What that work explicitly left
 default's directory later is out of scope" — this line's `relocate` sub-task is that missing piece,
 generalized to any mirrored (not just the one default) workspace.
 
-## Design (open — needs the two @human decisions in todo.txt first)
+## Design
 
-- Mirror root candidate, following the default-workspace pattern: something like
+Decided 2026-09-23 (human):
+
+- Mirror root: reuse the per-OS data dir scheme (`txtodo-workspace-paths` /
+  `default_workspace_dir(env)`, the same helper `ref:default-workspace` uses), e.g.
   `$XDG_DATA_HOME/txtodo/remote/<workspace-id>/` (macOS/Linux) and the `%LOCALAPPDATA%` equivalent
-  on Windows — but this is a new on-disk convention, not a bugfix, hence @human.
+  on Windows.
+- Trust model: auto-accept, no prompt. The peer is already paired/trusted, and mirrored content is
+  non-executable data — same trust boundary sync already uses for every other op.
 - Provenance flag: `WorkspaceInfo` needs a way to say "this root is a mirror I chose for you," not
   a path the user picked — surfaced as a "Remote" badge in the desktop switcher and a marker in
   `txtodo workspace list`/TUI, the same way `is_default` already marks the default workspace.
-- Auto-accept trust model: does an incoming offer from an already-paired device mirror itself with
-  no prompt (matches how sync already trusts a paired device for every other op), or does it still
-  require an explicit `txtodo workspace accept`? This is a new trust boundary, not implied by
-  anything already decided — @human.
 - `relocate`: once mirrored, a user may want the workspace at a real path (e.g. inside their actual
   project checkout). Needs to move the files and repoint the registry's root without touching the
   `WorkspaceId` or losing sync — same identity-preservation constraint `default-workspace`

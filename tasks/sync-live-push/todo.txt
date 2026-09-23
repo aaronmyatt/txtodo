@@ -1,6 +1,6 @@
-2026-09-22 Decide: ADR for Session accepting unsolicited Ops (push) and the long-lived session contract +m11 @human
 2026-09-22 sync: workspace_session accepts pushed Ops in Idle after Greet, imports and Acks them; tests + goldens +m11 @sync
 2026-09-22 daemon: LAN transport binds once per device and accepts into drive_shared_session with the real route table; drop lan_session::drive_session +m11 @daemon @sync
 2026-09-22 daemon: long-lived peer session: heartbeat keeps the link open, redial becomes reconnect-with-backoff only when no session is live +m11 @daemon @sync
 2026-09-22 daemon: push on commit: subscribe each routed workspace's Change broadcast and send its new ops to every live peer session, no echo to origin +m11 @daemon @sync
 2026-09-22 test: two-daemon LAN test on the default workspace asserting commit-to-peer convergence under a generous bound with no redial in between +m11 @daemon @test
+x 2026-09-23 2026-09-22 Decide: ADR for Session accepting unsolicited Ops (push) and the long-lived session contract +m11 @human — decided 2026-09-23 (human): accept pushed Ops in Idle once Greet completes, no extra Device::list gate — Greet already implies holding the group key, which is only ever handed out via pairing; found and fixed a real registration-durability bug along the way instead (see notes.md, root todo.txt line marked x pairing_lan.rs). Lines 2-6 are now unblocked to build

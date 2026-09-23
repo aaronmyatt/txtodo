@@ -1,6 +1,6 @@
-2026-09-21 Decide: default mirror directory location/naming for an auto-accepted remote workspace (default-workspace precedent: txtodo-workspace-paths, per-OS data dir) +m11 @human
-2026-09-21 Decide: auto-accept vs prompt-to-accept trust model for an incoming workspace offer with no local_dir given +m11 @human
 2026-09-21 daemon: WorkspaceInfo carries a remote/provenance flag (mirrored vs user-anchored root) +m11 @daemon
 2026-09-21 daemon: accept-into-mirror path when --dir/local_dir is omitted, using the decided default location +m11 @daemon
 2026-09-21 cli/tui/desktop: label remote (mirrored) workspaces in every workspace list/switcher +m11 @cli @tui @desktop
 2026-09-21 cli: `txtodo workspace relocate <id> <new-dir>` moves a mirrored workspace's files into a user-chosen directory, keeping its WorkspaceId +m11 @cli @daemon
+x 2026-09-23 2026-09-21 Decide: default mirror directory location/naming for an auto-accepted remote workspace (default-workspace precedent: txtodo-workspace-paths, per-OS data dir) +m11 @human — decided 2026-09-23 (human): reuse the per-OS data dir scheme (txtodo-workspace-paths / default-workspace precedent) for the mirror root
+x 2026-09-23 2026-09-21 Decide: auto-accept vs prompt-to-accept trust model for an incoming workspace offer with no local_dir given +m11 @human — decided 2026-09-23 (human): auto-accept — peer is already trusted (paired device) and mirrored content is non-executable

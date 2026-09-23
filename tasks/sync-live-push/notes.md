@@ -71,9 +71,23 @@ user saw as "no sync" was two things:
 - `tests/lan_loopback_converge.rs` and `relay_converge.rs` stay green; a new test asserts
   commit-to-peer latency with a generous bound (this machine is slow — see memory).
 
+## Decided (2026-09-23, human)
+
+- Session accepts unsolicited `Ops` in `Idle` once Greet has completed, no extra gate: Greet
+  already requires holding the group key (every frame is AEAD-sealed under it before `Session`
+  ever sees it), and the group key is only ever handed out during pairing — so gating push
+  identically to Want/Ack is consistent, not a new trust class.
+- Investigating that question surfaced a real, separate bug: registering the peer in the local
+  `devices` table was not durable on either side of pairing (initiator: `register_joiner_device`
+  read a value that was always `None` by the time it ran, so it silently never registered anyone;
+  joiner: the group key was committed to the keystore before the local `devices`/`group` rows
+  could fail to write, stranding an unrecoverable half-paired state). Fixed directly rather than
+  adding a redundant `Device::list` gate as a workaround — see root todo.txt's pairing_lan.rs
+  line (`x 2026-09-23`) and `pairing_state.rs`/`pairing_lan.rs`/`pairing_adopt.rs` for the fix.
+- Heartbeat shape: reuse `Ack` (no wire change) vs a new link-level ping (cleaner, needs a
+  `Message` variant). Default to `Ack` unless a future ADR says otherwise — not reopened here.
+
 ## Open
 
-- Needs an ADR: a `Session` transition that accepts unsolicited `Ops` changes the protocol's
-  trust posture (a peer can now push without being asked). Not an agent's call alone.
-- Heartbeat shape: reuse `Ack` (no wire change) vs a new link-level ping (cleaner, needs a
-  `Message` variant). Default to `Ack` unless the ADR says otherwise.
+- The ADR itself (Session accepting unsolicited Ops, the long-lived session contract) is decided
+  in principle above; still not implemented — line 1 in todo.txt stays open for that build.
