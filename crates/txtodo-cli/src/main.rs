@@ -115,7 +115,13 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => {
-            commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
+            // `workspace …` is about the registry, not a document: asking the layout here would
+            // make the daemon open and register the resolved `--dir`/cwd as a side effect
+            // (`workspace list` from any folder registered it; `accept --dir x` tried to
+            // register `x`, which the global `--dir` also received).
+            if !matches!(cli.command, Command::Workspace { .. }) {
+                commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
+            }
             dispatch_daemon(&ctx, &mut daemon, &cli.command)
         }
     }

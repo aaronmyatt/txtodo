@@ -26,6 +26,9 @@ impl GlobalDaemon {
         let child = Command::new(txtodod_binary())
             .env("TXTODO_SOCKET", &socket)
             .env("TXTODO_REGISTRY_DB", state_dir.join("registry.db"))
+            // Debug-only seam (`identity_setup.rs`): a freshly rebuilt `txtodod` otherwise blocks
+            // in the OS keychain prompt on a developer Mac, past `SOCKET_WAIT`.
+            .env("TXTODO_TEST_KEYSTORE_MEMORY", "1")
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
@@ -61,6 +64,9 @@ fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
         .env_remove("TXTODO_TODO_DIR")
         .env("TXTODO_CONFIG", dir.join("none.toml"))
         .env("TXTODO_SOCKET", &daemon.socket)
+        // A test daemon that is not up must fail this test, never make the CLI spawn a daemon
+        // of its own at this socket with the machine's real registry.
+        .env("TXTODO_NO_AUTOSTART", "1")
         .args(args)
         .output()
         .unwrap_or_else(|e| panic!("txtodo: {e}"))
