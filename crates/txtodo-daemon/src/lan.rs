@@ -7,9 +7,12 @@
 //! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
 //! closed after `IDLE_TIMEOUT` (750 ms) of silence, so `lan_session::drive_session` naturally
 //! returns once a connection has caught the peer up and gone quiet. The periodic resync below
-//! (`spawn_resync_dial`) is the other half: every known peer is redialed every `RESYNC_INTERVAL`,
-//! so a later local edit still converges quickly without this module watching the store — a new
-//! QUIC handshake roughly every second while paired is a known, flagged tradeoff.
+//! (`relay_autodial::spawn_resync_dial`) is the other half: every known peer is redialed every
+//! `RESYNC_INTERVAL`, so a later local edit still converges without this module watching the store.
+//! Resync dials share `DialState`'s backoff with sighting dials, and a session that connects but
+//! bails before its first greeting (no group key yet, no routed workspace) counts as a failure —
+//! measured 2026-09-23 at ~3 sessions a second between two unpaired daemons, each one a keystore
+//! read, before either bound was in place.
 //!
 //! **Real same-host, cross-process connect works.** A real `iroh` QUIC connect only ever fails
 //! between two endpoints in the *same process*; two real `txtodod` processes on one host connect
@@ -42,9 +45,11 @@ pub const MAX_CONCURRENT_LAN_SESSIONS: usize = 16;
 pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How often already-known peers are redialed — see the module doc on why this, together with
-/// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Longer than `IDLE_TIMEOUT` so the
-/// common case is one live session per peer, not two briefly overlapping ones.
-const RESYNC_INTERVAL: Duration = Duration::from_millis(1_000);
+/// `IrohLink`'s `IDLE_TIMEOUT`, is what keeps sync "live". Was 1 s until 2026-09-23: with two
+/// daemons each redialing the other every second, plus the accept side, an unpaired pair ran ~3
+/// sessions a second (1164 in 7 min on one Mac), each one a keystore read. 15 s keeps a local edit
+/// converging within a human's patience while a dial storm can no longer pile up.
+const RESYNC_INTERVAL: Duration = Duration::from_secs(15);
 
 /// The background LAN transport task; `abort()` on daemon shutdown.
 pub struct LanTransport {
@@ -140,7 +145,13 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
                     ctx.group = rebuilt.group;
                     table = txtodo_sync::PeerTable::new(ctx.device, ctx.group);
                 }
-                crate::relay_autodial::resync_and_dial(&known_peers, &ctx, &endpoint, &sessions);
+                crate::relay_autodial::resync_and_dial(
+                    &known_peers,
+                    &ctx,
+                    &endpoint,
+                    &sessions,
+                    &dial_state,
+                );
             }
         }
     }
@@ -248,18 +259,20 @@ fn browse(discovery: &Discovery) -> Option<txtodo_sync::BrowseEvents> {
     }
 }
 
-/// `pub(crate)`: `relay.rs` reuses this too — `RelayEndpoint` returns the same `IrohLink` type.
+/// `pub(crate)`: `relay_autodial.rs` reuses this too — `RelayEndpoint` returns the same
+/// `IrohLink` type. `on_done(greeted)` runs on the driver thread once the session ends; `greeted`
+/// is false when it bailed before its first greeting, which the dial path books as a failure.
 pub(crate) fn spawn_driver(
-    ws: SharedWorkspace,
-    device: DeviceId,
-    group: GroupId,
+    ctx: LanCtx,
     link: IrohLink,
     permit: tokio::sync::OwnedSemaphorePermit,
+    on_done: impl FnOnce(bool) + Send + 'static,
 ) {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        drive_session(&mut link, ws, device, group);
+        let greeted = drive_session(&mut link, ctx.ws, ctx.device, ctx.group);
+        on_done(greeted);
     });
 }
 
@@ -308,7 +321,7 @@ fn accept_one(
     if link.alpn() == PAIRING_ALPN {
         spawn_pairing_driver(ctx.ws.clone(), link, permit);
     } else {
-        spawn_driver(ctx.ws.clone(), ctx.device, ctx.group, link, permit);
+        spawn_driver(ctx.clone(), link, permit, |_| {});
     }
 }
 
@@ -329,12 +342,16 @@ async fn lan_only_dial(endpoint: Arc<LanEndpoint>, peer: DiscoveredPeer) -> Opti
 
 /// Connects to `peer`, spawning its session driver on success (`permit` drops either way). Tries
 /// LAN first, falling back to relay (`crate::relay_fallback`) only when LAN doesn't produce a link
-/// within `CONNECT_TIMEOUT` — ADR 0026: LAN stays primary, relay is additive.
-async fn dial_and_spawn(
+/// within `CONNECT_TIMEOUT` — ADR 0026: LAN stays primary, relay is additive. Returns whether a
+/// link was established; the dial's `DialState` outcome is booked here, on the driver thread once
+/// the session ends (a connect that bails before greeting is a failure, so `backoff_ms` applies).
+/// `pub(crate)`: `relay_autodial.rs`'s resync dial is the same connect-and-drive.
+pub(crate) async fn dial_and_spawn(
     ctx: LanCtx,
     endpoint: Arc<LanEndpoint>,
     peer: DiscoveredPeer,
     permit: tokio::sync::OwnedSemaphorePermit,
+    dial_state: SharedDialState,
 ) -> bool {
     let node = peer.node;
     let device = peer.device;
@@ -342,11 +359,14 @@ async fn dial_and_spawn(
     let relay_dial = crate::relay_fallback::relay_fallback_dial(ctx.clone(), node);
     match crate::relay_fallback::lan_then_relay(CONNECT_TIMEOUT, lan_dial, relay_dial).await {
         Some(link) => {
-            spawn_driver(ctx.ws, ctx.device, ctx.group, link, permit);
+            spawn_driver(ctx, link, permit, move |greeted| {
+                record_dial_outcome(&dial_state, device, greeted);
+            });
             true
         }
         None => {
             tracing::debug!(peer = %device, "lan_and_relay_dial_both_failed");
+            record_dial_outcome(&dial_state, device, false);
             false
         }
     }
@@ -364,34 +384,6 @@ fn spawn_dial(
         return;
     };
     tokio::spawn(async move {
-        let device = peer.device;
-        let ok = dial_and_spawn(ctx, endpoint, peer, permit).await;
-        record_dial_outcome(&dial_state, device, ok);
+        dial_and_spawn(ctx, endpoint, peer, permit, dial_state).await;
     });
-}
-
-/// The periodic-resync counterpart of `spawn_dial`: same connect-and-drive, but no `DialState`
-/// bookkeeping — deliberate, unconditional churn rather than failure recovery (module doc).
-pub(crate) fn spawn_resync_dial(
-    sessions: Arc<Semaphore>,
-    ctx: LanCtx,
-    endpoint: Arc<LanEndpoint>,
-    peer: DiscoveredPeer,
-) {
-    let Ok(permit) = sessions.try_acquire_owned() else {
-        tracing::debug!(peer = %peer.device, "lan_session_cap_reached_skipping_resync");
-        return;
-    };
-    tokio::spawn(async move {
-        let device = peer.device;
-        let ok = dial_and_spawn(ctx, endpoint, peer, permit).await;
-        log_resync_dial_outcome(device, ok);
-    });
-}
-
-/// Previously discarded outright (`let _ = dial_and_spawn(...).await;`) — no `DialState`
-/// bookkeeping added here on purpose (module doc: unconditional churn, not failure recovery), just
-/// visibility that a periodic resync dial happened and how it went.
-fn log_resync_dial_outcome(peer: DeviceId, ok: bool) {
-    tracing::debug!(%peer, ok, "lan_resync_dial_outcome");
 }

@@ -93,13 +93,14 @@ pub(crate) fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
 /// The single-workspace entry point every pre-stage-2 call site still uses: builds a one-entry
 /// routing table for `ws` and hands it to `lan_session_shared::drive_shared_session`, so a peer
 /// relationship with only one open workspace behaves exactly as it did before this stage (same
-/// code path, not a parallel one that could drift).
+/// code path, not a parallel one that could drift). Returns `drive_shared_session`'s "greeted"
+/// flag through unchanged.
 pub(crate) fn drive_session(
     link: &mut dyn Link,
     ws: SharedWorkspace,
     device: DeviceId,
     group: GroupId,
-) {
+) -> bool {
     let id = read(&ws).workspace_id();
     let routes = WorkspaceRoutes::new();
     let registered = routes.register(id, WorkspaceRoute { ws, device, group });
@@ -107,5 +108,5 @@ pub(crate) fn drive_session(
         registered.is_ok(),
         "a single-entry routing table never exceeds MAX_ROUTED_WORKSPACES"
     );
-    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group);
+    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group)
 }

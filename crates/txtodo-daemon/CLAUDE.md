@@ -183,9 +183,11 @@ multiplex every workspace's traffic — not done by this task).
   (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
   crate; only `txtodo_sync`'s own types do. Sessions are short-lived by design (`IrohLink`'s own
   idle timeout in `txtodo-sync`) and `lan.rs` redials every known peer every `RESYNC_INTERVAL`, so
-  a local edit made after an earlier sync round still converges quickly without this module
-  watching the store for changes — the cost (a QUIC handshake roughly every second while paired) is
-  a known, flagged tradeoff; see Invariants for the rest of this pass's real scope limits (per-op
+  a local edit made after an earlier sync round still converges without this module
+  watching the store for changes — `RESYNC_INTERVAL` is 15 s since 2026-09-23 (was 1 s: two
+  unpaired daemons ran ~3 sessions a second, each a keystore read) and resync dials now share
+  `DialState`'s backoff, a session that bails before greeting counting as a failed dial; see
+  Invariants for the rest of this pass's real scope limits (per-op
   signatures are a stand-in derived key, not real per-device attribution) and the corrected same-
   *process* (not same-host) connect finding. `lan.rs`'s accept loop (plan M4 `sync-pairing`'s LAN
   wiring pass) also dispatches by `IrohLink::alpn()`: `txtodo_sync::PAIRING_ALPN` routes to

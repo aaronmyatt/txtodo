@@ -166,6 +166,8 @@ mod import_tests;
 #[cfg(test)]
 mod keystore_setup_tests;
 #[cfg(test)]
+mod lan_peers_tests;
+#[cfg(test)]
 mod lan_session_security_tests;
 #[cfg(test)]
 mod lan_session_tests;

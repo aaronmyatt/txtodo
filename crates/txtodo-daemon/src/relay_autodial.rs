@@ -14,8 +14,8 @@ use txtodo_model::DeviceId;
 use txtodo_store::DeviceRow;
 use txtodo_sync::{DiscoveredPeer, LanEndpoint};
 
-use crate::lan::{LanCtx, spawn_driver, spawn_resync_dial};
-use crate::lan_peers::{KnownPeers, peers_to_resync};
+use crate::lan::{LanCtx, dial_and_spawn, spawn_driver};
+use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
 use crate::lan_session::read;
 use crate::relay_fallback::relay_fallback_dial;
 
@@ -27,12 +27,14 @@ pub(crate) fn resync_and_dial(
     ctx: &LanCtx,
     endpoint: &Arc<LanEndpoint>,
     sessions: &Arc<Semaphore>,
+    dial_state: &SharedDialState,
 ) {
     for peer in peers_to_resync(known_peers, ctx.device) {
         spawn_resync_dial(
             Arc::clone(sessions),
             ctx.clone(),
             Arc::clone(endpoint),
+            Arc::clone(dial_state),
             peer,
         );
     }
@@ -79,6 +81,53 @@ fn filter_relay_only(
         .collect()
 }
 
+/// The periodic-resync counterpart of `lan.rs`'s `spawn_dial`: the same connect-and-drive, gated
+/// by the same `DialState` backoff (`try_begin_dial`) — until 2026-09-23 this was unconditional
+/// churn, one dial per known peer per tick regardless of how the last one went.
+fn spawn_resync_dial(
+    sessions: Arc<Semaphore>,
+    ctx: LanCtx,
+    endpoint: Arc<LanEndpoint>,
+    dial_state: SharedDialState,
+    peer: DiscoveredPeer,
+) {
+    let Some(permit) = resync_permit(&sessions, &ctx, &dial_state, peer.device) else {
+        return;
+    };
+    tokio::spawn(async move {
+        let device = peer.device;
+        let ok = dial_and_spawn(ctx, endpoint, peer, permit, dial_state).await;
+        tracing::debug!(peer = %device, ok, "lan_resync_dial_outcome");
+    });
+}
+
+/// The backoff gate, then the session cap: `None` (already logged) skips `peer` this tick.
+fn resync_permit(
+    sessions: &Arc<Semaphore>,
+    ctx: &LanCtx,
+    dial_state: &SharedDialState,
+    peer: DeviceId,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    let now_ms = read(&ctx.ws).clock().now_ms();
+    if !try_begin_dial(dial_state, peer, now_ms) {
+        return log_backing_off(peer);
+    }
+    Arc::clone(sessions)
+        .try_acquire_owned()
+        .ok()
+        .or_else(|| log_cap_reached(peer))
+}
+
+fn log_backing_off(peer: DeviceId) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    tracing::debug!(%peer, "lan_resync_dial_backing_off");
+    None
+}
+
+fn log_cap_reached(peer: DeviceId) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    tracing::debug!(%peer, "lan_session_cap_reached_skipping_resync");
+    None
+}
+
 /// One relay-only dial attempt, bounded by `sessions` the same as every other dial in this crate.
 fn spawn_relay_only_dial(ctx: LanCtx, node: [u8; 32], device: DeviceId, sessions: Arc<Semaphore>) {
     let Ok(permit) = sessions.try_acquire_owned() else {
@@ -86,7 +135,7 @@ fn spawn_relay_only_dial(ctx: LanCtx, node: [u8; 32], device: DeviceId, sessions
     };
     tokio::spawn(async move {
         match relay_fallback_dial(ctx.clone(), node).await {
-            Some(link) => spawn_driver(ctx.ws, ctx.device, ctx.group, link, permit),
+            Some(link) => spawn_driver(ctx, link, permit, |_| {}),
             None => tracing::debug!(peer = %device, "relay_only_auto_dial_failed"),
         }
     });

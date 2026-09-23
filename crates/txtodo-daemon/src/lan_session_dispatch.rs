@@ -251,14 +251,17 @@ fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCt
 /// `lan_session_shared.rs`'s module doc for the wire sequence and failure scope. Runs on the
 /// caller's own thread, which must be a blocking one (`Link::send`/`recv` block); returns when the
 /// peer closes, the link handshake fails, or the `MAX_MESSAGES_PER_SESSION` bound is reached.
+/// Returns `false` when the session bailed before its first greeting went out (no routed
+/// workspace, no group key, or the greeting itself failed) — the dial side books that as a failed
+/// dial so its backoff applies (`lan.rs::dial_and_spawn`).
 pub(crate) fn drive_shared_session(
     link: &mut dyn Link,
     routes: &WorkspaceRoutes,
     device: DeviceId,
     group: GroupId,
-) {
+) -> bool {
     let Some(shared) = build_shared_ctx(routes, group) else {
-        return;
+        return false;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —
     // that a peer relationship with more than one open workspace shares this single connection
@@ -272,7 +275,8 @@ pub(crate) fn drive_shared_session(
     let mut session = Session::new(device, group);
     open_every_route(&mut session, &shared.routes);
     if !send_initial_greetings(link, &shared, &mut session) {
-        return;
+        return false;
     }
     run_shared_message_loop(link, &shared, &mut session);
+    true
 }

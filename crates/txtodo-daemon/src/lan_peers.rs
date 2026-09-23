@@ -60,8 +60,8 @@ pub(crate) fn remember_peer(known_peers: &KnownPeers, peer: &DiscoveredPeer) {
 }
 
 /// Every currently known peer this device (rather than the peer) is responsible for dialing —
-/// `lan.rs`'s `redial_known_peers` calls this each tick; the tie-break is unconditional here, no
-/// backoff or debounce, since periodic resync is deliberate churn, not failure recovery.
+/// `relay_autodial::resync_and_dial` calls this each tick and then gates each one through
+/// [`try_begin_dial`], so a peer whose last dial failed is left alone until its backoff elapses.
 pub(crate) fn peers_to_resync(known_peers: &KnownPeers, device: DeviceId) -> Vec<DiscoveredPeer> {
     known_peers
         .lock()
@@ -96,6 +96,20 @@ pub(crate) fn worth_dialing(
     Some(peer)
 }
 
+/// The resync tick's gate: `true` (and the attempt booked) when `peer`'s backoff has elapsed,
+/// `false` to leave it alone this tick. Same `DialState` as the sighting path, so a failed dial
+/// from either side pushes the next one out by `backoff_ms`.
+pub(crate) fn try_begin_dial(dial_state: &SharedDialState, peer: DeviceId, now_ms: u64) -> bool {
+    let mut dial_state = dial_state.lock().unwrap_or_else(PoisonError::into_inner);
+    if !dial_state.due(peer, now_ms) {
+        return false;
+    }
+    dial_state.record_attempt(peer, now_ms);
+    true
+}
+
+/// Books how a dial went. `ok` is false both for a connect that never happened and for one whose
+/// session bailed before its first greeting (`lan.rs::dial_and_spawn`), so both back off.
 pub(crate) fn record_dial_outcome(dial_state: &SharedDialState, peer: DeviceId, ok: bool) {
     let mut dial_state = dial_state.lock().unwrap_or_else(PoisonError::into_inner);
     if ok {
