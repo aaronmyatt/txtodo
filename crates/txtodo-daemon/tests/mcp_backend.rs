@@ -287,7 +287,9 @@ async fn batch_raw_and_lint_work_under_sidecar() {
     assert!(dry.applied > 0 && dry.diff.is_some(), "{dry:?}");
     assert_eq!(disk(dir.path()), "one\n");
     let real = mcp.batch(ops, false, None).await.unwrap();
-    assert_eq!(real.applied, 2);
+    // The run applies the plan the dry run showed (task batch-dry-run-divergence), so `applied`
+    // is the daemon's op count for both — not one per batch op, as the per-op fallback counts.
+    assert_eq!(real.applied, dry.applied, "{real:?} vs {dry:?}");
     assert!(disk(dir.path()).contains("two"));
 
     // Raw read and write address a line by number alone.
