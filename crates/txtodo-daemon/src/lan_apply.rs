@@ -133,7 +133,11 @@ fn group_ops_by_file(ops: Vec<Op>) -> BTreeMap<FilePath, Vec<Op>> {
 }
 
 fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<Op>) -> bool {
-    if crate::walker::is_notes_document(crate::workspace_mint::basename(&path)) {
+    // `txtodo.toml` is whole-text too (`layout_sync.rs`); its commit writes the file, and the
+    // watcher then hot-reloads the layout.
+    if crate::walker::is_notes_document(crate::workspace_mint::basename(&path))
+        || crate::layout_sync::is_layout_document(&path)
+    {
         return commit_notes_file(ws, &path, ops);
     }
     let Some(handle) = get_or_create_actor(ws, &path) else {

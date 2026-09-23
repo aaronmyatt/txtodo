@@ -42,6 +42,19 @@ impl Daemon {
             .bytes
     }
 
+    /// `WorkspaceLayout`: read (`set: false`) or set the workspace's layout (task
+    /// workspace-layout, `txtodo.toml` sync).
+    pub async fn workspace_layout(
+        &mut self,
+        req: pb::WorkspaceLayoutRequest,
+    ) -> pb::WorkspaceLayoutInfo {
+        self.client
+            .workspace_layout(req)
+            .await
+            .unwrap_or_else(|e| panic!("workspace_layout: {e}"))
+            .into_inner()
+    }
+
     /// The paths of every document the daemon has registered.
     pub async fn documents(&mut self) -> Vec<String> {
         self.client

@@ -49,6 +49,10 @@ impl Workspace {
                 started += 1;
             }
         }
+        // The root's layout file syncs as a document too (`layout_sync.rs`).
+        if dir == self.root() {
+            crate::layout_sync::seed_layout(self);
+        }
         Ok(started)
     }
 
@@ -57,7 +61,7 @@ impl Workspace {
     /// without that a hand-written notes.md has nothing for a peer to fetch. Never fatal: a
     /// notes file that will not open (too large, unreadable) is logged and left for `GetNotes`
     /// to report; it must not stop the workspace from opening.
-    fn seed_notes(&self, path: &FilePath) {
+    pub(crate) fn seed_notes(&self, path: &FilePath) {
         if let Err(e) = self.notes_actor(path) {
             tracing::warn!(file = %path, error = %e, "notes_seed_failed");
         }

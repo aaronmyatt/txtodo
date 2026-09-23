@@ -57,7 +57,7 @@ impl MultiWorkspaceDaemon {
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()
-            .expect("spawn txtodod");
+            .unwrap_or_else(|e| panic!("spawn txtodod: {e}"));
         let start = Instant::now();
         while !socket.exists() {
             assert!(
@@ -112,31 +112,38 @@ fn path_selector(path: &Path) -> pb::WorkspaceSelector {
 /// `debug_set_group_key` call can change it — `WorkspaceRoute.group` is never re-read live, so the
 /// file carrier would seal/open frames under the wrong group forever.
 pub fn seed_group_id_at(state_dir: &Path, group_id: u128) {
-    std::fs::create_dir_all(state_dir).expect("create state dir");
+    std::fs::create_dir_all(state_dir).unwrap_or_else(|e| panic!("create state dir: {e}"));
     let mut identity = txtodo_store::IdentityStore::open(&state_dir.join("identity.db"))
-        .expect("open identity store");
+        .unwrap_or_else(|e| panic!("open identity store: {e}"));
     identity
         .meta_set(
             txtodo_daemon::device_identity::GROUP_ID_KEY,
             &group_id.to_be_bytes(),
         )
-        .expect("seed group id");
+        .unwrap_or_else(|e| panic!("seed group id: {e}"));
 }
 
 /// Pre-registers `root` under `workspace_id` — the global-registry counterpart of
 /// `seed_workspace_id`.
 pub fn seed_workspace_at(registry_db: &Path, root: &Path, workspace_id: u128) {
-    std::fs::create_dir_all(registry_db.parent().expect("registry_db has a parent"))
-        .expect("create registry dir");
-    let canonical = root.canonicalize().expect("canonicalize root");
-    let mut registry = txtodo_store::Registry::open(registry_db).expect("open registry");
+    std::fs::create_dir_all(
+        registry_db
+            .parent()
+            .unwrap_or_else(|| panic!("registry_db has a parent")),
+    )
+    .unwrap_or_else(|e| panic!("create registry dir: {e}"));
+    let canonical = root
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("canonicalize root: {e}"));
+    let mut registry =
+        txtodo_store::Registry::open(registry_db).unwrap_or_else(|e| panic!("open registry: {e}"));
     registry
         .insert(&txtodo_store::NewWorkspaceEntry {
             id: txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(workspace_id)),
             root: canonical.to_string_lossy().into_owned(),
             added_at_ms: 0,
         })
-        .expect("seed workspace id");
+        .unwrap_or_else(|e| panic!("seed workspace id: {e}"));
 }
 
 pub async fn debug_set_group_key(
@@ -152,7 +159,7 @@ pub async fn debug_set_group_key(
             workspace: Some(path_selector(workspace)),
         })
         .await
-        .expect("debug_set_group_key");
+        .unwrap_or_else(|e| panic!("debug_set_group_key: {e}"));
 }
 
 /// `Health` is per-workspace on the wire (`HealthRequest.workspace`), but every open workspace's
@@ -167,7 +174,7 @@ pub async fn health_at(client: &mut MultiClient, workspace: &Path) -> pb::Health
             workspace: Some(path_selector(workspace)),
         })
         .await
-        .expect("health")
+        .unwrap_or_else(|e| panic!("health: {e}"))
         .into_inner()
 }
 
@@ -178,7 +185,7 @@ pub async fn file_at(client: &mut MultiClient, workspace: &Path) -> Vec<u8> {
             workspace: Some(path_selector(workspace)),
         })
         .await
-        .expect("get_file")
+        .unwrap_or_else(|e| panic!("get_file: {e}"))
         .into_inner()
         .bytes
 }

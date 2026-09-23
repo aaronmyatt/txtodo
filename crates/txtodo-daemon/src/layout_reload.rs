@@ -53,6 +53,10 @@ pub(crate) fn is_layout_file(root: &Path, path: &Path) -> bool {
 pub(crate) async fn reload_layout(ws: &SharedWorkspace) {
     let (root, shared, root_actor) = {
         let guard = ws.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Whatever the file now says reaches paired devices, applied here or not
+        // (`layout_sync.rs`); a peer's own import already holds the bytes, so this is then a no-op.
+        let device = guard.device();
+        crate::layout_sync::record_disk(&guard, txtodo_model::Principal::External { device });
         let shared = guard.layout().clone();
         let root_list = shared.get().root_list();
         (

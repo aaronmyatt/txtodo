@@ -46,6 +46,11 @@ impl TxtodoService {
                 }
                 moved = relocate(&root, (&current, &new), &slugs, req.move_dirs)?;
                 write_layout_file(&root, &new)?;
+                // The new bytes go to paired devices as an op (`layout_sync.rs`).
+                let ws = self.workspace();
+                let device = ws.device();
+                crate::layout_sync::record_disk(&ws, txtodo_model::Principal::User { device });
+                drop(ws);
                 shared.set(new);
                 shared.set_note(None);
                 if list_changed {

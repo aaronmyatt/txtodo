@@ -95,6 +95,23 @@ Known gaps:
 
 - `todo_file` in a subdirectory is untested end to end in the clients.
 - MCP resource URIs (`todotxt://todo.txt`) still name the file in the URI; only the tool and prompt defaults follow the layout.
-- `txtodo.toml` is not synced between devices. Notes have the same limit today: a `notes.md` edited on disk is not an op, and a `notes.md` op is dropped by a receiver with no actor for it.
+- (2026-09-23: `txtodo.toml` now syncs, see the As built below; notes.md sync landed in task notes-sync the same day.)
 - The desktop refetches the layout on a workspace change, not when the file changes. Its visual-regression goldens (light and dark) fail and were not regenerated.
 - The daemon installed on this machine is the old build; this repo behaves as described only after `just install-daemon`.
+
+## As built (2026-09-23): `txtodo.toml` sync
+
+- `txtodo.toml` is one more whole-text document, owned by a `NotesActor` under the path
+  `txtodo.toml` (`layout_sync.rs`), so its bytes travel as `NotesEdit` ops like a hand-written
+  notes.md (task notes-sync). No new wire format.
+- Seams: `Workspace::register_discovered` seeds the actor when the file exists; the layout RPC
+  and the watcher's `reload_layout` record the bytes on disk as an op (`record_disk`, a no-op
+  when the actor already holds them); `lan_apply` routes a peer's ops for the path through the
+  notes actor, whose commit writes the file, and the watcher hot-reloads it.
+- Proven by `tests/layout_sync.rs`: a fresh device gets the file at pairing and its layout follows
+  it; `refs_dir` set on one device reaches the other's file and layout in force.
+- Known gaps: a deleted `txtodo.toml` stays deleted on that device only (recording it would open
+  an actor that writes an empty file back, which reads as the default layout); a change the
+  receiver refuses (ref dirs in the old place) lands on disk with a note but is not the layout in
+  force, and nothing moves the dirs remotely; two devices editing the file at once merge
+  char-wise, which can produce a TOML neither wrote (then "keeping the last good layout").
