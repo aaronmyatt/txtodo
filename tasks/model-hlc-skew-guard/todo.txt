@@ -1,4 +1,3 @@
-2026-09-12 Confirm the guard reads as refuse-the-peer on Hello, not drop-the-op; record the answer in ./notes.md before coding +m4 @model @human
 x 2026-09-12 2026-09-12 Turn HlcError into an enum: Overflow { wall_ms } and PeerAhead { peer_ms, local_ms, bound_ms }, Display naming both clocks and the bound +m4 @model
 x 2026-09-12 2026-09-12 Add MAX_PEER_SKEW_AHEAD_MS and MAX_PEER_SKEW_BEHIND_MS consts at 5 min, units in the name +m4 @model
 x 2026-09-12 2026-09-12 Hlc::merge(&mut self, remote: Hlc, now_ms: u64) per Kulkarni section 3, asserting result > self and result > remote and device unchanged +m4 @model
@@ -9,3 +8,4 @@ x 2026-09-12 2026-09-12 Table tests for the four merge branches, plus a failed m
 x 2026-09-12 2026-09-12 proptest: merging a then b and b then a both yield a stamp greater than self, a and b +m4 @model @test
 x 2026-09-12 2026-09-12 Test: a peer 5 min 1 ms ahead is rejected, 4 min 59 s ahead is accepted, 1 day behind merges with a warning +m4 @model @test
 x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @model
+x 2026-09-24 2026-09-12 Confirm the guard reads as refuse-the-peer on Hello, not drop-the-op; record the answer in ./notes.md before coding +m4 @model @human — 2026-09-24: settled by code — refuse the peer (SessionError::PeerAhead on Hello, txtodo-sync session.rs:223); no op is dropped

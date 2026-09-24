@@ -1,4 +1,3 @@
-2026-09-12 Decide whether mine means this device or this user; record it in ./notes.md before the CLI lands +m4 @crdt @human
 x 2026-09-12 2026-09-12 concurrent.rs: pairwise concurrency from Loro frontiers, never from Hlc; a doc comment saying why Hlc cannot answer this +m4 @crdt
 x 2026-09-12 2026-09-12 overlap.rs: map each concurrent EditText onto char ranges in the merged text and report overlapping or adjacent pairs +m4 @crdt
 x 2026-09-12 2026-09-12 MAX_REVIEW_FLAGS_PER_FILE const, asserted; past the cap flag the file once instead of every task +m4 @crdt
@@ -13,3 +12,4 @@ x 2026-09-12 2026-09-12 Test: two devices edit the same word offline, merge, exa
 x 2026-09-12 2026-09-12 Test: two devices edit different words, no flag; sequential edits to the same word, no flag +m4 @crdt @test
 x 2026-09-12 2026-09-12 Test: resolve merged writes no op; resolve mine writes one EditText and the second resolve is a no-op +m4 @cli @test
 x 2026-09-12 2026-09-12 Complete the parent line in ./todo.txt +m4 @crdt @cli
+x 2026-09-24 2026-09-12 Decide whether mine means this device or this user; record it in ./notes.md before the CLI lands +m4 @crdt @human — 2026-09-24: settled by code — this device (txtodo.proto:266, cli conflicts.rs:5); known gap: ReviewFlag carries no device name, so sides are not labelled by device

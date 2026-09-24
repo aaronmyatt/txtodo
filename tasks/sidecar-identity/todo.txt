@@ -1,5 +1,4 @@
 2026-09-12 crates/txtodo-crdt/src/identity.rs: IdentityMode enum, Fingerprint struct, CostWeights struct, and assign() signature +m10 @crdt
-2026-09-12 Answer plan §6 Q2 in docs/questions.md: sidecar confidence threshold and cost weights +m10 @human
 2026-09-12 Build the cost matrix: date-equality + Jaccard project/context overlap + normalised Levenshtein + |i-j| position, padded to square +m10 @crdt
 2026-09-12 Solve the assignment with the munkres Hungarian algorithm and drop matches above match_threshold into delete+insert +m10 @crdt
 2026-09-12 txtodo-store migration: fingerprint_index table mapping Fingerprint -> TaskId, rebuildable from files +m10 @store
@@ -11,3 +10,4 @@
 2026-09-12 Test: sidecar-mode runs of the M4 sync simulator assert convergence and no-loss with zero failures +m10 @crdt @test
 2026-09-12 Add munkres as a dependency with human sign-off and a cargo deny pass +m10 @crdt
 2026-09-12 Complete the parent line in ./todo.txt +m10 @crdt
+x 2026-09-24 2026-09-12 Answer plan §6 Q2 in docs/questions.md: sidecar confidence threshold and cost weights +m10 @human — 2026-09-24: settled — answered 2026-09-13 in docs/questions.md (ADR 0015, superseded by 0019); constants in txtodo-model identity.rs:63

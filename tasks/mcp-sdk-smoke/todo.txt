@@ -1,4 +1,4 @@
-2026-09-20 Approve rmcp client features as dev-dependencies of txtodo-mcp (test-only); I'd approve +m6 @human @mcp
-2026-09-20 txtodo-mcp: add the dev-dependencies to Cargo.toml; deny.toml and the dependency budget stay green +m6 @mcp
+2026-09-20 txtodo-mcp: add the dev-dependencies to Cargo.toml; deny.toml and the dependency budget stay green +m6 @mcp @doing by:claude
 2026-09-20 txtodo-mcp: test — the rmcp client over stdio lists the tools and calls todo_list and todo_add on a real daemon +m6 @mcp @test
 2026-09-20 txtodo-mcp: test — the same client over Streamable HTTP on 127.0.0.1 +m6 @mcp @test
+x 2026-09-24 2026-09-20 Approve rmcp client features as dev-dependencies of txtodo-mcp (test-only); I'd approve +m6 @human @mcp — 2026-09-24: approved (human). rmcp's client feature was already on (tests/smoke.rs); stdio needs no new feature, HTTP needs transport-streamable-http-client-reqwest as a dev-dep
