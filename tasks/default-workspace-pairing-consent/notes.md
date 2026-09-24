@@ -41,3 +41,17 @@ That one is independent of the decision above and can ship either way.
 The reserved-id guard itself (`9116a6a`, "PairAccept never rekeys the default workspace off its
 reserved id") is correct, and the reverse collision is caught by `registry.adopt`. The gap is the
 missing consent step, not the guard.
+
+## Decided 2026-09-24 (human): A
+
+- Pairing asks "is this your own device?" (CLI `pair`, TUI, desktop). The answer rides the
+  handshake and is stored on the `devices` row.
+- The default workspace merges by its reserved id only when **both** sides marked each other as
+  own-device. Mismatched answers take the stricter reading: no merge.
+- Any other peer gets the default offered like a normal workspace. Under
+  `ref:remote-workspace-mirror` (same day) that means it lands as a separate Remote mirror at
+  `<data dir>/remote/<workspace-id>/`. Your own default never merges into theirs.
+- Migration: devices paired before this ships count as own-device. Pairing with a foreign device
+  has not been a supported flow, so that is today's truth.
+- ADR 0029 needs a short amendment: the reserved id converges only between own devices.
+- Open, not decided: can a user flip the flag after pairing? Not asked; leave it off until wanted.

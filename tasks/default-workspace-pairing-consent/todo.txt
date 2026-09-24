@@ -1,2 +1,6 @@
-2026-09-21 Decide: does the default workspace sync on a pairing, or need its own accept @human
 2026-09-21 PairAccept tells the caller when the offered id was not adopted
+x 2026-09-24 Decide: does the default workspace sync on a pairing, or need its own accept @human — decided 2026-09-24 (human): A, pairing asks "your own device?"; yes merges the default, no mirrors their default as a Remote entry
+2026-09-24 pairing: ask "is this your own device?" in txtodo pair, the TUI and desktop; carry the answer in the handshake and store it on the devices row +m8 @daemon @cli @tui @desktop
+2026-09-24 daemon: the default workspace merges only with a peer both sides marked own-device; any other peer gets the default offered like a normal workspace (lands as a Remote mirror, ref:remote-workspace-mirror) +m8 @daemon @security
+2026-09-24 migration: devices paired before this ship count as own-device (they are today's only use); doctor/device list shows the flag +m8 @daemon @cli
+2026-09-24 docs: amend ADR 0029 — the reserved default id converges only between own-device peers +m8 @docs

@@ -45,6 +45,21 @@ Decided 2026-09-23 (human):
   `WorkspaceId` or losing sync — same identity-preservation constraint `default-workspace`
   documented as unaddressed for its own directory.
 
+## Adjusted 2026-09-24 (human)
+
+- **Always separate, always in the data dir.** Every workspace synced from another device lands at
+  `<data dir>/remote/<workspace-id>/` (sibling of `<data dir>/default/`) and shows as its own
+  Remote entry in every workspace list. No path is ever user-chosen on the receiving side.
+- Auto-accept is now unconditional, not "only when `local_dir` is omitted".
+- So `workspace accept --dir`, the TUI accept pane's directory prompt, and
+  `WorkspaceAcceptOfferRequest.local_dir` go (reserve the proto field, don't reuse the number).
+- `relocate` is dropped: it existed only to move a mirror onto a user path, which "always" rules out.
+- Exception, decided 2026-09-24 (human, option A): the *default* workspace keeps merging by ADR
+  0029's reserved id — it is the one list shared across your devices, never a Remote entry. No
+  ADR 0029 amendment needed. The foreign-device consent worry stays with
+  `ref:default-workspace-pairing-consent`, which this does not settle.
+- Unchanged: accept/decline RPCs stay (decline still means "don't mirror this one").
+
 ## Dependency
 
 Needs `ref:workspace-offer-cli`'s `accept` command to exist first — this line's "no --dir" default
