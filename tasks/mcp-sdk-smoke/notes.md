@@ -25,3 +25,18 @@ Proof that a stock MCP client works against txtodo over both stdio and Streamabl
 
 - Not checked yet: which rmcp features the client needs and whether they pull new transitive
   dependencies past `deny.toml`. The dependency line finds out.
+
+## As built (2026-09-24)
+
+- `crates/txtodo-mcp/tests/sdk_client.rs`, two `#[ignore]`d tests (CI-only, like every sibling
+  real-daemon test). Each starts `txtodod --dir <ws> --no-lan --no-relay` in a short `/tmp` dir
+  (socket path under 100 chars), lists tools, calls `todo_add`, then `todo_list` finds the line.
+- Stdio: spawns the real `txtodo-mcp --stdio` binary and hands its stdout/stdin to rmcp's client.
+  Also checks the binary exits 0 once the client cancels.
+- HTTP: `serve_http` in-process on a free loopback port, rmcp's `StreamableHttpClientTransport`.
+- Dev-deps: rmcp `transport-streamable-http-client-reqwest` (reqwest was already in the lockfile,
+  no TLS turned on; 0 new crates) and tokio `process`/`time`. `cargo deny check` green.
+
+Known gaps:
+- The `--http` binary's own startup is untested: it always binds port 8636, so a test can't pick one.
+- Only the `--dir` daemon shape is tested; `--global` and no-flag are not.

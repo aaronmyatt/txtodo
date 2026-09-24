@@ -6,6 +6,6 @@
 (D) 2026-09-15 Phase 2 flip: access.http pointing at the accounts container over the Docker network, with IROH_RELAY_HTTP_BEARER_TOKEN set; keep access.allowlist in the file as documented break-glass +m8 @ops @relay
 (D) 2026-09-15 Deploy runbook in docs/: what to run, what to check, how to roll back, and how to revoke a device in a hurry +m8 @ops @docs
 (D) 2026-09-15 Verify for real: a node id in the allowlist syncs across two networks; one not in it is refused and says so in the relay's log +m8 @ops @test
-(D) 2026-09-20 Blocked: relay-id-keystore (default --key-store auto, decided 2026-09-20); seed no allowlist until the relay node id survives a restart +m8 @relay @human
 (D) 2026-09-20 Check the relay node id is the same in txtodo doctor before and after a txtodod restart +m8 @relay @test
 (D) 2026-09-15 Complete the parent line in ./todo.txt +m8 @ops
+x 2026-09-24 2026-09-20 Blocked: relay-id-keystore (default --key-store auto, decided 2026-09-20); seed no allowlist until the relay node id survives a restart +m8 @relay @human pri:D — 2026-09-24: unblocked; the relay node id survives a restart on the OS keychain (relay-id-keystore line 1 PASS), so an allowlist entry now stays valid

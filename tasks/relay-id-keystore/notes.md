@@ -116,3 +116,14 @@ fresh on every start, and a relay `access.allowlist` entry goes stale each time.
 - Seen in passing: the desktop Playwright suite on this Mac hit exactly this hang (a rebuilt
   `txtodod` prompting under a test runner) — `TXTODO_TEST_KEYSTORE_MEMORY=1` in the Playwright env
   is the workaround; noted in `tasks/desktop-sublist-start/notes.md`.
+
+## 2026-09-24
+
+- Signing decided (human): self-sign for now with scripts/macos-selfsign.sh. A fixed identifier plus
+  one long-lived cert keeps the keychain's designated requirement stable, so "Always Allow" should
+  survive a reinstall. Not re-checked after a self-signed reinstall yet.
+- By-hand keychain check PASS: scripts/check-relay-id-keychain.sh, installed txtodod, id
+  8858f836… across two starts; the live launchd daemon reports the same id.
+- Desktop sidecar by hand: with the launchd daemon stopped, the app's bundled txtodod reported the
+  same id with no keychain prompt, so both binaries share the one keychain item. The app's second
+  launch attached to the launchd daemon instead, so the sidecar started once, not twice.
