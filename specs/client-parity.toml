@@ -1,0 +1,312 @@
+# Client parity manifest (NORMATIVE). The one list of user-facing actions, and where the desktop
+# app and the TUI each stand on every one of them. ADR 0031 (proposed until its decide line in
+# tasks/tui-revamp/todo.txt is signed). Plan: tasks/tui-revamp/parity-manifest/notes.md.
+#
+# Checked by crates/txtodo-tui/tests/parity.rs (every `tui.status = "done"` id is bound in
+# `keymap::BINDINGS` with the same keys, and the reverse) and apps/desktop/src/lib/keys.parity.test.ts
+# (the same against `keys.ts`). The TUI Help screen and the desktop Help page and Shortcuts card
+# render from this file. Change it in the same commit as the client change it describes; the client
+# that lags gets an `@parity` backlog line naming the action id. A deviation is never silent.
+#
+# TOML 1.0: https://toml.io/en/v1.0.0
+#
+# ---- [[action]]: one row per user-facing action --------------------------------------------------
+#
+#   id        Stable, dotted, lower case: `<scope>.<verb>` (`list.complete`, `search.next`). Never
+#             reused for another action. Also the TUI `:` palette command, so `:list.complete` runs
+#             it.
+#   title     What a user reads in Help and Shortcuts: a short imperative, sentence case.
+#   keys      The shared default bindings, canonical names (below). `[]` for an action with no key
+#             (click or menu only). Several entries are alternatives, not a sequence.
+#   scope     Where the keys work: `global` (anywhere outside a text field), `list` (the Tasks
+#             buffer in list mode), `edit` (editing a line's text), `search` (the search field),
+#             `prompt` (the prompt bar), `detail` (the detail panel), `universal` (the Universal
+#             screen), `settings` (the Settings screen), `sheet` (a modal sheet or popup).
+#   desktop   `{ status, surface }` for the desktop app, plus `keys` when its keys differ from
+#             the shared ones (then `status = "differs"`).
+#   tui       The same for the TUI.
+#   deviation One plain line, required whenever either status is `differs` or `na`: what differs
+#             and why. Empty otherwise.
+#
+#   status    `done`     built and bound as described
+#             `planned`  not built yet; the lagging client's backlog has an `@parity` line
+#             `differs`  built, but with other keys or behaviour; `deviation` says how
+#             `na`       cannot exist in this client (an OS-level feature); `deviation` says why
+#   surface   The component or screen that owns it: `FileView`, `Tasks`, `W popup`, `tray`, ...
+#
+# ---- key names ------------------------------------------------------------------------------------
+#
+#   A printable key is itself, case-sensitive: `x`, `G` (shift is implied by the capital), `/`, `?`.
+#   Named keys: `Enter`, `Esc`, `Space`, `Tab`, `Backspace`, `Delete`, `Up`, `Down`, `Left`,
+#   `Right`, `Home`, `End`, `PageUp`, `PageDown`.
+#   Modifiers join with `-`, in this order: `Mod-Ctrl-Alt-Shift-<key>`. `Mod` is Cmd on macOS and
+#   Ctrl elsewhere; `Ctrl` is Ctrl everywhere. Shift is written only with a named key or a symbol
+#   (`Shift-Enter`, `Mod-Shift-Space`), never with a letter.
+#   A chord is its keys separated by one space: `g g`, `d d`, `g t` (the second key within 900 ms).
+#
+# ---- [[screen]]: one row per desktop surface and its TUI counterpart ------------------------------
+#
+#   desktop   The desktop surface (component, page or window).
+#   tui       Where the same thing lives in the TUI: a screen, a popup, a panel, or `na`.
+#   note      Why the shape differs, when it does. Empty otherwise.
+
+# ==== Tasks: list mode (seeded from the TUI as of 2026-09-24: input.rs, ui/list.rs) ===============
+# Desktop gains list mode as `@parity` lines (tasks/tui-revamp/notes.md, "Decisions").
+
+[[action]]
+id = "list.down"
+title = "Next line"
+keys = ["j", "Down"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.up"
+title = "Previous line"
+keys = ["k", "Up"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.first"
+title = "First line"
+keys = ["g g"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.last"
+title = "Last line"
+keys = ["G"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.edit_start"
+title = "Edit the line, caret at the start"
+keys = ["i"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.edit_end"
+title = "Edit the line, caret at the end"
+keys = ["a", "A"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.delete"
+title = "Delete the line"
+keys = ["d d"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "list.toggle_complete"
+title = "Complete or reopen the line"
+keys = ["x", "Space"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "differs", surface = "Tasks", keys = ["Space"] }
+deviation = "The TUI binds only Space until tui-tasks adds x (the c2 key)."
+
+[[action]]
+id = "list.move_down"
+title = "Move the line down"
+keys = ["J", "Alt-Down"]
+scope = "list"
+desktop = { status = "differs", surface = "FileView", keys = ["Alt-Down"] }
+tui = { status = "differs", surface = "Tasks", keys = ["J"] }
+deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet; the TUI adds Alt-Down in tui-tasks."
+
+[[action]]
+id = "list.move_up"
+title = "Move the line up"
+keys = ["K", "Alt-Up"]
+scope = "list"
+desktop = { status = "differs", surface = "FileView", keys = ["Alt-Up"] }
+tui = { status = "differs", surface = "Tasks", keys = ["K"] }
+deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet; the TUI adds Alt-Up in tui-tasks."
+
+# ==== Editing a line ===============================================================================
+
+[[action]]
+id = "edit.commit"
+title = "Save the edit"
+keys = ["Enter"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView", keys = ["Mod-s"] }
+tui = { status = "done", surface = "Tasks" }
+deviation = "Desktop edits the whole buffer in CodeMirror, where Enter is a new line: Mod-s or blur saves."
+
+[[action]]
+id = "edit.cancel"
+title = "Discard the edit"
+keys = ["Esc"]
+scope = "edit"
+desktop = { status = "done", surface = "FileView" }
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
+
+# ==== Panes the revamp replaces (TUI as of 2026-09-24) =============================================
+
+[[action]]
+id = "conflicts.open"
+title = "Review conflicts"
+keys = ["r"]
+scope = "list"
+desktop = { status = "differs", surface = "ConflictBanner", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop opens the review sheet from the conflict banner's button; the TUI's r pane becomes the same banner and sheet in tui-tasks."
+
+[[action]]
+id = "conflicts.down"
+title = "Next conflict"
+keys = ["j", "Down"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop lists every conflict at once; there is nothing to move through."
+
+[[action]]
+id = "conflicts.up"
+title = "Previous conflict"
+keys = ["k", "Up"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop lists every conflict at once; there is nothing to move through."
+
+[[action]]
+id = "conflicts.keep_mine"
+title = "Keep mine"
+keys = ["m"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop: a button per conflict, no key."
+
+[[action]]
+id = "conflicts.keep_theirs"
+title = "Keep theirs"
+keys = ["t"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop: a button per conflict, no key."
+
+[[action]]
+id = "conflicts.keep_merged"
+title = "Keep the merged text"
+keys = ["M"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
+tui = { status = "done", surface = "r pane" }
+deviation = "Desktop: a button per conflict, no key."
+
+[[action]]
+id = "conflicts.close"
+title = "Close the conflict review"
+keys = ["Esc", "r"]
+scope = "sheet"
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = ["Esc"] }
+tui = { status = "done", surface = "r pane" }
+deviation = "r toggles the TUI pane; desktop closes the sheet with Esc or its close button."
+
+[[action]]
+id = "offers.open"
+title = "Workspace offers from paired devices"
+keys = ["o"]
+scope = "list"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "offers.down"
+title = "Next offer"
+keys = ["j", "Down"]
+scope = "sheet"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "offers.up"
+title = "Previous offer"
+keys = ["k", "Up"]
+scope = "sheet"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "offers.accept"
+title = "Accept the offer"
+keys = ["a"]
+scope = "sheet"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "offers.decline"
+title = "Decline the offer"
+keys = ["d"]
+scope = "sheet"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "offers.close"
+title = "Close the offers"
+keys = ["Esc", "o"]
+scope = "sheet"
+desktop = { status = "planned", surface = "Settings > Devices", keys = [] }
+tui = { status = "done", surface = "o pane" }
+deviation = ""
+
+[[action]]
+id = "sync.open"
+title = "Sync details"
+keys = ["s"]
+scope = "list"
+desktop = { status = "planned", surface = "status footer", keys = [] }
+tui = { status = "done", surface = "s pane" }
+deviation = ""
+
+# ==== App ==========================================================================================
+
+[[action]]
+id = "palette.open"
+title = "Command palette: run any action by id"
+keys = [":"]
+scope = "global"
+desktop = { status = "na", surface = "" }
+tui = { status = "done", surface = "command line" }
+deviation = "A vim-style command line is a terminal convention; desktop reaches every action by key or click."
+
+[[action]]
+id = "app.quit"
+title = "Quit"
+keys = []
+scope = "global"
+desktop = { status = "na", surface = "" }
+tui = { status = "done", surface = "command line (:q)" }
+deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q (and Ctrl-C once tui-foundation lands)."
