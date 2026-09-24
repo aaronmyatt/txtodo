@@ -134,3 +134,31 @@ fn set_relay_reachability_round_trips_and_reports_false_for_an_unknown_device() 
             .unwrap()
     );
 }
+
+/// Task `default-workspace-pairing-consent`: the own-device flag is recorded with the registration,
+/// a re-pairing overwrites it, a plain `register_device` (and so every row that predates the
+/// question) reads as own, and an unknown device never does.
+#[test]
+fn the_own_device_flag_is_stored_with_the_registration() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut identity = open(dir.path());
+    identity
+        .register_device_as(&new_device(1, 1, 1_000), false)
+        .unwrap();
+    identity.register_device(&new_device(2, 2, 1_000)).unwrap();
+    assert!(!identity.is_own_device(device(1)).unwrap());
+    assert!(
+        identity.is_own_device(device(2)).unwrap(),
+        "the column default: rows from before the question count as own"
+    );
+    assert!(!identity.is_own_device(device(3)).unwrap(), "unknown");
+
+    identity
+        .register_device_as(&new_device(1, 1, 2_000), true)
+        .unwrap();
+    assert!(
+        identity.is_own_device(device(1)).unwrap(),
+        "re-paired as own"
+    );
+    assert_eq!(identity.list_devices().unwrap().len(), 2);
+}

@@ -23,13 +23,25 @@ use crate::{DeviceRow, NewDevice, StoreError};
 
 /// The schema version this build writes and expects, for the identity database specifically —
 /// independent of [`crate::Store`]'s own `SCHEMA_VERSION`, since it is a different file.
-const IDENTITY_SCHEMA_VERSION: i64 = 2;
+const IDENTITY_SCHEMA_VERSION: i64 = 3;
 /// Every identity-store migration in order, embedded so the binary is self-contained; mirrors
 /// [`crate::Registry`]'s own `REGISTRY_MIGRATIONS` array.
-const IDENTITY_MIGRATIONS: [(i64, &str); 2] = [
+const IDENTITY_MIGRATIONS: [(i64, &str); 3] = [
     (1, include_str!("../identity_migrations/0001.sql")),
     (2, include_str!("../identity_migrations/0002.sql")),
+    (3, include_str!("../identity_migrations/0003.sql")),
 ];
+/// [`IdentityStore::register_device_as`]'s upsert: [`UPSERT_DEVICE`] plus the own-device flag,
+/// which a re-pairing overwrites like every other registration fact.
+const UPSERT_DEVICE_OWN: &str = "INSERT INTO devices \
+     (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at, \
+      relay_node_id, relay_url, own_device) \
+     VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, NULL, NULL, NULL, ?7) \
+     ON CONFLICT(device) DO UPDATE SET name = excluded.name, static_public = excluded.static_public, \
+     paired_at = excluded.paired_at, last_seen = excluded.last_seen, \
+     last_known_wall = excluded.last_known_wall, key_epoch = excluded.key_epoch, removed_at = NULL, \
+     own_device = excluded.own_device";
+const SELECT_OWN: &str = "SELECT own_device FROM devices WHERE device = ?1";
 
 const SELECT_META: &str = "SELECT value FROM meta WHERE key = ?1";
 const UPSERT_DEVICE: &str = "INSERT INTO devices \
@@ -144,6 +156,41 @@ impl IdentityStore {
             )
             .map_err(StoreError::query("register device"))?;
         Ok(())
+    }
+
+    /// [`Self::register_device`], also recording whether both sides called each other their own
+    /// device (task `default-workspace-pairing-consent`) — in the same statement, so a peer is never
+    /// on record without its answer. `register_device` alone leaves the flag at the column default,
+    /// own, the migration's reading for rows that predate the question.
+    pub fn register_device_as(&mut self, new: &NewDevice, own: bool) -> Result<(), StoreError> {
+        self.conn
+            .execute(
+                UPSERT_DEVICE_OWN,
+                params![
+                    device_blob(new.device),
+                    new.name,
+                    new.static_public.to_vec(),
+                    crate::ops::wall_i64(new.paired_at_ms),
+                    new.last_known_wall_ms.map(crate::ops::wall_i64),
+                    new.key_epoch,
+                    own,
+                ],
+            )
+            .map_err(StoreError::query("register device"))?;
+        Ok(())
+    }
+
+    /// Whether `device` is on record as this user's own device. `false` for an unknown device: the
+    /// default workspace never merges with a peer this store has not heard of.
+    pub fn is_own_device(&self, device: DeviceId) -> Result<bool, StoreError> {
+        Ok(self
+            .conn
+            .query_row(SELECT_OWN, params![device_blob(device)], |r| {
+                r.get::<_, bool>(0)
+            })
+            .optional()
+            .map_err(StoreError::query("select own device"))?
+            .unwrap_or(false))
     }
 
     /// Every known device, oldest-paired first, at most [`MAX_DEVICES_PER_READ`]. Includes

@@ -78,7 +78,11 @@ that entry below.
   log/projections/tokens/fingerprints tables at all — this store's only job is the identity a
   device now shares across every workspace it opens; `txtodo-daemon`'s
   `device_identity.rs` resolves where the file lives and owns id/group minting, the same split
-  `workspace_registry.rs` has with `Registry`.
+  `workspace_registry.rs` has with `Registry`. Own-device flag (task
+  `default-workspace-pairing-consent`, `identity_migrations/0003.sql`, schema 3): `devices.own_device`
+  defaults to 1, so every row that predates it counts as own; `register_device_as(new, own)` records
+  it with the registration, `is_own_device(id)` reads it (`false` for an unknown device). An older
+  build refuses a schema-3 file (`SchemaTooNew`), so a downgrade after this needs the column gone.
 
 ## Invariants
 - Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/oplog.rs greps).
