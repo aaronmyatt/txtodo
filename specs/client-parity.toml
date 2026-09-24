@@ -310,3 +310,222 @@ scope = "global"
 desktop = { status = "na", surface = "" }
 tui = { status = "done", surface = "command line (:q)" }
 deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q (and Ctrl-C once tui-foundation lands)."
+
+# ==== Revamp plan (tasks/desktop-ui-revamp/notes.md "Keyboard map", c2 footer hints) ===============
+# Neither client has these yet; the TUI builds them first (tasks/tui-revamp).
+
+[[action]]
+id = "search.focus"
+title = "Search"
+keys = ["/"]
+scope = "global"
+desktop = { status = "planned", surface = "header search" }
+tui = { status = "planned", surface = "header search" }
+deviation = ""
+
+[[action]]
+id = "search.next"
+title = "Next match"
+keys = ["Enter"]
+scope = "search"
+desktop = { status = "planned", surface = "header search" }
+tui = { status = "planned", surface = "header search" }
+deviation = ""
+
+[[action]]
+id = "search.prev"
+title = "Previous match"
+keys = ["Shift-Enter"]
+scope = "search"
+desktop = { status = "planned", surface = "header search" }
+tui = { status = "planned", surface = "header search" }
+deviation = ""
+
+[[action]]
+id = "search.clear"
+title = "Clear the search, then leave it"
+keys = ["Esc"]
+scope = "search"
+desktop = { status = "planned", surface = "header search" }
+tui = { status = "planned", surface = "header search" }
+deviation = ""
+
+[[action]]
+id = "nav.tasks"
+title = "Go to Tasks"
+keys = ["g t"]
+scope = "global"
+desktop = { status = "planned", surface = "header tabs" }
+tui = { status = "planned", surface = "header tabs" }
+deviation = ""
+
+[[action]]
+id = "nav.universal"
+title = "Go to Universal"
+keys = ["g u"]
+scope = "global"
+desktop = { status = "planned", surface = "header tabs" }
+tui = { status = "planned", surface = "header tabs" }
+deviation = ""
+
+[[action]]
+id = "nav.settings"
+title = "Go to Settings"
+keys = ["g s"]
+scope = "global"
+desktop = { status = "planned", surface = "header tabs" }
+tui = { status = "planned", surface = "header tabs" }
+deviation = ""
+
+[[action]]
+id = "nav.help"
+title = "Help: keys, search operators, the prompt bar"
+keys = ["?"]
+scope = "global"
+desktop = { status = "planned", surface = "/help" }
+tui = { status = "planned", surface = "Help screen" }
+deviation = ""
+
+[[action]]
+id = "nav.workspace_menu"
+title = "Switch workspace"
+keys = ["W"]
+scope = "global"
+desktop = { status = "planned", surface = "header workspace menu" }
+tui = { status = "planned", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "prompt.focus"
+title = "Quick Add in the prompt bar"
+keys = ["Mod-Shift-Space"]
+scope = "global"
+desktop = { status = "planned", surface = "prompt bar" }
+tui = { status = "planned", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
+deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart."
+
+[[action]]
+id = "prompt.submit"
+title = "Add the line to this workspace"
+keys = ["Enter"]
+scope = "prompt"
+desktop = { status = "planned", surface = "prompt bar" }
+tui = { status = "planned", surface = "prompt bar" }
+deviation = ""
+
+[[action]]
+id = "prompt.cancel"
+title = "Leave the prompt bar"
+keys = ["Esc"]
+scope = "prompt"
+desktop = { status = "planned", surface = "prompt bar" }
+tui = { status = "planned", surface = "prompt bar" }
+deviation = ""
+
+[[action]]
+id = "detail.open"
+title = "Open the line's detail: sub-list and notes"
+keys = ["Enter", "Mod-Enter"]
+scope = "list"
+desktop = { status = "differs", surface = "FileView", keys = ["Mod-Enter"] }
+tui = { status = "planned", surface = "detail panel", keys = ["Enter", "Ctrl-Enter"] }
+deviation = "Desktop has no list mode yet, so only Mod-Enter from the buffer. A terminal cannot see Cmd: the TUI binds Ctrl-Enter."
+
+[[action]]
+id = "detail.close"
+title = "Close the detail"
+keys = ["Esc"]
+scope = "detail"
+desktop = { status = "done", surface = "DetailView" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "list.undo"
+title = "Undo the last change (the daemon's Undo)"
+keys = ["u"]
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "planned", surface = "Tasks" }
+deviation = ""
+
+[[action]]
+id = "edit.save"
+title = "Save the buffer now"
+keys = ["Mod-s"]
+scope = "edit"
+desktop = { status = "done", surface = "FileView" }
+tui = { status = "na", surface = "" }
+deviation = "The TUI edits one line at a time and Enter saves it; there is no whole-buffer edit to save."
+
+[[action]]
+id = "universal.down"
+title = "Next row"
+keys = ["j", "Down"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.up"
+title = "Previous row"
+keys = ["k", "Up"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.first"
+title = "First row"
+keys = ["Home"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.last"
+title = "Last row"
+keys = ["End"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.open"
+title = "Open the row on its line in its workspace"
+keys = ["Enter"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.complete"
+title = "Complete the row, with an Undo toast"
+keys = ["x"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "settings.filter"
+title = "Filter the settings cards"
+keys = ["/"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "planned", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "toast.undo"
+title = "Undo from a toast"
+keys = []
+scope = "global"
+desktop = { status = "planned", surface = "toast" }
+tui = { status = "planned", surface = "toast" }
+deviation = ""
