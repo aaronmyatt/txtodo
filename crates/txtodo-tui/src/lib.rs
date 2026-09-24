@@ -34,6 +34,7 @@ pub mod ui {
     pub mod mark;
     pub mod notes_edit;
     pub mod offers;
+    pub mod prompt_bar;
     pub mod row;
     pub mod screen;
     pub mod search_panel;
@@ -58,6 +59,7 @@ pub mod input;
 pub mod input_detail;
 pub mod keymap;
 pub mod mouse;
+pub mod prompt;
 pub mod search;
 pub mod search_suggest;
 

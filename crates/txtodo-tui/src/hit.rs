@@ -23,6 +23,8 @@ pub enum Target {
     Crumb(usize),
     /// A row of the detail panel's sub-list (`lines.len()` is its Add-a-line row).
     DetailRow(usize),
+    /// A prompt bar chip, by its index in `prompt::CHIPS`.
+    Chip(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

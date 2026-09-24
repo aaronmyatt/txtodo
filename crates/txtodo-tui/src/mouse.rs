@@ -78,6 +78,10 @@ impl Mouse {
                 return None;
             }
             Target::Crumb(keep) => return crate::commands_detail::leave(state, keep),
+            Target::Chip(index) => {
+                crate::prompt::apply(state, index);
+                return None;
+            }
             Target::DetailRow(index) => return self.press_sub_row(state, index, ev, now),
             Target::Inert => return None,
         };
@@ -152,6 +156,7 @@ fn row_of(target: Option<Target>) -> Option<usize> {
         | Target::Suggestion(_)
         | Target::Crumb(_)
         | Target::DetailRow(_)
+        | Target::Chip(_)
         | Target::Inert => None,
     }
 }

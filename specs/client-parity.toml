@@ -447,7 +447,7 @@ title = "Quick Add in the prompt bar"
 keys = ["Mod-Shift-Space"]
 scope = "global"
 desktop = { status = "planned", surface = "prompt bar" }
-tui = { status = "planned", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
+tui = { status = "differs", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
 deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart."
 
 [[action]]
@@ -456,7 +456,7 @@ title = "Add the line to this workspace"
 keys = ["Enter"]
 scope = "prompt"
 desktop = { status = "planned", surface = "prompt bar" }
-tui = { status = "planned", surface = "prompt bar" }
+tui = { status = "done", surface = "prompt bar" }
 deviation = ""
 
 [[action]]
@@ -465,7 +465,7 @@ title = "Leave the prompt bar"
 keys = ["Esc"]
 scope = "prompt"
 desktop = { status = "planned", surface = "prompt bar" }
-tui = { status = "planned", surface = "prompt bar" }
+tui = { status = "done", surface = "prompt bar" }
 deviation = ""
 
 [[action]]
@@ -673,8 +673,8 @@ title = "Insert a chip: (A) (B) (C) x + @ due: t: rec:"
 keys = []
 scope = "prompt"
 desktop = { status = "done", surface = "Quick Add window (EditPopover)" }
-tui = { status = "planned", surface = "prompt bar" }
-deviation = ""
+tui = { status = "done", surface = "prompt bar" }
+deviation = "The TUI also takes Alt and a chip key in the field (a b c x p o d t r); desktop clicks them."
 
 [[action]]
 id = "edit.undo"

@@ -14,8 +14,8 @@ use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, conflict_sheet, detail, footer, header, list, offers, search_panel, subbar, sync,
-    toast, workspace_menu,
+    banner, conflict_sheet, detail, footer, header, list, offers, prompt_bar, search_panel, subbar,
+    sync, toast, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -25,10 +25,17 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
     let mut hits = HitMap::default();
     let banners = banner::banners(state);
     let banner_rows = u16::try_from(banners.len()).unwrap_or(u16::MAX);
-    let [header_area, banner_area, main_area, status_area] = Layout::vertical([
+    let [
+        header_area,
+        banner_area,
+        main_area,
+        prompt_area,
+        status_area,
+    ] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(banner_rows),
         Constraint::Min(1),
+        Constraint::Length(1),
         Constraint::Length(1),
     ])
     .areas(frame.area());
@@ -40,6 +47,7 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
     }
     let now = Instant::now();
     footer::draw(frame, status_area, state, now, &mut hits);
+    prompt_bar::draw(frame, prompt_area, state, now, &mut hits);
     toast::draw(frame, main_area, &state.shell, now, &mut hits);
     if state.sync_visible {
         sync::draw_popup(frame, main_area, &state.sync, &mut hits);
@@ -136,10 +144,10 @@ mod tests {
     use super::*;
     use crate::state::AppState;
 
-    /// Draws `state` on a 40x8 test terminal and returns the hit map.
+    /// Draws `state` on a 40x9 test terminal and returns the hit map.
     /// Ref: https://docs.rs/ratatui/latest/ratatui/backend/struct.TestBackend.html
     fn drawn(state: &AppState) -> HitMap {
-        let backend = ratatui::backend::TestBackend::new(40, 8);
+        let backend = ratatui::backend::TestBackend::new(40, 9);
         let mut terminal = ratatui::Terminal::new(backend).unwrap_or_else(|e| panic!("{e}"));
         let mut hits = HitMap::default();
         terminal
@@ -163,6 +171,11 @@ mod tests {
         assert_eq!(hits.at(0, 6), Some(Target::Row(4)), "the Add-a-line row");
         assert_eq!(
             hits.at(0, 7),
+            Some(Target::Command(crate::keymap::Command::PromptFocus)),
+            "the prompt bar"
+        );
+        assert_eq!(
+            hits.at(0, 8),
             Some(Target::Command(crate::keymap::Command::SyncOpen)),
             "the footer's status opens the sync popup"
         );

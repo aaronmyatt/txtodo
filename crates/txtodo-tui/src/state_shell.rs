@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 /// Everything the header and its popups draw from.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Shell {
     /// The open workspace's root, canonical, as `WorkspaceInfo.root` spells it.
     pub root: String,
@@ -13,6 +13,10 @@ pub struct Shell {
     pub search: String,
     /// This session's recent queries, newest first (the suggestions panel).
     pub recent_searches: Vec<String>,
+    /// The prompt bar's draft (task `tui-revamp/tui-prompt`); kept while it loses the keyboard.
+    pub prompt: crate::state::EditDraft,
+    /// When the prompt bar was last typed in: its strict hint waits for a pause.
+    pub prompt_typed_at: Option<Instant>,
     /// The `W` popup's rows, filled when it opens.
     pub menu: WorkspaceMenu,
     /// Whether the daemon's `Watch` stream is up.
@@ -99,6 +103,28 @@ impl Shell {
             self.changes.remove(0);
         }
         id
+    }
+}
+
+impl Default for Shell {
+    fn default() -> Self {
+        Shell {
+            root: String::new(),
+            search: String::new(),
+            recent_searches: Vec::new(),
+            prompt: crate::state::EditDraft::new_line(),
+            prompt_typed_at: None,
+            menu: WorkspaceMenu::default(),
+            link: Link::default(),
+            daemon_build: None,
+            conflict_banner_hidden: false,
+            refused: None,
+            saved_at: None,
+            toasts: Vec::new(),
+            pending_toast: None,
+            changes: Vec::new(),
+            next_change: 0,
+        }
     }
 }
 

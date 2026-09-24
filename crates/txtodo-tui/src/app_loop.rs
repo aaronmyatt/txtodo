@@ -64,12 +64,18 @@ async fn run_loop_inner(
 
     loop {
         draw_frame(terminal, state);
-        let autosave = crate::app_detail::autosave_due(state);
+        let deadline = [
+            crate::app_detail::autosave_due(state),
+            crate::prompt::hint_due(state),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
         let wake = tokio::select! {
             event = events.recv() => Wake::Input(event),
             change = watching.next() => Wake::Change(change),
             _ = sync_tick.tick() => Wake::Tick,
-            () = wait_until(autosave) => Wake::Autosave,
+            () = wait_until(deadline) => Wake::Deadline,
         };
         let keep_going = on_wake(wake, daemon, &mut input, state, &mut watching).await?;
         if !keep_going || state.should_quit {
@@ -90,7 +96,13 @@ async fn on_wake(
         Wake::Input(event) => return handle_input(daemon, input, state, event, watching).await,
         Wake::Change(change) => handle_watch_message(daemon, state, change, watching).await,
         Wake::Tick => watching.on_tick(daemon, state).await,
-        Wake::Autosave => crate::app_detail::save_dirty_notes(daemon, state).await?,
+        Wake::Deadline => {
+            // The notes save once their pause is over; the prompt's hint only needs the redraw.
+            let now = std::time::Instant::now();
+            if crate::app_detail::autosave_due(state).is_some_and(|due| due <= now) {
+                crate::app_detail::save_dirty_notes(daemon, state).await?;
+            }
+        }
     }
     Ok(true)
 }
@@ -103,8 +115,8 @@ enum Wake {
     Change(Result<Option<pb::Change>, tonic::Status>),
     /// The 1 s tick.
     Tick,
-    /// Typing in the notes paused long enough to save.
-    Autosave,
+    /// A pause in typing ran out: the notes save, or the prompt's hint shows.
+    Deadline,
 }
 
 /// Resolves at `at`; never, without one.

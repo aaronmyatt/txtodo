@@ -65,6 +65,9 @@ impl Input {
         if state.nav.focus == Focus::Search {
             return on_search_key(state, key, name.as_deref());
         }
+        if state.nav.focus == Focus::Prompt {
+            return on_prompt_key(state, key, name.as_deref(), now);
+        }
         if state.editing.is_some() {
             // A line of the sub-list is being edited: its save names the sub-list's path.
             if in_detail {
@@ -168,6 +171,25 @@ fn on_search_key(state: &mut AppState, key: KeyEvent, name: Option<&str>) -> Opt
         }
         _ => {}
     }
+    None
+}
+
+/// The prompt bar has the keyboard: Enter and Esc are its commands, the rest edits the draft.
+fn on_prompt_key(
+    state: &mut AppState,
+    key: KeyEvent,
+    name: Option<&str>,
+    now: Instant,
+) -> Option<Action> {
+    let bound = name.and_then(|n| {
+        keymap::BINDINGS
+            .iter()
+            .find(|b| b.scope == Scope::Prompt && b.keys.contains(&n))
+    });
+    if let Some(binding) = bound {
+        return commands::run(state, binding.command);
+    }
+    crate::prompt::on_key(state, key, now);
     None
 }
 

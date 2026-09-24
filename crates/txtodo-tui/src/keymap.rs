@@ -192,6 +192,12 @@ commands! {
     DetailStartSublist = "detail.start_sublist", [], Detail;
     /// Edit the notes.
     DetailEditNotes = "detail.edit_notes", [], Detail;
+    /// Give the prompt bar the keyboard.
+    PromptFocus = "prompt.focus", ["Ctrl-Space", "Ctrl-Shift-Space"], Global;
+    /// Add the prompt bar's line to this workspace.
+    PromptSubmit = "prompt.submit", ["Enter"], Prompt;
+    /// Leave the prompt bar.
+    PromptCancel = "prompt.cancel", ["Esc"], Prompt;
     /// The Tasks screen.
     NavTasks = "nav.tasks", ["g t"], Global;
     /// The Universal screen.
