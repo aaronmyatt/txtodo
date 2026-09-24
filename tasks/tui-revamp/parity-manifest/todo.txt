@@ -1,4 +1,4 @@
-2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui
+2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui @doing by:claude
 2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui
 2026-09-24 Seed [[action]] rows from current desktop: FileView Mod-Enter/Mod-s/Esc, CM6 Alt-Up/Down line move, detail, sidebar, Universal, devices, tokens, tray, pin +m11 @desktop
 2026-09-24 Seed [[action]] rows from the revamp plan (notes.md:235-240, c2 key hints) with desktop status planned +m11 @desktop
