@@ -529,3 +529,65 @@ scope = "global"
 desktop = { status = "planned", surface = "toast" }
 tui = { status = "planned", surface = "toast" }
 deviation = ""
+
+# ==== Screens: desktop surface -> TUI surface (tasks/tui-revamp/notes.md "Screen map") ============
+
+[[screen]]
+desktop = "Header workspace dropdown (today: sidebar WorkspaceSwitcher)"
+tui = "W popup; clicking the workspace name opens it too"
+note = "A terminal has no room for a sidebar beside the list."
+
+[[screen]]
+desktop = "Sidebar Activity tab / Settings > Activity card"
+tui = "Settings > Activity"
+note = ""
+
+[[screen]]
+desktop = "Detail bottom panel (DetailView)"
+tui = "Bottom split panel"
+note = "The TUI takes the panel ahead of desktop's panel-or-page decide line."
+
+[[screen]]
+desktop = "Conflict banner + review sheet"
+tui = "Banner + modal sheet"
+note = "Replaces the TUI's r pane."
+
+[[screen]]
+desktop = "Prompt bar"
+tui = "Prompt bar"
+note = ""
+
+[[screen]]
+desktop = "Quick Add always-on-top window (global hotkey)"
+tui = "na"
+note = "A terminal program cannot own an OS-wide hotkey or a floating window."
+
+[[screen]]
+desktop = "/universal"
+tui = "Universal screen (g u)"
+note = ""
+
+[[screen]]
+desktop = "/settings#card"
+tui = "Settings screen with a card nav (g s)"
+note = ""
+
+[[screen]]
+desktop = "/help"
+tui = "Help screen (?)"
+note = ""
+
+[[screen]]
+desktop = "Status footer"
+tui = "Status footer; the s sync pane becomes a popup from it"
+note = ""
+
+[[screen]]
+desktop = "/devices (pairing, paired devices, tokens)"
+tui = "Settings > Devices and Settings > Tokens; the o offers pane moves into Devices"
+note = ""
+
+[[screen]]
+desktop = "Tray menu and window pin"
+tui = "na"
+note = "OS window chrome; a terminal has neither."
