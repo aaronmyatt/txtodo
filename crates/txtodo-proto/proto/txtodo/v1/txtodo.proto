@@ -563,10 +563,19 @@ message PairAcceptRequest {
   WorkspaceSelector workspace = 2;
 }
 
-message PairResult { string sas = 1; }           // 6-word SAS (EFF short list); no key material
+message PairResult {
+  string sas = 1;   // 6-word SAS (EFF short list); no key material
+  // PairAccept only (task default-workspace-pairing-consent): true when this device kept its own
+  // workspace (its default) instead of adopting the id the code offered; the offered workspace then
+  // arrives later as an offer, mirrored as a Remote entry. False from an older daemon.
+  bool kept_own_workspace = 2;
+}
 
 message PairConfirmRequest {
   WorkspaceSelector workspace = 1;
+  // The human's answer to "is this your own device?" (task default-workspace-pairing-consent). Rides
+  // the handshake to the peer; the default workspace merges only when both sides said yes.
+  bool own_device = 2;
 }
 
 message PairAwaitPeerRequest {
@@ -647,6 +656,10 @@ message Device {
   uint64 last_seen_ms = 7;       // 0 = never contacted since registration
   SkewStatus skew_status = 8;
   uint64 skew_ms = 9;            // magnitude for BEHIND/AHEAD; 0 for OK/UNKNOWN
+  // Both sides called the other their own device at pairing (task
+  // default-workspace-pairing-consent), so the default workspace merges with it. Devices paired
+  // before the question existed count as own. False from an older daemon.
+  bool own_device = 10;
 }
 
 message DeviceListRequest {

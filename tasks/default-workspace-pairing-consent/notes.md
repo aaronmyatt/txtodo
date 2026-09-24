@@ -55,3 +55,26 @@ missing consent step, not the guard.
   has not been a supported flow, so that is today's truth.
 - ADR 0029 needs a short amendment: the reserved id converges only between own devices.
 - Open, not decided: can a user flip the flag after pairing? Not asked; leave it off until wanted.
+
+## Build plan (2026-09-24, agent)
+
+- Question at SAS time: `PairConfirmRequest.own_device`. The joiner's answer rides `JoinerHello`
+  (new field); the initiator's rides the sealed `PairingGrant` (new field). Each side stores
+  `own = mine && theirs` on the peer's `devices` row. Wire note: postcard refuses a struct with a
+  field missing or extra, so a pre-change build and a post-change build can no longer pair with
+  each other. Devices pair at the same version in practice (clients upgrade the daemon), so this
+  is noted, not versioned.
+- Store: `devices.own_device` column; the migration marks every existing row own-device (the
+  decided migration: pairing a foreign device was never a supported flow).
+- Merge gate: a sync session learns the peer from its link `Hello`. It now sends its `Greet`s only
+  after that, and drops the reserved default from the session's routes unless the peer's row says
+  own-device.
+- The foreign default as a Remote entry: both devices hold the reserved id for their *own*
+  default, so a mirror of the other one needs its own id. Each device offers its default under an
+  alias, `alias(device) = blake3("txtodo default alias" || reserved id || device id)` cut to a ULID
+  with a non-zero timestamp. A session with a non-own peer routes `alias(self)` to this device's
+  default. The receiver mirrors `alias(sender)` like any offer; an own-device receiver skips it
+  (it already merges that list under the reserved id). Offering the plain reserved id stops.
+- `PairResult.kept_own_workspace`: true when the joiner kept its default instead of adopting the
+  offered id; the CLI then says the other device's workspace arrives as a Remote entry.
+- TUI: it has no pairing flow, so there is nothing to ask there.

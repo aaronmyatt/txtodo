@@ -657,13 +657,23 @@ pub struct PairAcceptRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairResult {
+    /// 6-word SAS (EFF short list); no key material
     #[prost(string, tag = "1")]
     pub sas: ::prost::alloc::string::String,
+    /// PairAccept only (task default-workspace-pairing-consent): true when this device kept its own
+    /// workspace (its default) instead of adopting the id the code offered; the offered workspace then
+    /// arrives later as an offer, mirrored as a Remote entry. False from an older daemon.
+    #[prost(bool, tag = "2")]
+    pub kept_own_workspace: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairConfirmRequest {
     #[prost(message, optional, tag = "1")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// The human's answer to "is this your own device?" (task default-workspace-pairing-consent). Rides
+    /// the handshake to the peer; the default workspace merges only when both sides said yes.
+    #[prost(bool, tag = "2")]
+    pub own_device: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairAwaitPeerRequest {
@@ -768,6 +778,11 @@ pub struct Device {
     /// magnitude for BEHIND/AHEAD; 0 for OK/UNKNOWN
     #[prost(uint64, tag = "9")]
     pub skew_ms: u64,
+    /// Both sides called the other their own device at pairing (task
+    /// default-workspace-pairing-consent), so the default workspace merges with it. Devices paired
+    /// before the question existed count as own. False from an older daemon.
+    #[prost(bool, tag = "10")]
+    pub own_device: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceListRequest {

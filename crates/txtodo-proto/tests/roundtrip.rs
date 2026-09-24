@@ -204,6 +204,7 @@ fn device_messages_round_trip() {
         last_seen_ms: 2_000,
         skew_status: SkewStatus::Behind as i32,
         skew_ms: 400_000,
+        own_device: true,
     });
     round_trip(&DeviceListResponse {
         devices: vec![Device::default()],
@@ -245,6 +246,29 @@ fn the_early_bind_and_relay_fields_round_trip_and_default_to_absent() {
         !WorkspaceInfo::default().is_remote,
         "an older daemon never claims a mirror"
     );
+}
+
+/// Task `default-workspace-pairing-consent`: the own-device answer and flag round-trip, and an
+/// older peer's message reads as "not own" / "adopted".
+#[test]
+fn the_own_device_fields_round_trip_and_default_to_false() {
+    use txtodo_proto::v1::{Device, PairConfirmRequest, PairResult};
+    round_trip(&PairConfirmRequest {
+        workspace: None,
+        own_device: true,
+    });
+    round_trip(&Device {
+        id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        own_device: true,
+        ..Device::default()
+    });
+    round_trip(&PairResult {
+        sas: "one two three four five six".into(),
+        kept_own_workspace: true,
+    });
+    assert!(!PairConfirmRequest::default().own_device);
+    assert!(!Device::default().own_device);
+    assert!(!PairResult::default().kept_own_workspace);
     assert_eq!(
         WorkspaceInfo::default().load_state,
         WorkspaceLoadState::Unspecified as i32,
