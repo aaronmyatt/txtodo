@@ -19,6 +19,9 @@ the TUI and (through `txtodo-ffi`) desktop share; `GOLDEN` is the table every wr
 `strict_hint::strict_hint` (same task): the prompt bar's one-line strict-mode hint (lower-case priority,
 a leading `(` that is not one priority letter, a `due:`/`t:` without a `YYYY-MM-DD`), the c2 mockup's
 three regexes ported by hand and checked against them; never blocks a save.
+`chips::{Chip, apply_chip, toggle_priority, insert_chip, toggle_complete_text}` (same task): the prompt
+bar's chips, ported from desktop's `editPopoverLogic.ts` with its tests mirrored; carets are byte offsets
+(the wasm shim converts UTF-16).
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
 
 ## Invariants
