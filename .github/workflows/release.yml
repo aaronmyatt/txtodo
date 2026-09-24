@@ -156,6 +156,28 @@ jobs:
             cargo build --release --target "${{ matrix.rust_target }}" -p "$pkg" --locked
           done
 
+      # Self-sign the macOS binaries with fixed identifiers (com.txtodo.<bin>), same cert as the
+      # desktop app, so the Keychain's "Always Allow" for txtodod survives upgrades. Signed before
+      # `collect artifacts` renames them, so the identifier is the bare binary name.
+      - name: import self-signed signing cert (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: scripts/macos-import-cert.sh
+      - name: self-sign binaries (macOS)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          out="target/${{ matrix.rust_target }}/release"
+          scripts/macos-selfsign.sh "$out/txtodo" "$out/txtodod" "$out/txtodo-tui"
+      - name: remove signing keychain (macOS)
+        if: always() && runner.os == 'macOS'
+        run: |
+          if [ -n "${TXTODO_SIGN_KEYCHAIN:-}" ]; then security delete-keychain "$TXTODO_SIGN_KEYCHAIN" || true; fi
+
       # Package binaries: [[bin]] name differs from the crate name (txtodo-cli -> txtodo,
       # txtodo-daemon -> txtodod, txtodo-tui -> txtodo-tui — see each crate's Cargo.toml), and
       # Windows adds a `.exe` suffix.
@@ -287,21 +309,7 @@ jobs:
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          set -euo pipefail
-          keychain="$RUNNER_TEMP/txtodo-signing.keychain-db"
-          keychain_password="$(openssl rand -hex 24)"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          rm "$RUNNER_TEMP/cert.p12"
-          # Lets codesign use the key without a GUI "allow access" prompt.
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null
-          # shellcheck disable=SC2046 # word-split the existing list, one keychain path per word
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          echo "TXTODO_SIGN_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+        run: scripts/macos-import-cert.sh
       # Bundle output lands under the *workspace* root `target/`, not apps/desktop/src-tauri's own
       # (this crate is a real Cargo workspace member) — verified locally against a real build.
       # `--target` always writes to `target/<triple>/release/bundle/...`, even for this runner's
@@ -310,7 +318,7 @@ jobs:
       - name: re-sign app + bundled txtodod with fixed identifiers
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-        run: scripts/macos-selfsign.sh "target/${{ matrix.target }}/release/bundle/macos/txtodo.app" "$TXTODO_SIGN_KEYCHAIN"
+        run: scripts/macos-selfsign.sh "target/${{ matrix.target }}/release/bundle/macos/txtodo.app"
       # Drag-to-install layout: the app plus an /Applications symlink. UDZO = zlib-compressed.
       # Ref: https://keith.github.io/xcode-man-pages/hdiutil.1.html
       - name: build dmg (rename to this release's <bin>-<leg> convention)
