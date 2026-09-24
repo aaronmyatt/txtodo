@@ -1,8 +1,8 @@
-2026-09-24 Data from the UniversalTasks RPC; refresh on any workspace Watch change +m11 @tui
-2026-09-24 Stat strip: Overdue, Due this week, t open, x done +m11 @tui
-2026-09-24 Group selector (Priority default, Due, Project, Context, Workspace) via core universal::group +m11 @tui
-2026-09-24 Filters: workspace chips (at least one on), show done, context chips by count, Reset filters on the empty state +m11 @tui
-2026-09-24 Rows: mark, priority, token colours, due badge, ref pill, 2-letter workspace tile +m11 @tui
-2026-09-24 Keys: j/k/Home/End move, Enter opens the row on its line in its workspace, x completes with an Undo toast +m11 @tui
-2026-09-24 Search filters rows; is:done reveals done rows +m11 @tui
-2026-09-25 Mouse: wheel scrolls, click selects a row, double-click opens it +m11 @tui
+x 2026-09-25 2026-09-24 Data from the UniversalTasks RPC; refresh on any workspace Watch change +m11 @tui — app_universal.rs; read on entry, on the tick and after changes, not on Watch (the loop's Watch covers the open workspace only); a workspace the daemon has not loaded is not listed
+x 2026-09-25 2026-09-24 Stat strip: Overdue, Due this week, t open, x done +m11 @tui — ui/universal.rs stat_line
+x 2026-09-25 2026-09-24 Group selector (Priority default, Due, Project, Context, Workspace) via core universal::group +m11 @tui — Tab cycles, or click; core universal::group
+x 2026-09-25 2026-09-24 Filters: workspace chips (at least one on), show done, context chips by count, Reset filters on the empty state +m11 @tui — state_universal.rs; click-only chips, plus :universal.show_done / :universal.reset
+x 2026-09-25 2026-09-24 Rows: mark, priority, token colours, due badge, ref pill, 2-letter workspace tile +m11 @tui — the priority shows in the painted line itself
+x 2026-09-25 2026-09-24 Keys: j/k/Home/End move, Enter opens the row on its line in its workspace, x completes with an Undo toast +m11 @tui — x's toast Undo reaches the row's workspace; u is list mode only
+x 2026-09-25 2026-09-24 Search filters rows; is:done reveals done rows +m11 @tui — the header query, core query::matches
+x 2026-09-25 2026-09-25 Mouse: wheel scrolls, click selects a row, double-click opens it +m11 @tui — click selects, double-click opens; the wheel is not wired here yet; wired after all: the wheel moves the selection
