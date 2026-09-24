@@ -108,7 +108,7 @@ fuzz (row 6), and the F5 and F6 tests (2026-09-24).
       accepted.
 - [x] F6: fixed before M6 closes (your call, 2026-09-24).
 - [ ] F7 goes to the next milestone review as a new checklist item.
-- [ ] The line changes in the table are made.
+- [x] The line changes in the table are made (2026-09-24).
 - [ ] This text goes into `RATCHET.md` as the M6 entry, with F2 and F3 recorded as accepted gaps
       and `payloadKB` noted as shipped separately.
 
