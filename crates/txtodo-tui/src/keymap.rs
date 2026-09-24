@@ -38,6 +38,14 @@ pub enum Scope {
 }
 
 impl Scope {
+    /// Whether the global keys work here too: on a screen, yes; in a text field or a sheet, no.
+    pub fn takes_global(self) -> bool {
+        matches!(
+            self,
+            Scope::Global | Scope::List | Scope::Detail | Scope::Universal | Scope::Settings
+        )
+    }
+
     /// The manifest's spelling.
     pub fn name(self) -> &'static str {
         match self {
@@ -52,67 +60,6 @@ impl Scope {
             Scope::Sheet => "sheet",
         }
     }
-}
-
-/// One thing the user can make the TUI do. `id()` is its manifest id and its `:` command.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Command {
-    /// Next line.
-    ListDown,
-    /// Previous line.
-    ListUp,
-    /// First line.
-    ListFirst,
-    /// Last row.
-    ListLast,
-    /// Edit the line, caret at the start.
-    ListEditStart,
-    /// Edit the line, caret at the end.
-    ListEditEnd,
-    /// Delete the line.
-    ListDelete,
-    /// Complete or reopen the line.
-    ListToggleComplete,
-    /// Move the line down.
-    ListMoveDown,
-    /// Move the line up.
-    ListMoveUp,
-    /// Save the edit.
-    EditCommit,
-    /// Discard the edit.
-    EditCancel,
-    /// Open the conflict review.
-    ConflictsOpen,
-    /// Next conflict.
-    ConflictsDown,
-    /// Previous conflict.
-    ConflictsUp,
-    /// Keep mine.
-    ConflictsKeepMine,
-    /// Keep theirs.
-    ConflictsKeepTheirs,
-    /// Keep the merged text.
-    ConflictsKeepMerged,
-    /// Close the conflict review.
-    ConflictsClose,
-    /// Open the workspace offers.
-    OffersOpen,
-    /// Next offer.
-    OffersDown,
-    /// Previous offer.
-    OffersUp,
-    /// Accept the offer.
-    OffersAccept,
-    /// Decline the offer.
-    OffersDecline,
-    /// Close the offers.
-    OffersClose,
-    /// Sync details.
-    SyncOpen,
-    /// The `:` command line.
-    PaletteOpen,
-    /// Quit.
-    AppQuit,
 }
 
 /// One row of [`BINDINGS`].
@@ -134,73 +81,110 @@ const fn bind(command: Command, keys: &'static [&'static str], scope: Scope) -> 
     }
 }
 
-/// Every binding, in the manifest's order.
-pub const BINDINGS: &[Binding] = &[
-    bind(Command::ListDown, &["j", "Down"], Scope::List),
-    bind(Command::ListUp, &["k", "Up"], Scope::List),
-    bind(Command::ListFirst, &["g g"], Scope::List),
-    bind(Command::ListLast, &["G"], Scope::List),
-    bind(Command::ListEditStart, &["i"], Scope::List),
-    bind(Command::ListEditEnd, &["a", "A"], Scope::List),
-    bind(Command::ListDelete, &["d d"], Scope::List),
-    bind(Command::ListToggleComplete, &["Space"], Scope::List),
-    bind(Command::ListMoveDown, &["J"], Scope::List),
-    bind(Command::ListMoveUp, &["K"], Scope::List),
-    bind(Command::EditCommit, &["Enter"], Scope::Edit),
-    bind(Command::EditCancel, &["Esc"], Scope::Edit),
-    bind(Command::ConflictsOpen, &["r"], Scope::List),
-    bind(Command::ConflictsDown, &["j", "Down"], Scope::Sheet),
-    bind(Command::ConflictsUp, &["k", "Up"], Scope::Sheet),
-    bind(Command::ConflictsKeepMine, &["m"], Scope::Sheet),
-    bind(Command::ConflictsKeepTheirs, &["t"], Scope::Sheet),
-    bind(Command::ConflictsKeepMerged, &["M"], Scope::Sheet),
-    bind(Command::ConflictsClose, &["Esc", "r"], Scope::Sheet),
-    bind(Command::OffersOpen, &["o"], Scope::List),
-    bind(Command::OffersDown, &["j", "Down"], Scope::Sheet),
-    bind(Command::OffersUp, &["k", "Up"], Scope::Sheet),
-    bind(Command::OffersAccept, &["a"], Scope::Sheet),
-    bind(Command::OffersDecline, &["d"], Scope::Sheet),
-    bind(Command::OffersClose, &["Esc", "o"], Scope::Sheet),
-    bind(Command::SyncOpen, &["s"], Scope::List),
-    bind(Command::PaletteOpen, &[":"], Scope::Global),
-    bind(Command::AppQuit, &["Ctrl-c"], Scope::Global),
-];
+/// Declares [`Command`], its manifest ids and [`BINDINGS`] from one table, so the three cannot
+/// drift apart. Each row: doc, `Variant = "manifest.id", [keys], Scope;`.
+macro_rules! commands {
+    ($($(#[doc = $doc:literal])* $name:ident = $id:literal, [$($key:literal),*], $scope:ident;)*) => {
+        /// One thing the user can make the TUI do. `id()` is its manifest id and its `:` command.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum Command {
+            $($(#[doc = $doc])* $name,)*
+        }
+
+        impl Command {
+            /// The manifest id, also the `:` command.
+            pub fn id(self) -> &'static str {
+                match self {
+                    $(Command::$name => $id,)*
+                }
+            }
+        }
+
+        /// Every binding, in the manifest's order. Empty keys: a palette-only command.
+        pub const BINDINGS: &[Binding] = &[$(bind(Command::$name, &[$($key),*], Scope::$scope),)*];
+    };
+}
+
+commands! {
+    /// Next line.
+    ListDown = "list.down", ["j", "Down"], List;
+    /// Previous line.
+    ListUp = "list.up", ["k", "Up"], List;
+    /// First line.
+    ListFirst = "list.first", ["g g"], List;
+    /// Last row.
+    ListLast = "list.last", ["G"], List;
+    /// Edit the line, caret at the start.
+    ListEditStart = "list.edit_start", ["i"], List;
+    /// Edit the line, caret at the end.
+    ListEditEnd = "list.edit_end", ["a", "A"], List;
+    /// Delete the line.
+    ListDelete = "list.delete", ["d d"], List;
+    /// Complete or reopen the line.
+    ListToggleComplete = "list.toggle_complete", ["Space"], List;
+    /// Move the line down.
+    ListMoveDown = "list.move_down", ["J"], List;
+    /// Move the line up.
+    ListMoveUp = "list.move_up", ["K"], List;
+    /// Save the edit.
+    EditCommit = "edit.commit", ["Enter"], Edit;
+    /// Discard the edit.
+    EditCancel = "edit.cancel", ["Esc"], Edit;
+    /// Open the conflict review.
+    ConflictsOpen = "conflicts.open", ["r"], List;
+    /// Next conflict.
+    ConflictsDown = "conflicts.down", ["j", "Down"], Sheet;
+    /// Previous conflict.
+    ConflictsUp = "conflicts.up", ["k", "Up"], Sheet;
+    /// Keep mine.
+    ConflictsKeepMine = "conflicts.keep_mine", ["m"], Sheet;
+    /// Keep theirs.
+    ConflictsKeepTheirs = "conflicts.keep_theirs", ["t"], Sheet;
+    /// Keep the merged text.
+    ConflictsKeepMerged = "conflicts.keep_merged", ["M"], Sheet;
+    /// Close the conflict review.
+    ConflictsClose = "conflicts.close", ["Esc", "r"], Sheet;
+    /// Open the workspace offers.
+    OffersOpen = "offers.open", ["o"], List;
+    /// Next offer.
+    OffersDown = "offers.down", ["j", "Down"], Sheet;
+    /// Previous offer.
+    OffersUp = "offers.up", ["k", "Up"], Sheet;
+    /// Accept the offer.
+    OffersAccept = "offers.accept", ["a"], Sheet;
+    /// Decline the offer.
+    OffersDecline = "offers.decline", ["d"], Sheet;
+    /// Close the offers.
+    OffersClose = "offers.close", ["Esc", "o"], Sheet;
+    /// Sync details.
+    SyncOpen = "sync.open", ["s"], List;
+    /// The `:` command line.
+    PaletteOpen = "palette.open", [":"], Global;
+    /// Quit.
+    AppQuit = "app.quit", ["Ctrl-c"], Global;
+    /// The Tasks screen.
+    NavTasks = "nav.tasks", ["g t"], Global;
+    /// The Universal screen.
+    NavUniversal = "nav.universal", ["g u"], Global;
+    /// The Settings screen.
+    NavSettings = "nav.settings", ["g s"], Global;
+    /// The Help screen.
+    NavHelp = "nav.help", ["?"], Global;
+    /// The `W` workspace popup.
+    NavWorkspaceMenu = "nav.workspace_menu", ["W"], Global;
+    /// Switch workspace: `:workspace.switch` opens the popup, `:w <name>` switches at once.
+    WorkspaceSwitch = "workspace.switch", [], Global;
+    /// Next workspace in the popup.
+    WorkspaceMenuDown = "workspace_menu.down", ["j", "Down"], Sheet;
+    /// Previous workspace in the popup.
+    WorkspaceMenuUp = "workspace_menu.up", ["k", "Up"], Sheet;
+    /// Switch to the workspace, or open Manage workspaces.
+    WorkspaceMenuOpen = "workspace_menu.open", ["Enter"], Sheet;
+    /// Close the popup.
+    WorkspaceMenuClose = "workspace_menu.close", ["Esc", "W"], Sheet;
+}
 
 impl Command {
-    /// The manifest id, also the `:` command.
-    pub fn id(self) -> &'static str {
-        match self {
-            Command::ListDown => "list.down",
-            Command::ListUp => "list.up",
-            Command::ListFirst => "list.first",
-            Command::ListLast => "list.last",
-            Command::ListEditStart => "list.edit_start",
-            Command::ListEditEnd => "list.edit_end",
-            Command::ListDelete => "list.delete",
-            Command::ListToggleComplete => "list.toggle_complete",
-            Command::ListMoveDown => "list.move_down",
-            Command::ListMoveUp => "list.move_up",
-            Command::EditCommit => "edit.commit",
-            Command::EditCancel => "edit.cancel",
-            Command::ConflictsOpen => "conflicts.open",
-            Command::ConflictsDown => "conflicts.down",
-            Command::ConflictsUp => "conflicts.up",
-            Command::ConflictsKeepMine => "conflicts.keep_mine",
-            Command::ConflictsKeepTheirs => "conflicts.keep_theirs",
-            Command::ConflictsKeepMerged => "conflicts.keep_merged",
-            Command::ConflictsClose => "conflicts.close",
-            Command::OffersOpen => "offers.open",
-            Command::OffersDown => "offers.down",
-            Command::OffersUp => "offers.up",
-            Command::OffersAccept => "offers.accept",
-            Command::OffersDecline => "offers.decline",
-            Command::OffersClose => "offers.close",
-            Command::SyncOpen => "sync.open",
-            Command::PaletteOpen => "palette.open",
-            Command::AppQuit => "app.quit",
-        }
-    }
-
     /// The keys bound to this command, empty for a palette-only one.
     pub fn keys(self) -> &'static [&'static str] {
         BINDINGS
@@ -278,9 +262,10 @@ pub struct Chords {
 }
 
 impl Chords {
-    /// Resolves `key` in `scope` (for a sheet, among `group`'s commands only), at `now`. A first
-    /// key that no second key completes is dropped, and the second key is taken on its own, as
-    /// vim does.
+    /// Resolves `key` in `scope` (for a sheet, among `group`'s commands only), at `now`. A screen's
+    /// scope also takes the global keys, so `g g` and `g t` share one pending `g`. A first key
+    /// that no second key completes is dropped, and the second key is taken on its own, as vim
+    /// does.
     pub fn resolve(
         &mut self,
         scope: Scope,
@@ -288,8 +273,10 @@ impl Chords {
         key: &str,
         now: Instant,
     ) -> Resolved {
-        let active =
-            |b: &&Binding| b.scope == scope && group.is_none_or(|g| b.command.group() == g);
+        let active = |b: &&Binding| {
+            (b.scope == scope || (scope.takes_global() && b.scope == Scope::Global))
+                && group.is_none_or(|g| b.command.group() == g)
+        };
         if let Some((first, at)) = self.pending.take()
             && now.duration_since(at) <= CHORD_WINDOW
         {

@@ -57,7 +57,7 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::SyncOpen => state.toggle_sync_visible(),
         Command::PaletteOpen => state.start_command(),
         Command::AppQuit => return Some(Action::Quit),
-        _ => {}
+        other => return crate::commands_nav::run(state, other).flatten(),
     }
     None
 }

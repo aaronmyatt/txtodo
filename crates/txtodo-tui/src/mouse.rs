@@ -69,6 +69,10 @@ impl Mouse {
         let row = match target? {
             Target::Row(row) => row,
             Target::Command(command) => return commands::run(state, command),
+            Target::MenuItem(index) => {
+                state.shell.menu.cursor = index;
+                return commands::run(state, Command::WorkspaceMenuOpen);
+            }
             Target::Inert => return None,
         };
         let double = self.last_press.is_some_and(|(column, line, at)| {
@@ -103,7 +107,7 @@ fn busy(state: &AppState) -> bool {
 fn row_of(target: Option<Target>) -> Option<usize> {
     match target? {
         Target::Row(row) => Some(row),
-        Target::Command(_) | Target::Inert => None,
+        Target::Command(_) | Target::MenuItem(_) | Target::Inert => None,
     }
 }
 

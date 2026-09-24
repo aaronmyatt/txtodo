@@ -357,7 +357,7 @@ title = "Go to Tasks"
 keys = ["g t"]
 scope = "global"
 desktop = { status = "planned", surface = "header tabs" }
-tui = { status = "planned", surface = "header tabs" }
+tui = { status = "done", surface = "header tabs" }
 deviation = ""
 
 [[action]]
@@ -366,7 +366,7 @@ title = "Go to Universal"
 keys = ["g u"]
 scope = "global"
 desktop = { status = "differs", surface = "MainView link", keys = [] }
-tui = { status = "planned", surface = "header tabs" }
+tui = { status = "done", surface = "header tabs" }
 deviation = "Desktop reaches Universal by a top-bar link today; the g chord comes with the revamp."
 
 [[action]]
@@ -375,7 +375,7 @@ title = "Go to Settings"
 keys = ["g s"]
 scope = "global"
 desktop = { status = "planned", surface = "header tabs" }
-tui = { status = "planned", surface = "header tabs" }
+tui = { status = "done", surface = "header tabs" }
 deviation = ""
 
 [[action]]
@@ -384,8 +384,8 @@ title = "Help: keys, search operators, the prompt bar"
 keys = ["?"]
 scope = "global"
 desktop = { status = "differs", surface = "/help", keys = [] }
-tui = { status = "planned", surface = "Help screen" }
-deviation = "Desktop reaches Help by the ? link in the top bar; no key yet."
+tui = { status = "differs", surface = "header ?" }
+deviation = "Desktop reaches Help by the ? link in the top bar; no key yet. The TUI's ? opens a placeholder until its Help screen line lands."
 
 [[action]]
 id = "nav.workspace_menu"
@@ -393,7 +393,43 @@ title = "Switch workspace"
 keys = ["W"]
 scope = "global"
 desktop = { status = "planned", surface = "header workspace menu" }
-tui = { status = "planned", surface = "W popup" }
+tui = { status = "done", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "workspace_menu.down"
+title = "Next workspace in the menu"
+keys = ["j", "Down"]
+scope = "sheet"
+desktop = { status = "planned", surface = "header workspace menu" }
+tui = { status = "done", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "workspace_menu.up"
+title = "Previous workspace in the menu"
+keys = ["k", "Up"]
+scope = "sheet"
+desktop = { status = "planned", surface = "header workspace menu" }
+tui = { status = "done", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "workspace_menu.open"
+title = "Switch to the workspace, or Manage workspaces"
+keys = ["Enter"]
+scope = "sheet"
+desktop = { status = "planned", surface = "header workspace menu" }
+tui = { status = "done", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "workspace_menu.close"
+title = "Close the workspace menu"
+keys = ["Esc", "W"]
+scope = "sheet"
+desktop = { status = "planned", surface = "header workspace menu" }
+tui = { status = "done", surface = "W popup" }
 deviation = ""
 
 [[action]]
@@ -754,7 +790,7 @@ title = "Switch to a workspace"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
-tui = { status = "planned", surface = "W popup" }
+tui = { status = "done", surface = "W popup; :w <name>" }
 deviation = ""
 
 [[action]]

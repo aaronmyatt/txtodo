@@ -6,6 +6,7 @@
 
 use crate::hit::HitMap;
 use crate::state_offers::OffersPane;
+use crate::state_shell::Shell;
 
 pub use crate::state_nav::{Focus, Nav, Overlay, Screen, SettingsCard};
 pub use crate::state_types::{
@@ -61,6 +62,8 @@ pub struct AppState {
     pub hover: Option<usize>,
     /// Where the last frame put each clickable thing (task `tui-revamp/tui-mouse`).
     pub hits: HitMap,
+    /// The header and its popups (task `tui-revamp/tui-shell`).
+    pub shell: Shell,
 }
 
 impl AppState {
@@ -93,6 +96,7 @@ impl AppState {
             scroll: 0,
             hover: None,
             hits: HitMap::default(),
+            shell: Shell::default(),
         }
     }
 

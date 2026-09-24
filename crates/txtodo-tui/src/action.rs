@@ -20,6 +20,9 @@ pub enum Action {
     /// `:w <workspace>`: switch to the workspace a name, id or path picks (task
     /// `tui-revamp/tui-foundation`).
     SwitchWorkspace(String),
+    /// `W`: list the workspaces and their open counts, then open the popup (task
+    /// `tui-revamp/tui-shell`).
+    OpenWorkspaceMenu,
     /// `:q`: exit the event loop.
     Quit,
 }

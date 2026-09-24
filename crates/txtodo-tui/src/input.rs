@@ -13,6 +13,7 @@ use crate::commands;
 use crate::keymap::{self, Chords, Command, Resolved, Scope};
 use crate::mouse::Mouse;
 use crate::state::AppState;
+use crate::state_nav::{Overlay, Screen};
 use crate::ui::edit;
 
 #[cfg(test)]
@@ -63,26 +64,32 @@ impl Input {
             return on_edit_key(state, key, name.as_deref());
         }
         let name = name?;
-        let (scope, group) = if state.conflicts_open {
-            (Scope::Sheet, Some("conflicts"))
-        } else if state.offers.open {
-            (Scope::Sheet, Some("offers"))
-        } else {
-            (Scope::List, None)
-        };
-        let command = match self.chords.resolve(scope, group, &name, now) {
-            Resolved::Command(c) => c,
-            Resolved::Pending => return None,
-            Resolved::Unbound if scope == Scope::List => {
-                match self.chords.resolve(Scope::Global, None, &name, now) {
-                    Resolved::Command(c) => c,
-                    Resolved::Pending | Resolved::Unbound => return None,
-                }
-            }
-            Resolved::Unbound => return None,
-        };
-        commands::run(state, command)
+        let (scope, group) = scope_of(state);
+        match self.chords.resolve(scope, group, &name, now) {
+            Resolved::Command(command) => commands::run(state, command),
+            Resolved::Pending | Resolved::Unbound => None,
+        }
     }
+}
+
+/// Which keys are live: a sheet's own (its id group), else the screen's plus the global ones.
+fn scope_of(state: &AppState) -> (Scope, Option<&'static str>) {
+    if state.conflicts_open {
+        return (Scope::Sheet, Some("conflicts"));
+    }
+    if state.offers.open {
+        return (Scope::Sheet, Some("offers"));
+    }
+    if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
+        return (Scope::Sheet, Some("workspace_menu"));
+    }
+    let scope = match state.nav.screen {
+        Screen::Tasks => Scope::List,
+        Screen::Universal => Scope::Universal,
+        Screen::Settings(_) => Scope::Settings,
+        Screen::Help => Scope::Global,
+    };
+    (scope, None)
 }
 
 /// Typing into the `:` line. `Enter` runs it: `:q` quits, `:w <workspace>` switches workspace,

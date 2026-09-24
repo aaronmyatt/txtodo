@@ -15,6 +15,8 @@ pub enum Target {
     Row(usize),
     /// A clickable that runs a command: a tab, a button, a chip.
     Command(Command),
+    /// A row of the `W` popup: a workspace, or `items.len()` for Manage workspaces.
+    MenuItem(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

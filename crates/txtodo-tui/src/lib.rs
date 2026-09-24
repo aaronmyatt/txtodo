@@ -11,6 +11,7 @@ pub mod skill_hint;
 pub mod state;
 pub mod state_nav;
 pub mod state_offers;
+pub mod state_shell;
 pub mod state_types;
 pub mod terminal;
 pub mod theme;
@@ -21,14 +22,18 @@ pub mod theme;
 pub mod ui {
     pub mod conflicts;
     pub mod edit;
+    pub mod header;
     pub mod list;
+    pub mod mark;
     pub mod offers;
     pub mod screen;
     pub mod sync;
+    pub mod workspace_menu;
 }
 
 pub mod action;
 pub mod commands;
+pub mod commands_nav;
 pub mod daemon;
 pub mod daemon_activity;
 pub mod daemon_devices;

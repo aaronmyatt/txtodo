@@ -100,7 +100,9 @@ async fn async_main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match run_in(&mut daemon, &root_list, label).await {
+    // `WorkspaceInfo.root` is canonical; the W popup finds the open workspace by comparing it.
+    let root = workspace.canonicalize().unwrap_or(workspace);
+    match run_in(&mut daemon, &root_list, &root.to_string_lossy(), label).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("txtodo-tui: {e}");
@@ -112,18 +114,21 @@ async fn async_main() -> ExitCode {
 /// The real event loop: baselines from `GetFile`, then handles terminal input, `Watch` events and
 /// bounded `Watch`-drop reconnects (design edge cases) until `:q` or the input channel closes.
 pub async fn run(daemon: &mut Daemon, path: &str) -> Result<(), DaemonError> {
-    run_in(daemon, path, None).await
+    run_in(daemon, path, "", None).await
 }
 
-/// `run`, naming the workspace in the status line when it is worth naming (the default one).
+/// `run` for the workspace at `root`, named `workspace_label` in the header when it has a better
+/// name than its folder (the default one, a remote mirror).
 pub async fn run_in(
     daemon: &mut Daemon,
     path: &str,
+    root: &str,
     workspace_label: Option<String>,
 ) -> Result<(), DaemonError> {
     let file = daemon.get_file(path).await?;
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
     state.workspace_label = workspace_label;
+    root.clone_into(&mut state.shell.root);
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
     let mode = crate::theme::ThemeMode::default();
     crate::theme::set_current(crate::theme::Theme::resolve(mode, |k| {
@@ -188,6 +193,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::AcceptOffer(_) => "accept_offer",
         Action::DeclineOffer(_) => "decline_offer",
         Action::SwitchWorkspace(_) => "switch_workspace",
+        Action::OpenWorkspaceMenu => "open_workspace_menu",
     }
 }
 
@@ -216,6 +222,7 @@ async fn perform_inner(
         Action::SwitchWorkspace(query) => {
             crate::app_workspace::switch_workspace(daemon, state, &query).await?;
         }
+        Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await?,
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;

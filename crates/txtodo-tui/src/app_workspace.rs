@@ -9,6 +9,7 @@ use txtodo_workspace_paths::{
 use crate::daemon::{Daemon, DaemonError};
 use crate::daemon_workspace::workspace_id_selector;
 use crate::state::AppState;
+use crate::state_shell::MenuItem;
 
 /// The current folder when it is a workspace, else the user's default one (task
 /// default-workspace), and the status-line label that says which kind it is.
@@ -104,12 +105,59 @@ pub async fn switch_workspace(
     state.cursor = 0;
     state.needs_review.clear();
     state.workspace_label = Some(workspace_title(&target));
+    state.shell.root = target.root.clone();
     state.last_error = None;
     state.rewatch = true;
     Ok(())
 }
 
-/// The status line's name for a workspace switched to.
+/// `W`: lists the workspaces with their open counts, then opens the popup (task
+/// `tui-revamp/tui-shell`). A refused list goes on the status line. The daemon counts only the
+/// workspaces it has loaded (`UniversalTasks`), so the rest show no count.
+pub async fn open_menu(daemon: &mut Daemon, state: &mut AppState) -> Result<(), DaemonError> {
+    let listed = match daemon.workspace_list().await {
+        Ok(listed) => listed,
+        Err(DaemonError::Rpc(status)) => {
+            state.last_error = Some(status.message().to_owned());
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
+    let open = daemon
+        .universal_tasks(false)
+        .await
+        .map(|r| r.tasks)
+        .unwrap_or_default();
+    let items = menu_items(&listed.workspaces, &open, &state.shell.root);
+    crate::commands_nav::open_menu(state, items);
+    Ok(())
+}
+
+/// The popup's rows: each workspace, its open tasks, whether its folder is gone, and whether it is
+/// the one at `root`.
+pub fn menu_items(
+    workspaces: &[pb::WorkspaceInfo],
+    tasks: &[pb::UniversalTask],
+    root: &str,
+) -> Vec<MenuItem> {
+    workspaces
+        .iter()
+        .map(|w| MenuItem {
+            id: w.workspace_id.clone(),
+            name: workspace_title(w),
+            open: (w.load_state == pb::WorkspaceLoadState::Ready as i32).then(|| {
+                tasks
+                    .iter()
+                    .filter(|t| t.workspace_id == w.workspace_id && !t.done)
+                    .count()
+            }),
+            missing: !w.root_exists,
+            current: w.root == root,
+        })
+        .collect()
+}
+
+/// The header's name for a workspace switched to.
 fn workspace_title(w: &pb::WorkspaceInfo) -> String {
     if w.is_default {
         return "default workspace".to_owned();
@@ -157,6 +205,26 @@ mod tests {
         assert_eq!(id("/home/u/Work").as_deref(), Ok("01B"));
         assert!(id("work").is_err_and(|e| e.contains("2 workspaces")));
         assert!(id("nope").is_err_and(|e| e.contains("no workspace named nope")));
+    }
+
+    #[test]
+    fn menu_rows_count_open_tasks_and_mark_the_current_and_missing_ones() {
+        let mut gone = info("01B", "/home/u/Work", false);
+        gone.root_exists = false;
+        let mut here = info("01A", "/home/u/notes", true);
+        here.root_exists = true;
+        here.load_state = pb::WorkspaceLoadState::Ready as i32;
+        let task = |ws: &str, done| pb::UniversalTask {
+            workspace_id: ws.to_owned(),
+            done,
+            ..pb::UniversalTask::default()
+        };
+        let tasks = [task("01A", false), task("01A", true), task("01A", false)];
+        let rows = menu_items(&[here, gone], &tasks, "/home/u/notes");
+        assert_eq!(rows[0].name, "default workspace");
+        let row = |i: usize| (rows[i].open, rows[i].current, rows[i].missing);
+        assert_eq!(row(0), (Some(2), true, false));
+        assert_eq!(row(1), (None, false, true), "not loaded: no count");
     }
 
     #[test]

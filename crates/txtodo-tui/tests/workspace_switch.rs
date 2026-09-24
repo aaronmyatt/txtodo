@@ -62,3 +62,64 @@ async fn colon_w_switches_to_another_registered_workspace() {
         .await
         .unwrap_or_else(|e| panic!("workspace_remove: {e}"));
 }
+
+/// `W` against a real daemon (task `tui-revamp/tui-shell`): the popup lists the registered
+/// workspaces with their open counts, and its Enter switches to the selected one.
+#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+#[tokio::test]
+async fn the_w_popup_lists_workspaces_with_counts_and_switches() {
+    let (_real, mut daemon) = support::RealDaemon::start("first list line\n").await;
+    let other = tempfile::Builder::new()
+        .prefix("tui-menu-")
+        .tempdir()
+        .unwrap_or_else(|e| panic!("tempdir: {e}"));
+    std::fs::write(other.path().join("todo.txt"), "one\nx done\ntwo\n")
+        .unwrap_or_else(|e| panic!("{e}"));
+    let added = daemon
+        .workspace_add(&other.path().display().to_string())
+        .await
+        .unwrap_or_else(|e| panic!("workspace_add: {e}"));
+    let mut state = AppState::from_document("todo.txt", "first list line");
+
+    let row_of_added = |state: &AppState| {
+        let row = state
+            .shell
+            .menu
+            .items
+            .iter()
+            .position(|i| i.id == added.workspace_id);
+        row.unwrap_or_else(|| panic!("the added workspace is listed: {:?}", state.shell.menu))
+    };
+    perform(&mut daemon, &mut state, Action::OpenWorkspaceMenu)
+        .await
+        .unwrap_or_else(|e| panic!("perform: {e}"));
+    assert_eq!(
+        state.nav.overlay,
+        Some(txtodo_tui::state_nav::Overlay::WorkspaceMenu)
+    );
+    let row = row_of_added(&state);
+    assert!(!state.shell.menu.items[row].current);
+
+    state.shell.menu.cursor = row;
+    let action =
+        txtodo_tui::commands::run(&mut state, txtodo_tui::keymap::Command::WorkspaceMenuOpen)
+            .unwrap_or_else(|| panic!("Enter on another workspace switches"));
+    perform(&mut daemon, &mut state, action)
+        .await
+        .unwrap_or_else(|e| panic!("perform: {e}"));
+    assert_eq!(state.lines[0].raw, "one");
+    assert_eq!(state.nav.overlay, None);
+
+    // Switching opened it, so the daemon now counts it; it is also the current one.
+    perform(&mut daemon, &mut state, Action::OpenWorkspaceMenu)
+        .await
+        .unwrap_or_else(|e| panic!("perform: {e}"));
+    let row = row_of_added(&state);
+    let item = &state.shell.menu.items[row];
+    assert!(item.current, "{item:?}");
+    assert_eq!(item.open, Some(2), "two open, one done");
+    daemon
+        .workspace_remove(&added.workspace_id)
+        .await
+        .unwrap_or_else(|e| panic!("workspace_remove: {e}"));
+}

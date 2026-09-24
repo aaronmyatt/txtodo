@@ -79,3 +79,36 @@ fn a_sheet_resolves_only_its_own_group() {
         Resolved::Unbound
     );
 }
+
+#[test]
+fn a_screen_shares_its_g_with_the_global_chords() {
+    let now = Instant::now();
+    let mut chords = Chords::default();
+    let mut keys = |scope, keys: &[&str]| {
+        keys.iter()
+            .map(|k| chords.resolve(scope, None, k, now))
+            .last()
+    };
+    assert_eq!(
+        keys(Scope::List, &["g", "t"]),
+        Some(Resolved::Command(Command::NavTasks))
+    );
+    assert_eq!(
+        keys(Scope::List, &["g", "g"]),
+        Some(Resolved::Command(Command::ListFirst))
+    );
+    assert_eq!(
+        keys(Scope::Universal, &["g", "s"]),
+        Some(Resolved::Command(Command::NavSettings))
+    );
+    assert_eq!(
+        keys(Scope::Universal, &["g", "g"]),
+        Some(Resolved::Pending),
+        "no g g here: the second g starts a chord of its own"
+    );
+    assert_eq!(
+        chords.resolve(Scope::Sheet, Some("workspace_menu"), "W", now),
+        Resolved::Command(Command::WorkspaceMenuClose),
+        "a sheet takes no global keys: W closes the popup"
+    );
+}
