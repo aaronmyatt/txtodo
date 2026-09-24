@@ -170,6 +170,14 @@ pub fn default_workspace_dir_for(env: &RegistryEnv) -> PathBuf {
     global_state_dir(env).join("default")
 }
 
+/// Where workspaces mirrored from a paired device live (task `remote-workspace-mirror`): `remote`
+/// beside the default workspace, one `<workspace-id>/` folder each. Relocated with an isolated
+/// daemon's socket, the same way [`default_workspace_dir_for`] is, so a test daemon never writes
+/// the real data dir. The daemon owns this folder: anything registered under it is a mirror.
+pub fn remote_workspaces_dir_for(env: &RegistryEnv) -> PathBuf {
+    global_state_dir(env).join("remote")
+}
+
 /// The workspace root a client should name to the daemon when the user gave no `--dir`: the
 /// nearest ancestor of `start` (itself included) that already holds a `.txtodo/` directory, else
 /// `start` unchanged (a first run in a fresh directory still registers that directory).

@@ -174,6 +174,24 @@ fn an_isolated_socket_carries_the_default_workspace_with_it() {
     );
 }
 
+/// Mirrors sit beside the default, and move with an isolated socket like it does.
+#[test]
+fn remote_mirrors_live_beside_the_default_workspace() {
+    let e = env(&[("XDG_DATA_HOME", "/xdg-data")]);
+    assert_eq!(
+        remote_workspaces_dir_for(&e),
+        PathBuf::from("/xdg-data/txtodo/remote")
+    );
+    let e = env(&[
+        ("XDG_DATA_HOME", "/xdg-data"),
+        ("TXTODO_SOCKET", "/tmp/iso/txtodod.sock"),
+    ]);
+    assert_eq!(
+        remote_workspaces_dir_for(&e),
+        PathBuf::from("/tmp/iso/remote")
+    );
+}
+
 /// A fresh directory tree under the OS temp dir (this crate has no dependencies, so no
 /// `tempfile`). `mk` lists directories to create, relative to the returned root.
 fn tree(name: &str, mk: &[&str]) -> PathBuf {
