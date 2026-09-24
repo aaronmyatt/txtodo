@@ -1,3 +1,3 @@
-2026-09-25 daemon: a non-exact reconcile commits synthesized ops that replay to the target, checked on a clone +m11 @daemon
+2026-09-25 daemon: a non-exact reconcile commits synthesized ops that replay to the target, checked on a clone +m11 @daemon @doing by:claude
 2026-09-25 daemon: sync import retries a failed op after the rest of its same-HLC group, then skips what still fails with a sync_op_skipped warn; the op stays in the log +m11 @daemon @sync
 2026-09-25 daemon: tests for the seq-23778 shape (move after a later insert) on both paths +m11 @daemon @test
