@@ -1,4 +1,4 @@
-(A) 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/worktrees/*) as part of the enclosing workspace +m11 @daemon ref:walker-nested-checkouts
+(A) 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/worktrees/*) as part of the enclosing workspace +m11 @daemon ref:walker-nested-checkouts @doing by:claude
 (B) 2026-09-25 sync: one big workspace transfer holds every other workspace up on the shared link +m11 @daemon @sync ref:sync-link-fairness
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay
 (C) 2026-09-24 TUI revamp to desktop parity from the c2 spec, TUI first +m11 @tui ref:tui-revamp
