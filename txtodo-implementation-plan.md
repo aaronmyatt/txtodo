@@ -442,7 +442,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB);   -- device id, keys (encr
 
 **Performance budgets** (fail CI if exceeded, measured on the Linux runner): parse 100 k lines ≤ 150 ms; reconcile a single external line edit in a 10 k-line file ≤ 20 ms; sync 1 000 ops between two loopback daemons ≤ 500 ms; daemon idle RSS ≤ 50 MB with a 10 k-line workspace.
 
-**Security checklist** (review before M4, M6, M8 close): no secrets in logs; keys only in keystore; every network message versioned, authenticated, encrypted; MCP HTTP never binds a non-loopback address and refuses a foreign `Host` or `Origin`; tokens never logged; path traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types.
+**Security checklist** (review before M4, M6, M8, M11 close): no secrets in logs; keys only in keystore; every network message versioned, authenticated, encrypted; MCP HTTP never binds a non-loopback address and refuses a foreign `Host` or `Origin`; tokens never logged; path traversal impossible via `ref:` (fuzz the slug validator); relay cannot distinguish op types; content a paired device pushes stays inert and contained (M11: an auto-accepted Remote workspace lands only under the data dir's `remote/<workspace-id>/`, is plain text never run, carries no absolute path, and a removed one never comes back on its own; the default workspace merges only with a device both humans called their own, ADR 0029 amendment).
 
 **Observability from M3 onward:** `tracing` spans `reconcile{file}`, `sync.session{peer}`, `mcp.call{tool,principal}`; JSON logs to `.txtodo/logs/` with rotation; `txtodo doctor --verbose` dumps the last 100 events.
 
