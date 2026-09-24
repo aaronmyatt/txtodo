@@ -1,5 +1,5 @@
-2026-09-24 Sub-toolbar: file name, t N x N N lines, search match status +m11 @tui
-2026-09-24 Rows: line-number gutter, done dim + strike, ref: n/m or notes glyph, 100-char underline, Add a line row +m11 @tui
+2026-09-24 Sub-toolbar: file name, t N x N N lines, search match status +m11 @tui @doing by:claude
+2026-09-24 Rows: line-number gutter, done dim + strike, ref: n/m or notes glyph, 100-char underline, Add a line row +m11 @tui @doing by:claude
 2026-09-24 List mode: x complete, Enter/Ctrl-Enter open detail, u undo, Alt-Up/Down as J/K aliases; keep j/k/gg/G/i/a/A/dd/J/K/Space +m11 @tui
 2026-09-24 Search: / focus, hits reversed, misses faded, Enter/Shift-Enter cycle, Esc clears then blurs, count pill; core query::matches +m11 @tui
 2026-09-24 Search suggestions: top contexts/projects, (A)(B)(C), is:open, is:done, due:, recents; click or Tab toggles +m11 @tui
