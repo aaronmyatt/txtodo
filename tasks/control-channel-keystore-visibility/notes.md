@@ -60,3 +60,17 @@ was offered."
 - Whether the *first* device (the one whose workspace never arrived) also hit this, or only the
   second device's read of its own key, isn't distinguishable from one one-sided log — either side
   failing the read blocks the whole exchange (see Diagnosis).
+
+## As built (2026-09-24)
+
+- Commits: c7d0258 (proto `offers_problem(_age_ms)` on `HealthResponse` and
+  `WorkspacePendingOffersResponse`), 46e8420 (daemon), 3692187 (CLI), 7f48a98 (TUI), d88cc75
+  (desktop), and the runbook `docs/keychain-runbook.md`.
+- Daemon: each control session records its group-key read on the device's `LanStatus`: a keystore
+  failure (timeout included) or a corrupt key is kept with its time; a clean read clears it. Not
+  paired yet is no problem.
+- Clients: `txtodo workspace offers` prints the block to stderr (JSON: its own line); `doctor` has an
+  `offers` row; the TUI pane and status line say "offers blocked"; the desktop has no offers list, so
+  its Devices page carries a banner.
+- Still not proven: the unit test uses a corrupt stored key in place of a keychain that never
+  answers; no run against a real launchd keychain prompt. Nobody has looked at the TUI/desktop text.
