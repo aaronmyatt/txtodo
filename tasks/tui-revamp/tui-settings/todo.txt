@@ -1,10 +1,11 @@
-2026-09-24 Settings shell: left card nav, scroll, / filters cards by keyword +m11 @tui
-2026-09-24 General: daemon socket path, connected dot, Restart; pin and menu bar shown as not available here +m11 @tui
-2026-09-24 Appearance: theme System/Light/Dark, line numbers, 100-char underline, preview; saved to a TUI prefs file +m11 @tui
-2026-09-24 Workspaces: list, current badge, N open, Open, Remove with inline confirm, Add by typed path +m11 @tui
-2026-09-24 Shortcuts: table rendered from the manifest +m11 @tui
-2026-09-24 Devices: pair offer with half-block QR and 60 s countdown, six SAS words, They match / They differ, accept by pasted code +m11 @tui
-2026-09-24 Devices: paired list via DeviceList, Revoke via DeviceRemove, workspace offers moved in from the o pane +m11 @tui
-2026-09-24 Tokens: New token dialog (name, scopes, project/context/file limits, expiry), secret shown once, Copy via OSC 52, list, Revoke +m11 @tui
-2026-09-24 Activity: OpLogStream across workspaces, newest 200, glyphs x ~ + - > refresh, Refresh button +m11 @tui
-2026-09-25 Mouse: wheel scrolls, click the card nav, buttons and toggles +m11 @tui
+x 2026-09-25 2026-09-24 Settings shell: left card nav, scroll, / filters cards by keyword +m11 @tui — ui/settings.rs + settings_rows.rs + commands_settings.rs; a scope's own key now beats a global one, so / filters here
+x 2026-09-25 2026-09-24 General: daemon socket path, connected dot, Restart; pin and menu bar shown as not available here +m11 @tui — Restart is an instruction (txtodo daemon stop / start); the TUI does not stop the daemon
+x 2026-09-25 2026-09-24 Appearance: theme System/Light/Dark, line numbers, 100-char underline, preview; saved to a TUI prefs file +m11 @tui — prefs.rs, $XDG_CONFIG_HOME/txtodo/tui.conf; the preview row is plain text, not painted
+x 2026-09-25 2026-09-24 Workspaces: list, current badge, N open, Open, Remove with inline confirm, Add by typed path +m11 @tui — tests/settings_screen.rs adds and removes a typed folder
+x 2026-09-25 2026-09-24 Shortcuts: table rendered from the manifest +m11 @tui — manifest.rs (include_str), also the parity test's parser and Help's source
+x 2026-09-25 2026-09-24 Devices: pair offer with half-block QR and 60 s countdown, six SAS words, They match / They differ, accept by pasted code +m11 @tui — accept by pasted code and the six words work; showing a code or QR here is blocked on the new decide line (the code encoding lives in the CLI)
+x 2026-09-25 2026-09-24 Devices: paired list via DeviceList, Revoke via DeviceRemove, workspace offers moved in from the o pane +m11 @tui — the o pane still works too
+x 2026-09-25 2026-09-24 Tokens: New token dialog (name, scopes, project/context/file limits, expiry), secret shown once, Copy via OSC 52, list, Revoke +m11 @tui — one typed line: name scope… expires:YYYY-MM-DD; project/context/file limits are scopes typed the same way
+x 2026-09-25 2026-09-24 Activity: OpLogStream across workspaces, newest 200, glyphs x ~ + - > refresh, Refresh button +m11 @tui — the open workspace's feed only, read until a 300 ms pause; not across workspaces yet
+x 2026-09-25 2026-09-25 Mouse: wheel scrolls, click the card nav, buttons and toggles +m11 @tui — click a card or row, double-click runs a row, wheel moves the row
+2026-09-25 Devices: show this device's pairing code and QR with a 60 s countdown, after the pairing-code decide line in ../todo.txt +m11 @tui
