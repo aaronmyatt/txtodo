@@ -1,4 +1,4 @@
-2026-09-25 sync: dial IPv4 first, then global IPv6; drop link-local IPv6 with no scope id +m11 @sync
+2026-09-25 sync: dial IPv4 first, then global IPv6; drop link-local IPv6 with no scope id +m11 @sync @doing by:claude
 2026-09-25 daemon: a peer live only over the relay is still dialed over LAN; the relay session ends once LAN is up +m11 @daemon
 2026-09-25 Two-Mac check with TXTODO_LOG=txtodo_daemon::lan=debug on both: the link runs over LAN +m11 @human
 x 2026-09-25 2026-09-25 daemon: log lan_connect_failed at info with the addresses tried +m11 @daemon — with the addresses tried
