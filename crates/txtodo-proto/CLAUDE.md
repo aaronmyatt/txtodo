@@ -13,6 +13,11 @@ it over the real LAN transport and show a real SAS, without the RPC itself ever 
 `DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).
+`UniversalTasks` (task `tui-revamp/universal-rpc`, 2026-09-25): device-level (no selector), every
+root-list task line across every ready workspace as a `UniversalTask` row (workspace id and name,
+root list, line number, task id, raw, done, completion date, priority, raw `due`, bare projects and
+contexts, `has_ref`, the ref sub-list's `Progress`, `has_notes`); `include_done` false gives open
+tasks only. Clients bucket `due` against their own today (ADR 0011).
 `WorkspacePendingOffers`, `WorkspaceAcceptOffer`, `WorkspaceDeclineOffer` (task
 `daemon-workspace-identity-agreement`, M11): the human accept/decline surface for a peer's
 control-channel workspace offer (offer/accept, first-registrant-wins). Device-level like

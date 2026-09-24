@@ -888,6 +888,66 @@ pub struct SyncStatusRequest {
     #[prost(message, optional, tag = "1")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
 }
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UniversalTasksRequest {
+    /// false: open tasks only
+    #[prost(bool, tag = "1")]
+    pub include_done: bool,
+}
+/// One root-list task line (blank lines never appear).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UniversalTask {
+    /// ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// "default" for the default workspace, else the root's folder name
+    #[prost(string, tag = "2")]
+    pub workspace_name: ::prost::alloc::string::String,
+    /// workspace-relative root list path, e.g. "todo.txt"
+    #[prost(string, tag = "3")]
+    pub root_list: ::prost::alloc::string::String,
+    /// 1-based over every line, blanks included (TaskRef's rule)
+    #[prost(uint32, tag = "4")]
+    pub line_number: u32,
+    /// ULID text; "" when the daemon holds no id for the line
+    #[prost(string, tag = "5")]
+    pub task_id: ::prost::alloc::string::String,
+    /// the line's exact text
+    #[prost(string, tag = "6")]
+    pub raw: ::prost::alloc::string::String,
+    #[prost(bool, tag = "7")]
+    pub done: bool,
+    /// YYYY-MM-DD; "" when open or undated
+    #[prost(string, tag = "8")]
+    pub completion_date: ::prost::alloc::string::String,
+    /// one letter, "" for none; a done line's `pri:` tag counts
+    #[prost(string, tag = "9")]
+    pub priority: ::prost::alloc::string::String,
+    /// the raw `due:` value, "" for none
+    #[prost(string, tag = "10")]
+    pub due: ::prost::alloc::string::String,
+    /// bare (no `+`), in line order
+    #[prost(string, repeated, tag = "11")]
+    pub projects: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// bare (no `@`), in line order
+    #[prost(string, repeated, tag = "12")]
+    pub contexts: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// the line carries a `ref:` tag
+    #[prost(bool, tag = "13")]
+    pub has_ref: bool,
+    /// done/total of the ref's sub-list; unset when it has none
+    #[prost(message, optional, tag = "14")]
+    pub ref_progress: ::core::option::Option<Progress>,
+    /// the ref directory holds a notes.md
+    #[prost(bool, tag = "15")]
+    pub has_notes: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UniversalTasksResponse {
+    /// workspace by workspace (WorkspaceList order), line order within
+    #[prost(message, repeated, tag = "1")]
+    pub tasks: ::prost::alloc::vec::Vec<UniversalTask>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SyncStatusResponse {
     #[prost(message, repeated, tag = "1")]
@@ -2147,6 +2207,35 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "SyncStatus"));
             self.inner.unary(req, path, codec).await
         }
+        /// Every root-list task across every ready workspace, for the Universal screen (task
+        /// tui-revamp/universal-rpc): one call instead of a GetFile per workspace in each client.
+        /// Device-level, like WorkspaceList: no selector. A workspace still opening, missing, or failing
+        /// is skipped, never fatal. `due` is the raw `due:` value; clients bucket it against their own
+        /// local today (ADR 0011).
+        pub async fn universal_tasks(
+            &mut self,
+            request: impl tonic::IntoRequest<super::UniversalTasksRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::UniversalTasksResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/UniversalTasks",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "UniversalTasks"));
+            self.inner.unary(req, path, codec).await
+        }
         /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
         /// group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
         /// daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
@@ -2512,6 +2601,18 @@ pub mod txtodo_server {
             request: tonic::Request<super::SyncStatusRequest>,
         ) -> std::result::Result<
             tonic::Response<super::SyncStatusResponse>,
+            tonic::Status,
+        >;
+        /// Every root-list task across every ready workspace, for the Universal screen (task
+        /// tui-revamp/universal-rpc): one call instead of a GetFile per workspace in each client.
+        /// Device-level, like WorkspaceList: no selector. A workspace still opening, missing, or failing
+        /// is skipped, never fatal. `due` is the raw `due:` value; clients bucket it against their own
+        /// local today (ADR 0011).
+        async fn universal_tasks(
+            &self,
+            request: tonic::Request<super::UniversalTasksRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::UniversalTasksResponse>,
             tonic::Status,
         >;
         /// TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
@@ -4117,6 +4218,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = SyncStatusSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/UniversalTasks" => {
+                    #[allow(non_camel_case_types)]
+                    struct UniversalTasksSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::UniversalTasksRequest>
+                    for UniversalTasksSvc<T> {
+                        type Response = super::UniversalTasksResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::UniversalTasksRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::universal_tasks(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = UniversalTasksSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

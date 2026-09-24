@@ -153,6 +153,13 @@ service Txtodo {
   // precise per-peer ack count — no per-peer synced-seq is tracked anywhere yet).
   rpc SyncStatus(SyncStatusRequest) returns (SyncStatusResponse);
 
+  // Every root-list task across every ready workspace, for the Universal screen (task
+  // tui-revamp/universal-rpc): one call instead of a GetFile per workspace in each client.
+  // Device-level, like WorkspaceList: no selector. A workspace still opening, missing, or failing
+  // is skipped, never fatal. `due` is the raw `due:` value; clients bucket it against their own
+  // local today (ADR 0011).
+  rpc UniversalTasks(UniversalTasksRequest) returns (UniversalTasksResponse);
+
   // TEST-ONLY (plan M4 `sync-lan-transport`): forces this workspace's sync group id and epoch-0
   // group key directly, bypassing the pairing handshake. Refused with UNIMPLEMENTED unless the
   // daemon was started with TXTODO_TEST_HOOKS=1 — real pairing has no transport over the LAN
@@ -724,6 +731,33 @@ message DeviceRemoveResponse {
 
 message SyncStatusRequest {
   WorkspaceSelector workspace = 1;
+}
+
+message UniversalTasksRequest {
+  bool include_done = 1;   // false: open tasks only
+}
+
+// One root-list task line (blank lines never appear).
+message UniversalTask {
+  string workspace_id = 1;         // ULID text
+  string workspace_name = 2;       // "default" for the default workspace, else the root's folder name
+  string root_list = 3;            // workspace-relative root list path, e.g. "todo.txt"
+  uint32 line_number = 4;          // 1-based over every line, blanks included (TaskRef's rule)
+  string task_id = 5;              // ULID text; "" when the daemon holds no id for the line
+  string raw = 6;                  // the line's exact text
+  bool done = 7;
+  string completion_date = 8;      // YYYY-MM-DD; "" when open or undated
+  string priority = 9;             // one letter, "" for none; a done line's `pri:` tag counts
+  string due = 10;                 // the raw `due:` value, "" for none
+  repeated string projects = 11;   // bare (no `+`), in line order
+  repeated string contexts = 12;   // bare (no `@`), in line order
+  bool has_ref = 13;               // the line carries a `ref:` tag
+  Progress ref_progress = 14;      // done/total of the ref's sub-list; unset when it has none
+  bool has_notes = 15;             // the ref directory holds a notes.md
+}
+
+message UniversalTasksResponse {
+  repeated UniversalTask tasks = 1;   // workspace by workspace (WorkspaceList order), line order within
 }
 
 message SyncStatusResponse {
