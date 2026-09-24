@@ -31,7 +31,6 @@ pub fn accept_request(state: &AppState) -> Option<pb::WorkspaceAcceptOfferReques
     Some(pb::WorkspaceAcceptOfferRequest {
         offering_device: offer.device.clone(),
         workspace_id: offer.workspace_id.clone(),
-        ..pb::WorkspaceAcceptOfferRequest::default()
     })
 }
 
