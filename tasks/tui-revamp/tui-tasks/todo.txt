@@ -1,4 +1,4 @@
-2026-09-24 List mode: x complete, Enter/Ctrl-Enter open detail, u undo, Alt-Up/Down as J/K aliases; keep j/k/gg/G/i/a/A/dd/J/K/Space +m11 @tui
+2026-09-24 List mode: x complete, Enter/Ctrl-Enter open detail, u undo, Alt-Up/Down as J/K aliases; keep j/k/gg/G/i/a/A/dd/J/K/Space +m11 @tui @doing by:claude
 2026-09-24 Search: / focus, hits reversed, misses faded, Enter/Shift-Enter cycle, Esc clears then blurs, count pill; core query::matches +m11 @tui
 2026-09-24 Search suggestions: top contexts/projects, (A)(B)(C), is:open, is:done, due:, recents; click or Tab toggles +m11 @tui
 2026-09-24 Conflict sheet modal: merged preview, core diff, mine/theirs/merged, N more, Esc closes; replaces the r pane +m11 @tui
