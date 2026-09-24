@@ -267,3 +267,39 @@ M4 — relay, file carrier, bundle. Same plan §5 checklist as the M4 pass above
 
 `security-m8-review`'s parent line closes with this entry — every item above is `pass` or carries
 its own tracked `deferred` line; none is a silent gap.
+
+---
+2026-09-24 · `security-m6-review`: the MCP loopback threat model. Replaces the `--lan` threat model
+the M4 and M8 entries above deferred to M6: `--lan` no longer exists (task `mcp-local-only`, ADR
+0028). The full M6 checklist entry follows once `tasks/security-m6-review/findings-draft.md` is
+signed off.
+
+What is exposed. `txtodo mcp --stdio` has no network: only the process that spawned it can talk to
+it. `--http` serves Streamable HTTP at `127.0.0.1:8636/mcp`. That HTTP surface is plain HTTP with no
+authentication, and it offers every MCP tool, writes included. `--token` names the agent principal
+recorded on each op; nothing checks it. Nothing here is encrypted, and nothing claims to be.
+
+Who can reach the HTTP surface, and what stops them:
+
+- **Other hosts (LAN, internet) — blocked.** `serve_http` takes a port, never an address, and binds
+  `MCP_LOOPBACK`; `--lan` answers a refusal (`crates/txtodo-mcp/src/transport.rs`, `main.rs`).
+  Test: `crates/txtodo-mcp/tests/http_loopback_bind.rs` dials the real server on `127.0.0.1`
+  (served) and on the host's own address (refused); a `0.0.0.0` bind fails it. Loopback traffic
+  never leaves the host, so no TLS is needed for this case. Released v0.0.1 and v0.0.2 still have
+  `--lan`: do not run them with it.
+- **Web pages in a browser on this device — blocked.** A page can send requests to `127.0.0.1`, and a
+  hostile page can rebind its own name to it. rmcp's `Host`/`Origin` check answers 403 unless
+  `Host` is a loopback name and `Origin` is absent or this server's own. Test:
+  `crates/txtodo-mcp/tests/http_guard.rs` (foreign `Origin` 403, rebound `Host` 403, no `Origin`
+  served). Known gap: a browser MCP client on another local port (MCP Inspector) is refused too;
+  there is no `--allow-origin`.
+- **Other processes of the same OS user — allowed, by design.** They can call every tool. They can
+  already read and write the same `todo.txt` files directly, so MCP gives them nothing new.
+- **Other OS users on a shared machine — allowed, open gap.** Loopback is reachable by every local
+  user, and nothing authenticates the caller, so another user can read and change this user's
+  lists. Acceptable on a single-user laptop, not on a shared machine. On a shared machine, use
+  `--stdio` only.
+
+Tokens. `TokenCreate` mints scoped tokens, but `Store::verify_token` has no caller outside tests: no
+scope, expiry or revocation restricts any MCP call. The layer is dormant, not a defence. Tokens and
+their hashes never reach the logs: `crates/txtodo-daemon/tests/tokens.rs::a_token_round_logs_no_secret_hash_or_caveat_value`.
