@@ -1,8 +1,8 @@
-2026-09-24 cli: txtodo list uses core query::matches and drops its local copy +m11 @cli @doing by:claude
-2026-09-24 mcp: parse.rs::matches_query delegates to core query::matches +m11 @mcp
+2026-09-24 mcp: parse.rs::matches_query delegates to core query::matches +m11 @mcp @doing by:claude
 2026-09-24 core: lint::strict_hints, the three strict-check messages from mockup todotxt.js:308-313 +m11 @core
 2026-09-24 core: edit::toggle_priority, toggle_complete_text, insert_chip, the prompt-bar chip transforms +m11 @core
 2026-09-24 core: universal::due_bucket (Overdue/Today/This week/Later/No date, from a passed-in today) and universal::group (Priority/Due/Project/Context/Workspace, missing-value groups) +m11 @core
 2026-09-24 ffi: wasm exports for matches, strict_hints, chip edits, due_bucket, group; same pattern as parse_check.rs/diff_view.rs +m11 @ffi
 2026-09-24 desktop: rebuild the wasm core (npm run build:wasm-core) and add a Vitest proving each new export loads +m11 @desktop @test
 x 2026-09-25 2026-09-24 core: query::matches, AND terms, case-insensitive substring, -term excludes, is:open/is:done; one golden table shared with CLI and MCP +m11 @core — txtodo_core::query::{matches, GOLDEN}
+x 2026-09-25 2026-09-24 cli: txtodo list uses core query::matches and drops its local copy +m11 @cli — via query::matches_terms, so a quoted phrase stays one term; golden-table test
