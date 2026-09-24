@@ -1,8 +1,8 @@
-2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui @doing by:claude
-2026-09-24 Live mark: 4 strokes filled by done/total over the root todo.txt, blank lines excluded, faint full mark behind +m11 @tui
-2026-09-24 Workspace popup (W or click): name, N open, current highlighted, missing state, Manage workspaces goes to Settings > Workspaces +m11 @tui
-2026-09-24 g t / g u / g s screen chords beside gg, 900 ms window +m11 @tui
 2026-09-24 Banners: daemon connecting + Retry, conflict + Review (list read-only), version mismatch, skill hint, refused edit +m11 @tui
 2026-09-24 Status footer: synced/unsaved/saving/saved, Ln X, per-screen key hints from the manifest; a sync-detail popup replaces the s pane +m11 @tui
 2026-09-24 Toasts: bottom right, 5 s, optional Undo through the daemon Undo +m11 @tui
 2026-09-25 Mouse targets: tabs, ? help, workspace name, banner Retry/Review, toast Undo, footer sync popup, as hit::Target::Command +m11 @tui
+x 2026-09-25 2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui — ui/header.rs; the search field shows but is inert until tui-tasks' search
+x 2026-09-25 2026-09-24 Live mark: 4 strokes filled by done/total over the root todo.txt, blank lines excluded, faint full mark behind +m11 @tui — ui/mark.rs; strokes are box glyphs, one cell each, the look is for the human pass
+x 2026-09-25 2026-09-24 Workspace popup (W or click): name, N open, current highlighted, missing state, Manage workspaces goes to Settings > Workspaces +m11 @tui — ui/workspace_menu.rs; counts only for workspaces the daemon has loaded (else 'not loaded')
+x 2026-09-25 2026-09-24 g t / g u / g s screen chords beside gg, 900 ms window +m11 @tui — screen scopes take the global keys; Universal/Settings/Help are placeholders until their lines
