@@ -1,6 +1,26 @@
 /* @ts-self-types="./txtodo_ffi.d.ts" */
 
 /**
+ * One chip tap: `{ text, caret }`, the caret in UTF-16 units both ways; `null` for an unknown
+ * chip. Chip names: `A` `B` `C` `x` `+` `@` `due:` `t:` `rec:` (`txtodo_core::chips`).
+ * @param {string} raw
+ * @param {number} caret
+ * @param {string} chip
+ * @param {string} today
+ * @returns {any}
+ */
+export function apply_chip(raw, caret, chip, today) {
+    const ptr0 = passStringToWasm0(raw, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(chip, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(today, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.apply_chip(ptr0, len0, caret, ptr1, len1, ptr2, len2);
+    return ret;
+}
+
+/**
  * Char-level diff between `a` ("mine") and `b` ("theirs"), for the conflict-review `DiffView`
  * (`tasks/desktop-conflict-review/notes.md`). Returns a JS array of `{ op: "equal" | "insert" |
  * "delete", text: string }` segments, in order; concatenating every segment's `text` reconstructs `b`.
@@ -18,6 +38,81 @@ export function diff_text(a, b) {
 }
 
 /**
+ * The due bucket's heading for `due` against `today`: `Overdue` `Today` `This week` `Later`
+ * `No date` (`txtodo_core::universal::due_bucket`).
+ * @param {string | null | undefined} due
+ * @param {string} today
+ * @returns {string}
+ */
+export function due_bucket(due, today) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        var ptr0 = isLikeNone(due) ? 0 : passStringToWasm0(due, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(today, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.due_bucket(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * A row's due badge `{ text, days }`, or `null` for no date (`txtodo_core::universal::due_label`).
+ * @param {string | null | undefined} due
+ * @param {string} today
+ * @returns {any}
+ */
+export function due_label(due, today) {
+    var ptr0 = isLikeNone(due) ? 0 : passStringToWasm0(due, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(today, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.due_label(ptr0, len0, ptr1, len1);
+    return ret;
+}
+
+/**
+ * Groups Universal rows: `rows` is an array of `{ done, priority?, due?, project?, context?,
+ * workspace }`, `by` one of `priority` `due` `project` `context` `workspace`, `workspaces` the
+ * workspace order. Returns `[{ name, rows: number[] }]` in display order, or `null` for an
+ * unknown `by` (`txtodo_core::universal::group`).
+ * @param {Array<any>} rows
+ * @param {string} by
+ * @param {string} today
+ * @param {Array<any>} workspaces
+ * @returns {any}
+ */
+export function group_rows(rows, by, today, workspaces) {
+    const ptr0 = passStringToWasm0(by, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(today, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.group_rows(rows, ptr0, len0, ptr1, len1, workspaces);
+    return ret;
+}
+
+/**
+ * Whether `raw` matches every term of `query` (`txtodo_core::query`): the search every client
+ * shares.
+ * @param {string} raw
+ * @param {string} query
+ * @returns {boolean}
+ */
+export function matches_query(raw, query) {
+    const ptr0 = passStringToWasm0(raw, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(query, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.matches_query(ptr0, len0, ptr1, len1);
+    return ret !== 0;
+}
+
+/**
  * Strict-mode validity check for one `todo.txt` line, for the edit popover's inline error
  * (`tasks/desktop-edit-popover/notes.md`). Returns `{ ok: true }` when `raw` parses cleanly under
  * strict mode, or `{ ok: false, rule: string, byte: number, message: string }` otherwise — it
@@ -31,11 +126,76 @@ export function parse_line_strict(raw) {
     const ret = wasm.parse_line_strict(ptr0, len0);
     return ret;
 }
+
+/**
+ * The prompt bar's strict-mode hint for `line`, or `null` (`txtodo_core::strict_hint`).
+ * @param {string} line
+ * @returns {string | undefined}
+ */
+export function strict_hint(line) {
+    const ptr0 = passStringToWasm0(line, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.strict_hint(ptr0, len0);
+    let v2;
+    if (ret[0] !== 0) {
+        v2 = getStringFromWasm0(ret[0], ret[1]);
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    }
+    return v2;
+}
+
+/**
+ * Completes or reopens `raw` (`txtodo_core::chips::toggle_complete_text`).
+ * @param {string} raw
+ * @param {string} today
+ * @returns {string}
+ */
+export function toggle_complete_text(raw, today) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(raw, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(today, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.toggle_complete_text(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_boolean_get_7a12af2b3f899c5a: function(arg0) {
+            const v = arg0;
+            const ret = typeof(v) === 'boolean' ? v : undefined;
+            return isLikeNone(ret) ? 0xFFFFFF : ret ? 1 : 0;
+        },
+        __wbg___wbindgen_string_get_92ab86bb19cbc12f: function(arg0, arg1) {
+            const obj = arg1;
+            const ret = typeof(obj) === 'string' ? obj : undefined;
+            var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var len1 = WASM_VECTOR_LEN;
+            getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+        },
         __wbg___wbindgen_throw_5d9e815e6fdf150f: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
+        },
+        __wbg_get_989d0a1309644f2b: function() { return handleError(function (arg0, arg1) {
+            const ret = Reflect.get(arg0, arg1);
+            return ret;
+        }, arguments); },
+        __wbg_get_unchecked_363572bdd397d473: function(arg0, arg1) {
+            const ret = arg0[arg1 >>> 0];
+            return ret;
+        },
+        __wbg_length_4e1adc0d42e23620: function(arg0) {
+            const ret = arg0.length;
+            return ret;
         },
         __wbg_new_bebc3f4757acf305: function() {
             const ret = new Object();
@@ -85,6 +245,14 @@ function addToExternrefTable0(obj) {
     return idx;
 }
 
+let cachedDataViewMemory0 = null;
+function getDataViewMemory0() {
+    if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
+        cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
+    }
+    return cachedDataViewMemory0;
+}
+
 function getStringFromWasm0(ptr, len) {
     return decodeText(ptr >>> 0, len);
 }
@@ -104,6 +272,10 @@ function handleError(f, args) {
         const idx = addToExternrefTable0(e);
         wasm.__wbindgen_exn_store(idx);
     }
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
 }
 
 function passStringToWasm0(arg, malloc, realloc) {
@@ -177,6 +349,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedDataViewMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;
