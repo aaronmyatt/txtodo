@@ -44,6 +44,8 @@
 	// --- SAS confirmation (shared by both roles: one instance of this component is one device) ---
 	let confirmState = $state<ConfirmState>("none");
 	let sas = $state("");
+	/** "Is the other device your own?" — off unless ticked, like the CLI's explicit yes. */
+	let ownDevice = $state(false);
 	let confirmError = $state("");
 
 	function resetPairingUiState() {
@@ -52,6 +54,7 @@
 		scanner = null;
 		confirmState = "none";
 		sas = "";
+		ownDevice = false;
 		confirmError = "";
 		scanError = "";
 		scannedCode = "";
@@ -163,7 +166,7 @@
 		confirmState = "confirming";
 		confirmError = "";
 		try {
-			const result = await pairConfirmSas();
+			const result = await pairConfirmSas(ownDevice);
 			if (sas && result.sas !== sas) {
 				confirmError = "This device's SAS changed on confirm — do not trust this pairing.";
 				confirmState = "error";
@@ -258,6 +261,10 @@
 			<button type="button" onclick={armConfirm}>Confirm match</button>
 		{:else if confirmState === "armed"}
 			<p class="state-warning">This confirms the pairing on this device. Continue?</p>
+			<label class="own-device">
+				<input type="checkbox" bind:checked={ownDevice} />
+				The other device is mine (my default list merges only with my own devices)
+			</label>
 			<button type="button" onclick={confirmMatch}>Yes, confirm match</button>
 			<button type="button" onclick={cancelConfirm}>Cancel</button>
 		{:else if confirmState === "confirming"}

@@ -52,22 +52,29 @@ async fn pair_accept_inner(
 }
 
 /// Confirms the SAS shown to the human on this device. The group key lands only once both sides
-/// have confirmed.
+/// have confirmed. `own_device` (JS `ownDevice`): the human's answer to "is the other device your
+/// own?" (task default-workspace-pairing-consent).
+/// Ref: https://v2.tauri.app/develop/calling-rust/#passing-arguments
 #[tracing::instrument(name = "ipc.pair_confirm_sas", skip_all)]
 #[tauri::command]
 pub async fn pair_confirm_sas(
     app: AppHandle,
     state: State<'_, AppState>,
+    own_device: bool,
 ) -> Result<PairResultDto, String> {
-    pair_confirm_sas_inner(app, state).await
+    pair_confirm_sas_inner(app, state, own_device).await
 }
 
 async fn pair_confirm_sas_inner(
     app: AppHandle,
     state: State<'_, AppState>,
+    own_device: bool,
 ) -> Result<PairResultDto, String> {
     ensure_connected(&app, &state).await?;
     let mut client = state.client_snapshot().await?;
-    let resp = client.pair_confirm_sas().await.map_err(|e| e.to_string())?;
+    let resp = client
+        .pair_confirm_sas(own_device)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(PairResultDto::from(resp))
 }

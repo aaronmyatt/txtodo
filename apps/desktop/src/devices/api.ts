@@ -16,9 +16,12 @@ export function pairAccept(code: string): Promise<PairResult> {
 	return invoke("pair_accept", { code });
 }
 
-/** Confirms the SAS shown to the human on this device. Call only after an explicit user tap. */
-export function pairConfirmSas(): Promise<PairResult> {
-	return invoke("pair_confirm_sas");
+/**
+ * Confirms the SAS shown to the human on this device. Call only after an explicit user tap.
+ * `ownDevice`: "is the other device your own?" — the default list merges only when both say yes.
+ */
+export function pairConfirmSas(ownDevice: boolean): Promise<PairResult> {
+	return invoke("pair_confirm_sas", { ownDevice });
 }
 
 /** Mints a new capability token. `expires` is RFC 3339 text; empty means no expiry. */

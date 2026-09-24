@@ -221,7 +221,7 @@ async fn pair_accept_and_pair_confirm_sas_reach_the_daemon() {
     assert!(matches!(accept_err, DaemonError::Rpc(_)), "{accept_err}");
 
     let confirm_err = client
-        .pair_confirm_sas()
+        .pair_confirm_sas(false)
         .await
         .expect_err("pair_confirm_sas with no open pairing should be refused, not transport-fail");
     assert!(matches!(confirm_err, DaemonError::Rpc(_)), "{confirm_err}");

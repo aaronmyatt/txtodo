@@ -297,14 +297,18 @@ impl DaemonClient {
     }
 
     /// Confirms the SAS shown to the human on this device; the group key lands only once both
-    /// sides have confirmed.
-    pub async fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, DaemonError> {
+    /// sides have confirmed. `own_device` is the human's answer to "is the other device your own?"
+    /// (task default-workspace-pairing-consent): the default list merges only when both said yes.
+    pub async fn pair_confirm_sas(
+        &mut self,
+        own_device: bool,
+    ) -> Result<pb::PairResult, DaemonError> {
         let workspace = self.selector.clone();
-        Ok(self
-            .inner
-            .pair_confirm_sas(pb::PairConfirmRequest { workspace })
-            .await?
-            .into_inner())
+        let req = pb::PairConfirmRequest {
+            workspace,
+            own_device,
+        };
+        Ok(self.inner.pair_confirm_sas(req).await?.into_inner())
     }
 
     /// Mints a new capability token from the design §6.2 scope/caveat grammar.
