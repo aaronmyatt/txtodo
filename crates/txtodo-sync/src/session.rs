@@ -54,7 +54,8 @@ pub const MAX_OPEN_WORKSPACES: usize = 256;
 /// Where one workspace's sub-session is. Closed set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionState {
-    /// Nothing sent yet.
+    /// Nothing in flight: before our `Greet`, or once an exchange settled. After the peer's
+    /// `Greet`, a pushed `Ops` batch is accepted here (task `sync-live-push`).
     Idle,
     /// Our `Hello` is out; waiting for theirs.
     Greeted,
@@ -260,7 +261,8 @@ impl Session {
         self.workspace_mut(workspace)?.on_hello(msg, workspace)
     }
 
-    /// `workspace`'s `Wanting → Importing`. `msg` must be a `Message::Ops` whose own `workspace`
+    /// `workspace`'s `Wanting → Importing` (or `Idle → Importing` for a pushed batch once the
+    /// peer's `Greet` was consumed). `msg` must be a `Message::Ops` whose own `workspace`
     /// field matches `workspace` (`SessionError::WorkspaceMismatch` otherwise) and must already be
     /// opened (see `sealed_ops::open_ops`) — `Session` never touches the group-key AEAD, only
     /// per-op signatures via `device_keys`.

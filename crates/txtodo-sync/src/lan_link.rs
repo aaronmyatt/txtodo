@@ -268,7 +268,15 @@ impl Link for IrohLink {
     /// `cognitive_complexity`, `tasks/logging-sync-crate/notes.md`).
     #[tracing::instrument(skip_all)]
     fn recv(&mut self) -> Result<Frame, LinkError> {
-        self.recv_inner()
+        self.recv_inner(self.idle_timeout)
+            .and_then(|frame| frame.ok_or_else(|| log_link_idle_timeout(self.idle_timeout)))
+    }
+
+    /// Quinn's `read` is cancel-safe, so a timed-out wait loses no bytes: whatever arrived stays
+    /// in the stream, and a partial frame stays in `inbox`.
+    /// Ref: <https://docs.rs/quinn/latest/quinn/struct.RecvStream.html#method.read>
+    fn recv_timeout(&mut self, wait: std::time::Duration) -> Result<Option<Frame>, LinkError> {
+        self.recv_inner(wait)
     }
 
     /// `finish()` sends the stream's FIN; `stopped()` then resolves once the peer has acknowledged
@@ -293,23 +301,24 @@ impl IrohLink {
     /// `LinkError::Closed` at the type level (no wire/API break — see `tasks/logging-sync-crate/
     /// notes.md`), but each now logs which one it was *before* returning, so a human reading the
     /// JSON log can finally tell an idle redial apart from a real peer hangup.
-    fn recv_inner(&mut self) -> Result<Frame, LinkError> {
+    /// `Ok(None)` once `wait` passes with no whole frame; `recv` turns that into the idle close.
+    fn recv_inner(&mut self, wait: std::time::Duration) -> Result<Option<Frame>, LinkError> {
         loop {
             match Frame::decode(&self.inbox) {
                 Ok((frame, used)) => {
                     self.inbox.drain(..used);
-                    return Ok(frame);
+                    return Ok(Some(frame));
                 }
                 Err(FrameError::Truncated { .. }) => {} // fall through: read more
                 Err(other) => return Err(LinkError::Frame(other)),
             }
             let mut chunk = [0u8; READ_CHUNK_BYTES];
-            let read = tokio::time::timeout(self.idle_timeout, self.recv.read(&mut chunk));
+            let read = tokio::time::timeout(wait, self.recv.read(&mut chunk));
             match self.handle.block_on(read) {
                 Ok(Ok(Some(n))) => self.inbox.extend_from_slice(&chunk[..n]),
                 Ok(Ok(None)) => return Err(log_link_peer_closed()),
                 Ok(Err(e)) => return Err(LinkError::Io(e.to_string())),
-                Err(_elapsed) => return Err(log_link_idle_timeout(self.idle_timeout)),
+                Err(_elapsed) => return Ok(None),
             }
         }
     }

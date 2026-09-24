@@ -61,6 +61,12 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   dispatch as of stage 2** — `lan_session_dispatch.rs::drive_shared_session` opens every routed
   workspace onto one `Session` and interleaves `Greet`/`Want`/`Ops`/`Ack` across all of them over
   one connection; see that crate's own `CLAUDE.md`.
+- Push (task `sync-live-push`, 2026-09-24): once a workspace consumed the peer's `Greet`, an `Ops`
+  batch the peer sends unasked is accepted in `Idle` and `Ack`ed like a wanted one — only when each
+  run follows the heads held (`advance`), so a push that raced an open `Want` or skipped a seq is
+  refused (`Unrequested`/`Gap`) and changes nothing. No wire change. `Link::recv_timeout(wait) ->
+  Result<Option<Frame>, LinkError>` lets a long-lived driver do work between frames (`ChannelLink`
+  and `IrohLink` implement it; the default calls `recv`).
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,
   `verify_batch(&[Op], &[Signature], &BTreeMap<DeviceId, DevicePublicKey>)` (all-or-nothing);
   `DeviceSigningKey`/`DevicePublicKey`/`Signature` with `from_bytes`/`to_bytes`.

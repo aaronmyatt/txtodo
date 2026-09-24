@@ -162,6 +162,8 @@ mod sealed_ops_tests;
 #[cfg(test)]
 mod session_multiplex_tests;
 #[cfg(test)]
+mod session_push_tests;
+#[cfg(test)]
 mod session_tests;
 #[cfg(test)]
 mod sign_tests;

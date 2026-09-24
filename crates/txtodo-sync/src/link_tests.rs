@@ -58,3 +58,15 @@ fn the_queue_cap_is_enforced_rather_than_growing_without_bound() {
     }
     assert!(matches!(a.send(frame(0)), Err(LinkError::Io(_))));
 }
+
+/// Task `sync-live-push`: a timed wait on a quiet link says "nothing yet" and leaves it usable.
+#[test]
+fn recv_timeout_reports_nothing_yet_then_the_frame_then_the_close() {
+    let (mut a, mut b) = channel_link_pair();
+    let wait = std::time::Duration::from_millis(10);
+    assert!(matches!(b.recv_timeout(wait), Ok(None)));
+    a.send(frame(9)).unwrap();
+    assert_eq!(b.recv_timeout(wait).unwrap(), Some(frame(9)));
+    drop(a);
+    assert!(matches!(b.recv_timeout(wait), Err(LinkError::Closed)));
+}

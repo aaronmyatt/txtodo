@@ -6,6 +6,7 @@
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use crate::frame::{Frame, FrameError};
 
@@ -20,6 +21,14 @@ pub trait Link: Send {
     fn send(&mut self, frame: Frame) -> Result<(), LinkError>;
     /// Blocks for the next frame from the peer.
     fn recv(&mut self) -> Result<Frame, LinkError>;
+    /// Waits up to `wait` for the next frame; `Ok(None)` when none came in time, and the link is
+    /// still usable (task `sync-live-push`: a long-lived session pushes local commits and sends
+    /// heartbeats between frames, and judges the peer's silence itself). The default just calls
+    /// [`Link::recv`], which is right for a link whose `recv` never blocks for long.
+    fn recv_timeout(&mut self, wait: Duration) -> Result<Option<Frame>, LinkError> {
+        let _ = wait;
+        self.recv().map(Some)
+    }
     /// Ends this side's sends and blocks until the peer has acknowledged every frame sent so far
     /// (bounded by the link's own idle timeout). Call it before dropping a link whose *last*
     /// `send` must actually arrive: dropping an `IrohLink` closes its QUIC connection at once and
@@ -113,6 +122,29 @@ impl Queue {
         }
     }
 
+    /// [`Queue::pop`], but gives up after `wait` with `Ok(None)`.
+    /// Ref: https://doc.rust-lang.org/std/sync/struct.Condvar.html#method.wait_timeout
+    fn pop_timeout(&self, wait: Duration) -> Result<Option<Frame>, LinkError> {
+        let deadline = Instant::now() + wait;
+        let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        loop {
+            if let Some(frame) = state.frames.pop_front() {
+                return Ok(Some(frame));
+            }
+            if state.closed {
+                return Err(LinkError::Closed);
+            }
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                return Ok(None);
+            };
+            state = self
+                .not_empty
+                .wait_timeout(state, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+    }
+
     fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         state.closed = true;
@@ -135,6 +167,10 @@ impl Link for ChannelLink {
 
     fn recv(&mut self) -> Result<Frame, LinkError> {
         self.inbox.pop()
+    }
+
+    fn recv_timeout(&mut self, wait: Duration) -> Result<Option<Frame>, LinkError> {
+        self.inbox.pop_timeout(wait)
     }
 }
 

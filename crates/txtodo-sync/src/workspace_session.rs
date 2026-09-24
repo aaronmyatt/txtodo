@@ -32,6 +32,10 @@ pub(crate) struct WorkspaceSession {
     wanted: Vec<OriginRange>,
     /// Runs in the batch the caller is committing.
     inflight: Vec<OriginRange>,
+    /// Whether the peer's `Greet` for this workspace was consumed. Once it was, an `Ops` batch the
+    /// peer pushes unasked is accepted in `Idle` (task `sync-live-push`, decided 2026-09-23): the
+    /// peer already proved it holds the group key, and push is how a commit reaches it live.
+    greeted: bool,
 }
 
 impl WorkspaceSession {
@@ -42,6 +46,7 @@ impl WorkspaceSession {
             heads,
             wanted: Vec::new(),
             inflight: Vec::new(),
+            greeted: false,
         }
     }
 
@@ -119,6 +124,7 @@ impl WorkspaceSession {
             return Err(self.unexpected(name_of(msg)));
         };
         check_workspace(workspace, *msg_ws)?;
+        self.greeted = true;
         self.wanted = want(&self.heads, their_heads);
         self.state = if self.wanted.is_empty() {
             SessionState::Idle
@@ -132,8 +138,10 @@ impl WorkspaceSession {
         })
     }
 
-    /// `Wanting → Importing`: hands the batch to the caller to commit. `msg`'s own `workspace`
-    /// field must match `workspace` — a caller routing to the wrong sub-session is a typed error,
+    /// `Wanting → Importing`, or `Idle → Importing` for a batch the peer pushed unasked once its
+    /// `Greet` was consumed (task `sync-live-push`): hands the batch to the caller to commit.
+    /// `msg`'s own `workspace` field must match `workspace` — a caller routing to the wrong
+    /// sub-session is a typed error,
     /// never a silent misroute. Every op's signature is verified against `device_keys` before
     /// anything else runs (`sign::verify_batch` is all-or-nothing); only once authorship checks
     /// out does a run outside our `Want` get checked. `msg` must already be opened (see
@@ -157,12 +165,13 @@ impl WorkspaceSession {
         msg: &Message,
         device_keys: &BTreeMap<DeviceId, DevicePublicKey>,
     ) -> Result<Vec<Op>, SessionError> {
-        match self.state {
-            SessionState::Wanting => {}
+        let pushed = match self.state {
+            SessionState::Wanting => false,
+            SessionState::Idle if self.greeted => true,
             SessionState::Idle | SessionState::Greeted | SessionState::Importing => {
                 return Err(self.unexpected("Ops"));
             }
-        }
+        };
         let Message::Ops {
             workspace: msg_ws,
             ops,
@@ -174,14 +183,28 @@ impl WorkspaceSession {
         };
         check_workspace(workspace, *msg_ws)?;
         verify_batch(ops, signatures, device_keys).map_err(SessionError::Crypto)?;
-        if let Some(stray) = ranges.iter().find(|r| !covered(&self.wanted, r)) {
-            return Err(SessionError::Unrequested(*stray));
-        }
+        self.check_ranges(pushed, ranges)?;
         self.inflight = ranges.clone();
         self.state = SessionState::Importing;
-        debug_assert!(self.inflight.iter().all(|r| covered(&self.wanted, r)));
         debug_assert_eq!(self.state, SessionState::Importing);
         Ok(ops.clone())
+    }
+
+    /// A wanted batch must lie inside our `Want`. A pushed one must follow the heads we hold with
+    /// no gap and no repeat, run after run, so `committed` can always advance past it: a push that
+    /// raced an exchange still in flight is refused here, and the next session's `Greet` fills in.
+    fn check_ranges(&self, pushed: bool, ranges: &[OriginRange]) -> Result<(), SessionError> {
+        if pushed {
+            let mut trial = self.heads.clone();
+            for r in ranges {
+                advance(&mut trial, r).map_err(SessionError::Gap)?;
+            }
+            return Ok(());
+        }
+        match ranges.iter().find(|r| !covered(&self.wanted, r)) {
+            Some(stray) => Err(SessionError::Unrequested(*stray)),
+            None => Ok(()),
+        }
     }
 
     /// `Importing → Wanting | Idle`: the caller reports what it durably committed; heads advance
