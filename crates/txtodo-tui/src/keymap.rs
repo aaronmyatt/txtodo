@@ -164,6 +164,14 @@ commands! {
     PaletteOpen = "palette.open", [":"], Global;
     /// Quit.
     AppQuit = "app.quit", ["Ctrl-c"], Global;
+    /// Focus the header search.
+    SearchFocus = "search.focus", ["/"], Global;
+    /// The next match.
+    SearchNext = "search.next", ["Enter"], Search;
+    /// The previous match.
+    SearchPrev = "search.prev", ["Shift-Enter"], Search;
+    /// Clear the search, then leave it.
+    SearchClear = "search.clear", ["Esc"], Search;
     /// The Tasks screen.
     NavTasks = "nav.tasks", ["g t"], Global;
     /// The Universal screen.

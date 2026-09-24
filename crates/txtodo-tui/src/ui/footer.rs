@@ -16,7 +16,7 @@ use ratatui::widgets::Paragraph;
 use crate::hit::{HitMap, Target};
 use crate::keymap::Command;
 use crate::state::AppState;
-use crate::state_nav::Screen;
+use crate::state_nav::{Focus, Screen};
 
 /// How long "saved" shows after an edit lands.
 pub const SAVED_FOR: Duration = Duration::from_secs(2);
@@ -50,9 +50,16 @@ fn caret(state: &AppState) -> Option<String> {
     })
 }
 
-/// This screen's hints: a command and the word for it.
-fn hints(screen: Screen) -> &'static [(Command, &'static str)] {
-    match screen {
+/// The hints for what has the keyboard: a command and the word for it.
+fn hints(state: &AppState) -> &'static [(Command, &'static str)] {
+    if state.nav.focus == Focus::Search {
+        return &[
+            (Command::SearchNext, "next"),
+            (Command::SearchPrev, "previous"),
+            (Command::SearchClear, "clear"),
+        ];
+    }
+    match state.nav.screen {
         Screen::Tasks => &[
             (Command::ListDown, "down"),
             (Command::ListToggleComplete, "done"),
@@ -67,8 +74,8 @@ fn hints(screen: Screen) -> &'static [(Command, &'static str)] {
 }
 
 /// `j down  Space done  ...`: each hint's first key and its word.
-fn hint_text(screen: Screen) -> String {
-    hints(screen)
+fn hint_text(state: &AppState) -> String {
+    hints(state)
         .iter()
         .filter_map(|(command, word)| command.keys().first().map(|k| format!("{k} {word}")))
         .collect::<Vec<_>>()
@@ -114,7 +121,7 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, now: Instant, hits:
 
 /// The hints and the version, whichever fit beside `used` columns with a gap of two.
 fn right_side(state: &AppState, width: u16, used: usize) -> Line<'static> {
-    let hints = format!("{}  ", hint_text(state.nav.screen));
+    let hints = format!("{}  ", hint_text(state));
     let version = format!("{} ", crate::buildinfo::UI_LABEL);
     let room = usize::from(width).saturating_sub(used + 2);
     let fits = |s: &str| Span::raw(s).width() <= room;

@@ -321,7 +321,7 @@ title = "Search"
 keys = ["/"]
 scope = "global"
 desktop = { status = "planned", surface = "header search" }
-tui = { status = "planned", surface = "header search" }
+tui = { status = "done", surface = "header search" }
 deviation = ""
 
 [[action]]
@@ -330,7 +330,7 @@ title = "Next match"
 keys = ["Enter"]
 scope = "search"
 desktop = { status = "planned", surface = "header search" }
-tui = { status = "planned", surface = "header search" }
+tui = { status = "done", surface = "header search" }
 deviation = ""
 
 [[action]]
@@ -339,7 +339,7 @@ title = "Previous match"
 keys = ["Shift-Enter"]
 scope = "search"
 desktop = { status = "planned", surface = "header search" }
-tui = { status = "planned", surface = "header search" }
+tui = { status = "done", surface = "header search" }
 deviation = ""
 
 [[action]]
@@ -348,7 +348,7 @@ title = "Clear the search, then leave it"
 keys = ["Esc"]
 scope = "search"
 desktop = { status = "planned", surface = "header search" }
-tui = { status = "planned", surface = "header search" }
+tui = { status = "done", surface = "header search" }
 deviation = ""
 
 [[action]]

@@ -79,6 +79,8 @@ impl Mouse {
             (column, line) == (ev.column, ev.row) && now.duration_since(at) <= DOUBLE_CLICK
         });
         state.cursor = row;
+        // A click on the list takes the keyboard back from the search field; the query stays.
+        state.nav.focus = crate::state_nav::Focus::List;
         if double {
             self.last_press = None;
             self.dragging = None;

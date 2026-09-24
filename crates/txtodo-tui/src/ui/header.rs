@@ -13,7 +13,7 @@ use ratatui::widgets::Paragraph;
 use crate::hit::{HitMap, Target};
 use crate::keymap::Command;
 use crate::state::AppState;
-use crate::state_nav::Screen;
+use crate::state_nav::{Focus, Screen};
 
 /// Below this width the tabs are letters.
 const WIDE: u16 = 80;
@@ -98,28 +98,33 @@ pub fn workspace_name(state: &AppState) -> String {
     format!("{cut}\u{2026}")
 }
 
-/// The search field: the query, or a dim placeholder naming the open file, underlined as a field,
-/// `width` columns wide. Not clickable until search lands (task `tui-revamp/tui-tasks`).
+/// The search field, `width` columns wide and underlined as a field: the query (with a caret while
+/// it has the keyboard) or a dim placeholder naming the open file, and the count pill (`i/N`) at
+/// its right end. A click focuses it, like `/`.
 fn search_field(state: &AppState, width: usize) -> Part {
     let file = std::path::Path::new(&state.path)
         .file_name()
         .map_or_else(|| state.path.clone(), |n| n.to_string_lossy().into_owned());
-    let (text, style) = if state.shell.search.is_empty() {
+    let focused = state.nav.focus == Focus::Search;
+    let caret = if focused { "\u{258f}" } else { "" };
+    let (text, style) = if state.shell.search.is_empty() && !focused {
         (
             format!("/ Search {file}"),
             Style::new().add_modifier(Modifier::DIM | Modifier::UNDERLINED),
         )
     } else {
         (
-            format!("/ {}", state.shell.search),
+            format!("/ {}{caret}", state.shell.search),
             Style::new().add_modifier(Modifier::UNDERLINED),
         )
     };
-    let text: String = text.chars().take(width).collect();
-    let pad = width.saturating_sub(Span::raw(text.as_str()).width());
+    let pill = crate::search::pill(state).map_or_else(String::new, |p| format!(" {p} "));
+    let room = width.saturating_sub(Span::raw(pill.as_str()).width());
+    let text: String = text.chars().take(room).collect();
+    let pad = room.saturating_sub(Span::raw(text.as_str()).width());
     Part {
-        span: Span::styled(format!("{text}{}", " ".repeat(pad)), style),
-        target: Some(Target::Inert),
+        span: Span::styled(format!("{text}{}{pill}", " ".repeat(pad)), style),
+        target: Some(Target::Command(Command::SearchFocus)),
     }
 }
 

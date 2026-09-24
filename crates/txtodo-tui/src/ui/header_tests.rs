@@ -47,7 +47,7 @@ fn a_wide_header_names_the_workspace_and_spells_out_the_tabs() {
         Some(Target::Command(Command::NavWorkspaceMenu))
     );
     assert_eq!(tab("?"), Some(Target::Command(Command::NavHelp)));
-    assert_eq!(tab("Search"), Some(Target::Inert));
+    assert_eq!(tab("Search"), Some(Target::Command(Command::SearchFocus)));
 }
 
 #[test]
@@ -72,4 +72,15 @@ fn a_long_workspace_name_is_cut() {
         workspace_name(&state),
         format!("{}\u{2026}", "n".repeat(NAME_MAX - 1))
     );
+}
+
+#[test]
+fn a_query_shows_its_caret_while_focused_and_its_count_pill() {
+    let mut state = AppState::fixture();
+    state.nav.focus = Focus::Search;
+    state.shell.search = "is:open".to_owned();
+    state.cursor = 3;
+    let (text, _) = drawn(&state, 100);
+    assert!(text.contains("/ is:open\u{258f}"), "{text}");
+    assert!(text.contains(" 2/2 "), "{text}");
 }

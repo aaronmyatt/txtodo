@@ -7,7 +7,49 @@
 //! has no range API yet (desktop's mockup has `findRanges`), so this is the TUI's alone for now.
 //! Ref: <https://doc.rust-lang.org/std/primitive.char.html#method.to_lowercase>
 
+use crate::action::Action;
+use crate::keymap::Command;
 use crate::state::AppState;
+use crate::state_nav::Focus;
+
+/// Runs a search command; `None` for any other command.
+pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
+    match command {
+        Command::SearchFocus => state.nav.focus = Focus::Search,
+        Command::SearchNext => step(state, true),
+        Command::SearchPrev => step(state, false),
+        Command::SearchClear if state.shell.search.is_empty() => state.nav.focus = Focus::List,
+        Command::SearchClear => state.shell.search.clear(),
+        _ => return None,
+    }
+    Some(None)
+}
+
+/// Moves the cursor to the next hit after it (or the previous one before it), wrapping around.
+fn step(state: &mut AppState, forward: bool) {
+    let hits = hits(state);
+    let at = state.cursor;
+    let next = if forward {
+        hits.iter().find(|&&h| h > at).or(hits.first())
+    } else {
+        hits.iter().rev().find(|&&h| h < at).or(hits.last())
+    };
+    if let Some(&row) = next {
+        state.cursor = row;
+    }
+}
+
+/// The header's count pill: `i/N` while the cursor is on hit `i`, else `N`; `None` with no search.
+pub fn pill(state: &AppState) -> Option<String> {
+    if !active(&state.shell.search) {
+        return None;
+    }
+    let hits = hits(state);
+    Some(match hits.iter().position(|&h| h == state.cursor) {
+        Some(i) => format!("{}/{}", i + 1, hits.len()),
+        None => hits.len().to_string(),
+    })
+}
 
 /// Whether `query` searches at all (it has a term).
 pub fn active(query: &str) -> bool {
@@ -80,6 +122,35 @@ fn merge(mut ranges: Vec<(usize, usize)>) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enter_and_shift_enter_step_through_hits_and_wrap() {
+        let mut state = AppState::fixture();
+        state.shell.search = "is:open".to_owned(); // rows 0 and 3
+        run(&mut state, Command::SearchNext);
+        assert_eq!(state.cursor, 3);
+        assert_eq!(pill(&state).as_deref(), Some("2/2"));
+        run(&mut state, Command::SearchNext);
+        assert_eq!(state.cursor, 0, "wraps to the first");
+        run(&mut state, Command::SearchPrev);
+        assert_eq!(state.cursor, 3, "wraps to the last");
+        state.cursor = 1;
+        assert_eq!(pill(&state).as_deref(), Some("2"), "off a hit: the count");
+    }
+
+    #[test]
+    fn esc_clears_then_leaves() {
+        let mut state = AppState::fixture();
+        run(&mut state, Command::SearchFocus);
+        state.shell.search = "milk".to_owned();
+        run(&mut state, Command::SearchClear);
+        assert_eq!(
+            (state.shell.search.as_str(), state.nav.focus),
+            ("", Focus::Search)
+        );
+        run(&mut state, Command::SearchClear);
+        assert_eq!(state.nav.focus, Focus::List);
+    }
 
     #[test]
     fn hits_use_the_shared_matcher_and_skip_blank_lines() {

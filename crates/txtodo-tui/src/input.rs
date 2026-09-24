@@ -6,14 +6,14 @@
 
 use std::time::Instant;
 
-use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 use crate::action::Action;
 use crate::commands;
 use crate::keymap::{self, Chords, Command, Resolved, Scope};
 use crate::mouse::Mouse;
 use crate::state::AppState;
-use crate::state_nav::{Overlay, Screen};
+use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::edit;
 
 #[cfg(test)]
@@ -59,6 +59,9 @@ impl Input {
         }
         if state.command.is_some() {
             return on_command_key(state, key);
+        }
+        if state.nav.focus == Focus::Search {
+            return on_search_key(state, key, name.as_deref());
         }
         if state.editing.is_some() {
             return on_edit_key(state, key, name.as_deref());
@@ -132,6 +135,30 @@ fn run_palette(state: &mut AppState) -> Option<Action> {
             }
         },
     }
+}
+
+/// The header search has the keyboard: its bindings (`Enter`, `Shift-Enter`, `Esc`) are commands,
+/// a plain character types, `Backspace` deletes.
+fn on_search_key(state: &mut AppState, key: KeyEvent, name: Option<&str>) -> Option<Action> {
+    let bound = name.and_then(|n| {
+        keymap::BINDINGS
+            .iter()
+            .find(|b| b.scope == Scope::Search && b.keys.contains(&n))
+    });
+    if let Some(binding) = bound {
+        return commands::run(state, binding.command);
+    }
+    let plain = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+    match key.code {
+        KeyCode::Char(c) if plain => state.shell.search.push(c),
+        KeyCode::Backspace => {
+            state.shell.search.pop();
+        }
+        _ => {}
+    }
+    None
 }
 
 /// The line editor has the keyboard: `Enter` and `Esc` are commands, anything else edits text.

@@ -102,7 +102,10 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::SyncOpen => state.toggle_sync_visible(),
         Command::PaletteOpen => state.start_command(),
         Command::AppQuit => return Some(Action::Quit),
-        other => return crate::commands_nav::run(state, other).flatten(),
+        other => {
+            let run = crate::commands_nav::run(state, other);
+            return run.or_else(|| crate::search::run(state, other)).flatten();
+        }
     }
     None
 }

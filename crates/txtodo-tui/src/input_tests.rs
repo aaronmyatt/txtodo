@@ -350,3 +350,26 @@ fn a_line_under_review_is_read_only_and_says_so() {
         "other lines are not"
     );
 }
+
+#[test]
+fn slash_types_a_query_enter_jumps_and_esc_twice_leaves() {
+    let mut state = AppState::fixture();
+    let mut input = Input::default();
+    for c in "/plants".chars() {
+        input.on_key(&mut state, key(c));
+    }
+    assert_eq!(state.shell.search, "plants", "/ focuses, the rest types");
+    input.on_key(
+        &mut state,
+        KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+    );
+    input.on_key(&mut state, key('s'));
+    input.on_key(&mut state, enter());
+    assert_eq!(state.cursor, 3, "Enter jumps to the hit");
+    let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    input.on_key(&mut state, esc);
+    assert_eq!(state.shell.search, "", "Esc clears");
+    input.on_key(&mut state, esc);
+    input.on_key(&mut state, key('j'));
+    assert_eq!(state.cursor, 4, "Esc again leaves; j moves the list");
+}
