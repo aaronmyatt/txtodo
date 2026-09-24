@@ -4,7 +4,7 @@ members = ["crates/*", "apps/desktop/src-tauri", "relay"]
 exclude = ["crates/txtodo-core/fuzz"]   # cargo-fuzz crate: nightly-only, built via `just fuzz`
 
 [workspace.package]
-version = "0.0.10"
+version = "0.0.11"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
