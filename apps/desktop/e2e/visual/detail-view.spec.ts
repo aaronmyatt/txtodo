@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 	const line = page.locator(".cm-line", { hasText: "plan the roadmap" }).first();
 	await line.dblclick();
 	await expect(page.locator("section.parent")).toContainText("plan the roadmap");
-	await expect(page.locator("section.notes")).toHaveCount(0);
+	await expect(page.locator("section.notes")).toBeVisible();
 	await expect(page.locator("section.sublist")).toContainText("of");
 });
 

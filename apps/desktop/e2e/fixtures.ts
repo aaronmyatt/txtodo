@@ -26,10 +26,16 @@ const TARGET_DEBUG = join(REPO_ROOT, "target", "debug");
 
 let builtOnce = false;
 
+/** Set by globalSetup once it has built both binaries; workers inherit it through `process.env`. */
+export const PREBUILT_ENV = "TXTODO_E2E_PREBUILT";
+
 /** Builds `e2e_bridge` (behind its `e2e-bridge` feature — see that file's module doc for why it's
- * feature-gated) and `txtodod` once per Playwright run, not once per spec file. */
-function ensureBuilt(): void {
-	if (builtOnce) return;
+ * feature-gated) and `txtodod` once per Playwright run, not once per spec file. globalSetup calls
+ * it before any worker starts: `builtOnce` is per worker process, so a build left to `spawnDaemon`
+ * ran once per worker, all in parallel, inside `beforeEach` — the cargo lock plus a real compile
+ * blew the 30 s hook timeout on every visual spec (2026-09-24). */
+export function ensureBuilt(): void {
+	if (builtOnce || process.env[PREBUILT_ENV] === "1") return;
 	execFileSync(
 		"cargo",
 		["build", "-p", "desktop", "--features", "e2e-bridge", "--bin", "e2e_bridge"],
