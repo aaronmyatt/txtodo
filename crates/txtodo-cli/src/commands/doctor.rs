@@ -223,10 +223,16 @@ fn peer_checks(devices: &[pb::Device]) -> Vec<Check> {
         .iter()
         .filter(|d| !d.is_self && !d.removed)
         .map(|d| {
-            let label = if d.name.is_empty() {
+            let name = if d.name.is_empty() {
                 d.id.clone()
             } else {
                 format!("{} ({})", d.name, d.id)
+            };
+            // Task default-workspace-pairing-consent: the default merges only with an own device.
+            let label = if d.own_device {
+                name
+            } else {
+                format!("{name} [not own: default kept apart]")
             };
             let (status, detail) = match pb::SkewStatus::try_from(d.skew_status)
                 .unwrap_or(pb::SkewStatus::Unspecified)

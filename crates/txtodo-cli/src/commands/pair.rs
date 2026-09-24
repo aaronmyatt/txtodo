@@ -122,7 +122,7 @@ fn run_offer(daemon: &mut Daemon) -> Result<(), CliError> {
                 .to_owned(),
         ));
     }
-    daemon.pair_confirm_sas()?;
+    daemon.pair_confirm_sas(ask_own_device()?)?;
     println!(
         "Confirmed on this device. Once the joining device also confirms, it receives the group \
          key and syncs this workspace over the LAN automatically."
@@ -159,6 +159,12 @@ fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> 
     let parsed: PairingCode = parse_code(code)?;
     refuse_on_identity_mismatch(ctx, daemon, &parsed.identity_mode)?;
     let result = daemon.pair_accept(code.to_owned())?;
+    if result.kept_own_workspace {
+        println!(
+            "Your default list stays as it is. The other device's workspace arrives separately, \
+             as a Remote workspace (`txtodo workspace list`)."
+        );
+    }
     println!("Six words from the initiator's device — compare them by eye:");
     println!();
     println!("  {}", result.sas);
@@ -170,7 +176,7 @@ fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> 
                 .to_owned(),
         ));
     }
-    daemon.pair_confirm_sas()?;
+    daemon.pair_confirm_sas(ask_own_device()?)?;
     println!("Confirmed on this device. Waiting for the initiator to confirm...");
     let carrier = await_group_key(daemon)?;
     println!("Paired. Syncing this workspace with the initiator over {carrier}...");
@@ -302,6 +308,16 @@ fn print_qr(text: &str) -> Result<(), CliError> {
     let art = code.render::<qrcode::render::unicode::Dense1x2>().build();
     println!("{art}");
     Ok(())
+}
+
+/// Task `default-workspace-pairing-consent` (decided 2026-09-24): the default list merges only
+/// between two devices whose humans both answer yes; with any other device each side sees the
+/// other's default as a separate Remote workspace. Same explicit-yes rule as the SAS question: no
+/// answer, or anything but yes, is no.
+fn ask_own_device() -> Result<bool, CliError> {
+    println!();
+    println!("Your default todo list merges only with devices that are yours.");
+    confirm("Is the other device your own? [y/N] ")
 }
 
 /// Reads one line from stdin and requires an explicit "y"/"yes" (case-insensitive); anything

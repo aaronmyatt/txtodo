@@ -251,7 +251,7 @@ fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
     let b = Daemon::spawn(dir_b.path());
 
     let (offer_child, mut offer_reader) =
-        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\n");
+        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\nyes\n");
     let (offer_seen_so_far, code) = read_until_code(&mut offer_reader);
     assert_offer_preamble(&offer_seen_so_far, &code);
 
@@ -259,7 +259,7 @@ fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
         dir_b.path(),
         &missing_config(dir_b.path()),
         &["pair", &code],
-        "yes\n",
+        "yes\nyes\n",
     );
     assert!(join.status.success(), "{}", stderr(&join));
     let join_text = stdout(&join);
@@ -319,7 +319,7 @@ fn joiner_saying_no_aborts_without_confirming_while_the_initiator_still_confirms
     let _b = Daemon::spawn(dir_b.path());
 
     let (offer_child, mut offer_reader) =
-        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\n");
+        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\nyes\n");
     let (_seen, code) = read_until_code(&mut offer_reader);
 
     let join = txtodo_with_stdin(
@@ -354,14 +354,14 @@ fn a_detected_identity_mode_mismatch_against_a_non_empty_workspace_is_refused_be
     let _b = Daemon::spawn(dir_b.path());
 
     let (mut offer_child, mut offer_reader) =
-        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\n");
+        spawn_pair_offer(dir_a.path(), &missing_config(dir_a.path()), "yes\nyes\n");
     let (_seen, code) = read_until_code(&mut offer_reader);
 
     // B's own CLI config asks for tagged mode, disagreeing with A's sidecar offer.
     let b_config = dir_b.path().join("config.toml");
     std::fs::write(&b_config, "identity_mode = \"tagged\"\n").unwrap();
 
-    let join = txtodo_with_stdin(dir_b.path(), &b_config, &["pair", &code], "yes\n");
+    let join = txtodo_with_stdin(dir_b.path(), &b_config, &["pair", &code], "yes\nyes\n");
     assert!(
         !join.status.success(),
         "a real mismatch against existing tasks must refuse, never guess"

@@ -47,10 +47,11 @@ fn skew_word(status: i32) -> &'static str {
 
 fn device_json(d: &pb::Device) -> String {
     format!(
-        r#"{{"id":{},"name":{},"is_self":{},"removed":{},"key_epoch":{},"paired_at_ms":{},"last_seen_ms":{},"skew":{}}}"#,
+        r#"{{"id":{},"name":{},"is_self":{},"own_device":{},"removed":{},"key_epoch":{},"paired_at_ms":{},"last_seen_ms":{},"skew":{}}}"#,
         json::str(&d.id),
         json::str(&d.name),
         d.is_self,
+        d.own_device,
         d.removed,
         d.key_epoch,
         d.paired_at_ms,
@@ -65,7 +66,12 @@ fn device_text(d: &pb::Device) -> String {
     } else {
         d.name.as_str()
     };
-    let marker = if d.is_self { " (this device)" } else { "" };
+    // Task default-workspace-pairing-consent: whether the default list merges with this peer.
+    let marker = match (d.is_self, d.own_device) {
+        (true, _) => " (this device)",
+        (false, true) => " (own)",
+        (false, false) => " (not own: default kept apart)",
+    };
     let removed = if d.removed { " [removed]" } else { "" };
     let last_seen = if d.last_seen_ms == 0 {
         "never".to_owned()
@@ -152,4 +158,25 @@ fn confirm(daemon: &mut Daemon, id: &str) -> Result<bool, CliError> {
         .read_line(&mut line)
         .map_err(CliError::Io)?;
     Ok(line.trim() == id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn peer(own_device: bool) -> pb::Device {
+        pb::Device {
+            id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+            own_device,
+            ..pb::Device::default()
+        }
+    }
+
+    /// Task `default-workspace-pairing-consent`: a peer row says whether the default merges.
+    #[test]
+    fn a_peer_row_says_whether_it_is_an_own_device() {
+        assert!(device_text(&peer(true)).contains("(own)"));
+        assert!(device_text(&peer(false)).contains("not own"));
+        assert!(device_json(&peer(false)).contains(r#""own_device":false"#));
+    }
 }

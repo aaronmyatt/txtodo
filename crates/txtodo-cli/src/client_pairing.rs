@@ -33,13 +33,16 @@ impl Daemon {
     }
 
     /// Confirms the SAS shown on this device; the group key moves only once the peer has too.
-    pub fn pair_confirm_sas(&mut self) -> Result<pb::PairResult, ClientError> {
+    /// `own_device` is the human's answer to "is the other device your own?" (task
+    /// default-workspace-pairing-consent): the default list merges only when both sides said yes.
+    pub fn pair_confirm_sas(&mut self, own_device: bool) -> Result<pb::PairResult, ClientError> {
+        let req = pb::PairConfirmRequest {
+            workspace: None,
+            own_device,
+        };
         let rep = self
             .rt
-            .block_on(
-                self.client
-                    .pair_confirm_sas(pb::PairConfirmRequest { workspace: None }),
-            )
+            .block_on(self.client.pair_confirm_sas(req))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }
