@@ -303,3 +303,61 @@ Who can reach the HTTP surface, and what stops them:
 Tokens. `TokenCreate` mints scoped tokens, but `Store::verify_token` has no caller outside tests: no
 scope, expiry or revocation restricts any MCP call. The layer is dormant, not a defence. Tokens and
 their hashes never reach the logs: `crates/txtodo-daemon/tests/tokens.rs::a_token_round_logs_no_secret_hash_or_caveat_value`.
+
+---
+2026-09-24 · `security-m6-review`: M6 security checklist, signed off by the human 2026-09-24. Same
+plan §5 checklist as the M4 and M8 entries above, re-checked against the M6 surface (MCP stdio and
+HTTP) and the sync surface added since (`notes.md` and `txtodo.toml` travel between devices). Full
+task and the signed draft in `tasks/security-m6-review/` (`findings-draft.md`). The threat model is
+the entry just above.
+
+- **No secrets in logs — pass, tested.** Token code has no `tracing::` calls. MCP tool calls are
+  `#[tracing::instrument(skip_all, fields(tool, principal))]` (`crates/txtodo-mcp/src/schema.rs`),
+  so arguments are never logged. Tests: `crates/txtodo-mcp/tests/smoke.rs` captures a tool call's
+  JSON log; `crates/txtodo-daemon/tests/tokens.rs::a_token_round_logs_no_secret_hash_or_caveat_value`
+  captures a create, list and revoke round and finds no secret, no `blake3` hex of it and no caveat
+  value. Adding a log of the secret in `token_create` fails it. Known gap: that test drives the
+  per-workspace `serve`, not `GlobalService`, whose `rpc_span` carries only method and workspace.
+- **Keys only in keystore — pass.** Token secrets are not keystore keys: 32 bytes of OS entropy,
+  shown once, only `blake3(secret)` stored (`crates/txtodo-store/src/tokens.rs`). The macaroon root
+  key the M6 plan expected was never built, so its audit does not apply. New since M8:
+  `keystore_cache.rs` holds `Secret`, which wipes on drop and never prints its bytes; the
+  `TXTODO_TEST_KEYSTORE_MEMORY` switch is honoured only under `cfg!(debug_assertions)`.
+- **Every network message versioned, authenticated, encrypted — pass.** MCP stdio has no network;
+  MCP HTTP never leaves loopback (next item). `notes.md` and `txtodo.toml` changes are ordinary
+  `Op`s on the same AEAD-sealed sync session as `todo.txt` ops (`crates/txtodo-daemon/src/lan_apply.rs`).
+- **MCP HTTP refuses non-loopback — pass, tested; the `--lan` exception is gone.** Decided
+  2026-09-20 (`mcp-local-only`, ADR 0028): no `--lan`, no bearer auth, no mDNS. `serve_http` takes a
+  port, never an address. Test: `crates/txtodo-mcp/tests/http_loopback_bind.rs`; a `0.0.0.0` bind
+  fails it. It skips on a host with no network route. Browser pages are blocked by the `Host`/
+  `Origin` check (`crates/txtodo-mcp/tests/http_guard.rs`).
+- **Tokens never logged — pass, tested.** Same test as the first item.
+- **Path traversal — pass, after one real bug found and fixed.** Slug fuzz re-run after M5's ref
+  work: `slug` target, 60 s, 57.7 million runs, no crash (2026-09-20); `slug_windows_safe` not run.
+  Synced `txtodo.toml` goes through `WorkspaceLayout`, which refuses `..` and absolute paths.
+  **Bug:** `FilePath` checked its input only in `FilePath::new` and derived `Deserialize`, so an
+  `Op` decoded from a paired device kept any path it carried, `../` included; `lan_apply.rs` then
+  made directories and opened a file actor at `root.join(path)`. Only a group-key holder could do
+  it, but it let a hostile paired device write todo.txt-shaped text anywhere the user can write.
+  Fixed in 15ac56f: `#[serde(try_from = "String")]` runs `new` on decode; serialization, and so
+  signed-op bytes, are unchanged. Test: `crates/txtodo-model/src/ids.rs::file_path_decode_runs_the_same_checks_as_new`.
+  Known gap: no daemon-level test sends a whole sealed frame with a bad path.
+- **Relay cannot distinguish op types — not an M6 item.** Content closed in M8; frame-length
+  padding dropped by human decision 2026-09-17.
+
+Accepted gaps, signed off with this entry:
+
+- MCP tokens are minted but never checked (`Store::verify_token` has no caller outside tests). No
+  scope, expiry or revocation restricts anything. Later choice: keep the layer dormant or remove it.
+- Other OS users on a shared machine can reach loopback MCP and call every tool. Fine on a
+  single-user laptop; use `--stdio` only on a shared machine.
+- Released v0.0.1 and v0.0.2 still have `--lan`.
+
+Carried forward: trust between paired devices changed after this checklist was written. Remote
+workspaces auto-accept (`remote-workspace-mirror`) and the default workspace merges on pairing
+(`default-workspace-pairing-consent`, `@human`). The checklist has no item for content a paired
+device pushes; the next milestone review adds one (root `todo.txt`). The `payloadKB` budget was
+split out and shipped separately at 512 KiB (`tasks/payload-budget`, 2026-09-23).
+
+M8's deferred item 5 (re-run the MCP-loopback, tokens-never-logged and slug-fuzz tests in the M8
+job) is unblocked: all three now exist. `security-m6-review`'s parent line closes with this entry.

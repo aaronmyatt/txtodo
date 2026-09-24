@@ -109,3 +109,14 @@ round.
 - caps: `MAX_LINES_PER_FILE` (`crates/txtodo-daemon/src/state.rs`), `SUMMARY_MAX_CHARS`
   (`crates/txtodo-daemon/src/convert.rs`), `FILE_PATH_MAX_BYTES` (`crates/txtodo-model/src/ids.rs`)
 - frozen-path write: `/setup` skill; `budgets.json` + `stack.md` are both frozen
+
+## As built (2026-09-24)
+
+- Signed off by the human 2026-09-24; the entry is in `RATCHET.md` (2026-09-24, two entries: the
+  loopback threat model, then the checklist). `findings-draft.md` is the signed text.
+- The plan above went stale before it ran: no bearer auth, no `--lan`, no macaroon root key was
+  ever built (`mcp-local-only`, ADR 0028), and `payloadKB` shipped on its own (`payload-budget`).
+- Found and fixed one real bug: peer-sent `FilePath` skipped validation on decode (15ac56f).
+- Added the two tests M4 deferred: loopback bind (bdbc331), token round log capture (b5d0889).
+- Known gaps: tokens are never checked; other OS users reach loopback MCP; `slug_windows_safe` not
+  fuzzed; no daemon-level bad-path frame test.
