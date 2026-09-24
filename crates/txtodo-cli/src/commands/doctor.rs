@@ -302,10 +302,10 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(config_check(ctx));
     checks.push(keystore_check(health.as_ref()));
     checks.push(transport_check(health.as_ref()));
-    checks.push(offers_check(health.as_ref()));
     debug_assert_eq!(checks.len(), 7, "seven fixed checks in a fixed order");
     // After the fixed seven, so their order and count stay what scripts already read.
     checks.push(version_check(health.as_ref()));
+    checks.push(offers_check(health.as_ref()));
     checks.extend(peer_checks(&devices));
     checks.extend(other_workspace_checks(
         state.daemon.as_deref_mut(),
