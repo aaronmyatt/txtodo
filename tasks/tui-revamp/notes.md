@@ -68,3 +68,7 @@
   - Desktop uses `Mod-Shift-Space`. The manifest should record this as `differs` unless a better shared key turns up.
 
 ## As built
+- 2026-09-25: every sub-backlog that needs no human is built: foundation, mouse, shell, Tasks, detail panel, prompt bar, Universal, Settings, Help; the desktop @parity lines are filed. Each folder's notes.md has its own "As built".
+- Open, all waiting on a person: the six Decide lines at the top of todo.txt (ADR 0031, reopen, deps, gate script, detail panel, and the new pairing-code one), the human pass, check-parity.sh, and showing this device's pairing code.
+- Found on the way and fixed: other clients' edits never repainted the TUI until a reconnect; Space on a done line never reopened it (Complete leaves done lines alone; the TUI now sends Reopen).
+- Reopen already exists in the proto and daemon (2026-09-20), which the reopen decide line predates.
