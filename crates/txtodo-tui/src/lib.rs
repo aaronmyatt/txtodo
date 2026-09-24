@@ -33,6 +33,7 @@ pub mod daemon_notes;
 pub mod daemon_tokens;
 pub mod daemon_workspace;
 pub mod input;
+pub mod keymap;
 
 pub mod app;
 pub mod app_layout;
