@@ -1,8 +1,6 @@
 //! In-memory state of one document: the ordered entries the actor owns, materialised to the exact
 //! bytes on disk, mutated only through ops (plan M4 swaps the backing store, same shape).
 
-use crate::textedit::TextEditError;
-use std::fmt;
 use txtodo_core::{File, LineEnding, LineKind, OwnedLine};
 use txtodo_model::{FilePath, IdentityMode, Op, OpKind, TaskId, Ulid};
 
@@ -48,47 +46,8 @@ pub struct TaskCounts {
     pub completed: usize,
 }
 
-/// Why an op or a file could not be applied — a daemon bug or a stale client.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StateError {
-    /// A task line has no resolved id, tag or fingerprint match (line index).
-    MissingId(usize),
-    /// A line is not valid UTF-8 (line index).
-    Opaque(usize),
-    /// The op names a task this document does not hold.
-    UnknownTask(TaskId),
-    /// `Insert` line text does not carry the op's task id.
-    IdMismatch(TaskId),
-    /// A text edit did not fit the description.
-    Text(TaskId, TextEditError),
-    /// `BlankRemove` found no blank at that position.
-    NoBlank(Option<TaskId>),
-    /// The op kind is not handled in this document model (notes, undelete-via-`SetField`).
-    Unsupported(&'static str),
-    /// The document would exceed `MAX_LINES_PER_FILE`.
-    TooManyLines(usize),
-}
+pub use crate::state_error::StateError;
 
-impl fmt::Display for StateError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StateError::MissingId(i) => write!(f, "line {} has no id: tag", i + 1),
-            StateError::Opaque(i) => write!(f, "line {} is not UTF-8", i + 1),
-            StateError::UnknownTask(t) => write!(f, "no task {t} in this document"),
-            StateError::IdMismatch(t) => write!(f, "inserted line does not carry id {t}"),
-            StateError::Text(t, e) => write!(f, "task {t}: {e}"),
-            StateError::NoBlank(after) => write!(f, "no blank line after {after:?}"),
-            StateError::Unsupported(what) => {
-                write!(f, "{what} is not supported on one device (M3)")
-            }
-            StateError::TooManyLines(n) => {
-                write!(f, "document would have {n} lines, max {MAX_LINES_PER_FILE}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for StateError {}
 /// `apply`'s span field: the op kind's name, never its payload; blank/notes group as `"other"`.
 fn op_kind_name(kind: &OpKind) -> &'static str {
     match kind {
@@ -322,7 +281,8 @@ impl DocState {
         Ok(())
     }
 
-    /// Same-file: reorders. Cross-file: removes only — the destination gets its own `Insert`.
+    /// Same-file: reorders; the anchor is checked before anything moves (`apply` is unchanged on
+    /// `Err`, task sync-poison-op). Cross-file: removes only — the destination has its `Insert`.
     fn move_task(
         &mut self,
         task: TaskId,
@@ -338,6 +298,9 @@ impl DocState {
             return Err(StateError::UnknownTask(task));
         }
         let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
+        if let Some(a) = after.filter(|a| self.index_of(*a).is_none()) {
+            return Err(StateError::UnknownTask(a));
+        }
         let entry = self.entries.remove(from);
         let at = self.position_after(after)?;
         self.entries.insert(at, entry);

@@ -63,7 +63,13 @@ async fn insert_a_line_in_the_middle_gets_an_id_in_one_write() {
             .join("\n"),
         &[],
     );
-    assert_eq!(kinds(&d.history().await), vec!["insert"]);
+    // The new line sits after a blank. An `Insert` anchors on the task above and lands above that
+    // task's blank, so the ops a peer can replay are three (task sync-poison-op); the single
+    // `insert` this used to record put the line on the wrong side of the blank on a peer.
+    assert_eq!(
+        kinds(&d.history().await),
+        vec!["insert", "blank_insert", "blank_remove"]
+    );
 }
 
 #[tokio::test]

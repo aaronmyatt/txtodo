@@ -51,3 +51,21 @@ be findable.
   conflicts (mine/theirs) and the task may not exist.
 - The receiver's copy can differ from the sender's where an op was skipped, until a later edit
   of those lines.
+
+## As built (2026-09-25)
+- Sender: `reconcile_replay.rs`. `FileActor::settle_reconciled` keeps the reconciler's ops when
+  they replay to its render; else synthesizes ops (delete, place tasks by rank among tasks, even
+  out each run of blanks), each applied to a scratch copy as it is made, kept only if the copy's
+  lines equal the target's; else the old ops with a `reconcile_ops_not_replayable` warn.
+  `ops_derived` now logs `synthesized`.
+- A line inserted after a blank now takes three ops (`insert`, `blank_insert`, `blank_remove`):
+  an `Insert` anchors on a task and lands above its blank. Two external-edit tests pinned the old
+  single `insert`, which a peer placed on the wrong side of the blank; updated.
+- Receiver: `sync_ops.rs::on_sync_ops` applies leniently. Per commit (same HLC stamp), a failed op
+  is retried after the others; what still fails is logged `sync_op_skipped` (file, op, kind, task,
+  error) and kept in the log.
+- Found and fixed on the way: `DocState::move_task` removed the task before checking its anchor,
+  so a failed `Move` deleted the line. `apply` is now unchanged on `Err`, as its doc said.
+  `StateError` moved to `state_error.rs` for the 400-line budget.
+- Tests: `reconcile_replay_tests.rs` (5, one fails without the synthesis), `sync_ops_tests.rs`
+  (skipped op kept in the log; the seq-23778 shape applies once its insert has).

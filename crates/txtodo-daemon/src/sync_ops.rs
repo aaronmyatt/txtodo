@@ -13,7 +13,8 @@
 
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
-use txtodo_model::Op;
+use crate::state::{DocState, StateError};
+use txtodo_model::{Op, OpKind, TaskId};
 
 impl ActorHandle {
     /// Sends a peer's already-signed LAN sync ops (`lan.rs`) to this document's actor. `ops` must
@@ -27,10 +28,14 @@ impl ActorHandle {
 
 impl FileActor {
     /// Applies `ops` (already filtered to this actor's `path` by the caller — one commit is one
-    /// document, same invariant `commit_change_with` asserts) in the order they arrived, which the
-    /// wire protocol's own doc guarantees is "a total order the receiver may apply as-is". A
-    /// refusal partway through means the batch never commits: the caller then acks nothing, so the
-    /// peer resends the whole run (`Session::committed`'s own documented behaviour).
+    /// document, same invariant `commit_change_with` asserts) in the order they arrived, and
+    /// commits every one of them to the log, applied or not (task `sync-poison-op`, 2026-09-25).
+    /// An op that does not fit this document used to refuse the whole batch, so one bad op in a
+    /// peer's log blocked the workspace on every reconnect. Now it is retried once the rest of its
+    /// commit (its HLC stamp: one tick per batch) has applied, the order a reconciler that
+    /// anchored on a later insert needed, and skipped if it still does not fit, with a warn that
+    /// names it. It stays in the log so heads stay dense and other peers still get it. Only a
+    /// store or disk failure refuses the batch now.
     pub(crate) fn on_sync_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
         debug_assert!(
             ops.iter().all(|o| o.file == self.cfg.path),
@@ -40,8 +45,8 @@ impl FileActor {
             return Ok(());
         }
         let mut next = self.state.clone();
-        for op in &ops {
-            next.apply(op)?;
+        for (op, e) in apply_leniently(&mut next, &ops) {
+            log_skipped(op, &e);
         }
         let bytes = next.to_bytes();
         let write = bytes != self.projection;
@@ -57,5 +62,54 @@ impl FileActor {
             },
         })?;
         Ok(())
+    }
+}
+
+/// Applies `ops` to `state` one commit (same HLC stamp) at a time; within a commit, an op that
+/// fails is retried after the others, until a round applies nothing new. Returns the ops that
+/// never applied, with why.
+fn apply_leniently<'a>(state: &mut DocState, ops: &'a [Op]) -> Vec<(&'a Op, StateError)> {
+    let mut skipped = Vec::new();
+    for group in ops.chunk_by(|a, b| a.hlc == b.hlc) {
+        let mut pending: Vec<&Op> = group.iter().collect();
+        // Bounded: every round but the last applies at least one op.
+        loop {
+            let before = pending.len();
+            let mut failed = Vec::new();
+            for op in pending {
+                if let Err(e) = state.apply(op) {
+                    failed.push((op, e));
+                }
+            }
+            if failed.is_empty() || failed.len() == before {
+                skipped.extend(failed);
+                break;
+            }
+            pending = failed.into_iter().map(|(op, _)| op).collect();
+        }
+    }
+    debug_assert!(skipped.len() <= ops.len());
+    skipped
+}
+
+fn log_skipped(op: &Op, e: &StateError) {
+    tracing::warn!(
+        file = %op.file,
+        op = %op.id.ulid(),
+        kind = txtodo_store::kind_tag(&op.kind),
+        task = task_of(&op.kind).map(|t| t.to_string()),
+        error = %e,
+        "sync_op_skipped"
+    );
+}
+
+/// The task an op names, when it names one.
+fn task_of(kind: &OpKind) -> Option<TaskId> {
+    match kind {
+        OpKind::Insert { task, .. }
+        | OpKind::SetField { task, .. }
+        | OpKind::EditText { task, .. }
+        | OpKind::Move { task, .. } => Some(*task),
+        OpKind::NotesEdit { .. } | OpKind::BlankInsert { .. } | OpKind::BlankRemove { .. } => None,
     }
 }

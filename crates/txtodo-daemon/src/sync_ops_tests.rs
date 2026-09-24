@@ -1,6 +1,6 @@
 //! `FileActor::on_sync_ops`: a peer's already-formed op lands verbatim (own id, own device),
-//! never re-stamped, and a batch that fails partway commits nothing (CLAUDE.md §3's negative
-//! space — the store, the projection and the state must all agree afterwards).
+//! never re-stamped, and an op that does not fit is skipped but kept in the log (task
+//! `sync-poison-op`), including one that only fits once the rest of its commit has applied.
 
 use crate::actor::{ActorConfig, FileActor, SharedStore};
 use crate::clock::FakeClock;
@@ -94,48 +94,121 @@ async fn a_peers_op_lands_verbatim_with_its_own_id_and_device() {
     );
 }
 
-#[tokio::test]
-async fn a_batch_that_fails_partway_commits_nothing() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = store(dir.path());
-    let clock = Arc::new(FakeClock::new(1_000));
-    let handle = open(dir.path(), &store, &clock).spawn();
-
-    let good_task = TaskId::new(Ulid::from_u128(1));
-    let good = peer_insert(good_task, "first line", 1);
-    // Insert after a predecessor that was never itself inserted refuses to apply.
-    let bad = Op {
-        id: OpId::new(Ulid::from_u128(2)),
+/// A peer op stamped `(wall_ms, counter)`: ops of one commit share a stamp.
+fn peer_op(n: u128, wall_ms: u64, kind: OpKind) -> Op {
+    Op {
+        id: OpId::new(Ulid::from_u128(n)),
         hlc: Hlc {
-            wall_ms: 5_001,
-            counter: 2,
+            wall_ms,
+            counter: 0,
             device: peer_device(),
         },
         principal: Principal::User {
             device: peer_device(),
         },
         file: FilePath::new("todo.txt").unwrap(),
-        kind: OpKind::Insert {
-            task: TaskId::new(Ulid::from_u128(3)),
-            after: Some(TaskId::new(Ulid::from_u128(999))),
-            line: "second line".to_string(),
-        },
-    };
+        kind,
+    }
+}
 
-    let before = crate::actor::hash_of(&handle.get().await.unwrap().bytes);
-    let result = handle.sync_import_ops(vec![good, bad]).await;
-    assert!(result.is_err());
+fn insert(task: TaskId, after: Option<TaskId>, name: &str) -> OpKind {
+    OpKind::Insert {
+        task,
+        after,
+        line: format!("{name} id:{task}"),
+    }
+}
 
-    let after = handle.get().await.unwrap();
-    assert_eq!(after.hash, before, "projection unchanged");
-    assert!(
-        String::from_utf8_lossy(&after.bytes).is_empty(),
-        "neither op landed"
-    );
-    let rows = store
+fn rows(store: &SharedStore) -> usize {
+    store
         .lock()
         .unwrap()
         .for_file(&FilePath::new("todo.txt").unwrap(), txtodo_store::Seq(0))
+        .unwrap()
+        .len()
+}
+
+#[tokio::test]
+async fn an_op_that_does_not_fit_is_kept_in_the_log_and_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let handle = open(dir.path(), &store, &clock).spawn();
+
+    let good = peer_op(
+        1,
+        5_000,
+        insert(TaskId::new(Ulid::from_u128(1)), None, "first"),
+    );
+    // Anchored after a task no op ever inserted (task sync-poison-op): it can never apply.
+    let bad = peer_op(
+        2,
+        5_001,
+        insert(
+            TaskId::new(Ulid::from_u128(3)),
+            Some(TaskId::new(Ulid::from_u128(999))),
+            "second",
+        ),
+    );
+    let after_it = peer_op(
+        3,
+        5_002,
+        insert(TaskId::new(Ulid::from_u128(4)), None, "third"),
+    );
+    handle
+        .sync_import_ops(vec![good, bad, after_it])
+        .await
         .unwrap();
-    assert!(rows.is_empty(), "the store holds no partial batch either");
+
+    let text = String::from_utf8_lossy(&handle.get().await.unwrap().bytes).into_owned();
+    assert!(text.contains("first") && text.contains("third"), "{text}");
+    assert!(!text.contains("second"), "{text}");
+    assert_eq!(
+        rows(&store),
+        3,
+        "all three are in the log, so heads stay dense"
+    );
+}
+
+#[tokio::test]
+async fn a_move_after_a_task_its_own_commit_inserts_later_applies_once_that_insert_has() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let handle = open(dir.path(), &store, &clock).spawn();
+    let (a, b, c) = (
+        TaskId::new(Ulid::from_u128(1)),
+        TaskId::new(Ulid::from_u128(2)),
+        TaskId::new(Ulid::from_u128(3)),
+    );
+    handle
+        .sync_import_ops(vec![
+            peer_op(1, 5_000, insert(a, None, "a")),
+            peer_op(2, 5_000, insert(b, Some(a), "b")),
+        ])
+        .await
+        .unwrap();
+    // One commit (one stamp), in the order an old reconciler wrote it: the move names `c`
+    // before the insert of `c` (seq 23778 in this repo's own log).
+    let to_file = FilePath::new("todo.txt").unwrap();
+    handle
+        .sync_import_ops(vec![
+            peer_op(
+                3,
+                6_000,
+                OpKind::Move {
+                    task: a,
+                    after: Some(c),
+                    to_file,
+                },
+            ),
+            peer_op(4, 6_000, insert(c, Some(b), "c")),
+        ])
+        .await
+        .unwrap();
+
+    let text = String::from_utf8_lossy(&handle.get().await.unwrap().bytes).into_owned();
+    let order: Vec<&str> = text.lines().map(|l| &l[..1]).collect();
+    assert_eq!(order, vec!["b", "c", "a"], "{text}");
+    assert_eq!(rows(&store), 4);
 }

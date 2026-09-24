@@ -173,7 +173,7 @@ impl FileActor {
     /// Reconciles `disk_bytes` against our projection into stamped ops plus the state they land
     /// on: `exact` when replaying those ops onto our current state reproduces the reconciler's
     /// own render byte-for-byte (the common case), otherwise the reconciler's render is adopted
-    /// directly and a snapshot is forced (mirror/state disagreement, healed on next flush).
+    /// directly, with ops that replay to it (`reconcile_replay.rs`), and a snapshot is forced.
     fn derive_reconciled_ops(
         &mut self,
         disk_bytes: &[u8],
@@ -185,24 +185,16 @@ impl FileActor {
         let mut mint = || TaskId::new(clock.new_ulid());
         let r = self.reconcile_against(&old, &new, &mut mint);
         let target = r.file.to_bytes();
-        let ops = self.stamp(r.ops, principal)?;
-        let (next, exact) = match self.replay_on_clone(&ops) {
-            Some(next) if next.to_bytes() == target => (next, true),
-            _ => (
-                DocState::from_file(
-                    self.cfg.path.clone(),
-                    &r.file,
-                    &r.ids,
-                    self.cfg.identity_mode,
-                )?,
-                false,
-            ),
-        };
+        let (minted, reused) = (r.minted, r.reused);
+        let settled = self.settle_reconciled(r)?;
+        let (next, exact) = (settled.next, settled.exact);
+        let ops = self.stamp(settled.kinds, principal)?;
         tracing::info!(
             ops = ops.len(),
-            minted = r.minted,
-            reused = r.reused,
+            minted,
+            reused,
             exact,
+            synthesized = settled.synthesized,
             "ops_derived"
         );
         let write_back = target != disk_bytes;
@@ -236,14 +228,6 @@ impl FileActor {
             ids: &old_ids,
         };
         reconcile_sidecar(side, new, &self.cfg.path, &CostWeights::DEFAULT, mint)
-    }
-
-    fn replay_on_clone(&self, ops: &[Op]) -> Option<DocState> {
-        let mut next = self.state.clone();
-        for op in ops {
-            next.apply(op).ok()?;
-        }
-        Some(next)
     }
 
     pub(crate) fn maybe_snapshot(

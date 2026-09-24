@@ -98,6 +98,7 @@ mod pairing_wire;
 pub mod pidfile;
 mod progress;
 pub mod reconcile;
+mod reconcile_replay;
 pub mod reconcile_sidecar;
 pub mod refdir;
 mod refdir_grpc;
@@ -114,6 +115,7 @@ pub mod serve;
 pub mod server;
 mod server_actors;
 pub mod state;
+mod state_error;
 pub mod stats;
 mod stored_ids;
 mod sync_ops;
@@ -207,6 +209,8 @@ mod notes_actor_tests;
 mod pairing_grpc_tests;
 #[cfg(test)]
 mod pairing_lan_tests;
+#[cfg(test)]
+mod reconcile_replay_tests;
 #[cfg(test)]
 mod reconcile_sidecar_tests;
 #[cfg(test)]

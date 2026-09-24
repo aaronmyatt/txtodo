@@ -55,7 +55,13 @@ async fn insert_a_line_in_the_middle_needs_no_write_back() {
         "sidecar stamps nothing, so the file the user wrote is already right"
     );
     assert_eq!(d.writes_since().await, 0);
-    assert_eq!(kinds(&d.history().await), vec!["insert"]);
+    // The new line sits after a blank. An `Insert` anchors on the task above and lands above that
+    // task's blank, so the ops a peer can replay are three (task sync-poison-op); the single
+    // `insert` this used to record put the line on the wrong side of the blank on a peer.
+    assert_eq!(
+        kinds(&d.history().await),
+        vec!["insert", "blank_insert", "blank_remove"]
+    );
 }
 
 #[tokio::test]
