@@ -1,4 +1,3 @@
-2026-09-24 commands.rs: run(state, Command) -> Option<Action>; input.rs becomes key -> keymap -> commands::run; port every existing key, input_tests stay green +m11 @tui @doing by:claude
 2026-09-24 : palette: :<action id>, :q, :w <workspace>; unknown command shows in the status line +m11 @tui
 2026-09-24 Workspace switch: swap the WorkspaceSelector, re-watch, re-baseline (mirror desktop switch_workspace) +m11 @tui
 2026-09-24 theme.rs: ink/paper, token colours from app.css:56-63/96-103 as RGB under COLORTERM=truecolor else nearest ANSI 16, Light/Dark/System; paint.rs reads it +m11 @tui
@@ -10,3 +9,4 @@ x 2026-09-25 2026-09-24 Split daemon.rs per area (workspace, notes, devices, tok
 x 2026-09-25 2026-09-24 Daemon wrappers: WorkspaceList/Add/Remove, GetNotes/EditNotes, RefDir, History, Undo +m11 @tui — daemon_workspace/notes/history.rs; tests/daemon_wrappers.rs
 x 2026-09-25 2026-09-24 Daemon wrappers: PairOffer/Accept/ConfirmSas, DeviceList/Remove, TokenCreate/List/Revoke, OpLogStream, UniversalTasks +m11 @tui — daemon_devices/tokens/activity.rs (+ pair_await_peer, workspace_id_selector); pairing untested here: it needs two devices
 x 2026-09-25 2026-09-24 keymap.rs: static BINDINGS (id, keys, scope) using manifest ids; Command enum +m11 @tui — Command, Binding, BINDINGS, key_name, Chords (900 ms)
+x 2026-09-25 2026-09-24 commands.rs: run(state, Command) -> Option<Action>; input.rs becomes key -> keymap -> commands::run; port every existing key, input_tests stay green +m11 @tui — input.rs is key -> keymap -> commands::run; all 93 TUI tests (18 need a daemon) pass
