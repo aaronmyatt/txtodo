@@ -77,8 +77,9 @@ desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
   `tasks/desktop-ui-revamp/todo.txt`, this one's in `tasks/tui-revamp/todo.txt`.
 - No silent deviations: a different key or a missing feature is a `differs` or `na` row with its
   one-line `deviation`.
-- `tests/parity.rs` (once `keymap.rs` lands) fails when `keymap::BINDINGS` and the manifest's
-  `tui.status = "done"` rows disagree. The Help screen renders from the manifest.
+- `tests/parity.rs` fails when `keymap::BINDINGS` and the manifest's
+  `tui.status = "done"`/`"differs"` rows disagree (keys and scope), or a `differs`/`na` row has no
+  deviation. The Help screen renders from the manifest.
 
 ## Invariants
 - Thin client: talks to the daemon, never parses the file — every byte painted comes from

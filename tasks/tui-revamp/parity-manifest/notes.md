@@ -35,3 +35,10 @@
 - Revamp: `tasks/desktop-ui-revamp/notes.md:235-240` and the c2 footer hints (`c2-prompt.html:335-339`).
 
 ## As built
+- `specs/client-parity.toml`: 89 actions, 12 screens. ADR 0031 is `proposed` until its decide line.
+- `crates/txtodo-tui/tests/parity.rs`: every bound command has a row with `tui.status` done or differs, same scope, same keys (`tui.keys` when the row has them, else the shared ones); every done row is bound; every differs/na row has a deviation.
+  - It reads the manifest with a hand parser for the subset, like `keys.parity.test.ts`. So the `toml` dev-dep in the deps decide line is no longer needed; only `qrcode` is left in it.
+  - Checked it fails: changing `G` to `H` for `list.last` fails on `list.last: keys`.
+  - A planned row may carry a deviation ahead of time (`prompt.focus`), so the deviation rule is one way only.
+- `apps/desktop/src/lib/keys.parity.test.ts`: the manifest rules run; the keys.ts half is skipped until keys.ts exists.
+- Open: `check-parity.sh` waits on its decide line (`.claude` is frozen).
