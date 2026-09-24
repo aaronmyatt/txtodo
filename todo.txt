@@ -1,4 +1,3 @@
-(A) 2026-09-25 sync: a pushed or served batch counts as delivered before the peer acks it, so a refused batch is never re-sent +m11 @daemon @sync ref:sync-ack-before-held @doing by:claude
 (A) 2026-09-25 sync: one change a peer cannot apply blocks that workspace on every reconnect +m11 @daemon @sync ref:sync-poison-op
 (A) 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/worktrees/*) as part of the enclosing workspace +m11 @daemon ref:walker-nested-checkouts
 (B) 2026-09-25 sync: one big workspace transfer holds every other workspace up on the shared link +m11 @daemon @sync ref:sync-link-fairness
@@ -309,3 +308,4 @@ x 2026-09-24 2026-09-21 The default workspace merges on pairing with no accept s
 x 2026-09-24 2026-09-24 daemon: control-channel workspace offers silently stop when the OS keystore can't answer +m11 @daemon @sync ref:control-channel-keystore-visibility pri:A — see tasks/control-channel-keystore-visibility/notes.md; known gap: not run against a real unanswered keychain prompt
 x 2026-09-24 2026-09-24 Security checklist: add an item for content a paired device pushes (auto-accepted remote workspaces, default-workspace merge) before the next milestone review +m11 @security — added to txtodo-implementation-plan.md §5's security checklist (now reviewed before M11 close too): pushed content stays inert and contained, Remote mirrors only under remote/, removed ones stay gone, the default merges only with own devices; known gap: an item on the list, not yet a review
 
+x 2026-09-25 2026-09-25 sync: a pushed or served batch counts as delivered before the peer acks it, so a refused batch is never re-sent +m11 @daemon @sync ref:sync-ack-before-held pri:A — see tasks/sync-ack-before-held/notes.md; known gap: the file carrier still commits past a failed run

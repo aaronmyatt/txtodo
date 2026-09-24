@@ -1,5 +1,5 @@
-2026-09-25 daemon: commit a batch as a dense prefix (same-file runs in order, stop at the first failure) and ack only that prefix +m11 @daemon @sync @doing by:claude
-2026-09-25 daemon: a batch that does not follow the heads is skipped and logged, not fatal to the connection +m11 @daemon @sync
-2026-09-25 daemon: Live keeps held and sent apart; an Ack moves runs to held; no ack progress for 10 s rewinds sent to held +m11 @daemon @sync
-2026-09-25 daemon: tests for a refused batch re-sent in the same session, a partial prefix acked, a duplicate skipped +m11 @daemon @sync @test
 x 2026-09-25 2026-09-25 sync: any batch must follow the session heads, wanted or pushed; drop the inside-the-Want rule +m11 @sync — SessionError::Unrequested removed; b7e3ec7
+x 2026-09-25 2026-09-25 daemon: commit a batch as a dense prefix (same-file runs in order, stop at the first failure) and ack only that prefix +m11 @daemon @sync — same-file runs in order, stop at the first failure; landed_ranges acks the prefix; a91d141
+x 2026-09-25 2026-09-25 daemon: a batch that does not follow the heads is skipped and logged, not fatal to the connection +m11 @daemon @sync — lan_session_ops.rs; a resent copy is answered with an Ack of what we hold; a91d141
+x 2026-09-25 2026-09-25 daemon: Live keeps held and sent apart; an Ack moves runs to held; no ack progress for 10 s rewinds sent to held +m11 @daemon @sync — held/sent/waiting_since; RESEND_AFTER 10 s (300 ms under test); a91d141
+x 2026-09-25 2026-09-25 daemon: tests for a refused batch re-sent in the same session, a partial prefix acked, a duplicate skipped +m11 @daemon @sync @test — lan_session_resend_tests.rs, 4 tests; 23 real-daemon sync tests pass; a91d141
