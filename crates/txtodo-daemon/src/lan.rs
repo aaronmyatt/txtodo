@@ -61,7 +61,8 @@ pub const RESYNC_INTERVAL_ENV_VAR: &str = "TXTODO_RESYNC_INTERVAL_MS";
 /// invisible to its peer until it re-advertises under the new group.
 const GROUP_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
-fn resync_interval() -> Duration {
+/// `pub(crate)`: `relay.rs`'s and `control_channel.rs`'s dial loops share this cadence and knob.
+pub(crate) fn resync_interval() -> Duration {
     std::env::var(RESYNC_INTERVAL_ENV_VAR)
         .ok()
         .and_then(|v| v.parse().ok())

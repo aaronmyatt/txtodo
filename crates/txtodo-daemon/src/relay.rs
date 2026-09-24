@@ -45,7 +45,6 @@
 //! job, not this module's — nothing here needs to notice the change mid-handshake.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
@@ -53,16 +52,15 @@ use txtodo_model::DeviceId;
 use txtodo_sync::{GroupId, HolepunchError, RelayEndpoint};
 
 use crate::device_relay::DeviceRelay;
-use crate::lan::MAX_CONCURRENT_LAN_SESSIONS;
+use crate::lan::{MAX_CONCURRENT_LAN_SESSIONS, resync_interval};
 use crate::lan_session::read;
 use crate::lan_session_dispatch::drive_shared_session;
 use crate::lan_status::LanStatus;
 use crate::server::SharedWorkspace;
 
-/// How often [`dial_known_peer`] retries `--relay-dial-peer` while it has not yet connected, and
-/// (once it has) redials to pick up a local edit made after the previous sync round — the relay
-/// counterpart of `lan.rs`'s `RESYNC_INTERVAL`, same reasoning.
-const DIAL_KNOWN_PEER_INTERVAL: Duration = Duration::from_millis(1_000);
+// [`dial_known_peer`]'s cadence is `lan.rs`'s `resync_interval()` — the relay counterpart of
+// `RESYNC_INTERVAL`, same reasoning and the same `TXTODO_RESYNC_INTERVAL_MS` override; it was its
+// own 1 s constant until 2026-09-23.
 
 /// n0's own public relay (named in `docs.rs/iroh`'s own `Endpoint::builder` doctest,
 /// `use1-1.relay.n0.iroh.link`) — already proven reliable by this repo's own real-relay tests
@@ -279,7 +277,7 @@ async fn dial_once(
 
 /// `--relay-dial-peer`'s active half (module doc): once `endpoint` is registered with its relay
 /// (`RelayEndpoint::online`), repeatedly tries to connect to `peer` and drives a sync session on
-/// every success, same as an accepted connection. Keeps retrying on [`DIAL_KNOWN_PEER_INTERVAL`]
+/// every success, same as an accepted connection. Keeps retrying on `lan::resync_interval()`
 /// forever (bounded only by the caller aborting this task on daemon shutdown) rather than a fixed
 /// attempt cap: like `lan.rs`'s own resync, a later local edit still needs a fresh dial to reach
 /// the peer, and a peer that comes online after this daemon started must still eventually be
@@ -291,7 +289,7 @@ async fn dial_known_peer(
     sessions: Arc<Semaphore>,
 ) {
     device_relay.endpoint().online().await;
-    let mut interval = tokio::time::interval(DIAL_KNOWN_PEER_INTERVAL);
+    let mut interval = tokio::time::interval(resync_interval());
     loop {
         interval.tick().await;
         if let Ok(permit) = Arc::clone(&sessions).try_acquire_owned() {

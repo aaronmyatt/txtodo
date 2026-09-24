@@ -24,7 +24,6 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
 
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
@@ -35,10 +34,9 @@ use crate::device_identity::DeviceIdentity;
 use crate::device_relay::DeviceRelay;
 use crate::workspace_registry::WorkspaceRegistry;
 
-/// How often the redial loop retries a known peer while unreachable, and — once reachable —
-/// redials to pick up a workspace registered since the previous round. Same reasoning as
-/// `relay.rs`'s `DIAL_KNOWN_PEER_INTERVAL`.
-const DIAL_KNOWN_PEER_INTERVAL: Duration = Duration::from_millis(1_000);
+// The redial loop's cadence is `lan.rs`'s `resync_interval()` (15 s, `TXTODO_RESYNC_INTERVAL_MS`
+// to override): was a 1 s constant of its own until 2026-09-23, one of three loops that together
+// dialed a paired peer several times a second.
 /// Most sessions of any kind (control, pairing or sync) this device's one shared endpoint accepts
 /// or dials at once — a hostile or buggy peer flooding connections must not spawn unboundedly many
 /// blocking threads. Named for what it now bounds (task `daemon-shared-sync-link` stage 3: this
@@ -120,7 +118,7 @@ async fn accept_loop(endpoint: Arc<RelayEndpoint>, ctx: DispatchCtx, sem: Arc<Se
 }
 
 /// Dials every known peer with a durably-stored relay node id (`IdentityStore::list_devices()`,
-/// stage 2), redialing every [`DIAL_KNOWN_PEER_INTERVAL`] whether or not the previous round
+/// stage 2), redialing every `lan::resync_interval()` whether or not the previous round
 /// connected — same "short session, periodic redial" shape as `relay.rs::dial_known_peer`. A
 /// device paired before stage 2 landed has no `relay_node_id` and simply never appears here
 /// (documented gap, no migration, same precedent `device_identity.rs` already set).
@@ -130,7 +128,7 @@ async fn redial_loop(
     registry: Arc<Mutex<WorkspaceRegistry>>,
     sem: Arc<Semaphore>,
 ) {
-    let mut ticker = tokio::time::interval(DIAL_KNOWN_PEER_INTERVAL);
+    let mut ticker = tokio::time::interval(crate::lan::resync_interval());
     loop {
         ticker.tick().await;
         for node_id in known_relay_peers(&identity) {
