@@ -144,6 +144,11 @@ release:
     done
     echo "release smoke OK: $(ls dist/) bom.json"
 
+# Tagged releases install via scripts/install.sh or brew; this is for pre-release builds.
+# Full install of this checkout (binaries + desktop app, self-signed, service restarted)
+install:
+    scripts/install-local.sh
+
 # task desktop-daemon-sidecar-bundle: stages this host's own txtodod build as apps/desktop's Tauri
 # sidecar (tauri.conf.json's bundle.externalBin), so a local `npm run tauri build` produces a
 # bundle with a working daemon instead of relying on $PATH. Host-only (one target triple, via
