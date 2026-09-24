@@ -56,6 +56,7 @@ mod lan_apply;
 mod lan_peers;
 mod lan_session;
 mod lan_session_dispatch;
+mod lan_session_live;
 mod lan_session_shared;
 pub mod lan_status;
 pub mod layout_file;
@@ -63,6 +64,7 @@ mod layout_reload;
 mod layout_rpc;
 pub mod layout_state;
 mod layout_sync;
+mod live_peers;
 mod migrate_grpc;
 pub mod migrate_sidecar;
 pub mod mirror;
@@ -169,6 +171,8 @@ mod import_tests;
 mod keystore_setup_tests;
 #[cfg(test)]
 mod lan_peers_tests;
+#[cfg(test)]
+mod lan_session_push_tests;
 #[cfg(test)]
 mod lan_session_security_tests;
 #[cfg(test)]

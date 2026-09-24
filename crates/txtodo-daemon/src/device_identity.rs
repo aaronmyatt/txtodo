@@ -78,6 +78,7 @@ pub struct DeviceIdentity {
     /// one LAN task's progress and pairing sees every sighting.
     lan_status: crate::lan_status::LanStatus,
     pairing_lan: crate::pairing_lan_state::PairingLan,
+    live_peers: crate::live_peers::LivePeers,
 }
 
 impl DeviceIdentity {
@@ -145,6 +146,7 @@ impl DeviceIdentity {
             workspace_offers: WorkspaceOfferRegistry::new(),
             lan_status: crate::lan_status::LanStatus::default(),
             pairing_lan: crate::pairing_lan_state::PairingLan::default(),
+            live_peers: crate::live_peers::LivePeers::default(),
         })
     }
 
@@ -215,6 +217,10 @@ impl DeviceIdentity {
     /// The device's LAN (and relay) status, shared by every workspace's `Health`.
     pub fn lan_status(&self) -> &crate::lan_status::LanStatus {
         &self.lan_status
+    }
+    /// Peers with a sync session open right now, whatever the carrier.
+    pub(crate) fn live_peers(&self) -> &crate::live_peers::LivePeers {
+        &self.live_peers
     }
     /// The bound LAN endpoint and every mDNS sighting, for pairing.
     pub(crate) fn pairing_lan(&self) -> &crate::pairing_lan_state::PairingLan {

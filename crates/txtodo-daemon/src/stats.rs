@@ -12,6 +12,9 @@ pub struct Stats {
     pub watcher_alive: AtomicBool,
     /// Unix ms of the last raw watcher event, 0 when none yet.
     pub last_event_ms: AtomicU64,
+    /// Task-document commits since start (task `sync-live-push`): a live sync session reads this
+    /// on every poll and diffs heads only when it moved, so a commit is pushed at once.
+    pub commits_total: AtomicU64,
 }
 
 impl Stats {
@@ -19,6 +22,15 @@ impl Stats {
     pub fn count_write(&self) {
         let before = self.writes_total.fetch_add(1, Ordering::Relaxed);
         debug_assert!(before < u64::MAX);
+    }
+    /// One more commit landed (apply, reconcile or sync import).
+    pub fn count_commit(&self) {
+        let before = self.commits_total.fetch_add(1, Ordering::Relaxed);
+        debug_assert!(before < u64::MAX);
+    }
+    /// Commits so far.
+    pub fn commits(&self) -> u64 {
+        self.commits_total.load(Ordering::Relaxed)
     }
     /// A watcher event arrived at `now_ms`.
     pub fn saw_event(&self, now_ms: u64) {

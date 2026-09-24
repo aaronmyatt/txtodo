@@ -233,6 +233,7 @@ impl FileActor {
     /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that
     /// just landed durably (`Err` only means no receiver is left, which the guard excludes).
     pub(crate) fn broadcast(&self, change: &crate::handle::Change) {
+        self.cfg.stats.count_commit();
         if self.changes.receiver_count() > 0 {
             let _ = self.changes.send(change.clone());
         }

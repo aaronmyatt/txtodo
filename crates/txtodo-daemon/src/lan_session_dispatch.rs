@@ -1,6 +1,6 @@
 //! The actual read/write loop and entry point for task `daemon-workspace-session-multiplex`
 //! stage 2 — split out of `lan_session_shared.rs` for its line budget; that file owns the wire
-//! primitives (`send_message`/`recv_frame`/`open_and_decode_logged`) and the per-workspace message
+//! primitives (`send_message`/`open_and_decode_logged`) and the per-workspace message
 //! handlers (`handle_workspace_message` and everything it calls), both reused here. See that
 //! file's module doc for the wire sequence and failure scope this loop implements.
 
@@ -17,10 +17,12 @@ use txtodo_sync::{
 
 use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
 use crate::lan_session::{fetch_group_key, read, read_heads, single_epoch_keys};
+use crate::lan_session_live::{Live, POLL, PushCtx};
 use crate::lan_session_shared::{
     LINK_WORKSPACE, MAX_MESSAGES_PER_SESSION, SessionCtx, handle_link_hello,
-    handle_workspace_message, open_and_decode_logged, recv_frame, send_message,
+    handle_workspace_message, open_and_decode_logged, send_message,
 };
+use crate::live_peers::LivePeers;
 
 /// Everything shared across every workspace this one connection multiplexes: the crypto material
 /// (one group key for the whole device-set, ADR 0021) and the routing table naming which
@@ -32,6 +34,14 @@ struct SharedCtx {
     keys: GroupKeys,
     signing_key: DeviceSigningKey,
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
+    live_peers: LivePeers,
+}
+
+/// The per-connection state every frame updates: the protocol `Session` and the push/liveness
+/// bookkeeping (task `sync-live-push`), bundled so the dispatch functions stay under `maxParams`.
+struct Conn {
+    session: Session,
+    live: Live,
 }
 
 /// Any one routed workspace's own clock, for stamping the link-level `Hello` and re-checking skew
@@ -89,32 +99,33 @@ fn touch_peer_last_seen(
     }
 }
 
-/// The link-level `Hello` branch of [`recv_and_dispatch`] — split out purely to keep that
+/// The link-level `Hello` branch of [`dispatch_frame`] — split out purely to keep that
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
     frame: &txtodo_sync::Frame,
     shared: &SharedCtx,
-    session: &mut Session,
+    conn: &mut Conn,
 ) -> Option<()> {
     let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)?;
     let now_ms = any_route_now_ms(&shared.routes);
-    if !handle_link_hello(session, &msg, now_ms) {
+    if !handle_link_hello(&mut conn.session, &msg, now_ms) {
         return None;
     }
-    if let Some(peer) = session.peer() {
+    if let Some(peer) = conn.session.peer() {
         touch_peer_last_seen(&shared.routes, peer, now_ms);
+        conn.live.enter(&shared.live_peers, peer);
     }
     Some(())
 }
 
-/// A real workspace's own branch of [`recv_and_dispatch`] — `Some(())` (not `None`) when
+/// A real workspace's own branch of [`dispatch_frame`] — `Some(())` (not `None`) when
 /// `workspace` has no local route: an unrouted workspace is skipped, never fatal to the
 /// connection (`lan_session_shared.rs`'s module doc, "failure scope").
 fn dispatch_workspace_frame(
     link: &mut dyn Link,
     frame: &txtodo_sync::Frame,
     shared: &SharedCtx,
-    session: &mut Session,
+    conn: &mut Conn,
     workspace: WorkspaceId,
 ) -> Option<()> {
     let Some(route) = shared.routes.get(&workspace) else {
@@ -122,6 +133,7 @@ fn dispatch_workspace_frame(
         return Some(());
     };
     let msg = open_and_decode_logged(frame, shared.group, workspace, &shared.keys)?;
+    conn.live.observe(workspace, &msg);
     let ctx = SessionCtx {
         ws: &route.ws,
         rt: &shared.rt,
@@ -130,35 +142,71 @@ fn dispatch_workspace_frame(
         key: &shared.key,
         signing_key: &shared.signing_key,
     };
-    handle_workspace_message(link, &ctx, session, msg).then_some(())
+    handle_workspace_message(link, &ctx, &mut conn.session, msg).then_some(())
 }
 
-/// Reads one frame, peeks its workspace, and dispatches: the link-level `Hello` if it peeked
+/// Peeks one frame's workspace and dispatches it: the link-level `Hello` if it peeked
 /// [`LINK_WORKSPACE`], a routed workspace's own message if it peeked one this connection has open,
 /// or a logged skip for a workspace this side never opened. `None` ends the connection.
-fn recv_and_dispatch(link: &mut dyn Link, shared: &SharedCtx, session: &mut Session) -> Option<()> {
-    let frame = recv_frame(link)?;
+fn dispatch_frame(
+    link: &mut dyn Link,
+    shared: &SharedCtx,
+    conn: &mut Conn,
+    frame: &txtodo_sync::Frame,
+) -> Option<()> {
     let Some(workspace) = peek_workspace(&frame.body) else {
         log_frame_too_short_to_peek();
         return None;
     };
     if workspace == LINK_WORKSPACE {
-        return dispatch_link_frame(&frame, shared, session);
+        return dispatch_link_frame(frame, shared, conn);
     }
-    dispatch_workspace_frame(link, &frame, shared, session, workspace)
+    dispatch_workspace_frame(link, frame, shared, conn, workspace)
 }
 
-fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx, session: &mut Session) {
-    for _ in 0..MAX_MESSAGES_PER_SESSION {
-        if recv_and_dispatch(link, shared, session).is_none() {
+/// Waits up to [`POLL`] for a frame: `Ok(None)` when none came, `Err(())` once the link is gone
+/// (a real close, or a failure logged here).
+fn recv_polled(link: &mut dyn Link) -> Result<Option<txtodo_sync::Frame>, ()> {
+    match link.recv_timeout(POLL) {
+        Ok(frame) => Ok(frame),
+        Err(txtodo_sync::LinkError::Closed) => Err(()),
+        Err(e) => {
+            tracing::debug!(error = %e, "lan_session_recv_failed");
+            Err(())
+        }
+    }
+}
+
+/// One turn: a frame if one arrives within [`POLL`], then a push/heartbeat/liveness tick
+/// (`lan_session_live.rs`). `None` ends the connection.
+fn turn(link: &mut dyn Link, shared: &SharedCtx, conn: &mut Conn) -> Option<()> {
+    if let Some(frame) = recv_polled(link).ok()? {
+        conn.live.heard();
+        dispatch_frame(link, shared, conn, &frame)?;
+    }
+    let push = PushCtx {
+        group: shared.group,
+        key: &shared.key,
+        signing_key: &shared.signing_key,
+        routes: &shared.routes,
+    };
+    conn.live.tick(link, &push).then_some(())
+}
+
+/// Runs until the peer closes, goes silent, or the turn cap ends it (the dial side then
+/// reconnects). Bounded like every loop here: a quiet turn is one [`POLL`], so the cap is hours.
+fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx, conn: &mut Conn) {
+    for _ in 0..MAX_TURNS_PER_SESSION {
+        if turn(link, shared, conn).is_none() {
             return;
         }
     }
-    tracing::warn!(
-        cap = MAX_MESSAGES_PER_SESSION,
-        "lan_session_message_cap_reached"
-    );
+    tracing::warn!(cap = MAX_TURNS_PER_SESSION, "lan_session_turn_cap_reached");
 }
+
+/// Turns one connection runs before it is closed and redialed: at least a few hours at one
+/// [`POLL`] each, and never fewer than the old per-session message cap.
+const MAX_TURNS_PER_SESSION: usize = MAX_MESSAGES_PER_SESSION * 3;
 
 /// Sends our own `Greet` for one workspace and, on success, the message it produced. A session-
 /// level refusal (e.g. an already-greeted workspace) is logged and skipped, not fatal to the
@@ -236,6 +284,7 @@ fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCt
         log_no_group_key();
         return None;
     };
+    let live_peers = read(&first.ws).live_peers().clone();
     Some(SharedCtx {
         rt: Handle::current(),
         group,
@@ -243,6 +292,7 @@ fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCt
         key,
         keys,
         routes: all,
+        live_peers,
     })
 }
 
@@ -277,6 +327,10 @@ pub(crate) fn drive_shared_session(
     if !send_initial_greetings(link, &shared, &mut session) {
         return false;
     }
-    run_shared_message_loop(link, &shared, &mut session);
+    let mut conn = Conn {
+        session,
+        live: Live::new(),
+    };
+    run_shared_message_loop(link, &shared, &mut conn);
     true
 }

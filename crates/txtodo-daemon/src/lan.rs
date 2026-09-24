@@ -10,11 +10,11 @@
 //! carries every open workspace, the same as the relay path. It used to be one endpoint, one mDNS
 //! advertisement and one link per open workspace.
 //!
-//! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
-//! closed after `IDLE_TIMEOUT` (750 ms) of silence, so a session naturally
-//! returns once a connection has caught the peer up and gone quiet. The periodic resync below
-//! (`relay_autodial::spawn_resync_dial`) is the other half: every known peer is redialed every
-//! `RESYNC_INTERVAL`, so a later local edit still converges without this module watching the store.
+//! **Sessions are long-lived** (task `sync-live-push`): once two devices share a workspace, the
+//! connection stays open, commits are pushed over it and an empty `Ack` heartbeat keeps it up
+//! (`lan_session_live.rs`). The periodic resync below (`relay_autodial::spawn_resync_dial`) is now
+//! a reconnect: it skips every peer with a live session (`live_peers.rs`) and dials the rest every
+//! `RESYNC_INTERVAL`. With no shared workspace a session still ends after the old 750 ms of quiet.
 //! Resync dials share `DialState`'s backoff with sighting dials, and a session that connects but
 //! bails before its first greeting (no group key yet, no routed workspace) counts as a failure —
 //! measured 2026-09-23 at ~3 sessions a second between two unpaired daemons, each one a keystore
@@ -237,6 +237,10 @@ fn handle_sighting(
     let now_ms = ctx.clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         remember_peer(known_peers, &peer);
+        // A live session already carries every shared workspace (task sync-live-push).
+        if ctx.identity.live_peers().is_live(peer.device) {
+            return true;
+        }
         spawn_dial(
             Arc::clone(sessions),
             ctx.clone(),

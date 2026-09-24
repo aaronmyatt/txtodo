@@ -314,6 +314,13 @@ multiplex every workspace's traffic — not done by this task).
   `DeviceLan::routes()` and every LAN connection runs `drive_shared_session` over that table.
   `LanStatus`/`PairingLan` live on `DeviceIdentity` (each `Workspace` holds a clone). The
   one-workspace `lan_session::drive_session` is gone; tests use `lan_session_tests::drive_session`.
+  **Sessions are long-lived and push** (same task): `lan_session_live.rs` polls the link every
+  50 ms (`Link::recv_timeout`), pushes each shared workspace's new ops as a head diff against what
+  the peer holds (woken by `Stats::commits`, re-diffed on every 5 s heartbeat), sends an empty `Ack`
+  heartbeat, and ends after 20 s of silence. `live_peers.rs` marks a peer live while a session runs;
+  every dial loop skips live peers. A refused `Ops` batch now ends the connection (the reconnect
+  resyncs). This supersedes the "short-lived session, periodic redial" text elsewhere in this file.
+  `tests/lan_live_push.rs` is the two-daemon proof.
 - `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
   paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
   flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry

@@ -6,9 +6,7 @@
 //! file's line budget, and split again into this file (crypto/wire primitives + per-workspace
 //! message handlers) and `lan_session_dispatch.rs` (the actual read loop and entry point) for its
 //! own budget — `lan_session.rs` keeps the crypto-material lookups (`fetch_group_key`/
-//! `read_heads`/etc.) both this file and `file_carrier.rs` share, plus the single-workspace
-//! `drive_session` wrapper that now just calls `lan_session_dispatch::drive_shared_session` with a
-//! one-entry routing table.
+//! `read_heads`/etc.) both this file and `file_carrier.rs` share.
 //!
 //! **Wire sequence.** Every connection starts with exactly one link-level `Message::Hello`
 //! (`Session::link_hello`/`on_link_hello` — device+group+protocol+skew, unchanged from before this
@@ -31,6 +29,9 @@
 //! own state is left untouched, but the connection itself keeps running for every other workspace
 //! — a deliberate change from the pre-multiplex `drive_session`, where the only workspace *was*
 //! the whole connection, so ending on its refusal and ending the connection were the same thing.
+//! One exception since sessions became long-lived (task `sync-live-push`): a refused `Ops` batch
+//! ends the connection, because a workspace left out of step would otherwise stay stuck until the
+//! session's natural end; the reconnect's fresh `Greet`/`Want` puts it right.
 
 use std::fmt;
 
@@ -115,20 +116,6 @@ pub(crate) fn send_message(
     Ok(())
 }
 
-/// `None` on a closed link (routine) or a real recv failure (logged as debug, matching this
-/// module's pre-existing "an ended connection is not a daemon-level warning" stance). `pub(crate)`:
-/// `lan_session_dispatch.rs`'s own read loop calls this.
-pub(crate) fn recv_frame(link: &mut dyn Link) -> Option<Frame> {
-    match link.recv() {
-        Ok(frame) => Some(frame),
-        Err(LinkError::Closed) => None,
-        Err(e) => {
-            tracing::debug!(error = %e, "lan_session_recv_failed");
-            None
-        }
-    }
-}
-
 /// Opens `frame` under `workspace`'s key material and decodes the `Message` inside.
 fn open_and_decode(
     frame: &Frame,
@@ -143,8 +130,8 @@ fn open_and_decode(
     })?)
 }
 
-/// `None` on any failure worth ending the connection over — already logged. `pub(crate)`: see
-/// [`recv_frame`]'s doc.
+/// `None` on any failure worth ending the connection over — already logged. `pub(crate)`: the
+/// dispatch loop in `lan_session_dispatch.rs` calls this.
 pub(crate) fn open_and_decode_logged(
     frame: &Frame,
     group: GroupId,
@@ -337,8 +324,11 @@ fn handle_ops(
     msg: &Message,
     ranges: Vec<OriginRange>,
 ) -> bool {
+    // A refused batch ends the connection (task sync-live-push): sessions are long-lived now, so a
+    // push that raced an open `Want` or skipped a seq would otherwise leave this workspace stuck;
+    // the reconnect's fresh `Greet`/`Want` repairs it.
     let Some(ops) = ops_or_refuse(ctx, session, msg) else {
-        return true;
+        return false;
     };
     let Some(ack) = commit_and_ack(ctx, session, ops, ranges) else {
         return true;

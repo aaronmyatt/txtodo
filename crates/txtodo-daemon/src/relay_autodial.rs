@@ -28,7 +28,13 @@ pub(crate) fn resync_and_dial(
     sessions: &Arc<Semaphore>,
     dial_state: &SharedDialState,
 ) {
-    for peer in peers_to_resync(known_peers, ctx.device) {
+    // Only peers with no live session (task sync-live-push): a session stays open now, so the
+    // resync is a reconnect, not a redial of a link that is still up.
+    let live = ctx.identity.live_peers();
+    for peer in peers_to_resync(known_peers, ctx.device)
+        .into_iter()
+        .filter(|p| !live.is_live(p.device))
+    {
         spawn_resync_dial(
             Arc::clone(sessions),
             ctx.clone(),
@@ -37,7 +43,10 @@ pub(crate) fn resync_and_dial(
             peer,
         );
     }
-    for (device, node) in relay_only_peers(ctx, known_peers) {
+    for (device, node) in relay_only_peers(ctx, known_peers)
+        .into_iter()
+        .filter(|(device, _)| !live.is_live(*device))
+    {
         spawn_relay_only_dial(ctx.clone(), node, device, Arc::clone(sessions));
     }
 }
