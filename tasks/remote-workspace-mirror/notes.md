@@ -64,3 +64,20 @@ Decided 2026-09-23 (human):
 
 Needs `ref:workspace-offer-cli`'s `accept` command to exist first — this line's "no --dir" default
 path is what makes that command usable without the user picking a directory by hand.
+
+## Build plan (2026-09-24, agent)
+
+- Provenance is derived, not stored: a root under `<state dir>/remote/` is a mirror. No registry
+  column, no migration (same call `default-workspace` made for `is_default`).
+  `WorkspaceInfo.is_remote` (field 11) carries it.
+- Path helper: `txtodo_workspace_paths::remote_workspaces_dir_for(env)`, beside
+  `default_workspace_dir_for`, so a hermetic test daemon never writes the real data dir.
+- Auto-accept: the control channel still only records offers (it has no catalog). The offer
+  registry wakes a mirror task (`tokio::sync::Notify`); the task, on a blocking thread, adopts each
+  pending offer at `remote/<workspace-id>/` (dir + empty `todo.txt`), opens it so it is routed for
+  sync, and consumes the offer.
+- Skip rule: an id the registry has ever held (active or removed) is never mirrored. Active covers
+  the default and a peer offering back our own workspace; removed means the user removed the
+  mirror, which is how "don't mirror this one" sticks across restarts. A declined pending offer is
+  remembered in memory so the next re-offer does not bring it back.
+- Proto order: add `is_remote` first; reserve `local_dir` last, after every client stopped sending it.

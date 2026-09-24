@@ -921,6 +921,12 @@ pub struct WorkspaceInfo {
     pub refs_dir: ::prost::alloc::string::String,
     #[prost(string, tag = "10")]
     pub todo_file: ::prost::alloc::string::String,
+    /// True when this workspace is a mirror of one a paired device offered (task
+    /// remote-workspace-mirror): the daemon accepted it on its own and keeps it under its data dir
+    /// (`<data dir>/remote/<workspace-id>/`), so `root` is a place txtodo chose, not the user. False
+    /// from an older daemon, which a client reads as "not a mirror".
+    #[prost(bool, tag = "11")]
+    pub is_remote: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {

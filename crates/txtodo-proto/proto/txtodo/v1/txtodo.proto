@@ -751,6 +751,11 @@ message WorkspaceInfo {
   // reads as the defaults, `todo.txt` and `tasks`.
   string refs_dir = 9;
   string todo_file = 10;
+  // True when this workspace is a mirror of one a paired device offered (task
+  // remote-workspace-mirror): the daemon accepted it on its own and keeps it under its data dir
+  // (`<data dir>/remote/<workspace-id>/`), so `root` is a place txtodo chose, not the user. False
+  // from an older daemon, which a client reads as "not a mirror".
+  bool is_remote = 11;
 }
 
 message WorkspaceAddRequest {

@@ -237,9 +237,14 @@ fn the_early_bind_and_relay_fields_round_trip_and_default_to_absent() {
         root: "/home/a/project".into(),
         load_state: WorkspaceLoadState::Failed as i32,
         load_error: "disk".into(),
+        is_remote: true,
         ..WorkspaceInfo::default()
     };
     round_trip(&info);
+    assert!(
+        !WorkspaceInfo::default().is_remote,
+        "an older daemon never claims a mirror"
+    );
     assert_eq!(
         WorkspaceInfo::default().load_state,
         WorkspaceLoadState::Unspecified as i32,
