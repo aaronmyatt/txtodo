@@ -15,7 +15,9 @@ use txtodo_proto::v1 as pb;
 
 /// `workspace offers`: one row per pending offer, in the daemon's own order.
 pub fn run_offers(daemon: &mut Daemon, as_json: bool) -> Result<(), CliError> {
-    let offers = daemon.workspace_pending_offers()?;
+    let reply = daemon.workspace_pending_offers()?;
+    report_offers_problem(&reply, as_json);
+    let offers = reply.offers;
     if offers.is_empty() {
         if !as_json {
             println!("TODO: no pending workspace offers.");
@@ -88,7 +90,7 @@ fn resolve_device(daemon: &mut Daemon, id: &str, from: Option<&str>) -> Result<S
     if let Some(device) = from {
         return Ok(device.to_owned());
     }
-    let offers = daemon.workspace_pending_offers()?;
+    let offers = daemon.workspace_pending_offers()?.offers;
     let devices: Vec<&str> = offers
         .iter()
         .filter(|o| o.workspace_id == id)
@@ -110,6 +112,32 @@ fn pick_device<'a>(id: &str, devices: &[&'a str]) -> Result<&'a str, CliError> {
             many.join(", ")
         ))),
     }
+}
+
+/// Task `control-channel-keystore-visibility`: when the daemon could not run its offer exchange, an
+/// empty list means "blocked", not "nothing offered" — say so, before the list. Text goes to stderr
+/// so the rows on stdout stay parseable; JSON gets its own line.
+fn report_offers_problem(reply: &pb::WorkspacePendingOffersResponse, as_json: bool) {
+    if reply.offers_problem.is_empty() {
+        return;
+    }
+    if as_json {
+        println!(
+            r#"{{"offers_problem":{},"offers_problem_age_ms":{}}}"#,
+            json::str(&reply.offers_problem),
+            reply.offers_problem_age_ms
+        );
+    } else {
+        eprintln!("{}", offers_problem_text(reply));
+    }
+}
+
+fn offers_problem_text(reply: &pb::WorkspacePendingOffersResponse) -> String {
+    format!(
+        "txtodo: offers from paired devices are blocked ({}s ago): {}. See docs/keychain-runbook.md.",
+        reply.offers_problem_age_ms / 1_000,
+        reply.offers_problem
+    )
 }
 
 fn offer_json(o: &pb::PendingWorkspaceOffer) -> String {
@@ -153,6 +181,18 @@ mod tests {
         assert!(row.ends_with("from 01ARZ3NDEKTSV4RRFFQ69G5FAV"), "{row}");
         assert!(offer_text(&offer("")).contains("(unnamed)"));
         assert!(offer_json(&offer("work")).contains(r#""name":"work""#));
+    }
+
+    #[test]
+    fn a_blocked_offer_channel_is_named_with_its_age_and_the_runbook() {
+        let reply = pb::WorkspacePendingOffersResponse {
+            offers: Vec::new(),
+            offers_problem: "the keystore could not read the group key".into(),
+            offers_problem_age_ms: 42_000,
+        };
+        let text = offers_problem_text(&reply);
+        assert!(text.contains("blocked (42s ago)"), "{text}");
+        assert!(text.contains("keychain-runbook"), "{text}");
     }
 
     #[test]

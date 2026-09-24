@@ -72,10 +72,11 @@ impl Daemon {
 /// Workspace offer RPCs (task `workspace-offer-cli`): the pending offers a paired peer sent this
 /// device, and accepting or declining one. Registry-level like the three above — no selector.
 impl Daemon {
-    /// Every workspace a peer offered that this device has not yet accepted or declined.
+    /// Every workspace a peer offered that this device has not yet accepted or declined, plus why
+    /// offers are blocked when they are (`offers_problem`, task control-channel-keystore-visibility).
     pub fn workspace_pending_offers(
         &mut self,
-    ) -> Result<Vec<pb::PendingWorkspaceOffer>, ClientError> {
+    ) -> Result<pb::WorkspacePendingOffersResponse, ClientError> {
         let rep = self
             .rt
             .block_on(
@@ -83,7 +84,7 @@ impl Daemon {
                     .workspace_pending_offers(pb::WorkspacePendingOffersRequest {}),
             )
             .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner().offers)
+        Ok(rep.into_inner())
     }
 
     /// Mirrors a pending offer now, in the daemon's own mirror folder (task

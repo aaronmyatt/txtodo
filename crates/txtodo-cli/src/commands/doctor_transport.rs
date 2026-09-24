@@ -85,6 +85,25 @@ fn relay_summary(h: &pb::HealthResponse) -> String {
     format!("relay {} ({source}, {outcome}){node}", h.relay_url)
 }
 
+/// Workspace offers from paired devices (task `control-channel-keystore-visibility`): a warning
+/// naming why the daemon's last offer exchange could not run — today, the OS keystore not
+/// answering the group-key read (a keychain prompt nobody clicked under launchd). `Ok` otherwise,
+/// including with no daemon or an older one, which report nothing.
+pub(super) fn offers_check(health: Option<&pb::HealthResponse>) -> Check {
+    match health.filter(|h| !h.offers_problem.is_empty()) {
+        Some(h) => check(
+            "offers",
+            Status::Warn,
+            format!(
+                "blocked ({}s ago): {}; see docs/keychain-runbook.md",
+                h.offers_problem_age_ms / 1_000,
+                h.offers_problem
+            ),
+        ),
+        None => check("offers", Status::Ok, "no problem reported"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

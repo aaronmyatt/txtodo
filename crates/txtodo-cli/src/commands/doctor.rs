@@ -6,7 +6,7 @@
 
 use crate::client::{self, Mode, SOCKET_REL};
 use crate::commands::doctor_clock::{clock_check, config_check};
-use crate::commands::doctor_transport::transport_check;
+use crate::commands::doctor_transport::{offers_check, transport_check};
 use crate::commands::doctor_version::version_check;
 use crate::{CliError, Ctx, json};
 use std::path::Path;
@@ -302,6 +302,7 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(config_check(ctx));
     checks.push(keystore_check(health.as_ref()));
     checks.push(transport_check(health.as_ref()));
+    checks.push(offers_check(health.as_ref()));
     debug_assert_eq!(checks.len(), 7, "seven fixed checks in a fixed order");
     // After the fixed seven, so their order and count stay what scripts already read.
     checks.push(version_check(health.as_ref()));
