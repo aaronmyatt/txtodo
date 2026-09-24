@@ -1,7 +1,7 @@
-2026-09-24 hit.rs: draw records Vec<(Rect, Target)> into state each frame +m11 @tui @doing by:claude
-2026-09-24 mouse.rs: on_event(state, MouseEvent) -> Option<Command> via the hit map; unit tests over a fixed map +m11 @tui @test
-2026-09-24 Click selects a row or focuses a field; double-click (400 ms, same cell) opens detail +m11 @tui
-2026-09-24 Wheel scrolls the list, Universal, Settings and notes +m11 @tui
-2026-09-24 Hover highlights the row under the pointer +m11 @tui
-2026-09-24 Drag a row to reorder via MoveBefore/MoveToEnd, reusing move_selected_* and task_ref_at +m11 @tui
-2026-09-24 Clickable targets: tabs, buttons, chips, breadcrumbs, toggles, toast Undo, banner Retry/Review +m11 @tui
+x 2026-09-25 2026-09-24 hit.rs: draw records Vec<(Rect, Target)> into state each frame +m11 @tui — draw returns the HitMap; the loop stores it in AppState.hits; overlays record Inert
+x 2026-09-25 2026-09-24 mouse.rs: on_event(state, MouseEvent) -> Option<Command> via the hit map; unit tests over a fixed map +m11 @tui @test — returns Option<Action>, not Command (a drop is a mutation); Input::on_mouse; 7 tests over a hand-drawn map
+x 2026-09-25 2026-09-24 Click selects a row or focuses a field; double-click (400 ms, same cell) opens detail +m11 @tui — rows only; no fields exist yet. Double-click edits the row until tui-detail's panel takes it over
+x 2026-09-25 2026-09-24 Wheel scrolls the list, Universal, Settings and notes +m11 @tui — the list only (3 rows a notch, cursor pulled along); Universal, Settings and notes get it with their screens (lines added there)
+x 2026-09-25 2026-09-24 Hover highlights the row under the pointer +m11 @tui — desktop's hover overlay colour, underline in 16 colours
+x 2026-09-25 2026-09-24 Drag a row to reorder via MoveBefore/MoveToEnd, reusing move_selected_* and task_ref_at +m11 @tui — commands::move_row; tests/mouse_drag.rs against a real daemon; manifest notes desktop has no drag
+x 2026-09-25 2026-09-24 Clickable targets: tabs, buttons, chips, breadcrumbs, toggles, toast Undo, banner Retry/Review +m11 @tui — the seam only: hit::Target::Command runs any command; each screen registers its own targets (lines added to tui-shell, tui-settings, tui-universal, tui-detail)

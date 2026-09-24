@@ -15,3 +15,13 @@
 - Ref: https://docs.rs/crossterm/latest/crossterm/event/struct.MouseEvent.html
 
 ## As built
+- `hit.rs`: `HitMap` of `(Rect, Target)` in drawing order; `Target::{Row, Command, Inert}`. `ui::screen::draw` returns it; `app_loop` stores it in `AppState.hits` and copies the list's scroll into `AppState.scroll`.
+  - Overlays record `Inert` over what they cover, so a click never reaches a row under them.
+- `mouse.rs`: `Mouse::on_event -> Option<Action>` (a drop is a mutation, so not `Command`). `Input::on_mouse` wraps it; a press clears a half-typed chord.
+  - Acts in list mode only. While editing, in the `:` line or with a sheet up, it does nothing.
+  - Double-click edits the row for now. `tui-detail` re-points it to open detail.
+  - Wheel: 3 rows a notch, then the cursor is pulled into view (else drawing scrolls back to it).
+  - Hover: desktop's `--color-hover-overlay` over its paper, as RGB; underline in 16 colours.
+  - Drag: `commands::move_row` drops the row where it is released; a blank drop row counts as the task above it; the Add-a-line row is the end. `tests/mouse_drag.rs` checks the file on disk.
+- Not done here: targets on screens that don't exist yet. Each screen's backlog now has a Mouse line.
+- Human check: click, double-click, wheel, hover and drag in iTerm2 or kitty, and Terminal.app.

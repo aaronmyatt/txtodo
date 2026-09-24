@@ -5,3 +5,4 @@
 2026-09-24 Rows: mark, priority, token colours, due badge, ref pill, 2-letter workspace tile +m11 @tui
 2026-09-24 Keys: j/k/Home/End move, Enter opens the row on its line in its workspace, x completes with an Undo toast +m11 @tui
 2026-09-24 Search filters rows; is:done reveals done rows +m11 @tui
+2026-09-25 Mouse: wheel scrolls, click selects a row, double-click opens it +m11 @tui

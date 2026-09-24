@@ -7,3 +7,4 @@
 2026-09-24 Devices: paired list via DeviceList, Revoke via DeviceRemove, workspace offers moved in from the o pane +m11 @tui
 2026-09-24 Tokens: New token dialog (name, scopes, project/context/file limits, expiry), secret shown once, Copy via OSC 52, list, Revoke +m11 @tui
 2026-09-24 Activity: OpLogStream across workspaces, newest 200, glyphs x ~ + - > refresh, Refresh button +m11 @tui
+2026-09-25 Mouse: wheel scrolls, click the card nav, buttons and toggles +m11 @tui
