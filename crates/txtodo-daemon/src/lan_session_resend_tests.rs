@@ -262,3 +262,29 @@ fn landed_ranges_ack_only_the_ops_that_landed() {
     assert_eq!(landed_ranges(&ranges, 6), vec![r(1, 5, 9), r(2, 1, 1)]);
     assert_eq!(landed_ranges(&ranges, 99), ranges.to_vec());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ops_on_a_worktree_copy_land_in_the_log_but_never_on_disk() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (ws, ..) = make_workspace(dir.path(), [7u8; 32]);
+    let ops = vec![
+        peer_insert(1, ".claude/worktrees/wt/todo.txt"),
+        peer_insert(2, ".claude/worktrees/wt/todo.txt"),
+        peer_insert(3, "todo.txt"),
+    ];
+    let rt = tokio::runtime::Handle::current();
+    let landed = {
+        let ws = Arc::clone(&ws);
+        tokio::task::spawn_blocking(move || commit_incoming_ops(&ws, &rt, ops))
+            .await
+            .unwrap_or_else(|e| panic!("join: {e}"))
+    };
+    assert_eq!(landed, 3);
+    let held = crate::lan_session::read_heads(&ws);
+    assert_eq!(held.get(&peer_device()), Some(&3), "heads stay dense");
+    assert!(
+        !dir.path().join(".claude").exists(),
+        "no worktree copy written"
+    );
+    assert!(text_of(&ws).unwrap_or_default().contains("task 3"));
+}

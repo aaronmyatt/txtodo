@@ -37,3 +37,13 @@ A workspace's walker does not descend into another git checkout nested inside it
 ## Known gaps
 - A peer that already wrote the copies (B) keeps them until someone deletes them by hand.
 - The first mirror of this workspace still moves the 54k junk ops over the link.
+
+## As built (2026-09-25)
+- `walker::is_skipped_dir` also skips a directory holding a `.git` entry (dir or file). The
+  watcher goes through `is_in_skipped_dir`, so it follows. The root itself is never checked.
+- `walker::is_skipped_path` (names only: `.git`, `node_modules`, `.claude/worktrees`) gates
+  `lan_apply::commit_one_file`: such ops go to the log with source "sync" and no file or actor.
+- Tests: walker (nested clone and linked worktree skipped; the path check), and
+  `lan_session_resend_tests::ops_on_a_worktree_copy_land_in_the_log_but_never_on_disk`.
+- Full daemon suite: 543/545 in one run; the two misses were `relay_multiplex` and
+  `relay_converge`, which dial the public n0 relay and time out under suite load. Both pass alone.

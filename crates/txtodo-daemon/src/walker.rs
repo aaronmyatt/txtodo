@@ -150,18 +150,20 @@ fn visit(
 }
 
 /// True for a directory that is never part of a workspace's documents: `.git` and `node_modules`;
-/// a Cargo build directory (`target` holding the `CACHEDIR.TAG` cargo writes into it, or sitting
-/// beside a `Cargo.toml`); and `.claude/worktrees`, whose checkouts are whole copies of the repo
-/// (registered as workspaces of their own when they matter, never a subtree of this one). Walking
-/// them made the daemon adopt about 2979 documents against 361 real ones and re-walk every new
-/// directory a `cargo build` created under `target/` (root todo id:01M2WK7W1MPDW9VBWS25EF8CB5).
-/// A ref directory that merely happens to be called `target` is still walked.
-/// Ref: <https://bford.info/cachedir/>
+/// another git checkout (it holds a `.git` dir, or a `.git` file for a linked worktree or a
+/// submodule: the boundary `txtodo_workspace_paths::workspace_root_from` stops at too, task
+/// walker-nested-checkouts); a Cargo build directory (`target` holding the `CACHEDIR.TAG` cargo
+/// writes into it, or sitting beside a `Cargo.toml`); and `.claude/worktrees`, whose checkouts are
+/// whole copies of the repo (registered as workspaces of their own when they matter, never a
+/// subtree of this one). Walking them made the daemon adopt about 2979 documents against 361 real
+/// ones and re-walk every new directory a `cargo build` created under `target/` (root todo
+/// id:01M2WK7W1MPDW9VBWS25EF8CB5). A ref directory that merely happens to be called `target` is
+/// still walked. Ref: <https://bford.info/cachedir/>, <https://git-scm.com/docs/gitrepository-layout>
 pub fn is_skipped_dir(dir: &Path) -> bool {
     let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
-    if SKIPPED_DIR_NAMES.contains(&name) {
+    if SKIPPED_DIR_NAMES.contains(&name) || std::fs::symlink_metadata(dir.join(".git")).is_ok() {
         return true;
     }
     let parent = dir.parent();
@@ -173,6 +175,17 @@ pub fn is_skipped_dir(dir: &Path) -> bool {
         "worktrees" => parent.and_then(Path::file_name).and_then(|n| n.to_str()) == Some(".claude"),
         _ => false,
     }
+}
+
+/// True for a workspace-relative path under a directory skipped by name alone (`.git`,
+/// `node_modules`, `.claude/worktrees`): a sync import logs a peer's ops on such a path without
+/// writing the file (task walker-nested-checkouts). The `target` and nested-checkout rules need
+/// the disk, so they stay walker-only.
+pub fn is_skipped_path(path: &FilePath) -> bool {
+    let parts: Vec<&str> = path.as_str().split('/').collect();
+    let dirs = &parts[..parts.len().saturating_sub(1)];
+    dirs.iter().any(|d| SKIPPED_DIR_NAMES.contains(d))
+        || dirs.windows(2).any(|w| w == [".claude", "worktrees"])
 }
 
 /// True when `path` (a directory or a document) is at or below a skipped directory that lies
@@ -272,6 +285,11 @@ mod tests {
             "app/Cargo.toml",
             "app/target/todo.txt",
             ".claude/worktrees/wt/todo.txt",
+            // Nested checkouts: a clone (`.git` dir) and a linked worktree (`.git` file).
+            "vendor/lib/.git/HEAD",
+            "vendor/lib/todo.txt",
+            "wt2/.git",
+            "wt2/todo.txt",
             // Kept: a ref dir that is only called `target`, `worktrees` outside `.claude`, and the
             // rest of `.claude`.
             "tasks/target/todo.txt",
@@ -294,6 +312,18 @@ mod tests {
                 "worktrees/todo.txt"
             ]
         );
+    }
+
+    #[test]
+    fn a_synced_path_under_a_skipped_name_is_known_without_the_disk() {
+        let skipped =
+            |p: &str| is_skipped_path(&FilePath::new(p).unwrap_or_else(|e| panic!("{e}")));
+        assert!(skipped(".claude/worktrees/wt/todo.txt"));
+        assert!(skipped("web/node_modules/pkg/todo.txt"));
+        assert!(skipped("a/.git/todo.txt"));
+        assert!(!skipped("todo.txt"));
+        assert!(!skipped("worktrees/todo.txt"));
+        assert!(!skipped("tasks/target/todo.txt"));
     }
 
     #[test]

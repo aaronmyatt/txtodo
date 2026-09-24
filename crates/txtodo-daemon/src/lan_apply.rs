@@ -125,6 +125,9 @@ fn get_or_create_actor(ws: &SharedWorkspace, path: &FilePath) -> Option<ActorHan
 }
 
 fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<Op>) -> bool {
+    if crate::walker::is_skipped_path(&path) {
+        return log_only(ws, &path, &ops);
+    }
     // `txtodo.toml` is whole-text too (`layout_sync.rs`); its commit writes the file, and the
     // watcher then hot-reloads the layout.
     if crate::walker::is_notes_document(crate::workspace_mint::basename(&path))
@@ -142,6 +145,31 @@ fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<O
             false
         }
     }
+}
+
+/// A peer's ops on a path the walker never walks (a `.claude/worktrees` copy of a repo's backlog,
+/// say; task walker-nested-checkouts): into the log, so heads stay dense and other peers still get
+/// them, but no file and no actor. A peer's old log can hold tens of thousands of these.
+fn log_only(ws: &SharedWorkspace, path: &FilePath, ops: &[Op]) -> bool {
+    let store = read(ws).store().clone();
+    let appended = store
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .append_with_source(ops, Some("sync"));
+    match appended {
+        Ok(_) => log_logged_only(path, ops.len()),
+        Err(e) => log_log_only_failed(path, &e),
+    }
+}
+
+fn log_logged_only(path: &FilePath, ops: usize) -> bool {
+    tracing::debug!(file = %path, ops, "lan_sync_ops_logged_only");
+    true
+}
+
+fn log_log_only_failed(path: &FilePath, e: &txtodo_store::StoreError) -> bool {
+    tracing::warn!(file = %path, error = %e, "lan_sync_log_only_failed");
+    false
 }
 
 /// A peer's `NotesEdit` ops for one `notes.md` (task notes-sync): the directory is made if this
