@@ -20,6 +20,7 @@ impl TxtodoService {
             now_ms.saturating_sub(last_event_ms)
         };
         let lan = ws.lan_status();
+        let (offers_problem, offers_problem_age_ms) = offers_problem_now(lan, now_ms);
         // The same helper `PairOffer` reads, so the id a human puts on an allowlist can never
         // disagree with the one a pairing offer carries (root todo `cli-relay-node-id`).
         let (relay_bound, relay_node_id) = crate::pairing_grpc::relay_rendezvous(&ws)
@@ -44,7 +45,17 @@ impl TxtodoService {
             pairing_last_carrier: ws.pairing_lan().carrier(),
             relay_node_id,
             relay_bound,
+            offers_problem,
+            offers_problem_age_ms,
             ..pb::HealthResponse::default()
         }))
     }
+}
+
+/// `LanStatus::offers_problem` as the wire pair: the message and its age, or empty and 0 (task
+/// control-channel-keystore-visibility). `pub(crate)`: `WorkspacePendingOffers` answers the same.
+pub(crate) fn offers_problem_now(lan: &crate::lan_status::LanStatus, now_ms: u64) -> (String, u64) {
+    lan.offers_problem()
+        .map(|(why, at_ms)| (why, now_ms.saturating_sub(at_ms)))
+        .unwrap_or_default()
 }

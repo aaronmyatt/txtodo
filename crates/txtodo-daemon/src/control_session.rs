@@ -31,7 +31,9 @@ pub(crate) fn drive_control_session(
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
 ) {
-    let Some(key) = fetch_group_key(identity) else {
+    let key = fetch_group_key(identity);
+    record_offers_outcome(identity, &key);
+    let Some(key) = key.ok().flatten() else {
         return;
     };
     let epoch = identity.group_epoch();
@@ -54,28 +56,37 @@ pub(crate) fn drive_control_session(
 
 /// The three ways this can fail (keystore error, no key stored yet, corrupt length) used to
 /// collapse into one flat `control_channel_session_skipped_no_group_key` debug event at the call
-/// site — each now logs its own specific reason here instead, at the source.
-fn fetch_group_key(identity: &DeviceIdentity) -> Option<GroupKey> {
+/// site — each now logs its own specific reason here instead, at the source. `Err` carries what a
+/// human should hear about (task control-channel-keystore-visibility); `Ok(None)` is "not paired
+/// yet", which is no problem.
+fn fetch_group_key(identity: &DeviceIdentity) -> Result<Option<GroupKey>, String> {
     let stored = match identity
         .key_store()
         .get(KeyId::Group(identity.group_epoch()))
     {
         Ok(v) => v,
-        Err(e) => return log_group_key_keystore_err(&e),
+        Err(e) => return Err(log_group_key_keystore_err(&e)),
     };
     let Some(bytes) = stored else {
-        return log_group_key_missing();
+        return Ok(log_group_key_missing());
     };
     let raw = bytes.expose();
     match raw.try_into() {
-        Ok(array) => Some(GroupKey::from_bytes(array)),
-        Err(_) => log_group_key_corrupt(raw.len()),
+        Ok(array) => Ok(Some(GroupKey::from_bytes(array))),
+        Err(_) => Err(log_group_key_corrupt(raw.len())),
     }
 }
 
-fn log_group_key_keystore_err(e: &txtodo_sync::KeyStoreError) -> Option<GroupKey> {
+/// Puts the group-key read's outcome on the device's `LanStatus`, where `Health` and
+/// `WorkspacePendingOffers` read it: a failure is kept with its time, a success clears it.
+fn record_offers_outcome(identity: &DeviceIdentity, key: &Result<Option<GroupKey>, String>) {
+    let problem = key.as_ref().err().map(|why| (why.clone(), now_ms()));
+    identity.lan_status().set_offers_problem(problem);
+}
+
+fn log_group_key_keystore_err(e: &txtodo_sync::KeyStoreError) -> String {
     tracing::warn!(error = %e, "control_channel_group_key_keystore_error");
-    None
+    format!("the keystore could not read the group key: {e}")
 }
 
 fn log_group_key_missing() -> Option<GroupKey> {
@@ -83,9 +94,9 @@ fn log_group_key_missing() -> Option<GroupKey> {
     None
 }
 
-fn log_group_key_corrupt(len: usize) -> Option<GroupKey> {
+fn log_group_key_corrupt(len: usize) -> String {
     tracing::warn!(len, "control_channel_group_key_corrupt_length");
-    None
+    format!("the stored group key is {len} bytes, not 32")
 }
 
 fn single_epoch_keys(epoch: u32, key: GroupKey) -> Option<GroupKeys> {

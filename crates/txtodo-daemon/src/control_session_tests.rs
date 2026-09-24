@@ -117,3 +117,37 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     assert_eq!(recorded[0].workspace_id.ulid().to_u128(), offered_workspace);
     assert_eq!(recorded[0].name, "from-a");
 }
+
+/// Task `control-channel-keystore-visibility`: a group-key read that fails leaves its reason on the
+/// device's `LanStatus` (what `Health` and `WorkspacePendingOffers` report), and the next session
+/// that reads the key cleanly clears it. A corrupt stored key stands in for the OS keystore not
+/// answering: both take the same path.
+#[test]
+fn a_failed_group_key_read_is_recorded_and_a_good_one_clears_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let identity = DeviceIdentity::open_in_memory(dir.path(), &FakeClock::new(1_000)).unwrap();
+    identity
+        .key_store()
+        .put(KeyId::Group(GROUP_EPOCH), &Secret::new(vec![1, 2, 3]))
+        .unwrap();
+    let registry_dir = tempfile::tempdir().unwrap();
+    let registry =
+        Mutex::new(WorkspaceRegistry::open(&registry_dir.path().join("registry.db")).unwrap());
+
+    let (_peer, mut link) = channel_link_pair();
+    drive_control_session(&mut link, &identity, &registry);
+    let (why, _at_ms) = identity
+        .lan_status()
+        .offers_problem()
+        .unwrap_or_else(|| panic!("the failure is recorded"));
+    assert!(why.contains("3 bytes"), "{why}");
+
+    identity
+        .key_store()
+        .put(KeyId::Group(GROUP_EPOCH), &Secret::new(vec![7; 32]))
+        .unwrap();
+    let (peer, mut link) = channel_link_pair();
+    drop(peer);
+    drive_control_session(&mut link, &identity, &registry);
+    assert!(identity.lan_status().offers_problem().is_none(), "cleared");
+}

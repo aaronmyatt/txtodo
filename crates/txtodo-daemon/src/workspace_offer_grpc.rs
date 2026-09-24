@@ -51,7 +51,16 @@ pub(crate) async fn pending_offers(
         .into_iter()
         .map(to_pending_offer)
         .collect();
-    Ok(Response::new(pb::WorkspacePendingOffersResponse { offers }))
+    // An empty list while the offer channel is failing means "blocked", not "nothing offered".
+    let now_ms = crate::clock::Clock::now_ms(&crate::clock::SystemClock);
+    let lan = service.catalog().open_args.identity.lan_status();
+    let (offers_problem, offers_problem_age_ms) =
+        crate::health_grpc::offers_problem_now(lan, now_ms);
+    Ok(Response::new(pb::WorkspacePendingOffersResponse {
+        offers,
+        offers_problem,
+        offers_problem_age_ms,
+    }))
 }
 
 pub(crate) async fn accept_offer(

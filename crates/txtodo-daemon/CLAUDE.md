@@ -335,6 +335,11 @@ multiplex every workspace's traffic — not done by this task).
   own device's alias and mirrors any other as a Remote workspace. `PairResult.kept_own_workspace`
   says when a joiner kept its default. `tests/default_workspace_foreign.rs` is the two-daemon proof.
   Known gap: the file carrier is not gated (it has no peer to ask about).
+- Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
+  records its group-key read on the device's `LanStatus` (`offers_problem`: a keystore failure or a
+  corrupt key, with its time; a clean read clears it). `Health.offers_problem(_age_ms)` and
+  `WorkspacePendingOffersResponse.offers_problem(_age_ms)` carry it, so an empty offer list can say
+  "blocked" instead of "nothing offered".
 - `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
   paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
   flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry

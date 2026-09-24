@@ -18,6 +18,8 @@ pub struct LanStatus {
     relay_configured: Arc<AtomicBool>,
     relay_url: Arc<Mutex<String>>,
     relay_last_outcome: Arc<Mutex<String>>,
+    /// See [`LanStatus::offers_problem`]: the message and the unix ms it was seen.
+    offers_problem: Arc<Mutex<Option<(String, u64)>>>,
 }
 
 impl LanStatus {
@@ -81,5 +83,23 @@ impl LanStatus {
             .relay_last_outcome
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = outcome.into();
+    }
+
+    /// Why the last workspace-offer (control channel) session could not run, and when (task
+    /// `control-channel-keystore-visibility`); `None` once a session read the group key again.
+    /// Offers stop while it is set, so an empty offer list means "blocked", not "nothing offered".
+    pub fn offers_problem(&self) -> Option<(String, u64)> {
+        self.offers_problem
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Records (or, with `None`, clears) [`Self::offers_problem`].
+    pub(crate) fn set_offers_problem(&self, problem: Option<(String, u64)>) {
+        *self
+            .offers_problem
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = problem;
     }
 }
