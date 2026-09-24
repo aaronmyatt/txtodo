@@ -123,7 +123,10 @@
 								<span class="description">{task.description}</span>
 								<span class="meta">
 									<span class="project">{projectLabel(task.workspace_root)}</span>
-									{#each task.contexts as ctx (ctx)}
+									<!-- A plain list of strings needs no key. Keying by value throws when a line
+										repeats a context (e.g. `@human ... @human`).
+										Ref: https://svelte.dev/docs/svelte/each#Keyed-each-blocks -->
+									{#each task.contexts as ctx}
 										<span class="context">{ctx}</span>
 									{/each}
 								</span>
