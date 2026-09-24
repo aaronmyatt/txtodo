@@ -81,3 +81,20 @@ path is what makes that command usable without the user picking a directory by h
   mirror, which is how "don't mirror this one" sticks across restarts. A declined pending offer is
   remembered in memory so the next re-offer does not bring it back.
 - Proto order: add `is_remote` first; reserve `local_dir` last, after every client stopped sending it.
+
+## As built (2026-09-24)
+
+- Commits: c8ec994 (proto is_remote), a438149 (paths), ec4c645 (daemon), 9d75e57 (cli),
+  e47136b (tui), 65a4bbe (desktop), e98ff7b (proto reserves local_dir), then three one-line
+  clean-ups.
+- Daemon: `workspace_catalog_mirror.rs`. Mirror folder is `remote/` beside the default
+  (`<state dir>/remote/` under `--dir`). `is_remote` is derived from the root, no column.
+- Skip rule as planned: ever-registered ids are left alone; removing a mirror is the durable
+  "not this one". Decline is in memory only.
+- Clients: CLI `workspace list` shows `[remote]`; the TUI has no workspace list, so its status line
+  says `remote workspace` when run inside a mirror; desktop switcher shows `Remote`.
+- Still broken / not proven:
+  - No two-daemon end-to-end test: offers travel the relay control channel only, and the relay
+    tests need the public n0 relay. Unit tests cover the mirror; the wire path is untested here.
+  - A declined offer comes back after a daemon restart and is mirrored then.
+  - Nobody has looked at the desktop Remote label in the running app.
