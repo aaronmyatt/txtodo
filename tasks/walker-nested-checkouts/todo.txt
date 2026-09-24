@@ -1,3 +1,3 @@
-2026-09-25 daemon: the walker and watcher skip any sub-directory holding a .git entry +m11 @daemon @doing by:claude
-2026-09-25 daemon: sync import logs ops on a path under .git, node_modules or .claude/worktrees without writing a file +m11 @daemon @sync
-2026-09-25 daemon: tests for a nested checkout and a junk-path import +m11 @daemon @test
+x 2026-09-25 2026-09-25 daemon: the walker and watcher skip any sub-directory holding a .git entry +m11 @daemon — walker::is_skipped_dir checks for a .git entry; the watcher follows
+x 2026-09-25 2026-09-25 daemon: sync import logs ops on a path under .git, node_modules or .claude/worktrees without writing a file +m11 @daemon @sync — walker::is_skipped_path; lan_apply::log_only
+x 2026-09-25 2026-09-25 daemon: tests for a nested checkout and a junk-path import +m11 @daemon @test — walker tests + lan_session_resend_tests
