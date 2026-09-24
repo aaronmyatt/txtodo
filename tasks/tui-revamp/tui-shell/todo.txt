@@ -1,4 +1,4 @@
-2026-09-24 Toasts: bottom right, 5 s, optional Undo through the daemon Undo +m11 @tui
+2026-09-24 Toasts: bottom right, 5 s, optional Undo through the daemon Undo +m11 @tui @doing by:claude
 2026-09-25 Mouse targets: tabs, ? help, workspace name, banner Retry/Review, toast Undo, footer sync popup, as hit::Target::Command +m11 @tui
 x 2026-09-25 2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui — ui/header.rs; the search field shows but is inert until tui-tasks' search
 x 2026-09-25 2026-09-24 Live mark: 4 strokes filled by done/total over the root todo.txt, blank lines excluded, faint full mark behind +m11 @tui — ui/mark.rs; strokes are box glyphs, one cell each, the look is for the human pass
