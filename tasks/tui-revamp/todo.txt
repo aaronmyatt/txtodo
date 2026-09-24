@@ -5,7 +5,7 @@
 2026-09-24 Decide: TUI detail as a bottom split panel, ahead of the desktop "panel or page" decide line. I'd take the panel +m11 @tui @human
 2026-09-24 Parity manifest, parity tests and agent rules +m11 @tui @desktop ref:parity-manifest — all but check-parity.sh, which waits on its decide line; see tasks/tui-revamp/parity-manifest/notes.md
 2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc — UniversalTasks done 2026-09-25 (d9d1695 + daemon); the reopen line waits on its decide line
-2026-09-24 TUI prompt bar: Quick Add, chips, strict hint +m11 @tui ref:tui-prompt
+2026-09-24 TUI prompt bar: Quick Add, chips, strict hint +m11 @tui ref:tui-prompt @doing by:claude
 2026-09-24 TUI Universal screen +m11 @tui ref:tui-universal
 2026-09-24 TUI Settings screen: General, Appearance, Workspaces, Shortcuts, Devices, Tokens, Activity +m11 @tui ref:tui-settings
 2026-09-24 TUI Help screen rendered from specs/client-parity.toml: keymap, search operators, prompt bar +m11 @tui
