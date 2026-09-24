@@ -169,8 +169,8 @@ impl Daemon {
         Err(last.unwrap_or(DaemonError::Timeout))
     }
 
-    /// Liveness only; used by [`Daemon::wait_until_ready`].
-    async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
+    /// Liveness, and the daemon's build: [`Daemon::wait_until_ready`] and the version banner.
+    pub async fn health(&mut self) -> Result<pb::HealthResponse, DaemonError> {
         Ok(self
             .inner
             .health(pb::HealthRequest {

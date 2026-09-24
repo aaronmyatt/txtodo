@@ -10,6 +10,35 @@ pub struct Shell {
     pub search: String,
     /// The `W` popup's rows, filled when it opens.
     pub menu: WorkspaceMenu,
+    /// Whether the daemon's `Watch` stream is up.
+    pub link: Link,
+    /// The daemon's version and release date (`Health`), when they are not this build's.
+    pub daemon_build: Option<(String, String)>,
+    /// The conflict banner is hidden until the next flag arrives.
+    pub conflict_banner_hidden: bool,
+    /// The last edit the daemon refused, kept so it can be copied back out.
+    pub refused: Option<Refused>,
+}
+
+/// The `Watch` stream's state, for the daemon banner.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Link {
+    /// Streaming.
+    #[default]
+    Up,
+    /// Dropped; the 1 s tick is reconnecting.
+    Connecting,
+    /// Reconnecting ran past its bound; Retry starts again.
+    Down,
+}
+
+/// An edit the daemon did not save.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Refused {
+    /// The daemon's reason.
+    pub error: String,
+    /// The line as typed.
+    pub text: String,
 }
 
 /// One workspace in the `W` popup.

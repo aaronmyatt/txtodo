@@ -174,6 +174,14 @@ commands! {
     NavWorkspaceMenu = "nav.workspace_menu", ["W"], Global;
     /// Switch workspace: `:workspace.switch` opens the popup, `:w <name>` switches at once.
     WorkspaceSwitch = "workspace.switch", [], Global;
+    /// Reconnect to the daemon (the daemon banner's Retry).
+    AppRetryDaemon = "app.retry_daemon", [], Global;
+    /// Hide the agent-playbook hint.
+    AppDismissSkillHint = "app.dismiss_skill_hint", [], Global;
+    /// Copy the edit the daemon refused (OSC 52).
+    AppCopyRefusedEdit = "app.copy_refused_edit", [], Global;
+    /// Hide the conflict banner until the next flag.
+    ConflictsDismissBanner = "conflicts.dismiss_banner", [], Global;
     /// Next workspace in the popup.
     WorkspaceMenuDown = "workspace_menu.down", ["j", "Down"], Sheet;
     /// Previous workspace in the popup.

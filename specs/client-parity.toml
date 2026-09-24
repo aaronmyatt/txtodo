@@ -700,7 +700,7 @@ title = "Reconnect to the daemon"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "status banner" }
-tui = { status = "planned", surface = "status banner" }
+tui = { status = "done", surface = "daemon banner" }
 deviation = ""
 
 [[action]]
@@ -709,7 +709,7 @@ title = "Hide the agent-playbook hint"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "SkillHintBanner" }
-tui = { status = "planned", surface = "banner" }
+tui = { status = "done", surface = "banner" }
 deviation = ""
 
 [[action]]
@@ -718,7 +718,7 @@ title = "Copy an edit the daemon refused"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "RejectedEditBanner" }
-tui = { status = "planned", surface = "banner" }
+tui = { status = "done", surface = "banner (OSC 52)" }
 deviation = ""
 
 [[action]]
@@ -727,7 +727,7 @@ title = "Hide the conflict banner for now"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "ConflictBanner" }
-tui = { status = "planned", surface = "banner" }
+tui = { status = "done", surface = "banner" }
 deviation = ""
 
 [[action]]

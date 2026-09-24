@@ -23,6 +23,8 @@ pub enum Action {
     /// `W`: list the workspaces and their open counts, then open the popup (task
     /// `tui-revamp/tui-shell`).
     OpenWorkspaceMenu,
+    /// Put this text on the clipboard (OSC 52): a refused edit, a new token's secret.
+    Copy(String),
     /// `:q`: exit the event loop.
     Quit,
 }

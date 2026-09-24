@@ -129,6 +129,10 @@ pub async fn run_in(
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
     state.workspace_label = workspace_label;
     root.clone_into(&mut state.shell.root);
+    if let Ok(health) = daemon.health().await {
+        state.shell.daemon_build =
+            crate::buildinfo::other_build(&health.version, &health.release_date);
+    }
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
     let mode = crate::theme::ThemeMode::default();
     crate::theme::set_current(crate::theme::Theme::resolve(mode, |k| {
@@ -194,6 +198,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::DeclineOffer(_) => "decline_offer",
         Action::SwitchWorkspace(_) => "switch_workspace",
         Action::OpenWorkspaceMenu => "open_workspace_menu",
+        Action::Copy(_) => "copy",
     }
 }
 
@@ -208,10 +213,18 @@ async fn perform_inner(
             let path = req.path.clone();
             // A refusal (a stale TaskRef, a line that changed underneath) is the daemon doing its
             // job: it goes on the status line, never out of the loop. A transport error still does.
+            let typed = typed_line(&req);
             match daemon.apply(req).await {
-                Ok(_) => state.last_error = None,
+                Ok(_) => {
+                    state.last_error = None;
+                    state.shell.refused = None;
+                }
                 Err(DaemonError::Rpc(status)) => {
                     state.last_error = Some(status.message().to_owned());
+                    state.shell.refused = typed.map(|text| crate::state_shell::Refused {
+                        error: status.message().to_owned(),
+                        text,
+                    });
                     return Ok(true);
                 }
                 Err(e) => return Err(e),
@@ -223,6 +236,11 @@ async fn perform_inner(
             crate::app_workspace::switch_workspace(daemon, state, &query).await?;
         }
         Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await?,
+        Action::Copy(text) => {
+            if let Err(e) = crate::clipboard::copy(&text) {
+                state.last_error = Some(format!("copy failed: {e}"));
+            }
+        }
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;
@@ -236,6 +254,15 @@ async fn perform_inner(
         }
     }
     Ok(true)
+}
+
+/// The line a request typed (an `Add` or an `Edit`), kept so a refused one can be copied back.
+fn typed_line(req: &pb::ApplyRequest) -> Option<String> {
+    match req.mutations.first()?.kind.as_ref()? {
+        pb::mutation::Kind::Add(add) => Some(add.line.clone()),
+        pb::mutation::Kind::Edit(edit) => Some(edit.new_line.clone()),
+        _ => None,
+    }
 }
 
 /// Replaces `state.lines` with a freshly fetched document, preserving the cursor position by
@@ -260,6 +287,9 @@ pub async fn follow_change(
 ) -> Result<Option<tonic::Streaming<pb::Change>>, DaemonError> {
     let layout_changed = crate::app_layout::is_layout_change(&change);
     let this_document = change.path == state.path;
+    if !change.review.is_empty() {
+        state.shell.conflict_banner_hidden = false;
+    }
     apply_change(state, change);
     if layout_changed {
         return crate::app_layout::follow_root_list(daemon, state).await;

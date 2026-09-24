@@ -1,11 +1,13 @@
-//! The screen and workspace-popup commands (task `tui-revamp/tui-shell`): `g t` / `g u` / `g s` /
-//! `?` move between screens, `W` opens the workspace popup, and its rows switch workspace or go to
-//! Settings › Workspaces. Split from `commands.rs` for its line budget; pure like it.
+//! The shell's commands (task `tui-revamp/tui-shell`): `g t` / `g u` / `g s` / `?` move between
+//! screens, `W` opens the workspace popup, whose rows switch workspace or go to Settings ›
+//! Workspaces, and the banners' buttons. Split from `commands.rs` for its line budget; pure like
+//! it.
 
 use crate::action::Action;
 use crate::keymap::Command;
 use crate::state::AppState;
 use crate::state_nav::{Overlay, Screen, SettingsCard};
+use crate::state_shell::Link;
 
 /// Runs a screen or popup command; `None` for any other command.
 pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
@@ -17,7 +19,7 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
         Command::NavWorkspaceMenu | Command::WorkspaceSwitch => {
             return Some(Some(Action::OpenWorkspaceMenu));
         }
-        other => return run_menu(state, other),
+        other => return run_menu(state, other).or_else(|| run_banner(state, other)),
     };
     go(state, screen);
     Some(None)
@@ -52,6 +54,24 @@ fn run_menu(state: &mut AppState, command: Command) -> Option<Option<Action>> {
             }
             return Some(Some(Action::SwitchWorkspace(item.id.clone())));
         }
+        _ => return None,
+    }
+    Some(None)
+}
+
+/// The banners' buttons.
+fn run_banner(state: &mut AppState, command: Command) -> Option<Option<Action>> {
+    match command {
+        Command::AppRetryDaemon if state.shell.link != Link::Up => {
+            state.shell.link = Link::Connecting;
+        }
+        Command::AppDismissSkillHint => state.skill_hint = false,
+        Command::ConflictsDismissBanner => state.shell.conflict_banner_hidden = true,
+        Command::AppCopyRefusedEdit => {
+            let refused = state.shell.refused.take()?;
+            return Some(Some(Action::Copy(refused.text)));
+        }
+        Command::AppRetryDaemon => {}
         _ => return None,
     }
     Some(None)

@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod buildinfo;
+pub mod clipboard;
 pub mod hit;
 pub mod paint;
 pub mod skill_hint;
@@ -20,6 +21,7 @@ pub mod theme;
 /// `list` (line list + vim nav), `edit` (single-line editor), `conflicts` (`r` pane), `sync`
 /// (`s` indicator) and `screen` (the top-level frame composing all of them).
 pub mod ui {
+    pub mod banner;
     pub mod conflicts;
     pub mod edit;
     pub mod header;

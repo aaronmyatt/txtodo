@@ -11,8 +11,15 @@ use crate::state::{AppState, Resolution};
 use crate::ui::edit::{self, OpenKey};
 use crate::ui::{conflicts, offers};
 
+/// What the status line says when a command would change a line under review.
+pub const READ_ONLY: &str = "that line needs review first: r";
+
 /// Runs one command against `state`: the daemon call it needs, if any.
 pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
+    if changes_the_line(command) && under_review(state, state.cursor) {
+        state.last_error = Some(READ_ONLY.to_owned());
+        return None;
+    }
     match command {
         Command::ListDown => state.move_down(),
         Command::ListUp => state.move_up(),
@@ -38,6 +45,32 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
         other => return run_panes(state, other),
     }
     None
+}
+
+/// Whether `command` edits, moves, completes or deletes the selected line.
+fn changes_the_line(command: Command) -> bool {
+    matches!(
+        command,
+        Command::ListEditStart
+            | Command::ListEditEnd
+            | Command::ListDelete
+            | Command::ListToggleComplete
+            | Command::ListMoveDown
+            | Command::ListMoveUp
+    )
+}
+
+/// Whether the line at `idx` carries a `needs_review` flag: it is read-only until the flag is
+/// resolved, like desktop's buffer (per line here, since the TUI edits line by line).
+pub(crate) fn under_review(state: &AppState, idx: usize) -> bool {
+    let Some(line) = state.lines.get(idx) else {
+        return false;
+    };
+    let id = line.task_ref_id();
+    state
+        .needs_review
+        .iter()
+        .any(|f| (!id.is_empty() && f.task_id == id) || f.line_number == line.line_number)
 }
 
 /// The conflict and offer sheets, the sync pane, the palette and quitting.
@@ -175,6 +208,10 @@ fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
 /// where `to` is, blank lines never addressed (`to` may be the Add-a-line row: the end). Nothing
 /// when `from` is not a task or the drop would not move it. The cursor goes where it lands.
 pub(crate) fn move_row(state: &mut AppState, from: usize, to: usize) -> Option<Action> {
+    if under_review(state, from) {
+        state.last_error = Some(READ_ONLY.to_owned());
+        return None;
+    }
     let task = Some(task_ref_at(state, from)?);
     let (kind, lands_at) = if to < from {
         let before = next_task_from(state, to).filter(|&b| b != from)?;

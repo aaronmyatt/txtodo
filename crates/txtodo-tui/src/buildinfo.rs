@@ -20,9 +20,40 @@ pub const UI_LABEL: &str = concat!(
     env!("TXTODO_RELEASE_DATE")
 );
 
+/// The daemon's version and release date when they are not this build's (the version banner, task
+/// `tui-revamp/tui-shell`, as desktop's `daemonMismatch`). A daemon that sends no release date is
+/// older than the field, so it counts as different; one that sends no version is too old to say.
+pub fn other_build(version: &str, release_date: &str) -> Option<(String, String)> {
+    let same = version == env!("CARGO_PKG_VERSION") && release_date == env!("TXTODO_RELEASE_DATE");
+    if version.is_empty() || same {
+        return None;
+    }
+    let date = if release_date.is_empty() {
+        "an older build"
+    } else {
+        release_date
+    };
+    Some((version.to_owned(), date.to_owned()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_another_build_is_reported() {
+        let (version, date) = (env!("CARGO_PKG_VERSION"), env!("TXTODO_RELEASE_DATE"));
+        assert_eq!(other_build(version, date), None);
+        assert_eq!(other_build("", ""), None, "too old to say");
+        assert_eq!(
+            other_build(version, ""),
+            Some((version.to_owned(), "an older build".to_owned()))
+        );
+        assert_eq!(
+            other_build("0.0.1", "2026-01-01"),
+            Some(("0.0.1".to_owned(), "2026-01-01".to_owned()))
+        );
+    }
 
     #[test]
     fn both_forms_carry_the_version_and_the_same_date() {

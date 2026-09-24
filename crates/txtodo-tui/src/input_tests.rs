@@ -112,6 +112,7 @@ fn capital_k_skips_a_blank_line_above() {
 #[test]
 fn capital_j_on_the_second_to_last_line_produces_move_to_end() {
     let mut state = AppState::fixture();
+    state.needs_review.clear(); // the fixture flags passport, which would make it read-only
     state.cursor = 1; // passport; past the blank, only the last task (plants) follows it
     let mut input = Input::default();
     let action = input
@@ -162,6 +163,7 @@ fn capital_j_on_the_add_line_row_does_nothing() {
 #[test]
 fn capital_k_moves_before_the_previous_line_and_the_cursor_follows() {
     let mut state = AppState::fixture();
+    state.needs_review.clear(); // the fixture flags passport, which would make it read-only
     state.cursor = 1; // the passport line, which carries an id:
     let mut input = Input::default();
     let action = input
@@ -330,4 +332,21 @@ fn today_local_is_iso_calendar_shape() {
     assert_eq!(s.len(), 10);
     assert_eq!(s.as_bytes()[4], b'-');
     assert_eq!(s.as_bytes()[7], b'-');
+}
+
+#[test]
+fn a_line_under_review_is_read_only_and_says_so() {
+    let mut state = AppState::fixture(); // flags passport, line 2
+    state.cursor = 1;
+    let mut input = Input::default();
+    for c in ['i', 'J', ' '] {
+        assert_eq!(input.on_key(&mut state, key(c)), None, "{c:?}");
+        assert!(state.editing.is_none());
+        assert_eq!(state.last_error.as_deref(), Some(commands::READ_ONLY));
+    }
+    state.cursor = 0;
+    assert!(
+        input.on_key(&mut state, key(' ')).is_some(),
+        "other lines are not"
+    );
 }
