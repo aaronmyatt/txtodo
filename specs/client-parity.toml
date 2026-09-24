@@ -39,8 +39,9 @@
 #   A printable key is itself, case-sensitive: `x`, `G` (shift is implied by the capital), `/`, `?`.
 #   Named keys: `Enter`, `Esc`, `Space`, `Tab`, `Backspace`, `Delete`, `Up`, `Down`, `Left`,
 #   `Right`, `Home`, `End`, `PageUp`, `PageDown`.
-#   Modifiers join with `-`, in this order: `Mod-Ctrl-Alt-Shift-<key>`. `Mod` is Cmd on macOS and
-#   Ctrl elsewhere; `Ctrl` is Ctrl everywhere. Shift is written only with a named key or a symbol
+#   Modifiers join with `-`, in this order: `Mod-Super-Ctrl-Alt-Shift-<key>`. `Mod` is Cmd on macOS
+#   and Ctrl elsewhere; `Super` is Cmd on macOS and the Windows/Super key elsewhere; `Ctrl` is Ctrl
+#   everywhere. Shift is written only with a named key or a symbol
 #   (`Shift-Enter`, `Mod-Shift-Space`), never with a letter.
 #   A chord is its keys separated by one space: `g g`, `d d`, `g t` (the second key within 900 ms).
 #
@@ -112,9 +113,9 @@ id = "list.delete"
 title = "Delete the line"
 keys = ["d d"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "differs", surface = "FileView", keys = ["Mod-Shift-k"] }
 tui = { status = "done", surface = "Tasks" }
-deviation = ""
+deviation = "Desktop has no list mode yet: CodeMirror's default Mod-Shift-k deletes the line."
 
 [[action]]
 id = "list.toggle_complete"
@@ -364,9 +365,9 @@ id = "nav.universal"
 title = "Go to Universal"
 keys = ["g u"]
 scope = "global"
-desktop = { status = "planned", surface = "header tabs" }
+desktop = { status = "differs", surface = "MainView link", keys = [] }
 tui = { status = "planned", surface = "header tabs" }
-deviation = ""
+deviation = "Desktop reaches Universal by a top-bar link today; the g chord comes with the revamp."
 
 [[action]]
 id = "nav.settings"
@@ -382,9 +383,9 @@ id = "nav.help"
 title = "Help: keys, search operators, the prompt bar"
 keys = ["?"]
 scope = "global"
-desktop = { status = "planned", surface = "/help" }
+desktop = { status = "differs", surface = "/help", keys = [] }
 tui = { status = "planned", surface = "Help screen" }
-deviation = ""
+deviation = "Desktop reaches Help by the ? link in the top bar; no key yet."
 
 [[action]]
 id = "nav.workspace_menu"
@@ -591,3 +592,284 @@ note = ""
 desktop = "Tray menu and window pin"
 tui = "na"
 note = "OS window chrome; a terminal has neither."
+
+# ==== Desktop today (seeded 2026-09-25 from apps/desktop/src and src-tauri) =========================
+
+[[action]]
+id = "quick_add.open"
+title = "Quick Add window, from any app"
+keys = ["Super-Shift-Space"]
+scope = "global"
+desktop = { status = "done", surface = "Quick Add window (quick_add.rs)" }
+tui = { status = "na", surface = "" }
+deviation = "An OS-wide hotkey and a floating window need a GUI app; the TUI's prompt bar (prompt.focus) covers adding from inside it."
+
+[[action]]
+id = "prompt.chip"
+title = "Insert a chip: (A) (B) (C) x + @ due: t: rec:"
+keys = []
+scope = "prompt"
+desktop = { status = "done", surface = "Quick Add window (EditPopover)" }
+tui = { status = "planned", surface = "prompt bar" }
+deviation = ""
+
+[[action]]
+id = "edit.undo"
+title = "Undo typing in a text field"
+keys = ["Mod-z"]
+scope = "edit"
+desktop = { status = "done", surface = "detail title, notes, Quick Add" }
+tui = { status = "na", surface = "" }
+deviation = "The TUI's line editor has no typing history; Esc discards the edit, and u in list mode undoes a saved change through the daemon."
+
+[[action]]
+id = "tray.open"
+title = "Open the window from the tray"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "tray" }
+tui = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon."
+
+[[action]]
+id = "tray.quick_add"
+title = "Quick Add from the tray"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "tray" }
+tui = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon."
+
+[[action]]
+id = "app.pin"
+title = "Keep the window on top"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "PinToggle" }
+tui = { status = "na", surface = "" }
+deviation = "A terminal program does not own its window; the terminal emulator does."
+
+[[action]]
+id = "app.theme"
+title = "Theme: light, dark or system"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "ThemeToggle" }
+tui = { status = "planned", surface = "Settings > Appearance" }
+deviation = ""
+
+[[action]]
+id = "app.retry_daemon"
+title = "Reconnect to the daemon"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "status banner" }
+tui = { status = "planned", surface = "status banner" }
+deviation = ""
+
+[[action]]
+id = "app.dismiss_skill_hint"
+title = "Hide the agent-playbook hint"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "SkillHintBanner" }
+tui = { status = "planned", surface = "banner" }
+deviation = ""
+
+[[action]]
+id = "app.copy_refused_edit"
+title = "Copy an edit the daemon refused"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "RejectedEditBanner" }
+tui = { status = "planned", surface = "banner" }
+deviation = ""
+
+[[action]]
+id = "conflicts.dismiss_banner"
+title = "Hide the conflict banner for now"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "ConflictBanner" }
+tui = { status = "planned", surface = "banner" }
+deviation = ""
+
+[[action]]
+id = "detail.up"
+title = "Up one level"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "DetailView back button" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.breadcrumb"
+title = "Jump to a level from the breadcrumb"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "Breadcrumb" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.edit_parent"
+title = "Edit the parent line (Enter saves, Esc reverts)"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "DetailView" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.complete_parent"
+title = "Mark the parent done once every sub-task is"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "DetailView" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.start_sublist"
+title = "Add the first sub-task (makes the ref: folder)"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "DetailView" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.edit_notes"
+title = "Edit notes.md; saves 500 ms after typing stops"
+keys = []
+scope = "detail"
+desktop = { status = "done", surface = "NotesEditor" }
+tui = { status = "planned", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "workspace.switch"
+title = "Switch to a workspace"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "WorkspaceSwitcher" }
+tui = { status = "planned", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "workspace.add"
+title = "Add a workspace by path"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "WorkspaceSwitcher" }
+tui = { status = "planned", surface = "Settings > Workspaces" }
+deviation = ""
+
+[[action]]
+id = "workspace.remove"
+title = "Remove a workspace (never the current or the default)"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "WorkspaceSwitcher" }
+tui = { status = "planned", surface = "Settings > Workspaces" }
+deviation = ""
+
+[[action]]
+id = "activity.refresh"
+title = "Refresh the activity feed"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "ActivityTab" }
+tui = { status = "planned", surface = "Settings > Activity" }
+deviation = ""
+
+[[action]]
+id = "universal.filter_context"
+title = "Filter by @context"
+keys = []
+scope = "universal"
+desktop = { status = "done", surface = "UniversalView" }
+tui = { status = "planned", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "nav.devices"
+title = "Devices and agents"
+keys = []
+scope = "global"
+desktop = { status = "done", surface = "MainView link to /devices" }
+tui = { status = "planned", surface = "Settings > Devices" }
+deviation = ""
+
+[[action]]
+id = "pair.offer"
+title = "Show this device's pairing code"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Devices" }
+tui = { status = "planned", surface = "Settings > Devices" }
+deviation = ""
+
+[[action]]
+id = "pair.scan"
+title = "Pair from another device's code"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Devices (camera)" }
+tui = { status = "differs", surface = "Settings > Devices" }
+deviation = "A terminal has no camera: the TUI takes the code pasted as text."
+
+[[action]]
+id = "pair.confirm"
+title = "Confirm the six SAS words match"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Devices" }
+tui = { status = "planned", surface = "Settings > Devices" }
+deviation = ""
+
+[[action]]
+id = "devices.list"
+title = "List paired devices"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "planned", surface = "Settings > Devices" }
+deviation = ""
+
+[[action]]
+id = "devices.revoke"
+title = "Revoke a paired device (rotates the group key)"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "planned", surface = "Settings > Devices" }
+deviation = ""
+
+[[action]]
+id = "tokens.create"
+title = "New agent token: name, scopes, limits, expiry"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Tokens" }
+tui = { status = "planned", surface = "Settings > Tokens" }
+deviation = ""
+
+[[action]]
+id = "tokens.copy"
+title = "Copy the new token's secret (shown once)"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Tokens" }
+tui = { status = "differs", surface = "Settings > Tokens" }
+deviation = "The TUI copies with OSC 52, a terminal escape some terminals ignore; the secret stays on screen until dismissed."
+
+[[action]]
+id = "tokens.revoke"
+title = "Revoke a token"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "Tokens" }
+tui = { status = "planned", surface = "Settings > Tokens" }
+deviation = ""
