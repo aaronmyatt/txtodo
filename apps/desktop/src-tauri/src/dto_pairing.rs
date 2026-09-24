@@ -51,3 +51,11 @@ impl From<pb::PairResult> for PairResultDto {
         PairResultDto { sas: r.sas }
     }
 }
+
+/// `offers_problem`'s answer: why offers from paired devices are blocked, and how long ago that was
+/// seen, in milliseconds; empty and 0 when they are not (task control-channel-keystore-visibility).
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+pub struct OffersProblemDto {
+    pub problem: String,
+    pub age_ms: u64,
+}

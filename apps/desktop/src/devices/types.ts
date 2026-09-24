@@ -120,3 +120,12 @@ export interface OpEvent {
 	/** `cli` / `tui` / `desktop` / `mcp` / `sync` / `external`; empty or absent for an old op. */
 	source?: string;
 }
+
+/**
+ * Why offers from paired devices are blocked (task control-channel-keystore-visibility), e.g. the
+ * OS keychain not answering the group-key read. Mirrors `OffersProblemDto`; empty when fine.
+ */
+export interface OffersProblem {
+	problem: string;
+	age_ms: number;
+}

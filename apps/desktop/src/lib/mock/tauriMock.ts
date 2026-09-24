@@ -77,6 +77,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockPairAccept() as T;
 		case "pair_confirm_sas":
 			return mockPairConfirm() as T;
+		case "offers_problem":
+			return { problem: "", age_ms: 0 } as T;
 		case "token_create":
 			return mockTokenCreate(args) as T;
 		case "token_list":

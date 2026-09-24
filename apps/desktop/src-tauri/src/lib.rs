@@ -92,6 +92,7 @@ pub fn run() {
             commands_pairing::pair_offer,
             commands_pairing::pair_accept,
             commands_pairing::pair_confirm_sas,
+            commands_pairing::offers_problem,
             commands_tokens::token_create,
             commands_tokens::token_list,
             commands_tokens::token_revoke,

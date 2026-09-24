@@ -4,7 +4,12 @@
 // daemon is the only source of truth.
 // Ref: https://v2.tauri.app/develop/calling-rust/
 import { invoke } from "$lib/tauriShim";
-import type { OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
+import type { OffersProblem, OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
+
+/** Why offers from paired devices are blocked, if they are (empty `problem` when not). */
+export function offersProblem(): Promise<OffersProblem> {
+	return invoke("offers_problem");
+}
 
 /** Starts a pairing handshake on this device; returns the QR payload. */
 export function pairOffer(): Promise<PairOffer> {

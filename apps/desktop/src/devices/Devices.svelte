@@ -4,9 +4,9 @@
 	// pair_confirm_sas() — never an automatic confirm. All crypto and pairing state live in the
 	// daemon (crates/txtodo-sync, crates/txtodo-daemon); this component only calls the three
 	// Tauri commands and renders their results.
-	import { onDestroy, tick } from "svelte";
+	import { onDestroy, onMount, tick } from "svelte";
 	import QRCode from "qrcode"; // https://github.com/soldair/node-qrcode
-	import { pairAccept, pairConfirmSas, pairOffer } from "./api";
+	import { offersProblem, pairAccept, pairConfirmSas, pairOffer } from "./api";
 	import { startQrScanner, type QrScanner } from "./camera";
 	import { decodePairOfferQr, encodePairOfferQr } from "./qr";
 	import {
@@ -181,10 +181,26 @@
 	}
 
 	onDestroy(resetPairingUiState);
+
+	/** Task control-channel-keystore-visibility: "blocked" is not "nothing to offer". */
+	let blockedReason = $state("");
+	onMount(async () => {
+		try {
+			blockedReason = (await offersProblem()).problem;
+		} catch {
+			blockedReason = "";
+		}
+	});
 </script>
 
 <section class="devices">
 	<h2>Pair a device</h2>
+	{#if blockedReason}
+		<p class="state-warning" role="status">
+			Workspaces from your other devices are not arriving: {blockedReason}. See
+			docs/keychain-runbook.md.
+		</p>
+	{/if}
 
 	{#if mode === "idle"}
 		<div class="actions">

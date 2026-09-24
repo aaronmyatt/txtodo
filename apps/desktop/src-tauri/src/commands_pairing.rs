@@ -51,6 +51,21 @@ async fn pair_accept_inner(
     Ok(PairResultDto::from(resp))
 }
 
+/// Why offers from paired devices are blocked, if they are (task
+/// control-channel-keystore-visibility): the Devices page shows it so a user can tell "blocked"
+/// from "nothing to offer". Never fails: no daemon reads as no problem.
+#[tracing::instrument(name = "ipc.offers_problem", skip_all)]
+#[tauri::command]
+pub async fn offers_problem(
+    state: State<'_, AppState>,
+) -> Result<crate::dto_pairing::OffersProblemDto, String> {
+    let Ok(mut client) = state.client_snapshot().await else {
+        return Ok(crate::dto_pairing::OffersProblemDto::default());
+    };
+    let (problem, age_ms) = client.offers_problem().await.unwrap_or_default();
+    Ok(crate::dto_pairing::OffersProblemDto { problem, age_ms })
+}
+
 /// Confirms the SAS shown to the human on this device. The group key lands only once both sides
 /// have confirmed. `own_device` (JS `ownDevice`): the human's answer to "is the other device your
 /// own?" (task default-workspace-pairing-consent).

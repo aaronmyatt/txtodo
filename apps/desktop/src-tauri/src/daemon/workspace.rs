@@ -72,6 +72,18 @@ impl DaemonClient {
             .into_inner();
         Ok((health.version, health.release_date))
     }
+
+    /// Why offers from paired devices are blocked, and how long ago that was seen; empty and 0
+    /// when they are not (task control-channel-keystore-visibility). Selector-less `Health`, like
+    /// [`Self::daemon_build`]: the problem is device-level.
+    pub async fn offers_problem(&mut self) -> Result<(String, u64), DaemonError> {
+        let health = self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner();
+        Ok((health.offers_problem, health.offers_problem_age_ms))
+    }
 }
 
 impl DaemonClient {

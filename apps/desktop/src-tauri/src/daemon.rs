@@ -297,13 +297,9 @@ impl DaemonClient {
     }
 
     /// Confirms the SAS shown to the human on this device; the group key lands only once both
-    /// sides have confirmed. `own_device` is the human's answer to "is the other device your own?"
-    /// (task default-workspace-pairing-consent): the default list merges only when both said yes.
-    pub async fn pair_confirm_sas(
-        &mut self,
-        own_device: bool,
-    ) -> Result<pb::PairResult, DaemonError> {
-        let workspace = self.selector.clone();
+    /// sides have. `own_device`: "is the other device yours?" (task default-workspace-pairing-consent).
+    pub async fn pair_confirm_sas(&mut self, own: bool) -> Result<pb::PairResult, DaemonError> {
+        let (workspace, own_device) = (self.selector.clone(), own);
         let req = pb::PairConfirmRequest {
             workspace,
             own_device,
