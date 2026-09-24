@@ -324,6 +324,9 @@ multiplex every workspace's traffic — not done by this task).
   apart and resends what stays unacked for `RESEND_AFTER`; the receiver commits a batch as a dense
   prefix (`lan_apply::commit_incoming_ops`) and acks only that (`lan_session_ops.rs`). This
   supersedes the "short-lived session, periodic redial" text elsewhere in this file.
+  Each session is tagged with its `live_peers::Carrier` (task `lan-dial-falls-to-relay`,
+  2026-09-25): a peer live only over the relay is still dialed over LAN, with no relay fallback,
+  and a relay session ends once a LAN session with its peer is up.
   `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
   `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
   **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts

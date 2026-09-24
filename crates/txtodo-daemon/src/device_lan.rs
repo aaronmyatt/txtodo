@@ -16,6 +16,7 @@ use crate::lan::{
     CONNECT_TIMEOUT, LanCtx, LanTransport, MAX_CONCURRENT_LAN_SESSIONS, spawn_driver,
 };
 use crate::lan_peers::{KnownPeers, peers_to_resync};
+use crate::live_peers::Carrier;
 use crate::server::SharedWorkspace;
 use crate::workspace_registry::WorkspaceRegistry;
 
@@ -119,7 +120,7 @@ pub(crate) fn accept_one(
     } else if link.alpn() == PAIRING_ALPN {
         accept_pairing(link, ctx, permit);
     } else {
-        spawn_driver(ctx.clone(), link, permit, |_| {});
+        spawn_driver(ctx.clone(), (link, Carrier::Lan), permit, |_| {});
     }
 }
 

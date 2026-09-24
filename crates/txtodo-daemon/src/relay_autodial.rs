@@ -16,6 +16,7 @@ use txtodo_sync::{DiscoveredPeer, LanEndpoint};
 
 use crate::lan::{LanCtx, dial_and_spawn, spawn_driver};
 use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
+use crate::live_peers::Carrier;
 use crate::relay_fallback::relay_fallback_dial;
 
 /// Runs both halves of a resync tick: `lan.rs`'s existing known-peer redial, then this module's
@@ -28,12 +29,13 @@ pub(crate) fn resync_and_dial(
     sessions: &Arc<Semaphore>,
     dial_state: &SharedDialState,
 ) {
-    // Only peers with no live session (task sync-live-push): a session stays open now, so the
-    // resync is a reconnect, not a redial of a link that is still up.
+    // Only peers with no live LAN session (task sync-live-push): a session stays open now, so the
+    // resync is a reconnect, not a redial of a link that is still up. One live only over the relay
+    // is dialed over LAN, no relay fallback (task lan-dial-falls-to-relay, `dial_and_spawn`).
     let live = ctx.identity.live_peers();
     for peer in peers_to_resync(known_peers, ctx.device)
         .into_iter()
-        .filter(|p| !live.is_live(p.device))
+        .filter(|p| !live.is_live_on(p.device, Carrier::Lan))
     {
         spawn_resync_dial(
             Arc::clone(sessions),
@@ -144,7 +146,7 @@ fn spawn_relay_only_dial(ctx: LanCtx, node: [u8; 32], device: DeviceId, sessions
     };
     tokio::spawn(async move {
         match relay_fallback_dial(ctx.clone(), node).await {
-            Some(link) => spawn_driver(ctx, link, permit, |_| {}),
+            Some(link) => spawn_driver(ctx, (link, Carrier::Relay), permit, |_| {}),
             None => tracing::debug!(peer = %device, "relay_only_auto_dial_failed"),
         }
     });

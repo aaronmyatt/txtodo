@@ -41,6 +41,7 @@ use crate::lan_peers::{
     DialState, KnownPeers, SharedDialState, known_or, record_dial_outcome, remember_any_sighting,
     remember_sighting, worth_dialing,
 };
+use crate::live_peers::Carrier;
 
 /// Refuses a 101st concurrent sync session the same way `MAX_LAN_PEERS` bounds the peer table
 /// itself — a LAN flooded with peers must not spawn unbounded tasks.
@@ -242,8 +243,13 @@ fn handle_sighting(
     let now_ms = ctx.clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         let peer = known_or(known_peers, peer);
-        // A live session already carries every shared workspace (task sync-live-push).
-        if ctx.identity.live_peers().is_live(peer.device) {
+        // A live LAN session already carries every shared workspace (task sync-live-push). One
+        // live only over the relay is dialed anyway: the LAN session supersedes it.
+        if ctx
+            .identity
+            .live_peers()
+            .is_live_on(peer.device, Carrier::Lan)
+        {
             return true;
         }
         spawn_dial(
@@ -294,7 +300,7 @@ fn browse(discovery: &Discovery) -> Option<txtodo_sync::BrowseEvents> {
 /// is false when it bailed before its first greeting, which the dial path books as a failure.
 pub(crate) fn spawn_driver(
     ctx: LanCtx,
-    link: IrohLink,
+    (link, carrier): (IrohLink, Carrier),
     permit: tokio::sync::OwnedSemaphorePermit,
     on_done: impl FnOnce(bool) + Send + 'static,
 ) {
@@ -306,6 +312,7 @@ pub(crate) fn spawn_driver(
             ctx.lan.routes(),
             ctx.device,
             ctx.group,
+            carrier,
         );
         on_done(greeted);
     });
@@ -333,7 +340,9 @@ async fn lan_only_dial(endpoint: Arc<LanEndpoint>, peer: DiscoveredPeer) -> Opti
 /// within `CONNECT_TIMEOUT` — ADR 0026: LAN stays primary, relay is additive. Returns whether a
 /// link was established; the dial's `DialState` outcome is booked here, on the driver thread once
 /// the session ends (a connect that bails before greeting is a failure, so `backoff_ms` applies).
-/// `pub(crate)`: `relay_autodial.rs`'s resync dial is the same connect-and-drive.
+/// A peer already live (over the relay: callers skip one live over LAN) gets no relay fallback:
+/// this dial is the LAN upgrade (task lan-dial-falls-to-relay), and a second relay session would
+/// only duplicate the first. `pub(crate)`: `relay_autodial.rs`'s resync dial is the same.
 pub(crate) async fn dial_and_spawn(
     ctx: LanCtx,
     endpoint: Arc<LanEndpoint>,
@@ -343,8 +352,16 @@ pub(crate) async fn dial_and_spawn(
 ) -> bool {
     let node = peer.node;
     let device = peer.device;
-    let lan_dial = lan_only_dial(endpoint, peer);
-    let relay_dial = crate::relay_fallback::relay_fallback_dial(ctx.clone(), node);
+    let upgrade = ctx.identity.live_peers().is_live(device);
+    let lan_dial = async { Some((lan_only_dial(endpoint, peer).await?, Carrier::Lan)) };
+    let relay_ctx = ctx.clone();
+    let relay_dial = async move {
+        if upgrade {
+            return None;
+        }
+        let link = crate::relay_fallback::relay_fallback_dial(relay_ctx, node).await?;
+        Some((link, Carrier::Relay))
+    };
     match crate::relay_fallback::lan_then_relay(CONNECT_TIMEOUT, lan_dial, relay_dial).await {
         Some(link) => {
             spawn_driver(ctx, link, permit, move |greeted| {

@@ -351,6 +351,19 @@ pub(crate) fn drive_session(
     device: txtodo_model::DeviceId,
     group: txtodo_sync::GroupId,
 ) -> bool {
+    drive_session_over(link, (ws, device, group), crate::live_peers::Carrier::Lan)
+}
+
+/// [`drive_session`] over a named carrier (task lan-dial-falls-to-relay).
+pub(crate) fn drive_session_over(
+    link: &mut dyn txtodo_sync::Link,
+    (ws, device, group): (
+        SharedWorkspace,
+        txtodo_model::DeviceId,
+        txtodo_sync::GroupId,
+    ),
+    carrier: crate::live_peers::Carrier,
+) -> bool {
     use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
     let id = crate::lan_session::read(&ws).workspace_id();
     let routes = WorkspaceRoutes::new();
@@ -359,5 +372,5 @@ pub(crate) fn drive_session(
         registered.is_ok(),
         "a single-entry routing table never exceeds MAX_ROUTED_WORKSPACES"
     );
-    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group)
+    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group, carrier)
 }

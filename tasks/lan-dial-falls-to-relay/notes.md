@@ -36,3 +36,23 @@ Two paired devices on one LAN sync over LAN, not the relay.
   each session runs on.
 - The higher id still does not dial over LAN: with the address fix and the upgrade, one dialer is
   enough. Revisit if the two-Mac check still falls back.
+
+## As built (2026-09-25)
+- `lan_connect_failed` at info, with the addresses tried (`lan.rs`).
+- `lan_peers::remember_sighting`: the dialing side (lower id) refreshes a peer's addresses on every
+  in-group sighting, merged on the same port; `known_or` hands the dial the merged set. The higher
+  id still remembers nothing: it stays the side that relay-dials a peer off the LAN
+  (`relay_only_peers`), which a remembered-forever LAN sighting would have silenced.
+- txtodo-sync `dial_order.rs`: IPv4 first, then IPv6; link-local IPv6 with no scope id dropped;
+  loopback only when nothing else is left.
+- `live_peers::Carrier` on every session (`drive_shared_session` takes it). LAN dial paths skip a
+  peer only when it is live over LAN; `dial_and_spawn` gives a peer already live (over the relay)
+  no relay fallback. `Live::tick` ends a relay session once its peer is live over LAN.
+- Tests: address merge and dialer-side memory (`lan_peers_tests.rs`), `dial_order` unit tests,
+  `a_relay_session_ends_once_a_lan_session_with_its_peer_is_up`. Full daemon suite 549/549.
+
+## Known gaps
+- Not checked on the two Macs: the `@human` line in todo.txt. Look for `lan_shared_session_started`
+  with `carrier: Lan` and no `lan_connect_failed` on the lower id (01M2J707…).
+- The higher id relay-dials a LAN peer it has no session with at every resync (15 s) until the
+  lower id's LAN session supersedes it; a little wasted relay traffic after each restart.

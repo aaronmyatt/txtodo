@@ -36,7 +36,7 @@ use crate::device_relay::WorkspaceRoute;
 use crate::lan_apply::serve_want;
 use crate::lan_session::{read, read_heads};
 use crate::lan_session_shared::send_message;
-use crate::live_peers::{LiveGuard, LivePeers};
+use crate::live_peers::{Carrier, LiveGuard, LivePeers};
 
 /// How long one wait for a frame lasts: the most a local commit waits before it is pushed.
 pub(crate) const POLL: Duration = Duration::from_millis(50);
@@ -114,11 +114,19 @@ impl Live {
         self.last_heard = Instant::now();
     }
 
-    /// Marks `peer` live for as long as this session runs.
-    pub(crate) fn enter(&mut self, peers: &LivePeers, peer: DeviceId) {
+    /// Marks `peer` live over `carrier` for as long as this session runs.
+    pub(crate) fn enter(&mut self, peers: &LivePeers, peer: DeviceId, carrier: Carrier) {
         if self.guard.is_none() {
-            self.guard = Some(peers.enter(peer));
+            self.guard = Some(peers.enter(peer, carrier));
         }
+    }
+
+    /// A relay session whose peer now has a LAN session too (task lan-dial-falls-to-relay).
+    fn superseded(&self) -> bool {
+        self.guard.as_ref().is_some_and(|g| {
+            let (peer, carrier) = g.key();
+            carrier == Carrier::Relay && g.peers().is_live_on(peer, Carrier::Lan)
+        })
     }
 
     /// Bookkeeping from one message the peer sent for `workspace`, taken before it is handled.
@@ -206,6 +214,9 @@ impl Live {
         let now = Instant::now();
         if self.expired(now) {
             return log_session_ended(self.ready.len(), now.duration_since(self.last_heard));
+        }
+        if self.superseded() {
+            return log_superseded_by_lan();
         }
         let sweep = now.duration_since(self.last_sweep) >= HEARTBEAT;
         if sweep {
@@ -328,6 +339,11 @@ fn log_session_ended(shared: usize, quiet: Duration) -> bool {
         quiet_ms = quiet.as_millis(),
         "lan_live_session_quiet_ended"
     );
+    false
+}
+
+fn log_superseded_by_lan() -> bool {
+    tracing::info!("lan_relay_session_superseded_by_lan");
     false
 }
 

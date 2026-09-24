@@ -37,6 +37,7 @@ use txtodo_sync::{ALPN, CONTROL_ALPN, IrohLink, PAIRING_ALPN};
 use crate::device_identity::DeviceIdentity;
 use crate::device_relay::DeviceRelay;
 use crate::lan_session_dispatch::drive_shared_session;
+use crate::live_peers::Carrier;
 use crate::workspace_registry::WorkspaceRegistry;
 
 /// The device-level state every dispatch branch might need, bundled so the functions below stay
@@ -105,6 +106,12 @@ fn dispatch_sync(link: IrohLink, ctx: &DispatchCtx, permit: OwnedSemaphorePermit
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        drive_shared_session(&mut link, device_relay.routes(), device, group);
+        drive_shared_session(
+            &mut link,
+            device_relay.routes(),
+            device,
+            group,
+            Carrier::Relay,
+        );
     });
 }

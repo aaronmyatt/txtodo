@@ -13,7 +13,8 @@ use txtodo_sync::{ChannelLink, Frame, Link, LinkError, OriginRange, channel_link
 
 use crate::lan_apply::{commit_incoming_ops, landed_ranges};
 use crate::lan_session_push_tests::{add_line, text_of, wait_for_line, workspace_with_list};
-use crate::lan_session_tests::{drive_session, make_workspace, peer_device};
+use crate::lan_session_tests::{drive_session_over, make_workspace, peer_device};
+use crate::live_peers::Carrier;
 use crate::server::SharedWorkspace;
 
 /// A link that drops outbound frames while `drop_out` is set (only frames longer than
@@ -79,6 +80,11 @@ struct Pair {
 const OPS_FRAME_MIN: usize = 200;
 
 fn start_pair(min_len_b: usize) -> Pair {
+    start_pair_over(min_len_b, Carrier::Lan)
+}
+
+/// [`start_pair`] with A's session tagged `carrier_a`.
+fn start_pair_over(min_len_b: usize, carrier_a: Carrier) -> Pair {
     let dirs = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let key = [7u8; 32];
     let a = workspace_with_list(dirs.0.path(), key, 1_000);
@@ -97,9 +103,21 @@ fn start_pair(min_len_b: usize) -> Pair {
     let (loss_a, loss_b) = (loss(), loss());
     let (link_a, link_b) = channel_link_pair();
     let mut drivers = Vec::new();
-    for (inner, ws, device, l, min_len) in [
-        (link_a, Arc::clone(&a), device_a, &loss_a, OPS_FRAME_MIN),
-        (link_b, Arc::clone(&b), device_b, &loss_b, min_len_b),
+    for (inner, ws, device, l, (min_len, carrier)) in [
+        (
+            link_a,
+            Arc::clone(&a),
+            device_a,
+            &loss_a,
+            (OPS_FRAME_MIN, carrier_a),
+        ),
+        (
+            link_b,
+            Arc::clone(&b),
+            device_b,
+            &loss_b,
+            (min_len_b, Carrier::Lan),
+        ),
     ] {
         let mut link = LossyLink {
             inner,
@@ -109,7 +127,7 @@ fn start_pair(min_len_b: usize) -> Pair {
             dropped: Arc::clone(&l.dropped),
         };
         drivers.push(tokio::task::spawn_blocking(move || {
-            drive_session(&mut link, ws, device, group)
+            drive_session_over(&mut link, (ws, device, group), carrier)
         }));
     }
     Pair {
@@ -287,4 +305,40 @@ async fn ops_on_a_worktree_copy_land_in_the_log_but_never_on_disk() {
         "no worktree copy written"
     );
     assert!(text_of(&ws).unwrap_or_default().contains("task 3"));
+}
+
+/// Task lan-dial-falls-to-relay: a relay session ends once a LAN session with the same peer is
+/// up, so two devices on one LAN do not keep talking through the relay.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_relay_session_ends_once_a_lan_session_with_its_peer_is_up() {
+    let pair = start_pair_over(OPS_FRAME_MIN, Carrier::Relay);
+    let _stop = StopOnDrop(Arc::clone(&pair.stop));
+    let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
+    wait_until("never linked", || {
+        a.read().unwrap().live_peers().is_live(device_b)
+    })
+    .await;
+    let relay = a
+        .read()
+        .unwrap()
+        .live_peers()
+        .is_live_on(device_b, Carrier::Relay);
+    assert!(relay, "A's session is the relay one");
+
+    let lan = a.read().unwrap().live_peers().enter(device_b, Carrier::Lan);
+    let mut drivers = pair.drivers.into_iter();
+    let a_driver = drivers.next().unwrap_or_else(|| panic!("no driver"));
+    let ended = tokio::time::timeout(Duration::from_secs(10), a_driver).await;
+    assert!(
+        ended.is_ok_and(|r| r.is_ok_and(|greeted| greeted)),
+        "the relay session ended"
+    );
+    let still = a
+        .read()
+        .unwrap()
+        .live_peers()
+        .is_live_on(device_b, Carrier::Relay);
+    assert!(!still, "no relay session left");
+    drop(lan);
+    pair.stop.store(true, Ordering::Relaxed);
 }

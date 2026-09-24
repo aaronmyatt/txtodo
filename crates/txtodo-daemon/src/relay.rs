@@ -56,6 +56,7 @@ use crate::lan::{MAX_CONCURRENT_LAN_SESSIONS, resync_interval};
 use crate::lan_session::read;
 use crate::lan_session_dispatch::drive_shared_session;
 use crate::lan_status::LanStatus;
+use crate::live_peers::Carrier;
 use crate::server::SharedWorkspace;
 
 // [`dial_known_peer`]'s cadence is `lan.rs`'s `resync_interval()` — the relay counterpart of
@@ -232,7 +233,13 @@ fn on_dial_connected(
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        drive_shared_session(&mut link, device_relay.routes(), device, group);
+        drive_shared_session(
+            &mut link,
+            device_relay.routes(),
+            device,
+            group,
+            Carrier::Relay,
+        );
     });
 }
 

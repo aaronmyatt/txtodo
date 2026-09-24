@@ -22,7 +22,7 @@ use crate::lan_session_shared::{
     LINK_WORKSPACE, MAX_MESSAGES_PER_SESSION, SessionCtx, handle_link_hello,
     handle_workspace_message, open_and_decode_logged, send_message,
 };
-use crate::live_peers::LivePeers;
+use crate::live_peers::{Carrier, LivePeers};
 
 /// Everything shared across every workspace this one connection multiplexes: the crypto material
 /// (one group key for the whole device-set, ADR 0021) and the routing table naming which
@@ -41,6 +41,8 @@ struct SharedCtx<'a> {
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
     live_peers: LivePeers,
     device: DeviceId,
+    /// What this connection runs over.
+    carrier: Carrier,
 }
 
 /// The per-connection state every frame updates: the protocol `Session`, the push/liveness
@@ -123,7 +125,7 @@ fn dispatch_link_frame(
     }
     let peer = conn.session.peer()?;
     touch_peer_last_seen(&shared.routes, peer, now_ms);
-    conn.live.enter(&shared.live_peers, peer);
+    conn.live.enter(&shared.live_peers, peer, shared.carrier);
     greet_for_peer(link, shared, conn, peer).then_some(())
 }
 
@@ -306,6 +308,7 @@ fn build_shared_ctx(
     routes: &WorkspaceRoutes,
     device: DeviceId,
     group: GroupId,
+    carrier: Carrier,
 ) -> Option<SharedCtx<'_>> {
     let generation = routes.generation();
     let all: BTreeMap<WorkspaceId, WorkspaceRoute> = routes.list().into_iter().collect();
@@ -329,6 +332,7 @@ fn build_shared_ctx(
         routes: all,
         live_peers,
         device,
+        carrier,
     })
 }
 
@@ -345,8 +349,9 @@ pub(crate) fn drive_shared_session(
     routes: &WorkspaceRoutes,
     device: DeviceId,
     group: GroupId,
+    carrier: Carrier,
 ) -> bool {
-    let Some(shared) = build_shared_ctx(routes, device, group) else {
+    let Some(shared) = build_shared_ctx(routes, device, group, carrier) else {
         return false;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —
@@ -356,6 +361,7 @@ pub(crate) fn drive_shared_session(
     // emit, so this is not gated on the count.
     tracing::info!(
         workspaces = shared.routes.len(),
+        ?carrier,
         "lan_shared_session_started"
     );
     let mut session = Session::new(device, group);

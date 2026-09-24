@@ -14,6 +14,7 @@ use crate::lan_session_shared::LINK_WORKSPACE;
 use crate::lan_session_tests::{
     PeerCrypto, assert_todo_txt_has, make_workspace, one_peer_op, peer_device, run_peer_script,
 };
+use crate::live_peers::Carrier;
 use txtodo_model::{TaskId, Ulid};
 use txtodo_sync::{
     Frame, GroupKey, GroupKeys, Link, Message, OriginRange, PROTOCOL_VERSION, SealFor,
@@ -54,7 +55,7 @@ async fn a_registered_workspace_routes_to_the_real_session_and_converges() {
     };
 
     let driver = tokio::task::spawn_blocking(move || {
-        drive_shared_session(&mut b_link, &routes, device_b, group);
+        drive_shared_session(&mut b_link, &routes, device_b, group, Carrier::Relay);
     });
     let crypto = PeerCrypto {
         group,
@@ -112,7 +113,7 @@ async fn no_routes_at_all_is_dropped_without_panicking_or_hanging() {
     // reading the frame the peer sent, so it neither panics nor hangs.
     let routes = WorkspaceRoutes::new();
     tokio::task::spawn_blocking(move || {
-        drive_shared_session(&mut b_link, &routes, peer_device(), group);
+        drive_shared_session(&mut b_link, &routes, peer_device(), group, Carrier::Relay);
     })
     .await
     .unwrap_or_else(|e| panic!("driver task panicked: {e}"));
@@ -198,7 +199,7 @@ async fn a_message_for_a_workspace_this_side_never_opened_is_skipped_not_fatal()
     };
 
     let driver = tokio::task::spawn_blocking(move || {
-        drive_shared_session(&mut b_link, &routes, device_b, group);
+        drive_shared_session(&mut b_link, &routes, device_b, group, Carrier::Relay);
     });
     let crypto = PeerCrypto {
         group,
