@@ -1,5 +1,4 @@
-2026-09-24 Split daemon.rs per area (workspace, notes, devices, tokens, activity) +m11 @tui @doing by:claude
-2026-09-24 Daemon wrappers: WorkspaceList/Add/Remove, GetNotes/EditNotes, RefDir, History, Undo +m11 @tui
+2026-09-24 Daemon wrappers: WorkspaceList/Add/Remove, GetNotes/EditNotes, RefDir, History, Undo +m11 @tui @doing by:claude
 2026-09-24 Daemon wrappers: PairOffer/Accept/ConfirmSas, DeviceList/Remove, TokenCreate/List/Revoke, OpLogStream, UniversalTasks +m11 @tui
 2026-09-24 keymap.rs: static BINDINGS (id, keys, scope) using manifest ids; Command enum +m11 @tui
 2026-09-24 commands.rs: run(state, Command) -> Option<Action>; input.rs becomes key -> keymap -> commands::run; port every existing key, input_tests stay green +m11 @tui
@@ -10,3 +9,4 @@
 2026-09-24 Fixes: bind or drop toggle_show_id, fix the stale AcceptOffer doc, follow txtodo.toml hot reload (tasks/layout-hot-reload-clients) +m11 @tui
 x 2026-09-25 2026-09-24 Split state.rs: Screen (Tasks|Universal|Settings(card)|Help), Focus (List|Edit|Search|Prompt|Detail), Overlay (WorkspaceMenu|ConflictSheet|TokenDialog|PairFlow|Confirm) into state_nav.rs; no behaviour change +m11 @tui — state_nav.rs (+ SettingsCard) and state_types.rs; AppState.nav
 x 2026-09-25 2026-09-24 Split app.rs: event loop and ticks into app_loop.rs; no behaviour change +m11 @tui — app_loop.rs; the 90 TUI tests (15 need a daemon) pass
+x 2026-09-25 2026-09-24 Split daemon.rs per area (workspace, notes, devices, tokens, activity) +m11 @tui — daemon_workspace.rs now; notes/history/devices/tokens/activity files arrive with their wrappers
