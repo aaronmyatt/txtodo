@@ -1,4 +1,3 @@
-(A) 2026-09-25 sync: one change a peer cannot apply blocks that workspace on every reconnect +m11 @daemon @sync ref:sync-poison-op @doing by:claude
 (A) 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/worktrees/*) as part of the enclosing workspace +m11 @daemon ref:walker-nested-checkouts
 (B) 2026-09-25 sync: one big workspace transfer holds every other workspace up on the shared link +m11 @daemon @sync ref:sync-link-fairness
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay
@@ -309,3 +308,4 @@ x 2026-09-24 2026-09-24 daemon: control-channel workspace offers silently stop w
 x 2026-09-24 2026-09-24 Security checklist: add an item for content a paired device pushes (auto-accepted remote workspaces, default-workspace merge) before the next milestone review +m11 @security — added to txtodo-implementation-plan.md §5's security checklist (now reviewed before M11 close too): pushed content stays inert and contained, Remote mirrors only under remote/, removed ones stay gone, the default merges only with own devices; known gap: an item on the list, not yet a review
 
 x 2026-09-25 2026-09-25 sync: a pushed or served batch counts as delivered before the peer acks it, so a refused batch is never re-sent +m11 @daemon @sync ref:sync-ack-before-held pri:A — see tasks/sync-ack-before-held/notes.md; known gap: the file carrier still commits past a failed run
+x 2026-09-25 2026-09-25 sync: one change a peer cannot apply blocks that workspace on every reconnect +m11 @daemon @sync ref:sync-poison-op pri:A — see tasks/sync-poison-op/notes.md; known gap: a skipped op shows in the log only, and a peer that replays the old history keeps those lines as they fell
