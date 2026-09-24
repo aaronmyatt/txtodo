@@ -55,3 +55,5 @@
 2026-09-19 Human pass on a real build: macOS (WKWebView) and Linux (WebKitGTK) for fonts, block caret, search, Universal, Settings, pairing with a second device, hide-on-close and the tray; Windows stays out of scope (README) +m11 @desktop @human id:01M2WSTPE092TWM3TEEQY04XY1
 2026-09-19 Delete the dead code and CSS: the old WorkspaceSwitcher drawer, per-route top-nav styles, unused --color-* tokens, and (one release later) the /devices redirect; grep for orphans +m11 @desktop id:01M2WSTPE0YTBMB2CFEXAHRGFF
 2026-09-19 Complete the parent line in ./todo.txt +m11 @desktop id:01M2WSTPE0VT746XZAJ79F4HGN
+2026-09-24 Forward uncaught frontend errors to ui_log (window.onerror, unhandledrejection, a <svelte:boundary> in +layout.svelte) so a render crash lands in desktop.log; the Universal view hung on 'Loading…' with nothing logged on 2026-09-24 +m11 @desktop
+2026-09-24 Universal view fixture (tauriMock + e2e/visual): add an open line with the same context tag twice and assert the list renders; guards the 2026-09-24 duplicate each-key hang in UniversalView.svelte +m11 @desktop @test
