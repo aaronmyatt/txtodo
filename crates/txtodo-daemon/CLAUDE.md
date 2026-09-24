@@ -319,7 +319,11 @@ multiplex every workspace's traffic — not done by this task).
   the peer holds (woken by `Stats::commits`, re-diffed on every 5 s heartbeat), sends an empty `Ack`
   heartbeat, and ends after 20 s of silence. `live_peers.rs` marks a peer live while a session runs;
   every dial loop skips live peers. A refused `Ops` batch now ends the connection (the reconnect
-  resyncs). This supersedes the "short-lived session, periodic redial" text elsewhere in this file.
+  resyncs), except one out of step with our heads, which is skipped (task `sync-ack-before-held`,
+  2026-09-25). A run counts as held only once the peer acks it: `Live` keeps `held` and `sent`
+  apart and resends what stays unacked for `RESEND_AFTER`; the receiver commits a batch as a dense
+  prefix (`lan_apply::commit_incoming_ops`) and acks only that (`lan_session_ops.rs`). This
+  supersedes the "short-lived session, periodic redial" text elsewhere in this file.
   `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
   `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
   **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts

@@ -31,19 +31,22 @@
 //! the whole connection, so ending on its refusal and ending the connection were the same thing.
 //! One exception since sessions became long-lived (task `sync-live-push`): a refused `Ops` batch
 //! ends the connection, because a workspace left out of step would otherwise stay stuck until the
-//! session's natural end; the reconnect's fresh `Greet`/`Want` puts it right.
+//! session's natural end; the reconnect's fresh `Greet`/`Want` puts it right. Except a batch that
+//! only fails to follow our heads (task `sync-ack-before-held`, 2026-09-25): it is skipped, the
+//! connection carries on, and the sender, which counts a run as held only once we ack it
+//! (`lan_session_live.rs`), sends it again.
 
 use std::fmt;
 
 use tokio::runtime::Handle;
-use txtodo_model::{Op, Ulid};
+use txtodo_model::Ulid;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     CryptoError, DeviceSigningKey, Frame, GroupId, GroupKey, GroupKeys, Link, LinkError, Message,
     MessageError, OriginRange, SealFor, Session, open, seal,
 };
 
-use crate::lan_apply::{commit_incoming_ops, serve_want};
+use crate::lan_apply::serve_want;
 use crate::lan_session::GROUP_EPOCH;
 
 /// A hostile or buggy peer cannot keep one connection's driver looping forever — bounded the same
@@ -205,7 +208,7 @@ pub(crate) struct SessionCtx<'a> {
 }
 
 impl SessionCtx<'_> {
-    fn send(&self, link: &mut dyn Link, msg: Message) -> Result<(), SyncError> {
+    pub(crate) fn send(&self, link: &mut dyn Link, msg: Message) -> Result<(), SyncError> {
         send_message(link, self.group, self.workspace, self.key, msg)
     }
 }
@@ -279,71 +282,6 @@ fn log_ops_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
     false
 }
 
-fn ops_or_refuse(ctx: &SessionCtx<'_>, session: &mut Session, msg: &Message) -> Option<Vec<Op>> {
-    // An empty map when `msg` is not actually `Ops` is fine: `on_ops` checks the variant before
-    // it ever consults `device_keys` and reports "unexpected message" instead.
-    let device_keys = match msg {
-        Message::Ops { ops, .. } => {
-            crate::lan_apply::device_keys_for(ops, ctx.signing_key.public_key())
-        }
-        _ => std::collections::BTreeMap::new(),
-    };
-    match session.on_ops(ctx.workspace, msg, &device_keys) {
-        Ok(ops) => Some(ops),
-        Err(e) => {
-            tracing::warn!(error = %e, workspace = %ctx.workspace, "lan_ops_refused");
-            None
-        }
-    }
-}
-
-fn commit_and_ack(
-    ctx: &SessionCtx<'_>,
-    session: &mut Session,
-    ops: Vec<Op>,
-    ranges: Vec<OriginRange>,
-) -> Option<Message> {
-    let committed_ranges = if commit_incoming_ops(ctx.ws, ctx.rt, ops) {
-        ranges
-    } else {
-        Vec::new()
-    };
-    match session.committed(ctx.workspace, &committed_ranges) {
-        Ok(ack) => Some(ack),
-        Err(e) => {
-            tracing::warn!(error = %e, workspace = %ctx.workspace, "lan_ack_refused");
-            None
-        }
-    }
-}
-
-fn handle_ops(
-    link: &mut dyn Link,
-    ctx: &SessionCtx<'_>,
-    session: &mut Session,
-    msg: &Message,
-    ranges: Vec<OriginRange>,
-) -> bool {
-    // A refused batch ends the connection (task sync-live-push): sessions are long-lived now, so a
-    // push that raced an open `Want` or skipped a seq would otherwise leave this workspace stuck;
-    // the reconnect's fresh `Greet`/`Want` repairs it.
-    let Some(ops) = ops_or_refuse(ctx, session, msg) else {
-        return false;
-    };
-    let Some(ack) = commit_and_ack(ctx, session, ops, ranges) else {
-        return true;
-    };
-    match ctx.send(link, ack) {
-        Ok(()) => true,
-        Err(e) => log_ack_send_failed(ctx.workspace, &e),
-    }
-}
-
-fn log_ack_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
-    tracing::warn!(error = %e, %workspace, "lan_ack_send_failed");
-    false
-}
-
 fn log_peer_acked(runs: usize, workspace: WorkspaceId) {
     tracing::debug!(runs, workspace = %workspace, "lan_peer_acked");
 }
@@ -368,7 +306,9 @@ pub(crate) fn handle_workspace_message(
     match &msg {
         Message::Greet { .. } => handle_greet(link, ctx, session, &msg),
         Message::Want { ranges, .. } => handle_want(link, ctx, ranges),
-        Message::Ops { ranges, .. } => handle_ops(link, ctx, session, &msg, ranges.clone()),
+        Message::Ops { ranges, .. } => {
+            crate::lan_session_ops::handle_ops(link, ctx, session, &msg, ranges.clone())
+        }
         Message::Ack { committed, .. } => {
             log_peer_acked(committed.len(), ctx.workspace);
             true

@@ -124,14 +124,6 @@ fn get_or_create_actor(ws: &SharedWorkspace, path: &FilePath) -> Option<ActorHan
     register_and_fetch(ws, path)
 }
 
-fn group_ops_by_file(ops: Vec<Op>) -> BTreeMap<FilePath, Vec<Op>> {
-    let mut by_file: BTreeMap<FilePath, Vec<Op>> = BTreeMap::new();
-    for op in ops {
-        by_file.entry(op.file.clone()).or_default().push(op);
-    }
-    by_file
-}
-
 fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<Op>) -> bool {
     // `txtodo.toml` is whole-text too (`layout_sync.rs`); its commit writes the file, and the
     // watcher then hot-reloads the layout.
@@ -177,18 +169,75 @@ fn commit_notes_file(ws: &SharedWorkspace, path: &FilePath, ops: Vec<Op>) -> boo
     }
 }
 
-/// Routes `ops` to their document's actor (one commit per file — `commit_change_with`'s own
-/// invariant) and commits each group. `true` only if every group committed; the caller must ack
-/// nothing at all otherwise, so the peer resends the whole batch (`Session::committed`'s own
-/// documented crash-then-nothing-committed behaviour, extended here to a partial-file failure).
-pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> bool {
-    let mut all_ok = true;
-    for (path, file_ops) in group_ops_by_file(ops) {
-        if !commit_one_file(ws, rt, path, file_ops) {
-            all_ok = false;
+/// Commits `ops` in order, one run of consecutive same-file ops at a time (one commit per file
+/// per run — `commit_change_with`'s own invariant), and stops at the first run that fails.
+/// Returns how many ops landed, always a prefix of `ops` (task `sync-ack-before-held`,
+/// 2026-09-25). The store's head for a device is its op count (`txtodo_store::heads`), so a
+/// half-committed batch must never leave a hole: grouping by file and carrying on past a failed
+/// file used to commit later ops over a missing earlier one. The caller acks only the prefix
+/// ([`landed_ranges`]), and the peer sends the rest again.
+pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> usize {
+    let total = ops.len();
+    let mut landed = 0;
+    for (path, run) in same_file_runs(ops) {
+        let len = run.len();
+        if !commit_one_file(ws, rt, path, run) {
+            log_partly_committed(landed, total);
+            break;
+        }
+        landed += len;
+    }
+    debug_assert!(landed <= total);
+    landed
+}
+
+/// `ops` cut into maximal runs of consecutive ops on one file, in order.
+fn same_file_runs(ops: Vec<Op>) -> Vec<(FilePath, Vec<Op>)> {
+    let mut runs: Vec<(FilePath, Vec<Op>)> = Vec::new();
+    for op in ops {
+        match runs.last_mut() {
+            Some((path, run)) if *path == op.file => run.push(op),
+            _ => runs.push((op.file.clone(), vec![op])),
         }
     }
-    all_ok
+    debug_assert!(
+        runs.windows(2).all(|w| w[0].0 != w[1].0),
+        "runs are maximal"
+    );
+    debug_assert!(runs.iter().all(|(_, run)| !run.is_empty()));
+    runs
+}
+
+/// The runs covering the first `landed` ops of a batch whose ops follow `ranges` in order (one op
+/// per origin seq, `serve_range`'s own shape). A batch that carried fewer ops than its ranges name
+/// is acked only for the ops it carried, so heads never run past the store's count.
+pub(crate) fn landed_ranges(ranges: &[OriginRange], landed: usize) -> Vec<OriginRange> {
+    let mut left = u64::try_from(landed).unwrap_or(u64::MAX);
+    let mut out = Vec::new();
+    for r in ranges {
+        if left == 0 {
+            break;
+        }
+        let take = (r.last - r.first + 1).min(left);
+        out.push(OriginRange {
+            device: r.device,
+            first: r.first,
+            last: r.first + take - 1,
+        });
+        left -= take;
+    }
+    debug_assert!(out.len() <= ranges.len());
+    debug_assert!(
+        out.iter()
+            .zip(ranges)
+            .all(|(o, r)| o.device == r.device && o.first == r.first && o.last <= r.last),
+        "each landed run is a prefix of its range"
+    );
+    out
+}
+
+fn log_partly_committed(landed: usize, total: usize) {
+    tracing::warn!(landed, total, "lan_sync_batch_partly_committed");
 }
 
 fn log_refused(path: &FilePath, e: &ActorError) {

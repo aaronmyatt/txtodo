@@ -40,3 +40,23 @@ The sender half alone is not enough. Tracing the receiver showed a worse hole un
   wire change. A stall timer does the same job.
 - End the connection on any refused batch (today): every reconnect replays and fails again, and
   it cuts every other workspace on the shared link.
+
+## As built (2026-09-25)
+- txtodo-sync (b7e3ec7): every batch must follow the session heads; `Unrequested` is gone.
+- `lan_apply::commit_incoming_ops` commits same-file runs in order, stops at the first failure,
+  returns the count. `landed_ranges` turns that into the runs to ack.
+- `lan_session_ops.rs` (split out of `lan_session_shared.rs` for the 400-line budget): a `Gap`
+  refusal is skipped, not fatal. When we already hold part of the batch (a resent copy), we send
+  an `Ack` naming each device's run `1..=head`, so the sender stops resending. Without that, a copy
+  sent while our real `Ack` was in flight, or a third device's ops we got elsewhere, would be
+  resent every 10 s forever.
+- `lan_session_live.rs`: `held`/`sent`/`waiting_since`. Rewind check runs on every tick, not only
+  on sweeps. `RESEND_AFTER` is 10 s, 300 ms under `cfg(test)`.
+- Tests: `lan_session_resend_tests.rs` (dropped push re-sent; resent copy acked and the session
+  carries on; failed run stops the batch; `landed_ranges`). The 23 real-daemon sync tests pass.
+
+## Known gaps
+- The file carrier commits frames with no session: it ignores the landed count, as it ignored the
+  old `bool`. A failed run there still means the next frame lands past a hole.
+- A batch whose op count is short of its ranges is acked for the ops it carried; the sender's
+  next diff sends the rest. Nothing checks count against ranges on receipt.

@@ -48,7 +48,7 @@ impl Drop for StopOnDrop {
     }
 }
 
-fn text_of(ws: &SharedWorkspace) -> Option<String> {
+pub(crate) fn text_of(ws: &SharedWorkspace) -> Option<String> {
     let handle = ws
         .read()
         .unwrap_or_else(PoisonError::into_inner)
@@ -61,7 +61,7 @@ fn text_of(ws: &SharedWorkspace) -> Option<String> {
     Some(String::from_utf8_lossy(&bytes).into_owned())
 }
 
-async fn add_line(ws: &SharedWorkspace, line: &str) {
+pub(crate) async fn add_line(ws: &SharedWorkspace, line: &str) {
     let (handle, device) = {
         let guard = ws.read().unwrap_or_else(PoisonError::into_inner);
         let handle = guard
@@ -80,7 +80,7 @@ async fn add_line(ws: &SharedWorkspace, line: &str) {
 }
 
 /// Waits for `ws`'s todo.txt to hold `needle`. Generous: this machine is slow in bursts.
-async fn wait_for_line(ws: &SharedWorkspace, needle: &str) -> Duration {
+pub(crate) async fn wait_for_line(ws: &SharedWorkspace, needle: &str) -> Duration {
     let started = Instant::now();
     loop {
         if text_of(ws).is_some_and(|t| t.contains(needle)) {
@@ -97,7 +97,11 @@ async fn wait_for_line(ws: &SharedWorkspace, needle: &str) -> Duration {
 
 /// `lan_session_tests::make_workspace`, with an empty `todo.txt` and its own clock start: two
 /// `FakeClock`s started alike mint the same op ids, which one store then refuses as a repeat.
-fn workspace_with_list(dir: &std::path::Path, key: [u8; 32], start_ms: u64) -> SharedWorkspace {
+pub(crate) fn workspace_with_list(
+    dir: &std::path::Path,
+    key: [u8; 32],
+    start_ms: u64,
+) -> SharedWorkspace {
     std::fs::write(dir.join("todo.txt"), "").unwrap_or_else(|e| panic!("write: {e}"));
     let clock: Arc<dyn crate::clock::Clock> = Arc::new(crate::clock::FakeClock::new(start_ms));
     let ws = crate::workspace::Workspace::open_with_default_mode(

@@ -58,6 +58,7 @@ mod lan_session;
 mod lan_session_dispatch;
 mod lan_session_gate;
 mod lan_session_live;
+mod lan_session_ops;
 mod lan_session_shared;
 pub mod lan_status;
 pub mod layout_file;
@@ -178,6 +179,8 @@ mod lan_peers_tests;
 mod lan_session_gate_tests;
 #[cfg(test)]
 mod lan_session_push_tests;
+#[cfg(test)]
+mod lan_session_resend_tests;
 #[cfg(test)]
 mod lan_session_security_tests;
 #[cfg(test)]
