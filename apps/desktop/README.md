@@ -66,6 +66,20 @@ npm run tauri dev
   (needs `rustup target add wasm32-unknown-unknown` + `wasm-bindgen-cli`). Generated output,
   committed but never hand-edited.
 
+## Parity with the TUI
+
+`specs/client-parity.toml` is the one list of user-facing actions and where this app and the TUI
+each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
+
+- Change the manifest in the same commit as any key, shortcut or user-facing action you add,
+  change or drop here.
+- If the TUI lags, add an `@parity` line naming the action id to its backlog
+  (`tasks/tui-revamp/todo.txt`); if this app lags, to `tasks/desktop-ui-revamp/todo.txt`.
+- Never let the two drift silently: a different key or a missing feature is a `differs` or `na`
+  row with its one-line `deviation`.
+- `src/lib/keys.parity.test.ts` checks the manifest's rules now, and `keys.ts` against it once the
+  revamp creates `keys.ts`. The Help page and the Shortcuts card render from the manifest.
+
 ## Configuration
 
 - `TXTODO_WORKSPACE` — workspace directory to talk to (dev/test override). Defaults to the
