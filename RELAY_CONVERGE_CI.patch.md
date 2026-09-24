@@ -1,4 +1,4 @@
-# RELAY_CONVERGE_CI.patch.md — apply this yourself
+# RELAY_CONVERGE_CI.patch.md — PARKED 2026-09-24, do not apply (see tasks/relay-converge-test/notes.md)
 
 Backlog item `id:01M2B4ZWQEM6BCAK9BHBB3SSAS` (`relay-converge-test`, plan M8). `.github/**` is
 frozen by `.claude/budgets.json` and a PreToolUse hook refuses agent edits to it — no workaround
