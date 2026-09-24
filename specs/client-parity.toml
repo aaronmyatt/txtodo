@@ -873,3 +873,59 @@ scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "planned", surface = "Settings > Tokens" }
 deviation = ""
+
+# ==== Revamp Settings rows that cannot exist in a terminal =========================================
+
+[[action]]
+id = "workspace.pick_folder"
+title = "Add a workspace from a folder picker"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Workspaces" }
+tui = { status = "na", surface = "" }
+deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add)."
+
+[[action]]
+id = "appearance.font"
+title = "Editor font"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "na", surface = "" }
+deviation = "The terminal emulator owns the font; the TUI cannot change it."
+
+[[action]]
+id = "appearance.text_size"
+title = "Text size"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "na", surface = "" }
+deviation = "The terminal emulator owns the text size; the TUI cannot change it."
+
+[[action]]
+id = "appearance.line_height"
+title = "Line height"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "na", surface = "" }
+deviation = "A terminal draws one row per cell; there is no line height to set."
+
+[[action]]
+id = "appearance.line_numbers"
+title = "Show line numbers"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "planned", surface = "Settings > Appearance" }
+deviation = ""
+
+[[action]]
+id = "appearance.length_hint"
+title = "Mark lines past 100 characters"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "planned", surface = "Settings > Appearance" }
+deviation = ""
