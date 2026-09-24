@@ -1,6 +1,6 @@
 2026-09-20 Review and sign off tasks/security-m6-review/findings-draft.md (F1 to F3 and F5 and F6) +m6 @security @human
-2026-09-12 Test: MCP HTTP binds 127.0.0.1 by default; a non-loopback bind errors unless --lan is passed +m6 @security @test
-2026-09-12 Test: tracing capture across token create, auth and a tool call shows no token text, root-key bytes or caveat values +m6 @security @test
+2026-09-12 Test: the MCP HTTP listener answers on 127.0.0.1 and refuses on this host's non-loopback address +m6 @security @test @doing by:claude
+2026-09-12 Test: tracing capture across token create, list and revoke shows no token secret or caveat values +m6 @security @test @doing by:claude
 2026-09-12 Test: an unauthenticated MCP HTTP request is rejected even with --lan bound to the LAN +m6 @security @test
 2026-09-12 Re-check no-secrets-in-logs against the new MCP paths (HTTP middleware and stdio wiring are new logging surface) +m6 @security
 2026-09-12 Audit: the macaroon root key exists only via KeyStore::get(KeyId::TokenRoot) and is never written outside the store +m6 @security
