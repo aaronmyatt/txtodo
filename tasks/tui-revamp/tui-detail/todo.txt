@@ -1,8 +1,8 @@
-2026-09-24 Bottom split panel (55%): Enter/Ctrl-Enter/double-click opens, Esc closes +m11 @tui
-2026-09-24 Breadcrumb: workspace > parent labels cut to 28 chars, click to jump back +m11 @tui
-2026-09-24 Parent line editor: Enter saves an Edit, Esc reverts; Mark parent done once every sub-task is done +m11 @tui
-2026-09-24 Sub-list: RefDir(ensure) + GetFile on the sub path, same list mode, drill one level deeper +m11 @tui
-2026-09-24 Add a sub-task on an empty ref: RefDir(ensure), then Add +m11 @tui
-2026-09-24 Notes: multi-line editor in ui/notes_edit.rs, GetNotes/EditNotes, autosave 500 ms after typing stops, save on close, footer shows the notes path +m11 @tui
-2026-09-24 Integration test: drill two levels, add a sub-task, edit notes, reopen and see them +m11 @tui @test
-2026-09-25 Mouse: wheel scrolls the sub-list and notes; double-click on a row opens detail instead of editing (mouse.rs) +m11 @tui
+x 2026-09-25 2026-09-24 Bottom split panel (55%): Enter/Ctrl-Enter/double-click opens, Esc closes +m11 @tui — ui/detail.rs; the panel ahead of the @human decide line (a page would be a layout change only)
+x 2026-09-25 2026-09-24 Breadcrumb: workspace > parent labels cut to 28 chars, click to jump back +m11 @tui — workspace closes, a parent cuts back (Target::Crumb)
+x 2026-09-25 2026-09-24 Parent line editor: Enter saves an Edit, Esc reverts; Mark parent done once every sub-task is done +m11 @tui — the parent part is a field; Tab away reverts like Esc
+x 2026-09-25 2026-09-24 Sub-list: RefDir(ensure) + GetFile on the sub path, same list mode, drill one level deeper +m11 @tui — list mode by swapping the sub-list into AppState (state_detail::with_sub_list); no ref: badges inside the panel yet
+x 2026-09-25 2026-09-24 Add a sub-task on an empty ref: RefDir(ensure), then Add +m11 @tui — app_detail::ensure_sub_list before the first Apply
+x 2026-09-25 2026-09-24 Notes: multi-line editor in ui/notes_edit.rs, GetNotes/EditNotes, autosave 500 ms after typing stops, save on close, footer shows the notes path +m11 @tui — ui/notes_edit.rs; no line wrap (long lines are cut at the panel edge)
+x 2026-09-25 2026-09-24 Integration test: drill two levels, add a sub-task, edit notes, reopen and see them +m11 @tui @test — tests/detail_panel.rs
+x 2026-09-25 2026-09-25 Mouse: wheel scrolls the sub-list and notes; double-click on a row opens detail instead of editing (mouse.rs) +m11 @tui — wheel moves the sub-list cursor or the notes caret
