@@ -1,5 +1,4 @@
-2026-09-24 theme.rs: ink/paper, token colours from app.css:56-63/96-103 as RGB under COLORTERM=truecolor else nearest ANSI 16, Light/Dark/System; paint.rs reads it +m11 @tui @doing by:claude
-2026-09-24 Terminal setup: EnableMouseCapture, PushKeyboardEnhancementFlags where supported, Ctrl-C quits, all undone on exit and on panic +m11 @tui
+2026-09-24 Terminal setup: EnableMouseCapture, PushKeyboardEnhancementFlags where supported, Ctrl-C quits, all undone on exit and on panic +m11 @tui @doing by:claude
 2026-09-24 Fixes: bind or drop toggle_show_id, fix the stale AcceptOffer doc, follow txtodo.toml hot reload (tasks/layout-hot-reload-clients) +m11 @tui
 x 2026-09-25 2026-09-24 Split state.rs: Screen (Tasks|Universal|Settings(card)|Help), Focus (List|Edit|Search|Prompt|Detail), Overlay (WorkspaceMenu|ConflictSheet|TokenDialog|PairFlow|Confirm) into state_nav.rs; no behaviour change +m11 @tui — state_nav.rs (+ SettingsCard) and state_types.rs; AppState.nav
 x 2026-09-25 2026-09-24 Split app.rs: event loop and ticks into app_loop.rs; no behaviour change +m11 @tui — app_loop.rs; the 90 TUI tests (15 need a daemon) pass
@@ -10,3 +9,4 @@ x 2026-09-25 2026-09-24 keymap.rs: static BINDINGS (id, keys, scope) using manif
 x 2026-09-25 2026-09-24 commands.rs: run(state, Command) -> Option<Action>; input.rs becomes key -> keymap -> commands::run; port every existing key, input_tests stay green +m11 @tui — input.rs is key -> keymap -> commands::run; all 93 TUI tests (18 need a daemon) pass
 x 2026-09-25 2026-09-24 : palette: :<action id>, :q, :w <workspace>; unknown command shows in the status line +m11 @tui — input.rs run_palette; unknown commands go to last_error
 x 2026-09-25 2026-09-24 Workspace switch: swap the WorkspaceSelector, re-watch, re-baseline (mirror desktop switch_workspace) +m11 @tui — app_workspace::switch_workspace + pick_by_name; AppState.rewatch; tests/workspace_switch.rs
+x 2026-09-25 2026-09-24 theme.rs: ink/paper, token colours from app.css:56-63/96-103 as RGB under COLORTERM=truecolor else nearest ANSI 16, Light/Dark/System; paint.rs reads it +m11 @tui — 16-colour table by hue, not nearest distance (that merged five token pairs); Light/Dark prefs arrive with Settings > Appearance
