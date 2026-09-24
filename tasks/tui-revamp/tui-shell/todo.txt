@@ -1,4 +1,4 @@
-2026-09-24 Status footer: synced/unsaved/saving/saved, Ln X, per-screen key hints from the manifest; a sync-detail popup replaces the s pane +m11 @tui
+2026-09-24 Status footer: synced/unsaved/saving/saved, Ln X, per-screen key hints from the manifest; a sync-detail popup replaces the s pane +m11 @tui @doing by:claude
 2026-09-24 Toasts: bottom right, 5 s, optional Undo through the daemon Undo +m11 @tui
 2026-09-25 Mouse targets: tabs, ? help, workspace name, banner Retry/Review, toast Undo, footer sync popup, as hit::Target::Command +m11 @tui
 x 2026-09-25 2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui — ui/header.rs; the search field shows but is inert until tui-tasks' search
