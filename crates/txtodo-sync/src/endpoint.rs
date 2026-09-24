@@ -38,22 +38,26 @@ pub const PAIRING_ALPN: &[u8] = b"txtodo/pairing/1";
 /// Identifies the always-on, per-device-set control channel (task
 /// `daemon-workspace-identity-agreement` stage 5) — carries `crate::control::ControlMessage`
 /// (workspace offer/accept), sealed with the group key, over its own connection distinct from a
-/// group-keyed sync connection or a pairing handshake. Relay-only: unlike [`ALPN`]/[`PAIRING_ALPN`],
-/// this is registered on the relay endpoint (`relay.rs::build`), not the LAN one — the control
-/// channel's redial loop dials a peer's durably-stored relay node id (stage 2), which has no LAN
-/// equivalent to redial by.
+/// group-keyed sync connection or a pairing handshake. Registered on the relay endpoint
+/// (`relay.rs::build`), where the redial loop dials a peer's stored relay node id, and since task
+/// `default-workspace`'s LAN pairing test (2026-09-24) on the LAN one too, where a peer found over
+/// mDNS is dialed — so offers reach a paired device on a LAN with no relay at all.
 pub const CONTROL_ALPN: &[u8] = b"txtodo/control/1";
 
 /// Binds the one endpoint shape this crate ever constructs: LAN-only, no relay, no port mapping,
 /// no third-party address lookup. Picks an ephemeral local UDP port on every interface. Accepts
-/// both [`ALPN`] and [`PAIRING_ALPN`] — one endpoint, one bound port, two protocols told apart by
-/// which ALPN a connection negotiates.
+/// [`ALPN`], [`PAIRING_ALPN`] and [`CONTROL_ALPN`] — one endpoint, one bound port, three protocols
+/// told apart by which ALPN a connection negotiates.
 pub async fn bind_local_endpoint() -> Result<Endpoint, BindError> {
     let endpoint = Endpoint::builder(Minimal)
         .relay_mode(RelayMode::Disabled)
         .portmapper_config(PortmapperConfig::Disabled)
         .bind()
         .await?;
-    endpoint.set_alpns(vec![ALPN.to_vec(), PAIRING_ALPN.to_vec()]);
+    endpoint.set_alpns(vec![
+        ALPN.to_vec(),
+        PAIRING_ALPN.to_vec(),
+        CONTROL_ALPN.to_vec(),
+    ]);
     Ok(endpoint)
 }

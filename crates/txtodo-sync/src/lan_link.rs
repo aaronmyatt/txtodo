@@ -127,6 +127,17 @@ impl LanEndpoint {
         self.connect_with_alpn(node, addrs, PAIRING_ALPN).await
     }
 
+    /// [`LanEndpoint::connect`]'s control-channel twin: a workspace-offer exchange with a paired
+    /// peer found on the LAN, no relay needed.
+    pub async fn connect_control(
+        &self,
+        node: [u8; 32],
+        addrs: &[SocketAddr],
+    ) -> Result<IrohLink, LanError> {
+        self.connect_with_alpn(node, addrs, crate::endpoint::CONTROL_ALPN)
+            .await
+    }
+
     async fn connect_with_alpn(
         &self,
         node: [u8; 32],
