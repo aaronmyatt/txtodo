@@ -218,6 +218,7 @@ async fn perform_inner(
                 Ok(_) => {
                     state.last_error = None;
                     state.shell.refused = None;
+                    state.shell.saved_at = Some(std::time::Instant::now());
                 }
                 Err(DaemonError::Rpc(status)) => {
                     state.last_error = Some(status.message().to_owned());

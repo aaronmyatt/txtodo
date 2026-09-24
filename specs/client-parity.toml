@@ -289,7 +289,7 @@ title = "Sync details"
 keys = ["s"]
 scope = "list"
 desktop = { status = "planned", surface = "status footer", keys = [] }
-tui = { status = "done", surface = "s pane" }
+tui = { status = "done", surface = "footer sync popup" }
 deviation = ""
 
 # ==== App ==========================================================================================

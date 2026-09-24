@@ -1,5 +1,6 @@
-//! The `s` sync indicator: renders a [`SyncSnapshot`] (peers with their lag, and pending ops) as
-//! one status line (design §7). Pure rendering against the mock/fixture snapshot for now
+//! The `s` sync popup: renders a [`SyncSnapshot`] (peers with their lag, and pending ops) as a
+//! summary line and one row per peer (design §7; a popup from the footer since task
+//! `tui-revamp/tui-shell`). Pure rendering against the mock/fixture snapshot for now
 //! (recommended build order step 3); `app.rs` refreshes `AppState.sync` from the real
 //! `SyncStatus` RPC on a 1 s tick plus every `Watch` event once that RPC exists (step 4).
 
@@ -33,6 +34,34 @@ pub fn render(sync: &SyncSnapshot) -> Line<'static> {
     }
     spans.push(Span::raw(format!(" \u{b7} {} pending", sync.pending_ops)));
     Line::from(spans)
+}
+
+/// The sync popup (task `tui-revamp/tui-shell`, replacing the one-line `s` pane): the summary line,
+/// then one row per peer with its lag, in a box over the bottom-left of `area`.
+/// Ref: <https://docs.rs/ratatui/latest/ratatui/widgets/struct.Clear.html>
+pub fn draw_popup(
+    frame: &mut ratatui::Frame,
+    area: ratatui::layout::Rect,
+    sync: &SyncSnapshot,
+    hits: &mut crate::hit::HitMap,
+) {
+    use ratatui::widgets::{Block, Borders, Clear};
+    let mut lines = vec![render(sync)];
+    lines.extend(sync.peers.iter().map(|p| {
+        let short: String = p.device.chars().take(10).collect();
+        Line::from(format!("  {short}\u{2026}  lag {}ms", p.lag_ms))
+    }));
+    let height = u16::try_from(lines.len() + 2)
+        .unwrap_or(u16::MAX)
+        .min(area.height);
+    let width = 44.min(area.width);
+    let popup = ratatui::layout::Rect::new(area.x, area.bottom() - height, width, height);
+    frame.render_widget(Clear, popup);
+    frame.render_widget(
+        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title(" Sync ")),
+        popup,
+    );
+    hits.push(popup, crate::hit::Target::Inert);
 }
 
 /// The real widget wrapper for `render`.

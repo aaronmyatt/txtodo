@@ -18,6 +18,8 @@ pub struct Shell {
     pub conflict_banner_hidden: bool,
     /// The last edit the daemon refused, kept so it can be copied back out.
     pub refused: Option<Refused>,
+    /// When the last edit landed: the footer says "saved" for a moment.
+    pub saved_at: Option<std::time::Instant>,
 }
 
 /// The `Watch` stream's state, for the daemon banner.

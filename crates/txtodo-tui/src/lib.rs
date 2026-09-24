@@ -24,6 +24,7 @@ pub mod ui {
     pub mod banner;
     pub mod conflicts;
     pub mod edit;
+    pub mod footer;
     pub mod header;
     pub mod list;
     pub mod mark;
