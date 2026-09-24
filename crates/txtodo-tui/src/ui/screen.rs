@@ -13,7 +13,7 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Overlay, Screen};
-use crate::ui::{banner, footer, header, list, offers, sync, toast, workspace_menu};
+use crate::ui::{banner, footer, header, list, offers, subbar, sync, toast, workspace_menu};
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
 /// `W` popup, `edit`, the `r` pane, the `:` line) is active. Returns where the clickable things
@@ -73,8 +73,11 @@ fn draw_placeholder(frame: &mut Frame, area: Rect, screen: Screen) {
     );
 }
 
-/// The Tasks screen: the line list and the overlays that sit on it.
-fn draw_tasks(frame: &mut Frame, list_area: Rect, state: &AppState, hits: &mut HitMap) {
+/// The Tasks screen: the sub-toolbar, the line list and the overlays that sit on it.
+fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) {
+    let [bar_area, list_area] =
+        Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).areas(area);
+    subbar::draw(frame, bar_area, state);
     // Start from the last frame's scroll; ratatui moves it only to keep the cursor in view.
     // Ref: https://docs.rs/ratatui/latest/ratatui/widgets/struct.ListState.html
     let mut list_state = ListState::default()
@@ -141,10 +144,10 @@ mod tests {
     use super::*;
     use crate::state::AppState;
 
-    /// Draws `state` on a 40x7 test terminal and returns the hit map.
+    /// Draws `state` on a 40x8 test terminal and returns the hit map.
     /// Ref: https://docs.rs/ratatui/latest/ratatui/backend/struct.TestBackend.html
     fn drawn(state: &AppState) -> HitMap {
-        let backend = ratatui::backend::TestBackend::new(40, 7);
+        let backend = ratatui::backend::TestBackend::new(40, 8);
         let mut terminal = ratatui::Terminal::new(backend).unwrap_or_else(|e| panic!("{e}"));
         let mut hits = HitMap::default();
         terminal
@@ -163,19 +166,20 @@ mod tests {
         );
         state.needs_review.clear();
         let hits = drawn(&state);
-        assert_eq!(hits.at(0, 1), Some(Target::Row(0)), "under the header");
-        assert_eq!(hits.at(0, 5), Some(Target::Row(4)), "the Add-a-line row");
+        assert_eq!(hits.at(0, 1), None, "the sub-toolbar");
+        assert_eq!(hits.at(0, 2), Some(Target::Row(0)), "under the sub-toolbar");
+        assert_eq!(hits.at(0, 6), Some(Target::Row(4)), "the Add-a-line row");
         assert_eq!(
-            hits.at(0, 6),
+            hits.at(0, 7),
             Some(Target::Command(crate::keymap::Command::SyncOpen)),
             "the footer's status opens the sync popup"
         );
         state.command = Some(String::new());
-        assert_eq!(drawn(&state).at(0, 5), Some(Target::Inert), "the : line");
+        assert_eq!(drawn(&state).at(0, 6), Some(Target::Inert), "the : line");
         state.command = None;
         state.nav.overlay = Some(Overlay::WorkspaceMenu);
         assert_eq!(
-            drawn(&state).at(39, 5),
+            drawn(&state).at(39, 6),
             Some(Target::Command(crate::keymap::Command::WorkspaceMenuClose)),
             "the popup's outside closes it"
         );

@@ -129,6 +129,7 @@ pub async fn run_in(
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
     state.workspace_label = workspace_label;
     root.clone_into(&mut state.shell.root);
+    crate::app_refs::refresh(daemon, &mut state).await;
     if let Ok(health) = daemon.health().await {
         state.shell.daemon_build =
             crate::buildinfo::other_build(&health.version, &health.release_date);

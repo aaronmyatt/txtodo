@@ -74,7 +74,11 @@ impl RealDaemon {
     pub async fn start_with_files(files: &[(&str, &str)]) -> (RealDaemon, Daemon) {
         let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
         for (name, text) in files {
-            std::fs::write(dir.path().join(name), text).unwrap_or_else(|e| panic!("{e}"));
+            let path = dir.path().join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap_or_else(|e| panic!("{e}"));
+            }
+            std::fs::write(path, text).unwrap_or_else(|e| panic!("{e}"));
         }
         let child = Command::new(daemon_bin())
             .args(["--dir", &dir.path().to_string_lossy()])

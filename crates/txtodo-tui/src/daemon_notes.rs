@@ -1,11 +1,20 @@
-//! A line's `ref:` directory and its `notes.md` (task `tui-revamp/tui-foundation`), for the
-//! detail panel. Split out of `daemon.rs` by area.
+//! The file tree, a line's `ref:` directory and its `notes.md` (task `tui-revamp/tui-foundation`),
+//! for the Tasks badges and the detail panel. Split out of `daemon.rs` by area.
 
 use txtodo_proto::v1 as pb;
 
 use crate::daemon::{Daemon, DaemonError};
 
 impl Daemon {
+    /// Every document with its done/total, and the `ref:` directory tree (`ListFiles`): the Tasks
+    /// rows' badges.
+    pub async fn list_files(&mut self) -> Result<pb::ListFilesResponse, DaemonError> {
+        let req = pb::ListFilesRequest {
+            workspace: self.selector.clone(),
+        };
+        Ok(self.inner.list_files(req).await?.into_inner())
+    }
+
     /// The `notes.md` of `task`'s `ref:` directory (empty text when it has none yet).
     pub async fn get_notes(&mut self, task: pb::TaskRef) -> Result<pb::NotesDoc, DaemonError> {
         let req = pb::GetNotesRequest {

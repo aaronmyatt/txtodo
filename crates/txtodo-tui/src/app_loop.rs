@@ -113,6 +113,7 @@ impl Watching {
     async fn on_tick(&mut self, daemon: &mut Daemon, state: &mut AppState) {
         state.shell.prune(std::time::Instant::now());
         crate::app_offers::refresh_on_tick(daemon, state).await;
+        crate::app_refs::refresh(daemon, state).await;
         self.retry(daemon, state).await;
     }
 
