@@ -131,7 +131,7 @@ fn a_push_with_a_gap_or_a_repeat_is_refused_and_changes_nothing() {
 }
 
 #[test]
-fn a_push_while_a_want_is_open_is_refused_as_unrequested() {
+fn a_push_while_a_want_is_open_must_still_follow_the_heads() {
     let mut s = linked();
     let greet = Message::Greet {
         workspace: ws().ulid().to_u128(),
@@ -141,7 +141,70 @@ fn a_push_while_a_want_is_open_is_refused_as_unrequested() {
     assert_eq!(s.state(ws()).unwrap(), SessionState::Wanting);
     assert_eq!(
         s.on_ops(ws(), &ops(vec![range(2, 7, 7)]), &BTreeMap::new()),
-        Err(SessionError::Unrequested(range(2, 7, 7)))
+        Err(SessionError::Gap(Gap {
+            device_head: 4,
+            range: range(2, 7, 7),
+        })),
+        "5 and 6 are still missing"
     );
     assert_eq!(s.state(ws()).unwrap(), SessionState::Wanting);
+    // A batch reaching past the Want is fine once it follows the heads (task
+    // sync-ack-before-held): the sender re-serves from its last acked head, and its heads may
+    // have moved on since the Greet.
+    s.on_ops(ws(), &ops(vec![range(2, 5, 7)]), &BTreeMap::new())
+        .unwrap();
+    s.committed(ws(), &[range(2, 5, 7)]).unwrap();
+    assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 7)]));
+    assert_eq!(
+        s.state(ws()).unwrap(),
+        SessionState::Idle,
+        "the Want is met"
+    );
+}
+
+#[test]
+fn a_wanted_batch_after_a_failed_one_is_refused_so_no_hole_is_committed() {
+    let mut s = linked();
+    let greet = Message::Greet {
+        workspace: ws().ulid().to_u128(),
+        heads: heads(&[(2, 10)]),
+    };
+    s.on_hello(ws(), &greet).unwrap();
+    s.on_ops(ws(), &ops(vec![range(2, 5, 7)]), &BTreeMap::new())
+        .unwrap();
+    s.committed(ws(), &[]).unwrap();
+    assert_eq!(s.state(ws()).unwrap(), SessionState::Wanting);
+    assert_eq!(
+        s.on_ops(ws(), &ops(vec![range(2, 8, 10)]), &BTreeMap::new()),
+        Err(SessionError::Gap(Gap {
+            device_head: 4,
+            range: range(2, 8, 10),
+        })),
+        "5..=7 never landed"
+    );
+    assert_eq!(s.wanted(ws()).unwrap(), &[range(2, 5, 10)]);
+}
+
+#[test]
+fn a_partial_commit_acks_the_prefix_and_the_rest_is_wanted_again() {
+    let mut s = linked();
+    let greet = Message::Greet {
+        workspace: ws().ulid().to_u128(),
+        heads: heads(&[(2, 10)]),
+    };
+    s.on_hello(ws(), &greet).unwrap();
+    s.on_ops(ws(), &ops(vec![range(2, 5, 10)]), &BTreeMap::new())
+        .unwrap();
+    let ack = s.committed(ws(), &[range(2, 5, 6)]).unwrap();
+    assert_eq!(
+        ack,
+        Message::Ack {
+            workspace: ws().ulid().to_u128(),
+            committed: vec![range(2, 5, 6)],
+        }
+    );
+    assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 6)]));
+    assert_eq!(s.wanted(ws()).unwrap(), &[range(2, 7, 10)]);
+    s.on_ops(ws(), &ops(vec![range(2, 7, 10)]), &BTreeMap::new())
+        .unwrap();
 }

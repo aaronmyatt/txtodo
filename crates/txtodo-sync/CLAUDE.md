@@ -63,8 +63,13 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   one connection; see that crate's own `CLAUDE.md`.
 - Push (task `sync-live-push`, 2026-09-24): once a workspace consumed the peer's `Greet`, an `Ops`
   batch the peer sends unasked is accepted in `Idle` and `Ack`ed like a wanted one — only when each
-  run follows the heads held (`advance`), so a push that raced an open `Want` or skipped a seq is
-  refused (`Unrequested`/`Gap`) and changes nothing. No wire change. `Link::recv_timeout(wait) ->
+  run follows the heads held (`advance`), so a push that skipped a seq is refused (`Gap`) and
+  changes nothing. No wire change. **Since task `sync-ack-before-held` (2026-09-25) a wanted batch
+  obeys the same rule**, and the old "inside our `Want`" check (`Unrequested`) is gone: a batch
+  that follows the heads is accepted whether asked for or not, and one that does not is a `Gap`
+  and commits nothing, so a wanted batch that lands after a failed one can no longer leave a hole
+  in the store (its head is a per-device op count). `committed(id, prefix)` acks a prefix of the
+  batch; the rest stays wanted. `Link::recv_timeout(wait) ->
   Result<Option<Frame>, LinkError>` lets a long-lived driver do work between frames (`ChannelLink`
   and `IrohLink` implement it; the default calls `recv`).
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,

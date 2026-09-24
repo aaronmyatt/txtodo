@@ -276,18 +276,21 @@ fn link_hello_checks_group_protocol_and_clock_before_anything_wants_anything() {
 }
 
 #[test]
-fn ops_outside_the_want_and_commits_outside_the_batch_are_refused() {
+fn ops_that_skip_the_heads_and_commits_outside_the_batch_are_refused() {
     let mut s = greeted();
     s.on_hello(ws(), &peer_greet(heads(&[(2, 4)]))).unwrap();
     let stray = Message::Ops {
         workspace: ws_bits(),
         ops: Vec::new(),
         signatures: Vec::new(),
-        ranges: vec![range(2, 1, 2), range(3, 1, 1)],
+        ranges: vec![range(2, 1, 2), range(3, 2, 2)],
     };
     assert_eq!(
         s.on_ops(ws(), &stray, &no_keys()),
-        Err(SessionError::Unrequested(range(3, 1, 1)))
+        Err(SessionError::Gap(Gap {
+            device_head: 0,
+            range: range(3, 2, 2)
+        }))
     );
     assert_eq!(s.state(ws()).unwrap(), SessionState::Wanting);
     let batch = Message::Ops {

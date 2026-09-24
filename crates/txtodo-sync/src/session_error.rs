@@ -64,11 +64,9 @@ pub enum SessionError {
         /// By how much it leads.
         lead_ms: u64,
     },
-    /// `Ops` covered a run we never asked for.
-    Unrequested(OriginRange),
     /// `committed()` named a run that was not in the in-flight batch.
     NotInBatch(OriginRange),
-    /// A committed run does not follow the head we hold.
+    /// A received or committed run does not follow the head we hold.
     Gap(Gap),
     /// An op's signature did not verify, or its device is unrecognised. Checked before anything
     /// else in `on_ops`, so a bad batch never advances `wanted`/`inflight`.
@@ -101,7 +99,6 @@ impl SessionError {
             SessionError::GroupMismatch { .. } => "group_mismatch",
             SessionError::ProtocolMismatch { .. } => "protocol_mismatch",
             SessionError::PeerAhead { .. } => "peer_ahead",
-            SessionError::Unrequested(_) => "unrequested",
             SessionError::NotInBatch(_) => "not_in_batch",
             SessionError::Gap(_) => "gap",
             SessionError::Crypto(_) => "crypto",
@@ -145,13 +142,6 @@ impl fmt::Display for SessionError {
                 f,
                 "peer clock {peer_ms} ms leads local clock {local_ms} ms by {lead_ms} ms; refused"
             ),
-            SessionError::Unrequested(r) => {
-                write!(
-                    f,
-                    "ops for {:?} {}..={} were not wanted",
-                    r.device, r.first, r.last
-                )
-            }
             SessionError::NotInBatch(r) => {
                 write!(
                     f,
