@@ -64,11 +64,6 @@ pub fn draw_popup(
     hits.push(popup, crate::hit::Target::Inert);
 }
 
-/// The real widget wrapper for `render`.
-pub fn widget(sync: &SyncSnapshot) -> Paragraph<'static> {
-    Paragraph::new(render(sync))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

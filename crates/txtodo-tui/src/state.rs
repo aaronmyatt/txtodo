@@ -196,15 +196,6 @@ impl AppState {
     pub fn cancel_command(&mut self) {
         self.command = None;
     }
-
-    /// `Enter`: takes the command line's buffer and, if it is exactly `q`, quits (design: "`:q`
-    /// quit" — no other `:` commands are specified, so anything else is a silent no-op rather
-    /// than an invented feature).
-    pub fn run_command(&mut self) {
-        if self.command.take().as_deref() == Some("q") {
-            self.should_quit = true;
-        }
-    }
 }
 
 #[cfg(test)]
