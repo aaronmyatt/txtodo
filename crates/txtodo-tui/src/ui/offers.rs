@@ -2,28 +2,13 @@
 //! `a` accepts, `d` declines. No directory prompt (task `remote-workspace-mirror`): the daemon
 //! mirrors every offer into its own folder, and on its own too, so the list is usually empty.
 
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState};
 use txtodo_proto::v1 as pb;
 
-use crate::action::Action;
 use crate::state::AppState;
-
-/// One keystroke while the pane has focus. Returns the [`Action`] to send, if any.
-pub fn on_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
-    match key.code {
-        KeyCode::Esc | KeyCode::Char('o') => state.offers.toggle(),
-        KeyCode::Char('j') | KeyCode::Down => state.offers.move_down(),
-        KeyCode::Char('k') | KeyCode::Up => state.offers.move_up(),
-        KeyCode::Char('a') => return accept_request(state).map(Action::AcceptOffer),
-        KeyCode::Char('d') => return decline_request(state).map(Action::DeclineOffer),
-        _ => {}
-    }
-    None
-}
 
 /// The accept request for the selected offer, if any. The daemon picks the folder.
 pub fn accept_request(state: &AppState) -> Option<pb::WorkspaceAcceptOfferRequest> {
@@ -87,11 +72,17 @@ fn row(o: &crate::state_offers::OfferItem) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::action::Action;
     use crate::state_offers::OfferItem;
-    use crossterm::event::KeyModifiers;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    /// A key through the real dispatch (`input.rs` -> keymap -> `commands.rs`).
+    fn on_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
+        crate::input::Input::default().on_key(state, key)
     }
 
     fn state_with_offer() -> AppState {

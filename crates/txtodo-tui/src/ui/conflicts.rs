@@ -5,7 +5,6 @@
 //! this operation (writes the chosen side back and clears the flag, both or neither), so
 //! reusing it here avoids a second, possibly-drifting implementation of the same merge rule.
 
-use crossterm::event::{KeyCode, KeyEvent};
 use txtodo_proto::v1 as pb;
 
 use crate::state::{AppState, Resolution};
@@ -31,18 +30,6 @@ pub fn move_down(state: &mut AppState) {
 /// `j`/`k` inside the pane, clamped to the flag list.
 pub fn move_up(state: &mut AppState) {
     state.conflict_cursor = state.conflict_cursor.saturating_sub(1);
-}
-
-/// One keystroke while the pane has focus, other than the mine/theirs/merged picks themselves
-/// (`app.rs` maps those to `resolve_request` because only it holds the `Daemon` to send the
-/// result through). Returns `true` when the key was handled.
-pub fn on_key(state: &mut AppState, key: KeyEvent) -> bool {
-    match key.code {
-        KeyCode::Char('j') | KeyCode::Down => move_down(state),
-        KeyCode::Char('k') | KeyCode::Up => move_up(state),
-        _ => return false,
-    }
-    true
 }
 
 /// Builds the `ResolveConflict` request for the currently selected flag, if any. `path` is the

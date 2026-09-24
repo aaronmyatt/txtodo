@@ -3,6 +3,7 @@
 
 use super::*;
 use crossterm::event::KeyModifiers;
+use txtodo_proto::v1 as pb;
 
 fn key(c: char) -> KeyEvent {
     KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)

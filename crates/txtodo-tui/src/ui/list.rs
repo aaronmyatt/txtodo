@@ -4,7 +4,6 @@
 //! (`app.rs`) draws with.
 //! Ref: <https://docs.rs/ratatui/latest/ratatui/widgets/struct.List.html>
 
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem};
@@ -62,43 +61,10 @@ pub fn list_widget(state: &AppState) -> List<'static> {
     List::new(items).highlight_style(Style::new().add_modifier(Modifier::REVERSED))
 }
 
-/// Vim-key navigation input for the line list. Owns the one bit of transient state `gg`'s
-/// double-key detection needs (`state.rs`'s `AppState` is not the place for a mid-sequence input
-/// flag — it is a fact about the keyboard, not the document).
-#[derive(Default)]
-pub struct ListInput {
-    /// Set after a first bare `g`; a second `g` before anything else fires `gg`; anything else
-    /// clears it without side effects (design: vim's own "wait for the second key" rule).
-    pending_g: bool,
-}
-
-impl ListInput {
-    /// Dispatches one key while the list has focus (`AppState.editing`/`conflicts_open` both
-    /// `None`/`false`). Returns `true` when the key was handled.
-    pub fn on_key(&mut self, state: &mut AppState, key: KeyEvent) -> bool {
-        if self.pending_g {
-            self.pending_g = false;
-            if key.code == KeyCode::Char('g') {
-                state.move_first();
-                return true;
-            }
-            // Any other key after a lone `g` falls through to the normal dispatch below.
-        }
-        match key.code {
-            KeyCode::Char('j') | KeyCode::Down => state.move_down(),
-            KeyCode::Char('k') | KeyCode::Up => state.move_up(),
-            KeyCode::Char('g') => self.pending_g = true,
-            KeyCode::Char('G') => state.move_last(),
-            _ => return false,
-        }
-        true
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyEventKind, KeyModifiers};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
@@ -150,13 +116,20 @@ mod tests {
         assert_eq!(last, ADD_LINE_PLACEHOLDER);
     }
 
+    /// Presses `keys` through the real dispatch (`input.rs` -> keymap -> `commands.rs`).
+    fn press(state: &mut AppState, keys: &[KeyEvent]) {
+        let mut input = crate::input::Input::default();
+        for key in keys {
+            let _ = input.on_key(state, *key);
+        }
+    }
+
     #[test]
     fn j_and_k_move_one_row_and_clamp() {
         let mut state = AppState::fixture();
-        let mut input = ListInput::default();
-        assert!(input.on_key(&mut state, key('k')));
+        press(&mut state, &[key('k')]);
         assert_eq!(state.cursor, 0, "k clamps at the top");
-        assert!(input.on_key(&mut state, key('j')));
+        press(&mut state, &[key('j')]);
         assert_eq!(state.cursor, 1);
     }
 
@@ -164,41 +137,30 @@ mod tests {
     fn gg_jumps_to_first_only_on_the_second_g() {
         let mut state = AppState::fixture();
         state.move_last();
-        let mut input = ListInput::default();
-        assert!(input.on_key(&mut state, key('g')));
+        let mut input = crate::input::Input::default();
+        let _ = input.on_key(&mut state, key('g'));
         assert_eq!(state.cursor, state.lines.len(), "one g does nothing yet");
-        assert!(input.on_key(&mut state, key('g')));
+        let _ = input.on_key(&mut state, key('g'));
         assert_eq!(state.cursor, 0, "gg jumps to the first line");
     }
 
     #[test]
     fn a_single_g_then_other_key_is_not_gg() {
         let mut state = AppState::fixture();
-        let mut input = ListInput::default();
-        assert!(input.on_key(&mut state, key('g')));
-        assert!(input.on_key(&mut state, key('j')));
+        press(&mut state, &[key('g'), key('j')]);
         assert_eq!(
             state.cursor, 1,
-            "the pending g was cancelled, j still moved down"
+            "the pending g was dropped, j still moved down"
         );
     }
 
     #[test]
     fn capital_g_jumps_to_the_add_line_row() {
         let mut state = AppState::fixture();
-        let mut input = ListInput::default();
-        assert!(input.on_key(
+        press(
             &mut state,
-            KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)
-        ));
+            &[KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)],
+        );
         assert!(state.on_add_line_row());
-    }
-
-    #[test]
-    fn unhandled_keys_return_false() {
-        let mut state = AppState::fixture();
-        let mut input = ListInput::default();
-        assert!(!input.on_key(&mut state, key('x')));
-        let _ = KeyEventKind::Press; // silence unused-import if crossterm changes defaults
     }
 }

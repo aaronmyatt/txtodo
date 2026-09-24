@@ -1,256 +1,112 @@
-//! Vim-key dispatch: maps one [`KeyEvent`] plus the current `AppState` mode (command line /
-//! editor / conflicts pane / list) to an [`Action`], mutating `AppState` for anything that
-//! doesn't need the daemon (navigation, opening the editor, buffer edits) and returning an
-//! `Action` for anything that does (`app::perform` sends it). Pure and daemon-free by
-//! construction — that split is what makes this testable without a terminal or a daemon.
+//! Key dispatch (task `tui-revamp/tui-foundation`): one [`KeyEvent`] becomes a key name
+//! ([`keymap::key_name`]), then a [`Command`] in the scope that has the keyboard (the `:` line, the
+//! line editor, a sheet, the list), then whatever [`commands::run`] makes of it. Keys no binding
+//! claims go to the text field when one has focus. Pure and daemon-free, so it is tested without a
+//! terminal or a daemon; `app::perform` sends the [`Action`] it returns.
+
+use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use txtodo_proto::v1 as pb;
 
 use crate::action::Action;
-use crate::state::{AppState, Resolution};
-use crate::ui::edit::{self, OpenKey};
-use crate::ui::{conflicts, list, offers};
+use crate::commands;
+use crate::keymap::{self, Chords, Command, Resolved, Scope};
+use crate::state::AppState;
+use crate::ui::edit;
 
-/// Owns the small bits of transient input state that span more than one keystroke (`gg`, `dd`) —
-/// facts about the keyboard, not the document, so they live here rather than in `AppState`.
+#[cfg(test)]
+use crate::commands::today_local;
+
+/// The keyboard state that spans key presses: a half-typed chord (`g g`, `d d`).
 #[derive(Default)]
 pub struct Input {
-    list: list::ListInput,
-    /// Set after a first bare `d`; a second `d` before anything else fires `dd` (delete).
-    pending_d: bool,
+    chords: Chords,
 }
 
 impl Input {
     /// Dispatches one key against `state`, returning the [`Action`] to perform, if any.
     pub fn on_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
-        if let Some(action) = self.on_command_key(state, key) {
-            return Some(action);
-        }
+        self.on_key_at(state, key, Instant::now())
+    }
+
+    /// [`Input::on_key`] at a given time, for chord timing in tests.
+    pub fn on_key_at(
+        &mut self,
+        state: &mut AppState,
+        key: KeyEvent,
+        now: Instant,
+    ) -> Option<Action> {
         if state.command.is_some() {
-            return None; // typing into the command line, handled above
+            return on_command_key(state, key);
         }
+        let name = keymap::key_name(&key);
         if state.editing.is_some() {
-            return self.on_edit_key(state, key);
+            return on_edit_key(state, key, name.as_deref());
         }
-        if state.conflicts_open {
-            return self.on_conflicts_key(state, key);
-        }
-        if state.offers.open {
-            return offers::on_key(state, key);
-        }
-        self.on_list_key(state, key)
-    }
-
-    fn on_command_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
-        let buf = state.command.as_mut()?;
-        match key.code {
-            KeyCode::Esc => state.cancel_command(),
-            KeyCode::Enter => {
-                let quit = buf.as_str() == "q";
-                state.run_command();
-                if quit {
-                    return Some(Action::Quit);
+        let name = name?;
+        let (scope, group) = if state.conflicts_open {
+            (Scope::Sheet, Some("conflicts"))
+        } else if state.offers.open {
+            (Scope::Sheet, Some("offers"))
+        } else {
+            (Scope::List, None)
+        };
+        let command = match self.chords.resolve(scope, group, &name, now) {
+            Resolved::Command(c) => c,
+            Resolved::Pending => return None,
+            Resolved::Unbound if scope == Scope::List => {
+                match self.chords.resolve(Scope::Global, None, &name, now) {
+                    Resolved::Command(c) => c,
+                    Resolved::Pending | Resolved::Unbound => return None,
                 }
             }
-            KeyCode::Backspace => {
-                buf.pop();
-            }
-            KeyCode::Char(c) => buf.push(c),
-            _ => {}
+            Resolved::Unbound => return None,
+        };
+        commands::run(state, command)
+    }
+}
+
+/// Typing into the `:` line. `Enter` runs it: `:q` quits, `:<action id>` runs that command,
+/// anything else is a silent no-op.
+fn on_command_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
+    let buf = state.command.as_mut()?;
+    match key.code {
+        KeyCode::Esc => state.cancel_command(),
+        KeyCode::Enter => return run_palette(state),
+        KeyCode::Backspace => {
+            buf.pop();
         }
-        None
+        KeyCode::Char(c) => buf.push(c),
+        _ => {}
     }
+    None
+}
 
-    fn on_edit_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
-        match key.code {
-            KeyCode::Esc => {
-                edit::cancel(state);
-                None
-            }
-            KeyCode::Enter => edit::commit(state).map(|m| Action::Apply(apply_of(state, m))),
-            _ => {
-                if let Some(draft) = state.editing.as_mut() {
-                    edit::on_key(draft, key);
-                }
-                None
-            }
+fn run_palette(state: &mut AppState) -> Option<Action> {
+    let line = state.command.take().unwrap_or_default();
+    match line.trim() {
+        "q" => {
+            state.should_quit = true;
+            Some(Action::Quit)
         }
-    }
-
-    fn on_conflicts_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('r') => {
-                state.toggle_conflicts();
-                None
-            }
-            KeyCode::Char('m') => {
-                conflicts::resolve_request(state, Resolution::Mine).map(Action::Resolve)
-            }
-            KeyCode::Char('t') => {
-                conflicts::resolve_request(state, Resolution::Theirs).map(Action::Resolve)
-            }
-            KeyCode::Char('M') => {
-                conflicts::resolve_request(state, Resolution::Merged).map(Action::Resolve)
-            }
-            _ => {
-                conflicts::on_key(state, key);
-                None
-            }
-        }
-    }
-
-    fn on_list_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
-        if self.pending_d {
-            self.pending_d = false;
-            if key.code == KeyCode::Char('d') {
-                return delete_selected(state).map(|m| Action::Apply(apply_of(state, m)));
-            }
-        }
-        match key.code {
-            KeyCode::Char(':') => state.start_command(),
-            KeyCode::Char('r') => state.toggle_conflicts(),
-            KeyCode::Char('o') => state.offers.toggle(),
-            KeyCode::Char('s') => state.toggle_sync_visible(),
-            KeyCode::Char('i') => edit::start(state, OpenKey::Insert),
-            KeyCode::Char('a') => edit::start(state, OpenKey::Append),
-            KeyCode::Char('A') => edit::start(state, OpenKey::AppendEnd),
-            KeyCode::Char('d') => self.pending_d = true,
-            KeyCode::Char(' ') => {
-                return toggle_complete(state).map(|m| Action::Apply(apply_of(state, m)));
-            }
-            KeyCode::Char('J') => {
-                return move_selected_down(state).map(|m| Action::Apply(apply_of(state, m)));
-            }
-            KeyCode::Char('K') => {
-                return move_selected_up(state).map(|m| Action::Apply(apply_of(state, m)));
-            }
-            _ => {
-                self.list.on_key(state, key);
-            }
-        }
-        None
+        id => Command::from_id(id).and_then(|c| commands::run(state, c)),
     }
 }
 
-/// `Space`: builds the `Complete` mutation for the selected line, if any (the Add-a-line row has
-/// nothing to complete).
-fn toggle_complete(state: &AppState) -> Option<pb::Mutation> {
-    let line = state.selected_line()?;
-    Some(pb::Mutation {
-        kind: Some(pb::mutation::Kind::Complete(pb::Complete {
-            task: Some(pb::TaskRef {
-                line_number: line.line_number,
-                task_id: line.task_ref_id().to_owned(),
-            }),
-            today: today_local(),
-        })),
-    })
-}
-
-/// `dd`: builds the `Delete` mutation for the selected line; `leave_blank = true` matches
-/// todo.sh's own default (proto's own doc on `Delete`).
-fn delete_selected(state: &AppState) -> Option<pb::Mutation> {
-    let line = state.selected_line()?;
-    Some(pb::Mutation {
-        kind: Some(pb::mutation::Kind::Delete(pb::Delete {
-            task: Some(pb::TaskRef {
-                line_number: line.line_number,
-                task_id: line.task_ref_id().to_owned(),
-            }),
-            leave_blank: true,
-        })),
-    })
-}
-
-/// The `TaskRef` for the line at `idx`, if it is a task line. A blank line is never addressed:
-/// the daemon refuses a `TaskRef` to one (`specs/todotxt.abnf#blank`), and that refusal used to
-/// end the whole TUI session (root todo: "J/K on or beside a blank line exits the TUI").
-fn task_ref_at(state: &AppState, idx: usize) -> Option<pb::TaskRef> {
-    let line = state.lines.get(idx)?;
-    if line.raw.trim().is_empty() {
-        return None;
+/// The line editor has the keyboard: `Enter` and `Esc` are commands, anything else edits text.
+fn on_edit_key(state: &mut AppState, key: KeyEvent, name: Option<&str>) -> Option<Action> {
+    let bound = name.and_then(|n| {
+        keymap::BINDINGS
+            .iter()
+            .find(|b| b.scope == Scope::Edit && b.keys.contains(&n))
+    });
+    if let Some(binding) = bound {
+        return commands::run(state, binding.command);
     }
-    Some(pb::TaskRef {
-        line_number: line.line_number,
-        task_id: line.task_ref_id().to_owned(),
-    })
-}
-
-/// The index of the first task line at or after `from`, skipping blanks.
-fn next_task_from(state: &AppState, from: usize) -> Option<usize> {
-    (from..state.lines.len()).find(|&i| !state.lines[i].raw.trim().is_empty())
-}
-
-/// The index of the last task line at or before `from`, skipping blanks.
-fn prev_task_from(state: &AppState, from: usize) -> Option<usize> {
-    (0..=from)
-        .rev()
-        .find(|&i| !state.lines[i].raw.trim().is_empty())
-}
-
-/// `J`: builds the `MoveBefore`/`MoveToEnd` mutation that puts the selected task right after the
-/// next task below it, blank lines skipped (a no-op on a blank line, the Add-a-line row or the
-/// last task), then moves the cursor to where the task will land once the daemon's refresh does.
-fn move_selected_down(state: &mut AppState) -> Option<pb::Mutation> {
-    if state.on_add_line_row() {
-        return None;
+    if let Some(draft) = state.editing.as_mut() {
+        edit::on_key(draft, key);
     }
-    let task = task_ref_at(state, state.cursor)?;
-    let next = next_task_from(state, state.cursor + 1)?;
-    let (kind, lands_at) = match next_task_from(state, next + 1) {
-        Some(after_next) => (
-            pb::mutation::Kind::MoveBefore(pb::MoveBefore {
-                task: Some(task),
-                before: task_ref_at(state, after_next),
-            }),
-            after_next - 1,
-        ),
-        None => (
-            pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task: Some(task) }),
-            state.lines.len() - 1,
-        ),
-    };
-    state.cursor = lands_at;
-    Some(pb::Mutation { kind: Some(kind) })
-}
-
-/// `K`: builds the `MoveBefore` mutation that puts the selected task right before the previous
-/// task above it, blank lines skipped (a no-op on a blank line, the first task or the Add-a-line
-/// row), then moves the cursor to where the task will land.
-fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
-    if state.on_add_line_row() || state.cursor == 0 {
-        return None;
-    }
-    let task = task_ref_at(state, state.cursor)?;
-    let prev = prev_task_from(state, state.cursor - 1)?;
-    let before = task_ref_at(state, prev)?;
-    state.cursor = prev;
-    Some(pb::Mutation {
-        kind: Some(pb::mutation::Kind::MoveBefore(pb::MoveBefore {
-            task: Some(task),
-            before: Some(before),
-        })),
-    })
-}
-
-/// Wraps one mutation as a single-mutation `ApplyRequest` against the open document.
-pub(crate) fn apply_of(state: &AppState, mutation: pb::Mutation) -> pb::ApplyRequest {
-    pb::ApplyRequest {
-        workspace: None,
-        path: state.path.clone(),
-        mutations: vec![mutation],
-        agent: None,
-        // The activity log tells a TUI change from a CLI or desktop one (task op-source).
-        source: "tui".to_owned(),
-        dry_run: false,
-    }
-}
-
-/// Today's date in the local calendar, `YYYY-MM-DD` (ADR 0011).
-/// Ref: <https://docs.rs/jiff/latest/jiff/struct.Zoned.html>
-pub(crate) fn today_local() -> String {
-    jiff::Zoned::now().date().to_string()
+    None
 }
 
 #[cfg(test)]

@@ -25,6 +25,7 @@ pub mod ui {
 }
 
 pub mod action;
+pub mod commands;
 pub mod daemon;
 pub mod daemon_activity;
 pub mod daemon_devices;
