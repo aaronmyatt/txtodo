@@ -86,18 +86,17 @@ impl Daemon {
         Ok(rep.into_inner().offers)
     }
 
-    /// Adopts a pending offer's workspace id into the registry at `local_dir`. The daemon
-    /// canonicalizes the path and consumes the offer whether or not the adopt succeeds.
+    /// Mirrors a pending offer now, in the daemon's own mirror folder (task
+    /// remote-workspace-mirror). The daemon consumes the offer whether or not that succeeds.
     pub fn workspace_accept_offer(
         &mut self,
         offering_device: &str,
         workspace_id: &str,
-        local_dir: &str,
     ) -> Result<pb::WorkspaceInfo, ClientError> {
         let req = pb::WorkspaceAcceptOfferRequest {
             offering_device: offering_device.to_owned(),
             workspace_id: workspace_id.to_owned(),
-            local_dir: local_dir.to_owned(),
+            ..pb::WorkspaceAcceptOfferRequest::default()
         };
         let rep = self
             .rt

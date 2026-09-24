@@ -1,8 +1,9 @@
 //! `txtodo workspace offers|accept|decline` (task `workspace-offer-cli`): the CLI surface of the
 //! offer/accept workspace-identity agreement (`tasks/daemon-workspace-identity-agreement`). A
-//! paired peer announces its non-default workspaces; each lands here as a pending offer that this
-//! device adopts (same `WorkspaceId`, a local directory of its choosing) or discards. Split out of
-//! `workspace.rs` for its file-length budget only.
+//! paired peer announces its non-default workspaces; the daemon mirrors each one on its own (task
+//! `remote-workspace-mirror`: same `WorkspaceId`, a folder the daemon picks under its data dir), so
+//! an offer is only pending for a moment, or when mirroring failed. Split out of `workspace.rs` for
+//! its file-length budget only.
 //!
 //! An offer is keyed by (offering device, workspace id). The commands take the workspace id and
 //! find the device among the pending offers, so the common case needs one id; `--from` picks the
@@ -34,17 +35,15 @@ pub fn run_offers(daemon: &mut Daemon, as_json: bool) -> Result<(), CliError> {
     Ok(())
 }
 
-/// `workspace accept <id> --dir <path> [--from <device>]`: adopts the offer at `dir`. `--dir` is
-/// required until `remote-workspace-mirror` decides a default location for a bare accept.
+/// `workspace accept <id> [--from <device>]`: mirrors the offer now, where the daemon keeps mirrors.
 pub fn run_accept(
     daemon: &mut Daemon,
     id: &str,
     from: Option<&str>,
-    dir: &str,
     as_json: bool,
 ) -> Result<(), CliError> {
     let device = resolve_device(daemon, id, from)?;
-    let info = daemon.workspace_accept_offer(&device, id, dir)?;
+    let info = daemon.workspace_accept_offer(&device, id)?;
     if as_json {
         println!(
             r#"{{"id":{},"root":{},"offering_device":{}}}"#,

@@ -46,14 +46,12 @@ pub enum Action {
     /// Workspaces a paired peer offered this device, not yet accepted or declined: one row per
     /// offer, workspace id first.
     Offers,
-    /// Adopts a pending offer at `--dir`: same workspace id as the peer, so the two sync as one
-    /// workspace. `--from` picks the device when several peers offer the same id.
+    /// Mirrors a pending offer now, into the daemon's own folder (it also does this on its own):
+    /// same workspace id as the peer, so the two sync as one workspace. `--from` picks the device
+    /// when several peers offer the same id.
     Accept {
         /// The offered workspace's id (ULID text, from `workspace offers`).
         id: String,
-        /// The local directory to adopt it into (required until a default location exists).
-        #[arg(long)]
-        dir: String,
         /// The offering device's id, when more than one device offers this workspace.
         #[arg(long)]
         from: Option<String>,
@@ -92,8 +90,8 @@ pub fn run(
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
         Some(Action::Offers) => super::workspace_offers::run_offers(daemon, as_json),
-        Some(Action::Accept { id, dir, from }) => {
-            super::workspace_offers::run_accept(daemon, id, from.as_deref(), dir, as_json)
+        Some(Action::Accept { id, from }) => {
+            super::workspace_offers::run_accept(daemon, id, from.as_deref(), as_json)
         }
         Some(Action::Decline { id, from }) => {
             super::workspace_offers::run_decline(daemon, id, from.as_deref(), as_json)
@@ -145,10 +143,11 @@ fn load_state_name(w: &pb::WorkspaceInfo) -> &'static str {
 
 fn info_json(w: &pb::WorkspaceInfo) -> String {
     format!(
-        r#"{{"id":{},"root":{},"is_default":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
+        r#"{{"id":{},"root":{},"is_default":{},"is_remote":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
         json::str(&w.workspace_id),
         json::str(&w.root),
         w.is_default,
+        w.is_remote,
         w.added_at_ms,
         w.root_exists,
         w.has_state,
@@ -167,8 +166,11 @@ fn info_text(w: &pb::WorkspaceInfo) -> String {
         _ => "",
     };
     let default = if w.is_default { " [default]" } else { "" };
+    // A mirror of a paired device's workspace (task remote-workspace-mirror): txtodo chose the
+    // folder, so say so beside the path.
+    let remote = if w.is_remote { " [remote]" } else { "" };
     format!(
-        "{}  {}{default}{missing}{state}{load}",
+        "{}  {}{default}{remote}{missing}{state}{load}",
         w.workspace_id, w.root
     )
 }
@@ -296,5 +298,17 @@ mod tests {
         assert!(info_text(&info(pb::WorkspaceLoadState::Loading)).ends_with("[opening]"));
         assert!(info_text(&info(pb::WorkspaceLoadState::Queued)).ends_with("[queued]"));
         assert!(info_text(&info(pb::WorkspaceLoadState::Failed)).ends_with("[failed to open]"));
+    }
+
+    /// Task `remote-workspace-mirror`: a mirrored workspace says so in both forms.
+    #[test]
+    fn a_mirrored_workspace_is_marked_remote() {
+        let mirror = pb::WorkspaceInfo {
+            is_remote: true,
+            ..info(pb::WorkspaceLoadState::Ready)
+        };
+        assert!(info_text(&mirror).contains("[remote]"));
+        assert!(info_json(&mirror).contains(r#""is_remote":true"#));
+        assert!(!info_text(&info(pb::WorkspaceLoadState::Ready)).contains("[remote]"));
     }
 }

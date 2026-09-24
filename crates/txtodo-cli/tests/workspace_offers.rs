@@ -62,26 +62,21 @@ fn accept_and_decline_of_an_unknown_offer_fail_by_name_and_adopt_nothing() {
     let dir = ws.path();
 
     // No `--from`: the CLI looks the device up among the (empty) pending offers.
-    let accept = daemon.txtodo(dir, &["workspace", "accept", WORKSPACE_ID, "--dir", "x"]);
+    let accept = daemon.txtodo(dir, &["workspace", "accept", WORKSPACE_ID]);
     assert_fails_with(&accept, "no pending offer for workspace");
 
     // With `--from`: the daemon itself answers NotFound for a (device, workspace) it never saw.
-    let target = dir.join("adopted");
-    let target_arg = target.display().to_string();
     let accept_from = daemon.txtodo(
         dir,
-        &[
-            "workspace",
-            "accept",
-            WORKSPACE_ID,
-            "--from",
-            DEVICE_ID,
-            "--dir",
-            &target_arg,
-        ],
+        &["workspace", "accept", WORKSPACE_ID, "--from", DEVICE_ID],
     );
     assert_fails_with(&accept_from, "no pending offer");
-    assert!(!target.exists(), "nothing adopted");
+    let listed = daemon.txtodo(dir, &["workspace", "list"]);
+    assert!(
+        !text(&listed).contains(WORKSPACE_ID),
+        "nothing mirrored: {}",
+        text(&listed)
+    );
 
     let decline = daemon.txtodo(
         dir,
