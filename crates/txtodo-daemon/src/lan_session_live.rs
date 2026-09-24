@@ -17,13 +17,20 @@
 //! in that session. Now, with runs in flight and no ack progress for [`RESEND_AFTER`], `sent`
 //! rewinds to `held` and the next diff sends them again. A copy that lands anyway is out of step
 //! with the peer's heads and skipped there (`lan_session_shared.rs`).
+//!
+//! Workspaces take turns (task `sync-link-fairness`, 2026-09-25): a turn sends at most one batch
+//! per workspace, and none while [`WINDOW_BATCHES`] are unacked, so a small change in one workspace
+//! never queues behind another's thousands of ops. A peer's `Want` is served here too, a batch a
+//! turn, up to the heads it asked for, before anything newer is pushed.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{DeviceSigningKey, GroupId, GroupKey, Heads, Link, Message, OriginRange, want};
+use txtodo_sync::{
+    DeviceSigningKey, GroupId, GroupKey, Heads, Link, MAX_OPS_PER_BATCH, Message, OriginRange, want,
+};
 
 use crate::device_relay::WorkspaceRoute;
 use crate::lan_apply::serve_want;
@@ -47,6 +54,9 @@ pub(crate) const RESEND_AFTER: Duration = Duration::from_secs(10);
 /// Short under test, so a resend test does not wait ten seconds.
 #[cfg(test)]
 pub(crate) const RESEND_AFTER: Duration = Duration::from_millis(300);
+/// Most unacked batches in flight per workspace: enough to keep the link busy while the peer
+/// commits one, few enough that another workspace's batch is never far behind in the queue.
+pub(crate) const WINDOW_BATCHES: u64 = 2;
 
 /// The group crypto and routing a push needs, borrowed from the dispatch loop's own context.
 pub(crate) struct PushCtx<'a> {
@@ -66,10 +76,14 @@ pub(crate) struct Live {
     sent: BTreeMap<WorkspaceId, Heads>,
     /// Per workspace with runs in flight: when the first went out, or the peer last acked one.
     waiting_since: BTreeMap<WorkspaceId, Instant>,
-    /// Workspaces whose peer `Want` was served: safe to push to.
+    /// Workspaces whose peer sent its `Want`: safe to push to.
     ready: BTreeSet<WorkspaceId>,
-    /// `Stats::commits` per workspace at its last diff.
-    seen_commits: BTreeMap<WorkspaceId, u64>,
+    /// Per workspace, the heads the peer's `Want` asked for, until they are sent: served first.
+    asked: BTreeMap<WorkspaceId, Heads>,
+    /// Workspaces with more to send than the last turn sent.
+    pending: BTreeSet<WorkspaceId>,
+    /// `Stats::commits` per workspace at its last diff, and the local heads read then.
+    seen_commits: BTreeMap<WorkspaceId, (u64, Heads)>,
     last_heard: Instant,
     last_beat: Instant,
     last_sweep: Instant,
@@ -85,6 +99,8 @@ impl Live {
             sent: BTreeMap::new(),
             waiting_since: BTreeMap::new(),
             ready: BTreeSet::new(),
+            asked: BTreeMap::new(),
+            pending: BTreeSet::new(),
             seen_commits: BTreeMap::new(),
             last_heard: now,
             last_beat: now,
@@ -114,9 +130,12 @@ impl Live {
                 self.waiting_since.remove(&workspace);
             }
             Message::Want { ranges, .. } => {
-                // Served right after this, in `handle_want`: in flight until acked.
-                self.note_sent(workspace, ranges);
+                // Served by `tick`, a batch a turn, ahead of any push (task sync-link-fairness).
+                let mut asked = self.sent.get(&workspace).cloned().unwrap_or_default();
+                raise(&mut asked, ranges);
+                self.asked.insert(workspace, asked);
                 self.ready.insert(workspace);
+                self.pending.insert(workspace);
             }
             Message::Ops { ranges, .. } => {
                 raise(self.held.entry(workspace).or_default(), ranges);
@@ -212,7 +231,8 @@ impl Live {
         }
     }
 
-    /// Pushes `id`'s ops the peer lacks, when a commit landed since the last look (or on a sweep).
+    /// Sends `id`'s next batch the peer lacks, when a commit landed since the last look, a sweep
+    /// or a rewind is due, or the last turn left more to send; nothing while the window is full.
     /// `false` only on a failed send.
     fn push(
         &mut self,
@@ -226,27 +246,66 @@ impl Live {
         };
         let commits = read(&route.ws).stats().commits();
         let rewound = self.rewind_if_stalled(id, Instant::now());
-        if !sweep && !rewound && self.seen_commits.get(&id) == Some(&commits) {
+        let seen = self.seen_commits.get(&id);
+        let fresh = seen.is_none_or(|(c, _)| *c != commits);
+        if !(sweep || rewound || fresh || self.pending.contains(&id)) {
             return true;
         }
-        self.seen_commits.insert(id, commits);
-        let from = self.sent.get(&id).cloned().unwrap_or_default();
-        let ranges = want(&from, &read_heads(&route.ws));
-        if ranges.is_empty() {
+        let local = match seen {
+            Some((c, heads)) if *c == commits && !sweep => heads.clone(),
+            _ => read_heads(&route.ws),
+        };
+        self.seen_commits.insert(id, (commits, local.clone()));
+        let Some(batch) = self.next_batch(id, &local) else {
+            self.pending.remove(&id);
+            return true;
+        };
+        self.pending.insert(id);
+        if self.in_flight_ops(id) >= WINDOW_BATCHES * MAX_OPS_PER_BATCH as u64 {
             return true;
         }
-        let batches = match serve_want(&route.ws, &ranges, id, ctx.signing_key) {
-            Ok(b) => b,
+        let messages = match serve_want(&route.ws, &[batch], id, ctx.signing_key) {
+            Ok(m) => m,
             Err(e) => return log_push_serve_failed(id, &e),
         };
-        for batch in batches {
-            if send_message(link, ctx.group, id, ctx.key, batch).is_err() {
+        for message in messages {
+            if send_message(link, ctx.group, id, ctx.key, message).is_err() {
                 return false;
             }
         }
-        self.note_sent(id, &ranges);
-        log_pushed(id, ranges.len());
+        self.note_sent(id, &[batch]);
+        log_pushed(id, batch);
         true
+    }
+
+    /// The next run to send `id`'s peer, one batch wide: up to what its `Want` asked for while
+    /// that is still owed, else up to the local heads.
+    fn next_batch(&mut self, id: WorkspaceId, local: &Heads) -> Option<OriginRange> {
+        let sent = self.sent.get(&id).cloned().unwrap_or_default();
+        let owed = self.asked.get(&id).map(|asked| want(&sent, asked));
+        let runs = match owed {
+            Some(runs) if !runs.is_empty() => runs,
+            _ => {
+                self.asked.remove(&id);
+                want(&sent, local)
+            }
+        };
+        let first = runs.first()?;
+        let width = MAX_OPS_PER_BATCH as u64;
+        Some(OriginRange {
+            last: first.last.min(first.first + width - 1),
+            ..*first
+        })
+    }
+
+    /// Ops sent to `id`'s peer and not acked yet.
+    fn in_flight_ops(&self, id: WorkspaceId) -> u64 {
+        let (Some(sent), held) = (self.sent.get(&id), self.held.get(&id)) else {
+            return 0;
+        };
+        sent.iter()
+            .map(|(d, s)| s.saturating_sub(held.and_then(|h| h.get(d)).copied().unwrap_or(0)))
+            .sum()
     }
 
     /// An empty `Ack` on a shared workspace: harmless to the peer (it only logs an `Ack`), and it
@@ -297,6 +356,6 @@ fn log_push_rewound(workspace: WorkspaceId) {
     tracing::info!(%workspace, "lan_push_rewound_unacked");
 }
 
-fn log_pushed(workspace: WorkspaceId, runs: usize) {
-    tracing::debug!(%workspace, runs, "lan_ops_pushed");
+fn log_pushed(workspace: WorkspaceId, run: OriginRange) {
+    tracing::debug!(%workspace, first = run.first, last = run.last, "lan_ops_pushed");
 }

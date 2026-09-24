@@ -43,10 +43,9 @@ use txtodo_model::Ulid;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
     CryptoError, DeviceSigningKey, Frame, GroupId, GroupKey, GroupKeys, Link, LinkError, Message,
-    MessageError, OriginRange, SealFor, Session, open, seal,
+    MessageError, SealFor, Session, open, seal,
 };
 
-use crate::lan_apply::serve_want;
 use crate::lan_session::GROUP_EPOCH;
 
 /// A hostile or buggy peer cannot keep one connection's driver looping forever — bounded the same
@@ -261,27 +260,6 @@ fn log_want_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
     false
 }
 
-fn handle_want(link: &mut dyn Link, ctx: &SessionCtx<'_>, ranges: &[OriginRange]) -> bool {
-    let batches = match serve_want(ctx.ws, ranges, ctx.workspace, ctx.signing_key) {
-        Ok(b) => b,
-        Err(e) => {
-            tracing::warn!(error = %e, workspace = %ctx.workspace, "lan_serve_want_failed");
-            return true;
-        }
-    };
-    for batch in batches {
-        if let Err(e) = ctx.send(link, batch) {
-            return log_ops_send_failed(ctx.workspace, &e);
-        }
-    }
-    true
-}
-
-fn log_ops_send_failed(workspace: WorkspaceId, e: &SyncError) -> bool {
-    tracing::warn!(error = %e, %workspace, "lan_ops_send_failed");
-    false
-}
-
 fn log_peer_acked(runs: usize, workspace: WorkspaceId) {
     tracing::debug!(runs, workspace = %workspace, "lan_peer_acked");
 }
@@ -305,7 +283,8 @@ pub(crate) fn handle_workspace_message(
 ) -> bool {
     match &msg {
         Message::Greet { .. } => handle_greet(link, ctx, session, &msg),
-        Message::Want { ranges, .. } => handle_want(link, ctx, ranges),
+        // Served by `lan_session_live.rs`, a batch a turn (task sync-link-fairness).
+        Message::Want { .. } => true,
         Message::Ops { ranges, .. } => {
             crate::lan_session_ops::handle_ops(link, ctx, session, &msg, ranges.clone())
         }

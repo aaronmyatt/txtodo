@@ -22,3 +22,19 @@ A big transfer for one workspace does not hold up a small change in another on t
   ahead of a new small batch is then a few batches, not thousands of ops.
 - The batch served for a `Want` may reach past the ranges asked for (the local heads moved on).
   Fine once the receiver accepts any batch that follows its heads.
+
+## As built (2026-09-25)
+- `lan_session_shared.rs` no longer serves a `Want`; `Live::observe` records the heads it asked
+  for (`asked`) and marks the workspace `pending`.
+- `Live::push` sends one batch (`MAX_OPS_PER_BATCH` wide) per workspace per turn: up to `asked`
+  while that is owed, then up to the local heads. Nothing while `WINDOW_BATCHES` (2) are unacked.
+  Local heads are cached per `Stats::commits` and re-read on every 5 s sweep.
+- Serving the `Want` from `asked` first keeps an older peer happy: it still refuses a batch
+  outside its `Want`.
+- Test: `lan_session_fairness_tests.rs` (both workspaces in the first turn, the window holds, an
+  ack reopens it). Full daemon suite 546/546.
+
+## Known gaps
+- A turn with nothing to receive waits `POLL` (50 ms), so one workspace alone moves at most
+  2 000 ops per peer round trip plus commit time. Not measured on the two Macs.
+- A `notes.md` or log-only append does not bump `Stats::commits`; it goes out on the next sweep.
