@@ -1,4 +1,4 @@
-2026-09-24 Prompt bar always at the bottom; Ctrl-Space focuses it, and Ctrl-Shift-Space too under enhanced keys +m11 @tui
-2026-09-24 Enter adds to the current workspace root with toast "Added to <ws>"; empty submit cancels; Esc returns to the list +m11 @tui
-2026-09-24 Chips (A)(B)(C) x + @ due: t: rec: while focused, by key or click, through core chip edits +m11 @tui
-2026-09-24 Strict hint 150 ms after typing stops, via core lint::strict_hints +m11 @tui
+x 2026-09-25 2026-09-24 Prompt bar always at the bottom; Ctrl-Space focuses it, and Ctrl-Shift-Space too under enhanced keys +m11 @tui — ui/prompt_bar.rs + prompt.rs; Ctrl-Space in a legacy terminal arrives as Ctrl-Space, Ctrl-Shift-Space only under the kitty protocol
+x 2026-09-25 2026-09-24 Enter adds to the current workspace root with toast "Added to <ws>"; empty submit cancels; Esc returns to the list +m11 @tui — tests/prompt_bar.rs; Enter keeps the keyboard for the next line
+x 2026-09-25 2026-09-24 Chips (A)(B)(C) x + @ due: t: rec: while focused, by key or click, through core chip edits +m11 @tui — Alt+a b c x p o d t r, or click; Alt needs Option-as-Meta on macOS terminals
+x 2026-09-25 2026-09-24 Strict hint 150 ms after typing stops, via core lint::strict_hints +m11 @tui — a Wake::Deadline in the loop redraws for it
