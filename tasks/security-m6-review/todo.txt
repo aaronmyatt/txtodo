@@ -1,6 +1,4 @@
 2026-09-20 Review and sign off tasks/security-m6-review/findings-draft.md (F1 to F3 and F5 and F6) +m6 @security @human
-2026-09-12 Test: the MCP HTTP listener answers on 127.0.0.1 and refuses on this host's non-loopback address +m6 @security @test @doing by:claude
-2026-09-12 Test: tracing capture across token create, list and revoke shows no token secret or caveat values +m6 @security @test @doing by:claude
 2026-09-12 Test: an unauthenticated MCP HTTP request is rejected even with --lan bound to the LAN +m6 @security @test
 2026-09-12 Re-check no-secrets-in-logs against the new MCP paths (HTTP middleware and stdio wiring are new logging surface) +m6 @security
 2026-09-12 Audit: the macaroon root key exists only via KeyStore::get(KeyId::TokenRoot) and is never written outside the store +m6 @security
@@ -10,3 +8,5 @@
 2026-09-12 Defer the relay op-type-leak item to M8 with a todo.txt line in the owning milestone +m6 @security
 2026-09-12 Complete the parent line in ./todo.txt +m6 @security
 x 2026-09-24 2026-09-24 txtodo-model: FilePath deserializes through FilePath::new, so a peer op with ../ is refused on decode (F6) +m6 @security @test — shipped in 15ac56f: serde try_from runs new(), serialize unchanged; model/sync/store green; known gap: no daemon-level test with a whole sealed bad-path frame
+x 2026-09-24 2026-09-12 Test: the MCP HTTP listener answers on 127.0.0.1 and refuses on this host's non-loopback address +m6 @security @test — shipped in bdbc331: tests/http_loopback_bind.rs dials the real serve_http; a 0.0.0.0 bind fails it; known gap: skips on a host with no route
+x 2026-09-24 2026-09-12 Test: tracing capture across token create, list and revoke shows no token secret or caveat values +m6 @security @test — shipped in b5d0889: tests/tokens.rs checks secret, blake3 hex and a caveat canary; logging the secret fails it; known gap: per-workspace serve, not the global service's rpc_span path
