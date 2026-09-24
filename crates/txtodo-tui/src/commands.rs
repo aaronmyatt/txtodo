@@ -171,6 +171,36 @@ fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
     })
 }
 
+/// A row dragged from `from` and dropped on `to` (task `tui-revamp/tui-mouse`): the task lands
+/// where `to` is, blank lines never addressed (`to` may be the Add-a-line row: the end). Nothing
+/// when `from` is not a task or the drop would not move it. The cursor goes where it lands.
+pub(crate) fn move_row(state: &mut AppState, from: usize, to: usize) -> Option<Action> {
+    let task = Some(task_ref_at(state, from)?);
+    let (kind, lands_at) = if to < from {
+        let before = next_task_from(state, to).filter(|&b| b != from)?;
+        let kind = pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+            task,
+            before: task_ref_at(state, before),
+        });
+        (kind, before)
+    } else {
+        let last = state.lines.len().checked_sub(1)?;
+        let anchor = prev_task_from(state, to.min(last)).filter(|&a| a != from)?;
+        match next_task_from(state, anchor + 1) {
+            Some(before) => (
+                pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+                    task,
+                    before: task_ref_at(state, before),
+                }),
+                before - 1,
+            ),
+            None => (pb::mutation::Kind::MoveToEnd(pb::MoveToEnd { task }), last),
+        }
+    };
+    state.cursor = lands_at;
+    apply(state, Some(pb::Mutation { kind: Some(kind) }))
+}
+
 /// Wraps one mutation as a single-mutation `ApplyRequest` against the open document.
 pub(crate) fn apply_of(state: &AppState, mutation: pb::Mutation) -> pb::ApplyRequest {
     pb::ApplyRequest {

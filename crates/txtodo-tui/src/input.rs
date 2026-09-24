@@ -6,24 +6,36 @@
 
 use std::time::Instant;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 
 use crate::action::Action;
 use crate::commands;
 use crate::keymap::{self, Chords, Command, Resolved, Scope};
+use crate::mouse::Mouse;
 use crate::state::AppState;
 use crate::ui::edit;
 
 #[cfg(test)]
 use crate::commands::today_local;
 
-/// The keyboard state that spans key presses: a half-typed chord (`g g`, `d d`).
+/// The input state that spans events: a half-typed chord (`g g`, `d d`), and the mouse's last
+/// press and drag.
 #[derive(Default)]
 pub struct Input {
     chords: Chords,
+    mouse: Mouse,
 }
 
 impl Input {
+    /// Dispatches one mouse event against `state` ([`crate::mouse`]). A press drops a half-typed
+    /// chord, as moving the focus does.
+    pub fn on_mouse(&mut self, state: &mut AppState, event: MouseEvent) -> Option<Action> {
+        if matches!(event.kind, MouseEventKind::Down(_)) {
+            self.chords.clear();
+        }
+        self.mouse.on_event(state, event, Instant::now())
+    }
+
     /// Dispatches one key against `state`, returning the [`Action`] to perform, if any.
     pub fn on_key(&mut self, state: &mut AppState, key: KeyEvent) -> Option<Action> {
         self.on_key_at(state, key, Instant::now())

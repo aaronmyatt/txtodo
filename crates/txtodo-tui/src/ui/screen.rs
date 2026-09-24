@@ -8,17 +8,25 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
+use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::ui::{list, offers, sync};
 
 /// Renders one frame: the line list, the status/sync line, and whichever overlay (`edit`/`r`
-/// pane/`:` command line) is active.
-pub fn draw(frame: &mut Frame, state: &AppState) {
+/// pane/`:` command line) is active. Returns where the clickable things landed (task
+/// `tui-revamp/tui-mouse`); an overlay covers the rows under it.
+pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
+    let mut hits = HitMap::default();
     let [list_area, status_area] =
         Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(frame.area());
 
-    let mut list_state = ListState::default().with_selected(Some(state.cursor));
+    // Start from the last frame's scroll; ratatui moves it only to keep the cursor in view.
+    // Ref: https://docs.rs/ratatui/latest/ratatui/widgets/struct.ListState.html
+    let mut list_state = ListState::default()
+        .with_offset(state.scroll)
+        .with_selected(Some(state.cursor));
     frame.render_stateful_widget(list::list_widget(state), list_area, &mut list_state);
+    hits.record_list(list_area, list_state.offset(), state.row_count());
 
     frame.render_widget(
         Paragraph::new(status_line(state, status_area.width)),
@@ -26,24 +34,28 @@ pub fn draw(frame: &mut Frame, state: &AppState) {
     );
 
     if state.sync_visible {
-        draw_overlay(frame, list_area, sync::render(&state.sync));
+        hits.push(
+            draw_overlay(frame, list_area, sync::render(&state.sync)),
+            Target::Inert,
+        );
     }
     if state.conflicts_open {
         draw_conflicts(frame, list_area, state);
+        hits.push(list_area, Target::Inert);
     }
     if state.offers.open {
         offers::draw(frame, list_area, state);
+        hits.push(list_area, Target::Inert);
     }
     if let Some(draft) = &state.editing {
-        draw_overlay(
-            frame,
-            list_area,
-            Line::from(format!("{}> {}", edit_label(&draft.target), draft.buffer)),
-        );
+        let line = Line::from(format!("{}> {}", edit_label(&draft.target), draft.buffer));
+        hits.push(draw_overlay(frame, list_area, line), Target::Inert);
     }
     if let Some(cmd) = &state.command {
-        draw_overlay(frame, list_area, Line::from(format!(":{cmd}")));
+        let line = Line::from(format!(":{cmd}"));
+        hits.push(draw_overlay(frame, list_area, line), Target::Inert);
     }
+    hits
 }
 
 fn edit_label(target: &EditTarget) -> &'static str {
@@ -92,13 +104,15 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
 /// A one-line strip anchored to the bottom of `area` — good enough for the sync indicator and
 /// the edit/command line; a real popup (with a border) is a rendering-polish follow-up, not
 /// required by any acceptance criterion.
-fn draw_overlay(frame: &mut Frame, area: Rect, content: Line<'static>) {
+/// One bold line over the bottom of `area`; returns where it went.
+fn draw_overlay(frame: &mut Frame, area: Rect, content: Line<'static>) -> Rect {
     let y = area.y + area.height.saturating_sub(1);
     let rect = Rect::new(area.x, y, area.width, 1.min(area.height));
     frame.render_widget(
         Paragraph::new(content).style(Style::new().add_modifier(Modifier::BOLD)),
         rect,
     );
+    rect
 }
 
 fn draw_conflicts(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -180,6 +194,29 @@ mod tests {
         );
         state.last_error = None;
         assert!(!status_line(&state, 120).to_string().contains("refused"));
+    }
+
+    /// Draws `state` on a 40x6 test terminal and returns the hit map.
+    /// Ref: https://docs.rs/ratatui/latest/ratatui/backend/struct.TestBackend.html
+    fn drawn(state: &AppState) -> HitMap {
+        let backend = ratatui::backend::TestBackend::new(40, 6);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap_or_else(|e| panic!("{e}"));
+        let mut hits = HitMap::default();
+        terminal
+            .draw(|f| hits = draw(f, state))
+            .unwrap_or_else(|e| panic!("{e}"));
+        hits
+    }
+
+    #[test]
+    fn a_frame_maps_rows_to_cells_and_an_overlay_covers_them() {
+        let mut state = AppState::fixture();
+        let hits = drawn(&state);
+        assert_eq!(hits.at(0, 0), Some(Target::Row(0)));
+        assert_eq!(hits.at(0, 4), Some(Target::Row(4)), "the Add-a-line row");
+        assert_eq!(hits.at(0, 5), None, "the status line");
+        state.command = Some(String::new());
+        assert_eq!(drawn(&state).at(0, 4), Some(Target::Inert), "the : line");
     }
 
     #[test]

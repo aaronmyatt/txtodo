@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 pub mod buildinfo;
+pub mod hit;
 pub mod paint;
 pub mod skill_hint;
 pub mod state;
@@ -37,6 +38,7 @@ pub mod daemon_tokens;
 pub mod daemon_workspace;
 pub mod input;
 pub mod keymap;
+pub mod mouse;
 
 pub mod app;
 pub mod app_layout;

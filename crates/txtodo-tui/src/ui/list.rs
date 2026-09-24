@@ -54,9 +54,18 @@ pub fn rows(state: &AppState) -> Vec<Line<'static>> {
 /// The real `ratatui` widget for `rows`; selection is drawn via the caller's `ListState`
 /// (`ListState::select(Some(state.cursor))`) so the highlight always tracks `AppState.cursor`.
 pub fn list_widget(state: &AppState) -> List<'static> {
+    let hover = crate::theme::current().hover_style();
     let items = rows(state)
         .into_iter()
-        .map(ListItem::new)
+        .enumerate()
+        .map(|(i, line)| {
+            let item = ListItem::new(line);
+            if state.hover == Some(i) {
+                item.style(hover)
+            } else {
+                item
+            }
+        })
         .collect::<Vec<_>>();
     List::new(items).highlight_style(Style::new().add_modifier(Modifier::REVERSED))
 }

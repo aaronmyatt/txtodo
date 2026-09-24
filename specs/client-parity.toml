@@ -132,8 +132,8 @@ title = "Move the line down"
 keys = ["J", "Alt-Down"]
 scope = "list"
 desktop = { status = "differs", surface = "FileView", keys = ["Alt-Down"] }
-tui = { status = "differs", surface = "Tasks", keys = ["J"] }
-deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet; the TUI adds Alt-Down in tui-tasks."
+tui = { status = "differs", surface = "Tasks; or drag the row", keys = ["J"] }
+deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet; the TUI adds Alt-Down in tui-tasks. Only the TUI drags a row so far."
 
 [[action]]
 id = "list.move_up"
@@ -141,8 +141,8 @@ title = "Move the line up"
 keys = ["K", "Alt-Up"]
 scope = "list"
 desktop = { status = "differs", surface = "FileView", keys = ["Alt-Up"] }
-tui = { status = "differs", surface = "Tasks", keys = ["K"] }
-deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet; the TUI adds Alt-Up in tui-tasks."
+tui = { status = "differs", surface = "Tasks; or drag the row", keys = ["K"] }
+deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet; the TUI adds Alt-Up in tui-tasks. Only the TUI drags a row so far."
 
 # ==== Editing a line ===============================================================================
 

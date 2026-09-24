@@ -4,6 +4,7 @@
 //! here (recommended build order step 2); `app.rs` (step 4) is the only place that mutates it from
 //! real `Daemon` calls.
 
+use crate::hit::HitMap;
 use crate::state_offers::OffersPane;
 
 pub use crate::state_nav::{Focus, Nav, Overlay, Screen, SettingsCard};
@@ -54,6 +55,12 @@ pub struct AppState {
     pub nav: Nav,
     /// Set when `path` now lives in another workspace: the loop opens a new `Watch` for it.
     pub rewatch: bool,
+    /// The list row at the top of the view; the wheel moves it, and drawing keeps the cursor in it.
+    pub scroll: usize,
+    /// The list row under the mouse pointer, painted as hovered.
+    pub hover: Option<usize>,
+    /// Where the last frame put each clickable thing (task `tui-revamp/tui-mouse`).
+    pub hits: HitMap,
 }
 
 impl AppState {
@@ -83,6 +90,9 @@ impl AppState {
             last_error: None,
             nav: Nav::default(),
             rewatch: false,
+            scroll: 0,
+            hover: None,
+            hits: HitMap::default(),
         }
     }
 

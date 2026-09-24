@@ -11,7 +11,7 @@
 
 use std::sync::{PoisonError, RwLock};
 
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 use txtodo_core::TokenKind;
 
 /// Light, dark, or whatever the terminal is.
@@ -63,6 +63,17 @@ impl Theme {
             ThemeMode::System => !light_background(env("COLORFGBG").as_deref()),
         };
         Theme { dark, depth }
+    }
+
+    /// The row under the mouse pointer: desktop's `--color-hover-overlay` over its own paper
+    /// (`app.css:33,74`: 5% slate on white, 8% white on black) where 24-bit colour allows, else an
+    /// underline, since no 16-colour background is that faint.
+    pub fn hover_style(self) -> Style {
+        match (self.depth, self.dark) {
+            (Depth::TrueColor, false) => Style::new().bg(rgb(0xf3f3f4)),
+            (Depth::TrueColor, true) => Style::new().bg(rgb(0x141414)),
+            (Depth::Ansi16, _) => Style::new().add_modifier(Modifier::UNDERLINED),
+        }
     }
 
     /// The foreground colour of `kind`; `Color::Reset` (the ink) for plain text.

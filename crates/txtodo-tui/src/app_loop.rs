@@ -11,6 +11,7 @@ use txtodo_proto::v1 as pb;
 
 use crate::app::{follow_change, perform, reconnect_watch};
 use crate::daemon::{Daemon, DaemonError};
+use crate::hit::HitMap;
 use crate::input::Input;
 use crate::state::AppState;
 use crate::ui::screen::draw;
@@ -62,7 +63,10 @@ async fn run_loop_inner(
     let mut sync_tick = tokio::time::interval(SYNC_STATUS_INTERVAL);
 
     loop {
-        terminal.draw(|f| draw(f, state)).ok();
+        let mut hits = HitMap::default();
+        terminal.draw(|f| hits = draw(f, state)).ok();
+        state.scroll = hits.list().map_or(0, |l| l.offset);
+        state.hits = hits;
         tokio::select! {
             event = events.recv() => {
                 if !handle_input(daemon, &mut input, state, event, &mut watch).await? {
@@ -120,13 +124,12 @@ async fn handle_input(
     event: Option<io::Result<Event>>,
     watch: &mut tonic::Streaming<pb::Change>,
 ) -> Result<bool, DaemonError> {
-    let Some(Ok(Event::Key(key))) = event else {
-        return Ok(true);
+    let action = match event {
+        Some(Ok(Event::Key(key))) if key.kind == KeyEventKind::Press => input.on_key(state, key),
+        Some(Ok(Event::Mouse(mouse))) => input.on_mouse(state, mouse),
+        _ => None,
     };
-    if key.kind != KeyEventKind::Press {
-        return Ok(true);
-    }
-    let Some(action) = input.on_key(state, key) else {
+    let Some(action) = action else {
         return Ok(true);
     };
     let keep_going = perform(daemon, state, action).await?;
