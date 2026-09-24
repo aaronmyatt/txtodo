@@ -41,10 +41,11 @@ pub async fn refresh_on_tick(daemon: &mut Daemon, state: &mut AppState) {
 /// Best-effort refresh of the pending list — a failed call (an older daemon without the RPC, a
 /// transient hiccup) leaves the previous list in place, same as `refresh_sync_status`.
 pub async fn refresh_offers(daemon: &mut Daemon, state: &mut AppState) {
-    if let Ok(offers) = daemon.workspace_pending_offers().await {
+    if let Ok(reply) = daemon.workspace_pending_offers().await {
+        state.offers.problem = reply.offers_problem;
         state
             .offers
-            .replace(offers.into_iter().map(to_offer_item).collect());
+            .replace(reply.offers.into_iter().map(to_offer_item).collect());
     }
 }
 

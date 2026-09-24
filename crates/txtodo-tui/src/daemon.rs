@@ -254,16 +254,13 @@ impl Daemon {
 /// own `client_workspace.rs`.
 impl Daemon {
     /// Every workspace a paired peer offered that this device has not accepted or declined.
+    /// With `offers_problem` set when the daemon's offer exchange is failing (task
+    /// control-channel-keystore-visibility).
     pub async fn workspace_pending_offers(
         &mut self,
-    ) -> Result<Vec<pb::PendingWorkspaceOffer>, DaemonError> {
+    ) -> Result<pb::WorkspacePendingOffersResponse, DaemonError> {
         let req = pb::WorkspacePendingOffersRequest {};
-        Ok(self
-            .inner
-            .workspace_pending_offers(req)
-            .await?
-            .into_inner()
-            .offers)
+        Ok(self.inner.workspace_pending_offers(req).await?.into_inner())
     }
 
     /// Mirrors an offer now, in the daemon's own folder; the daemon consumes the offer either way.

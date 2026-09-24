@@ -69,6 +69,7 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
         .as_deref()
         .map_or_else(String::new, |label| format!(" \u{b7} {label}"));
     let pending = match state.offers.items.len() {
+        0 if !state.offers.problem.is_empty() => " \u{b7} offers blocked: o".to_owned(),
         0 => String::new(),
         n => format!(" \u{b7} {n} workspace offer(s): o"),
     };

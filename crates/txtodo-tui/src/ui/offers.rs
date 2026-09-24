@@ -49,7 +49,7 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState) {
         .borders(Borders::ALL)
         .title("workspace offers: a=accept d=decline");
     let items: Vec<ListItem> = if state.offers.items.is_empty() {
-        vec![ListItem::new("no pending workspace offers")]
+        vec![ListItem::new(empty_text(&state.offers.problem))]
     } else {
         state
             .offers
@@ -63,6 +63,15 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState) {
         .block(block)
         .highlight_style(Style::new().fg(Color::Black).bg(Color::Yellow));
     frame.render_stateful_widget(list, area, &mut list_state);
+}
+
+/// The empty pane's one line: "blocked" with its reason while the daemon's offer exchange fails.
+fn empty_text(problem: &str) -> String {
+    if problem.is_empty() {
+        "no pending workspace offers".to_owned()
+    } else {
+        format!("offers blocked: {problem} (see docs/keychain-runbook.md)")
+    }
 }
 
 fn label(name: &str) -> &str {
@@ -120,6 +129,12 @@ mod tests {
         let mut empty = AppState::fixture();
         empty.offers.open = true;
         assert!(on_key(&mut empty, key(KeyCode::Char('a'))).is_none());
+    }
+
+    #[test]
+    fn an_empty_pane_says_blocked_when_the_offer_channel_fails() {
+        assert_eq!(empty_text(""), "no pending workspace offers");
+        assert!(empty_text("keystore timed out").starts_with("offers blocked: keystore"));
     }
 
     #[test]

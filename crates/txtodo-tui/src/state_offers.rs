@@ -23,6 +23,9 @@ pub struct OffersPane {
     pub items: Vec<OfferItem>,
     /// Selected index into `items` while the pane is open.
     pub cursor: usize,
+    /// Why the daemon's offer exchange is failing, empty when it is not (task
+    /// control-channel-keystore-visibility): an empty list then means "blocked".
+    pub problem: String,
 }
 
 impl OffersPane {
