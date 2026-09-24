@@ -83,7 +83,13 @@ pub const FILE_PATH_MAX_BYTES: usize = 1024;
 
 /// A synced document's path relative to the workspace root, with `/` separators. Parsed once at the
 /// boundary (gRPC, walker); interior code trusts it.
+///
+/// Decoding is a boundary too: a peer's postcard `Op` names its own `file`, so `Deserialize` runs
+/// `new` and a `../` from a paired device is a decode error, not a write outside the root (task
+/// security-m6-review, F6). Serializing is unchanged, so signed ops' bytes do not move.
+/// <https://serde.rs/container-attrs.html#try_from>
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String")]
 pub struct FilePath(String);
 
 /// Why a path was rejected. The message names the offending value (constitution §3 errors).
@@ -137,6 +143,14 @@ impl FilePath {
     }
 }
 
+impl TryFrom<String> for FilePath {
+    type Error = FilePathError;
+
+    fn try_from(path: String) -> Result<FilePath, FilePathError> {
+        FilePath::new(&path)
+    }
+}
+
 impl fmt::Display for FilePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -163,6 +177,24 @@ mod tests {
             FilePath::new(&long),
             Err(FilePathError::TooLong(FILE_PATH_MAX_BYTES + 1))
         );
+    }
+
+    #[test]
+    fn file_path_decode_runs_the_same_checks_as_new() {
+        // postcard writes a newtype String as the bare string, so this is exactly what a peer
+        // who skipped `FilePath::new` on their side puts on the wire.
+        // <https://postcard.jamesmunns.com/wire-format#16---newtype_struct>
+        let good = postcard::to_allocvec(&FilePath::new("q4/todo.txt").unwrap()).unwrap();
+        let back: FilePath = postcard::from_bytes(&good).unwrap();
+        assert_eq!(back.as_str(), "q4/todo.txt");
+        let long = "a".repeat(FILE_PATH_MAX_BYTES + 1);
+        for bad in ["", "../todo.txt", "a/../../b", "/etc/passwd", "a\\b", &long] {
+            let bytes = postcard::to_allocvec(&bad.to_owned()).unwrap();
+            assert!(
+                postcard::from_bytes::<FilePath>(&bytes).is_err(),
+                "{bad:.40} decoded"
+            );
+        }
     }
 
     #[test]
