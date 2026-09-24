@@ -1,5 +1,5 @@
-2026-09-25 daemon: a peer live only over the relay is still dialed over LAN; the relay session ends once LAN is up +m11 @daemon
 2026-09-25 Two-Mac check with TXTODO_LOG=txtodo_daemon::lan=debug on both: the link runs over LAN +m11 @human
 x 2026-09-25 2026-09-25 daemon: log lan_connect_failed at info with the addresses tried +m11 @daemon — with the addresses tried
 x 2026-09-25 2026-09-25 daemon: every in-group sighting refreshes the remembered peer's addresses; debounce only gates the dial +m11 @daemon — the dialing side only: the higher id stays the one that relay-dials a peer off the LAN
 x 2026-09-25 2026-09-25 sync: dial IPv4 first, then global IPv6; drop link-local IPv6 with no scope id +m11 @sync — txtodo-sync dial_order.rs
+x 2026-09-25 2026-09-25 daemon: a peer live only over the relay is still dialed over LAN; the relay session ends once LAN is up +m11 @daemon — live_peers::Carrier; Live::tick ends a superseded relay session
