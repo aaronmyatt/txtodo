@@ -11,6 +11,7 @@ mod carrier_error;
 mod control;
 mod crypto_error;
 mod device_static;
+mod dial_order;
 mod discovery;
 mod eff_wordlist;
 mod endpoint;

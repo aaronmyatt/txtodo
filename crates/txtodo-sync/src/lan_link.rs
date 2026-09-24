@@ -144,12 +144,7 @@ impl LanEndpoint {
         addrs: &[SocketAddr],
         alpn: &[u8],
     ) -> Result<IrohLink, LanError> {
-        let has_real_address = addrs.iter().any(|a| !a.ip().is_loopback());
-        let dialable: Vec<SocketAddr> = addrs
-            .iter()
-            .copied()
-            .filter(|a| !has_real_address || !a.ip().is_loopback())
-            .collect();
+        let dialable = crate::dial_order::dial_order(addrs);
         if dialable.is_empty() {
             return Err(LanError::NoDialableAddress);
         }
