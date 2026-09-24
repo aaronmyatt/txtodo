@@ -1,5 +1,3 @@
-2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui @doing by:claude
-2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui
 2026-09-24 Seed [[action]] rows from current desktop: FileView Mod-Enter/Mod-s/Esc, CM6 Alt-Up/Down line move, detail, sidebar, Universal, devices, tokens, tray, pin +m11 @desktop
 2026-09-24 Seed [[action]] rows from the revamp plan (notes.md:235-240, c2 key hints) with desktop status planned +m11 @desktop
 2026-09-24 Seed [[screen]] rows: sidebar to W popup, Activity to Settings card, detail panel, Quick Add window to prompt bar, /devices to Settings +m11 @tui
@@ -9,3 +7,5 @@
 2026-09-24 Add apps/desktop/src/lib/keys.parity.test.ts, skipped until keys.ts exists (desktop-ui-revamp keys.ts line) +m11 @desktop @test
 2026-09-24 Add a Parity section to crates/txtodo-tui/CLAUDE.md and apps/desktop guidance: same-commit manifest update, @parity line for the lagging client, no silent deviations +m11 @docs
 2026-09-24 Write .claude/scripts/check-parity.sh (warn when keymap.rs, input.rs, keys.ts or ui files change without the manifest) and wire it into the gate; blocked on the decide line +m11 @setup
+x 2026-09-25 2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui — header comment per field, key-name rules
+x 2026-09-25 2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui — 28 rows: list mode, edit, the r/o/s panes, palette, quit
