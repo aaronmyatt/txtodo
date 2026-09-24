@@ -984,9 +984,6 @@ pub struct WorkspaceAcceptOfferRequest {
     /// WorkspaceId ULID text, identifies which pending offer
     #[prost(string, tag = "2")]
     pub workspace_id: ::prost::alloc::string::String,
-    /// where to adopt it; the daemon canonicalizes it
-    #[prost(string, tag = "3")]
-    pub local_dir: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceDeclineOfferRequest {
@@ -1745,7 +1742,7 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspacePendingOffers"));
             self.inner.unary(req, path, codec).await
         }
-        /// Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+        /// Mirrors a pending offer now, into the daemon's own folder (task remote-workspace-mirror) —
         /// `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
         /// collision direction). Consumes the pending offer whether it succeeds or fails.
         pub async fn workspace_accept_offer(
@@ -2358,7 +2355,7 @@ pub mod txtodo_server {
             tonic::Response<super::WorkspacePendingOffersResponse>,
             tonic::Status,
         >;
-        /// Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+        /// Mirrors a pending offer now, into the daemon's own folder (task remote-workspace-mirror) —
         /// `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
         /// collision direction). Consumes the pending offer whether it succeeds or fails.
         async fn workspace_accept_offer(

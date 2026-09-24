@@ -94,7 +94,7 @@ service Txtodo {
 
   // Every workspace a peer has offered that this device has not yet accepted or declined.
   rpc WorkspacePendingOffers(WorkspacePendingOffersRequest) returns (WorkspacePendingOffersResponse);
-  // Adopts a pending offer's workspace id verbatim into the local registry at `local_dir` —
+  // Mirrors a pending offer now, into the daemon's own folder (task remote-workspace-mirror) —
   // `WorkspaceRegistry::adopt`'s own guards apply (refused, not silently substituted, on either
   // collision direction). Consumes the pending offer whether it succeeds or fails.
   rpc WorkspaceAcceptOffer(WorkspaceAcceptOfferRequest) returns (WorkspaceInfo);
@@ -795,7 +795,11 @@ message WorkspacePendingOffersResponse {
 message WorkspaceAcceptOfferRequest {
   string offering_device = 1;   // DeviceId ULID text, identifies which pending offer
   string workspace_id = 2;      // WorkspaceId ULID text, identifies which pending offer
-  string local_dir = 3;         // where to adopt it; the daemon canonicalizes it
+  // Was `local_dir`: where to adopt it. Gone with task remote-workspace-mirror, since the daemon
+  // always mirrors into its own folder. Reserved so the number is never reused.
+  // Ref: https://protobuf.dev/programming-guides/proto3/#reserved
+  reserved 3;
+  reserved "local_dir";
 }
 
 message WorkspaceDeclineOfferRequest {
