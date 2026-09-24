@@ -78,3 +78,30 @@ missing consent step, not the guard.
 - `PairResult.kept_own_workspace`: true when the joiner kept its default instead of adopting the
   offered id; the CLI then says the other device's workspace arrives as a Remote entry.
 - TUI: it has no pairing flow, so there is nothing to ask there.
+
+## As built (2026-09-24)
+
+- Commits: 43882ed (proto), 868ae72 (store: `devices.own_device`, schema 3), 9c71fcd (sync:
+  `JoinerHello`/`PairingGrant` fields), 59713ba (daemon), 1422dd5 (CLI), c8b89ff (desktop),
+  1be9dda (ADR 0029 amendment).
+- Answers: asked right after the SAS match, explicit yes only. Each side stores
+  `own = mine && theirs`.
+- Gate: sessions greet only after the peer's `Hello`; `lan_session_gate.rs` keeps the reserved
+  default for an own peer, else routes this device's `default_alias` instead. Unknown peers read as
+  not own (the stricter reading).
+- Foreign default as Remote: offers carry the default under the alias; an own receiver skips it,
+  any other mirrors it (`remote-workspace-mirror`). `tests/default_workspace_foreign.rs` pairs two
+  global daemons over LAN with one "no": defaults stay apart, each mirrors the other's.
+- `PairResult.kept_own_workspace` + the CLI note.
+
+## Still broken / open
+
+- Design call made here, flagged for review: the alias id. The decision said "offered like a
+  normal workspace", but both defaults hold the one reserved id, so a mirror needed its own id. The
+  alias is a permanent derivation (label + reserved id + device id); changing it later is a
+  migration.
+- Own-ness is per direct pairing: a device that joined through another counts as not own until
+  paired directly, so a third own device shows the others' defaults as Remote entries.
+- File carrier is not gated.
+- Old/new builds cannot pair with each other; an older build refuses the schema-3 identity.db.
+- Still not decided (from the decision): flipping the flag after pairing. Not built.
