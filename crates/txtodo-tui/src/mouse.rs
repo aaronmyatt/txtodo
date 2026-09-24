@@ -218,7 +218,7 @@ fn row_of(target: Option<Target>) -> Option<usize> {
 }
 
 /// The wheel over the detail panel's sub-list moves its cursor, over its notes moves their caret,
-/// anywhere else scrolls the list.
+/// on the Universal screen moves its selection, anywhere else scrolls the list.
 fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Action> {
     let steps = WHEEL_ROWS.unsigned_abs();
     match target {
@@ -236,6 +236,17 @@ fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Act
             for _ in 0..steps {
                 let key = KeyEvent::new(code, KeyModifiers::NONE);
                 crate::ui::notes_edit::on_key(notes, key, Instant::now());
+            }
+            None
+        }
+        _ if state.nav.screen == crate::state_nav::Screen::Universal => {
+            let step = if down {
+                Command::UniversalDown
+            } else {
+                Command::UniversalUp
+            };
+            for _ in 0..steps {
+                commands::run(state, step);
             }
             None
         }
