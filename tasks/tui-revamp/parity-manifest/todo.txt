@@ -1,5 +1,4 @@
 2026-09-24 Add crates/txtodo-tui/tests/parity.rs: manifest ids and keys equal keymap::BINDINGS; differs/na need a deviation (after tui-foundation keymap.rs lands) +m11 @tui @test
-2026-09-24 Add a Parity section to crates/txtodo-tui/CLAUDE.md and apps/desktop guidance: same-commit manifest update, @parity line for the lagging client, no silent deviations +m11 @docs
 2026-09-24 Write .claude/scripts/check-parity.sh (warn when keymap.rs, input.rs, keys.ts or ui files change without the manifest) and wire it into the gate; blocked on the decide line +m11 @setup
 x 2026-09-25 2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui — header comment per field, key-name rules
 x 2026-09-25 2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui — 28 rows: list mode, edit, the r/o/s panes, palette, quit
@@ -9,3 +8,4 @@ x 2026-09-25 2026-09-24 Seed [[action]] rows from current desktop: FileView Mod-
 x 2026-09-25 2026-09-24 Give every na/differs row a one-line deviation: pin, tray, global hotkey, camera scan, folder picker, font/size/line height, Copy via OSC 52 +m11 @tui — all 89 rows pass the header's rules (checked with tomllib); folder picker, font, size, line height added
 x 2026-09-25 2026-09-24 Write docs/adr/0031-client-parity-manifest.md, status proposed until the decide line is signed +m11 @docs — status proposed until the decide line is signed
 x 2026-09-25 2026-09-24 Add apps/desktop/src/lib/keys.parity.test.ts, skipped until keys.ts exists (desktop-ui-revamp keys.ts line) +m11 @desktop @test — manifest rules run now (3 tests); the keys.ts comparison is it.skip until keys.ts exists
+x 2026-09-25 2026-09-24 Add a Parity section to crates/txtodo-tui/CLAUDE.md and apps/desktop guidance: same-commit manifest update, @parity line for the lagging client, no silent deviations +m11 @docs — crates/txtodo-tui/CLAUDE.md and apps/desktop/README.md (desktop has no CLAUDE.md)
