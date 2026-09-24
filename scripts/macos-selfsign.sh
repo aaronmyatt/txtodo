@@ -45,7 +45,9 @@ if [ -n "$keychain" ]; then kc_args=(--keychain "$keychain"); fi
 # No --options runtime: hardened runtime only matters for notarization, which needs Developer ID.
 # Ref: https://keith.github.io/xcode-man-pages/codesign.1.html
 sign() {
-  codesign --force --sign "$identity" "${kc_args[@]}" "$@"
+  # ${a[@]+"${a[@]}"}: macOS's bash 3.2 calls an empty array unbound under `set -u`.
+  # Ref: https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
+  codesign --force --sign "$identity" ${kc_args[@]+"${kc_args[@]}"} "$@"
 }
 
 # Fail the build on a wrong identifier or signer instead of shipping it.
