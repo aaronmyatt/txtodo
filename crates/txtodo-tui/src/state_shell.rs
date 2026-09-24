@@ -27,7 +27,26 @@ pub struct Shell {
     pub toasts: Vec<Toast>,
     /// What the next Apply toasts when it lands; dropped when it is refused.
     pub pending_toast: Option<String>,
+    /// This session's changes, newest last: what `u` and a toast's Undo take back.
+    pub changes: Vec<Change>,
+    /// The id the next change gets.
+    pub next_change: u64,
 }
+
+/// One change this session made, as the daemon's `Undo` takes it back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Change {
+    /// Its id, which a toast names.
+    pub id: u64,
+    /// The document it changed.
+    pub path: String,
+    /// The ops it appended (`ApplyResponse.applied`; a delete that leaves a blank line is two):
+    /// the daemon undoes op by op.
+    pub ops: u32,
+}
+
+/// The most changes `u` remembers.
+const CHANGES_KEPT: usize = 100;
 
 /// How long a toast stays (the c2 mockup's 5 s).
 pub const TOAST_FOR: Duration = Duration::from_secs(5);
@@ -37,16 +56,15 @@ pub const TOAST_FOR: Duration = Duration::from_secs(5);
 pub struct Toast {
     /// What happened.
     pub message: String,
-    /// What Undo reverts through the daemon's `Undo`: the document, and how many ops the change
-    /// appended (`ApplyResponse.applied`; a delete that leaves a blank line is two).
-    pub undo: Option<(String, u32)>,
+    /// The [`Change`] its Undo takes back, while that change is still the newest.
+    pub undo: Option<u64>,
     /// When it appeared.
     pub at: Instant,
 }
 
 impl Shell {
     /// Adds a toast at `now`.
-    pub fn toast(&mut self, message: impl Into<String>, undo: Option<(String, u32)>, now: Instant) {
+    pub fn toast(&mut self, message: impl Into<String>, undo: Option<u64>, now: Instant) {
         self.toasts.push(Toast {
             message: message.into(),
             undo,
@@ -59,10 +77,26 @@ impl Shell {
         self.toasts.retain(|t| now.duration_since(t.at) < TOAST_FOR);
     }
 
-    /// The newest toast, when it has Undo: only the newest change can be undone, so an older
-    /// toast's Undo would revert the wrong one.
+    /// The newest toast, when its change is still the newest one: the daemon undoes the newest
+    /// ops, so any other toast's Undo would take back the wrong change.
     pub fn undoable(&self) -> Option<&Toast> {
-        self.toasts.last().filter(|t| t.undo.is_some())
+        let newest = self.changes.last()?.id;
+        self.toasts.last().filter(|t| t.undo == Some(newest))
+    }
+
+    /// Records a change that landed; returns its id.
+    pub fn record(&mut self, path: &str, ops: u32) -> u64 {
+        let id = self.next_change;
+        self.next_change += 1;
+        self.changes.push(Change {
+            id,
+            path: path.to_owned(),
+            ops,
+        });
+        if self.changes.len() > CHANGES_KEPT {
+            self.changes.remove(0);
+        }
+        id
     }
 }
 

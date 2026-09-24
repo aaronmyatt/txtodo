@@ -121,11 +121,13 @@ commands! {
     /// Delete the line.
     ListDelete = "list.delete", ["d d"], List;
     /// Complete or reopen the line.
-    ListToggleComplete = "list.toggle_complete", ["Space"], List;
+    ListToggleComplete = "list.toggle_complete", ["x", "Space"], List;
     /// Move the line down.
-    ListMoveDown = "list.move_down", ["J"], List;
+    ListMoveDown = "list.move_down", ["J", "Alt-Down"], List;
     /// Move the line up.
-    ListMoveUp = "list.move_up", ["K"], List;
+    ListMoveUp = "list.move_up", ["K", "Alt-Up"], List;
+    /// Undo this session's newest change (the daemon's Undo).
+    ListUndo = "list.undo", ["u"], List;
     /// Save the edit.
     EditCommit = "edit.commit", ["Enter"], Edit;
     /// Discard the edit.

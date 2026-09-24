@@ -47,7 +47,7 @@ fn a_wide_footer_has_the_caret_hints_and_version() {
     let (text, hits) = drawn(&state, 140, Instant::now());
     assert!(text.starts_with(" \u{25cf} syncing 2  Ln 4"), "{text}");
     assert!(
-        text.contains("j down  Space done  a edit  : command  ? help"),
+        text.contains("j down  x done  a edit  : command  ? help"),
         "{text}"
     );
     assert!(

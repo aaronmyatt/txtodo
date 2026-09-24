@@ -123,8 +123,8 @@ title = "Complete or reopen the line"
 keys = ["x", "Space"]
 scope = "list"
 desktop = { status = "planned", surface = "FileView" }
-tui = { status = "differs", surface = "Tasks", keys = ["Space"] }
-deviation = "The TUI binds only Space until tui-tasks adds x (the c2 key)."
+tui = { status = "done", surface = "Tasks" }
+deviation = ""
 
 [[action]]
 id = "list.move_down"
@@ -132,8 +132,8 @@ title = "Move the line down"
 keys = ["J", "Alt-Down"]
 scope = "list"
 desktop = { status = "differs", surface = "FileView", keys = ["Alt-Down"] }
-tui = { status = "differs", surface = "Tasks; or drag the row", keys = ["J"] }
-deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet; the TUI adds Alt-Down in tui-tasks. Only the TUI drags a row so far."
+tui = { status = "done", surface = "Tasks; or drag the row" }
+deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet. Only the TUI drags a row so far."
 
 [[action]]
 id = "list.move_up"
@@ -141,8 +141,8 @@ title = "Move the line up"
 keys = ["K", "Alt-Up"]
 scope = "list"
 desktop = { status = "differs", surface = "FileView", keys = ["Alt-Up"] }
-tui = { status = "differs", surface = "Tasks; or drag the row", keys = ["K"] }
-deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet; the TUI adds Alt-Up in tui-tasks. Only the TUI drags a row so far."
+tui = { status = "done", surface = "Tasks; or drag the row" }
+deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet. Only the TUI drags a row so far."
 
 # ==== Editing a line ===============================================================================
 
@@ -483,7 +483,7 @@ title = "Undo the last change (the daemon's Undo)"
 keys = ["u"]
 scope = "list"
 desktop = { status = "planned", surface = "FileView" }
-tui = { status = "planned", surface = "Tasks" }
+tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
 [[action]]

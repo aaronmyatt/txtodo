@@ -73,13 +73,24 @@ fn run_banner(state: &mut AppState, command: Command) -> Option<Option<Action>> 
         }
         Command::AppRetryDaemon => {}
         Command::ToastUndo => {
-            let (path, steps) = state.shell.undoable()?.undo.clone()?;
+            state.shell.undoable()?;
             state.shell.toasts.pop();
-            return Some(Some(Action::Undo(path, steps)));
+            return Some(undo_last(state));
         }
+        Command::ListUndo => return Some(undo_last(state)),
         _ => return None,
     }
     Some(None)
+}
+
+/// `u` and a toast's Undo: takes back this session's newest change, all its ops, through the
+/// daemon. Changes from before the session, or from other clients, are not the TUI's to guess at.
+fn undo_last(state: &mut AppState) -> Option<Action> {
+    let Some(change) = state.shell.changes.pop() else {
+        state.last_error = Some("nothing to undo from this session".to_owned());
+        return None;
+    };
+    Some(Action::Undo(change.path, change.ops))
 }
 
 /// Opens the popup over `items` (after `app` fetched them).
@@ -139,5 +150,34 @@ mod tests {
         run(&mut state, Command::WorkspaceMenuDown);
         run(&mut state, Command::WorkspaceMenuOpen);
         assert_eq!(state.nav.screen, Screen::Settings(SettingsCard::Workspaces));
+    }
+
+    #[test]
+    fn u_takes_back_this_sessions_newest_change_and_a_stale_toast_does_not() {
+        let now = std::time::Instant::now();
+        let mut state = AppState::fixture();
+        assert_eq!(run(&mut state, Command::ListUndo), Some(None));
+        assert_eq!(
+            state.last_error.as_deref(),
+            Some("nothing to undo from this session")
+        );
+        let deleted = state.shell.record("todo.txt", 2);
+        state.shell.toast("Deleted the line", Some(deleted), now);
+        state.shell.record("todo.txt", 1); // a move, with no toast
+        assert_eq!(
+            run(&mut state, Command::ToastUndo),
+            None,
+            "the toast is stale"
+        );
+        assert_eq!(
+            run(&mut state, Command::ListUndo),
+            Some(Some(Action::Undo("todo.txt".to_owned(), 1))),
+            "u takes back the move"
+        );
+        assert_eq!(
+            run(&mut state, Command::ToastUndo),
+            Some(Some(Action::Undo("todo.txt".to_owned(), 2))),
+            "now the toast's change is the newest again"
+        );
     }
 }

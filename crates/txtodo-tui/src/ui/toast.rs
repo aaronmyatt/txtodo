@@ -27,8 +27,8 @@ pub fn draw(frame: &mut Frame, area: Rect, shell: &Shell, now: Instant, hits: &m
         .collect();
     let shown = live.iter().rev().take(MAX_SHOWN);
     for (i, (toast, y)) in shown.zip((area.y..area.bottom()).rev()).enumerate() {
-        // Only the newest toast undoes: the daemon's Undo reverts the newest change.
-        let undo = i == 0 && toast.undo.is_some();
+        // Only the newest toast undoes, and only while its change is the newest one.
+        let undo = i == 0 && shell.undoable().is_some();
         let text = format!(" {} ", toast.message);
         let button = if undo { " Undo " } else { "" };
         let width = u16::try_from(Span::raw(text.as_str()).width() + button.len())
@@ -63,8 +63,10 @@ mod tests {
         let now = Instant::now();
         let mut shell = Shell::default();
         shell.toast("Old", None, now - TOAST_FOR);
-        shell.toast("Completed the line", Some(("todo.txt".to_owned(), 1)), now);
-        shell.toast("Deleted the line", Some(("todo.txt".to_owned(), 2)), now);
+        let first = shell.record("todo.txt", 1);
+        shell.toast("Completed the line", Some(first), now);
+        let second = shell.record("todo.txt", 2);
+        shell.toast("Deleted the line", Some(second), now);
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap_or_else(|e| panic!("{e}"));
         let mut hits = HitMap::default();
         terminal

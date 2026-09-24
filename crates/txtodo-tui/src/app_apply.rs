@@ -39,10 +39,9 @@ fn landed(state: &mut AppState, path: &str, ops: u32) {
     state.last_error = None;
     state.shell.refused = None;
     state.shell.saved_at = Some(now);
+    let change = state.shell.record(path, ops);
     if let Some(message) = state.shell.pending_toast.take() {
-        state
-            .shell
-            .toast(message, Some((path.to_owned(), ops)), now);
+        state.shell.toast(message, Some(change), now);
     }
 }
 
