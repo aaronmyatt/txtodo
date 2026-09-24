@@ -207,3 +207,29 @@ repoint-service:
     ctl install --force
     ctl start
     ctl status
+
+# By-hand check (tasks/relay-id-keystore): starts the installed txtodod twice on the macOS login
+# keychain and prints PASS when the relay node id is the same both times. Touches one real keychain
+# item; see the script's header. `timeout` is seconds per start, time to answer a keychain prompt.
+# Check the relay node id survives a restart on the macOS keychain (prints PASS/FAIL)
+check-relay-id-keychain timeout="180":
+    scripts/check-relay-id-keychain.sh --timeout-s {{timeout}}
+
+# Desktop visual goldens (tasks/desktop-visual-regression): the light and dark Playwright projects
+# against the browser mock, which starts its own dev server. `goldens-check` compares without
+# writing; `goldens-update` rewrites the PNGs (review them before committing: `goldens-review`).
+# Goldens are per-OS: this writes *-darwin.png on a Mac, the nightly (ubuntu) reads *-linux.png.
+# https://playwright.dev/docs/test-snapshots#updating-screenshots
+# Compare the light/dark visual goldens without writing
+goldens-check:
+    cd apps/desktop && TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_SERVICE=1 npx playwright test --project=light --project=dark
+
+# Regenerate the light/dark visual goldens (review before committing)
+goldens-update:
+    cd apps/desktop && TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_SERVICE=1 npx playwright test --project=light --project=dark --update-snapshots
+
+# https://ss64.com/mac/open.html
+# Open every golden in Preview and list which ones changed
+goldens-review:
+    git status --short -- apps/desktop/e2e/visual
+    open apps/desktop/e2e/visual/*-snapshots/*.png
