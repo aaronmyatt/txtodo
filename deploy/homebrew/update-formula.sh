@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # deploy/homebrew/update-formula.sh — stamps Formula/txtodo.rb's urls/sha256s for a real release
 # tag (task brew-distribution). Two args: the tag (e.g. v0.1.0) and a directory already holding
-# that release's 12 assets: 6 macOS (txtodo{,d,-tui}-macos-{aarch64,x86_64}) and 6 static Linux
-# (txtodo{,d,-tui}-linux-{aarch64,x86_64}-musl) — RELEASE_CI.patch.md's own naming. Real usage
+# that release's 16 assets: 8 macOS (txtodo{,d,-tui,-mcp}-macos-{aarch64,x86_64}) and 8 static
+# Linux (txtodo{,d,-tui,-mcp}-linux-{aarch64,x86_64}-musl) — RELEASE_CI.patch.md's own naming. Real usage
 # populates that directory first via
 # `gh release download "$tag" --pattern '*macos*' --pattern '*linux*-musl*' --dir assets/`
 # (https://cli.github.com/manual/gh_release_download); this script itself never touches the
@@ -15,10 +15,10 @@ ASSETS="${2:?usage: update-formula.sh <tag> <assets-dir>}"
 FORMULA="$(cd "$(dirname "$0")" && pwd)/Formula/txtodo.rb"
 
 ASSET_NAMES=(
-  txtodo-macos-aarch64 txtodod-macos-aarch64 txtodo-tui-macos-aarch64
-  txtodo-macos-x86_64 txtodod-macos-x86_64 txtodo-tui-macos-x86_64
-  txtodo-linux-aarch64-musl txtodod-linux-aarch64-musl txtodo-tui-linux-aarch64-musl
-  txtodo-linux-x86_64-musl txtodod-linux-x86_64-musl txtodo-tui-linux-x86_64-musl
+  txtodo-macos-aarch64 txtodod-macos-aarch64 txtodo-tui-macos-aarch64 txtodo-mcp-macos-aarch64
+  txtodo-macos-x86_64 txtodod-macos-x86_64 txtodo-tui-macos-x86_64 txtodo-mcp-macos-x86_64
+  txtodo-linux-aarch64-musl txtodod-linux-aarch64-musl txtodo-tui-linux-aarch64-musl txtodo-mcp-linux-aarch64-musl
+  txtodo-linux-x86_64-musl txtodod-linux-x86_64-musl txtodo-tui-linux-x86_64-musl txtodo-mcp-linux-x86_64-musl
 )
 for name in "${ASSET_NAMES[@]}"
 do
