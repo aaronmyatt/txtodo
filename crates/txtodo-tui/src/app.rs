@@ -11,7 +11,6 @@ use std::time::Duration;
 use crossterm::event::{Event, KeyEventKind};
 use tokio::sync::mpsc;
 use txtodo_proto::v1 as pb;
-use txtodo_workspace_paths::{RegistryEnv, WorkspaceChoice, choose_workspace};
 
 use crate::action::Action;
 use crate::daemon::{
@@ -54,17 +53,6 @@ pub fn main() -> ExitCode {
     rt.block_on(async_main())
 }
 
-/// The current folder when it is a workspace, else the user's default one (task
-/// default-workspace), and the status-line label that says so when it is the default.
-fn pick_workspace(cwd: std::path::PathBuf) -> (std::path::PathBuf, Option<String>) {
-    let choice = match RegistryEnv::from_process() {
-        Ok(env) => choose_workspace(&env, &cwd),
-        Err(_) => WorkspaceChoice::Here(cwd),
-    };
-    let label = choice.is_default().then(|| "default workspace".to_owned());
-    (choice.path().to_path_buf(), label)
-}
-
 #[allow(clippy::print_stderr)] // see `main`'s doc
 async fn async_main() -> ExitCode {
     let cwd = match std::env::current_dir() {
@@ -74,7 +62,7 @@ async fn async_main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let (workspace, label) = pick_workspace(cwd);
+    let (workspace, label) = crate::app_workspace::pick_workspace(cwd);
     // File-only sink (root todo.txt logging-tui): `run` below enters raw mode + an alternate
     // screen (`ratatui::init()`) and only leaves it on return, so any stderr write for the rest of
     // this function's lifetime would corrupt the render — `init_file_only` never installs a

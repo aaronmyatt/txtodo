@@ -21,9 +21,11 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   `ResolveConflict` RPC (mine/theirs/merged) rather than a hand-rolled `Apply`. `ui::sync::{render,
   widget}` — the `s` indicator's pure rendering of a `SyncSnapshot`. `ui::offers::{on_key, draw,
   accept_request, decline_request}` + `state_offers::{OfferItem, OffersPane}` + `app_offers` — the
-  `o` workspace-offers pane (task `workspace-offer-cli`): `a` prompts for a local directory and
-  accepts into it (the daemon has no default location yet), `d` declines; the list refreshes on
-  the same 1 s tick as `s`, and the status line counts pending offers. `ui::screen::draw` —
+  `o` workspace-offers pane (task `workspace-offer-cli`): `a` accepts at once (the daemon mirrors
+  into its own folder, task `remote-workspace-mirror`, and on its own too), `d` declines; the list
+  refreshes on the same 1 s tick as `s`, and the status line counts pending offers.
+  `app_workspace::pick_workspace` labels the status line `default workspace` or, inside a mirror,
+  `remote workspace`. `ui::screen::draw` —
   composes all of the above into one `ratatui::Frame`.
 - `daemon::{Daemon, DaemonError, socket_path, MAX_RECONNECT_ATTEMPTS}` — the gRPC bridge to
   `txtodod` over the ADR 0010 unix socket (mirrors `apps/desktop/src-tauri/src/daemon.rs`'s

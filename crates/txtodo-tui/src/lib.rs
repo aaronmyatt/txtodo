@@ -29,3 +29,4 @@ pub mod input;
 pub mod app;
 pub mod app_layout;
 pub mod app_offers;
+pub mod app_workspace;

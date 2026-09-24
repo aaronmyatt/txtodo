@@ -266,7 +266,7 @@ impl Daemon {
             .offers)
     }
 
-    /// Adopts an offer at `req.local_dir`; the daemon consumes the offer either way.
+    /// Mirrors an offer now, in the daemon's own folder; the daemon consumes the offer either way.
     pub async fn workspace_accept_offer(
         &mut self,
         req: pb::WorkspaceAcceptOfferRequest,

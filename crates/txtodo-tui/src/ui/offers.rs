@@ -1,7 +1,6 @@
 //! The `o` workspace-offers pane (task `workspace-offer-cli`): lists what paired peers offered,
-//! `a` composes a local directory and accepts into it, `d` declines. The daemon requires a
-//! directory for an accept (no default location until `remote-workspace-mirror` decides one), so
-//! `a` opens a one-line prompt rather than adopting somewhere invented.
+//! `a` accepts, `d` declines. No directory prompt (task `remote-workspace-mirror`): the daemon
+//! mirrors every offer into its own folder, and on its own too, so the list is usually empty.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::Frame;
@@ -15,53 +14,24 @@ use crate::state::AppState;
 
 /// One keystroke while the pane has focus. Returns the [`Action`] to send, if any.
 pub fn on_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
-    if state.offers.dir_draft.is_some() {
-        return on_draft_key(state, key);
-    }
     match key.code {
         KeyCode::Esc | KeyCode::Char('o') => state.offers.toggle(),
         KeyCode::Char('j') | KeyCode::Down => state.offers.move_down(),
         KeyCode::Char('k') | KeyCode::Up => state.offers.move_up(),
-        KeyCode::Char('a') => state.offers.start_accept(),
+        KeyCode::Char('a') => return accept_request(state).map(Action::AcceptOffer),
         KeyCode::Char('d') => return decline_request(state).map(Action::DeclineOffer),
         _ => {}
     }
     None
 }
 
-/// Typing the directory: `Enter` accepts (a blank directory is a no-op, not an accept into
-/// nowhere), `Esc` cancels, the rest edits the buffer.
-fn on_draft_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
-    match key.code {
-        KeyCode::Esc => state.offers.cancel_accept(),
-        KeyCode::Enter => {
-            let req = accept_request(state);
-            if req.is_some() {
-                state.offers.cancel_accept();
-            }
-            return req.map(Action::AcceptOffer);
-        }
-        KeyCode::Backspace => {
-            state.offers.dir_draft.as_mut()?.pop();
-        }
-        KeyCode::Char(c) => state.offers.dir_draft.as_mut()?.push(c),
-        _ => {}
-    }
-    None
-}
-
-/// The accept request for the selected offer and the typed directory; `None` when either is
-/// missing or the directory is blank.
+/// The accept request for the selected offer, if any. The daemon picks the folder.
 pub fn accept_request(state: &AppState) -> Option<pb::WorkspaceAcceptOfferRequest> {
     let offer = state.offers.selected()?;
-    let dir = state.offers.dir_draft.as_deref()?.trim();
-    if dir.is_empty() {
-        return None;
-    }
     Some(pb::WorkspaceAcceptOfferRequest {
         offering_device: offer.device.clone(),
         workspace_id: offer.workspace_id.clone(),
-        local_dir: dir.to_owned(),
+        ..pb::WorkspaceAcceptOfferRequest::default()
     })
 }
 
@@ -74,13 +44,11 @@ pub fn decline_request(state: &AppState) -> Option<pb::WorkspaceDeclineOfferRequ
     })
 }
 
-/// Renders the pane over `area`; the directory prompt takes the title while it is open.
+/// Renders the pane over `area`.
 pub fn draw(frame: &mut Frame, area: Rect, state: &AppState) {
-    let title = match (&state.offers.dir_draft, state.offers.selected()) {
-        (Some(dir), Some(offer)) => format!("accept {} into dir> {dir}", label(&offer.name)),
-        _ => "workspace offers: a=accept d=decline".to_owned(),
-    };
-    let block = Block::default().borders(Borders::ALL).title(title);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("workspace offers: a=accept d=decline");
     let items: Vec<ListItem> = if state.offers.items.is_empty() {
         vec![ListItem::new("no pending workspace offers")]
     } else {
@@ -143,30 +111,21 @@ mod tests {
     }
 
     #[test]
-    fn a_then_a_typed_directory_then_enter_accepts_and_blank_does_not() {
+    fn a_accepts_the_selected_offer_at_once_with_no_directory_prompt() {
         let mut state = state_with_offer();
-        assert!(on_key(&mut state, key(KeyCode::Char('a'))).is_none());
-        assert!(
-            on_key(&mut state, key(KeyCode::Enter)).is_none(),
-            "blank dir"
-        );
-        for c in "/tmp/w".chars() {
-            on_key(&mut state, key(KeyCode::Char(c)));
-        }
-        let Some(Action::AcceptOffer(req)) = on_key(&mut state, key(KeyCode::Enter)) else {
+        let Some(Action::AcceptOffer(req)) = on_key(&mut state, key(KeyCode::Char('a'))) else {
             panic!("expected AcceptOffer")
         };
-        assert_eq!(req.local_dir, "/tmp/w");
+        assert_eq!(req.offering_device, "d1");
         assert_eq!(req.workspace_id, "w1");
-        assert!(state.offers.dir_draft.is_none(), "draft consumed");
+        let mut empty = AppState::fixture();
+        empty.offers.open = true;
+        assert!(on_key(&mut empty, key(KeyCode::Char('a'))).is_none());
     }
 
     #[test]
-    fn esc_cancels_the_draft_before_it_closes_the_pane() {
+    fn esc_closes_the_pane() {
         let mut state = state_with_offer();
-        on_key(&mut state, key(KeyCode::Char('a')));
-        on_key(&mut state, key(KeyCode::Esc));
-        assert!(state.offers.open && state.offers.dir_draft.is_none());
         on_key(&mut state, key(KeyCode::Esc));
         assert!(!state.offers.open);
     }
