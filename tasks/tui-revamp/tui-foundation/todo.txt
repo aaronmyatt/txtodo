@@ -1,4 +1,4 @@
-2026-09-24 Split state.rs: Screen (Tasks|Universal|Settings(card)|Help), Focus (List|Edit|Search|Prompt|Detail), Overlay (WorkspaceMenu|ConflictSheet|TokenDialog|PairFlow|Confirm) into state_nav.rs; no behaviour change +m11 @tui
+2026-09-24 Split state.rs: Screen (Tasks|Universal|Settings(card)|Help), Focus (List|Edit|Search|Prompt|Detail), Overlay (WorkspaceMenu|ConflictSheet|TokenDialog|PairFlow|Confirm) into state_nav.rs; no behaviour change +m11 @tui @doing by:claude
 2026-09-24 Split app.rs: event loop and ticks into app_loop.rs; no behaviour change +m11 @tui
 2026-09-24 Split daemon.rs per area (workspace, notes, devices, tokens, activity) +m11 @tui
 2026-09-24 Daemon wrappers: WorkspaceList/Add/Remove, GetNotes/EditNotes, RefDir, History, Undo +m11 @tui
