@@ -35,21 +35,9 @@ impl WorkspaceCatalog {
     /// default's directory moved, which is out of scope, and silently re-pointing it could hide
     /// the tasks the old directory holds.
     pub fn ensure_default_workspace(&self, dir: &Path) -> Result<WorkspaceId, Status> {
-        let io = |what: &str, e: std::io::Error| {
-            Status::internal(format!("default workspace {what} {}: {e}", dir.display()))
-        };
-        std::fs::create_dir_all(dir).map_err(|e| io("create", e))?;
-        // `create_new` so a `todo.txt` that is already there is never touched.
-        // Ref: https://doc.rust-lang.org/std/fs/struct.OpenOptions.html#method.create_new
-        match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(dir.join("todo.txt"))
-        {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(io("create todo.txt in", e)),
-        }
+        crate::workspace_catalog_mirror::create_list_dir(dir).map_err(|e| {
+            Status::internal(format!("default workspace create {}: {e}", dir.display()))
+        })?;
         let id = default_workspace_id();
         self.registry
             .lock()

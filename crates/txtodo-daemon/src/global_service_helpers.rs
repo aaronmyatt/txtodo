@@ -21,7 +21,11 @@ pub(crate) fn workspace_info(
 ) -> pb::WorkspaceInfo {
     let state = catalog.load_state(entry.id);
     let layout = layout_of(catalog, &entry);
-    to_workspace_info(entry, state, &layout)
+    let is_remote = catalog.is_remote_root(&entry.root);
+    pb::WorkspaceInfo {
+        is_remote,
+        ..to_workspace_info(entry, state, &layout)
+    }
 }
 
 /// The workspace's layout for its `WorkspaceInfo` (task layout-client-gaps): the live one when
@@ -69,6 +73,7 @@ pub(crate) fn to_workspace_info(
         is_default: e.id == crate::default_workspace::default_workspace_id(),
         refs_dir: layout.refs_dir().to_owned(),
         todo_file: layout.todo_file().to_owned(),
+        is_remote: false,
     }
 }
 

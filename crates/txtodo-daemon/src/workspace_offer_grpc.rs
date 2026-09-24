@@ -61,11 +61,10 @@ pub(crate) async fn accept_offer(
     let req = r.into_inner();
     let offering_device = parse_device_id(&req.offering_device)?;
     let workspace_id = parse_workspace_id(&req.workspace_id)?;
-    let entry = service.catalog().accept_offer(
-        offering_device,
-        workspace_id,
-        std::path::Path::new(&req.local_dir),
-    )?;
+    // `local_dir` is ignored (task remote-workspace-mirror): a mirror always lives in the data dir.
+    let entry = service
+        .catalog()
+        .accept_offer(offering_device, workspace_id)?;
     Ok(Response::new(workspace_info(service.catalog(), entry)))
 }
 

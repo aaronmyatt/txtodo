@@ -162,6 +162,12 @@ impl WorkspaceRegistry {
             .map(entry_of))
     }
 
+    /// Whether `id` was ever registered here, removed rows included (task remote-workspace-mirror:
+    /// a mirror the user removed must not be mirrored again on the peer's next offer).
+    pub fn ever_registered(&self, id: WorkspaceId) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.get(id)?.is_some())
+    }
+
     /// How many workspaces are active: the rows alone, none of [`Self::list`]'s two `stat` calls
     /// per entry. `Health` asks this on every call (code review 2026-09-20, finding 12).
     pub fn count_active(&self) -> Result<usize, WorkspaceRegistryError> {

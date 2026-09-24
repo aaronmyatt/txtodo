@@ -37,6 +37,9 @@ fn service() -> (tempfile::TempDir, Arc<DeviceIdentity>, GlobalService) {
     let registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
         .unwrap_or_else(|e| panic!("open registry: {e}"));
     let catalog = WorkspaceCatalog::new(registry, open_args, Arc::new(FakeClock::new(1_000)));
+    catalog
+        .set_remote_root(&registry_dir.path().join("remote"))
+        .unwrap_or_else(|e| panic!("remote root: {e}"));
     (
         registry_dir,
         identity,
@@ -89,13 +92,12 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
             offered_at_ms: 1_000,
         })
         .unwrap();
-    let local_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
 
     let info = svc
         .workspace_accept_offer(Request::new(pb::WorkspaceAcceptOfferRequest {
             offering_device: device(1).to_string(),
             workspace_id: offered.to_string(),
-            local_dir: local_dir.path().display().to_string(),
+            ..Default::default()
         }))
         .await
         .unwrap()
@@ -104,6 +106,12 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
         info.workspace_id,
         offered.to_string(),
         "the offered id, not a freshly minted one"
+    );
+    assert!(info.is_remote, "accepted into the mirror folder: {info:?}");
+    assert!(
+        info.root.ends_with(&format!("remote/{offered}")),
+        "never a caller-chosen directory: {}",
+        info.root
     );
 
     // It now shows up as a real, locally-registered workspace...
@@ -131,12 +139,11 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
 #[tokio::test]
 async fn accept_offer_with_no_pending_match_is_not_found() {
     let (_registry_dir, _identity, svc) = service();
-    let local_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let err = svc
         .workspace_accept_offer(Request::new(pb::WorkspaceAcceptOfferRequest {
             offering_device: device(404).to_string(),
             workspace_id: workspace(404).to_string(),
-            local_dir: local_dir.path().display().to_string(),
+            ..Default::default()
         }))
         .await
         .unwrap_err();

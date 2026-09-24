@@ -48,6 +48,9 @@ pub struct WorkspaceCatalog {
     /// The default workspace's id, once `ensure_default_workspace` registered it (task
     /// default-workspace). Unset in a `--dir` bridge daemon, which has none.
     pub(crate) default: std::sync::OnceLock<WorkspaceId>,
+    /// Where offered workspaces are mirrored, canonical (task remote-workspace-mirror); unset means
+    /// nothing is mirrored. See `workspace_catalog_mirror.rs`.
+    pub(crate) remote_root: std::sync::OnceLock<std::path::PathBuf>,
 }
 
 /// Default bound on a request waiting for a workspace that is still loading: the client-side spawn
@@ -72,6 +75,7 @@ impl WorkspaceCatalog {
             open_hook: None,
             last_touch: Mutex::new(HashMap::new()),
             default: std::sync::OnceLock::new(),
+            remote_root: std::sync::OnceLock::new(),
         }
     }
 

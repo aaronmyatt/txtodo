@@ -308,6 +308,11 @@ multiplex every workspace's traffic — not done by this task).
   connection), so its own call site wraps it in `tokio::task::block_in_place` instead — without
   that it panics ("cannot start a runtime from within a runtime").
   `crates/txtodo-daemon/tests/file_carrier_converge.rs` is the real two-daemon, no-network proof.
+- `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
+  paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
+  flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry
+  ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
+  `WorkspaceAcceptOffer` ignores `local_dir`. Offers still travel the relay control channel only.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

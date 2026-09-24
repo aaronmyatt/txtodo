@@ -6,7 +6,7 @@
 //! devices and many workspaces, so this registry supports many pending offers at once, bounded by
 //! [`MAX_PENDING_OFFERS`] instead of a slot of one.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -55,6 +55,10 @@ impl std::error::Error for WorkspaceOfferRegistryError {}
 #[derive(Default)]
 struct Inner {
     pending: BTreeMap<(DeviceId, WorkspaceId), PendingOffer>,
+    /// Offers a human declined (task `remote-workspace-mirror`): a peer re-offers every workspace
+    /// on every control session, so without this a declined one would come straight back and be
+    /// mirrored. In memory only; removing a mirror is the durable "not this one".
+    declined: BTreeSet<(DeviceId, WorkspaceId)>,
 }
 
 /// This device's pending-offers bookkeeping. One per `DeviceIdentity` (device-level, not per
@@ -63,6 +67,11 @@ struct Inner {
 #[derive(Default)]
 pub struct WorkspaceOfferRegistry {
     inner: Mutex<Inner>,
+    /// Woken on every recorded offer, so the catalog's mirror task (task `remote-workspace-mirror`)
+    /// runs without polling. `notify_one` keeps one permit when nobody waits yet, so an offer
+    /// recorded before the task starts is not missed.
+    /// Ref: https://docs.rs/tokio/latest/tokio/sync/struct.Notify.html#method.notify_one
+    wake: tokio::sync::Notify,
 }
 
 impl WorkspaceOfferRegistry {
@@ -75,14 +84,41 @@ impl WorkspaceOfferRegistry {
     /// `(offering_device, workspace_id)` pair (the control channel's own outbound loop
     /// idempotently re-offers this device's active workspaces every tick, stage 5's design) —
     /// only a genuinely *new* pair counts against [`MAX_PENDING_OFFERS`].
+    ///
+    /// A declined pair is ignored (`Ok`, nothing recorded).
     pub fn record(&self, offer: PendingOffer) -> Result<(), WorkspaceOfferRegistryError> {
-        let mut inner = self.lock();
-        let key = (offer.offering_device, offer.workspace_id);
-        if !inner.pending.contains_key(&key) && inner.pending.len() >= MAX_PENDING_OFFERS {
-            return Err(WorkspaceOfferRegistryError::TooManyPending);
+        {
+            let mut inner = self.lock();
+            let key = (offer.offering_device, offer.workspace_id);
+            if inner.declined.contains(&key) {
+                return Ok(());
+            }
+            if !inner.pending.contains_key(&key) && inner.pending.len() >= MAX_PENDING_OFFERS {
+                return Err(WorkspaceOfferRegistryError::TooManyPending);
+            }
+            inner.pending.insert(key, offer);
         }
-        inner.pending.insert(key, offer);
+        self.wake.notify_one();
         Ok(())
+    }
+
+    /// Consumes the pending offer and remembers the pair as declined, so a re-offer is ignored.
+    /// `false` when no such offer was pending (nothing is remembered then either).
+    pub fn decline(&self, offering_device: DeviceId, workspace_id: WorkspaceId) -> bool {
+        let mut inner = self.lock();
+        let key = (offering_device, workspace_id);
+        if inner.pending.remove(&key).is_none() {
+            return false;
+        }
+        if inner.declined.len() < MAX_PENDING_OFFERS {
+            inner.declined.insert(key);
+        }
+        true
+    }
+
+    /// Resolves once an offer has been recorded since the last call returned.
+    pub async fn recorded(&self) {
+        self.wake.notified().await;
     }
 
     /// Every pending offer, for a listing RPC (stage 6). No particular order guaranteed beyond

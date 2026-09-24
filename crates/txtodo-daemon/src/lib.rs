@@ -123,6 +123,7 @@ pub mod watcher;
 pub mod workspace;
 pub mod workspace_catalog;
 mod workspace_catalog_load;
+mod workspace_catalog_mirror;
 mod workspace_catalog_offers;
 mod workspace_catalog_open;
 mod workspace_discover;
@@ -213,6 +214,8 @@ mod sync_ops_tests;
 mod unified_diff_tests;
 #[cfg(test)]
 mod workspace_catalog_load_tests;
+#[cfg(test)]
+mod workspace_catalog_mirror_tests;
 #[cfg(test)]
 mod workspace_catalog_state_tests;
 #[cfg(test)]

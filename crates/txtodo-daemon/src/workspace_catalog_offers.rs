@@ -1,5 +1,6 @@
 //! The catalog's offer/adoption half (tasks `daemon-workspace-identity-agreement`,
-//! `pairing-workspace-identity`): the pending-offer surface a human accepts or declines, and the id
+//! `pairing-workspace-identity`): the pending-offer surface (mirrored on its own since task
+//! `remote-workspace-mirror`, see `workspace_catalog_mirror.rs`), and the id
 //! rekeying a joiner needs once pairing hands it the initiator's workspace id. Same `impl
 //! WorkspaceCatalog`, split from `workspace_catalog.rs` for its file budget.
 
@@ -19,15 +20,15 @@ impl WorkspaceCatalog {
         self.open_args.identity.workspace_offers().list()
     }
 
-    /// `WorkspaceAcceptOffer` RPC: adopts the pending offer's workspace id verbatim into the local
-    /// registry at `local_dir` (`WorkspaceRegistry::adopt`'s own collision guards apply). Consumes
-    /// the pending offer whether adoption succeeds or fails — a human who explicitly acted on an
-    /// offer should never see it silently reappear as still-pending.
+    /// `WorkspaceAcceptOffer` RPC: mirrors the pending offer's workspace now, the same way the
+    /// mirror task would on its own (task `remote-workspace-mirror`: always under
+    /// `<remote root>/<workspace-id>/`, never a directory the caller picks). Consumes the pending
+    /// offer whether mirroring succeeds or fails — a human who explicitly acted on an offer should
+    /// never see it silently reappear as still-pending.
     pub fn accept_offer(
         &self,
         offering_device: DeviceId,
         workspace_id: WorkspaceId,
-        local_dir: &Path,
     ) -> Result<crate::workspace_registry::WorkspaceEntry, Status> {
         let offer = self
             .open_args
@@ -39,19 +40,7 @@ impl WorkspaceCatalog {
                 "no pending offer for workspace {workspace_id} from device {offering_device}"
             )));
         }
-        {
-            let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
-            registry
-                .adopt(workspace_id, local_dir, self.clock.as_ref())
-                .map_err(|e| Status::invalid_argument(format!("accept {workspace_id}: {e}")))?;
-        }
-        let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
-        registry
-            .get(workspace_id)
-            .map_err(|e| Status::internal(format!("look up workspace {workspace_id}: {e}")))?
-            .ok_or_else(|| {
-                Status::internal(format!("workspace {workspace_id} vanished after adopting"))
-            })
+        self.mirror_workspace(workspace_id)
     }
 
     /// The registry half of [`Self::adopt_offered_workspace_id`], split out for that function's
@@ -156,7 +145,6 @@ impl WorkspaceCatalog {
         self.open_args
             .identity
             .workspace_offers()
-            .take(offering_device, workspace_id)
-            .is_some()
+            .decline(offering_device, workspace_id)
     }
 }
