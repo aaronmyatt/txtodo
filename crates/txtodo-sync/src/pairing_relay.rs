@@ -45,6 +45,10 @@ pub struct JoinerHello {
     pub static_public: [u8; DEVICE_STATIC_KEY_BYTES],
     /// Whether this device's own human has confirmed the SAS as of this attempt.
     pub confirmed: bool,
+    /// The joiner's human's answer to "is this your own device?" (task
+    /// `default-workspace-pairing-consent`), meaningful once `confirmed` is true. Appended last:
+    /// postcard has no optional fields, so a build from before this field cannot pair with one after.
+    pub own_device: bool,
 }
 
 /// Initiator -> joiner, one reply per [`JoinerHello`].

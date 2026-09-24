@@ -16,6 +16,7 @@ fn sample_hello() -> JoinerHello {
         public_key: [1u8; X25519_PUBLIC_KEY_BYTES],
         static_public: [2u8; DEVICE_STATIC_KEY_BYTES],
         confirmed: false,
+        own_device: true,
     }
 }
 

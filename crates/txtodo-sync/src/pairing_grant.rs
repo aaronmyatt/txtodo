@@ -23,6 +23,9 @@ pub struct PairingGrant {
     /// rotations to. Not secret, but printed as hex rather than a raw byte-array Debug for
     /// consistency with every other key type here.
     pub static_public: [u8; DEVICE_STATIC_KEY_BYTES],
+    /// The sender's human's answer to "is this your own device?" (task
+    /// `default-workspace-pairing-consent`). Sealed with the grant, so only the joiner reads it.
+    pub own_device: bool,
 }
 
 impl fmt::Debug for PairingGrant {
@@ -30,6 +33,7 @@ impl fmt::Debug for PairingGrant {
         f.debug_struct("PairingGrant")
             .field("group_key", &"<redacted>")
             .field("static_public", &hex(&self.static_public))
+            .field("own_device", &self.own_device)
             .finish()
     }
 }

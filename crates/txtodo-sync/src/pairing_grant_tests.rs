@@ -6,6 +6,7 @@ fn sample() -> PairingGrant {
     PairingGrant {
         group_key: [7u8; 32],
         static_public: [9u8; 32],
+        own_device: true,
     }
 }
 
@@ -14,6 +15,12 @@ fn round_trips_through_bytes() {
     let grant = sample();
     let bytes = grant.to_bytes().unwrap();
     assert_eq!(PairingGrant::from_bytes(&bytes).unwrap(), grant);
+    let foreign = PairingGrant {
+        own_device: false,
+        ..sample()
+    };
+    let back = PairingGrant::from_bytes(&foreign.to_bytes().unwrap()).unwrap();
+    assert!(!back.own_device, "the sender's answer survives the seal");
 }
 
 #[test]

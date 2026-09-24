@@ -114,7 +114,10 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   group, nonce, is_handshaken, is_locally_confirmed}` (the last four, M4 `sync-pairing`'s LAN wiring
   pass, are read-only accessors a network relay driver needs to validate and drive a session
   without touching its private fields), `MAX_FAILED_SAS_CONFIRMATIONS`, `PairingError`.
-  `PairingGrant { group_key, static_public }` is the
+  `JoinerHello.own_device` and `PairingGrant.own_device` (task `default-workspace-pairing-consent`,
+  2026-09-24) carry each human's "is this your own device?" answer; appended fields, so a build
+  from before them cannot pair with one after (postcard has no optional fields).
+  `PairingGrant { group_key, static_public, own_device }` is the
   normative confirmed-exchange payload — bundles the group key with the sender's long-term static
   public key so a caller cannot register one without the other; hand-written `Debug` redacts
   `group_key` only (`static_public` is not secret).

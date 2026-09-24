@@ -79,6 +79,7 @@ fn pairing_also_registers_each_sides_static_public_key() {
     let from_a = PairingGrant {
         group_key,
         static_public: a_static.public_key().to_bytes(),
+        own_device: true,
     };
     let sealed = a.wrap_grant(&from_a).unwrap();
     let seen_by_b = b.unwrap_grant(&sealed).unwrap();
@@ -89,10 +90,15 @@ fn pairing_also_registers_each_sides_static_public_key() {
     let from_b = PairingGrant {
         group_key,
         static_public: b_static.public_key().to_bytes(),
+        own_device: false,
     };
     let sealed_back = b.wrap_grant(&from_b).unwrap();
     let seen_by_a = a.unwrap_grant(&sealed_back).unwrap();
     assert_eq!(seen_by_a.static_public, b_static.public_key().to_bytes());
+    assert!(
+        !seen_by_a.own_device,
+        "each side's own answer rides its own grant"
+    );
 }
 
 #[test]
