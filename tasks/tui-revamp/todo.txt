@@ -4,7 +4,7 @@
 2026-09-24 Decide: let .claude/scripts/check-parity.sh into the gate (.claude is frozen). I'd take advisory only, never blocking +m11 @setup @human
 2026-09-24 Decide: TUI detail as a bottom split panel, ahead of the desktop "panel or page" decide line. I'd take the panel +m11 @tui @human
 2026-09-24 Parity manifest, parity tests and agent rules +m11 @tui @desktop ref:parity-manifest @doing by:claude
-2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc @doing by:claude
+2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc — UniversalTasks done 2026-09-25 (d9d1695 + daemon); the reopen line waits on its decide line
 2026-09-24 TUI foundation: screens, focus, overlays, keymap + commands, theme, terminal setup +m11 @tui ref:tui-foundation
 2026-09-24 TUI mouse: hit map, click, double-click, wheel, hover, drag reorder +m11 @tui ref:tui-mouse
 2026-09-24 TUI shell: header, workspace popup, banners, status footer, toasts +m11 @tui ref:tui-shell
