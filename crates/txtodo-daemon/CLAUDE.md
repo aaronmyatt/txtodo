@@ -320,12 +320,18 @@ multiplex every workspace's traffic — not done by this task).
   heartbeat, and ends after 20 s of silence. `live_peers.rs` marks a peer live while a session runs;
   every dial loop skips live peers. A refused `Ops` batch now ends the connection (the reconnect
   resyncs). This supersedes the "short-lived session, periodic redial" text elsewhere in this file.
-  `tests/lan_live_push.rs` is the two-daemon proof.
+  `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
+  `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
+  **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts
+  `CONTROL_ALPN`; each resync tick the lower-id side dials a short control session to every LAN
+  peer (`device_lan::dial_control`), the same exchange as the relay control channel.
+  `tests/default_workspace_pairing.rs` pairs over LAN and sees the offer mirrored and synced.
 - `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
   paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
   flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry
   ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
-  `WorkspaceAcceptOffer` ignores `local_dir`. Offers still travel the relay control channel only.
+  `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
+  the same day, a LAN control session too.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

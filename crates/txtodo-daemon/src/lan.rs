@@ -106,6 +106,9 @@ pub(crate) struct LanCtx {
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) device: DeviceId,
     pub(crate) group: GroupId,
+    /// Where LAN control sessions read this device's offers from; `None` means no offers over LAN.
+    pub(crate) registry:
+        Option<Arc<std::sync::Mutex<crate::workspace_registry::WorkspaceRegistry>>>,
 }
 
 /// Everything a bind/discover/browse setup produces, kept alive for the run loop's whole life.
@@ -185,6 +188,7 @@ async fn run(ctx: LanCtx) {
                     &sessions,
                     &dial_state,
                 );
+                crate::device_lan::dial_control(&known_peers, &ctx, &endpoint, &sessions);
             }
         }
     }

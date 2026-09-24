@@ -74,6 +74,10 @@ impl std::error::Error for DeviceRelayError {}
 #[derive(Default)]
 pub struct WorkspaceRoutes {
     inner: RwLock<HashMap<WorkspaceId, WorkspaceRoute>>,
+    /// Bumped on every register/unregister (task `sync-live-push`): a long-lived session greets
+    /// only the routes it started with, so it ends when this moves and the reconnect greets the
+    /// new set — a workspace opened later (a new mirror, say) joins on the next dial.
+    generation: std::sync::atomic::AtomicU64,
 }
 
 impl WorkspaceRoutes {
@@ -91,13 +95,26 @@ impl WorkspaceRoutes {
             return Err(DeviceRelayError::TooManyRoutes);
         }
         routes.insert(id, route);
+        self.bump();
         Ok(())
+    }
+
+    /// Which version of the table this is; changes on every register/unregister.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn bump(&self) {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Removes `id`'s route, if any — called when a workspace closes (`OpenedWorkspace::Drop`,
     /// stage 5), so a connection for a no-longer-open workspace is never routed to a stale handle.
     pub fn unregister(&self, id: WorkspaceId) {
-        self.write().remove(&id);
+        if self.write().remove(&id).is_some() {
+            self.bump();
+        }
     }
 
     /// The route for `id`, if this device currently has that workspace open. `None` for an

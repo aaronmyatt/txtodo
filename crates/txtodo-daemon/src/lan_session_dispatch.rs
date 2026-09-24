@@ -27,7 +27,10 @@ use crate::live_peers::LivePeers;
 /// Everything shared across every workspace this one connection multiplexes: the crypto material
 /// (one group key for the whole device-set, ADR 0021) and the routing table naming which
 /// `SharedWorkspace` each locally open workspace resolves to.
-struct SharedCtx {
+struct SharedCtx<'a> {
+    /// The live route table this session was built from, and its generation then.
+    table: &'a WorkspaceRoutes,
+    generation: u64,
     rt: Handle,
     group: GroupId,
     key: GroupKey,
@@ -103,7 +106,7 @@ fn touch_peer_last_seen(
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
     frame: &txtodo_sync::Frame,
-    shared: &SharedCtx,
+    shared: &SharedCtx<'_>,
     conn: &mut Conn,
 ) -> Option<()> {
     let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)?;
@@ -124,7 +127,7 @@ fn dispatch_link_frame(
 fn dispatch_workspace_frame(
     link: &mut dyn Link,
     frame: &txtodo_sync::Frame,
-    shared: &SharedCtx,
+    shared: &SharedCtx<'_>,
     conn: &mut Conn,
     workspace: WorkspaceId,
 ) -> Option<()> {
@@ -150,7 +153,7 @@ fn dispatch_workspace_frame(
 /// or a logged skip for a workspace this side never opened. `None` ends the connection.
 fn dispatch_frame(
     link: &mut dyn Link,
-    shared: &SharedCtx,
+    shared: &SharedCtx<'_>,
     conn: &mut Conn,
     frame: &txtodo_sync::Frame,
 ) -> Option<()> {
@@ -179,7 +182,10 @@ fn recv_polled(link: &mut dyn Link) -> Result<Option<txtodo_sync::Frame>, ()> {
 
 /// One turn: a frame if one arrives within [`POLL`], then a push/heartbeat/liveness tick
 /// (`lan_session_live.rs`). `None` ends the connection.
-fn turn(link: &mut dyn Link, shared: &SharedCtx, conn: &mut Conn) -> Option<()> {
+fn turn(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) -> Option<()> {
+    if shared.table.generation() != shared.generation {
+        return log_routes_changed();
+    }
     if let Some(frame) = recv_polled(link).ok()? {
         conn.live.heard();
         dispatch_frame(link, shared, conn, &frame)?;
@@ -195,13 +201,20 @@ fn turn(link: &mut dyn Link, shared: &SharedCtx, conn: &mut Conn) -> Option<()> 
 
 /// Runs until the peer closes, goes silent, or the turn cap ends it (the dial side then
 /// reconnects). Bounded like every loop here: a quiet turn is one [`POLL`], so the cap is hours.
-fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx, conn: &mut Conn) {
+fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) {
     for _ in 0..MAX_TURNS_PER_SESSION {
         if turn(link, shared, conn).is_none() {
             return;
         }
     }
     tracing::warn!(cap = MAX_TURNS_PER_SESSION, "lan_session_turn_cap_reached");
+}
+
+/// A workspace opened or closed since this session greeted its set: end it, and the reconnect
+/// greets the new set (task `sync-live-push`).
+fn log_routes_changed() -> Option<()> {
+    tracing::debug!("lan_session_routes_changed_reconnecting");
+    None
 }
 
 /// Turns one connection runs before it is closed and redialed: at least a few hours at one
@@ -213,7 +226,7 @@ const MAX_TURNS_PER_SESSION: usize = MAX_MESSAGES_PER_SESSION * 3;
 /// connection's other workspaces — only a real send failure is.
 fn send_greet_for(
     link: &mut dyn Link,
-    shared: &SharedCtx,
+    shared: &SharedCtx<'_>,
     session: &mut Session,
     id: WorkspaceId,
 ) -> bool {
@@ -229,7 +242,11 @@ fn send_greet_for(
 /// Sends the once-per-connection link `Hello`, then a `Greet` for every workspace `shared.routes`
 /// names. `false` (already logged) on a link handshake or send failure — nothing past that point
 /// can matter.
-fn send_initial_greetings(link: &mut dyn Link, shared: &SharedCtx, session: &mut Session) -> bool {
+fn send_initial_greetings(
+    link: &mut dyn Link,
+    shared: &SharedCtx<'_>,
+    session: &mut Session,
+) -> bool {
     let now_ms = any_route_now_ms(&shared.routes);
     let Ok(hello) = session.link_hello(now_ms) else {
         tracing::warn!("lan_session_link_hello_failed");
@@ -274,7 +291,8 @@ fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSi
 /// Gathers `routes`' crypto material and routing table into one [`SharedCtx`] — `None` (logged)
 /// when nothing is routed at all, or when the (necessarily shared, ADR 0021) group key cannot be
 /// read from any routed workspace's keystore.
-fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCtx> {
+fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCtx<'_>> {
+    let generation = routes.generation();
     let all: BTreeMap<WorkspaceId, WorkspaceRoute> = routes.list().into_iter().collect();
     let Some(first) = all.values().next() else {
         log_no_routed_workspace();
@@ -286,6 +304,8 @@ fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCt
     };
     let live_peers = read(&first.ws).live_peers().clone();
     Some(SharedCtx {
+        table: routes,
+        generation,
         rt: Handle::current(),
         group,
         signing_key,

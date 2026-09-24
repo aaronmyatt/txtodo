@@ -349,17 +349,15 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         Some(url) => DeviceRelay::bind(&identity, url).await,
         None => None,
     };
-    let _control_channel = txtodo_daemon::control_channel::start(
-        Arc::clone(&identity),
-        device_relay.clone(),
-        registry_path.clone(),
-    );
     let carriers = carriers::start(
         &args,
-        &identity,
-        &device_relay,
         built.sync_allowed,
-        clock.clone(),
+        carriers::Deps {
+            identity: Arc::clone(&identity),
+            device_relay: device_relay.clone(),
+            clock: clock.clone(),
+            registry_path: registry_path.clone(),
+        },
     );
     let mut open = open_args(
         &args,
