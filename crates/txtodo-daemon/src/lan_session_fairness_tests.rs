@@ -74,18 +74,25 @@ fn greet_empty(id: WorkspaceId) -> Message {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
-    let (d1, d2) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+/// Two workspaces a peer wants everything from: `big` holds 2 500 ops, `small` one.
+struct Fixture {
+    big: SharedWorkspace,
+    big_id: WorkspaceId,
+    small_id: WorkspaceId,
+    group: txtodo_sync::GroupId,
+    key: GroupKey,
+    routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
+    _dirs: (tempfile::TempDir, tempfile::TempDir),
+}
+
+fn fixture() -> Fixture {
+    let dirs = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let (big, small) = (
-        workspace(d1.path(), 2_500, 1_000),
-        workspace(d2.path(), 1, 9_000),
+        workspace(dirs.0.path(), 2_500, 1_000),
+        workspace(dirs.1.path(), 1, 9_000),
     );
     let id = |ws: &SharedWorkspace| ws.read().unwrap().workspace_id();
-    let (big_id, small_id) = (id(&big), id(&small));
     let group = big.read().unwrap().group();
-    let key = GroupKey::from_bytes([7u8; 32]);
-    let signing_key = derive_group_op_signing_key(&key);
     let mut routes = BTreeMap::new();
     for ws in [&big, &small] {
         let device = ws.read().unwrap().device();
@@ -96,16 +103,32 @@ async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
         };
         routes.insert(id(ws), route);
     }
-    let ctx = PushCtx {
+    Fixture {
+        big_id: id(&big),
+        small_id: id(&small),
+        big,
         group,
-        key: &key,
+        key: GroupKey::from_bytes([7u8; 32]),
+        routes,
+        _dirs: dirs,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
+    let f = fixture();
+    let (big_id, small_id) = (f.big_id, f.small_id);
+    let signing_key = derive_group_op_signing_key(&f.key);
+    let ctx = PushCtx {
+        group: f.group,
+        key: &f.key,
         signing_key: &signing_key,
-        routes: &routes,
+        routes: &f.routes,
     };
     let mut live = Live::new();
-    for (ws, ws_id) in [(&big, big_id), (&small, small_id)] {
-        live.observe(ws_id, &greet_empty(ws_id));
-        live.observe(ws_id, &want_all(ws, ws_id));
+    for (ws_id, route) in &f.routes {
+        live.observe(*ws_id, &greet_empty(*ws_id));
+        live.observe(*ws_id, &want_all(&route.ws, *ws_id));
     }
     let mut link = Recorder::default();
 
@@ -116,21 +139,15 @@ async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
     both.sort();
     assert_eq!(
         first, both,
-        "one batch each, not the big one's whole backlog first"
+        "one batch each, not the big one's backlog first"
     );
     assert!(live.tick(&mut link, &ctx));
     assert_eq!(link.drain(), vec![big_id], "the big one's second batch");
     assert!(live.tick(&mut link, &ctx));
-    assert_eq!(
-        link.drain(),
-        Vec::new(),
-        "two batches unacked: the window is full"
-    );
+    assert_eq!(link.drain(), Vec::new(), "two unacked: the window is full");
 
-    let device = *read_heads(&big)
-        .keys()
-        .next()
-        .unwrap_or_else(|| panic!("no ops"));
+    let heads = read_heads(&f.big);
+    let device = *heads.keys().next().unwrap_or_else(|| panic!("no ops"));
     let ack = Message::Ack {
         workspace: big_id.ulid().to_u128(),
         committed: vec![OriginRange {
