@@ -7,6 +7,7 @@
 use crate::hit::HitMap;
 use crate::state_detail::Detail;
 use crate::state_offers::OffersPane;
+use crate::state_settings::SettingsView;
 use crate::state_shell::Shell;
 use crate::state_tasks::TasksView;
 use crate::state_universal::UniversalView;
@@ -73,6 +74,8 @@ pub struct AppState {
     pub detail: Detail,
     /// The Universal screen (task `tui-revamp/tui-universal`).
     pub universal: UniversalView,
+    /// The Settings screen (task `tui-revamp/tui-settings`).
+    pub settings: SettingsView,
 }
 
 impl AppState {
@@ -109,6 +112,7 @@ impl AppState {
             tasks: TasksView::default(),
             detail: Detail::default(),
             universal: UniversalView::default(),
+            settings: SettingsView::default(),
         }
     }
 

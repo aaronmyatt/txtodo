@@ -38,6 +38,8 @@ pub enum Action {
     OpenUniversal(crate::state_universal::UTask),
     /// Universal's `x`: complete the task in its workspace.
     CompleteUniversal(crate::state_universal::UTask),
+    /// What the Settings screen asks of the daemon or the disk.
+    Settings(crate::commands_settings::SettingsAction),
     /// `:q`: exit the event loop.
     Quit,
 }

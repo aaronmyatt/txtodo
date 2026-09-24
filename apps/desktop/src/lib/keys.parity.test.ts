@@ -25,6 +25,7 @@ const SCOPES = [
 	"detail",
 	"universal",
 	"settings",
+	"help",
 	"sheet"
 ];
 

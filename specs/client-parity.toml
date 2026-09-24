@@ -21,7 +21,8 @@
 #   scope     Where the keys work: `global` (anywhere outside a text field), `list` (the Tasks
 #             buffer in list mode), `edit` (editing a line's text), `search` (the search field),
 #             `prompt` (the prompt bar), `detail` (the detail panel), `universal` (the Universal
-#             screen), `settings` (the Settings screen), `sheet` (a modal sheet or popup).
+#             screen), `settings` (the Settings screen), `help` (the Help screen), `sheet` (a
+#             modal sheet or popup).
 #   desktop   `{ status, surface }` for the desktop app, plus `keys` when its keys differ from
 #             the shared ones (then `status = "differs"`).
 #   tui       The same for the TUI.
@@ -393,8 +394,8 @@ title = "Help: keys, search operators, the prompt bar"
 keys = ["?"]
 scope = "global"
 desktop = { status = "differs", surface = "/help", keys = [] }
-tui = { status = "differs", surface = "header ?" }
-deviation = "Desktop reaches Help by the ? link in the top bar; no key yet. The TUI's ? opens a placeholder until its Help screen line lands."
+tui = { status = "done", surface = "Help screen" }
+deviation = "Desktop reaches Help by the ? link in the top bar; no key yet."
 
 [[action]]
 id = "nav.workspace_menu"
@@ -613,12 +614,84 @@ tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
+id = "settings.down"
+title = "Next Settings row"
+keys = ["j", "Down"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "settings.up"
+title = "Previous Settings row"
+keys = ["k", "Up"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "settings.next_card"
+title = "Next Settings card"
+keys = ["Tab", "l", "Right"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "settings.prev_card"
+title = "Previous Settings card"
+keys = ["Shift-Tab", "h", "Left"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "settings.activate"
+title = "Run the row: a button, a toggle, a field"
+keys = ["Enter", "Space"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "settings.remove"
+title = "Remove what the row lists (press twice)"
+keys = ["d"]
+scope = "settings"
+desktop = { status = "planned", surface = "/settings" }
+tui = { status = "done", surface = "Settings screen" }
+deviation = ""
+
+[[action]]
+id = "help.down"
+title = "Scroll Help down"
+keys = ["j", "Down"]
+scope = "help"
+desktop = { status = "done", surface = "/help (the page scrolls)" }
+tui = { status = "done", surface = "Help screen" }
+deviation = ""
+
+[[action]]
+id = "help.up"
+title = "Scroll Help up"
+keys = ["k", "Up"]
+scope = "help"
+desktop = { status = "done", surface = "/help (the page scrolls)" }
+tui = { status = "done", surface = "Help screen" }
+deviation = ""
+
+[[action]]
 id = "settings.filter"
 title = "Filter the settings cards"
 keys = ["/"]
 scope = "settings"
 desktop = { status = "planned", surface = "/settings" }
-tui = { status = "planned", surface = "Settings screen" }
+tui = { status = "done", surface = "Settings screen" }
 deviation = ""
 
 [[action]]
@@ -754,7 +827,7 @@ title = "Theme: light, dark or system"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "ThemeToggle" }
-tui = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "done", surface = "Settings > Appearance" }
 deviation = ""
 
 [[action]]
@@ -862,7 +935,7 @@ title = "Add a workspace by path"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
-tui = { status = "planned", surface = "Settings > Workspaces" }
+tui = { status = "done", surface = "Settings > Workspaces" }
 deviation = ""
 
 [[action]]
@@ -871,7 +944,7 @@ title = "Remove a workspace (never the current or the default)"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
-tui = { status = "planned", surface = "Settings > Workspaces" }
+tui = { status = "done", surface = "Settings > Workspaces (d, twice)" }
 deviation = ""
 
 [[action]]
@@ -880,7 +953,7 @@ title = "Refresh the activity feed"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "ActivityTab" }
-tui = { status = "planned", surface = "Settings > Activity" }
+tui = { status = "done", surface = "Settings > Activity" }
 deviation = ""
 
 [[action]]
@@ -898,7 +971,7 @@ title = "Devices and agents"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "MainView link to /devices" }
-tui = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
 [[action]]
@@ -925,7 +998,7 @@ title = "Confirm the six SAS words match"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
-tui = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
 [[action]]
@@ -934,7 +1007,7 @@ title = "List paired devices"
 keys = []
 scope = "settings"
 desktop = { status = "planned", surface = "Settings > Devices" }
-tui = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
 [[action]]
@@ -943,7 +1016,7 @@ title = "Revoke a paired device (rotates the group key)"
 keys = []
 scope = "settings"
 desktop = { status = "planned", surface = "Settings > Devices" }
-tui = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "done", surface = "Settings > Devices (d, twice)" }
 deviation = ""
 
 [[action]]
@@ -952,7 +1025,7 @@ title = "New agent token: name, scopes, limits, expiry"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
-tui = { status = "planned", surface = "Settings > Tokens" }
+tui = { status = "done", surface = "Settings > Tokens" }
 deviation = ""
 
 [[action]]
@@ -970,7 +1043,7 @@ title = "Revoke a token"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
-tui = { status = "planned", surface = "Settings > Tokens" }
+tui = { status = "done", surface = "Settings > Tokens (d, twice)" }
 deviation = ""
 
 # ==== Revamp Settings rows that cannot exist in a terminal =========================================
@@ -1017,7 +1090,7 @@ title = "Show line numbers"
 keys = []
 scope = "settings"
 desktop = { status = "planned", surface = "Settings > Appearance" }
-tui = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "done", surface = "Settings > Appearance" }
 deviation = ""
 
 [[action]]
@@ -1026,5 +1099,5 @@ title = "Mark lines past 100 characters"
 keys = []
 scope = "settings"
 desktop = { status = "planned", surface = "Settings > Appearance" }
-tui = { status = "planned", surface = "Settings > Appearance" }
+tui = { status = "done", surface = "Settings > Appearance" }
 deviation = ""

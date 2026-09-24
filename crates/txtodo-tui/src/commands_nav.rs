@@ -22,8 +22,14 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
         other => return run_menu(state, other).or_else(|| run_banner(state, other)),
     };
     go(state, screen);
-    // Universal reads every workspace, which no Watch covers: read it on the way in.
-    Some((screen == Screen::Universal).then_some(Action::RefreshUniversal))
+    // Universal and Settings read what no Watch covers: read it on the way in.
+    Some(match state.nav.screen {
+        Screen::Universal => Some(Action::RefreshUniversal),
+        Screen::Settings(_) => Some(Action::Settings(
+            crate::commands_settings::SettingsAction::Refresh,
+        )),
+        _ => None,
+    })
 }
 
 /// Shows `screen`, closing any popup; a Settings screen already open keeps its card.
@@ -73,6 +79,8 @@ fn run_banner(state: &mut AppState, command: Command) -> Option<Option<Action>> 
             return Some(Some(Action::Copy(refused.text)));
         }
         Command::AppRetryDaemon => {}
+        Command::HelpDown => state.shell.help_scroll = state.shell.help_scroll.saturating_add(1),
+        Command::HelpUp => state.shell.help_scroll = state.shell.help_scroll.saturating_sub(1),
         Command::ToastUndo => {
             state.shell.undoable()?;
             state.shell.toasts.pop();

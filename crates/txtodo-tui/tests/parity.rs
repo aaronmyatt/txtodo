@@ -3,109 +3,13 @@
 //! `keymap::BINDINGS` with the same keys and scope, every binding has such a row, and every
 //! `differs`/`na` row says why. `apps/desktop/src/lib/keys.parity.test.ts` is the desktop twin.
 //!
-//! The manifest is read with a small parser for the subset it uses (one `key = value` per line;
-//! values are basic strings, arrays of strings, or inline tables of those), the same one the
-//! desktop test carries, so this crate takes no TOML dependency for a test. Anything outside that
-//! subset fails the parse loudly.
+//! The manifest is read with `txtodo_tui::manifest`'s parser, the one Help and Shortcuts use.
 //! Ref: <https://toml.io/en/v1.0.0> (basic strings, arrays, inline tables)
 
 use std::collections::BTreeMap;
 
 use txtodo_tui::keymap::{BINDINGS, Binding};
-
-const MANIFEST: &str = include_str!("../../../specs/client-parity.toml");
-
-/// A value in the manifest's subset. Tables hold strings and arrays only.
-#[derive(Clone, Debug, PartialEq)]
-enum Value {
-    Str(String),
-    List(Vec<String>),
-    Table(BTreeMap<String, Value>),
-}
-
-type Row = BTreeMap<String, Value>;
-
-/// A basic string at the start of `text`: its value and the rest of `text`.
-fn take_string(text: &str) -> (String, &str) {
-    let body = text
-        .strip_prefix('"')
-        .unwrap_or_else(|| panic!("expected a string at: {text}"));
-    let mut out = String::new();
-    let mut chars = body.char_indices();
-    while let Some((i, c)) = chars.next() {
-        match c {
-            '"' => return (out, body[i + 1..].trim_start()),
-            '\\' => out.extend(chars.next().map(|(_, e)| e)),
-            _ => out.push(c),
-        }
-    }
-    panic!("unterminated string: {text}")
-}
-
-/// Drops one `,` separator, if there is one.
-fn skip_comma(text: &str) -> &str {
-    text.strip_prefix(',').map_or(text, str::trim_start)
-}
-
-/// A string, an array of strings, or an inline table of those, at the start of `text`.
-fn take_value(text: &str) -> (Value, &str) {
-    if text.starts_with('"') {
-        let (s, rest) = take_string(text);
-        return (Value::Str(s), rest);
-    }
-    if let Some(mut rest) = text.strip_prefix('[').map(str::trim_start) {
-        let mut out = Vec::new();
-        while !rest.starts_with(']') {
-            let (s, after) = take_string(rest);
-            out.push(s);
-            rest = skip_comma(after);
-        }
-        return (Value::List(out), rest[1..].trim_start());
-    }
-    if let Some(mut rest) = text.strip_prefix('{').map(str::trim_start) {
-        let mut table = BTreeMap::new();
-        while !rest.starts_with('}') {
-            let (key, after) = rest
-                .split_once('=')
-                .unwrap_or_else(|| panic!("expected a key at: {rest}"));
-            let (value, after) = take_value(after.trim_start());
-            assert!(!matches!(value, Value::Table(_)), "nested table at: {rest}");
-            table.insert(key.trim().to_owned(), value);
-            rest = skip_comma(after);
-        }
-        return (Value::Table(table), rest[1..].trim_start());
-    }
-    panic!("unsupported value: {text}")
-}
-
-/// Every `[[action]]` row, in file order (`[[screen]]` rows are parsed, then dropped).
-fn actions() -> Vec<Row> {
-    let mut out: Vec<(bool, Row)> = Vec::new();
-    for raw in MANIFEST.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        match line {
-            "[[action]]" => out.push((true, Row::new())),
-            "[[screen]]" => out.push((false, Row::new())),
-            _ => {
-                let (key, value) = line
-                    .split_once('=')
-                    .unwrap_or_else(|| panic!("unexpected line: {raw}"));
-                let (value, rest) = take_value(value.trim_start());
-                assert!(rest.is_empty(), "trailing text: {raw}");
-                let (_, row) = out
-                    .last_mut()
-                    .unwrap_or_else(|| panic!("a key before any row: {raw}"));
-                row.insert(key.trim().to_owned(), value);
-            }
-        }
-    }
-    out.into_iter()
-        .filter_map(|(is_action, row)| is_action.then_some(row))
-        .collect()
-}
+use txtodo_tui::manifest::{Row, Value, actions};
 
 fn text<'a>(row: &'a Row, key: &str) -> &'a str {
     match row.get(key) {

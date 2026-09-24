@@ -135,7 +135,9 @@ pub async fn run_in(
             crate::buildinfo::other_build(&health.version, &health.release_date);
     }
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
-    let mode = crate::theme::ThemeMode::default();
+    state.settings.prefs = crate::prefs::load();
+    state.settings.socket = global_socket_path().display().to_string();
+    let mode = state.settings.prefs.theme;
     crate::theme::set_current(crate::theme::Theme::resolve(mode, |k| {
         std::env::var(k).ok()
     }));
@@ -204,6 +206,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::OpenDetail(_) => "open_detail",
         Action::SaveNotes(..) => "save_notes",
         Action::RefreshUniversal => "refresh_universal",
+        Action::Settings(_) => "settings",
         Action::OpenUniversal(_) => "open_universal",
         Action::CompleteUniversal(_) => "complete_universal",
     }
@@ -251,6 +254,7 @@ async fn perform_screens(
             crate::app_universal::refresh(daemon, state).await;
             Ok(())
         }
+        Action::Settings(action) => crate::app_settings::perform(daemon, state, action).await,
         Action::OpenUniversal(task) => crate::app_universal::open(daemon, state, task).await,
         Action::CompleteUniversal(task) => {
             crate::app_universal::complete(daemon, state, task).await

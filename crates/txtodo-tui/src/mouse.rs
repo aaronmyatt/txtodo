@@ -89,6 +89,18 @@ impl Mouse {
                 let t = target?;
                 return self.press_universal(state, t, ev, now);
             }
+            Target::SettingsCard(i) => {
+                let card = crate::state_nav::SettingsCard::ALL.get(i).copied()?;
+                return crate::commands_settings::show_card(state, card);
+            }
+            Target::SettingsRow(i) => {
+                let double = self.is_double(ev, now);
+                state.settings.row = i;
+                state.settings.confirm = None;
+                return double
+                    .then(|| commands::run(state, Command::SettingsActivate))
+                    .flatten();
+            }
             Target::DetailRow(index) => return self.press_sub_row(state, index, ev, now),
             Target::Inert => return None,
         };
@@ -213,21 +225,24 @@ fn row_of(target: Option<Target>) -> Option<usize> {
         | Target::UniversalGroup(_)
         | Target::UniversalWorkspace(_)
         | Target::UniversalContext(_)
+        | Target::SettingsCard(_)
+        | Target::SettingsRow(_)
         | Target::Inert => None,
     }
 }
 
 /// The wheel over the detail panel's sub-list moves its cursor, over its notes moves their caret,
-/// on the Universal screen moves its selection, anywhere else scrolls the list.
+/// on the Universal and Settings screens moves their selection, anywhere else scrolls the list.
 fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Action> {
     let steps = WHEEL_ROWS.unsigned_abs();
     match target {
         Some(Target::DetailRow(_)) => {
-            crate::state_detail::with_sub_list(state, |s| {
-                for _ in 0..steps {
-                    if down { s.move_down() } else { s.move_up() }
-                }
-            });
+            let step = if down {
+                Command::ListDown
+            } else {
+                Command::ListUp
+            };
+            crate::state_detail::with_sub_list(state, |s| repeat(s, step, steps));
             None
         }
         Some(Target::Command(Command::DetailEditNotes)) => {
@@ -239,18 +254,26 @@ fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Act
             }
             None
         }
-        _ if state.nav.screen == crate::state_nav::Screen::Universal => {
-            let step = if down {
-                Command::UniversalDown
-            } else {
-                Command::UniversalUp
-            };
-            for _ in 0..steps {
-                commands::run(state, step);
-            }
-            None
-        }
-        _ => scroll(state, if down { WHEEL_ROWS } else { -WHEEL_ROWS }),
+        _ => screen_wheel(state, down, steps),
+    }
+}
+
+/// The wheel anywhere else: a screen's own selection, or the list's view.
+fn screen_wheel(state: &mut AppState, down: bool, steps: usize) -> Option<Action> {
+    let (next, prev) = match state.nav.screen {
+        crate::state_nav::Screen::Settings(_) => (Command::SettingsDown, Command::SettingsUp),
+        crate::state_nav::Screen::Universal => (Command::UniversalDown, Command::UniversalUp),
+        crate::state_nav::Screen::Help => (Command::HelpDown, Command::HelpUp),
+        _ => return scroll(state, if down { WHEEL_ROWS } else { -WHEEL_ROWS }),
+    };
+    repeat(state, if down { next } else { prev }, steps);
+    None
+}
+
+/// Runs a movement command `steps` times.
+fn repeat(state: &mut AppState, command: Command, steps: usize) {
+    for _ in 0..steps {
+        commands::run(state, command);
     }
 }
 

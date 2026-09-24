@@ -33,6 +33,10 @@ pub enum Target {
     UniversalWorkspace(usize),
     /// A Universal context chip, by its index in `UniversalView::contexts`.
     UniversalContext(usize),
+    /// A Settings card in the nav, by its index in `SettingsCard::ALL`.
+    SettingsCard(usize),
+    /// A row of the Settings card in view.
+    SettingsRow(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

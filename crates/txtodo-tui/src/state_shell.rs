@@ -37,6 +37,8 @@ pub struct Shell {
     pub changes: Vec<Change>,
     /// The id the next change gets.
     pub next_change: u64,
+    /// How far the Help screen is scrolled, in lines.
+    pub help_scroll: u16,
 }
 
 /// One change this session made, as the daemon's `Undo` takes it back.
@@ -132,6 +134,7 @@ impl Default for Shell {
             pending_toast: None,
             changes: Vec::new(),
             next_change: 0,
+            help_scroll: 0,
         }
     }
 }

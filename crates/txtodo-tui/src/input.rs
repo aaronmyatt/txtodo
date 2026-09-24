@@ -68,6 +68,10 @@ impl Input {
         if state.nav.focus == Focus::Prompt {
             return on_prompt_key(state, key, name.as_deref(), now);
         }
+        let typing = state.settings.filtering || state.settings.field.is_some();
+        if typing && matches!(state.nav.screen, Screen::Settings(_)) {
+            return crate::commands_settings::on_text_key(state, key);
+        }
         if state.editing.is_some() {
             // A line of the sub-list is being edited: its save names the sub-list's path.
             if in_detail {
@@ -103,7 +107,7 @@ fn scope_of(state: &AppState) -> (Scope, Option<&'static str>) {
         Screen::Tasks => Scope::List,
         Screen::Universal => Scope::Universal,
         Screen::Settings(_) => Scope::Settings,
-        Screen::Help => Scope::Global,
+        Screen::Help => Scope::Help,
     };
     (scope, None)
 }

@@ -28,13 +28,19 @@ pub fn paint(state: &AppState, i: usize) -> Line<'static> {
     let width = gutter_width(state);
     let dim = Style::new().add_modifier(Modifier::DIM);
     let Some(line) = state.lines.get(i) else {
+        let pad = if state.settings.prefs.line_numbers {
+            width
+        } else {
+            0
+        };
         return Line::from(vec![
-            Span::raw(" ".repeat(width)),
+            Span::raw(" ".repeat(pad)),
             Span::styled(ADD_LINE_PLACEHOLDER, dim.add_modifier(Modifier::ITALIC)),
         ]);
     };
+    let prefs = state.settings.prefs;
     let mut body = paint_line(&line.raw, line.completed, false);
-    if over_length_hint(&line.raw).is_some() {
+    if prefs.length_hint && over_length_hint(&line.raw).is_some() {
         body = mark(
             body,
             &[(LINE_LENGTH_HINT, usize::MAX)],
@@ -59,10 +65,13 @@ pub fn paint(state: &AppState, i: usize) -> Line<'static> {
             )
         };
     }
-    let mut spans = vec![Span::styled(
-        format!("{:>w$} ", line.line_number, w = width - 1),
-        dim,
-    )];
+    let mut spans = Vec::new();
+    if prefs.line_numbers {
+        spans.push(Span::styled(
+            format!("{:>w$} ", line.line_number, w = width - 1),
+            dim,
+        ));
+    }
     spans.extend(body.spans);
     if let Some(badge) = ref_slug(&line.raw).and_then(|s| state.tasks.refs.get(s)) {
         let text = match badge {
