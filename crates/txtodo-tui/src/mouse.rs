@@ -73,6 +73,10 @@ impl Mouse {
                 state.shell.menu.cursor = index;
                 return commands::run(state, Command::WorkspaceMenuOpen);
             }
+            Target::Suggestion(index) => {
+                crate::search::pick_suggestion(state, index);
+                return None;
+            }
             Target::Inert => return None,
         };
         let double = self.last_press.is_some_and(|(column, line, at)| {
@@ -109,7 +113,7 @@ fn busy(state: &AppState) -> bool {
 fn row_of(target: Option<Target>) -> Option<usize> {
     match target? {
         Target::Row(row) => Some(row),
-        Target::Command(_) | Target::MenuItem(_) | Target::Inert => None,
+        Target::Command(_) | Target::MenuItem(_) | Target::Suggestion(_) | Target::Inert => None,
     }
 }
 

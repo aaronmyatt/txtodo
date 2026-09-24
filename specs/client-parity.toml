@@ -343,6 +343,15 @@ tui = { status = "done", surface = "header search" }
 deviation = ""
 
 [[action]]
+id = "search.suggest"
+title = "Complete the word, or add the next suggested filter"
+keys = ["Tab"]
+scope = "search"
+desktop = { status = "planned", surface = "header search panel" }
+tui = { status = "done", surface = "header search panel" }
+deviation = ""
+
+[[action]]
 id = "search.clear"
 title = "Clear the search, then leave it"
 keys = ["Esc"]

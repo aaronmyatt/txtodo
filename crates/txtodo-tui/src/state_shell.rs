@@ -11,6 +11,8 @@ pub struct Shell {
     pub root: String,
     /// The header search field's text (the Tasks search, task `tui-revamp/tui-tasks`).
     pub search: String,
+    /// This session's recent queries, newest first (the suggestions panel).
+    pub recent_searches: Vec<String>,
     /// The `W` popup's rows, filled when it opens.
     pub menu: WorkspaceMenu,
     /// Whether the daemon's `Watch` stream is up.

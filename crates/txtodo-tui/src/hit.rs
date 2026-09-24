@@ -17,6 +17,8 @@ pub enum Target {
     Command(Command),
     /// A row of the `W` popup: a workspace, or `items.len()` for Manage workspaces.
     MenuItem(usize),
+    /// A search suggestion: a term, or past the terms a recent query.
+    Suggestion(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

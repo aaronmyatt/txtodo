@@ -16,13 +16,33 @@ use crate::state_nav::Focus;
 pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
     match command {
         Command::SearchFocus => state.nav.focus = Focus::Search,
-        Command::SearchNext => step(state, true),
+        Command::SearchNext => {
+            crate::search_suggest::remember(&mut state.shell.recent_searches, &state.shell.search);
+            step(state, true);
+        }
+        Command::SearchSuggest => {
+            let terms = crate::search_suggest::suggestions(state);
+            if let Some(q) = crate::search_suggest::complete(&state.shell.search, &terms) {
+                state.shell.search = q;
+            }
+        }
         Command::SearchPrev => step(state, false),
         Command::SearchClear if state.shell.search.is_empty() => state.nav.focus = Focus::List,
         Command::SearchClear => state.shell.search.clear(),
         _ => return None,
     }
     Some(None)
+}
+
+/// A click on suggestion `index`: a term toggles in the query; past the terms, a recent query
+/// replaces it.
+pub fn pick_suggestion(state: &mut AppState, index: usize) {
+    let terms = crate::search_suggest::suggestions(state);
+    if let Some(term) = terms.get(index) {
+        state.shell.search = crate::search_suggest::toggle(&state.shell.search, term);
+    } else if let Some(recent) = state.shell.recent_searches.get(index - terms.len()) {
+        state.shell.search = recent.clone();
+    }
 }
 
 /// Moves the cursor to the next hit after it (or the previous one before it), wrapping around.

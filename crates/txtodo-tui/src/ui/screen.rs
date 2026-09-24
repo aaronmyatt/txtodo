@@ -12,8 +12,10 @@ use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
 use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
-use crate::state_nav::{Overlay, Screen};
-use crate::ui::{banner, footer, header, list, offers, subbar, sync, toast, workspace_menu};
+use crate::state_nav::{Focus, Overlay, Screen};
+use crate::ui::{
+    banner, footer, header, list, offers, search_panel, subbar, sync, toast, workspace_menu,
+};
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
 /// `W` popup, `edit`, the `r` pane, the `:` line) is active. Returns where the clickable things
@@ -40,6 +42,10 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
     toast::draw(frame, main_area, &state.shell, now, &mut hits);
     if state.sync_visible {
         sync::draw_popup(frame, main_area, &state.sync, &mut hits);
+    }
+    if state.nav.focus == Focus::Search {
+        let screen = frame.area();
+        search_panel::draw(frame, screen, header_area.bottom(), state, &mut hits);
     }
     if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
         let screen = frame.area();

@@ -170,6 +170,8 @@ commands! {
     SearchNext = "search.next", ["Enter"], Search;
     /// The previous match.
     SearchPrev = "search.prev", ["Shift-Enter"], Search;
+    /// Complete the word being typed, or add the next suggested term.
+    SearchSuggest = "search.suggest", ["Tab"], Search;
     /// Clear the search, then leave it.
     SearchClear = "search.clear", ["Esc"], Search;
     /// The Tasks screen.

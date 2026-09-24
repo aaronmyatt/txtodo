@@ -32,6 +32,7 @@ pub mod ui {
     pub mod offers;
     pub mod row;
     pub mod screen;
+    pub mod search_panel;
     pub mod subbar;
     pub mod sync;
     pub mod toast;
@@ -52,6 +53,7 @@ pub mod input;
 pub mod keymap;
 pub mod mouse;
 pub mod search;
+pub mod search_suggest;
 
 pub mod app;
 pub mod app_apply;
