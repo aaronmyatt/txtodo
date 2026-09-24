@@ -26,6 +26,7 @@ pub mod ui {
 
 pub mod action;
 pub mod daemon;
+pub mod daemon_workspace;
 pub mod input;
 
 pub mod app;
