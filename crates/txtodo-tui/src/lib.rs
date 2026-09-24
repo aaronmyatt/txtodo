@@ -26,6 +26,11 @@ pub mod ui {
 
 pub mod action;
 pub mod daemon;
+pub mod daemon_activity;
+pub mod daemon_devices;
+pub mod daemon_history;
+pub mod daemon_notes;
+pub mod daemon_tokens;
 pub mod daemon_workspace;
 pub mod input;
 
