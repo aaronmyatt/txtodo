@@ -241,12 +241,31 @@ pub fn rebaseline(state: &mut AppState, file: &pb::FileContents) {
     state.cursor = cursor.min(state.row_count() - 1);
 }
 
-/// One `Watch` change: appends any freshly raised `needs_review` flags. `Change` carries only the
-/// projection's hash, not its bytes, so the line text itself is re-baselined by whichever caller
-/// already holds a fresh `GetFile` for this tick (`run_loop`'s reconnect path); wiring a `GetFile`
-/// into the common, non-reconnect path too is a small follow-up this crate's own next task can
-/// pick up without crossing the slice fence (see `daemon.rs`'s module doc).
-pub(crate) fn apply_change(state: &mut AppState, change: pb::Change) {
+/// Follows one `Watch` change: its review flags, then whatever it names. A layout change re-reads
+/// the root list and returns the `Watch` stream to swap in when that moved; a change to the open
+/// document (another client, a peer, an editor on disk) re-fetches it, since `Change` carries only
+/// a hash. The TUI's own edits come back here too, a second fetch after `perform`'s: cheap, and one
+/// path for every writer. `pub` for the integration tests, like [`perform`].
+pub async fn follow_change(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    change: pb::Change,
+) -> Result<Option<tonic::Streaming<pb::Change>>, DaemonError> {
+    let layout_changed = crate::app_layout::is_layout_change(&change);
+    let this_document = change.path == state.path;
+    apply_change(state, change);
+    if layout_changed {
+        return crate::app_layout::follow_root_list(daemon, state).await;
+    }
+    if this_document {
+        let file = daemon.get_file(&state.path).await?;
+        rebaseline(state, &file);
+    }
+    Ok(None)
+}
+
+/// One `Watch` change's review flags, appended to the conflict list.
+fn apply_change(state: &mut AppState, change: pb::Change) {
     for flag in change.review {
         state.needs_review.push(to_conflict_item(flag));
     }

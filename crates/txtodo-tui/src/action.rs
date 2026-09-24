@@ -12,7 +12,8 @@ pub enum Action {
     Apply(pb::ApplyRequest),
     /// Send `ResolveConflict`.
     Resolve(pb::ResolveRequest),
-    /// `o` pane `a`+`Enter`: adopt a peer's offered workspace at the typed directory.
+    /// `o` pane `a`: accept a peer's offered workspace; the daemon mirrors it into a folder of its
+    /// own choosing (task `remote-workspace-mirror`), so nothing is typed.
     AcceptOffer(pb::WorkspaceAcceptOfferRequest),
     /// `o` pane `d`: discard a peer's offer.
     DeclineOffer(pb::WorkspaceDeclineOfferRequest),

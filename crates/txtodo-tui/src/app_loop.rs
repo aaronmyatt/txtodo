@@ -9,14 +9,14 @@ use crossterm::event::{Event, KeyEventKind};
 use tokio::sync::mpsc;
 use txtodo_proto::v1 as pb;
 
-use crate::app::{apply_change, perform, reconnect_watch};
+use crate::app::{follow_change, perform, reconnect_watch};
 use crate::daemon::{Daemon, DaemonError};
 use crate::input::Input;
 use crate::state::AppState;
 use crate::ui::screen::draw;
 
 /// How often the `s` indicator refreshes from a real `SyncStatus` call (`ui/sync.rs`'s own
-/// module doc: "on a 1 s tick") — independent of the `Watch`-driven refresh `apply_change` also
+/// module doc: "on a 1 s tick") — independent of the `Watch`-driven refresh `follow_change` also
 /// does, since a peer's lag can change with no local `Watch` event at all.
 const SYNC_STATUS_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -94,12 +94,8 @@ async fn handle_watch_message(
     reconnects: &mut u32,
 ) -> Result<(), DaemonError> {
     if let Ok(Some(change)) = change {
-        let layout_changed = crate::app_layout::is_layout_change(&change);
-        apply_change(state, change);
         *reconnects = 0;
-        if layout_changed
-            && let Some(fresh) = crate::app_layout::follow_root_list(daemon, state).await?
-        {
+        if let Some(fresh) = follow_change(daemon, state, change).await? {
             *watch = fresh;
         }
     } else {

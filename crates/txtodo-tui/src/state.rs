@@ -21,8 +21,6 @@ pub struct AppState {
     pub lines: Vec<LineState>,
     /// Index into `lines`; `lines.len()` selects the trailing Add-a-line row.
     pub cursor: usize,
-    /// Whether `id:` tags are painted (header toggle, design §3.1).
-    pub show_id: bool,
     /// The single-line editor's draft, when `i`/`a`/`A` is active; `None` otherwise.
     pub editing: Option<EditDraft>,
     /// Whether the conflict-review pane (`r`) is open.
@@ -71,7 +69,6 @@ impl AppState {
             path: path.into(),
             lines,
             cursor: 0,
-            show_id: false,
             editing: None,
             conflicts_open: false,
             needs_review: Vec::new(),
@@ -147,11 +144,6 @@ impl AppState {
     /// `G`: jump to the last row (the Add-a-line row, since it is always the last row).
     pub fn move_last(&mut self) {
         self.cursor = self.lines.len();
-    }
-
-    /// `id:` visibility header toggle.
-    pub fn toggle_show_id(&mut self) {
-        self.show_id = !self.show_id;
     }
 
     /// `s`: toggles the sync indicator.

@@ -12,7 +12,7 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
 - `state::{AppState, LineState, EditDraft, EditTarget, ConflictItem, PeerStatus, SyncSnapshot,
   Resolution}` — everything the UI renders from; `AppState::fixture()` for tests/fixtures,
   `AppState::from_document` from real bytes. Navigation (`move_down`/`up`/`first`/`last`),
-  toggles (`show_id`/`sync_visible`/`conflicts_open`), and the `:` command line
+  toggles (`sync_visible`/`conflicts_open`), and the `:` command line
   (`start_command`/`cancel_command`/`run_command`) all live here.
 - `ui::list::{rows, list_widget, ListInput}` — the line list + `j`/`k`/`gg`/`G` + the trailing
   Add-a-line row. `ui::edit::{start, on_key, commit, cancel, OpenKey}` — the `i`/`a`/`A` single-

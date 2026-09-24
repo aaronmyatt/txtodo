@@ -53,12 +53,11 @@ fn edit_label(target: &EditTarget) -> &'static str {
     }
 }
 
-/// The path, the `id:` toggle and the skill hint on the left; this build's version and date on the
+/// The path, the workspace, pending offers, a refusal and the skill hint on the left; this build's version and date on the
 /// right, dim. The version is the first thing to go: it is shown only when the whole line still
 /// fits in `width` columns with a gap, so a narrow terminal loses nothing it needs.
 /// `Line::width`: https://docs.rs/ratatui/latest/ratatui/text/struct.Line.html#method.width
 fn status_line(state: &AppState, width: u16) -> Line<'static> {
-    let id = if state.show_id { "id:on" } else { "id:off" };
     let hint = if state.skill_hint {
         " \u{b7} no agent playbook installed; run `txtodo skill install`"
     } else {
@@ -77,10 +76,7 @@ fn status_line(state: &AppState, width: u16) -> Line<'static> {
         .last_error
         .as_deref()
         .map_or_else(String::new, |e| format!(" \u{b7} refused: {e}"));
-    let left = format!(
-        " {}{workspace} \u{b7} {id}{pending}{error}{hint}",
-        state.path
-    );
+    let left = format!(" {}{workspace}{pending}{error}{hint}", state.path);
     let version = format!("{} ", crate::buildinfo::UI_LABEL);
     let used = Line::from(left.as_str()).width() + Line::from(version.as_str()).width();
     let Some(gap) = usize::from(width).checked_sub(used).filter(|gap| *gap >= 2) else {
@@ -136,7 +132,7 @@ mod tests {
         let state = AppState::fixture();
         let text = status_line(&state, 120).to_string();
         assert!(!text.contains("skill install"));
-        assert!(text.contains("id:off"));
+        assert!(text.contains(&state.path));
     }
 
     #[test]
@@ -154,7 +150,7 @@ mod tests {
         let state = AppState::fixture();
         let narrow = status_line(&state, 30).to_string();
         assert!(!narrow.contains(crate::buildinfo::UI_LABEL));
-        assert!(narrow.contains("id:off"), "the rest stays: {narrow}");
+        assert!(narrow.contains(&state.path), "the rest stays: {narrow}");
     }
 
     #[test]

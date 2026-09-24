@@ -32,7 +32,7 @@ pub fn rows(state: &AppState) -> Vec<Line<'static>> {
         .lines
         .iter()
         .map(|l| {
-            let mut line = paint_line(&l.raw, l.completed, state.show_id);
+            let mut line = paint_line(&l.raw, l.completed, false);
             if over_length_hint(&l.raw).is_some() {
                 line.spans.push(Span::styled(
                     format!(" [{LINE_LENGTH_HINT}+]"),

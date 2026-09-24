@@ -14,13 +14,14 @@ mod support;
 
 use std::time::Duration;
 
-use txtodo_tui::app::reconnect_watch;
+use txtodo_tui::app::{follow_change, reconnect_watch};
 use txtodo_tui::state::AppState;
 
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn external_edit_appears_on_watch_without_a_manual_refresh() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
+    let mut state = AppState::from_document("todo.txt", "buy milk\n");
     let mut watch = daemon
         .watch(vec!["todo.txt".to_owned()])
         .await
@@ -37,14 +38,14 @@ async fn external_edit_appears_on_watch_without_a_manual_refresh() {
         .unwrap_or_else(|| panic!("watch stream ended with no change"));
     assert_eq!(change.path, "todo.txt");
 
-    // The client never re-reads the file itself (design invariant) — it re-baselines from
-    // `GetFile`, whose bytes must now show the externally added line.
-    let file = daemon
-        .get_file("todo.txt")
+    // The client never re-reads the file itself (design invariant): following the change
+    // re-baselines from `GetFile`, so the list now shows the externally added line.
+    let fresh = follow_change(&mut daemon, &mut state, change)
         .await
-        .unwrap_or_else(|e| panic!("get_file: {e}"));
-    let text = String::from_utf8_lossy(&file.bytes);
-    assert!(text.contains("call mom"), "{text:?}");
+        .unwrap_or_else(|e| panic!("follow_change: {e}"));
+    assert!(fresh.is_none(), "not a layout change");
+    let lines: Vec<&str> = state.lines.iter().map(|l| l.raw.as_str()).collect();
+    assert_eq!(lines, ["buy milk", "call mom"]);
 }
 
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
