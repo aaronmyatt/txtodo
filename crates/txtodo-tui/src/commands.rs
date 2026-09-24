@@ -27,8 +27,20 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
         Command::ListLast => state.move_last(),
         Command::ListEditStart => edit::start(state, OpenKey::Insert),
         Command::ListEditEnd => edit::start(state, OpenKey::AppendEnd),
-        Command::ListDelete => return apply(state, delete_selected(state)),
-        Command::ListToggleComplete => return apply(state, toggle_complete(state)),
+        Command::ListDelete => {
+            let m = delete_selected(state);
+            return toasting(state, m, "Deleted the line");
+        }
+        Command::ListToggleComplete => {
+            let done = state.selected_line().is_some_and(|l| l.completed);
+            let m = toggle_complete(state);
+            let message = if done {
+                "Reopened the line"
+            } else {
+                "Completed the line"
+            };
+            return toasting(state, m, message);
+        }
         Command::ListMoveDown => {
             let m = move_selected_down(state);
             return apply(state, m);
@@ -93,6 +105,13 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         other => return crate::commands_nav::run(state, other).flatten(),
     }
     None
+}
+
+/// [`apply`], and the toast (with Undo) to show once the daemon has it.
+fn toasting(state: &mut AppState, mutation: Option<pb::Mutation>, message: &str) -> Option<Action> {
+    let action = apply(state, mutation)?;
+    state.shell.pending_toast = Some(message.to_owned());
+    Some(action)
 }
 
 fn apply(state: &AppState, mutation: Option<pb::Mutation>) -> Option<Action> {

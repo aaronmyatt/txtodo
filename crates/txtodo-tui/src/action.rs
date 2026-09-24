@@ -25,6 +25,8 @@ pub enum Action {
     OpenWorkspaceMenu,
     /// Put this text on the clipboard (OSC 52): a refused edit, a new token's secret.
     Copy(String),
+    /// A toast's Undo: the daemon's `Undo` of the newest ops (this many) to this document.
+    Undo(String, u32),
     /// `:q`: exit the event loop.
     Quit,
 }

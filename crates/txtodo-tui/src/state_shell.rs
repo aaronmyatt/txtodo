@@ -1,5 +1,8 @@
 //! The window chrome's state (task `tui-revamp/tui-shell`): which workspace the header names, the
-//! header's search text, and the `W` workspace popup. Kept out of `state.rs` for its line budget.
+//! header's search text, the `W` workspace popup, the banners' inputs and the toasts. Kept out of
+//! `state.rs` for its line budget.
+
+use std::time::{Duration, Instant};
 
 /// Everything the header and its popups draw from.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -19,7 +22,48 @@ pub struct Shell {
     /// The last edit the daemon refused, kept so it can be copied back out.
     pub refused: Option<Refused>,
     /// When the last edit landed: the footer says "saved" for a moment.
-    pub saved_at: Option<std::time::Instant>,
+    pub saved_at: Option<Instant>,
+    /// Toasts, oldest first.
+    pub toasts: Vec<Toast>,
+    /// What the next Apply toasts when it lands; dropped when it is refused.
+    pub pending_toast: Option<String>,
+}
+
+/// How long a toast stays (the c2 mockup's 5 s).
+pub const TOAST_FOR: Duration = Duration::from_secs(5);
+
+/// A short note in the bottom-right corner, with Undo when it reports a change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Toast {
+    /// What happened.
+    pub message: String,
+    /// What Undo reverts through the daemon's `Undo`: the document, and how many ops the change
+    /// appended (`ApplyResponse.applied`; a delete that leaves a blank line is two).
+    pub undo: Option<(String, u32)>,
+    /// When it appeared.
+    pub at: Instant,
+}
+
+impl Shell {
+    /// Adds a toast at `now`.
+    pub fn toast(&mut self, message: impl Into<String>, undo: Option<(String, u32)>, now: Instant) {
+        self.toasts.push(Toast {
+            message: message.into(),
+            undo,
+            at: now,
+        });
+    }
+
+    /// Drops the toasts older than [`TOAST_FOR`].
+    pub fn prune(&mut self, now: Instant) {
+        self.toasts.retain(|t| now.duration_since(t.at) < TOAST_FOR);
+    }
+
+    /// The newest toast, when it has Undo: only the newest change can be undone, so an older
+    /// toast's Undo would revert the wrong one.
+    pub fn undoable(&self) -> Option<&Toast> {
+        self.toasts.last().filter(|t| t.undo.is_some())
+    }
 }
 
 /// The `Watch` stream's state, for the daemon banner.

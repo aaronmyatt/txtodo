@@ -564,7 +564,7 @@ title = "Undo from a toast"
 keys = []
 scope = "global"
 desktop = { status = "planned", surface = "toast" }
-tui = { status = "planned", surface = "toast" }
+tui = { status = "done", surface = "toast" }
 deviation = ""
 
 # ==== Screens: desktop surface -> TUI surface (tasks/tui-revamp/notes.md "Screen map") ============

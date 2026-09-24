@@ -31,6 +31,7 @@ pub mod ui {
     pub mod offers;
     pub mod screen;
     pub mod sync;
+    pub mod toast;
     pub mod workspace_menu;
 }
 
@@ -49,6 +50,7 @@ pub mod keymap;
 pub mod mouse;
 
 pub mod app;
+pub mod app_apply;
 pub mod app_layout;
 pub mod app_loop;
 pub mod app_offers;

@@ -199,6 +199,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::SwitchWorkspace(_) => "switch_workspace",
         Action::OpenWorkspaceMenu => "open_workspace_menu",
         Action::Copy(_) => "copy",
+        Action::Undo(..) => "undo",
     }
 }
 
@@ -209,60 +210,40 @@ async fn perform_inner(
 ) -> Result<bool, DaemonError> {
     match action {
         Action::Quit => return Ok(false),
-        Action::Apply(req) => {
-            let path = req.path.clone();
-            // A refusal (a stale TaskRef, a line that changed underneath) is the daemon doing its
-            // job: it goes on the status line, never out of the loop. A transport error still does.
-            let typed = typed_line(&req);
-            match daemon.apply(req).await {
-                Ok(_) => {
-                    state.last_error = None;
-                    state.shell.refused = None;
-                    state.shell.saved_at = Some(std::time::Instant::now());
-                }
-                Err(DaemonError::Rpc(status)) => {
-                    state.last_error = Some(status.message().to_owned());
-                    state.shell.refused = typed.map(|text| crate::state_shell::Refused {
-                        error: status.message().to_owned(),
-                        text,
-                    });
-                    return Ok(true);
-                }
-                Err(e) => return Err(e),
-            }
-            let file = daemon.get_file(&path).await?;
-            rebaseline(state, &file);
-        }
+        Action::Apply(req) => crate::app_apply::apply(daemon, state, req).await?,
         Action::SwitchWorkspace(query) => {
             crate::app_workspace::switch_workspace(daemon, state, &query).await?;
         }
         Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await?,
-        Action::Copy(text) => {
-            if let Err(e) = crate::clipboard::copy(&text) {
-                state.last_error = Some(format!("copy failed: {e}"));
-            }
-        }
+        Action::Undo(path, steps) => crate::app_apply::undo(daemon, state, &path, steps).await?,
+        Action::Copy(text) => copy(state, &text),
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;
         }
-        Action::Resolve(req) => {
-            daemon.resolve(req).await?;
-            state.needs_review.clear();
-            if let Ok(flags) = daemon.list_conflicts(&state.path).await {
-                state.needs_review = flags.flags.into_iter().map(to_conflict_item).collect();
-            }
-        }
+        Action::Resolve(req) => resolve(daemon, state, req).await?,
     }
     Ok(true)
 }
 
-/// The line a request typed (an `Add` or an `Edit`), kept so a refused one can be copied back.
-fn typed_line(req: &pb::ApplyRequest) -> Option<String> {
-    match req.mutations.first()?.kind.as_ref()? {
-        pb::mutation::Kind::Add(add) => Some(add.line.clone()),
-        pb::mutation::Kind::Edit(edit) => Some(edit.new_line.clone()),
-        _ => None,
+/// Resolves one conflict, then re-reads the flags the daemon still holds for the document.
+async fn resolve(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    req: pb::ResolveRequest,
+) -> Result<(), DaemonError> {
+    daemon.resolve(req).await?;
+    state.needs_review.clear();
+    if let Ok(flags) = daemon.list_conflicts(&state.path).await {
+        state.needs_review = flags.flags.into_iter().map(to_conflict_item).collect();
+    }
+    Ok(())
+}
+
+/// Puts `text` on the clipboard through the terminal; a failed write says so.
+fn copy(state: &mut AppState, text: &str) {
+    if let Err(e) = crate::clipboard::copy(text) {
+        state.last_error = Some(format!("copy failed: {e}"));
     }
 }
 

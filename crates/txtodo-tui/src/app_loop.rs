@@ -111,6 +111,7 @@ impl Watching {
 
     /// The 1 s tick: sync status and offers, then a reconnect if the stream is down.
     async fn on_tick(&mut self, daemon: &mut Daemon, state: &mut AppState) {
+        state.shell.prune(std::time::Instant::now());
         crate::app_offers::refresh_on_tick(daemon, state).await;
         self.retry(daemon, state).await;
     }

@@ -72,6 +72,11 @@ fn run_banner(state: &mut AppState, command: Command) -> Option<Option<Action>> 
             return Some(Some(Action::Copy(refused.text)));
         }
         Command::AppRetryDaemon => {}
+        Command::ToastUndo => {
+            let (path, steps) = state.shell.undoable()?.undo.clone()?;
+            state.shell.toasts.pop();
+            return Some(Some(Action::Undo(path, steps)));
+        }
         _ => return None,
     }
     Some(None)
