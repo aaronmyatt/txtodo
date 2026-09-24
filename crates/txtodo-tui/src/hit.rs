@@ -19,6 +19,10 @@ pub enum Target {
     MenuItem(usize),
     /// A search suggestion: a term, or past the terms a recent query.
     Suggestion(usize),
+    /// A breadcrumb in the detail panel: keep this many levels.
+    Crumb(usize),
+    /// A row of the detail panel's sub-list (`lines.len()` is its Add-a-line row).
+    DetailRow(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

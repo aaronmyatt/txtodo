@@ -14,8 +14,8 @@ use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, conflict_sheet, footer, header, list, offers, search_panel, subbar, sync, toast,
-    workspace_menu,
+    banner, conflict_sheet, detail, footer, header, list, offers, search_panel, subbar, sync,
+    toast, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -85,9 +85,16 @@ fn draw_placeholder(frame: &mut Frame, area: Rect, screen: Screen) {
 
 /// The Tasks screen: the sub-toolbar, the line list and the overlays that sit on it.
 fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) {
-    let [bar_area, list_area] =
-        Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).areas(area);
+    // The detail panel takes the bottom 55% and the list stays above it, as in c2.
+    let panel = if state.detail.is_open() { 55 } else { 0 };
+    let [bar_area, list_area, panel_area] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Min(1),
+        Constraint::Percentage(panel),
+    ])
+    .areas(area);
     subbar::draw(frame, bar_area, state);
+    detail::draw(frame, panel_area, state, hits);
     // Start from the last frame's scroll; ratatui moves it only to keep the cursor in view.
     // Ref: https://docs.rs/ratatui/latest/ratatui/widgets/struct.ListState.html
     let mut list_state = ListState::default()

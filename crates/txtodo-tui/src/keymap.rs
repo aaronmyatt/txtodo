@@ -174,6 +174,24 @@ commands! {
     SearchSuggest = "search.suggest", ["Tab"], Search;
     /// Clear the search, then leave it.
     SearchClear = "search.clear", ["Esc"], Search;
+    /// Open the line's detail: sub-list and notes.
+    DetailOpen = "detail.open", ["Enter", "Ctrl-Enter"], List;
+    /// Close the detail panel.
+    DetailClose = "detail.close", ["Esc"], Detail;
+    /// Up one level.
+    DetailUp = "detail.up", ["Backspace"], Detail;
+    /// The next part of the panel.
+    DetailNextPart = "detail.next_part", ["Tab"], Detail;
+    /// The previous part of the panel.
+    DetailPrevPart = "detail.prev_part", ["Shift-Tab"], Detail;
+    /// Edit the parent line.
+    DetailEditParent = "detail.edit_parent", [], Detail;
+    /// Mark the parent done once every sub-task is.
+    DetailCompleteParent = "detail.complete_parent", [], Detail;
+    /// Go to the sub-list (where the first sub-task is added).
+    DetailStartSublist = "detail.start_sublist", [], Detail;
+    /// Edit the notes.
+    DetailEditNotes = "detail.edit_notes", [], Detail;
     /// The Tasks screen.
     NavTasks = "nav.tasks", ["g t"], Global;
     /// The Universal screen.
@@ -234,6 +252,7 @@ pub fn key_name(key: &KeyEvent) -> Option<String> {
         KeyCode::Enter => "Enter",
         KeyCode::Esc => "Esc",
         KeyCode::Tab => "Tab",
+        KeyCode::BackTab => return Some("Shift-Tab".to_owned()),
         KeyCode::Backspace => "Backspace",
         KeyCode::Delete => "Delete",
         KeyCode::Up => "Up",

@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::action::Action;
 use crate::commands;
@@ -51,8 +51,8 @@ impl Mouse {
                 state.hover = row_of(target);
                 None
             }
-            MouseEventKind::ScrollDown => scroll(state, WHEEL_ROWS),
-            MouseEventKind::ScrollUp => scroll(state, -WHEEL_ROWS),
+            MouseEventKind::ScrollDown => wheel(state, target, true),
+            MouseEventKind::ScrollUp => wheel(state, target, false),
             MouseEventKind::Down(MouseButton::Left) => self.press(state, target, &ev, now),
             MouseEventKind::Up(MouseButton::Left) => self.release(state, target),
             _ => None,
@@ -77,23 +77,57 @@ impl Mouse {
                 crate::search::pick_suggestion(state, index);
                 return None;
             }
+            Target::Crumb(keep) => return crate::commands_detail::leave(state, keep),
+            Target::DetailRow(index) => return self.press_sub_row(state, index, ev, now),
             Target::Inert => return None,
         };
+        let double = self.is_double(ev, now);
+        state.cursor = row;
+        // A click on the list takes the keyboard back from the search field or the panel.
+        state.nav.focus = crate::state_nav::Focus::List;
+        if double {
+            self.dragging = None;
+            return commands::run(state, Command::DetailOpen);
+        }
+        self.dragging = Some(row);
+        None
+    }
+
+    /// A click on a row of the detail panel's sub-list: selects it and gives the sub-list the
+    /// keyboard; a double-click opens it a level deeper.
+    fn press_sub_row(
+        &mut self,
+        state: &mut AppState,
+        index: usize,
+        ev: &MouseEvent,
+        now: Instant,
+    ) -> Option<Action> {
+        let double = self.is_double(ev, now);
+        self.dragging = None;
+        state.nav.focus = crate::state_nav::Focus::Detail;
+        state.detail.part = crate::state_detail::Part::Sub;
+        crate::state_detail::with_sub_list(state, |s| {
+            s.cursor = index;
+            if double {
+                commands::run(s, Command::DetailOpen)
+            } else {
+                None
+            }
+        })
+        .flatten()
+    }
+
+    /// Whether this press, at `now`, is the second of a double-click; remembers it otherwise.
+    fn is_double(&mut self, ev: &MouseEvent, now: Instant) -> bool {
         let double = self.last_press.is_some_and(|(column, line, at)| {
             (column, line) == (ev.column, ev.row) && now.duration_since(at) <= DOUBLE_CLICK
         });
-        state.cursor = row;
-        // A click on the list takes the keyboard back from the search field; the query stays.
-        state.nav.focus = crate::state_nav::Focus::List;
-        if double {
-            self.last_press = None;
-            self.dragging = None;
-            // The detail panel takes this over once it exists (tasks/tui-revamp/tui-detail).
-            return commands::run(state, Command::ListEditEnd);
-        }
-        self.last_press = Some((ev.column, ev.row, now));
-        self.dragging = Some(row);
-        None
+        self.last_press = if double {
+            None
+        } else {
+            Some((ev.column, ev.row, now))
+        };
+        double
     }
 
     fn release(&mut self, state: &mut AppState, target: Option<Target>) -> Option<Action> {
@@ -113,7 +147,38 @@ fn busy(state: &AppState) -> bool {
 fn row_of(target: Option<Target>) -> Option<usize> {
     match target? {
         Target::Row(row) => Some(row),
-        Target::Command(_) | Target::MenuItem(_) | Target::Suggestion(_) | Target::Inert => None,
+        Target::Command(_)
+        | Target::MenuItem(_)
+        | Target::Suggestion(_)
+        | Target::Crumb(_)
+        | Target::DetailRow(_)
+        | Target::Inert => None,
+    }
+}
+
+/// The wheel over the detail panel's sub-list moves its cursor, over its notes moves their caret,
+/// anywhere else scrolls the list.
+fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Action> {
+    let steps = WHEEL_ROWS.unsigned_abs();
+    match target {
+        Some(Target::DetailRow(_)) => {
+            crate::state_detail::with_sub_list(state, |s| {
+                for _ in 0..steps {
+                    if down { s.move_down() } else { s.move_up() }
+                }
+            });
+            None
+        }
+        Some(Target::Command(Command::DetailEditNotes)) => {
+            let notes = &mut state.detail.top_mut()?.notes;
+            let code = if down { KeyCode::Down } else { KeyCode::Up };
+            for _ in 0..steps {
+                let key = KeyEvent::new(code, KeyModifiers::NONE);
+                crate::ui::notes_edit::on_key(notes, key, Instant::now());
+            }
+            None
+        }
+        _ => scroll(state, if down { WHEEL_ROWS } else { -WHEEL_ROWS }),
     }
 }
 

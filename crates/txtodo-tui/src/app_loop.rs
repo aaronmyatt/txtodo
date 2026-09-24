@@ -64,22 +64,55 @@ async fn run_loop_inner(
 
     loop {
         draw_frame(terminal, state);
-        let keep_going = tokio::select! {
-            event = events.recv() => {
-                handle_input(daemon, &mut input, state, event, &mut watching).await?
-            }
-            change = watching.next() => {
-                handle_watch_message(daemon, state, change, &mut watching).await;
-                true
-            }
-            _ = sync_tick.tick() => {
-                watching.on_tick(daemon, state).await;
-                true
-            }
+        let autosave = crate::app_detail::autosave_due(state);
+        let wake = tokio::select! {
+            event = events.recv() => Wake::Input(event),
+            change = watching.next() => Wake::Change(change),
+            _ = sync_tick.tick() => Wake::Tick,
+            () = wait_until(autosave) => Wake::Autosave,
         };
+        let keep_going = on_wake(wake, daemon, &mut input, state, &mut watching).await?;
         if !keep_going || state.should_quit {
             return Ok(());
         }
+    }
+}
+
+/// Handles one wake-up; `false` when the loop should exit.
+async fn on_wake(
+    wake: Wake,
+    daemon: &mut Daemon,
+    input: &mut Input,
+    state: &mut AppState,
+    watching: &mut Watching,
+) -> Result<bool, DaemonError> {
+    match wake {
+        Wake::Input(event) => return handle_input(daemon, input, state, event, watching).await,
+        Wake::Change(change) => handle_watch_message(daemon, state, change, watching).await,
+        Wake::Tick => watching.on_tick(daemon, state).await,
+        Wake::Autosave => crate::app_detail::save_dirty_notes(daemon, state).await?,
+    }
+    Ok(true)
+}
+
+/// What woke the loop.
+enum Wake {
+    /// A terminal event (`None`: the reader thread ended).
+    Input(Option<io::Result<Event>>),
+    /// The `Watch` stream's next message.
+    Change(Result<Option<pb::Change>, tonic::Status>),
+    /// The 1 s tick.
+    Tick,
+    /// Typing in the notes paused long enough to save.
+    Autosave,
+}
+
+/// Resolves at `at`; never, without one.
+/// Ref: https://docs.rs/tokio/latest/tokio/time/fn.sleep_until.html
+async fn wait_until(at: Option<std::time::Instant>) {
+    match at {
+        Some(at) => tokio::time::sleep_until(tokio::time::Instant::from_std(at)).await,
+        None => std::future::pending().await,
     }
 }
 
@@ -198,7 +231,8 @@ async fn handle_input(
     let keep_going = perform(daemon, state, action).await?;
     // A workspace switch moved `path` to another workspace: its old stream watches the old one.
     if std::mem::take(&mut state.rewatch) {
-        watching.stream = Some(daemon.watch(vec![state.path.clone()]).await?);
+        let paths = crate::app_detail::watched_paths(state);
+        watching.stream = Some(daemon.watch(paths).await?);
     }
     Ok(keep_going)
 }

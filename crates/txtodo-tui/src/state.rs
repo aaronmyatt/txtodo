@@ -5,6 +5,7 @@
 //! real `Daemon` calls.
 
 use crate::hit::HitMap;
+use crate::state_detail::Detail;
 use crate::state_offers::OffersPane;
 use crate::state_shell::Shell;
 use crate::state_tasks::TasksView;
@@ -67,6 +68,8 @@ pub struct AppState {
     pub shell: Shell,
     /// The Tasks screen's `ref:` badges (task `tui-revamp/tui-tasks`).
     pub tasks: TasksView,
+    /// The detail panel (task `tui-revamp/tui-detail`).
+    pub detail: Detail,
 }
 
 impl AppState {
@@ -101,6 +104,7 @@ impl AppState {
             hits: HitMap::default(),
             shell: Shell::default(),
             tasks: TasksView::default(),
+            detail: Detail::default(),
         }
     }
 

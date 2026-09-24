@@ -16,6 +16,7 @@ use ratatui::widgets::Paragraph;
 use crate::hit::{HitMap, Target};
 use crate::keymap::Command;
 use crate::state::AppState;
+use crate::state_detail::Part;
 use crate::state_nav::{Focus, Screen};
 
 /// How long "saved" shows after an edit lands.
@@ -39,14 +40,25 @@ pub fn status(state: &AppState, now: Instant) -> String {
     }
 }
 
-/// `Ln N` for the selected line on the Tasks screen; `Ln +` on the Add-a-line row.
+/// Where the keyboard is on the Tasks screen: `Ln N` for the selected line (`Ln +` on the
+/// Add-a-line row), the sub-list's line while the detail panel has it, or the notes' path.
 fn caret(state: &AppState) -> Option<String> {
     if state.nav.screen != Screen::Tasks {
         return None;
     }
-    Some(match state.selected_line() {
+    let ln = |line: Option<&crate::state::LineState>| match line {
         Some(line) => format!("Ln {}", line.line_number),
         None => "Ln +".to_owned(),
+    };
+    let level = state
+        .detail
+        .top()
+        .filter(|_| state.nav.focus == Focus::Detail);
+    Some(match (level, state.detail.part) {
+        (Some(level), Part::Notes) => format!("{}/notes.md", level.dir),
+        (Some(level), Part::Sub) => ln(level.doc.lines.get(level.doc.cursor)),
+        (Some(_), Part::Parent) => "parent".to_owned(),
+        (None, _) => ln(state.selected_line()),
     })
 }
 
@@ -57,6 +69,14 @@ fn hints(state: &AppState) -> &'static [(Command, &'static str)] {
             (Command::SearchNext, "next"),
             (Command::SearchPrev, "previous"),
             (Command::SearchClear, "clear"),
+        ];
+    }
+    if state.nav.focus == Focus::Detail {
+        return &[
+            (Command::DetailNextPart, "part"),
+            (Command::DetailOpen, "open"),
+            (Command::DetailUp, "up"),
+            (Command::DetailClose, "close"),
         ];
     }
     match state.nav.screen {

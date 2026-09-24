@@ -201,6 +201,8 @@ fn action_kind(action: &Action) -> &'static str {
         Action::OpenWorkspaceMenu => "open_workspace_menu",
         Action::Copy(_) => "copy",
         Action::Undo(..) => "undo",
+        Action::OpenDetail(_) => "open_detail",
+        Action::SaveNotes(..) => "save_notes",
     }
 }
 
@@ -218,6 +220,10 @@ async fn perform_inner(
         Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await?,
         Action::Undo(path, steps) => crate::app_apply::undo(daemon, state, &path, steps).await?,
         Action::Copy(text) => copy(state, &text),
+        Action::OpenDetail(parent) => crate::app_detail::open(daemon, state, parent).await?,
+        Action::SaveNotes(task, text) => {
+            crate::app_detail::save_notes(daemon, state, task, text).await?;
+        }
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;
@@ -276,7 +282,8 @@ pub async fn follow_change(
     change: pb::Change,
 ) -> Result<Option<tonic::Streaming<pb::Change>>, DaemonError> {
     let layout_changed = crate::app_layout::is_layout_change(&change);
-    let this_document = change.path == state.path;
+    let path = change.path.clone();
+    let this_document = crate::app_detail::watched_paths(state).contains(&path);
     if !change.review.is_empty() {
         state.shell.conflict_banner_hidden = false;
     }
@@ -285,8 +292,7 @@ pub async fn follow_change(
         return crate::app_layout::follow_root_list(daemon, state).await;
     }
     if this_document {
-        let file = daemon.get_file(&state.path).await?;
-        rebaseline(state, &file);
+        crate::app_detail::refetch(daemon, state, &path).await?;
     }
     Ok(None)
 }

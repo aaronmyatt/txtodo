@@ -474,8 +474,26 @@ title = "Open the line's detail: sub-list and notes"
 keys = ["Enter", "Mod-Enter"]
 scope = "list"
 desktop = { status = "differs", surface = "FileView", keys = ["Mod-Enter"] }
-tui = { status = "planned", surface = "detail panel", keys = ["Enter", "Ctrl-Enter"] }
+tui = { status = "differs", surface = "detail panel; or double-click", keys = ["Enter", "Ctrl-Enter"] }
 deviation = "Desktop has no list mode yet, so only Mod-Enter from the buffer. A terminal cannot see Cmd: the TUI binds Ctrl-Enter."
+
+[[action]]
+id = "detail.next_part"
+title = "Next part of the detail: parent, sub-list, notes"
+keys = ["Tab"]
+scope = "detail"
+desktop = { status = "done", surface = "DetailView (focus order)" }
+tui = { status = "done", surface = "detail panel" }
+deviation = ""
+
+[[action]]
+id = "detail.prev_part"
+title = "Previous part of the detail"
+keys = ["Shift-Tab"]
+scope = "detail"
+desktop = { status = "done", surface = "DetailView (focus order)" }
+tui = { status = "done", surface = "detail panel" }
+deviation = ""
 
 [[action]]
 id = "detail.close"
@@ -483,7 +501,7 @@ title = "Close the detail"
 keys = ["Esc"]
 scope = "detail"
 desktop = { status = "done", surface = "DetailView" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
@@ -745,8 +763,8 @@ title = "Up one level"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "DetailView back button" }
-tui = { status = "planned", surface = "detail panel" }
-deviation = ""
+tui = { status = "differs", surface = "detail panel", keys = ["Backspace"] }
+deviation = "Desktop goes up with its back button; the TUI binds Backspace in the sub-list."
 
 [[action]]
 id = "detail.breadcrumb"
@@ -754,7 +772,7 @@ title = "Jump to a level from the breadcrumb"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "Breadcrumb" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
@@ -763,7 +781,7 @@ title = "Edit the parent line (Enter saves, Esc reverts)"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "DetailView" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
@@ -772,7 +790,7 @@ title = "Mark the parent done once every sub-task is"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "DetailView" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
@@ -781,7 +799,7 @@ title = "Add the first sub-task (makes the ref: folder)"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "DetailView" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
@@ -790,7 +808,7 @@ title = "Edit notes.md; saves 500 ms after typing stops"
 keys = []
 scope = "detail"
 desktop = { status = "done", surface = "NotesEditor" }
-tui = { status = "planned", surface = "detail panel" }
+tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]

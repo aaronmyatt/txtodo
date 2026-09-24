@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use txtodo_proto::v1 as pb;
 
-use crate::app::rebaseline;
 use crate::daemon::{Daemon, DaemonError};
 use crate::state::AppState;
 use crate::state_shell::Refused;
@@ -21,6 +20,7 @@ pub(crate) async fn apply(
 ) -> Result<(), DaemonError> {
     let path = req.path.clone();
     let typed = typed_line(&req);
+    crate::app_detail::ensure_sub_list(daemon, state, &path).await?;
     match daemon.apply(req).await {
         Ok(reply) => landed(state, &path, reply.applied),
         Err(DaemonError::Rpc(status)) => {
@@ -29,9 +29,7 @@ pub(crate) async fn apply(
         }
         Err(e) => return Err(e),
     }
-    let file = daemon.get_file(&path).await?;
-    rebaseline(state, &file);
-    Ok(())
+    crate::app_detail::refetch(daemon, state, &path).await
 }
 
 fn landed(state: &mut AppState, path: &str, ops: u32) {
@@ -79,10 +77,7 @@ pub(crate) async fn undo(
         }
         Err(e) => return Err(e),
     }
-    if path == state.path {
-        let file = daemon.get_file(path).await?;
-        rebaseline(state, &file);
-    }
+    crate::app_detail::refetch(daemon, state, path).await?;
     state.shell.toast("Undone", None, Instant::now());
     Ok(())
 }

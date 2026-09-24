@@ -45,16 +45,18 @@ fn anchor(action: Option<Action>) -> Option<u32> {
 }
 
 #[test]
-fn a_click_selects_the_row_and_a_quick_second_one_edits_it() {
+fn a_click_selects_the_row_and_a_quick_second_one_opens_its_detail() {
     let mut state = fixture(10);
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
     assert_eq!(mouse.on_event(&mut state, down(3), t0), None);
     assert_eq!(state.cursor, 3);
-    assert!(state.editing.is_none());
     mouse.on_event(&mut state, up(3), t0);
-    mouse.on_event(&mut state, down(3), t0 + DOUBLE_CLICK);
-    assert!(state.editing.is_some(), "a double-click edits the row");
+    let action = mouse.on_event(&mut state, down(3), t0 + DOUBLE_CLICK);
+    let Some(Action::OpenDetail(parent)) = action else {
+        panic!("a double-click opens the detail: {action:?}");
+    };
+    assert_eq!(parent.line_number, 4);
 }
 
 #[test]
@@ -68,7 +70,7 @@ fn a_slow_second_click_or_one_on_another_row_is_just_a_click() {
         down(0),
         t0 + DOUBLE_CLICK + Duration::from_millis(1),
     );
-    assert!(state.editing.is_none(), "too slow");
+    assert!(!state.detail.is_open(), "too slow");
     mouse.on_event(
         &mut state,
         down(1),

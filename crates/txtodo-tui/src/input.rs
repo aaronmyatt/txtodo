@@ -13,6 +13,7 @@ use crate::commands;
 use crate::keymap::{self, Chords, Command, Resolved, Scope};
 use crate::mouse::Mouse;
 use crate::state::AppState;
+use crate::state_detail::with_sub_list;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::edit;
 
@@ -50,6 +51,7 @@ impl Input {
         now: Instant,
     ) -> Option<Action> {
         let name = keymap::key_name(&key);
+        let in_detail = state.nav.focus == Focus::Detail && state.detail.is_open();
         // Quit wins everywhere, a text field included: raw mode made Ctrl-c a key, not SIGINT.
         if name
             .as_deref()
@@ -64,7 +66,15 @@ impl Input {
             return on_search_key(state, key, name.as_deref());
         }
         if state.editing.is_some() {
+            // A line of the sub-list is being edited: its save names the sub-list's path.
+            if in_detail {
+                return with_sub_list(state, |s| on_edit_key(s, key, name.as_deref())).flatten();
+            }
             return on_edit_key(state, key, name.as_deref());
+        }
+        if in_detail {
+            let name = name.as_deref();
+            return crate::input_detail::on_key(&mut self.chords, state, key, name, now);
         }
         let name = name?;
         let (scope, group) = scope_of(state);

@@ -103,8 +103,10 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::PaletteOpen => state.start_command(),
         Command::AppQuit => return Some(Action::Quit),
         other => {
-            let run = crate::commands_nav::run(state, other);
-            return run.or_else(|| crate::search::run(state, other)).flatten();
+            let run = crate::commands_nav::run(state, other)
+                .or_else(|| crate::search::run(state, other))
+                .or_else(|| crate::commands_detail::run(state, other));
+            return run.flatten();
         }
     }
     None

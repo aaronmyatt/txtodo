@@ -10,6 +10,7 @@ pub mod hit;
 pub mod paint;
 pub mod skill_hint;
 pub mod state;
+pub mod state_detail;
 pub mod state_nav;
 pub mod state_offers;
 pub mod state_shell;
@@ -25,11 +26,13 @@ pub mod ui {
     pub mod banner;
     pub mod conflict_sheet;
     pub mod conflicts;
+    pub mod detail;
     pub mod edit;
     pub mod footer;
     pub mod header;
     pub mod list;
     pub mod mark;
+    pub mod notes_edit;
     pub mod offers;
     pub mod row;
     pub mod screen;
@@ -42,6 +45,7 @@ pub mod ui {
 
 pub mod action;
 pub mod commands;
+pub mod commands_detail;
 pub mod commands_nav;
 pub mod daemon;
 pub mod daemon_activity;
@@ -51,6 +55,7 @@ pub mod daemon_notes;
 pub mod daemon_tokens;
 pub mod daemon_workspace;
 pub mod input;
+pub mod input_detail;
 pub mod keymap;
 pub mod mouse;
 pub mod search;
@@ -58,6 +63,7 @@ pub mod search_suggest;
 
 pub mod app;
 pub mod app_apply;
+pub mod app_detail;
 pub mod app_layout;
 pub mod app_loop;
 pub mod app_offers;

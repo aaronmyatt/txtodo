@@ -27,6 +27,10 @@ pub enum Action {
     Copy(String),
     /// A toast's Undo: the daemon's `Undo` of the newest ops (this many) to this document.
     Undo(String, u32),
+    /// Enter on a line: open it in the detail panel (task `tui-revamp/tui-detail`).
+    OpenDetail(crate::state_detail::Parent),
+    /// Save a level's notes (`EditNotes`): its parent's `TaskRef` and the whole text.
+    SaveNotes(pb::TaskRef, String),
     /// `:q`: exit the event loop.
     Quit,
 }

@@ -161,8 +161,10 @@ fn every_row_built_in_the_tui_is_bound_with_its_keys_and_scope() {
         let id = text(&row, "id");
         let built = status(&row, "tui");
         let Some(b) = binding(id) else {
-            assert_ne!(
-                built, "done",
+            // A click-only action (no key anywhere, like a breadcrumb or a drag) has nothing to
+            // bind; any other done row must be in the keymap.
+            assert!(
+                built != "done" || tui_keys(&row).is_empty(),
                 "{id} is done in the manifest but not in keymap::BINDINGS"
             );
             continue;
