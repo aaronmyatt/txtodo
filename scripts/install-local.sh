@@ -86,12 +86,13 @@ fi
 # brew first, so it removes its own files and `brew upgrade` can't bring them back. The cask also
 # deletes /Applications/txtodo.app, so the new app is copied in only after this.
 # Ref: https://docs.brew.sh/Manpage#uninstall-remove-rm-options-installed_formulainstalled_cask-
+# The cask goes before the formula: it depends on it, and brew refuses to remove a dependency.
 if command -v brew >/dev/null; then
-  if brew list --formula txtodo >/dev/null 2>&1; then
-    log "purging brew formula txtodo"; brew uninstall --formula txtodo
-  fi
   if brew list --cask txtodo-desktop >/dev/null 2>&1; then
     log "purging brew cask txtodo-desktop"; brew uninstall --cask txtodo-desktop
+  fi
+  if brew list --formula txtodo >/dev/null 2>&1; then
+    log "purging brew formula txtodo"; brew uninstall --formula txtodo
   fi
 fi
 # scripts/install.sh's default folder, on PATH or not, then anything else on PATH by these names.
