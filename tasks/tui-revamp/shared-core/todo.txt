@@ -1,4 +1,4 @@
-2026-09-24 core: query::matches, AND terms, case-insensitive substring, -term excludes, is:open/is:done; one golden table shared with CLI and MCP +m11 @core
+2026-09-24 core: query::matches, AND terms, case-insensitive substring, -term excludes, is:open/is:done; one golden table shared with CLI and MCP +m11 @core @doing by:claude
 2026-09-24 cli: txtodo list uses core query::matches and drops its local copy +m11 @cli
 2026-09-24 mcp: parse.rs::matches_query delegates to core query::matches +m11 @mcp
 2026-09-24 core: lint::strict_hints, the three strict-check messages from mockup todotxt.js:308-313 +m11 @core
