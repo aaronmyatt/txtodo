@@ -125,6 +125,10 @@ pub async fn run_in(
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
     state.workspace_label = workspace_label;
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
+    let mode = crate::theme::ThemeMode::default();
+    crate::theme::set_current(crate::theme::Theme::resolve(mode, |k| {
+        std::env::var(k).ok()
+    }));
 
     let mut terminal = ratatui::init();
     let result = crate::app_loop::run_loop(&mut terminal, daemon, &mut state).await;

@@ -2,44 +2,21 @@
 //! (design §3.1). This is the only place token colours live — every widget renders a line by
 //! calling [`paint_line`], never by re-deriving a style from a token kind itself.
 
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span as TuiSpan};
 use txtodo_core::{Span, TokenKind, tokenize};
 
-/// The semantic colour for one [`TokenKind`], per design §3.1's platform-agnostic names
-/// (`priority`, `date`, `completion-marker`, `project`, `context`, `tag-key`, `tag-value`,
-/// `id-tag`, `text`). Each platform maps these names to its own theme; this is the ratatui
-/// terminal's mapping, picked for a dark-background 256-colour terminal.
+/// The style for one [`TokenKind`], per design §3.1's semantic names (`priority`, `date`,
+/// `completion-marker`, `project`, `context`, `tag-key`, `tag-value`, `id-tag`, `text`): the colour
+/// comes from the current [`crate::theme`] (desktop's palette, ink-on-paper), priority is bold,
+/// and a URL is underlined text. Plain text and whitespace keep the terminal's own ink.
 /// Ref: <https://docs.rs/ratatui/latest/ratatui/style/enum.Color.html>
 pub fn token_style(kind: TokenKind) -> Style {
+    let style = Style::new().fg(crate::theme::current().token_color(kind));
     match kind {
-        // "priority"
-        TokenKind::Priority => Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-        // "date" — completion and creation dates share one semantic colour.
-        TokenKind::CompletionDate | TokenKind::CreationDate => Style::new().fg(Color::Cyan),
-        // "completion-marker"
-        TokenKind::CompletionMarker => Style::new().fg(Color::DarkGray),
-        // "project"
-        TokenKind::Project => Style::new().fg(Color::Green),
-        // "context"
-        TokenKind::Context => Style::new().fg(Color::Magenta),
-        // "tag-key"
-        TokenKind::TagKey => Style::new().fg(Color::Blue),
-        // "tag-value"
-        TokenKind::TagValue => Style::new().fg(Color::LightBlue),
-        // "id-tag" — hidden by default (see `paint_line`'s `show_id`); dim when shown, but a
-        // distinct shade from `completion-marker` so the two never read as the same token.
-        TokenKind::IdTag => Style::new().fg(Color::Gray),
-        // Not one of design §3.1's named colours; treated as "text" with an underline so a link
-        // still reads distinctly without inventing a tenth semantic name.
-        TokenKind::Url => Style::new()
-            .fg(Color::White)
-            .add_modifier(Modifier::UNDERLINED),
-        // "text"
-        TokenKind::Text => Style::new().fg(Color::White),
-        // Not a semantic token; carries no colour of its own but still gets an explicit, stable
-        // style so every `TokenKind` maps to *something* (see `every_token_kind_has_a_style`).
-        TokenKind::Whitespace => Style::new().fg(Color::Reset),
+        TokenKind::Priority => style.add_modifier(Modifier::BOLD),
+        TokenKind::Url => style.add_modifier(Modifier::UNDERLINED),
+        _ => style,
     }
 }
 
@@ -90,6 +67,7 @@ fn span_to_tui(kind: TokenKind, text: &str, completed: bool) -> TuiSpan<'static>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::style::Color;
 
     const ALL_KINDS: [TokenKind; 11] = [
         TokenKind::CompletionMarker,
@@ -119,7 +97,8 @@ mod tests {
     }
 
     /// §3.1 semantic colours are pairwise distinct except the deliberate `date` merge
-    /// (`CompletionDate`/`CreationDate` share one colour by design).
+    /// (`CompletionDate`/`CreationDate` share one colour by design) and URL, which is underlined
+    /// text: both keep the ink.
     #[test]
     fn distinct_kinds_get_distinct_colours() {
         let grouped = |k: TokenKind| match k {
@@ -128,7 +107,8 @@ mod tests {
         };
         for a in ALL_KINDS {
             for b in ALL_KINDS {
-                if grouped(a) == grouped(b) || a == TokenKind::Url || b == TokenKind::Url {
+                let ink = |k| matches!(k, TokenKind::Url | TokenKind::Text);
+                if grouped(a) == grouped(b) || (ink(a) && ink(b)) {
                     continue;
                 }
                 if a != b {
