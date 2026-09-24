@@ -97,7 +97,6 @@ async fn accept_offer_adopts_it_and_it_stops_being_pending() {
         .workspace_accept_offer(Request::new(pb::WorkspaceAcceptOfferRequest {
             offering_device: device(1).to_string(),
             workspace_id: offered.to_string(),
-            ..Default::default()
         }))
         .await
         .unwrap()
@@ -143,7 +142,6 @@ async fn accept_offer_with_no_pending_match_is_not_found() {
         .workspace_accept_offer(Request::new(pb::WorkspaceAcceptOfferRequest {
             offering_device: device(404).to_string(),
             workspace_id: workspace(404).to_string(),
-            ..Default::default()
         }))
         .await
         .unwrap_err();
