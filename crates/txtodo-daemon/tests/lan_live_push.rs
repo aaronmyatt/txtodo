@@ -15,7 +15,8 @@ mod support;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use support::multi::{
-    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, seed_group_id_at,
+    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, register_own_peer_at,
+    seed_group_id_at,
 };
 
 const FIRST_DEADLINE: Duration = Duration::from_secs(60);
@@ -59,12 +60,17 @@ async fn an_edit_is_pushed_over_the_open_lan_session_with_no_redial() {
     seed_group_id_at(dir_a.path(), group_id);
     seed_group_id_at(dir_b.path(), group_id);
     let (default_a, default_b) = (dir_a.path().join("default"), dir_b.path().join("default"));
+    let (state_a, state_b) = (dir_a.path().to_path_buf(), dir_b.path().to_path_buf());
 
     let (a, mut client_a) = MultiWorkspaceDaemon::start_with_args(dir_a, &[]).await;
     let (b, mut client_b) = MultiWorkspaceDaemon::start_with_args(dir_b, &[]).await;
     let key_hex = "ab".repeat(32);
     debug_set_group_key(&mut client_a, group_id, &key_hex, &default_a).await;
     debug_set_group_key(&mut client_b, group_id, &key_hex, &default_b).await;
+    // The debug seam skips pairing, so record what a real own-device pairing would: the default
+    // merges only with an own device (task default-workspace-pairing-consent).
+    register_own_peer_at(&state_a, &state_b);
+    register_own_peer_at(&state_b, &state_a);
 
     // First contact: mDNS, a dial, the Greet/Want exchange.
     append(&default_a, "first id:01M2CZ00000000000000000A");

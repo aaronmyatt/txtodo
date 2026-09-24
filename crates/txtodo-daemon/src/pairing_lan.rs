@@ -22,6 +22,10 @@ use txtodo_sync::{
 };
 
 use crate::lan_session::read;
+use crate::pairing_lan_reject::{
+    reject_handshake_failed, reject_no_active_session, reject_peer_conflict,
+    reject_protocol_mismatch,
+};
 use crate::pairing_state::Role;
 use crate::server::SharedWorkspace;
 use crate::workspace::Workspace;
@@ -114,10 +118,10 @@ async fn joiner_loop(ctx: &JoinerCtx, endpoint: Option<&LanEndpoint>, deadline_m
 
 fn build_hello(ctx: &JoinerCtx) -> JoinerHello {
     let now_ms = read(&ctx.ws).clock().now_ms();
-    let confirmed = read(&ctx.ws)
+    let (confirmed, own_device) = read(&ctx.ws)
         .pairing()
         .joiner_local_confirmed(now_ms)
-        .unwrap_or(false);
+        .unwrap_or((false, false));
     JoinerHello {
         device: ctx.own_device,
         group: ctx.offer.group,
@@ -125,6 +129,7 @@ fn build_hello(ctx: &JoinerCtx) -> JoinerHello {
         public_key: ctx.own_public,
         static_public: ctx.static_public,
         confirmed,
+        own_device,
     }
 }
 
@@ -145,7 +150,8 @@ pub(crate) fn finish_joiner(ws: &SharedWorkspace, offer: &PairingOffer, sealed: 
     let now_ms = read(ws).clock().now_ms();
     // This device's own session can only learn the initiator confirmed through this message: a
     // non-empty `Grant` is only possible once the initiator's session was ready, so it is the proof.
-    let _ = read(ws).pairing().mark_remote_confirmed(now_ms);
+    // The initiator's own-device answer arrives inside the grant (`adopt_group_key`), not here.
+    let _ = read(ws).pairing().mark_remote_confirmed(now_ms, false);
     match read(ws).adopt_group_key(offer.group, sealed, now_ms) {
         Ok(()) => {
             log_joiner_adopted(offer.device);
@@ -280,11 +286,12 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
     // cache is device-global (`pairing()`, not the per-workspace `pairing_lan()`): the relay
     // accept path routes each round to an arbitrary open workspace, so a per-workspace cache
     // missed whenever a retry landed on a different one and this device hard-rejected the joiner.
-    if let Some(sealed) = ws.pairing().cached_grant(hello.device, hello.nonce) {
+    if let Some((sealed, own)) = ws.pairing().cached_grant(hello.device, hello.nonce) {
         // `register_device` is an upsert, so retrying this on every retried hello (not just the
         // first) is safe and is how a transient failure below gets another chance instead of
         // being silently dropped forever — see `register_joiner_device`'s own doc.
-        register_joiner_device(&ws, hello.device, hello.static_public, ws.clock().now_ms());
+        let joiner = (hello.device, hello.static_public, own);
+        register_joiner_device(&ws, joiner, ws.clock().now_ms());
         return InitiatorReply::Grant(sealed);
     }
     let now_ms = ws.clock().now_ms();
@@ -308,42 +315,9 @@ pub(crate) fn process_hello(ws: &SharedWorkspace, hello: JoinerHello) -> Initiat
         return reject_handshake_failed(hello.device, &e);
     }
     if hello.confirmed {
-        let _ = pairing.mark_remote_confirmed(now_ms);
+        let _ = pairing.mark_remote_confirmed(now_ms, hello.own_device);
     }
     finalize_or_pending(&ws, hello.device, hello.static_public, now_ms)
-}
-
-/// No active session (expired window, wrong role, or none). `warn`: `Rejected` is fatal for the
-/// joiner, and on 2026-09-23 an expired window (keychain prompts blocked the SAS confirm) left no
-/// reason in the log at all.
-fn reject_no_active_session(
-    peer: DeviceId,
-    e: &crate::pairing_state_error::PairingStateError,
-) -> InitiatorReply {
-    tracing::warn!(%peer, error = %e, "pairing_initiator_rejected_no_active_session");
-    InitiatorReply::Rejected
-}
-
-/// Role/group/nonce mismatch — a stale retry, or a hello for a pairing this device never started.
-fn reject_protocol_mismatch(peer: DeviceId) -> InitiatorReply {
-    tracing::warn!(%peer, "pairing_initiator_rejected_protocol_mismatch");
-    InitiatorReply::Rejected
-}
-
-/// A second device claimed a nonce/group already bound to someone else — a joiner race or a nonce
-/// reuse attempt; `warn` so an operator can see it happened.
-fn reject_peer_conflict(peer: DeviceId, bound_to: Option<DeviceId>) -> InitiatorReply {
-    tracing::warn!(%peer, bound_to = ?bound_to, "pairing_initiator_rejected_peer_conflict");
-    InitiatorReply::Rejected
-}
-
-/// The handshake's own crypto step refused this hello's public key — a real failure, not routine.
-fn reject_handshake_failed(
-    peer: DeviceId,
-    e: &crate::pairing_state_error::PairingStateError,
-) -> InitiatorReply {
-    tracing::warn!(%peer, error = %e, "pairing_initiator_rejected_handshake_failed");
-    InitiatorReply::Rejected
 }
 
 /// `error`: on the wire this is just `Pending`, so without it a keystore/crypto failure leaves
@@ -373,8 +347,8 @@ fn finalize_or_pending(
         }
     };
     match sealed {
-        Some(sealed) => {
-            register_joiner_device(ws, device, static_public, now_ms);
+        Some((sealed, own)) => {
+            register_joiner_device(ws, (device, static_public, own), now_ms);
             InitiatorReply::Grant(sealed)
         }
         None => InitiatorReply::Pending,
@@ -388,13 +362,14 @@ fn finalize_or_pending(
 /// always got `None`: registration never actually ran. `register_device` is an upsert, so calling
 /// this again on a retried/cached hello (see `process_hello`) is safe and is how a failure here
 /// gets another chance instead of being silently and permanently dropped.
+/// `joiner` is the device, its static key and whether both humans called each other own.
 fn register_joiner_device(
     ws: &Workspace,
-    device: DeviceId,
-    static_public: [u8; txtodo_sync::DEVICE_STATIC_KEY_BYTES],
+    joiner: (DeviceId, [u8; txtodo_sync::DEVICE_STATIC_KEY_BYTES], bool),
     now_ms: u64,
 ) {
-    if let Err(e) = ws.register_paired_device(device, static_public, now_ms) {
+    let (device, static_public, own) = joiner;
+    if let Err(e) = ws.register_paired_device(device, static_public, now_ms, own) {
         tracing::warn!(peer = %device, error = %e, "pairing_initiator_register_joiner_failed");
     }
 }

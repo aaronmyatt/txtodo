@@ -27,21 +27,23 @@ impl Workspace {
         // a failure below leaves the attempt retryable from scratch instead of stranding an
         // already-committed key with no matching device/group row. See
         // pairing_state.rs::preview_group_key.
-        let (group_key, peer_device, peer_static) =
+        let (group_key, peer_device, peer_static, own) =
             self.pairing().preview_group_key(sealed, now_ms)?;
         let mut store = self
             .identity_store()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.meta_set(crate::device_identity::GROUP_ID_KEY, &group.0.to_be_bytes())?;
-        store.register_device(&NewDevice {
+        // `own`: both humans said "my own device" (task default-workspace-pairing-consent).
+        let new = NewDevice {
             device: peer_device,
             name: String::new(),
             static_public: peer_static.to_bytes(),
             paired_at_ms: now_ms,
             last_known_wall_ms: None,
             key_epoch: 0,
-        })?;
+        };
+        store.register_device_as(&new, own)?;
         drop(store);
         // Point of no return: only now do we commit the key and end the pairing attempt.
         self.pairing()

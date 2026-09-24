@@ -63,9 +63,12 @@ async fn pair(a: &mut Daemon, b: &mut MultiClient) {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     a.pair_confirm_sas().await;
-    b.pair_confirm_sas(pb::PairConfirmRequest { workspace: None })
-        .await
-        .unwrap();
+    b.pair_confirm_sas(pb::PairConfirmRequest {
+        workspace: None,
+        own_device: true,
+    })
+    .await
+    .unwrap();
 }
 
 async fn workspaces(b: &mut MultiClient) -> Vec<pb::WorkspaceInfo> {

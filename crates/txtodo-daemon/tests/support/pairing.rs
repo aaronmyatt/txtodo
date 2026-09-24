@@ -44,7 +44,11 @@ impl Daemon {
 
     pub async fn pair_confirm_sas(&mut self) -> pb::PairResult {
         self.client
-            .pair_confirm_sas(pb::PairConfirmRequest { workspace: None })
+            // Every real-daemon pairing test pairs two of the user's own devices.
+            .pair_confirm_sas(pb::PairConfirmRequest {
+                workspace: None,
+                own_device: true,
+            })
             .await
             .unwrap_or_else(|e| panic!("pair_confirm_sas: {e}"))
             .into_inner()

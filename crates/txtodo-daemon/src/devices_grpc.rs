@@ -48,7 +48,8 @@ fn skew_of(last_known_wall_ms: Option<u64>, now_ms: u64) -> (pb::SkewStatus, u64
     }
 }
 
-fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64) -> pb::Device {
+/// `own`: the row's own-device flag (task default-workspace-pairing-consent).
+fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64, own: bool) -> pb::Device {
     let (skew_status, skew_ms) = skew_of(row.last_known_wall_ms, now_ms);
     pb::Device {
         id: row.device.ulid().to_string(),
@@ -60,6 +61,7 @@ fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64) -> pb::Device {
         last_seen_ms: row.last_seen_ms.unwrap_or(0),
         skew_status: skew_status as i32,
         skew_ms,
+        own_device: own,
     }
 }
 
@@ -123,15 +125,22 @@ impl TxtodoService {
         let ws = self.workspace();
         let now_ms = ws.clock().now_ms();
         let self_device = ws.device();
-        let rows = ws
+        let store = ws
             .identity_store()
             .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .unwrap_or_else(PoisonError::into_inner);
+        let rows = store
             .list_devices()
             .map_err(|e| Status::internal(e.to_string()))?;
+        let owns: Vec<bool> = rows
+            .iter()
+            .map(|r| store.is_own_device(r.device).unwrap_or(false))
+            .collect();
+        drop(store);
         let devices = rows
             .into_iter()
-            .map(|r| to_pb(r, self_device, now_ms))
+            .zip(owns)
+            .map(|(r, own)| to_pb(r, self_device, now_ms, own))
             .collect();
         Ok(Response::new(pb::DeviceListResponse { devices }))
     }

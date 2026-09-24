@@ -184,3 +184,42 @@ async fn the_mirror_task_picks_up_an_offer_without_being_asked() {
     }
     task.abort();
 }
+
+/// Task `default-workspace-pairing-consent`: a peer's default arrives under its alias. From an own
+/// device it is skipped (the default already merges); from any other device it is mirrored as a
+/// Remote workspace, apart from this device's own default.
+#[tokio::test]
+async fn a_peers_default_alias_is_mirrored_only_from_a_device_that_is_not_own() {
+    let f = fixture();
+    let (own, foreign) = (
+        DeviceId::new(Ulid::from_u128(21)),
+        DeviceId::new(Ulid::from_u128(22)),
+    );
+    for (peer, is_own) in [(own, true), (foreign, false)] {
+        let new = txtodo_store::NewDevice {
+            device: peer,
+            name: String::new(),
+            static_public: [1; 32],
+            paired_at_ms: 1_000,
+            last_known_wall_ms: None,
+            key_epoch: 0,
+        };
+        f.identity
+            .store()
+            .lock()
+            .unwrap()
+            .register_device_as(&new, is_own)
+            .unwrap();
+    }
+    let alias = crate::default_workspace::default_alias;
+    offer(&f, 21, alias(own));
+    offer(&f, 22, alias(foreign));
+
+    assert_eq!(f.catalog.mirror_pending_offers(), 1);
+    assert!(
+        root_of(&f, alias(own)).is_none(),
+        "own default: merged, not mirrored"
+    );
+    let root = root_of(&f, alias(foreign)).unwrap_or_else(|| panic!("foreign default mirrored"));
+    assert!(f.catalog.is_remote_root(&root));
+}

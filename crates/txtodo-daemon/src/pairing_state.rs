@@ -17,8 +17,7 @@ use txtodo_sync::{
 
 pub(crate) use crate::pairing_state_error::PairingStateError;
 
-/// The group-key epoch pairing establishes. Rotation (`txtodo device remove`) is future work.
-const INITIAL_GROUP_EPOCH: u32 = 0;
+use crate::pairing_group_key::{INITIAL_GROUP_EPOCH, fetch_or_mint_group_key};
 
 /// Which role this daemon is playing in its one active pairing attempt.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -36,6 +35,10 @@ struct Active {
     /// The joiner's own ephemeral public key, kept so a relay can hand it to the initiator's
     /// `complete_as_initiator`. Only ever set on the joiner's side.
     own_public: Option<[u8; X25519_PUBLIC_KEY_BYTES]>,
+    /// This human's and the peer's human's answers to "is this your own device?" (task
+    /// `default-workspace-pairing-consent`); the peer is registered as own only when both are true.
+    own_answer: bool,
+    peer_own_answer: bool,
 }
 
 /// A read-only snapshot of the active pairing, enough for the LAN relay driver (`pairing_lan.rs`)
@@ -54,7 +57,8 @@ pub(crate) struct ActiveSnapshot {
 /// arbitrary open workspace (`device_relay::WorkspaceRoutes::any`) while the session is already
 /// device-global (ADR 0021); a per-workspace cache missed whenever a retry landed on a different
 /// workspace, so the initiator answered `Rejected` off the cleared session and the joiner aborted.
-type FinalizedGrant = (DeviceId, Nonce, Vec<u8>);
+/// The last field is whether both humans called each other their own device.
+type FinalizedGrant = (DeviceId, Nonce, Vec<u8>, bool);
 
 #[derive(Default)]
 struct Inner {
@@ -96,27 +100,6 @@ fn ensure_capacity(active: &mut Option<Active>, now_ms: u64) -> Result<(), Pairi
     }
 }
 
-/// Fetches the device group key bytes, minting and storing a fresh one for the first-ever pairing.
-/// `getrandom` failure is not meaningfully recoverable (`load_or_mint_group` takes the same stance).
-fn fetch_or_mint_group_key(key_store: &dyn KeyStore) -> Result<[u8; KEY_BYTES], PairingStateError> {
-    if let Some(secret) = key_store.get(KeyId::Group(INITIAL_GROUP_EPOCH))? {
-        let bytes: [u8; KEY_BYTES] = secret
-            .expose()
-            .try_into()
-            .map_err(|_| PairingStateError::CorruptGroupKey(secret.expose().len()))?;
-        return Ok(bytes);
-    }
-    let mut bytes = [0u8; KEY_BYTES];
-    if getrandom::fill(&mut bytes).is_err() {
-        bytes = [0xA5; KEY_BYTES];
-    }
-    key_store.put(
-        KeyId::Group(INITIAL_GROUP_EPOCH),
-        &Secret::new(bytes.to_vec()),
-    )?;
-    Ok(bytes)
-}
-
 /// This daemon's pairing bookkeeping: at most [`MAX_CONCURRENT_PAIRINGS`] session, its own nonces.
 #[derive(Default)]
 pub(crate) struct PairingRegistry {
@@ -152,6 +135,8 @@ impl PairingRegistry {
             role: Role::Initiator,
             opened_at_ms: now_ms,
             own_public: None,
+            own_answer: false,
+            peer_own_answer: false,
         });
         Ok(offer)
     }
@@ -173,18 +158,23 @@ impl PairingRegistry {
             role: Role::Joiner,
             opened_at_ms: now_ms,
             own_public: Some(own_public),
+            own_answer: false,
+            peer_own_answer: false,
         });
         Ok(sas)
     }
 
-    /// Records this device's human confirming the SAS (`pair_confirm_sas`).
+    /// Records this device's human confirming the SAS (`pair_confirm_sas`), with their answer to
+    /// "is this your own device?".
     pub(crate) fn confirm_local(
         &self,
         now_ms: u64,
+        own_device: bool,
     ) -> Result<[&'static str; SAS_WORD_COUNT], PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
         active.session.confirm_local()?;
+        active.own_answer = own_device;
         Ok(active.session.sas_words()?)
     }
 
@@ -229,10 +219,17 @@ impl PairingRegistry {
     /// Relay seam: records that the peer's SAS confirmation arrived. Driven for real by
     /// `pairing_lan.rs` when a `JoinerHello.confirmed` arrives true; `pairing_grpc_tests.rs` also
     /// drives it directly (whitebox).
-    pub(crate) fn mark_remote_confirmed(&self, now_ms: u64) -> Result<(), PairingStateError> {
+    /// `peer_own` is the peer's own-device answer when this message carries it (the initiator
+    /// reads `JoinerHello.own_device`); the joiner learns its peer's answer from the grant instead.
+    pub(crate) fn mark_remote_confirmed(
+        &self,
+        now_ms: u64,
+        peer_own: bool,
+    ) -> Result<(), PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
         active.session.confirm_remote()?;
+        active.peer_own_answer = peer_own;
         Ok(())
     }
 
@@ -246,11 +243,16 @@ impl PairingRegistry {
         key_store: &dyn KeyStore,
         own_static_public: DeviceStaticPublic,
         now_ms: u64,
-    ) -> Result<Option<Vec<u8>>, PairingStateError> {
+    ) -> Result<Option<(Vec<u8>, bool)>, PairingStateError> {
         let mut inner = self.lock();
-        let ready = {
+        let (ready, own, mutual) = {
             let active = active_mut(&mut inner.active, now_ms)?;
-            active.role == Role::Initiator && active.session.is_ready_to_send_key()
+            let ready = active.role == Role::Initiator && active.session.is_ready_to_send_key();
+            (
+                ready,
+                active.own_answer,
+                active.own_answer && active.peer_own_answer,
+            )
         };
         if !ready {
             return Ok(None);
@@ -259,6 +261,7 @@ impl PairingRegistry {
         let grant = PairingGrant {
             group_key,
             static_public: own_static_public.to_bytes(),
+            own_device: own,
         };
         let (sealed, cached) = {
             let active = active_mut(&mut inner.active, now_ms)?;
@@ -268,21 +271,21 @@ impl PairingRegistry {
             let cached = active
                 .session
                 .peer_device()
-                .map(|device| (device, active.session.nonce(), sealed.clone()));
+                .map(|device| (device, active.session.nonce(), sealed.clone(), mutual));
             (sealed, cached)
         };
         inner.finalized = cached;
         inner.active = None;
-        Ok(Some(sealed))
+        Ok(Some((sealed, mutual)))
     }
 
     /// The device-global cached grant for `(device, nonce)`, if [`PairingRegistry::try_finalize_initiator`]
     /// produced one — re-serves a retried `JoinerHello` the same sealed bytes after `active` was
     /// cleared, on whichever open workspace the relay accept path routed the round to.
-    pub(crate) fn cached_grant(&self, device: DeviceId, nonce: Nonce) -> Option<Vec<u8>> {
+    pub(crate) fn cached_grant(&self, device: DeviceId, nonce: Nonce) -> Option<(Vec<u8>, bool)> {
         let inner = self.lock();
-        let (d, n, sealed) = inner.finalized.as_ref()?;
-        (*d == device && *n == nonce).then(|| sealed.clone())
+        let (d, n, sealed, mutual) = inner.finalized.as_ref()?;
+        (*d == device && *n == nonce).then(|| (sealed.clone(), *mutual))
     }
 
     /// Relay seam, step 1 of 2: the joiner unwraps the initiator's [`PairingGrant`] and returns the
@@ -297,7 +300,7 @@ impl PairingRegistry {
         &self,
         sealed: &[u8],
         now_ms: u64,
-    ) -> Result<([u8; KEY_BYTES], DeviceId, DeviceStaticPublic), PairingStateError> {
+    ) -> Result<([u8; KEY_BYTES], DeviceId, DeviceStaticPublic, bool), PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
         if active.role != Role::Joiner {
@@ -315,6 +318,7 @@ impl PairingRegistry {
             grant.group_key,
             peer_device,
             DeviceStaticPublic::from_bytes(grant.static_public),
+            grant.own_device && active.own_answer,
         ))
     }
 
@@ -376,9 +380,13 @@ impl PairingRegistry {
     /// Whether *this* device's own human has confirmed the SAS yet — read by the joiner's
     /// background relay task (`pairing_lan.rs`) on every retry so a `JoinerHello.confirmed` always
     /// reflects the current, real state rather than a value captured once at the start of pairing.
-    pub(crate) fn joiner_local_confirmed(&self, now_ms: u64) -> Result<bool, PairingStateError> {
+    /// With the human's own-device answer, which rides the same `JoinerHello`.
+    pub(crate) fn joiner_local_confirmed(
+        &self,
+        now_ms: u64,
+    ) -> Result<(bool, bool), PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
-        Ok(active.session.is_locally_confirmed())
+        Ok((active.session.is_locally_confirmed(), active.own_answer))
     }
 }

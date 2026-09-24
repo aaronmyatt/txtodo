@@ -113,6 +113,7 @@ fn hello(device_id: DeviceId, group: GroupId, nonce: [u8; 16]) -> JoinerHello {
         public_key: [0xCD; 32],
         static_public: [0xEF; 32],
         confirmed: false,
+        own_device: true,
     }
 }
 
@@ -176,7 +177,11 @@ fn ready_joiner_hello(ws: &SharedWorkspace, joiner_device: DeviceId, now_ms: u64
         process_hello(ws, hello.clone()),
         InitiatorReply::Pending
     ));
-    ws.read().unwrap().pairing().confirm_local(now_ms).unwrap();
+    ws.read()
+        .unwrap()
+        .pairing()
+        .confirm_local(now_ms, true)
+        .unwrap();
     hello.confirmed = true;
     hello
 }

@@ -44,7 +44,9 @@ impl WorkspaceCatalog {
         let offers = self.open_args.identity.workspace_offers();
         let mut mirrored = 0;
         for offer in offers.list() {
-            mirrored += usize::from(self.mirror_offered(offer.workspace_id));
+            if !self.is_own_default_alias(&offer) {
+                mirrored += usize::from(self.mirror_offered(offer.workspace_id));
+            }
             offers.take(offer.offering_device, offer.workspace_id);
         }
         mirrored
@@ -57,6 +59,20 @@ impl WorkspaceCatalog {
             Ok(false) => false,
             Err(e) => log_mirror_failed(id, &e),
         }
+    }
+
+    /// An own device's default, offered under its alias (task default-workspace-pairing-consent):
+    /// this device already merges that list under the reserved id, so no mirror.
+    fn is_own_default_alias(&self, offer: &crate::workspace_offer_registry::PendingOffer) -> bool {
+        offer.workspace_id == crate::default_workspace::default_alias(offer.offering_device)
+            && self
+                .open_args
+                .identity
+                .store()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .is_own_device(offer.offering_device)
+                .unwrap_or(false)
     }
 
     fn try_mirror_offered(&self, id: WorkspaceId) -> Result<bool, Status> {

@@ -26,6 +26,22 @@ pub fn default_workspace_id() -> WorkspaceId {
     WorkspaceId::new(Ulid::from_u128(DEFAULT_WORKSPACE_ULID))
 }
 
+/// The id this device's default is offered and synced under to a peer that is not one of the
+/// user's own devices (task `default-workspace-pairing-consent`): that peer mirrors it as a Remote
+/// workspace instead of merging it into its own default. Derived, so every peer computes the same
+/// alias for a device without asking: blake3 over a fixed label, the reserved id and the device id,
+/// cut to 128 bits, with one timestamp bit set so it is never the all-zero link sentinel.
+/// Ref: https://docs.rs/blake3/latest/blake3/struct.Hasher.html
+pub(crate) fn default_alias(device: txtodo_model::DeviceId) -> WorkspaceId {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"txtodo default workspace alias v1");
+    hasher.update(&DEFAULT_WORKSPACE_ULID.to_be_bytes());
+    hasher.update(&device.ulid().to_u128().to_be_bytes());
+    let mut first = [0u8; 16];
+    first.copy_from_slice(&hasher.finalize().as_bytes()[..16]);
+    WorkspaceId::new(Ulid::from_u128(u128::from_be_bytes(first) | (1 << 80)))
+}
+
 impl WorkspaceCatalog {
     /// Creates the default workspace's directory and an empty `todo.txt` when they are missing,
     /// and registers it under the reserved id. Idempotent, and never overwrites a `todo.txt`

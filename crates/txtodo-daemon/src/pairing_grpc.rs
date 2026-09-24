@@ -42,13 +42,22 @@ pub(crate) async fn pair_accept_with_catalog(
     r: Request<pb::PairAcceptRequest>,
 ) -> Result<Response<pb::PairResult>, Status> {
     let ws = service.resolve(r.get_ref().workspace.as_ref()).await?;
+    let mut kept_own_workspace = false;
     if let Some(offered_id) = code_workspace_id(&r.get_ref().code).map_err(wire_status)? {
-        service
+        let now_id = service
             .catalog()
             .adopt_offered_workspace_id(&ws, offered_id)?;
+        // The default keeps its reserved id (task default-workspace-pairing-consent's side note):
+        // say so, since the offered workspace then only arrives later, as a Remote mirror.
+        kept_own_workspace = now_id != offered_id;
     }
     let span = crate::global_service::rpc_span("pair_accept", &ws);
-    TxtodoService::new(ws).pair_accept(r).instrument(span).await
+    let mut reply = TxtodoService::new(ws)
+        .pair_accept(r)
+        .instrument(span)
+        .await?;
+    reply.get_mut().kept_own_workspace = kept_own_workspace;
+    Ok(reply)
 }
 
 impl TxtodoService {
@@ -102,20 +111,31 @@ impl TxtodoService {
             .map_err(pairing_status)?;
         drop(ws);
         crate::pairing_lan::spawn_joiner(self.shared_workspace(), offer, own_public);
-        Ok(Response::new(pb::PairResult { sas: words(&sas) }))
+        Ok(Response::new(pb::PairResult {
+            sas: words(&sas),
+            ..pb::PairResult::default()
+        }))
     }
 
     /// Confirms the SAS shown to the human on this device. The group key lands only once both
     /// sides confirm — see `pairing_state::PairingRegistry`'s relay-seam methods, which enforce
     /// that (via `txtodo_sync::PairingSession::is_ready_to_send_key`) independent of this call.
+    /// `own_device` is the human's answer to "is this your own device?" (task
+    /// default-workspace-pairing-consent); it rides the handshake to the peer.
     pub(crate) async fn pair_confirm_sas_impl(
         &self,
-        _r: Request<pb::PairConfirmRequest>,
+        r: Request<pb::PairConfirmRequest>,
     ) -> Result<Response<pb::PairResult>, Status> {
         let ws = self.workspace();
         let now_ms = ws.clock().now_ms();
-        let sas = ws.pairing().confirm_local(now_ms).map_err(pairing_status)?;
-        Ok(Response::new(pb::PairResult { sas: words(&sas) }))
+        let sas = ws
+            .pairing()
+            .confirm_local(now_ms, r.get_ref().own_device)
+            .map_err(pairing_status)?;
+        Ok(Response::new(pb::PairResult {
+            sas: words(&sas),
+            ..pb::PairResult::default()
+        }))
     }
 
     /// Initiator only: polls whether a joiner's `PairAccept` has reached this device yet over the
@@ -131,6 +151,7 @@ impl TxtodoService {
         let sas = ws.pairing().sas_if_ready(now_ms).map_err(pairing_status)?;
         Ok(Response::new(pb::PairResult {
             sas: sas.map(|s| words(&s)).unwrap_or_default(),
+            ..pb::PairResult::default()
         }))
     }
 }

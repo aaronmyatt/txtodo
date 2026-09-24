@@ -56,6 +56,7 @@ mod lan_apply;
 mod lan_peers;
 mod lan_session;
 mod lan_session_dispatch;
+mod lan_session_gate;
 mod lan_session_live;
 mod lan_session_shared;
 pub mod lan_status;
@@ -83,8 +84,10 @@ pub mod notes_mirror;
 pub mod notes_registry;
 pub mod notes_state;
 mod pairing_adopt;
+mod pairing_group_key;
 mod pairing_grpc;
 mod pairing_lan;
+mod pairing_lan_reject;
 mod pairing_lan_state;
 mod pairing_register;
 mod pairing_relay_dial;
@@ -171,6 +174,8 @@ mod import_tests;
 mod keystore_setup_tests;
 #[cfg(test)]
 mod lan_peers_tests;
+#[cfg(test)]
+mod lan_session_gate_tests;
 #[cfg(test)]
 mod lan_session_push_tests;
 #[cfg(test)]

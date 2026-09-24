@@ -203,6 +203,7 @@ fn bogus_hello(offer: &pb::PairOfferResponse, nonce: [u8; 16]) -> JoinerHello {
         public_key: [0u8; X25519_PUBLIC_KEY_BYTES],
         static_public: [0u8; DEVICE_STATIC_KEY_BYTES],
         confirmed: false,
+        own_device: false,
     }
 }
 

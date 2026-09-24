@@ -326,6 +326,15 @@ multiplex every workspace's traffic — not done by this task).
   `CONTROL_ALPN`; each resync tick the lower-id side dials a short control session to every LAN
   peer (`device_lan::dial_control`), the same exchange as the relay control channel.
   `tests/default_workspace_pairing.rs` pairs over LAN and sees the offer mirrored and synced.
+- Own-device consent (task `default-workspace-pairing-consent`, 2026-09-24): `PairConfirmSas`
+  carries the human's "is this your own device?" answer; it rides `JoinerHello`/`PairingGrant` and
+  each side registers the peer with `own = mine && theirs` (`register_device_as`). A sync session
+  sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the reserved
+  default for an own peer and swaps it for this device's `default_alias` otherwise (unknown peers
+  too). Control sessions offer the default under that alias; `workspace_catalog_mirror.rs` skips an
+  own device's alias and mirrors any other as a Remote workspace. `PairResult.kept_own_workspace`
+  says when a joiner kept its default. `tests/default_workspace_foreign.rs` is the two-daemon proof.
+  Known gap: the file carrier is not gated (it has no peer to ask about).
 - `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
   paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
   flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry

@@ -40,9 +40,12 @@ async fn accept(svc: &TxtodoService, code: String) -> pb::PairResult {
 }
 
 async fn confirm(svc: &TxtodoService) -> Result<pb::PairResult, tonic::Status> {
-    svc.pair_confirm_sas(Request::new(pb::PairConfirmRequest { workspace: None }))
-        .await
-        .map(tonic::Response::into_inner)
+    svc.pair_confirm_sas(Request::new(pb::PairConfirmRequest {
+        workspace: None,
+        own_device: true,
+    }))
+    .await
+    .map(tonic::Response::into_inner)
 }
 
 #[tokio::test]
@@ -164,14 +167,16 @@ pub(crate) async fn finalize_after_both_confirm(
 
     a.workspace()
         .pairing()
-        .mark_remote_confirmed(now_ms)
+        .mark_remote_confirmed(now_ms, true)
         .unwrap();
     b.workspace()
         .pairing()
-        .mark_remote_confirmed(now_ms)
+        .mark_remote_confirmed(now_ms, true)
         .unwrap();
 
-    let sealed = ready(a).expect("both sides confirmed: the initiator now wraps its group key");
+    let (sealed, own) =
+        ready(a).expect("both sides confirmed: the initiator now wraps its group key");
+    assert!(own, "both humans said own device");
     b.workspace()
         .adopt_group_key(group, &sealed, now_ms)
         .unwrap();

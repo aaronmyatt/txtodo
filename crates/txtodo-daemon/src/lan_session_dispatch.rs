@@ -36,15 +36,21 @@ struct SharedCtx<'a> {
     key: GroupKey,
     keys: GroupKeys,
     signing_key: DeviceSigningKey,
+    /// Every workspace open on this device when the session started; the session itself carries
+    /// [`Conn::routes`], chosen from these once the peer is known.
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
     live_peers: LivePeers,
+    device: DeviceId,
 }
 
-/// The per-connection state every frame updates: the protocol `Session` and the push/liveness
-/// bookkeeping (task `sync-live-push`), bundled so the dispatch functions stay under `maxParams`.
+/// The per-connection state every frame updates: the protocol `Session`, the push/liveness
+/// bookkeeping (task `sync-live-push`) and the workspaces this session carries — set once the
+/// peer's link `Hello` names it (task `default-workspace-pairing-consent`: the default merges only
+/// with an own device). Bundled so the dispatch functions stay under `maxParams`.
 struct Conn {
     session: Session,
     live: Live,
+    routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
 }
 
 /// Any one routed workspace's own clock, for stamping the link-level `Hello` and re-checking skew
@@ -105,6 +111,7 @@ fn touch_peer_last_seen(
 /// The link-level `Hello` branch of [`dispatch_frame`] — split out purely to keep that
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
+    link: &mut dyn Link,
     frame: &txtodo_sync::Frame,
     shared: &SharedCtx<'_>,
     conn: &mut Conn,
@@ -114,11 +121,26 @@ fn dispatch_link_frame(
     if !handle_link_hello(&mut conn.session, &msg, now_ms) {
         return None;
     }
-    if let Some(peer) = conn.session.peer() {
-        touch_peer_last_seen(&shared.routes, peer, now_ms);
-        conn.live.enter(&shared.live_peers, peer);
-    }
-    Some(())
+    let peer = conn.session.peer()?;
+    touch_peer_last_seen(&shared.routes, peer, now_ms);
+    conn.live.enter(&shared.live_peers, peer);
+    greet_for_peer(link, shared, conn, peer).then_some(())
+}
+
+/// Chooses this session's workspaces for `peer` (`lan_session_gate.rs`), opens them on the
+/// `Session` and sends a `Greet` for each. Sent only now, after the peer's `Hello`, so the default
+/// is never greeted to a device that is not the user's own.
+fn greet_for_peer(
+    link: &mut dyn Link,
+    shared: &SharedCtx<'_>,
+    conn: &mut Conn,
+    peer: DeviceId,
+) -> bool {
+    conn.routes = crate::lan_session_gate::session_routes(&shared.routes, shared.device, peer);
+    open_every_route(&mut conn.session, &conn.routes);
+    let ids: Vec<WorkspaceId> = conn.routes.keys().copied().collect();
+    ids.into_iter()
+        .all(|id| send_greet_for(link, shared, &mut conn.session, id))
 }
 
 /// A real workspace's own branch of [`dispatch_frame`] — `Some(())` (not `None`) when
@@ -131,7 +153,7 @@ fn dispatch_workspace_frame(
     conn: &mut Conn,
     workspace: WorkspaceId,
 ) -> Option<()> {
-    let Some(route) = shared.routes.get(&workspace) else {
+    let Some(route) = conn.routes.get(&workspace).cloned() else {
         log_unrouted_workspace_skipped(workspace);
         return Some(());
     };
@@ -162,7 +184,7 @@ fn dispatch_frame(
         return None;
     };
     if workspace == LINK_WORKSPACE {
-        return dispatch_link_frame(frame, shared, conn);
+        return dispatch_link_frame(link, frame, shared, conn);
     }
     dispatch_workspace_frame(link, frame, shared, conn, workspace)
 }
@@ -194,7 +216,7 @@ fn turn(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) -> Option<
         group: shared.group,
         key: &shared.key,
         signing_key: &shared.signing_key,
-        routes: &shared.routes,
+        routes: &conn.routes,
     };
     conn.live.tick(link, &push).then_some(())
 }
@@ -239,26 +261,15 @@ fn send_greet_for(
     }
 }
 
-/// Sends the once-per-connection link `Hello`, then a `Greet` for every workspace `shared.routes`
-/// names. `false` (already logged) on a link handshake or send failure — nothing past that point
-/// can matter.
-fn send_initial_greetings(
-    link: &mut dyn Link,
-    shared: &SharedCtx<'_>,
-    session: &mut Session,
-) -> bool {
+/// Sends the once-per-connection link `Hello`. The `Greet`s follow once the peer's own `Hello`
+/// names it ([`greet_for_peer`]). `false` (already logged) on a link handshake or send failure.
+fn send_link_hello(link: &mut dyn Link, shared: &SharedCtx<'_>, session: &mut Session) -> bool {
     let now_ms = any_route_now_ms(&shared.routes);
     let Ok(hello) = session.link_hello(now_ms) else {
         tracing::warn!("lan_session_link_hello_failed");
         return false;
     };
-    if send_message(link, shared.group, LINK_WORKSPACE, &shared.key, hello).is_err() {
-        return false;
-    }
-    shared
-        .routes
-        .keys()
-        .all(|id| send_greet_for(link, shared, session, *id))
+    send_message(link, shared.group, LINK_WORKSPACE, &shared.key, hello).is_ok()
 }
 
 fn open_every_route(session: &mut Session, routes: &BTreeMap<WorkspaceId, WorkspaceRoute>) {
@@ -291,7 +302,11 @@ fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSi
 /// Gathers `routes`' crypto material and routing table into one [`SharedCtx`] — `None` (logged)
 /// when nothing is routed at all, or when the (necessarily shared, ADR 0021) group key cannot be
 /// read from any routed workspace's keystore.
-fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCtx<'_>> {
+fn build_shared_ctx(
+    routes: &WorkspaceRoutes,
+    device: DeviceId,
+    group: GroupId,
+) -> Option<SharedCtx<'_>> {
     let generation = routes.generation();
     let all: BTreeMap<WorkspaceId, WorkspaceRoute> = routes.list().into_iter().collect();
     let Some(first) = all.values().next() else {
@@ -313,6 +328,7 @@ fn build_shared_ctx(routes: &WorkspaceRoutes, group: GroupId) -> Option<SharedCt
         keys,
         routes: all,
         live_peers,
+        device,
     })
 }
 
@@ -330,7 +346,7 @@ pub(crate) fn drive_shared_session(
     device: DeviceId,
     group: GroupId,
 ) -> bool {
-    let Some(shared) = build_shared_ctx(routes, group) else {
+    let Some(shared) = build_shared_ctx(routes, device, group) else {
         return false;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —
@@ -343,13 +359,13 @@ pub(crate) fn drive_shared_session(
         "lan_shared_session_started"
     );
     let mut session = Session::new(device, group);
-    open_every_route(&mut session, &shared.routes);
-    if !send_initial_greetings(link, &shared, &mut session) {
+    if !send_link_hello(link, &shared, &mut session) {
         return false;
     }
     let mut conn = Conn {
         session,
         live: Live::new(),
+        routes: BTreeMap::new(),
     };
     run_shared_message_loop(link, &shared, &mut conn);
     true

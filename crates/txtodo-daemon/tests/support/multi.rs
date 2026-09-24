@@ -215,3 +215,34 @@ pub async fn wait_until_all_open(client: &mut Client) {
             .ok();
     }
 }
+
+/// Records the device of `peer_state_dir` as the own device of the daemon at `state_dir`, in the
+/// running daemon's `identity.db` — what a real pairing where both humans said "my own device"
+/// leaves behind (task default-workspace-pairing-consent). For tests that seed the group key
+/// through the debug seam instead of pairing: without it the default does not merge with the peer.
+pub fn register_own_peer_at(state_dir: &Path, peer_state_dir: &Path) {
+    let open = |dir: &Path| {
+        txtodo_store::IdentityStore::open(&dir.join("identity.db"))
+            .unwrap_or_else(|e| panic!("open identity store: {e}"))
+    };
+    let raw = open(peer_state_dir)
+        .meta_get("device_id")
+        .unwrap_or_else(|e| panic!("read device id: {e}"))
+        .unwrap_or_else(|| panic!("the peer minted no device id yet"));
+    let raw: [u8; 16] = raw
+        .as_slice()
+        .try_into()
+        .unwrap_or_else(|_| panic!("a 16-byte device id"));
+    let bits = u128::from_be_bytes(raw);
+    let new = txtodo_store::NewDevice {
+        device: txtodo_model::DeviceId::new(txtodo_model::Ulid::from_u128(bits)),
+        name: String::new(),
+        static_public: [0; txtodo_store::DEVICE_STATIC_KEY_BYTES],
+        paired_at_ms: 0,
+        last_known_wall_ms: None,
+        key_epoch: 0,
+    };
+    open(state_dir)
+        .register_device_as(&new, true)
+        .unwrap_or_else(|e| panic!("register own peer: {e}"));
+}

@@ -169,6 +169,14 @@ fn send_all_offers(
     let device = identity.device();
     let now_ms = now_ms();
     for (workspace_id, name) in outbound_offers(registry) {
+        // The default goes out under this device's alias (task default-workspace-pairing-consent):
+        // a foreign peer mirrors it as a Remote workspace; an own device skips it, since it merges
+        // that list under the reserved id already.
+        let workspace_id = if workspace_id == crate::default_workspace::default_workspace_id() {
+            crate::default_workspace::default_alias(device)
+        } else {
+            workspace_id
+        };
         let msg = ControlMessage::Offer {
             sender: device,
             workspace_id: workspace_id.ulid().to_u128(),
