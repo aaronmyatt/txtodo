@@ -15,10 +15,14 @@ use crate::{LineKind, Mode, parse_line};
 
 /// Whether the line `raw` satisfies every term of `query` (no terms: always).
 pub fn matches(raw: &str, query: &str) -> bool {
+    matches_terms(raw, query.split_whitespace())
+}
+
+/// [`matches`] over terms already split: `txtodo list "call mum"` keeps a quoted phrase as one
+/// term, as todo.sh's `filtercommand` does.
+pub fn matches_terms<'t>(raw: &str, terms: impl IntoIterator<Item = &'t str>) -> bool {
     let hay = raw.to_lowercase();
-    query
-        .split_whitespace()
-        .all(|term| term_holds(raw, &hay, term))
+    terms.into_iter().all(|term| term_holds(raw, &hay, term))
 }
 
 /// One term against the line (`hay` is `raw` lowercased once for the whole query).
@@ -72,6 +76,14 @@ pub const GOLDEN: &[(&str, &str, bool)] = &[
 #[cfg(test)]
 mod tests {
     use super::{GOLDEN, matches};
+
+    #[test]
+    fn a_term_split_by_the_caller_keeps_its_spaces() {
+        use super::matches_terms;
+        assert!(matches_terms("call mum today", ["call mum"]));
+        assert!(!matches_terms("call dad, then mum", ["call mum"]));
+        assert!(matches_terms("call dad, then mum", ["call", "mum"]));
+    }
 
     #[test]
     fn every_golden_row_holds() {
