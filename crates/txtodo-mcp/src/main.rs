@@ -6,6 +6,7 @@
 //! notes for the full reasoning.
 #![forbid(unsafe_code)]
 #![allow(clippy::print_stderr)] // this binary's only human output path (matches txtodod's main.rs)
+#![allow(clippy::print_stdout)] // --version's own output path (must be stdout, like txtodod's)
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -109,7 +110,22 @@ async fn ensure_daemon_for_target(target: &Target, socket: &Path) {
     let _ = txtodo_daemon_launch::ensure_daemon(&cfg).await;
 }
 
+/// What follows `txtodo-mcp` in `--version` (task version-info), e.g. `0.0.10 (2026-09-24)`.
+/// `build.rs` supplies the date. release.yml's smoke test runs `--version` on every shipped binary.
+/// `concat!` takes literals and `env!` only: https://doc.rust-lang.org/std/macro.concat.html
+const VERSION_LINE: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("TXTODO_RELEASE_DATE"),
+    ")"
+);
+
 fn main() -> ExitCode {
+    // Checked before `parse_args`, which requires --stdio or --http.
+    if std::env::args_os().nth(1).is_some_and(|a| a == "--version") {
+        println!("txtodo-mcp {VERSION_LINE}");
+        return ExitCode::SUCCESS;
+    }
     let args = match parse_args() {
         Ok(a) => a,
         Err(msg) => {
