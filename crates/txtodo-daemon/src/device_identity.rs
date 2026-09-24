@@ -73,6 +73,11 @@ pub struct DeviceIdentity {
     store: Mutex<IdentityStore>,
     relay_identity: [u8; 32],
     workspace_offers: WorkspaceOfferRegistry,
+    /// Device-level since the LAN transport binds once per device (task `sync-live-push`): every
+    /// `Workspace` holds a clone (both are `Arc`s inside), so `Health` on any workspace reads the
+    /// one LAN task's progress and pairing sees every sighting.
+    lan_status: crate::lan_status::LanStatus,
+    pairing_lan: crate::pairing_lan_state::PairingLan,
 }
 
 impl DeviceIdentity {
@@ -138,6 +143,8 @@ impl DeviceIdentity {
             store: Mutex::new(store),
             relay_identity,
             workspace_offers: WorkspaceOfferRegistry::new(),
+            lan_status: crate::lan_status::LanStatus::default(),
+            pairing_lan: crate::pairing_lan_state::PairingLan::default(),
         })
     }
 
@@ -204,6 +211,14 @@ impl DeviceIdentity {
     /// `debug_hooks.rs`, `devices_grpc.rs`).
     pub(crate) fn store(&self) -> &Mutex<IdentityStore> {
         &self.store
+    }
+    /// The device's LAN (and relay) status, shared by every workspace's `Health`.
+    pub fn lan_status(&self) -> &crate::lan_status::LanStatus {
+        &self.lan_status
+    }
+    /// The bound LAN endpoint and every mDNS sighting, for pairing.
+    pub(crate) fn pairing_lan(&self) -> &crate::pairing_lan_state::PairingLan {
+        &self.pairing_lan
     }
 }
 

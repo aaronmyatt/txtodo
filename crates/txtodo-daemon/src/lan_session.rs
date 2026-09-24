@@ -1,19 +1,15 @@
 //! Crypto-material lookups shared by every real `Link`-driving path in this crate (plan M4
 //! `sync-lan-transport`; task `daemon-workspace-session-multiplex` stage 2 split this file down to
 //! just these): fetching a workspace's group key, building its single-epoch `GroupKeys`, and
-//! reading its current heads. `lan_session_shared.rs` is where the actual multiplexed read/write
-//! loop now lives (`drive_shared_session`) — this file's own [`drive_session`] is the
-//! single-workspace backward-compat wrapper every pre-stage-2 call site (`lan.rs::spawn_driver`,
-//! `relay.rs`, every existing single-workspace test) still calls, built by handing
-//! `drive_shared_session` a routing table with exactly one entry: unchanged behaviour, same code
-//! path as a genuinely multi-workspace connection with only one workspace open.
+//! reading its current heads. `lan_session_dispatch.rs` is where the actual multiplexed read/write
+//! loop lives (`drive_shared_session`). The single-workspace `drive_session` wrapper is gone (task
+//! `sync-live-push`): LAN now drives every connection over the device's own route table, and the
+//! tests' one-workspace helper lives in `lan_session_tests.rs`.
 
 use std::sync::PoisonError;
 
-use txtodo_model::DeviceId;
-use txtodo_sync::{GroupId, GroupKey, GroupKeys, KeyId, Link};
+use txtodo_sync::{GroupKey, GroupKeys, KeyId};
 
-use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
 use crate::server::SharedWorkspace;
 use crate::workspace::Workspace;
 
@@ -88,25 +84,4 @@ pub(crate) fn read_heads(ws: &SharedWorkspace) -> txtodo_sync::Heads {
         .unwrap_or_else(PoisonError::into_inner)
         .heads()
         .unwrap_or_default()
-}
-
-/// The single-workspace entry point every pre-stage-2 call site still uses: builds a one-entry
-/// routing table for `ws` and hands it to `lan_session_shared::drive_shared_session`, so a peer
-/// relationship with only one open workspace behaves exactly as it did before this stage (same
-/// code path, not a parallel one that could drift). Returns `drive_shared_session`'s "greeted"
-/// flag through unchanged.
-pub(crate) fn drive_session(
-    link: &mut dyn Link,
-    ws: SharedWorkspace,
-    device: DeviceId,
-    group: GroupId,
-) -> bool {
-    let id = read(&ws).workspace_id();
-    let routes = WorkspaceRoutes::new();
-    let registered = routes.register(id, WorkspaceRoute { ws, device, group });
-    debug_assert!(
-        registered.is_ok(),
-        "a single-entry routing table never exceeds MAX_ROUTED_WORKSPACES"
-    );
-    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group)
 }

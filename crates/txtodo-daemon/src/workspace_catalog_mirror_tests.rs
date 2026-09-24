@@ -32,7 +32,7 @@ fn fixture() -> Fixture {
         relay_url: None,
         device_relay: None,
         relay_dial_peer: None,
-        no_lan: true,
+        device_lan: None,
         device_file_carrier: None,
     };
     let registry = WorkspaceRegistry::open(&dirs.path().join("registry.db"))

@@ -18,7 +18,7 @@ use txtodo_sync::{
 use txtodo_telemetry::testing::{LogSink, capturing_dispatch, pin_global_trace_floor};
 
 use crate::clock::{Clock, FakeClock};
-use crate::lan_session::drive_session;
+use crate::lan_session_tests::drive_session;
 use crate::lan_session_tests::{PeerCrypto, one_peer_op, peer_device, run_peer_script};
 use crate::pairing_grpc_tests::{finalize_after_both_confirm, handshake_and_confirm};
 use crate::server::{SharedWorkspace, TxtodoService};

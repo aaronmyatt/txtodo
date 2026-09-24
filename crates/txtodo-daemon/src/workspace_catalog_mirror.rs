@@ -92,6 +92,15 @@ impl WorkspaceCatalog {
         Ok(entry)
     }
 
+    /// Sets the mirror folder and starts [`Self::spawn_offer_mirror`]. A folder that cannot be made
+    /// is logged: offers then stay pending, nothing else is lost.
+    pub fn start_offer_mirror(self: &Arc<Self>, dir: &Path) {
+        match self.set_remote_root(dir) {
+            Ok(()) => drop(self.spawn_offer_mirror()),
+            Err(e) => log_mirror_root_unavailable(dir, &e),
+        }
+    }
+
     /// Mirrors offers as they arrive, and any already pending, until the runtime stops.
     pub fn spawn_offer_mirror(self: &Arc<Self>) -> tokio::task::JoinHandle<()> {
         let catalog = Arc::clone(self);
@@ -145,6 +154,10 @@ pub(crate) fn create_list_dir(dir: &Path) -> std::io::Result<()> {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(e) => Err(e),
     }
+}
+
+fn log_mirror_root_unavailable(dir: &Path, e: &std::io::Error) {
+    tracing::warn!(dir = %dir.display(), error = %e, "workspace_mirror_root_unavailable");
 }
 
 fn log_mirrored(id: WorkspaceId) -> bool {

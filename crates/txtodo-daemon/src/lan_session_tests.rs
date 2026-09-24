@@ -10,7 +10,6 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 
 use crate::clock::FakeClock;
-use crate::lan_session::drive_session;
 use crate::server::SharedWorkspace;
 use crate::workspace::Workspace;
 use txtodo_model::{
@@ -341,4 +340,24 @@ async fn drive_session_touches_last_seen_for_a_known_peer_after_link_hello() {
         .expect("peer row exists");
     assert_eq!(row.last_seen_ms, Some(1_000));
     assert_eq!(row.paired_at_ms, 500);
+}
+
+/// Drives one connection for `ws` alone: a one-entry route table handed to the real
+/// `drive_shared_session`, the same code path production runs. Was `lan_session::drive_session`
+/// before LAN went device-level (task `sync-live-push`); only tests still want one workspace.
+pub(crate) fn drive_session(
+    link: &mut dyn txtodo_sync::Link,
+    ws: SharedWorkspace,
+    device: txtodo_model::DeviceId,
+    group: txtodo_sync::GroupId,
+) -> bool {
+    use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
+    let id = crate::lan_session::read(&ws).workspace_id();
+    let routes = WorkspaceRoutes::new();
+    let registered = routes.register(id, WorkspaceRoute { ws, device, group });
+    debug_assert!(
+        registered.is_ok(),
+        "a single-entry routing table never exceeds MAX_ROUTED_WORKSPACES"
+    );
+    crate::lan_session_dispatch::drive_shared_session(link, &routes, device, group)
 }

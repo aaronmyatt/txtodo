@@ -145,6 +145,8 @@ impl Workspace {
         )?;
         let started_at_ms = clock.now_ms();
         let placeholder_workspace_id = WorkspaceId::new(clock.new_ulid());
+        let lan_status = identity.lan_status().clone();
+        let pairing_lan = identity.pairing_lan().clone();
         let mut ws = Workspace {
             root: root.to_path_buf(),
             store: Arc::new(Mutex::new(store)),
@@ -159,8 +161,8 @@ impl Workspace {
             layout: crate::layout_state::SharedLayout::new(layout),
             tree_dirty: Arc::new(TreeDirty::default()),
             cached_tree: Mutex::new(WorkspaceTree::default()),
-            lan_status: LanStatus::default(),
-            pairing_lan: PairingLan::default(),
+            lan_status,
+            pairing_lan,
             relay_state: RelayState::default(),
         };
         ws.discover(root)?;

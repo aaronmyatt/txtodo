@@ -10,7 +10,6 @@ use std::time::Duration;
 use txtodo_sync::IrohLink;
 
 use crate::lan::{CONNECT_TIMEOUT, LanCtx};
-use crate::lan_session::read;
 
 /// Tries `primary` within `timeout`; if it times out, or resolves to `None` (LAN "didn't reach the
 /// peer" — a plain `Option`, not an error type, since what counts as "didn't work" is the caller's
@@ -65,8 +64,8 @@ fn log_fallback_outcome(relay_won: bool) {
 /// `lan_loopback_converge.rs` proving LAN for real versus `endpoint_tests.rs`'s same-process
 /// caveat.
 pub(crate) async fn relay_fallback_dial(ctx: LanCtx, node: [u8; 32]) -> Option<IrohLink> {
-    let endpoint = read(&ctx.ws).relay_state().get()?;
-    let status = read(&ctx.ws).lan_status().clone();
+    let endpoint = ctx.device_relay.as_ref()?.endpoint();
+    let status = ctx.identity.lan_status().clone();
     match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node, ctx.group)).await {
         Ok(Ok(link)) => {
             status.set_relay_last_outcome("connected");

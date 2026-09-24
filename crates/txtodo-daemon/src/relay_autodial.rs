@@ -16,7 +16,6 @@ use txtodo_sync::{DiscoveredPeer, LanEndpoint};
 
 use crate::lan::{LanCtx, dial_and_spawn, spawn_driver};
 use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
-use crate::lan_session::read;
 use crate::relay_fallback::relay_fallback_dial;
 
 /// Runs both halves of a resync tick: `lan.rs`'s existing known-peer redial, then this module's
@@ -48,8 +47,9 @@ pub(crate) fn resync_and_dial(
 /// and `known_peers`, then delegates the actual decision to [`filter_relay_only`] so that decision
 /// stays unit-testable without a real `Workspace`.
 fn relay_only_peers(ctx: &LanCtx, known_peers: &KnownPeers) -> Vec<(DeviceId, [u8; 32])> {
-    let rows = read(&ctx.ws)
-        .identity_store()
+    let rows = ctx
+        .identity
+        .store()
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .list_devices()
@@ -108,7 +108,7 @@ fn resync_permit(
     dial_state: &SharedDialState,
     peer: DeviceId,
 ) -> Option<tokio::sync::OwnedSemaphorePermit> {
-    let now_ms = read(&ctx.ws).clock().now_ms();
+    let now_ms = ctx.clock.now_ms();
     if !try_begin_dial(dial_state, peer, now_ms) {
         return log_backing_off(peer);
     }

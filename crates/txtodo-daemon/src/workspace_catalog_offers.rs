@@ -129,6 +129,11 @@ impl WorkspaceCatalog {
                 .as_ref()
                 .map(Arc::as_ref)
                 .map(crate::file_carrier::DeviceFileCarrier::routes),
+            self.open_args
+                .device_lan
+                .as_ref()
+                .map(Arc::as_ref)
+                .map(crate::device_lan::DeviceLan::routes),
         ]
         .into_iter()
         .flatten()

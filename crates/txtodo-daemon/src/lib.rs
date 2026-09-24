@@ -28,6 +28,7 @@ pub mod debounce;
 pub mod debug_hooks;
 mod default_workspace;
 pub mod device_identity;
+pub mod device_lan;
 pub mod device_relay;
 mod device_remove;
 mod devices_grpc;

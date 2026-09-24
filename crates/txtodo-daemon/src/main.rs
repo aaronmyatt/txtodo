@@ -7,6 +7,7 @@
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
 mod boot_log;
+mod carriers;
 mod identity_setup;
 mod signals;
 
@@ -202,7 +203,7 @@ fn open_args(
         relay_url,
         device_relay,
         relay_dial_peer: args.relay_dial_peer,
-        no_lan: args.no_lan,
+        device_lan: None,
         device_file_carrier,
     }
 }
@@ -243,33 +244,21 @@ fn start_dir_bridge(
     Ok(())
 }
 
+/// Where offered workspaces are mirrored (task remote-workspace-mirror): `remote/` beside the
+/// default, or under the bridge's own state dir with `--dir`.
+fn mirror_dir(args: &Args, env: &RegistryEnv, state_dir: &Path) -> PathBuf {
+    match args.dir {
+        Some(_) => state_dir.join("remote"),
+        None => workspace_registry_paths::remote_workspaces_dir_for(env),
+    }
+}
+
 /// The user's default workspace: created on first run, and queued first by the caller. A failure is
 /// logged and never fatal: every other workspace still opens.
 fn register_default_workspace(catalog: &WorkspaceCatalog, env: &RegistryEnv) {
     let dir = workspace_registry_paths::default_workspace_dir_for(env);
     if let Err(e) = catalog.ensure_default_workspace(&dir) {
         tracing::warn!(dir = %dir.display(), error = %e, "default_workspace_unavailable");
-    }
-}
-
-/// Mirrors every workspace a paired device offers (task remote-workspace-mirror) into `remote/`
-/// beside the default in global mode, or under the bridge's own `.txtodo/` state dir with `--dir`.
-/// A folder that cannot be made is logged: offers then stay pending, nothing else is lost.
-fn start_offer_mirror(
-    catalog: &Arc<WorkspaceCatalog>,
-    args: &Args,
-    env: &RegistryEnv,
-    state_dir: &Path,
-) {
-    let dir = match args.dir {
-        Some(_) => state_dir.join("remote"),
-        None => workspace_registry_paths::remote_workspaces_dir_for(env),
-    };
-    match catalog.set_remote_root(&dir) {
-        Ok(()) => drop(catalog.spawn_offer_mirror()),
-        Err(e) => {
-            tracing::warn!(dir = %dir.display(), error = %e, "workspace_mirror_root_unavailable");
-        }
     }
 }
 
@@ -365,25 +354,23 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         device_relay.clone(),
         registry_path.clone(),
     );
-    // One shared file-carrier per device (stage 6), opened before any workspace opens — every
-    // workspace naming the same `--sync-dir` shares this one carrier handle.
-    let device_file_carrier = args
-        .sync_dir
-        .clone()
-        .and_then(|dir| DeviceFileCarrier::open(dir, identity.device()));
-    let _file_carrier = device_file_carrier
-        .clone()
-        .map(txtodo_daemon::file_carrier::start);
+    let carriers = carriers::start(
+        &args,
+        &identity,
+        &device_relay,
+        built.sync_allowed,
+        clock.clone(),
+    );
     let mut open = open_args(
         &args,
         identity,
         relay_url,
         device_relay,
-        device_file_carrier,
+        carriers.file.clone(),
     );
-    open.no_lan |= !built.sync_allowed;
+    open.device_lan = carriers.lan.as_ref().map(|(lan, _task)| Arc::clone(lan));
     let catalog = Arc::new(WorkspaceCatalog::new(registry, open, clock));
-    start_offer_mirror(&catalog, &args, &env, &state_dir);
+    catalog.start_offer_mirror(&mirror_dir(&args, &env, &state_dir));
 
     let queued = open_or_queue(&args, &catalog, &env)?;
     drop(_boot);

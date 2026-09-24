@@ -6,9 +6,9 @@
 
 use crate::clock::Clock;
 use crate::device_identity::DeviceIdentity;
+use crate::device_lan::DeviceLan;
 use crate::device_relay::{DeviceRelay, WorkspaceRoute, WorkspaceRoutes};
 use crate::file_carrier::DeviceFileCarrier;
-use crate::lan::{self, LanTransport};
 use crate::relay::{self, RelayTransport};
 use crate::server::SharedWorkspace;
 use crate::watch_task;
@@ -45,8 +45,10 @@ pub struct WorkspaceOpenArgs {
     pub device_relay: Option<Arc<DeviceRelay>>,
     /// `--relay-dial-peer` (plan M8 `relay-converge-test`); test/manual-pairing-substitute only.
     pub relay_dial_peer: Option<[u8; 32]>,
-    /// `--no-lan`: skip `lan::start` entirely for every workspace.
-    pub no_lan: bool,
+    /// This device's one LAN transport's routing table (task `sync-live-push`), when LAN is on;
+    /// `None` for `--no-lan`, a keystore that cannot keep keys, or a test with no LAN at all. A
+    /// workspace only registers a route here — the LAN task itself is started once, in `main.rs`.
+    pub device_lan: Option<Arc<DeviceLan>>,
     /// This device's one shared file-carrier surface (plan M8 `sync-file-carrier`; task
     /// `daemon-shared-sync-link` stage 6), when `--sync-dir` was configured and opened
     /// successfully; `None` means file-carrier sync stays off for every workspace, same as
@@ -69,9 +71,9 @@ pub struct OpenedWorkspace {
     id: txtodo_store::WorkspaceId,
     device_relay: Option<Arc<DeviceRelay>>,
     device_file_carrier: Option<Arc<DeviceFileCarrier>>,
+    device_lan: Option<Arc<DeviceLan>>,
     _watcher: notify::RecommendedWatcher,
     watch_task: JoinHandle<()>,
-    lan: Option<LanTransport>,
     relay: Option<RelayTransport>,
 }
 
@@ -96,9 +98,6 @@ impl OpenedWorkspace {
 
     fn drop_inner(&mut self) {
         self.watch_task.abort();
-        if let Some(l) = &self.lan {
-            l.abort();
-        }
         if let Some(r) = &self.relay {
             r.abort();
         }
@@ -110,6 +109,9 @@ impl OpenedWorkspace {
         }
         if let Some(device_file_carrier) = &self.device_file_carrier {
             device_file_carrier.routes().unregister(self.id);
+        }
+        if let Some(device_lan) = &self.device_lan {
+            device_lan.routes().unregister(self.id);
         }
         log_workspace_closed();
     }
@@ -153,6 +155,14 @@ pub fn open_workspace_full(
             .map(Arc::as_ref)
             .map(DeviceFileCarrier::routes),
     );
+    register_route(
+        &ws,
+        id,
+        args.device_lan
+            .as_ref()
+            .map(Arc::as_ref)
+            .map(DeviceLan::routes),
+    );
     let (watcher, watch_task) =
         watch_task::start(Arc::clone(&ws), Arc::clone(&clock)).map_err(|source| {
             WorkspaceError::Walk(crate::walker::WalkError::Io {
@@ -160,11 +170,6 @@ pub fn open_workspace_full(
                 source: std::io::Error::other(source.to_string()),
             })
         })?;
-    let lan = if args.no_lan {
-        None
-    } else {
-        Some(lan::start(Arc::clone(&ws), Arc::clone(&clock)))
-    };
     let relay = relay::start(
         Arc::clone(&ws),
         args.relay_url.clone(),
@@ -181,9 +186,9 @@ pub fn open_workspace_full(
         id,
         device_relay: args.device_relay.clone(),
         device_file_carrier: args.device_file_carrier.clone(),
+        device_lan: args.device_lan.clone(),
         _watcher: watcher,
         watch_task,
-        lan,
         relay,
     })
 }

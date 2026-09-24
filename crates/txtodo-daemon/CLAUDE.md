@@ -308,6 +308,12 @@ multiplex every workspace's traffic — not done by this task).
   connection), so its own call site wraps it in `tokio::task::block_in_place` instead — without
   that it panics ("cannot start a runtime from within a runtime").
   `crates/txtodo-daemon/tests/file_carrier_converge.rs` is the real two-daemon, no-network proof.
+- `device_lan.rs` (task `sync-live-push`, 2026-09-24): **LAN is one per device now**, not one per
+  workspace — this supersedes the per-workspace `lan::start(ws, clock)` described below. `main.rs`
+  (`carriers.rs`) starts one LAN task next to `DeviceRelay`; each workspace registers a route on
+  `DeviceLan::routes()` and every LAN connection runs `drive_shared_session` over that table.
+  `LanStatus`/`PairingLan` live on `DeviceIdentity` (each `Workspace` holds a clone). The
+  one-workspace `lan_session::drive_session` is gone; tests use `lan_session_tests::drive_session`.
 - `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
   paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
   flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry

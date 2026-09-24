@@ -11,7 +11,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::lan_session::drive_session;
+use crate::lan_session_tests::drive_session;
 use crate::lan_session_tests::{
     PeerCrypto, assert_todo_txt_has, make_workspace, one_peer_op, peer_device, run_peer_script,
 };

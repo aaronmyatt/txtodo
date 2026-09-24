@@ -4,8 +4,14 @@
 //! discovery failure is logged and this device simply runs without LAN sync. `iroh`/`mdns-sd`
 //! never appear here or anywhere else in this crate; only `txtodo_sync`'s own types do.
 //!
+//! **One per device** (task `sync-live-push`, 2026-09-24): bound once in `main.rs` next to
+//! `DeviceRelay`, advertised once, and every connection is driven by
+//! `lan_session_dispatch::drive_shared_session` over [`DeviceLan`]'s route table, so one LAN link
+//! carries every open workspace, the same as the relay path. It used to be one endpoint, one mDNS
+//! advertisement and one link per open workspace.
+//!
 //! **Sessions are short-lived by design.** `IrohLink::recv` (`txtodo-sync`) reports the link
-//! closed after `IDLE_TIMEOUT` (750 ms) of silence, so `lan_session::drive_session` naturally
+//! closed after `IDLE_TIMEOUT` (750 ms) of silence, so a session naturally
 //! returns once a connection has caught the peer up and gone quiet. The periodic resync below
 //! (`relay_autodial::spawn_resync_dial`) is the other half: every known peer is redialed every
 //! `RESYNC_INTERVAL`, so a later local edit still converges without this module watching the store.
@@ -25,17 +31,16 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use txtodo_model::DeviceId;
-use txtodo_sync::{
-    DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, PAIRING_ALPN, Sighting,
-};
+use txtodo_sync::{DiscoveredPeer, Discovery, GroupId, IrohLink, LanEndpoint, Sighting};
 
 use crate::clock::Clock;
+use crate::device_identity::DeviceIdentity;
+use crate::device_lan::DeviceLan;
+use crate::device_relay::DeviceRelay;
 use crate::lan_peers::{
     DialState, KnownPeers, SharedDialState, record_dial_outcome, remember_any_sighting,
     remember_peer, worth_dialing,
 };
-use crate::lan_session::{drive_session, read};
-use crate::server::SharedWorkspace;
 
 /// Refuses a 101st concurrent sync session the same way `MAX_LAN_PEERS` bounds the peer table
 /// itself — a LAN flooded with peers must not spawn unbounded tasks.
@@ -82,18 +87,23 @@ impl LanTransport {
     }
 }
 
-/// Starts LAN discovery and the iroh endpoint as a background task.
-pub fn start(ws: SharedWorkspace, clock: Arc<dyn Clock>) -> LanTransport {
+/// Starts LAN discovery and the iroh endpoint as a background task, once per device.
+pub(crate) fn start(ctx: LanCtx) -> LanTransport {
     LanTransport {
-        task: tokio::spawn(run(ws, clock)),
+        task: tokio::spawn(run(ctx)),
     }
 }
 
-/// This device's identity for the sync group, plus the workspace — bundled to stay under
-/// `maxParams`, cheap to clone. Fields are `pub(crate)`: `relay_fallback.rs` needs them too.
+/// Everything the device's one LAN task shares with its dials and sessions — bundled to stay under
+/// `maxParams`, cheap to clone. Fields are `pub(crate)`: `relay_fallback.rs`/`relay_autodial.rs`
+/// need them too. `group` is the group `Discovery` advertises; a pairing changes it (see
+/// `rebuild_on_group_change`).
 #[derive(Clone)]
 pub(crate) struct LanCtx {
-    pub(crate) ws: SharedWorkspace,
+    pub(crate) identity: Arc<DeviceIdentity>,
+    pub(crate) lan: Arc<DeviceLan>,
+    pub(crate) device_relay: Option<Arc<DeviceRelay>>,
+    pub(crate) clock: Arc<dyn Clock>,
     pub(crate) device: DeviceId,
     pub(crate) group: GroupId,
 }
@@ -106,32 +116,32 @@ struct LanSetup {
     ctx: LanCtx,
 }
 
-async fn setup(ws: SharedWorkspace) -> Option<LanSetup> {
+async fn setup(mut ctx: LanCtx) -> Option<LanSetup> {
     let endpoint = Arc::new(bind_endpoint().await?);
-    let (device, group, status) = {
-        let ws = read(&ws);
-        ws.pairing_lan().set_endpoint(Arc::clone(&endpoint));
-        (ws.device(), ws.group(), ws.lan_status().clone())
-    };
+    ctx.identity
+        .pairing_lan()
+        .set_endpoint(Arc::clone(&endpoint));
+    let status = ctx.identity.lan_status().clone();
     status.set_endpoint_bound(true);
-    let discovery = start_discovery(device, group, &endpoint)?;
+    ctx.group = ctx.identity.group();
+    let discovery = start_discovery(ctx.device, ctx.group, &endpoint)?;
     let browse = browse(&discovery)?;
     status.set_discovery_active(true);
     Some(LanSetup {
         endpoint,
         discovery,
         browse,
-        ctx: LanCtx { ws, device, group },
+        ctx,
     })
 }
 
-async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
+async fn run(ctx: LanCtx) {
     let Some(LanSetup {
         endpoint,
         mut discovery,
         mut browse,
         mut ctx,
-    }) = setup(ws).await
+    }) = setup(ctx).await
     else {
         return;
     };
@@ -147,11 +157,12 @@ async fn run(ws: SharedWorkspace, clock: Arc<dyn Clock>) {
 
     loop {
         tokio::select! {
-            incoming = endpoint.accept() => accept_one(incoming, &sessions, &ctx),
+            incoming = endpoint.accept() => {
+                crate::device_lan::accept_one(incoming, &sessions, &ctx);
+            }
             sighting = browse.recv() => {
                 let keep_going = handle_sighting(
-                    sighting, &mut table, &dial_state, &known_peers, clock.as_ref(), &sessions,
-                    &ctx, &endpoint,
+                    sighting, &mut table, &dial_state, &known_peers, &sessions, &ctx, &endpoint,
                 );
                 if !keep_going {
                     return;
@@ -191,7 +202,7 @@ struct Rebuilt {
 /// re-advertises under the current group and returns a fresh `Discovery`/browse stream for `run`'s
 /// loop to swap in, or `None` when the group has not changed since `ctx.group`.
 async fn rebuild_on_group_change(ctx: &LanCtx, endpoint: &LanEndpoint) -> Option<Rebuilt> {
-    let current = read(&ctx.ws).group();
+    let current = ctx.identity.group();
     if current == ctx.group {
         return None;
     }
@@ -211,7 +222,6 @@ fn handle_sighting(
     table: &mut txtodo_sync::PeerTable,
     dial_state: &SharedDialState,
     known_peers: &KnownPeers,
-    clock: &dyn Clock,
     sessions: &Arc<Semaphore>,
     ctx: &LanCtx,
     endpoint: &Arc<LanEndpoint>,
@@ -223,8 +233,8 @@ fn handle_sighting(
     // Remembered regardless of group, *before* the group-filtered dial decision below: pairing
     // (`pairing_lan.rs`) looks a peer up by device id alone, since the whole point of pairing is
     // that the two devices do not share a group yet (see `pairing_lan_state.rs`'s module doc).
-    remember_any_sighting(&ctx.ws, &sighting);
-    let now_ms = clock.now_ms();
+    remember_any_sighting(ctx.identity.pairing_lan(), &sighting);
+    let now_ms = ctx.clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         remember_peer(known_peers, &peer);
         spawn_dial(
@@ -282,58 +292,14 @@ pub(crate) fn spawn_driver(
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        let greeted = drive_session(&mut link, ctx.ws, ctx.device, ctx.group);
+        let greeted = crate::lan_session_dispatch::drive_shared_session(
+            &mut link,
+            ctx.lan.routes(),
+            ctx.device,
+            ctx.group,
+        );
         on_done(greeted);
     });
-}
-
-/// One accepted pairing connection (this device as initiator) — same "blocking thread, one permit"
-/// shape as [`spawn_driver`]. Unlike a sync session, this needs no `device`/`group` of its own:
-/// `pairing_lan.rs`'s handler reads whatever this daemon's own active `PairingRegistry` says.
-fn spawn_pairing_driver(
-    ws: SharedWorkspace,
-    link: IrohLink,
-    permit: tokio::sync::OwnedSemaphorePermit,
-) {
-    tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        let mut link = link;
-        crate::pairing_lan::handle_incoming(&ws, &mut link);
-    });
-}
-
-fn log_accept_failed(e: &txtodo_sync::LanError) {
-    tracing::debug!(error = %e, "lan_accept_failed");
-}
-
-fn log_session_cap_reached_dropping_incoming() {
-    tracing::warn!(
-        cap = MAX_CONCURRENT_LAN_SESSIONS,
-        "lan_session_cap_reached_dropping_incoming"
-    );
-}
-
-/// One accepted connection: spawns a driver if the session cap allows it, otherwise the link is
-/// simply dropped (closing it) and logged. Which driver depends on `link.alpn()`: the one bound
-/// endpoint accepts both the group-keyed sync protocol and a pairing relay connection, told apart
-/// here rather than by any frame content.
-fn accept_one(
-    incoming: Result<IrohLink, txtodo_sync::LanError>,
-    sessions: &Arc<Semaphore>,
-    ctx: &LanCtx,
-) {
-    let Ok(link) = incoming.inspect_err(log_accept_failed) else {
-        return;
-    };
-    let Ok(permit) = Arc::clone(sessions).try_acquire_owned() else {
-        log_session_cap_reached_dropping_incoming();
-        return;
-    };
-    if link.alpn() == PAIRING_ALPN {
-        spawn_pairing_driver(ctx.ws.clone(), link, permit);
-    } else {
-        spawn_driver(ctx.clone(), link, permit, |_| {});
-    }
 }
 
 fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
