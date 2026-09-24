@@ -1,4 +1,3 @@
-2026-09-24 Seed [[action]] rows from current desktop: FileView Mod-Enter/Mod-s/Esc, CM6 Alt-Up/Down line move, detail, sidebar, Universal, devices, tokens, tray, pin +m11 @desktop @doing by:claude
 2026-09-24 Give every na/differs row a one-line deviation: pin, tray, global hotkey, camera scan, folder picker, font/size/line height, Copy via OSC 52 +m11 @tui
 2026-09-24 Write docs/adr/0031-client-parity-manifest.md, status proposed until the decide line is signed +m11 @docs
 2026-09-24 Add crates/txtodo-tui/tests/parity.rs: manifest ids and keys equal keymap::BINDINGS; differs/na need a deviation (after tui-foundation keymap.rs lands) +m11 @tui @test
@@ -9,3 +8,4 @@ x 2026-09-25 2026-09-24 Write specs/client-parity.toml schema: [[action]] id/tit
 x 2026-09-25 2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui — 28 rows: list mode, edit, the r/o/s panes, palette, quit
 x 2026-09-25 2026-09-24 Seed [[action]] rows from the revamp plan (notes.md:235-240, c2 key hints) with desktop status planned +m11 @desktop — 24 rows; prompt.focus and detail.open differ (no Cmd in a terminal)
 x 2026-09-25 2026-09-24 Seed [[screen]] rows: sidebar to W popup, Activity to Settings card, detail panel, Quick Add window to prompt bar, /devices to Settings +m11 @tui — 12 rows
+x 2026-09-25 2026-09-24 Seed [[action]] rows from current desktop: FileView Mod-Enter/Mod-s/Esc, CM6 Alt-Up/Down line move, detail, sidebar, Universal, devices, tokens, tray, pin +m11 @desktop — 31 rows from an inventory of apps/desktop; found no device list/revoke in the UI and an unreachable offer-side SAS confirm
