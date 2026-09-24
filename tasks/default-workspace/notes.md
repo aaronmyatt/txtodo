@@ -74,3 +74,18 @@ workspace).
   (2026-09-20) and has stayed red since (confirmed still failing on 2026-09-21's push). Not
   covered by any line above; those are new tests for the feature, not a fix for these two old
   ones.
+
+## 2026-09-24: the two-daemon pairing test
+
+- Was blocked: offers only travelled the relay control channel, and the relay tests need the public
+  n0 relay (quarantined with `#[ignore]`). Picked the other named way out: a LAN control channel.
+  The LAN endpoint now accepts `CONTROL_ALPN`, and on each resync tick the lower-id side dials a
+  short control session to every LAN peer (`device_lan::dial_control`). No wire change: the same
+  `ControlMessage::Offer` exchange.
+- `tests/default_workspace_pairing.rs`: a global-mode daemon holding only its default pairs over LAN
+  with a `--dir` daemon holding one workspace. The joiner's default keeps the reserved id; the
+  offered workspace arrives as a Remote mirror (`ref:remote-workspace-mirror`) and LAN sync fills it.
+- Found on the way: a long-lived sync session never greeted a workspace opened after it started.
+  Sessions now end when the route table's generation moves; the reconnect greets the new set.
+- Known gap: the `--dir` side has no default, so it mirrors the joiner's default as a Remote entry.
+  Only a test setup does that; every global daemon already holds the reserved id and skips it.

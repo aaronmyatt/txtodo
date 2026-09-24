@@ -98,3 +98,6 @@ path is what makes that command usable without the user picking a directory by h
     tests need the public n0 relay. Unit tests cover the mirror; the wire path is untested here.
   - A declined offer comes back after a daemon restart and is mirrored then.
   - Nobody has looked at the desktop Remote label in the running app.
+- Update 2026-09-24 (later): the wire path is now proven over LAN by
+  `tests/default_workspace_pairing.rs` (offers ride a LAN control session too). The relay path is
+  still only unit-tested.
