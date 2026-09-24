@@ -2,11 +2,14 @@
 //! every peer this device has ever resolved for real (`KnownPeers`, `lan.rs`'s periodic redial).
 //! Split out of `lan.rs` purely for the file budget.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use txtodo_model::DeviceId;
-use txtodo_sync::{DiscoveredPeer, PeerEvent, PeerTable, Sighting, backoff_ms};
+use txtodo_sync::{
+    DiscoveredPeer, GroupId, PROTOCOL_VERSION, PeerEvent, PeerTable, Sighting, backoff_ms,
+};
 
 /// Shared across the run loop and every spawned dial task.
 pub(crate) type SharedDialState = Arc<Mutex<DialState>>;
@@ -66,11 +69,58 @@ pub(crate) fn remember_any_sighting(
     pairing.remember(&peer);
 }
 
-pub(crate) fn remember_peer(known_peers: &KnownPeers, peer: &DiscoveredPeer) {
-    known_peers
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(peer.device, peer.clone());
+/// Most addresses remembered per peer, however many answers mDNS merges.
+const MAX_PEER_ADDRESSES: usize = 32;
+
+/// Every in-group sighting of a peer this device dials (the lower id, the tie-break) keeps its
+/// remembered addresses current, whatever the debounce says (task lan-dial-falls-to-relay,
+/// 2026-09-25). Only a `Found` sighting used to be remembered, so the first answer, sometimes
+/// IPv6-only, was the address set every redial used. The higher id still remembers nothing: it
+/// is the side that dials a peer over the relay when the peer leaves the LAN
+/// (`relay_autodial::relay_only_peers`), and a LAN session supersedes that relay one.
+pub(crate) fn remember_sighting(
+    known_peers: &KnownPeers,
+    sighting: &Sighting,
+    own: DeviceId,
+    group: GroupId,
+) {
+    let a = &sighting.announcement;
+    if own >= a.device || a.group != group || a.proto != PROTOCOL_VERSION {
+        return;
+    }
+    let mut known = known_peers.lock().unwrap_or_else(PoisonError::into_inner);
+    let addresses = match known.get(&a.device) {
+        Some(old) if old.node == a.node => merge_addresses(&old.addresses, &sighting.addresses),
+        _ => sighting.addresses.clone(),
+    };
+    let peer = DiscoveredPeer {
+        device: a.device,
+        node: a.node,
+        addresses,
+    };
+    known.insert(a.device, peer);
+}
+
+/// `new`, then each of `old` on a port `new` uses that `new` lacks: mDNS can answer a peer's IPv4
+/// and IPv6 addresses separately, and a later answer must not drop an earlier one. A new port is a
+/// restarted peer, so its old addresses go.
+fn merge_addresses(old: &[SocketAddr], new: &[SocketAddr]) -> Vec<SocketAddr> {
+    let ports: BTreeSet<u16> = new.iter().map(SocketAddr::port).collect();
+    let mut out = new.to_vec();
+    for addr in old {
+        if ports.contains(&addr.port()) && !out.contains(addr) {
+            out.push(*addr);
+        }
+    }
+    out.truncate(MAX_PEER_ADDRESSES);
+    debug_assert!(out.len() <= MAX_PEER_ADDRESSES);
+    out
+}
+
+/// `peer` as remembered, addresses merged across sightings, or `peer` itself when it is not.
+pub(crate) fn known_or(known_peers: &KnownPeers, peer: DiscoveredPeer) -> DiscoveredPeer {
+    let known = known_peers.lock().unwrap_or_else(PoisonError::into_inner);
+    known.get(&peer.device).cloned().unwrap_or(peer)
 }
 
 /// Every currently known peer this device (rather than the peer) is responsible for dialing —

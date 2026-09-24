@@ -75,3 +75,54 @@ fn peers_back_off_independently() {
     );
     assert!(!try_begin_dial(&state, peer(), backoff_ms(0)));
 }
+
+fn sighting(device: u128, group: u128, addrs: &[&str]) -> txtodo_sync::Sighting {
+    txtodo_sync::Sighting {
+        announcement: txtodo_sync::Announcement {
+            device: DeviceId::new(Ulid::from_u128(device)),
+            group: txtodo_sync::GroupId(group),
+            proto: txtodo_sync::PROTOCOL_VERSION,
+            node: [9u8; 32],
+        },
+        addresses: addrs
+            .iter()
+            .map(|a| a.parse().unwrap_or_else(|e| panic!("{a}: {e}")))
+            .collect(),
+    }
+}
+
+/// Task lan-dial-falls-to-relay: an IPv6-only answer must not wipe the IPv4 address an earlier
+/// answer gave, and a peer that restarted on a new port drops its old addresses.
+#[test]
+fn a_later_sighting_merges_addresses_on_the_same_port() {
+    use crate::lan_peers::{KnownPeers, remember_sighting};
+    let known: KnownPeers = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+    let own = DeviceId::new(Ulid::from_u128(1));
+    let group = txtodo_sync::GroupId(5);
+    remember_sighting(&known, &sighting(7, 5, &["192.168.1.11:4000"]), own, group);
+    remember_sighting(&known, &sighting(7, 5, &["[2001:db8::7]:4000"]), own, group);
+    let got = known.lock().unwrap()[&peer()].addresses.clone();
+    let want: Vec<std::net::SocketAddr> = vec![
+        "[2001:db8::7]:4000".parse().unwrap(),
+        "192.168.1.11:4000".parse().unwrap(),
+    ];
+    assert_eq!(got, want);
+    remember_sighting(&known, &sighting(7, 5, &["[2001:db8::7]:5000"]), own, group);
+    assert_eq!(
+        known.lock().unwrap()[&peer()].addresses.len(),
+        1,
+        "new port"
+    );
+}
+
+#[test]
+fn only_the_dialing_side_remembers_and_only_its_own_group() {
+    use crate::lan_peers::{KnownPeers, remember_sighting};
+    let known: KnownPeers = Arc::new(Mutex::new(std::collections::BTreeMap::new()));
+    let group = txtodo_sync::GroupId(5);
+    let higher = DeviceId::new(Ulid::from_u128(99));
+    remember_sighting(&known, &sighting(7, 5, &["10.0.0.7:1"]), higher, group);
+    let lower = DeviceId::new(Ulid::from_u128(1));
+    remember_sighting(&known, &sighting(7, 6, &["10.0.0.7:1"]), lower, group);
+    assert!(known.lock().unwrap().is_empty());
+}

@@ -38,8 +38,8 @@ use crate::device_identity::DeviceIdentity;
 use crate::device_lan::DeviceLan;
 use crate::device_relay::DeviceRelay;
 use crate::lan_peers::{
-    DialState, KnownPeers, SharedDialState, record_dial_outcome, remember_any_sighting,
-    remember_peer, worth_dialing,
+    DialState, KnownPeers, SharedDialState, known_or, record_dial_outcome, remember_any_sighting,
+    remember_sighting, worth_dialing,
 };
 
 /// Refuses a 101st concurrent sync session the same way `MAX_LAN_PEERS` bounds the peer table
@@ -238,9 +238,10 @@ fn handle_sighting(
     // (`pairing_lan.rs`) looks a peer up by device id alone, since the whole point of pairing is
     // that the two devices do not share a group yet (see `pairing_lan_state.rs`'s module doc).
     remember_any_sighting(ctx.identity.pairing_lan(), &sighting);
+    remember_sighting(known_peers, &sighting, ctx.device, ctx.group);
     let now_ms = ctx.clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
-        remember_peer(known_peers, &peer);
+        let peer = known_or(known_peers, peer);
         // A live session already carries every shared workspace (task sync-live-push).
         if ctx.identity.live_peers().is_live(peer.device) {
             return true;
@@ -310,8 +311,10 @@ pub(crate) fn spawn_driver(
     });
 }
 
-fn log_connect_failed(peer: DeviceId, e: &txtodo_sync::LanError) {
-    tracing::debug!(peer = %peer, error = %e, "lan_connect_failed");
+/// At `info` (task lan-dial-falls-to-relay): the one line that says why a LAN peer ended up on
+/// the relay, with the addresses tried.
+fn log_connect_failed(peer: &DiscoveredPeer, e: &txtodo_sync::LanError) {
+    tracing::info!(peer = %peer.device, addresses = ?peer.addresses, error = %e, "lan_connect_failed");
 }
 
 /// The LAN half of the fallback: `None` on any failure, already logged via `log_connect_failed`.
@@ -319,7 +322,7 @@ async fn lan_only_dial(endpoint: Arc<LanEndpoint>, peer: DiscoveredPeer) -> Opti
     match endpoint.connect(peer.node, &peer.addresses).await {
         Ok(link) => Some(link),
         Err(e) => {
-            log_connect_failed(peer.device, &e);
+            log_connect_failed(&peer, &e);
             None
         }
     }
