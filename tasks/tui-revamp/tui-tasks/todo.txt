@@ -1,4 +1,4 @@
-2026-09-24 Conflict sheet modal: merged preview, core diff, mine/theirs/merged, N more, Esc closes; replaces the r pane +m11 @tui
+2026-09-24 Conflict sheet modal: merged preview, core diff, mine/theirs/merged, N more, Esc closes; replaces the r pane +m11 @tui @doing by:claude
 2026-09-24 Integration test: search, x and u undo round-trip against a real txtodod +m11 @tui @test
 x 2026-09-25 2026-09-24 Sub-toolbar: file name, t N x N N lines, search match status +m11 @tui — ui/subbar.rs
 x 2026-09-25 2026-09-24 Rows: line-number gutter, done dim + strike, ref: n/m or notes glyph, 100-char underline, Add a line row +m11 @tui — ui/row.rs + app_refs.rs; a ref dir without tasks shows the notes mark (the tree lists notes.md only once opened); the underline counts drawn chars, so a mid-line id: tag shifts it by one
