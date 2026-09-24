@@ -18,6 +18,6 @@ while IFS= read -r f; do
   rel="${f#"$ROOT"/}"
   echo "$rel" | grep -Eq "$EXEMPT" && continue
   n=$(wc -l < "$f")
-  if [ "$n" -gt "$MAX" ]; then echo "file-length: $rel has $n lines (max $MAX)"; status=1; fi
+  if [ "$n" -gt "$MAX" ]; then echo "file-length: $rel has $n lines (max $MAX) — split the file; move long rationale comments to the task's tasks/<slug>/notes.md (leave a one-line pointer)"; status=1; fi
 done < <(find "$ROOT/crates" "$ROOT/apps/desktop/src-tauri" -name '*.rs' -not -path '*/target/*')
 exit $status
