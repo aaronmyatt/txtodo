@@ -138,7 +138,10 @@ ctl() { env -u TXTODO_NO_SERVICE "$bin_dir/txtodo" daemon "$@"; }
 ctl stop || true
 ctl install --force
 ctl start
-ctl status
+# `start` returns before the socket answers: boot loads every workspace, and a first run of a newly
+# signed txtodod waits on the Keychain prompt. Wait up to 2 minutes rather than fail the install.
+for _ in $(seq 1 120); do ctl status >/dev/null 2>&1 && break; sleep 1; done
+ctl status || log "WARNING: daemon not answering yet; check for a Keychain prompt, then: txtodo doctor"
 
 # --- 7. build stamp + checks ---------------------------------------------------------------------
 # Same data dir the daemon's socket uses: $XDG_DATA_HOME/txtodo, else ~/.local/share/txtodo.
