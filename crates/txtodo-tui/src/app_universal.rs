@@ -43,6 +43,24 @@ fn utask(t: pb::UniversalTask) -> UTask {
     }
 }
 
+/// `Complete` for an open task, `Reopen` for a done one (the daemon's `Complete` leaves a done line
+/// alone).
+fn toggle(task: &UTask) -> pb::Mutation {
+    let target = Some(pb::TaskRef {
+        line_number: task.line_number,
+        task_id: task.task_id.clone(),
+    });
+    let kind = if task.done {
+        pb::mutation::Kind::Reopen(pb::Reopen { task: target })
+    } else {
+        pb::mutation::Kind::Complete(pb::Complete {
+            task: target,
+            today: crate::commands::today_local(),
+        })
+    };
+    pb::Mutation { kind: Some(kind) }
+}
+
 /// `x`: completes (or reopens) `task` in its workspace, toasts with Undo, and re-reads the rows.
 pub async fn complete(
     daemon: &mut Daemon,
@@ -51,15 +69,7 @@ pub async fn complete(
 ) -> Result<(), DaemonError> {
     let req = pb::ApplyRequest {
         path: task.root_list.clone(),
-        mutations: vec![pb::Mutation {
-            kind: Some(pb::mutation::Kind::Complete(pb::Complete {
-                task: Some(pb::TaskRef {
-                    line_number: task.line_number,
-                    task_id: task.task_id.clone(),
-                }),
-                today: crate::commands::today_local(),
-            })),
-        }],
+        mutations: vec![toggle(&task)],
         source: "tui".to_owned(),
         ..pb::ApplyRequest::default()
     };

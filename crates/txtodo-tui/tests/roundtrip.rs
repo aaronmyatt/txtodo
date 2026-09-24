@@ -95,6 +95,17 @@ async fn space_completes_a_line_through_apply() {
         "{:?}",
         state.lines[0].raw
     );
+
+    // Space again reopens it (a Reopen mutation: Complete leaves a done line alone).
+    press(
+        &mut daemon,
+        &mut input,
+        &mut state,
+        crossterm::event::KeyCode::Char(' '),
+    )
+    .await;
+    assert!(!state.lines[0].completed, "{:?}", state.lines[0].raw);
+    assert_eq!(state.lines[0].raw, "buy milk");
 }
 
 /// Task complete-to-bottom against a real daemon: the done line goes to the bottom of the file and

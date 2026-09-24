@@ -130,19 +130,24 @@ fn resolve(state: &AppState, pick: Resolution) -> Option<Action> {
     conflicts::resolve_request(state, pick).map(Action::Resolve)
 }
 
-/// `Space`: builds the `Complete` mutation for the selected line, if any (the Add-a-line row has
-/// nothing to complete).
+/// Space / `x`: completes the selected line, or reopens it when it is done. The daemon's
+/// `Complete` does nothing to a done line, so reopening is its own `Reopen` mutation (which also
+/// moves the line back above the done ones).
 fn toggle_complete(state: &AppState) -> Option<pb::Mutation> {
     let line = state.selected_line()?;
-    Some(pb::Mutation {
-        kind: Some(pb::mutation::Kind::Complete(pb::Complete {
-            task: Some(pb::TaskRef {
-                line_number: line.line_number,
-                task_id: line.task_ref_id().to_owned(),
-            }),
+    let task = Some(pb::TaskRef {
+        line_number: line.line_number,
+        task_id: line.task_ref_id().to_owned(),
+    });
+    let kind = if line.completed {
+        pb::mutation::Kind::Reopen(pb::Reopen { task })
+    } else {
+        pb::mutation::Kind::Complete(pb::Complete {
+            task,
             today: today_local(),
-        })),
-    })
+        })
+    };
+    Some(pb::Mutation { kind: Some(kind) })
 }
 
 /// `dd`: builds the `Delete` mutation for the selected line; `leave_blank = true` matches
