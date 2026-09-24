@@ -172,7 +172,7 @@ title = "Review conflicts"
 keys = ["r"]
 scope = "list"
 desktop = { status = "differs", surface = "ConflictBanner", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop opens the review sheet from the conflict banner's button; the TUI's r pane becomes the same banner and sheet in tui-tasks."
 
 [[action]]
@@ -181,7 +181,7 @@ title = "Next conflict"
 keys = ["j", "Down"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop lists every conflict at once; there is nothing to move through."
 
 [[action]]
@@ -190,7 +190,7 @@ title = "Previous conflict"
 keys = ["k", "Up"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop lists every conflict at once; there is nothing to move through."
 
 [[action]]
@@ -199,7 +199,7 @@ title = "Keep mine"
 keys = ["m"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop: a button per conflict, no key."
 
 [[action]]
@@ -208,7 +208,7 @@ title = "Keep theirs"
 keys = ["t"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop: a button per conflict, no key."
 
 [[action]]
@@ -217,7 +217,7 @@ title = "Keep the merged text"
 keys = ["M"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop: a button per conflict, no key."
 
 [[action]]
@@ -226,7 +226,7 @@ title = "Close the conflict review"
 keys = ["Esc", "r"]
 scope = "sheet"
 desktop = { status = "differs", surface = "ConflictReviewSheet", keys = ["Esc"] }
-tui = { status = "done", surface = "r pane" }
+tui = { status = "done", surface = "conflict sheet" }
 deviation = "r toggles the TUI pane; desktop closes the sheet with Esc or its close button."
 
 [[action]]

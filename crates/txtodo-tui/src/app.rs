@@ -238,6 +238,13 @@ async fn resolve(
     if let Ok(flags) = daemon.list_conflicts(&state.path).await {
         state.needs_review = flags.flags.into_iter().map(to_conflict_item).collect();
     }
+    // The sheet moves on to the next flag, and closes after the last, as desktop's does.
+    state.conflict_cursor = state
+        .conflict_cursor
+        .min(state.needs_review.len().saturating_sub(1));
+    if state.needs_review.is_empty() {
+        state.conflicts_open = false;
+    }
     Ok(())
 }
 

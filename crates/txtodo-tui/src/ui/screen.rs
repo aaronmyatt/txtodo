@@ -6,15 +6,16 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{ListState, Paragraph};
 
 use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, footer, header, list, offers, search_panel, subbar, sync, toast, workspace_menu,
+    banner, conflict_sheet, footer, header, list, offers, search_panel, subbar, sync, toast,
+    workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -46,6 +47,9 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
     if state.nav.focus == Focus::Search {
         let screen = frame.area();
         search_panel::draw(frame, screen, header_area.bottom(), state, &mut hits);
+    }
+    if state.conflicts_open {
+        conflict_sheet::draw(frame, frame.area(), state, &mut hits);
     }
     if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
         let screen = frame.area();
@@ -92,10 +96,6 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
     frame.render_stateful_widget(list::list_widget(state), list_area, &mut list_state);
     hits.record_list(list_area, list_state.offset(), state.row_count());
 
-    if state.conflicts_open {
-        draw_conflicts(frame, list_area, state);
-        hits.push(list_area, Target::Inert);
-    }
     if state.offers.open {
         offers::draw(frame, list_area, state);
         hits.push(list_area, Target::Inert);
@@ -122,27 +122,6 @@ fn draw_overlay(frame: &mut Frame, area: Rect, content: Line<'static>) -> Rect {
         rect,
     );
     rect
-}
-
-fn draw_conflicts(frame: &mut Frame, area: Rect, state: &AppState) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title("conflicts: m=mine t=theirs M=merged");
-    let items: Vec<ListItem> = state
-        .needs_review
-        .iter()
-        .map(|f| {
-            ListItem::new(format!(
-                "line {}: mine={:?} theirs={:?}",
-                f.line_number, f.mine, f.theirs
-            ))
-        })
-        .collect();
-    let mut list_state = ListState::default().with_selected(Some(state.conflict_cursor));
-    let list = List::new(items)
-        .block(block)
-        .highlight_style(Style::new().fg(Color::Black).bg(Color::Yellow));
-    frame.render_stateful_widget(list, area, &mut list_state);
 }
 
 #[cfg(test)]
