@@ -14,8 +14,7 @@ use tracing::Instrument;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
 
-// Re-exported so `crate::global_service::rpc_span`/`workspace_info`, the paths
-// `pairing_grpc.rs`/`workspace_offer_grpc.rs` call them by, keep resolving after this split.
+// Re-exported: `pairing_grpc.rs` and the other split-out handlers reach them by these paths.
 pub(crate) use crate::global_service_helpers::{
     HasWorkspace, parse_workspace_id, rpc_span, totals_only, with_totals, workspace_info,
 };
@@ -31,14 +30,12 @@ impl GlobalService {
     pub fn new(catalog: Arc<WorkspaceCatalog>) -> GlobalService {
         GlobalService { catalog }
     }
-    /// `pub(crate)`: `workspace_offer_grpc.rs`'s own `impl Txtodo for GlobalService` extension
-    /// needs the catalog too (split out for `server.rs`'s file budget).
+    /// For the handlers split into their own files (`workspace_offer_grpc.rs`, `universal_grpc.rs`).
     pub(crate) fn catalog(&self) -> &Arc<WorkspaceCatalog> {
         &self.catalog
     }
 
-    /// `resolve`, then the per-call `TxtodoService` scoped to that workspace and its `rpc` span:
-    /// the three lines every workspace-scoped handler below would otherwise repeat.
+    /// `resolve`, then the per-call `TxtodoService` and `rpc` span every scoped handler needs.
     async fn scoped<T: HasWorkspace>(
         &self,
         method: &'static str,
@@ -371,6 +368,13 @@ impl Txtodo for GlobalService {
             .map(|entry| workspace_info(&self.catalog, entry))
             .collect();
         Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
+    }
+
+    async fn universal_tasks(
+        &self,
+        r: Request<pb::UniversalTasksRequest>,
+    ) -> Result<Response<pb::UniversalTasksResponse>, Status> {
+        crate::universal_grpc::universal_tasks(self, r).await
     }
 
     async fn workspace_pending_offers(

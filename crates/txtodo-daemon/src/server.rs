@@ -2,7 +2,7 @@
 //! typed values (`convert.rs`), send one message to the right actor, map the reply. Ref:
 //! <https://docs.rs/tonic/latest/tonic/transport/server/>. No `rpc{method,workspace}` span here: `GlobalService` wraps every production RPC in one.
 
-use crate::convert::{file_kind_of, parse_mutation, parse_path, parse_principal};
+use crate::convert::{parse_mutation, parse_path, parse_principal};
 use crate::handle::{ActorHandle, WATCH_CAP};
 use crate::workspace::Workspace;
 use std::pin::Pin;
@@ -58,28 +58,7 @@ impl Txtodo for TxtodoService {
         &self,
         _r: Request<pb::ListFilesRequest>,
     ) -> Result<Response<pb::ListFilesResponse>, Status> {
-        let handles = self.all_actors();
-        let mut files = Vec::with_capacity(handles.len());
-        for h in handles {
-            let c = h.get().await.map_err(status_of)?;
-            let kind = file_kind_of(h.path());
-            let progress = match kind {
-                pb::FileKind::Todo => Some(self.progress_for(&h).await?),
-                _ => None,
-            };
-            files.push(pb::FileInfo {
-                path: h.path().to_string(),
-                hash: c.hash.to_vec(),
-                kind: kind as i32,
-                progress,
-            });
-        }
-        let (tree, layout) = (
-            self.workspace_tree().await?,
-            self.workspace().layout().get(),
-        );
-        let tree = Some(crate::tree::to_pb_tree(&tree, &files, &layout));
-        Ok(Response::new(pb::ListFilesResponse { tree, files }))
+        self.list_files_response().await.map(Response::new)
     }
 
     async fn get_file(
@@ -373,6 +352,13 @@ impl Txtodo for TxtodoService {
         &self,
         _r: Request<pb::WorkspaceListRequest>,
     ) -> Result<Response<pb::WorkspaceListResponse>, Status> {
+        Err(no_registry())
+    }
+
+    async fn universal_tasks(
+        &self,
+        _r: Request<pb::UniversalTasksRequest>,
+    ) -> Result<Response<pb::UniversalTasksResponse>, Status> {
         Err(no_registry())
     }
 

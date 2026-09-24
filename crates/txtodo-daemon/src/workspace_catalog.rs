@@ -295,6 +295,11 @@ impl WorkspaceCatalog {
         self.open_ws(id)
     }
 
+    /// `id` when it is open and ready, without waiting, promoting or marking it used.
+    pub(crate) fn ready(&self, id: WorkspaceId) -> Option<SharedWorkspace> {
+        self.open_ws(id).ok()
+    }
+
     fn open_ws(&self, id: WorkspaceId) -> Result<SharedWorkspace, Status> {
         self.open
             .read()

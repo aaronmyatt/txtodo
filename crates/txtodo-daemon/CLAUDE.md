@@ -353,6 +353,13 @@ multiplex every workspace's traffic — not done by this task).
   ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
   `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
   the same day, a LAN control session too.
+- `universal_grpc.rs` (task `tui-revamp/universal-rpc`, 2026-09-25): `UniversalTasks`, device-level
+  like `WorkspaceList`. Every ready workspace's root list (`WorkspaceCatalog::ready`, no wait, no
+  promote, no MRU touch), one `UniversalTask` row per task line with the line's id, done/priority
+  (a done line's `pri:` counts), raw `due`, projects, contexts, and for a `ref:` line its sub-list's
+  `Progress` and whether `notes.md` exists. A failing workspace is skipped and logged.
+  `TxtodoService` answers it with `no_registry`. `list_files`'s body moved to `progress.rs` to make
+  room in `server.rs`.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes

@@ -11,6 +11,33 @@ use tonic::Status;
 use txtodo_proto::v1 as pb;
 
 impl TxtodoService {
+    /// `ListFiles`: every document with its hash and, for a todo.txt, its progress, plus the
+    /// workspace tree. Moved here from `server.rs` for its line budget.
+    pub(crate) async fn list_files_response(&self) -> Result<pb::ListFilesResponse, Status> {
+        let handles = self.all_actors();
+        let mut files = Vec::with_capacity(handles.len());
+        for h in handles {
+            let c = h.get().await.map_err(status_of)?;
+            let kind = crate::convert::file_kind_of(h.path());
+            let progress = match kind {
+                pb::FileKind::Todo => Some(self.progress_for(&h).await?),
+                _ => None,
+            };
+            files.push(pb::FileInfo {
+                path: h.path().to_string(),
+                hash: c.hash.to_vec(),
+                kind: kind as i32,
+                progress,
+            });
+        }
+        let (tree, layout) = (
+            self.workspace_tree().await?,
+            self.workspace().layout().get(),
+        );
+        let tree = Some(crate::tree::to_pb_tree(&tree, &files, &layout));
+        Ok(pb::ListFilesResponse { tree, files })
+    }
+
     /// Progress for a TODO-kind file: its own counts.
     pub(crate) async fn progress_for(&self, h: &ActorHandle) -> Result<pb::Progress, Status> {
         let todo = h.progress().await.map_err(status_of)?;

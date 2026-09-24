@@ -125,6 +125,7 @@ mod tokens;
 mod tree;
 pub mod tree_dirty;
 mod unified_diff;
+mod universal_grpc;
 pub mod walker;
 mod watch_forward;
 pub mod watch_task;
@@ -231,6 +232,8 @@ mod status_details_tests;
 mod sync_ops_tests;
 #[cfg(test)]
 mod unified_diff_tests;
+#[cfg(test)]
+mod universal_grpc_tests;
 #[cfg(test)]
 mod workspace_catalog_load_tests;
 #[cfg(test)]
