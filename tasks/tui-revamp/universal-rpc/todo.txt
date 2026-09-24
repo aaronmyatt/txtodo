@@ -1,4 +1,4 @@
-2026-09-24 proto + daemon: reopen per the decide line, with a handler test; blocked on the decide line +m11 @proto @daemon — waits on the reopen decide line in ../todo.txt
+2026-09-24 proto + daemon: reopen per the decide line, with a handler test; blocked on the decide line +m11 @proto @daemon — waits on the reopen decide line in ../todo.txt — note 2026-09-25: Mutation.Reopen already exists with a daemon handler (a3727a5, f870c8ab); this may only need the decide line signed
 x 2026-09-25 2026-09-24 proto: UniversalTasks RPC; row = workspace id+name, line_number, task_id, raw, done, completion_date, priority, due, projects, contexts, ref n/m, has_notes; request include_done +m11 @proto — d9d1695; also has_ref next to ref_progress
 x 2026-09-25 2026-09-24 daemon: UniversalTasks handler over every ready workspace's root list; raw due date only, clients bucket it +m11 @daemon — universal_grpc.rs; WorkspaceCatalog::ready never waits or touches MRU
 x 2026-09-25 2026-09-24 daemon: integration test over two workspaces with a done line, a due line and a ref: line +m11 @daemon @test — universal_grpc_tests.rs, in-process through GlobalService

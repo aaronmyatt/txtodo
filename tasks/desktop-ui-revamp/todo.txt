@@ -57,3 +57,13 @@
 2026-09-19 Complete the parent line in ./todo.txt +m11 @desktop id:01M2WSTPE0VT746XZAJ79F4HGN
 2026-09-24 Forward uncaught frontend errors to ui_log (window.onerror, unhandledrejection, a <svelte:boundary> in +layout.svelte) so a render crash lands in desktop.log; the Universal view hung on 'Loading…' with nothing logged on 2026-09-24 +m11 @desktop
 2026-09-24 Universal view fixture (tauriMock + e2e/visual): add an open line with the same context tag twice and assert the list renders; guards the 2026-09-24 duplicate each-key hang in UniversalView.svelte +m11 @desktop @test
+2026-09-25 List mode in the Tasks buffer: Esc leaves text edit, then j/k, gg/G, x/Space, dd, J/K and Alt-Up/Down, Enter act on lines, i/a/A edit (list.*, edit.cancel) +m11 @desktop @parity
+2026-09-25 u undoes the session's newest change through the daemon Undo, all its ops (list.undo; toast.undo) +m11 @desktop @parity
+2026-09-25 Live sync indicator in the status footer with a sync-detail popup (sync.open) +m11 @desktop @parity
+2026-09-25 Workspace offers (pending, accept, decline) in Settings > Devices (offers.*) +m11 @desktop @parity
+2026-09-25 Drag a line to reorder in the buffer (list.move_up/list.move_down deviation: only the TUI drags) +m11 @desktop @parity
+2026-09-25 Universal from the UniversalTasks RPC; drop commands_universal.rs's local parse; group Tab, show done, workspace and context chips, x with Undo in its own workspace (universal.*) +m11 @desktop @parity
+2026-09-25 Paired devices list and Revoke through DeviceList/DeviceRemove, which the proto already has (devices.list, devices.revoke) +m11 @desktop @parity
+2026-09-25 Search, strict hints and chip edits through the wasm core exports (matches_query, strict_hint, apply_chip); drop the TS copies (search.*, prompt.chip) +m11 @desktop @parity
+2026-09-25 Help page and the Shortcuts card render from specs/client-parity.toml; turn on keys.parity.test.ts's keys.ts half (nav.help, settings.*) +m11 @desktop @parity
+2026-09-25 The W workspace menu keys: j/k, Enter, Esc/W (workspace_menu.*) and the detail panel's Tab/Shift-Tab parts (detail.next_part, detail.prev_part) +m11 @desktop @parity
