@@ -1,5 +1,5 @@
-# apps/desktop's Playwright suite (e2e/*.spec.ts functional + e2e/visual/** light/dark visual
-# regression), on a nightly cadence + manual dispatch — deliberately separate from ci.yml's
+# apps/desktop's functional Playwright specs (e2e/*.spec.ts; the visual goldens run locally only,
+# `just goldens-check`), on a nightly cadence + manual dispatch — deliberately separate from ci.yml's
 # required `desktop` job (task desktop-stack-gaps): a real Playwright browser download plus
 # building the real e2e_bridge/txtodod binaries the harness spawns (see e2e/fixtures.ts) is heavy,
 # and ci.yml itself is described as frozen for cost reasons — this suite must never gate every PR.
@@ -41,14 +41,13 @@ jobs:
       - name: install Playwright browsers
         working-directory: apps/desktop
         run: npx playwright install --with-deps
-      # Functional (e2e/*.spec.ts) + visual regression (e2e/visual/**, light+dark projects) —
-      # playwright.config.ts's own `projects` list is what `npm run test:e2e` (bare `playwright
-      # test`, no --project filter) already runs, matching what a human runs locally for "the
-      # full suite". No `--update-snapshots`: a real drift fails this job rather than silently
-      # overwriting goldens (playwright.config.ts's own doc comment on this).
-      - name: playwright test (functional + visual regression)
+      # Functional specs only (e2e/*.spec.ts). The visual goldens (light/dark projects) are
+      # -darwin.png, taken and reviewed on a Mac, so an ubuntu runner has nothing to compare
+      # against: they run locally via `just goldens-check` (decided 2026-09-24).
+      # https://playwright.dev/docs/test-projects#running-projects
+      - name: playwright test (functional)
         working-directory: apps/desktop
-        run: npm run test:e2e
+        run: npx playwright test --project=functional
       - name: upload report on failure
         if: failure()
         uses: actions/upload-artifact@v4
