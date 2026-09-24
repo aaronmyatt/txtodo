@@ -1,6 +1,6 @@
 # 0029 — Every user has one default workspace
 
-- Status: accepted
+- Status: accepted; amended 2026-09-24 (own devices only, see Amendment)
 - Date: 2026-09-21
 - Deciders: project owner (the three decisions below, 2026-09-20)
 
@@ -50,7 +50,8 @@ How it behaves:
 - Two devices that each already have tasks in their defaults converge to the union of both.
 - If the reserved id is registered at a different root the daemon refuses to repoint it and logs it.
   Moving the default's directory later is out of scope.
-- Two unrelated users share the constant, which is harmless: they never pair.
+- Two unrelated users share the constant. That was "harmless: they never pair" until pairing with
+  a colleague became a real case; the amendment below closes it.
 - Nothing synced or offered carries an absolute path: `default_workspace_audit_tests.rs` pins it.
 
 ## Alternatives considered
@@ -59,3 +60,26 @@ How it behaves:
 - Marking one workspace default and adopting the peer's id through the offer/accept rekey: more
   moving parts, and a race between two devices that both minted one first.
 - Always the default unless `--dir` is given: simpler to explain, but breaks `cd repo && txtodo add`.
+
+## Amendment (2026-09-24): the reserved id converges only between own devices
+Decided by the project owner (task `default-workspace-pairing-consent`, option A). Pairing once
+with anyone used to union both defaults with no consent step.
+
+- Pairing asks each human "is the other device your own?" (`PairConfirmRequest.own_device`). The
+  answer rides the handshake (`JoinerHello.own_device`, `PairingGrant.own_device`); each side stores
+  `own = mine && theirs` on the peer's `devices` row. Mismatched answers read as not own.
+- A sync session carries the default under the reserved id only with an own peer
+  (`lan_session_gate.rs`). With any other peer, known or not, it carries this device's default under
+  a derived **alias**, `blake3("txtodo default workspace alias v1" || reserved id || device id)` cut to
+  a ULID with a non-zero timestamp (`default_workspace::default_alias`). Offers carry the alias too.
+- An own receiver skips an alias offer (it already merges that list); any other receiver mirrors it
+  as a separate Remote workspace (ADR-less task `remote-workspace-mirror`). The two defaults never
+  merge. The alias is a permanent derivation, like the reserved id.
+- Migration: devices paired before this count as own (`devices.own_device` defaults to 1).
+
+Consequences of the amendment:
+- A build from before it cannot pair with one after: postcard has no optional fields.
+- Own-ness is per direct pairing. A device that joined through another is unknown here and reads as
+  not own, so it sees this device's default as a Remote workspace until the two pair directly.
+- The file carrier (`--sync-dir`) has no peer to ask, so it still shares the reserved id with every
+  device reading the folder.
