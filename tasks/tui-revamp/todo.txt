@@ -7,7 +7,6 @@
 2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc — UniversalTasks done 2026-09-25 (d9d1695 + daemon); the reopen line waits on its decide line
 2026-09-24 TUI Settings screen: General, Appearance, Workspaces, Shortcuts, Devices, Tokens, Activity +m11 @tui ref:tui-settings — all but showing this device's pairing code, which waits on its decide line; see tasks/tui-revamp/tui-settings/notes.md
 2026-09-24 Human pass: drive the TUI in a scratch workspace, light and dark terminal, keys and mouse, against the c2 mockup +m11 @tui @human
-2026-09-24 Refresh crates/txtodo-tui/CLAUDE.md public interface and invariants; drop dead code left by the revamp +m11 @tui @doing by:claude
 x 2026-09-25 2026-09-24 Shared logic in txtodo-core + wasm: search, strict hints, chip edits, Universal grouping +m11 @core ref:shared-core — see tasks/tui-revamp/shared-core/notes.md; known gap: desktop still uses its TS copies until its @parity lines
 x 2026-09-25 2026-09-24 TUI foundation: screens, focus, overlays, keymap + commands, theme, terminal setup +m11 @tui ref:tui-foundation — see tasks/tui-revamp/tui-foundation/notes.md
 x 2026-09-25 2026-09-24 TUI mouse: hit map, click, double-click, wheel, hover, drag reorder +m11 @tui ref:tui-mouse — see tasks/tui-revamp/tui-mouse/notes.md
@@ -19,3 +18,4 @@ x 2026-09-25 2026-09-24 TUI Universal screen +m11 @tui ref:tui-universal — see
 2026-09-25 Decide: TUI pairing code display: add postcard + data-encoding + qrcode to txtodo-tui, or have the daemon return the code text (a PairOfferResponse.code field) so TUI and desktop stop re-encoding it. I'd take the daemon field +m11 @tui @proto @human
 x 2026-09-25 2026-09-24 TUI Help screen rendered from specs/client-parity.toml: keymap, search operators, prompt bar +m11 @tui — ui/help.rs from manifest.rs; j/k and the wheel scroll it
 x 2026-09-25 2026-09-24 File the @parity catch-up lines (below) into tasks/desktop-ui-revamp/todo.txt; build none of them now +m11 @desktop @parity — 10 lines in tasks/desktop-ui-revamp/todo.txt, each naming its action ids; some overlap older desktop lines (query.ts, keys.ts) and supersede them
+x 2026-09-25 2026-09-24 Refresh crates/txtodo-tui/CLAUDE.md public interface and invariants; drop dead code left by the revamp +m11 @tui — two dead functions dropped; paint_line's show_id stays for its byte-coverage test
