@@ -82,6 +82,13 @@ impl Mouse {
                 crate::prompt::apply(state, index);
                 return None;
             }
+            Target::UniversalRow(_)
+            | Target::UniversalGroup(_)
+            | Target::UniversalWorkspace(_)
+            | Target::UniversalContext(_) => {
+                let t = target?;
+                return self.press_universal(state, t, ev, now);
+            }
             Target::DetailRow(index) => return self.press_sub_row(state, index, ev, now),
             Target::Inert => return None,
         };
@@ -121,6 +128,51 @@ impl Mouse {
         .flatten()
     }
 
+    /// A click on the Universal screen: a row selects (a double-click opens it), a grouping,
+    /// workspace or context chip switches its filter.
+    fn press_universal(
+        &mut self,
+        state: &mut AppState,
+        target: Target,
+        ev: &MouseEvent,
+        now: Instant,
+    ) -> Option<Action> {
+        let view = &mut state.universal;
+        match target {
+            Target::UniversalRow(row) => {
+                let double = self.is_double(ev, now);
+                view.cursor = row;
+                if double {
+                    return commands::run(state, Command::UniversalOpen);
+                }
+            }
+            Target::UniversalGroup(i) => {
+                if let Some((group, _)) = crate::state_universal::GROUPS.get(i) {
+                    view.group = *group;
+                    view.cursor = 0;
+                }
+            }
+            Target::UniversalWorkspace(i) => {
+                if let Some((id, _, _)) = view.workspaces().get(i) {
+                    view.toggle_workspace(&id.clone());
+                }
+            }
+            Target::UniversalContext(i) => {
+                let query = state.shell.search.clone();
+                let name = state
+                    .universal
+                    .contexts(&query)
+                    .get(i)
+                    .map(|(c, _)| c.clone());
+                if let Some(name) = name {
+                    state.universal.toggle_context(&name);
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+
     /// Whether this press, at `now`, is the second of a double-click; remembers it otherwise.
     fn is_double(&mut self, ev: &MouseEvent, now: Instant) -> bool {
         let double = self.last_press.is_some_and(|(column, line, at)| {
@@ -157,6 +209,10 @@ fn row_of(target: Option<Target>) -> Option<usize> {
         | Target::Crumb(_)
         | Target::DetailRow(_)
         | Target::Chip(_)
+        | Target::UniversalRow(_)
+        | Target::UniversalGroup(_)
+        | Target::UniversalWorkspace(_)
+        | Target::UniversalContext(_)
         | Target::Inert => None,
     }
 }

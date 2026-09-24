@@ -106,7 +106,8 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
             let run = crate::commands_nav::run(state, other)
                 .or_else(|| crate::search::run(state, other))
                 .or_else(|| crate::commands_detail::run(state, other))
-                .or_else(|| crate::prompt::run(state, other));
+                .or_else(|| crate::prompt::run(state, other))
+                .or_else(|| crate::commands_universal::run(state, other));
             return run.flatten();
         }
     }

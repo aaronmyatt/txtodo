@@ -198,6 +198,24 @@ commands! {
     PromptSubmit = "prompt.submit", ["Enter"], Prompt;
     /// Leave the prompt bar.
     PromptCancel = "prompt.cancel", ["Esc"], Prompt;
+    /// Next Universal row.
+    UniversalDown = "universal.down", ["j", "Down"], Universal;
+    /// Previous Universal row.
+    UniversalUp = "universal.up", ["k", "Up"], Universal;
+    /// First Universal row.
+    UniversalFirst = "universal.first", ["Home"], Universal;
+    /// Last Universal row.
+    UniversalLast = "universal.last", ["End"], Universal;
+    /// Open the row on its line in its workspace.
+    UniversalOpen = "universal.open", ["Enter"], Universal;
+    /// Complete the row, with an Undo toast.
+    UniversalComplete = "universal.complete", ["x"], Universal;
+    /// The next grouping.
+    UniversalGroup = "universal.group", ["Tab"], Universal;
+    /// Show done tasks too, or not.
+    UniversalShowDone = "universal.show_done", [], Universal;
+    /// Every workspace and context again, no done tasks.
+    UniversalReset = "universal.reset", [], Universal;
     /// The Tasks screen.
     NavTasks = "nav.tasks", ["g t"], Global;
     /// The Universal screen.

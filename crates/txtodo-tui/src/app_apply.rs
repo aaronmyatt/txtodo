@@ -61,15 +61,27 @@ fn typed_line(req: &pb::ApplyRequest) -> Option<String> {
     }
 }
 
-/// A toast's Undo: the daemon reverts the newest `steps` ops to `path` (one change's worth), then
-/// the list re-baselines. A refusal (nothing left to undo) goes on the status line.
+/// `u` or a toast's Undo: the daemon reverts the newest `steps` ops to `path` (one change's
+/// worth) in `workspace` (the open one when `None`), then the list re-baselines. A refusal
+/// (nothing left to undo) goes on the status line.
 pub(crate) async fn undo(
     daemon: &mut Daemon,
     state: &mut AppState,
     path: &str,
     steps: u32,
+    workspace: Option<&str>,
 ) -> Result<(), DaemonError> {
-    match daemon.undo(path, steps).await {
+    let reply = match workspace {
+        Some(id) => {
+            let open = daemon.selector_for_restore();
+            daemon.set_selector(Some(crate::daemon_workspace::workspace_id_selector(id)));
+            let reply = daemon.undo(path, steps).await;
+            daemon.set_selector(open);
+            reply
+        }
+        None => daemon.undo(path, steps).await,
+    };
+    match reply {
         Ok(_) => {}
         Err(DaemonError::Rpc(status)) => {
             state.last_error = Some(status.message().to_owned());
@@ -77,7 +89,11 @@ pub(crate) async fn undo(
         }
         Err(e) => return Err(e),
     }
-    crate::app_detail::refetch(daemon, state, path).await?;
+    if workspace.is_none() {
+        crate::app_detail::refetch(daemon, state, path).await?;
+    } else {
+        crate::app_universal::refresh(daemon, state).await;
+    }
     state.shell.toast("Undone", None, Instant::now());
     Ok(())
 }

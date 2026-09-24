@@ -203,6 +203,9 @@ fn action_kind(action: &Action) -> &'static str {
         Action::Undo(..) => "undo",
         Action::OpenDetail(_) => "open_detail",
         Action::SaveNotes(..) => "save_notes",
+        Action::RefreshUniversal => "refresh_universal",
+        Action::OpenUniversal(_) => "open_universal",
+        Action::CompleteUniversal(_) => "complete_universal",
     }
 }
 
@@ -214,23 +217,46 @@ async fn perform_inner(
     match action {
         Action::Quit => return Ok(false),
         Action::Apply(req) => crate::app_apply::apply(daemon, state, req).await?,
-        Action::SwitchWorkspace(query) => {
-            crate::app_workspace::switch_workspace(daemon, state, &query).await?;
+        Action::Undo(path, steps, workspace) => {
+            let ws = workspace.as_deref();
+            crate::app_apply::undo(daemon, state, &path, steps, ws).await?;
         }
-        Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await?,
-        Action::Undo(path, steps) => crate::app_apply::undo(daemon, state, &path, steps).await?,
         Action::Copy(text) => copy(state, &text),
-        Action::OpenDetail(parent) => crate::app_detail::open(daemon, state, parent).await?,
-        Action::SaveNotes(task, text) => {
-            crate::app_detail::save_notes(daemon, state, task, text).await?;
-        }
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;
         }
         Action::Resolve(req) => resolve(daemon, state, req).await?,
+        other => perform_screens(daemon, state, other).await?,
     }
     Ok(true)
+}
+
+/// The actions of the shell's screens and panels: workspaces, the detail panel, Universal.
+async fn perform_screens(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    action: Action,
+) -> Result<(), DaemonError> {
+    match action {
+        Action::SwitchWorkspace(query) => {
+            crate::app_workspace::switch_workspace(daemon, state, &query).await
+        }
+        Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await,
+        Action::OpenDetail(parent) => crate::app_detail::open(daemon, state, parent).await,
+        Action::SaveNotes(task, text) => {
+            crate::app_detail::save_notes(daemon, state, task, text).await
+        }
+        Action::RefreshUniversal => {
+            crate::app_universal::refresh(daemon, state).await;
+            Ok(())
+        }
+        Action::OpenUniversal(task) => crate::app_universal::open(daemon, state, task).await,
+        Action::CompleteUniversal(task) => {
+            crate::app_universal::complete(daemon, state, task).await
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Resolves one conflict, then re-reads the flags the daemon still holds for the document.

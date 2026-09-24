@@ -16,6 +16,7 @@ pub mod state_offers;
 pub mod state_shell;
 pub mod state_tasks;
 pub mod state_types;
+pub mod state_universal;
 pub mod terminal;
 pub mod theme;
 
@@ -41,6 +42,7 @@ pub mod ui {
     pub mod subbar;
     pub mod sync;
     pub mod toast;
+    pub mod universal;
     pub mod workspace_menu;
 }
 
@@ -48,6 +50,7 @@ pub mod action;
 pub mod commands;
 pub mod commands_detail;
 pub mod commands_nav;
+pub mod commands_universal;
 pub mod daemon;
 pub mod daemon_activity;
 pub mod daemon_devices;
@@ -70,4 +73,5 @@ pub mod app_layout;
 pub mod app_loop;
 pub mod app_offers;
 pub mod app_refs;
+pub mod app_universal;
 pub mod app_workspace;

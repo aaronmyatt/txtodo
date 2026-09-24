@@ -15,7 +15,7 @@ use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
     banner, conflict_sheet, detail, footer, header, list, offers, prompt_bar, search_panel, subbar,
-    sync, toast, workspace_menu,
+    sync, toast, universal, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -43,6 +43,7 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
     banner::draw(frame, banner_area, &banners, &mut hits);
     match state.nav.screen {
         Screen::Tasks => draw_tasks(frame, main_area, state, &mut hits),
+        Screen::Universal => universal::draw(frame, main_area, state, &mut hits),
         other => draw_placeholder(frame, main_area, other),
     }
     let now = Instant::now();
@@ -79,9 +80,8 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
 /// A screen that is not built yet says so, and where its plan is.
 fn draw_placeholder(frame: &mut Frame, area: Rect, screen: Screen) {
     let (name, task) = match screen {
-        Screen::Universal => ("Universal", "tui-universal"),
         Screen::Settings(_) => ("Settings", "tui-settings"),
-        Screen::Help | Screen::Tasks => ("Help", "tui-revamp"),
+        Screen::Help | Screen::Tasks | Screen::Universal => ("Help", "tui-revamp"),
     };
     let text =
         format!("  {name} is not built yet (tasks/tui-revamp/{task}). g t goes back to Tasks.");

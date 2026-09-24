@@ -528,7 +528,7 @@ title = "Next row"
 keys = ["j", "Down"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -537,7 +537,7 @@ title = "Previous row"
 keys = ["k", "Up"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -546,7 +546,7 @@ title = "First row"
 keys = ["Home"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -555,7 +555,7 @@ title = "Last row"
 keys = ["End"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -564,7 +564,7 @@ title = "Open the row on its line in its workspace"
 keys = ["Enter"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -573,7 +573,43 @@ title = "Complete the row, with an Undo toast"
 keys = ["x"]
 scope = "universal"
 desktop = { status = "planned", surface = "/universal" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.group"
+title = "Next grouping: priority, due, project, context, workspace"
+keys = ["Tab"]
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "done", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.show_done"
+title = "Show done tasks too"
+keys = []
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "done", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.reset"
+title = "Reset filters: every workspace and context, no done tasks"
+keys = []
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "done", surface = "Universal screen" }
+deviation = ""
+
+[[action]]
+id = "universal.filter_workspace"
+title = "Show or hide a workspace (one stays on)"
+keys = []
+scope = "universal"
+desktop = { status = "planned", surface = "/universal" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]
@@ -853,7 +889,7 @@ title = "Filter by @context"
 keys = []
 scope = "universal"
 desktop = { status = "done", surface = "UniversalView" }
-tui = { status = "planned", surface = "Universal screen" }
+tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
 [[action]]

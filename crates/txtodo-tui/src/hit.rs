@@ -25,6 +25,14 @@ pub enum Target {
     DetailRow(usize),
     /// A prompt bar chip, by its index in `prompt::CHIPS`.
     Chip(usize),
+    /// A Universal row, by its place among the rows shown.
+    UniversalRow(usize),
+    /// A Universal grouping, by its index in `state_universal::GROUPS`.
+    UniversalGroup(usize),
+    /// A Universal workspace chip, by its index in `UniversalView::workspaces`.
+    UniversalWorkspace(usize),
+    /// A Universal context chip, by its index in `UniversalView::contexts`.
+    UniversalContext(usize),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
 }

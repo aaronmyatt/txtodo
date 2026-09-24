@@ -9,6 +9,7 @@ use crate::state_detail::Detail;
 use crate::state_offers::OffersPane;
 use crate::state_shell::Shell;
 use crate::state_tasks::TasksView;
+use crate::state_universal::UniversalView;
 
 pub use crate::state_nav::{Focus, Nav, Overlay, Screen, SettingsCard};
 pub use crate::state_types::{
@@ -70,6 +71,8 @@ pub struct AppState {
     pub tasks: TasksView,
     /// The detail panel (task `tui-revamp/tui-detail`).
     pub detail: Detail,
+    /// The Universal screen (task `tui-revamp/tui-universal`).
+    pub universal: UniversalView,
 }
 
 impl AppState {
@@ -105,6 +108,7 @@ impl AppState {
             shell: Shell::default(),
             tasks: TasksView::default(),
             detail: Detail::default(),
+            universal: UniversalView::default(),
         }
     }
 

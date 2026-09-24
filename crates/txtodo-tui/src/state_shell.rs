@@ -49,6 +49,8 @@ pub struct Change {
     /// The ops it appended (`ApplyResponse.applied`; a delete that leaves a blank line is two):
     /// the daemon undoes op by op.
     pub ops: u32,
+    /// The workspace it was made in, when not the open one (the Universal screen's `x`).
+    pub workspace: Option<String>,
 }
 
 /// The most changes `u` remembers.
@@ -90,14 +92,20 @@ impl Shell {
         self.toasts.last().filter(|t| t.undo == Some(newest))
     }
 
-    /// Records a change that landed; returns its id.
+    /// Records a change that landed in the open workspace; returns its id.
     pub fn record(&mut self, path: &str, ops: u32) -> u64 {
+        self.record_in(path, ops, None)
+    }
+
+    /// Records a change that landed in `workspace` (by id; `None` for the open one).
+    pub fn record_in(&mut self, path: &str, ops: u32, workspace: Option<String>) -> u64 {
         let id = self.next_change;
         self.next_change += 1;
         self.changes.push(Change {
             id,
             path: path.to_owned(),
             ops,
+            workspace,
         });
         if self.changes.len() > CHANGES_KEPT {
             self.changes.remove(0);

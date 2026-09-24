@@ -25,12 +25,19 @@ pub enum Action {
     OpenWorkspaceMenu,
     /// Put this text on the clipboard (OSC 52): a refused edit, a new token's secret.
     Copy(String),
-    /// A toast's Undo: the daemon's `Undo` of the newest ops (this many) to this document.
-    Undo(String, u32),
+    /// `u` or a toast's Undo: the daemon's `Undo` of the newest ops (this many) to this document,
+    /// in this workspace (by id; `None` for the open one).
+    Undo(String, u32, Option<String>),
     /// Enter on a line: open it in the detail panel (task `tui-revamp/tui-detail`).
     OpenDetail(crate::state_detail::Parent),
     /// Save a level's notes (`EditNotes`): its parent's `TaskRef` and the whole text.
     SaveNotes(pb::TaskRef, String),
+    /// Re-read the Universal screen's rows.
+    RefreshUniversal,
+    /// Universal's Enter: open the task on its line in its workspace.
+    OpenUniversal(crate::state_universal::UTask),
+    /// Universal's `x`: complete the task in its workspace.
+    CompleteUniversal(crate::state_universal::UTask),
     /// `:q`: exit the event loop.
     Quit,
 }

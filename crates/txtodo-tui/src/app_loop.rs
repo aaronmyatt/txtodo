@@ -159,6 +159,9 @@ impl Watching {
         state.shell.prune(std::time::Instant::now());
         crate::app_offers::refresh_on_tick(daemon, state).await;
         crate::app_refs::refresh(daemon, state).await;
+        if state.nav.screen == crate::state_nav::Screen::Universal {
+            crate::app_universal::refresh(daemon, state).await;
+        }
         self.retry(daemon, state).await;
     }
 

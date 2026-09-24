@@ -22,7 +22,8 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
         other => return run_menu(state, other).or_else(|| run_banner(state, other)),
     };
     go(state, screen);
-    Some(None)
+    // Universal reads every workspace, which no Watch covers: read it on the way in.
+    Some((screen == Screen::Universal).then_some(Action::RefreshUniversal))
 }
 
 /// Shows `screen`, closing any popup; a Settings screen already open keeps its card.
@@ -90,7 +91,7 @@ fn undo_last(state: &mut AppState) -> Option<Action> {
         state.last_error = Some("nothing to undo from this session".to_owned());
         return None;
     };
-    Some(Action::Undo(change.path, change.ops))
+    Some(Action::Undo(change.path, change.ops, change.workspace))
 }
 
 /// Opens the popup over `items` (after `app` fetched them).
@@ -108,7 +109,11 @@ mod tests {
     fn screen_commands_move_between_screens_and_close_the_popup() {
         let mut state = AppState::fixture();
         state.nav.overlay = Some(Overlay::WorkspaceMenu);
-        assert_eq!(run(&mut state, Command::NavUniversal), Some(None));
+        assert_eq!(
+            run(&mut state, Command::NavUniversal),
+            Some(Some(Action::RefreshUniversal)),
+            "Universal is read on the way in"
+        );
         assert_eq!(state.nav.screen, Screen::Universal);
         assert_eq!(state.nav.overlay, None);
         state.nav.screen = Screen::Settings(SettingsCard::Tokens);
@@ -171,12 +176,12 @@ mod tests {
         );
         assert_eq!(
             run(&mut state, Command::ListUndo),
-            Some(Some(Action::Undo("todo.txt".to_owned(), 1))),
+            Some(Some(Action::Undo("todo.txt".to_owned(), 1, None))),
             "u takes back the move"
         );
         assert_eq!(
             run(&mut state, Command::ToastUndo),
-            Some(Some(Action::Undo("todo.txt".to_owned(), 2))),
+            Some(Some(Action::Undo("todo.txt".to_owned(), 2, None))),
             "now the toast's change is the newest again"
         );
     }
