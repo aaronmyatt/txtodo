@@ -255,7 +255,7 @@ fn colon_q_enter_quits() {
 }
 
 #[test]
-fn colon_anything_else_is_a_silent_no_op() {
+fn colon_an_unknown_command_says_so_on_the_status_line() {
     let mut state = AppState::fixture();
     let mut input = Input::default();
     input.on_key(&mut state, key(':'));
@@ -263,6 +263,38 @@ fn colon_anything_else_is_a_silent_no_op() {
     let action = input.on_key(&mut state, enter());
     assert_eq!(action, None);
     assert!(!state.should_quit);
+    assert_eq!(state.last_error.as_deref(), Some("unknown command :x"));
+}
+
+fn type_command(input: &mut Input, state: &mut AppState, text: &str) -> Option<Action> {
+    input.on_key(state, key(':'));
+    for c in text.chars() {
+        input.on_key(state, key(c));
+    }
+    input.on_key(state, enter())
+}
+
+#[test]
+fn colon_an_action_id_runs_that_command() {
+    let mut state = AppState::fixture();
+    let mut input = Input::default();
+    assert_eq!(type_command(&mut input, &mut state, "list.last"), None);
+    assert!(state.on_add_line_row());
+    let quit = type_command(&mut input, &mut state, "app.quit");
+    assert_eq!(quit, Some(Action::Quit));
+}
+
+#[test]
+fn colon_w_names_the_workspace_to_switch_to() {
+    let mut state = AppState::fixture();
+    let mut input = Input::default();
+    let action = type_command(&mut input, &mut state, "w  work ");
+    assert_eq!(action, Some(Action::SwitchWorkspace("work".to_owned())));
+    assert_eq!(
+        type_command(&mut input, &mut state, "w"),
+        None,
+        "no name, no switch"
+    );
 }
 
 #[test]

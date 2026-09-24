@@ -54,6 +54,8 @@ pub struct AppState {
     pub last_error: Option<String>,
     /// The screen, focus and overlay (task `tui-revamp/tui-foundation`).
     pub nav: Nav,
+    /// Set when `path` now lives in another workspace: the loop opens a new `Watch` for it.
+    pub rewatch: bool,
 }
 
 impl AppState {
@@ -83,6 +85,7 @@ impl AppState {
             offers: OffersPane::default(),
             last_error: None,
             nav: Nav::default(),
+            rewatch: false,
         }
     }
 

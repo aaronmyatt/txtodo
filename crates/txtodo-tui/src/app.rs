@@ -183,6 +183,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::Resolve(_) => "resolve",
         Action::AcceptOffer(_) => "accept_offer",
         Action::DeclineOffer(_) => "decline_offer",
+        Action::SwitchWorkspace(_) => "switch_workspace",
     }
 }
 
@@ -207,6 +208,9 @@ async fn perform_inner(
             }
             let file = daemon.get_file(&path).await?;
             rebaseline(state, &file);
+        }
+        Action::SwitchWorkspace(query) => {
+            crate::app_workspace::switch_workspace(daemon, state, &query).await?;
         }
         Action::AcceptOffer(req) => crate::app_offers::perform_accept(daemon, state, req).await?,
         Action::DeclineOffer(req) => {

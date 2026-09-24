@@ -87,6 +87,17 @@ impl Daemon {
         &self.sock
     }
 
+    /// Points every later call at another workspace (task `tui-revamp/tui-foundation`), as
+    /// desktop's `switch_workspace` does. A `Watch` opened before keeps its old workspace.
+    pub fn set_selector(&mut self, selector: Option<pb::WorkspaceSelector>) {
+        self.selector = selector;
+    }
+
+    /// The selector in force now, to put back if a switch fails.
+    pub fn selector_for_restore(&self) -> Option<pb::WorkspaceSelector> {
+        self.selector.clone()
+    }
+
     /// Builds a lazily-dialed channel to `sock`, targeted with `selector` (`None` for a per-
     /// workspace bridge daemon; `Some` to pick one workspace out of a device-global daemon's
     /// several). This never blocks: the first RPC drives the actual unix-socket dial, bounded by

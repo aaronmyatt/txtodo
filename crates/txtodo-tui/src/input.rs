@@ -66,8 +66,8 @@ impl Input {
     }
 }
 
-/// Typing into the `:` line. `Enter` runs it: `:q` quits, `:<action id>` runs that command,
-/// anything else is a silent no-op.
+/// Typing into the `:` line. `Enter` runs it: `:q` quits, `:w <workspace>` switches workspace,
+/// `:<action id>` runs that command, and anything else says so on the status line.
 fn on_command_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
     let buf = state.command.as_mut()?;
     match key.code {
@@ -84,12 +84,27 @@ fn on_command_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
 
 fn run_palette(state: &mut AppState) -> Option<Action> {
     let line = state.command.take().unwrap_or_default();
-    match line.trim() {
+    let line = line.trim();
+    if let Some(target) = line
+        .strip_prefix("w ")
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        return Some(Action::SwitchWorkspace(target.to_owned()));
+    }
+    match line {
+        "" => None,
         "q" => {
             state.should_quit = true;
             Some(Action::Quit)
         }
-        id => Command::from_id(id).and_then(|c| commands::run(state, c)),
+        id => match Command::from_id(id) {
+            Some(command) => commands::run(state, command),
+            None => {
+                state.last_error = Some(format!("unknown command :{id}"));
+                None
+            }
+        },
     }
 }
 

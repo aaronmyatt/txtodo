@@ -65,7 +65,7 @@ async fn run_loop_inner(
         terminal.draw(|f| draw(f, state)).ok();
         tokio::select! {
             event = events.recv() => {
-                if !handle_input(daemon, &mut input, state, event).await? {
+                if !handle_input(daemon, &mut input, state, event, &mut watch).await? {
                     return Ok(());
                 }
             }
@@ -122,6 +122,7 @@ async fn handle_input(
     input: &mut Input,
     state: &mut AppState,
     event: Option<io::Result<Event>>,
+    watch: &mut tonic::Streaming<pb::Change>,
 ) -> Result<bool, DaemonError> {
     let Some(Ok(Event::Key(key))) = event else {
         return Ok(true);
@@ -132,5 +133,10 @@ async fn handle_input(
     let Some(action) = input.on_key(state, key) else {
         return Ok(true);
     };
-    perform(daemon, state, action).await
+    let keep_going = perform(daemon, state, action).await?;
+    // A workspace switch moved `path` to another workspace: its old stream watches the old one.
+    if std::mem::take(&mut state.rewatch) {
+        *watch = daemon.watch(vec![state.path.clone()]).await?;
+    }
+    Ok(keep_going)
 }

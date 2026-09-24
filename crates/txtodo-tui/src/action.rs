@@ -16,6 +16,9 @@ pub enum Action {
     AcceptOffer(pb::WorkspaceAcceptOfferRequest),
     /// `o` pane `d`: discard a peer's offer.
     DeclineOffer(pb::WorkspaceDeclineOfferRequest),
+    /// `:w <workspace>`: switch to the workspace a name, id or path picks (task
+    /// `tui-revamp/tui-foundation`).
+    SwitchWorkspace(String),
     /// `:q`: exit the event loop.
     Quit,
 }
