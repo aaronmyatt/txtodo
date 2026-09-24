@@ -15,6 +15,7 @@ mod format;
 mod line_length;
 mod lint;
 mod parse;
+pub mod query;
 mod quirks;
 mod scanner;
 mod task;

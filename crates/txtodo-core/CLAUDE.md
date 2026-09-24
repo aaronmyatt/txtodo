@@ -13,6 +13,9 @@ check), `line_length::{LINE_LENGTH_HINT, over_length_hint, visible_chars}` (2026
 line-length measure — visible `char`s, own `id:` tag not counted — that `txtodo lint`, the TUI and
 the desktop editor share), `Edit::{set_priority, clear_priority, set_description, set_tag, remove_tag, append, prepend, complete, uncomplete}`
 (`Result<_, EditError>` where input is validated), `LineDiff`, `TextEdit`, `is_valid_slug`, `SLUG_MAX_LEN`.
+`query::{matches, GOLDEN}` (2026-09-25, task `tui-revamp/shared-core`): the one line-search matcher
+(AND terms, case-insensitive substring, `-term` excludes, `is:open`/`is:done`) that `txtodo list`, MCP,
+the TUI and (through `txtodo-ffi`) desktop share; `GOLDEN` is the table every wrapper is tested against.
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
 
 ## Invariants
