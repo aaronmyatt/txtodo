@@ -22,6 +22,9 @@ three regexes ported by hand and checked against them; never blocks a save.
 `chips::{Chip, apply_chip, toggle_priority, insert_chip, toggle_complete_text}` (same task): the prompt
 bar's chips, ported from desktop's `editPopoverLogic.ts` with its tests mirrored; carets are byte offsets
 (the wasm shim converts UTF-16).
+`universal::{days_between, DueBucket, due_bucket, due_label, GroupBy, RowFacts, group_name, group}` (same
+task): the Universal screen's due buckets, due badges and grouping in the c2 mockup's order, against a
+`today` the caller passes (ADR 0011: the client's local calendar).
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
 
 ## Invariants

@@ -24,6 +24,7 @@ mod task;
 mod tokenize;
 mod types;
 mod ulid;
+pub mod universal;
 pub mod urls;
 
 pub use diff::{LineDiff, TextEdit, diff_lines, diff_text};
