@@ -1,5 +1,11 @@
-2026-09-19 Rebase baseline while dirty: on a Change while typing, update baseline and rebase the user's edits (3-way) so stale line numbers and ids cannot delete or duplicate lines; also update baseline after a Cmd-S commit @desktop @human
+2026-09-24 desktop: pure merge3(base, mine, theirs) in $lib/todotxt — line-level; a line changed on one side takes that side, changed on both is a conflict; returns merged text + conflict ranges +m11 @desktop
+2026-09-24 desktop: unit tests for merge3 — agent append while typing elsewhere, `do` moving a line to the bottom, same line edited on both sides, blank-line runs, CRLF/trailing newline +m11 @desktop @test
+2026-09-24 desktop: FileView on a Change while dirty — merge3 against the new file; clean → repaint merged text (caret kept on its line), new baseline + hash; conflict → keep the buffer and raise the banner +m11 @desktop
+2026-09-24 desktop: overlap banner — names the conflicting lines, offers keep mine / take theirs; never saves on its own +m11 @desktop
+2026-09-24 desktop: after a Cmd-S commit, adopt the saved text as baseline (already true for Replace, check the delta path too) +m11 @desktop
+2026-09-24 e2e: an agent appends via the daemon while the buffer is dirty elsewhere → both lines survive, no banner; same-line edit → banner, nothing lost +m11 @desktop @test
 x 2026-09-19 2026-09-19 Stop duplicate Watch streams: watch() in commands.rs opens a new forwarder per call and never cancels it, so one change fires several refreshDoc @desktop
 x 2026-09-19 2026-09-19 FileView.commit: on Apply error keep the buffer dirty and show loadError instead of refreshDoc() wiping the text @desktop
 x 2026-09-19 2026-09-19 FileView.refreshDoc: re-check dirty after await getFile and number each call so a stale or out-of-order refresh never repaints @desktop
 x 2026-09-19 2026-09-19 Fix phantom trailing line: computeDelta emits add + positional delete of the trailing empty line, which deletes the just-added task (or an agent's) — strip one trailing newline in rawMode.ts splitLines; regression test computeDelta("a\nb\n","a\nb\nnew") == [add new] @desktop pri:A
+x 2026-09-24 2026-09-19 Rebase baseline while dirty: on a Change while typing, update baseline and rebase the user's edits (3-way) so stale line numbers and ids cannot delete or duplicate lines; also update baseline after a Cmd-S commit @desktop @human — 2026-09-24: decided (human): 3-way merge, banner only on overlap; build lines below

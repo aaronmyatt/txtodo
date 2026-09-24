@@ -230,3 +230,11 @@ npm run test:perf      # perf.spec.ts alone
 npm run test:visual        # light+dark only, no update
 npm run test:visual:update # regenerate goldens explicitly — the ONLY sanctioned way, never CI
 ```
+
+## Decision: goldens are local-only (2026-09-24, human)
+
+The goldens are `-darwin.png`, taken and reviewed on a Mac; the nightly runs on ubuntu and had no
+`-linux` set, so its visual projects could never pass. Dropped them from
+`desktop-e2e-nightly.yml` (it now runs `--project=functional`, which still includes perf.spec.ts);
+the visual check is `just goldens-check` / `goldens-update` / `goldens-review` on a Mac. Not filed:
+Linux goldens. Revisit if the goldens ever need to gate a merge.

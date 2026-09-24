@@ -45,3 +45,13 @@ For the record, `refDirFor` itself matches `WorkspaceLayout::ref_dir_for` exactl
 `refs_dir = "."` case. The bug is entirely at the call site.
 
 See [[layout-client-gaps]].
+
+## As built (2026-09-24)
+
+- Goldens regenerated and reviewed by a human: 6/6 (main view, detail view, conflict sheet; light
+  and dark), `just goldens-check` green.
+- Fixed on the way: the e2e binaries build once in globalSetup (per-worker cargo builds blew the
+  30 s beforeEach), detail-view.spec.ts no longer asserts the notes section is absent (it always
+  renders since f0340df), and the wordmark font is self-hosted so the screenshot font wait never
+  needs the network.
+- Known gap: goldens are `-darwin.png` only; the nightly runs on ubuntu and has no `-linux` set.

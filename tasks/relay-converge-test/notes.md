@@ -169,3 +169,17 @@ Verified: `cargo test -p txtodo-sync` (183 passed, 3 pre-existing ignores, no ne
 `cargo clippy -p txtodo-sync -p txtodo-daemon --all-targets -- -D warnings` and
 `cargo fmt --check` both clean (one `cognitive_complexity` hit from the added log call, fixed the
 same way `mutation.rs::log_mutation_ops` already establishes: split into its own small fn).
+
+## Decision: relay-only instead of netns (2026-09-24, human)
+
+What the relay test must guard: two devices with no direct route (phone on mobile data, laptop at
+home) still sync through the relay. On one host with `--no-lan`, iroh can start via the relay and
+then switch to a direct path, so the test can pass while the relay path is broken. Regressions this
+must catch: code that quietly needs a direct/LAN address (the rendezvous gap, relay_fallback_dial
+only for mDNS-found peers) and relay-only failures a direct path hides (same-endpoint-id clash).
+
+Chosen: turn iroh's direct path off in the test build and assert the connection used the relay.
+Runs everywhere, including macOS. Parked: netns (`tests/support/netns.sh`,
+`RELAY_CONVERGE_CI.patch.md`) — it needs Linux + sudo in CI and daemons driven across namespaces;
+revisit only if relay-only proves too weak. Note: the patch's convergence step is already covered
+by ci.yml's `daemon` job; only the three netns.sh steps were new.

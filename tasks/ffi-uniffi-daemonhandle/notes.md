@@ -108,3 +108,13 @@ dropped, and no bare string crosses the boundary.
 - plan M9 + §3.1 (txtodo-implementation-plan.md), design §5/§7 (txtodo-design.md)
 - uniffi: https://mozilla.github.io/uniffi-rs/ · async: https://mozilla.github.io/uniffi-rs/latest/kotlin/async.html · callbacks: https://mozilla.github.io/uniffi-rs/latest/kotlin/callback_interfaces.html
 - `crates/txtodo-daemon/src/handle.rs` (ActorHandle/ActorError) — the surface this mirrors.
+
+## Decision: the allowedDeps gap (2026-09-24, human)
+
+Thin daemon-core crate (option A). Split the in-process parts of `txtodo-daemon` (FileActor /
+ActorHandle, store, sync) into their own library crate; `txtodod` keeps the gRPC server, socket,
+service and LAN listener on top of it, and `txtodo-ffi` depends on the core only. Mobile still
+carries SQLite and iroh (sync needs them) but not tonic or the server code. Rejected: `txtodo-ffi`
+as a gRPC client of a separate daemon — iOS can't keep one running, and design §5 embeds the
+daemon in the app. A new crate boundary needs an ADR first (next line in todo.txt), then a
+human-approved `allowedDeps` edit in budgets.json for the new crate and for `txtodo-ffi`.

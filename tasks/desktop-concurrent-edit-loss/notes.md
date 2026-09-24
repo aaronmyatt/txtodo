@@ -84,3 +84,16 @@ Lines 1–4 done, commit 8551f3e.
   "block the repaint, show a conflict banner" UX, not just an implementation.
 - Nothing here has been driven against a real, running desktop app by a human yet — this pass is
   vitest (rawMode) + `cargo check`/`clippy -p desktop` + svelte-check only.
+
+## Decision: incoming change while dirty (2026-09-24, human)
+
+3-way merge, with a banner only when both sides changed the same line. base = `baseline` (last
+daemon-confirmed text), mine = the buffer, theirs = the file after the Change. A line changed on
+one side takes that side; changed on both is a conflict: keep the buffer, show the banner, save
+nothing on its own. A clean merge repaints and becomes the new baseline, so the next save is a
+clean `Replace`.
+
+Why not banner-only: agents edit todo.txt all the time while a human types (claims, appends, `do`
+moving a line to the bottom); a banner on every such write would fire constantly for changes that
+never touched the human's lines. Known risk: a wrong merge is silent, so merge3 gets its own unit
+tests (moved lines, blank runs, line endings) before FileView uses it.

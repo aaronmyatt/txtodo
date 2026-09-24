@@ -125,3 +125,13 @@ supervision needs an actual design decision (where "this document is unavailable
 `resolve()`/gRPC surfaces it, auto-restart vs. refuse-until-reopened) that's a
 `workspace_catalog.rs`/`actor.rs` architecture change, not a mirror bugfix — flagged, not decided
 here.
+
+## Decision: actor panic (2026-09-24, human)
+
+Restart plus a log line. Today a panic already turns later requests into `ActorError::Gone` →
+gRPC `unavailable` (never a stale answer); what was missing is noticing it. So: keep the
+`JoinHandle`, log the panic at error with the document path, and respawn the actor from disk.
+Restarts are bounded so a panic on every load can't loop; past the cap the document stays Gone
+(today's behaviour) with one log line. Rejected: refuse-until-reopened (a user would have to know
+to reopen). Not decided here: whether Health/doctor shows a restart count — add it if a restart
+ever needs diagnosing without the logs.

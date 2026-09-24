@@ -5,7 +5,7 @@ x 2026-09-13 2026-09-12 Snapshot: edit popover and detail view (pinned parent, n
 x 2026-09-13 2026-09-12 apps/desktop/src/decorations.ts: bound CM6 line decorations to visibleRanges via StateField so a 10k-line file only decorates the visible window +m7 @desktop
 x 2026-09-13 2026-09-12 apps/desktop/e2e/visual: disable animations, freeze the footer clock, and pin the seed so goldens are deterministic across runs +m7 @desktop @test
 x 2026-09-13 2026-09-12 apps/desktop/e2e/perf.spec.ts: load todo-10k.txt, time first paint to first visible line, assert ≤ 500 ms on the CI runner +m7 @desktop @test
-2026-09-12 Record the ≤ 500 ms first-paint budget in budgets.json (perf note or new perf key) so it has a named check, not a comment-only promise +m7 @desktop @human
 x 2026-09-13 2026-09-12 Commit the goldens and document the explicit --update-snapshots path; CI runs snapshots without update and fails on any drift +m7 @desktop @test
 2026-09-12 Wire snapshot + perf suites into the gate and CI so both run green on every push (constitution §5: CI is law) +m7 @desktop @test
 2026-09-12 Complete the parent line in ./todo.txt +m7 @desktop @test
+x 2026-09-24 2026-09-12 Record the ≤ 500 ms first-paint budget in budgets.json (perf note or new perf key) so it has a named check, not a comment-only promise +m7 @desktop @human — 2026-09-24: budgets.json perf.firstPaint10kMs = 500 (human); e2e/perf.spec.ts reads it instead of a hard-coded constant

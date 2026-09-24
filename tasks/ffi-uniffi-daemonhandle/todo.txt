@@ -1,7 +1,7 @@
 2026-09-12 Add uniffi to crates/txtodo-ffi/Cargo.toml and expose tokenize(raw) -> Vec<Span> over txtodo_core::tokenize; get human sign-off + cargo deny +m9 @ffi
 2026-09-12 crates/txtodo-ffi/src/span.rs: SpanKind enum with the nine plan §3.1 semantic names and the TokenKind -> SpanKind collapse (dates merge, Url/Whitespace -> Text) +m9 @ffi
+2026-09-24 ADR 0031: split a thin daemon-core crate out of txtodo-daemon (FileActor/ActorHandle, store, sync; no tonic server, socket, launchd or LAN listener) so txtodo-ffi can embed it; name it, list what moves, and the allowedDeps edit budgets.json needs +m9 @ffi @daemon
 2026-09-12 Map txtodo_daemon::handle::ActorError to a generated DaemonError enum — all 7 variants (Mutation/State/Store/Write/Hlc/Gone/Unsupported), none dropped +m9 @ffi
-2026-09-12 Surface the allowedDeps gap: txtodo-ffi needs txtodo-daemon but budgets.json allows only core+query — ask before editing budgets.json/.claude (frozen) +m9 @ffi @human
 2026-09-12 crates/txtodo-ffi/src/handle.rs: DaemonHandle::new(root) spawns an owned tokio runtime and boots the daemon actors in-process +m9 @ffi
 2026-09-12 DaemonHandle::get(file) and apply(mutations, principal) as uniffi async methods delegating to ActorHandle::get/apply +m9 @ffi
 2026-09-12 DaemonHandle::subscribe(listener) as a uniffi callback interface streaming Change events from the actor broadcast channel +m9 @ffi
@@ -11,3 +11,4 @@
 2026-09-12 Test: force each ActorError variant and assert a typed DaemonError crosses the boundary, none dropped to a string +m9 @ffi @test
 2026-09-12 CI: run uniffi-bindgen for Kotlin and Swift and assert the generated sources compile +m9 @ffi @test
 2026-09-12 Complete the parent line in ./todo.txt +m9 @ffi
+x 2026-09-24 2026-09-12 Surface the allowedDeps gap: txtodo-ffi needs txtodo-daemon but budgets.json allows only core+query — ask before editing budgets.json/.claude (frozen) +m9 @ffi @human — 2026-09-24: decided (human): split a thin daemon-core crate (actors, store, sync; no gRPC server, socket or service code) that both txtodod and txtodo-ffi depend on; ADR first, see notes.md

@@ -103,3 +103,10 @@ once under this session's concurrent load, passed immediately when re-run alone.
 Not done by this session, per the parent task's own instruction that editing the root `todo.txt` is
 the orchestrating session's job: adding the M6/M8 todo lines item 10 above calls for, and completing
 this task's parent line in the root `todo.txt`. Both are named explicitly in the final report instead.
+
+## Decision: Hello's heads (2026-09-24, human)
+
+Accepted as a known, bounded leak. Hello is sealed with the group key, so only paired devices can
+read the heads (RATCHET.md 2026-09-13 entry). ADR 0021 (docs/adr/0021-sync-group-per-device-set.md)
+then made a sync group one user's own set of devices, so what the heads reveal (how many ops each
+device has made) goes only to that user's other devices. Revisit if a group ever spans users.
