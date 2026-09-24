@@ -1,4 +1,4 @@
-2026-09-24 Banners: daemon connecting + Retry, conflict + Review (list read-only), version mismatch, skill hint, refused edit +m11 @tui
+2026-09-24 Banners: daemon connecting + Retry, conflict + Review (list read-only), version mismatch, skill hint, refused edit +m11 @tui @doing by:claude
 2026-09-24 Status footer: synced/unsaved/saving/saved, Ln X, per-screen key hints from the manifest; a sync-detail popup replaces the s pane +m11 @tui
 2026-09-24 Toasts: bottom right, 5 s, optional Undo through the daemon Undo +m11 @tui
 2026-09-25 Mouse targets: tabs, ? help, workspace name, banner Retry/Review, toast Undo, footer sync popup, as hit::Target::Command +m11 @tui
