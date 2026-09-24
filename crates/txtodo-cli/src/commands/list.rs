@@ -15,12 +15,10 @@ pub struct Item {
 }
 
 /// todo.sh `filtercommand`: each term is a case-insensitive substring; a leading `-` excludes it.
+/// The shared matcher every client uses (`txtodo_core::query`, task `tui-revamp/shared-core`),
+/// which also knows `is:open`/`is:done`; a quoted phrase stays one term.
 pub fn matches(raw: &str, terms: &[String]) -> bool {
-    let hay = raw.to_lowercase();
-    let ok = terms.iter().all(|t| match t.strip_prefix('-') {
-        Some(neg) if !neg.is_empty() => !hay.contains(&neg.to_lowercase()),
-        _ => hay.contains(&t.to_lowercase()),
-    });
+    let ok = txtodo_core::query::matches_terms(raw, terms.iter().map(String::as_str));
     debug_assert!(!terms.is_empty() || ok, "no terms keeps every line");
     ok
 }
@@ -214,6 +212,16 @@ mod tests {
         assert!(matches("Call Mum @phone", &terms(&["mum", "@PHONE"])));
         assert!(!matches("Call Mum @phone", &terms(&["mum", "-phone"])));
         assert!(matches("anything", &terms(&[])));
+    }
+
+    /// The same table as the core's own and MCP's (task tui-revamp/shared-core): the three
+    /// matchers cannot drift.
+    #[test]
+    fn agrees_with_the_shared_golden_table() {
+        for (line, query, want) in txtodo_core::query::GOLDEN {
+            let terms: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
+            assert_eq!(matches(line, &terms), *want, "{line:?} against {query:?}");
+        }
     }
 
     #[test]
