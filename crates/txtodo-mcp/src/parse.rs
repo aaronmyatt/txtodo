@@ -116,17 +116,12 @@ pub fn find_by_id<'a>(text: &'a str, id: &str) -> Option<(u32, &'a str)> {
 /// `txtodo list TERM...`'s matching, the todo.sh `filtercommand` semantics (root todo
 /// id:01M2T868JD32M84JQQ2ABASXW4): `query` is split on whitespace, every term must match (AND), a
 /// term is a case-insensitive substring of the line, and a term with a leading `-` (and something
-/// after it) excludes lines containing the rest. An empty query keeps every line. Mirrors
-/// `txtodo-cli`'s `commands::list::matches` — this crate may not depend on that binary, so the
-/// vectors in the tests below are the same, and MCP search agrees with CLI search.
+/// after it) excludes lines containing the rest; `is:open` / `is:done` match by completion. An
+/// empty query keeps every line. The one matcher every client shares (`txtodo_core::query`,
+/// reached through `txtodo_query` since this crate may not depend on core; task
+/// `tui-revamp/shared-core`), held to its golden table by the tests below.
 pub fn matches_query(raw: &str, query: &str) -> bool {
-    let hay = raw.to_lowercase();
-    query
-        .split_whitespace()
-        .all(|term| match term.strip_prefix('-') {
-            Some(neg) if !neg.is_empty() => !hay.contains(&neg.to_lowercase()),
-            _ => hay.contains(&term.to_lowercase()),
-        })
+    txtodo_query::matches(raw, query)
 }
 
 /// A typed token a caller asked for by name: `todotxt://project/<name>`, `todotxt://context/<name>`
@@ -297,6 +292,17 @@ mod tests {
         assert!(matches_query(QUERY_LINE, "-eggs"));
         assert!(matches_query(QUERY_LINE, "draft -eggs"));
         assert!(matches_query("a - b", "-"));
+    }
+
+    #[test]
+    fn agrees_with_the_shared_golden_table() {
+        for (line, query, want) in txtodo_query::GOLDEN {
+            assert_eq!(
+                matches_query(line, query),
+                *want,
+                "{line:?} against {query:?}"
+            );
+        }
     }
 
     #[test]

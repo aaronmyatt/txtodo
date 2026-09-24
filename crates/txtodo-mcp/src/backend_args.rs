@@ -21,9 +21,10 @@ pub type WorkspaceArg = Option<String>;
 pub struct ListArgs {
     /// Whitespace-separated terms with `txtodo list`'s matching: every term must match, a term is
     /// a case-insensitive substring of the line (`+project` and `@context` included), and a
-    /// leading `-` excludes lines containing the rest — see [`crate::parse::matches_query`]. The
-    /// design §8 query language (`txtodo-query`) is still a stub. `done` and `not done` are plain
-    /// words here, as in `txtodo list`; filter on completion with the `done` field below.
+    /// leading `-` excludes lines containing the rest; `is:open` / `is:done` match by completion —
+    /// see [`crate::parse::matches_query`]. The design §8 query language (`txtodo-query`) is still
+    /// a stub. `done` and `not done` are plain words here, as in `txtodo list`; filter on
+    /// completion with `is:done` or the `done` field below.
     pub query: Option<String>,
     /// `true`: only completed tasks. `false`: only open ones. Absent: both. This replaces the
     /// `done` / `not done` query words the old stub matcher understood, which became ordinary
