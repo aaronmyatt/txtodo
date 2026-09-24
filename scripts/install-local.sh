@@ -150,9 +150,13 @@ mkdir -p "$data_dir"
 echo "$build_id" > "$data_dir/installed-build"
 log "build $build_id ($("$bin_dir/txtodo" --version)); compare devices with: cat $data_dir/installed-build"
 
-# An earlier PATH entry would run some other txtodo instead (brew, old symlinks).
-if [ "$(command -v txtodo)" != "$bin_dir/txtodo" ]; then
-  log "WARNING: 'txtodo' on your PATH is $(command -v txtodo), not this install. All copies:"
-  which -a txtodo | sed 's/^/  /'
+found="$(command -v txtodo || true)"
+if [ -z "$found" ]; then
+  log "WARNING: txtodo is not on your PATH; add $bin_dir to PATH"
+elif [ "$found" != "$bin_dir/txtodo" ]; then
+  log "WARNING: 'txtodo' on your PATH is $found, not this install. All copies:"
+  # `|| true` stops pipefail + set -e from aborting the script on a warning-only path.
+  # Ref: https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html
+  which -a txtodo | sed 's/^/  /' || true
   log "remove the others (brew uninstall txtodo, or delete stale symlinks) or put $bin_dir first"
 fi
