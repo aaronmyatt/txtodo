@@ -5,7 +5,6 @@
 2026-09-24 Decide: TUI detail as a bottom split panel, ahead of the desktop "panel or page" decide line. I'd take the panel +m11 @tui @human
 2026-09-24 Parity manifest, parity tests and agent rules +m11 @tui @desktop ref:parity-manifest — all but check-parity.sh, which waits on its decide line; see tasks/tui-revamp/parity-manifest/notes.md
 2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc — UniversalTasks done 2026-09-25 (d9d1695 + daemon); the reopen line waits on its decide line
-2026-09-24 TUI Tasks screen: gutter, list mode, search, conflict sheet +m11 @tui ref:tui-tasks @doing by:claude
 2026-09-24 TUI detail panel: breadcrumb, parent edit, sub-list drill, notes editor +m11 @tui ref:tui-detail
 2026-09-24 TUI prompt bar: Quick Add, chips, strict hint +m11 @tui ref:tui-prompt
 2026-09-24 TUI Universal screen +m11 @tui ref:tui-universal
@@ -18,3 +17,4 @@ x 2026-09-25 2026-09-24 Shared logic in txtodo-core + wasm: search, strict hints
 x 2026-09-25 2026-09-24 TUI foundation: screens, focus, overlays, keymap + commands, theme, terminal setup +m11 @tui ref:tui-foundation — see tasks/tui-revamp/tui-foundation/notes.md
 x 2026-09-25 2026-09-24 TUI mouse: hit map, click, double-click, wheel, hover, drag reorder +m11 @tui ref:tui-mouse — see tasks/tui-revamp/tui-mouse/notes.md
 x 2026-09-25 2026-09-24 TUI shell: header, workspace popup, banners, status footer, toasts +m11 @tui ref:tui-shell — see tasks/tui-revamp/tui-shell/notes.md
+x 2026-09-25 2026-09-24 TUI Tasks screen: gutter, list mode, search, conflict sheet +m11 @tui ref:tui-tasks — see tasks/tui-revamp/tui-tasks/notes.md
