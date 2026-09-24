@@ -490,6 +490,15 @@ pub struct HealthResponse {
     /// field, which is itself the answer "this daemon is an older build".
     #[prost(string, tag = "21")]
     pub release_date: ::prost::alloc::string::String,
+    /// Why the last workspace-offer (control channel) session could not run, empty when it could
+    /// (task control-channel-keystore-visibility): today that is the OS keystore failing or not
+    /// answering the group-key read, e.g. a keychain prompt nobody clicked under launchd. Offers from
+    /// paired devices stop until it clears. Device-level: the same on every workspace.
+    #[prost(string, tag = "22")]
+    pub offers_problem: ::prost::alloc::string::String,
+    /// How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
+    #[prost(uint64, tag = "23")]
+    pub offers_problem_age_ms: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {
@@ -990,6 +999,12 @@ pub struct WorkspacePendingOffersRequest {}
 pub struct WorkspacePendingOffersResponse {
     #[prost(message, repeated, tag = "1")]
     pub offers: ::prost::alloc::vec::Vec<PendingWorkspaceOffer>,
+    /// Same as HealthResponse.offers_problem: when set, an empty `offers` means "blocked", not
+    /// "nothing offered" (task control-channel-keystore-visibility).
+    #[prost(string, tag = "2")]
+    pub offers_problem: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "3")]
+    pub offers_problem_age_ms: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAcceptOfferRequest {

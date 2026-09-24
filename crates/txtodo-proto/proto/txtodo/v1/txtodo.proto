@@ -453,6 +453,13 @@ message HealthResponse {
   // talking to an older daemon was the bug that started this. Empty from a daemon older than the
   // field, which is itself the answer "this daemon is an older build".
   string release_date = 21;
+  // Why the last workspace-offer (control channel) session could not run, empty when it could
+  // (task control-channel-keystore-visibility): today that is the OS keystore failing or not
+  // answering the group-key read, e.g. a keychain prompt nobody clicked under launchd. Offers from
+  // paired devices stop until it clears. Device-level: the same on every workspace.
+  string offers_problem = 22;
+  // How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
+  uint64 offers_problem_age_ms = 23;
 }
 
 // --- notes.md (plan M5, design §7) ---
@@ -803,6 +810,10 @@ message WorkspacePendingOffersRequest {}
 
 message WorkspacePendingOffersResponse {
   repeated PendingWorkspaceOffer offers = 1;
+  // Same as HealthResponse.offers_problem: when set, an empty `offers` means "blocked", not
+  // "nothing offered" (task control-channel-keystore-visibility).
+  string offers_problem = 2;
+  uint64 offers_problem_age_ms = 3;
 }
 
 message WorkspaceAcceptOfferRequest {

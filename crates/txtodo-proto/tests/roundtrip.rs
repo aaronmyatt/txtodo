@@ -269,6 +269,24 @@ fn the_own_device_fields_round_trip_and_default_to_false() {
     assert!(!PairConfirmRequest::default().own_device);
     assert!(!Device::default().own_device);
     assert!(!PairResult::default().kept_own_workspace);
+}
+
+/// Task `control-channel-keystore-visibility`: the offers problem round-trips on both messages and
+/// reads as "no problem" from an older daemon.
+#[test]
+fn the_offers_problem_round_trips_and_defaults_to_empty() {
+    use txtodo_proto::v1::WorkspacePendingOffersResponse;
+    round_trip(&HealthResponse {
+        offers_problem: "keystore: did not answer".into(),
+        offers_problem_age_ms: 1_500,
+        ..HealthResponse::default()
+    });
+    round_trip(&WorkspacePendingOffersResponse {
+        offers: Vec::new(),
+        offers_problem: "keystore: did not answer".into(),
+        offers_problem_age_ms: 1_500,
+    });
+    assert!(HealthResponse::default().offers_problem.is_empty());
     assert_eq!(
         WorkspaceInfo::default().load_state,
         WorkspaceLoadState::Unspecified as i32,
