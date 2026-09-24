@@ -3,5 +3,6 @@
 
 pub mod diff_view;
 pub mod parse_check;
+pub mod shared;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
