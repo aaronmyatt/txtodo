@@ -96,7 +96,6 @@ impl Daemon {
         let req = pb::WorkspaceAcceptOfferRequest {
             offering_device: offering_device.to_owned(),
             workspace_id: workspace_id.to_owned(),
-            ..pb::WorkspaceAcceptOfferRequest::default()
         };
         let rep = self
             .rt
