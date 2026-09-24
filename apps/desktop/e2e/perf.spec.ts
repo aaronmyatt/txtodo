@@ -3,21 +3,23 @@
 // (./tenKFixture.ts — "one fixture, two consumers", notes.md) through a real daemon, and asserts
 // the measured budget.
 //
-// FROZEN-PATH NOTE: the ≤500ms number below is meant to become a named `budgets.json` perf key
-// (notes.md: "a constitution number... gets a named check, never a comment-only promise"), but
-// `.claude/budgets.json` is a frozen path requiring an explicit human-reviewed `/setup` write —
-// different from most frozen paths in this repo, and NOT something this session may touch or
-// propose a diff for. Hard-coding the constant here, with this comment, is the deliberate
-// stand-in until a human runs `/setup` to promote it (see this task's notes.md "As built" entry
-// for the full flag).
+// The budget itself lives in `.claude/budgets.json` as `perf.firstPaint10kMs` (decided 2026-09-24),
+// so it is a named number next to the other perf budgets, not a comment-only promise.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { type DaemonHandle, spawnDaemon } from "./fixtures";
 import { gotoWithDaemon } from "./helpers";
 import { TEN_K_DOC_LINES } from "./tenKFixture";
 
-/** See the FROZEN-PATH NOTE above: promote to `.claude/budgets.json` via a human-reviewed
- * `/setup` pass, not by this task editing that file directly. */
-const FIRST_PAINT_BUDGET_MS = 500;
+/** `.claude/budgets.json` `perf.firstPaint10kMs`, read at load so the spec and the budget can't
+ * drift. Ref: https://nodejs.org/api/fs.html#fsreadfilesyncpath-options */
+const BUDGETS = join(dirname(fileURLToPath(import.meta.url)), "../../../.claude/budgets.json");
+const FIRST_PAINT_BUDGET_MS: number = JSON.parse(readFileSync(BUDGETS, "utf8")).perf.firstPaint10kMs;
+if (typeof FIRST_PAINT_BUDGET_MS !== "number") {
+	throw new Error(`${BUDGETS} has no numeric perf.firstPaint10kMs`);
+}
 
 test("10k-line first paint stays within the perf budget", async ({ page }) => {
 	// Warm-up navigation on a tiny, separate fixture first. This is a dev-server (`vite dev`)
