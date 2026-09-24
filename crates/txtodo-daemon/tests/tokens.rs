@@ -211,3 +211,56 @@ async fn an_unrecognized_scope_is_refused_at_create_time() {
         .tokens;
     assert!(listed.is_empty(), "the rejected create stored nothing");
 }
+
+/// Task security-m6-review, F5 (checklist rows 1 and 5): a full create → list → revoke round,
+/// captured the way `init`'s JSON layer writes it, carries neither the bearer secret, its stored
+/// `blake3` hash, nor a scope's caveat value. The token code logs nothing today; this guards that.
+/// `#[tokio::test]` runs on one thread, so the server task's events reach this thread's dispatch.
+/// Ref: https://docs.rs/tracing/latest/tracing/dispatcher/fn.set_default.html
+#[tokio::test]
+async fn a_token_round_logs_no_secret_hash_or_caveat_value() {
+    // Sibling tests in this binary log with no subscriber of their own (task
+    // tracing-set-default-audit); without the floor this dispatch can capture nothing.
+    txtodo_telemetry::testing::pin_global_trace_floor();
+    let sink = txtodo_telemetry::testing::LogSink::new();
+    let dispatch = txtodo_telemetry::testing::capturing_dispatch(sink.clone(), "txtodod");
+    let guard = tracing::dispatcher::set_default(&dispatch);
+
+    let caveat = "project:+caveatcanary7f3a";
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "(A) seed\n").unwrap();
+    let (mut client, _stop) = serve(dir.path()).await;
+    let created = client
+        .token_create(create_req("claude-code", &["read", caveat]))
+        .await
+        .unwrap()
+        .into_inner();
+    client
+        .token_list(pb::TokenListRequest { workspace: None })
+        .await
+        .unwrap();
+    client
+        .token_revoke(pb::TokenRevokeRequest {
+            id: created.id.clone(),
+            workspace: None,
+        })
+        .await
+        .unwrap();
+    drop(guard);
+
+    let logs = sink.captured_text();
+    // A capture that caught nothing would pass every check below and prove nothing.
+    assert!(
+        logs.contains("daemon_ready"),
+        "sanity: the daemon's own events reached the capture: {logs}"
+    );
+    assert!(!created.secret.is_empty(), "fixture: a secret to look for");
+    assert!(!logs.contains(&created.secret), "the bearer secret leaked");
+    // The store keeps `blake3(secret)` (`txtodo-store/src/tokens.rs`); hex is how it would leak.
+    let hash = blake3::hash(created.secret.as_bytes()).to_hex();
+    assert!(
+        !logs.contains(hash.as_str()),
+        "the stored secret hash leaked"
+    );
+    assert!(!logs.contains("caveatcanary7f3a"), "a caveat value leaked");
+}
