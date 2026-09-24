@@ -16,6 +16,9 @@ the desktop editor share), `Edit::{set_priority, clear_priority, set_description
 `query::{matches, matches_terms, GOLDEN}` (2026-09-25, task `tui-revamp/shared-core`): the one line-search matcher
 (AND terms, case-insensitive substring, `-term` excludes, `is:open`/`is:done`) that `txtodo list`, MCP,
 the TUI and (through `txtodo-ffi`) desktop share; `GOLDEN` is the table every wrapper is tested against.
+`strict_hint::strict_hint` (same task): the prompt bar's one-line strict-mode hint (lower-case priority,
+a leading `(` that is not one priority letter, a `due:`/`t:` without a `YYYY-MM-DD`), the c2 mockup's
+three regexes ported by hand and checked against them; never blocks a save.
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
 
 ## Invariants

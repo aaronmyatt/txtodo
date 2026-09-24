@@ -18,6 +18,7 @@ mod parse;
 pub mod query;
 mod quirks;
 mod scanner;
+pub mod strict_hint;
 mod task;
 mod tokenize;
 mod types;
