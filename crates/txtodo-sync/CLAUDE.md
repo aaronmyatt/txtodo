@@ -291,7 +291,10 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   this crate needing any "watch the store for changes" plumbing of its own. The tradeoff — a new
   QUIC handshake roughly every second for as long as two daemons stay paired and on the same LAN —
   is a known cost of this M4-scoped design, flagged for a human: a push/notify model would avoid it
-  but is real additional work, not attempted this pass.
+  but is real additional work, not attempted this pass. **Superseded 2026-09-24 (task
+  `sync-live-push`):** the daemon's driver now uses `Link::recv_timeout`, keeps the connection open
+  with its own heartbeat and pushes commits; `recv`'s idle close still applies to callers that use
+  plain `recv` (pairing, the control channel).
 - `LanEndpoint::connect` prefers non-loopback candidate addresses, falling back to loopback only
   when nothing else was advertised (real two-process testing on one host sometimes resolves only a
   loopback address for a peer before its real interface address is known — refusing it outright
