@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install txtodo on macOS from the latest GitHub release, with no Gatekeeper block: the desktop
-# app into /Applications, and the txtodo, txtodod and txtodo-tui binaries into ~/.local/bin.
+# app into /Applications, and the txtodo, txtodod, txtodo-mcp and txtodo-tui binaries into
+# ~/.local/bin.
 #
 # Why this works unnotarized: Gatekeeper only checks files carrying the com.apple.quarantine xattr
 # (extended attribute), which browsers, Mail and AirDrop add on download. curl never adds it, so
@@ -17,14 +18,14 @@
 #   TXTODO_INSTALL_DIR=<dir>     app folder (default /Applications, or ~/Applications if not writable)
 #   TXTODO_BIN_DIR=<dir>         binaries folder (default ~/.local/bin)
 #   TXTODO_NO_DESKTOP=1          skip the desktop app
-#   TXTODO_NO_CLI=1              skip txtodo, txtodod and txtodo-tui
+#   TXTODO_NO_CLI=1              skip txtodo, txtodod, txtodo-mcp and txtodo-tui
 set -euo pipefail
 
 repo="aaronmyatt/txtodo"
 app="txtodo.app"
 # txtodo finds the txtodod beside it first (crates/txtodo-daemon-launch/src/binary_path.rs), so
-# all three go into one folder.
-bins="txtodo txtodod txtodo-tui"
+# they all go into one folder.
+bins="txtodo txtodod txtodo-mcp txtodo-tui"
 
 log() { echo "install: $*"; }
 die() { echo "install: $*" >&2; exit 1; }
@@ -98,7 +99,13 @@ install_cli() {
     # Download beside the target, then rename over it. A rename is atomic and leaves a running
     # txtodod on its old file; writing into a running signed binary gets it killed by the kernel.
     # Ref: https://developer.apple.com/documentation/security/updating-mac-software
-    curl -fL --progress-bar -o "$dir/.$bin.download" "$base/$bin-$leg"
+    if ! curl -fL --progress-bar -o "$dir/.$bin.download" "$base/$bin-$leg"; then
+      rm -f "$dir/.$bin.download"
+      # Releases up to v0.0.10 shipped no txtodo-mcp; `txtodo mcp` needs it beside txtodo.
+      [ "$bin" = "txtodo-mcp" ] || die "download failed: $base/$bin-$leg"
+      log "this release has no txtodo-mcp; skipped (\`txtodo mcp\` won't work)"
+      continue
+    fi
     chmod 755 "$dir/.$bin.download"
     mv -f "$dir/.$bin.download" "$dir/$bin"
   done

@@ -53,7 +53,7 @@ jobs:
             os: ubuntu-latest
             rust_target: x86_64-unknown-linux-gnu
             zig_target: x86_64-unknown-linux-gnu.2.17
-            packages: "txtodo-cli txtodo-daemon txtodo-tui"
+            packages: "txtodo-cli txtodo-daemon txtodo-mcp txtodo-tui"
             native: false
             static_check: false
           # Linux musl: fully static — no libc at all — verified below via `ldd` (expect "not a
@@ -62,14 +62,14 @@ jobs:
             os: ubuntu-latest
             rust_target: x86_64-unknown-linux-musl
             zig_target: x86_64-unknown-linux-musl
-            packages: "txtodo-cli txtodo-daemon txtodo-tui"
+            packages: "txtodo-cli txtodo-daemon txtodo-mcp txtodo-tui"
             native: false
             static_check: true
           - leg: linux-aarch64-musl
             os: ubuntu-latest
             rust_target: aarch64-unknown-linux-musl
             zig_target: aarch64-unknown-linux-musl
-            packages: "txtodo-cli txtodo-daemon txtodo-tui"
+            packages: "txtodo-cli txtodo-daemon txtodo-mcp txtodo-tui"
             native: false
             static_check: true
           # Windows: ADR 0010 (no Unix domain sockets on Windows) already drops txtodo-cli,
@@ -91,13 +91,13 @@ jobs:
           - leg: macos-aarch64
             os: macos-latest
             rust_target: aarch64-apple-darwin
-            packages: "txtodo-cli txtodo-daemon txtodo-tui"
+            packages: "txtodo-cli txtodo-daemon txtodo-mcp txtodo-tui"
             native: true
             static_check: false
           - leg: macos-x86_64
             os: macos-latest
             rust_target: x86_64-apple-darwin
-            packages: "txtodo-cli txtodo-daemon txtodo-tui"
+            packages: "txtodo-cli txtodo-daemon txtodo-mcp txtodo-tui"
             native: true
             static_check: false
     runs-on: ${{ matrix.os }}
@@ -172,7 +172,7 @@ jobs:
         run: |
           set -euo pipefail
           out="target/${{ matrix.rust_target }}/release"
-          scripts/macos-selfsign.sh "$out/txtodo" "$out/txtodod" "$out/txtodo-tui"
+          scripts/macos-selfsign.sh "$out/txtodo" "$out/txtodod" "$out/txtodo-mcp" "$out/txtodo-tui"
       - name: remove signing keychain (macOS)
         if: always() && runner.os == 'macOS'
         run: |
@@ -194,6 +194,7 @@ jobs:
             case "$1" in
               txtodo-cli) echo "txtodo" ;;
               txtodo-daemon) echo "txtodod" ;;
+              txtodo-mcp) echo "txtodo-mcp" ;;
               txtodo-tui) echo "txtodo-tui" ;;
             esac
           }
