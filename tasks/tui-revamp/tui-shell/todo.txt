@@ -1,4 +1,4 @@
-2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui
+2026-09-24 Header: live mark, workspace name, search field, Tasks/Universal/Settings tabs, ? help; labels collapse on narrow terminals +m11 @tui @doing by:claude
 2026-09-24 Live mark: 4 strokes filled by done/total over the root todo.txt, blank lines excluded, faint full mark behind +m11 @tui
 2026-09-24 Workspace popup (W or click): name, N open, current highlighted, missing state, Manage workspaces goes to Settings > Workspaces +m11 @tui
 2026-09-24 g t / g u / g s screen chords beside gg, 900 ms window +m11 @tui
