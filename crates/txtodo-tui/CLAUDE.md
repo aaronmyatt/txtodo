@@ -68,6 +68,18 @@ Invariants below for the one real gap that RPC surfaced but did not fix.
   a real daemon with no peers (the two-loopback-daemon, real-peer version of this test is still
   open — `tasks/tui/todo.txt`).
 
+## Parity
+`specs/client-parity.toml` is the one list of user-facing actions and where this client and the
+desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
+- Change the manifest in the same commit as any key or user-facing action added, changed or
+  dropped here. A manifest `id` is also the `:` palette command.
+- The client that lags gets an `@parity` backlog line naming the action id: desktop's in
+  `tasks/desktop-ui-revamp/todo.txt`, this one's in `tasks/tui-revamp/todo.txt`.
+- No silent deviations: a different key or a missing feature is a `differs` or `na` row with its
+  one-line `deviation`.
+- `tests/parity.rs` (once `keymap.rs` lands) fails when `keymap::BINDINGS` and the manifest's
+  `tui.status = "done"` rows disagree. The Help screen renders from the manifest.
+
 ## Invariants
 - Thin client: talks to the daemon, never parses the file — every byte painted comes from
   `GetFile`/`Watch`; the only file-shaped work done in-process is `txtodo_core::tokenize` for
