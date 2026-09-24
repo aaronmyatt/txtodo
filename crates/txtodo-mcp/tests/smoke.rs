@@ -1,7 +1,7 @@
 //! In-process MCP smoke test (mcp-server-tools notes.md acceptance: "the registered set is
 //! exhaustive"). Runs `McpServer` over `tokio::io::duplex` — no stdio process, no real daemon —
-//! against a `FakeBackend` recording calls; a full SDK-reference-client smoke test over both real
-//! transports is [mcp-smoke-test](../../../tasks/mcp-smoke-test), a separate later task.
+//! against a `FakeBackend` recording calls. The stock-SDK-client test over both real transports
+//! against a real `txtodod` is `tests/sdk_client.rs` ([mcp-sdk-smoke](../../../tasks/mcp-sdk-smoke)).
 
 use std::sync::Arc;
 

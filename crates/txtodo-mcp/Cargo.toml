@@ -75,6 +75,19 @@ tempfile = "3"
 # production layer, which never enables span-lifecycle events). Same workspace version/features
 # `txtodo-daemon`/`txtodo-telemetry` already use.
 tracing-subscriber = { workspace = true }
+# https://docs.rs/rmcp/latest/rmcp/transport/streamable_http_client/ — rmcp's stock Streamable
+# HTTP client, only for `tests/sdk_client.rs` (task mcp-sdk-smoke: a stock SDK client against the
+# real server, so protocol drift fails a test). Test-only, never in the shipped binary. The
+# `-reqwest` feature pulls reqwest with default features off and no TLS backend (plain
+# http://127.0.0.1 only), so it adds no TLS stack. Features here unify with [dependencies]' rmcp.
+# https://docs.rs/crate/rmcp/latest/features
+rmcp = { version = "3.3", default-features = false, features = [
+  "transport-streamable-http-client-reqwest",
+] }
+# https://docs.rs/tokio/latest/tokio/process/ — `tests/sdk_client.rs` spawns the real `txtodo-mcp
+# --stdio` binary and talks to its piped stdin/stdout. Named here rather than relied on through
+# txtodo-daemon-launch's own tokio features, which could change under us.
+tokio = { version = "1", features = ["process", "time"] }
 
 [lints]
 workspace = true
