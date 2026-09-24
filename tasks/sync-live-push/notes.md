@@ -91,3 +91,34 @@ user saw as "no sync" was two things:
 
 - The ADR itself (Session accepting unsolicited Ops, the long-lived session contract) is decided
   in principle above; still not implemented — line 1 in todo.txt stays open for that build.
+
+## As built (2026-09-24)
+
+- Commits: ba5ce8c (sync: pushed Ops in Idle, `Link::recv_timeout`), b34174a (one LAN per
+  device), 69f8a7a (long-lived sessions + push), d3c927b (sync doc).
+- Session: a workspace that consumed the peer's `Greet` accepts `Ops` in `Idle` when every run
+  follows its heads. A gap, a repeat, or a push while a `Want` is open is refused and changes
+  nothing. No wire change, no golden change.
+- LAN: `device_lan.rs` holds the route table; `main.rs` (`carriers.rs`) starts one LAN task next to
+  `DeviceRelay`. `LanStatus`/`PairingLan` moved onto `DeviceIdentity`. `drive_session` is gone
+  (test helper only).
+- Live session (`lan_session_live.rs`): poll 50 ms, heartbeat = empty `Ack` every 5 s (the
+  decided default), dead after 20 s, 750 ms quiet close when nothing is shared. Push is a head diff:
+  `want(peer holds, local heads)`, served by `serve_want`. "Peer holds" = its `Greet`, plus runs it
+  asked for, sent us, or we pushed — so the peer's own ops never echo. Pushing to a workspace starts
+  only after its `Want` was served, so the push lands behind the batches it asked for. The trigger is
+  a new `Stats::commits_total`, bumped in `FileActor::broadcast` (not the `Change` broadcast
+  subscription the design named: one atomic read per poll, no per-actor receivers to track as files
+  come and go).
+- Redial: `live_peers.rs`; LAN resync, relay auto-dial and sighting dials skip a live peer.
+- A refused `Ops` batch now ends the connection; the reconnect's `Greet`/`Want` repairs the gap.
+- Measured (`tests/lan_live_push.rs`, two global daemons, default only): first contact 0.87 s,
+  then a→b 205 ms and b→a 201 ms (mostly the file-watcher debounce), no new session.
+
+## Still broken / not proven
+
+- The relay path runs the same driver but the relay tests (public n0 relay) were not rerun.
+- A dropped session reconnects on the next resync tick (15 s in production), not at once.
+- `notes.md` edits do not bump the commit counter; they go out on the 5 s sweep.
+- Two sessions to one peer at once (LAN and relay) can both push the same ops; the second copy is
+  refused (duplicate op id) and ends that session. No dedupe before commit.
