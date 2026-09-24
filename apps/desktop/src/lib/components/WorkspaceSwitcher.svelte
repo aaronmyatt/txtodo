@@ -216,6 +216,7 @@
 								title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
 							>
 								{#if ws.is_default}<span class="default-label">Default</span>{/if}
+								{#if ws.is_remote}<span class="default-label" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
 								{ws.root}
 								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
 								{#if ws.load_state === "queued" || ws.load_state === "loading"}

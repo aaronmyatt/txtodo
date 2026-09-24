@@ -256,6 +256,8 @@ export interface WorkspaceInfo {
 	load_error: string;
 	/** The user's default workspace (task default-workspace): labelled, and never removable. */
 	is_default?: boolean;
+	/** A mirror of a paired device's workspace (task remote-workspace-mirror): labelled "Remote". */
+	is_remote?: boolean;
 }
 
 /** The current workspace's layout (task workspace-layout). Mirrors `WorkspaceLayoutDto`. */

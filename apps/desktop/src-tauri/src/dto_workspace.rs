@@ -25,6 +25,9 @@ pub struct WorkspaceInfoDto {
     /// True for the user's default workspace (task default-workspace): shown as "Default" and
     /// never removable.
     pub is_default: bool,
+    /// True for a mirror of a paired device's workspace (task remote-workspace-mirror): the daemon
+    /// chose its folder, so the switcher labels it "Remote".
+    pub is_remote: bool,
 }
 
 /// Where a workspace keeps its root list and the folder for its `ref:` lines (task
@@ -84,6 +87,24 @@ impl From<pb::WorkspaceInfo> for WorkspaceInfoDto {
             load_state: load_state_name(w.load_state),
             load_error: w.load_error,
             is_default: w.is_default,
+            is_remote: w.is_remote,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Task remote-workspace-mirror: the switcher's "Remote" label reads this flag.
+    #[test]
+    fn the_remote_flag_reaches_the_dto() {
+        let w = pb::WorkspaceInfo {
+            workspace_id: "01BX5ZZKBKACTAV9WEVGEMMVRZ".into(),
+            is_remote: true,
+            ..pb::WorkspaceInfo::default()
+        };
+        assert!(WorkspaceInfoDto::from(w).is_remote);
+        assert!(!WorkspaceInfoDto::from(pb::WorkspaceInfo::default()).is_remote);
     }
 }
