@@ -130,9 +130,9 @@ pub async fn run_in(
         std::env::var(k).ok()
     }));
 
-    let mut terminal = ratatui::init();
+    let mut terminal = crate::terminal::enter();
     let result = crate::app_loop::run_loop(&mut terminal, daemon, &mut state).await;
-    ratatui::restore();
+    crate::terminal::leave();
     result
 }
 

@@ -309,8 +309,8 @@ title = "Quit"
 keys = []
 scope = "global"
 desktop = { status = "na", surface = "" }
-tui = { status = "done", surface = "command line (:q)" }
-deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q (and Ctrl-C once tui-foundation lands)."
+tui = { status = "differs", surface = "command line (:q)", keys = ["Ctrl-c"] }
+deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q or Ctrl-c (raw mode makes Ctrl-c a key)."
 
 # ==== Revamp plan (tasks/desktop-ui-revamp/notes.md "Keyboard map", c2 footer hints) ===============
 # Neither client has these yet; the TUI builds them first (tasks/tui-revamp).

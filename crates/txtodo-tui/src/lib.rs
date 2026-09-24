@@ -11,6 +11,7 @@ pub mod state;
 pub mod state_nav;
 pub mod state_offers;
 pub mod state_types;
+pub mod terminal;
 pub mod theme;
 
 /// Widgets, each rendering a pure function of `&state::AppState` (design §7's per-row/pane split):

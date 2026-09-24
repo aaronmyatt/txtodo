@@ -163,7 +163,7 @@ pub const BINDINGS: &[Binding] = &[
     bind(Command::OffersClose, &["Esc", "o"], Scope::Sheet),
     bind(Command::SyncOpen, &["s"], Scope::List),
     bind(Command::PaletteOpen, &[":"], Scope::Global),
-    bind(Command::AppQuit, &[], Scope::Global),
+    bind(Command::AppQuit, &["Ctrl-c"], Scope::Global),
 ];
 
 impl Command {
@@ -199,6 +199,14 @@ impl Command {
             Command::PaletteOpen => "palette.open",
             Command::AppQuit => "app.quit",
         }
+    }
+
+    /// The keys bound to this command, empty for a palette-only one.
+    pub fn keys(self) -> &'static [&'static str] {
+        BINDINGS
+            .iter()
+            .find(|b| b.command == self)
+            .map_or(&[], |b| b.keys)
     }
 
     /// The command with manifest id `id`.

@@ -36,10 +36,17 @@ impl Input {
         key: KeyEvent,
         now: Instant,
     ) -> Option<Action> {
+        let name = keymap::key_name(&key);
+        // Quit wins everywhere, a text field included: raw mode made Ctrl-c a key, not SIGINT.
+        if name
+            .as_deref()
+            .is_some_and(|n| Command::AppQuit.keys().contains(&n))
+        {
+            return commands::run(state, Command::AppQuit);
+        }
         if state.command.is_some() {
             return on_command_key(state, key);
         }
-        let name = keymap::key_name(&key);
         if state.editing.is_some() {
             return on_edit_key(state, key, name.as_deref());
         }

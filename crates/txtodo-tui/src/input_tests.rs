@@ -266,6 +266,23 @@ fn colon_an_unknown_command_says_so_on_the_status_line() {
     assert_eq!(state.last_error.as_deref(), Some("unknown command :x"));
 }
 
+#[test]
+fn ctrl_c_quits_from_the_list_the_editor_and_the_command_line() {
+    let ctrl_c = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+    let mut input = Input::default();
+    for open in [None, Some('i'), Some(':')] {
+        let mut state = AppState::fixture();
+        if let Some(c) = open {
+            input.on_key(&mut state, key(c));
+        }
+        assert_eq!(
+            input.on_key(&mut state, ctrl_c),
+            Some(Action::Quit),
+            "{open:?}"
+        );
+    }
+}
+
 fn type_command(input: &mut Input, state: &mut AppState, text: &str) -> Option<Action> {
     input.on_key(state, key(':'));
     for c in text.chars() {
