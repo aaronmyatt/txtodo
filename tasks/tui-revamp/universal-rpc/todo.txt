@@ -1,0 +1,4 @@
+2026-09-24 proto: UniversalTasks RPC; row = workspace id+name, line_number, task_id, raw, done, completion_date, priority, due, projects, contexts, ref n/m, has_notes; request include_done +m11 @proto
+2026-09-24 daemon: UniversalTasks handler over every ready workspace's root list; raw due date only, clients bucket it +m11 @daemon
+2026-09-24 daemon: integration test over two workspaces with a done line, a due line and a ref: line +m11 @daemon @test
+2026-09-24 proto + daemon: reopen per the decide line, with a handler test; blocked on the decide line +m11 @proto @daemon

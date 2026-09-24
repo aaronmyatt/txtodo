@@ -1,0 +1,7 @@
+2026-09-24 Data from the UniversalTasks RPC; refresh on any workspace Watch change +m11 @tui
+2026-09-24 Stat strip: Overdue, Due this week, t open, x done +m11 @tui
+2026-09-24 Group selector (Priority default, Due, Project, Context, Workspace) via core universal::group +m11 @tui
+2026-09-24 Filters: workspace chips (at least one on), show done, context chips by count, Reset filters on the empty state +m11 @tui
+2026-09-24 Rows: mark, priority, token colours, due badge, ref pill, 2-letter workspace tile +m11 @tui
+2026-09-24 Keys: j/k/Home/End move, Enter opens the row on its line in its workspace, x completes with an Undo toast +m11 @tui
+2026-09-24 Search filters rows; is:done reveals done rows +m11 @tui

@@ -1,0 +1,20 @@
+2026-09-24 Decide: sign off ADR 0031, specs/client-parity.toml as the one list of user-facing actions, tests in both clients fail on drift. I'd take yes +m11 @tui @desktop @human
+2026-09-24 Decide: reopen a done task via a new Reopen mutation or Complete{undo}. Shared with tasks/desktop-ui-revamp/notes.md:169. I'd take a Reopen mutation +m11 @proto @human
+2026-09-24 Decide: approve txtodo-tui deps qrcode (runtime, pairing QR) and toml (dev only, parity test); both already in Cargo.lock. I'd take yes +m11 @tui @human
+2026-09-24 Decide: let .claude/scripts/check-parity.sh into the gate (.claude is frozen). I'd take advisory only, never blocking +m11 @setup @human
+2026-09-24 Decide: TUI detail as a bottom split panel, ahead of the desktop "panel or page" decide line. I'd take the panel +m11 @tui @human
+2026-09-24 Parity manifest, parity tests and agent rules +m11 @tui @desktop ref:parity-manifest
+2026-09-24 Shared logic in txtodo-core + wasm: search, strict hints, chip edits, Universal grouping +m11 @core ref:shared-core
+2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc
+2026-09-24 TUI foundation: screens, focus, overlays, keymap + commands, theme, terminal setup +m11 @tui ref:tui-foundation
+2026-09-24 TUI mouse: hit map, click, double-click, wheel, hover, drag reorder +m11 @tui ref:tui-mouse
+2026-09-24 TUI shell: header, workspace popup, banners, status footer, toasts +m11 @tui ref:tui-shell
+2026-09-24 TUI Tasks screen: gutter, list mode, search, conflict sheet +m11 @tui ref:tui-tasks
+2026-09-24 TUI detail panel: breadcrumb, parent edit, sub-list drill, notes editor +m11 @tui ref:tui-detail
+2026-09-24 TUI prompt bar: Quick Add, chips, strict hint +m11 @tui ref:tui-prompt
+2026-09-24 TUI Universal screen +m11 @tui ref:tui-universal
+2026-09-24 TUI Settings screen: General, Appearance, Workspaces, Shortcuts, Devices, Tokens, Activity +m11 @tui ref:tui-settings
+2026-09-24 TUI Help screen rendered from specs/client-parity.toml: keymap, search operators, prompt bar +m11 @tui
+2026-09-24 File the @parity catch-up lines (below) into tasks/desktop-ui-revamp/todo.txt; build none of them now +m11 @desktop @parity
+2026-09-24 Human pass: drive the TUI in a scratch workspace, light and dark terminal, keys and mouse, against the c2 mockup +m11 @tui @human
+2026-09-24 Refresh crates/txtodo-tui/CLAUDE.md public interface and invariants; drop dead code left by the revamp +m11 @tui

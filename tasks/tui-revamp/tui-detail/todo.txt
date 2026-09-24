@@ -1,0 +1,7 @@
+2026-09-24 Bottom split panel (55%): Enter/Ctrl-Enter/double-click opens, Esc closes +m11 @tui
+2026-09-24 Breadcrumb: workspace > parent labels cut to 28 chars, click to jump back +m11 @tui
+2026-09-24 Parent line editor: Enter saves an Edit, Esc reverts; Mark parent done once every sub-task is done +m11 @tui
+2026-09-24 Sub-list: RefDir(ensure) + GetFile on the sub path, same list mode, drill one level deeper +m11 @tui
+2026-09-24 Add a sub-task on an empty ref: RefDir(ensure), then Add +m11 @tui
+2026-09-24 Notes: multi-line editor in ui/notes_edit.rs, GetNotes/EditNotes, autosave 500 ms after typing stops, save on close, footer shows the notes path +m11 @tui
+2026-09-24 Integration test: drill two levels, add a sub-task, edit notes, reopen and see them +m11 @tui @test

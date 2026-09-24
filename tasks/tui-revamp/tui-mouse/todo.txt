@@ -1,0 +1,7 @@
+2026-09-24 hit.rs: draw records Vec<(Rect, Target)> into state each frame +m11 @tui
+2026-09-24 mouse.rs: on_event(state, MouseEvent) -> Option<Command> via the hit map; unit tests over a fixed map +m11 @tui @test
+2026-09-24 Click selects a row or focuses a field; double-click (400 ms, same cell) opens detail +m11 @tui
+2026-09-24 Wheel scrolls the list, Universal, Settings and notes +m11 @tui
+2026-09-24 Hover highlights the row under the pointer +m11 @tui
+2026-09-24 Drag a row to reorder via MoveBefore/MoveToEnd, reusing move_selected_* and task_ref_at +m11 @tui
+2026-09-24 Clickable targets: tabs, buttons, chips, breadcrumbs, toggles, toast Undo, banner Retry/Review +m11 @tui

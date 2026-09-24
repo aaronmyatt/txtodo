@@ -1,0 +1,4 @@
+2026-09-24 Prompt bar always at the bottom; Ctrl-Space focuses it, and Ctrl-Shift-Space too under enhanced keys +m11 @tui
+2026-09-24 Enter adds to the current workspace root with toast "Added to <ws>"; empty submit cancels; Esc returns to the list +m11 @tui
+2026-09-24 Chips (A)(B)(C) x + @ due: t: rec: while focused, by key or click, through core chip edits +m11 @tui
+2026-09-24 Strict hint 150 ms after typing stops, via core lint::strict_hints +m11 @tui
