@@ -9,4 +9,4 @@
 2026-09-12 Write the dated M6 findings section in RATCHET.md: pass / fail / deferred-to-M8 per item, each with its test +m6 @security @docs
 2026-09-12 Defer the relay op-type-leak item to M8 with a todo.txt line in the owning milestone +m6 @security
 2026-09-12 Complete the parent line in ./todo.txt +m6 @security
-2026-09-24 txtodo-model: FilePath deserializes through FilePath::new, so a peer op with ../ is refused on decode (F6) +m6 @security @test @doing by:claude
+x 2026-09-24 2026-09-24 txtodo-model: FilePath deserializes through FilePath::new, so a peer op with ../ is refused on decode (F6) +m6 @security @test — shipped in 15ac56f: serde try_from runs new(), serialize unchanged; model/sync/store green; known gap: no daemon-level test with a whole sealed bad-path frame
