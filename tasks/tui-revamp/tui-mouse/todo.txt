@@ -1,4 +1,4 @@
-2026-09-24 hit.rs: draw records Vec<(Rect, Target)> into state each frame +m11 @tui
+2026-09-24 hit.rs: draw records Vec<(Rect, Target)> into state each frame +m11 @tui @doing by:claude
 2026-09-24 mouse.rs: on_event(state, MouseEvent) -> Option<Command> via the hit map; unit tests over a fixed map +m11 @tui @test
 2026-09-24 Click selects a row or focuses a field; double-click (400 ms, same cell) opens detail +m11 @tui
 2026-09-24 Wheel scrolls the list, Universal, Settings and notes +m11 @tui
