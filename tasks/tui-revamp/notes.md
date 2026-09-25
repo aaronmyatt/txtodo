@@ -20,6 +20,23 @@
 
 ## Decisions (2026-09-25, human)
 - **ADR 0031 signed.** The manifest convention is accepted as written; the ADR's status is now `accepted`.
+- **Reopen mutation, not `Complete{undo}`.** Sign-off only: `Mutation.Reopen` already shipped
+  2026-09-20 and the TUI already sends it for Space/x on a done line.
+- **`qrcode` and `toml` approved for txtodo-tui.** `qrcode` is still not in the crate's Cargo.toml;
+  it lands with the pairing-code display. `toml` turned out not to be needed — `tests/parity.rs`
+  parses the manifest by hand.
+- **`check-parity.sh` may live in `.claude`, advisory only.** It warns, never blocks the gate.
+- **TUI detail is a bottom split panel.** Already built ahead of the sign-off (`ui/screen.rs`, 55%
+  of the Tasks screen when detail is open). The desktop's own panel-or-page line is still open.
+- **Pairing code: the daemon returns it.** `PairOfferResponse.code` (field 10) carries the compact
+  postcard+base32 text, so the codec has exactly one implementation.
+  - The JSON/QR payload stays client-side on purpose: it must keep matching
+    `JSON.stringify(pair_offer_response)` byte for byte or existing scanners break. A client that
+    wants a QR still serializes the fields itself, which is why `qrcode` is still a TUI dep.
+  - `txtodo-cli` keeps its own encoder as a fallback rather than deleting it: the field is empty
+    from an older daemon, and `txtodo` talks to whatever `txtodod` is installed and running, not
+    necessarily one built from this tree. Printing a blank line as the pairing code would be a
+    silent dead end. `commands/pair.rs::compact_code` is the two-branch choice.
 
 ## Rejected
 - **Opt-in vim mode on desktop**: the two clients behave differently until the toggle is on.
@@ -65,13 +82,17 @@
 - Help page and Shortcuts card render from specs/client-parity.toml.
 
 ## Open questions
-- The `Decide:` lines at the top of `todo.txt`: reopen, new deps, gate script, detail panel, pairing code. (ADR 0031 was signed 2026-09-25.)
 - The TUI prompt-bar key.
   - Plan: `Ctrl-Space`, plus `Ctrl-Shift-Space` where the kitty keyboard protocol works.
   - Desktop uses `Mod-Shift-Space`. The manifest should record this as `differs` unless a better shared key turns up.
 
 ## As built
 - 2026-09-25: every sub-backlog that needs no human is built: foundation, mouse, shell, Tasks, detail panel, prompt bar, Universal, Settings, Help; the desktop @parity lines are filed. Each folder's notes.md has its own "As built".
-- Open, all waiting on a person: the five Decide lines at the top of todo.txt (reopen, deps, gate script, detail panel, and the new pairing-code one; ADR 0031 was signed 2026-09-25), the human pass, check-parity.sh, and showing this device's pairing code.
+- 2026-09-25: all five Decide lines are answered (see Decisions above) and closed. Still open: the
+  human pass driving the TUI, `check-parity.sh`, and showing this device's pairing code in Settings
+  — the last two were blocked on those decisions and are now just work.
+- 2026-09-25: the pairing-code wire change is in — `PairOfferResponse.code` (proto), filled by
+  `pairing_wire::response_to_compact` (daemon), consumed by `commands/pair.rs::compact_code` (CLI).
+  Not done yet: the TUI still shows no code of its own; that is tui-settings' own line.
 - Found on the way and fixed: other clients' edits never repainted the TUI until a reconnect; Space on a done line never reopened it (Complete leaves done lines alone; the TUI now sends Reopen).
 - Reopen already exists in the proto and daemon (2026-09-20), which the reopen decide line predates.

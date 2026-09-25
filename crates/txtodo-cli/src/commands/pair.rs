@@ -106,7 +106,7 @@ fn run_offer(daemon: &mut Daemon) -> Result<(), CliError> {
     print_qr(&to_json(&code)?)?;
     println!();
     println!("Code (no camera? paste this into `txtodo pair <code>` on the other device):");
-    println!("{}", to_compact(&code)?);
+    println!("{}", compact_code(&offer, &code)?);
     println!();
     println!("txtodo: waiting for a device to scan or enter this code...");
     let sas = await_peer_sas(daemon)?;
@@ -342,6 +342,19 @@ fn is_explicit_yes(line: &str) -> bool {
 fn to_json(code: &PairingCode) -> Result<String, CliError> {
     serde_json::to_string(code)
         .map_err(|e| CliError::Message(format!("txtodo: cannot encode the pairing code: {e}")))
+}
+
+/// The compact code to print, preferring `PairOfferResponse.code` (field 10, task `tui-revamp`):
+/// the encoder moved server-side so no client owns a second copy. [`to_compact`] survives only as
+/// the older-daemon fallback (that field arrives empty) — see `tasks/tui-revamp/notes.md`.
+fn compact_code(
+    offer: &txtodo_proto::v1::PairOfferResponse,
+    code: &PairingCode,
+) -> Result<String, CliError> {
+    if offer.code.is_empty() {
+        return to_compact(code);
+    }
+    Ok(offer.code.clone())
 }
 
 /// The compact text fallback (task `pairing-code-compact`): postcard-packed, then base32 (RFC

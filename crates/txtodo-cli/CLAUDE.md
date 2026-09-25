@@ -25,7 +25,11 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   crosses the network for real (plan M4 `sync-pairing`'s LAN wiring pass,
   `txtodo-daemon/CLAUDE.md`'s `pairing_lan.rs` entry) — both `run_offer` and `run_join` block on a
   bounded poll rather than a known-gap message; `commands::pair`'s own module doc has the CLI-level
-  detail. `open`/`notes`/`sub`/
+  detail. The compact text code now comes from the daemon (`PairOfferResponse.code`, task
+  `tui-revamp`, 2026-09-25) rather than this crate's own encoder; `to_compact` survives only as the
+  older-daemon fallback, since `txtodo` dials whatever `txtodod` is installed, not necessarily one
+  built from this tree (`compact_code`). The QR payload is still encoded here — it must keep
+  matching `JSON.stringify(pair_offer_response)` for an existing scanner. `open`/`notes`/`sub`/
   `prune --orphans` (plan M5, `specs/ref-directories.md`): a line's `ref:` directory, its
   `notes.md` in `$EDITOR`, a scoped `todo.sh -d`, and orphaned `ref:` directories no line points to
   (`--yes` to actually delete). `bundle export [--out FILE] [--passphrase-file -]` / `bundle import

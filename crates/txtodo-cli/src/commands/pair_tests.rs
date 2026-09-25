@@ -113,6 +113,26 @@ fn compact_code_is_shorter_than_json() {
     );
 }
 
+/// `compact_code` must prefer the daemon's own `PairOfferResponse.code` and only fall back to this
+/// crate's encoder when the field is empty — the older-daemon case. Both branches matter: the first
+/// is the point of moving the encoder server-side, the second is what stops an older daemon
+/// printing a blank line where the pairing code should be.
+#[test]
+fn compact_code_prefers_the_daemons_own_and_falls_back_when_absent() {
+    let code = sample_code();
+    let from_daemon = txtodo_proto::v1::PairOfferResponse {
+        code: "MADEUPBASE32FROMTHEDAEMON".to_owned(),
+        ..Default::default()
+    };
+    assert_eq!(compact_code(&from_daemon, &code).unwrap(), from_daemon.code);
+
+    let older_daemon = txtodo_proto::v1::PairOfferResponse::default();
+    assert_eq!(
+        compact_code(&older_daemon, &code).unwrap(),
+        to_compact(&code).unwrap()
+    );
+}
+
 #[test]
 fn from_compact_rejects_garbage_instead_of_panicking() {
     assert!(from_compact("not base32 at all !!!").is_err());
