@@ -5,20 +5,123 @@ multi-device sync daemon, CRDT merge, and an MCP server for agents.
 
 ## Install
 
-### Homebrew (macOS)
+Four binaries make up a device: `txtodo` (the CLI), `txtodod` (the sync daemon), `txtodo-tui` (the
+terminal client) and `txtodo-mcp` (the MCP server `txtodo mcp` runs).
+
+**Two devices that sync should run the same build.** The wire format is additive, so mixed versions
+do talk to each other — a newer field simply arrives empty from an older daemon — but a change you
+just made only shows up where that build is installed. `txtodo --version` prints what you have on
+each side.
+
+### Homebrew (macOS and Linux)
 
 ```bash
 brew install aaronmyatt/tap/txtodo
 ```
 
-Installs three binaries: `txtodo` (the CLI), `txtodod` (the sync daemon) and `txtodo-tui` (the
-ratatui client).
+The tap can lag the newest GitHub release by a few versions. Check with `txtodo --version` before
+assuming a fix is present.
+
+### From a release
+
+Every [release](https://github.com/aaronmyatt/txtodo/releases) publishes bare binaries per platform
+(`txtodo-macos-aarch64`, `txtodo-linux-x86_64-musl`, …) — no archive to unpack. GitHub serves them
+without the executable bit, so `chmod` each one:
+
+```bash
+V=v0.0.12; P=macos-aarch64   # or macos-x86_64, linux-x86_64-musl, linux-aarch64-musl
+for b in txtodo txtodod txtodo-tui txtodo-mcp; do
+  curl -fsSL -o "$b" "https://github.com/aaronmyatt/txtodo/releases/download/$V/$b-$P"
+  chmod +x "$b" && sudo mv "$b" /usr/local/bin/
+done
+```
+
+Each binary has a `.bundle` sibling: its Sigstore signature, verifiable with
+[`cosign`](https://docs.sigstore.dev/cosign/verifying/verify/).
 
 ### From source
 
+Needed for a commit that has not been released yet.
+
+`cargo install` takes one crate at a time, so loop over the four:
+
 ```bash
+for c in cli daemon tui mcp; do cargo install --path "crates/txtodo-$c"; done
+# they land in ~/.cargo/bin — make sure that is ahead of any brew-installed copy on $PATH
+
+# or, without installing:
 cargo build --workspace --release
-# binaries at target/release/{txtodo,txtodod,txtodo-tui}
+# binaries at target/release/{txtodo,txtodod,txtodo-tui,txtodo-mcp}
+```
+
+### Desktop app (macOS)
+
+Releases carry `desktop-macos-aarch64.dmg` and `desktop-macos-x86_64.dmg`. They are **not yet
+Apple-notarized**, so Gatekeeper blocks them on first open — right-click the app and choose *Open*
+to get the override prompt. A signed cask is still open work.
+
+## First run
+
+```bash
+txtodo daemon install     # one device-global service (launchd on macOS, systemd --user on Linux)
+txtodo daemon start
+txtodo doctor             # socket, watcher, files, clock, keystore, transport; exit 1 on any failure
+```
+
+`txtodo` also starts the daemon on demand, so `daemon install` is only for keeping it running
+across logins. macOS prompts for **Local Network** permission on the daemon's first run — allow it,
+or LAN sync fails silently and looks exactly like a bug.
+
+The terminal client opens the current workspace:
+
+```bash
+txtodo-tui
+```
+
+## Sync a second device
+
+Both devices need the same build (see Install), the same LAN, and mDNS not blocked — no guest VLAN
+or client isolation. Cross-network works too: `txtodod` defaults to a public iroh relay when
+`--relay` is unset.
+
+On **A**, start a handshake. It prints a QR and a short base32 code, then waits:
+
+```bash
+txtodo pair
+```
+
+On **B**, join with that code — scanned, or pasted as text:
+
+```bash
+txtodo pair '<CODE>'
+```
+
+Both sides print the same six words. **Compare them out loud and confirm on both** — a mismatch can
+mean an active attacker, so start over rather than retry. Allow ~30 s: real mDNS plus the pairing
+retry burst is not instant. Then check it took:
+
+```bash
+txtodo doctor | grep transport   # expect: ... paired via lan ...
+txtodo device list               # expect: the other device's id
+```
+
+Pairing shares the sync group, not your lists. Each device then **offers** its workspaces to the
+other; the daemon mirrors them on its own, and you can drive it by hand:
+
+```bash
+txtodo workspace offers          # one row per pending offer, workspace id first
+txtodo workspace accept <ID>     # --from <DEVICE> when several peers offer the same id
+```
+
+An accepted workspace keeps the peer's id, which is what makes the two sync as one. To check
+convergence, `txtodo add` on A and `txtodo list` on B — a second or two on a LAN — or compare
+`shasum -a 256` of both `todo.txt`s.
+
+There is also a shared-folder carrier that needs no network at all, for a Dropbox/Syncthing-style
+directory (pair first — the frames are sealed with the group key):
+
+```bash
+txtodod --sync-dir ~/Dropbox/txtodo-sync
 ```
 
 ## Usage
@@ -79,19 +182,20 @@ These need a running `txtodo daemon` for this workspace.
 | `conflicts [list\|resolve]` | Open `needs_review` flags and resolve them. |
 | `device [list\|remove ID]` | Devices paired into this workspace's sync group. |
 | `pair [CODE]` | Pair with another device (no CODE starts a handshake; CODE joins it). |
+| `identity migrate [--dry-run]` | Strip `id:` tags from a workspace that still carries them (ADR 0019). |
 | `open ITEM#` | Print the resolved `ref:` directory for a line. |
 | `notes ITEM#` | Open `$EDITOR` on a line's `ref:`/`notes.md`. |
 | `sub ITEM# CMD...` | Run CMD with its directory scoped to a line's `ref:` sub-list. |
 | `prune --orphans [--yes]` | List `ref:` directories no line points to; delete only with `--yes`. |
 | `bundle export\|import` | Move the whole workspace as one encrypted file (sneakernet carrier). |
 | `workspace [list\|add\|remove ID\|layout\|default\|prune]` | Manage the device-global daemon's workspace registry; `layout` shows or sets this workspace's `txtodo.toml`, `default` prints the default workspace's path, `prune` drops registrations whose folder is gone. |
-| `workspace offers\|accept ID --dir DIR\|decline ID` | Workspaces a paired device offered: list them, adopt one into a folder, or drop the offer. |
+| `workspace offers\|accept ID [--from DEVICE]\|decline ID` | Workspaces a paired device offered: list them, mirror one into the daemon's own folder under the peer's id, or drop the offer. |
 
 ### Service and diagnostics
 
 | Command | Description |
 |---|---|
-| `daemon <start\|stop\|status\|install\|uninstall> [--force]` | Manage the `txtodod` service for this workspace. |
+| `daemon <install\|start\|stop\|status> [--force]` | Manage this device's `txtodod` service. `install` writes one global unit, migrating any pre-M11 per-workspace ones. |
 | `mcp [--stdio] [--http] [--token TOKEN]` | Serve the Model Context Protocol surface for this workspace. |
 | `doctor [--verbose]` | Check socket, watcher, files, clock and config; exit 1 on any failure. |
 | `skill install [--only claude\|agents]` | Install the agent playbook for working this backlog. |
