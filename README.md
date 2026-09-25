@@ -33,7 +33,7 @@ Env overrides:
 
 | Variable | Effect |
 |---|---|
-| `TXTODO_VERSION=v0.0.12` | Install that tag instead of the newest release. |
+| `TXTODO_VERSION=v0.0.9` | Install that tag instead of the newest release. |
 | `TXTODO_BIN_DIR=<dir>` | Where the binaries go (default `~/.local/bin`). |
 | `TXTODO_INSTALL_DIR=<dir>` | Where the app goes. |
 | `TXTODO_NO_DESKTOP=1` | Binaries only. |
@@ -57,12 +57,15 @@ Every [release](https://github.com/aaronmyatt/txtodo/releases) publishes bare bi
 without the executable bit, so `chmod` each one:
 
 ```bash
-V=v0.0.12; P=macos-aarch64   # or macos-x86_64, linux-x86_64-musl, linux-aarch64-musl
+P=macos-aarch64   # or macos-x86_64, linux-x86_64-musl, linux-aarch64-musl
 for b in txtodo txtodod txtodo-tui txtodo-mcp; do
-  curl -fsSL -o "$b" "https://github.com/aaronmyatt/txtodo/releases/download/$V/$b-$P"
+  curl -fsSL -o "$b" "https://github.com/aaronmyatt/txtodo/releases/latest/download/$b-$P"
   chmod +x "$b" && sudo mv "$b" /usr/local/bin/
 done
 ```
+
+`latest/download` is GitHub's own redirect to the newest non-prerelease, so this never names a
+version that goes stale. Swap it for `download/v0.0.9` to pin one.
 
 Each binary has a `.bundle` sibling: its Sigstore signature, verifiable with
 [`cosign`](https://docs.sigstore.dev/cosign/verifying/verify/).
