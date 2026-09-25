@@ -213,8 +213,10 @@ jobs:
   # mirrors the `check` job's own "Install system dependencies (Ubuntu)" step verbatim (kept as a
   # duplicate, not factored into a reusable/composite step, matching this file's existing
   # per-job style — no composite actions are used anywhere else in this workflow).
-  # Deliberately does NOT run the Playwright e2e/visual suite (see desktop-e2e-nightly.yml
-  # instead): browser downloads are heavy and this file is described as cost-frozen.
+  # Deliberately does NOT run the Playwright e2e/visual suite: browser downloads are heavy and
+  # this file is described as cost-frozen. The nightly desktop-e2e-nightly.yml workflow that used
+  # to run it was dropped (2026-09-25); the specs still exist under apps/desktop/e2e and run via
+  # `npx playwright test` locally, just with no CI schedule driving them any more.
   desktop:
     runs-on: ubuntu-latest
     steps:
