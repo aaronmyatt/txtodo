@@ -1,4 +1,4 @@
-2026-09-24 Write .claude/scripts/check-parity.sh (warn when keymap.rs, input.rs, keys.ts or ui files change without the manifest) and wire it into the gate; blocked on the decide line +m11 @setup @human
+2026-09-24 Write .claude/scripts/check-parity.sh (warn when keymap.rs, input.rs, keys.ts or ui files change without the manifest) and wire it into the gate; blocked on the decide line +m11 @setup @human — unblocked 2026-09-25 (human): advisory only, never blocking
 x 2026-09-25 2026-09-24 Write specs/client-parity.toml schema: [[action]] id/title/keys/scope/desktop/tui/deviation and [[screen]], with a header comment per field +m11 @tui — header comment per field, key-name rules
 x 2026-09-25 2026-09-24 Seed [[action]] rows from the current TUI: input.rs, ui/list.rs, conflicts, offers, :q +m11 @tui — 28 rows: list mode, edit, the r/o/s panes, palette, quit
 x 2026-09-25 2026-09-24 Seed [[action]] rows from the revamp plan (notes.md:235-240, c2 key hints) with desktop status planned +m11 @desktop — 24 rows; prompt.focus and detail.open differ (no Cmd in a terminal)

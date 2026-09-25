@@ -8,4 +8,4 @@ x 2026-09-25 2026-09-24 Devices: paired list via DeviceList, Revoke via DeviceRe
 x 2026-09-25 2026-09-24 Tokens: New token dialog (name, scopes, project/context/file limits, expiry), secret shown once, Copy via OSC 52, list, Revoke +m11 @tui — one typed line: name scope… expires:YYYY-MM-DD; project/context/file limits are scopes typed the same way
 x 2026-09-25 2026-09-24 Activity: OpLogStream across workspaces, newest 200, glyphs x ~ + - > refresh, Refresh button +m11 @tui — the open workspace's feed only, read until a 300 ms pause; not across workspaces yet
 x 2026-09-25 2026-09-25 Mouse: wheel scrolls, click the card nav, buttons and toggles +m11 @tui — click a card or row, double-click runs a row, wheel moves the row
-2026-09-25 Devices: show this device's pairing code and QR with a 60 s countdown, after the pairing-code decide line in ../todo.txt +m11 @tui
+2026-09-25 Devices: show this device's pairing code and QR with a 60 s countdown, after the pairing-code decide line in ../todo.txt +m11 @tui — unblocked 2026-09-25: the decide landed on the daemon field, so this shows offer.code and QR-encodes the JSON payload; qrcode dep now approved
