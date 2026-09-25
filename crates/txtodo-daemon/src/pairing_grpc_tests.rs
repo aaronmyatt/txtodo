@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use tonic::Request;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
-use txtodo_sync::{GroupId, KeyId, PAIRING_WINDOW_MS};
+use txtodo_sync::{GroupId, KeyId, PAIRING_WINDOW_MS, SAS_WORD_COUNT};
 
 use crate::clock::{Clock, FakeClock};
 use crate::pairing_wire::response_to_code;
@@ -85,6 +85,35 @@ async fn qr_payload_has_no_field_beyond_the_documented_nine() {
     // rendezvous fields are empty, not merely absent — the no-regression case notes.md requires.
     assert_eq!(response.relay_node_id, "");
     assert_eq!(response.relay_url, "");
+}
+
+/// `PairOfferResponse.code` (field 10, task tui-revamp) must be a code this daemon's *own*
+/// `pair_accept` accepts — that is the whole point of moving the encoder server-side, so the test
+/// drives the real RPC rather than re-checking `response_to_compact` against itself.
+#[tokio::test]
+async fn offer_code_is_compact_and_a_real_peer_can_accept_it() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let svc_a = service(a.path(), Arc::new(FakeClock::new(1_000)));
+    let svc_b = service(b.path(), Arc::new(FakeClock::new(1_000)));
+    let offer_a = offer(&svc_a).await;
+
+    // Compact, not JSON: base32's alphabet can't produce `{`, which is exactly how `decode_wire`
+    // tells the two formats apart.
+    assert!(!offer_a.code.is_empty());
+    assert!(!offer_a.code.starts_with('{'));
+    assert!(
+        offer_a
+            .code
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || ('2'..='7').contains(&c))
+    );
+    // Shorter than the JSON form is the reason a human can type it at all.
+    assert!(offer_a.code.len() < response_to_code(&offer_a).len());
+
+    // The joiner accepts it and derives six real SAS words, so every field survived the round trip.
+    let result = accept(&svc_b, offer_a.code.clone()).await;
+    assert_eq!(result.sas.split_whitespace().count(), SAS_WORD_COUNT);
 }
 
 #[tokio::test]

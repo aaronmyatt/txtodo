@@ -151,6 +151,37 @@ pub(crate) fn response_to_code(r: &pb::PairOfferResponse) -> String {
     .to_string()
 }
 
+/// Builds the **compact** `code` text for a `pair_offer` response (`PairOfferResponse.code`, field
+/// 10, 2026-09-25): the same nine fields [`response_to_code`] renders as JSON, postcard-packed and
+/// then base32-encoded (RFC 4648, no padding) — the shorter form a human types into `txtodo pair
+/// <code>` when there is no camera, and one of the two formats [`decode_wire`] above accepts.
+///
+/// Unlike [`response_to_code`] this *is* production code: the tui-revamp decide line put the
+/// encoder here, on the daemon, so no client owns a second copy of it (before this, `txtodo-cli`'s
+/// own `PairingCode` was the only encoder in the tree, which is why the TUI could render the six
+/// SAS words but not a code of its own). The JSON/QR form stays the client's job on purpose — it
+/// must keep matching `JSON.stringify(pair_offer_response)` byte for byte for an existing scanner.
+///
+/// Field *order* here is the wire contract, not a style choice: postcard is a positional,
+/// non-self-describing format, so [`RawCode`]'s declaration order is what a decoder replays. It
+/// already matches `txtodo-cli`'s `PairingCode`, which is what makes a code from either encoder
+/// decode on either side. Ref: <https://postcard.jamesmunns.com/wire-format>,
+/// <https://docs.rs/data-encoding>.
+pub(crate) fn response_to_compact(r: &pb::PairOfferResponse) -> Result<String, postcard::Error> {
+    let raw = RawCode {
+        device: r.device.clone(),
+        group_id: r.group_id.clone(),
+        x25519_pub: r.x25519_pub.clone(),
+        endpoint: r.endpoint.clone(),
+        nonce: r.nonce.clone(),
+        identity_mode: r.identity_mode.clone(),
+        relay_node_id: r.relay_node_id.clone(),
+        relay_url: r.relay_url.clone(),
+        workspace_id: r.workspace_id.clone(),
+    };
+    Ok(data_encoding::BASE32_NOPAD.encode(&postcard::to_allocvec(&raw)?))
+}
+
 /// Reads just `workspace_id` off a decoded `code`, independent of [`code_to_offer`] — workspace
 /// identity is catalog/routing metadata, not part of the crypto offer ([`PairingOffer`]), the same
 /// reason `identity_mode` is handled outside it too (see this module's doc). `Ok(None)` when the

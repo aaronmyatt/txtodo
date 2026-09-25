@@ -80,11 +80,14 @@ impl TxtodoService {
             offer.relay_node_id = Some(node_id);
             offer.relay_url = Some(url);
         }
-        Ok(Response::new(response_of(
-            &offer,
-            ws.identity_mode(),
-            ws.workspace_id(),
-        )))
+        let mut reply = response_of(&offer, ws.identity_mode(), ws.workspace_id());
+        // The compact copy-paste code (`PairOfferResponse.code`, task tui-revamp): built here so
+        // no client re-implements postcard+base32. A failure is a real error, not an empty
+        // string — an empty `code` is how a client detects an *older* daemon, so silently
+        // returning one would make a bug here look like a version skew.
+        reply.code = crate::pairing_wire::response_to_compact(&reply)
+            .map_err(|e| Status::internal(format!("cannot encode the pairing code: {e}")))?;
+        Ok(Response::new(reply))
     }
 
     /// Accepts a peer's scanned `PairOffer` (`code`, decoded per `pairing_wire`'s module doc) and
@@ -188,6 +191,9 @@ fn response_of(
             .unwrap_or_default(),
         relay_url: offer.relay_url.clone().unwrap_or_default(),
         workspace_id: workspace_id.to_string(),
+        // Filled by the caller once every field above is set — the compact code is an encoding
+        // *of* them, so it cannot be built in the same initializer.
+        code: String::new(),
     }
 }
 

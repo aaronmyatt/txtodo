@@ -360,6 +360,13 @@ multiplex every workspace's traffic — not done by this task).
   `Progress` and whether `notes.md` exists. A failing workspace is skipped and logged.
   `TxtodoService` answers it with `no_registry`. `list_files`'s body moved to `progress.rs` to make
   room in `server.rs`.
+- `PairOffer` fills `PairOfferResponse.code` (task `tui-revamp`, 2026-09-25): `pairing_wire.rs`'s
+  `response_to_compact` is now the tree's one encoder of the compact postcard+base32 pairing code,
+  so no client owns a second copy (`txtodo-cli` used to be the only one, which is why the TUI could
+  show the six SAS words but not a code). An encode failure is `Status::internal`, never an empty
+  string — an empty `code` is how a client detects an older daemon. The JSON/QR form stays
+  client-side (`response_to_code` is still test-only) because it must keep matching
+  `JSON.stringify(pair_offer_response)` for an existing scanner.
 - `notes` (plan M5, design §7): `GetNotes`/`EditNotes`, an `impl TxtodoService` extension like
   `progress`/`tokens`. `notes_state` (`NotesState`: the file's exact UTF-8 content as one string,
   no lines/ids/blanks — deliberately not a `DocState`) · `notes_mirror` (`NotesMirror`, the notes
