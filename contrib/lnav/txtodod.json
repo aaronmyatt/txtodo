@@ -1,0 +1,31 @@
+// Install (copies into ~/.config/lnav/formats/installed/): lnav -i contrib/lnav/txtodod.json
+// Extends lnav's built-in `rust_tracing_log` format (same name = merged, not replaced),
+// which sets "hide-extra": true and so drops every tracing field but `message`.
+// Ref: https://docs.lnav.org/en/latest/formats.html
+{
+  "$schema": "https://lnav.org/schemas/format-v1.schema.json",
+  "rust_tracing_log": {
+    // tracing's JSON layer nests event fields under `fields`; lnav reads nested keys as `a/b`.
+    // Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/format/struct.Json.html
+    "value": {
+      "fields/kind": { "kind": "string", "identifier": true },
+      "fields/file": { "kind": "string", "identifier": true },
+      "fields/error": { "kind": "string" },
+      "fields/landed": { "kind": "integer" },
+      "fields/total": { "kind": "integer" }
+    },
+    // A field that is missing on a line prints nothing, prefix included (`default-value: ""`).
+    // Ref: https://docs.lnav.org/en/latest/formats.html
+    "line-format": [
+      { "field": "__timestamp__" }, " ",
+      { "field": "level", "min-width": 5, "max-width": 5, "overflow": "truncate", "prefix": "[", "suffix": "]" }, " ",
+      { "field": "target", "min-width": 10, "max-width": 10, "overflow": "abbrev", "prefix": "(", "suffix": ")" }, " ",
+      { "field": "fields/message" },
+      { "field": "fields/kind", "prefix": " kind=", "default-value": "" },
+      { "field": "fields/file", "prefix": " file=", "default-value": "" },
+      { "field": "fields/error", "prefix": " error=", "default-value": "" },
+      { "field": "fields/landed", "prefix": " landed=", "default-value": "" },
+      { "field": "fields/total", "prefix": "/", "default-value": "" }
+    ]
+  }
+}
