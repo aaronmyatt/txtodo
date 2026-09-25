@@ -24,6 +24,7 @@
 //! turn, up to the heads it asked for, before anything newer is pushed.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use txtodo_model::DeviceId;
@@ -32,6 +33,7 @@ use txtodo_sync::{
     DeviceSigningKey, GroupId, GroupKey, Heads, Link, MAX_OPS_PER_BATCH, Message, OriginRange, want,
 };
 
+use crate::clock::Clock;
 use crate::device_relay::WorkspaceRoute;
 use crate::lan_apply::serve_want;
 use crate::lan_session::{read, read_heads};
@@ -89,11 +91,16 @@ pub(crate) struct Live {
     last_sweep: Instant,
     /// This session's mark on the device's live peers, once the peer's `Hello` named it.
     guard: Option<LiveGuard>,
+    /// Injected time (stack.md idiom): every `Instant` this session compares against comes from
+    /// here, never `Instant::now()` directly, so a test's `FakeClock` makes `RESEND_AFTER`/
+    /// `HEARTBEAT`/`DEAD_AFTER` deterministic instead of racing real wall-clock CI slowness
+    /// (found flaky on a loaded coverage runner, task `sync-link-fairness`'s own follow-up).
+    clock: Arc<dyn Clock>,
 }
 
 impl Live {
-    pub(crate) fn new() -> Live {
-        let now = Instant::now();
+    pub(crate) fn new(clock: Arc<dyn Clock>) -> Live {
+        let now = clock.now_instant();
         Live {
             held: BTreeMap::new(),
             sent: BTreeMap::new(),
@@ -106,12 +113,13 @@ impl Live {
             last_beat: now,
             last_sweep: now,
             guard: None,
+            clock,
         }
     }
 
     /// A frame arrived.
     pub(crate) fn heard(&mut self) {
-        self.last_heard = Instant::now();
+        self.last_heard = self.clock.now_instant();
     }
 
     /// Marks `peer` live over `carrier` for as long as this session runs.
@@ -159,9 +167,8 @@ impl Live {
             return;
         }
         raise(self.sent.entry(workspace).or_default(), ranges);
-        self.waiting_since
-            .entry(workspace)
-            .or_insert_with(Instant::now);
+        let now = self.clock.now_instant();
+        self.waiting_since.entry(workspace).or_insert(now);
     }
 
     /// An `Ack`: its runs are held now. Any progress restarts the resend clock; an empty `Ack` (a
@@ -174,7 +181,8 @@ impl Live {
         let held = self.held.get(&workspace).cloned().unwrap_or_default();
         raise_to(self.sent.entry(workspace).or_default(), &held);
         if self.in_flight(workspace) {
-            self.waiting_since.insert(workspace, Instant::now());
+            let now = self.clock.now_instant();
+            self.waiting_since.insert(workspace, now);
         } else {
             self.waiting_since.remove(&workspace);
         }
@@ -211,7 +219,7 @@ impl Live {
     /// One turn after a frame or a quiet poll: push what changed, beat, check the peer is alive.
     /// `false` ends the session.
     pub(crate) fn tick(&mut self, link: &mut dyn Link, ctx: &PushCtx<'_>) -> bool {
-        let now = Instant::now();
+        let now = self.clock.now_instant();
         if self.expired(now) {
             return log_session_ended(self.ready.len(), now.duration_since(self.last_heard));
         }
@@ -256,7 +264,7 @@ impl Live {
             return true;
         };
         let commits = read(&route.ws).stats().commits();
-        let rewound = self.rewind_if_stalled(id, Instant::now());
+        let rewound = self.rewind_if_stalled(id, self.clock.now_instant());
         let seen = self.seen_commits.get(&id);
         let fresh = seen.is_none_or(|(c, _)| *c != commits);
         if !(sweep || rewound || fresh || self.pending.contains(&id)) {

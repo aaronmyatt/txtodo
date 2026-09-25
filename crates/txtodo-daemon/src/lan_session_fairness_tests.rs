@@ -125,7 +125,12 @@ async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
         signing_key: &signing_key,
         routes: &f.routes,
     };
-    let mut live = Live::new();
+    // A clock that never advances on its own (stack.md idiom): every `tick` below sees the same
+    // instant unless the test itself calls `advance_ms`, so `RESEND_AFTER`/`HEARTBEAT` never fire
+    // on their own no matter how long the real assertions above take on a loaded CI runner.
+    let clock: std::sync::Arc<dyn crate::clock::Clock> =
+        std::sync::Arc::new(crate::clock::FakeClock::new(0));
+    let mut live = Live::new(clock);
     for (ws_id, route) in &f.routes {
         live.observe(*ws_id, &greet_empty(*ws_id));
         live.observe(*ws_id, &want_all(&route.ws, *ws_id));

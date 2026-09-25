@@ -5,7 +5,7 @@
 //! file's module doc for the wire sequence and failure scope this loop implements.
 
 use std::collections::BTreeMap;
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
 use tokio::runtime::Handle;
 use txtodo_model::DeviceId;
@@ -15,6 +15,7 @@ use txtodo_sync::{
     peek_workspace,
 };
 
+use crate::clock::SystemClock;
 use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
 use crate::lan_session::{fetch_group_key, read, read_heads, single_epoch_keys};
 use crate::lan_session_live::{Live, POLL, PushCtx};
@@ -370,7 +371,11 @@ pub(crate) fn drive_shared_session(
     }
     let mut conn = Conn {
         session,
-        live: Live::new(),
+        // Session liveness/resend timing is real wall-clock time even under test (unlike a
+        // workspace's own injected `Clock`, which stamps HLC ids and in most daemon tests is a
+        // `FakeClock` that never advances on its own — using one of those here would freeze
+        // `RESEND_AFTER`/`HEARTBEAT` forever and break every test that waits out a real resend).
+        live: Live::new(Arc::new(SystemClock)),
         routes: BTreeMap::new(),
     };
     run_shared_message_loop(link, &shared, &mut conn);
