@@ -1,3 +1,12 @@
+2026-09-15 FIRST, before anything else is built: prove kamal-proxy round-trips a long-lived WebSocket upgrade to a backend container and does not idle it out — the relay protocol is a WebSocket, and if this fails the whole colocated topology is wrong +m8 @ops id:01M2T71CGQR1TB5FKGPHWJNMJQ
+2026-09-15 Decide and record: relay as a Kamal accessory (pinned third-party image, right conceptually) vs its own Kamal app (guaranteed kamal-proxy host routing) — settle by whether an accessory can sit behind kamal-proxy cleanly +m8 @ops id:01M2T71CGQ2NW2Z48CAY9WJMZ0
+2026-09-15 Droplet: DNS A records for both hostnames, firewall 22/80/443 only, kamal setup, secrets via .kamal/secrets never committed +m8 @ops id:01M2T71CGQ8GW10781CN6HSQJ3
+2026-09-15 Pin an iroh-relay image at the crate version this workspace depends on (iroh 1.x), so the server and the client's relay protocol version can never drift silently +m8 @ops id:01M2T71CGQDDAAM38GNKRNWDYX
+2026-09-15 Relay config: enable_relay true, http_bind_addr behind the proxy, NO tls block (kamal-proxy terminates), enable_quic_addr_discovery false, access.allowlist seeded with my own devices +m8 @ops @relay id:01M2T71CGQ08ZZJJG81NV3TV2C
+2026-09-15 Phase 2 flip: access.http pointing at the accounts container over the Docker network, with IROH_RELAY_HTTP_BEARER_TOKEN set; keep access.allowlist in the file as documented break-glass +m8 @ops @relay id:01M2T71CGQ4CK82V5YAH8204X2
+2026-09-15 Deploy runbook in docs/: what to run, what to check, how to roll back, and how to revoke a device in a hurry +m8 @ops @docs id:01M2T71CGQZMJVGV7NJDHMNKY8
+2026-09-15 Verify for real: a node id in the allowlist syncs across two networks; one not in it is refused and says so in the relay's log +m8 @ops @test id:01M2T71CGQHMFAST4NDTKC031Q
+2026-09-15 Complete the parent line in ./todo.txt +m8 @ops id:01M2T71CGQ8T3NSE9P22K2WM3Q
 (D) 2026-09-15 FIRST, before anything else is built: prove kamal-proxy round-trips a long-lived WebSocket upgrade to a backend container and does not idle it out — the relay protocol is a WebSocket, and if this fails the whole colocated topology is wrong +m8 @ops
 (D) 2026-09-15 Decide and record: relay as a Kamal accessory (pinned third-party image, right conceptually) vs its own Kamal app (guaranteed kamal-proxy host routing) — settle by whether an accessory can sit behind kamal-proxy cleanly +m8 @ops
 (D) 2026-09-15 Droplet: DNS A records for both hostnames, firewall 22/80/443 only, kamal setup, secrets via .kamal/secrets never committed +m8 @ops

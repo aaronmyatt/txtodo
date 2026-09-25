@@ -1,3 +1,10 @@
+2026-09-15 cli: txtodo relay enroll <email> posts to the accounts service's /enroll/request and tells the human to check their mail; accounts URL from --accounts-url, $TXTODO_ACCOUNTS_URL or config accounts_url, resolved the same precedence way relay_url already is +m8 @cli id:01M2T71CAS93JZHXHJ40D9PE8T
+2026-09-15 cli: txtodo relay enroll --code NNNNNN reads this device's relay node id from Health (needs cli-relay-node-id) and posts {email, code, endpoint_id} to /enroll/verify +m8 @cli id:01M2T71CASRKEHJ55VF67VWHCN
+2026-09-15 The code is never a command-line argument in shell history terms — accept it on a prompt too, the way bundle.rs already prompts for a passphrase rather than taking one as an arg +m8 @cli @security id:01M2T71CASZFH5X27C3MC6MHMS
+2026-09-15 Refuse to enroll when no relay is configured, naming the flag to set — enrolling a node id the device will never bind is a silent no-op otherwise +m8 @cli id:01M2T71CASNAHV5N7P63TRWHKE
+2026-09-15 txtodo doctor reports enrollment state for this device (enrolled / not enrolled / accounts service unreachable), so a denied relay connection is diagnosable without reading server logs +m8 @cli id:01M2T71CASP8PV9M6TFMB666WR
+2026-09-15 Test: enroll against a stub accounts server binds the node id Health reports, and a wrong code surfaces as a clear CLI error, not a panic or a silent success +m8 @cli @test id:01M2T71CAS33KAZ94YCDRCDRKN
+2026-09-15 Complete the parent line in ./todo.txt +m8 @cli id:01M2T71CASY9XNY8ZDGX0V1E64
 2026-09-15 cli: txtodo relay enroll <email> posts to the accounts service's /enroll/request and tells the human to check their mail; accounts URL from --accounts-url, $TXTODO_ACCOUNTS_URL or config accounts_url, resolved the same precedence way relay_url already is +m8 @cli
 2026-09-15 cli: txtodo relay enroll --code NNNNNN reads this device's relay node id from Health (needs cli-relay-node-id) and posts {email, code, endpoint_id} to /enroll/verify +m8 @cli
 2026-09-15 The code is never a command-line argument in shell history terms — accept it on a prompt too, the way bundle.rs already prompts for a passphrase rather than taking one as an arg +m8 @cli @security
