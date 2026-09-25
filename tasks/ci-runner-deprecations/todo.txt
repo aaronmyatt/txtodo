@@ -1,0 +1,3 @@
+2026-09-25 Decide: pin the Linux legs to ubuntu-24.04, or ride ubuntu-latest into Ubuntu 26. I'd pin, then bump deliberately +m11 @ci @human
+2026-09-25 Write CI_DEPRECATIONS.patch.md: actions/checkout, upload-artifact, download-artifact and setup-node v4 to v5 across ci.yml and release.yml, plus whatever the runner decide line lands on; .github is frozen, so a human pastes it +m11 @ci
+2026-09-25 After a human applies the patch: confirm one ci and one release run come back green with no Node 20 annotation left +m11 @ci @human
