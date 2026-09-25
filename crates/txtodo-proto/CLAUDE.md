@@ -62,6 +62,13 @@ workspaces in the background, task `daemon-early-bind`); `HealthResponse.workspa
 MCP agent's conflict resolution is attributed to it, task `mcp-conflicts-parity`); the read-only `Lint` RPC (task
 `mcp-hygiene-parity`, so a client that may not link txtodo-core still gets the CLI's findings).
 
+`PairOfferResponse.code` (field 10, task `tui-revamp`, 2026-09-25): the offer's nine fields already
+framed as the compact copy-paste pairing code (postcard, then base32 no-pad) — one of the two forms
+`PairAcceptRequest.code` accepts — so no client owns a second copy of that codec. The JSON QR payload
+stays client-side on purpose: it is `JSON.stringify` of this message, and existing scanners depend on
+that exact shape. Empty from an older daemon, so a client that must work against one still needs its
+own encoder as a fallback.
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.

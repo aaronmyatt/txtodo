@@ -655,6 +655,22 @@ pub struct PairOfferResponse {
     /// daemon opened the workspace, so both sides route post-pairing sync messages to the same id.
     #[prost(string, tag = "9")]
     pub workspace_id: ::prost::alloc::string::String,
+    /// The same nine fields above, already framed as the compact copy-paste code a human types into
+    /// `txtodo pair <code>` on the other device: postcard-packed, then base32 (RFC 4648, no padding)
+    /// — exactly one of the two wire formats `PairAcceptRequest.code` accepts. Added 2026-09-25
+    /// (task tui-revamp, decide line "TUI pairing code display") so no client re-implements that
+    /// codec: before this, txtodo-cli owned the only encoder, which is why the TUI could render the
+    /// six SAS words but not a code of its own. Refs: <<https://docs.rs/postcard>,>
+    /// <<https://datatracker.ietf.org/doc/html/rfc4648#section-6>.>
+    ///
+    /// The *other* wire format — the JSON QR payload — is deliberately still the client's job: it is
+    /// byte-for-byte `JSON.stringify(<this message>)`, so an existing QR scanner keeps working and
+    /// nothing here can drift it. A client that wants a QR still serializes these fields itself.
+    ///
+    /// Empty from a daemon older than this field; a client that must work against one falls back to
+    /// encoding the fields itself.
+    #[prost(string, tag = "10")]
+    pub code: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PairAcceptRequest {
