@@ -311,3 +311,4 @@ x 2026-09-25 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/w
 x 2026-09-25 2026-09-25 sync: one big workspace transfer holds every other workspace up on the shared link +m11 @daemon @sync ref:sync-link-fairness pri:B — see tasks/sync-link-fairness/notes.md; known gap: throughput not measured on the two Macs
 2026-09-25 crates/txtodo-cli/tests/pairing.rs: three of the four tests fail when run in parallel (the default) and all four pass with --test-threads=1 — eight real txtodod processes on real mDNS at once; found 2026-09-25, pre-existing, not caused by the pairing-code change +m11 @test @cli
 (B) 2026-09-25 CI runner and action deprecations before Ubuntu 26 lands 2026-10-19 +m11 @ci ref:ci-runner-deprecations
+(C) 2026-09-25 Homebrew tap and this repo hold forked copies of the same formula, cask and stamp scripts; bumping the tap is a manual post-release step +m11 @release ref:homebrew-tap-reconcile

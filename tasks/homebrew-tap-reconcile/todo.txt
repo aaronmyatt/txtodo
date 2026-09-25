@@ -1,0 +1,5 @@
+2026-09-25 Decide: canonical home for the formula, cask and stamp scripts, and whether release.yml pushes to the tap (needs a cross-repo write token) or a human copies after each release. I'd take canonical-here plus automated +m11 @release @human
+2026-09-25 Sync this repo's staged Formula/txtodo.rb and Casks/txtodo-desktop.rb up to the tap's live 0.0.13 content, so neither side is stale before anything is deleted +m11 @release
+2026-09-25 Delete the losing copy of update-formula.sh, update-cask.sh and stamp-cask-sha.py, leaving a one-line pointer where it was; the tap's update-formula.sh is the 12-asset fork that missed txtodo-mcp +m11 @release
+2026-09-25 Write TAP_RELEASE_CI.patch.md for the release.yml post-publish tap bump, after the decide line; .github is frozen so a human pastes it +m11 @release @ci
+2026-09-25 Add a release checklist line naming update-release.sh, so the formula and cask are never stamped separately again — the drift its own header warns about is what happened +m11 @release @docs
