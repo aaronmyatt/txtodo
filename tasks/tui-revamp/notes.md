@@ -18,6 +18,9 @@
   - Search matcher, strict hints, chip edits, Universal grouping.
   - Plus a new `UniversalTasks` daemon RPC.
 
+## Decisions (2026-09-25, human)
+- **ADR 0031 signed.** The manifest convention is accepted as written; the ADR's status is now `accepted`.
+
 ## Rejected
 - **Opt-in vim mode on desktop**: the two clients behave differently until the toggle is on.
 - **A copy of the logic per client, checked by fixture tests**: the same logic lives in two places and drifts.
@@ -62,13 +65,13 @@
 - Help page and Shortcuts card render from specs/client-parity.toml.
 
 ## Open questions
-- The five `Decide:` lines at the top of `todo.txt`: ADR 0031, reopen, new deps, gate script, detail panel.
+- The `Decide:` lines at the top of `todo.txt`: reopen, new deps, gate script, detail panel, pairing code. (ADR 0031 was signed 2026-09-25.)
 - The TUI prompt-bar key.
   - Plan: `Ctrl-Space`, plus `Ctrl-Shift-Space` where the kitty keyboard protocol works.
   - Desktop uses `Mod-Shift-Space`. The manifest should record this as `differs` unless a better shared key turns up.
 
 ## As built
 - 2026-09-25: every sub-backlog that needs no human is built: foundation, mouse, shell, Tasks, detail panel, prompt bar, Universal, Settings, Help; the desktop @parity lines are filed. Each folder's notes.md has its own "As built".
-- Open, all waiting on a person: the six Decide lines at the top of todo.txt (ADR 0031, reopen, deps, gate script, detail panel, and the new pairing-code one), the human pass, check-parity.sh, and showing this device's pairing code.
+- Open, all waiting on a person: the five Decide lines at the top of todo.txt (reopen, deps, gate script, detail panel, and the new pairing-code one; ADR 0031 was signed 2026-09-25), the human pass, check-parity.sh, and showing this device's pairing code.
 - Found on the way and fixed: other clients' edits never repainted the TUI until a reconnect; Space on a done line never reopened it (Complete leaves done lines alone; the TUI now sends Reopen).
 - Reopen already exists in the proto and daemon (2026-09-20), which the reopen decide line predates.

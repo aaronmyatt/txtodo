@@ -1,6 +1,6 @@
 # 0031 — One manifest of user-facing actions keeps the desktop app and the TUI in step
 
-- Status: proposed (signed off by the decide line in `tasks/tui-revamp/todo.txt`)
+- Status: accepted 2026-09-25 (the owner signed the decide line in `tasks/tui-revamp/todo.txt`)
 - Date: 2026-09-25
 - Deciders: project owner (the 2026-09-24 decisions in `tasks/tui-revamp/notes.md`)
 

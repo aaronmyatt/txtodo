@@ -1,6 +1,6 @@
 # Client parity manifest (NORMATIVE). The one list of user-facing actions, and where the desktop
-# app and the TUI each stand on every one of them. ADR 0031 (proposed until its decide line in
-# tasks/tui-revamp/todo.txt is signed). Plan: tasks/tui-revamp/parity-manifest/notes.md.
+# app and the TUI each stand on every one of them. ADR 0031 (accepted 2026-09-25).
+# Plan: tasks/tui-revamp/parity-manifest/notes.md.
 #
 # Checked by crates/txtodo-tui/tests/parity.rs (every `tui.status = "done"` id is bound in
 # `keymap::BINDINGS` with the same keys, and the reverse) and apps/desktop/src/lib/keys.parity.test.ts
