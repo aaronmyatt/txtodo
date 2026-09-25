@@ -10,8 +10,36 @@ terminal client) and `txtodo-mcp` (the MCP server `txtodo mcp` runs).
 
 **Two devices that sync should run the same build.** The wire format is additive, so mixed versions
 do talk to each other — a newer field simply arrives empty from an older daemon — but a change you
-just made only shows up where that build is installed. `txtodo --version` prints what you have on
-each side.
+just made only shows up where that build is installed. For a released version, run the same curl
+line on both and check `txtodo --version`; for an unreleased commit, `just install` on both and
+compare `installed-build`.
+
+### Quick install (macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aaronmyatt/txtodo/main/scripts/install.sh | bash
+```
+
+Takes the newest release: the desktop app into `/Applications` (or `~/Applications` when that is
+not writable — no `sudo` either way) and the four binaries into `~/.local/bin`. Add that to `$PATH`
+if it isn't already; the script says so when it isn't.
+
+**No Gatekeeper prompt, even though the app isn't notarized.** Gatekeeper only checks files
+carrying the `com.apple.quarantine` attribute, which browsers, Mail and AirDrop add on download —
+`curl` never does. Downloading the same `.dmg` through a browser *will* be blocked; the script
+exists partly to avoid that.
+
+Env overrides:
+
+| Variable | Effect |
+|---|---|
+| `TXTODO_VERSION=v0.0.12` | Install that tag instead of the newest release. |
+| `TXTODO_BIN_DIR=<dir>` | Where the binaries go (default `~/.local/bin`). |
+| `TXTODO_INSTALL_DIR=<dir>` | Where the app goes. |
+| `TXTODO_NO_DESKTOP=1` | Binaries only. |
+| `TXTODO_NO_CLI=1` | Desktop app only. |
+
+Re-run it any time to upgrade — a running daemon restarts itself on the next `txtodo` call.
 
 ### Homebrew (macOS and Linux)
 
@@ -19,10 +47,10 @@ each side.
 brew install aaronmyatt/tap/txtodo
 ```
 
-The tap can lag the newest GitHub release by a few versions. Check with `txtodo --version` before
-assuming a fix is present.
+CLI binaries only, no desktop app. The tap can lag the newest GitHub release by several versions —
+check `txtodo --version` before assuming a fix is present. The curl script above is always current.
 
-### From a release
+### From a release (manual, or Linux)
 
 Every [release](https://github.com/aaronmyatt/txtodo/releases) publishes bare binaries per platform
 (`txtodo-macos-aarch64`, `txtodo-linux-x86_64-musl`, …) — no archive to unpack. GitHub serves them
@@ -39,26 +67,28 @@ done
 Each binary has a `.bundle` sibling: its Sigstore signature, verifiable with
 [`cosign`](https://docs.sigstore.dev/cosign/verifying/verify/).
 
-### From source
+### From this checkout
 
-Needed for a commit that has not been released yet.
-
-`cargo install` takes one crate at a time, so loop over the four:
+For a commit that has no release yet — testing an unreleased build on two devices, say.
 
 ```bash
-for c in cli daemon tui mcp; do cargo install --path "crates/txtodo-$c"; done
-# they land in ~/.cargo/bin — make sure that is ahead of any brew-installed copy on $PATH
-
-# or, without installing:
-cargo build --workspace --release
-# binaries at target/release/{txtodo,txtodod,txtodo-tui,txtodo-mcp}
+just install    # scripts/install-local.sh
 ```
 
-### Desktop app (macOS)
+Builds all four binaries, self-signs them on macOS with the same cert a real release uses, builds
+the desktop app around that daemon, **purges every other install** (brew, the curl script's copies,
+any other `txtodo*` on `$PATH`) so what runs is this build, then restarts the OS service on it. A
+same-version daemon never auto-upgrades, which is why the restart is part of the job.
 
-Releases carry `desktop-macos-aarch64.dmg` and `desktop-macos-x86_64.dmg`. They are **not yet
-Apple-notarized**, so Gatekeeper blocks them on first open — right-click the app and choose *Open*
-to get the override prompt. A signed cask is still open work.
+It also writes the build id to `<data dir>/txtodo/installed-build`, so you can check two devices are
+on the same code rather than assuming it.
+
+Just the binaries, no install:
+
+```bash
+cargo build --workspace --release
+# target/release/{txtodo,txtodod,txtodo-tui,txtodo-mcp}
+```
 
 ## First run
 
