@@ -358,6 +358,18 @@ multiplex every workspace's traffic — not done by this task).
   ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
   `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
   the same day, a LAN control session too.
+- `workspace_rejoin.rs` + `rejoin_backup.rs` (task sync-drift line 8, 2026-09-26): `WorkspaceRejoin`
+  drops this device's copy of one workspace and takes a paired peer's. Refused, nothing changed,
+  for the default, a missing root, a root overlapping another registered one, or when no paired
+  device offered it within 4 redial rounds (`WorkspaceOfferRegistry::offered_by`, which remembers
+  offers after the mirror task drains them). It holds the load slot `Loading`, closes the
+  workspace, sends each actor `ActorMsg::Stop` (a Watch stream holds a handle until its actor's
+  changes end), waits up to 30 s for the store's last holder, then renames `.txtodo/`,
+  `txtodo.toml` and every document into `<root>.rejoin-backup-<UTC time>` beside the root. A guard
+  file named `.txtodo` blocks any open while they move; a failure moves them back, never over
+  something new. The same registry row reopens the empty folder with a fresh store, which pulls the
+  peer's whole log on the next session. `tests/workspace_rejoin.rs` is the two-daemon proof.
+  `workspace_registry_grpc.rs` holds the registry handlers, split from `global_service.rs`.
 - `universal_grpc.rs` (task `tui-revamp/universal-rpc`, 2026-09-25): `UniversalTasks`, device-level
   like `WorkspaceList`. Every ready workspace's root list (`WorkspaceCatalog::ready`, no wait, no
   promote, no MRU touch), one `UniversalTask` row per task line with the line's id, done/priority
