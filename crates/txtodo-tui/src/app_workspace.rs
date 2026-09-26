@@ -37,8 +37,9 @@ pub fn workspace_label(env: &RegistryEnv, choice: &WorkspaceChoice) -> Option<St
         .then(|| "remote workspace".to_owned())
 }
 
-/// The workspace `query` picks out of `workspaces`: its id, `default`, its folder's name (any
-/// case) or its root path. An unknown or ambiguous name is an error naming the problem.
+/// The workspace `query` picks out of `workspaces`: its id, `default`, its shown name or its
+/// folder's name (any case), or its root path. An unknown or ambiguous name is an error naming the
+/// problem.
 pub fn pick_by_name<'a>(
     workspaces: &'a [pb::WorkspaceInfo],
     query: &str,
@@ -55,6 +56,7 @@ pub fn pick_by_name<'a>(
             w.workspace_id == query
                 || (q == "default" && w.is_default)
                 || folder(w).is_some_and(|f| f == q)
+                || (!w.name.is_empty() && w.name.to_lowercase() == q)
                 || w.root == query
         })
         .collect();
@@ -157,10 +159,30 @@ pub fn menu_items(
         .collect()
 }
 
-/// The header's name for a workspace switched to.
+/// The header's name for the workspace at `root` as the daemon lists it (task
+/// workspace-vanity-name), so a mirror opens under its shared name, not `remote workspace`. `None`
+/// when the daemon does not list it (a `--dir` daemon has no registry).
+pub async fn listed_title(daemon: &mut Daemon, root: &str) -> Option<String> {
+    // Canonical, like the daemon's roots (macOS `/var` is `/private/var`).
+    // Ref: https://doc.rust-lang.org/std/fs/fn.canonicalize.html
+    let canonical = std::path::Path::new(root).canonicalize().ok()?;
+    let listed = daemon.workspace_list().await.ok()?;
+    listed
+        .workspaces
+        .iter()
+        .find(|w| std::path::Path::new(&w.root) == canonical)
+        .map(workspace_title)
+}
+
+/// The header's name for a workspace switched to: the name every paired device shows (task
+/// workspace-vanity-name), else, from an older daemon, the folder's. An unnamed default (the
+/// daemon calls it `default`) stays `default workspace`.
 fn workspace_title(w: &pb::WorkspaceInfo) -> String {
-    if w.is_default {
+    if w.is_default && (w.name.is_empty() || w.name == "default") {
         return "default workspace".to_owned();
+    }
+    if !w.name.is_empty() {
+        return w.name.clone();
     }
     std::path::Path::new(&w.root)
         .file_name()
@@ -205,6 +227,23 @@ mod tests {
         assert_eq!(id("/home/u/Work").as_deref(), Ok("01B"));
         assert!(id("work").is_err_and(|e| e.contains("2 workspaces")));
         assert!(id("nope").is_err_and(|e| e.contains("no workspace named nope")));
+    }
+
+    /// Task workspace-vanity-name: the shown name titles a row and picks it; an unnamed default
+    /// (the daemon says `default`) keeps its title.
+    #[test]
+    fn the_shown_name_titles_a_row_and_picks_it() {
+        let mut mirror = info("01M", "/data/txtodo/remote/01M", false);
+        mirror.name = "House plants".to_owned();
+        let mut default = info("01A", "/data/txtodo/default", true);
+        default.name = "default".to_owned();
+        let list = [default, mirror];
+        let rows = menu_items(&list, &[], "");
+        assert_eq!(rows[0].name, "default workspace");
+        assert_eq!(rows[1].name, "House plants");
+        let id = |q: &str| pick_by_name(&list, q).map(|w| w.workspace_id.clone());
+        assert_eq!(id("house plants").as_deref(), Ok("01M"));
+        assert_eq!(id("default").as_deref(), Ok("01A"));
     }
 
     #[test]

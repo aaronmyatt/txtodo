@@ -117,8 +117,9 @@ pub async fn run(daemon: &mut Daemon, path: &str) -> Result<(), DaemonError> {
     run_in(daemon, path, "", None).await
 }
 
-/// `run` for the workspace at `root`, named `workspace_label` in the header when it has a better
-/// name than its folder (the default one, a remote mirror).
+/// `run` for the workspace at `root`, named in the header by the name the daemon lists for it
+/// (task workspace-vanity-name), else `workspace_label` when it has a better name than its folder
+/// (the default one, a remote mirror).
 pub async fn run_in(
     daemon: &mut Daemon,
     path: &str,
@@ -128,6 +129,9 @@ pub async fn run_in(
     let file = daemon.get_file(path).await?;
     let mut state = AppState::from_document(path, &String::from_utf8_lossy(&file.bytes));
     state.workspace_label = workspace_label;
+    if let Some(title) = crate::app_workspace::listed_title(daemon, root).await {
+        state.workspace_label = Some(title);
+    }
     root.clone_into(&mut state.shell.root);
     crate::app_refs::refresh(daemon, &mut state).await;
     if let Ok(health) = daemon.health().await {
