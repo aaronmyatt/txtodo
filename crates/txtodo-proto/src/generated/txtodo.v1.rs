@@ -2005,6 +2005,32 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRejoin"));
             self.inner.unary(req, path, codec).await
         }
+        /// Sets or clears the name every paired device shows for a workspace (task
+        /// workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
+        /// Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
+        /// unknown id, FAILED_PRECONDITION when the file holds `name` in a form it cannot edit.
+        /// Device-level, no selector.
+        pub async fn workspace_rename(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceRename",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRename"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -2625,6 +2651,15 @@ pub mod txtodo_server {
             tonic::Response<super::WorkspaceRejoinResponse>,
             tonic::Status,
         >;
+        /// Sets or clears the name every paired device shows for a workspace (task
+        /// workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
+        /// Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
+        /// unknown id, FAILED_PRECONDITION when the file holds `name` in a form it cannot edit.
+        /// Device-level, no selector.
+        async fn workspace_rename(
+            &self,
+            request: tonic::Request<super::WorkspaceRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         async fn pair_offer(
             &self,
@@ -3824,6 +3859,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceRejoinSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceRename" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceRenameSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceRenameRequest>
+                    for WorkspaceRenameSvc<T> {
+                        type Response = super::WorkspaceInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceRenameRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_rename(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceRenameSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

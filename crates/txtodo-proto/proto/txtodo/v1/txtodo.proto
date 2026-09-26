@@ -107,6 +107,12 @@ service Txtodo {
   // refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
   // device offered this workspace lately, and for the default workspace. Device-level, no selector.
   rpc WorkspaceRejoin(WorkspaceRejoinRequest) returns (WorkspaceRejoinResponse);
+  // Sets or clears the name every paired device shows for a workspace (task
+  // workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
+  // Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
+  // unknown id, FAILED_PRECONDITION when the file holds `name` in a form it cannot edit.
+  // Device-level, no selector.
+  rpc WorkspaceRename(WorkspaceRenameRequest) returns (WorkspaceInfo);
 
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
