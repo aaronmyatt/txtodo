@@ -12,6 +12,8 @@ use txtodo_model::{DeviceId, FilePath, IdentityMode, Principal, Ulid};
 use txtodo_store::{Seq, Store};
 
 const A: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAA";
+const B: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAB";
+const C: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
 
 fn device() -> DeviceId {
     DeviceId::new(Ulid::from_u128(7))
@@ -134,6 +136,27 @@ async fn apply_writes_the_file_records_user_ops_and_notifies_subscribers() {
         matches!(err, ActorError::Mutation(MutationError::Stale { .. })),
         "{err}"
     );
+}
+
+/// The file's last line has no newline: an add starts a line of its own on disk (CRLF kept)
+/// instead of being glued onto it, and undoing the add puts the original bytes back.
+#[tokio::test]
+async fn add_after_a_last_line_with_no_newline_starts_a_new_line_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let before = format!("(A) buy ducks id:{A}\r\nwalk the dog id:{B}");
+    std::fs::write(dir.path().join("todo.txt"), &before).unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let handle = open(dir.path(), &store, &clock).spawn();
+    assert_eq!(disk(dir.path()), before, "opening rewrites nothing");
+    let add = Mutation::Add {
+        line: format!("call mum id:{C}"),
+    };
+    handle.apply(vec![add], user()).await.unwrap();
+    assert_eq!(disk(dir.path()), format!("{before}\r\ncall mum id:{C}\r\n"));
+    clock.advance_ms(1_000);
+    handle.undo(1, user()).await.unwrap();
+    assert_eq!(disk(dir.path()), before, "undo restores the bytes exactly");
 }
 
 #[tokio::test]

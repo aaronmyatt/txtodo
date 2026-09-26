@@ -107,6 +107,55 @@ fn insert_move_and_blank_ops_reorder_the_document() {
     );
 }
 
+/// A last line with no final newline: whatever lands after it (an add, the move `do` makes to the
+/// bottom, a blank) starts a line of its own, CRLF kept, never glued onto it. Take it away again
+/// and the bytes are the original ones.
+#[test]
+fn ops_after_a_last_line_with_no_newline_start_a_line_of_their_own() {
+    let before = format!("(A) buy ducks id:{A}\r\nwalk the dog id:{B}");
+    let mut state = doc(before.as_bytes());
+    let (a, b, c) = (
+        task_id(ulid_bits(A)),
+        task_id(ulid_bits(B)),
+        task_id(ulid_bits(C)),
+    );
+    let text = |state: &DocState| String::from_utf8(state.to_bytes()).unwrap();
+    let insert = OpKind::Insert {
+        task: c,
+        after: Some(b),
+        line: format!("call mum id:{C}"),
+    };
+    state.apply_kind(&insert).unwrap();
+    assert_eq!(text(&state), format!("{before}\r\ncall mum id:{C}\r\n"));
+    let delete = set_field(c, Field::Deleted, FieldValue::Bool(true)).unwrap();
+    state.apply_kind(&delete).unwrap();
+    assert_eq!(text(&state), before, "the add undone: bytes as they were");
+
+    let here = FilePath::new("todo.txt").unwrap();
+    let to_bottom = |task, after| OpKind::Move {
+        task,
+        after: Some(after),
+        to_file: here.clone(),
+    };
+    state.apply_kind(&to_bottom(a, b)).unwrap();
+    assert_eq!(
+        text(&state),
+        format!("walk the dog id:{B}\r\n(A) buy ducks id:{A}\r\n")
+    );
+    state.apply_kind(&to_bottom(b, a)).unwrap();
+    assert_eq!(text(&state), before, "last again: no final newline again");
+
+    state
+        .apply_kind(&OpKind::BlankInsert { after: Some(b) })
+        .unwrap();
+    assert_eq!(
+        text(&state),
+        format!("{before}\r\n\r\n"),
+        "the blank is kept"
+    );
+    assert_eq!(parse_file(&state.to_bytes()).lines.len(), state.len());
+}
+
 // Cross-file: this document is the source, so the task just leaves. `after` names a position in
 // `to_file`, meaningless here — the destination actor never replays this op (see `move_task`'s
 // doc and `move_coordinator_tests`).
