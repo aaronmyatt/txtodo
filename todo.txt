@@ -1,3 +1,5 @@
+2026-09-25 enable force sync one way - though is this wise?
+2026-09-26 remote/syncd workspaces should share a "vanity" name to dispaly on the remote device
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay @human — code done 2026-09-25 (see tasks/lan-dial-falls-to-relay/notes.md); only the two-Mac check is left
 (C) 2026-09-24 TUI revamp to desktop parity from the c2 spec, TUI first +m11 @tui ref:tui-revamp — built bar the @human lines (five decide lines, the human pass); see tasks/tui-revamp/notes.md
 (D) 2026-09-19 Desktop UI/UX revamp from the c2-prompt mockups: ink/paper theme, header search bar, prompt-bar Quick Add with the live logo mark, Universal and Settings pages +m11 @desktop ref:desktop-ui-revamp — deferred 2026-09-19 (human call): design signed off, build deprioritised for now; plan and mockup map in tasks/desktop-ui-revamp/notes.md id:01M2WSN2PZ701CR2QFX7ZG5ZTD
@@ -311,3 +313,5 @@ x 2026-09-25 2026-09-25 sync: a pushed or served batch counts as delivered befor
 x 2026-09-25 2026-09-25 sync: one change a peer cannot apply blocks that workspace on every reconnect +m11 @daemon @sync ref:sync-poison-op pri:A — see tasks/sync-poison-op/notes.md; known gap: a skipped op shows in the log only, and a peer that replays the old history keeps those lines as they fell
 x 2026-09-25 2026-09-25 daemon: the walker syncs nested git checkouts (.claude/worktrees/*) as part of the enclosing workspace +m11 @daemon ref:walker-nested-checkouts pri:A — see tasks/walker-nested-checkouts/notes.md; known gap: the 54k old worktree ops stay in this Mac's log and still cross the link on a first mirror
 x 2026-09-25 2026-09-25 sync: one big workspace transfer holds every other workspace up on the shared link +m11 @daemon @sync ref:sync-link-fairness pri:B — see tasks/sync-link-fairness/notes.md; known gap: throughput not measured on the two Macs
+(A) 2026-09-26 sync: duplicate lines and stuck batches between paired devices +m11 @daemon @sync ref:sync-drift
+(B) 2026-09-26 daemon: a line inserted after a last line with no final newline is glued onto it; state.rs insert leaves the old last line's ending empty (crates/txtodo-core/src/file.rs to_bytes), found filing sync-drift +m11 @daemon @cli
