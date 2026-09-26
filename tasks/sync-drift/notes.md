@@ -97,3 +97,29 @@ never stalls sync without anyone seeing it.
   is the cause.
 - "At the bottom" is inferred from the reconcile cost, not traced from a real op.
 - The source of `unknown_epoch`: likely the control channel after `device remove`. Inferred.
+
+## As built
+
+### Line 1
+- Store: a commit's fingerprints are now the file's whole live set. `land_fingerprints` upserts
+  them, then tombstones every other live row for that file, in the same transaction. A delete
+  (by a client or in an editor) retires its row at once. Rows are kept, never deleted.
+- Why "whole set" and not "the daemon lists what left": the store API stays additive (no new
+  `CommitExtras` field), and it also cleans up after any path that leaves rows behind, a re-mint
+  included.
+- Daemon: on start, `stored_ids` repairs when live rows don't line up with lines. A task line's
+  owner is the row the newest commit landed at its position (one commit stamps all its rows with
+  one `updated_at`) whose fingerprint equals the line's. The rest are retired
+  (`Store::retain_live_fingerprints`, one transaction), and `fingerprints_repaired` is logged at
+  warn. It runs only on a mismatch, so in practice once per stale store. No schema change.
+- Checked on a scratch copy of this Mac's root oplog.db (never the real one): 233 files, 30 needed
+  the repair, 34,994 stale rows retired, `todo.txt` went 23,436 → 317 live rows (317 lines), 0
+  files unrepairable, no op minted (last seq unchanged).
+- Still broken / not done:
+  - A sidecar file whose last task leaves keeps that row live until a later commit with a task,
+    or the next start's repair. An empty set can't be told apart from tagged mode.
+  - If an owner can't be told apart (two newest rows with one line's exact fingerprint, e.g. two
+    commits in one ms), the repair gives up and the old re-mint runs, as before.
+  - Duplicate ids a peer already got from past re-mints don't heal. That is line 8.
+  - `live_fingerprints` reads at most 50,000 rows. Past that the repair can miss an owner and fall
+    back to the re-mint (the worst file here has 23,436).

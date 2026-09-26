@@ -229,6 +229,8 @@ mod state_tests;
 #[cfg(test)]
 mod status_details_tests;
 #[cfg(test)]
+mod stored_ids_tests;
+#[cfg(test)]
 mod sync_ops_tests;
 #[cfg(test)]
 mod unified_diff_tests;
