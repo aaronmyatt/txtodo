@@ -1,5 +1,5 @@
 (A) 2026-09-26 sync: duplicate lines and stuck batches between paired devices +m11 @daemon @sync ref:sync-drift — built bar the @human lines (the origin_seq decide, the heal-duplicates decide); see tasks/sync-drift/notes.md
-(B) 2026-09-26 daemon: a line inserted after a last line with no final newline is glued onto it; state.rs insert leaves the old last line's ending empty (crates/txtodo-core/src/file.rs to_bytes), found filing sync-drift +m11 @daemon @cli
+(B) 2026-09-26 daemon: a line inserted after a last line with no final newline is glued onto it; state.rs insert leaves the old last line's ending empty (crates/txtodo-core/src/file.rs to_bytes), found filing sync-drift +m11 @daemon @cli @doing by:claude
 2026-09-25 enable force sync one way - though is this wise?
 2026-09-26 remote/syncd workspaces should share a "vanity" name to dispaly on the remote device
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay @human — code done 2026-09-25 (see tasks/lan-dial-falls-to-relay/notes.md); only the two-Mac check is left
