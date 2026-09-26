@@ -49,6 +49,9 @@ const SELECT_LIVE: &str = "SELECT task, creation_date, projects, contexts, descr
 const SELECT_TOMBSTONED: &str = "SELECT task, creation_date, projects, contexts, \
      description_norm, line_index, updated_at FROM fingerprints \
      WHERE file = ?1 AND status = 'tombstoned' ORDER BY retired_at, task LIMIT ?2";
+// No LIMIT: `retire_live_except_on` must see every stale row, however many piled up.
+const SELECT_LIVE_TASKS: &str =
+    "SELECT task FROM fingerprints WHERE file = ?1 AND status = 'live' ORDER BY task";
 
 fn task_blob(task: TaskId) -> Vec<u8> {
     task.ulid().to_u128().to_be_bytes().to_vec()
@@ -117,13 +120,28 @@ impl Store {
         task: TaskId,
         at_ms: u64,
     ) -> Result<(), StoreError> {
-        self.conn
-            .execute(
-                RETIRE_FINGERPRINT,
-                params![file.as_str(), task_blob(task), wall_i64(at_ms)],
-            )
-            .map_err(StoreError::query("retire fingerprint"))?;
-        Ok(())
+        retire_fingerprint_on(&self.conn, file, task, at_ms)
+    }
+
+    /// Keeps `keep` live for `file` and tombstones every other live row at `at_ms`, in one
+    /// transaction. Returns how many rows it retired. The daemon's startup repair
+    /// (tasks/sync-drift line 1): rows no line owns any more, left live by commits made before
+    /// `land_fingerprints` retired them, are put to rest once their owners are known.
+    pub fn retain_live_fingerprints(
+        &mut self,
+        file: &FilePath,
+        keep: &BTreeSet<TaskId>,
+        at_ms: u64,
+    ) -> Result<usize, StoreError> {
+        // https://docs.rs/rusqlite/latest/rusqlite/struct.Connection.html#method.transaction
+        let tx = self
+            .conn
+            .transaction()
+            .map_err(StoreError::query("begin retain fingerprints"))?;
+        let retired = retire_live_except_on(&tx, file, keep, at_ms)?;
+        tx.commit()
+            .map_err(StoreError::query("commit retain fingerprints"))?;
+        Ok(retired)
     }
 
     /// The live fingerprints for `file`, ordered by `line_index`, at most
@@ -221,4 +239,48 @@ pub(crate) fn upsert_fingerprint_on(
     )
     .map_err(StoreError::query("upsert fingerprint"))?;
     Ok(())
+}
+
+/// Tombstones one fingerprint on `conn`; the caller owns the transaction.
+fn retire_fingerprint_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    task: TaskId,
+    at_ms: u64,
+) -> Result<(), StoreError> {
+    conn.execute(
+        RETIRE_FINGERPRINT,
+        params![file.as_str(), task_blob(task), wall_i64(at_ms)],
+    )
+    .map_err(StoreError::query("retire fingerprint"))?;
+    Ok(())
+}
+
+/// Tombstones, at `at_ms`, every live row for `file` whose task is not in `keep`; the caller
+/// owns the transaction. Returns how many rows it retired.
+pub(crate) fn retire_live_except_on(
+    conn: &rusqlite::Connection,
+    file: &FilePath,
+    keep: &BTreeSet<TaskId>,
+    at_ms: u64,
+) -> Result<usize, StoreError> {
+    let mut stmt = conn
+        .prepare_cached(SELECT_LIVE_TASKS)
+        .map_err(StoreError::query("prepare live tasks"))?;
+    let rows = stmt
+        .query_map(params![file.as_str()], |r| r.get::<_, Vec<u8>>(0))
+        .map_err(StoreError::query("query live tasks"))?;
+    let mut stale = Vec::new();
+    for row in rows {
+        let bytes = row.map_err(StoreError::query("read live task"))?;
+        let task = task_of(&bytes).ok_or(StoreError::BadDevice(bytes.len()))?;
+        if !keep.contains(&task) {
+            stale.push(task);
+        }
+    }
+    for task in &stale {
+        retire_fingerprint_on(conn, file, *task, at_ms)?;
+    }
+    debug_assert!(stale.iter().all(|t| !keep.contains(t)));
+    Ok(stale.len())
 }

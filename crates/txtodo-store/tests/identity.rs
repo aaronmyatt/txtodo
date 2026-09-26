@@ -1,6 +1,6 @@
 //! Sidecar identity fingerprints: upsert → live, retire → tombstoned (idempotent, kept not
-//! deleted), a later upsert revives a tombstoned row, files don't see each other's rows, and the
-//! schema lands at 5.
+//! deleted), a later upsert revives a tombstoned row, files don't see each other's rows, a commit
+//! or a retain retires the live rows it leaves out, and the schema lands at 5.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -164,4 +164,91 @@ fn a_fingerprint_with_no_creation_date_round_trips_as_none() {
 
     let live = store.live_fingerprints(&file).unwrap();
     assert_eq!(live[0].fingerprint.creation_date, None);
+}
+
+#[test]
+fn retain_keeps_the_named_tasks_and_retires_the_rest() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let file = todo();
+    let other = FilePath::new("other.txt").unwrap();
+    for (n, desc) in [(1, "buy milk"), (2, "walk dog"), (3, "call mum")] {
+        store
+            .upsert_fingerprint(&file, task(n), &fp(desc, 0), 1_000)
+            .unwrap();
+    }
+    store
+        .upsert_fingerprint(&other, task(9), &fp("elsewhere", 0), 1_000)
+        .unwrap();
+
+    let retired = store
+        .retain_live_fingerprints(&file, &BTreeSet::from([task(1)]), 2_000)
+        .unwrap();
+
+    assert_eq!(retired, 2);
+    let live: Vec<TaskId> = store
+        .live_fingerprints(&file)
+        .unwrap()
+        .into_iter()
+        .map(|r| r.task)
+        .collect();
+    assert_eq!(live, vec![task(1)]);
+    let tombstoned = store.tombstoned_fingerprints(&file).unwrap();
+    assert_eq!(tombstoned.len(), 2);
+    assert_eq!(
+        tombstoned[0].fingerprint.description_norm, "walk dog",
+        "a retired row keeps what it last looked like"
+    );
+    assert_eq!(store.live_fingerprints(&other).unwrap().len(), 1);
+}
+
+/// tasks/sync-drift line 1: a commit's fingerprints are the file's whole live set, so the row of
+/// a task that left the file is retired in that same commit instead of staying live forever.
+#[test]
+fn a_commit_retires_the_rows_its_fingerprints_leave_out() {
+    use txtodo_store::{CommitExtras, FingerprintRow, Projection};
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let file = todo();
+    let row = |n: u128, desc: &str, i: usize, at: u64| FingerprintRow {
+        file: todo(),
+        task: task(n),
+        fingerprint: fp(desc, i),
+        updated_at_ms: at,
+    };
+    let commit = |store: &mut Store, rows: Vec<FingerprintRow>| {
+        let projection = Projection {
+            file: todo(),
+            bytes: b"whatever\n".to_vec(),
+            hash: [1; 32],
+            written_at_ms: 1,
+        };
+        let extras = CommitExtras {
+            fingerprints: rows,
+            ..CommitExtras::default()
+        };
+        store
+            .commit_change_with(&[], &projection, None, &extras)
+            .unwrap();
+    };
+
+    commit(
+        &mut store,
+        vec![row(1, "buy milk", 0, 1_000), row(2, "walk dog", 1, 1_000)],
+    );
+    commit(&mut store, vec![row(2, "walk dog", 0, 2_000)]);
+
+    let live = store.live_fingerprints(&file).unwrap();
+    assert_eq!(live.len(), 1);
+    assert_eq!(live[0].task, task(2));
+    let tombstoned = store.tombstoned_fingerprints(&file).unwrap();
+    assert_eq!(tombstoned.len(), 1);
+    assert_eq!(tombstoned[0].task, task(1));
+
+    commit(&mut store, Vec::new());
+    assert_eq!(
+        store.live_fingerprints(&file).unwrap().len(),
+        1,
+        "an empty set (tagged mode) retires nothing"
+    );
 }

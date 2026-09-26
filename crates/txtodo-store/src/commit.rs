@@ -2,8 +2,10 @@
 //! hash remembered in `meta` so a restart can tell "our rename never landed" from "someone edited
 //! the file while we were down" (plan M3 crash safety). Plus the two reads undo and checkout need.
 
+use std::collections::BTreeSet;
+
 use crate::flags::{clear_flag_on, upsert_mirror_on};
-use crate::identity::upsert_fingerprint_on;
+use crate::identity::{retire_live_except_on, upsert_fingerprint_on};
 use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
 use crate::{
@@ -27,7 +29,8 @@ pub struct CommitExtras {
     pub mirror: Option<Vec<u8>>,
     /// Sidecar identity mode (docs/questions.md Q2): every live task's fingerprint as of this
     /// commit's new projection, upserted alongside it so identity and content never part ways
-    /// across a crash. Empty in tagged mode — nothing to track.
+    /// across a crash. Empty in tagged mode — nothing to track. A non-empty set is the whole live
+    /// set: any other live row for the file is tombstoned in the same transaction.
     pub fingerprints: Vec<FingerprintRow>,
     /// Which client made this change (task op-source), stamped on every op this commit appends.
     /// Local to this device's log: never in an op's payload, hash or signature.
@@ -58,16 +61,28 @@ fn land_extras(
     Ok(())
 }
 
-/// Upserts every row of `fingerprints` on `tx`; the caller owns the transaction.
+/// Upserts every row of `fingerprints` on `tx`, then tombstones every other live row for `file`;
+/// the caller owns the transaction. A non-empty set is the file's whole live set as of this
+/// commit, so a task that left the file loses its live row in the commit that removed it
+/// (tasks/sync-drift line 1: stale live rows made `stored_ids` give up and re-mint every line on
+/// the next start). An empty set lands and retires nothing: tagged mode has no rows, and a sidecar
+/// file whose last task just left keeps that row until the next commit or the startup repair.
 fn land_fingerprints(
     tx: &rusqlite::Connection,
     file: &FilePath,
     fingerprints: &[FingerprintRow],
 ) -> Result<(), StoreError> {
+    let Some(at_ms) = fingerprints.iter().map(|r| r.updated_at_ms).max() else {
+        return Ok(());
+    };
+    let mut keep = BTreeSet::new();
     for row in fingerprints {
         debug_assert_eq!(&row.file, file, "a commit's own file's fingerprints only");
         upsert_fingerprint_on(tx, file, row.task, &row.fingerprint, row.updated_at_ms)?;
+        keep.insert(row.task);
     }
+    retire_live_except_on(tx, file, &keep, at_ms)?;
+    debug_assert_eq!(keep.len(), fingerprints.len(), "one row per task");
     Ok(())
 }
 
