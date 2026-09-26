@@ -152,18 +152,35 @@ fn dominant_ending(lines: &[OwnedLine]) -> LineEnding {
 
 impl File {
     /// The exact bytes: BOM, then every line with its own ending. Identity on an unchanged parse.
+    /// Only the last line may lack an ending (`parse_file` never yields another): a line left
+    /// without one by an insert or move after it is written with the dominant ending, or the next
+    /// line would be glued onto it. The last line keeps a missing final newline.
     pub fn to_bytes(&self) -> Vec<u8> {
         let size = self.lines.iter().map(|l| l.bytes.len() + 2).sum::<usize>() + BOM.len();
         let mut out = Vec::with_capacity(size);
         if self.bom {
             out.extend_from_slice(BOM);
         }
-        for line in &self.lines {
+        let last = self.lines.len().saturating_sub(1);
+        for (i, line) in self.lines.iter().enumerate() {
             out.extend_from_slice(&line.bytes);
-            out.extend_from_slice(line.ending.as_bytes());
+            let ending = match line.ending {
+                LineEnding::None if i < last => self.terminator(),
+                own => own,
+            };
+            out.extend_from_slice(ending.as_bytes());
         }
         debug_assert!(out.len() <= size, "capacity estimate is an upper bound");
         out
+    }
+
+    /// The ending a line gets when it must have one: the dominant one, or `Lf` when a caller set
+    /// that to `None` (`parse_file` never does).
+    fn terminator(&self) -> LineEnding {
+        match self.ending {
+            LineEnding::None => LineEnding::Lf,
+            dominant => dominant,
+        }
     }
 }
 
@@ -230,6 +247,42 @@ mod tests {
             parse_file(b"\n").lines.len(),
             1,
             "a lone newline is one blank entry"
+        );
+    }
+
+    /// What an insert or move after a last line with no newline leaves in memory: that line still
+    /// has no ending but is no longer last. Written as-is, the next line would be glued onto it.
+    #[test]
+    fn a_line_without_an_ending_that_is_no_longer_last_gets_the_dominant_one() {
+        let append = |bytes: &[u8], line: &[u8]| {
+            let mut file = parse_file(bytes);
+            let ending = file.ending;
+            file.lines
+                .push(OwnedLine::from_bytes(line.to_vec(), ending));
+            file.to_bytes()
+        };
+        assert_eq!(
+            append(b"a\r\nb", b"c"),
+            b"a\r\nb\r\nc\r\n",
+            "CRLF stays CRLF"
+        );
+        assert_eq!(append(b"a\nb", b""), b"a\nb\n\n", "an added blank is kept");
+
+        let mut moved = parse_file(b"a\nb");
+        let b = moved.lines.remove(1);
+        moved.lines.insert(0, b);
+        assert_eq!(moved.to_bytes(), b"b\na\n", "moved up, it ends too");
+
+        let mut odd = parse_file(b"a");
+        odd.ending = LineEnding::None;
+        odd.lines
+            .push(OwnedLine::from_bytes(b"b".to_vec(), LineEnding::Lf));
+        assert_eq!(odd.to_bytes(), b"a\nb\n", "no dominant ending: still `\\n`");
+
+        assert_eq!(
+            parse_file(b"a\nb").to_bytes(),
+            b"a\nb",
+            "still last: the missing final newline is kept"
         );
     }
 }
