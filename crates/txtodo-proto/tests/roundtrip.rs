@@ -224,11 +224,34 @@ fn sync_status_messages_round_trip() {
         peers: vec![sync_status_response::Peer {
             device: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
             lag_ms: 400,
+            stuck: vec![sync_status_response::Stuck {
+                workspace_id: "01ARZ3NDEKTSV4RRFFQ69G5FAW".into(),
+                file: "tasks/a/todo.txt".into(),
+                reason: "store: UNIQUE constraint failed: ops.op_id".into(),
+                since_ms: 1_000,
+                last_ms: 21_000,
+                refusals: 3,
+            }],
+            parked: true,
         }],
         pending_ops: 3,
     });
     // No peers, nothing pending — the empty case this RPC's own doc calls out.
     round_trip(&SyncStatusResponse::default());
+}
+
+/// Task sync-drift line 7: an older daemon's peer (fields 1-2 only) reads as not stuck and not
+/// parked.
+#[test]
+fn an_older_daemons_peer_reads_as_not_stuck_and_not_parked() {
+    let old = sync_status_response::Peer {
+        device: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+        lag_ms: 7,
+        ..sync_status_response::Peer::default()
+    };
+    round_trip(&old);
+    assert!(old.stuck.is_empty(), "nothing stuck");
+    assert!(!old.parked, "not parked");
 }
 
 #[test]

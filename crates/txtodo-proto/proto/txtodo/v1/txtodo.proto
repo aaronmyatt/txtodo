@@ -776,12 +776,32 @@ message UniversalTasksResponse {
 }
 
 message SyncStatusResponse {
+  // One file whose incoming ops from a peer the daemon keeps refusing (task sync-drift line 7).
+  // The peer resends an unacked run every few seconds, so a run that can never land is refused
+  // again and again, and every later op from that peer waits behind it. Held in the daemon's
+  // memory: cleared once that peer's run for the file lands, and on restart.
+  message Stuck {
+    string workspace_id = 1;   // ULID text, same form as WorkspaceSelector.workspace_id
+    string file = 2;           // workspace-relative path, `/` separators
+    string reason = 3;         // why the latest run was refused, as the daemon logged it
+    uint64 since_ms = 4;       // daemon clock at the first refusal in this row
+    uint64 last_ms = 5;        // daemon clock at the latest refusal
+    uint32 refusals = 6;       // refusals of this file's run in a row, at least 1
+  }
   // One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
   // SyncStatus design section).
   message Peer {
     string device = 1;   // ULID text, same form as Device.id
     int64 lag_ms = 2;    // now_ms - last_seen_ms; 0 if never seen, mirroring Device.last_seen_ms's
                           // own "0 = never contacted" convention
+
+    // Where sync from this peer is stuck, one entry per workspace (task sync-drift line 7). Empty
+    // when nothing is, and from an older daemon.
+    repeated Stuck stuck = 3;
+    // The daemon has stopped dialing this peer: its frames failed to open under our group key
+    // several times in a row, so it holds no key we share (task sync-drift line 5). Held in
+    // memory; false from an older daemon.
+    bool parked = 4;
   }
   repeated Peer peers = 1;
   // Approximate, not a precise per-peer ack count (tasks/tui/notes.md: no per-peer synced-seq is

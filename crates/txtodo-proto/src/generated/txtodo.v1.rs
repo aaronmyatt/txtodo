@@ -976,9 +976,34 @@ pub struct SyncStatusResponse {
 }
 /// Nested message and enum types in `SyncStatusResponse`.
 pub mod sync_status_response {
+    /// One file whose incoming ops from a peer the daemon keeps refusing (task sync-drift line 7).
+    /// The peer resends an unacked run every few seconds, so a run that can never land is refused
+    /// again and again, and every later op from that peer waits behind it. Held in the daemon's
+    /// memory: cleared once that peer's run for the file lands, and on restart.
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct Stuck {
+        /// ULID text, same form as WorkspaceSelector.workspace_id
+        #[prost(string, tag = "1")]
+        pub workspace_id: ::prost::alloc::string::String,
+        /// workspace-relative path, `/` separators
+        #[prost(string, tag = "2")]
+        pub file: ::prost::alloc::string::String,
+        /// why the latest run was refused, as the daemon logged it
+        #[prost(string, tag = "3")]
+        pub reason: ::prost::alloc::string::String,
+        /// daemon clock at the first refusal in this row
+        #[prost(uint64, tag = "4")]
+        pub since_ms: u64,
+        /// daemon clock at the latest refusal
+        #[prost(uint64, tag = "5")]
+        pub last_ms: u64,
+        /// refusals of this file's run in a row, at least 1
+        #[prost(uint32, tag = "6")]
+        pub refusals: u32,
+    }
     /// One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
     /// SyncStatus design section).
-    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Peer {
         /// ULID text, same form as Device.id
         #[prost(string, tag = "1")]
@@ -986,6 +1011,15 @@ pub mod sync_status_response {
         /// now_ms - last_seen_ms; 0 if never seen, mirroring Device.last_seen_ms's
         #[prost(int64, tag = "2")]
         pub lag_ms: i64,
+        /// Where sync from this peer is stuck, one entry per workspace (task sync-drift line 7). Empty
+        /// when nothing is, and from an older daemon.
+        #[prost(message, repeated, tag = "3")]
+        pub stuck: ::prost::alloc::vec::Vec<Stuck>,
+        /// The daemon has stopped dialing this peer: its frames failed to open under our group key
+        /// several times in a row, so it holds no key we share (task sync-drift line 5). Held in
+        /// memory; false from an older daemon.
+        #[prost(bool, tag = "4")]
+        pub parked: bool,
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

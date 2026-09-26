@@ -69,6 +69,11 @@ stays client-side on purpose: it is `JSON.stringify` of this message, and existi
 that exact shape. Empty from an older daemon, so a client that must work against one still needs its
 own encoder as a fallback.
 
+`SyncStatusResponse.Peer.stuck`/`parked` (fields 3-4, task sync-drift line 7, 2026-09-26): per
+peer, each workspace where its incoming run keeps being refused (`Stuck`: file, reason, since, last,
+refusals in a row), and whether the daemon stopped dialing it for holding no shared key. Both come
+from daemon memory; empty/false from an older daemon.
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.
