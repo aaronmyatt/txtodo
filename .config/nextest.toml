@@ -1,0 +1,48 @@
+# cargo-nextest config. https://nexte.st/docs/configuration/
+#
+# Local runs leave out the slow real-process / real-network tests; CI runs every test.
+# - Why: measured 2026-09-26 over ~437 nextest logs (1,028 tests). 945 tests finish under 1 s
+#   (39 s in all); 36 tests over 10 s take ~1,500 s, ~90% of all test time. The ones left out
+#   below spawn real daemons, a real relay or real mDNS (3-60 s each), or wait out a fixed 30 s
+#   dial timeout (the two holepunch tests).
+# - Full set locally: `cargo nextest run --profile ci ...` (or `NEXTEST_PROFILE=ci`).
+# - One left-out file: `cargo nextest run --ignore-default-filter -E 'binary_id(txtodo-daemon::crash)'`
+# - CI sets NEXTEST_PROFILE=ci (.github/workflows/ci.yml), so nothing is skipped there.
+# Default set: https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default
+# Filterset DSL (binary_id = `<package>` for a lib, `<package>::<test file>` for tests/*.rs; `-` is
+# set difference): https://nexte.st/docs/filtersets/reference/
+
+# `default-filter` arrived in nextest 0.9.77; an older nextest would ignore it and run everything.
+# https://nexte.st/docs/configuration/minimum-versions/
+nextest-version = { required = "0.9.77" }
+
+# `support::` unit tests are compiled into every tests/*.rs binary and take milliseconds: kept.
+[profile.default]
+default-filter = '''
+not (
+    (
+        binary_id(txtodo-daemon::crash)
+        | binary_id(txtodo-daemon::relay_multiplex)
+        | binary_id(txtodo-daemon::default_workspace_foreign)
+        | binary_id(txtodo-daemon::layout_sync)
+        | binary_id(txtodo-daemon::pairing_lan)
+        | (binary_id(txtodo-daemon::relay_converge)
+            & test(=two_real_daemons_converge_via_relay_with_lan_disabled))
+    ) - test(/^support::/)
+    | (binary_id(txtodo-sync)
+        & test(/^holepunch_tests::connect_(control|pairing)_has_no_group_parameter_to_gate_on$/))
+)
+'''
+
+[profile.ci]
+default-filter = 'all()'
+
+# Real mDNS, one test at a time: txtodo-cli's pairing tests run eight real txtodod on real mDNS
+# when parallel, and 3 of 4 fail; they pass run one by one. The ci profile inherits this override.
+# https://nexte.st/docs/configuration/test-groups/
+[test-groups]
+real-mdns = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'binary_id(txtodo-cli::pairing)'
+test-group = 'real-mdns'

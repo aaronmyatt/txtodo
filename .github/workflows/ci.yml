@@ -20,6 +20,10 @@ permissions:
 # Key name mapping: https://doc.rust-lang.org/cargo/reference/config.html#target
 env:
   CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: cc
+  # Every `cargo nextest run` below uses .config/nextest.toml's `ci` profile: all tests, including
+  # the slow real-daemon/relay/mDNS ones the default (local) profile leaves out. `cargo llvm-cov`
+  # runs cargo's own test harness and never reads this. https://nexte.st/docs/configuration/
+  NEXTEST_PROFILE: ci
 
 jobs:
   check:
