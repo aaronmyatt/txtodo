@@ -176,6 +176,20 @@ impl LoadSlots {
         Some(OpenTicket { slot, done: false })
     }
 
+    /// A rejoin's claim on `id` (task sync-drift line 8): moves its slot to `Loading` from any
+    /// settled state, so a request for it waits for the fresh copy instead of reopening the old one
+    /// half way. `None` while another open of it is running.
+    pub(crate) fn hold(&self, id: WorkspaceId) -> Option<OpenTicket> {
+        let slot = self.slot(id);
+        let mut state = slot.lock();
+        if *state == LoadState::Loading {
+            return None;
+        }
+        *state = LoadState::Loading;
+        drop(state);
+        Some(OpenTicket { slot, done: false })
+    }
+
     /// A request's claim on `id`: opens it now if it is `Queued` or `Failed` (promotion, beside
     /// whatever the loader is running), shares the open in flight if it is `Loading`, waiting up
     /// to `wait`, and returns at once if it is `Ready`.

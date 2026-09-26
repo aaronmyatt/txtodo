@@ -46,7 +46,8 @@ fn first_document_with_text(root: &Path) -> Result<Option<FilePath>, WalkError> 
 
 /// The root list's path when `txtodo.toml` names one the walker would not find by name (the same
 /// rule as `Workspace::extra_document`). Read from disk, so it works for a folder not open yet.
-fn root_list(root: &Path) -> Option<PathBuf> {
+/// A rejoin (`rejoin_backup.rs`) reads it too, to move that list.
+pub(crate) fn root_list(root: &Path) -> Option<PathBuf> {
     match layout_file::read(root) {
         LayoutFile::Valid(layout) => layout.custom_root_list().map(|p| root.join(p.as_str())),
         LayoutFile::Missing | LayoutFile::Invalid(_) => None,

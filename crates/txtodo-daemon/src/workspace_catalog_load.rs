@@ -73,8 +73,8 @@ impl WorkspaceCatalog {
     }
 
     /// The real open, with no catalog lock held: only the finished workspace is inserted, under a
-    /// write lock taken for that one insert.
-    fn run_open(&self, root: &Path, id: WorkspaceId) -> Result<(), Status> {
+    /// write lock taken for that one insert. A rejoin calls it with the ticket it holds.
+    pub(crate) fn run_open(&self, root: &Path, id: WorkspaceId) -> Result<(), Status> {
         if let Some(hook) = &self.open_hook {
             hook(root);
         }

@@ -127,6 +127,9 @@ impl From<HlcError> for ActorError {
 pub enum ActorMsg {
     /// The watcher saw the file change.
     ExternalChange,
+    /// Stop once the messages ahead of this one are handled (a rejoin closing its workspace,
+    /// task sync-drift line 8): a handle still held elsewhere must not keep the store open.
+    Stop,
     /// Intent-level mutations from a client.
     Apply {
         /// What to do, in order; later ones see earlier ones applied.

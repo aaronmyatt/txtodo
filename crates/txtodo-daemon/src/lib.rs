@@ -105,6 +105,7 @@ pub mod reconcile_sidecar;
 pub mod refdir;
 mod refdir_grpc;
 mod refdir_ops;
+mod rejoin_backup;
 pub mod relay;
 mod relay_autodial;
 mod relay_fallback;
@@ -148,6 +149,7 @@ mod workspace_offer_grpc;
 pub mod workspace_offer_registry;
 pub mod workspace_registry;
 mod workspace_registry_error;
+pub mod workspace_rejoin;
 /// Re-exported from the shared `txtodo-workspace-paths` crate (task `daemon-paths-shared-crate`)
 /// so every existing `txtodo_daemon::workspace_registry_paths::*` call site keeps working
 /// unchanged — `txtodo-cli`/`txtodo-mcp`/`apps/desktop` now depend on the same crate directly
@@ -265,5 +267,7 @@ mod workspace_offer_registry_tests;
 mod workspace_overlap_tests;
 #[cfg(test)]
 mod workspace_registry_tests;
+#[cfg(test)]
+mod workspace_rejoin_tests;
 #[cfg(test)]
 mod workspace_tests;

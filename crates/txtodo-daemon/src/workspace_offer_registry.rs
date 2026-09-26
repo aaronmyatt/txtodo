@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::time::{Duration, Instant};
 
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
@@ -59,6 +60,22 @@ struct Inner {
     /// on every control session, so without this a declined one would come straight back and be
     /// mirrored. In memory only; removing a mirror is the durable "not this one".
     declined: BTreeSet<(DeviceId, WorkspaceId)>,
+    /// When each pair was last offered, on this device's monotonic clock (task sync-drift line 8).
+    /// `pending` is drained by the mirror task within a moment, so this is what "a paired device
+    /// offers this workspace" reads. Declined pairs count too. Same cap; the oldest pair goes.
+    seen: BTreeMap<(DeviceId, WorkspaceId), Instant>,
+}
+
+impl Inner {
+    fn note_seen(&mut self, key: (DeviceId, WorkspaceId)) {
+        if !self.seen.contains_key(&key) && self.seen.len() >= MAX_PENDING_OFFERS {
+            let oldest = self.seen.iter().min_by_key(|(_, at)| **at).map(|(k, _)| *k);
+            if let Some(oldest) = oldest {
+                self.seen.remove(&oldest);
+            }
+        }
+        self.seen.insert(key, Instant::now());
+    }
 }
 
 /// This device's pending-offers bookkeeping. One per `DeviceIdentity` (device-level, not per
@@ -90,6 +107,7 @@ impl WorkspaceOfferRegistry {
         {
             let mut inner = self.lock();
             let key = (offer.offering_device, offer.workspace_id);
+            inner.note_seen(key);
             if inner.declined.contains(&key) {
                 return Ok(());
             }
@@ -119,6 +137,21 @@ impl WorkspaceOfferRegistry {
     /// Resolves once an offer has been recorded since the last call returned.
     pub async fn recorded(&self) {
         self.wake.notified().await;
+    }
+
+    /// The devices that offered `workspace` within the last `within`, newest first (task
+    /// sync-drift line 8: a rejoin needs one, or nothing would refill the folder).
+    pub fn offered_by(&self, workspace: WorkspaceId, within: Duration) -> Vec<DeviceId> {
+        let mut hits: Vec<(Instant, DeviceId)> = self
+            .lock()
+            .seen
+            .iter()
+            .filter(|((_, w), at)| *w == workspace && at.elapsed() <= within)
+            .map(|((device, _), at)| (*at, *device))
+            .collect();
+        // Newest first. Ref: https://doc.rust-lang.org/std/cmp/struct.Reverse.html
+        hits.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+        hits.into_iter().map(|(_, device)| device).collect()
     }
 
     /// Every pending offer, for a listing RPC (stage 6). No particular order guaranteed beyond

@@ -137,8 +137,11 @@ impl FileActor {
     }
 
     async fn run(mut self, mut rx: mpsc::Receiver<ActorMsg>) {
-        // Bounded by the mailbox: the loop ends when every sender is gone.
+        // Bounded by the mailbox: the loop ends when every sender is gone, or at `Stop`.
         while let Some(msg) = rx.recv().await {
+            if matches!(msg, ActorMsg::Stop) {
+                break;
+            }
             self.handle(msg);
         }
     }

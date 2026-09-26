@@ -103,3 +103,38 @@ fn re_announcing_an_existing_offer_never_counts_against_the_cap() {
         .unwrap();
     assert_eq!(registry.list().len(), MAX_PENDING_OFFERS);
 }
+
+/// Task sync-drift line 8: an offer is remembered as seen after the mirror task took it, a
+/// declined pair still counts as offered, and the newest device comes first.
+#[test]
+fn offered_by_outlives_take_counts_declined_and_puts_the_newest_first() {
+    let registry = WorkspaceOfferRegistry::new();
+    let hour = std::time::Duration::from_secs(3_600);
+    assert!(registry.offered_by(workspace(1), hour).is_empty());
+
+    registry.record(offer(1, 1, "alpha")).unwrap();
+    registry.take(device(1), workspace(1));
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    registry.record(offer(2, 1, "alpha")).unwrap();
+    assert!(registry.decline(device(2), workspace(1)));
+    registry.record(offer(2, 1, "alpha")).unwrap();
+    registry.record(offer(3, 9, "other")).unwrap();
+
+    assert_eq!(
+        registry.offered_by(workspace(1), hour),
+        [device(2), device(1)]
+    );
+    assert!(
+        registry
+            .list()
+            .iter()
+            .all(|o| o.workspace_id != workspace(1))
+    );
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    assert!(
+        registry
+            .offered_by(workspace(1), std::time::Duration::from_millis(1))
+            .is_empty(),
+        "too long ago"
+    );
+}
