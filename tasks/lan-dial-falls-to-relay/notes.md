@@ -1,5 +1,5 @@
 # lan-dial-falls-to-relay
-
+wat
 ## Goal
 Two paired devices on one LAN sync over LAN, not the relay.
 
