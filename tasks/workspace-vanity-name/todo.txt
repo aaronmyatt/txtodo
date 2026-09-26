@@ -1,0 +1,3 @@
+2026-09-27 tui/desktop: rename a workspace, with a workspace.rename row in specs/client-parity.toml +m11 @tui @desktop
+2026-09-27 mcp: the workspace list carries the shared name +m11 @mcp
+x 2026-09-27 2026-09-27 daemon/cli/tui/desktop: a synced workspace's shared name, stored in txtodo.toml, set with workspace rename, shown on every device +m11 @daemon @sync — see tasks/workspace-vanity-name/notes.md; known gap: offered names are memory-only, and two renames at once keep a merge-order pick
