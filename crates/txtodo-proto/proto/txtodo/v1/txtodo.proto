@@ -851,6 +851,12 @@ message WorkspaceInfo {
   // (`<data dir>/remote/<workspace-id>/`), so `root` is a place txtodo chose, not the user. False
   // from an older daemon, which a client reads as "not a mirror".
   bool is_remote = 11;
+  // The name to show for this workspace (task workspace-vanity-name). Display only, never
+  // identity. The `name` in its `txtodo.toml` when one is set: that file syncs, so every paired
+  // device shows the same one. Else, for a mirror, what the offering device calls it; else
+  // `default` for the default workspace, or the root's folder name. Empty from an older daemon,
+  // which a client reads as "derive one from `root`".
+  string name = 12;
 }
 
 message WorkspaceAddRequest {
@@ -928,6 +934,16 @@ message WorkspaceRejoinResponse {
   // Paired devices that offered this workspace lately (DeviceId ULID text), newest first. Sync
   // refills the folder from whichever of them it reaches.
   repeated string offering_devices = 4;
+}
+
+// --- vanity name (task workspace-vanity-name) ---
+
+message WorkspaceRenameRequest {
+  string workspace_id = 1;   // WorkspaceId ULID text
+  // The name every paired device shows, stored as `name` in the workspace's `txtodo.toml`.
+  // Trimmed; at most 256 bytes, no control characters. Empty clears it, and the workspace shows
+  // its folder name again.
+  string name = 2;
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---

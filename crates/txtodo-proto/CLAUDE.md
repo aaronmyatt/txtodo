@@ -80,6 +80,12 @@ beside the root, never deleted) and reopens the empty folder under the same id, 
 from a paired peer. `dry_run` changes nothing. The response names the backup folder, what moved,
 and the devices that offered the workspace lately. UNIMPLEMENTED from an older daemon.
 
+`WorkspaceInfo.name` (field 12, task workspace-vanity-name, 2026-09-26): the name to show for a
+workspace, display only. The daemon fills it from `name` in the workspace's `txtodo.toml` (which
+syncs, so paired devices agree), else a mirror's offered name, else `default` or the folder name.
+Empty from an older daemon. `WorkspaceRenameRequest { workspace_id, name }`: messages only in this
+commit; its rpc follows once the daemon can answer it.
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.

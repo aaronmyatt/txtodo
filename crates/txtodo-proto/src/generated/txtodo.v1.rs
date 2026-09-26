@@ -1061,6 +1061,13 @@ pub struct WorkspaceInfo {
     /// from an older daemon, which a client reads as "not a mirror".
     #[prost(bool, tag = "11")]
     pub is_remote: bool,
+    /// The name to show for this workspace (task workspace-vanity-name). Display only, never
+    /// identity. The `name` in its `txtodo.toml` when one is set: that file syncs, so every paired
+    /// device shows the same one. Else, for a mirror, what the offering device calls it; else
+    /// `default` for the default workspace, or the root's folder name. Empty from an older daemon,
+    /// which a client reads as "derive one from `root`".
+    #[prost(string, tag = "12")]
+    pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
@@ -1163,6 +1170,17 @@ pub struct WorkspaceRejoinResponse {
     /// refills the folder from whichever of them it reaches.
     #[prost(string, repeated, tag = "4")]
     pub offering_devices: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceRenameRequest {
+    /// WorkspaceId ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// The name every paired device shows, stored as `name` in the workspace's `txtodo.toml`.
+    /// Trimmed; at most 256 bytes, no control characters. Empty clears it, and the workspace shows
+    /// its folder name again.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
