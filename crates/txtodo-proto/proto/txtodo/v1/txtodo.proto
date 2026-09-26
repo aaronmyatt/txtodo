@@ -904,6 +904,26 @@ message WorkspaceDeclineOfferResponse {
   bool declined = 1;   // false when no such pending offer was found
 }
 
+// --- rejoin fresh (task sync-drift line 8) ---
+
+message WorkspaceRejoinRequest {
+  string workspace_id = 1;   // WorkspaceId ULID text
+  bool dry_run = 2;          // only say what would move and who offers it; change nothing
+}
+
+message WorkspaceRejoinResponse {
+  WorkspaceInfo workspace = 1;
+  // The new folder beside the root that this device's copy moved into. For a dry run, the name it
+  // would have had at that moment.
+  string backup_dir = 2;
+  // What moved (or would), relative to the root, `/` separators: `.txtodo`, `txtodo.toml` when
+  // present, and every synced document.
+  repeated string moved = 3;
+  // Paired devices that offered this workspace lately (DeviceId ULID text), newest first. Sync
+  // refills the folder from whichever of them it reaches.
+  repeated string offering_devices = 4;
+}
+
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---
 
 message DebugSetGroupKeyRequest {

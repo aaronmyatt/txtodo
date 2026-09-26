@@ -1139,6 +1139,32 @@ pub struct WorkspaceDeclineOfferResponse {
     pub declined: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceRejoinRequest {
+    /// WorkspaceId ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// only say what would move and who offers it; change nothing
+    #[prost(bool, tag = "2")]
+    pub dry_run: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceRejoinResponse {
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceInfo>,
+    /// The new folder beside the root that this device's copy moved into. For a dry run, the name it
+    /// would have had at that moment.
+    #[prost(string, tag = "2")]
+    pub backup_dir: ::prost::alloc::string::String,
+    /// What moved (or would), relative to the root, `/` separators: `.txtodo`, `txtodo.toml` when
+    /// present, and every synced document.
+    #[prost(string, repeated, tag = "3")]
+    pub moved: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Paired devices that offered this workspace lately (DeviceId ULID text), newest first. Sync
+    /// refills the folder from whichever of them it reaches.
+    #[prost(string, repeated, tag = "4")]
+    pub offering_devices: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
     /// decimal u128, same encoding pairing_wire.rs's group_id already uses
     #[prost(string, tag = "1")]
