@@ -370,6 +370,15 @@ multiplex every workspace's traffic — not done by this task).
   something new. The same registry row reopens the empty folder with a fresh store, which pulls the
   peer's whole log on the next session. `tests/workspace_rejoin.rs` is the two-daemon proof.
   `workspace_registry_grpc.rs` holds the registry handlers, split from `global_service.rs`.
+- `workspace_name.rs` + `workspace_rename.rs` (task workspace-vanity-name, 2026-09-26): a
+  workspace's shown name, display only. Stored as a top-level `name` line in `txtodo.toml`, which
+  already syncs as a text document (`layout_sync.rs`); `WorkspaceInfo.name` is that name, else
+  `default`, else the folder's, and for a mirror (`remote/<id>/`) what its offering device calls it
+  (`WorkspaceOfferRegistry::offered_name`, in memory). Outbound offers carry the shown name.
+  `WorkspaceRename` edits the line through the file's notes actor as two ops (old line out, new
+  line in), so two renames at once merge into two whole lines; the last one is read on every
+  device, and `layout_file::parse` ignores `name` lines. `tests/workspace_name.rs` is the
+  two-daemon proof.
 - `universal_grpc.rs` (task `tui-revamp/universal-rpc`, 2026-09-25): `UniversalTasks`, device-level
   like `WorkspaceList`. Every ready workspace's root list (`WorkspaceCatalog::ready`, no wait, no
   promote, no MRU touch), one `UniversalTask` row per task line with the line's id, done/priority
