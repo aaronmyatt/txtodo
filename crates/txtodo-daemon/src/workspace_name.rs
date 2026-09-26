@@ -95,6 +95,25 @@ pub(crate) fn without_name(text: &str) -> String {
     put_name_line(text, None)
 }
 
+/// The texts a rename of `text` to `name` goes through, each to be one edit: the old `name`
+/// line(s) out, then the new one in. Never one diff from name to name, which would splice two
+/// renames made at once into one name; this way they leave two whole lines ([`parse`]). Empty
+/// when `text` already names `name`.
+pub(crate) fn rename_steps(text: &str, name: Option<&str>) -> Result<Vec<String>, String> {
+    let named = with_name(text, name)?;
+    if named == text {
+        return Ok(Vec::new());
+    }
+    let mut steps: Vec<String> = [without_name(text), named]
+        .into_iter()
+        .filter(|step| step != text)
+        .collect();
+    // Clearing a name makes both steps the same text; `dedup` keeps one.
+    // Ref: https://doc.rust-lang.org/std/vec/struct.Vec.html#method.dedup
+    steps.dedup();
+    Ok(steps)
+}
+
 /// `text` with every top-level `name = ...` line dropped, and `line` (when given) put where the
 /// first of them stood, else before the first `[table]` header, else at the end. Every other byte
 /// stays as it was.

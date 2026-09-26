@@ -160,18 +160,23 @@ fn move_one((from, to): &(PathBuf, PathBuf)) -> std::io::Result<()> {
     std::fs::rename(from, to)
 }
 
-/// Writes `<root>/txtodo.toml` through a temp file and a rename, so a reader never sees half of it.
-/// The temp name starts with `.txtodo-`, which the watcher ignores. The workspace's name (task
-/// workspace-vanity-name) lives in the same file and is kept.
-fn write_layout_file(root: &Path, layout: &WorkspaceLayout) -> Result<(), Status> {
-    let text = format!(
+/// `layout` as the lines of a `txtodo.toml`, with no name. A rename that makes the file writes these
+/// too (`workspace_rename.rs`).
+pub(crate) fn layout_text(layout: &WorkspaceLayout) -> String {
+    format!(
         "# Where this workspace keeps its root list and the folder for its ref: lines.\n\
          refs_dir = {:?}\ntodo_file = {:?}\n",
         layout.refs_dir(),
         layout.todo_file()
-    );
+    )
+}
+
+/// Writes `<root>/txtodo.toml` through a temp file and a rename, so a reader never sees half of it.
+/// The temp name starts with `.txtodo-`, which the watcher ignores. The workspace's name (task
+/// workspace-vanity-name) lives in the same file and is kept.
+fn write_layout_file(root: &Path, layout: &WorkspaceLayout) -> Result<(), Status> {
     let name = crate::workspace_name::read(root);
-    let text = crate::workspace_name::with_name(&text, name.as_deref())
+    let text = crate::workspace_name::with_name(&layout_text(layout), name.as_deref())
         .map_err(|e| Status::internal(format!("cannot keep the workspace's name: {e}")))?;
     let tmp = root.join(".txtodo-layout.tmp");
     std::fs::write(&tmp, text)

@@ -1,9 +1,8 @@
-//! `GlobalService`: the tonic `Txtodo` impl actually wired to the one global socket
-//! (ADR 0025, task `daemon-global-socket`). Every method resolves the request's `WorkspaceSelector`
-//! against a `WorkspaceCatalog`, then delegates to a `TxtodoService` built fresh for the resolved
-//! workspace. `TxtodoService` still implements `Txtodo` directly, for the whitebox tests that
-//! bypass the catalog (`serve::serve`). Every method wraps its call in an `rpc{method,workspace}`
-//! span (`rpc_span`): this is the one place that sees every RPC.
+//! `GlobalService`: the tonic `Txtodo` impl wired to the one global socket (ADR 0025, task
+//! `daemon-global-socket`). Every method resolves the request's `WorkspaceSelector` against a
+//! `WorkspaceCatalog`, then delegates to a `TxtodoService` built fresh for that workspace (which
+//! still implements `Txtodo` itself, for whitebox tests via `serve::serve`), in an
+//! `rpc{method,workspace}` span (`rpc_span`): this is the one place that sees every RPC.
 
 use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
@@ -143,10 +142,9 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::HealthRequest>,
     ) -> Result<Response<pb::HealthResponse>, Status> {
-        // A selector-less Health never waits and never fails: the totals are about the device. It
-        // adds the one open workspace's details when there is exactly one (the `--dir` bridge),
-        // and is the totals alone while any open is pending or when 0 or 2+ are open, which
-        // `resolve_sole_open` refuses as ambiguous. A named workspace is resolved like any call.
+        // Selector-less: never waits or fails. The device's totals, plus the one open workspace's
+        // details when exactly one is open and none is pending (the `--dir` bridge; 0 or 2+ open
+        // are ambiguous to `resolve_sole_open`). A named workspace is resolved like any call.
         let totals = self.catalog.load_totals();
         let unnamed = r.get_ref().workspace.is_none();
         if unnamed && self.catalog.load_pending() > 0 {
@@ -391,5 +389,12 @@ impl Txtodo for GlobalService {
         r: Request<pb::WorkspaceRejoinRequest>,
     ) -> Result<Response<pb::WorkspaceRejoinResponse>, Status> {
         crate::workspace_registry_grpc::rejoin(self, r).await
+    }
+
+    async fn workspace_rename(
+        &self,
+        r: Request<pb::WorkspaceRenameRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        crate::workspace_rename::rename(self, r).await
     }
 }

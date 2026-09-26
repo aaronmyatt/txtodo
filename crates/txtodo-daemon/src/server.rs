@@ -389,4 +389,11 @@ impl Txtodo for TxtodoService {
     ) -> Result<Response<pb::WorkspaceRejoinResponse>, Status> {
         Err(no_registry())
     }
+
+    async fn workspace_rename(
+        &self,
+        _r: Request<pb::WorkspaceRenameRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        Err(no_registry())
+    }
 }
