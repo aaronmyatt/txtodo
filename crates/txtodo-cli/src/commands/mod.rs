@@ -27,3 +27,4 @@ pub mod skill;
 pub mod text;
 pub mod workspace;
 pub mod workspace_offers;
+pub mod workspace_rejoin;

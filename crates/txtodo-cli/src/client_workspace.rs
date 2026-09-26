@@ -105,6 +105,24 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
+    /// Drops this device's copy of a workspace and takes a paired device's (task sync-drift line
+    /// 8); `dry_run` only says what would move and who offers it.
+    pub fn workspace_rejoin(
+        &mut self,
+        workspace_id: &str,
+        dry_run: bool,
+    ) -> Result<pb::WorkspaceRejoinResponse, ClientError> {
+        let req = pb::WorkspaceRejoinRequest {
+            workspace_id: workspace_id.to_owned(),
+            dry_run,
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_rejoin(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Discards a pending offer; `false` when there was no such offer.
     pub fn workspace_decline_offer(
         &mut self,

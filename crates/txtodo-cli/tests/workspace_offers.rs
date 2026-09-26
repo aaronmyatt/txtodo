@@ -91,3 +91,30 @@ fn accept_and_decline_of_an_unknown_offer_fail_by_name_and_adopt_nothing() {
     );
     assert_fails_with(&bad, "not a ULID");
 }
+
+/// Task sync-drift line 8: with no paired device offering it, `rejoin` is refused before any
+/// prompt, `--yes` or not, and nothing in the workspace moves.
+#[test]
+fn rejoin_is_refused_with_no_peer_and_moves_nothing() {
+    let (_state, daemon, ws) = fixture();
+    let dir = ws.path();
+    std::fs::write(dir.join("todo.txt"), "(A) keep me\n").unwrap();
+    let added = daemon.txtodo(dir, &["--json", "workspace", "add"]);
+    assert!(added.status.success(), "{}", text(&added));
+    let out = String::from_utf8_lossy(&added.stdout).into_owned();
+    let id = out.split(r#""id":""#).nth(1).and_then(|s| s.get(..26));
+    let id = id.unwrap_or_else(|| panic!("no id in {out}"));
+
+    for args in [
+        vec!["workspace", "rejoin", id, "--yes"],
+        vec!["workspace", "rejoin", id],
+    ] {
+        let rejoin = daemon.txtodo(dir, &args);
+        assert_fails_with(&rejoin, "no paired device offered");
+        assert!(!text(&rejoin).contains("Continue?"), "{}", text(&rejoin));
+    }
+    let kept = std::fs::read_to_string(dir.join("todo.txt")).unwrap();
+    assert_eq!(kept, "(A) keep me\n");
+    let unknown = daemon.txtodo(dir, &["workspace", "rejoin", WORKSPACE_ID, "--yes"]);
+    assert_fails_with(&unknown, "no registered workspace");
+}

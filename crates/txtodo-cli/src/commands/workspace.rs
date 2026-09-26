@@ -1,6 +1,7 @@
 //! `txtodo workspace add|remove|list` (ADR 0025, task `cli-workspace-commands`): manages the
 //! device-global daemon's workspace registry. `offers|accept|decline` (task
-//! `workspace-offer-cli`) live in `workspace_offers.rs`; only their clap variants are here. Needs the true global daemon — a legacy
+//! `workspace-offer-cli`) live in `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in
+//! `workspace_rejoin.rs`; only their clap variants are here. Needs the true global daemon — a legacy
 //! `--dir`-bridge daemon has no registry to answer these with (`Daemon::workspace_add`/etc.
 //! return an `Unimplemented` `ClientError::Rpc` against one, surfaced as a normal error).
 
@@ -64,6 +65,16 @@ pub enum Action {
         #[arg(long)]
         from: Option<String>,
     },
+    /// Drops this device's copy of a workspace and takes a paired device's (it must offer it
+    /// now): its documents and `.txtodo/` move into a new folder beside it, printed, never
+    /// deleted or sent; sync then refills it. Shows what moves and asks first, unless `--yes`.
+    Rejoin {
+        /// The workspace's id (ULID text, from `workspace list`).
+        id: String,
+        /// Skip the confirmation prompt.
+        #[arg(long)]
+        yes: bool,
+    },
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
     Default,
@@ -96,6 +107,7 @@ pub fn run(
         Some(Action::Decline { id, from }) => {
             super::workspace_offers::run_decline(daemon, id, from.as_deref(), as_json)
         }
+        Some(Action::Rejoin { id, yes }) => super::workspace_rejoin::run(daemon, id, *yes, as_json),
         Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
         Some(Action::Layout {
             refs_dir,

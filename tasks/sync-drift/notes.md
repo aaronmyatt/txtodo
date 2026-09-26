@@ -330,3 +330,83 @@ never stalls sync without anyone seeing it.
   - The proto commit alone breaks the daemon build (its `Peer` literal lacks the new fields) until
     the daemon commit right after it, same as earlier proto changes.
   - Not checked against this Mac's live daemon or the other device's log.
+
+### Line 8
+- CLI: `txtodo workspace rejoin <id> [--yes]`, beside `remove`/`accept`/`prune`. It asks the
+  daemon for a dry run first, so a refusal comes before any prompt, then shows the backup folder,
+  what moves and the peer, and asks `Continue? [y/N]` on stderr (a closed stdin is a no). `--yes`
+  skips the prompt, like `device remove`. No `--from`: sync refills the folder from whichever paired
+  device shares the workspace, so a device choice would promise something the daemon can't keep.
+- Proto, additive: `WorkspaceRejoin(WorkspaceRejoinRequest { workspace_id, dry_run })` →
+  `{ workspace, backup_dir, moved, offering_devices }`. Needed: `remove` + `accept` can't do it.
+  The mirror skips any id ever registered, `accept` needs a pending offer (drained within a moment)
+  and lands under `remote/`, and `adopt` of a removed id at the same root is a no-op. Local
+  daemon↔client only, no peer wire change. Messages and rpc went in two commits, so only the
+  minutes between the rpc commit and the daemon wiring had a broken daemon build.
+- Daemon (`workspace_rejoin.rs`, `rejoin_backup.rs`):
+  - Refused, nothing changed: the default workspace, an unknown or missing one, a root that
+    overlaps another registered workspace (moving its lists would make that one send deletes), and
+    one no paired device offered in the last 4 redial rounds (60 s by default).
+    `WorkspaceOfferRegistry` now remembers when each (device, workspace) was last offered; the
+    pending list is drained by the mirror task at once, so it could not answer "who offers this".
+  - The registry row never changes: same id, same root. The load slot is held `Loading`, so a
+    request for the workspace waits for the fresh copy instead of reopening the old one half way.
+  - Close: the workspace leaves `open` (routes unregistered, so live sessions end), each actor gets
+    a new `ActorMsg::Stop`, and the rejoin waits up to 30 s until nothing holds the store. `Stop`
+    is needed: a Watch stream (`watch_forward.rs`) holds an actor handle until that actor's changes
+    end, so an open TUI or desktop kept the old store alive for as long as it stayed connected.
+  - Move: `.txtodo/` first, then a guard file named `.txtodo` in its place, then `txtodo.toml` and
+    every synced document, by `rename` into `<root>.rejoin-backup-<UTC time>` beside the root (same
+    filesystem, never a copy, never a delete). With the guard there no open can make a store, so a
+    crash half way leaves a folder that refuses to open, not a fresh store beside old lines (a
+    re-mint) or an old store beside missing lists (deletes a peer takes). A failure moves back what
+    moved, never over a file that appeared meanwhile.
+  - Reopen: line 4's `require_empty` must pass, the guard goes, an empty `todo.txt`, then the same
+    open as any workspace. The fresh store greets with no heads, so the next session pulls the
+    peer's whole log, this device's own ops the peer holds included. Nothing from the backup is sent.
+- Does it heal the Evidence duplicates? Partly, and not by itself.
+  - Sync ships the op log, not the file. A rejoin gets the peer's log replayed from empty: what the
+    peer's log holds comes back; what only this device held stays in the backup.
+  - Heals: this device's ids match the peer's again, so the 233 `no task <ULID> in this document`
+    skips stop. Ops only this device held (a run the peer kept refusing, and everything queued
+    behind it) are dropped, not sent. That is the two-daemon test's case.
+  - Does not heal: a re-mint or merge that already landed on the peer. It is in the peer's log, so
+    the fresh copy shows the same duplicates the peer's file shows. The gain: both devices then hold
+    the same ids, so deleting one copy by hand, once, on either side, reaches the other. Before, a
+    device that re-minted lacked the old ids, and deleting the "wrong" copy on the peer (the two
+    lines read the same) deleted that device's only copy.
+  - Not checked on real data: which of this Mac's re-mints landed on the other device is unknown.
+    Reading a copy of this Mac's `oplog.db` was not allowed in this session; the other device's log
+    is still unseen.
+- Tests: `rejoin_backup_tests.rs` (plan order, backup name, move with guard, a failure moves all
+  back and removes the backup, move-back never overwrites, a crash's guard moves like state);
+  `workspace_rejoin_tests.rs` (no offer, default, unknown refused with nothing moved; dry run; a
+  real rejoin with a Watch stream open: copy in the backup, empty list, same row, fresh store, the
+  stream ends); `offered_by` in `workspace_offer_registry_tests.rs`; `roundtrip_rejoin.rs`; CLI
+  prompt/JSON units and `tests/workspace_offers.rs` (refused with no peer, before any prompt,
+  nothing moved). `tests/workspace_rejoin.rs`: two daemons pair over LAN; A refuses one of B's
+  runs (a file sits where its folder would go) and B's duplicates of A's lines wait behind it;
+  rejoin on B: the backup holds B's old list, sub-list and store, B ends with A's lines only (its
+  own line A held comes back), and B's next line reaches A. Still green: daemon lib (427),
+  `global_socket`, `default_workspace_pairing`, `default_workspace_foreign`, `pairing_lan`,
+  `lan_live_push`, CLI bin and `tests/workspace.rs`.
+- Still broken / not done:
+  - Duplicates the peer's log already holds come back (above). A real "take the peer's file" needs
+    the peer to send a snapshot, a wire change; an automatic dedupe of same-text lines could delete
+    real repeats. Neither done.
+  - Don't edit the workspace on this device until the peer's lines show up. An edit before the
+    first session is this device's op 1, while the peer already holds this device's old ops from 1
+    up: the ranks clash (line 6). The CLI says so; nothing blocks it.
+  - The default workspace can't be rejoined.
+  - A holder of the old workspace that outlives 30 s (a stuck RPC, a long commit) makes the rejoin
+    give up and reopen the old copy, nothing moved; that holder may still write to the old store.
+  - The fresh store takes the daemon's default identity mode, like any mirror, not the old one's.
+  - A crash between moving `.txtodo/` and writing the guard (one rename apart) leaves old lines
+    with no store: the next start re-mints them.
+  - Every other workspace's LAN sessions restart too (the route table changed).
+  - `workspace remove` still leaks a watched workspace's store (no `Stop` there); not this line.
+  - Only the CLI and the RPC; the TUI and desktop have no rejoin. No two-daemon run of the CLI
+    command itself (its tests are units plus a refusal against one real daemon).
+  - Daemon tests with a `--dir` peer (`default_workspace_pairing`) fail when `TXTODO_REGISTRY_DB`
+    is set for the whole run: the harness seeds `<dir>/.txtodo/registry.db`, the env var wins. They
+    pass without it.

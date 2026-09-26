@@ -16,7 +16,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   per known sync peer, and from `SyncStatus` one `sync` row per file a peer's ops keep being
   refused on and per parked peer, `doctor_sync.rs`, sync-drift line 7; exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
   list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
-  human type the id back unless `--yes`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
+  human type the id back unless `--yes`); `workspace rejoin <id> [--yes]` (sync-drift line 8,
+  `commands/workspace_rejoin.rs`: a dry run first so a refusal comes before the prompt, then a
+  `[y/N]` prompt on stderr that EOF answers no; the daemon moves this device's copy into a backup
+  folder beside the root and refills it from a paired peer); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
   handshake as the initiator (renders the QR and text code from `PairOffer`, polls the new
   `PairAwaitPeer` RPC for a real joiner, shows and confirms the real SAS once one arrives); `CODE`
   joins as the joiner (`PairAccept`, real SAS, an explicit typed "yes" before `PairConfirmSas` —
