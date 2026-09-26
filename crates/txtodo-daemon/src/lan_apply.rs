@@ -203,13 +203,14 @@ fn commit_notes_file(ws: &SharedWorkspace, path: &FilePath, ops: Vec<Op>) -> boo
 /// 2026-09-25). The store's head for a device is its op count (`txtodo_store::heads`), so a
 /// half-committed batch must never leave a hole: grouping by file and carrying on past a failed
 /// file used to commit later ops over a missing earlier one. The caller acks only the prefix
-/// ([`landed_ranges`]), and the peer sends the rest again.
+/// ([`landed_ranges`]), and the peer sends the rest again. An op the log already holds counts as
+/// landed ([`not_yet_stored`]).
 pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> usize {
     let total = ops.len();
     let mut landed = 0;
     for (path, run) in same_file_runs(ops) {
         let len = run.len();
-        if !commit_one_file(ws, rt, path, run) {
+        if !commit_new_ops(ws, rt, path, run) {
             log_partly_committed(landed, total);
             break;
         }
@@ -217,6 +218,71 @@ pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op
     }
     debug_assert!(landed <= total);
     landed
+}
+
+/// One same-file run, minus the ops the log already holds. A run of nothing but held ops
+/// commits nothing and still counts as landed, so the ack covers it.
+fn commit_new_ops(ws: &SharedWorkspace, rt: &Handle, path: FilePath, run: Vec<Op>) -> bool {
+    let Some(fresh) = not_yet_stored(ws, &path, run) else {
+        return false;
+    };
+    fresh.is_empty() || commit_one_file(ws, rt, path, fresh)
+}
+
+/// `run` without the ops whose id the log already holds (task sync-drift line 2). A device's
+/// "op N" is its rank in its own HLC order (`txtodo_store::heads`), and a later own op can sort
+/// before ops it already sent, so a batch can start with ops we hold. Inserting one again failed
+/// the `UNIQUE` op id and refused the run; the sender resent it every `RESEND_AFTER`, and all
+/// later ops from that device waited behind it. A held id whose op differs is skipped too: the
+/// log is append-only, so the first copy stays, with a warn. `None` only on a store error.
+fn not_yet_stored(ws: &SharedWorkspace, path: &FilePath, run: Vec<Op>) -> Option<Vec<Op>> {
+    let store = read(ws).store().clone();
+    let store = store.lock().unwrap_or_else(PoisonError::into_inner);
+    let total = run.len();
+    let mut fresh = Vec::with_capacity(total);
+    for op in run {
+        match store.op_by_id(op.id) {
+            Ok(None) => fresh.push(op),
+            Ok(Some(stored)) => warn_if_other(&stored, &op),
+            Err(e) => return log_held_check_failed(path, &e),
+        }
+    }
+    debug_assert!(fresh.len() <= total);
+    log_already_held(path, total - fresh.len(), total);
+    Some(fresh)
+}
+
+/// A held id is expected to carry the very op we hold; one that does not is worth a look.
+fn warn_if_other(stored: &txtodo_store::Stored, op: &Op) {
+    debug_assert_eq!(stored.op.id, op.id);
+    if stored.op != *op {
+        log_id_conflict(stored, op);
+    }
+}
+
+/// Split out of [`warn_if_other`]: a macro call inside a branch costs cognitive complexity.
+fn log_id_conflict(stored: &txtodo_store::Stored, op: &Op) {
+    tracing::warn!(
+        file = %op.file,
+        op = %op.id.ulid(),
+        seq = stored.seq.0,
+        kind = txtodo_store::kind_tag(&op.kind),
+        stored_kind = txtodo_store::kind_tag(&stored.op.kind),
+        "lan_sync_op_id_conflict"
+    );
+}
+
+/// Info, not debug: a held op in a batch means the sender's ranks moved (sync-drift line 6),
+/// and the op that moved them may never reach us.
+fn log_already_held(path: &FilePath, held: usize, total: usize) {
+    if held > 0 {
+        tracing::info!(file = %path, held, total, "lan_sync_ops_already_held");
+    }
+}
+
+fn log_held_check_failed(path: &FilePath, e: &txtodo_store::StoreError) -> Option<Vec<Op>> {
+    tracing::warn!(file = %path, error = %e, "lan_sync_held_check_failed");
+    None
 }
 
 /// `ops` cut into maximal runs of consecutive ops on one file, in order.

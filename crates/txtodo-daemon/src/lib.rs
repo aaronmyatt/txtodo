@@ -179,6 +179,8 @@ mod keystore_setup_tests;
 #[cfg(test)]
 mod lan_peers_tests;
 #[cfg(test)]
+mod lan_session_dup_tests;
+#[cfg(test)]
 mod lan_session_fairness_tests;
 #[cfg(test)]
 mod lan_session_gate_tests;

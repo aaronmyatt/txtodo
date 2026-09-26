@@ -50,7 +50,8 @@ impl Link for LossyLink {
 }
 
 /// Ends both drivers when dropped, so a failed assertion does not hang the runtime's shutdown.
-struct StopOnDrop(Arc<AtomicBool>);
+/// `pub(crate)`, like the pair helpers below: `lan_session_dup_tests` reuses them.
+pub(crate) struct StopOnDrop(pub(crate) Arc<AtomicBool>);
 
 impl Drop for StopOnDrop {
     fn drop(&mut self) {
@@ -65,21 +66,21 @@ struct Loss {
 }
 
 /// Two linked workspaces, their drivers, and each side's loss controls.
-struct Pair {
-    a: SharedWorkspace,
-    b: SharedWorkspace,
-    device_b: DeviceId,
+pub(crate) struct Pair {
+    pub(crate) a: SharedWorkspace,
+    pub(crate) b: SharedWorkspace,
+    pub(crate) device_b: DeviceId,
     loss_a: Loss,
     loss_b: Loss,
-    stop: Arc<AtomicBool>,
+    pub(crate) stop: Arc<AtomicBool>,
     drivers: Vec<JoinHandle<bool>>,
     _dirs: (tempfile::TempDir, tempfile::TempDir),
 }
 
 /// Frames at or under this many bytes are never dropped: heartbeats and link handshakes.
-const OPS_FRAME_MIN: usize = 200;
+pub(crate) const OPS_FRAME_MIN: usize = 200;
 
-fn start_pair(min_len_b: usize) -> Pair {
+pub(crate) fn start_pair(min_len_b: usize) -> Pair {
     start_pair_over(min_len_b, Carrier::Lan)
 }
 
@@ -142,7 +143,7 @@ fn start_pair_over(min_len_b: usize, carrier_a: Carrier) -> Pair {
     }
 }
 
-async fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
+pub(crate) async fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
     let started = Instant::now();
     while !ok() {
         assert!(started.elapsed() < Duration::from_secs(20), "{what}");
@@ -150,7 +151,7 @@ async fn wait_until(what: &str, mut ok: impl FnMut() -> bool) {
     }
 }
 
-async fn finish(pair: Pair) {
+pub(crate) async fn finish(pair: Pair) {
     let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
     assert!(
         a.read().unwrap().live_peers().is_live(device_b),
@@ -216,7 +217,7 @@ async fn a_copy_of_a_batch_already_held_is_acked_and_the_session_carries_on() {
     finish(pair).await;
 }
 
-fn peer_insert(n: u128, file: &str) -> Op {
+pub(crate) fn peer_insert(n: u128, file: &str) -> Op {
     let task = TaskId::new(Ulid::from_u128(1_000 + n));
     Op {
         id: OpId::new(Ulid::from_u128(5_000 + n)),

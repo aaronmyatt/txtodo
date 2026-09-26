@@ -123,3 +123,30 @@ never stalls sync without anyone seeing it.
   - Duplicate ids a peer already got from past re-mints don't heal. That is line 8.
   - `live_fingerprints` reads at most 50,000 rows. Past that the repair can miss an owner and fall
     back to the re-mint (the worst file here has 23,436).
+
+### Line 2
+- Store: `Store::op_by_id`, one lookup on the `UNIQUE` op id. Additive, no schema change.
+- Daemon: `commit_incoming_ops` (`lan_apply.rs`) drops the ops whose id is already stored from
+  each same-file run before it commits, and still counts them as landed. The ack covers the whole
+  range, the sender's `held` moves past it, and the resend stops. Later ops from that device land
+  again. A run of only held ops commits nothing. Covers the LAN, relay and file-carrier paths
+  (all go through `commit_incoming_ops`). Rank and head code is untouched.
+- Same id, other content: skipped too, with a warn (`lan_sync_op_id_conflict`: op id, seq, both
+  kinds, no text). The log is append-only, so the first copy stays. Refusing it would bring the
+  loop back.
+- A held op in a batch logs `lan_sync_ops_already_held` at info (file, held, total). Info, not
+  debug: it is the one visible trace of a rank shift.
+- Tests (`lan_session_dup_tests.rs`): a held op counts as landed and is not applied twice; a held
+  id with other content keeps the stored op; a real linked pair where A gets an own op stamped
+  before all its others, and A's next line still reaches B. All three fail without the fix (the
+  pair test times out: B never gets the line).
+- Still broken / not done:
+  - The rank shift itself (line 6). The op that moved the ranks is never sent: the receiver's head
+    says it already holds that rank. So the receiver quietly lacks that op.
+  - The receiver's store count for that device now trails the ranks it acked. The session's own
+    heads are right, but the next connection greets with the store count, so one held op comes
+    again per reconnect. It is skipped and acked; no loop.
+  - Check and insert are not one transaction. Two sessions landing the same op at once (LAN and
+    relay, or the file carrier) can still hit the `UNIQUE` insert. That run is refused once, then
+    skipped on the resend 10 s later. Not a loop.
+  - Not checked against the other device's real log; its refusal `error` is still unseen.
