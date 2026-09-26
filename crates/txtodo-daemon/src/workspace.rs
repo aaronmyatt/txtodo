@@ -296,6 +296,10 @@ impl Workspace {
     pub(crate) fn live_peers(&self) -> &crate::live_peers::LivePeers {
         self.identity.live_peers()
     }
+    /// Which peers hold no key we share (task sync-drift line 5), device-wide.
+    pub(crate) fn peer_keys(&self) -> &crate::peer_keys::PeerKeys {
+        self.identity.peer_keys()
+    }
     /// The device-global meta/devices rows (ADR 0021: `adopt_group_key`, `device_remove.rs`,
     /// `debug_hooks.rs`, `devices_grpc.rs` all go through this instead of `store()`).
     pub(crate) fn identity_store(&self) -> &Mutex<txtodo_store::IdentityStore> {

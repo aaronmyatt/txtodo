@@ -96,6 +96,7 @@ mod pairing_relay_dial;
 mod pairing_state;
 mod pairing_state_error;
 mod pairing_wire;
+mod peer_keys;
 pub mod pidfile;
 mod progress;
 pub mod reconcile;
@@ -215,6 +216,10 @@ mod notes_actor_tests;
 mod pairing_grpc_tests;
 #[cfg(test)]
 mod pairing_lan_tests;
+#[cfg(test)]
+mod peer_keys_dial_tests;
+#[cfg(test)]
+mod peer_keys_tests;
 #[cfg(test)]
 mod reconcile_replay_tests;
 #[cfg(test)]

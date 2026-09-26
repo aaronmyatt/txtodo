@@ -253,12 +253,9 @@ multiplex every workspace's traffic — not done by this task).
   (LAN) within `timeout`, else awaits `fallback` (relay) — shared by production
   (`lan.rs::dial_and_spawn`, `L = IrohLink`) and `relay_fallback_tests.rs` (`L = ChannelLink`, a
   simulated relay half) so there is exactly one fallback code path, not two that could drift.
-  `relay_fallback.rs`'s own `relay_fallback_dial` dials a peer's LAN identity over the relay
-  endpoint — a known, flagged limitation: the relay endpoint is a separately-generated iroh
-  identity per daemon run (no shared/persisted key across LAN and relay yet), so this only really
-  connects once both ends share one identity across carriers, which is `relay-converge-test`'s job;
-  this pass proves the LAN→relay *selection* logic end to end via simulation, the same spirit as
-  `lan_loopback_converge.rs` proving LAN for real versus `endpoint_tests.rs`'s same-process caveat.
+  `relay_fallback.rs`'s `relay_dial_device` dials the peer's relay node id from its devices row
+  (task sync-drift line 5, 2026-09-26; none recorded means no fallback). It used to dial the
+  peer's LAN node id over the relay, which no relay endpoint answers.
 - `--relay-dial-peer`/`--no-lan` (plan M8 `relay-converge-test`, `relay.rs`): investigating the
   identity gap above for a real two-daemon test surfaced a deeper one — `relay_fallback_dial` only
   ever runs for a peer `lan.rs::handle_sighting` already learned about via mDNS, which by
@@ -327,6 +324,10 @@ multiplex every workspace's traffic — not done by this task).
   Each session is tagged with its `live_peers::Carrier` (task `lan-dial-falls-to-relay`,
   2026-09-25): a peer live only over the relay is still dialed over LAN, with no relay fallback,
   and a relay session ends once a LAN session with its peer is up.
+  A dial succeeds only once the peer's `Hello` opens (task sync-drift line 5, 2026-09-26):
+  `drive_shared_session` returns a `peer_keys::SessionEnd`. `peer_keys.rs` parks a peer after 3
+  `wrong_group` opens in a row (every dial loop skips it; pairing, an in-group sighting, an opened
+  frame or a group change bring it back) and warns once per peer and kind (`peer_open_failed`).
   `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
   `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
   **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts

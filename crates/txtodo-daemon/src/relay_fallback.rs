@@ -5,10 +5,13 @@
 //! selection code, never two copies that could drift apart.
 
 use std::future::Future;
+use std::sync::PoisonError;
 use std::time::Duration;
 
+use txtodo_model::DeviceId;
 use txtodo_sync::IrohLink;
 
+use crate::device_identity::DeviceIdentity;
 use crate::lan::{CONNECT_TIMEOUT, LanCtx};
 
 /// Tries `primary` within `timeout`; if it times out, or resolves to `None` (LAN "didn't reach the
@@ -50,19 +53,35 @@ fn log_fallback_outcome(relay_won: bool) {
     }
 }
 
-/// The relay half of `lan.rs::dial_and_spawn`'s fallback (plan M8 `sync-relay-enable`, ADR 0026):
-/// dials `node` over this daemon's own bound relay endpoint, if any — no endpoint (relay never
-/// configured, or `relay.rs` has not finished binding yet) is the same "nothing to try" as a
-/// `None` LAN dial. `RelayEndpoint::connect`'s own `ForeignGroup` gate is inherited for free by
-/// passing `ctx.group` as the peer's claimed group.
-///
-/// **Known limitation, flagged**: `node` is the peer's *LAN* iroh identity; the relay endpoint
-/// binds a separately generated identity per daemon run (no shared/persisted key across LAN and
-/// relay yet), so this dial only really reaches the peer once both ends share one identity across
-/// both carriers — that gap is `relay-converge-test`'s job. This pass proves the LAN→relay
-/// *selection* logic end to end via simulation (`relay_fallback_tests.rs`), the same spirit as
-/// `lan_loopback_converge.rs` proving LAN for real versus `endpoint_tests.rs`'s same-process
-/// caveat.
+/// The relay half of `lan.rs::dial_and_spawn`'s fallback (plan M8 `sync-relay-enable`, ADR
+/// 0026): dials `device` at the relay node id its devices row records (pairing records it,
+/// `Workspace::record_peer_relay_reachability`). No row, a removed one, or none recorded is the
+/// same "nothing to try" as a `None` LAN dial. It used to dial the peer's *LAN* node id over the
+/// relay, which no relay endpoint ever answers: the LAN endpoint's identity is not the relay one
+/// (task sync-drift line 5).
+pub(crate) async fn relay_dial_device(ctx: LanCtx, device: DeviceId) -> Option<IrohLink> {
+    let node = peer_relay_node(&ctx.identity, device)?;
+    relay_fallback_dial(ctx, node).await
+}
+
+/// The relay node id `device`'s devices row records, unless the row is removed. `pub(crate)` for
+/// `relay_fallback_tests.rs`.
+pub(crate) fn peer_relay_node(identity: &DeviceIdentity, device: DeviceId) -> Option<[u8; 32]> {
+    let row = identity
+        .store()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .device(device)
+        .ok()??;
+    row.relay_node_id.filter(|_| row.removed_at_ms.is_none())
+}
+
+/// Dials the relay node id `node` over this daemon's own bound relay endpoint, if any — no
+/// endpoint (relay never configured, or `relay.rs` has not finished binding yet) is the same
+/// "nothing to try" as a `None` LAN dial. `RelayEndpoint::connect`'s own `ForeignGroup` gate is
+/// inherited for free by passing `ctx.group` as the peer's claimed group. `relay_autodial.rs`'s
+/// relay-only dial calls this with a devices row's relay node id; [`relay_dial_device`] looks it
+/// up for the LAN fallback.
 pub(crate) async fn relay_fallback_dial(ctx: LanCtx, node: [u8; 32]) -> Option<IrohLink> {
     let endpoint = ctx.device_relay.as_ref()?.endpoint();
     let status = ctx.identity.lan_status().clone();

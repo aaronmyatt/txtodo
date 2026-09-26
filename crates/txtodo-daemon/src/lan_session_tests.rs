@@ -354,8 +354,22 @@ pub(crate) fn drive_session(
     drive_session_over(link, (ws, device, group), crate::live_peers::Carrier::Lan)
 }
 
-/// [`drive_session`] over a named carrier (task lan-dial-falls-to-relay).
+/// [`drive_session`] over a named carrier (task lan-dial-falls-to-relay): `true` once the peer's
+/// `Hello` opened.
 pub(crate) fn drive_session_over(
+    link: &mut dyn txtodo_sync::Link,
+    session: (
+        SharedWorkspace,
+        txtodo_model::DeviceId,
+        txtodo_sync::GroupId,
+    ),
+    carrier: crate::live_peers::Carrier,
+) -> bool {
+    drive_session_end(link, session, carrier).greeted()
+}
+
+/// [`drive_session_over`], returning how the session ended (task sync-drift line 5).
+pub(crate) fn drive_session_end(
     link: &mut dyn txtodo_sync::Link,
     (ws, device, group): (
         SharedWorkspace,
@@ -363,7 +377,7 @@ pub(crate) fn drive_session_over(
         txtodo_sync::GroupId,
     ),
     carrier: crate::live_peers::Carrier,
-) -> bool {
+) -> crate::peer_keys::SessionEnd {
     use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
     let id = crate::lan_session::read(&ws).workspace_id();
     let routes = WorkspaceRoutes::new();

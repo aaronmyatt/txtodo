@@ -33,7 +33,7 @@ pub(crate) fn resync_and_dial(
     // resync is a reconnect, not a redial of a link that is still up. One live only over the relay
     // is dialed over LAN, no relay fallback (task lan-dial-falls-to-relay, `dial_and_spawn`).
     let live = ctx.identity.live_peers();
-    for peer in peers_to_resync(known_peers, ctx.device)
+    for peer in peers_to_resync(known_peers, &ctx.identity)
         .into_iter()
         .filter(|p| !live.is_live_on(p.device, Carrier::Lan))
     {
@@ -45,9 +45,12 @@ pub(crate) fn resync_and_dial(
             peer,
         );
     }
+    // A parked peer holds no key we share (task sync-drift line 5): this used to dial every device
+    // not marked removed, whatever its group.
+    let parked = ctx.identity.peer_keys();
     for (device, node) in relay_only_peers(ctx, known_peers)
         .into_iter()
-        .filter(|(device, _)| !live.is_live(*device))
+        .filter(|(device, _)| !live.is_live(*device) && !parked.is_parked(*device))
     {
         spawn_relay_only_dial(ctx.clone(), node, device, Arc::clone(sessions));
     }
@@ -140,13 +143,20 @@ fn log_cap_reached(peer: DeviceId) -> Option<tokio::sync::OwnedSemaphorePermit> 
 }
 
 /// One relay-only dial attempt, bounded by `sessions` the same as every other dial in this crate.
+/// What the session showed about `device`'s key is booked (`peer_keys.rs`), so a peer with another
+/// group's key is parked. Still no backoff here: an unreachable peer is tried every tick.
 fn spawn_relay_only_dial(ctx: LanCtx, node: [u8; 32], device: DeviceId, sessions: Arc<Semaphore>) {
     let Ok(permit) = sessions.try_acquire_owned() else {
         return;
     };
     tokio::spawn(async move {
         match relay_fallback_dial(ctx.clone(), node).await {
-            Some(link) => spawn_driver(ctx, (link, Carrier::Relay), permit, |_| {}),
+            Some(link) => {
+                let keys = ctx.identity.peer_keys().clone();
+                spawn_driver(ctx, (link, Carrier::Relay), permit, move |end| {
+                    keys.book_session(Some(device), end);
+                });
+            }
             None => tracing::debug!(peer = %device, "relay_only_auto_dial_failed"),
         }
     });

@@ -132,21 +132,20 @@ fn open_and_decode(
     })?)
 }
 
-/// `None` on any failure worth ending the connection over — already logged. `pub(crate)`: the
-/// dispatch loop in `lan_session_dispatch.rs` calls this.
+/// `Err(kind)` on any failure worth ending the connection over — logged here at debug; the peer's
+/// own warning, once per peer and kind, is `peer_keys.rs`'s. `pub(crate)`: the dispatch loop in
+/// `lan_session_dispatch.rs` calls this.
 pub(crate) fn open_and_decode_logged(
     frame: &Frame,
     group: GroupId,
     workspace: WorkspaceId,
     keys: &GroupKeys,
-) -> Option<Message> {
-    match open_and_decode(frame, group, workspace, keys) {
-        Ok(msg) => Some(msg),
-        Err(e) => {
-            tracing::debug!(error = %e, kind = sync_error_kind(&e), "lan_session_open_failed");
-            None
-        }
-    }
+) -> Result<Message, &'static str> {
+    open_and_decode(frame, group, workspace, keys).map_err(|e| {
+        let kind = sync_error_kind(&e);
+        tracing::debug!(error = %e, kind, "lan_session_open_failed");
+        kind
+    })
 }
 
 /// A stable, queryable tag for `SyncError`'s own inner variant — previously only the free-text
@@ -172,7 +171,8 @@ fn message_error_kind(e: &MessageError) -> &'static str {
     }
 }
 
-fn crypto_error_kind(e: &CryptoError) -> &'static str {
+/// `pub(crate)`: `control_session.rs` names a control frame's open failure the same way.
+pub(crate) fn crypto_error_kind(e: &CryptoError) -> &'static str {
     match e {
         CryptoError::Encode(_) => "encode",
         CryptoError::BatchLength { .. } => "batch_length",
@@ -180,7 +180,7 @@ fn crypto_error_kind(e: &CryptoError) -> &'static str {
         CryptoError::BadPublicKey { .. } => "bad_public_key",
         CryptoError::SignatureInvalid { .. } => "signature_invalid",
         CryptoError::WrongVersion { .. } => "wrong_version",
-        CryptoError::WrongGroup { .. } => "wrong_group",
+        CryptoError::WrongGroup { .. } => crate::peer_keys::WRONG_GROUP,
         CryptoError::WrongWorkspace { .. } => "wrong_workspace",
         CryptoError::Truncated { .. } => "truncated",
         CryptoError::UnknownEpoch { .. } => "unknown_epoch",

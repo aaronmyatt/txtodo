@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
+use txtodo_model::DeviceId;
 use txtodo_sync::RelayEndpoint;
 
 use crate::control_dispatch::{self, DispatchCtx};
@@ -131,13 +132,13 @@ async fn redial_loop(
     let mut ticker = tokio::time::interval(crate::lan::resync_interval());
     loop {
         ticker.tick().await;
-        for node_id in known_relay_peers(&identity) {
+        for peer in known_relay_peers(&identity) {
             let Ok(permit) = Arc::clone(&sem).try_acquire_owned() else {
                 break;
             };
             dial_one_peer(
                 &endpoint,
-                node_id,
+                peer,
                 Arc::clone(&identity),
                 Arc::clone(&registry),
                 permit,
@@ -149,42 +150,47 @@ async fn redial_loop(
 
 async fn dial_one_peer(
     endpoint: &RelayEndpoint,
-    node_id: [u8; 32],
+    (device, node_id): (DeviceId, [u8; 32]),
     identity: Arc<DeviceIdentity>,
     registry: Arc<Mutex<WorkspaceRegistry>>,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     match endpoint.connect_control(node_id).await {
-        Ok(link) => spawn_session(link, identity, registry, permit),
+        Ok(link) => spawn_session(link, identity, registry, permit, Some(device)),
         Err(e) => tracing::debug!(error = %e, "control_channel_dial_known_peer_failed"),
     }
 }
 
-fn known_relay_peers(identity: &DeviceIdentity) -> Vec<[u8; 32]> {
-    let store = identity
+/// Every device not removed with a relay node id, less the parked ones (no shared key,
+/// `peer_keys.rs`): this used to dial every device not removed, whatever its group.
+fn known_relay_peers(identity: &DeviceIdentity) -> Vec<(DeviceId, [u8; 32])> {
+    let rows = identity
         .store()
         .lock()
-        .unwrap_or_else(PoisonError::into_inner);
-    store
+        .unwrap_or_else(PoisonError::into_inner)
         .list_devices()
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|d| d.removed_at_ms.is_none())
-        .filter_map(|d| d.relay_node_id)
+        .unwrap_or_default();
+    rows.into_iter()
+        .filter(|d| d.removed_at_ms.is_none() && !identity.peer_keys().is_parked(d.device))
+        .filter_map(|d| Some((d.device, d.relay_node_id?)))
         .collect()
 }
 
 /// `pub(crate)`: `control_dispatch.rs`'s `CONTROL_ALPN` branch calls this directly, the same
-/// session-driving code an accepted or a dialed control connection always ran.
+/// session-driving code an accepted or a dialed control connection always ran. `dialed` is the
+/// peer a dialer meant to reach (`None` when accepted); what the session showed about its key is
+/// booked (`peer_keys.rs`).
 pub(crate) fn spawn_session(
     link: txtodo_sync::IrohLink,
     identity: Arc<DeviceIdentity>,
     registry: Arc<Mutex<WorkspaceRegistry>>,
     permit: tokio::sync::OwnedSemaphorePermit,
+    dialed: Option<DeviceId>,
 ) {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        crate::control_session::drive_control_session(&mut link, &identity, &registry);
+        let seen = crate::control_session::drive_control_session(&mut link, &identity, &registry);
+        identity.peer_keys().book(dialed, seen, "control");
     });
 }

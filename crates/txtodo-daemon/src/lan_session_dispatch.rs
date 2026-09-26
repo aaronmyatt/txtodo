@@ -24,6 +24,7 @@ use crate::lan_session_shared::{
     handle_workspace_message, open_and_decode_logged, send_message,
 };
 use crate::live_peers::{Carrier, LivePeers};
+use crate::peer_keys::SessionEnd;
 
 /// Everything shared across every workspace this one connection multiplexes: the crypto material
 /// (one group key for the whole device-set, ADR 0021) and the routing table naming which
@@ -54,6 +55,8 @@ struct Conn {
     session: Session,
     live: Live,
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
+    /// Why the peer's link `Hello` did not open, when it came and did not (task sync-drift line 5).
+    refused: Option<&'static str>,
 }
 
 /// Any one routed workspace's own clock, for stamping the link-level `Hello` and re-checking skew
@@ -119,7 +122,9 @@ fn dispatch_link_frame(
     shared: &SharedCtx<'_>,
     conn: &mut Conn,
 ) -> Option<()> {
-    let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)?;
+    let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)
+        .map_err(|kind| conn.refused = Some(kind))
+        .ok()?;
     let now_ms = any_route_now_ms(&shared.routes);
     if !handle_link_hello(&mut conn.session, &msg, now_ms) {
         return None;
@@ -160,7 +165,7 @@ fn dispatch_workspace_frame(
         log_unrouted_workspace_skipped(workspace);
         return Some(());
     };
-    let msg = open_and_decode_logged(frame, shared.group, workspace, &shared.keys)?;
+    let msg = open_and_decode_logged(frame, shared.group, workspace, &shared.keys).ok()?;
     conn.live.observe(workspace, &msg);
     let ctx = SessionCtx {
         ws: &route.ws,
@@ -342,18 +347,18 @@ fn build_shared_ctx(
 /// `lan_session_shared.rs`'s module doc for the wire sequence and failure scope. Runs on the
 /// caller's own thread, which must be a blocking one (`Link::send`/`recv` block); returns when the
 /// peer closes, the link handshake fails, or the `MAX_MESSAGES_PER_SESSION` bound is reached.
-/// Returns `false` when the session bailed before its first greeting went out (no routed
-/// workspace, no group key, or the greeting itself failed) — the dial side books that as a failed
-/// dial so its backoff applies (`lan.rs::dial_and_spawn`).
+/// Only [`SessionEnd::Greeted`] (the peer's `Hello` opened and was accepted) is a successful dial
+/// (task sync-drift line 5); the dial side books anything else as a failure so its backoff grows
+/// (`lan.rs::dial_and_spawn`), and a `Refused` one feeds `peer_keys.rs`.
 pub(crate) fn drive_shared_session(
     link: &mut dyn Link,
     routes: &WorkspaceRoutes,
     device: DeviceId,
     group: GroupId,
     carrier: Carrier,
-) -> bool {
+) -> SessionEnd {
     let Some(shared) = build_shared_ctx(routes, device, group, carrier) else {
-        return false;
+        return SessionEnd::NoHello;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —
     // that a peer relationship with more than one open workspace shares this single connection
@@ -367,7 +372,7 @@ pub(crate) fn drive_shared_session(
     );
     let mut session = Session::new(device, group);
     if !send_link_hello(link, &shared, &mut session) {
-        return false;
+        return SessionEnd::NoHello;
     }
     let mut conn = Conn {
         session,
@@ -377,7 +382,8 @@ pub(crate) fn drive_shared_session(
         // `RESEND_AFTER`/`HEARTBEAT` forever and break every test that waits out a real resend).
         live: Live::new(Arc::new(SystemClock)),
         routes: BTreeMap::new(),
+        refused: None,
     };
     run_shared_message_loop(link, &shared, &mut conn);
-    true
+    SessionEnd::of(conn.session.peer(), conn.refused)
 }

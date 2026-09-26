@@ -35,6 +35,9 @@ impl Workspace {
             last_known_wall_ms: None,
             key_epoch: 0,
         };
-        store.register_device_as(&new, own)
+        store.register_device_as(&new, own)?;
+        // A peer parked for holding another group's key shares ours now (task sync-drift line 5).
+        self.peer_keys().forget(device, "paired");
+        Ok(())
     }
 }

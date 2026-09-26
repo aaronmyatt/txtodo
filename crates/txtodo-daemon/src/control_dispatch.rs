@@ -81,6 +81,7 @@ fn dispatch_control(link: IrohLink, ctx: &DispatchCtx, permit: OwnedSemaphorePer
         Arc::clone(&ctx.identity),
         Arc::clone(&ctx.registry),
         permit,
+        None,
     );
 }
 
@@ -103,15 +104,18 @@ fn dispatch_sync(link: IrohLink, ctx: &DispatchCtx, permit: OwnedSemaphorePermit
     let device_relay = Arc::clone(&ctx.device_relay);
     let device = ctx.identity.device();
     let group = ctx.identity.group();
+    let keys = ctx.identity.peer_keys().clone();
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        drive_shared_session(
+        let end = drive_shared_session(
             &mut link,
             device_relay.routes(),
             device,
             group,
             Carrier::Relay,
         );
+        // An incoming session: its peer is known only once its `Hello` opens.
+        keys.book_session(None, end);
     });
 }

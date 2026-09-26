@@ -120,7 +120,11 @@ pub(crate) fn accept_one(
     } else if link.alpn() == PAIRING_ALPN {
         accept_pairing(link, ctx, permit);
     } else {
-        spawn_driver(ctx.clone(), (link, Carrier::Lan), permit, |_| {});
+        // An incoming session: its peer is known only once its `Hello` opens.
+        let keys = ctx.identity.peer_keys().clone();
+        spawn_driver(ctx.clone(), (link, Carrier::Lan), permit, move |end| {
+            keys.book_session(None, end);
+        });
     }
 }
 
@@ -134,6 +138,7 @@ fn accept_control(link: IrohLink, ctx: &LanCtx, permit: tokio::sync::OwnedSemaph
         Arc::clone(&ctx.identity),
         Arc::clone(registry),
         permit,
+        None,
     );
 }
 
@@ -163,7 +168,7 @@ pub(crate) fn dial_control(
     let Some(registry) = ctx.registry.clone() else {
         return;
     };
-    for peer in peers_to_resync(known_peers, ctx.device) {
+    for peer in peers_to_resync(known_peers, &ctx.identity) {
         let Ok(permit) = Arc::clone(sessions).try_acquire_owned() else {
             return;
         };
@@ -177,7 +182,8 @@ pub(crate) fn dial_control(
             let dial = endpoint.connect_control(peer.node, &peer.addresses);
             match tokio::time::timeout(CONNECT_TIMEOUT, dial).await {
                 Ok(Ok(link)) => {
-                    crate::control_channel::spawn_session(link, identity, registry, permit);
+                    let dialed = Some(peer.device);
+                    crate::control_channel::spawn_session(link, identity, registry, permit, dialed);
                 }
                 Ok(Err(e)) => log_control_dial_failed(peer.device, &e.to_string()),
                 Err(_) => log_control_dial_failed(peer.device, "timed out"),

@@ -48,6 +48,7 @@ impl Workspace {
         // Point of no return: only now do we commit the key and end the pairing attempt.
         self.pairing()
             .commit_group_key(self.key_store().as_ref(), group_key, now_ms)?;
+        // Clears every parked peer too (`DeviceIdentity::set_group`): the initiator among them.
         self.set_group(group);
         Ok(())
     }

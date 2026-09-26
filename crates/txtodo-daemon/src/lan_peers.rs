@@ -11,6 +11,9 @@ use txtodo_sync::{
     DiscoveredPeer, GroupId, PROTOCOL_VERSION, PeerEvent, PeerTable, Sighting, backoff_ms,
 };
 
+use crate::device_identity::DeviceIdentity;
+use crate::peer_keys::SessionEnd;
+
 /// Shared across the run loop and every spawned dial task.
 pub(crate) type SharedDialState = Arc<Mutex<DialState>>;
 /// Every peer this device has ever resolved for real, kept for `lan.rs`'s `redial_known_peers`.
@@ -56,17 +59,19 @@ fn log_peer_found(peer: &DiscoveredPeer) {
 }
 
 /// Records `sighting` in `pairing_lan()`'s unfiltered address book, regardless of which group it
-/// claims — see `lan.rs::handle_sighting`'s call site and `pairing_lan_state.rs`'s module doc.
-pub(crate) fn remember_any_sighting(
-    pairing: &crate::pairing_lan_state::PairingLan,
-    sighting: &Sighting,
-) {
+/// claims — see `lan.rs::handle_sighting`'s call site and `pairing_lan_state.rs`'s module doc. A
+/// peer announcing our group is unparked (task sync-drift line 5): it may have joined our group
+/// through another device, a pairing this one never saw.
+pub(crate) fn remember_any_sighting(identity: &DeviceIdentity, sighting: &Sighting) {
     let peer = DiscoveredPeer {
         device: sighting.announcement.device,
         node: sighting.announcement.node,
         addresses: sighting.addresses.clone(),
     };
-    pairing.remember(&peer);
+    identity.pairing_lan().remember(&peer);
+    if sighting.announcement.group == identity.group() {
+        identity.peer_keys().forget(peer.device, "sighted");
+    }
 }
 
 /// Most addresses remembered per peer, however many answers mDNS merges.
@@ -126,12 +131,18 @@ pub(crate) fn known_or(known_peers: &KnownPeers, peer: DiscoveredPeer) -> Discov
 /// Every currently known peer this device (rather than the peer) is responsible for dialing —
 /// `relay_autodial::resync_and_dial` calls this each tick and then gates each one through
 /// [`try_begin_dial`], so a peer whose last dial failed is left alone until its backoff elapses.
-pub(crate) fn peers_to_resync(known_peers: &KnownPeers, device: DeviceId) -> Vec<DiscoveredPeer> {
+/// A parked peer (no shared key, `peer_keys.rs`) is left out: known peers are never pruned, so a
+/// peer that joined another group would otherwise be dialed forever.
+pub(crate) fn peers_to_resync(
+    known_peers: &KnownPeers,
+    identity: &DeviceIdentity,
+) -> Vec<DiscoveredPeer> {
+    let (device, keys) = (identity.device(), identity.peer_keys());
     known_peers
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .values()
-        .filter(|p| device < p.device)
+        .filter(|p| device < p.device && !keys.is_parked(p.device))
         .cloned()
         .collect()
 }
@@ -172,8 +183,21 @@ pub(crate) fn try_begin_dial(dial_state: &SharedDialState, peer: DeviceId, now_m
     true
 }
 
-/// Books how a dial went. `ok` is false both for a connect that never happened and for one whose
-/// session bailed before its first greeting (`lan.rs::dial_and_spawn`), so both back off.
+/// Books how a dialed session with `peer` ended: a success only when the peer's `Hello` opened,
+/// else its backoff grows (task sync-drift line 5), and what it showed about the peer's key goes
+/// to `peer_keys.rs`, which parks a peer with no shared key.
+pub(crate) fn book_dial(
+    identity: &DeviceIdentity,
+    dial_state: &SharedDialState,
+    peer: DeviceId,
+    end: SessionEnd,
+) {
+    record_dial_outcome(dial_state, peer, end.greeted());
+    identity.peer_keys().book_session(Some(peer), end);
+}
+
+/// Books how a dial went. `ok` is false both for a connect that never happened and for a session
+/// whose peer `Hello` never opened ([`book_dial`]), so both back off.
 pub(crate) fn record_dial_outcome(dial_state: &SharedDialState, peer: DeviceId, ok: bool) {
     let mut dial_state = dial_state.lock().unwrap_or_else(PoisonError::into_inner);
     if ok {

@@ -10,9 +10,10 @@ use std::sync::{Mutex, PoisonError};
 
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{ControlMessage, GroupId, GroupKey, GroupKeys, KeyId, Link};
+use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, KeyId, Link};
 
 use crate::device_identity::DeviceIdentity;
+use crate::peer_keys::PeerSignal;
 use crate::workspace_offer_registry::{PendingOffer, WorkspaceOfferRegistryError};
 use crate::workspace_registry::WorkspaceRegistry;
 
@@ -26,19 +27,21 @@ struct SealCtx<'a> {
 
 /// One full exchange over an established connection. Runs on the caller's own thread, which must
 /// be a blocking one (`Link::send`/`recv` block, same invariant `lan_session.rs` documents).
+/// Returns what the peer's frames showed about its key, for `peer_keys.rs` (task sync-drift
+/// line 5).
 pub(crate) fn drive_control_session(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
-) {
+) -> PeerSignal {
     let key = fetch_group_key(identity);
     record_offers_outcome(identity, &key);
     let Some(key) = key.ok().flatten() else {
-        return;
+        return PeerSignal::Silent;
     };
     let epoch = identity.group_epoch();
     let Some(keys) = single_epoch_keys(epoch, key.clone()) else {
-        return;
+        return PeerSignal::Silent;
     };
     let ctx = SealCtx {
         group: identity.group(),
@@ -47,10 +50,29 @@ pub(crate) fn drive_control_session(
     };
 
     if !send_all_offers(link, identity, registry, &ctx) {
-        return;
+        return PeerSignal::Silent;
     }
-    while let Some(msg) = recv_control(link, ctx.group, &keys) {
-        handle_one_message(identity, msg);
+    read_until_closed(link, identity, ctx.group, &keys)
+}
+
+/// Handles every message the peer sends until the link closes (`Opened` if any came) or one does
+/// not open (`OpenFailed`, which ends the session as before).
+fn read_until_closed(
+    link: &mut dyn Link,
+    identity: &DeviceIdentity,
+    group: GroupId,
+    keys: &GroupKeys,
+) -> PeerSignal {
+    let mut seen = PeerSignal::Silent;
+    loop {
+        match recv_control(link, group, keys) {
+            Ok(msg) => {
+                seen = PeerSignal::Opened;
+                handle_one_message(identity, msg);
+            }
+            Err(PeerSignal::Silent) => return seen,
+            Err(failed) => return failed,
+        }
     }
 }
 
@@ -154,19 +176,28 @@ fn log_seal_failed(e: &txtodo_sync::ControlSealError) {
     tracing::debug!(error = %e, "control_channel_seal_failed");
 }
 
-fn recv_control(link: &mut dyn Link, group: GroupId, keys: &GroupKeys) -> Option<ControlMessage> {
-    let frame = link.recv().ok()?;
-    match txtodo_sync::open_control(&frame, group, keys) {
-        Ok(msg) => Some(msg),
-        Err(e) => {
-            log_open_failed(&e);
-            None
-        }
-    }
+/// `Err(Silent)` once the link is closed or idle, `Err(OpenFailed(kind))` for a frame that did not
+/// open (logged here at debug; the once-per-peer warning is `peer_keys.rs`'s).
+fn recv_control(
+    link: &mut dyn Link,
+    group: GroupId,
+    keys: &GroupKeys,
+) -> Result<ControlMessage, PeerSignal> {
+    let frame = link.recv().map_err(|_| PeerSignal::Silent)?;
+    txtodo_sync::open_control(&frame, group, keys).map_err(|e| {
+        let kind = control_error_kind(&e);
+        tracing::debug!(error = %e, kind, "control_channel_open_failed");
+        PeerSignal::OpenFailed(kind)
+    })
 }
 
-fn log_open_failed(e: &txtodo_sync::ControlSealError) {
-    tracing::debug!(error = %e, "control_channel_open_failed");
+/// Same tags as a sync frame's (`lan_session_shared::crypto_error_kind`), so `wrong_group` means
+/// one thing whichever channel saw it.
+fn control_error_kind(e: &ControlSealError) -> &'static str {
+    match e {
+        ControlSealError::Crypto(c) => crate::lan_session_shared::crypto_error_kind(c),
+        ControlSealError::Message(_) => "control_message",
+    }
 }
 
 /// Sends this device's every currently-active workspace as a fresh `Offer`. Returns `false` the

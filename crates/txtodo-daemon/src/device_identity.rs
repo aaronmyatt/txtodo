@@ -79,6 +79,7 @@ pub struct DeviceIdentity {
     lan_status: crate::lan_status::LanStatus,
     pairing_lan: crate::pairing_lan_state::PairingLan,
     live_peers: crate::live_peers::LivePeers,
+    peer_keys: crate::peer_keys::PeerKeys,
 }
 
 impl DeviceIdentity {
@@ -147,6 +148,7 @@ impl DeviceIdentity {
             lan_status: crate::lan_status::LanStatus::default(),
             pairing_lan: crate::pairing_lan_state::PairingLan::default(),
             live_peers: crate::live_peers::LivePeers::default(),
+            peer_keys: crate::peer_keys::PeerKeys::default(),
         })
     }
 
@@ -186,8 +188,10 @@ impl DeviceIdentity {
     }
     /// Replaces this device's sync group id in memory; the caller is responsible for persisting it
     /// to `store()` first (the same discipline `Workspace::set_group` documented before this task).
+    /// What sessions showed about peers' keys under the old group is dropped (`peer_keys.rs`).
     pub(crate) fn set_group(&self, group: GroupId) {
         *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
+        self.peer_keys.clear();
     }
     /// The group key epoch this device currently seals ops under; 0 until the first `device
     /// remove` rotates it.
@@ -221,6 +225,11 @@ impl DeviceIdentity {
     /// Peers with a sync session open right now, whatever the carrier.
     pub(crate) fn live_peers(&self) -> &crate::live_peers::LivePeers {
         &self.live_peers
+    }
+    /// What sessions showed about each peer's group key: which peers are parked, which open
+    /// failures were already warned about (task sync-drift line 5).
+    pub(crate) fn peer_keys(&self) -> &crate::peer_keys::PeerKeys {
+        &self.peer_keys
     }
     /// The bound LAN endpoint and every mDNS sighting, for pairing.
     pub(crate) fn pairing_lan(&self) -> &crate::pairing_lan_state::PairingLan {

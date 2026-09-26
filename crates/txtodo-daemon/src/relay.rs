@@ -18,9 +18,9 @@
 //! *discovered* but could not reach.
 //!
 //! **`--relay-dial-peer` (plan M8 `relay-converge-test`): the rendezvous gap that pass left open.**
-//! `relay_fallback_dial`'s own doc names a real limitation — it dials a peer's *LAN* node id over
-//! relay, reachable only once both carriers share one identity, not built yet. Investigating it for
-//! that task surfaced a second, deeper gap: `lan.rs::dial_and_spawn` (and therefore
+//! `relay_fallback_dial`'s own doc named a real limitation — it dialed a peer's *LAN* node id over
+//! relay (fixed 2026-09-26, task sync-drift line 5: the recorded relay one now). Investigating it
+//! for that task surfaced a second, deeper gap: `lan.rs::dial_and_spawn` (and therefore
 //! `relay_fallback_dial`) only ever runs for a peer `handle_sighting` already learned about via
 //! **mDNS**, which by construction never crosses a real network boundary — two daemons that were
 //! never on the same LAN never populate each other's `PeerTable` at all, so the relay fallback path
@@ -230,16 +230,19 @@ fn on_dial_connected(
     ctx.status.set_relay_last_outcome("dialed known peer");
     let device_relay = Arc::clone(device_relay);
     let (device, group) = (ctx.device, ctx.group);
+    let keys = read(&ctx.ws).peer_keys().clone();
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
         let mut link = link;
-        drive_shared_session(
+        let end = drive_shared_session(
             &mut link,
             device_relay.routes(),
             device,
             group,
             Carrier::Relay,
         );
+        // Only the peer's relay node id is known here, not its device id.
+        keys.book_session(None, end);
     });
 }
 
