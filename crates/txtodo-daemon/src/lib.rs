@@ -120,6 +120,7 @@ pub mod state;
 mod state_error;
 pub mod stats;
 mod stored_ids;
+mod stuck_sync;
 mod sync_ops;
 pub mod telemetry;
 pub mod textedit;
@@ -238,6 +239,8 @@ mod state_tests;
 mod status_details_tests;
 #[cfg(test)]
 mod stored_ids_tests;
+#[cfg(test)]
+mod stuck_sync_session_tests;
 #[cfg(test)]
 mod sync_ops_tests;
 #[cfg(test)]

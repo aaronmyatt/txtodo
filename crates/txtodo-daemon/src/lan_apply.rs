@@ -88,69 +88,69 @@ pub(crate) fn device_keys_for(
     ops.iter().map(|op| (op.hlc.device, key)).collect()
 }
 
-fn ensure_parent_dir(ws: &SharedWorkspace, path: &FilePath) -> bool {
+/// Why a run was refused (task sync-drift line 7): the error's text, as logged. `stuck_sync.rs`
+/// keeps it for `SyncStatus`.
+type Refusal = String;
+
+fn ensure_parent_dir(ws: &SharedWorkspace, path: &FilePath) -> Result<(), Refusal> {
     let disk = read(ws).root().join(path.as_str());
     let Some(parent) = disk.parent() else {
-        return true;
+        return Ok(());
     };
-    match std::fs::create_dir_all(parent) {
-        Ok(()) => true,
-        Err(e) => {
-            tracing::warn!(file = %path, error = %e, "lan_sync_mkdir_failed");
-            false
-        }
-    }
+    std::fs::create_dir_all(parent).map_err(|e| {
+        tracing::warn!(file = %path, error = %e, "lan_sync_mkdir_failed");
+        format!("mkdir: {e}")
+    })
 }
 
-fn register_and_fetch(ws: &SharedWorkspace, path: &FilePath) -> Option<ActorHandle> {
+fn register_and_fetch(ws: &SharedWorkspace, path: &FilePath) -> Result<ActorHandle, Refusal> {
     let mut guard = write(ws);
     if let Err(e) = guard.register(path.clone()) {
         tracing::warn!(file = %path, error = %e, "lan_sync_register_failed");
-        return None;
+        return Err(format!("register: {e}"));
     }
-    guard.actor(path).cloned()
+    guard
+        .actor(path)
+        .cloned()
+        .ok_or_else(|| "register: no actor".to_owned())
 }
 
 /// The actor for `path`, registering (and, for a nested-ref file arriving for the first time on a
-/// fresh device, creating the containing directory for) a not-yet-known document. `None` only on a
+/// fresh device, creating the containing directory for) a not-yet-known document. `Err` only on a
 /// real failure, logged with the file named.
-fn get_or_create_actor(ws: &SharedWorkspace, path: &FilePath) -> Option<ActorHandle> {
+fn get_or_create_actor(ws: &SharedWorkspace, path: &FilePath) -> Result<ActorHandle, Refusal> {
     if let Some(h) = read(ws).actor(path) {
-        return Some(h.clone());
+        return Ok(h.clone());
     }
-    if !ensure_parent_dir(ws, path) {
-        return None;
-    }
+    ensure_parent_dir(ws, path)?;
     register_and_fetch(ws, path)
 }
 
-fn commit_one_file(ws: &SharedWorkspace, rt: &Handle, path: FilePath, ops: Vec<Op>) -> bool {
-    if crate::walker::is_skipped_path(&path) {
-        return log_only(ws, &path, &ops);
+fn commit_one_file(
+    ws: &SharedWorkspace,
+    rt: &Handle,
+    path: &FilePath,
+    ops: Vec<Op>,
+) -> Result<(), Refusal> {
+    if crate::walker::is_skipped_path(path) {
+        return log_only(ws, path, &ops);
     }
     // `txtodo.toml` is whole-text too (`layout_sync.rs`); its commit writes the file, and the
     // watcher then hot-reloads the layout.
-    if crate::walker::is_notes_document(crate::workspace_mint::basename(&path))
-        || crate::layout_sync::is_layout_document(&path)
+    if crate::walker::is_notes_document(crate::workspace_mint::basename(path))
+        || crate::layout_sync::is_layout_document(path)
     {
-        return commit_notes_file(ws, &path, ops);
+        return commit_notes_file(ws, path, ops);
     }
-    let Some(handle) = get_or_create_actor(ws, &path) else {
-        return false;
-    };
-    match rt.block_on(handle.sync_import_ops(ops)) {
-        Ok(()) => true,
-        Err(e) => {
-            log_refused(&path, &e);
-            false
-        }
-    }
+    let handle = get_or_create_actor(ws, path)?;
+    rt.block_on(handle.sync_import_ops(ops))
+        .map_err(|e| log_refused(path, &e))
 }
 
 /// A peer's ops on a path the walker never walks (a `.claude/worktrees` copy of a repo's backlog,
 /// say; task walker-nested-checkouts): into the log, so heads stay dense and other peers still get
 /// them, but no file and no actor. A peer's old log can hold tens of thousands of these.
-fn log_only(ws: &SharedWorkspace, path: &FilePath, ops: &[Op]) -> bool {
+fn log_only(ws: &SharedWorkspace, path: &FilePath, ops: &[Op]) -> Result<(), Refusal> {
     let store = read(ws).store().clone();
     let appended = store
         .lock()
@@ -158,75 +158,82 @@ fn log_only(ws: &SharedWorkspace, path: &FilePath, ops: &[Op]) -> bool {
         .append_with_source(ops, Some("sync"));
     match appended {
         Ok(_) => log_logged_only(path, ops.len()),
-        Err(e) => log_log_only_failed(path, &e),
+        Err(e) => Err(log_log_only_failed(path, &e)),
     }
 }
 
-fn log_logged_only(path: &FilePath, ops: usize) -> bool {
+fn log_logged_only(path: &FilePath, ops: usize) -> Result<(), Refusal> {
     tracing::debug!(file = %path, ops, "lan_sync_ops_logged_only");
-    true
+    Ok(())
 }
 
-fn log_log_only_failed(path: &FilePath, e: &txtodo_store::StoreError) -> bool {
+fn log_log_only_failed(path: &FilePath, e: &txtodo_store::StoreError) -> Refusal {
     tracing::warn!(file = %path, error = %e, "lan_sync_log_only_failed");
-    false
+    format!("store: {e}")
 }
 
 /// A peer's `NotesEdit` ops for one `notes.md` (task notes-sync): the directory is made if this
 /// device has never seen it (a nested ref arriving fresh), the notes actor is opened (seeding
 /// any bytes already on disk first) and the batch lands through `NotesActor::import_ops`. Used
 /// to be dropped silently: `Workspace::register` never builds a `FileActor` for a notes path.
-fn commit_notes_file(ws: &SharedWorkspace, path: &FilePath, ops: Vec<Op>) -> bool {
-    if !ensure_parent_dir(ws, path) {
-        return false;
-    }
-    let cell = match read(ws).notes_actor(path) {
-        Ok(cell) => cell,
-        Err(e) => {
-            log_refused(path, &e);
-            return false;
-        }
-    };
+fn commit_notes_file(ws: &SharedWorkspace, path: &FilePath, ops: Vec<Op>) -> Result<(), Refusal> {
+    ensure_parent_dir(ws, path)?;
+    let cell = read(ws)
+        .notes_actor(path)
+        .map_err(|e| log_refused(path, &e))?;
     let mut actor = cell.lock().unwrap_or_else(PoisonError::into_inner);
-    match actor.import_ops(ops) {
-        Ok(()) => true,
-        Err(e) => {
-            log_refused(path, &e);
-            false
-        }
-    }
+    actor.import_ops(ops).map_err(|e| log_refused(path, &e))
+}
+
+/// What [`commit_incoming_ops`] did with one batch.
+#[derive(Debug, Default)]
+pub(crate) struct Landed {
+    /// How many ops landed: always a prefix of the batch.
+    pub(crate) ops: usize,
+    /// The file of each run that landed, in order; a run of held ops counts.
+    pub(crate) files: Vec<FilePath>,
+    /// The run that was refused, if one was: its file and why (task sync-drift line 7).
+    pub(crate) refused: Option<(FilePath, Refusal)>,
 }
 
 /// Commits `ops` in order, one run of consecutive same-file ops at a time (one commit per file
 /// per run — `commit_change_with`'s own invariant), and stops at the first run that fails.
-/// Returns how many ops landed, always a prefix of `ops` (task `sync-ack-before-held`,
+/// What landed is always a prefix of `ops` (task `sync-ack-before-held`,
 /// 2026-09-25). The store's head for a device is its op count (`txtodo_store::heads`), so a
 /// half-committed batch must never leave a hole: grouping by file and carrying on past a failed
 /// file used to commit later ops over a missing earlier one. The caller acks only the prefix
 /// ([`landed_ranges`]), and the peer sends the rest again. An op the log already holds counts as
 /// landed ([`not_yet_stored`]).
-pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> usize {
+pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> Landed {
     let total = ops.len();
-    let mut landed = 0;
+    let mut landed = Landed::default();
     for (path, run) in same_file_runs(ops) {
         let len = run.len();
-        if !commit_new_ops(ws, rt, path, run) {
-            log_partly_committed(landed, total);
+        if let Err(why) = commit_new_ops(ws, rt, &path, run) {
+            log_partly_committed(landed.ops, total);
+            landed.refused = Some((path, why));
             break;
         }
-        landed += len;
+        landed.ops += len;
+        landed.files.push(path);
     }
-    debug_assert!(landed <= total);
+    debug_assert!(landed.ops <= total);
     landed
 }
 
 /// One same-file run, minus the ops the log already holds. A run of nothing but held ops
 /// commits nothing and still counts as landed, so the ack covers it.
-fn commit_new_ops(ws: &SharedWorkspace, rt: &Handle, path: FilePath, run: Vec<Op>) -> bool {
-    let Some(fresh) = not_yet_stored(ws, &path, run) else {
-        return false;
-    };
-    fresh.is_empty() || commit_one_file(ws, rt, path, fresh)
+fn commit_new_ops(
+    ws: &SharedWorkspace,
+    rt: &Handle,
+    path: &FilePath,
+    run: Vec<Op>,
+) -> Result<(), Refusal> {
+    let fresh = not_yet_stored(ws, path, run)?;
+    if fresh.is_empty() {
+        return Ok(());
+    }
+    commit_one_file(ws, rt, path, fresh)
 }
 
 /// `run` without the ops whose id the log already holds (task sync-drift line 2). A device's
@@ -234,8 +241,8 @@ fn commit_new_ops(ws: &SharedWorkspace, rt: &Handle, path: FilePath, run: Vec<Op
 /// before ops it already sent, so a batch can start with ops we hold. Inserting one again failed
 /// the `UNIQUE` op id and refused the run; the sender resent it every `RESEND_AFTER`, and all
 /// later ops from that device waited behind it. A held id whose op differs is skipped too: the
-/// log is append-only, so the first copy stays, with a warn. `None` only on a store error.
-fn not_yet_stored(ws: &SharedWorkspace, path: &FilePath, run: Vec<Op>) -> Option<Vec<Op>> {
+/// log is append-only, so the first copy stays, with a warn. `Err` only on a store error.
+fn not_yet_stored(ws: &SharedWorkspace, path: &FilePath, run: Vec<Op>) -> Result<Vec<Op>, Refusal> {
     let store = read(ws).store().clone();
     let store = store.lock().unwrap_or_else(PoisonError::into_inner);
     let total = run.len();
@@ -244,12 +251,12 @@ fn not_yet_stored(ws: &SharedWorkspace, path: &FilePath, run: Vec<Op>) -> Option
         match store.op_by_id(op.id) {
             Ok(None) => fresh.push(op),
             Ok(Some(stored)) => warn_if_other(&stored, &op),
-            Err(e) => return log_held_check_failed(path, &e),
+            Err(e) => return Err(log_held_check_failed(path, &e)),
         }
     }
     debug_assert!(fresh.len() <= total);
     log_already_held(path, total - fresh.len(), total);
-    Some(fresh)
+    Ok(fresh)
 }
 
 /// A held id is expected to carry the very op we hold; one that does not is worth a look.
@@ -280,9 +287,9 @@ fn log_already_held(path: &FilePath, held: usize, total: usize) {
     }
 }
 
-fn log_held_check_failed(path: &FilePath, e: &txtodo_store::StoreError) -> Option<Vec<Op>> {
+fn log_held_check_failed(path: &FilePath, e: &txtodo_store::StoreError) -> Refusal {
     tracing::warn!(file = %path, error = %e, "lan_sync_held_check_failed");
-    None
+    format!("store: {e}")
 }
 
 /// `ops` cut into maximal runs of consecutive ops on one file, in order.
@@ -334,6 +341,7 @@ fn log_partly_committed(landed: usize, total: usize) {
     tracing::warn!(landed, total, "lan_sync_batch_partly_committed");
 }
 
-fn log_refused(path: &FilePath, e: &ActorError) {
+fn log_refused(path: &FilePath, e: &ActorError) -> Refusal {
     tracing::warn!(file = %path, error = %e, "lan_sync_ops_refused");
+    e.to_string()
 }

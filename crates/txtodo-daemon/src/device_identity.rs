@@ -80,6 +80,7 @@ pub struct DeviceIdentity {
     pairing_lan: crate::pairing_lan_state::PairingLan,
     live_peers: crate::live_peers::LivePeers,
     peer_keys: crate::peer_keys::PeerKeys,
+    stuck_sync: crate::stuck_sync::StuckSync,
 }
 
 impl DeviceIdentity {
@@ -149,6 +150,7 @@ impl DeviceIdentity {
             pairing_lan: crate::pairing_lan_state::PairingLan::default(),
             live_peers: crate::live_peers::LivePeers::default(),
             peer_keys: crate::peer_keys::PeerKeys::default(),
+            stuck_sync: crate::stuck_sync::StuckSync::default(),
         })
     }
 
@@ -188,10 +190,12 @@ impl DeviceIdentity {
     }
     /// Replaces this device's sync group id in memory; the caller is responsible for persisting it
     /// to `store()` first (the same discipline `Workspace::set_group` documented before this task).
-    /// What sessions showed about peers' keys under the old group is dropped (`peer_keys.rs`).
+    /// What sessions showed about peers' keys under the old group is dropped (`peer_keys.rs`),
+    /// and so is where their sync was stuck (`stuck_sync.rs`).
     pub(crate) fn set_group(&self, group: GroupId) {
         *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
         self.peer_keys.clear();
+        self.stuck_sync.clear();
     }
     /// The group key epoch this device currently seals ops under; 0 until the first `device
     /// remove` rotates it.
@@ -230,6 +234,10 @@ impl DeviceIdentity {
     /// failures were already warned about (task sync-drift line 5).
     pub(crate) fn peer_keys(&self) -> &crate::peer_keys::PeerKeys {
         &self.peer_keys
+    }
+    /// Where each peer's incoming ops keep being refused (task sync-drift line 7).
+    pub(crate) fn stuck_sync(&self) -> &crate::stuck_sync::StuckSync {
+        &self.stuck_sync
     }
     /// The bound LAN endpoint and every mDNS sighting, for pairing.
     pub(crate) fn pairing_lan(&self) -> &crate::pairing_lan_state::PairingLan {

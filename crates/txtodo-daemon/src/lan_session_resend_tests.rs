@@ -257,7 +257,16 @@ async fn a_failed_run_stops_the_batch_so_the_log_never_holds_a_hole() {
             .await
             .unwrap_or_else(|e| panic!("join: {e}"))
     };
-    assert_eq!(landed, 2, "the run before the failure, nothing after it");
+    assert_eq!(
+        landed.ops, 2,
+        "the run before the failure, nothing after it"
+    );
+    // Task sync-drift line 7: the batch says which run was refused, and why.
+    let todo = FilePath::new("todo.txt").unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(landed.files, vec![todo]);
+    let (file, why) = landed.refused.unwrap_or_else(|| panic!("a refused run"));
+    assert_eq!(file.as_str(), "blocked/todo.txt");
+    assert!(why.starts_with("mkdir: "), "{why}");
     let held = crate::lan_session::read_heads(&ws);
     assert_eq!(held.get(&peer_device()), Some(&2));
     let text = text_of(&ws).unwrap_or_default();
@@ -298,7 +307,8 @@ async fn ops_on_a_worktree_copy_land_in_the_log_but_never_on_disk() {
             .await
             .unwrap_or_else(|e| panic!("join: {e}"))
     };
-    assert_eq!(landed, 3);
+    assert_eq!(landed.ops, 3);
+    assert!(landed.refused.is_none());
     let held = crate::lan_session::read_heads(&ws);
     assert_eq!(held.get(&peer_device()), Some(&3), "heads stay dense");
     assert!(

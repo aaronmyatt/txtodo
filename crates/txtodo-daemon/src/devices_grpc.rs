@@ -182,11 +182,20 @@ impl TxtodoService {
             .into_iter()
             .filter(|r| r.removed_at_ms.is_none() && r.device != self_device)
             .collect();
+        let (stuck, keys) = (ws.stuck_sync(), ws.peer_keys());
         let peers = active_peers
             .iter()
             .map(|r| pb::sync_status_response::Peer {
                 device: r.device.ulid().to_string(),
                 lag_ms: now_ms.saturating_sub(r.last_seen_ms.unwrap_or(0)) as i64,
+                // Task sync-drift line 7: where its ops keep being refused, and whether it is
+                // parked for holding no key we share (line 5). Both device-wide, in memory.
+                stuck: stuck
+                    .of(r.device)
+                    .into_iter()
+                    .map(|(w, s)| crate::stuck_sync::to_pb(w, s))
+                    .collect(),
+                parked: keys.is_parked(r.device),
             })
             .collect();
         let pending_ops = pending_ops_since(self, &active_peers)?;

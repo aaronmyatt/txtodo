@@ -118,3 +118,53 @@ async fn removed_and_self_rows_are_excluded_from_peers() {
         "removed device must not appear as a peer"
     );
 }
+
+/// Task sync-drift line 7: a peer whose run keeps being refused says where and why, and a peer
+/// parked for holding no key we share (line 5) says so.
+#[tokio::test]
+async fn a_peer_says_where_its_sync_is_stuck_and_whether_it_is_parked() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), "one\n");
+    let clock = Arc::new(FakeClock::new(1_000));
+    let ws = Workspace::open(dir.path(), clock as Arc<dyn Clock>).unwrap_or_else(|e| panic!("{e}"));
+    register_peer(&ws, 1, 500);
+    register_peer(&ws, 2, 500);
+    let file = txtodo_model::FilePath::new("tasks/a/todo.txt").unwrap();
+    let refused = crate::lan_apply::Landed {
+        refused: Some((file, "mkdir: Not a directory".to_owned())),
+        ..crate::lan_apply::Landed::default()
+    };
+    let workspace = txtodo_store::WorkspaceId::new(Ulid::from_u128(9));
+    ws.stuck_sync().book(device(1), workspace, &refused, 2_000);
+    ws.stuck_sync().book(device(1), workspace, &refused, 3_000);
+    for _ in 0..crate::peer_keys::PARK_AFTER {
+        ws.peer_keys()
+            .note_failure(Some(device(2)), crate::peer_keys::WRONG_GROUP);
+    }
+    let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
+
+    let resp = svc
+        .sync_status_impl(Request::new(pb::SyncStatusRequest { workspace: None }))
+        .await
+        .unwrap()
+        .into_inner();
+
+    let by_id = |n: u128| {
+        let id = device(n).ulid().to_string();
+        resp.peers.iter().find(|p| p.device == id).unwrap().clone()
+    };
+    let (one, two) = (by_id(1), by_id(2));
+    assert_eq!(one.stuck.len(), 1);
+    let s = &one.stuck[0];
+    assert_eq!(s.workspace_id, workspace.to_string());
+    assert_eq!(s.file, "tasks/a/todo.txt");
+    assert_eq!(s.reason, "mkdir: Not a directory");
+    assert_eq!((s.since_ms, s.last_ms, s.refusals), (2_000, 3_000, 2));
+    assert!(!one.parked);
+    assert!(two.stuck.is_empty());
+    assert!(
+        two.parked,
+        "parked after {} wrong_group opens",
+        crate::peer_keys::PARK_AFTER
+    );
+}

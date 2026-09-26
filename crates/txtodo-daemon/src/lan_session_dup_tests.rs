@@ -19,7 +19,7 @@ use crate::server::SharedWorkspace;
 async fn commit(ws: &SharedWorkspace, ops: Vec<Op>) -> usize {
     let rt = tokio::runtime::Handle::current();
     let ws = Arc::clone(ws);
-    tokio::task::spawn_blocking(move || commit_incoming_ops(&ws, &rt, ops))
+    tokio::task::spawn_blocking(move || commit_incoming_ops(&ws, &rt, ops).ops)
         .await
         .unwrap_or_else(|e| panic!("join: {e}"))
 }

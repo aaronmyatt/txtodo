@@ -300,6 +300,10 @@ impl Workspace {
     pub(crate) fn peer_keys(&self) -> &crate::peer_keys::PeerKeys {
         self.identity.peer_keys()
     }
+    /// Where each peer's incoming ops keep being refused (task sync-drift line 7), device-wide.
+    pub(crate) fn stuck_sync(&self) -> &crate::stuck_sync::StuckSync {
+        self.identity.stuck_sync()
+    }
     /// The device-global meta/devices rows (ADR 0021: `adopt_group_key`, `device_remove.rs`,
     /// `debug_hooks.rs`, `devices_grpc.rs` all go through this instead of `store()`).
     pub(crate) fn identity_store(&self) -> &Mutex<txtodo_store::IdentityStore> {

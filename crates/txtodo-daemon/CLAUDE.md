@@ -328,6 +328,10 @@ multiplex every workspace's traffic — not done by this task).
   `drive_shared_session` returns a `peer_keys::SessionEnd`. `peer_keys.rs` parks a peer after 3
   `wrong_group` opens in a row (every dial loop skips it; pairing, an in-group sighting, an opened
   frame or a group change bring it back) and warns once per peer and kind (`peer_open_failed`).
+  Where sync is stuck (task sync-drift line 7, 2026-09-26): `commit_incoming_ops` returns a
+  `Landed` (ops, landed files, the refused file and why); a session books it per peer and
+  workspace in `stuck_sync.rs` (in memory, cleared when that file's run lands), and `SyncStatus`
+  carries it with `peer_keys`' parked flag. The file carrier books nothing: it knows no peer.
   `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
   `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
   **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts

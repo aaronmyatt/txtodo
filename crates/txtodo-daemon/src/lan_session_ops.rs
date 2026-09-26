@@ -3,11 +3,11 @@
 //! the sender what we already hold), end the connection on anything else. Split out of
 //! `lan_session_shared.rs` for its line budget; that file dispatches here.
 
-use txtodo_model::Op;
+use txtodo_model::{DeviceId, Op};
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{Link, Message, OriginRange, Session, SessionError};
 
-use crate::lan_apply::{commit_incoming_ops, landed_ranges};
+use crate::lan_apply::{Landed, commit_incoming_ops, landed_ranges};
 use crate::lan_session_shared::{SessionCtx, SyncError};
 
 /// Why an `Ops` batch was not taken.
@@ -88,7 +88,8 @@ fn commit_and_ack(
     ranges: Vec<OriginRange>,
 ) -> Option<Message> {
     let landed = commit_incoming_ops(ctx.ws, ctx.rt, ops);
-    let committed_ranges = landed_ranges(&ranges, landed);
+    book_stuck(ctx, session.peer(), &landed);
+    let committed_ranges = landed_ranges(&ranges, landed.ops);
     match session.committed(ctx.workspace, &committed_ranges) {
         Ok(ack) => Some(ack),
         Err(e) => {
@@ -96,6 +97,17 @@ fn commit_and_ack(
             None
         }
     }
+}
+
+/// Books where sync from this session's peer is stuck, or that it no longer is (task sync-drift
+/// line 7, `stuck_sync.rs`). The peer is known by now: its `Ops` only come after its `Hello`.
+fn book_stuck(ctx: &SessionCtx<'_>, peer: Option<DeviceId>, landed: &Landed) {
+    let Some(peer) = peer else {
+        return;
+    };
+    let ws = crate::lan_session::read(ctx.ws);
+    let now = ws.clock().now_ms();
+    ws.stuck_sync().book(peer, ctx.workspace, landed, now);
 }
 
 /// `Ops` for `ctx.workspace`: commit what follows our heads and ack it, skip what does not.
