@@ -1,7 +1,32 @@
 //! The root list's name in direct-file mode (`todo_file` in `txtodo.toml`) and the rule it must
 //! pass, split out of `config.rs` for that file's line budget.
 
+use crate::CliError;
+use crate::config::Paths;
 use std::path::Path;
+
+/// Points `paths` at `list`, a list inside the workspace named by the hidden `--list` flag (what
+/// `sub` passes), instead of the root list. The workspace stays `paths.dir`, so the daemon is
+/// asked about the workspace that holds the list, never about the list's own folder, which it
+/// would register as a second workspace (sync-drift line 3). `report.txt` goes beside the list,
+/// where `sub` has always put it. Same name rules as a root list.
+pub(crate) fn scope_to_list(paths: &mut Paths, list: &str) -> Result<(), CliError> {
+    if !valid_root_list(list) {
+        return Err(CliError::Message(format!(
+            "txtodo: --list {list:?} is not a list inside the workspace (relative, `/` \
+             separators, no `.`/`..`, no `:`, not under .txtodo, not notes.md)"
+        )));
+    }
+    paths.todo = paths.dir.join(list);
+    paths.todo_file = list.to_owned();
+    paths.report = paths.todo.parent().unwrap_or(&paths.dir).join("report.txt");
+    paths.layout_note = None;
+    debug_assert!(
+        paths.todo.starts_with(&paths.dir),
+        "the list is in the workspace"
+    );
+    Ok(())
+}
 
 /// The workspace's root list for direct-file mode: `todo_file` from `<dir>/txtodo.toml`, else
 /// `todo.txt`, checked by the same rules the daemon applies (`specs/ref-directories.md` rule 2,

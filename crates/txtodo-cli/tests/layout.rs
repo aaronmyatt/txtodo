@@ -306,9 +306,9 @@ fn open_notes(daemon: &GlobalDaemon, ws: &Path, item: &str) {
     );
 }
 
-/// `sub 1 ls` until it shows `want` or the deadline passes. Under the global daemon the ref dir
-/// is a workspace of its own, registered by `sub`'s first call; its new `todo.txt` is written to
-/// disk and adopted by the watcher, so the listing may lag the add.
+/// `sub 1 ls` until it shows `want` or the deadline passes. The sub-list is one more list of the
+/// workspace (sync-drift line 3); a new `todo.txt` is written to disk and adopted by the
+/// watcher, so the listing may lag the add.
 fn sub_ls_until(daemon: &GlobalDaemon, ws: &Path, want: &str) -> String {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
     loop {

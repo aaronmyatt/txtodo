@@ -65,20 +65,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
     let config = Config::load(&config_file).map_err(CliError::Config)?;
-    let paths = config::resolve(
-        &env,
-        config::ResolveFlags {
-            dir: cli.dir.as_deref(),
-            sync_dir: cli.sync_dir.as_deref(),
-            relay: cli.relay.as_deref(),
-        },
-        &config,
-        config_file,
-    );
-    debug_assert!(
-        paths.todo.ends_with(&paths.todo_file),
-        "resolve names the todo file"
-    );
+    let paths = resolve_paths(cli, &env, &config, config_file)?;
     let mut ctx = Ctx {
         ids: config.id_tags() && !cli.no_id,
         auto_archive: !cli.no_archive,
@@ -120,12 +107,41 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             // make the daemon open and register the resolved `--dir`/cwd as a side effect
             // (`workspace list` from any folder registered it; `accept --dir x` tried to
             // register `x`, which the global `--dir` also received).
-            if !matches!(cli.command, Command::Workspace { .. }) {
+            // A `--list` (from `sub`) already names the document; the layout only knows the root.
+            if !matches!(cli.command, Command::Workspace { .. }) && cli.list.is_none() {
                 commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
             }
             dispatch_daemon(&ctx, &mut daemon, &cli.command)
         }
     }
+}
+
+/// Every path this run uses: `config::resolve`'s, then a `--list` (what `sub` passes) in place of
+/// the root list, inside the same workspace.
+fn resolve_paths(
+    cli: &Cli,
+    env: &Env,
+    config: &Config,
+    config_file: std::path::PathBuf,
+) -> Result<Paths, CliError> {
+    let mut paths = config::resolve(
+        env,
+        config::ResolveFlags {
+            dir: cli.dir.as_deref(),
+            sync_dir: cli.sync_dir.as_deref(),
+            relay: cli.relay.as_deref(),
+        },
+        config,
+        config_file,
+    );
+    if let Some(list) = cli.list.as_deref() {
+        config_root_list::scope_to_list(&mut paths, list)?;
+    }
+    debug_assert!(
+        paths.todo.ends_with(&paths.todo_file),
+        "resolve names the todo file"
+    );
+    Ok(paths)
 }
 
 /// Says which workspace a command is about to use when it fell back to the default one (task

@@ -32,6 +32,12 @@ pub struct Cli {
     /// Ignore a running daemon and edit the files directly (M2 behaviour).
     #[arg(long, global = true)]
     pub no_daemon: bool,
+    /// A list inside the workspace, relative to its root, to run the command on instead of the
+    /// root list. `sub` passes it, so a sub-list is worked as one more list of its workspace,
+    /// never registered as a workspace of its own (sync-drift line 3). Hidden: `sub ITEM#` is
+    /// the way to name one. Ref: <https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide>
+    #[arg(long, global = true, value_name = "FILE", hide = true)]
+    pub list: Option<String>,
     #[command(subcommand)]
     pub command: Command,
 }

@@ -130,8 +130,9 @@ fn todo_sh_d_reads_a_sub_list_txtodo_sub_created_and_agrees_with_txtodo_sub() {
     let _daemon = Daemon::spawn(root.path());
     let ref_dir = create_ref_dir(root.path());
 
-    // `sub` writes into the sub-list like any other `txtodo add` (direct-file mode there, since
-    // only the workspace root runs a daemon — rule 12's "other tools see an inert tag").
+    // `sub` writes into the sub-list like any other `txtodo add`, through the root's daemon: the
+    // sub-list is one more list of that workspace, never a workspace of its own (sync-drift
+    // line 3).
     let sub_add = txtodo(root.path(), &["sub", "1", "add", "leaf task"]);
     assert!(sub_add.status.success(), "{}", stderr(&sub_add));
     let sub_todo = std::fs::read_to_string(ref_dir.join("todo.txt")).unwrap_or_default();
@@ -144,18 +145,26 @@ fn todo_sh_d_reads_a_sub_list_txtodo_sub_created_and_agrees_with_txtodo_sub() {
     assert!(stdout(&sh_ls).contains("leaf task"), "{}", stdout(&sh_ls));
 
     // Agreement: `txtodo sub 1 ls` lists the very same line.
-    let sub_ls = txtodo(root.path(), &["sub", "1", "ls"]);
-    assert!(sub_ls.status.success(), "{}", stderr(&sub_ls));
-    assert!(stdout(&sub_ls).contains("leaf task"), "{}", stdout(&sub_ls));
+    let sub_ls = sub_ls_until(root.path(), "leaf task");
+    assert!(sub_ls.contains("leaf task"), "{sub_ls}");
 
     // A line todo.sh -d adds is in turn visible to `txtodo sub ... ls` (round trip both ways).
     let sh_add = run_todo_sh(&ref_dir, &cfg, &["add", "todo.sh line"]);
     assert!(sh_add.status.success(), "{}", stderr(&sh_add));
-    let sub_ls_2 = txtodo(root.path(), &["sub", "1", "ls"]);
-    assert!(sub_ls_2.status.success(), "{}", stderr(&sub_ls_2));
-    assert!(
-        stdout(&sub_ls_2).contains("todo.sh line"),
-        "{}",
-        stdout(&sub_ls_2)
-    );
+    let sub_ls_2 = sub_ls_until(root.path(), "todo.sh line");
+    assert!(sub_ls_2.contains("todo.sh line"), "{sub_ls_2}");
+}
+
+/// `sub 1 ls` until it succeeds and shows `want`, or 20 s pass: the daemon learns of a write
+/// todo.sh made on disk through its watcher, so a listing can lag it.
+fn sub_ls_until(root: &Path, want: &str) -> String {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        let out = txtodo(root, &["sub", "1", "ls"]);
+        let listed = stdout(&out);
+        if (out.status.success() && listed.contains(want)) || Instant::now() >= deadline {
+            return format!("{listed}{}", stderr(&out));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }

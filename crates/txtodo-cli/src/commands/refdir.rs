@@ -73,10 +73,13 @@ fn edit_in_editor(current: &[u8]) -> Result<String, CliError> {
     String::from_utf8(bytes).map_err(|_| CliError::Message("txtodo: notes.md must be UTF-8".into()))
 }
 
-/// `sub ITEM# COMMAND...`: re-execs this same binary with `--dir` scoped to the line's `ref:`
-/// sub-list (rule 12) — a scoped `todo.sh -d <ref>/todo.cfg`. Requires an existing `ref:` tag
-/// (typed error otherwise); a dangling one (rule 9) is healed first, same as the first sub-list
-/// write would, since the tag already exists and `ensure` can mint no new one.
+/// `sub ITEM# COMMAND...`: re-execs this same binary on the line's `ref:` sub-list (rule 12) — a
+/// scoped `todo.sh -d <ref>/todo.cfg`. The child keeps this workspace's `--dir` and names the
+/// sub-list with the hidden `--list`: every `todo.txt` under the root is one of its lists (rule
+/// 11). It used to get `--dir <ref dir>`, which made the daemon register the ref dir as a
+/// workspace of its own, and two stores then tracked one file (sync-drift line 3). Requires an
+/// existing `ref:` tag (typed error otherwise); a dangling one (rule 9) is healed first, same as
+/// the first sub-list write would, since the tag already exists and `ensure` can mint no new one.
 pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Result<(), CliError> {
     let task = task_ref(item, "sub ITEM# COMMAND...")?;
     let probe = daemon.ref_dir(&ctx.paths.todo_file, task.clone(), false)?;
@@ -86,11 +89,15 @@ pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Re
         )));
     }
     let info = daemon.ref_dir(&ctx.paths.todo_file, task, true)?;
-    let dir = ctx.paths.dir.join(&info.dir);
+    // `info.dir` is workspace-relative with `/` separators, and a sub-list is always the ref
+    // dir's `todo.txt` (rule 3), whatever the workspace calls its root list.
+    let list = format!("{}/todo.txt", info.dir);
     let exe = std::env::current_exe().map_err(CliError::Io)?;
     let status = std::process::Command::new(exe)
         .arg("--dir")
-        .arg(&dir)
+        .arg(&ctx.paths.dir)
+        .arg("--list")
+        .arg(&list)
         .args(cmd)
         .status()
         .map_err(CliError::Io)?;

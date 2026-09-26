@@ -47,13 +47,14 @@ pub fn run_via_daemon(
 ) -> Result<(), CliError> {
     let scratch = tempfile::tempdir().map_err(CliError::Io)?;
     let listed: Vec<String> = daemon.list_files()?.into_iter().map(|f| f.path).collect();
-    // One document today: the workspace's root list, under its own name for the daemon.
+    // One document: the workspace's root list, or the sub-list `--list` named (`sub`), under its
+    // own name for the daemon.
     let doc = ctx.paths.todo_file.clone();
     let known = listed.contains(&doc);
     let (bytes, hash) = if known {
         daemon.snapshot(&doc)?
     } else {
-        (Vec::new(), Vec::new())
+        (read_unadopted(&ctx.paths.dir.join(&doc))?, Vec::new())
     };
     let scratch_name = scratch_doc(&doc);
     if !bytes.is_empty() {
@@ -91,8 +92,20 @@ pub fn run_via_daemon(
     for original in &originals {
         push_document(ctx, daemon, scratch.path(), original)?;
     }
-    copy_back(scratch.path(), &ctx.paths.dir, "report.txt")?;
+    copy_back(scratch.path(), "report.txt", &ctx.paths.report)?;
     Ok(())
+}
+
+/// A document the daemon has not adopted yet, read from disk: a sub-list `sub` just wrote
+/// straight to disk, before the watcher reached it. Starting from its bytes, not from empty,
+/// keeps them when `push_document` writes the file directly; two quick `sub N add`s used to lose
+/// the first line that way. Missing is empty.
+fn read_unadopted(path: &Path) -> Result<Vec<u8>, CliError> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(bytes),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(CliError::Io(e)),
+    }
 }
 
 /// Sends one document's diff as mutations, or the whole new document as a guarded `Replace` when
@@ -144,13 +157,15 @@ fn replace(base_hash: &[u8], contents: Vec<u8>) -> pb::Mutation {
     }
 }
 
-fn copy_back(scratch: &Path, dir: &Path, name: &str) -> Result<(), CliError> {
+/// Copies `name` from the scratch dir to `to` (`Paths::report`: beside the list the command ran
+/// on, which for `sub` is the sub-list's folder, not the workspace root).
+fn copy_back(scratch: &Path, name: &str, to: &Path) -> Result<(), CliError> {
     let from = scratch.join(name);
     if !from.exists() {
         return Ok(());
     }
     let bytes = std::fs::read(&from).map_err(CliError::Io)?;
-    store::write(&dir.join(name), &parse_file(&bytes)).map_err(CliError::Store)
+    store::write(to, &parse_file(&bytes)).map_err(CliError::Store)
 }
 
 pub(crate) fn line_text(line: &OwnedLine) -> Option<String> {

@@ -150,3 +150,51 @@ never stalls sync without anyone seeing it.
     relay, or the file carrier) can still hit the `UNIQUE` insert. That run is refused once, then
     skipped on the resend 10 s later. Not a loop.
   - Not checked against the other device's real log; its refusal `error` is still unseen.
+
+### Line 3
+- One rule, in `txtodo-workspace-paths` (`root_overlap`, `walks_into`): two roots overlap when
+  the walk of one reaches the other. That is, one is below the other and no folder on the way
+  down, the inner root included, is `.txtodo` or skipped by the walker. `is_skipped_dir` moved
+  there from the daemon's walker, so the rule and the walk can't drift. A linked worktree (it has
+  `.git`) and a `--dir` daemon's `.txtodo/remote/<id>` mirrors are not overlaps.
+- Daemon: `WorkspaceRegistry::add` and `adopt` refuse a new root that overlaps an active one
+  (`WorkspaceRegistryError::Overlap`), after the exact-root dedupe. The error names the
+  registered root and id: "use that workspace instead" (inside), or `txtodo workspace remove
+  <id>` (around). Every path that registers goes through these two: `WorkspaceAdd` (CLI, TUI,
+  desktop), a `Path` selector (CLI, MCP cwd), the default workspace, and offer mirrors.
+- The pairing rekey uses a new `adopt_released`, with no overlap check: it re-adopts the folder
+  it just released under the peer's id. Else an old overlap would fail pairing, and the rollback
+  would not save it: `adopt` of a removed row with the same root is a no-op, so the row stays
+  removed (true before this change too).
+- Rows already registered keep loading: `open_one` re-adds a registered root, and an exact root
+  is never refused. At start the loader logs `workspace_roots_overlap` (warn, both ids) per pair.
+- `sub`: the child now gets `--dir <workspace root>` and a hidden `--list <ref dir>/todo.txt`, so
+  the sub-list is one more list of the same workspace. It used to get `--dir <ref dir>`, which
+  registered the ref dir (and, with `$TXTODO_LOG`, made `<ref dir>/.txtodo/logs`). `report.txt`
+  still lands beside the sub-list.
+- CLI daemon mode: a list the daemon has not adopted yet is read from disk, not taken as empty.
+  Before, two quick `sub N add`s on a new sub-list lost the first line: the second one's scratch
+  started empty and was written straight to disk.
+- `doctor`: one `overlap` FAIL row per pair of registered workspaces (both on disk), naming both
+  and the id to remove (the inner one, or the outer one when the inner is the default). Report
+  only.
+- Tests: `walk_scope_tests.rs` (the rule), `workspace_overlap_tests.rs` (refused inside and
+  around with the root named; checkout, state folder and exact root accepted; a legacy registry
+  still loads and resolves; `adopt` refuses, `adopt_released` does not; the catalog refuses by
+  RPC and by `Path`), `doctor_overlap.rs`, and `tests/sub_scope.rs` (a real daemon: `sub` adds
+  twice, nothing new registered, no `.txtodo` in the ref dir, `workspace add <ref dir>` refused).
+  `nested_ref_sync.rs` now waits for the watcher: `sub` goes through the daemon there too.
+- Still broken / not done:
+  - The 5 nested workspaces on this Mac stay registered until someone removes them; `txtodo
+    doctor` lists them. Nothing removes them on its own.
+  - A removed nested workspace leaves its `tasks/<slug>/.txtodo/` on disk (16 of those here).
+    `workspace_root_from` takes the nearest `.txtodo/`, so a client started inside that folder
+    names it as the root and is now refused (the error names the parent). Deleting the stale
+    `.txtodo/` fixes it. Making `workspace_root_from` prefer the outer root is not done.
+  - A registered root that is gone from disk still blocks a new root around it (refused, with
+    the remove command). Doctor skips missing roots, so it won't list that pair.
+  - The check runs at registration only. A folder moved into a registered workspace later is
+    caught only by `doctor` and the next start's warn.
+  - `--list` is hidden, not a documented flag.
+  - The desktop and TUI add-workspace paths go through the same RPC, but their e2e tests were
+    not run.

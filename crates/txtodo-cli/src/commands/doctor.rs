@@ -1,11 +1,13 @@
 //! `txtodo doctor` (plan M3, design §5; `keystore` added plan M4 `sync-keystore`, `transport`
 //! added plan M4 `sync-lan-transport`): socket, watcher, files, clock, config, keystore,
 //! transport. Seven fixed checks in a fixed order so scripts can index them, plus one row per
-//! known sync peer (plan M4 tasks/model-hlc-skew-guard) — each carries the command that fixes it.
+//! known sync peer (plan M4 tasks/model-hlc-skew-guard) and one per pair of registered workspaces
+//! that share lists (`doctor_overlap.rs`) — each carries the command that fixes it.
 //! Exit status 1 when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
 use crate::commands::doctor_clock::{clock_check, config_check};
+use crate::commands::doctor_overlap::{overlap_checks, registered_workspaces};
 use crate::commands::doctor_transport::{offers_check, transport_check};
 use crate::commands::doctor_version::version_check;
 use crate::{CliError, Ctx, json};
@@ -261,14 +263,15 @@ fn peer_checks(devices: &[pb::Device]) -> Vec<Check> {
 /// One line per *other* registered workspace (ADR 0025, task `cli-doctor-multi-workspace`) — the
 /// seven fixed checks above already cover the current one in full depth, so this stays a cheap
 /// per-entry `Health` probe, not a second full battery of checks. Best-effort: a legacy
-/// `--dir`-bridge daemon has no registry, so `workspace_list` returning an error (`Unimplemented`)
-/// just means there is nothing more to report, not a doctor failure — `run`'s existing seven
-/// checks already told the human that story if it matters.
-fn other_workspace_checks(daemon: Option<&mut client::Daemon>, current: &Path) -> Vec<Check> {
+/// `--dir`-bridge daemon has no registry, so an empty `workspaces`
+/// (`doctor_overlap::registered_workspaces`) just means there is nothing more to report, not a
+/// doctor failure — `run`'s existing seven checks already told the human that story if it matters.
+fn other_workspace_checks(
+    daemon: Option<&mut client::Daemon>,
+    workspaces: &[pb::WorkspaceInfo],
+    current: &Path,
+) -> Vec<Check> {
     let Some(daemon) = daemon else {
-        return Vec::new();
-    };
-    let Ok(workspaces) = daemon.workspace_list() else {
         return Vec::new();
     };
     let current = current
@@ -307,10 +310,13 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(version_check(health.as_ref()));
     checks.push(offers_check(health.as_ref()));
     checks.extend(peer_checks(&devices));
+    let workspaces = registered_workspaces(state.daemon.as_deref_mut());
     checks.extend(other_workspace_checks(
         state.daemon.as_deref_mut(),
+        &workspaces,
         &ctx.paths.dir,
     ));
+    checks.extend(overlap_checks(&workspaces));
     checks.push(skill_check());
     checks.extend(super::layout::doctor_checks(
         ctx,
