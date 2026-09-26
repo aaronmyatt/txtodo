@@ -30,6 +30,24 @@ impl Daemon {
         Ok(rep.into_inner().removed)
     }
 
+    /// Sets the name every paired device shows for a workspace (task workspace-vanity-name); an
+    /// empty `name` clears it. Returns the workspace as it now lists.
+    pub fn workspace_rename(
+        &mut self,
+        id: &str,
+        name: &str,
+    ) -> Result<pb::WorkspaceInfo, ClientError> {
+        let req = pb::WorkspaceRenameRequest {
+            workspace_id: id.to_owned(),
+            name: name.to_owned(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_rename(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Every registered workspace, oldest first.
     pub fn workspace_list(&mut self) -> Result<Vec<pb::WorkspaceInfo>, ClientError> {
         let rep = self

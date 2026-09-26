@@ -118,3 +118,34 @@ fn rejoin_is_refused_with_no_peer_and_moves_nothing() {
     let unknown = daemon.txtodo(dir, &["workspace", "rejoin", WORKSPACE_ID, "--yes"]);
     assert_fails_with(&unknown, "no registered workspace");
 }
+
+/// Task workspace-vanity-name: `rename` writes the name into the workspace's `txtodo.toml` and
+/// `list` shows it after the id; an empty name clears it, and a bad one is refused.
+#[test]
+fn rename_shows_the_name_in_list_and_an_empty_name_clears_it() {
+    let (_state, daemon, ws) = fixture();
+    let dir = ws.path();
+    let added = daemon.txtodo(dir, &["--json", "workspace", "add"]);
+    let out = String::from_utf8_lossy(&added.stdout).into_owned();
+    let id = out.split(r#""id":""#).nth(1).and_then(|s| s.get(..26));
+    let id = id.unwrap_or_else(|| panic!("no id in {out}"));
+
+    let renamed = daemon.txtodo(dir, &["workspace", "rename", id, "House plants"]);
+    assert!(renamed.status.success(), "{}", text(&renamed));
+    let file = std::fs::read_to_string(dir.join("txtodo.toml")).unwrap();
+    assert!(file.contains("name = \"House plants\""), "{file}");
+    let listed = daemon.txtodo(dir, &["workspace", "list"]);
+    assert!(
+        text(&listed).contains(&format!("{id}  House plants  ")),
+        "{}",
+        text(&listed)
+    );
+    let json = text(&daemon.txtodo(dir, &["--json", "workspace", "list"]));
+    assert!(json.contains(r#""name":"House plants""#), "{json}");
+
+    let bad = daemon.txtodo(dir, &["workspace", "rename", id, "a\tb"]);
+    assert_fails_with(&bad, "tab");
+    let cleared = text(&daemon.txtodo(dir, &["workspace", "rename", id, ""]));
+    assert!(cleared.starts_with(id), "{cleared}");
+    assert!(!cleared.contains("House plants"), "{cleared}");
+}

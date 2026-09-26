@@ -1,5 +1,6 @@
 //! `txtodo workspace add|remove|list` (ADR 0025, task `cli-workspace-commands`): manages the
-//! device-global daemon's workspace registry. `offers|accept|decline` (task
+//! device-global daemon's workspace registry; `rename` (task workspace-vanity-name) sets the name
+//! every paired device shows. `offers|accept|decline` (task
 //! `workspace-offer-cli`) live in `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in
 //! `workspace_rejoin.rs`; only their clap variants are here. Needs the true global daemon — a legacy
 //! `--dir`-bridge daemon has no registry to answer these with (`Daemon::workspace_add`/etc.
@@ -25,9 +26,17 @@ pub enum Action {
         /// The workspace's id (ULID text, from `workspace list`).
         id: String,
     },
-    /// id, root, added time, and whether it still exists / has state on disk.
+    /// id, name, root, and whether it still exists / has state on disk.
     #[command(visible_alias = "ls")]
     List,
+    /// Sets the name every paired device shows for a workspace. It is kept as `name` in the
+    /// workspace's `txtodo.toml`, which syncs. An empty name clears it (the folder's name shows).
+    Rename {
+        /// The workspace's id (ULID text, from `workspace list`).
+        id: String,
+        /// The name to show; quote it when it has spaces.
+        name: String,
+    },
     /// Shows where this workspace keeps its root list and its `ref:` folders, or changes them
     /// (written to `txtodo.toml`). A change is refused while ref dirs sit in the old place, unless
     /// `--move` moves them.
@@ -99,6 +108,7 @@ pub fn run(
         None | Some(Action::List) => run_list(daemon, as_json),
         Some(Action::Add { dir }) => run_add(ctx, daemon, dir.as_deref(), as_json),
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
+        Some(Action::Rename { id, name }) => run_rename(daemon, id, name, as_json),
         Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
         Some(Action::Offers) => super::workspace_offers::run_offers(daemon, as_json),
         Some(Action::Accept { id, from }) => {
@@ -155,8 +165,9 @@ fn load_state_name(w: &pb::WorkspaceInfo) -> &'static str {
 
 fn info_json(w: &pb::WorkspaceInfo) -> String {
     format!(
-        r#"{{"id":{},"root":{},"is_default":{},"is_remote":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
+        r#"{{"id":{},"name":{},"root":{},"is_default":{},"is_remote":{},"added_at_ms":{},"root_exists":{},"has_state":{},"load_state":{},"load_error":{}}}"#,
         json::str(&w.workspace_id),
+        json::str(&w.name),
         json::str(&w.root),
         w.is_default,
         w.is_remote,
@@ -181,8 +192,14 @@ fn info_text(w: &pb::WorkspaceInfo) -> String {
     // A mirror of a paired device's workspace (task remote-workspace-mirror): txtodo chose the
     // folder, so say so beside the path.
     let remote = if w.is_remote { " [remote]" } else { "" };
+    // The name every paired device shows (task workspace-vanity-name); empty from an older daemon.
+    let name = if w.name.is_empty() {
+        String::new()
+    } else {
+        format!("{}  ", w.name)
+    };
     format!(
-        "{}  {}{default}{remote}{missing}{state}{load}",
+        "{}  {name}{}{default}{remote}{missing}{state}{load}",
         w.workspace_id, w.root
     )
 }
@@ -220,6 +237,21 @@ fn run_remove(daemon: &mut Daemon, id: &str, as_json: bool) -> Result<(), CliErr
             "txtodo: no registered workspace {id}."
         )));
     }
+    Ok(())
+}
+
+/// `workspace rename <id> <name>`: the daemon writes the name into the workspace's `txtodo.toml`
+/// as ops, so every paired device shows it; prints the workspace as it now lists.
+fn run_rename(daemon: &mut Daemon, id: &str, name: &str, as_json: bool) -> Result<(), CliError> {
+    let info = daemon.workspace_rename(id, name)?;
+    println!(
+        "{}",
+        if as_json {
+            info_json(&info)
+        } else {
+            info_text(&info)
+        }
+    );
     Ok(())
 }
 
@@ -322,5 +354,24 @@ mod tests {
         assert!(info_text(&mirror).contains("[remote]"));
         assert!(info_json(&mirror).contains(r#""is_remote":true"#));
         assert!(!info_text(&info(pb::WorkspaceLoadState::Ready)).contains("[remote]"));
+    }
+
+    /// Task workspace-vanity-name: the shown name sits after the id, and an older daemon's empty
+    /// name leaves the row as it was.
+    #[test]
+    fn the_shown_name_follows_the_id() {
+        let named = pb::WorkspaceInfo {
+            name: "House plants".into(),
+            ..info(pb::WorkspaceLoadState::Ready)
+        };
+        assert_eq!(
+            info_text(&named),
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV  House plants  /home/a/project"
+        );
+        assert!(info_json(&named).contains(r#""name":"House plants""#));
+        assert_eq!(
+            info_text(&info(pb::WorkspaceLoadState::Ready)),
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV  /home/a/project"
+        );
     }
 }

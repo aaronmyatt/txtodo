@@ -19,7 +19,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   human type the id back unless `--yes`); `workspace rejoin <id> [--yes]` (sync-drift line 8,
   `commands/workspace_rejoin.rs`: a dry run first so a refusal comes before the prompt, then a
   `[y/N]` prompt on stderr that EOF answers no; the daemon moves this device's copy into a backup
-  folder beside the root and refills it from a paired peer); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
+  folder beside the root and refills it from a paired peer); `workspace rename <id> <name>` (task
+  workspace-vanity-name: `WorkspaceRename`, the daemon writes `name` into the workspace's
+  `txtodo.toml`, which syncs; `workspace list` shows `WorkspaceInfo.name` after the id, and its
+  JSON carries `name`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
   handshake as the initiator (renders the QR and text code from `PairOffer`, polls the new
   `PairAwaitPeer` RPC for a real joiner, shows and confirms the real SAS once one arrives); `CODE`
   joins as the joiner (`PairAccept`, real SAS, an explicit typed "yes" before `PairConfirmSas` —
