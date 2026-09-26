@@ -22,8 +22,15 @@ pub(crate) fn workspace_info(
     let state = catalog.load_state(entry.id);
     let layout = layout_of(catalog, &entry);
     let is_remote = catalog.is_remote_root(&entry.root);
+    let is_default = entry.id == crate::default_workspace::default_workspace_id();
+    // Task workspace-vanity-name: what every paired device shows for it.
+    let offers = catalog.open_args.identity.workspace_offers();
+    let name = crate::workspace_name::display_name(entry.id, &entry.root, is_default, || {
+        offers.offered_name(entry.id)
+    });
     pb::WorkspaceInfo {
         is_remote,
+        name,
         ..to_workspace_info(entry, state, &layout)
     }
 }

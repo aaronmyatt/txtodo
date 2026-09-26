@@ -41,8 +41,12 @@ fn log_skipped(workspace: &str, e: &Status) {
     tracing::warn!(workspace, error = %e.message(), "universal_tasks_workspace_skipped");
 }
 
-/// The name a client shows: `default` for the default workspace, else the root's folder name.
+/// The name a client shows: `WorkspaceInfo.name` (task workspace-vanity-name, always filled by
+/// `workspace_info`), else `default` for the default workspace, else the root's folder name.
 fn workspace_name(info: &pb::WorkspaceInfo) -> String {
+    if !info.name.is_empty() {
+        return info.name.clone();
+    }
     if info.is_default {
         return String::from("default");
     }

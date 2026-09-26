@@ -63,18 +63,29 @@ struct Inner {
     /// When each pair was last offered, on this device's monotonic clock (task sync-drift line 8).
     /// `pending` is drained by the mirror task within a moment, so this is what "a paired device
     /// offers this workspace" reads. Declined pairs count too. Same cap; the oldest pair goes.
-    seen: BTreeMap<(DeviceId, WorkspaceId), Instant>,
+    seen: BTreeMap<(DeviceId, WorkspaceId), Seen>,
+}
+
+/// One `(device, workspace)` pair's latest offer.
+struct Seen {
+    at: Instant,
+    /// What that device calls the workspace (task workspace-vanity-name), when it said anything:
+    /// a mirror this device shows by that name until the synced `txtodo.toml` names it. An offer
+    /// that says nothing (the id as a mirror's folder name) keeps the last name it gave.
+    name: Option<String>,
 }
 
 impl Inner {
-    fn note_seen(&mut self, key: (DeviceId, WorkspaceId)) {
+    fn note_seen(&mut self, key: (DeviceId, WorkspaceId), name: Option<String>) {
         if !self.seen.contains_key(&key) && self.seen.len() >= MAX_PENDING_OFFERS {
-            let oldest = self.seen.iter().min_by_key(|(_, at)| **at).map(|(k, _)| *k);
+            let oldest = self.seen.iter().min_by_key(|(_, s)| s.at).map(|(k, _)| *k);
             if let Some(oldest) = oldest {
                 self.seen.remove(&oldest);
             }
         }
-        self.seen.insert(key, Instant::now());
+        let name = name.or_else(|| self.seen.remove(&key).and_then(|s| s.name));
+        let at = Instant::now();
+        self.seen.insert(key, Seen { at, name });
     }
 }
 
@@ -107,7 +118,8 @@ impl WorkspaceOfferRegistry {
         {
             let mut inner = self.lock();
             let key = (offer.offering_device, offer.workspace_id);
-            inner.note_seen(key);
+            let name = crate::workspace_name::offered_name(offer.workspace_id, &offer.name);
+            inner.note_seen(key, name);
             if inner.declined.contains(&key) {
                 return Ok(());
             }
@@ -146,12 +158,24 @@ impl WorkspaceOfferRegistry {
             .lock()
             .seen
             .iter()
-            .filter(|((_, w), at)| *w == workspace && at.elapsed() <= within)
-            .map(|((device, _), at)| (*at, *device))
+            .filter(|((_, w), s)| *w == workspace && s.at.elapsed() <= within)
+            .map(|((device, _), s)| (s.at, *device))
             .collect();
         // Newest first. Ref: https://doc.rust-lang.org/std/cmp/struct.Reverse.html
         hits.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
         hits.into_iter().map(|(_, device)| device).collect()
+    }
+
+    /// What the device that offered `workspace` most recently calls it, among the offers that
+    /// named it at all (task workspace-vanity-name). In memory: `None` after a restart until the
+    /// next offer.
+    pub fn offered_name(&self, workspace: WorkspaceId) -> Option<String> {
+        self.lock()
+            .seen
+            .iter()
+            .filter(|((_, w), s)| *w == workspace && s.name.is_some())
+            .max_by_key(|(_, s)| s.at)
+            .and_then(|(_, s)| s.name.clone())
     }
 
     /// Every pending offer, for a listing RPC (stage 6). No particular order guaranteed beyond

@@ -138,3 +138,29 @@ fn offered_by_outlives_take_counts_declined_and_puts_the_newest_first() {
         "too long ago"
     );
 }
+
+/// Task workspace-vanity-name: what the newest offer that named the workspace calls it, kept after
+/// the offer is taken. An offer that names it by its own id says nothing.
+#[test]
+fn offered_name_is_the_newest_name_and_outlives_the_offer() {
+    let registry = WorkspaceOfferRegistry::new();
+    assert_eq!(registry.offered_name(workspace(1)), None);
+    registry.record(offer(1, 1, "plants")).unwrap();
+    registry.take(device(1), workspace(1));
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    registry.record(offer(2, 1, " House plants ")).unwrap();
+    assert_eq!(
+        registry.offered_name(workspace(1)).as_deref(),
+        Some("House plants")
+    );
+    std::thread::sleep(std::time::Duration::from_millis(2));
+    registry
+        .record(offer(2, 1, &workspace(1).to_string()))
+        .unwrap();
+    assert_eq!(
+        registry.offered_name(workspace(1)).as_deref(),
+        Some("House plants"),
+        "an id says nothing; the last name stays"
+    );
+    assert_eq!(registry.offered_name(workspace(2)), None);
+}

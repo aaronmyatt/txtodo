@@ -14,7 +14,9 @@ use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys
 
 use crate::device_identity::DeviceIdentity;
 use crate::peer_keys::PeerSignal;
-use crate::workspace_offer_registry::{PendingOffer, WorkspaceOfferRegistryError};
+use crate::workspace_offer_registry::{
+    PendingOffer, WorkspaceOfferRegistry, WorkspaceOfferRegistryError,
+};
 use crate::workspace_registry::WorkspaceRegistry;
 
 /// Which group/epoch/key to seal under, bundled so `send_all_offers` stays under the
@@ -134,21 +136,29 @@ fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKey
     None
 }
 
-/// This device's currently-active workspaces, as `(id, display name)` pairs — the name is derived
-/// from the root directory's basename purely for an accept-side prompt (stage 6), never persisted
-/// or used as identity.
-pub(crate) fn outbound_offers(registry: &Mutex<WorkspaceRegistry>) -> Vec<(WorkspaceId, String)> {
-    let registry = registry.lock().unwrap_or_else(PoisonError::into_inner);
-    registry
+/// This device's currently-active workspaces, as `(id, display name)` pairs — never used as
+/// identity. The name is the one this device shows (`workspace_name::display_name`, task
+/// workspace-vanity-name): the `txtodo.toml` name, else the folder's, else for a mirror what its
+/// own offering device called it (`offers`), so a third device learns the name, not the id.
+pub(crate) fn outbound_offers(
+    registry: &Mutex<WorkspaceRegistry>,
+    offers: &WorkspaceOfferRegistry,
+) -> Vec<(WorkspaceId, String)> {
+    let entries = registry
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
         .list()
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let default = crate::default_workspace::default_workspace_id();
+    entries
         .into_iter()
         .map(|entry| {
-            let name = entry
-                .root
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let name = crate::workspace_name::display_name(
+                entry.id,
+                &entry.root,
+                entry.id == default,
+                || offers.offered_name(entry.id),
+            );
             (entry.id, name)
         })
         .collect()
@@ -210,7 +220,7 @@ fn send_all_offers(
 ) -> bool {
     let device = identity.device();
     let now_ms = now_ms();
-    for (workspace_id, name) in outbound_offers(registry) {
+    for (workspace_id, name) in outbound_offers(registry, identity.workspace_offers()) {
         // The default goes out under this device's alias (task default-workspace-pairing-consent):
         // a foreign peer mirrors it as a Remote workspace; an own device skips it, since it merges
         // that list under the reserved id already.

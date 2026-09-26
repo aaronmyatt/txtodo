@@ -9,6 +9,7 @@ use crate::control_session::outbound_offers;
 use crate::keystore_setup::load_or_mint_device_signing;
 use crate::walker;
 use crate::workspace::Workspace;
+use crate::workspace_offer_registry::WorkspaceOfferRegistry;
 use crate::workspace_registry::WorkspaceRegistry;
 use std::sync::{Arc, Mutex};
 
@@ -49,7 +50,7 @@ fn a_workspace_offer_carries_the_folder_name_and_never_a_path() {
     let registry_dir = tempfile::tempdir().unwrap();
     let mut registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db")).unwrap();
     registry.add(&root, &FakeClock::new(1_000)).unwrap();
-    let offers = outbound_offers(&Mutex::new(registry));
+    let offers = outbound_offers(&Mutex::new(registry), &WorkspaceOfferRegistry::new());
     assert_eq!(offers.len(), 1);
     assert_eq!(offers[0].1, "default");
 }

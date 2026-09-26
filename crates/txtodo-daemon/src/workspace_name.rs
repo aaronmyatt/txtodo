@@ -18,12 +18,16 @@
 
 use serde::Deserialize;
 use std::path::Path;
+use txtodo_store::WorkspaceId;
 
 use crate::layout_file::LAYOUT_FILE;
 
 /// Most bytes a name may have: the most a control-channel offer carries, so a set name always fits
 /// the offer that names the workspace to a peer.
 pub(crate) const MAX_NAME_BYTES: usize = txtodo_sync::MAX_WORKSPACE_NAME_BYTES;
+
+/// What the default workspace is called until someone names it (ADR 0029).
+const DEFAULT_NAME: &str = "default";
 
 #[derive(Deserialize, Default)]
 struct Raw {
@@ -139,6 +143,43 @@ fn is_name_line(trimmed: &str) -> bool {
     trimmed
         .strip_prefix("name")
         .is_some_and(|rest| rest.trim_start().starts_with('='))
+}
+
+/// The name a client shows for a workspace: the name its `txtodo.toml` sets; else `default` for
+/// the default workspace; else its folder's name, unless that folder is named by the workspace id
+/// (a mirror, `remote/<id>/`), which tells a person nothing, so what the offering device calls it
+/// (`offered`) wins there when it said anything.
+pub(crate) fn display_name(
+    id: WorkspaceId,
+    root: &Path,
+    is_default: bool,
+    offered: impl FnOnce() -> Option<String>,
+) -> String {
+    if let Some(name) = read(root) {
+        return name;
+    }
+    if is_default {
+        return DEFAULT_NAME.to_owned();
+    }
+    let folder = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if (folder.is_empty() || folder == id.to_string())
+        && let Some(name) = offered()
+    {
+        return name;
+    }
+    if folder.is_empty() {
+        return root.display().to_string();
+    }
+    folder
+}
+
+/// Whether an offered `name` says anything about workspace `id`: a device that has no name for a
+/// mirror offers its folder's name, which is the id itself.
+pub(crate) fn offered_name(id: WorkspaceId, name: &str) -> Option<String> {
+    clean(name).ok().flatten().filter(|n| *n != id.to_string())
 }
 
 /// `name` as a TOML basic string. [`clean`] already refused control characters, so a backslash and
