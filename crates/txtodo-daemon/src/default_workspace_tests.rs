@@ -177,10 +177,10 @@ async fn pairing_never_rekeys_the_default_off_its_reserved_id() {
 }
 
 #[tokio::test]
-async fn a_non_default_workspace_is_still_rekeyed_to_the_offered_id() {
+async fn an_empty_non_default_workspace_is_still_rekeyed_to_the_offered_id() {
     let (_state, catalog) = catalog();
     let other = tempfile::tempdir().unwrap();
-    std::fs::write(other.path().join("todo.txt"), "x\n").unwrap();
+    std::fs::write(other.path().join("todo.txt"), "\n").unwrap();
     catalog.open_dir_bridge(other.path()).unwrap();
     let ws = catalog.resolve(None).unwrap();
     let offered = txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(0x77));
@@ -188,4 +188,35 @@ async fn a_non_default_workspace_is_still_rekeyed_to_the_offered_id() {
         catalog.adopt_offered_workspace_id(&ws, offered).unwrap(),
         offered
     );
+    assert_eq!(ws.read().unwrap().workspace_id(), offered);
+}
+
+/// sync-drift line 4: a folder with lines (a git clone, say) is never joined in place. Its lines
+/// have ids of their own, so the peer's copy of them would come back as duplicates.
+#[tokio::test]
+async fn a_workspace_with_lines_is_not_rekeyed_and_is_left_as_it_was() {
+    let (_state, catalog) = catalog();
+    let other = tempfile::tempdir().unwrap();
+    std::fs::write(other.path().join("todo.txt"), "(A) buy milk\n").unwrap();
+    catalog.open_dir_bridge(other.path()).unwrap();
+    let ws = catalog.resolve(None).unwrap();
+    let before = ws.read().unwrap().workspace_id();
+    let offered = txtodo_store::WorkspaceId::new(txtodo_model::Ulid::from_u128(0x77));
+
+    let err = catalog
+        .adopt_offered_workspace_id(&ws, offered)
+        .unwrap_err();
+    assert_eq!(err.code(), Code::FailedPrecondition);
+    let root = ws.read().unwrap().root().display().to_string();
+    assert!(err.message().contains(&root), "{err}");
+    assert!(err.message().contains("todo.txt"), "{err}");
+    assert!(err.message().contains("default workspace"), "{err}");
+    assert_eq!(ws.read().unwrap().workspace_id(), before);
+    let ids: Vec<_> = catalog
+        .list_registered_entries()
+        .unwrap()
+        .iter()
+        .map(|e| e.id)
+        .collect();
+    assert_eq!(ids, vec![before], "no row was released or added");
 }

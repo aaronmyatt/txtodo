@@ -87,10 +87,12 @@ impl WorkspaceCatalog {
     /// in favor of the initiator's `offered_id` instead. A no-op returning `current_id` when the
     /// two already match. Never touches `root/.txtodo/` — only the registry row's id, this
     /// process's `open` map key, `ws`'s own live id, and the device-level relay/file-carrier route
-    /// tables change. Refuses (never silently substitutes) only when `offered_id` is already
+    /// tables change. Refuses (never silently substitutes) when `offered_id` is already
     /// actively registered locally under a *different* root — the one collision `adopt` cannot
     /// resolve by itself; the far more common case, `ws`'s own root being self-registered under
-    /// its old id, is exactly what this releases first.
+    /// its old id, is exactly what this releases first. Also refuses a folder that is not empty
+    /// (sync-drift line 4, `join_target.rs`): its lines have ids of their own, so rekeying it
+    /// would merge them with the peer's copy of the same lines.
     pub fn adopt_offered_workspace_id(
         &self,
         ws: &SharedWorkspace,
@@ -110,6 +112,14 @@ impl WorkspaceCatalog {
             tracing::info!(offered = %offered_id, "pairing_kept_default_workspace_id");
             return Ok(current_id);
         }
+        // Checked before anything changes, so a refusal leaves the registry and the pairing
+        // handshake untouched (`pair_accept_with_catalog` only starts it after this returns).
+        crate::join_target::require_empty(
+            &root,
+            "cannot join the other device's workspace",
+            "Pair from your default workspace instead (the other device's workspaces then arrive \
+             on their own as Remote workspaces), or from an empty folder.",
+        )?;
         self.rekey_registry(current_id, offered_id, &root)?;
         {
             let mut open = self.open.write().unwrap_or_else(PoisonError::into_inner);

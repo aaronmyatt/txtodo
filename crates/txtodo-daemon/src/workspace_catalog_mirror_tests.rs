@@ -145,6 +145,33 @@ async fn a_removed_mirror_is_not_mirrored_again() {
     assert!(root_of(&f, id).is_none());
 }
 
+/// sync-drift line 4: a mirror lands only in an empty folder. One left behind with lines in it
+/// (a registry reset, say) is refused, named, and left alone.
+#[test]
+fn a_mirror_folder_left_with_lines_in_it_is_refused_and_left_alone() {
+    let f = fixture();
+    let id = workspace(0x0190_0000_0000_0000_0000_0000_0000_000a);
+    let remote = f.catalog.remote_root.get().cloned();
+    let dir = remote
+        .unwrap_or_else(|| panic!("no remote root"))
+        .join(id.to_string());
+    std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("mkdir: {e}"));
+    std::fs::write(dir.join("todo.txt"), "(A) left behind\n").unwrap_or_else(|e| panic!("{e}"));
+    offer(&f, 1, id);
+
+    let err = f
+        .catalog
+        .accept_offer(DeviceId::new(Ulid::from_u128(1)), id)
+        .expect_err("a folder with lines is not mirrored into");
+    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
+    assert!(err.message().contains(&dir.display().to_string()), "{err}");
+    assert!(root_of(&f, id).is_none(), "not registered");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("todo.txt")).unwrap_or_default(),
+        "(A) left behind\n"
+    );
+}
+
 #[test]
 fn a_declined_offer_is_ignored_when_it_comes_again() {
     let f = fixture();

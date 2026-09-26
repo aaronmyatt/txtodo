@@ -85,11 +85,19 @@ impl WorkspaceCatalog {
 
     /// Registers `id` at its mirror folder (made with an empty `todo.txt` when missing) and opens
     /// it, so sync routes it at once. A failed open is logged, not returned: the workspace stays
-    /// registered and the next start's loader opens it.
+    /// registered and the next start's loader opens it. A folder left there with text in it is
+    /// refused (sync-drift line 4, `join_target.rs`), unless `id` is already registered.
     pub(crate) fn mirror_workspace(&self, id: WorkspaceId) -> Result<WorkspaceEntry, Status> {
         let dir = self.mirror_dir(id)?;
         create_list_dir(&dir)
             .map_err(|e| Status::internal(format!("create {}: {e}", dir.display())))?;
+        if !self.is_active(id)? {
+            crate::join_target::require_empty(
+                &dir,
+                &format!("cannot mirror workspace {id}"),
+                "Move that folder away; the device's next offer mirrors it again.",
+            )?;
+        }
         let entry = {
             let mut registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
             registry
@@ -144,6 +152,16 @@ impl WorkspaceCatalog {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .ever_registered(id)
+            .map_err(|e| Status::internal(format!("look up workspace {id}: {e}")))
+    }
+
+    /// Whether `id` is registered and not removed: already mirrored, so its folder may hold text.
+    fn is_active(&self, id: WorkspaceId) -> Result<bool, Status> {
+        self.registry
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(id)
+            .map(|entry| entry.is_some())
             .map_err(|e| Status::internal(format!("look up workspace {id}: {e}")))
     }
 
