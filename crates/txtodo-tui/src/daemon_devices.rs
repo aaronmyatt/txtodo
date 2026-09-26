@@ -15,11 +15,16 @@ impl Daemon {
         Ok(self.inner.pair_offer(req).await?.into_inner())
     }
 
-    /// Joins with another device's code; the result carries the six SAS words to compare.
+    /// Joins with another device's code; the result carries the six SAS words to compare. Sent
+    /// with no workspace, so the daemon answers for the default, which it never rekeys
+    /// (sync-drift line 4): the selected folder stays as it is, and the other device's
+    /// workspaces arrive as Remote mirrors in fresh folders. Naming the selected workspace would
+    /// ask the daemon to join it in place, which it refuses once that folder has lines, and the
+    /// TUI started in a folder with a `todo.txt` selects that folder.
     pub async fn pair_accept(&mut self, code: &str) -> Result<pb::PairResult, DaemonError> {
         let req = pb::PairAcceptRequest {
             code: code.to_owned(),
-            workspace: self.selector.clone(),
+            workspace: None,
         };
         Ok(self.inner.pair_accept(req).await?.into_inner())
     }
