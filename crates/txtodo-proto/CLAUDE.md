@@ -74,12 +74,11 @@ peer, each workspace where its incoming run keeps being refused (`Stuck`: file, 
 refusals in a row), and whether the daemon stopped dialing it for holding no shared key. Both come
 from daemon memory; empty/false from an older daemon.
 
-`WorkspaceRejoinRequest`/`WorkspaceRejoinResponse` (task sync-drift line 8, 2026-09-26): the
-messages for dropping this device's copy of one workspace (its documents and `.txtodo/` move into a
-time-stamped folder beside the root, never deleted) and reopening the empty folder under the same
-id, so sync refills it from a paired peer. `dry_run` changes nothing. The response names the backup
-folder, what moved, and the devices that offered the workspace lately. The RPC itself lands in a
-follow-up commit, so this one does not break the daemon's `Txtodo` impl.
+`WorkspaceRejoin` (task sync-drift line 8, 2026-09-26): device-level like `WorkspaceRemove`. Drops
+this device's copy of one workspace (its documents and `.txtodo/` move into a time-stamped folder
+beside the root, never deleted) and reopens the empty folder under the same id, so sync refills it
+from a paired peer. `dry_run` changes nothing. The response names the backup folder, what moved,
+and the devices that offered the workspace lately. UNIMPLEMENTED from an older daemon.
 
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).

@@ -101,6 +101,12 @@ service Txtodo {
   // Discards a pending offer without adopting it. What the offering device does with this (e.g.
   // stop re-announcing to this peer) is the control channel's own bookkeeping, not built yet.
   rpc WorkspaceDeclineOffer(WorkspaceDeclineOfferRequest) returns (WorkspaceDeclineOfferResponse);
+  // Drops this device's copy of one workspace and takes a paired peer's (task sync-drift line 8):
+  // closes it, moves its synced documents and `.txtodo/` into a new time-stamped folder beside its
+  // root (never deleted, never sent), then opens the now-empty folder under the same id, so sync
+  // refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
+  // device offered this workspace lately, and for the default workspace. Device-level, no selector.
+  rpc WorkspaceRejoin(WorkspaceRejoinRequest) returns (WorkspaceRejoinResponse);
 
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);

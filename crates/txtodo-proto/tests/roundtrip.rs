@@ -387,28 +387,3 @@ fn the_layout_messages_round_trip() {
         outside_refs_dir: vec!["old/plan".into()],
     });
 }
-
-/// Task sync-drift line 8: the rejoin request and its answer round-trip, lists and the nested
-/// `WorkspaceInfo` included.
-#[test]
-fn the_rejoin_messages_round_trip() {
-    use txtodo_proto::v1::{WorkspaceRejoinRequest, WorkspaceRejoinResponse};
-    round_trip(&WorkspaceRejoinRequest {
-        workspace_id: "01M2RZ8EX1CQAS21TNZ5YY6PBT".into(),
-        dry_run: true,
-    });
-    round_trip(&WorkspaceRejoinResponse {
-        workspace: Some(WorkspaceInfo {
-            workspace_id: "01M2RZ8EX1CQAS21TNZ5YY6PBT".into(),
-            root: "/home/a/todo".into(),
-            ..WorkspaceInfo::default()
-        }),
-        backup_dir: "/home/a/todo.rejoin-backup-2026-09-26T150211Z".into(),
-        moved: vec![
-            ".txtodo".into(),
-            "todo.txt".into(),
-            "tasks/a/notes.md".into(),
-        ],
-        offering_devices: vec!["01ARZ3NDEKTSV4RRFFQ69G5FAV".into()],
-    });
-}

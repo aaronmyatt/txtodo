@@ -1958,6 +1958,35 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceDeclineOffer"));
             self.inner.unary(req, path, codec).await
         }
+        /// Drops this device's copy of one workspace and takes a paired peer's (task sync-drift line 8):
+        /// closes it, moves its synced documents and `.txtodo/` into a new time-stamped folder beside its
+        /// root (never deleted, never sent), then opens the now-empty folder under the same id, so sync
+        /// refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
+        /// device offered this workspace lately, and for the default workspace. Device-level, no selector.
+        pub async fn workspace_rejoin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceRejoinRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceRejoinResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceRejoin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRejoin"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -2564,6 +2593,18 @@ pub mod txtodo_server {
             request: tonic::Request<super::WorkspaceDeclineOfferRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WorkspaceDeclineOfferResponse>,
+            tonic::Status,
+        >;
+        /// Drops this device's copy of one workspace and takes a paired peer's (task sync-drift line 8):
+        /// closes it, moves its synced documents and `.txtodo/` into a new time-stamped folder beside its
+        /// root (never deleted, never sent), then opens the now-empty folder under the same id, so sync
+        /// refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
+        /// device offered this workspace lately, and for the default workspace. Device-level, no selector.
+        async fn workspace_rejoin(
+            &self,
+            request: tonic::Request<super::WorkspaceRejoinRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceRejoinResponse>,
             tonic::Status,
         >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
@@ -3720,6 +3761,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceDeclineOfferSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceRejoin" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceRejoinSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceRejoinRequest>
+                    for WorkspaceRejoinSvc<T> {
+                        type Response = super::WorkspaceRejoinResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceRejoinRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_rejoin(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceRejoinSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
