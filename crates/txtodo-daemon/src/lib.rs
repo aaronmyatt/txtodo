@@ -147,6 +147,7 @@ mod workspace_error;
 pub mod workspace_load;
 mod workspace_migrate;
 mod workspace_mint;
+mod workspace_name;
 mod workspace_offer_grpc;
 pub mod workspace_offer_registry;
 pub mod workspace_registry;
@@ -262,6 +263,8 @@ mod workspace_catalog_state_tests;
 mod workspace_catalog_tests;
 #[cfg(test)]
 mod workspace_migrate_tests;
+#[cfg(test)]
+mod workspace_name_tests;
 #[cfg(test)]
 mod workspace_offer_grpc_tests;
 #[cfg(test)]

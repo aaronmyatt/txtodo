@@ -128,6 +128,18 @@ async fn setting_the_layout_with_nothing_in_the_way_writes_the_file_and_takes_ef
     assert!(ref_dir(&mut client, false).await.dir.starts_with("stuff/"));
 }
 
+/// Task workspace-vanity-name: the workspace's name shares `txtodo.toml`; a layout change keeps it.
+#[tokio::test]
+async fn a_layout_change_keeps_the_workspaces_name() {
+    let (dir, mut client, _stop) = served("plan the launch\n").await;
+    let file = dir.path().join("txtodo.toml");
+    std::fs::write(&file, "name = \"House plants\"\n").unwrap();
+    layout(&mut client, set("stuff", false)).await.unwrap();
+    let toml = std::fs::read_to_string(&file).unwrap();
+    assert!(toml.contains("refs_dir = \"stuff\""), "{toml}");
+    assert!(toml.ends_with("name = \"House plants\"\n"), "{toml}");
+}
+
 #[tokio::test]
 async fn a_change_is_refused_while_a_ref_dir_exists_and_moves_them_when_asked() {
     let (dir, mut client, _stop) = served("plan the launch\n").await;

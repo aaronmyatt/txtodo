@@ -34,9 +34,12 @@ struct Raw {
     todo_file: Option<String>,
 }
 
-/// Parses a layout file's text. Unknown keys are ignored, so a newer file still loads.
+/// Parses a layout file's text. Unknown keys are ignored, so a newer file still loads. The
+/// workspace's `name` lines are not read at all (`workspace_name.rs`): two names set at once on two
+/// devices can leave two, which TOML refuses, and that must not cost the layout.
 pub fn parse(text: &str) -> Result<WorkspaceLayout, String> {
-    let raw: Raw = toml::from_str(text).map_err(|e| format!("{LAYOUT_FILE}: {e}"))?;
+    let text = crate::workspace_name::without_name(text);
+    let raw: Raw = toml::from_str(&text).map_err(|e| format!("{LAYOUT_FILE}: {e}"))?;
     WorkspaceLayout::new(
         raw.refs_dir.as_deref().unwrap_or_default(),
         raw.todo_file.as_deref().unwrap_or_default(),
