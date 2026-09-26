@@ -1,4 +1,4 @@
-(A) 2026-09-26 sync: duplicate lines and stuck batches between paired devices +m11 @daemon @sync ref:sync-drift @doing by:claude
+(A) 2026-09-26 sync: duplicate lines and stuck batches between paired devices +m11 @daemon @sync ref:sync-drift — built bar the @human lines (the origin_seq decide, the heal-duplicates decide); see tasks/sync-drift/notes.md
 (B) 2026-09-26 daemon: a line inserted after a last line with no final newline is glued onto it; state.rs insert leaves the old last line's ending empty (crates/txtodo-core/src/file.rs to_bytes), found filing sync-drift +m11 @daemon @cli
 2026-09-25 enable force sync one way - though is this wise?
 2026-09-26 remote/syncd workspaces should share a "vanity" name to dispaly on the remote device
