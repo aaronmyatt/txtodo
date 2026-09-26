@@ -198,3 +198,43 @@ never stalls sync without anyone seeing it.
   - `--list` is hidden, not a documented flag.
   - The desktop and TUI add-workspace paths go through the same RPC, but their e2e tests were
     not run.
+
+### Line 4
+- "Empty", as built (`join_target.rs`): nothing sync would merge. Every document the walker
+  finds (each `todo.txt`, the root list `txtodo.toml` names, each `notes.md`) holds only
+  whitespace (a BOM too). A README, `.git` or `.txtodo/` don't count: they never sync. An
+  unreadable document, or a walk that fails, counts as not empty.
+- Disk, not store: `notes.md` written by hand never becomes an op, and a line can land on disk
+  before the watcher sees it. A folder whose lines were all deleted still has ops; they reach the
+  peer as insert-then-delete, so nothing shows.
+- Daemon: `adopt_offered_workspace_id` (the `PairAccept` rekey) refuses a folder that is not
+  empty, with `FAILED_PRECONDITION` naming the folder, the first document with text, and what to
+  do instead. It runs before anything changes: no registry row moves, no handshake starts. The
+  default is still kept, never rekeyed or refused. A code naming the same id is still a no-op.
+- `mirror_workspace` (offer accept and the auto mirror) refuses a `remote/<id>/` folder left
+  behind with text in it, unless that id is already registered. Normally that folder is new.
+- Clients: the TUI and desktop sent their selected workspace to `PairAccept`, so the rekey hit
+  whatever was picked. The TUI picks the folder it starts in when that has a `todo.txt`, so a
+  refusal alone would fail its normal flow. Both now send no workspace, like the CLI already did:
+  the daemon pairs the default and keeps it, the picked folder is left alone, and the other
+  device's workspaces arrive as Remote mirrors in fresh folders. No wire change.
+- So an in-place join now happens only from a `--dir` daemon (the pairing tests) or a client that
+  names a workspace, and only into an empty folder.
+- Tests: `join_target.rs` (blank, BOM, bad bytes; README and `.txtodo/` ignored; `notes.md` and
+  the `txtodo.toml` root list count), `default_workspace_tests.rs` (a folder with a line is
+  refused and left as it was; an empty one is still rekeyed), `workspace_catalog_mirror_tests.rs`
+  (a leftover folder with a line is refused, not registered, file untouched). Still green: daemon
+  lib (395), `default_workspace_pairing`, `default_workspace_foreign`, `pairing_lan`, CLI
+  `tests/pairing.rs`, TUI.
+- Still broken / not done:
+  - The TUI and desktop can no longer join an empty folder they picked. The peer's workspace
+    lands under `remote/` instead.
+  - Neither shows `kept_own_workspace` ("your list stays; theirs arrives as Remote"). The CLI
+    does.
+  - With no default registered (its folder could not be made), a selector-less `PairAccept` is
+    refused as ambiguous once 2+ workspaces are open, so TUI and desktop pairing fails there.
+    Before, they paired the picked one.
+  - A leftover mirror folder with text logs `workspace_mirror_failed` on every offer, not once.
+  - The check and the rekey are not one step. A line written between them still merges.
+  - Folders already joined in place keep their merged ids. That is line 8.
+  - The desktop's pairing e2e was not run (its daemon tests are CI-only), nor any visual check.

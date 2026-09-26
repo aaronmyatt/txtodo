@@ -287,11 +287,12 @@ impl DaemonClient {
     }
 
     /// Accepts a peer's scanned `PairOffer` (`code`) and begins the X25519 handshake; returns the
-    /// 6-word SAS.
+    /// 6-word SAS. No workspace: the daemon pairs the default and leaves the picked one alone,
+    /// since it won't join a folder with lines in place (tasks/sync-drift/notes.md, line 4).
     pub async fn pair_accept(&mut self, code: String) -> Result<pb::PairResult, DaemonError> {
         let req = pb::PairAcceptRequest {
             code,
-            workspace: self.selector.clone(),
+            workspace: None,
         };
         Ok(self.inner.pair_accept(req).await?.into_inner())
     }
