@@ -165,6 +165,22 @@ fn total_ops_and_existing_op_ids_count_every_file() {
 }
 
 #[test]
+fn op_by_id_finds_the_stored_row_and_nothing_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let first = op(1, 10, 0, "todo.txt");
+    store
+        .append(&[first.clone(), op(2, 10, 1, "q4/todo.txt")])
+        .unwrap();
+    let found = store.op_by_id(first.id).unwrap().unwrap();
+    assert_eq!((found.seq, found.op), (Seq(1), first));
+    let second = store.op_by_id(OpId::new(Ulid::from_u128(2))).unwrap();
+    assert_eq!(second.map(|s| s.seq), Some(Seq(2)), "any file");
+    let unknown = store.op_by_id(OpId::new(Ulid::from_u128(3))).unwrap();
+    assert!(unknown.is_none());
+}
+
+#[test]
 fn the_crate_has_no_update_or_delete_statement() {
     let sources = [
         include_str!("../src/lib.rs"),

@@ -4,7 +4,7 @@
 
 use crate::{Store, StoreError};
 use rusqlite::{Connection, OptionalExtension, params};
-use txtodo_model::{FilePath, Hlc, Op, OpKind, Principal};
+use txtodo_model::{FilePath, Hlc, Op, OpId, OpKind, Principal};
 
 /// Position in the log. Dense, increasing, per database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -67,6 +67,9 @@ const SELECT_BETWEEN: &str = "SELECT seq, payload FROM ops WHERE file = ?1 \
 const SELECT_PAGE_GLOBAL: &str =
     "SELECT seq, payload FROM ops WHERE seq > ?1 ORDER BY seq LIMIT ?2";
 const SELECT_ALL_OP_IDS: &str = "SELECT op_id FROM ops LIMIT ?1";
+// `op_id` is `UNIQUE` (migration 0001), so SQLite keeps an index on it and this is one lookup.
+// Ref: https://www.sqlite.org/lang_createtable.html#unique_constraints
+const SELECT_BY_OP_ID: &str = "SELECT seq, payload FROM ops WHERE op_id = ?1";
 
 fn principal_tag(p: &Principal) -> &'static str {
     match p {
@@ -265,6 +268,28 @@ impl Store {
             })
             .map_err(StoreError::query("query ops_page"))?;
         collect(rows)
+    }
+
+    /// The row stored under `id`, if any (task sync-drift line 2: a peer's op this log already
+    /// holds counts as landed, so a sync batch skips it instead of failing the `UNIQUE` insert).
+    pub fn op_by_id(&self, id: OpId) -> Result<Option<Stored>, StoreError> {
+        let row = self
+            .conn
+            .query_row(
+                SELECT_BY_OP_ID,
+                params![id.ulid().to_u128().to_be_bytes().to_vec()],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?)),
+            )
+            // No row is `Ok(None)`, not an error.
+            // Ref: https://docs.rs/rusqlite/latest/rusqlite/trait.OptionalExtension.html
+            .optional()
+            .map_err(StoreError::query("op by id"))?;
+        let stored = row
+            .map(|(seq, payload)| decode_row(seq, payload))
+            .transpose()?;
+        debug_assert!(stored.as_ref().is_none_or(|s| s.op.id == id));
+        debug_assert!(stored.as_ref().is_none_or(|s| s.seq.0 > 0));
+        Ok(stored)
     }
 
     /// Every row in the op log, regardless of file (`txtodo bundle export`'s manifest `op_count`).
