@@ -7,7 +7,6 @@
 
 use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
-use std::path::Path;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use tracing::Instrument;
@@ -342,32 +341,21 @@ impl Txtodo for GlobalService {
         &self,
         r: Request<pb::WorkspaceAddRequest>,
     ) -> Result<Response<pb::WorkspaceInfo>, Status> {
-        let entry = self
-            .catalog
-            .add_registered(Path::new(&r.into_inner().root))?;
-        Ok(Response::new(workspace_info(&self.catalog, entry)))
+        crate::workspace_registry_grpc::add(self, r)
     }
 
     async fn workspace_remove(
         &self,
         r: Request<pb::WorkspaceRemoveRequest>,
     ) -> Result<Response<pb::WorkspaceRemoveResponse>, Status> {
-        let id = parse_workspace_id(&r.into_inner().workspace_id)?;
-        let removed = self.catalog.remove_registered(id)?;
-        Ok(Response::new(pb::WorkspaceRemoveResponse { removed }))
+        crate::workspace_registry_grpc::remove(self, r)
     }
 
     async fn workspace_list(
         &self,
         _r: Request<pb::WorkspaceListRequest>,
     ) -> Result<Response<pb::WorkspaceListResponse>, Status> {
-        let workspaces = self
-            .catalog
-            .list_registered_entries()?
-            .into_iter()
-            .map(|entry| workspace_info(&self.catalog, entry))
-            .collect();
-        Ok(Response::new(pb::WorkspaceListResponse { workspaces }))
+        crate::workspace_registry_grpc::list(self)
     }
 
     async fn universal_tasks(
@@ -396,5 +384,12 @@ impl Txtodo for GlobalService {
         r: Request<pb::WorkspaceDeclineOfferRequest>,
     ) -> Result<Response<pb::WorkspaceDeclineOfferResponse>, Status> {
         crate::workspace_offer_grpc::decline_offer(self, r).await
+    }
+
+    async fn workspace_rejoin(
+        &self,
+        r: Request<pb::WorkspaceRejoinRequest>,
+    ) -> Result<Response<pb::WorkspaceRejoinResponse>, Status> {
+        crate::workspace_registry_grpc::rejoin(self, r).await
     }
 }

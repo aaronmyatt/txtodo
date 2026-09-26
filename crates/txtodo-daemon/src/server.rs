@@ -382,4 +382,11 @@ impl Txtodo for TxtodoService {
     ) -> Result<Response<pb::WorkspaceDeclineOfferResponse>, Status> {
         Err(no_registry())
     }
+
+    async fn workspace_rejoin(
+        &self,
+        _r: Request<pb::WorkspaceRejoinRequest>,
+    ) -> Result<Response<pb::WorkspaceRejoinResponse>, Status> {
+        Err(no_registry())
+    }
 }

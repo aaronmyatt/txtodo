@@ -149,6 +149,7 @@ mod workspace_offer_grpc;
 pub mod workspace_offer_registry;
 pub mod workspace_registry;
 mod workspace_registry_error;
+mod workspace_registry_grpc;
 pub mod workspace_rejoin;
 /// Re-exported from the shared `txtodo-workspace-paths` crate (task `daemon-paths-shared-crate`)
 /// so every existing `txtodo_daemon::workspace_registry_paths::*` call site keeps working
