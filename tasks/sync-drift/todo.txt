@@ -1,4 +1,4 @@
-2026-09-26 daemon: retire a task's fingerprint row when it leaves the file, plus a one-time repair of stale live rows +m11 @daemon @sync
+2026-09-26 daemon: retire a task's fingerprint row when it leaves the file, plus a one-time repair of stale live rows +m11 @daemon @sync @doing by:claude
 2026-09-26 daemon: a peer op whose op_id is already stored counts as landed, not a refused run +m11 @daemon @sync
 2026-09-26 daemon/cli: refuse a workspace root inside or around a registered one; doctor flags existing overlaps +m11 @daemon @cli
 2026-09-26 daemon: joining or accepting an offer mirrors only into an empty folder +m11 @daemon @sync
