@@ -253,6 +253,8 @@ mod workspace_offer_grpc_tests;
 #[cfg(test)]
 mod workspace_offer_registry_tests;
 #[cfg(test)]
+mod workspace_overlap_tests;
+#[cfg(test)]
 mod workspace_registry_tests;
 #[cfg(test)]
 mod workspace_tests;

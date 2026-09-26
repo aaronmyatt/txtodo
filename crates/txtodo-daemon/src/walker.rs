@@ -25,9 +25,10 @@ pub const WALK_MAX_DEPTH: usize = 32;
 pub const WALK_MAX_FILES: usize = 10_000;
 /// The daemon's own state directory, never a document.
 pub const STATE_DIR: &str = ".txtodo";
-/// Directory names the walker never enters wherever they appear: version-control internals and
-/// installed dependencies, which hold thousands of files and never a todo list.
-const SKIPPED_DIR_NAMES: [&str; 2] = [".git", "node_modules"];
+// Which directories the walk never enters lives in `txtodo-workspace-paths` (sync-drift line 3),
+// so the registry's overlap refusal and `txtodo doctor` use the very rule this walk does.
+use txtodo_workspace_paths::SKIPPED_DIR_NAMES;
+pub use txtodo_workspace_paths::is_skipped_dir;
 
 /// Why a walk stopped.
 #[derive(Debug)]
@@ -147,34 +148,6 @@ fn visit(
         found.push(relative(root, &path)?);
     }
     Ok(())
-}
-
-/// True for a directory that is never part of a workspace's documents: `.git` and `node_modules`;
-/// another git checkout (it holds a `.git` dir, or a `.git` file for a linked worktree or a
-/// submodule: the boundary `txtodo_workspace_paths::workspace_root_from` stops at too, task
-/// walker-nested-checkouts); a Cargo build directory (`target` holding the `CACHEDIR.TAG` cargo
-/// writes into it, or sitting beside a `Cargo.toml`); and `.claude/worktrees`, whose checkouts are
-/// whole copies of the repo (registered as workspaces of their own when they matter, never a
-/// subtree of this one). Walking them made the daemon adopt about 2979 documents against 361 real
-/// ones and re-walk every new directory a `cargo build` created under `target/` (root todo
-/// id:01M2WK7W1MPDW9VBWS25EF8CB5). A ref directory that merely happens to be called `target` is
-/// still walked. Ref: <https://bford.info/cachedir/>, <https://git-scm.com/docs/gitrepository-layout>
-pub fn is_skipped_dir(dir: &Path) -> bool {
-    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
-        return false;
-    };
-    if SKIPPED_DIR_NAMES.contains(&name) || std::fs::symlink_metadata(dir.join(".git")).is_ok() {
-        return true;
-    }
-    let parent = dir.parent();
-    match name {
-        "target" => {
-            dir.join("CACHEDIR.TAG").is_file()
-                || parent.is_some_and(|p| p.join("Cargo.toml").is_file())
-        }
-        "worktrees" => parent.and_then(Path::file_name).and_then(|n| n.to_str()) == Some(".claude"),
-        _ => false,
-    }
 }
 
 /// True for a workspace-relative path under a directory skipped by name alone (`.git`,

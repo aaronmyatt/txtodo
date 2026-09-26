@@ -63,7 +63,9 @@ impl WorkspaceRegistry {
     /// Registers `root`, minting a fresh [`WorkspaceId`] the first time. Idempotent: registering
     /// an already-active root again is a no-op that returns the existing id — never a duplicate
     /// row (`txtodo_store::Registry`'s unique partial index is the actual backstop underneath
-    /// this check). Never reads, creates or touches `root/.txtodo/` in any way — the migration
+    /// this check). A new root inside or around a registered one is refused
+    /// ([`WorkspaceRegistryError::Overlap`], see `refuse_overlap`); an exact root never is.
+    /// Never reads, creates or touches `root/.txtodo/` in any way — the migration
     /// invariant this task exists for: a pre-existing op log is left exactly where it is, because
     /// `root/.txtodo/oplog.db` is always derivable from `root` later (`walker::STATE_DIR` +
     /// `workspace::STORE_FILE`, the same constants `Workspace::open` itself uses), never moved or
@@ -77,6 +79,7 @@ impl WorkspaceRegistry {
         if let Some(existing) = self.registry.find_active_by_root(&canonical)? {
             return Ok(existing.id);
         }
+        self.refuse_overlap(&canonical)?;
         let id = WorkspaceId::new(clock.new_ulid());
         self.registry.insert(&NewWorkspaceEntry {
             id,
@@ -97,8 +100,9 @@ impl WorkspaceRegistry {
     /// collision direction: `id` already names a *different* root locally
     /// ([`crate::workspace_registry_error::WorkspaceRegistryError::IdCollision`]), or `root` is
     /// already actively registered locally under a *different* id
-    /// ([`crate::workspace_registry_error::WorkspaceRegistryError::RootCollision`]). Same
-    /// migration invariant as `add`: never reads, creates or touches `root/.txtodo/`.
+    /// ([`crate::workspace_registry_error::WorkspaceRegistryError::RootCollision`]). A new root
+    /// inside or around a registered one is refused like `add`'s. Same migration invariant as
+    /// `add`: never reads, creates or touches `root/.txtodo/`.
     pub fn adopt(
         &mut self,
         id: WorkspaceId,
@@ -106,26 +110,87 @@ impl WorkspaceRegistry {
         clock: &dyn Clock,
     ) -> Result<(), WorkspaceRegistryError> {
         let canonical = canonical_root(root)?;
+        if self.adopted_already(id, &canonical)? {
+            return Ok(());
+        }
+        self.refuse_overlap(&canonical)?;
+        self.insert_adopted(id, canonical, clock)
+    }
+
+    /// [`Self::adopt`] for a root this device released a moment ago under another id: the pairing
+    /// rekey (`WorkspaceCatalog::rekey_registry`) and its rollback. It is the same folder, not a
+    /// new one, so an overlap it already had is not refused here: a registry from before the
+    /// refusal keeps working, and `txtodo doctor` reports the overlap instead.
+    pub fn adopt_released(
+        &mut self,
+        id: WorkspaceId,
+        root: &Path,
+        clock: &dyn Clock,
+    ) -> Result<(), WorkspaceRegistryError> {
+        let canonical = canonical_root(root)?;
+        if self.adopted_already(id, &canonical)? {
+            return Ok(());
+        }
+        self.insert_adopted(id, canonical, clock)
+    }
+
+    /// `adopt`'s collision checks: `Ok(true)` when `id` already names `canonical` (nothing to do),
+    /// an error when `id` names another root or `canonical` is active under another id.
+    fn adopted_already(
+        &self,
+        id: WorkspaceId,
+        canonical: &str,
+    ) -> Result<bool, WorkspaceRegistryError> {
         if let Some(by_id) = self.registry.get(id)? {
             if by_id.root == canonical {
-                return Ok(());
+                return Ok(true);
             }
             return Err(WorkspaceRegistryError::IdCollision {
                 id,
                 existing_root: PathBuf::from(by_id.root),
             });
         }
-        if let Some(active) = self.registry.find_active_by_root(&canonical)? {
+        if let Some(active) = self.registry.find_active_by_root(canonical)? {
             return Err(WorkspaceRegistryError::RootCollision {
                 root: PathBuf::from(canonical),
                 existing_id: active.id,
             });
         }
+        Ok(false)
+    }
+
+    fn insert_adopted(
+        &mut self,
+        id: WorkspaceId,
+        canonical: String,
+        clock: &dyn Clock,
+    ) -> Result<(), WorkspaceRegistryError> {
         self.registry.insert(&NewWorkspaceEntry {
             id,
             root: canonical,
             added_at_ms: clock.now_ms(),
         })?;
+        Ok(())
+    }
+
+    /// Refuses `canonical`, a root not registered yet, when the walk of it would reach an active
+    /// workspace's lists or theirs would reach its own (`txtodo_workspace_paths::root_overlap`):
+    /// two stores would then track one file with different ids, and each would read the other's
+    /// writes as outside edits (sync-drift line 3). Rows already in the registry are never
+    /// refused or dropped here; they keep loading, and `txtodo doctor` flags them.
+    fn refuse_overlap(&self, canonical: &str) -> Result<(), WorkspaceRegistryError> {
+        let root = Path::new(canonical);
+        for row in self.registry.list_active()? {
+            let registered = Path::new(&row.root);
+            if let Some(overlap) = txtodo_workspace_paths::root_overlap(root, registered) {
+                return Err(WorkspaceRegistryError::Overlap {
+                    root: root.to_path_buf(),
+                    overlap,
+                    registered: registered.to_path_buf(),
+                    registered_id: row.id,
+                });
+            }
+        }
         Ok(())
     }
 

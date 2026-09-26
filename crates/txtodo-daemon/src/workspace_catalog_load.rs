@@ -168,6 +168,7 @@ impl WorkspaceCatalog {
             return Vec::new();
         };
         let mut live: Vec<WorkspaceEntry> = entries.into_iter().filter(|e| e.root_exists).collect();
+        warn_overlaps(&live);
         // The default first (task default-workspace), so the app is usable at once; the rest most
         // recently used first.
         let default = self.registered_default();
@@ -214,6 +215,27 @@ impl WorkspaceCatalog {
         }
         ticket.finish(outcome.map_err(|s| s.message().to_owned()));
     }
+}
+
+/// One warn per pair of registered workspaces whose lists overlap (sync-drift line 3): a registry
+/// from before registration refused them. They still load, so a running setup keeps working;
+/// `txtodo doctor` says which to remove. Nothing here unregisters or deletes anything.
+fn warn_overlaps(live: &[WorkspaceEntry]) {
+    use txtodo_workspace_paths::{RootOverlap, root_overlap};
+    for (i, a) in live.iter().enumerate() {
+        for b in live.iter().skip(i + 1) {
+            match root_overlap(&a.root, &b.root) {
+                Some(RootOverlap::Inside) => log_overlap(a.id, b.id),
+                Some(RootOverlap::Around) => log_overlap(b.id, a.id),
+                None => {}
+            }
+        }
+    }
+}
+
+/// `inner`'s lists are also `outer`'s. Ids only; `txtodo doctor` prints the roots.
+fn log_overlap(inner: WorkspaceId, outer: WorkspaceId) {
+    tracing::warn!(workspace_id = %inner, inside = %outer, "workspace_roots_overlap");
 }
 
 fn log_touch_failed(

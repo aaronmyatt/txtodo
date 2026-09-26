@@ -61,8 +61,12 @@ impl WorkspaceCatalog {
                     "release {current_id} before adopting {offered_id}: {e}"
                 ))
             })?;
-        if let Err(e) = registry.adopt(offered_id, root, self.clock.as_ref()) {
-            if let Err(rollback_err) = registry.adopt(current_id, root, self.clock.as_ref()) {
+        // `adopt_released`, not `adopt`: `root` is the folder just released, not a new one, so an
+        // overlap it had before the refusal existed must not fail pairing (sync-drift line 3).
+        if let Err(e) = registry.adopt_released(offered_id, root, self.clock.as_ref()) {
+            if let Err(rollback_err) =
+                registry.adopt_released(current_id, root, self.clock.as_ref())
+            {
                 tracing::error!(
                     %current_id, %offered_id, error = %rollback_err,
                     "workspace_id_rekey_rollback_failed"

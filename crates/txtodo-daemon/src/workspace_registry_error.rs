@@ -5,6 +5,7 @@
 use std::fmt;
 use std::path::PathBuf;
 use txtodo_store::{StoreError, WorkspaceId};
+use txtodo_workspace_paths::RootOverlap;
 
 /// Why an operation against the workspace registry failed.
 #[derive(Debug)]
@@ -44,6 +45,19 @@ pub enum WorkspaceRegistryError {
         /// The id that root is already registered under.
         existing_id: WorkspaceId,
     },
+    /// `root` is inside, or holds, a workspace already registered here, and the walk of one
+    /// reaches the other's lists (`txtodo_workspace_paths::root_overlap`, sync-drift line 3):
+    /// refused, since two stores would then track the same files with different ids.
+    Overlap {
+        /// The root asked for.
+        root: PathBuf,
+        /// Whether `root` is inside `registered` or holds it.
+        overlap: RootOverlap,
+        /// The registered root it overlaps.
+        registered: PathBuf,
+        /// That registered root's id.
+        registered_id: WorkspaceId,
+    },
 }
 
 impl fmt::Display for WorkspaceRegistryError {
@@ -69,7 +83,38 @@ impl fmt::Display for WorkspaceRegistryError {
                 "{} is already registered locally under a different id ({existing_id})",
                 root.display()
             ),
+            WorkspaceRegistryError::Overlap {
+                root,
+                overlap,
+                registered,
+                registered_id,
+            } => write_overlap(f, root, *overlap, (registered, *registered_id)),
         }
+    }
+}
+
+/// The overlap refusal, naming the registered root and what to do instead.
+fn write_overlap(
+    f: &mut fmt::Formatter<'_>,
+    root: &std::path::Path,
+    overlap: RootOverlap,
+    (registered, id): (&std::path::Path, WorkspaceId),
+) -> fmt::Result {
+    match overlap {
+        RootOverlap::Inside => write!(
+            f,
+            "{} is inside the registered workspace {} ({id}), whose lists already include it; \
+             use that workspace instead",
+            root.display(),
+            registered.display()
+        ),
+        RootOverlap::Around => write!(
+            f,
+            "{} holds the registered workspace {} ({id}), so both would track its lists; \
+             remove that one first (`txtodo workspace remove {id}`)",
+            root.display(),
+            registered.display()
+        ),
     }
 }
 
