@@ -285,8 +285,7 @@ pub fn peek_workspace(sealed: &[u8]) -> Option<WorkspaceId> {
 
 /// Split out so the event macros don't count against `seal`'s own `#[instrument]` budget.
 /// **Byte counts only, never the plaintext or ciphertext.** `warn!` on failure, not `debug!`: a
-/// caller that cannot seal a batch at all is worth a human's attention immediately, matching
-/// `open`'s own failure level below.
+/// caller that cannot seal a batch at all is worth a human's attention immediately.
 fn log_seal(r: &Result<Vec<u8>, CryptoError>) {
     match r {
         Ok(out) => log_seal_ok(out.len()),
@@ -302,9 +301,11 @@ fn log_seal_failed(kind: &'static str) {
     tracing::warn!(kind, "seal_failed");
 }
 
-/// Split out so the event macros don't count against `open`'s own `#[instrument]` budget. `warn!`
-/// on failure: a batch that fails to open is either a bug or an adversary (foreign group, stale
-/// epoch, tampered tag), never routine traffic.
+/// Split out so the event macros don't count against `open`'s own `#[instrument]` budget. `debug!`
+/// on failure, not `warn!` (task sync-drift line 5): a device paired once and now in another group
+/// fails every frame of every redial, 469 warnings a day on one Mac. Only the caller knows which
+/// peer sent the frame, so the warning is its job: `txtodo-daemon`'s `peer_keys.rs` warns once per
+/// peer and kind, and its file carrier logs `file_carrier_open_failed`.
 fn log_open(r: &Result<Vec<u8>, CryptoError>) {
     match r {
         Ok(out) => log_open_ok(out.len()),
@@ -317,7 +318,7 @@ fn log_open_ok(bytes: usize) {
 }
 
 fn log_open_failed(kind: &'static str) {
-    tracing::warn!(kind, "open_failed");
+    tracing::debug!(kind, "open_failed");
 }
 
 /// Reads 16 little-endian bytes without `try_into`, so a length check earlier in `open` is the only

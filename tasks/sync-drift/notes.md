@@ -238,3 +238,50 @@ never stalls sync without anyone seeing it.
   - The check and the rekey are not one step. A line written between them still merges.
   - Folders already joined in place keep their merged ids. That is line 8.
   - The desktop's pairing e2e was not run (its daemon tests are CI-only), nor any visual check.
+
+### Line 5
+- A dial is a success only once the peer's link `Hello` opened and was accepted.
+  `drive_shared_session` returns a `SessionEnd` (`Greeted`, `Refused(kind)`, `NoHello`) instead
+  of "our `Hello` went out". Anything but `Greeted` is a failed dial, so a wrong-group peer's
+  backoff grows to the 60 s cap instead of resetting every time.
+- Parking (`peer_keys.rs`, on `DeviceIdentity`, in memory only): 3 `wrong_group` opens in a row,
+  sync or control, park the peer. Every dial loop skips it: LAN resync and LAN control
+  (`peers_to_resync`), relay-only sync (`relay_autodial`), relay control (`known_relay_peers`).
+  The devices row is not touched. Any other failure kind ends the run (`unknown_epoch` means the
+  group matched).
+- Why 3: one `wrong_group` can be a race with a pairing in flight (the joiner switches group and
+  re-advertises within a second). Two in a row, a backoff apart, is unlikely; three is not a race.
+  Parking is cheap to undo, so a small number costs little. A stale peer gets about two bookings
+  per 15 s tick (a sync dial and a control dial), so it is parked in about 30 s.
+- A parked peer comes back when a pairing registers it (initiator), when our group changes
+  (joiner: `set_group` clears it all), on an mDNS sighting in our group, when a frame of its opens
+  (it dialed us), or on restart.
+- Logs: `peer_open_failed` warns once per peer and kind per run (peer id, kind, `sync` or
+  `control`), then debug. `peer_parked_no_shared_key` warns once when parked; `peer_unparked` is
+  info, with the reason. txtodo-sync's own `open_failed` is debug now: it never knew the peer.
+- An incoming session's peer is unknown until its `Hello` opens (`IrohLink` does not expose the
+  remote node id), so incoming failures share one `unknown` peer, also warned once per kind.
+- The relay fallback (`relay_fallback.rs`, the flagged line): fixed. It dials the relay node id
+  the devices row records; none recorded means no fallback. It used to dial the LAN node id over
+  the relay, which nothing answers, holding a session permit up to 10 s per failed LAN dial.
+- The relay-only dial now books what its session showed, so it parks too.
+- Tests: `peer_keys_tests.rs` (park at 3, a run broken by another kind or an open, unpark on
+  forget/open/group change, the unknown peer never parked, warn once per peer and kind, the cap),
+  `peer_keys_dial_tests.rs` (a `Hello` sealed for another group ends `Refused(wrong_group)`; a peer
+  that never sends its `Hello` is not greeted; the same for a control frame; `book_dial` backs off,
+  parks and drops the peer from the resync set; an in-group sighting brings it back; the relay node
+  lookup, removed and unknown rows included).
+- Still broken / not done:
+  - `unknown_epoch` (45 here) is not parked. After `device remove` the control channel seals
+    under the new epoch while sync stays on epoch 0 (`GROUP_EPOCH`), so a rotated-out peer is
+    still dialed on control every 15 s; now one warning, then debug. Rotation is the real gap.
+  - Incoming failures carry no peer id. The dialing side warns with the id, if it runs this code.
+  - Parking is in memory. After a restart a stale peer costs 3 more failed opens and one warning.
+  - `known_peers` still never shrinks; a stale LAN peer is parked, not pruned.
+  - The relay-only dial and the relay control redial still have no backoff: an offline peer in
+    our group is dialed every tick.
+  - A peer that joins our group through a third device while parked comes back only by a LAN
+    sighting, by dialing us, or by restart. Over the relay alone, if it lacks our relay node id,
+    it stays parked until restart.
+  - `--relay-dial-peer` sessions book against `unknown`: only the node id is known there.
+  - Not checked against this Mac's live log.
