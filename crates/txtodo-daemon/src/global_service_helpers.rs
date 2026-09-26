@@ -73,7 +73,9 @@ pub(crate) fn to_workspace_info(
         is_default: e.id == crate::default_workspace::default_workspace_id(),
         refs_dir: layout.refs_dir().to_owned(),
         todo_file: layout.todo_file().to_owned(),
-        is_remote: false,
+        // `is_remote` and any field a newer proto adds: `workspace_info` fills what it knows, so
+        // an additive proto field never breaks this literal before the daemon learns it.
+        ..pb::WorkspaceInfo::default()
     }
 }
 
