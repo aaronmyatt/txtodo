@@ -11,6 +11,7 @@ mod client;
 mod client_bundle;
 mod client_identity;
 mod client_pairing;
+mod client_sync;
 #[cfg(test)]
 mod client_tests;
 mod client_workspace;

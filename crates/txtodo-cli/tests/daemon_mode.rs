@@ -360,4 +360,9 @@ fn doctor_reports_the_keystore_backend_and_no_peer_rows_when_unpaired() {
         !text.lines().any(|l| l.starts_with("peer ")),
         "no peers before any pairing: {text}"
     );
+    // Task sync-drift line 7: `SyncStatus` answered, and nothing is stuck or parked.
+    assert!(
+        !text.lines().any(|l| l.starts_with("sync ")),
+        "no sync rows before any pairing: {text}"
+    );
 }

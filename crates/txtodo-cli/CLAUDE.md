@@ -13,7 +13,8 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
   `doctor [--verbose]` (seven fixed checks — including `keystore` and `transport`, the latter
   plan M4 `sync-lan-transport`: relay off, endpoint bound, discovery active, paired — plus one row
-  per known sync peer, exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
+  per known sync peer, and from `SyncStatus` one `sync` row per file a peer's ops keep being
+  refused on and per parked peer, `doctor_sync.rs`, sync-drift line 7; exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
   list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
   human type the id back unless `--yes`); `pair [CODE]` (plan M4, design §4): no `CODE` starts a
   handshake as the initiator (renders the QR and text code from `PairOffer`, polls the new
