@@ -129,6 +129,7 @@ impl AppState {
             peers: vec![PeerStatus {
                 device: "01J9K3H5Z7Q8X2M4N6P8R0T2V5".to_owned(),
                 lag_ms: 400,
+                ..PeerStatus::default()
             }],
             pending_ops: 2,
         };

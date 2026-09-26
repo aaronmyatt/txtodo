@@ -60,12 +60,16 @@ impl LineState {
 /// (`app.rs::to_sync_snapshot` maps one to the other) — kept as its own type rather than using
 /// the generated `pb` one directly so this module and `ui/sync.rs` stay daemon/proto-free and
 /// fixture-testable, the same idiom `ConflictItem` already uses for `pb::ReviewFlag`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PeerStatus {
     /// Device id (ULID text).
     pub device: String,
     /// How far behind that peer's last-seen timestamp is, in milliseconds.
     pub lag_ms: i64,
+    /// Files this peer's ops keep being refused on, workspace-relative (task sync-drift line 7).
+    pub stuck: Vec<String>,
+    /// The daemon stopped dialing it: it holds no key we share (task sync-drift line 5).
+    pub parked: bool,
 }
 
 /// The sync indicator's last known snapshot.

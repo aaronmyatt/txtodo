@@ -285,3 +285,48 @@ never stalls sync without anyone seeing it.
     it stays parked until restart.
   - `--relay-dial-peer` sessions book against `unknown`: only the node id is known there.
   - Not checked against this Mac's live log.
+
+### Line 7
+- Daemon: `commit_incoming_ops` (`lan_apply.rs`) returns a `Landed`: how many ops landed, the
+  file of each run that landed, and the refused run's file and why (the error text it already
+  logged; a bare error gets `mkdir:`, `register:` or `store:` in front). The commit path does the
+  same as before; its helpers return `Result` instead of `bool`.
+- `stuck_sync.rs` (on `DeviceIdentity`, in memory, like `peer_keys.rs`): one row per peer and
+  workspace. A refused run books the file, reason, since, last and refusals in a row. The same
+  file again bumps the count; another file starts a new row. A landed run for that file clears it.
+  A run of ops we already hold counts as landed (line 2), so a copy that came through a third
+  device clears it too. A group change clears all. Capped at 256 rows.
+- Why per workspace and not per peer: one peer can be stuck in two workspaces at once. One row
+  per peer would flip between them and never count "in a row".
+- Booked by the session (`lan_session_ops.rs`), which knows the peer by then. Logs:
+  `lan_sync_stuck` warns once per row with the peer id (`lan_sync_ops_refused` repeats on every
+  resend and names no peer); `lan_sync_unstuck` at info when it clears.
+- Proto, additive: `SyncStatusResponse.Peer.stuck` (repeated `Stuck`: workspace id, file, reason,
+  since, last, refusals) and `Peer.parked` (line 5's parking). An older daemon reads as nothing
+  stuck, nothing parked.
+- CLI: there is no `txtodo sync status` command, so `doctor` is the CLI's view. It calls
+  `SyncStatus` and adds a `sync` row per stuck file and per parked peer, e.g.
+  `sync     FAIL  laptop (01K…): stuck on /Users/me/todo/tasks/a/todo.txt since 2026-09-26
+  15:02:11 (4 refusals in a row): store: UNIQUE constraint failed: ops.op_id; its later ops wait
+  behind it`. One refusal is a warn (the resend may take it); two in a row is a FAIL. Parked is
+  a warn. `--json` carries the same rows.
+- TUI: the `s` popup's summary adds `· N stuck` and a red dot; each stuck peer gets a
+  `stuck on <file>` row, a parked one `parked: no shared key`. Desktop shows no sync status at all.
+- Tests: `stuck_sync_tests.rs` (book, count, clear on land, another file, per workspace, group
+  change, cap); `stuck_sync_session_tests.rs` (two real workspaces over one link: B can't make the
+  folder for A's file, books A as stuck with an `mkdir:` reason; the folder freed, A's resend lands
+  and the row clears); `devices_grpc_tests.rs` (`SyncStatus` carries the row and `parked`); the
+  resend test checks the refused file and reason; `doctor_sync.rs`; the TUI popup; the proto round
+  trip; CLI `daemon_mode` doctor against a real daemon shows no `sync` row when unpaired.
+- Still broken / not done:
+  - The file carrier books nothing: its frames don't name the sending device.
+  - Only a commit refusal is booked. A batch refused before commit (a bad signature ends the
+    connection) or skipped as out of step shows nothing.
+  - In memory: a restart forgets it until the next refusal, about 10 s later if still stuck.
+  - A peer that stops resending (gone for good) keeps its row until restart. `last` says how old
+    it is; doctor doesn't age it out.
+  - Doctor names the file and the reason, not a fix. For id clashes, line 8 (rejoin fresh) is the
+    likely one.
+  - The proto commit alone breaks the daemon build (its `Peer` literal lacks the new fields) until
+    the daemon commit right after it, same as earlier proto changes.
+  - Not checked against this Mac's live daemon or the other device's log.

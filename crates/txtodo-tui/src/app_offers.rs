@@ -75,6 +75,8 @@ fn to_sync_snapshot(resp: pb::SyncStatusResponse) -> SyncSnapshot {
             .map(|p| PeerStatus {
                 device: p.device,
                 lag_ms: p.lag_ms,
+                stuck: p.stuck.into_iter().map(|s| s.file).collect(),
+                parked: p.parked,
             })
             .collect(),
         pending_ops: u32::try_from(resp.pending_ops).unwrap_or(u32::MAX),
