@@ -29,6 +29,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+mod walk_scope;
+pub use walk_scope::{RootOverlap, SKIPPED_DIR_NAMES, is_skipped_dir, root_overlap, walks_into};
+
 /// The slice of the process environment this module reads. Built once by a future `main.rs`
 /// wiring pass; tests build their own so no test depends on the real machine's environment.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
