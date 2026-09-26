@@ -42,6 +42,14 @@
 		workspaces = await listWorkspaces();
 	}
 
+	// The name every paired device shows (task workspace-vanity-name), beside the path only when it
+	// says more than the folder does: a mirror's folder is named by the workspace id.
+	function shownName(ws: WorkspaceInfo): string {
+		const folder = ws.root.split(/[\\/]/).filter(Boolean).pop() ?? "";
+		const plain = !ws.name || ws.name === folder || (ws.is_default && ws.name === "default");
+		return plain ? "" : (ws.name ?? "");
+	}
+
 	// While the daemon is still opening workspaces (task daemon-early-bind) keep the list fresh so
 	// "opening…" turns into a plain entry by itself; stops as soon as nothing is pending or the
 	// sidebar closes.
@@ -217,6 +225,7 @@
 							>
 								{#if ws.is_default}<span class="default-label">Default</span>{/if}
 								{#if ws.is_remote}<span class="default-label" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
+								{#if shownName(ws)}<span class="default-label">{shownName(ws)}</span>{/if}
 								{ws.root}
 								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
 								{#if ws.load_state === "queued" || ws.load_state === "loading"}

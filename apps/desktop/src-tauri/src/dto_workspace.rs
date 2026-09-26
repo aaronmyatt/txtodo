@@ -28,6 +28,10 @@ pub struct WorkspaceInfoDto {
     /// True for a mirror of a paired device's workspace (task remote-workspace-mirror): the daemon
     /// chose its folder, so the switcher labels it "Remote".
     pub is_remote: bool,
+    /// The name every paired device shows for it (task workspace-vanity-name): its `txtodo.toml`
+    /// name, else `default` or the folder's, else for a mirror what its offering device calls it.
+    /// Empty from an older daemon.
+    pub name: String,
 }
 
 /// Where a workspace keeps its root list and the folder for its `ref:` lines (task
@@ -88,6 +92,7 @@ impl From<pb::WorkspaceInfo> for WorkspaceInfoDto {
             load_error: w.load_error,
             is_default: w.is_default,
             is_remote: w.is_remote,
+            name: w.name,
         }
     }
 }
@@ -106,5 +111,20 @@ mod tests {
         };
         assert!(WorkspaceInfoDto::from(w).is_remote);
         assert!(!WorkspaceInfoDto::from(pb::WorkspaceInfo::default()).is_remote);
+    }
+
+    /// Task workspace-vanity-name: the switcher shows this name for a mirror.
+    #[test]
+    fn the_shown_name_reaches_the_dto() {
+        let w = pb::WorkspaceInfo {
+            name: "House plants".into(),
+            ..pb::WorkspaceInfo::default()
+        };
+        assert_eq!(WorkspaceInfoDto::from(w).name, "House plants");
+        assert!(
+            WorkspaceInfoDto::from(pb::WorkspaceInfo::default())
+                .name
+                .is_empty()
+        );
     }
 }

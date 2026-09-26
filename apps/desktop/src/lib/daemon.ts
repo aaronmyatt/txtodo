@@ -258,6 +258,8 @@ export interface WorkspaceInfo {
 	is_default?: boolean;
 	/** A mirror of a paired device's workspace (task remote-workspace-mirror): labelled "Remote". */
 	is_remote?: boolean;
+	/** The name every paired device shows for it (task workspace-vanity-name); empty from an older daemon. */
+	name?: string;
 }
 
 /** The current workspace's layout (task workspace-layout). Mirrors `WorkspaceLayoutDto`. */
