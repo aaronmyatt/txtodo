@@ -72,7 +72,7 @@ pub struct OpenedWorkspace {
     device_relay: Option<Arc<DeviceRelay>>,
     device_file_carrier: Option<Arc<DeviceFileCarrier>>,
     device_lan: Option<Arc<DeviceLan>>,
-    _watcher: notify::RecommendedWatcher,
+    _watcher: crate::watcher::WatchGuard,
     watch_task: JoinHandle<()>,
     relay: Option<RelayTransport>,
 }

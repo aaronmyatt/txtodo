@@ -258,3 +258,48 @@ async fn list_registered_entries_reports_every_add_and_remove_drops_from_open() 
         "an id this registry never heard of returns false"
     );
 }
+
+/// The real `notify` watcher end to end (`watch_opt_in`; unit tests get an inert one by default):
+/// a write from outside the daemon, an editor save, reaches the open workspace's actor. On
+/// `SystemClock`, because the watcher's debounce never comes due on a frozen `FakeClock`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_outside_edit_reaches_the_open_workspace_through_the_real_watcher() {
+    use std::time::{Duration, Instant};
+    let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))
+        .unwrap_or_else(|e| panic!("open registry: {e}"));
+    let clock = Arc::new(crate::clock::SystemClock);
+    let catalog = WorkspaceCatalog::new(registry, open_args(), clock);
+    let dir = new_workspace_dir();
+    crate::watch_opt_in::use_real_watcher(dir.path());
+    let ws = catalog
+        .resolve(Some(&selector_path(dir.path())))
+        .unwrap_or_else(|e| panic!("open: {e}"));
+    let list = txtodo_model::FilePath::new("todo.txt").unwrap_or_else(|e| panic!("{e}"));
+    let actor = ws
+        .read()
+        .unwrap_or_else(|e| panic!("{e}"))
+        .actor(&list)
+        .cloned();
+    let actor = actor.unwrap_or_else(|| panic!("an actor for todo.txt"));
+    let before = actor.get().await.unwrap_or_else(|e| panic!("get: {e}"));
+    assert_eq!(before.bytes, b"seed\n", "opened on the seed");
+
+    std::fs::write(dir.path().join("todo.txt"), "seed\noutside\n")
+        .unwrap_or_else(|e| panic!("{e}"));
+    // Bounds a hang only: FSEvents usually delivers in well under a second.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let bytes = actor
+            .get()
+            .await
+            .unwrap_or_else(|e| panic!("get: {e}"))
+            .bytes;
+        if bytes == b"seed\noutside\n" {
+            break;
+        }
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(Instant::now() < deadline, "never picked up: {text:?}");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+}

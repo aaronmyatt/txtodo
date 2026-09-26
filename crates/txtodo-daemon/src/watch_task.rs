@@ -6,7 +6,7 @@ use crate::clock::Clock;
 use crate::debounce::Debouncer;
 use crate::server::SharedWorkspace;
 use crate::walker::{is_in_skipped_dir, walk_with};
-use crate::watcher::{RawEvent, Routed, ingest, start as start_notify};
+use crate::watcher::{RawEvent, Routed, WatchGuard, ingest, start as start_notify};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -24,7 +24,7 @@ fn read(ws: &SharedWorkspace) -> std::sync::RwLockReadGuard<'_, crate::workspace
 pub fn start(
     ws: SharedWorkspace,
     clock: Arc<dyn Clock>,
-) -> notify::Result<(notify::RecommendedWatcher, JoinHandle<()>)> {
+) -> notify::Result<(WatchGuard, JoinHandle<()>)> {
     let root = read(&ws).root().to_path_buf();
     let (watcher, rx) = start_notify(&root)?;
     read(&ws).stats().saw_event(clock.now_ms());

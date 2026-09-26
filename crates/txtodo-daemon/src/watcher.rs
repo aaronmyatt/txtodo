@@ -102,10 +102,35 @@ fn log_document_event(accepted: bool, pending: usize) {
     tracing::debug!(accepted, pending, "document_event_debounced");
 }
 
+/// What keeps a workspace's watch alive. The caller holds it; dropping it stops events.
+pub enum WatchGuard {
+    /// The real `notify` watcher on the workspace root (FSEvents on macOS, inotify on Linux).
+    /// https://docs.rs/notify/8/notify/type.RecommendedWatcher.html
+    Notify(RecommendedWatcher),
+    /// Unit-test builds only, the default there (`crate::watch_opt_in`): no OS watch at all, just
+    /// the raw-event sender held open so the drain idles instead of ending. `cfg(test)` is set
+    /// only for this crate's own unit-test harness, never for `tests/*.rs` or a txtodod build, so
+    /// a shipped binary cannot hold this variant.
+    /// https://doc.rust-lang.org/reference/conditional-compilation.html#test
+    #[cfg(test)]
+    Inert(mpsc::Sender<RawEvent>),
+}
+
 /// Starts `notify` on `root` (recursive). Events arrive on the returned receiver as `RawEvent`s;
-/// the watcher must be kept alive by the caller (dropping it stops events).
-pub fn start(root: &Path) -> notify::Result<(RecommendedWatcher, mpsc::Receiver<RawEvent>)> {
+/// the guard must be kept alive by the caller (dropping it stops events).
+pub fn start(root: &Path) -> notify::Result<(WatchGuard, mpsc::Receiver<RawEvent>)> {
     let (tx, rx) = mpsc::channel(RAW_EVENT_CAP);
+    // A unit test that never looks at a file event skips the OS watch: registering one FSEvents
+    // stream per test process is what made catalog tests take 20 s to 300 s each.
+    #[cfg(test)]
+    if !crate::watch_opt_in::wants_real_watcher(root) {
+        return Ok((WatchGuard::Inert(tx), rx));
+    }
+    Ok((WatchGuard::Notify(notify_watch(root, tx)?), rx))
+}
+
+/// The real OS watch on `root`, feeding `tx`.
+fn notify_watch(root: &Path, tx: mpsc::Sender<RawEvent>) -> notify::Result<RecommendedWatcher> {
     let mut watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
         let Ok(event) = res else { return };
         // `Access` (open/read/close-no-write) never signals a content change; inotify emits it for
@@ -126,7 +151,7 @@ pub fn start(root: &Path) -> notify::Result<(RecommendedWatcher, mpsc::Receiver<
         }
     })?;
     watcher.watch(root, RecursiveMode::Recursive)?;
-    Ok((watcher, rx))
+    Ok(watcher)
 }
 
 #[cfg(test)]

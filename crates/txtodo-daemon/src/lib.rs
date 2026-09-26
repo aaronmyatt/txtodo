@@ -132,6 +132,8 @@ mod unified_diff;
 mod universal_grpc;
 pub mod walker;
 mod watch_forward;
+#[cfg(test)]
+mod watch_opt_in;
 pub mod watch_task;
 pub mod watcher;
 pub mod workspace;

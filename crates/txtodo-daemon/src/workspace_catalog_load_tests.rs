@@ -128,7 +128,10 @@ async fn a_call_on_a_ready_workspace_returns_while_another_is_mid_open() {
     let slow_root = slow.path().canonicalize().unwrap_or_default();
     let hook_gate = Arc::clone(&gate);
     let (_registry_dir, catalog) = catalog_with(&[], move |root| {
-        if root == slow_root {
+        // A path selector reaches the hook as sent (`/var/...` on macOS), not canonical. Compared
+        // raw, the gate never held there; the test only passed while a real watcher made the open
+        // slow enough to be seen `Loading`. https://doc.rust-lang.org/std/fs/fn.canonicalize.html
+        if root.canonicalize().unwrap_or_default() == slow_root {
             hook_gate.wait();
         }
     });
