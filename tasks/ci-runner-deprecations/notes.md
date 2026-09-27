@@ -57,4 +57,11 @@ self-inflicted ambiguous failure is worth avoiding. Not an agent's call either w
 
 ## As built
 
-- Nothing yet.
+- 2026-09-27: `CI_DEPRECATIONS.patch.md` at the repo root, not applied (`.github` is frozen).
+  25 tag bumps, nothing else: checkout v5, setup-node v5, upload-artifact **v6**, download-artifact
+  **v7**. The Inventory's "v5" target was wrong for the two artifact actions: their v5 still
+  declares `using: node20` (checked in each tag's `action.yml`), so the annotation would stay.
+  - The patch holds a real diff; its apply command was checked with `git apply --check` against
+    this tree, and its "none left" grep against a patched copy.
+  - Not in it: any `runs-on` change. That waits on the decide line.
+  - Not checked: a real CI run on the new majors. That is line 3, after a human applies it.
