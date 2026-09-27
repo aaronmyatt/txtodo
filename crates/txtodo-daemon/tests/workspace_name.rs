@@ -99,6 +99,25 @@ fn layout_file(root: &str) -> String {
     std::fs::read_to_string(Path::new(root).join("txtodo.toml")).unwrap_or_default()
 }
 
+/// Waits until `root`'s `txtodo.toml` holds `needle`; returns the file. A mirror can list a new
+/// name before its file has it: the owner's offer carries the name over the control channel, and
+/// the file follows as its own sync. CI once read the file between the two (run 36285146366).
+async fn wait_file_has(root: &str, needle: &str, log: &dyn Fn() -> String) -> String {
+    let start = Instant::now();
+    loop {
+        let text = layout_file(root);
+        if text.contains(needle) {
+            return text;
+        }
+        assert!(
+            start.elapsed() < DEADLINE,
+            "{needle:?} never reached {root}/txtodo.toml; last:\n{text}\n{}",
+            log()
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
 /// A's workspace in a folder named `plants`, registered and open.
 async fn plants(client: &mut MultiClient, work: &Path) -> pb::WorkspaceInfo {
     let root = work.join("plants");
@@ -134,11 +153,11 @@ async fn a_name_set_on_one_device_shows_on_the_other() {
     let renamed = rename(&mut client_a, &w.workspace_id, "House plants").await;
     assert_eq!(renamed.name, "House plants");
     let mirror = wait_named(&mut client_b, &w.workspace_id, "House plants", &logs).await;
-    assert!(
-        layout_file(&mirror.root).contains("name = \"House plants\""),
-        "the name reached B's txtodo.toml:\n{}\n{}",
-        layout_file(&mirror.root),
-        logs()
+    let text = wait_file_has(&mirror.root, "name = \"House plants\"", &logs).await;
+    assert_eq!(
+        text.matches("name =").count(),
+        1,
+        "B's file has one name line:\n{text}"
     );
 
     // And back: B names its mirror, and A shows that name for its own folder.
