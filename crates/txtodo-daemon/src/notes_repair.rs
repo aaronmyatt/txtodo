@@ -1,15 +1,18 @@
-//! A `notes.md` op that does not fit is skipped, not refused (task notes-no-base).
+//! Keeps a `notes.md`'s op log able to rebuild its text (task notes-no-base). Two halves:
 //!
-//! [`apply_leniently`]: a peer's notes op that does not fit is skipped with a `sync_op_skipped`
-//! warn instead of refusing the batch. A refused op used to be resent every 10 s forever, and
-//! every later op from that device, in every file of the workspace, waited behind it. Same rule
-//! `FileActor::on_sync_ops` has had for todo.txt since sync-poison-op. History replay skips the
-//! same way ([`replay_leniently`]), so a device replaying its log reaches the text it imported.
+//! - [`apply_leniently`]: a peer's notes op that does not fit is skipped with a `sync_op_skipped`
+//!   warn instead of refusing the batch. A refused op used to be resent every 10 s forever, and
+//!   every later op from that device, in every file of the workspace, waited behind it. Same rule
+//!   `FileActor::on_sync_ops` has had for todo.txt since sync-poison-op.
+//! - [`repair_edits`]: the edits that take "the log replayed from empty" to the current text. A
+//!   notes.md opened before notes-sync (v0.0.8) had its bytes adopted with no op, so its first
+//!   logged op can sit at char 8874 of a text no op ever wrote. `NotesActor::open` commits these
+//!   edits as one op, so a fresh peer that replays the same ops the same way lands on the file.
 
 use crate::handle::ActorError;
 use crate::history::MAX_REPLAY_PAGES;
 use crate::notes_state::{NotesState, NotesStateError};
-use txtodo_model::{FilePath, Op};
+use txtodo_model::{FilePath, Op, TextEdit};
 use txtodo_store::{MAX_OPS_PER_READ, Seq, Store};
 
 /// Applies `ops` to `state` in order; one that does not fit leaves `state` as it was
@@ -40,13 +43,22 @@ pub(crate) fn log_skipped(op: &Op, e: &NotesStateError) {
     );
 }
 
+/// A replay's text, and whether it read the whole log up to its target.
+pub(crate) struct Replayed {
+    /// The text.
+    pub(crate) state: NotesState,
+    /// `false` when the log ran past `MAX_REPLAY_PAGES` pages: a cut-off replay is not the log's
+    /// text, and [`repair_edits`] must never act on one.
+    pub(crate) complete: bool,
+}
+
 /// `path`'s text after every logged op with `seq <= upto` (all when `None`), skipping what does
 /// not fit.
 pub(crate) fn replay_leniently(
     store: &Store,
     path: &FilePath,
     upto: Option<Seq>,
-) -> Result<NotesState, ActorError> {
+) -> Result<Replayed, ActorError> {
     let target = match upto {
         Some(s) => s,
         None => store.last_seq()?.unwrap_or(Seq(0)),
@@ -56,14 +68,40 @@ pub(crate) fn replay_leniently(
     for _page in 0..MAX_REPLAY_PAGES {
         let ops = store.for_file(path, since)?;
         let Some(last) = ops.last() else {
-            return Ok(state);
+            return Ok(Replayed {
+                state,
+                complete: true,
+            });
         };
         let upto_target = ops.iter().take_while(|s| s.seq <= target).map(|s| &s.op);
         apply_leniently(&mut state, upto_target);
         since = last.seq;
         if last.seq >= target || ops.len() < MAX_OPS_PER_READ {
-            return Ok(state);
+            return Ok(Replayed {
+                state,
+                complete: true,
+            });
         }
     }
-    Ok(state)
+    Ok(Replayed {
+        state,
+        complete: false,
+    })
+}
+
+/// The edits that take `replayed` (the log's text) to `current` (the file), or `None` when the
+/// log already rebuilds the file.
+pub(crate) fn repair_edits(replayed: &NotesState, current: &NotesState) -> Option<Vec<TextEdit>> {
+    if replayed.text() == current.text() {
+        return None;
+    }
+    let edits: Vec<TextEdit> = txtodo_core::diff_text(replayed.text(), current.text())
+        .into_iter()
+        .map(TextEdit::from)
+        .collect();
+    debug_assert!(
+        !edits.is_empty(),
+        "different texts diff to at least one edit"
+    );
+    Some(edits)
 }

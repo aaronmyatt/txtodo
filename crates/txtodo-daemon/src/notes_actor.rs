@@ -21,7 +21,7 @@ use crate::expected::Hash;
 use crate::handle::{ActorError, Applied};
 use crate::history::MAX_REPLAY_PAGES;
 use crate::notes_mirror::NotesMirror;
-use crate::notes_repair::{apply_leniently, log_skipped};
+use crate::notes_repair::{apply_leniently, log_skipped, repair_edits, replay_leniently};
 use crate::notes_state::NotesState;
 use crate::write::write_atomic;
 use std::sync::PoisonError;
@@ -72,20 +72,9 @@ impl NotesActor {
             let projection = guard.get_projection(&cfg.path)?.map(|p| p.bytes);
             (projection, guard.get_mirror(&cfg.path)?)
         };
-        let peer = loro_peer(cfg.device);
-        let (mirror, state_bytes) = match mirror_snapshot {
-            Some((snap, since)) => {
-                let mirror = Self::restore_mirror(&store, &cfg.path, &snap, since, peer)?;
-                let bytes = projection.unwrap_or_else(|| mirror.text().into_bytes());
-                (mirror, bytes)
-            }
-            None => {
-                let bytes = projection.unwrap_or_default();
-                let state = NotesState::from_bytes(cfg.path.clone(), &bytes)?;
-                let mirror = NotesMirror::from_state(&state, peer).map_err(mirror_err)?;
-                (mirror, bytes)
-            }
-        };
+        // Text with no projection behind it came from a peer's mirror snapshot, not this log.
+        let own_text = projection.is_some();
+        let (mirror, state_bytes) = Self::load(&cfg, &store, projection, mirror_snapshot)?;
         let state = NotesState::from_bytes(cfg.path.clone(), &state_bytes)?;
         let bytes = state.to_bytes();
         let hash = hash_of(&bytes);
@@ -104,7 +93,82 @@ impl NotesActor {
             let disk_text = String::from_utf8_lossy(&disk_bytes).into_owned();
             actor.edit(&disk_text, Principal::External { device })?;
         }
+        if own_text {
+            actor.repair_log()?;
+        }
         Ok(actor)
+    }
+
+    /// Commits one `NotesEdit` taking "this file's log replayed from empty" to the current text,
+    /// when the two differ (task notes-no-base, `notes_repair.rs`). A notes.md opened before
+    /// v0.0.8 had its bytes adopted with no op, so a fresh peer replaying the log stopped at an
+    /// op aimed past the end of an empty text. The text here does not change, only the log: the
+    /// mirror already holds the text, so it is not flushed, and its snapshot moves to the new seq
+    /// so a restart does not replay the op into it. Skipped when the replay was cut off.
+    fn repair_log(&mut self) -> Result<(), ActorError> {
+        let replayed = {
+            let guard = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+            replay_leniently(&guard, &self.cfg.path, None)?
+        };
+        if !replayed.complete {
+            return Ok(());
+        }
+        let Some(edits) = repair_edits(&replayed.state, &self.state) else {
+            return Ok(());
+        };
+        tracing::warn!(
+            file = %self.cfg.path,
+            log_chars = replayed.state.text().chars().count(),
+            file_chars = self.state.text().chars().count(),
+            "notes_log_repaired"
+        );
+        let hlc = self.tick()?;
+        let device = self.cfg.device;
+        let op = self.stamped(edits, hlc, Principal::External { device });
+        let next = self.state.clone();
+        let range = self.land(&[op], &next)?;
+        self.persist_mirror(range)
+    }
+
+    /// The mirror and the text to start from. A mirror that will not restore (an op since its
+    /// snapshot that does not fit, say a skipped one after a crash before the snapshot moved) is
+    /// rebuilt from the projection as a new lineage: the mirror never decides bytes, and a notes
+    /// file that will not open refuses every peer op for it.
+    fn load(
+        cfg: &NotesActorConfig,
+        store: &SharedStore,
+        projection: Option<Vec<u8>>,
+        mirror_snapshot: Option<(Vec<u8>, Seq)>,
+    ) -> Result<(NotesMirror, Vec<u8>), ActorError> {
+        let peer = loro_peer(cfg.device);
+        if let Some((snap, since)) = mirror_snapshot {
+            match (
+                Self::restore_mirror(store, &cfg.path, &snap, since, peer),
+                projection,
+            ) {
+                (Ok(mirror), Some(bytes)) => return Ok((mirror, bytes)),
+                (Ok(mirror), None) => {
+                    let bytes = mirror.text().into_bytes();
+                    return Ok((mirror, bytes));
+                }
+                (Err(e), None) => return Err(e),
+                (Err(e), Some(bytes)) => {
+                    tracing::warn!(file = %cfg.path, error = %e, "notes_mirror_restore_failed");
+                    return Self::fresh(cfg, peer, bytes);
+                }
+            }
+        }
+        Self::fresh(cfg, peer, projection.unwrap_or_default())
+    }
+
+    fn fresh(
+        cfg: &NotesActorConfig,
+        peer: u64,
+        bytes: Vec<u8>,
+    ) -> Result<(NotesMirror, Vec<u8>), ActorError> {
+        let state = NotesState::from_bytes(cfg.path.clone(), &bytes)?;
+        let mirror = NotesMirror::from_state(&state, peer).map_err(mirror_err)?;
+        Ok((mirror, bytes))
     }
 
     /// The persisted mirror plus the ops committed since it was taken (bounded paging, same shape

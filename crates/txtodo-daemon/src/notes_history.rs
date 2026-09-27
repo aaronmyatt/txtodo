@@ -21,7 +21,7 @@ impl From<NotesStateError> for ActorError {
 /// An op that does not fit is skipped, the same way a peer's import skips it (task
 /// notes-no-base), so a log whose first op had no base still renders.
 pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<NotesState, ActorError> {
-    replay_leniently(store, path, upto)
+    Ok(replay_leniently(store, path, upto)?.state)
 }
 
 /// The document bytes as they were at `at_wall_ms` (inclusive).

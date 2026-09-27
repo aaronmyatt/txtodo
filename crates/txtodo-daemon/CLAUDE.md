@@ -401,7 +401,10 @@ multiplex every workspace's traffic — not done by this task).
   one writer is instead one `Arc<Mutex<NotesActor>>` per path) · `notes_registry` (one
   `NotesActor` per `ref:` directory, opened lazily) · `notes_history` (replay/checkout/undo_ops/
   inverse, the notes analogue of `history.rs`) · `notes_lookup` (resolves a bare task id to the
-  document holding it, since `GetNotes`/`EditNotes`'s wire `TaskRef` carries no path).
+  document holding it, since `GetNotes`/`EditNotes`'s wire `TaskRef` carries no path) ·
+  `notes_repair` (task notes-no-base: a peer's notes op that does not fit is skipped, not
+  refused, in import and replay alike; `NotesActor::open` commits one repair `NotesEdit` when the
+  log replayed from empty is not the file, e.g. a notes.md adopted with no op before v0.0.8).
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's
