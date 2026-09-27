@@ -15,6 +15,7 @@ use crate::hit::{HitMap, Target};
 use crate::settings_rows::{SRow, rows};
 use crate::state::AppState;
 use crate::state_nav::SettingsCard;
+use crate::state_settings::Pairing;
 
 /// The nav column's width.
 const NAV: u16 = 16;
@@ -51,7 +52,38 @@ pub fn draw(
         ),
     ]);
     frame.render_widget(Paragraph::new(heading), top);
-    draw_rows(frame, list, state, &rows(card, state), hits);
+    let rows = rows(card, state);
+    match (card, &state.settings.pairing) {
+        (SettingsCard::Devices, Pairing::Offer(offer)) => {
+            let height = u16::try_from(rows.len()).unwrap_or(u16::MAX);
+            let [above, below] =
+                Layout::vertical([Constraint::Length(height), Constraint::Min(1)]).areas(list);
+            draw_rows(frame, above, state, &rows, hits);
+            draw_qr(frame, below, &offer.qr);
+        }
+        _ => draw_rows(frame, list, state, &rows, hits),
+    }
+}
+
+/// This device's pairing QR under the Devices rows when the pane has room for it, else one line
+/// saying how much room it needs: the code above works without it.
+fn draw_qr(frame: &mut Frame, area: Rect, qr: &[String]) {
+    let width = qr.first().map_or(0, |l| l.chars().count());
+    let fits = usize::from(area.width) > width && usize::from(area.height) >= qr.len();
+    let text: Vec<Line> = if fits && !qr.is_empty() {
+        qr.iter().map(|l| Line::raw(format!(" {l}"))).collect()
+    } else {
+        vec![Line::styled(
+            format!(
+                " The QR needs {width}\u{d7}{} cells, this pane has {}\u{d7}{}: the code above works too.",
+                qr.len(),
+                area.width,
+                area.height
+            ),
+            Style::new().add_modifier(Modifier::DIM),
+        )]
+    };
+    frame.render_widget(Paragraph::new(text), area);
 }
 
 /// The card nav: every card the filter keeps, the one in view reversed.
@@ -124,3 +156,7 @@ fn row_line(row: &SRow, selected: bool, state: &AppState) -> Line<'static> {
     };
     Line::from(vec![Span::styled(label, label_style), value])
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

@@ -23,6 +23,20 @@
 - Preferences (`prefs.rs`): `$XDG_CONFIG_HOME/txtodo/tui.conf` (else `~/.config/...`), `key = value`. Theme applies at once; line numbers and the underline change the Tasks rows. Desktop keeps its own in localStorage.
 - Shortcuts and Help read `specs/client-parity.toml` built into the binary (`manifest.rs`); `tests/parity.rs` uses the same parser now.
 - General: Restart is an instruction (`txtodo daemon stop`, then `start`); the TUI does not stop the daemon itself.
-- Devices: pairing from this side works by pasting the other device's code, then comparing six words ("They match, my device" merges default workspaces; "not mine" keeps them apart; "They differ" stops). Showing a code or QR here needs the code encoding, which lives in the CLI (postcard + base32 + qrcode): blocked on a decide line. Paired devices list and revoke; workspace offers are listed here too (the `o` pane still works).
+- Devices: pairing from this side works by pasting the other device's code, then comparing six words ("They match, my device" merges default workspaces; "not mine" keeps them apart; "They differ" stops). Showing this device's code and QR came later (below). Paired devices list and revoke; workspace offers are listed here too (the `o` pane still works).
+- Devices, this device's code (2026-09-27, after the pairing-code decide line):
+  - "Show a code" sends `PairOffer`. The code shown is `PairOfferResponse.code`, made by the daemon;
+    Enter on it copies it (OSC 52). The QR holds the offer's JSON payload, built here by hand in
+    `pair_code.rs` (nine string fields, serde_json's escapes, the CLI's field order), drawn with
+    `qrcode`'s half-block renderer under the rows. A pane too small for it says how big it must be.
+  - The countdown is 120 s, not the 60 s the line said: that is the daemon's window
+    (`PAIRING_WINDOW_MS`), and desktop and `txtodo pair` use it too.
+  - The 1 s tick polls `PairAwaitPeer`; once a device joins, its six words show with the usual They
+    match / They differ rows. Past the window the code is dropped with a toast.
+  - A daemon older than the code field sends it empty: the status line then says to run
+    `txtodo pair`, rather than the TUI encoding the code itself.
+  - Known gaps: the QR is drawn in the terminal's own colours, as `txtodo pair` does, so a scanner may
+    need to read it inverted on a light theme. Not driven against a second real device here: the
+    unit tests cover the payload, the rows, the copy and the drawing only.
 - Tokens: the "dialog" is one typed line, `name scope… expires:YYYY-MM-DD` (read when no scope); the secret shows once, Enter copies it (OSC 52) and hides it.
 - Tests: `settings_rows_tests.rs`, `commands_settings_tests.rs`, `prefs.rs`, `manifest.rs`, and `tests/settings_screen.rs` against a real daemon.
