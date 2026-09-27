@@ -27,7 +27,7 @@ jobs:
   reject-duplicate-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: fail if this tag already has a published release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,7 +102,7 @@ jobs:
             static_check: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # The date every binary shows beside its version (task version-info). The tagged commit's
       # own date, so two builds of one tag agree; build-support/buildinfo.rs reads the variable.
       # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
@@ -234,7 +234,7 @@ jobs:
             esac
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dist-${{ matrix.leg }}
           path: dist/*
@@ -264,7 +264,7 @@ jobs:
             native: false
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # The date every binary shows beside its version (task version-info). The tagged commit's
       # own date, so two builds of one tag agree; build-support/buildinfo.rs reads the variable.
       # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-environment-variable
@@ -273,7 +273,7 @@ jobs:
         run: echo "TXTODO_RELEASE_DATE=$(git show -s --format=%cs HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: rustup target add
@@ -334,7 +334,7 @@ jobs:
         if: always()
         run: |
           if [ -n "${TXTODO_SIGN_KEYCHAIN:-}" ]; then security delete-keychain "$TXTODO_SIGN_KEYCHAIN" || true; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dist-desktop-${{ matrix.leg }}
           path: dist/*
@@ -344,7 +344,7 @@ jobs:
     needs: reject-duplicate-tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup target add wasm32-unknown-unknown
@@ -373,7 +373,7 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: build txtodo-ffi (wasm32)
         run: wasm-pack build crates/txtodo-ffi --release --target web --out-dir ../../dist-wasm
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: dist-wasm
           path: dist-wasm/*
@@ -390,7 +390,7 @@ jobs:
     needs: reject-duplicate-tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       # https://github.com/CycloneDX/cyclonedx-rust-cargo
@@ -419,7 +419,7 @@ jobs:
             jq -e --arg c "$c" '.components[] | select(.name == $c)' bom.json > /dev/null
           done
           jq -e '[.components[] | select(.licenses == null or .licenses == [])] | length == 0' bom.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: bom
           path: bom.json
@@ -434,7 +434,7 @@ jobs:
     needs: reject-duplicate-tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # https://github.com/cachix/install-nix-action
       - uses: cachix/install-nix-action@v27
         with:
@@ -461,7 +461,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
       # https://github.com/sigstore/cosign-installer
@@ -474,7 +474,7 @@ jobs:
           find artifacts -type f ! -name '*.bundle' | while read -r f; do
             cosign sign-blob --yes --bundle "${f}.bundle" "$f"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: signatures
           path: artifacts/**/*.bundle
@@ -490,8 +490,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
       # Missing on this project's first real release run: this job runs on its own fresh
