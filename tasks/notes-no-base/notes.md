@@ -43,3 +43,22 @@ before it, as today, until it upgrades).
   order, the repair can miss; the peer then skips it (logged) and keeps its own text. Same class
   as the existing "notes ops apply in arrival order, no transform" gap in notes-sync.
 - A 0.0.14 peer stays stuck until it runs 0.0.15.
+
+## As built
+
+- 2026-09-27: `b25c8e5` moves `NotesActor`'s sync tests to `notes_actor_sync_tests.rs` (line
+  budget). `77a79a9` makes import and replay skip ops that don't fit. `8072acb` adds the repair op
+  at open. `d5d1d2d` is release 0.0.15.
+- `notes_repair.rs` holds the shared lenient apply, `replay_leniently` (it reports whether it
+  reached the end of the log, so a cut-off replay never makes a repair), and `repair_edits`.
+- `NotesActor::open` repairs only text from this device's own projection. A text restored from a
+  peer's mirror snapshot has no op behind it by design, so no repair there. No production path
+  ships one today; only `notes_actor_tests.rs`'s `paired()` does.
+- Also changed: a notes mirror that won't restore (an op since its snapshot that doesn't fit)
+  now rebuilds from the projection. Before, the open failed, and every peer op for that file
+  was refused.
+- Checked once against a copy of this Mac's real `oplog.db`: `tasks/sync-pairing-relay/notes.md`
+  got 1 repair op, and a fresh store importing its 2 ops rebuilt all 9819 bytes.
+- Not checked yet: the two real Macs on 0.0.15. Expect `notes_log_repaired` once in this Mac's log
+  after its daemon restarts, then the other Mac's `sync FAIL ... stuck on ...notes.md` doctor row
+  should clear.
