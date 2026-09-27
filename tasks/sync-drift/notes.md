@@ -92,6 +92,34 @@ never stalls sync without anyone seeing it.
   and take the peer's.
 - This is the safe form of the root line "enable force sync one way": the peer never loses data.
 
+### 9. Decided 2026-09-27 (human): B. Heal duplicates already in a peer's history
+- Built under the `ref:duplicate-flags` line: `duplicate-flags/todo.txt` and `duplicate-flags/notes.md`.
+  ADR 0032 (accepted 2026-09-27) changes the design below. Groups are derived from
+  the file, not stored, and the default keeps the newest copy, which is safe even without a
+  rejoin. The text below is the first draft, kept as a record.
+- Rejoin (8) leaves duplicates the peer's log already holds. Sync ships ops, not the file, so they
+  come back.
+- A: rejoin takes a snapshot of the peer's file. Peer wire change, needs an ADR.
+- B (2026-09-27, human's idea, replaces "a dedupe command with a confirm"): flag exact-match lines
+  as a new kind of needs_review flag, shown in the existing conflicts UI. Nothing is deleted until
+  the user picks: delete newer, delete older, or keep both. To keep both, edit one (a tag, a date)
+  so the texts differ.
+  - Shape: today a flag is one task with two texts (`ReviewRow { task, mine, theirs }`,
+    `txtodo-store/src/flags.rs`), resolved Mine/Theirs/Merged (`on_resolve`,
+    `txtodo-daemon/src/import.rs`). A duplicate is two tasks with one text, so it needs a pair of
+    task ids and its own resolutions. Store table and proto `ConflictRow` change; no peer wire
+    change. Likely still an ADR, like the other store changes.
+  - Raise: on import, where flags come from today, plus a one-time scan. The duplicates already on
+    disk never pass through an import, so the scan is what heals the Evidence case.
+  - Clear: automatically once either line is gone or the texts stop matching. That makes "edit one
+    to keep both" work with no extra step, and clears the other device's flag once the fix syncs
+    (flags are per device, local and rebuildable).
+  - UI: a new row in the conflicts screen of the CLI (`txtodo conflicts`), the TUI and the desktop.
+  - Cost: a repeat the user meant to have is flagged once, when it syncs to the other device.
+  - Catch: run `rejoin` (8) first on a device that re-minted. Until both devices hold the same ids,
+    deleting the "extra" copy on one side can delete the other side's only copy.
+- I'd take B: no silent deletes, and it reuses a surface users already know.
+
 ## Open questions
 - The other device's refusal `error`. It should be `UNIQUE constraint failed: ops.op_id` if line 2
   is the cause.

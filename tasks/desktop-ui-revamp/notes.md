@@ -58,6 +58,16 @@ a rebuilt Universal page, a real Settings page, and an ink-on-paper theme.
    (the app is menu-bar resident, `tray.rs`); the prompt bar takes the hotkey only when the main
    window is frontmost.
 
+Decided 2026-09-27 (human): 1, 2, 4, 5 and 6 as picked above. 3 as picked, except save-on-blur
+ships too (human: "important"), as a read-only row, see below. Follow-ups:
+- 1 stays gated on the webview CSS audit line.
+- 2 amends plan §3.3 (`txtodo-implementation-plan.md:157`, "a page, not a modal"); noted on the
+  detail-view work line. The detail e2e specs that assume a page will need rewriting.
+- 5: 700 already ships; 400/500 for the buffer do not yet.
+- 3, save-on-blur: blur already commits today (`FileView.svelte` blur handler; the editing
+  contract under Invariants). Decided 2026-09-27 (human): a read-only row in General that says it
+  is always on. No toggle, so the contract and its regression test stay as they are.
+
 ## Tooling and theme
 
 - Today: SvelteKit 2 + Svelte 5 runes, Vite ^8.0.16, adapter-static, CM6, no Tailwind. Styling is
@@ -178,7 +188,7 @@ Keep the whole editing contract (see Invariants). Additions only:
 |---|---|---|
 | General | pin on top | real (`pin.ts`) |
 |  | keep running in the menu bar | real behaviour today (hide-on-close, tray Quit); a toggle needs config in `tray.rs`/`lib.rs`, otherwise show it as an explanation |
-|  | save when the buffer loses focus | proposed (skip, decision 3) |
+|  | save when the buffer loses focus | real, shown read-only as always on (decision 3) |
 |  | daemon status + Restart | real (`daemonStatus`, `retryConnect`) |
 | Appearance | theme System/Light/Dark | real (`themePreference`) |
 |  | text size, line height, line numbers, 100-char hint, editor font | proposed (`editorPrefs`) + live preview buffer |

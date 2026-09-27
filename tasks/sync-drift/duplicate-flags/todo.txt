@@ -1,0 +1,11 @@
+2026-09-27 core: pure duplicate_groups(&DocState): tasks in one file whose whole lines are byte-identical, blank lines skipped, oldest id first; table tests (ADR 0032) +m11 @daemon @test
+2026-09-27 proto: ConflictsResponse.duplicates (DuplicateGroup: task ids and line numbers, oldest first) and the file's group count on Change; both additive, no new RPC +m11 @daemon
+2026-09-27 daemon: ListConflicts returns the file's duplicate groups from duplicate_groups +m11 @daemon @sync
+2026-09-27 daemon: every Change carries the group count after the commit; the 10k-line perf fixture stays inside its budget +m11 @daemon @test
+2026-09-27 cli: txtodo conflicts lists duplicate groups; delete one line, or keep the newest in every group, after a confirm, through Apply Delete +m11 @cli
+2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui
+2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop
+2026-09-27 Two-daemon test: B re-mints a file, A gets both copies; keep newest on A with no rejoin leaves exactly one copy on both +m11 @daemon @test
+2026-09-27 Two-daemon test: an edit on A that makes two lines differ drops the group on both; a line typed twice on A shows as a group on both +m11 @daemon @test
+x 2026-09-27 2026-09-27 Draft ADR 0032: duplicate-line flags (a flag for two tasks with one text; raised on import and by a one-time scan; clears itself; resolved by deleting one) +m11 @daemon @sync @docs — proposed: docs/adr/0032-duplicate-lines-as-derived-conflicts.md; it derives groups from the file (no store, scan or clear) and keeps the newest by default; if accepted, the store, raise, scan and clear lines go (see notes.md)
+x 2026-09-27 2026-09-27 Accept ADR 0032 before any code below +m11 @daemon @sync @human — accepted 2026-09-27 (human) as drafted; lines above rewritten to it

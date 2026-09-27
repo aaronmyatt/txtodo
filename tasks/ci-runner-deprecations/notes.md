@@ -42,7 +42,7 @@ route around the fence.
 
 So the deliverable is a patch file plus a verified-after check, not a commit to the workflows.
 
-## Open question (`@human`)
+## Runner question (decided 2026-09-27: ride)
 
 Pin the Linux legs to `ubuntu-24.04`, or ride `ubuntu-latest` into Ubuntu 26?
 
@@ -55,6 +55,13 @@ Pin the Linux legs to `ubuntu-24.04`, or ride `ubuntu-latest` into Ubuntu 26?
 I'd pin, then bump deliberately: this repo already has enough intermittently-red CI that a
 self-inflicted ambiguous failure is worth avoiding. Not an agent's call either way.
 
+**Decided 2026-09-27 (human): ride `ubuntu-latest`.** No `runs-on` change, so the patch stays as
+it is. Release binaries are safe either way: zigbuild pins glibc 2.17, so the runner's OS never
+reaches them. Known gap: the three jobs that `apt-get install` Tauri deps (`libwebkit2gtk-4.1-dev`
+and friends) can go red from 2026-10-19 if Ubuntu 26 renames or drops a package. If the first
+red Linux run after that date shows an apt failure, it is the image, not the code: rename the
+package, or pin `ubuntu-24.04` then.
+
 ## As built
 
 - 2026-09-27: `CI_DEPRECATIONS.patch.md` at the repo root, not applied (`.github` is frozen).
@@ -63,5 +70,6 @@ self-inflicted ambiguous failure is worth avoiding. Not an agent's call either w
   declares `using: node20` (checked in each tag's `action.yml`), so the annotation would stay.
   - The patch holds a real diff; its apply command was checked with `git apply --check` against
     this tree, and its "none left" grep against a patched copy.
-  - Not in it: any `runs-on` change. That waits on the decide line.
+  - Not in it: any `runs-on` change. The decide line landed on ride (2026-09-27), so none is
+    needed.
   - Not checked: a real CI run on the new majors. That is line 3, after a human applies it.
