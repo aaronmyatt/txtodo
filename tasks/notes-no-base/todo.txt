@@ -1,0 +1,5 @@
+2026-09-27 daemon: notes import skips an op that does not fit, logs sync_op_skipped, keeps it in the log +m11 @daemon @sync
+2026-09-27 daemon: at open, a notes log that replays to other text gets one repair NotesEdit +m11 @daemon @sync
+2026-09-27 daemon: notes history replay skips ops that do not fit, same as import +m11 @daemon
+2026-09-27 daemon: test a fresh peer gets the full text of a notes.md whose log has no base +m11 @daemon @test
+2026-09-27 release: 0.0.15 +m11
