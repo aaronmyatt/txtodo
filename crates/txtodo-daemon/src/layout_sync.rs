@@ -48,11 +48,19 @@ pub(crate) fn record_disk(ws: &Workspace, principal: Principal) {
     let Some(path) = layout_path() else {
         return;
     };
-    let Ok(text) = std::fs::read_to_string(ws.root().join(LAYOUT_FILE)) else {
+    let disk = ws.root().join(LAYOUT_FILE);
+    if !disk.is_file() {
         return;
-    };
+    }
     let outcome = ws.notes_actor(&path).and_then(|cell| {
         let mut actor = cell.lock().unwrap_or_else(PoisonError::into_inner);
+        // Read under the actor's lock, never before it: a peer's import holds the lock while it
+        // writes the file, so bytes read before the lock can be older than the actor's, and
+        // recording them would undo the peer's change (a synced rename reverted: CI run
+        // 36295564374, `tests/workspace_name.rs`).
+        let Ok(text) = std::fs::read_to_string(&disk) else {
+            return Ok(0);
+        };
         actor.edit(&text, principal).map(|applied| applied.applied)
     });
     if let Err(e) = outcome {
