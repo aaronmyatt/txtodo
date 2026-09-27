@@ -948,6 +948,15 @@ tui = { status = "done", surface = "Settings > Workspaces (d, twice)" }
 deviation = ""
 
 [[action]]
+id = "workspace.rename"
+title = "Rename a workspace: the name every paired device shows"
+keys = []
+scope = "settings"
+desktop = { status = "done", surface = "WorkspaceSwitcher" }
+tui = { status = "differs", surface = "Settings > Workspaces (the open one)" }
+deviation = "The TUI renames only the open workspace, from a field row that starts at its name; switch to another first."
+
+[[action]]
 id = "activity.refresh"
 title = "Refresh the activity feed"
 keys = []

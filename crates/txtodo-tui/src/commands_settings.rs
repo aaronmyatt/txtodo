@@ -20,6 +20,13 @@ pub enum SettingsAction {
     AddWorkspace(String),
     /// Unregister this workspace.
     RemoveWorkspace(String),
+    /// Set the name every paired device shows for this workspace; empty clears it.
+    RenameWorkspace {
+        /// The workspace's id.
+        id: String,
+        /// The new name, trimmed.
+        name: String,
+    },
     /// Accept this pairing code.
     PairAccept(String),
     /// The six words matched; `true` when it is the user's own device.
@@ -104,10 +111,13 @@ fn activate(state: &mut AppState, row: SRow) -> Option<Action> {
     let act = row.act?;
     if row.field {
         let Some(text) = state.settings.field.take() else {
-            state.settings.field = Some(String::new());
+            state.settings.field = Some(field_start(state, &act));
             return None;
         };
         let text = text.trim().to_owned();
+        if let Act::RenameWorkspace(id) = act {
+            return rename(state, id, text);
+        }
         if text.is_empty() {
             return None;
         }
@@ -118,6 +128,34 @@ fn activate(state: &mut AppState, row: SRow) -> Option<Action> {
         }));
     }
     run_act(state, act)
+}
+
+/// What a field holds when typing starts: a rename starts from the name shown now.
+fn field_start(state: &AppState, act: &Act) -> String {
+    match act {
+        Act::RenameWorkspace(id) => listed_name(state, id),
+        _ => String::new(),
+    }
+}
+
+/// A rename, unless the name did not change: then nothing is sent, so a workspace with no
+/// `txtodo.toml` does not get one for nothing. Empty is sent: it clears the name.
+fn rename(state: &AppState, id: String, name: String) -> Option<Action> {
+    (name != listed_name(state, &id)).then_some(Action::Settings(SettingsAction::RenameWorkspace {
+        id,
+        name,
+    }))
+}
+
+/// The name the daemon last listed for workspace `id`.
+fn listed_name(state: &AppState, id: &str) -> String {
+    state
+        .settings
+        .workspaces
+        .iter()
+        .find(|w| w.id == id)
+        .map(|w| w.listed_name.clone())
+        .unwrap_or_default()
 }
 
 /// What a row's act does.

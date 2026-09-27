@@ -91,3 +91,48 @@ fn the_filter_keeps_matching_cards_and_moves_off_a_hidden_one() {
     on_text_key(&mut state, key(KeyCode::Esc));
     assert_eq!(visible_cards(&state).len(), 7, "Esc clears it");
 }
+
+#[test]
+fn a_rename_starts_from_the_listed_name_and_sends_only_a_change() {
+    let mut state = settings(SettingsCard::Workspaces);
+    state.settings.workspaces = vec![WsRow {
+        id: "01A".to_owned(),
+        name: "notes".to_owned(),
+        listed_name: "notes".to_owned(),
+        current: true,
+        ..WsRow::default()
+    }];
+    // Row 0 is the workspace, row 1 renames it.
+    run(&mut state, Command::SettingsDown);
+    assert_eq!(run(&mut state, Command::SettingsActivate), Some(None));
+    assert_eq!(state.settings.field.as_deref(), Some("notes"));
+    assert_eq!(
+        on_text_key(&mut state, key(KeyCode::Enter)),
+        None,
+        "unchanged: nothing sent"
+    );
+    run(&mut state, Command::SettingsActivate);
+    for _ in 0.."notes".len() {
+        on_text_key(&mut state, key(KeyCode::Backspace));
+    }
+    for c in " Groceries ".chars() {
+        on_text_key(&mut state, key(KeyCode::Char(c)));
+    }
+    let rename = |name: &str| {
+        Some(Action::Settings(SettingsAction::RenameWorkspace {
+            id: "01A".to_owned(),
+            name: name.to_owned(),
+        }))
+    };
+    assert_eq!(
+        on_text_key(&mut state, key(KeyCode::Enter)),
+        rename("Groceries")
+    );
+    run(&mut state, Command::SettingsActivate);
+    state.settings.field = Some(String::new());
+    assert_eq!(
+        on_text_key(&mut state, key(KeyCode::Enter)),
+        rename(""),
+        "empty clears the name"
+    );
+}

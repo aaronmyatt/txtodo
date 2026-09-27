@@ -26,6 +26,8 @@ pub enum Act {
     RemoveWorkspace(String),
     /// Register the typed folder.
     AddWorkspace,
+    /// Give this workspace the typed name, which every paired device shows.
+    RenameWorkspace(String),
     /// Accept the typed pairing code.
     PairCode,
     /// The six words match: pair; `true` when it is the user's own device (their default
@@ -190,6 +192,15 @@ fn workspaces(state: &AppState) -> Vec<SRow> {
             }
         })
         .collect();
+    // The open one only: the header names it, and the field starts from its name. Another
+    // workspace is renamed from there (manifest `workspace.rename`).
+    if let Some(w) = state.settings.workspaces.iter().find(|w| w.current) {
+        out.push(field(
+            "Rename the open one",
+            "the name every paired device shows; empty clears it",
+            Act::RenameWorkspace(w.id.clone()),
+        ));
+    }
     out.push(field(
         "Add a workspace",
         "type a folder path, Enter adds it",

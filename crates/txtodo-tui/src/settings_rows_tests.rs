@@ -36,6 +36,29 @@ fn the_current_and_default_workspaces_cannot_be_removed() {
         rows.iter()
             .any(|r| r.field && r.act == Some(Act::AddWorkspace))
     );
+    assert_eq!(
+        rows[3].act,
+        Some(Act::RenameWorkspace("01A".to_owned())),
+        "the open one gets a rename field"
+    );
+    assert!(rows[3].field);
+}
+
+#[test]
+fn with_no_open_workspace_listed_there_is_no_rename_row() {
+    let mut state = AppState::fixture();
+    state.settings.workspaces = vec![WsRow {
+        id: "01C".to_owned(),
+        name: "old".to_owned(),
+        ..WsRow::default()
+    }];
+    let rows = rows(SettingsCard::Workspaces, &state);
+    assert!(
+        !rows
+            .iter()
+            .any(|r| matches!(r.act, Some(Act::RenameWorkspace(_))))
+    );
+    assert!(rows.iter().any(|r| r.act == Some(Act::AddWorkspace)));
 }
 
 #[test]

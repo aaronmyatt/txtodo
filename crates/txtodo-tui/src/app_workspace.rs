@@ -177,7 +177,7 @@ pub async fn listed_title(daemon: &mut Daemon, root: &str) -> Option<String> {
 /// The header's name for a workspace switched to: the name every paired device shows (task
 /// workspace-vanity-name), else, from an older daemon, the folder's. An unnamed default (the
 /// daemon calls it `default`) stays `default workspace`.
-fn workspace_title(w: &pb::WorkspaceInfo) -> String {
+pub fn workspace_title(w: &pb::WorkspaceInfo) -> String {
     if w.is_default && (w.name.is_empty() || w.name == "default") {
         return "default workspace".to_owned();
     }

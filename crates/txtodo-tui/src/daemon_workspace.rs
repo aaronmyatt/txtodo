@@ -65,6 +65,20 @@ impl Daemon {
         Ok(self.inner.workspace_remove(req).await?.into_inner().removed)
     }
 
+    /// Sets the name every paired device shows for one workspace (task workspace-vanity-name),
+    /// stored in its `txtodo.toml`, which syncs; empty clears it. The daemon trims and checks it.
+    pub async fn workspace_rename(
+        &mut self,
+        workspace_id: &str,
+        name: &str,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        let req = pb::WorkspaceRenameRequest {
+            workspace_id: workspace_id.to_owned(),
+            name: name.to_owned(),
+        };
+        Ok(self.inner.workspace_rename(req).await?.into_inner())
+    }
+
     /// Every root-list task across every ready workspace (`UniversalTasks`).
     pub async fn universal_tasks(
         &mut self,

@@ -1,6 +1,6 @@
 //! The Settings screen's daemon calls and preference writes (task `tui-revamp/tui-settings`):
-//! reading the workspaces (with open counts), devices, tokens and the activity feed; adding and
-//! removing workspaces; accepting a pairing code and confirming its six words; revoking devices;
+//! reading the workspaces (with open counts), devices, tokens and the activity feed; adding,
+//! renaming and removing workspaces; accepting a pairing code and confirming its six words; revoking devices;
 //! creating and revoking tokens; and saving Appearance to the TUI's own file. A refusal goes on
 //! the status line; a transport error ends the call like any other.
 
@@ -37,6 +37,19 @@ pub async fn perform(
             .workspace_remove(&id)
             .await
             .map(|_| "Removed from the list (files untouched)".to_owned()),
+        SettingsAction::RenameWorkspace { id, name } => {
+            daemon.workspace_rename(&id, &name).await.map(|w| {
+                // The header names the open workspace; a rename of it shows there at once.
+                if w.root == state.shell.root {
+                    state.workspace_label = Some(crate::app_workspace::workspace_title(&w));
+                }
+                if name.is_empty() {
+                    format!("Name cleared: {} again", w.name)
+                } else {
+                    format!("Renamed to {}", w.name)
+                }
+            })
+        }
         SettingsAction::PairAccept(code) => return pair_accept(daemon, state, &code).await,
         SettingsAction::PairConfirm(own) => daemon.pair_confirm_sas(own).await.map(|_| {
             state.settings.pairing = Pairing::Done;
@@ -76,6 +89,7 @@ pub async fn refresh(daemon: &mut Daemon, state: &mut AppState) -> Result<(), Da
             .map(|(w, item)| WsRow {
                 id: item.id,
                 name: item.name,
+                listed_name: w.name.clone(),
                 root: w.root.clone(),
                 open: item.open,
                 current: item.current,

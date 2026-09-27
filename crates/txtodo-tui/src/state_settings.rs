@@ -34,6 +34,9 @@ pub struct WsRow {
     pub id: String,
     /// Its name (folder, or `default workspace`).
     pub name: String,
+    /// The name the daemon lists (`WorkspaceInfo.name`): the shared name, else `default` or the
+    /// folder's. What a rename starts from.
+    pub listed_name: String,
     /// Its root folder.
     pub root: String,
     /// Open tasks, when the daemon has it loaded.
