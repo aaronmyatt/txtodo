@@ -30,6 +30,10 @@ pub enum Act {
     RenameWorkspace(String),
     /// Accept the typed pairing code.
     PairCode,
+    /// Show this device's code and QR, and wait for a device to join.
+    PairOffer,
+    /// Copy this device's code (OSC 52).
+    CopyCode,
     /// The six words match: pair; `true` when it is the user's own device (their default
     /// workspaces then merge).
     SasMatch(bool),
@@ -214,37 +218,19 @@ fn workspaces(state: &AppState) -> Vec<SRow> {
 }
 
 fn devices(state: &AppState) -> Vec<SRow> {
-    let mut out = vec![field(
-        "Pair with a code",
-        "paste the other device's code, Enter",
-        Act::PairCode,
-    )];
-    match &state.settings.pairing {
-        Pairing::Sas(words) => {
-            out.push(info("Compare", words.clone()));
-            out.push(button(
-                "They match, my device",
-                "pair; our default workspaces merge",
-                Act::SasMatch(true),
-            ));
-            out.push(button(
-                "They match, not mine",
-                "pair; defaults stay apart",
-                Act::SasMatch(false),
-            ));
-            out.push(button(
-                "They differ",
-                "stop; nothing is shared",
-                Act::SasDiffer,
-            ));
-        }
-        Pairing::Done => out.push(info("Paired", "the devices now sync")),
-        Pairing::Idle => {}
-    }
-    out.push(info(
-        "Show a code",
-        "run `txtodo pair` in a terminal (QR and code)",
-    ));
+    let mut out = vec![
+        field(
+            "Pair with a code",
+            "paste the other device's code, Enter",
+            Act::PairCode,
+        ),
+        button(
+            "Show a code",
+            "this device's code and QR, for the other device",
+            Act::PairOffer,
+        ),
+    ];
+    out.extend(pairing_rows(&state.settings.pairing));
     out.push(not_here(
         "Scan a code",
         "A terminal has no camera: paste the code.",
@@ -272,6 +258,46 @@ fn devices(state: &AppState) -> Vec<SRow> {
             remove: Some(Act::DeclineOffer(i)),
             ..SRow::default()
         });
+    }
+    out
+}
+
+/// Where pairing stands, as rows: this device's code while it waits, the six words to compare
+/// once a device joins, or done.
+fn pairing_rows(pairing: &Pairing) -> Vec<SRow> {
+    let mut out = Vec::new();
+    match pairing {
+        Pairing::Offer(offer) => {
+            out.push(button("Your code", offer.code.clone(), Act::CopyCode));
+            let left = offer
+                .until
+                .saturating_duration_since(std::time::Instant::now())
+                .as_secs();
+            out.push(info(
+                "Waiting",
+                format!("for the other device \u{b7} {left} s left \u{b7} QR below"),
+            ));
+        }
+        Pairing::Sas(words) => {
+            out.push(info("Compare", words.clone()));
+            out.push(button(
+                "They match, my device",
+                "pair; our default workspaces merge",
+                Act::SasMatch(true),
+            ));
+            out.push(button(
+                "They match, not mine",
+                "pair; defaults stay apart",
+                Act::SasMatch(false),
+            ));
+            out.push(button(
+                "They differ",
+                "stop; nothing is shared",
+                Act::SasDiffer,
+            ));
+        }
+        Pairing::Done => out.push(info("Paired", "the devices now sync")),
+        Pairing::Idle => {}
     }
     out
 }

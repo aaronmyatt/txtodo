@@ -4,7 +4,7 @@
 //! creating and revoking tokens; and saving Appearance to the TUI's own file. A refusal goes on
 //! the status line; a transport error ends the call like any other.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use drain::next_entries;
 use txtodo_proto::v1 as pb;
@@ -12,10 +12,14 @@ use txtodo_proto::v1 as pb;
 use crate::commands_settings::SettingsAction;
 use crate::daemon::{Daemon, DaemonError};
 use crate::state::AppState;
-use crate::state_settings::{ActivityRow, DeviceRow, Pairing, TokenRow, WsRow};
+use crate::state_settings::{ActivityRow, DeviceRow, Offer, Pairing, TokenRow, WsRow};
 
 /// The most activity entries kept (the c2 card's newest 200).
 const ACTIVITY_KEPT: usize = 200;
+
+/// How long the daemon keeps a pairing open: `txtodo_sync::PAIRING_WINDOW_MS`, 120 s. This crate
+/// may not depend on txtodo-sync, so the value is repeated here, as `txtodo pair` and desktop do.
+const PAIRING_WINDOW: Duration = Duration::from_secs(120);
 
 /// Runs one Settings action.
 pub async fn perform(
@@ -51,6 +55,7 @@ pub async fn perform(
             })
         }
         SettingsAction::PairAccept(code) => return pair_accept(daemon, state, &code).await,
+        SettingsAction::PairOffer => return pair_offer(daemon, state).await,
         SettingsAction::PairConfirm(own) => daemon.pair_confirm_sas(own).await.map(|_| {
             state.settings.pairing = Pairing::Done;
             "Paired".to_owned()
@@ -171,6 +176,54 @@ async fn pair_accept(
         Err(e) => return Err(e),
     }
     Ok(())
+}
+
+/// Starts a pairing as the initiator: this device's code (the daemon encodes it) and a QR of the
+/// offer's JSON payload, until a device joins or the window closes. A daemon older than the code
+/// field sends it empty; the status line then points at `txtodo pair`.
+async fn pair_offer(daemon: &mut Daemon, state: &mut AppState) -> Result<(), DaemonError> {
+    match daemon.pair_offer().await {
+        Ok(offer) if offer.code.is_empty() => {
+            state.last_error =
+                Some("this daemon sends no pairing code; run `txtodo pair` instead".to_owned());
+        }
+        Ok(offer) => {
+            let qr = crate::pair_code::qr_lines(&crate::pair_code::qr_payload(&offer));
+            state.settings.pairing = Pairing::Offer(Offer {
+                code: offer.code,
+                qr,
+                until: Instant::now() + PAIRING_WINDOW,
+            });
+        }
+        Err(DaemonError::Rpc(status)) => state.last_error = Some(status.message().to_owned()),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// The 1 s tick while this device's code shows: once a device has joined, its six words show;
+/// past the window the code is dropped. A refusal ends the offer; a transport error waits for the
+/// tick's reconnect.
+pub async fn poll_pairing(daemon: &mut Daemon, state: &mut AppState) {
+    let Pairing::Offer(offer) = &state.settings.pairing else {
+        return;
+    };
+    let now = Instant::now();
+    if now >= offer.until {
+        state.settings.pairing = Pairing::Idle;
+        state
+            .shell
+            .toast("The code ran out. Show a new one to pair.", None, now);
+        return;
+    }
+    match daemon.pair_await_peer().await {
+        Ok(result) if !result.sas.is_empty() => state.settings.pairing = Pairing::Sas(result.sas),
+        Err(DaemonError::Rpc(status)) => {
+            state.settings.pairing = Pairing::Idle;
+            state.last_error = Some(status.message().to_owned());
+        }
+        Ok(_) | Err(_) => {}
+    }
 }
 
 /// `name scope… expires:YYYY-MM-DD`: a token named by the first word, with the scopes after it

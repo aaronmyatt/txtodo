@@ -136,3 +136,23 @@ fn a_rename_starts_from_the_listed_name_and_sends_only_a_change() {
         "empty clears the name"
     );
 }
+
+#[test]
+fn show_a_code_asks_the_daemon_and_your_code_copies() {
+    let mut state = settings(SettingsCard::Devices);
+    run(&mut state, Command::SettingsDown);
+    assert_eq!(
+        run(&mut state, Command::SettingsActivate),
+        Some(Some(Action::Settings(SettingsAction::PairOffer)))
+    );
+    state.settings.pairing = Pairing::Offer(crate::state_settings::Offer {
+        code: "CODE42".to_owned(),
+        qr: Vec::new(),
+        until: std::time::Instant::now() + std::time::Duration::from_secs(90),
+    });
+    run(&mut state, Command::SettingsDown);
+    assert_eq!(
+        run(&mut state, Command::SettingsActivate),
+        Some(Some(Action::Copy("CODE42".to_owned())))
+    );
+}

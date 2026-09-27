@@ -989,7 +989,7 @@ title = "Show this device's pairing code"
 keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
-tui = { status = "planned", surface = "Settings > Devices" }
+tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
 [[action]]

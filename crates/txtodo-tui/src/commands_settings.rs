@@ -29,6 +29,8 @@ pub enum SettingsAction {
     },
     /// Accept this pairing code.
     PairAccept(String),
+    /// Show this device's code and QR.
+    PairOffer,
     /// The six words matched; `true` when it is the user's own device.
     PairConfirm(bool),
     /// Revoke this device.
@@ -186,6 +188,17 @@ fn run_act(state: &mut AppState, act: Act) -> Option<Action> {
             None
         }
         Act::OpenWorkspace(id) => Some(Action::SwitchWorkspace(id)),
+        Act::PairOffer => Some(Action::Settings(SettingsAction::PairOffer)),
+        Act::CopyCode => {
+            let Pairing::Offer(offer) = &state.settings.pairing else {
+                return None;
+            };
+            let code = offer.code.clone();
+            state
+                .shell
+                .toast("Code copied", None, std::time::Instant::now());
+            Some(Action::Copy(code))
+        }
         Act::SasMatch(own) => Some(Action::Settings(SettingsAction::PairConfirm(own))),
         Act::SasDiffer => {
             state.settings.pairing = Pairing::Idle;

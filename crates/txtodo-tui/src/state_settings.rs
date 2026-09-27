@@ -88,13 +88,26 @@ pub struct ActivityRow {
     pub source: String,
 }
 
+/// This device's own pairing offer, shown until a device joins or the daemon's window closes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Offer {
+    /// The code to paste on the other device (`PairOfferResponse.code`).
+    pub code: String,
+    /// The QR of the offer's JSON payload, one string per terminal row.
+    pub qr: Vec<String>,
+    /// When the daemon's pairing window closes.
+    pub until: std::time::Instant,
+}
+
 /// Where pairing stands on this device.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Pairing {
     /// Nothing under way.
     #[default]
     Idle,
-    /// The other device's code was accepted; compare these six words.
+    /// This device shows its code and waits for another device to join.
+    Offer(Offer),
+    /// A device joined, from either side; compare these six words.
     Sas(String),
     /// Both sides confirmed.
     Done,
