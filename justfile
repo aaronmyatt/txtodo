@@ -187,10 +187,9 @@ install-desktop: stage-desktop-sidecar
 # Install `txtodo` + `txtodod` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that survives
 # `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit ended up
 # pointing at (a deleted or rebuilt-under-it binary). Both, not just the daemon: `txtodo daemon
-# install` records the `txtodod` sitting *beside* the `txtodo` that runs it. Leaves the running
-# daemon alone; `just repoint-service` is the separate, one-restart step.
+# install` records the `txtodod` sitting *beside* the `txtodo` that runs it.
 # https://doc.rust-lang.org/cargo/commands/cargo-install.html
-install-daemon:
+install-daemon: && repoint-service
     cargo install --path crates/txtodo-daemon --locked --force --target-dir target/install
     cargo install --path crates/txtodo-cli --locked --force --target-dir target/install
 
