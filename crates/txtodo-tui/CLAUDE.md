@@ -65,4 +65,4 @@ desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
 - May depend only on: txtodo-core, txtodo-proto, txtodo-telemetry, txtodo-daemon-launch,
   txtodo-workspace-paths (external: ratatui, crossterm, tonic, tokio, hyper-util, tower, jiff —
   same socket-dial set `txtodo-cli` already carries, `cargo deny check` clean as of 2026-09-13,
-  human sign-off still outstanding).
+  human sign-off still outstanding; plus qrcode for the pairing QR, approved 2026-09-25).

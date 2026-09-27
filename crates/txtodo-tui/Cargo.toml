@@ -48,6 +48,10 @@ txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
 # Shared device-global daemon state paths (task daemon-paths-shared-crate, tui-global-socket-
 # migration): app.rs resolves the same global socket cli/mcp/desktop dial, not a per-workspace one.
 txtodo-workspace-paths = { path = "../txtodo-workspace-paths" }
+# https://docs.rs/qrcode — Settings › Devices draws this device's pairing QR (task
+# tui-revamp/tui-settings; dep approved on its decide line 2026-09-25). Same version and features as
+# txtodo-cli's `txtodo pair`: no default features, so no `image`/`svg`/`pic` pull-in.
+qrcode = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own

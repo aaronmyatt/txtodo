@@ -8966,6 +8966,7 @@ dependencies = [
  "crossterm",
  "hyper-util",
  "jiff",
+ "qrcode",
  "ratatui",
  "tempfile",
  "tokio",
