@@ -25,16 +25,22 @@ use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_global_pid};
 use txtodo_proto::v1 as pb;
 
 /// Spawns a fresh, hermetic global daemon (own `global_socket_override`/`global_registry_override`
-/// beside `dir`, ADR 0025) and returns a client — already targeting `dir` via a `Path` selector,
-/// same auto-register bridge every other global-daemon caller relies on — past `wait_until_ready`,
-/// plus its pid for cleanup. Not itself a `#[test]` fn, so `clippy::unwrap_used`/`expect_used`
-/// still apply here — hence `unwrap_or_else(|e| panic!(...))` throughout, matching
-/// `tests/support/mod.rs`.
-async fn connected_client(dir: &std::path::Path) -> (DaemonClient, u32) {
+/// in a state folder of its own, ADR 0025) and returns a client — already targeting `dir` via a
+/// `Path` selector, same auto-register bridge every other global-daemon caller relies on — past
+/// `wait_until_ready`, plus its pid for cleanup and the state folder, which must outlive the
+/// daemon. Not itself a `#[test]` fn, so `clippy::unwrap_used`/`expect_used` still apply here —
+/// hence `unwrap_or_else(|e| panic!(...))` throughout, matching `tests/support/mod.rs`.
+///
+/// The state folder sits beside `dir`, never inside it, as in `universal_view.rs` and
+/// `workspace_registry.rs`: the daemon makes its default workspace under its state folder, and
+/// since task sync-drift line 4 (`ddfea4d`) it refuses to register a folder that holds another
+/// registered workspace, so a state folder inside `dir` made every call here fail.
+async fn connected_client(dir: &std::path::Path) -> (DaemonClient, u32, tempfile::TempDir) {
+    let state = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let mut cfg = desktop_lib::config::DesktopConfig::new(dir);
     cfg.daemon_bin = Some(TXTODOD_BIN.clone());
-    cfg.global_socket_override = Some(dir.join("txtodod.sock"));
-    cfg.global_registry_override = Some(dir.join("registry.db"));
+    cfg.global_socket_override = Some(state.path().join("txtodod.sock"));
+    cfg.global_registry_override = Some(state.path().join("registry.db"));
     let sock = desktop_lib::daemon::ensure_daemon(&cfg)
         .await
         .unwrap_or_else(|e| panic!("ensure_daemon: {e}"));
@@ -50,15 +56,15 @@ async fn connected_client(dir: &std::path::Path) -> (DaemonClient, u32) {
         .wait_until_ready()
         .await
         .unwrap_or_else(|e| panic!("wait_until_ready: {e}"));
-    let pid = wait_for_global_pid(dir);
-    (client, pid)
+    let pid = wait_for_global_pid(state.path());
+    (client, pid, state)
 }
 
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn list_conflicts_reaches_the_daemon_with_none_open() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     let resp = client
         .list_conflicts("todo.txt")
@@ -73,7 +79,7 @@ async fn list_conflicts_reaches_the_daemon_with_none_open() {
 #[tokio::test]
 async fn get_notes_and_edit_notes_refuse_a_taskref_matching_no_real_task() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
     // Doesn't resolve to any task in the seeded workspace (empty `task_id`, and `line_number: 1`
     // is whatever `temp_workspace`'s fixture line is, not this task's own id) — a real RPC-level
     // refusal from `locate_task`, exercised here as smoke coverage of the bridge, not of
@@ -154,7 +160,7 @@ async fn add_task_and_get_id(client: &mut DaemonClient, line: &str) -> String {
 #[tokio::test]
 async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     let task_id = add_task_and_get_id(&mut client, "plan the roadmap").await;
     let task = pb::TaskRef {
@@ -192,7 +198,7 @@ async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge()
 #[tokio::test]
 async fn pair_offer_reaches_the_daemon_with_the_five_documented_fields() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     let offer = client
         .pair_offer()
@@ -212,7 +218,7 @@ async fn pair_offer_reaches_the_daemon_with_the_five_documented_fields() {
 #[tokio::test]
 async fn pair_accept_and_pair_confirm_sas_reach_the_daemon() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     let accept_err = client
         .pair_accept("not a real offer".into())
@@ -233,7 +239,7 @@ async fn pair_accept_and_pair_confirm_sas_reach_the_daemon() {
 #[tokio::test]
 async fn tokens_create_list_and_revoke_round_trip_through_the_bridge() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     let created = client
         .token_create(pb::TokenCreateRequest {
@@ -282,7 +288,7 @@ async fn tokens_create_list_and_revoke_round_trip_through_the_bridge() {
 #[tokio::test]
 async fn op_log_drains_the_stream_into_a_vec() {
     let dir = temp_workspace();
-    let (mut client, pid) = connected_client(dir.path()).await;
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
 
     // `temp_workspace` seeds todo.txt with a line already in it, so adopting it at daemon start
     // is itself an "external" op — this workspace is never truly empty. Compare before/after
