@@ -151,6 +151,11 @@ pub struct WorkspaceInfo {
     pub root_exists: bool,
     /// Whether `root/.txtodo/oplog.db` exists; `false` means never opened yet.
     pub has_state: bool,
+    /// The name every paired device shows for it (task workspace-vanity-name): its `txtodo.toml`
+    /// name, else `default` or the folder's, else for a mirror what its offering device calls it.
+    /// Display only, never a `workspace` arg. Empty from a daemon older than the field.
+    #[serde(default)]
+    pub name: String,
 }
 
 /// The seam every MCP tool/resource/prompt calls through (mcp-server-tools notes.md). Schemas

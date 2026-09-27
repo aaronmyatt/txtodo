@@ -74,6 +74,7 @@ is display only: ids stay ULIDs, and nothing routes or matches by it.
     cancels without closing the sidebar). Same unchanged-sends-nothing rule. A Tauri command
     `rename_workspace`, also in the e2e bridge. `run()`'s handler list moved to `handlers()` to stay
     under the 60-line limit.
+  - mcp: `todotxt://workspaces` rows carry `name` (`serde(default)`: empty from an older daemon).
 - Still broken / not done:
   - The offered name lives in memory. After a restart, a mirror whose owner never set a name shows
     its id until that owner's next offer (offers go out on every control session).
@@ -87,4 +88,5 @@ is display only: ids stay ULIDs, and nothing routes or matches by it.
     with FAILED_PRECONDITION. Fix it by hand.
   - The TUI renames only the open workspace. The desktop Playwright test for rename
     (`e2e/workspace-switcher.spec.ts`) is written but was not run in this session.
-  - MCP's workspace list does not carry the name.
+  - The real-daemon MCP check (`global_workspace_routing.rs`, names equal folder names) is
+    `#[ignore]`d and was not run here.

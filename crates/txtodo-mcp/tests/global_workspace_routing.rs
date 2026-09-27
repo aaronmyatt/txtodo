@@ -117,6 +117,12 @@ fn assert_both_registered(workspaces: &[WorkspaceInfo], ws_a: &Path, ws_b: &Path
         roots.iter().any(|r| r.ends_with(&b)),
         "workspace B registered: {roots:?}"
     );
+    // Neither is renamed, so each shows its folder's name (task workspace-vanity-name).
+    let names: Vec<&str> = workspaces.iter().map(|w| w.name.as_str()).collect();
+    assert!(
+        names.contains(&a.as_str()) && names.contains(&b.as_str()),
+        "each lists its folder's name: {names:?}"
+    );
 }
 
 #[tokio::test]

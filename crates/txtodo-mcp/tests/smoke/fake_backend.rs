@@ -200,6 +200,7 @@ impl McpBackend for FakeBackend {
             added_at_ms: 0,
             root_exists: true,
             has_state: true,
+            name: "workspace".to_owned(),
         }])
     }
     fn principal(&self) -> String {

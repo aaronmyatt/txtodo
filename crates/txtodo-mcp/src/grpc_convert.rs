@@ -101,6 +101,7 @@ pub fn workspace_info(w: pb::WorkspaceInfo) -> WorkspaceInfo {
         added_at_ms: w.added_at_ms,
         root_exists: w.root_exists,
         has_state: w.has_state,
+        name: w.name,
     }
 }
 
@@ -112,6 +113,19 @@ mod tests {
     fn hex_matches_lowercase_no_prefix() {
         assert_eq!(hex(&[0x0a, 0xff]), "0aff");
         assert_eq!(hex(&[]), "");
+    }
+
+    #[test]
+    fn a_listed_workspace_carries_its_shared_name() {
+        let info = workspace_info(pb::WorkspaceInfo {
+            workspace_id: "01J0000000000000000000ABC".to_owned(),
+            root: "/r/01J0000000000000000000ABC".to_owned(),
+            name: "Groceries".to_owned(),
+            ..pb::WorkspaceInfo::default()
+        });
+        assert_eq!(info.name, "Groceries");
+        let json = serde_json::to_value(&info).unwrap_or_default();
+        assert_eq!(json["name"], "Groceries", "the resource's JSON has it");
     }
 
     #[test]
