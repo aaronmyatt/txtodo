@@ -44,7 +44,8 @@ impl WorkspaceCatalog {
         let offers = self.open_args.identity.workspace_offers();
         let mut mirrored = 0;
         for offer in offers.list() {
-            if !self.is_own_default_alias(&offer) {
+            if !self.is_own_default_alias(&offer) && !self.is_this_devices_alias(offer.workspace_id)
+            {
                 mirrored += usize::from(self.mirror_offered(offer.workspace_id));
             }
             offers.take(offer.offering_device, offer.workspace_id);
@@ -73,6 +74,15 @@ impl WorkspaceCatalog {
                 .unwrap_or_else(PoisonError::into_inner)
                 .is_own_device(offer.offering_device)
                 .unwrap_or(false)
+    }
+
+    /// This device's own default, offered back under its alias by a peer that mirrors it (a peer
+    /// offers every workspace it holds, mirrors too). The alias is never registered here, so the
+    /// "ever held" rule misses it. Mirrored, it became a second, empty workspace answering to the
+    /// alias, which could take the sync route from the real default and starve the peer's mirror
+    /// (`tests/default_workspace_foreign.rs`, CI run 36299140047).
+    fn is_this_devices_alias(&self, id: WorkspaceId) -> bool {
+        id == crate::default_workspace::default_alias(self.open_args.identity.device())
     }
 
     fn try_mirror_offered(&self, id: WorkspaceId) -> Result<bool, Status> {

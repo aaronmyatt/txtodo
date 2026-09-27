@@ -250,3 +250,19 @@ async fn a_peers_default_alias_is_mirrored_only_from_a_device_that_is_not_own() 
     let root = root_of(&f, alias(foreign)).unwrap_or_else(|| panic!("foreign default mirrored"));
     assert!(f.catalog.is_remote_root(&root));
 }
+
+/// A foreign peer mirrors this device's default and offers it back under this device's own alias:
+/// never mirrored here, since the real default already answers to that alias.
+#[test]
+fn this_devices_own_default_alias_offered_back_is_not_mirrored() {
+    let f = fixture();
+    let mine = crate::default_workspace::default_alias(f.identity.device());
+    offer(&f, 22, mine);
+
+    assert_eq!(f.catalog.mirror_pending_offers(), 0);
+    assert!(
+        root_of(&f, mine).is_none(),
+        "no second workspace for our alias"
+    );
+    assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
+}
