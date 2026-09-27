@@ -3,11 +3,12 @@
 //! as-is — it only walks store rows by HLC wall time, no document shape involved.
 
 use crate::handle::ActorError;
-use crate::history::{MAX_REPLAY_PAGES, seq_at_wall};
+use crate::history::seq_at_wall;
+use crate::notes_repair::replay_leniently;
 use crate::notes_state::{NotesState, NotesStateError};
 use crate::textedit::apply_notes_edits;
 use txtodo_model::{FilePath, OpKind, TextEdit};
-use txtodo_store::{MAX_OPS_PER_READ, Seq, Store, Stored};
+use txtodo_store::{Seq, Store, Stored};
 
 impl From<NotesStateError> for ActorError {
     fn from(e: NotesStateError) -> ActorError {
@@ -17,25 +18,10 @@ impl From<NotesStateError> for ActorError {
 
 /// The document state after every `NotesEdit` with `seq <= upto` (all when `upto` is `None`). No
 /// snapshot optimisation yet (plan M5 MVP): a notes.md's op volume is far below a task document's.
+/// An op that does not fit is skipped, the same way a peer's import skips it (task
+/// notes-no-base), so a log whose first op had no base still renders.
 pub fn replay(store: &Store, path: &FilePath, upto: Option<Seq>) -> Result<NotesState, ActorError> {
-    let target = match upto {
-        Some(s) => s,
-        None => store.last_seq()?.unwrap_or(Seq(0)),
-    };
-    let mut state = NotesState::empty(path.clone());
-    let mut since = Seq(0);
-    for _page in 0..MAX_REPLAY_PAGES {
-        let ops = store.for_file(path, since)?;
-        let Some(last) = ops.last() else { break };
-        for stored in ops.iter().take_while(|s| s.seq <= target) {
-            state.apply(&stored.op)?;
-        }
-        since = last.seq;
-        if last.seq >= target || ops.len() < MAX_OPS_PER_READ {
-            break;
-        }
-    }
-    Ok(state)
+    replay_leniently(store, path, upto)
 }
 
 /// The document bytes as they were at `at_wall_ms` (inclusive).

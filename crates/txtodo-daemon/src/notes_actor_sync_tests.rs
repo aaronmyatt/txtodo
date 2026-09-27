@@ -1,11 +1,12 @@
 //! `NotesActor` against its op log (task notes-sync, moved out of `notes_actor.rs` for its line
-//! budget): the disk seed at open, and a peer's ops into a fresh actor.
+//! budget): the disk seed at open, a peer's ops into a fresh actor, and (task notes-no-base) a
+//! peer's op that does not fit, which must not block the rest of its batch.
 
 use crate::actor::SharedStore;
 use crate::clock::{Clock, FakeClock};
 use crate::notes_actor::{NotesActor, NotesActorConfig};
 use std::sync::{Arc, Mutex, PoisonError};
-use txtodo_model::{DeviceId, FilePath, Op, Principal, Ulid};
+use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TextEdit, Ulid};
 use txtodo_store::{Seq, Store};
 
 fn setup(dir: &std::path::Path, n: u128) -> (SharedStore, Arc<dyn Clock>, NotesActorConfig) {
@@ -84,5 +85,55 @@ fn a_peers_ops_import_into_a_fresh_actor_and_land_on_disk() {
         ops_for(&store_b, &cfg_b.path).len(),
         2,
         "the batch is in b's log too"
+    );
+}
+
+fn notes_op(n: u128, device: DeviceId, wall_ms: u64, edits: Vec<TextEdit>) -> Op {
+    let path = FilePath::new("tasks/abc/notes.md").unwrap_or_else(|e| panic!("{e}"));
+    Op {
+        id: OpId::new(Ulid::from_u128(n)),
+        hlc: Hlc {
+            wall_ms,
+            counter: 0,
+            device,
+        },
+        principal: Principal::User { device },
+        file: path.clone(),
+        kind: OpKind::NotesEdit { file: path, edits },
+    }
+}
+
+#[test]
+fn a_peers_op_that_does_not_fit_is_skipped_and_the_rest_of_the_batch_lands() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (store, clock, cfg) = setup(dir.path(), 2);
+    let mut b =
+        NotesActor::open(cfg.clone(), Arc::clone(&store), clock).unwrap_or_else(|e| panic!("{e}"));
+    let peer = DeviceId::new(Ulid::from_u128(1));
+    let past_the_end = notes_op(
+        901,
+        peer,
+        500,
+        vec![TextEdit::Insert {
+            at: 8874,
+            text: "x".into(),
+        }],
+    );
+    let fits = notes_op(
+        902,
+        peer,
+        600,
+        vec![TextEdit::Insert {
+            at: 0,
+            text: "hi\n".into(),
+        }],
+    );
+    b.import_ops(vec![past_the_end, fits])
+        .unwrap_or_else(|e| panic!("one bad op must not refuse the batch: {e}"));
+    assert_eq!(b.contents().0, b"hi\n");
+    assert_eq!(
+        ops_for(&store, &cfg.path).len(),
+        2,
+        "the skipped op stays in the log, so heads stay dense"
     );
 }

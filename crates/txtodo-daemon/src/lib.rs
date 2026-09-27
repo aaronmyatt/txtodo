@@ -84,6 +84,7 @@ pub mod notes_history;
 pub mod notes_lookup;
 pub mod notes_mirror;
 pub mod notes_registry;
+mod notes_repair;
 pub mod notes_state;
 mod pairing_adopt;
 mod pairing_group_key;

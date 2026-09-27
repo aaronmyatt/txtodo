@@ -21,6 +21,7 @@ use crate::expected::Hash;
 use crate::handle::{ActorError, Applied};
 use crate::history::MAX_REPLAY_PAGES;
 use crate::notes_mirror::NotesMirror;
+use crate::notes_repair::{apply_leniently, log_skipped};
 use crate::notes_state::NotesState;
 use crate::write::write_atomic;
 use std::sync::PoisonError;
@@ -188,19 +189,32 @@ impl NotesActor {
         })
     }
 
-    /// Applies a peer's `NotesEdit` ops (task notes-sync), in the order they arrived, the way
-    /// `FileActor::on_sync_ops` applies a peer's task ops: the batch commits whole or not at all,
-    /// and the merged text lands in the store, on disk and in the Loro mirror. Ops for another
-    /// path are refused by `NotesState::apply`.
+    /// Applies a peer's `NotesEdit` ops (task notes-sync), in the order they arrived. An op that
+    /// does not fit the text is skipped with a `sync_op_skipped` warn (task notes-no-base,
+    /// `notes_repair.rs`): refusing it made the peer resend it every 10 s, and every later op
+    /// from that device waited behind it. Every op still lands in the log, so heads stay dense
+    /// and the batch is acked; only the applied ones reach the Loro mirror. Only a store or disk
+    /// failure refuses the batch.
     pub fn import_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
         if ops.is_empty() {
             return Ok(());
         }
         let mut next = self.state.clone();
-        for op in &ops {
-            next.apply(op)?;
-        }
-        self.commit(ops, next)
+        let skipped: Vec<OpId> = apply_leniently(&mut next, &ops)
+            .into_iter()
+            .map(|(op, e)| {
+                log_skipped(op, &e);
+                op.id
+            })
+            .collect();
+        let applied: Vec<Op> = ops
+            .iter()
+            .filter(|op| !skipped.contains(&op.id))
+            .cloned()
+            .collect();
+        let range = self.land(&ops, &next)?;
+        self.mirror.flush(&applied).map_err(mirror_err)?;
+        self.persist_mirror(range)
     }
 
     /// The mirror's version, for a peer to export updates since.
