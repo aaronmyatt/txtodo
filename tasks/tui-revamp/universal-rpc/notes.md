@@ -22,7 +22,8 @@
   default workspace, else the root's folder name (a mirror's folder is its workspace id: no human
   name is stored for it).
 - Test: `universal_grpc_tests.rs`.
+- Reopen (2026-09-27): the decide line picked a Reopen mutation, which already existed
+  (`Mutation.Reopen`, a3727a5 + f870c8ab). Nothing new built; its tests pass.
 
 ## Known gaps
-- Reopen waits on its decide line.
 - Desktop still builds Universal client-side (`commands_universal.rs`); switching is an `@parity` line.
