@@ -54,8 +54,17 @@ OTHERPATHRE=""; [ -n "$OTHERCRATES" ] && OTHERPATHRE="^crates/($(echo "$OTHERCRA
 n=$(git diff HEAD --numstat | grep -Ev $'\t('"$EXEMPT"')$' | { [ -n "$OTHERNUMSTATRE" ] && grep -Ev "$OTHERNUMSTATRE" || cat; } | awk '{a+=$1+$2} END{print a+0}')
 u=$(git ls-files --others --exclude-standard | grep -Ev "^($EXEMPT)$" | { [ -n "$OTHERPATHRE" ] && grep -Ev "$OTHERPATHRE" || cat; } | xargs -I{} wc -l "{}" 2>/dev/null | awk '{a+=$1} END{print a+0}')
 [ $((n+u)) -gt "$MAX" ] && fail+="[diff] $((n+u)) changed lines > budget $MAX. Split the change and say so."$'\n'
-[ -z "$fail" ] && { : > .git/setup-gate-strikes; exit 0; }
+# Advisory only, never a failure (tasks/tui-revamp/parity-manifest decide line, 2026-09-25): shown to
+# the human as a systemMessage on a pass, added to the reason on a block. Not in `fail`, so it never
+# counts toward the 3-strike signature. Ref: https://code.claude.com/docs/en/hooks#common-json-fields
+PCMD=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands.parity||""' $B)
+ADVICE=""; [ -n "$PCMD" ] && ADVICE=$(bash -c "$PCMD" 2>&1)
+if [ -z "$fail" ]; then
+  : > .git/setup-gate-strikes
+  [ -n "$ADVICE" ] && node -e 'console.log(JSON.stringify({systemMessage:process.argv[1]}))' "$ADVICE"
+  exit 0
+fi
 sig=${#fail}; prev=$(sed -n 1p .git/setup-gate-strikes 2>/dev/null); cnt=$(sed -n 2p .git/setup-gate-strikes 2>/dev/null)
 [ "$prev" = "$sig" ] && cnt=$((cnt+1)) || cnt=1; printf '%s\n%s\n' "$sig" "$cnt" > .git/setup-gate-strikes
 if [ "$cnt" -gt 3 ]; then echo "gate: still failing after 3 identical rounds; not blocking again. Fix or split by hand." >&2; exit 0; fi
-node -e 'console.log(JSON.stringify({decision:"block",reason:"Gate blocked (round "+process.argv[2]+"/3). A blocked stop means fix or split, never bypass:\n\n"+process.argv[1]}))' "$fail" "$cnt"
+node -e 'console.log(JSON.stringify({decision:"block",reason:"Gate blocked (round "+process.argv[2]+"/3). A blocked stop means fix or split, never bypass:\n\n"+process.argv[1]+(process.argv[3]?"\n"+process.argv[3]:"")}))' "$fail" "$cnt" "$ADVICE"

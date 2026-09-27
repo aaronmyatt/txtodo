@@ -41,4 +41,13 @@
   - Checked it fails: changing `G` to `H` for `list.last` fails on `list.last: keys`.
   - A planned row may carry a deviation ahead of time (`prompt.focus`), so the deviation rule is one way only.
 - `apps/desktop/src/lib/keys.parity.test.ts`: the manifest rules run; the keys.ts half is skipped until keys.ts exists.
-- Open: `check-parity.sh` waits on its decide line (`.claude` is frozen).
+- `.claude/scripts/check-parity.sh` (2026-09-27, after the decide line and with `.claude/UNFROZEN`):
+  warns when a TUI keymap/input/`ui/` file or desktop `keys.ts` differs from HEAD (or is new) and
+  `specs/client-parity.toml` does not. `_tests.rs` files are left out. Always exits 0.
+  - Wired as `commands.parity` in `budgets.json`. `gate.sh` shows it as a `systemMessage` on a pass
+    and adds it to the reason on a block; it is never in the strike signature. The Pi twin
+    (`.pi/extensions/guardrails/index.ts`) notifies at `warning` on a pass, appends on a block.
+  - Checked in a scratch repo: clean, tests-only and manifest-changed are silent; a `ui/` change and
+    a new `keymap/` file warn; the gate passes with the message and blocks with it appended.
+  - Known gap: a `systemMessage` reaches the human, not the agent, so on a pass the agent is not
+    told. The Pi twin was not run (no Pi session here); only its notify type was checked.

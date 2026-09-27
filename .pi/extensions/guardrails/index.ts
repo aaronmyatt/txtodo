@@ -154,14 +154,21 @@ export default function (pi: ExtensionAPI) {
     }
     const changed = diffLines(root, [...(b.generatedPaths ?? GENERATED_FALLBACK), ...b.baselinePaths], others);
     if (changed > b.diffLines) failures.push(`[diff] ${changed} changed lines > budget ${b.diffLines}. Split the change and say so.`);
+    // Advisory only, never a failure (parity-manifest decide line): notified on a pass, appended on a
+    // block, never part of the strike signature. Same as gate.sh's ADVICE.
+    const advice = b.commands.parity ? sh(b.commands.parity, root).out.trim() : "";
     const strikesFile = join(root, ".git", "setup-gate-strikes");
-    if (!failures.length) { if (existsSync(strikesFile)) writeFileSync(strikesFile, ""); return; }
+    if (!failures.length) {
+      if (existsSync(strikesFile)) writeFileSync(strikesFile, "");
+      if (advice && ctx.hasUI) ctx.ui.notify(advice, "warning");
+      return;
+    }
     const reason = failures.join("\n\n");
     const prev = existsSync(strikesFile) ? readFileSync(strikesFile, "utf8").split("\n") : [];
     const strikes = prev[0] === reason.length.toString() ? Number(prev[1] ?? 0) + 1 : 1;
     writeFileSync(strikesFile, `${reason.length}\n${strikes}`);
     if (strikes > STRIKES_MAX) { if (ctx.hasUI) ctx.ui.notify(`Gate still failing after ${STRIKES_MAX} identical rounds; not re-triggering. Fix or split by hand.`, "error"); return; }
-    pi.sendUserMessage(`Gate blocked (round ${strikes}/${STRIKES_MAX}). A blocked stop means fix or split, never bypass:\n\n${reason}`);
+    pi.sendUserMessage(`Gate blocked (round ${strikes}/${STRIKES_MAX}). A blocked stop means fix or split, never bypass:\n\n${reason}${advice ? `\n\n${advice}` : ""}`);
   });
 }
 
