@@ -64,41 +64,7 @@ pub fn run() {
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(setup)
-        .invoke_handler(tauri::generate_handler![
-            commands::daemon_status,
-            commands::retry_connect,
-            commands::workspace_root,
-            commands::skill_hint,
-            commands::set_main_popover_dirty,
-            commands::list_files,
-            commands::get_file,
-            commands::watch,
-            commands::apply,
-            commands::history,
-            commands::resolve,
-            commands::list_conflicts,
-            commands_ui_log::ui_log,
-            commands_version::build_info,
-            commands_window::set_pinned,
-            commands_workspace::list_workspaces,
-            commands_workspace::workspace_layout,
-            commands_workspace::add_workspace,
-            commands_workspace::remove_workspace,
-            commands_workspace::switch_workspace,
-            commands_universal::universal_tasks,
-            commands_notes::get_notes,
-            commands_notes::edit_notes,
-            commands_notes::ref_dir,
-            commands_pairing::pair_offer,
-            commands_pairing::pair_accept,
-            commands_pairing::pair_confirm_sas,
-            commands_pairing::offers_problem,
-            commands_tokens::token_create,
-            commands_tokens::token_list,
-            commands_tokens::token_revoke,
-            commands_activity::op_log,
-            commands_activity::op_log_all,
-        ])
+        .invoke_handler(handlers())
         .build(tauri::generate_context!())
         .map(|app| {
             app.run(|handle, event| {
@@ -121,6 +87,48 @@ pub fn run() {
         eprintln!("desktop: {e}");
         std::process::exit(1);
     }
+}
+
+/// Every command the frontend may call, pulled out of [`run`] to keep it under clippy's
+/// `too_many_lines` budget. `Invoke` defaults to the `Wry` runtime `Builder::default()` uses.
+/// Ref: https://docs.rs/tauri/2/tauri/macro.generate_handler.html
+fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        commands::daemon_status,
+        commands::retry_connect,
+        commands::workspace_root,
+        commands::skill_hint,
+        commands::set_main_popover_dirty,
+        commands::list_files,
+        commands::get_file,
+        commands::watch,
+        commands::apply,
+        commands::history,
+        commands::resolve,
+        commands::list_conflicts,
+        commands_ui_log::ui_log,
+        commands_version::build_info,
+        commands_window::set_pinned,
+        commands_workspace::list_workspaces,
+        commands_workspace::workspace_layout,
+        commands_workspace::add_workspace,
+        commands_workspace::remove_workspace,
+        commands_workspace::rename_workspace,
+        commands_workspace::switch_workspace,
+        commands_universal::universal_tasks,
+        commands_notes::get_notes,
+        commands_notes::edit_notes,
+        commands_notes::ref_dir,
+        commands_pairing::pair_offer,
+        commands_pairing::pair_accept,
+        commands_pairing::pair_confirm_sas,
+        commands_pairing::offers_problem,
+        commands_tokens::token_create,
+        commands_tokens::token_list,
+        commands_tokens::token_revoke,
+        commands_activity::op_log,
+        commands_activity::op_log_all,
+    ]
 }
 
 /// `.setup()` body, pulled out of [`run`] to keep it under clippy's `too_many_lines` budget.

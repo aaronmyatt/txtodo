@@ -98,6 +98,25 @@ async fn remove_workspace_inner(
         .map_err(|e| e.to_string())
 }
 
+/// Sets the name every paired device shows for workspace `id` (task workspace-vanity-name);
+/// empty clears it. Any workspace, the current one included: the name is display only.
+#[tracing::instrument(name = "ipc.rename_workspace", skip_all)]
+#[tauri::command]
+pub async fn rename_workspace(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+    name: String,
+) -> Result<WorkspaceInfoDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    let info = client
+        .workspace_rename(&id, &name)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(WorkspaceInfoDto::from(info))
+}
+
 /// Points every future command at `root` instead — no reconnect, since the global daemon already
 /// serves every registered workspace over the one connection `ensure_connected` maintains.
 #[tracing::instrument(name = "ipc.switch_workspace", skip_all)]

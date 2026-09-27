@@ -20,6 +20,7 @@
 		addWorkspace,
 		listWorkspaces,
 		removeWorkspace,
+		renameWorkspace,
 		switchWorkspace,
 		workspaceRoot,
 		type WorkspaceInfo
@@ -33,6 +34,10 @@
 	let newPath = $state("");
 	let error = $state("");
 	let busy = $state(false);
+	// The workspace whose name is being edited, and the text so far (task workspace-vanity-name).
+	let renaming = $state<string | null>(null);
+	let newName = $state("");
+	let renameRef: HTMLInputElement | undefined = $state();
 
 	let toggleRef: HTMLButtonElement | undefined = $state();
 	let asideRef: HTMLElement | undefined = $state();
@@ -152,6 +157,45 @@
 		}
 	}
 
+	async function startRename(ws: WorkspaceInfo) {
+		error = "";
+		renaming = ws.id;
+		newName = ws.name ?? "";
+		await tick(); // https://svelte.dev/docs/svelte/lifecycle-hooks#tick — wait for the input
+		renameRef?.select();
+	}
+
+	// Esc cancels the rename only. Stopping it here keeps the window's Esc handler from closing
+	// the whole sidebar. Ref: https://developer.mozilla.org/en-US/docs/Web/API/Event/stopPropagation
+	function onRenameKeydown(e: KeyboardEvent) {
+		if (e.key !== "Escape") return;
+		e.stopPropagation();
+		renaming = null;
+	}
+
+	async function rename(e: SubmitEvent, ws: WorkspaceInfo) {
+		e.preventDefault();
+		if (busy) return;
+		const name = newName.trim();
+		// Unchanged: nothing is sent, so a workspace with no txtodo.toml does not get one for
+		// nothing. Empty is sent: it clears the name.
+		if (name === (ws.name ?? "")) {
+			renaming = null;
+			return;
+		}
+		error = "";
+		busy = true;
+		try {
+			await renameWorkspace(ws.id, name);
+			renaming = null;
+			await refresh();
+		} catch (e2) {
+			error = String(e2);
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function remove(ws: WorkspaceInfo) {
 		if (busy) return;
 		error = "";
@@ -216,34 +260,59 @@
 				<ul>
 					{#each workspaces as ws (ws.id)}
 						<li class:current={ws.root === $currentWorkspaceRoot} class:missing={!ws.root_exists}>
-							<button
-								type="button"
-								class="entry"
-								onclick={() => pick(ws.root)}
-								disabled={busy}
-								title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
-							>
-								{#if ws.is_default}<span class="default-label">Default</span>{/if}
-								{#if ws.is_remote}<span class="default-label" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
-								{#if shownName(ws)}<span class="default-label">{shownName(ws)}</span>{/if}
-								{ws.root}
-								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
-								{#if ws.load_state === "queued" || ws.load_state === "loading"}
-									<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
-								{:else if ws.load_state === "failed"}
-									<span class="load-label failed" title={ws.load_error}>failed to open</span>
-								{/if}
-							</button>
-							{#if ws.root !== $currentWorkspaceRoot && !ws.is_default}
+							{#if renaming === ws.id}
+								<form class="rename-form" onsubmit={(e) => rename(e, ws)}>
+									<input
+										type="text"
+										aria-label={`Name for ${ws.root}`}
+										placeholder="empty shows the folder's name"
+										bind:this={renameRef}
+										bind:value={newName}
+										onkeydown={onRenameKeydown}
+										disabled={busy}
+									/>
+									<button type="submit" disabled={busy}>Save</button>
+								</form>
+							{:else}
+								<button
+									type="button"
+									class="entry"
+									onclick={() => pick(ws.root)}
+									disabled={busy}
+									title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
+								>
+									{#if ws.is_default}<span class="default-label">Default</span>{/if}
+									{#if ws.is_remote}<span class="default-label" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
+									{#if shownName(ws)}<span class="default-label">{shownName(ws)}</span>{/if}
+									{ws.root}
+									{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
+									{#if ws.load_state === "queued" || ws.load_state === "loading"}
+										<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
+									{:else if ws.load_state === "failed"}
+										<span class="load-label failed" title={ws.load_error}>failed to open</span>
+									{/if}
+								</button>
 								<button
 									type="button"
 									class="remove"
-									aria-label={`Remove ${ws.root}`}
-									onclick={() => remove(ws)}
+									aria-label={`Rename ${ws.root}`}
+									title="Rename: the name every paired device shows"
+									onclick={() => startRename(ws)}
 									disabled={busy}
 								>
-									&times;
+									&#9998;
 								</button>
+								{#if ws.root !== $currentWorkspaceRoot && !ws.is_default}
+									<button
+										type="button"
+										class="remove"
+										aria-label={`Remove ${ws.root}`}
+										onclick={() => remove(ws)}
+										disabled={busy}
+									>
+										&times;
+									</button>
+								{/if}
 							{/if}
 						</li>
 					{/each}
@@ -405,6 +474,11 @@
 	}
 
 	form input {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.rename-form {
 		flex: 1;
 		min-width: 0;
 	}

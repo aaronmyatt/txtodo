@@ -65,6 +65,15 @@ is display only: ids stay ULIDs, and nothing routes or matches by it.
 - daemon `138e285`: `tests/workspace_name.rs`, two real daemons: B's mirror lists `plants` (A's
   offer); A renames and B lists the new name, with it in B's `txtodo.toml`; B's rename reaches A.
 - cli `ab23c08`, desktop `d869b08`, and the tui commit that carries this file.
+- Rename in the clients (2026-09-27):
+  - tui `c9474a3`: Settings > Workspaces has a "Rename the open one" field row. It starts from the
+    listed name; Enter with it unchanged sends nothing, so no `txtodo.toml` is made for nothing.
+    Empty clears. The header updates at once. Only the open workspace: switch first for another.
+    The manifest row `workspace.rename` is `differs` for the TUI and says so.
+  - desktop: a pencil button on every sidebar row turns it into a name field (Enter saves, Esc
+    cancels without closing the sidebar). Same unchanged-sends-nothing rule. A Tauri command
+    `rename_workspace`, also in the e2e bridge. `run()`'s handler list moved to `handlers()` to stay
+    under the 60-line limit.
 - Still broken / not done:
   - The offered name lives in memory. After a restart, a mirror whose owner never set a name shows
     its id until that owner's next offer (offers go out on every control session).
@@ -76,5 +85,6 @@ is display only: ids stay ULIDs, and nothing routes or matches by it.
     The merge can then hold both sides' layout lines. Same gap as a notes.md made on two devices.
   - `name` in a form the one-line edit does not see (a quoted key, a multi-line string) is refused
     with FAILED_PRECONDITION. Fix it by hand.
-  - Only the CLI sets a name. No rename in the TUI or desktop yet. MCP's workspace list does not
-    carry the name.
+  - The TUI renames only the open workspace. The desktop Playwright test for rename
+    (`e2e/workspace-switcher.spec.ts`) is written but was not run in this session.
+  - MCP's workspace list does not carry the name.

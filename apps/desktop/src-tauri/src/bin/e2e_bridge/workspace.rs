@@ -1,4 +1,4 @@
-//! The four workspace-registry bridge commands (task `desktop-workspace-nav-sidebar`), split out
+//! The workspace-registry bridge commands (task `desktop-workspace-nav-sidebar`), split out
 //! of `e2e_bridge.rs` for its own file-length budget — same pattern `commands_workspace.rs` uses
 //! to split these out of `commands.rs` for the real Tauri command surface. Same RPC bodies,
 //! restated over this bridge's own `DaemonClient`.
@@ -10,8 +10,8 @@ use serde_json::Value;
 
 use super::{ApiError, parse};
 
-/// Dispatches one of `list_workspaces`/`add_workspace`/`remove_workspace`/`switch_workspace` —
-/// `cmd` is always one of those four, checked by the caller's own match arm.
+/// Dispatches one of `WORKSPACE_CMDS` (list, layout, add, remove, rename, switch) —
+/// `cmd` is always one of those, checked by the caller.
 pub(crate) async fn dispatch_workspace_cmd(
     client: &mut DaemonClient,
     cmd: &str,
@@ -44,6 +44,16 @@ pub(crate) async fn dispatch_workspace_cmd(
             }
             let r: Req = parse(args)?;
             Ok(Value::Bool(client.workspace_remove(&r.id).await?))
+        }
+        "rename_workspace" => {
+            #[derive(Deserialize)]
+            struct Req {
+                id: String,
+                name: String,
+            }
+            let r: Req = parse(args)?;
+            let info = client.workspace_rename(&r.id, &r.name).await?;
+            Ok(serde_json::to_value(WorkspaceInfoDto::from(info))?)
         }
         // Sync, no daemon round trip (`DaemonClient::switch_workspace`'s own signature) — just
         // points this connection's `selector` at `root` for every RPC after this one.

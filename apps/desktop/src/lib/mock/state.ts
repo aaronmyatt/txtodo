@@ -122,6 +122,8 @@ export interface StoredWorkspace {
 	has_state: boolean;
 	load_state: "queued" | "loading" | "ready" | "failed" | "unknown";
 	load_error: string;
+	/** The shared name once renamed (task workspace-vanity-name); unset reads as the folder's. */
+	name?: string;
 }
 
 export const workspaces: StoredWorkspace[] = [

@@ -294,6 +294,13 @@ export function removeWorkspace(id: string, root: string): Promise<boolean> {
 	return invoke("remove_workspace", { id, root });
 }
 
+/** Sets the name every paired device shows for workspace `id` (task workspace-vanity-name), kept
+ * in its `txtodo.toml`, which syncs. Empty clears it, and it shows its folder's name again. The
+ * daemon trims it and refuses one over 256 bytes or with control characters. */
+export function renameWorkspace(id: string, name: string): Promise<WorkspaceInfo> {
+	return invoke("rename_workspace", { id, name });
+}
+
 /** Points every future daemon call at `root` instead — no reconnect. Callers must also re-fetch
  * (and re-`watch`) anything already loaded against the old workspace: this only changes the
  * selector attached to calls made *after* it resolves, not any stream already open. */

@@ -65,3 +65,23 @@ test("the tab bar switches between the Workspaces and Activity panels", async ({
 	await expect(workspacesTab).toHaveAttribute("aria-selected", "true");
 	await expect(sidebar).toContainText(daemon.dir);
 });
+
+// Task workspace-vanity-name: the name every paired device shows, set from a workspace's row.
+test("a row's rename sets the shown name; Esc cancels it without closing the sidebar", async ({ page }) => {
+	await page.getByRole("button", { name: "Open workspace navigation" }).click();
+	const sidebar = page.getByRole("menu");
+	const row = sidebar.getByRole("listitem").filter({ hasText: daemon.dir });
+	const input = sidebar.getByRole("textbox", { name: /^Name for / });
+
+	await row.getByRole("button", { name: /^Rename / }).click();
+	await expect(input).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(sidebar).toBeVisible();
+	await expect(input).toBeHidden();
+
+	await row.getByRole("button", { name: /^Rename / }).click();
+	await input.fill("Groceries");
+	await input.press("Enter");
+	await expect(input).toBeHidden();
+	await expect(row).toContainText("Groceries");
+});

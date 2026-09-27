@@ -120,6 +120,14 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			// a fixture for testing that distinction.
 			return (idx >= 0) as T;
 		}
+		case "rename_workspace": {
+			const ws = workspaces.find((w) => w.id === (args?.id as string));
+			if (!ws) throw new Error("no such workspace");
+			// Empty falls back to the folder's name, like the daemon (task workspace-vanity-name).
+			const name = (args?.name as string).trim();
+			ws.name = name || (ws.root.split("/").filter(Boolean).pop() ?? "");
+			return { ...ws } as T;
+		}
 		case "switch_workspace":
 			setCurrentWorkspaceRoot(args?.root as string);
 			return undefined as T;

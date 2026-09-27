@@ -27,6 +27,21 @@ impl DaemonClient {
         Ok(self.inner.workspace_remove(req).await?.into_inner().removed)
     }
 
+    /// Sets the name every paired device shows for workspace `id` (task workspace-vanity-name),
+    /// stored in its `txtodo.toml`, which syncs; empty clears it. The daemon trims it and refuses
+    /// one over 256 bytes or with control characters.
+    pub async fn workspace_rename(
+        &mut self,
+        id: &str,
+        name: &str,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        let req = pb::WorkspaceRenameRequest {
+            workspace_id: id.to_owned(),
+            name: name.to_owned(),
+        };
+        Ok(self.inner.workspace_rename(req).await?.into_inner())
+    }
+
     /// Every registered workspace, oldest first.
     pub async fn workspace_list(&mut self) -> Result<Vec<pb::WorkspaceInfo>, DaemonError> {
         Ok(self
