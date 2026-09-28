@@ -205,6 +205,10 @@ repoint-service:
     ctl stop || true
     ctl install --force
     ctl start
+    # `start` only bootstraps the launchd job; the daemon binds its socket a few seconds later,
+    # and a `status` before that fails on the old socket file. Wait up to 30 s, then report once.
+    # Ref: https://www.manpagez.com/man/1/launchctl/
+    for _ in $(seq 1 30); do ctl status >/dev/null 2>&1 && break; sleep 1; done
     ctl status
 
 # By-hand check (tasks/relay-id-keystore): starts the installed txtodod twice on the macOS login
