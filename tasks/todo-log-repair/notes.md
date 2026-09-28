@@ -39,3 +39,23 @@ them; any that do not fit are skipped there (logged).
   on the same store. Each delete landed twice in the log (device 01A0B561 via MCP, then this
   Mac's reconcile of the "external" write), so a replay has two blank lines per delete. The
   repair here fixes that on the next open. Spawn bug flagged as its own task.
+
+## As built
+
+- 2026-09-28/29: `80c2ce08` drops the 161 stale copies (by task id through MCP `todo_delete`,
+  then the leftover blank lines by hand). `3b0f8099` adds `log_repair.rs` and its tests.
+  `b1f5bda7` is release 0.0.16.
+- `replay_from_empty` reuses `sync_ops::apply_leniently` (now `pub(crate)`), so the repair's base
+  skips exactly what a peer's import skips. It pages through the whole log; a cut-off replay
+  makes no repair.
+- The repair commit keeps the file and projection, does not feed the mirror (snapshot path
+  converges it), and forces a snapshot so `history::replay` starts from the file.
+- Checked on a copy of this Mac's real store (throwaway test, not committed): 103 of 236 lists
+  repaired at open; the root `todo.txt` alone got 23460 ops (its log replays to ~8976 lines, most
+  from ~4300 test-daemon ops written into the real log on 2026-09-23). A fresh peer importing
+  each log device by device then rebuilds 234 of 236; the other Mac as modelled, 235 of 236.
+  Boot cost on that copy: ~6 s for all 236 opens in a debug build, most of it the one-off root
+  repair.
+- Still open: `security-m8-review` and `sync-live-push` differ only by multi-device op order; the
+  origin's own log rebuilds them, so it sees nothing to repair. Not checked yet on the two real
+  Macs.
