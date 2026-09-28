@@ -405,6 +405,10 @@ multiplex every workspace's traffic — not done by this task).
   `notes_repair` (task notes-no-base: a peer's notes op that does not fit is skipped, not
   refused, in import and replay alike; `NotesActor::open` commits one repair `NotesEdit` when the
   log replayed from empty is not the file, e.g. a notes.md adopted with no op before v0.0.8).
+- `log_repair` (task todo-log-repair): the `todo.txt` counterpart. After `recover`,
+  `FileActor::open` replays the log from empty (no snapshot, lenient, like `on_sync_ops`); when
+  that is not the projection it commits `reconcile_replay::replayable_ops(replayed, state)` by
+  task id, file untouched, snapshot forced so `history::replay` starts from the file.
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's

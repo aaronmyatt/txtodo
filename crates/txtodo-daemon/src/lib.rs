@@ -68,6 +68,7 @@ mod layout_rpc;
 pub mod layout_state;
 mod layout_sync;
 mod live_peers;
+mod log_repair;
 mod migrate_grpc;
 pub mod migrate_sidecar;
 pub mod mirror;
@@ -209,6 +210,8 @@ mod layout_file_tests;
 mod layout_refs_tests;
 #[cfg(test)]
 mod layout_reload_tests;
+#[cfg(test)]
+mod log_repair_tests;
 #[cfg(test)]
 mod migrate_sidecar_tests;
 #[cfg(test)]

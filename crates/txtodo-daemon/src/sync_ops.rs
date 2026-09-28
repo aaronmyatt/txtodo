@@ -68,7 +68,10 @@ impl FileActor {
 /// Applies `ops` to `state` one commit (same HLC stamp) at a time; within a commit, an op that
 /// fails is retried after the others, until a round applies nothing new. Returns the ops that
 /// never applied, with why.
-fn apply_leniently<'a>(state: &mut DocState, ops: &'a [Op]) -> Vec<(&'a Op, StateError)> {
+pub(crate) fn apply_leniently<'a>(
+    state: &mut DocState,
+    ops: &'a [Op],
+) -> Vec<(&'a Op, StateError)> {
     let mut skipped = Vec::new();
     for group in ops.chunk_by(|a, b| a.hlc == b.hlc) {
         let mut pending: Vec<&Op> = group.iter().collect();

@@ -115,6 +115,7 @@ impl FileActor {
             writes_total: 0,
         };
         actor.recover()?;
+        actor.repair_log()?;
         debug_assert_eq!(
             actor.hash,
             hash_of(&actor.projection),
