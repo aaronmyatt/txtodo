@@ -1,4 +1,4 @@
-2026-09-28 daemon: at FileActor open, a log that replays to other lines gets repair ops by task id, pinned by a snapshot +m11 @daemon @sync
-2026-09-28 daemon: test a fresh peer gets the full file for a log with a lossy completion and a doubled delete +m11 @daemon @test
 2026-09-28 release: 0.0.16 +m11
 x 2026-09-28 2026-09-28 backlog: drop the 161 stale duplicate lines the 2026-09-25 18:02 burst re-added to 22 lists +m11 @sync — 161 copies deleted by task id, 22 lists; originals kept; 80c2ce08
+x 2026-09-29 2026-09-28 daemon: at FileActor open, a log that replays to other lines gets repair ops by task id, pinned by a snapshot +m11 @daemon @sync — log_repair.rs, FileActor::open after recover; real store copy: 103 of 236 lists repaired, fresh peer rebuilds 234; known gap: order-only divergence not detected; 3b0f8099
+x 2026-09-29 2026-09-28 daemon: test a fresh peer gets the full file for a log with a lossy completion and a doubled delete +m11 @daemon @test — log_repair_tests.rs: adopted bytes, a delete logged twice, no-op log; 3b0f8099
