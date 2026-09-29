@@ -247,3 +247,15 @@ goldens-update:
 goldens-review:
     git status --short -- apps/desktop/e2e/visual
     open apps/desktop/e2e/visual/*-snapshots/*.png
+
+# P2P container lab: tasks/p2p-lab/notes.md. Background by default.
+# Variadic parameters: https://just.systems/man/en/recipe-parameters.html
+lab *args:
+    scripts/lab/lab.sh start {{args}}
+
+# Foreground; LAB_KEEP=1 leaves the containers up to docker exec into.
+lab-fg *args:
+    scripts/lab/lab.sh run {{args}}
+
+lab-status:
+    scripts/lab/lab.sh status
