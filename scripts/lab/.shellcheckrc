@@ -1,0 +1,9 @@
+# shellcheck settings for the lab scripts: `shellcheck scripts/lab/lab.sh scripts/lab/lib/*.sh scripts/lab/scenarios/*.sh`
+# https://github.com/koalaman/shellcheck/wiki/Directive#shellcheckrc-file
+shell=bash
+external-sources=true
+# lab.sh sources every lib/*.sh and the scenario files into one shell: a variable set in one file
+# is read in another, which shellcheck cannot see file by file.
+disable=SC2034
+# Single quotes on purpose: the text is a script that expands inside the container (sh -c, awk).
+disable=SC2016

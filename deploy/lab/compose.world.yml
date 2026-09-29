@@ -1,0 +1,129 @@
+# deploy/lab/compose.world.yml — two homes behind NAT routers, a relay on the lab "internet",
+# and a shared LAN the scenarios can cut. The networks are plain bridges (`internal` drops mDNS
+# and routed packets); every container seals its own egress to 10.231.0.0/16 instead
+# (deploy/lab/entrypoint.sh), so nothing leaves the lab.
+#
+#   home-a 10.231.1.0/24        internet 10.231.0.0/24        home-b 10.231.2.0/24
+#   a1 .10 -- router-a .2 ====== .2 router-a                  b1 .10 -- router-b .2
+#                                .3 router-b ================ .3
+#                                .10 relay (iroh-relay --dev, :3340)
+#   lan 10.231.10.0/24: a1 .11, b1 .12  (scenarios disconnect it for relay-only paths)
+#
+# Static addresses: https://docs.docker.com/reference/compose-file/services/#ipv4_address-ipv6_address
+# sysctls: https://docs.docker.com/reference/compose-file/services/#sysctls
+
+x-device: &device
+  init: true
+  cap_add: [NET_ADMIN]
+  restart: "no"
+
+x-device-env: &device-env
+  LAB_ROLE: device
+  LAB_KEY_PASSPHRASE: ${LAB_KEY_PASSPHRASE}
+  LAB_RELAY: http://10.231.0.10:3340
+  LAB_LAN: ${LAB_LAN}
+  TXTODO_RESYNC_INTERVAL_MS: "1000"
+  TXTODO_NO_AUTOSTART: "1"
+  TXTODO_NO_SERVICE: "1"
+  TXTODO_LOG: ${LAB_LOG}
+  # Logs which path (direct or relay) each relay connection uses: txtodo-sync/src/holepunch.rs.
+  TXTODO_CONN_PATH_POLL: "1"
+  FAKETIME_TIMESTAMP_FILE: /lab/.faketime
+  FAKETIME_CACHE_DURATION: "1"
+  DONT_FAKE_MONOTONIC: "1"
+
+x-router: &router
+  image: ${LAB_IMAGE}
+  init: true
+  cap_add: [NET_ADMIN]
+  restart: "no"
+  sysctls:
+    net.ipv4.ip_forward: "1"
+
+networks:
+  internet:
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.231.0.0/24
+  home-a:
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.231.1.0/24
+  home-b:
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.231.2.0/24
+  lan:
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.231.10.0/24
+
+services:
+  relay:
+    image: ${LAB_IMAGE}
+    init: true
+    cap_add: [NET_ADMIN]
+    restart: "no"
+    environment:
+      LAB_ROLE: relay
+    networks:
+      internet:
+        ipv4_address: 10.231.0.10
+
+  router-a:
+    <<: *router
+    environment:
+      LAB_ROLE: router
+      LAB_WAN_PREFIX: "10.231.0."
+      LAB_NAT: ${LAB_NAT_A}
+    networks:
+      home-a:
+        ipv4_address: 10.231.1.2
+      internet:
+        ipv4_address: 10.231.0.2
+
+  router-b:
+    <<: *router
+    environment:
+      LAB_ROLE: router
+      LAB_WAN_PREFIX: "10.231.0."
+      LAB_NAT: ${LAB_NAT_B}
+    networks:
+      home-b:
+        ipv4_address: 10.231.2.2
+      internet:
+        ipv4_address: 10.231.0.3
+
+  a1:
+    <<: *device
+    image: ${LAB_IMAGE_A1}
+    hostname: a1
+    depends_on: [router-a, relay]
+    environment:
+      <<: *device-env
+      LAB_GATEWAY: 10.231.1.2
+      LD_PRELOAD: ${LAB_PRELOAD_A1}
+    networks:
+      home-a:
+        ipv4_address: 10.231.1.10
+      lan:
+        ipv4_address: 10.231.10.11
+
+  b1:
+    <<: *device
+    image: ${LAB_IMAGE_B1}
+    hostname: b1
+    depends_on: [router-b, relay]
+    environment:
+      <<: *device-env
+      LAB_GATEWAY: 10.231.2.2
+      LD_PRELOAD: ${LAB_PRELOAD_B1}
+    networks:
+      home-b:
+        ipv4_address: 10.231.2.10
+      lan:
+        ipv4_address: 10.231.10.12
