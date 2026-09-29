@@ -1,3 +1,3 @@
-2026-09-29 mcp: txtodo-mcp --dir on a folder the live global daemon owns serves it through that daemon +m11 @mcp
-2026-09-29 daemon: txtodod --dir refuses a root that overlaps one in the global registry +m11 @daemon
-2026-09-29 test: txtodo-mcp --dir on a registered root, autostart off, answers through the global socket and leaves no .txtodo/txtodod.sock +m11 @mcp @test
+x 2026-09-29 2026-09-29 mcp: txtodo-mcp --dir on a folder the live global daemon owns serves it through that daemon +m11 @mcp — main.rs owning_root/unless_owned: probes a live global daemon only, never starts or upgrades one; 8c637013
+x 2026-09-29 2026-09-29 daemon: txtodod --dir refuses a root that overlaps one in the global registry +m11 @daemon — dir_bridge_guard.rs, checked before the pid lock; fails open on an unreadable registry; 2ac9c1ca
+x 2026-09-29 2026-09-29 test: txtodo-mcp --dir on a registered root, autostart off, answers through the global socket and leaves no .txtodo/txtodod.sock +m11 @mcp @test — txtodo-mcp tests/dir_owned_by_global.rs (#[ignore], real binaries) + txtodo-daemon tests/dir_bridge_refused.rs; both fail without their fix; 8c637013, 2ac9c1ca
