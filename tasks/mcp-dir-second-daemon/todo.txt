@@ -1,0 +1,3 @@
+2026-09-29 mcp: txtodo-mcp --dir on a folder the live global daemon owns serves it through that daemon +m11 @mcp
+2026-09-29 daemon: txtodod --dir refuses a root that overlaps one in the global registry +m11 @daemon
+2026-09-29 test: txtodo-mcp --dir on a registered root, autostart off, answers through the global socket and leaves no .txtodo/txtodod.sock +m11 @mcp @test
