@@ -1,3 +1,3 @@
-2026-09-29 just: install-daemon installs txtodo-mcp beside txtodo +m11 @mcp
-2026-09-29 mcp: warn once per daemon version when txtodod is newer than txtodo-mcp, at start and every 5 min +m11 @mcp
 2026-09-29 release: 0.0.17 +m11
+x 2026-09-29 2026-09-29 just: install-daemon installs txtodo-mcp beside txtodo +m11 @mcp — 4a9c03aa
+x 2026-09-29 2026-09-29 mcp: warn once per daemon version when txtodod is newer than txtodo-mcp, at start and every 5 min +m11 @mcp — version_drift.rs + main.rs watch_daemon_version; the warn path itself is unit-tested only (no newer daemon in a test); 10ea485a
