@@ -32,6 +32,9 @@ pub mod device_lan;
 pub mod device_relay;
 mod device_remove;
 mod devices_grpc;
+pub mod dir_bridge_guard;
+#[cfg(test)]
+mod dir_bridge_guard_tests;
 pub mod expected;
 mod external;
 pub mod fastid;

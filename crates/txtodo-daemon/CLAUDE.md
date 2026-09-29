@@ -61,7 +61,9 @@ multiplex every workspace's traffic — not done by this task).
   changes): binds the *pre-existing* per-workspace locations instead — pid lock at
   `.txtodo/txtodod.pid`, socket at `.txtodo/txtodod.sock`, logs under `.txtodo/logs/
   txtodod.log.YYYY-MM-DD` (7 kept, `TXTODO_LOG` filter) — and auto-registers/opens that one
-  directory (plus, best-effort, anything else already in whatever registry is in effect). Either
+  directory (plus, best-effort, anything else already in whatever registry is in effect). It
+  refuses to start, before its pid lock, on a root that is, holds or sits inside an active row of
+  the global registry (`dir_bridge_guard.rs`, task mcp-dir-second-daemon). Either
   way, every RPC's wire `WorkspaceSelector` (`workspace_id` or `path`) picks which open workspace
   it targets; omitted resolves to "the sole open workspace" (ambiguous, refused with a clear error,
   when 0 or 2+ are open) — see `workspace_catalog.rs::resolve`. SIGTERM/SIGINT drain and remove the

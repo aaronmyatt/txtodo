@@ -244,6 +244,20 @@ fn start_dir_bridge(
     Ok(())
 }
 
+/// Refuses a `--dir` bridge on a root the global daemon holds (`dir_bridge_guard.rs`).
+fn refuse_global_owned(env: &RegistryEnv, dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let Some((id, root)) = txtodo_daemon::dir_bridge_guard::global_owner(env, dir) else {
+        return Ok(());
+    };
+    Err(format!(
+        "{} overlaps workspace {id} ({}) of this device's global daemon; use that daemon (omit \
+         --dir), not a --dir bridge on the same files",
+        dir.display(),
+        root.display()
+    )
+    .into())
+}
+
 /// Where offered workspaces are mirrored (task remote-workspace-mirror): `remote/` beside the
 /// default, or under the bridge's own state dir with `--dir`.
 fn mirror_dir(args: &Args, env: &RegistryEnv, state_dir: &Path) -> PathBuf {
@@ -325,6 +339,9 @@ fn lock_and_start_logging(
 /// (`deploy/launchd/*.plist`, `deploy/systemd/txtodod.service`), no detection needed here.
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let env = RegistryEnv::from_process()?;
+    if let Some(dir) = &args.dir {
+        refuse_global_owned(&env, dir)?;
+    }
     let registry_path = workspace_registry_paths::registry_db_path_for(&env, args.dir.as_deref());
     let state_dir = resolve_state_dir(&args, &env)?;
     let socket = workspace_registry_paths::global_socket_path(&env, args.dir.as_deref());
