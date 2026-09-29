@@ -1,0 +1,7 @@
+2026-09-30 DocState keeps each entry's placing HLC; peer placement skips later-stamped entries (RGA) +m11 @daemon @sync
+2026-09-30 Same-file Move: the newest move of a task wins +m11 @daemon @sync
+2026-09-30 Commit merges a peer batch's newest stamp into the actor's clock +m11 @daemon @sync
+2026-09-30 Scratch replays place as newest; the commit re-stamps them with its HLC +m11 @daemon
+2026-09-30 Recover stamps at open from repair_log's replay +m11 @daemon
+2026-09-30 Tests: permutation convergence, blanks, moves, clock merge, restart +m11 @daemon @sync
+2026-09-30 Re-run the lab's lan-converge and chaos to confirm order converges +m11 @sync
