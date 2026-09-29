@@ -114,7 +114,10 @@ on_network() {
 heal_all() {
   local kind dev net ip killed=" "
   touch "$REPORT_DIR/state/faults"
-  while read -r kind dev net ip; do
+  # The list is read on fd 3: any command in the loop that reads stdin (a `docker exec -i` did)
+  # would otherwise eat the rest of it and end the loop after the first fault.
+  # https://www.gnu.org/software/bash/manual/bash.html#Redirections
+  while read -r kind dev net ip <&3; do
     case "$kind" in
       down) killed+="$dev " ;;
       paused) if is_paused "$dev"; then thaw "$dev"; fi ;;
@@ -122,7 +125,7 @@ heal_all() {
       clock) set_clock "$dev" +0 ;;
       net) if ! on_network "$dev" "$net"; then plug "$dev" "$net" "$ip"; fi ;;
     esac
-  done <"$REPORT_DIR/state/faults"
+  done 3<"$REPORT_DIR/state/faults"
   for dev in "$@"; do
     if is_paused "$dev"; then
       thaw "$dev"

@@ -47,14 +47,20 @@ diff_devices() {
 }
 
 # expect_converged <label> <secs> <device...>: waits for convergence; on timeout records a
-# failure and the diffs, and returns 0 so the scenario goes on.
+# failure and the diffs, and returns 0 so the scenario goes on. Once one wait in an attempt has
+# timed out the verdict is already "fail", so later waits are capped at 60 s: the scenario still
+# runs every step and collects everything, without sitting out each full timeout again.
 expect_converged() {
   local label=$1 secs=$2 start=$SECONDS
   shift 2
+  if [ -f "$REPORT_DIR/state/diverged" ] && [ "$secs" -gt 60 ]; then
+    secs=60
+  fi
   if wait_for "$secs" converged "$@"; then
     log "check: converged ($label) in $((SECONDS - start))s"
     return 0
   fi
+  touch "$REPORT_DIR/state/diverged"
   diff_devices "$label" "$@"
   fail "converge: $label: $* still differ after ${secs}s (diff-${label// /-}.txt)"
 }

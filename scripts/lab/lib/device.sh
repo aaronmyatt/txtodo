@@ -16,7 +16,7 @@ cname() {
 dx() {
   local dev=$1
   shift
-  docker exec -i "$(cname "$dev")" "$@"
+  docker exec "$(cname "$dev")" "$@"
 }
 
 # tx <device> <txtodo args...>: the device's own CLI against its own daemon, bounded so a hung
@@ -24,7 +24,7 @@ dx() {
 tx() {
   local dev=$1
   shift
-  docker exec -i "$(cname "$dev")" timeout "${TX_TIMEOUT:-60}" txtodo "$@" 2>/dev/null
+  docker exec "$(cname "$dev")" timeout "${TX_TIMEOUT:-60}" txtodo "$@" 2>/dev/null
 }
 
 is_running() {

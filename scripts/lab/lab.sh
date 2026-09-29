@@ -54,6 +54,7 @@ case "${1:-help}" in
   list) lab_list ;;
   clean) lab_clean ;;
   *)
-    sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    # The header comment above, up to the `set` line.
+    sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed -e '$d' -e 's/^# \{0,1\}//'
     ;;
 esac

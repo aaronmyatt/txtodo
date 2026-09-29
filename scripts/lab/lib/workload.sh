@@ -95,7 +95,7 @@ exit 0
 editor_save() {
   local dev=$1
   shift
-  docker exec -i -e WS="$WS" "$(cname "$dev")" sh -c "$EDITOR_SAVE_SH" editor "$@" 2>&1
+  docker exec -e WS="$WS" "$(cname "$dev")" sh -c "$EDITOR_SAVE_SH" editor "$@" 2>&1
 }
 
 # One random edit on one device. Needs RANDOM already seeded by the caller.
