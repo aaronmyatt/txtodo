@@ -161,18 +161,29 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
-    ensure_daemon_for_target(&target, &socket).await;
-    let backend = Arc::new(GrpcMcpBackend::connect_unix(&socket, agent).await?);
-    if matches!(target, Target::Auto) {
-        aim_at_the_current_workspace(&backend).await;
-    }
-    tokio::spawn(watch_daemon_version(Arc::clone(&backend)));
+    let backend = connect(&target, &socket, agent).await?;
     let server = McpServer::new(backend);
     match args.mode {
         Mode::Stdio => transport::serve_stdio(server).await?,
         Mode::Http => serve_http(server).await?,
     }
     Ok(())
+}
+
+/// Starts the daemon if needed, connects, aims an `Auto` server at its folder, and starts the
+/// version check. Split out of `run` for the complexity budget.
+async fn connect(
+    target: &Target,
+    socket: &Path,
+    agent: Option<(String, String)>,
+) -> Result<Arc<GrpcMcpBackend>, Box<dyn std::error::Error>> {
+    ensure_daemon_for_target(target, socket).await;
+    let backend = Arc::new(GrpcMcpBackend::connect_unix(socket, agent).await?);
+    if matches!(target, Target::Auto) {
+        aim_at_the_current_workspace(&backend).await;
+    }
+    tokio::spawn(watch_daemon_version(Arc::clone(&backend)));
+    Ok(backend)
 }
 
 /// How often a running server re-asks the daemon's version (task mcp-version-drift).
