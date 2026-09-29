@@ -184,14 +184,16 @@ install-desktop: stage-desktop-sidecar
     rm -rf "$built"
     echo "installed /Applications/txtodo.app (removed $built)"
 
-# Install `txtodo` + `txtodod` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that survives
-# `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit ended up
-# pointing at (a deleted or rebuilt-under-it binary). Both, not just the daemon: `txtodo daemon
-# install` records the `txtodod` sitting *beside* the `txtodo` that runs it.
+# Install `txtodo` + `txtodod` + `txtodo-mcp` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that
+# survives `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit
+# ended up pointing at (a deleted or rebuilt-under-it binary). Not just the daemon: `txtodo daemon
+# install` records the `txtodod` sitting *beside* the `txtodo` that runs it, and `txtodo mcp` execs
+# the `txtodo-mcp` beside it, which otherwise stays on whatever build first put it there.
 # https://doc.rust-lang.org/cargo/commands/cargo-install.html
 install-daemon: && repoint-service
     cargo install --path crates/txtodo-daemon --locked --force --target-dir target/install
     cargo install --path crates/txtodo-cli --locked --force --target-dir target/install
+    cargo install --path crates/txtodo-mcp --locked --force --target-dir target/install
 
 # Point the real launchd/systemd unit at the `install-daemon` copy. Restarts the daemon once
 # (bootout, rewrite unit, bootstrap+kickstart). `env -u`: run without TXTODO_NO_SERVICE, which
