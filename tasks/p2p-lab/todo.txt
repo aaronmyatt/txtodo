@@ -1,5 +1,3 @@
-2026-09-29 lab scenario lan-to-relay: paired on the LAN, the LAN drops, sync goes on over the relay +m11 @lab @sync
-2026-09-29 lab scenario nat-holepunch: easy NATs, record whether a direct path forms +m11 @lab @sync
 2026-09-29 Add the lab recipes to the justfile (frozen for agents) +m11 @lab @human
 x 2026-09-30 2026-09-29 lab image and the lan/world compose topologies +m11 @lab — one image plays device, router and relay; plain bridges with per-container egress sealing, since internal networks drop mDNS and routed traffic
 x 2026-09-30 2026-09-29 lab runner: background start, lock, Docker autostart, build only when the source changed, teardown +m11 @lab — start returns at once; lock, Docker Desktop start, hash-tagged image, one compose project per scenario, torn down on exit and on SIGTERM
@@ -12,3 +10,5 @@ x 2026-09-30 2026-09-29 lab scenario sleep: a paused device misses resends, then
 x 2026-09-30 2026-09-29 lab scenario clock-skew: a device behind, a little ahead, and past the 5 min limit then fixed +m11 @lab @sync — runs, libfaketime moves b1's clock at runtime; fails today on seed 11: no convergence at any skew, and doctor never flags b1 ahead since peer clock samples are never stored
 x 2026-09-30 2026-09-29 lab scenario chaos: three devices under a seeded fault loop +m11 @lab @sync — runs: three-way pairing, pause, kill, netem and partition rounds; fails today on seed 11 before any fault, three devices do not converge; sync_op_skipped x223 on a1
 x 2026-09-30 2026-09-29 lab scenario old-new: the last differing release paired with this tree +m11 @lab @sync — runs: builds v0.0.17 from git archive in under a minute, pairs it with this tree and converges at first; fails today after the partition, like lan-converge
+x 2026-09-30 2026-09-29 lab scenario lan-to-relay: paired on the LAN, the LAN drops, sync goes on over the relay +m11 @lab @sync — runs; the real run filed (A) lab: lan-to-relay into the root todo.txt through the daemon; fails today, diverges on the LAN before any fault and the joiner never dials the relay
+x 2026-09-30 2026-09-29 lab scenario nat-holepunch: easy NATs, record whether a direct path forms +m11 @lab @sync — runs through two easy NATs; fails today, no relay connection at all (joiner group bug); a direct path cannot show until the lab relay has QUIC address discovery

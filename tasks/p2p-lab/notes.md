@@ -54,20 +54,44 @@ device with `docker exec`.
   after ..."): bad-link lost 11 of 21 tokens on a1.
 - **No convergence after a partition.** b1 leaves the LAN and returns on a new address; the two
   had not converged 2 min later, nor 5 min later.
-- **Relay pairing leaves the joiner's relay endpoint on its old group.** b1's doctor: "connect
-  failed: refusing to dial group ...: not this endpoint's group". Sync over the relay starts only
-  after b1 restarts.
+- **Pairing leaves the joiner's relay endpoint on its old group.** b1's doctor: "connect
+  failed: refusing to dial group ...: not this endpoint's group". Seen after relay pairing
+  (relay-only, nat-holepunch) and after LAN pairing (lan-to-relay). Sync over the relay starts
+  only after b1 restarts.
 - **`--no-lan` turns off the relay auto-dial**: it runs inside the LAN resync tick
   (crates/txtodo-daemon/src/relay_autodial.rs). relay-only keeps LAN on and pulls the cable.
 - **Peer clock samples are never stored.** In the daemon `last_known_wall_ms` is only ever set
   to `None` (pairing_adopt.rs, pairing_register.rs, relay_autodial.rs); the Hello's skew is only
   logged at debug (`lan_link_hello_accepted`). So doctor's `peer` rows always say "no clock
   sample yet", and clock-skew's check that a1 flags b1 7 min ahead fails.
+- **`txtodo daemon status` registers the cwd.** Run from this session's worktree
+  (`.claude/worktrees/p2p-lab`) at 01:43:53, it registered the worktree as workspace
+  01M3Q484EYNQPE47Y0YX02HHDX. The daemon then stamped `id:` into all 241 lists there. Undone:
+  `txtodo workspace remove`, `git checkout` of the lists, the worktree's `.txtodo/` removed. If
+  the other Mac mirrored it meanwhile, it shows up there as a `p2p-lab` workspace.
 - **`txtodo move` fails through the daemon**: it runs on a temp copy that holds only todo.txt
   ("Destination file /tmp/.tmpXXXX/lab-other.txt does not exist"). Left out of the workload.
+
+## As built (2026-09-30)
+
+- `deploy/lab/`: `Dockerfile` (+ its allow-list `.dockerignore`), `entrypoint.sh` (device,
+  router or relay by `LAB_ROLE`), `compose.lan.yml`, `compose.world.yml`, `iroh-relay.toml`,
+  `failure-task.txt.tmpl`.
+- `scripts/lab/lab.sh` plus `lib/` (common, images, device, workload, faults, checks, report,
+  run) and one file per scenario in `scenarios/`. `shellcheck` clean via `scripts/lab/.shellcheckrc`.
+- Image: a release build in the container, 51 s with a warm cache; the old-new image (v0.0.17
+  today) builds from `git archive` in under a minute.
+- Every scenario ran end to end on this Mac (Docker Desktop, arm64). Every one fails on 0.0.19
+  code, on the product bugs under Findings, not on the lab. A failing scenario takes 6-16 min.
+- Lab bugs found on the way and fixed: mDNS and NAT on `internal` networks; reading the pairing
+  code half-written; heal_all undoing only the first fault (a `docker exec -i` ate its stdin).
+- The workload leaves out `txtodo move` (see Findings). Tokens appended onto existing lines
+  (append, replace, editor edit) are not checked for loss: a concurrent delete may take them.
 
 ## Known gaps
 
 - Linux only: no Keychain, launchd, FSEvents or macOS mDNS. The two-Mac check still matters.
+- The dev relay has no QUIC address discovery (it needs TLS), so nat-holepunch cannot see a
+  direct path form yet; it only notes the path.
 - Not deterministic: a seed fixes the workload's choices, not the timing.
 - `justfile` is frozen for agents; the `lab` recipes are for a human to add.
