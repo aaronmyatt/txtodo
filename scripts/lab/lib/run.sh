@@ -105,7 +105,7 @@ run_scenario() {
   if [ "$VERDICT" = broke ]; then
     reason="the lab could not run it, see steps.log"
   fi
-  if [ "$VERDICT" = fail ]; then
+  if [ "$VERDICT" = fail ] && [ "${LAB_RERUN:-1}" != 0 ]; then
     attempt "$scenario" 2
     if [ "$VERDICT" = pass ]; then
       final=flaky

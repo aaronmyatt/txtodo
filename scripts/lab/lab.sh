@@ -15,6 +15,7 @@
 # Environment:
 #   LAB_KEEP=1            leave the containers up after a foreground run (to docker exec in)
 #   LAB_NO_TASK=1         never file a todo.txt line, only log it
+#   LAB_RERUN=0           no second attempt on a failure (it is then filed as "fails")
 #   LAB_BACKLOG_DIR=DIR   file failures into DIR/todo.txt (default: the main checkout)
 #   LAB_TASK_NO_DAEMON=1  file with `txtodo --no-daemon` (for a scratch backlog)
 #   LAB_OLD_REF=vX.Y.Z    the release old-new pairs with (default: newest with other crates/)

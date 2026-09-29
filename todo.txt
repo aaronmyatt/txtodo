@@ -325,3 +325,6 @@ x 2026-09-29 2026-09-29 desktop: a synced edit can show "Position N is out of ra
 x 2026-09-29 2026-09-29 daemon: an unanswered keychain prompt restarts txtodod every 20 s, a new modal each time +m11 @daemon ref:keychain-prompt-loop — one prompt per key, startup waits instead of exiting, every local install signs with the same cert; shipped in 0.0.18; see tasks/keychain-prompt-loop/notes.md pri:A
 (A) 2026-09-29 lab: container P2P sync lab, runs in the background, files failures here +m11 @sync @lab ref:p2p-lab @doing by:claude
 (A) 2026-09-30 daemon: an editor save is lost when a CLI or sync write lands a moment after it +m11 @daemon @sync ref:editor-save-lost
+(A) 2026-09-30 sync: two devices adding at once get the lines in a different order each, so their files never match +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
+(A) 2026-09-30 daemon: after pairing over the relay the joiner's relay endpoint keeps its old group and will not dial until restarted +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
+(C) 2026-09-30 daemon: with --no-lan the relay auto-dial never runs, it lives in the LAN resync tick +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
