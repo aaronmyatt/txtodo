@@ -59,6 +59,10 @@ device with `docker exec`.
   after b1 restarts.
 - **`--no-lan` turns off the relay auto-dial**: it runs inside the LAN resync tick
   (crates/txtodo-daemon/src/relay_autodial.rs). relay-only keeps LAN on and pulls the cable.
+- **Peer clock samples are never stored.** In the daemon `last_known_wall_ms` is only ever set
+  to `None` (pairing_adopt.rs, pairing_register.rs, relay_autodial.rs); the Hello's skew is only
+  logged at debug (`lan_link_hello_accepted`). So doctor's `peer` rows always say "no clock
+  sample yet", and clock-skew's check that a1 flags b1 7 min ahead fails.
 - **`txtodo move` fails through the daemon**: it runs on a temp copy that holds only todo.txt
   ("Destination file /tmp/.tmpXXXX/lab-other.txt does not exist"). Left out of the workload.
 

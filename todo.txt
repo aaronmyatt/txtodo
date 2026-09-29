@@ -328,3 +328,4 @@ x 2026-09-29 2026-09-29 daemon: an unanswered keychain prompt restarts txtodod e
 (A) 2026-09-30 sync: two devices adding at once get the lines in a different order each, so their files never match +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
 (A) 2026-09-30 daemon: after pairing over the relay the joiner's relay endpoint keeps its old group and will not dial until restarted +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
 (C) 2026-09-30 daemon: with --no-lan the relay auto-dial never runs, it lives in the LAN resync tick +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
+(B) 2026-09-30 daemon: peer clock samples are never stored, so doctor's peer clock rows always say no sample and never flag a peer ahead +m11 @sync @daemon — found by the p2p lab clock-skew scenario, see tasks/p2p-lab/notes.md Findings
