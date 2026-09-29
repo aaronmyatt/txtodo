@@ -126,6 +126,12 @@ async fn dir_on_a_root_the_global_daemon_owns_is_served_through_it() {
     let backend = GrpcMcpBackend::connect_unix(&socket, None)
         .await
         .expect("connect to the global socket");
+    // Task mcp-version-drift: the version check's call answers, and a same-version server stays
+    // quiet about it (asserted on stderr below).
+    assert_eq!(
+        backend.daemon_version().await.expect("daemon version"),
+        env!("CARGO_PKG_VERSION")
+    );
     backend
         .add(
             "written through the global daemon".to_owned(),
@@ -144,6 +150,10 @@ async fn dir_on_a_root_the_global_daemon_owns_is_served_through_it() {
         assert!(
             stderr.contains("serving it there"),
             "stderr says where it is served: {stderr}"
+        );
+        assert!(
+            !stderr.contains("older than"),
+            "no drift warning against a same-version daemon: {stderr}"
         );
         assert!(
             !dir.join(".txtodo/txtodod.sock").exists(),

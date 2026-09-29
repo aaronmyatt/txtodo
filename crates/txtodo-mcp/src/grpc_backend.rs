@@ -99,6 +99,17 @@ impl GrpcMcpBackend {
         }
     }
 
+    /// The version of the daemon behind this connection, from `Health` (task mcp-version-drift).
+    /// Selector-less: `Health` answers device-level on the global socket.
+    pub async fn daemon_version(&self) -> Result<String, McpError> {
+        let rep = self
+            .client()
+            .health(pb::HealthRequest { workspace: None })
+            .await
+            .map_err(crate::grpc_write::status)?;
+        Ok(rep.into_inner().version)
+    }
+
     fn client(&self) -> TxtodoClient<Channel> {
         self.ctx.client.clone()
     }

@@ -28,6 +28,7 @@ mod tools;
 mod tools_read;
 mod tools_write;
 pub mod transport;
+pub mod version_drift;
 
 #[cfg(test)]
 mod grpc_write_tests;

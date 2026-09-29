@@ -162,16 +162,43 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
     ensure_daemon_for_target(&target, &socket).await;
-    let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
+    let backend = Arc::new(GrpcMcpBackend::connect_unix(&socket, agent).await?);
     if matches!(target, Target::Auto) {
         aim_at_the_current_workspace(&backend).await;
     }
-    let server = McpServer::new(Arc::new(backend));
+    tokio::spawn(watch_daemon_version(Arc::clone(&backend)));
+    let server = McpServer::new(backend);
     match args.mode {
         Mode::Stdio => transport::serve_stdio(server).await?,
         Mode::Http => serve_http(server).await?,
     }
     Ok(())
+}
+
+/// How often a running server re-asks the daemon's version (task mcp-version-drift).
+const VERSION_CHECK_EVERY: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Asks the daemon's version now and every [`VERSION_CHECK_EVERY`], and warns once per daemon
+/// version that is newer than this server (`version_drift::warning`): on stderr, which the MCP
+/// client keeps as this server's log, and in the log file. Runs until the process ends; a failed
+/// check (daemon restarting) is skipped until the next tick.
+/// `tokio::time::interval`'s first tick is immediate: <https://docs.rs/tokio/latest/tokio/time/fn.interval.html>
+#[allow(clippy::print_stderr)]
+async fn watch_daemon_version(backend: Arc<GrpcMcpBackend>) {
+    let own = env!("CARGO_PKG_VERSION");
+    let mut warned: Option<String> = None;
+    let mut tick = tokio::time::interval(VERSION_CHECK_EVERY);
+    loop {
+        tick.tick().await;
+        let Ok(daemon) = backend.daemon_version().await else {
+            continue;
+        };
+        if let Some(text) = txtodo_mcp::version_drift::warning(own, &daemon, warned.as_deref()) {
+            tracing::warn!(own, daemon = %daemon, "mcp_older_than_daemon");
+            eprintln!("txtodo-mcp: {text}");
+            warned = Some(daemon);
+        }
+    }
 }
 
 /// `--dir`: the pre-existing per-workspace bridge socket/logs, unchanged. `--global`: the
