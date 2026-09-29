@@ -12,8 +12,8 @@
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
 	import { onDestroy, onMount, untrack } from "svelte";
-	import { Compartment, EditorState, RangeSetBuilder, type Extension } from "@codemirror/state";
-	import { Decoration, EditorView, keymap } from "@codemirror/view";
+	import { Compartment, EditorState } from "@codemirror/state";
+	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { get } from "svelte/store";
@@ -26,6 +26,7 @@
 		longLineHint,
 		mainViewBaseTheme
 	} from "$lib/todotxt/decorations";
+	import { hoverLine, setHoverLine } from "$lib/todotxt/hoverLine";
 	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
@@ -94,11 +95,10 @@
 	const hasPendingReview = $derived(flagsForPath($pendingConflicts, path).length > 0);
 
 	// Per-instance reconfigurable slots (never shared across FileView instances — see
-	// $lib/todotxt/decorations.ts) so refreshing ref: progress or the hovered line is a cheap
-	// dispatch, not a full document rebuild.
+	// $lib/todotxt/decorations.ts) so refreshing ref: progress is a cheap dispatch, not a full
+	// document rebuild. The hovered line is a state field instead (`$lib/todotxt/hoverLine.ts`).
 	const lineDecoCompartment = new Compartment();
 	const editableCompartment = new Compartment();
-	const hoverLineCompartment = new Compartment();
 
 	function setDirty(next: boolean) {
 		if (next === dirty) return;
@@ -141,7 +141,7 @@
 			addLinePlaceholder,
 			longLineHint, // root todo 9
 			lineDecoCompartment.of(lineDecorations(path, filesByPath)),
-			hoverLineCompartment.of([]),
+			hoverLine,
 			EditorView.domEventHandlers({
 				mousemove: handleMouseMove,
 				mouseleave: (_event, editorView) => {
@@ -185,30 +185,19 @@
 		return true;
 	}
 
-	// Only the implementation detail of "which line is the hover decoration currently on" — never
-	// read by the template, so a plain closure variable rather than `$state`.
-	let hoveredLineNumber: number | null = null;
-
-	function hoverDecorationFor(editorView: EditorView, lineNumber: number | null): Extension {
-		if (lineNumber == null || lineNumber < 1 || lineNumber > editorView.state.doc.lines) return [];
-		const line = editorView.state.doc.line(lineNumber);
-		const builder = new RangeSetBuilder<Decoration>();
-		builder.add(line.from, line.from, Decoration.line({ class: "cm-todotxt-hover" }));
-		return EditorView.decorations.of(builder.finish());
-	}
-
+	// The hovered line lives in editor state (`hoverLine`), which rebuilds its decoration from the
+	// current document: a synced edit that shrinks the file under a still mouse cannot leave it
+	// out of range (root todo "the hover highlight is never remapped").
 	function clearHover(editorView: EditorView) {
-		if (hoveredLineNumber === null) return;
-		hoveredLineNumber = null;
-		editorView.dispatch({ effects: hoverLineCompartment.reconfigure([]) });
+		if (editorView.state.field(hoverLine) === null) return;
+		editorView.dispatch({ effects: setHoverLine.of(null) });
 	}
 
 	function handleMouseMove(event: MouseEvent, editorView: EditorView): boolean {
 		const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
 		const lineNumber = pos == null ? null : editorView.state.doc.lineAt(pos).number;
-		if (lineNumber === hoveredLineNumber) return false;
-		hoveredLineNumber = lineNumber;
-		editorView.dispatch({ effects: hoverLineCompartment.reconfigure(hoverDecorationFor(editorView, lineNumber)) });
+		if (lineNumber === editorView.state.field(hoverLine)) return false;
+		editorView.dispatch({ effects: setHoverLine.of(lineNumber) });
 		return false;
 	}
 
