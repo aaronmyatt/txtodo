@@ -18,9 +18,15 @@ only how to get unstuck.
   `device/group-epoch-0` (next to `device/device-static`, `device/device-signing`,
   `device/relay-identity`).
 - macOS ties "Always Allow" to the binary's code signature. An ad-hoc signed build gets a new
-  signature on every rebuild, so the keychain asks again.
-- Under launchd (`com.txtodo.txtodod`) nobody sees that prompt. Each read waits 20 s, fails, and
-  the offer exchange stops. It retries every 15 s and fails the same way until someone answers.
+  signature on every rebuild, so the keychain asks again. Every local install (`just install`,
+  `just install-daemon`, `just install-desktop`) and every release signs with the same
+  "txtodo Self-Signed" cert and identifiers, so one "Always Allow" holds across rebuilds; mixing in
+  an unsigned build (`cargo install`, `cargo run`) asks again.
+- Since 0.0.18 each key is asked once per daemon process: a read nobody answers within 20 s
+  stays pending, and a retry waits on it instead of opening a second prompt. At startup the daemon
+  waits on that one prompt (log line `keychain_prompt_pending` every 20 s) instead of exiting.
+  Before 0.0.18 it exited, launchd restarted it, and each new process asked again: a new modal
+  every 20 s.
 
 ## Fix: answer the prompt once
 

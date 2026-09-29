@@ -162,7 +162,16 @@ stage-desktop-sidecar:
     triple=$(rustc --print host-tuple)
     ext=""; case "$triple" in *windows*) ext=".exe" ;; esac
     mkdir -p apps/desktop/src-tauri/binaries
-    cp "target/release/txtodod${ext}" "apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
+    # macOS: sign a copy named txtodod before the rename, so it gets com.txtodo.txtodod and the
+    # same cert as every other install: the Keychain's "Always Allow" then covers it too (task
+    # keychain-prompt-loop). Never sign target/release itself: other things point into it.
+    src="target/release/txtodod${ext}"
+    if [ "$(uname -s)" = Darwin ]; then
+      stage=$(mktemp -d); trap 'rm -rf "$stage"' EXIT
+      cp "$src" "$stage/txtodod"; src="$stage/txtodod"
+      scripts/sign-if-cert.sh "$src"
+    fi
+    cp "$src" "apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
     echo "staged apps/desktop/src-tauri/binaries/txtodod-${triple}${ext}"
 
 # `--bundles app` skips the DMG (a second copy): https://v2.tauri.app/reference/cli/#build
@@ -178,22 +187,22 @@ install-desktop: stage-desktop-sidecar
     (cd apps/desktop && npm run tauri build -- --bundles app)
     built="$target/release/bundle/macos/txtodo.app"
     [ -d "$built" ] || { echo "no bundle at $built"; exit 1; }
+    # Same cert and identifiers as `just install` (task keychain-prompt-loop).
+    scripts/sign-if-cert.sh "$built"
     osascript -e 'if application id "com.txtodo.desktop" is running then tell application id "com.txtodo.desktop" to quit'
     rm -rf /Applications/txtodo.app
     ditto "$built" /Applications/txtodo.app
     rm -rf "$built"
     echo "installed /Applications/txtodo.app (removed $built)"
 
-# Install `txtodo` + `txtodod` + `txtodo-mcp` to $CARGO_HOME/bin (default ~/.cargo/bin): a path that
-# survives `cargo clean` and worktree removal, unlike target/, which is where a launchd/systemd unit
-# ended up pointing at (a deleted or rebuilt-under-it binary). Not just the daemon: `txtodo daemon
-# install` records the `txtodod` sitting *beside* the `txtodo` that runs it, and `txtodo mcp` execs
-# the `txtodo-mcp` beside it, which otherwise stays on whatever build first put it there.
-# https://doc.rust-lang.org/cargo/commands/cargo-install.html
-install-daemon: && repoint-service
-    cargo install --path crates/txtodo-daemon --locked --force --target-dir target/install
-    cargo install --path crates/txtodo-cli --locked --force --target-dir target/install
-    cargo install --path crates/txtodo-mcp --locked --force --target-dir target/install
+# Install txtodo, txtodod, txtodo-mcp and txtodo-tui to $CARGO_HOME/bin (default ~/.cargo/bin),
+# signed with the "txtodo Self-Signed" cert, and restart the service on them: `just install`
+# without the desktop app (task keychain-prompt-loop). It used to `cargo install` them, ad-hoc
+# signed with a new signature each build, so the Keychain asked for every rebuild, and switching
+# between this and `just install` invalidated "Always Allow" both ways. Like `just install`, it
+# removes other copies (brew, ~/.local/bin) so the one that runs is this build.
+install-daemon:
+    TXTODO_NO_DESKTOP=1 scripts/install-local.sh
 
 # Point the real launchd/systemd unit at the `install-daemon` copy. Restarts the daemon once
 # (bootout, rewrite unit, bootstrap+kickstart). `env -u`: run without TXTODO_NO_SERVICE, which
