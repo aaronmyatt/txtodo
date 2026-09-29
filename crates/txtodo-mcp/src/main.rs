@@ -150,14 +150,8 @@ fn main() -> ExitCode {
 }
 
 async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    // `--dir`: the pre-existing per-workspace bridge socket/logs, unchanged. `--global`: the
-    // device-global socket (`global_socket::path`) and its own log directory
-    // (`global_socket::log_dir`) — a `--global`-started server has no single workspace directory
-    // to put `.txtodo/logs/` under.
-    let (socket, log_dir) = match &args.target {
-        Target::Dir(dir) => (dir.join(SOCKET_REL), dir.join(".txtodo/logs")),
-        Target::Global | Target::Auto => (global_socket::path(), global_socket::log_dir()),
-    };
+    let target = unless_owned(args.target).await;
+    let (socket, log_dir) = paths_for(&target);
     // JSON rolling-file + pretty-stderr layer (never stdout — `transport::serve_stdio` owns
     // stdin/stdout for the MCP protocol itself, see `transport.rs`'s `rmcp::transport::io::stdio`
     // call and this crate's As-built notes). `--dir` logs share the daemon's `.txtodo/logs/`
@@ -167,9 +161,9 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
-    ensure_daemon_for_target(&args.target, &socket).await;
+    ensure_daemon_for_target(&target, &socket).await;
     let backend = GrpcMcpBackend::connect_unix(&socket, agent).await?;
-    if matches!(args.target, Target::Auto) {
+    if matches!(target, Target::Auto) {
         aim_at_the_current_workspace(&backend).await;
     }
     let server = McpServer::new(Arc::new(backend));
@@ -178,6 +172,61 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
         Mode::Http => serve_http(server).await?,
     }
     Ok(())
+}
+
+/// `--dir`: the pre-existing per-workspace bridge socket/logs, unchanged. `--global`: the
+/// device-global socket (`global_socket::path`) and its own log directory
+/// (`global_socket::log_dir`) — a `--global`-started server has no single workspace directory
+/// to put `.txtodo/logs/` under.
+fn paths_for(target: &Target) -> (PathBuf, PathBuf) {
+    match target {
+        Target::Dir(dir) => (dir.join(SOCKET_REL), dir.join(".txtodo/logs")),
+        Target::Global | Target::Auto => (global_socket::path(), global_socket::log_dir()),
+    }
+}
+
+/// `target` as given, except a `--dir` folder the live global daemon already owns, which is
+/// served through that daemon instead (see [`owning_root`]).
+async fn unless_owned(target: Target) -> Target {
+    let Target::Dir(dir) = target else {
+        return target;
+    };
+    match owning_root(&dir).await {
+        Some(root) => serve_through_global(&dir, root),
+        None => Target::Dir(dir),
+    }
+}
+
+/// The root of the live global daemon's workspace that is `dir` or holds it, if there is one (task
+/// mcp-dir-second-daemon). A `--dir` bridge started on such a folder shares its op log and files
+/// with the global daemon: every write lands twice and both bind the same relay endpoint. Only a
+/// daemon that already answers is asked — nothing is started or upgraded here — so a `--dir` run
+/// against a folder no global daemon holds (every test harness's tmp dir) keeps its own bridge.
+async fn owning_root(dir: &Path) -> Option<PathBuf> {
+    let global = global_socket::path();
+    if !global.exists() || global == dir.join(SOCKET_REL) {
+        return None;
+    }
+    let backend = GrpcMcpBackend::connect_unix(&global, None).await.ok()?;
+    let known = backend.list_workspaces().await.ok()?;
+    known
+        .iter()
+        .map(|w| PathBuf::from(&w.root))
+        .find(|root| root == dir || txtodo_workspace_paths::walks_into(root, dir))
+}
+
+/// `--dir` becomes the global daemon, aimed at the root that owns `dir`, and stderr says so (stdout
+/// is the MCP protocol).
+#[allow(clippy::print_stderr)]
+fn serve_through_global(dir: &Path, root: PathBuf) -> Target {
+    eprintln!(
+        "txtodo-mcp: {} is in workspace {} of this device's daemon; serving it there, not \
+         starting a --dir daemon on the same files",
+        dir.display(),
+        root.display()
+    );
+    txtodo_mcp::set_default_workspace(root.display().to_string());
+    Target::Global
 }
 
 /// With neither `--dir` nor `--global`: calls that name no `workspace` mean the folder this server
