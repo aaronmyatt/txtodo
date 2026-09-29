@@ -194,22 +194,28 @@ const VERSION_CHECK_EVERY: std::time::Duration = std::time::Duration::from_secs(
 /// client keeps as this server's log, and in the log file. Runs until the process ends; a failed
 /// check (daemon restarting) is skipped until the next tick.
 /// `tokio::time::interval`'s first tick is immediate: <https://docs.rs/tokio/latest/tokio/time/fn.interval.html>
-#[allow(clippy::print_stderr)]
 async fn watch_daemon_version(backend: Arc<GrpcMcpBackend>) {
-    let own = env!("CARGO_PKG_VERSION");
     let mut warned: Option<String> = None;
     let mut tick = tokio::time::interval(VERSION_CHECK_EVERY);
     loop {
         tick.tick().await;
-        let Ok(daemon) = backend.daemon_version().await else {
-            continue;
-        };
-        if let Some(text) = txtodo_mcp::version_drift::warning(own, &daemon, warned.as_deref()) {
-            tracing::warn!(own, daemon = %daemon, "mcp_older_than_daemon");
-            eprintln!("txtodo-mcp: {text}");
-            warned = Some(daemon);
-        }
+        check_daemon_version(&backend, &mut warned).await;
     }
+}
+
+/// One check: warns when the daemon is newer than this server and not yet warned about.
+#[allow(clippy::print_stderr)]
+async fn check_daemon_version(backend: &GrpcMcpBackend, warned: &mut Option<String>) {
+    let own = env!("CARGO_PKG_VERSION");
+    let Ok(daemon) = backend.daemon_version().await else {
+        return;
+    };
+    let Some(text) = txtodo_mcp::version_drift::warning(own, &daemon, warned.as_deref()) else {
+        return;
+    };
+    tracing::warn!(own, daemon = %daemon, "mcp_older_than_daemon");
+    eprintln!("txtodo-mcp: {text}");
+    *warned = Some(daemon);
 }
 
 /// `--dir`: the pre-existing per-workspace bridge socket/logs, unchanged. `--global`: the
