@@ -1,0 +1,4 @@
+2026-09-29 daemon: a second read of the same key joins the pending keychain read instead of prompting again +m11 @daemon
+2026-09-29 daemon: startup waits on the one prompt instead of exiting after 20 s +m11 @daemon
+2026-09-29 just: install-daemon and stage-desktop-sidecar sign with the txtodo Self-Signed cert like just install +m11
+2026-09-29 release: 0.0.18 +m11
