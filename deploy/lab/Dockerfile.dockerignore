@@ -1,0 +1,25 @@
+# Allow-list: send Docker only what the lab build needs. target/ alone is hundreds of GB, and
+# .claude/worktrees holds whole copies of the repo. A <Dockerfile>.dockerignore beside the
+# Dockerfile wins over the context root's .dockerignore:
+# https://docs.docker.com/build/concepts/context/#filename-and-location
+*
+!Cargo.toml
+!Cargo.lock
+!crates/
+!relay/
+# cargo loads every workspace member's manifest, so the desktop crate comes along (never built).
+!apps/desktop/src-tauri/
+!deploy/lab/
+# Files the crates pull in from outside crates/: include_str!/include_bytes!, and the build
+# scripts' shared `#[path = "../../build-support/buildinfo.rs"]`.
+!build-support/
+!corpus/
+!skills/
+!specs/
+!deploy/launchd/
+!deploy/systemd/
+**/target
+**/.txtodo
+**/*.cdx.json
+apps/desktop/src-tauri/gen
+crates/txtodo-core/fuzz

@@ -1,0 +1,8 @@
+# iroh-relay config for the lab relay, run as `iroh-relay --dev --config-path /etc/iroh-relay.toml`.
+# Fields: https://github.com/n0-computer/iroh/blob/main/iroh-relay/src/main.rs (struct Config)
+# IPv4 only: Docker leaves IPv6 off in containers, so the dev default `[::]:3340` may not bind.
+http_bind_addr = "0.0.0.0:3340"
+enable_relay = true
+# QUIC address discovery needs TLS; dev mode has none.
+enable_quic_addr_discovery = false
+enable_metrics = false

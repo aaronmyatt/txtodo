@@ -1,0 +1,7 @@
+# deploy/lab/failure-task.txt.tmpl — the root todo.txt line a failed lab scenario files
+# (scripts/lab/lib/report.sh task_line). Lines starting with # are dropped. `txtodo add` puts
+# today's date after the priority. {{verdict}} is "fails", "flaky" (failed, then passed on the
+# same seed) or "broke" (the lab itself could not run it). One short clause; the detail lives in
+# the report. The lab:<scenario> tag is how a second failure finds this line instead of filing
+# another.
+(A) lab: {{scenario}} {{verdict}}, seed {{seed}}: {{reason}} +lab @sync lab:{{scenario}} report:{{report}}

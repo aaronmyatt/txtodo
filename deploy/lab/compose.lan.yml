@@ -1,0 +1,70 @@
+# deploy/lab/compose.lan.yml — one home LAN: every device on one bridge, found by mDNS, no relay.
+# scripts/lab/lab.sh sets every ${LAB_*} below and names the project (-p lab-<run>-<scenario>).
+# Compose file reference: https://docs.docker.com/reference/compose-file/
+# YAML anchors and merge keys (`<<:`): https://docs.docker.com/reference/compose-file/fragments/
+
+x-device: &device
+  init: true
+  # NET_ADMIN: `tc netem` for the bad-link scenario, `ip route` behind a router.
+  # https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities
+  cap_add: [NET_ADMIN]
+  restart: "no"
+
+x-device-env: &device-env
+  LAB_ROLE: device
+  LAB_KEY_PASSPHRASE: ${LAB_KEY_PASSPHRASE}
+  LAB_RELAY: "off"
+  # Redial and exchange offers every second instead of every 15 s (tests/support/mod.rs does too).
+  TXTODO_RESYNC_INTERVAL_MS: "1000"
+  # The CLI in a container never spawns its own daemon or touches systemd.
+  TXTODO_NO_AUTOSTART: "1"
+  TXTODO_NO_SERVICE: "1"
+  TXTODO_LOG: ${LAB_LOG}
+  # Read only when LD_PRELOAD loads libfaketime (clock-skew scenario). The file holds the offset
+  # (e.g. "+7m") and is re-read every second, so a scenario can move a device's clock at runtime.
+  # https://github.com/wolfcw/libfaketime#readme
+  FAKETIME_TIMESTAMP_FILE: /lab/.faketime
+  FAKETIME_CACHE_DURATION: "1"
+  DONT_FAKE_MONOTONIC: "1"
+
+networks:
+  lan:
+    # Not `internal`: Docker's isolation rules for an internal network drop packets addressed
+    # outside its subnet, mDNS multicast included. Each device seals its own egress to
+    # 10.231.0.0/16 instead (deploy/lab/entrypoint.sh), so nothing leaves the lab.
+    # https://docs.docker.com/reference/compose-file/networks/#internal
+    internal: false
+    ipam:
+      config:
+        - subnet: 10.231.10.0/24
+
+services:
+  a1:
+    <<: *device
+    image: ${LAB_IMAGE_A1}
+    hostname: a1
+    environment:
+      <<: *device-env
+      LD_PRELOAD: ${LAB_PRELOAD_A1}
+    networks: [lan]
+
+  b1:
+    <<: *device
+    image: ${LAB_IMAGE_B1}
+    hostname: b1
+    environment:
+      <<: *device-env
+      LD_PRELOAD: ${LAB_PRELOAD_B1}
+    networks: [lan]
+
+  # Third device, for the chaos scenario: `--profile three`.
+  # https://docs.docker.com/reference/compose-file/profiles/
+  a2:
+    <<: *device
+    image: ${LAB_IMAGE_A2}
+    hostname: a2
+    profiles: [three]
+    environment:
+      <<: *device-env
+      LD_PRELOAD: ${LAB_PRELOAD_A2}
+    networks: [lan]
