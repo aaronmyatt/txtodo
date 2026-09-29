@@ -22,7 +22,7 @@ use txtodo_sync::{
 };
 
 use crate::keystore_cache::CachedKeyStore;
-use crate::keystore_timeout::{KEYCHAIN_TIMEOUT, TimeoutKeyStore, bounded};
+use crate::keystore_timeout::{KEYCHAIN_TIMEOUT, TimeoutKeyStore, bounded, is_unanswered};
 use crate::workspace_error::WorkspaceError;
 
 /// File name of the encrypted-file keystore backend, under whichever `state_dir`
@@ -124,6 +124,41 @@ pub(crate) fn on_auto_probe_failure(reason: String, defaulted: bool) -> Result<(
     Ok(())
 }
 
+/// How many `KEYCHAIN_TIMEOUT` waits startup sits on one unanswered prompt: a day.
+const MAX_PROMPT_WAITS: u64 = 24 * 60 * 60 / KEYCHAIN_TIMEOUT.as_secs();
+
+/// Runs `load` until the keychain answers (task keychain-prompt-loop). An unanswered prompt used
+/// to fail startup after 20 s; launchd restarted the daemon and each new process asked again, a
+/// new modal every 20 s that nobody could finish answering. A retry joins the same pending read
+/// (`keystore_timeout.rs`), so the one prompt stays up until someone answers it. Any other error
+/// returns at once; after a day of waiting the timeout itself does.
+pub(crate) fn until_answered<T>(
+    key: &'static str,
+    mut load: impl FnMut() -> Result<T, WorkspaceError>,
+) -> Result<T, WorkspaceError> {
+    let mut waits = 0;
+    loop {
+        match load() {
+            Err(WorkspaceError::KeyStore(e)) if is_unanswered(&e) && waits < MAX_PROMPT_WAITS => {
+                waits += 1;
+                log_prompt_pending(key, waits * KEYCHAIN_TIMEOUT.as_secs());
+            }
+            other => return other,
+        }
+    }
+}
+
+/// tracing `warn!`: <https://docs.rs/tracing/latest/tracing/macro.warn.html>
+fn log_prompt_pending(key: &'static str, waited_s: u64) {
+    tracing::warn!(
+        key,
+        waited_s,
+        hint = "answer the macOS keychain prompt for txtodod (password, then Always Allow); \
+                see docs/keychain-runbook.md",
+        "keychain_prompt_pending"
+    );
+}
+
 /// Loads this device's long-term X25519 static keypair from the keystore, or mints and stores one
 /// — the same "mint once, fixed for the workspace's lifetime" idiom as the device/group id.
 pub(crate) fn load_or_mint_device_static(
@@ -184,4 +219,44 @@ pub(crate) fn load_or_mint_device_signing(
     getrandom::fill(&mut seed).map_err(|_| WorkspaceError::Entropy)?;
     key_store.put(KeyId::DeviceSigning, &Secret::new(seed.to_vec()))?;
     Ok(DeviceSigningKey::from_bytes(seed))
+}
+
+#[cfg(test)]
+mod until_answered_tests {
+    use super::*;
+
+    fn unanswered() -> WorkspaceError {
+        WorkspaceError::KeyStore(KeyStoreError::Backend {
+            id: KeyId::DeviceStatic,
+            reason: format!(
+                "{} the read within 20s",
+                crate::keystore_timeout::UNANSWERED
+            ),
+        })
+    }
+
+    #[test]
+    fn startup_waits_through_unanswered_reads_and_takes_the_answer() {
+        let mut calls = 0;
+        let got = until_answered("device-static", || {
+            calls += 1;
+            if calls < 3 { Err(unanswered()) } else { Ok(7) }
+        });
+        assert_eq!(got.ok(), Some(7));
+        assert_eq!(calls, 3, "two unanswered waits, then the answer");
+    }
+
+    #[test]
+    fn a_real_keystore_failure_still_fails_at_once() {
+        let mut calls = 0;
+        let got: Result<(), _> = until_answered("device-static", || {
+            calls += 1;
+            Err(WorkspaceError::KeyStore(KeyStoreError::Backend {
+                id: KeyId::DeviceStatic,
+                reason: "item not accessible".to_owned(),
+            }))
+        });
+        assert!(got.is_err());
+        assert_eq!(calls, 1);
+    }
 }

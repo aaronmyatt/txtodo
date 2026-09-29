@@ -30,6 +30,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::clock::Clock;
+use crate::keystore_setup::until_answered;
 use crate::pairing_state::PairingRegistry;
 use crate::walker::WalkError;
 use crate::workspace_error::WorkspaceError;
@@ -132,9 +133,13 @@ impl DeviceIdentity {
         let device = load_or_mint_device(&mut store, clock)?;
         let group = load_or_mint_group(&mut store)?;
         let group_epoch = load_group_epoch(&store)?;
-        let device_static = crate::keystore_setup::load_or_mint_device_static(key_store.as_ref())?;
-        let relay_identity =
-            crate::keystore_setup::load_or_mint_relay_identity(key_store.as_ref())?;
+        // Waits on an unanswered keychain prompt instead of failing startup (keychain-prompt-loop).
+        let device_static = until_answered("device-static", || {
+            crate::keystore_setup::load_or_mint_device_static(key_store.as_ref())
+        })?;
+        let relay_identity = until_answered("relay-identity", || {
+            crate::keystore_setup::load_or_mint_relay_identity(key_store.as_ref())
+        })?;
         Ok(DeviceIdentity {
             device,
             device_static,
