@@ -1,0 +1,3 @@
+2026-09-29 just: install-daemon installs txtodo-mcp beside txtodo +m11 @mcp
+2026-09-29 mcp: warn once per daemon version when txtodod is newer than txtodo-mcp, at start and every 5 min +m11 @mcp
+2026-09-29 release: 0.0.17 +m11
