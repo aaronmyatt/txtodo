@@ -1,4 +1,4 @@
-2026-09-29 release: 0.0.18 +m11
 x 2026-09-29 2026-09-29 daemon: a second read of the same key joins the pending keychain read instead of prompting again +m11 @daemon — keystore_timeout.rs PendingRead per key; 70be5dd1
 x 2026-09-29 2026-09-29 daemon: startup waits on the one prompt instead of exiting after 20 s +m11 @daemon — keystore_setup::until_answered in DeviceIdentity::finish_open, capped at a day; not checked against a real prompt; 70be5dd1
 x 2026-09-29 2026-09-29 just: install-daemon and stage-desktop-sidecar sign with the txtodo Self-Signed cert like just install +m11 — install-daemon runs install-local.sh with TXTODO_NO_DESKTOP=1; scripts/sign-if-cert.sh for the sidecar and install-desktop; 9eadca1d
+x 2026-09-29 2026-09-29 release: 0.0.18 +m11 — version files + Cargo.lock; d23b00f4; tagged v0.0.18

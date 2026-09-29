@@ -37,3 +37,19 @@ read within 20s`.
   (120 s) with "daemon did not become ready"; the prompt is still on screen.
 - `cargo run` / `target/debug/txtodod` builds are still ad-hoc signed; against the real keychain
   they prompt after every rebuild (tests use `TXTODO_TEST_KEYSTORE_MEMORY=1`).
+
+## As built
+
+- 2026-09-29: `70be5dd1` (daemon), `9eadca1d` (installs, runbook), `d23b00f4` release 0.0.18.
+- `keystore_timeout.rs`: `TimeoutKeyStore` keeps `reads: HashMap<KeyId, Arc<PendingRead>>`
+  (a result slot and a `Condvar`). `get` joins or starts the read, waits `KEYCHAIN_TIMEOUT`,
+  and forgets the entry only once it has answered. Writes and deletes are bounded as before.
+  `is_unanswered` tells a pending prompt from a real failure by the `UNANSWERED` prefix.
+- `keystore_setup::until_answered` wraps the two startup loads in `DeviceIdentity::finish_open`;
+  capped at `MAX_PROMPT_WAITS` (a day of 20 s waits).
+- `scripts/sign-if-cert.sh` signs through `scripts/macos-selfsign.sh` when the cert is there and
+  warns otherwise; `stage-desktop-sidecar` signs a copy named `txtodod` before the rename so the
+  identifier is `com.txtodo.txtodod`.
+- Tested with a slow stand-in keystore (one read for three calls) and the retry helper; not
+  checked against a real keychain prompt, and the new install paths were not run end to end
+  here (signing would have shown you another prompt).
