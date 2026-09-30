@@ -4,4 +4,4 @@ x 2026-09-30 2026-09-30 Commit merges a peer batch's newest stamp into the actor
 x 2026-09-30 2026-09-30 Scratch replays place as newest; the commit re-stamps them with its HLC +m11 @daemon — scratch_op in reconcile_replay and apply_kind; commit_inner settles the stamps
 x 2026-09-30 2026-09-30 Recover stamps at open from repair_log's replay +m11 @daemon — adopt_stamps from the replay, clock catches up; known gap: a cut-off replay keeps zero stamps
 x 2026-09-30 2026-09-30 Tests: permutation convergence, blanks, moves, clock merge, restart +m11 @daemon @sync — 651 daemon tests and the 22 slow sync ones pass; default_workspace_sync now asserts byte-equal files
-2026-09-30 Re-run the lab's lan-converge and chaos to confirm order converges +m11 @sync
+x 2026-09-30 Re-run the lab's lan-converge and chaos to confirm order converges +m11 @sync — new concurrent-adds scenario: fails on the old image (order only), passes on this one; lan-converge and chaos still fail on other open bugs, none on order

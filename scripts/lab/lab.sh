@@ -19,6 +19,7 @@
 #   LAB_BACKLOG_DIR=DIR   file failures into DIR/todo.txt (default: the main checkout)
 #   LAB_TASK_NO_DAEMON=1  file with `txtodo --no-daemon` (for a scratch backlog)
 #   LAB_OLD_REF=vX.Y.Z    the release old-new pairs with (default: newest with other crates/)
+#   LAB_USE_IMAGE=TAG     run an image already built (docker image ls txtodo-lab), no build
 #   LAB_LOG=FILTER        the daemons' TXTODO_LOG (default: info)
 #   TXTODO_LAB_HOME=DIR   reports, run logs, results.tsv (default: ~/.local/state/txtodo-lab)
 set -euo pipefail

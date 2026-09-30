@@ -17,7 +17,7 @@ export LAB_KEY_PASSPHRASE=lab-only-throwaway-passphrase
 export LAB_LOG=${LAB_LOG:-info}
 
 # Scenario order for `all`: quick LAN ones first, then the ones that need the relay.
-LAB_ALL_SCENARIOS=(lan-converge bad-link sleep clock-skew chaos old-new relay-only lan-to-relay nat-holepunch)
+LAB_ALL_SCENARIOS=(concurrent-adds lan-converge bad-link sleep clock-skew chaos old-new relay-only lan-to-relay nat-holepunch)
 
 # Prints a timestamped line to stdout (the run log) and to the scenario's steps.log if one is open.
 log() {

@@ -71,6 +71,13 @@ build_image() {
 # Sets LAB_IMAGE to this checkout's image, building it if no image has its source hash yet.
 ensure_current_image() {
   local tag
+  # An image already built (say, before a fix) instead of this checkout's: compare old and new.
+  if [ -n "${LAB_USE_IMAGE:-}" ]; then
+    docker image inspect "$LAB_USE_IMAGE" >/dev/null 2>&1 || return 1
+    log "image: $LAB_USE_IMAGE (LAB_USE_IMAGE)"
+    export LAB_IMAGE=$LAB_USE_IMAGE
+    return 0
+  fi
   tag="txtodo-lab:src-$(source_hash "$LAB_ROOT")"
   if docker image inspect "$tag" >/dev/null 2>&1; then
     log "image: $tag (up to date)"

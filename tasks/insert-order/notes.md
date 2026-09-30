@@ -63,7 +63,14 @@ the lines it inserts after, so its own adds would land below lines it meant to p
 - Tests: `state_order_tests.rs` (every arrival order of concurrent inserts, chains, blanks,
   moves and completions renders the same bytes; same-commit ops and the newest op land as
   before) and `sync_ops_tests.rs` (clock merge; stamps come back after a restart, and a late
-  concurrent op lands the same).
+  concurrent op lands the same). `tests/default_workspace_sync.rs` now waits for byte-equal
+  files, not just the same lines.
+- Lab: new scenario `concurrent-adds` (both devices add and complete lines at once, across a
+  partition; nothing else). Seed 5 on the image from before this change: every convergence check
+  fails, and the only difference is order (each device's run on top of the other's). On this
+  change: passes, 12 s. `lan-converge` and `chaos` still fail, on the other open bugs (lost
+  editor saves, skipped ops on a missing anchor, ops not delivered after a reconnect); no file
+  there differs in order only.
 
 ## Known gaps
 

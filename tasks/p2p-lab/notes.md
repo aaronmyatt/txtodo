@@ -43,7 +43,7 @@ device with `docker exec`.
 
 ## Findings (2026-09-30, first runs, 0.0.19 code)
 
-- **Line order diverges.** a1 and b1 each add one line at the same time into an empty list. Both
+- **Line order diverges** (fixed 2026-09-30, tasks/insert-order). a1 and b1 each add one line at the same time into an empty list. Both
   end with both lines, each with the other's line on top. It stays that way. relay-only shows
   the same after it converges on content.
 - **Editor saves are lost** when a CLI or sync write follows within a moment. Reproduced on one
