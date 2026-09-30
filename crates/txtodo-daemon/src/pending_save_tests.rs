@@ -178,3 +178,27 @@ async fn watcher_event(handle: &ActorHandle) {
     handle.external_change().await.unwrap();
     handle.get().await.unwrap();
 }
+
+/// The lab's case (lan-converge, seed 830835642): the save adds a line under `cli-1`, and a
+/// peer deletes `cli-1` before the merge. The new line has lost its anchor; it must still land.
+#[tokio::test]
+async fn a_saved_line_whose_anchor_a_peer_deleted_still_lands() {
+    let dir = tempfile::tempdir().unwrap();
+    let handle = start(dir.path());
+    editor_appends(dir.path(), &format!("editor-2 id:{E}"));
+    let mut delete = peer_insert(2, A, "unused");
+    delete.kind = txtodo_model::set_field(
+        TaskId::new(Ulid::parse(A).unwrap()),
+        txtodo_model::Field::Deleted,
+        txtodo_model::FieldValue::Bool(true),
+    )
+    .unwrap();
+    handle.sync_import_ops(vec![delete]).await.unwrap();
+    watcher_event(&handle).await;
+    let text = disk(dir.path());
+    assert!(
+        text.contains("editor-2") && !text.contains("cli-1"),
+        "{text}"
+    );
+    assert_eq!(handle.get().await.unwrap().bytes, text.as_bytes());
+}

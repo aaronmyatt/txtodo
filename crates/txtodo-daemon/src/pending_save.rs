@@ -18,10 +18,11 @@ use crate::actor::{Commit, CommitTail, FileActor, hash_of};
 use crate::handle::ActorError;
 use crate::reconcile::reconcile;
 use crate::reconcile_sidecar::{Side, reconcile_sidecar};
+use crate::state::{DocState, scratch_op};
 use crate::sync_ops::apply_leniently;
 use crate::write::read_or_empty;
 use txtodo_core::parse_file;
-use txtodo_model::{CostWeights, IdentityMode, Op, Principal, TaskId};
+use txtodo_model::{CostWeights, IdentityMode, Op, OpKind, Principal, TaskId};
 
 /// A save the actor stopped writing over: `base` is what it last wrote there (the common ancestor
 /// of the three-way merge) and `base_ids` that text's task ids, for sidecar identity.
@@ -109,10 +110,11 @@ impl FileActor {
                 &mut mint,
             ),
         };
+        let kinds = reanchor(r.ops, &r.ids, &self.state);
         let principal = Principal::External {
             device: self.cfg.device,
         };
-        self.stamp(r.ops, &principal)
+        self.stamp(kinds, &principal)
     }
 
     /// After any message: a pending save whose file has sat still for [`SETTLED`] is merged now,
@@ -125,6 +127,39 @@ impl FileActor {
             crate::external::tracing_stub_error(&self.cfg.path, &e);
         }
     }
+}
+
+/// The save's inserts and moves are anchored on the line above them in the editor's file, but the
+/// state may have lost that line meanwhile (a peer deleted it). Such an op would be skipped and a
+/// line the editor wrote would be gone, so it is re-anchored on the nearest line above it in the
+/// editor's file that the state still has (or the top). `ids` is the editor's file, line by line.
+/// Other ops on a line the state no longer has still fail and are skipped: the delete wins.
+fn reanchor(kinds: Vec<OpKind>, ids: &[Option<TaskId>], state: &DocState) -> Vec<OpKind> {
+    let mut scratch = state.clone();
+    let mut out = Vec::with_capacity(kinds.len());
+    for mut kind in kinds {
+        if let OpKind::Insert { task, after, .. } | OpKind::Move { task, after, .. } = &mut kind
+            && after.is_some_and(|a| scratch.index_of(a).is_none())
+        {
+            *after = nearest_kept_above(*task, ids, &scratch);
+        }
+        // Scratch only tracks which lines exist by now; a refusal changes nothing here.
+        let _ = scratch.apply(&scratch_op(scratch.path(), kind.clone()));
+        out.push(kind);
+    }
+    debug_assert_eq!(out.len(), out.capacity());
+    out
+}
+
+/// The closest task above `task` in the editor's file that `state` holds; `None` is the top.
+fn nearest_kept_above(task: TaskId, ids: &[Option<TaskId>], state: &DocState) -> Option<TaskId> {
+    let at = ids.iter().position(|id| *id == Some(task))?;
+    ids[..at]
+        .iter()
+        .rev()
+        .flatten()
+        .copied()
+        .find(|id| state.index_of(*id).is_some())
 }
 
 /// True when the file was last modified at least [`SETTLED`] ago, or cannot be read.
