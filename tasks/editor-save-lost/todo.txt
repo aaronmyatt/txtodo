@@ -1,0 +1,6 @@
+2026-09-30 FileActor: defer the write when the file is not our last write; keep the base +m11 @daemon
+2026-09-30 FileActor: three-way merge of a pending save on the watcher's event +m11 @daemon
+2026-09-30 FileActor: merge a settled pending save after any message (missed event) +m11 @daemon
+2026-09-30 NotesActor: commit foreign disk text before edit and imports +m11 @daemon
+2026-09-30 Tests: a save then a CLI add, then peer ops; notes save then a peer op +m11 @daemon
+2026-09-30 Re-run the lab's lan-converge +m11 @sync
