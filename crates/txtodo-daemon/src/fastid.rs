@@ -38,8 +38,10 @@ impl DocState {
     }
 }
 
-/// A synthetic op under a zero stamp (device 0, HLC 0): for the mirror's hydration and for tests,
-/// so any real op's field write wins over it. Never stored, never sent.
+/// A synthetic op under a zero stamp (device 0, HLC 0): for the mirror tests, so any real op's
+/// field write wins over it. Never stored, never sent. As a `DocState` placement it is the
+/// oldest op, so it lands after every line a real op placed after its anchor (`state_order.rs`);
+/// `DocState::apply_kind` uses `state::scratch_op` instead.
 #[cfg(test)]
 pub(crate) fn hydration_op(path: &FilePath, kind: txtodo_model::OpKind) -> txtodo_model::Op {
     let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));

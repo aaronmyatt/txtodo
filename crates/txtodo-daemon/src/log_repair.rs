@@ -21,7 +21,7 @@ use crate::reconcile_replay::replayable_ops;
 use crate::state::DocState;
 use crate::sync_ops::apply_leniently;
 use txtodo_core::File;
-use txtodo_model::{FilePath, IdentityMode, Principal};
+use txtodo_model::{FilePath, Hlc, IdentityMode, Principal};
 use txtodo_store::{MAX_OPS_PER_READ, Seq, Store};
 
 impl FileActor {
@@ -37,10 +37,12 @@ impl FileActor {
             return Ok(());
         };
         if replayed.to_bytes() == self.projection {
+            self.adopt_replayed_stamps(&replayed);
             return Ok(());
         }
         let Some((kinds, work)) = replayable_ops(&replayed, &self.state) else {
             log_unrepairable(&self.cfg.path);
+            self.adopt_replayed_stamps(&replayed);
             return Ok(());
         };
         debug_assert_eq!(
@@ -52,7 +54,12 @@ impl FileActor {
         let principal = Principal::External {
             device: self.cfg.device,
         };
+        // The repair's ops must be newer than every line the replay placed, or a peer would slot
+        // them past those lines instead of where the scratch copy put them.
+        self.catch_up_clock(replayed.newest_stamp());
         let ops = self.stamp(kinds, &principal)?;
+        let mut rebuilt = replayed;
+        apply_leniently(&mut rebuilt, &ops);
         self.commit(Commit {
             ops,
             next: self.state.clone(),
@@ -64,7 +71,28 @@ impl FileActor {
                 ..CommitTail::default()
             },
         })?;
+        self.adopt_replayed_stamps(&rebuilt);
         Ok(())
+    }
+
+    /// The state was read from disk, so no line knows which op placed it; `replayed` (the log
+    /// rebuilt from empty, what a peer holds) does (task insert-order). The clock then moves past
+    /// the newest of those stamps, so this device's next op still sorts after every line.
+    fn adopt_replayed_stamps(&mut self, replayed: &DocState) {
+        self.state.adopt_stamps(replayed);
+        self.catch_up_clock(self.state.newest_stamp());
+    }
+
+    /// Moves the clock up to `newest` (never back), keeping this device's id. Same adoption as
+    /// `recover` makes of the newest stored op.
+    fn catch_up_clock(&mut self, newest: Option<Hlc>) {
+        if let Some(newest) = newest.filter(|n| *n > self.hlc) {
+            self.hlc = Hlc {
+                device: self.cfg.device,
+                ..newest
+            };
+        }
+        debug_assert_eq!(self.hlc.device, self.cfg.device);
     }
 }
 

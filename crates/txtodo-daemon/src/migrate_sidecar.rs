@@ -149,7 +149,9 @@ impl FileActor {
             }
         }
         let bytes = file.to_bytes();
-        let next = self.as_sidecar(&bytes, ids)?;
+        let mut next = self.as_sidecar(&bytes, ids)?;
+        // Stripping tags moves no line: each task keeps the stamp that placed it (insert-order).
+        next.adopt_stamps(&self.state);
         let write = bytes != self.projection;
         // `commit` lands fingerprints only while the config says Sidecar; put it back on failure so
         // a retry sees the mode this document really is in.

@@ -274,12 +274,17 @@ impl FileActor {
     fn commit_inner(&mut self, plan: Commit) -> Result<Change, ActorError> {
         let Commit {
             ops,
-            next,
+            mut next,
             bytes,
             write,
             snapshot,
             tail,
         } = plan;
+        // A reconcile's `next` came from scratch replays; its lines take the stamp its ops carry
+        // everywhere else (one tick per local batch). A sync batch has nothing to settle.
+        if let Some(first) = ops.first() {
+            next.settle_scratch_stamps(first.hlc);
+        }
         let new_hash = hash_of(&bytes);
         let range = self.persist_change(&ops, &bytes, &tail, &next)?;
         self.state = next;

@@ -9,7 +9,8 @@
 //! `Hlc` and `Principal` already fixed by whoever first wrote it — because `heads`/`origin_seq`
 //! dedup (`want.rs`) only works if every peer stores exactly the same ops under exactly the same
 //! identity. So this path never ticks this actor's own clock and never mints anything: it applies
-//! the batch exactly as it arrived and commits.
+//! the batch exactly as it arrived and commits. It does merge the batch's newest stamp into the
+//! clock (the HLC receive rule), so the next local op sorts after it (task insert-order).
 
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
@@ -44,6 +45,7 @@ impl FileActor {
         if ops.is_empty() {
             return Ok(());
         }
+        self.observe_peer_stamps(&ops);
         let mut next = self.state.clone();
         for (op, e) in apply_leniently(&mut next, &ops) {
             log_skipped(op, &e);
@@ -63,6 +65,32 @@ impl FileActor {
         })?;
         Ok(())
     }
+
+    /// HLC receive rule for the batch's newest stamp (`Hlc::merge`), so this device's next op
+    /// sorts after every line it now holds: a peer's line placed "later" than a local op would
+    /// otherwise be skipped over by it (task insert-order, `state_order.rs`). A stamp more than
+    /// the skew bound ahead is not merged, the same refusal the link `Hello` makes.
+    fn observe_peer_stamps(&mut self, ops: &[Op]) {
+        let Some(newest) = ops.iter().map(|op| op.hlc).max() else {
+            return;
+        };
+        let before = self.hlc;
+        if let Err(e) = self.hlc.merge(newest, self.clock.now_ms()) {
+            log_stamp_not_merged(op_file(ops), &e);
+        }
+        debug_assert!(self.hlc >= before, "merge never goes back");
+        debug_assert_eq!(self.hlc.device, self.cfg.device);
+    }
+}
+
+fn op_file(ops: &[Op]) -> Option<&txtodo_model::FilePath> {
+    ops.first().map(|op| &op.file)
+}
+
+/// tracing `warn!`, split out for the caller's complexity budget.
+/// <https://docs.rs/tracing/latest/tracing/macro.warn.html>
+fn log_stamp_not_merged(file: Option<&txtodo_model::FilePath>, e: &txtodo_model::HlcError) {
+    tracing::warn!(file = file.map(|f| f.to_string()), error = %e, "sync_stamp_not_merged");
 }
 
 /// Applies `ops` to `state` one commit (same HLC stamp) at a time; within a commit, an op that

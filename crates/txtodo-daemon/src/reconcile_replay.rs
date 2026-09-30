@@ -18,10 +18,7 @@ use crate::actor::FileActor;
 use crate::handle::ActorError;
 use crate::reconcile::{Reconciled, change_ops};
 use crate::state::{DocState, Entry};
-use txtodo_model::{
-    DeviceId, Field, FieldValue, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid,
-    set_field,
-};
+use txtodo_model::{Field, FieldValue, FilePath, Op, OpKind, TaskId, set_field};
 
 /// What a reconcile commits.
 pub(crate) struct Settled {
@@ -237,14 +234,8 @@ fn blanks_after(state: &DocState, after: Option<TaskId>) -> Option<usize> {
     )
 }
 
-/// `kind` under a zero stamp, for a scratch copy only: `DocState::apply` never reads the stamp.
+/// `kind` for a scratch copy only. It places as the newest op, which is where the commit's own
+/// freshly stamped op lands (task insert-order); the commit re-stamps what it placed.
 fn bare(path: &FilePath, kind: OpKind) -> Op {
-    let zero = DeviceId::new(Ulid::from_u128(0));
-    Op {
-        id: OpId::new(Ulid::from_u128(0)),
-        hlc: Hlc::zero(zero),
-        principal: Principal::External { device: zero },
-        file: path.clone(),
-        kind,
-    }
+    crate::state::scratch_op(path, kind)
 }

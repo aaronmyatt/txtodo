@@ -212,3 +212,70 @@ async fn a_move_after_a_task_its_own_commit_inserts_later_applies_once_that_inse
     assert_eq!(order, vec!["b", "c", "a"], "{text}");
     assert_eq!(rows(&store), 4);
 }
+
+/// A peer op stamped by device `device` at `wall_ms`.
+fn op_from(n: u128, device: u128, wall_ms: u64, kind: OpKind) -> Op {
+    let device = DeviceId::new(Ulid::from_u128(device));
+    Op {
+        id: OpId::new(Ulid::from_u128(n)),
+        hlc: Hlc {
+            wall_ms,
+            counter: 0,
+            device,
+        },
+        principal: Principal::User { device },
+        file: FilePath::new("todo.txt").unwrap(),
+        kind,
+    }
+}
+
+/// Task insert-order: a peer stamped ahead of this device's wall clock (within the skew bound)
+/// still sorts before this device's next op, or that op would slot past the peer's line.
+#[test]
+fn a_peers_batch_moves_this_devices_clock_past_its_stamps() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let mut actor = open(dir.path(), &store, &clock);
+    let a = TaskId::new(Ulid::from_u128(71));
+    let ahead = peer_op(1, 5_000, insert(a, None, "a"));
+    actor.on_sync_ops(vec![ahead.clone()]).unwrap();
+    assert!(actor.hlc > ahead.hlc, "{:?} vs {:?}", actor.hlc, ahead.hlc);
+    assert_eq!(actor.hlc.device, local_device());
+    let next = actor.tick().unwrap();
+    assert!(next > ahead.hlc);
+}
+
+/// Task insert-order: which op placed each line comes back from the log at open, so a
+/// restarted device orders a late concurrent op like one that never restarted.
+#[test]
+fn line_stamps_come_back_after_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let (a, b, c) = (
+        TaskId::new(Ulid::from_u128(81)),
+        TaskId::new(Ulid::from_u128(82)),
+        TaskId::new(Ulid::from_u128(83)),
+    );
+    let (stamps, bytes) = {
+        let mut actor = open(dir.path(), &store, &clock);
+        actor
+            .on_sync_ops(vec![
+                op_from(1, 7, 2_000, insert(a, None, "a")),
+                op_from(2, 8, 3_000, insert(b, None, "b")),
+            ])
+            .unwrap();
+        (actor.state.stamps().to_vec(), actor.projection.clone())
+    };
+    let mut reopened = open(dir.path(), &store, &clock);
+    assert_eq!(reopened.projection, bytes);
+    assert_eq!(reopened.state.stamps(), stamps.as_slice());
+    // A third device's add from between the two lands between them, restart or not.
+    reopened
+        .on_sync_ops(vec![op_from(3, 9, 2_500, insert(c, None, "c"))])
+        .unwrap();
+    let text = String::from_utf8_lossy(&reopened.projection).into_owned();
+    let order: Vec<&str> = text.lines().map(|l| &l[..1]).collect();
+    assert_eq!(order, vec!["b", "c", "a"], "{text}");
+}

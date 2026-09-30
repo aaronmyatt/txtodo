@@ -2,7 +2,13 @@
 //! bytes on disk, mutated only through ops (plan M4 swaps the backing store, same shape).
 
 use txtodo_core::{File, LineEnding, LineKind, OwnedLine};
-use txtodo_model::{FilePath, IdentityMode, Op, OpKind, TaskId, Ulid};
+use txtodo_model::{FilePath, Hlc, IdentityMode, Op, OpKind, TaskId, Ulid};
+
+// Where concurrent placements go (task insert-order): each entry's placing stamp and RGA's skip
+// rule. A child module so it can keep `entries` and `stamps` in step without widening them.
+#[path = "state_order.rs"]
+mod order;
+pub(crate) use order::scratch_op;
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -63,10 +69,13 @@ fn log_state_applied(entries: usize) {
 }
 
 /// The document.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct DocState {
     path: FilePath,
     entries: Vec<Entry>,
+    /// `stamps[i]`: the HLC of the op that placed `entries[i]`, zero for a line read from disk.
+    /// Merge metadata, not content: equality ignores it (task insert-order, `state_order.rs`).
+    stamps: Vec<Hlc>,
     bom: bool,
     ending: LineEnding,
     trailing_newline: bool,
@@ -90,9 +99,11 @@ impl DocState {
             entries.push(entry_of(i, line, ids.get(i).copied().flatten())?);
         }
         debug_assert_eq!(entries.len(), file.lines.len());
+        let stamps = vec![order::unplaced(); entries.len()];
         Ok(DocState {
             path,
             entries,
+            stamps,
             bom: file.bom,
             ending: file.ending,
             trailing_newline: file.trailing_newline,
@@ -184,10 +195,13 @@ impl DocState {
         self.entries[i] = entry;
     }
 
-    /// Removes the entry at `i`.
+    /// Removes the entry at `i`, and its stamp.
     pub(crate) fn remove_entry(&mut self, i: usize) -> Entry {
         debug_assert!(i < self.entries.len(), "remove_entry index {i} in range");
-        self.entries.remove(i)
+        self.stamps.remove(i);
+        let entry = self.entries.remove(i);
+        debug_assert_eq!(self.stamps.len(), self.entries.len());
+        entry
     }
 
     /// The file as bytes, byte-faithful to what `from_file` read plus the applied ops.
@@ -211,7 +225,7 @@ impl DocState {
     fn apply_inner(&mut self, op: &Op) -> Result<(), StateError> {
         let before = self.entries.len();
         match &op.kind {
-            OpKind::Insert { task, after, line } => self.insert(*task, *after, line)?,
+            OpKind::Insert { task, after, line } => self.insert(*task, *after, line, op.hlc)?,
             OpKind::SetField { task, field, value } => {
                 crate::fields::set_field(self, *task, *field, *value)?
             }
@@ -220,8 +234,8 @@ impl DocState {
                 task,
                 after,
                 to_file,
-            } => self.move_task(*task, *after, to_file)?,
-            OpKind::BlankInsert { after } => self.blank_insert(*after)?,
+            } => self.move_task(*task, *after, to_file, op.hlc)?,
+            OpKind::BlankInsert { after } => self.blank_insert(*after, op.hlc)?,
             OpKind::BlankRemove { after } => self.blank_remove(*after)?,
             OpKind::NotesEdit { .. } => return Err(StateError::Unsupported("NotesEdit")),
         }
@@ -234,13 +248,10 @@ impl DocState {
         Ok(())
     }
 
-    /// Test seam: applies a bare `OpKind` under a zero stamp. Tests pin bytes, not clocks.
+    /// Test seam: applies a bare `OpKind` as the newest op would land. Tests pin bytes, not clocks.
     #[cfg(test)]
     pub(crate) fn apply_kind(&mut self, kind: &OpKind) -> Result<(), StateError> {
-        self.apply(&crate::fastid::hydration_op(
-            &self.path.clone(),
-            kind.clone(),
-        ))
+        self.apply(&scratch_op(&self.path.clone(), kind.clone()))
     }
 
     fn position_after(&self, after: Option<TaskId>) -> Result<usize, StateError> {
@@ -258,11 +269,12 @@ impl DocState {
         task: TaskId,
         after: Option<TaskId>,
         line: &str,
+        hlc: Hlc,
     ) -> Result<(), StateError> {
         if self.entries.len() + 1 > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(self.entries.len() + 1));
         }
-        let at = self.position_after(after)?;
+        let at = self.slot_after(after, hlc)?;
         let owned = OwnedLine::from_bytes(line.as_bytes().to_vec(), self.ending);
         if self.mode == IdentityMode::Tagged {
             let parsed_id = owned.parse().and_then(|l| match l.kind {
@@ -277,21 +289,24 @@ impl DocState {
             id: task,
             line: owned,
         };
-        self.entries.insert(at, entry);
+        self.insert_entry(at, entry, hlc);
         Ok(())
     }
 
     /// Same-file: reorders; the anchor is checked before anything moves (`apply` is unchanged on
-    /// `Err`, task sync-poison-op). Cross-file: removes only — the destination has its `Insert`.
+    /// `Err`, task sync-poison-op), and a move older than the task's placement is dropped, so the
+    /// newest of two concurrent moves wins everywhere. Cross-file: removes only — the destination
+    /// has its `Insert`.
     fn move_task(
         &mut self,
         task: TaskId,
         after: Option<TaskId>,
         to_file: &FilePath,
+        hlc: Hlc,
     ) -> Result<(), StateError> {
         if *to_file != self.path {
             let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
-            self.entries.remove(from);
+            self.remove_entry(from);
             return Ok(());
         }
         if after == Some(task) {
@@ -301,19 +316,23 @@ impl DocState {
         if let Some(a) = after.filter(|a| self.index_of(*a).is_none()) {
             return Err(StateError::UnknownTask(a));
         }
-        let entry = self.entries.remove(from);
-        let at = self.position_after(after)?;
-        self.entries.insert(at, entry);
+        if self.is_stale_move(from, hlc) {
+            order::log_stale_move(task);
+            return Ok(());
+        }
+        let entry = self.remove_entry(from);
+        let at = self.slot_after(after, hlc)?;
+        self.insert_entry(at, entry, hlc);
         Ok(())
     }
 
-    fn blank_insert(&mut self, after: Option<TaskId>) -> Result<(), StateError> {
+    fn blank_insert(&mut self, after: Option<TaskId>, hlc: Hlc) -> Result<(), StateError> {
         if self.entries.len() + 1 > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(self.entries.len() + 1));
         }
-        let at = self.position_after(after)?;
+        let at = self.slot_after(after, hlc)?;
         let entry = Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending));
-        self.entries.insert(at, entry);
+        self.insert_entry(at, entry, hlc);
         Ok(())
     }
 
@@ -321,7 +340,7 @@ impl DocState {
         let at = self.position_after(after)?;
         match self.entries.get(at) {
             Some(Entry::Blank(_)) => {
-                self.entries.remove(at);
+                self.remove_entry(at);
                 Ok(())
             }
             _ => Err(StateError::NoBlank(after)),

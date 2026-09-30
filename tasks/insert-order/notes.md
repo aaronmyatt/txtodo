@@ -47,9 +47,34 @@ source would mean syncing Loro updates instead of ops, a protocol change.
 Rejected: tie-breaking on TaskId (ULID). A device whose clock is behind mints ids smaller than
 the lines it inserts after, so its own adds would land below lines it meant to precede.
 
+## As built (2026-09-30)
+
+- `state_order.rs` (a child module of `state.rs`): `slot_after` (the skip rule),
+  `is_stale_move`, `settle_scratch_stamps`, `adopt_stamps`, `newest_stamp`, `scratch_op`.
+  `DocState` holds `stamps` beside `entries`; equality ignores them.
+- `state.rs`: `Insert`, same-file `Move` and `BlankInsert` place through `slot_after`; a move older
+  than its task's placement is dropped (`move_older_than_placement`, debug).
+- `sync_ops.rs`: `observe_peer_stamps` merges a batch's newest stamp (`Hlc::merge`); a refused
+  merge logs `sync_stamp_not_merged`.
+- `actor.rs::commit_inner` re-stamps scratch placements with the commit's HLC.
+- `log_repair.rs`: stamps from the replay at open; the clock catches up to the newest one; a
+  repair's ops are stamped after that, so they sort as newest on a peer.
+- `reconcile_replay.rs::bare` and `DocState::apply_kind` use `scratch_op`.
+- Tests: `state_order_tests.rs` (every arrival order of concurrent inserts, chains, blanks,
+  moves and completions renders the same bytes; same-commit ops and the newest op land as
+  before) and `sync_ops_tests.rs` (clock merge; stamps come back after a restart, and a late
+  concurrent op lands the same).
+
 ## Known gaps
 
+- The first open after this change replays each log under the new rule. A log whose history
+  holds concurrent placements, or stamps that went backwards, replays to another order than the
+  file; `repair_log` then commits `Move`s (`todo_log_repaired`) that keep the file as it is, and
+  those sync to paired devices.
+- An insert after task T concurrent with a move of T still depends on arrival order: an anchor
+  names a task, not the spot it was in. Same for an insert after a task another device deleted,
+  which is skipped (`sync_op_skipped`): deletes remove the entry, there is no tombstone. Both need
+  a placement tree with tombstones (Kleppmann et al. 2020, "Moving elements in list CRDTs").
 - A replay cut off at `MAX_REPLAY_PAGES` leaves zero stamps after a restart.
 - When the log does not rebuild the file and the repair runs, blank lines keep zero stamps.
-- An op anchored on a task another device deleted is still skipped (`sync_op_skipped`): deletes
-  remove the entry, there is no tombstone to anchor on.
+- The Loro mirror still places in arrival order; it is never read for bytes.

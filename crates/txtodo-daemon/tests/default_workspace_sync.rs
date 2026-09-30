@@ -59,7 +59,9 @@ async fn two_devices_defaults_at_different_paths_converge_to_the_union() {
         let a = String::from_utf8(file_at(&mut client_a, &default_a).await).unwrap();
         let b = String::from_utf8(file_at(&mut client_b, &default_b).await).unwrap();
         let both = |t: &str| t.contains("buy milk") && t.contains("walk the dog");
-        if both(&a) && both(&b) {
+        // Byte-equal, not just the same lines: two concurrent adds used to land in a different
+        // order on each device and stay that way (task insert-order).
+        if both(&a) && both(&b) && a == b {
             assert_eq!(a.lines().count(), 2, "the union, not duplicates: {a:?}");
             assert_eq!(b.lines().count(), 2, "the union, not duplicates: {b:?}");
             return;
