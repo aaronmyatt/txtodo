@@ -84,12 +84,15 @@ impl FileActor {
             }
             Err(_) => return self.on_external_change().map(|_| ()),
         }
+        // A write held for an unmerged save when we stopped: merged three-way below, not read as
+        // the held ops' lines having been deleted (`pending_save.rs`).
+        self.restore_held()?;
         if p.hash == disk_hash {
-            return Ok(());
+            return self.forget_held();
         }
         if prev == Some(disk_hash) {
             self.write_projection()?;
-            return Ok(());
+            return self.forget_held();
         }
         self.on_external_change().map(|_| ())
     }

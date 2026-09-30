@@ -54,16 +54,48 @@ impl FileActor {
         let wrote = (self.pending_save.is_none() || merging.is_some())
             && self.write_projection_if_ours(ours)?;
         if wrote {
-            self.pending_save = None;
+            self.settle_held()?;
         } else if self.pending_save.is_none() {
-            self.pending_save = Some(PendingSave {
+            self.hold(PendingSave {
                 base: before_bytes,
                 base_ids: before.line_ids().collect(),
-            });
+            })?;
             log_write_held(&self.cfg.path);
         }
         debug_assert!(wrote != self.pending_save.is_some());
         Ok(())
+    }
+
+    /// Holds writes for `pending`, and keeps its base in the store: a restart before the merge
+    /// resumes it three-way (`restore_held`) instead of reading the held ops as deleted lines.
+    fn hold(&mut self, pending: PendingSave) -> Result<(), ActorError> {
+        let encoded = encode_held(&pending);
+        let key = held_key(&self.cfg.path);
+        self.lock_store().meta_set(&key, &encoded)?;
+        self.pending_save = Some(pending);
+        Ok(())
+    }
+
+    /// The file holds our state again: nothing is held.
+    fn settle_held(&mut self) -> Result<(), ActorError> {
+        if self.pending_save.take().is_some() {
+            let key = held_key(&self.cfg.path);
+            self.lock_store().meta_set(&key, &[])?;
+        }
+        Ok(())
+    }
+
+    /// At open, before the disk is compared with the projection: a base a crash left held.
+    pub(crate) fn restore_held(&mut self) -> Result<(), ActorError> {
+        let key = held_key(&self.cfg.path);
+        let stored = self.lock_store().meta_get(&key)?;
+        self.pending_save = stored.as_deref().and_then(decode_held);
+        Ok(())
+    }
+
+    /// At open, when the file turned out to hold our projection after all.
+    pub(crate) fn forget_held(&mut self) -> Result<(), ActorError> {
+        self.settle_held()
     }
 
     /// Writes the projection unless, checked right before the rename, the file holds neither
@@ -96,7 +128,7 @@ impl FileActor {
         let disk = read_or_empty(&self.cfg.disk)?;
         if disk == base {
             if self.write_projection_if_ours(hash_of(&base))? {
-                self.pending_save = None;
+                self.settle_held()?;
             }
             return Ok(());
         }
@@ -121,9 +153,11 @@ impl FileActor {
         self.absorbing = None;
         // Another save landed during this write: what we just merged is the next merge's base,
         // or its lines would be merged in twice.
-        if let Some(pending) = self.pending_save.as_mut() {
-            pending.base = disk;
-            pending.base_ids = merged_ids;
+        if self.pending_save.is_some() {
+            self.hold(PendingSave {
+                base: disk,
+                base_ids: merged_ids,
+            })?;
         }
         committed.map(|_| ())
     }
@@ -227,4 +261,47 @@ fn log_save_op_skipped(op: &Op, e: &crate::state::StateError) {
 /// The same event `write_projection_and_log` emits, so the lab and logs read one name.
 fn log_projection_written(path: &txtodo_model::FilePath, bytes: usize, hash: &Hash) {
     tracing::info!(file = %path, bytes, hash = %crate::expected::hex8(hash), "projection_written");
+}
+
+/// The store's meta key for a document's held base.
+fn held_key(path: &txtodo_model::FilePath) -> String {
+    format!("held_base/{path}")
+}
+
+/// A held base as bytes: the id count, one id per line (`-` for a blank), then the base itself.
+/// Empty means nothing is held.
+fn encode_held(pending: &PendingSave) -> Vec<u8> {
+    let mut out = format!("{}\n", pending.base_ids.len()).into_bytes();
+    for id in &pending.base_ids {
+        let line = id.map_or_else(|| "-".to_owned(), |t| t.to_string());
+        out.extend_from_slice(line.as_bytes());
+        out.push(b'\n');
+    }
+    out.extend_from_slice(&pending.base);
+    debug_assert!(!out.is_empty());
+    out
+}
+
+/// `encode_held`'s inverse; `None` for empty or unreadable bytes (then nothing is held).
+fn decode_held(bytes: &[u8]) -> Option<PendingSave> {
+    let mut rest = bytes;
+    let mut next_line = || {
+        let end = rest.iter().position(|b| *b == b'\n')?;
+        let line = std::str::from_utf8(&rest[..end]).ok()?.to_owned();
+        rest = &rest[end + 1..];
+        Some(line)
+    };
+    let count: usize = next_line()?.parse().ok()?;
+    let mut base_ids = Vec::with_capacity(count.min(crate::state::MAX_LINES_PER_FILE));
+    for _ in 0..count {
+        let line = next_line()?;
+        base_ids.push(match line.as_str() {
+            "-" => None,
+            id => Some(TaskId::new(txtodo_model::Ulid::parse(id)?)),
+        });
+    }
+    Some(PendingSave {
+        base: rest.to_vec(),
+        base_ids,
+    })
 }

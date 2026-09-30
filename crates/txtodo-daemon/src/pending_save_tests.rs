@@ -202,3 +202,33 @@ async fn a_saved_line_whose_anchor_a_peer_deleted_still_lands() {
     );
     assert_eq!(handle.get().await.unwrap().bytes, text.as_bytes());
 }
+
+/// A stop while a write is held (a crash, a restart): the reopened actor merges the save three-way
+/// against the base the store kept, instead of reading the held add's line as deleted.
+#[tokio::test]
+async fn a_restart_while_a_write_is_held_keeps_both() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), format!("cli-1 id:{A}\n")).unwrap();
+    let store: SharedStore = Arc::new(Mutex::new(
+        Store::open(&dir.path().join("oplog.db")).unwrap(),
+    ));
+    let clock: Arc<dyn crate::clock::Clock> = Arc::new(FakeClock::new(1_000));
+    let open = || {
+        FileActor::open(cfg(dir.path()), Arc::clone(&store), Arc::clone(&clock))
+            .unwrap()
+            .spawn()
+    };
+    let handle = open();
+    editor_appends(dir.path(), &format!("editor-2 id:{E}"));
+    add(&handle, "cli-3").await;
+    assert!(!disk(dir.path()).contains("cli-3"), "held");
+    drop(handle);
+    let reopened = open();
+    let text = String::from_utf8(reopened.get().await.unwrap().bytes).unwrap();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|l| l.split(" id:").next().unwrap())
+        .collect();
+    assert_eq!(lines, vec!["cli-1", "editor-2", "cli-3"], "{text}");
+    assert_eq!(disk(dir.path()), text);
+}
