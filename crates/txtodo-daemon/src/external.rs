@@ -101,6 +101,12 @@ impl FileActor {
         let _span =
             tracing::info_span!("reconcile", file = %self.cfg.path, workspace = %workspace.display())
                 .entered();
+        // Our state is ahead of the file (a commit landed while this save waited out the
+        // debounce): three-way, against what we last wrote (`pending_save.rs`).
+        if self.pending_save.is_some() {
+            self.merge_pending_save()?;
+            return Ok(None);
+        }
         let bytes = read_or_empty(&self.cfg.disk)?;
         if self.log_and_skip_own_write(&bytes) {
             return Ok(None);
@@ -109,8 +115,11 @@ impl FileActor {
             device: self.cfg.device,
         };
         let reconciled = self.derive_reconciled_ops(&bytes, &principal)?;
-        let change = self.commit_reconciled(reconciled, Some("external".to_owned()))?;
-        Ok(Some(change))
+        // This commit merges exactly these bytes, so its write may replace them.
+        self.absorbing = Some(hash_of(&bytes));
+        let change = self.commit_reconciled(reconciled, Some("external".to_owned()));
+        self.absorbing = None;
+        Ok(Some(change?))
     }
 
     /// `on_external_change`'s reconcile-and-commit for bytes that did not come off disk

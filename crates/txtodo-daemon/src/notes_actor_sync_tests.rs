@@ -214,3 +214,42 @@ fn a_log_with_no_base_op_is_repaired_at_open_and_a_fresh_peer_gets_the_whole_fil
         "the peer's log already rebuilds its text: no repair of its own"
     );
 }
+
+/// Task editor-save-lost: nothing watches notes.md, so an editor's save used to be replaced by
+/// the next peer op's write. It is now committed first and kept.
+#[test]
+fn an_editors_save_survives_a_peers_op_landing_after_it() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (store_a, clock_a, cfg_a) = setup(dir.path(), 1);
+    let mut a = NotesActor::open(cfg_a.clone(), Arc::clone(&store_a), clock_a)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let me = Principal::User {
+        device: cfg_a.device,
+    };
+    a.edit("base\n", me.clone())
+        .unwrap_or_else(|e| panic!("{e}"));
+    let (store_b, clock_b, cfg_b) = setup(dir.path(), 2);
+    let mut b = NotesActor::open(cfg_b.clone(), Arc::clone(&store_b), clock_b)
+        .unwrap_or_else(|e| panic!("{e}"));
+    b.import_ops(ops_for(&store_a, &cfg_a.path))
+        .unwrap_or_else(|e| panic!("{e}"));
+    // An editor on b saves, then a's next edit arrives before anything else touches b.
+    std::fs::write(&cfg_b.disk, "base\nsaved on b\n").unwrap_or_else(|e| panic!("{e}"));
+    a.edit("from a\nbase\n", me)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let newest = ops_for(&store_a, &cfg_a.path).pop().unwrap();
+    b.import_ops(vec![newest]).unwrap_or_else(|e| panic!("{e}"));
+    let text = String::from_utf8(b.contents().0).unwrap_or_default();
+    assert_eq!(text, "from a\nbase\nsaved on b\n");
+    assert_eq!(
+        std::fs::read_to_string(&cfg_b.disk).unwrap_or_default(),
+        text
+    );
+    let saved = ops_for(&store_b, &cfg_b.path);
+    assert!(
+        saved
+            .iter()
+            .any(|op| matches!(op.principal, Principal::External { .. })),
+        "the save is an op b's peers can fetch"
+    );
+}

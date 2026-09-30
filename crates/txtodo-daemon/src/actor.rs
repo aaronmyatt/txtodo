@@ -87,6 +87,10 @@ pub struct FileActor {
     pub(crate) expected: ExpectedWrites,
     pub(crate) changes: broadcast::Sender<Change>,
     pub(crate) writes_total: u64,
+    /// A save on disk not merged yet: writes are held until it is (`pending_save.rs`).
+    pub(crate) pending_save: Option<crate::pending_save::PendingSave>,
+    /// The disk bytes a commit in flight is merging: its write may replace them.
+    pub(crate) absorbing: Option<Hash>,
 }
 
 impl FileActor {
@@ -113,6 +117,8 @@ impl FileActor {
             expected: ExpectedWrites::default(),
             changes,
             writes_total: 0,
+            pending_save: None,
+            absorbing: None,
         };
         actor.recover()?;
         actor.repair_log()?;
@@ -144,6 +150,7 @@ impl FileActor {
                 break;
             }
             self.handle(msg);
+            self.merge_settled_save();
         }
     }
 
@@ -286,6 +293,9 @@ impl FileActor {
             next.settle_scratch_stamps(first.hlc);
         }
         let new_hash = hash_of(&bytes);
+        // Asked before the state moves on: a save we have not merged holds the write, with our
+        // current projection as the merge base (`pending_save.rs`).
+        let write = write && self.may_write()?;
         let range = self.persist_change(&ops, &bytes, &tail, &next)?;
         self.state = next;
         self.projection = bytes;

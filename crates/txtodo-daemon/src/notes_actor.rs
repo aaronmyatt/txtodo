@@ -5,11 +5,9 @@
 //! (`write::write_atomic`, temp + fsync + rename), and a hash comparison at open time to tell our
 //! own projection from a foreign edit.
 //!
-//! No tokio mailbox: unlike `FileActor`, nothing drives a notes.md from a filesystem watcher in
-//! this plan (M5's scope is `GetNotes`/`EditNotes` plus history/undo/checkout — a live
-//! external-edit reconciler for notes.md is a natural follow-up, not required here). One writer is
-//! instead enforced by `notes_registry.rs`'s `Arc<Mutex<NotesActor>>` per path: every `GetNotes`/
-//! `EditNotes` call for the same `ref:` directory serialises through the same lock.
+//! No tokio mailbox and no watcher: an editor's save is picked up at open and before each write
+//! (`absorb_disk`, task editor-save-lost), never live. One writer is `notes_registry.rs`'s
+//! `Arc<Mutex<NotesActor>>` per path: every call for one `ref:` directory takes the same lock.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -88,11 +86,7 @@ impl NotesActor {
             store,
             clock,
         };
-        if hash_of(&disk_bytes) != actor.hash {
-            let device = actor.cfg.device;
-            let disk_text = String::from_utf8_lossy(&disk_bytes).into_owned();
-            actor.edit(&disk_text, Principal::External { device })?;
-        }
+        actor.absorb_disk_text(&disk_bytes)?;
         if own_text {
             actor.repair_log()?;
         }
@@ -207,6 +201,28 @@ impl NotesActor {
     /// text (`txtodo_core::diff_text`, the same char-level convention `EditText` uses), so
     /// concurrent edits from two devices still merge character-wise once both land in the mirror.
     pub fn edit(&mut self, new_text: &str, principal: Principal) -> Result<Applied, ActorError> {
+        self.absorb_disk()?;
+        self.edit_text(new_text, principal)
+    }
+
+    /// Task editor-save-lost: nothing watches notes.md, so before any write, text on disk that
+    /// is not our projection (an editor's save) is committed first as this device's `External`
+    /// edit, and never written over. It can still be read mid-save (no debounce here).
+    fn absorb_disk(&mut self) -> Result<(), ActorError> {
+        let disk = std::fs::read(&self.cfg.disk).unwrap_or_default();
+        self.absorb_disk_text(&disk)
+    }
+
+    fn absorb_disk_text(&mut self, disk: &[u8]) -> Result<(), ActorError> {
+        if hash_of(disk) != self.hash {
+            let device = self.cfg.device;
+            let text = String::from_utf8_lossy(disk).into_owned();
+            self.edit_text(&text, Principal::External { device })?;
+        }
+        Ok(())
+    }
+
+    fn edit_text(&mut self, new_text: &str, principal: Principal) -> Result<Applied, ActorError> {
         let edits: Vec<TextEdit> = txtodo_core::diff_text(self.state.text(), new_text)
             .into_iter()
             .map(TextEdit::from)
@@ -233,6 +249,7 @@ impl NotesActor {
         updates: &[u8],
         peer: DeviceId,
     ) -> Result<Applied, ActorError> {
+        self.absorb_disk()?;
         let (before, after) = self.mirror.import(updates).map_err(mirror_err)?;
         if before == after {
             return Ok(self.no_op_applied());
@@ -263,6 +280,7 @@ impl NotesActor {
         if ops.is_empty() {
             return Ok(());
         }
+        self.absorb_disk()?;
         let mut next = self.state.clone();
         let skipped: Vec<OpId> = apply_leniently(&mut next, &ops)
             .into_iter()

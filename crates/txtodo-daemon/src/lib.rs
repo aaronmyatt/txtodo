@@ -102,6 +102,7 @@ mod pairing_state;
 mod pairing_state_error;
 mod pairing_wire;
 mod peer_keys;
+mod pending_save;
 pub mod pidfile;
 mod progress;
 pub mod reconcile;
@@ -237,6 +238,8 @@ mod pairing_lan_tests;
 mod peer_keys_dial_tests;
 #[cfg(test)]
 mod peer_keys_tests;
+#[cfg(test)]
+mod pending_save_tests;
 #[cfg(test)]
 mod reconcile_replay_tests;
 #[cfg(test)]
