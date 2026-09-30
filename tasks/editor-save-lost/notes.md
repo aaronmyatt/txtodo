@@ -39,8 +39,8 @@ The design doc already says it (§4.3 step 3): the state "may already be ahead" 
 written, and the reconcile is three-way. The code assumed state == disk.
 
 - `todo.txt` (`FileActor`):
-  - Before writing, the commit checks the disk: our last write (or a recent one), or bytes this
-    commit is merging, go ahead. Anything else is someone's save we have not merged: the commit
+  - Right before its rename, the write checks the disk: our last write (or a recent one), or bytes
+    this commit is merging, go ahead. Anything else is someone's save we have not merged: the commit
     lands in the store and the state as usual, but the file is not written. The actor keeps the
     bytes it last wrote (and their task ids): the base of a three-way merge.
   - When the watcher's event comes, the merge runs: reconcile base → disk (the editor's changes),
@@ -55,12 +55,23 @@ written, and the reconcile is three-way. The code assumed state == disk.
   disk is compared with the projection, and foreign text is committed first as an `External`
   `NotesEdit`. It can still be read mid-write; watching notes.md is its own task.
 
-## As built (2026-09-30)
+## As built (2026-09-30, reworked 2026-10-01 after the lab)
 
-- `pending_save.rs`: `may_write` (the gate `commit_inner` asks before the state moves on; the
-  first refusal keeps the base, logs `write_held_for_unmerged_save`), `merge_pending_save` (the
-  three-way merge; an edit that no longer fits logs `save_op_skipped`), `merge_settled_save`
-  (after every mailbox message, for a save quiet for 1 s).
+- `pending_save.rs`:
+  - `write_or_hold`, `commit_inner`'s write: `write::write_atomic_if` writes and syncs the temp
+    file, checks the disk, then renames or holds (logs `write_held_for_unmerged_save`). The first
+    version checked before the SQLite commit; the lab (lan-converge, seed 830835642) still lost a
+    save that landed in that gap on a busy device.
+  - The held base is kept in the store (`meta` key `held_base/<file>`): a restart restores it in
+    `recover` and merges three-way, instead of reading the held ops' lines as deleted.
+  - `merge_pending_save`: the three-way merge. An insert or move whose anchor the state lost (a
+    peer deleted the line above) is re-anchored on the nearest line above it in the editor's
+    file that still exists (`reanchor`); the lab lost a saved line that way. Other edits that no
+    longer fit log `save_op_skipped`. The base stays held until the merge's own write lands; if
+    another save lands during it, what was just merged becomes the next base.
+  - `merge_settled_save`: after every mailbox message, for a save quiet for 1 s.
+- Lab, lan-converge seed 830835642: the old build lost a `todo.txt` save; this one lost none in
+  two attempts. The one token still lost is a `notes.md` save (no watcher, gap below).
 - `external.rs::on_external_change` runs the merge when a save is pending, and marks the bytes
   it reconciles (`absorbing`) so its own write is let through.
 - `notes_actor.rs`: `absorb_disk` before `edit`, `import_ops` and `import_updates`; `open` uses
@@ -69,13 +80,13 @@ written, and the reconcile is three-way. The code assumed state == disk.
   watcher has not delivered yet"); it now also refuses while a save is held, and the client
   retries.
 - Tests: `pending_save_tests.rs` (a save then a CLI add, then peer ops, then undone, then never
-  reported) and `notes_actor_sync_tests.rs` (a notes.md save then a peer op). All five fail on
-  the old code: each checks the save is still on disk after the daemon's next write.
+  reported, then its anchor deleted by a peer, then a restart while held) and
+  `notes_actor_sync_tests.rs` (a notes.md save then a peer op). Each fails on the old code.
 
 ## Known gaps
 
-- The check and the rename are not atomic: a save landing in the microseconds between them is
-  still overwritten.
+- The check and the rename are not atomic: a save landing between one read-and-hash and the
+  rename is still overwritten.
 - `notes.md` saves are picked up at the next write or open, not live; watching notes.md is its
   own task.
 - A line the editor changed that a peer changed or deleted in the same window: the editor's op
