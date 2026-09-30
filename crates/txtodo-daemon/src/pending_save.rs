@@ -3,24 +3,27 @@
 //!
 //! The watcher reports a save only after its debounce, so a commit can land first (a CLI edit, a
 //! peer's ops). It used to write its render straight over the save, and the watcher's event then
-//! found the daemon's own bytes and skipped the reconcile: the save was gone. Now a commit that
-//! finds the file is not its last write (nor a recent one, nor bytes it is merging) lands in the
-//! store and the state but leaves the file alone, keeping what it last wrote as the base. The
-//! watcher's event then merges three-way (design §4.3 step 3: the state "may already be ahead" of
-//! the bytes last written): the editor's changes, base → disk, applied on the current state, and
-//! one write. Folding the disk in before every write instead would skip the debounce and could
-//! read a save written in place half-way through.
+//! found the daemon's own bytes and skipped the reconcile: the save was gone. Now the write checks
+//! the file right before its rename (temp file written and synced): unless it is our last write, a
+//! recent one, or the bytes this commit merges, the rename is dropped. The commit still lands in
+//! the store and the state; what we last wrote is kept as the base. The watcher's event then
+//! merges three-way (design §4.3 step 3: the state "may already be ahead" of the bytes last
+//! written): the editor's changes, base → disk, applied on the current state, and one write.
+//! Folding the disk in before every write instead would skip the debounce and could read a save
+//! written in place half-way through. A check before the commit instead of before the rename left
+//! the SQLite commit and the fsync between check and rename: the lab still lost saves there.
 
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::actor::{Commit, CommitTail, FileActor, hash_of};
+use crate::expected::Hash;
 use crate::handle::ActorError;
 use crate::reconcile::reconcile;
 use crate::reconcile_sidecar::{Side, reconcile_sidecar};
 use crate::state::{DocState, scratch_op};
 use crate::sync_ops::apply_leniently;
-use crate::write::read_or_empty;
+use crate::write::{read_or_empty, write_atomic_if};
 use txtodo_core::parse_file;
 use txtodo_model::{CostWeights, IdentityMode, Op, OpKind, Principal, TaskId};
 
@@ -36,39 +39,68 @@ pub(crate) struct PendingSave {
 const SETTLED: Duration = Duration::from_secs(1);
 
 impl FileActor {
-    /// `commit_inner`'s gate, asked before the state moves on: may this commit write the file?
-    /// No while a save is pending. Else yes when the file holds our last write, a recent one, or
-    /// the bytes this commit merges; anything else is a save we have not merged, so it becomes
-    /// pending with our current projection as its base.
-    pub(crate) fn may_write(&mut self) -> Result<bool, ActorError> {
-        if self.pending_save.is_some() {
-            return Ok(false);
+    /// `commit_inner`'s write, after the state moved on: `ours` is the hash of what we last put
+    /// on disk, `before` the state and bytes it rendered. While a save is pending, and unless this
+    /// commit is the merge, nothing is written. Else the new projection replaces the file only if,
+    /// right before the rename, the file is still ours; otherwise the save it holds becomes
+    /// pending, based on `before` (an older base, if one is already pending, is kept).
+    pub(crate) fn write_or_hold(
+        &mut self,
+        ours: Hash,
+        before_bytes: Vec<u8>,
+        before: &DocState,
+    ) -> Result<(), ActorError> {
+        let merging = self.absorbing;
+        let wrote = (self.pending_save.is_none() || merging.is_some())
+            && self.write_projection_if_ours(ours)?;
+        if wrote {
+            self.pending_save = None;
+        } else if self.pending_save.is_none() {
+            self.pending_save = Some(PendingSave {
+                base: before_bytes,
+                base_ids: before.line_ids().collect(),
+            });
+            log_write_held(&self.cfg.path);
         }
-        let disk = hash_of(&read_or_empty(&self.cfg.disk)?);
+        debug_assert!(wrote != self.pending_save.is_some());
+        Ok(())
+    }
+
+    /// Writes the projection unless, checked right before the rename, the file holds neither
+    /// `ours`, a recent write of ours, nor the bytes being merged.
+    fn write_projection_if_ours(&mut self, ours: Hash) -> Result<bool, ActorError> {
         let now = self.clock.now_instant();
-        if disk == self.hash || self.absorbing == Some(disk) || self.expected.is_ours(&disk, now) {
-            return Ok(true);
+        self.expected.arm(self.hash, now);
+        let (disk, merging, expected) = (&self.cfg.disk, self.absorbing, &mut self.expected);
+        let still_ours = || {
+            let found = hash_of(&read_or_empty(disk)?);
+            Ok(found == ours || Some(found) == merging || expected.is_ours(&found, now))
+        };
+        let wrote = write_atomic_if(disk, &self.projection, still_ours)?;
+        if wrote {
+            self.writes_total += 1;
+            self.cfg.stats.count_write();
+            log_projection_written(&self.cfg.path, self.projection.len(), &self.hash);
         }
-        self.pending_save = Some(PendingSave {
-            base: self.projection.clone(),
-            base_ids: self.state.line_ids().collect(),
-        });
-        log_write_held(&self.cfg.path);
-        Ok(false)
+        Ok(wrote)
     }
 
     /// The watcher's event for a file with a pending save: merges it, or, when the file holds our
-    /// base again (the save was undone), writes what the state has now.
+    /// base again (the save was undone), writes what the state has now. The base stays pending
+    /// until the merge's own write lands, so a second save racing the merge is merged next time.
     pub(crate) fn merge_pending_save(&mut self) -> Result<(), ActorError> {
-        let Some(pending) = self.pending_save.take() else {
+        let Some(pending) = self.pending_save.as_ref() else {
             return Ok(());
         };
+        let (base, base_ids) = (pending.base.clone(), pending.base_ids.clone());
         let disk = read_or_empty(&self.cfg.disk)?;
-        if disk == pending.base {
-            self.write_projection_and_log(self.hash)?;
+        if disk == base {
+            if self.write_projection_if_ours(hash_of(&base))? {
+                self.pending_save = None;
+            }
             return Ok(());
         }
-        let ops = self.save_ops(&pending, &disk)?;
+        let (ops, merged_ids) = self.save_ops(&base, &base_ids, &disk)?;
         let mut next = self.state.clone();
         for (op, e) in apply_leniently(&mut next, &ops) {
             log_save_op_skipped(op, &e);
@@ -87,14 +119,24 @@ impl FileActor {
             },
         });
         self.absorbing = None;
-        debug_assert!(committed.is_err() || self.pending_save.is_none());
+        // Another save landed during this write: what we just merged is the next merge's base,
+        // or its lines would be merged in twice.
+        if let Some(pending) = self.pending_save.as_mut() {
+            pending.base = disk;
+            pending.base_ids = merged_ids;
+        }
         committed.map(|_| ())
     }
 
     /// The editor's changes as this device's stamped ops: base → disk, reconciled the same way
-    /// as any external edit.
-    fn save_ops(&mut self, pending: &PendingSave, disk: &[u8]) -> Result<Vec<Op>, ActorError> {
-        let (old, new) = (parse_file(&pending.base), parse_file(disk));
+    /// as any external edit; and the task ids of the disk's lines as merged.
+    fn save_ops(
+        &mut self,
+        base: &[u8],
+        base_ids: &[Option<TaskId>],
+        disk: &[u8],
+    ) -> Result<(Vec<Op>, Vec<Option<TaskId>>), ActorError> {
+        let (old, new) = (parse_file(base), parse_file(disk));
         let clock = Arc::clone(&self.clock);
         let mut mint = || TaskId::new(clock.new_ulid());
         let r = match self.cfg.identity_mode {
@@ -102,7 +144,7 @@ impl FileActor {
             IdentityMode::Sidecar => reconcile_sidecar(
                 Side {
                     file: &old,
-                    ids: &pending.base_ids,
+                    ids: base_ids,
                 },
                 &new,
                 &self.cfg.path,
@@ -114,7 +156,7 @@ impl FileActor {
         let principal = Principal::External {
             device: self.cfg.device,
         };
-        self.stamp(kinds, &principal)
+        Ok((self.stamp(kinds, &principal)?, r.ids))
     }
 
     /// After any message: a pending save whose file has sat still for [`SETTLED`] is merged now,
@@ -180,4 +222,9 @@ fn log_write_held(path: &txtodo_model::FilePath) {
 /// the same moment): the state keeps its version.
 fn log_save_op_skipped(op: &Op, e: &crate::state::StateError) {
     tracing::warn!(file = %op.file, op = %op.id.ulid(), error = %e, "save_op_skipped");
+}
+
+/// The same event `write_projection_and_log` emits, so the lab and logs read one name.
+fn log_projection_written(path: &txtodo_model::FilePath, bytes: usize, hash: &Hash) {
+    tracing::info!(file = %path, bytes, hash = %crate::expected::hex8(hash), "projection_written");
 }

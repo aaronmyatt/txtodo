@@ -293,16 +293,14 @@ impl FileActor {
             next.settle_scratch_stamps(first.hlc);
         }
         let new_hash = hash_of(&bytes);
-        // Asked before the state moves on: a save we have not merged holds the write, with our
-        // current projection as the merge base (`pending_save.rs`).
-        let write = write && self.may_write()?;
         let range = self.persist_change(&ops, &bytes, &tail, &next)?;
-        self.state = next;
-        self.projection = bytes;
-        self.hash = new_hash;
+        let before = std::mem::replace(&mut self.state, next);
+        let before_bytes = std::mem::replace(&mut self.projection, bytes);
+        let before_hash = std::mem::replace(&mut self.hash, new_hash);
         // Disk first: a first mirror flush after a restart materialises the whole Loro snapshot.
+        // A save we have not merged is never written over (`pending_save.rs`).
         if write {
-            self.write_projection_and_log(new_hash)?;
+            self.write_or_hold(before_hash, before_bytes, &before)?;
         }
         crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
         self.update_mirror_after_commit(snapshot, tail.flush, &ops);

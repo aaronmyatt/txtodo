@@ -80,6 +80,32 @@ fn write_atomic_inner(path: &Path, bytes: &[u8]) -> Result<(), WriteError> {
     Ok(())
 }
 
+/// `write_atomic`, but asks `still_ours` right before the rename, once the temp file is written
+/// and synced: `false` removes the temp file and leaves `path` alone (task editor-save-lost: an
+/// editor's save landed while we were writing). Returns whether `path` now holds `bytes`.
+pub fn write_atomic_if(
+    path: &Path,
+    bytes: &[u8],
+    still_ours: impl FnOnce() -> Result<bool, WriteError>,
+) -> Result<bool, WriteError> {
+    let tmp = temp_path_for(path);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(err("create directory", dir))?;
+    }
+    let mut file = std::fs::File::create(&tmp).map_err(err("create temp file", &tmp))?;
+    file.write_all(bytes).map_err(err("write", &tmp))?;
+    file.sync_all().map_err(err("fsync", &tmp))?;
+    drop(file);
+    if !still_ours()? {
+        std::fs::remove_file(&tmp).map_err(err("remove temp file", &tmp))?;
+        return Ok(false);
+    }
+    std::fs::rename(&tmp, path).map_err(err("rename over", path))?;
+    debug_assert!(!tmp.exists(), "rename consumed the temp file");
+    log_write_atomic_done();
+    Ok(true)
+}
+
 /// Split out so the event macro doesn't count against `write_atomic`'s own `#[instrument]` budget.
 fn log_write_atomic_done() {
     tracing::debug!("write_atomic_done");
