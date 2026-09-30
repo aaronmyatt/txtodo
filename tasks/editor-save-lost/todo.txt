@@ -1,6 +1,6 @@
-2026-09-30 FileActor: defer the write when the file is not our last write; keep the base +m11 @daemon
-2026-09-30 FileActor: three-way merge of a pending save on the watcher's event +m11 @daemon
-2026-09-30 FileActor: merge a settled pending save after any message (missed event) +m11 @daemon
-2026-09-30 NotesActor: commit foreign disk text before edit and imports +m11 @daemon
-2026-09-30 Tests: a save then a CLI add, then peer ops; notes save then a peer op +m11 @daemon
+x 2026-09-30 2026-09-30 FileActor: defer the write when the file is not our last write; keep the base +m11 @daemon — pending_save.rs may_write, the gate commit_inner asks first
+x 2026-09-30 2026-09-30 FileActor: three-way merge of a pending save on the watcher's event +m11 @daemon — merge_pending_save; a no-longer-fitting edit logs save_op_skipped
+x 2026-09-30 2026-09-30 FileActor: merge a settled pending save after any message (missed event) +m11 @daemon — merge_settled_save after every mailbox message, 1 s of quiet
+x 2026-09-30 2026-09-30 NotesActor: commit foreign disk text before edit and imports +m11 @daemon — absorb_disk; known gap: notes.md saves are picked up at the next write, not live
+x 2026-09-30 2026-09-30 Tests: a save then a CLI add, then peer ops; notes save then a peer op +m11 @daemon — 5 new tests, each fails on the old code; 656 daemon tests and 12 slow ones pass
 2026-09-30 Re-run the lab's lan-converge +m11 @sync

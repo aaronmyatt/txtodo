@@ -55,9 +55,28 @@ written, and the reconcile is three-way. The code assumed state == disk.
   disk is compared with the projection, and foreign text is committed first as an `External`
   `NotesEdit`. It can still be read mid-write; watching notes.md is its own task.
 
+## As built (2026-09-30)
+
+- `pending_save.rs`: `may_write` (the gate `commit_inner` asks before the state moves on; the
+  first refusal keeps the base, logs `write_held_for_unmerged_save`), `merge_pending_save` (the
+  three-way merge; an edit that no longer fits logs `save_op_skipped`), `merge_settled_save`
+  (after every mailbox message, for a save quiet for 1 s).
+- `external.rs::on_external_change` runs the merge when a save is pending, and marks the bytes
+  it reconciles (`absorbing`) so its own write is let through.
+- `notes_actor.rs`: `absorb_disk` before `edit`, `import_ops` and `import_updates`; `open` uses
+  the same check.
+- `replace.rs` already refused a `Replace` while the disk was not our write ("an editor save the
+  watcher has not delivered yet"); it now also refuses while a save is held, and the client
+  retries.
+- Tests: `pending_save_tests.rs` (a save then a CLI add, then peer ops, then undone, then never
+  reported) and `notes_actor_sync_tests.rs` (a notes.md save then a peer op). All five fail on
+  the old code: each checks the save is still on disk after the daemon's next write.
+
 ## Known gaps
 
 - The check and the rename are not atomic: a save landing in the microseconds between them is
   still overwritten.
+- `notes.md` saves are picked up at the next write or open, not live; watching notes.md is its
+  own task.
 - A line the editor changed that a peer changed or deleted in the same window: the editor's op
   does not fit and is skipped (`sync_op_skipped`), the peer's version stays.
