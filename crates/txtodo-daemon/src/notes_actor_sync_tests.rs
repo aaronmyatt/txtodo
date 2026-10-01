@@ -259,3 +259,31 @@ fn an_editors_save_survives_a_peers_op_landing_after_it() {
         "the save is an op b's peers can fetch"
     );
 }
+
+/// Task notes-watch: a save followed by nothing but the watcher's event (`absorb_disk`) is an op,
+/// and a fresh peer that takes this device's ops ends with the saved text.
+#[test]
+fn a_save_taken_on_the_watchers_event_reaches_a_fresh_peer() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (store_a, clock_a, cfg_a) = setup(dir.path(), 1);
+    let mut a = NotesActor::open(cfg_a.clone(), Arc::clone(&store_a), clock_a)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let me = Principal::User {
+        device: cfg_a.device,
+    };
+    a.edit("plan\n", me).unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(&cfg_a.disk, "plan\nsaved in an editor\n").unwrap_or_else(|e| panic!("{e}"));
+    a.absorb_disk().unwrap_or_else(|e| panic!("{e}"));
+
+    let (store_b, clock_b, cfg_b) = setup(dir.path(), 2);
+    let mut b = NotesActor::open(cfg_b.clone(), Arc::clone(&store_b), clock_b)
+        .unwrap_or_else(|e| panic!("{e}"));
+    b.import_ops(ops_for(&store_a, &cfg_a.path))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let text = String::from_utf8(b.contents().0).unwrap_or_default();
+    assert_eq!(text, "plan\nsaved in an editor\n");
+    assert_eq!(
+        std::fs::read_to_string(&cfg_b.disk).unwrap_or_default(),
+        text
+    );
+}
