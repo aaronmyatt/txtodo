@@ -58,6 +58,7 @@ pub struct NotesActor {
     /// The disk's hash while a commit merges it, so its write may replace those bytes.
     merging: Option<Hash>,
     wrote_last: bool,
+    held_stored: bool,
 }
 
 impl NotesActor {
@@ -102,7 +103,9 @@ impl NotesActor {
             held: None,
             merging: None,
             wrote_last: false,
+            held_stored: false,
         };
+        actor.restore_held()?;
         actor.absorb_disk_text(&disk_bytes)?;
         if own_text {
             actor.repair_log()?;

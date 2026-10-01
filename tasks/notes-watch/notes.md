@@ -59,4 +59,9 @@ ever made for it.
   Loro fork of the base snapshot under a fresh peer id and imported, and the import's diff is one
   `External` op. A disk put back to the base releases the held write. Plain absorb-before-write is
   gone. `notes_held_tests.rs`; `notes_actor_sync_tests::an_editors_save_survives...` now shows the
-  hold. Known gap: the held base lives in memory only until the restart line lands.
+  hold.
+- 2026-10-01, restart: a held base (bytes and mirror snapshot) goes to meta `held_base/<file>`
+  when a write is held and is cleared when one lands; `open` restores it before comparing the
+  disk, so a stopped daemon resumes the three-way merge. The fork's Loro peer is a hash of the
+  base snapshot and the save, never this device's peer: a clock-made one collided with it in the
+  restart test and Loro dropped half the merge.

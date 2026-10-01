@@ -12,9 +12,11 @@
 
 use super::{NotesActor, mirror_err};
 use crate::actor::hash_of;
+use crate::actor_mirror::loro_peer;
 use crate::handle::ActorError;
 use crate::notes_mirror::NotesMirror;
 use crate::write::write_atomic_if;
+use std::sync::PoisonError;
 use txtodo_model::{Principal, TextEdit};
 
 /// What we last wrote while a write is held: the three-way merge's common ancestor.
@@ -94,8 +96,7 @@ impl NotesActor {
             .into_iter()
             .map(TextEdit::from)
             .collect();
-        // Its own Loro peer: the fork's ops must never reuse a counter this device's mirror has.
-        let fork_peer = (self.clock.new_ulid().to_u128() & u128::from(u64::MAX)) as u64;
+        let fork_peer = fork_peer(loro_peer(self.cfg.device), held, disk);
         let mut fork = NotesMirror::from_snapshot(&held.base_snapshot, &self.cfg.path, fork_peer)
             .map_err(mirror_err)?;
         let since = fork.version();
@@ -126,12 +127,47 @@ impl NotesActor {
         if wrote {
             self.written.clone_from(&self.projection);
             self.wrote_last = true;
+            self.store_held(None)?;
         } else {
             log_write_held(&self.cfg.path);
-            self.held = Some(Held {
+            let held = Held {
                 base: self.written.clone(),
                 base_snapshot: self.written_snapshot.clone(),
-            });
+            };
+            self.store_held(Some(&held))?;
+            self.held = Some(held);
+        }
+        Ok(())
+    }
+
+    /// Keeps a held base in the store's meta (`held_base/<file>`, as `pending_save.rs` does for
+    /// a list), so a restart before the merge resumes it three-way instead of reading the held
+    /// edits as deleted text; `None` clears it once a write lands. Skipped when nothing changes.
+    fn store_held(&mut self, held: Option<&Held>) -> Result<(), ActorError> {
+        if held.is_none() && !self.held_stored {
+            return Ok(());
+        }
+        let bytes = held.map(encode_held).unwrap_or_default();
+        let key = held_key(&self.cfg.path);
+        let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+        store.meta_set(&key, &bytes)?;
+        self.held_stored = held.is_some();
+        Ok(())
+    }
+
+    /// At open, before the disk is compared: a base a stop left held. What we last wrote is then
+    /// that base, not the projection, which holds the edits the disk never got.
+    pub(super) fn restore_held(&mut self) -> Result<(), ActorError> {
+        let key = held_key(&self.cfg.path);
+        let stored = {
+            let store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
+            store.meta_get(&key)?
+        };
+        if let Some(held) = stored.as_deref().and_then(decode_held) {
+            self.written.clone_from(&held.base);
+            self.written_snapshot.clone_from(&held.base_snapshot);
+            self.held = Some(held);
+            self.held_stored = true;
         }
         Ok(())
     }
@@ -143,6 +179,45 @@ impl NotesActor {
             self.written_snapshot = snapshot.to_vec();
         }
     }
+}
+
+/// The fork's own Loro peer: its ops must never reuse an id this device's mirror already has
+/// (a clock-made id collided in a test, and Loro then dropped part of the merge). Derived from
+/// what is merged, so the same merge twice makes the same ops, which an import takes once.
+/// `blake3::Hasher`: <https://docs.rs/blake3/latest/blake3/struct.Hasher.html>
+fn fork_peer(own: u64, held: &Held, disk: &[u8]) -> u64 {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"txtodo notes merge fork");
+    hasher.update(&held.base_snapshot);
+    hasher.update(disk);
+    let mut first = [0u8; 8];
+    first.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
+    let peer = u64::from_le_bytes(first);
+    if peer == own { peer ^ 1 } else { peer }
+}
+
+fn held_key(path: &txtodo_model::FilePath) -> String {
+    format!("held_base/{path}")
+}
+
+/// The snapshot's length on its own line, the snapshot, then the base. Empty: nothing is held.
+fn encode_held(held: &Held) -> Vec<u8> {
+    let mut out = format!("{}\n", held.base_snapshot.len()).into_bytes();
+    out.extend_from_slice(&held.base_snapshot);
+    out.extend_from_slice(&held.base);
+    out
+}
+
+/// `encode_held`'s inverse; `None` for empty or unreadable bytes (then nothing is held).
+fn decode_held(bytes: &[u8]) -> Option<Held> {
+    let end = bytes.iter().position(|b| *b == b'\n')?;
+    let len: usize = std::str::from_utf8(&bytes[..end]).ok()?.parse().ok()?;
+    let rest = bytes.get(end + 1..)?;
+    let snapshot = rest.get(..len)?;
+    Some(Held {
+        base: rest.get(len..)?.to_vec(),
+        base_snapshot: snapshot.to_vec(),
+    })
 }
 
 fn log_write_held(path: &txtodo_model::FilePath) {

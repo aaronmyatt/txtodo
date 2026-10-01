@@ -93,3 +93,39 @@ fn a_save_put_back_to_what_we_wrote_releases_the_held_write() {
     assert_eq!(text(&actor), "kept\nmine\n");
     assert_eq!(on_disk(&disk), "kept\nmine\n");
 }
+
+#[test]
+fn a_held_base_survives_a_restart_and_the_merge_resumes() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let store = Arc::new(Mutex::new(
+        Store::open(&dir.path().join("oplog.db")).unwrap_or_else(|e| panic!("open store: {e}")),
+    ));
+    let disk = dir.path().join("notes.md");
+    let cfg = NotesActorConfig {
+        path: FilePath::new("q4/abc/notes.md").unwrap_or_else(|e| panic!("{e}")),
+        disk: disk.clone(),
+        device: DeviceId::new(Ulid::from_u128(ME)),
+    };
+    let open = |clock_ms: u64| {
+        let clock: Arc<dyn Clock> = Arc::new(FakeClock::new(clock_ms));
+        NotesActor::open(cfg.clone(), Arc::clone(&store), clock)
+            .unwrap_or_else(|e| panic!("open: {e}"))
+    };
+    let mut actor = open(1_000);
+    actor
+        .edit("one\ntwo\n", me())
+        .unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(&disk, "one\ntwo\nthree\n").unwrap_or_else(|e| panic!("{e}"));
+    actor
+        .edit("zero\none\ntwo\n", me())
+        .unwrap_or_else(|e| panic!("{e}"));
+    drop(actor); // stopped while the write is held: the disk never got "zero"
+
+    let reopened = open(5_000);
+    assert_eq!(
+        text(&reopened),
+        "zero\none\ntwo\nthree\n",
+        "neither side lost"
+    );
+    assert_eq!(on_disk(&disk), text(&reopened));
+}
