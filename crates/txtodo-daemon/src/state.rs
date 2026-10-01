@@ -11,6 +11,10 @@ use txtodo_model::{Field, FilePath, Hlc, IdentityMode, Op, OpKind, TaskId, Ulid}
 #[path = "state_order.rs"]
 mod order;
 pub(crate) use order::scratch_op;
+// Deleted and moved-away placements kept as hidden entries (ADR 0033), and the visible view.
+#[path = "state_ghosts.rs"]
+mod ghosts;
+pub use ghosts::MAX_GHOSTS_PER_FILE;
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -74,7 +78,11 @@ fn log_state_applied(entries: usize) {
 #[derive(Clone, Debug)]
 pub struct DocState {
     path: FilePath,
+    /// Every placement, shown or not: `hidden[s]` marks a ghost (ADR 0033, `state_ghosts.rs`).
     entries: Vec<Entry>,
+    hidden: Vec<bool>,
+    /// The slots shown, in order: line `i` is `entries[visible[i]]`.
+    visible: Vec<usize>,
     /// `stamps[i]`: the HLC of the op that placed `entries[i]`, zero for a line read from disk.
     /// Merge metadata, not content: equality ignores it (task insert-order, `state_order.rs`).
     stamps: Vec<Hlc>,
@@ -107,6 +115,8 @@ impl DocState {
         let stamps = vec![order::unplaced(); entries.len()];
         Ok(DocState {
             path,
+            hidden: vec![false; entries.len()],
+            visible: (0..entries.len()).collect(),
             entries,
             stamps,
             field_stamps: HashMap::new(),
@@ -137,16 +147,6 @@ impl DocState {
         self.bom
     }
 
-    /// Number of lines, blanks included.
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// True when the document has no lines.
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
     /// Counts task lines and completions, blanks excluded (plan §3.2.5's `ListFiles` progress).
     pub fn task_counts(&self) -> TaskCounts {
         let mut counts = TaskCounts::default();
@@ -155,76 +155,6 @@ impl DocState {
             counts.completed += usize::from(is_completed(line));
         }
         counts
-    }
-
-    /// The entry at `i`, by value: the backing store is not a slice after M4.
-    pub fn entry_at(&self, i: usize) -> Option<Entry> {
-        self.entries.get(i).cloned()
-    }
-
-    /// The line bytes of a task, if present.
-    pub fn line_of(&self, id: TaskId) -> Option<OwnedLine> {
-        let i = self.index_of(id)?;
-        debug_assert!(i < self.entries.len(), "index_of is in range");
-        Some(self.entries[i].line().clone())
-    }
-
-    /// The nearest task id before `i` — the `after` anchor an op needs (`i == len()`: the last).
-    pub fn task_before(&self, i: usize) -> Option<TaskId> {
-        debug_assert!(i <= self.entries.len(), "task_before index {i} in range");
-        self.entries[..i.min(self.entries.len())]
-            .iter()
-            .rev()
-            .find_map(Entry::id)
-    }
-
-    /// Position of a task, if present.
-    pub fn index_of(&self, id: TaskId) -> Option<usize> {
-        self.entries.iter().position(|e| e.id() == Some(id))
-    }
-
-    /// Every task's id and line, in file order (blanks skipped): item `i` is task-line index `i`.
-    pub fn task_lines(&self) -> impl Iterator<Item = (TaskId, &OwnedLine)> {
-        self.entries
-            .iter()
-            .filter_map(|e| Some((e.id()?, e.line())))
-    }
-
-    /// Every line with its 0-based index, blanks included (`duplicates.rs` needs line numbers).
-    pub(crate) fn indexed_entries(&self) -> impl Iterator<Item = (usize, &Entry)> {
-        self.entries.iter().enumerate()
-    }
-
-    /// Every line's task id in file order, `None` for a blank line (`GetFile`'s `task_ids`).
-    pub fn line_ids(&self) -> impl Iterator<Item = Option<TaskId>> + '_ {
-        self.entries.iter().map(Entry::id)
-    }
-
-    /// Replaces the entry at `i` (fields.rs rewrites lines in place).
-    pub(crate) fn replace_entry(&mut self, i: usize, entry: Entry) {
-        debug_assert!(i < self.entries.len(), "replace_entry index {i} in range");
-        self.entries[i] = entry;
-    }
-
-    /// Removes the entry at `i`, and its stamp.
-    pub(crate) fn remove_entry(&mut self, i: usize) -> Entry {
-        debug_assert!(i < self.entries.len(), "remove_entry index {i} in range");
-        self.stamps.remove(i);
-        let entry = self.entries.remove(i);
-        debug_assert_eq!(self.stamps.len(), self.entries.len());
-        entry
-    }
-
-    /// The file as bytes, byte-faithful to what `from_file` read plus the applied ops.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let file = File {
-            lines: self.entries.iter().map(|e| e.line().clone()).collect(),
-            bom: self.bom,
-            ending: self.ending,
-            trailing_newline: self.trailing_newline,
-        };
-        debug_assert_eq!(file.lines.len(), self.entries.len());
-        file.to_bytes()
     }
 
     /// Applies one op (unchanged on `Err`); a thin span wrapper (see `apply_inner`'s own doc).
@@ -247,15 +177,13 @@ impl DocState {
                 to_file,
             } => self.move_task(*task, *after, to_file, op.hlc)?,
             OpKind::BlankInsert { after } => self.blank_insert(*after, op.hlc)?,
-            OpKind::BlankRemove { after } => self.blank_remove(*after)?,
+            OpKind::BlankRemove { after } => self.blank_remove(*after, op.hlc)?,
             OpKind::NotesEdit { .. } => return Err(StateError::Unsupported("NotesEdit")),
         }
-        debug_assert!(self.entries.len() <= MAX_LINES_PER_FILE);
-        debug_assert!(
-            self.entries.len() + 1 >= before,
-            "an op removes at most one entry"
-        );
-        log_state_applied(self.entries.len());
+        debug_assert!(self.visible.len() <= MAX_LINES_PER_FILE);
+        debug_assert!(self.entries.len() >= before, "an op hides, never removes");
+        self.prune_ghosts();
+        log_state_applied(self.visible.len());
         Ok(())
     }
 
@@ -265,16 +193,6 @@ impl DocState {
         self.apply(&scratch_op(&self.path.clone(), kind.clone()))
     }
 
-    fn position_after(&self, after: Option<TaskId>) -> Result<usize, StateError> {
-        match after {
-            None => Ok(0),
-            Some(id) => self
-                .index_of(id)
-                .map(|i| i + 1)
-                .ok_or(StateError::UnknownTask(id)),
-        }
-    }
-
     fn insert(
         &mut self,
         task: TaskId,
@@ -282,8 +200,8 @@ impl DocState {
         line: &str,
         hlc: Hlc,
     ) -> Result<(), StateError> {
-        if self.entries.len() + 1 > MAX_LINES_PER_FILE {
-            return Err(StateError::TooManyLines(self.entries.len() + 1));
+        if self.visible.len() + 1 > MAX_LINES_PER_FILE {
+            return Err(StateError::TooManyLines(self.visible.len() + 1));
         }
         let at = self.slot_after(after, hlc)?;
         let owned = OwnedLine::from_bytes(line.as_bytes().to_vec(), self.ending);
@@ -304,10 +222,12 @@ impl DocState {
         Ok(())
     }
 
-    /// Same-file: reorders; the anchor is checked before anything moves (`apply` is unchanged on
-    /// `Err`, task sync-poison-op), and a move older than the task's placement is dropped, so the
-    /// newest of two concurrent moves wins everywhere. Cross-file: removes only — the destination
-    /// has its `Insert`.
+    /// Same-file: the task's shown placement becomes a ghost where it was and a new one goes
+    /// after `after` (ADR 0033). The anchor is checked before anything moves (`apply` is unchanged
+    /// on `Err`, task sync-poison-op). A move older than the task's shown placement, or of a task
+    /// already deleted, adds its spot as a ghost only, so the newest of two concurrent moves wins
+    /// and every device holds the same placements. Cross-file: hides only — the destination has
+    /// its `Insert`.
     fn move_task(
         &mut self,
         task: TaskId,
@@ -316,31 +236,37 @@ impl DocState {
         hlc: Hlc,
     ) -> Result<(), StateError> {
         if *to_file != self.path {
-            let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
-            self.remove_entry(from);
-            self.forget_fields(task);
-            return Ok(());
+            return match self.live_slot(task) {
+                Some(from) => {
+                    self.hide_entry(from);
+                    self.forget_fields(task);
+                    Ok(())
+                }
+                None if self.has_placement(task) => Ok(()),
+                None => Err(StateError::UnknownTask(task)),
+            };
         }
         if after == Some(task) {
             return Err(StateError::UnknownTask(task));
         }
-        let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
-        if let Some(a) = after.filter(|a| self.index_of(*a).is_none()) {
-            return Err(StateError::UnknownTask(a));
-        }
+        self.anchor_slot(after, hlc)?;
+        let Some(from) = self.live_slot(task) else {
+            return self.place_ghost(task, after, hlc);
+        };
         if self.is_stale_move(from, hlc) {
             order::log_stale_move(task);
-            return Ok(());
+            return self.place_ghost(task, after, hlc);
         }
-        let entry = self.remove_entry(from);
+        let entry = self.entries[from].clone();
+        self.hide_entry(from);
         let at = self.slot_after(after, hlc)?;
         self.insert_entry(at, entry, hlc);
         Ok(())
     }
 
     fn blank_insert(&mut self, after: Option<TaskId>, hlc: Hlc) -> Result<(), StateError> {
-        if self.entries.len() + 1 > MAX_LINES_PER_FILE {
-            return Err(StateError::TooManyLines(self.entries.len() + 1));
+        if self.visible.len() + 1 > MAX_LINES_PER_FILE {
+            return Err(StateError::TooManyLines(self.visible.len() + 1));
         }
         let at = self.slot_after(after, hlc)?;
         let entry = Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending));
@@ -348,11 +274,14 @@ impl DocState {
         Ok(())
     }
 
-    fn blank_remove(&mut self, after: Option<TaskId>) -> Result<(), StateError> {
-        let at = self.position_after(after)?;
-        match self.entries.get(at) {
-            Some(Entry::Blank(_)) => {
-                self.remove_entry(at);
+    /// Hides the first shown line after the anchor, which must be a blank: the one its author
+    /// saw there (ghosts in between are skipped).
+    fn blank_remove(&mut self, after: Option<TaskId>, hlc: Hlc) -> Result<(), StateError> {
+        let start = self.anchor_slot(after, hlc)?.map_or(0, |s| s + 1);
+        let next = (start..self.entries.len()).find(|&s| !self.hidden[s]);
+        match next.map(|s| (s, &self.entries[s])) {
+            Some((s, Entry::Blank(_))) => {
+                self.hide_entry(s);
                 Ok(())
             }
             _ => Err(StateError::NoBlank(after)),

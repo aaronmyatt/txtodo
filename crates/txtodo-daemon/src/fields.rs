@@ -15,17 +15,23 @@ pub(crate) fn set_field(
     (field, value): (Field, FieldValue),
     hlc: Hlc,
 ) -> Result<(), StateError> {
-    let i = state.index_of(task).ok_or(StateError::UnknownTask(task))?;
     if field == Field::Deleted {
         return match value {
-            FieldValue::Bool(true) => {
-                state.remove_entry(i);
-                state.forget_fields(task);
-                Ok(())
-            }
+            // The line stays as a ghost where it was (ADR 0033), so an op a peer anchored on it
+            // still lands; deleting it again, or after it moved away, changes nothing.
+            FieldValue::Bool(true) => match state.live_slot(task) {
+                Some(slot) => {
+                    state.hide_entry(slot);
+                    state.forget_fields(task);
+                    Ok(())
+                }
+                None if state.has_placement(task) => Ok(()),
+                None => Err(StateError::UnknownTask(task)),
+            },
             _ => Err(StateError::Unsupported("undelete via SetField")),
         };
     }
+    let i = state.live_slot(task).ok_or(StateError::UnknownTask(task))?;
     if state.is_stale_field(task, field, hlc) {
         log_stale_field(task, field);
         return Ok(());
@@ -60,7 +66,7 @@ pub(crate) fn edit_text(
     task: TaskId,
     edits: &[TextEdit],
 ) -> Result<(), StateError> {
-    let i = state.index_of(task).ok_or(StateError::UnknownTask(task))?;
+    let i = state.live_slot(task).ok_or(StateError::UnknownTask(task))?;
     let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
     let description = match line.parse().map(|l| l.kind) {
         Some(LineKind::Task(t)) => t.description.to_owned(),

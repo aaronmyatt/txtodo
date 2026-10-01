@@ -15,12 +15,12 @@ use std::collections::HashMap;
 use super::{DocState, Entry, StateError};
 use txtodo_model::{DeviceId, Field, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 
-/// Two states are equal when they hold the same document; which op placed a line is not part of
-/// the document.
+/// Two states are equal when they hold the same document; which op placed a line, and the ghosts
+/// (ADR 0033), are not part of the document.
 impl PartialEq for DocState {
     fn eq(&self, other: &DocState) -> bool {
         self.path == other.path
-            && self.entries == other.entries
+            && self.visible_entries().eq(other.visible_entries())
             && self.bom == other.bom
             && self.ending == other.ending
             && self.trailing_newline == other.trailing_newline
@@ -73,13 +73,15 @@ impl DocState {
     pub(super) fn insert_entry(&mut self, i: usize, entry: Entry, hlc: Hlc) {
         self.entries.insert(i, entry);
         self.stamps.insert(i, hlc);
-        debug_assert_eq!(self.stamps.len(), self.entries.len());
+        self.hidden.insert(i, false);
+        self.reindex();
     }
 
-    /// Index for an entry placed after `after` by an op stamped `hlc`: right after the anchor,
-    /// then past every entry placed by a later op (and so past whatever was placed after those).
+    /// Slot for an entry placed after `after` by an op stamped `hlc`: right after the anchor's
+    /// placement the op means (`anchor_slot`, ADR 0033), then past every entry placed by a later
+    /// op, ghosts included (and so past whatever was placed after those).
     pub(super) fn slot_after(&self, after: Option<TaskId>, hlc: Hlc) -> Result<usize, StateError> {
-        let mut at = self.position_after(after)?;
+        let mut at = self.anchor_slot(after, hlc)?.map_or(0, |s| s + 1);
         debug_assert!(at <= self.stamps.len());
         // Bounded by the document length.
         while self.stamps.get(at).is_some_and(|placed| *placed > hlc) {
@@ -129,20 +131,18 @@ impl DocState {
     }
 
     /// Takes the stamps of `replayed` (this document rebuilt from its log, what a peer holds):
-    /// all of them when it holds the same lines, else each task's by id, blanks left as they are.
+    /// its whole sequence, ghosts included, when it shows the same lines by id (ADR 0033: ghosts
+    /// are rebuilt from the log at open); else each task's stamp by id, blanks left as they are.
     pub(crate) fn adopt_stamps(&mut self, replayed: &DocState) {
         // By task id, so they hold whatever lines moved: a field's stamp is the task's, not a spot's.
         self.field_stamps.clone_from(&replayed.field_stamps);
-        if replayed.entries == self.entries {
-            self.stamps.clone_from(&replayed.stamps);
-            debug_assert_eq!(self.stamps.len(), self.entries.len());
+        if self.adopt_sequence(replayed) {
             return;
         }
         let by_task: HashMap<TaskId, Hlc> = replayed
-            .entries
+            .visible
             .iter()
-            .zip(&replayed.stamps)
-            .filter_map(|(entry, placed)| Some((entry.id()?, *placed)))
+            .filter_map(|&s| Some((replayed.entries[s].id()?, replayed.stamps[s])))
             .collect();
         for (entry, placed) in self.entries.iter().zip(self.stamps.iter_mut()) {
             if let Some(stamp) = entry.id().and_then(|id| by_task.get(&id)) {
@@ -162,9 +162,9 @@ impl DocState {
             .max()
     }
 
-    /// Test seam: each line's stamp, in file order.
+    /// Test seam: each shown line's stamp, in file order.
     #[cfg(test)]
-    pub(crate) fn stamps(&self) -> &[Hlc] {
-        &self.stamps
+    pub(crate) fn stamps(&self) -> Vec<Hlc> {
+        self.visible.iter().map(|&s| self.stamps[s]).collect()
     }
 }

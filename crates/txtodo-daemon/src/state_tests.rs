@@ -173,15 +173,17 @@ fn cross_file_move_only_removes_on_the_source() {
         })
         .unwrap();
     assert_eq!(state.index_of(a), None, "the task left this document");
-    assert_eq!(
-        state.apply_kind(&OpKind::Move {
+    // ADR 0033: a later move of it here only adds its spot as a ghost; it stays gone.
+    let before = state.to_bytes();
+    state
+        .apply_kind(&OpKind::Move {
             task: a,
             after: None,
             to_file: FilePath::new("todo.txt").unwrap(),
-        }),
-        Err(StateError::UnknownTask(a)),
-        "it is gone, so a second move of it fails"
-    );
+        })
+        .unwrap();
+    assert_eq!(state.index_of(a), None, "still not shown");
+    assert_eq!(state.to_bytes(), before);
 }
 
 #[test]
@@ -222,9 +224,17 @@ fn set_field_rewrites_the_prefix_and_delete_removes_the_line() {
         .unwrap();
     assert_eq!(state.len(), 2);
     assert_eq!(state.line_of(a), None);
+    // ADR 0033: the line is a ghost now, so deleting it again changes nothing; a task this
+    // document never held is still unknown.
+    let before = state.to_bytes();
+    state
+        .apply_kind(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap())
+        .unwrap();
+    assert_eq!(state.to_bytes(), before);
+    let never = task_id(0xDEAD);
     assert_eq!(
-        state.apply_kind(&set_field(a, Field::Deleted, FieldValue::Bool(true)).unwrap()),
-        Err(StateError::UnknownTask(a))
+        state.apply_kind(&set_field(never, Field::Deleted, FieldValue::Bool(true)).unwrap()),
+        Err(StateError::UnknownTask(never))
     );
 }
 
