@@ -90,3 +90,30 @@ async fn assert_consistent(d: &mut Daemon, after: &str) {
     );
     assert!(!ops.is_empty(), "the edit was recorded");
 }
+
+/// Task notes-watch: an editor's save to a `notes.md` whose actor is already open becomes the
+/// daemon's text on the watcher's event alone, with no write of the daemon's own to absorb it.
+#[tokio::test]
+async fn a_notes_md_save_is_taken_on_the_watchers_event() {
+    let mut d = Daemon::start("plan the launch\n").await;
+    let made = d.ref_dir(1, true).await;
+    let notes = d.dir.path().join(&made.dir).join("notes.md");
+    std::fs::write(&notes, "first\n").unwrap();
+    assert_eq!(
+        d.notes_of(&made.task_id).await,
+        "first\n",
+        "opened from disk"
+    );
+
+    std::fs::write(&notes, "first\nsecond\n").unwrap();
+    let start = std::time::Instant::now();
+    while d.notes_of(&made.task_id).await != "first\nsecond\n" {
+        assert!(
+            start.elapsed() < support::SETTLE_TIMEOUT,
+            "the save never reached the daemon\n{}",
+            d.log_tail()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert_eq!(std::fs::read_to_string(&notes).unwrap(), "first\nsecond\n");
+}

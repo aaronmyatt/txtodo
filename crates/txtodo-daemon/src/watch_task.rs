@@ -145,6 +145,11 @@ async fn route_document(ws: &SharedWorkspace, path: &Path) {
         crate::layout_reload::reload_layout(ws).await;
         return;
     }
+    let name = path.file_name().and_then(|n| n.to_str());
+    if name.is_some_and(crate::walker::is_notes_document) {
+        absorb_notes(&read(ws), path);
+        return;
+    }
     let handle = read(ws).actor_for_disk(path).cloned();
     match handle {
         Some(h) => {
@@ -156,6 +161,28 @@ async fn route_document(ws: &SharedWorkspace, path: &Path) {
                 discover(ws, parent);
             }
         }
+    }
+}
+
+/// Task notes-watch: an editor's save to a `notes.md` becomes an op now, not at that file's next
+/// daemon write. Its actor reads the disk under its own lock and commits text that is not its
+/// projection as this device's `External` edit; our own write reads back as the projection and
+/// records nothing. A missing file records nothing: a deleted or moved `ref:` directory must not
+/// sync as emptied notes (the same rule `layout_sync::record_disk` keeps for `txtodo.toml`).
+fn absorb_notes(ws: &crate::workspace::Workspace, path: &Path) {
+    if !path.is_file() {
+        return;
+    }
+    let Ok(file) = crate::walker::relative(ws.root(), path) else {
+        return;
+    };
+    let outcome = ws.notes_actor(&file).and_then(|cell| {
+        cell.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .absorb_disk()
+    });
+    if let Err(e) = outcome {
+        tracing::warn!(file = %file, error = %e, "notes_watch_absorb_failed");
     }
 }
 

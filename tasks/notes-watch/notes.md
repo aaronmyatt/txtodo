@@ -42,3 +42,12 @@ ever made for it.
   the text has an op and reaches a fresh peer.
 - Lab: `lan-converge` loses no `notes.md` token on three seeds; the no-loss check already
   counts `tasks/lab/notes.md`.
+
+## As built
+
+- 2026-10-01, watcher route: `watch_task.rs::route_document` sends a `notes.md` event (after the
+  150 ms debounce) to `absorb_notes`: `notes_actor` (get or open), then `absorb_disk` under the
+  actor's lock. A missing file records nothing, so a deleted or moved `ref:` dir never syncs as
+  emptied notes. `tests/editor_saves.rs::a_notes_md_save_is_taken_on_the_watchers_event` fails
+  without the route. Still open: the pre-rename check and three-way merge (a peer's import can
+  still read the disk mid-save before the debounce fires, through `absorb_disk` before writes).

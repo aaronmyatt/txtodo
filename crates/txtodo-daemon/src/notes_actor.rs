@@ -5,8 +5,8 @@
 //! (`write::write_atomic`, temp + fsync + rename), and a hash comparison at open time to tell our
 //! own projection from a foreign edit.
 //!
-//! No tokio mailbox and no watcher: an editor's save is picked up at open and before each write
-//! (`absorb_disk`, task editor-save-lost), never live. One writer is `notes_registry.rs`'s
+//! No mailbox: a save is absorbed on its watcher event, at open and before each write
+//! (`absorb_disk`; notes-watch, editor-save-lost). One writer: `notes_registry.rs`'s
 //! `Arc<Mutex<NotesActor>>` per path: every call for one `ref:` directory takes the same lock.
 
 use std::path::PathBuf;
@@ -205,10 +205,10 @@ impl NotesActor {
         self.edit_text(new_text, principal)
     }
 
-    /// Task editor-save-lost: nothing watches notes.md, so before any write, text on disk that
-    /// is not our projection (an editor's save) is committed first as this device's `External`
-    /// edit, and never written over. It can still be read mid-save (no debounce here).
-    fn absorb_disk(&mut self) -> Result<(), ActorError> {
+    /// Text on disk that is not our projection (an editor's save) committed as this device's
+    /// `External` edit, never written over: before any write (task editor-save-lost; no debounce
+    /// there) and on the watcher's debounced event for the file (task notes-watch, `watch_task.rs`).
+    pub(crate) fn absorb_disk(&mut self) -> Result<(), ActorError> {
         let disk = std::fs::read(&self.cfg.disk).unwrap_or_default();
         self.absorb_disk_text(&disk)
     }

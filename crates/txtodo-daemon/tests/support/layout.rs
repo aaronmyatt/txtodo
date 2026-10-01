@@ -29,6 +29,25 @@ impl Daemon {
             .into_inner()
     }
 
+    /// `GetNotes` for task `task_id` (a `RefDirInfo.task_id`): what the daemon holds for its
+    /// `notes.md`.
+    pub async fn notes_of(&mut self, task_id: &str) -> String {
+        let req = pb::GetNotesRequest {
+            task: Some(pb::TaskRef {
+                line_number: 0,
+                task_id: task_id.to_owned(),
+            }),
+            workspace: None,
+        };
+        let doc = self
+            .client
+            .get_notes(req)
+            .await
+            .unwrap_or_else(|e| panic!("get_notes: {e}"))
+            .into_inner();
+        String::from_utf8(doc.bytes).unwrap_or_else(|e| panic!("notes utf-8: {e}"))
+    }
+
     /// The bytes the daemon holds for `path` (a document that is not registered is an error).
     pub async fn bytes_of(&mut self, path: &str) -> Vec<u8> {
         self.client
