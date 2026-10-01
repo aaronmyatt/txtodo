@@ -73,7 +73,9 @@ device with `docker exec`.
   to `None` (pairing_adopt.rs, pairing_register.rs, relay_autodial.rs); the Hello's skew is only
   logged at debug (`lan_link_hello_accepted`). So doctor's `peer` rows always say "no clock
   sample yet", and clock-skew's check that a1 flags b1 7 min ahead fails.
-- **`txtodo daemon status` registers the cwd.** Run from this session's worktree
+- **`txtodo daemon status` registers the cwd** (fixed 2026-10-01: status asks `Health` with no
+  selector and prints the device's workspace totals; other daemon-mode commands, `doctor` and
+  `list` included, still register the folder they run in). Run from this session's worktree
   (`.claude/worktrees/p2p-lab`) at 01:43:53, it registered the worktree as workspace
   01M3Q484EYNQPE47Y0YX02HHDX. The daemon then stamped `id:` into all 241 lists there. Undone:
   `txtodo workspace remove`, `git checkout` of the lists, the worktree's `.txtodo/` removed. If

@@ -375,3 +375,18 @@ fn doctor_reports_every_other_registered_workspace() {
         "the row names b, not a: {workspace_rows:?}"
     );
 }
+
+/// p2p lab 2026-09-30: `daemon status` in a git worktree registered it, and every list there got
+/// `id:` tags. A status check names no workspace, so it must leave the registry as it was.
+#[test]
+fn daemon_status_answers_without_registering_the_cwd() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let ws_dir = tempfile::tempdir().unwrap();
+    std::fs::write(ws_dir.path().join("todo.txt"), "(A) a list\n").unwrap();
+
+    let status = stdout(&txtodo(&daemon, ws_dir.path(), &["daemon", "status"]));
+    assert!(status.contains("answers ("), "{status}");
+    let list = stdout(&txtodo(&daemon, ws_dir.path(), &["workspace", "list"]));
+    assert!(non_default_rows(&list).is_empty(), "{list}");
+}

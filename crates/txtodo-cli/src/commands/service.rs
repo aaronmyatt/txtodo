@@ -90,12 +90,19 @@ fn status(ctx: &Ctx, r: &service::Rendered) -> Result<(), CliError> {
     // The socket shown is the one that answered (or refused); with no socket at all, both
     // candidates are named, since either could be the one the human expected to find.
     let (socket, answers) = match client::select(&ctx.paths.dir, false, &env) {
-        Ok(Mode::Daemon(mut d)) => (
-            d.socket.display().to_string(),
-            d.health()
-                .map(|h| format!("answers ({} document(s), v{})", h.documents, h.version))
-                .unwrap_or_else(|e| e.to_string()),
-        ),
+        Ok(Mode::Daemon(mut d)) => {
+            // Device-level, never naming the cwd: the global daemon opens and registers any path
+            // a request names, so `daemon status` in a git worktree registered it and every list
+            // there got `id:` tags (p2p lab, 2026-09-30). Selector-less `Health` never waits or
+            // fails; it answers the device's workspace totals.
+            d.selector = None;
+            (
+                d.socket.display().to_string(),
+                d.health()
+                    .map(|h| answers_line(&h))
+                    .unwrap_or_else(|e| e.to_string()),
+            )
+        }
         Ok(Mode::Direct) => (
             format!(
                 "{} | {}",
@@ -117,5 +124,34 @@ fn status(ctx: &Ctx, r: &service::Rendered) -> Result<(), CliError> {
         Ok(())
     } else {
         Err(CliError::Reported)
+    }
+}
+
+/// The device's workspace totals (`Health.workspaces_*`, task daemon-early-bind), not one
+/// workspace's documents: status asks without a selector.
+fn answers_line(h: &txtodo_proto::v1::HealthResponse) -> String {
+    format!(
+        "answers ({} of {} workspace(s) ready, v{})",
+        h.workspaces_ready, h.workspaces_registered, h.version
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::answers_line;
+    use txtodo_proto::v1::HealthResponse;
+
+    #[test]
+    fn status_reports_the_devices_workspaces() {
+        let h = HealthResponse {
+            workspaces_ready: 2,
+            workspaces_registered: 3,
+            version: "0.0.19".to_owned(),
+            ..HealthResponse::default()
+        };
+        assert_eq!(
+            answers_line(&h),
+            "answers (2 of 3 workspace(s) ready, v0.0.19)"
+        );
     }
 }
