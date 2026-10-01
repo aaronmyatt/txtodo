@@ -9,7 +9,7 @@ use crate::clock::FakeClock;
 use crate::reconcile_replay::replayable_ops;
 use crate::state::{DocState, id_of};
 use txtodo_core::parse_file;
-use txtodo_model::{DeviceId, FilePath, IdentityMode, TaskId, Ulid};
+use txtodo_model::{DeviceId, FilePath, IdentityMode, OpKind, TaskId, Ulid};
 use txtodo_store::{Seq, Store};
 
 fn path() -> FilePath {
@@ -139,4 +139,46 @@ fn an_edit_the_reconciler_cannot_express_still_commits_ops_a_peer_replays() {
         String::from_utf8_lossy(&peer.to_bytes()),
         String::from_utf8_lossy(&disk)
     );
+}
+
+/// ADR 0033: an edit the reconciler can only express with synthesized ops keeps the state's
+/// ghosts. It used to keep a state read from the text, so a peer's add under a line deleted here
+/// earlier was skipped (p2p lab partition-edits, 2026-10-01).
+#[test]
+fn a_synthesized_reconcile_keeps_the_ghosts_a_peer_still_anchors_on() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let file = dir.path().join("todo.txt");
+    std::fs::write(&file, format!("{}\n\n{}\n", t(1, "a"), t(2, "b")))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let (mut actor, _store) = actor(dir.path());
+    // `a` deleted here, then a line put after the blank (the synthesized case above).
+    std::fs::write(&file, format!("\n{}\n", t(2, "b"))).unwrap_or_else(|e| panic!("{e}"));
+    actor.on_external_change().unwrap_or_else(|e| panic!("{e}"));
+    std::fs::write(&file, format!("\n{}\n{}\n", t(3, "c"), t(2, "b")))
+        .unwrap_or_else(|e| panic!("{e}"));
+    actor.on_external_change().unwrap_or_else(|e| panic!("{e}"));
+
+    // A peer that had not seen the delete adds under `a`.
+    let peer = DeviceId::new(Ulid::from_u128(9));
+    let hlc = txtodo_model::Hlc {
+        wall_ms: 500,
+        counter: 0,
+        device: peer,
+    };
+    let add = txtodo_model::Op {
+        id: txtodo_model::OpId::new(Ulid::from_u128(77)),
+        hlc,
+        principal: txtodo_model::Principal::User { device: peer },
+        file: path(),
+        kind: OpKind::Insert {
+            task: tid(9),
+            after: Some(tid(1)),
+            line: t(9, "x"),
+        },
+    };
+    actor
+        .on_sync_ops(vec![add])
+        .unwrap_or_else(|e| panic!("{e}"));
+    let disk = String::from_utf8(std::fs::read(&file).unwrap_or_default()).unwrap_or_default();
+    assert!(disk.contains(&t(9, "x")), "the peer's add landed: {disk:?}");
 }

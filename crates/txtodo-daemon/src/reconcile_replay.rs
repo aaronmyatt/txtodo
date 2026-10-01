@@ -47,7 +47,7 @@ impl FileActor {
                 synthesized: false,
             });
         }
-        let adopted = DocState::from_file(
+        let mut adopted = DocState::from_file(
             self.cfg.path.clone(),
             &r.file,
             &r.ids,
@@ -55,6 +55,8 @@ impl FileActor {
         )?;
         let Some((kinds, work)) = replayable_ops(&self.state, &adopted) else {
             log_not_replayable(&self.cfg.path, r.ops.len());
+            // Read from the text, it knows no stamps or ghosts: take each task's stamp at least.
+            adopted.adopt_stamps(&self.state);
             return Ok(Settled {
                 kinds: r.ops,
                 next: adopted,
@@ -62,10 +64,21 @@ impl FileActor {
                 synthesized: false,
             });
         };
+        // When the synthesized ops reproduce the target, keep the state they built: it is the
+        // current one moved on, ghosts and stamps included (ADR 0033). The one read from the text
+        // dropped every ghost, so a peer's add under a line deleted here was skipped (p2p lab
+        // partition-edits, 2026-10-01), and every stamp.
+        let exact = work.to_bytes() == target;
+        let next = if exact {
+            work
+        } else {
+            adopted.adopt_stamps(&work);
+            adopted
+        };
         Ok(Settled {
             kinds,
-            exact: work.to_bytes() == target,
-            next: adopted,
+            exact,
+            next,
             synthesized: true,
         })
     }
