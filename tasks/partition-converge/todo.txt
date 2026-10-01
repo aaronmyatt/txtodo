@@ -1,7 +1,7 @@
 2026-10-01 Decide: ghost placements in DocState (no wire change) or anchors that carry the anchor's placement op id (wire change); ADR either way, see notes.md options +m11 @sync @human
 2026-10-01 DocState: deleted tasks and the spot a moved task left stay as hidden ghost entries; anchors resolve to the placement not newer than the op +m11 @daemon @sync
 2026-10-01 DocState: ghosts rebuilt from the log at open, and a bound on how many are kept +m11 @daemon
-2026-10-01 DocState: SetField and EditText on one line win by stamp, not arrival, like the mirror's write_if_newer +m11 @daemon @sync
+2026-10-01 DocState: SetField and EditText on one line win by stamp, not arrival, like the mirror's write_if_newer +m11 @daemon @sync @doing by:claude-6391ec
 2026-10-01 Lab: a scenario with adds, do, archive and deletes across a partition; then lan-converge on three seeds and chaos +m11 @sync
 2026-10-01 Decide: EditText convergence, text history per task (T1, no wire change) or EditText names its base (T2, wire change); see notes.md +m11 @sync @human
 x 2026-10-01 2026-10-01 Test: every arrival order of an add after T with a move of T, an add after T with a delete of T, and two edits of one line renders the same bytes (fails today) +m11 @daemon — state_converge_tests.rs: all four cases fail today and are ignored with the line that fixes each; the two-edits case showed EditText needs its own decision (line 7)
