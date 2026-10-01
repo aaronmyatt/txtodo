@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 use tonic::Request;
 use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_proto::v1::{self as pb};
-use txtodo_sync::{GroupId, KeyId, PAIRING_WINDOW_MS, SAS_WORD_COUNT};
+use txtodo_sync::{GroupId, KeyId, PAIRING_WINDOW_MS, RelayConfig, RelayEndpoint, SAS_WORD_COUNT};
 
 use crate::clock::{Clock, FakeClock};
 use crate::pairing_wire::response_to_code;
@@ -246,6 +246,36 @@ async fn full_round_trip_converges_only_after_both_sides_confirm() {
         group,
         "the joiner adopted the group it joined"
     );
+}
+
+/// The p2p lab's pairing finding: the joiner's one relay endpoint is bound at boot under its own
+/// minted group, and its `connect` gate kept that group after pairing, refusing every dial to the
+/// initiator until a restart. Adopting the group must move the shared endpoint's gate too.
+#[tokio::test]
+async fn adopting_a_group_moves_the_shared_relay_endpoints_gate() {
+    let dir_a = tempfile::tempdir().unwrap();
+    let dir_b = tempfile::tempdir().unwrap();
+    let clock = Arc::new(FakeClock::new(1_000));
+    let a = service(dir_a.path(), Arc::clone(&clock));
+    let b = service(dir_b.path(), Arc::clone(&clock));
+    let now_ms = clock.now_ms();
+    // Bound offline: relay.example.org is never dialed, only the gate is read.
+    let cfg = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let boot_group = b.workspace().group();
+    let endpoint = Arc::new(RelayEndpoint::bind(&cfg, boot_group).await.unwrap());
+    b.workspace().relay_state().set(Arc::clone(&endpoint));
+
+    handshake_and_confirm(&a, &b, now_ms).await;
+    let group = finalize_after_both_confirm(&a, &b, now_ms).await;
+
+    assert_ne!(
+        group, boot_group,
+        "the joiner moved into the initiator's group"
+    );
+    assert_eq!(endpoint.group(), group, "the relay gate moved with it");
 }
 
 #[tokio::test]

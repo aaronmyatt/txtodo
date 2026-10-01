@@ -37,12 +37,11 @@
 //! ever required. This sidesteps the identity-sharing gap too: it dials the peer's *actual* relay
 //! identity, never conflates it with a LAN one.
 //!
-//! **Known scope limit, deliberate**: unlike `lan.rs::rebuild_on_group_change`, this module never
-//! rebinds anything when the workspace's sync group changes (e.g. mid-run pairing) — nor could it
-//! now, since binding is a device-level concern this module no longer performs at all. This is
-//! fine for pairing-over-relay itself (`sync-pairing-relay`, landed 2026-09-14): a group change
-//! only ever *follows* a completed pairing, which is `pairing_grpc.rs`/`pairing_relay_dial.rs`'s
-//! job, not this module's — nothing here needs to notice the change mid-handshake.
+//! A pairing that changes this device's sync group never rebinds the endpoint: binding is
+//! device-level, done once in `main.rs`. `Workspace::set_group` moves the shared endpoint's
+//! `connect` gate instead (`RelayEndpoint::set_group`), and the dial loop below reads the group
+//! fresh on every attempt rather than keeping the one it started with. Before that, a joiner's
+//! relay dials were refused as a foreign group until it restarted (p2p lab finding).
 
 use std::sync::Arc;
 
@@ -123,7 +122,6 @@ mod resolve_relay_url_tests {
 struct RelayCtx {
     ws: SharedWorkspace,
     device: DeviceId,
-    group: GroupId,
     status: LanStatus,
 }
 
@@ -202,7 +200,6 @@ fn build_ctx(ws: &SharedWorkspace) -> RelayCtx {
     RelayCtx {
         ws: ws.clone(),
         device: guard.device(),
-        group: guard.group(),
         status: guard.lan_status().clone(),
     }
 }
@@ -229,7 +226,8 @@ fn on_dial_connected(
 ) {
     ctx.status.set_relay_last_outcome("dialed known peer");
     let device_relay = Arc::clone(device_relay);
-    let (device, group) = (ctx.device, ctx.group);
+    // Read now, not at `start`: pairing may have moved this device into a new group since.
+    let (device, group) = (ctx.device, read(&ctx.ws).group());
     let keys = read(&ctx.ws).peer_keys().clone();
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
@@ -280,7 +278,8 @@ async fn dial_once(
     peer: DialPeer,
     permit: tokio::sync::OwnedSemaphorePermit,
 ) {
-    if let Some(link) = connect_bounded(&device_relay.endpoint(), peer, ctx.group).await {
+    let group = read(&ctx.ws).group();
+    if let Some(link) = connect_bounded(&device_relay.endpoint(), peer, group).await {
         on_dial_connected(ctx, device_relay, link, permit);
     }
 }

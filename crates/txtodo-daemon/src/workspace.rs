@@ -353,6 +353,12 @@ impl Workspace {
     /// first). Never called with the identity store not already updated to match.
     pub(crate) fn set_group(&self, group: GroupId) {
         self.identity.set_group(group);
+        // The device's one relay endpoint was bound at boot under the old group, and its
+        // `connect` gate refused the new peer until a restart (p2p lab finding). Every open
+        // workspace holds the same shared endpoint, so moving it here moves it for all of them.
+        if let Some(endpoint) = self.relay_state.get() {
+            endpoint.set_group(group);
+        }
     }
     /// This workspace's catalog identity, bound into every sealed batch's AEAD (stage 7). See the
     /// field's own doc: meaningful only once `set_workspace_id` replaces the placeholder.

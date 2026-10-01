@@ -79,13 +79,15 @@ pub(crate) fn peer_relay_node(identity: &DeviceIdentity, device: DeviceId) -> Op
 /// Dials the relay node id `node` over this daemon's own bound relay endpoint, if any — no
 /// endpoint (relay never configured, or `relay.rs` has not finished binding yet) is the same
 /// "nothing to try" as a `None` LAN dial. `RelayEndpoint::connect`'s own `ForeignGroup` gate is
-/// inherited for free by passing `ctx.group` as the peer's claimed group. `relay_autodial.rs`'s
-/// relay-only dial calls this with a devices row's relay node id; [`relay_dial_device`] looks it
-/// up for the LAN fallback.
+/// inherited for free by passing this device's group as the peer's claimed group: read from the
+/// identity, not `ctx.group`, which lags a pairing's group change until the next LAN resync tick.
+/// `relay_autodial.rs`'s relay-only dial calls this with a devices row's relay node id;
+/// [`relay_dial_device`] looks it up for the LAN fallback.
 pub(crate) async fn relay_fallback_dial(ctx: LanCtx, node: [u8; 32]) -> Option<IrohLink> {
     let endpoint = ctx.device_relay.as_ref()?.endpoint();
     let status = ctx.identity.lan_status().clone();
-    match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node, ctx.group)).await {
+    let group = ctx.identity.group();
+    match tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(node, group)).await {
         Ok(Ok(link)) => {
             status.set_relay_last_outcome("connected");
             Some(link)

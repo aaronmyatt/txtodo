@@ -54,7 +54,9 @@ device with `docker exec`.
   after ..."): bad-link lost 11 of 21 tokens on a1.
 - **No convergence after a partition.** b1 leaves the LAN and returns on a new address; the two
   had not converged 2 min later, nor 5 min later.
-- **Pairing leaves the joiner's relay endpoint on its old group.** b1's doctor: "connect
+- **Pairing leaves the joiner's relay endpoint on its old group** (fixed 2026-10-01:
+  `RelayEndpoint::set_group`, called from `Workspace::set_group`; relay dials read the group
+  fresh; not yet re-run in the lab). b1's doctor: "connect
   failed: refusing to dial group ...: not this endpoint's group". Seen after relay pairing
   (relay-only, nat-holepunch) and after LAN pairing (lan-to-relay). Sync over the relay starts
   only after b1 restarts.

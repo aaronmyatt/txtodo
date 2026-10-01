@@ -244,11 +244,11 @@ multiplex every workspace's traffic — not done by this task).
   `daemon-shared-sync-link` stage 5 — see that bullet): `relay::start(ws, relay_url, device_relay:
   Option<Arc<DeviceRelay>>, dial_peer)` registers this workspace against the device's already-bound
   shared endpoint (`LanStatus::set_relay_configured("")` and nothing else when `--relay` was never
-  configured) and, when `--relay-dial-peer` names one, spawns the outbound dial loop — deliberately
-  does **not** rebuild anything on group change the way `lan.rs::rebuild_on_group_change` does (a
-  group change only ever follows a completed pairing, `pairing_grpc.rs`/`pairing_relay_dial.rs`'s
-  job — nothing here needs to notice it mid-handshake, unlike LAN's mDNS advertisement, which is
-  itself group-scoped). `relay_state.rs`'s
+  configured) and, when `--relay-dial-peer` names one, spawns the outbound dial loop. Nothing is
+  rebound on a group change: `Workspace::set_group` moves the shared endpoint's `connect` gate
+  (`RelayEndpoint::set_group`), and every relay dial reads the group fresh. Before that (found by
+  the p2p lab, 2026-09-30) a joiner's relay dials stayed refused as a foreign group until it
+  restarted. `relay_state.rs`'s
   `RelayState` (same `Arc<Mutex<Option<Arc<_>>>>` shape as `pairing_lan_state.rs`'s endpoint half)
   is how `relay.rs`'s bound endpoint reaches `lan.rs`'s dial path. `relay_fallback.rs`'s generic
   `lan_then_relay(timeout, primary, fallback)` is the actual selection logic — tries `primary`
