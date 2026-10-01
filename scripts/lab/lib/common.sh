@@ -1,8 +1,10 @@
 # scripts/lab/lib/common.sh — paths, logging and small helpers every lab file uses.
 # Sourced by scripts/lab/lab.sh; not run on its own.
 
-# The checkout this script lives in (a worktree or the main one).
-LAB_ROOT=$(git -C "$LAB_SCRIPTS" rev-parse --show-toplevel)
+# The source under test: the checkout this script lives in (a worktree or the main one), or
+# LAB_SOURCE, another checkout this harness builds and runs instead (`watch.sh` points it at its
+# worktree, so the current scenarios test an older commit's source).
+LAB_ROOT=${LAB_SOURCE:-$(git -C "$LAB_SCRIPTS" rev-parse --show-toplevel)}
 LAB_DEPLOY="$LAB_ROOT/deploy/lab"
 LAB_SCENARIOS="$LAB_SCRIPTS/scenarios"
 
@@ -66,7 +68,7 @@ wait_for() {
 # A macOS notification when a run ends; a no-op anywhere else or if it fails.
 # https://ss64.com/mac/osascript.html
 notify() {
-  if [ "$(uname -s)" = Darwin ]; then
+  if [ "$(uname -s)" = Darwin ] && [ "${LAB_NO_NOTIFY:-0}" != 1 ]; then
     osascript -e "display notification \"$1\" with title \"txtodo lab\"" >/dev/null 2>&1 || true
   fi
 }

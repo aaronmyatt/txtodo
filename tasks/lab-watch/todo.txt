@@ -1,0 +1,6 @@
+2026-10-01 lab: LAB_SOURCE runs the harness against another checkout's source +m11 @lab
+2026-10-01 lab: queue, background worker, verdicts by commit (lab.sh queue|watch|watch-stop, status) +m11 @lab
+2026-10-01 lab: pass to fail is re-run, bisected and filed with the first bad commit; fail to pass notifies +m11 @lab
+2026-10-01 lab: .githooks/post-commit queues main's commits that touch the lab's inputs +m11 @lab
+2026-10-01 lab: test the worker's logic with a fake runner, no Docker +m11 @lab
+2026-10-01 Add just lab-watch and lab-watch-stop (justfile is frozen for agents) +m11 @lab @human

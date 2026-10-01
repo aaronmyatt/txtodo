@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Queues a commit on main for the background lab (scripts/lab/watch.sh, tasks/lab-watch): one line
+# appended to a file, and never a failed commit. `watch.sh queue` skips a commit that touches
+# nothing the lab builds or runs. Commits on other branches and worktrees are not queued.
+# Git hooks: https://git-scm.com/docs/githooks#_post_commit
+[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = main ] || exit 0
+"$(git rev-parse --show-toplevel)/scripts/lab/watch.sh" queue HEAD >/dev/null 2>&1 || true
+exit 0

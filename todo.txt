@@ -1,3 +1,4 @@
+(B) 2026-10-01 lab: test main's commits after the fact in a worktree, newest first, and say when a scenario turns from pass to fail +m11 @lab ref:lab-watch
 (A) 2026-09-30 sync: devices that edit while apart do not converge after they reconnect: anchors name tasks not spots, and one line's edits apply in arrival order +m11 @sync @daemon ref:partition-converge
 (A) 2026-09-26 sync: duplicate lines and stuck batches between paired devices +m11 @daemon @sync ref:sync-drift — heal-duplicates decided (B, duplicate-conflict flags, to build); the origin_seq decide is still @human; see tasks/sync-drift/notes.md
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay @human — code done 2026-09-25 (see tasks/lan-dial-falls-to-relay/notes.md); only the two-Mac check is left
