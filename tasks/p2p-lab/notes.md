@@ -107,3 +107,7 @@ device with `docker exec`.
   direct path form yet; it only notes the path.
 - Not deterministic: a seed fixes the workload's choices, not the timing.
 - `justfile` is frozen for agents; the `lab` recipes are for a human to add.
+- 2026-10-01: clock-skew's skew-guard check could never pass once a1 flagged b1: `doctor` exits 1
+  on a FAIL row (a peer clock ahead is one), and under `set -o pipefail` `tx a1 --json doctor | jq`
+  then failed although jq matched. The rows are read first now. The run before the fix
+  (20261001-164634) shows a1 did flag b1 ("clock ahead by 419687 ms") one second after the jump.

@@ -9,8 +9,12 @@ export LAB_PRELOAD_B1=$LAB_FAKETIME
 # A peer clock row may still read "ahead" or "behind" from its last sample after the fix.
 DOCTOR_ALLOW='^peer .*clock (ahead|behind)'
 
+# doctor exits 1 on any FAIL row, and a peer clock ahead is one: under `set -o pipefail` piping it
+# into jq failed this check exactly when a1 flagged b1. Read the rows, then ask jq.
 a1_flags_b1_ahead() {
-  tx a1 --json doctor | jq -e '.[] | select(.name == "peer" and (.detail | test("ahead")))' >/dev/null
+  local rows
+  rows=$(tx a1 --json doctor || true)
+  jq -e '.[] | select(.name == "peer" and (.detail | test("ahead")))' <<<"$rows" >/dev/null
 }
 
 scenario_main() {
