@@ -105,6 +105,37 @@ async fn foreign_group_is_refused_before_dialing() {
     }
 }
 
+/// The p2p lab's pairing finding: the daemon binds its one endpoint at boot, then pairing moves the
+/// joiner into the initiator's group. `set_group` must move the gate with it: the old group is now
+/// foreign, and the new one gets past the gate. Past the gate the dial goes out to a relay this
+/// test cannot reach, so the timeout or a non-`ForeignGroup` error both prove the gate let it by.
+#[tokio::test]
+async fn set_group_moves_the_connect_gate() {
+    let cfg = RelayConfig {
+        url: "https://relay.example.org".to_string(),
+        max_peers: 1,
+    };
+    let endpoint = RelayEndpoint::bind(&cfg, GroupId(1)).await.unwrap();
+    endpoint.set_group(GroupId(2));
+    assert_eq!(endpoint.group(), GroupId(2));
+    assert!(matches!(
+        endpoint.connect([0u8; 32], GroupId(1)).await,
+        Err(HolepunchError::ForeignGroup {
+            requested: GroupId(1)
+        })
+    ));
+    // `tokio::time::timeout`: https://docs.rs/tokio/latest/tokio/time/fn.timeout.html
+    let dial = tokio::time::timeout(
+        Duration::from_millis(500),
+        endpoint.connect([0u8; 32], GroupId(2)),
+    )
+    .await;
+    assert!(!matches!(
+        dial,
+        Ok(Err(HolepunchError::ForeignGroup { .. }))
+    ));
+}
+
 /// **Same-process artifact, not a real-relay failure — evidence below.** With `RUST_LOG=iroh=debug`
 /// the QUIC connection genuinely establishes (`iroh::endpoint: Connection established`, ~3s in,
 /// direct LAN path `192.168.100.24` selected `Available`) — the relay rendezvous itself works. But

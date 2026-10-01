@@ -8,6 +8,7 @@
 //! Refs: <https://docs.rs/iroh> · <https://www.iroh.computer/docs/layers/relay>.
 
 use std::fmt;
+use std::sync::{Mutex, PoisonError};
 
 use iroh::endpoint::{ConnectError, ConnectingError, TransportAddrUsage};
 use iroh::{EndpointAddr, RelayUrl};
@@ -144,7 +145,9 @@ fn log_conn_path(endpoint: &iroh::Endpoint, connection: &iroh::endpoint::Connect
 pub struct RelayEndpoint {
     endpoint: iroh::Endpoint,
     relay_url: RelayUrl,
-    group: GroupId,
+    /// Not fixed at bind: pairing moves the joiner into the initiator's group long after the
+    /// daemon bound this endpoint at boot ([`RelayEndpoint::set_group`]).
+    group: Mutex<GroupId>,
 }
 
 impl RelayEndpoint {
@@ -161,15 +164,28 @@ impl RelayEndpoint {
         self.endpoint.online().await;
     }
 
+    /// The group every [`RelayEndpoint::connect`] is gated on right now.
+    pub fn group(&self) -> GroupId {
+        *self.group.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Moves this endpoint's `connect` gate to `group`. The daemon binds one endpoint at boot,
+    /// under the group it had then; a pairing that adopts the peer's group must call this, or
+    /// every later dial to that peer is refused as [`HolepunchError::ForeignGroup`] until a
+    /// restart (found by the p2p lab, `tasks/p2p-lab/notes.md` Findings).
+    pub fn set_group(&self, group: GroupId) {
+        *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
+    }
+
     /// Binds [`crate::relay::build_endpoint`] for `group` — every `connect` this endpoint makes is
-    /// gated on the peer sharing this same group.
+    /// gated on the peer sharing this same group (until [`RelayEndpoint::set_group`] moves it).
     pub async fn bind(cfg: &RelayConfig, group: GroupId) -> Result<RelayEndpoint, RelayError> {
         let relay_url: RelayUrl = cfg.url.parse().map_err(RelayError::InvalidUrl)?;
         let endpoint = build_endpoint(cfg).await?;
         Ok(RelayEndpoint {
             endpoint,
             relay_url,
-            group,
+            group: Mutex::new(group),
         })
     }
 
@@ -187,7 +203,7 @@ impl RelayEndpoint {
         Ok(RelayEndpoint {
             endpoint,
             relay_url,
-            group,
+            group: Mutex::new(group),
         })
     }
 
@@ -204,7 +220,7 @@ impl RelayEndpoint {
         Ok(RelayEndpoint {
             endpoint,
             relay_url,
-            group,
+            group: Mutex::new(group),
         })
     }
 
@@ -216,7 +232,7 @@ impl RelayEndpoint {
         node: [u8; 32],
         their_group: GroupId,
     ) -> Result<IrohLink, HolepunchError> {
-        if their_group != self.group {
+        if their_group != self.group() {
             return Err(HolepunchError::ForeignGroup {
                 requested: their_group,
             });
