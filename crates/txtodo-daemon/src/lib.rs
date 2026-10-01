@@ -251,6 +251,8 @@ mod refdir_tests;
 #[cfg(test)]
 mod security_m8_tests;
 #[cfg(test)]
+mod state_converge_tests;
+#[cfg(test)]
 mod state_goldens;
 #[cfg(test)]
 mod state_order_tests;

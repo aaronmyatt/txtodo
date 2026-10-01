@@ -5,19 +5,19 @@ use crate::state::{DocState, scratch_op};
 use txtodo_core::File;
 use txtodo_model::{DeviceId, FilePath, Hlc, IdentityMode, Op, OpId, OpKind, TaskId, Ulid};
 
-const A: u128 = 1;
-const B: u128 = 2;
+pub(crate) const A: u128 = 1;
+pub(crate) const B: u128 = 2;
 
-fn path() -> FilePath {
+pub(crate) fn path() -> FilePath {
     FilePath::new("todo.txt").unwrap()
 }
 
-fn task(n: u128) -> TaskId {
+pub(crate) fn task(n: u128) -> TaskId {
     TaskId::new(Ulid::from_u128(0x100 + n))
 }
 
 /// Device `device`'s stamp at `wall` ms, counter `counter`.
-fn at(wall: u64, counter: u16, device: u128) -> Hlc {
+pub(crate) fn at(wall: u64, counter: u16, device: u128) -> Hlc {
     Hlc {
         wall_ms: wall,
         counter,
@@ -25,7 +25,7 @@ fn at(wall: u64, counter: u16, device: u128) -> Hlc {
     }
 }
 
-fn op(hlc: Hlc, kind: OpKind) -> Op {
+pub(crate) fn op(hlc: Hlc, kind: OpKind) -> Op {
     Op {
         id: OpId::new(Ulid::from_u128(
             u128::from(hlc.wall_ms) << 32 | u128::from(hlc.counter),
@@ -37,7 +37,7 @@ fn op(hlc: Hlc, kind: OpKind) -> Op {
     }
 }
 
-fn insert(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
+pub(crate) fn insert(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::Insert {
@@ -48,7 +48,7 @@ fn insert(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
     )
 }
 
-fn move_after(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
+pub(crate) fn move_after(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::Move {
@@ -68,7 +68,7 @@ fn blank_after(after: Option<u128>, hlc: Hlc) -> Op {
     )
 }
 
-fn empty() -> DocState {
+pub(crate) fn empty() -> DocState {
     DocState::from_file(path(), &File::default(), &[], IdentityMode::Sidecar).unwrap()
 }
 
@@ -82,7 +82,7 @@ fn applied(base: &DocState, ops: &[&Op]) -> Option<String> {
 }
 
 /// Every ordering of `0..n`.
-fn orders(n: usize) -> Vec<Vec<usize>> {
+pub(crate) fn orders(n: usize) -> Vec<Vec<usize>> {
     if n == 0 {
         return vec![Vec::new()];
     }

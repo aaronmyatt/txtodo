@@ -4,3 +4,4 @@
 2026-10-01 DocState: ghosts rebuilt from the log at open, and a bound on how many are kept +m11 @daemon
 2026-10-01 DocState: SetField and EditText on one line win by stamp, not arrival, like the mirror's write_if_newer +m11 @daemon @sync
 2026-10-01 Lab: a scenario with adds, do, archive and deletes across a partition; then lan-converge on three seeds and chaos +m11 @sync
+2026-10-01 Decide: EditText convergence, text history per task (T1, no wire change) or EditText names its base (T2, wire change); see notes.md +m11 @sync @human

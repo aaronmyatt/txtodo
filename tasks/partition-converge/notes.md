@@ -54,6 +54,30 @@ For cause 2: field ops last-writer-wins by stamp in `DocState`, per field, as th
 does. Description text: last-writer-wins per task for now (char-level merge is the mirror's job;
 see design §4.2), so two edits never render two texts.
 
+## EditText cannot win by stamp alone (found 2026-10-01)
+
+The plan above says description text is last-writer-wins per task. That works for `SetField`,
+which carries a whole value: skip an op older than the field's stamp, and every order ends on the
+newest value. It does not work for `EditText`: its edits are splices (`TextEdit::Insert/Delete`
+at char offsets) on the text its author saw. A HLC cannot tell "B edited after seeing A" (apply B
+on A's result) from "B edited at the same time as A" (B's offsets are against the old text). So
+skipping the older op gives `base+B` on one device and `base+A+B` on the other.
+`state_converge_tests::two_devices_editing_one_description_agree` shows it (ignored).
+
+Options (an `@human` call, sub-line 7):
+- **T1. Text history per task in `DocState`, replayed in stamp order.** Keep each task's text ops
+  since its last whole-text point; on a late arrival, rebuild the description by applying them in
+  HLC order, skipping ones that no longer fit. No wire change. Costs: memory per edited task
+  (bounded like ghosts: rebuilt at open, trimmed only with every peer's acks), and a splice
+  replayed on a different base can still land oddly (it applies, just not where its author meant).
+- **T2. `EditText` names its base** (the text's hash, or the op id it was made on). A wire change
+  (new variant, protocol bump). Exact: a peer can tell causal from concurrent.
+- **T3. Let the mirror decide description bytes** (Loro text already merges by character). Breaks
+  "the mirror never decides bytes" (an ADR-level change).
+
+I'd take T1 if line 1 goes with A (same kind of state: kept history, rebuilt at open), T2 if
+line 1 goes with B (one protocol bump for both).
+
 ## How to check
 
 - Unit: a `state_order_tests.rs`-style permutation test over (add after T, move T), (add after T,
