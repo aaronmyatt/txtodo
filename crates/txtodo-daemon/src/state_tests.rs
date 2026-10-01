@@ -101,10 +101,12 @@ fn insert_move_and_blank_ops_reorder_the_document() {
         line: "wrong id:01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
     };
     assert_eq!(state.apply_kind(&bad), Err(StateError::IdMismatch(c)));
-    assert_eq!(
-        state.apply_kind(&OpKind::BlankRemove { after: Some(a) }),
-        Err(StateError::NoBlank(Some(a)))
-    );
+    // No blank after it: kept as an eraser that hides nothing (`state_erase.rs`).
+    let before = state.to_bytes();
+    state
+        .apply_kind(&OpKind::BlankRemove { after: Some(a) })
+        .unwrap();
+    assert_eq!(state.to_bytes(), before);
 }
 
 /// A last line with no final newline: whatever lands after it (an add, the move `do` makes to the

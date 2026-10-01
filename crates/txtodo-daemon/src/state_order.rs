@@ -89,6 +89,7 @@ impl DocState {
         self.stamps.insert(spot.at, hlc);
         self.hidden.insert(spot.at, false);
         self.parents.insert(spot.at, spot.parent);
+        self.erasers.insert(spot.at, false);
         self.reindex();
     }
 

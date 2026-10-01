@@ -42,6 +42,13 @@ No wire change and no store change: ghosts are derived from the ops every device
   previous placement on that device only. Each slot now keeps its parent (the placement its op
   followed); a placement that lands late takes, with what follows them, the entries that should
   follow it (`state_rehome.rs`). A parent dropped by the ghost bound ends that block early.
+- Amended the same day, same run: which blank a `BlankRemove` hides depended on what had landed
+  when it did, so two devices hid two different blanks. A `BlankRemove` is now kept as an eraser,
+  a hidden slot placed and re-homed like any other; after each op every eraser, in sequence
+  order, claims the first unclaimed blank after it that its author could have seen
+  (`state_erase.rs`). One that finds none is kept and may claim a blank that lands later; a
+  delete between an eraser and a blank can let it claim that blank. The stamp rule still applies:
+  a remove can follow its anchor to a spot a concurrent move gave it and take the blank there.
 - Neutral: history replays that start from a snapshot (checkout, undo) start with no ghosts from
   before it; snapshots hold only the bytes.
 

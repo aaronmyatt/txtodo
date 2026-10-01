@@ -287,6 +287,78 @@ fn a_blank_removed_while_another_device_adds_under_its_line() {
     }
 }
 
+fn blank_insert(after: u128, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::BlankInsert {
+            after: Some(task(after)),
+        },
+    )
+}
+
+/// The bytes of every merge of two devices' ops that keeps each device's own order (sync delivers
+/// one device's ops in order); asserts they are all the same and returns them.
+fn converges_interleaved(base: &DocState, a: &[Op], b: &[Op]) -> String {
+    fn merges(a: usize, b: usize) -> Vec<Vec<bool>> {
+        if a == 0 || b == 0 {
+            return vec![vec![a > 0; a + b]];
+        }
+        let firsts = [(true, merges(a - 1, b)), (false, merges(a, b - 1))];
+        let prefixed = firsts.into_iter().flat_map(|(first, rest)| {
+            rest.into_iter()
+                .map(move |m| std::iter::once(first).chain(m).collect())
+        });
+        prefixed.collect()
+    }
+    let results: Vec<String> = merges(a.len(), b.len())
+        .iter()
+        .map(|merge| {
+            let (mut ia, mut ib) = (a.iter(), b.iter());
+            let mut state = base.clone();
+            for &from_a in merge {
+                let next = if from_a { ia.next() } else { ib.next() };
+                let _ = state.apply(next.expect("one op per step"));
+            }
+            String::from_utf8(state.to_bytes()).unwrap()
+        })
+        .collect();
+    for r in &results {
+        assert_eq!(r, &results[0], "two arrival orders disagree");
+    }
+    results[0].clone()
+}
+
+/// The blank half of lab lan-converge seed 435090918: A moves 2 to the top and its blank with it
+/// (adds one under 2, removes the one now under 1); B, unaware, removes the blank under 2. B's
+/// remove follows 2 to its newer spot on every device, so both blanks go.
+#[test]
+fn a_blank_removed_under_a_line_another_device_moved_with_its_blank() {
+    let mut start = base(3);
+    start.apply(&blank_insert(2, at(5, 0, A))).unwrap();
+    assert_eq!(start.to_bytes(), b"line 1\nline 2\n\nline 3\n");
+    let a = [
+        move_after(2, None, at(100, 0, A)),
+        blank_insert(2, at(100, 0, A)),
+        blank_remove(1, at(100, 0, A)),
+    ];
+    let b = [blank_remove(2, at(101, 0, B))];
+    let bytes = converges_interleaved(&start, &a, &b);
+    assert_eq!(bytes, "line 2\nline 1\nline 3\n");
+}
+
+/// Past the bound an eraser goes with the blank it hides: dropping the blank alone would let the
+/// eraser take the next one.
+#[test]
+fn past_the_bound_an_eraser_goes_with_its_blank() {
+    let mut state = base(1);
+    state.apply(&blank_insert(1, at(5, 0, A))).unwrap();
+    state.apply(&blank_insert(1, at(6, 0, A))).unwrap();
+    state.apply(&blank_remove(1, at(10, 0, A))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 1\n\n");
+    state.prune_ghosts_to(1);
+    assert_eq!(state.to_bytes(), b"line 1\n\n");
+}
+
 /// A peer's edit of a line deleted here applies as a no-op, not an error sync logs as skipped.
 #[test]
 fn an_edit_of_a_line_another_device_deleted_changes_nothing() {

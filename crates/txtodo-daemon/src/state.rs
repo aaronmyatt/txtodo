@@ -18,6 +18,9 @@ pub use ghosts::MAX_GHOSTS_PER_FILE;
 // A placement that lands late takes the entries that should follow it (ADR 0033).
 #[path = "state_rehome.rs"]
 mod rehome;
+// A `BlankRemove` is kept as an eraser; the blank it hides is settled after every op.
+#[path = "state_erase.rs"]
+mod erase;
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -92,6 +95,8 @@ pub struct DocState {
     /// `parents[i]`: the anchor placement the op that placed `entries[i]` followed
     /// (`state_rehome.rs`). Merge metadata, like `stamps`.
     parents: Vec<order::Parent>,
+    /// `erasers[i]`: `entries[i]` is a `BlankRemove`, never shown (`state_erase.rs`).
+    erasers: Vec<bool>,
     /// The stamp of the `SetField` each task's field last took, so an older one arriving late
     /// loses on every device (task partition-converge). Merge metadata, like `stamps`.
     field_stamps: HashMap<(TaskId, Field), Hlc>,
@@ -126,6 +131,7 @@ impl DocState {
             path,
             hidden: vec![false; entries.len()],
             parents: vec![None; entries.len()],
+            erasers: vec![false; entries.len()],
             visible: (0..entries.len()).collect(),
             entries,
             stamps,
@@ -195,6 +201,9 @@ impl DocState {
         }
         debug_assert!(self.visible.len() <= MAX_LINES_PER_FILE);
         debug_assert!(self.entries.len() >= before, "an op hides, never removes");
+        if reshapes(&op.kind) {
+            self.settle_erasers();
+        }
         self.prune_ghosts();
         log_state_applied(self.visible.len());
         Ok(())
@@ -288,23 +297,26 @@ impl DocState {
         Ok(())
     }
 
-    /// Hides the blank its author saw right after the anchor: the first shown blank after it,
-    /// when every shown line in between was placed by a newer op than that blank. RGA puts a
-    /// newer placement after the same anchor before an older one, so only lines the remover never
-    /// saw can sit there (a concurrent add, ADR 0033); any other line means no such blank.
+    /// Places an eraser after the anchor (`state_erase.rs`). The blank it hides is settled with
+    /// every other eraser's after each op, so a blank or an anchor placement that lands later
+    /// still ends with the blank every device hides. One that finds no blank is kept all the same.
     fn blank_remove(&mut self, after: Option<TaskId>, hlc: Hlc) -> Result<(), StateError> {
-        let start = self.anchor_slot(after, hlc)?.map_or(0, |s| s + 1);
-        let blank = (start..self.entries.len())
-            .find(|&s| !self.hidden[s] && matches!(self.entries[s], Entry::Blank(_)));
-        let between_newer =
-            |b: usize| (start..b).all(|s| self.hidden[s] || self.stamps[s] > self.stamps[b]);
-        match blank.filter(|&b| between_newer(b)) {
-            Some(b) => {
-                self.hide_entry(b);
-                Ok(())
-            }
-            None => Err(StateError::NoBlank(after)),
-        }
+        let spot = self.slot_after(after, hlc)?;
+        let at = spot.at;
+        let entry = Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending));
+        self.insert_entry(spot, entry, hlc);
+        self.erasers[at] = true;
+        self.hide_entry(at);
+        Ok(())
+    }
+}
+
+/// Whether an op can change which blank an eraser claims: it places, hides or removes a line.
+fn reshapes(kind: &OpKind) -> bool {
+    match kind {
+        OpKind::SetField { field, .. } => *field == Field::Deleted,
+        OpKind::EditText { .. } | OpKind::NotesEdit { .. } => false,
+        _ => true,
     }
 }
 

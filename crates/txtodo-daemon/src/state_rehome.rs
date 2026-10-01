@@ -14,7 +14,6 @@
 use std::collections::HashSet;
 
 use super::DocState;
-use super::order::Spot;
 use txtodo_model::{Hlc, TaskId};
 
 impl DocState {
@@ -34,38 +33,55 @@ impl DocState {
         }
     }
 
-    /// Whether the entry in `s` was placed after an older placement of `task` than `placed`, by
-    /// an op newer than `placed`: it would follow `placed` had that arrived first. Equal stamps
-    /// are one commit, applied in order, so they never move.
+    /// Whether the entry in `s` follows an older placement of `task` than `placed`, was placed by
+    /// a newer op than `placed`, and no placement of `task` sits between the two: had `placed`
+    /// arrived first, the op would have followed it. Equal stamps are one commit, applied in
+    /// order, so they never count (an op placed before its anchor moved in its own commit stays).
     fn follows_older(&self, s: usize, task: TaskId, placed: Hlc) -> bool {
-        matches!(self.parents[s], Some((t, p)) if t == task && p < placed && placed < self.stamps[s])
+        let mine = self.stamps[s];
+        let older =
+            matches!(self.parents[s], Some((t, p)) if t == task && p < placed && placed < mine);
+        older
+            && !(0..self.entries.len()).any(|q| {
+                self.entries[q].id() == Some(task)
+                    && placed < self.stamps[q]
+                    && self.stamps[q] < mine
+            })
     }
 
-    /// Moves the block `head` starts to its spot under `task`'s placement stamped `placed`.
-    /// `false`, nothing moved, when that placement is inside the block: parents are never newer
-    /// than their children, so it is only possible past a pruned ghost.
+    /// Moves the block `head` starts under `task`'s placement stamped `placed`, past what newer
+    /// ops placed there (RGA's skip). `false`, nothing moved, when that placement is gone or
+    /// inside the block: parents are never newer than their children, so only a pruned ghost
+    /// gets there.
     fn move_block(&mut self, head: usize, task: TaskId, placed: Hlc) -> bool {
         let end = self.block_end(head);
-        let inside =
-            (head..end).any(|s| self.entries[s].id() == Some(task) && self.stamps[s] == placed);
-        if inside {
+        let anchor = (0..self.entries.len())
+            .find(|&s| self.entries[s].id() == Some(task) && self.stamps[s] == placed);
+        let Some(anchor) = anchor.filter(|a| !(head..end).contains(a)) else {
             return false;
-        }
+        };
+        let anchor = if anchor > head {
+            anchor - (end - head)
+        } else {
+            anchor
+        };
         let entries: Vec<_> = self.entries.drain(head..end).collect();
         let stamps: Vec<_> = self.stamps.drain(head..end).collect();
         let hidden: Vec<_> = self.hidden.drain(head..end).collect();
         let mut parents: Vec<_> = self.parents.drain(head..end).collect();
-        let Ok(Spot { at, parent }) = self.slot_after(Some(task), stamps[0]) else {
-            debug_assert!(false, "the placement it moves under is here");
-            return false;
-        };
-        debug_assert_eq!(parent, Some((task, placed)));
-        parents[0] = parent;
+        let erasers: Vec<_> = self.erasers.drain(head..end).collect();
+        let mut at = anchor + 1;
+        // Bounded by the document length.
+        while self.stamps.get(at).is_some_and(|p| *p > stamps[0]) {
+            at += 1;
+        }
+        parents[0] = Some((task, placed));
         let tail = at..at;
         self.entries.splice(tail.clone(), entries);
         self.stamps.splice(tail.clone(), stamps);
         self.hidden.splice(tail.clone(), hidden);
-        self.parents.splice(tail, parents);
+        self.parents.splice(tail.clone(), parents);
+        self.erasers.splice(tail, erasers);
         self.reindex();
         true
     }

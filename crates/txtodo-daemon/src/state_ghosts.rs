@@ -8,6 +8,8 @@
 //! line numbers, `len`, `entry_at`, `index_of`, the bytes. A *slot* is a position in the whole
 //! sequence, ghosts included; only this module, `state_order.rs` and `fields.rs` use slots.
 
+use std::collections::HashSet;
+
 use super::{DocState, Entry, StateError};
 use txtodo_core::{File, OwnedLine};
 use txtodo_model::{Hlc, TaskId};
@@ -118,6 +120,7 @@ impl DocState {
         debug_assert_eq!(self.hidden.len(), self.entries.len());
         debug_assert_eq!(self.stamps.len(), self.entries.len());
         debug_assert_eq!(self.parents.len(), self.entries.len());
+        debug_assert_eq!(self.erasers.len(), self.entries.len());
         self.visible = (0..self.entries.len())
             .filter(|&s| !self.hidden[s])
             .collect();
@@ -181,26 +184,37 @@ impl DocState {
         self.prune_ghosts_to(MAX_GHOSTS_PER_FILE);
     }
 
-    /// Drops the oldest ghosts past `max` (a parameter so a test need not make 10 000).
+    /// Drops the oldest ghosts past `max` (a parameter so a test need not make 10 000). An
+    /// eraser goes with the blank it claims, so neither that blank nor another one comes back.
     pub(crate) fn prune_ghosts_to(&mut self, max: usize) {
         let ghosts = self.entries.len() - self.visible.len();
         if ghosts <= max {
             return;
         }
-        let mut hidden: Vec<usize> = (0..self.entries.len())
-            .filter(|&s| self.hidden[s])
+        let claims = self.claims();
+        let claimed: HashSet<usize> = claims.values().copied().collect();
+        let mut oldest: Vec<usize> = (0..self.entries.len())
+            .filter(|&s| self.hidden[s] && !claimed.contains(&s))
             .collect();
-        hidden.sort_by_key(|&s| self.stamps[s]);
-        let mut drop: Vec<usize> = hidden[..ghosts - max].to_vec();
+        oldest.sort_by_key(|&s| self.stamps[s]);
+        let mut drop = Vec::new();
+        for s in oldest {
+            if drop.len() >= ghosts - max {
+                break;
+            }
+            drop.push(s);
+            drop.extend(claims.get(&s));
+        }
         drop.sort_unstable_by(|a, b| b.cmp(a));
         for s in drop {
             self.entries.remove(s);
             self.stamps.remove(s);
             self.hidden.remove(s);
             self.parents.remove(s);
+            self.erasers.remove(s);
         }
         self.reindex();
-        debug_assert_eq!(self.entries.len() - self.visible.len(), max);
+        debug_assert!(self.entries.len() - self.visible.len() <= max);
     }
 
     /// Takes the replay's whole sequence, ghosts included, when it shows the same lines by id
@@ -218,6 +232,7 @@ impl DocState {
         self.stamps.clone_from(&replayed.stamps);
         self.hidden.clone_from(&replayed.hidden);
         self.parents.clone_from(&replayed.parents);
+        self.erasers.clone_from(&replayed.erasers);
         self.reindex();
         true
     }

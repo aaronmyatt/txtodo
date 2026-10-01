@@ -514,7 +514,9 @@ multiplex every workspace's traffic — not done by this task).
   moving a task away hide the entry where it is, with its stamp; nothing is removed except past
   `MAX_GHOSTS_PER_FILE` (oldest first). An op anchored on task T follows T's placement with the
   newest stamp not newer than its own (ties: the shown one); each slot keeps that parent, and a
-  placement that lands late takes the entries that should follow it (`state_rehome.rs`). Every
+  placement that lands late takes the entries that should follow it (`state_rehome.rs`). A
+  `BlankRemove` is a hidden eraser slot; which blank each one hides is settled from the sequence
+  after every op that reshapes it (`state_erase.rs`). Every
   by-position call (`len`, `entry_at`, `index_of`, `task_before`, `line_ids`, `to_bytes`) sees
   only shown lines; slots
   (ghosts included) are internal to `state*.rs` and `fields.rs`. Ghosts come back at open through
