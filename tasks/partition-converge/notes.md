@@ -78,6 +78,16 @@ Options (an `@human` call, the "Decide: EditText convergence" line):
 I'd take T1 if the placement decision goes with A (same kind of state: kept history, rebuilt at
 open), T2 if it goes with B (one protocol bump for both).
 
+**notes.md has the same problem, and it is now the lab's main failure** (run 20261001-155749,
+all 10 scenarios on 2026-10-01 code, seed 1072683562). A peer's `NotesEdit` is a splice too, and
+`NotesActor::import_ops` applies it in arrival order (the Loro mirror gets the same splices, so it
+does not merge either). In 6 of the 8 failing scenarios (lan-to-relay, nat-holepunch, sleep,
+old-new, bad-link, clock-skew) the only file still different at the end is `tasks/lab/notes.md`:
+the same appended lines in another order, and in some a line lost. lan-converge's `todo.txt` also
+ends with one line in two texts (`+lab @a pri:B1` vs `+lab @a1 pri:B`): a splice landed at
+another offset. relay-only passes. So the EditText decision should cover `NotesEdit` too; T3 is
+more natural there, since notes already are a Loro text document.
+
 ## How to check
 
 - Unit: a `state_order_tests.rs`-style permutation test over (add after T, move T), (add after T,
