@@ -44,9 +44,11 @@ pub struct Change {
     pub ops: Vec<Stored>,
     /// needs_review flags this change raised (an import), if any.
     pub review: Vec<ReviewRow>,
+    /// The file's duplicate groups afterwards (ADR 0032).
+    pub duplicate_groups: u32,
 }
 
-pub use crate::conflict_row::{ConflictRow, Resolution};
+pub use crate::conflict_row::{ConflictRow, FileConflicts, Resolution};
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
 /// FailedPrecondition; the rest are Internal.
@@ -206,7 +208,7 @@ pub enum ActorMsg {
     /// The open needs_review flags.
     Conflicts {
         /// Result channel.
-        reply: oneshot::Sender<Result<Vec<ConflictRow>, ActorError>>,
+        reply: oneshot::Sender<Result<FileConflicts, ActorError>>,
     },
     /// The mirror's version as opaque bytes (what a peer exports since).
     Version {
@@ -359,7 +361,7 @@ impl ActorHandle {
     }
 
     /// The open needs_review flags with their current lines.
-    pub async fn conflicts(&self) -> Result<Vec<ConflictRow>, ActorError> {
+    pub async fn conflicts(&self) -> Result<FileConflicts, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
     }
 

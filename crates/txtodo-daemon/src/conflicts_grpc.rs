@@ -5,6 +5,7 @@
 use crate::convert::{
     applied_of, parse_principal, parse_resolution, parse_task_ref, status_of, to_flag,
 };
+use crate::duplicates::to_duplicate_group;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
@@ -16,9 +17,10 @@ impl TxtodoService {
         r: Request<pb::ConflictsRequest>,
     ) -> Result<Response<pb::ConflictsResponse>, Status> {
         let h = self.actor(&r.get_ref().path)?;
-        let rows = h.conflicts().await.map_err(status_of)?;
+        let found = h.conflicts().await.map_err(status_of)?;
         Ok(Response::new(pb::ConflictsResponse {
-            flags: rows.iter().map(to_flag).collect(),
+            flags: found.flags.iter().map(to_flag).collect(),
+            duplicates: found.duplicates.iter().map(to_duplicate_group).collect(),
         }))
     }
 

@@ -65,11 +65,14 @@ impl FileActor {
                 op,
             })
             .collect();
+        // After the state swap: the groups the file has now (ADR 0032).
+        let groups = crate::duplicates::duplicate_groups(&self.state).len();
         Change {
             path: self.cfg.path.clone(),
             hash,
             ops: stored,
             review,
+            duplicate_groups: u32::try_from(groups).unwrap_or(u32::MAX),
         }
     }
 }

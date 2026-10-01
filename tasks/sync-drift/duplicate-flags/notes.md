@@ -59,3 +59,10 @@ file only adds what building it needs.
   One reading the ADR did not spell out: in tagged mode a line's own `id:` tag is left out of the
   comparison (`id_strip::strip_own_id`), since it is identity, not text, and would otherwise make
   every line unique. Say if tagged mode should not flag at all.
+- 2026-10-01: proto `ConflictsResponse.duplicates` (2) and `Change.duplicate_groups` (6), with
+  round-trip tests. Daemon: the actor's `Conflicts` reply is a `FileConflicts { flags, duplicates }`
+  and `ListConflicts` maps both; every commit's `Change` counts the groups from the state after
+  it, and a Watch client that lagged gets the count as it is now.
+  `grpc_conflicts::identical_lines_are_a_duplicate_group_until_one_is_deleted`. Cost: 0.8 ms per
+  commit on a 10k-line file (release, one throwaway timing run). The desktop 10k-line e2e perf
+  spec (`apps/desktop/e2e/perf.spec.ts`) was not run.

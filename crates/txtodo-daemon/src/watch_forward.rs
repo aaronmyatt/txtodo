@@ -65,6 +65,7 @@ pub(crate) async fn forward_changes(
                     })
                     .collect(),
                 progress: watch_progress_of(&svc, &h).await,
+                duplicate_groups: c.duplicate_groups,
             },
             Err(RecvError::Lagged(_)) => match h.get().await {
                 Ok(c) => pb::Change {
@@ -73,6 +74,10 @@ pub(crate) async fn forward_changes(
                     ops: Vec::new(),
                     review: Vec::new(),
                     progress: watch_progress_of(&svc, &h).await,
+                    // Missed changes: the count as it is now.
+                    duplicate_groups: h.conflicts().await.map_or(0, |found| {
+                        u32::try_from(found.duplicates.len()).unwrap_or(u32::MAX)
+                    }),
                 },
                 Err(_) => return,
             },

@@ -111,7 +111,7 @@ async fn same_word_on_both_sides_raises_one_flag_and_resolve_clears_it() {
         .unwrap();
     let applied = sync_a_into_b(&a, &b).await;
     assert!(applied >= 1, "the merge landed as ops on B: {applied}");
-    let flags = b.conflicts().await.unwrap();
+    let flags = b.conflicts().await.unwrap().flags;
     assert_eq!(flags.len(), 1, "{flags:?}");
     assert_eq!(flags[0].row.task, TaskId::new(Ulid::parse(T).unwrap()));
     assert_eq!(flags[0].line_number, 1);
@@ -142,7 +142,7 @@ async fn same_word_on_both_sides_raises_one_flag_and_resolve_clears_it() {
         .await
         .unwrap();
     assert_eq!(r.applied, 0);
-    assert!(b.conflicts().await.unwrap().is_empty());
+    assert!(b.conflicts().await.unwrap().flags.is_empty());
     assert_eq!(disk(bd.path()), merged, "merged changes nothing on disk");
     // a second resolve has nothing to resolve
     let again = b
@@ -169,7 +169,7 @@ async fn resolve_mine_writes_one_edit_back_and_different_words_never_flag() {
         .await
         .unwrap();
     sync_a_into_b(&a, &b).await;
-    assert_eq!(b.conflicts().await.unwrap().len(), 1);
+    assert_eq!(b.conflicts().await.unwrap().flags.len(), 1);
     let r = b
         .resolve(
             TaskRef {
@@ -183,7 +183,7 @@ async fn resolve_mine_writes_one_edit_back_and_different_words_never_flag() {
         .unwrap();
     assert!(r.applied >= 1, "one edit written back: {}", r.applied);
     assert_eq!(disk(bd.path()), format!("buy cows +farm id:{T}\n"));
-    assert!(b.conflicts().await.unwrap().is_empty());
+    assert!(b.conflicts().await.unwrap().flags.is_empty());
     // Different words from here on: A changes the project, B the verb — no flag.
     a.apply(edit(1, &format!("buy geese +barn id:{T}")), user(1))
         .await
@@ -191,7 +191,7 @@ async fn resolve_mine_writes_one_edit_back_and_different_words_never_flag() {
     let before = b.version().await.unwrap();
     sync_a_into_b(&a, &b).await;
     assert!(
-        b.conflicts().await.unwrap().is_empty(),
+        b.conflicts().await.unwrap().flags.is_empty(),
         "sequential, not concurrent"
     );
     assert_ne!(b.version().await.unwrap(), before);

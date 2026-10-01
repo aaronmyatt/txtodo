@@ -45,6 +45,20 @@ pub fn duplicate_groups(state: &DocState) -> Vec<DuplicateGroup> {
     groups
 }
 
+/// A group on the wire (`ConflictsResponse.duplicates`).
+pub(crate) fn to_duplicate_group(group: &DuplicateGroup) -> txtodo_proto::v1::DuplicateGroup {
+    txtodo_proto::v1::DuplicateGroup {
+        tasks: group
+            .tasks
+            .iter()
+            .map(|(task, line)| txtodo_proto::v1::DuplicateTask {
+                task_id: task.to_string(),
+                line_number: u32::try_from(*line).unwrap_or(u32::MAX),
+            })
+            .collect(),
+    }
+}
+
 /// The bytes two lines are compared by. In tagged mode each line carries its own `id:` tag, so no
 /// two would ever match; that tag is identity, not text, and is left out. Everything else counts.
 fn comparable(mode: IdentityMode, line: &OwnedLine) -> Cow<'_, [u8]> {

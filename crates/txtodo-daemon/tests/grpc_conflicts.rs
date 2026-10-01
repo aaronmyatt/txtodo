@@ -260,3 +260,78 @@ async fn an_agent_resolution_is_stamped_as_that_agent() {
         newest.principal
     );
 }
+
+async fn duplicates_of(client: &mut Client) -> Vec<pb::DuplicateGroup> {
+    client
+        .list_conflicts(pb::ConflictsRequest {
+            path: "todo.txt".into(),
+            workspace: None,
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .duplicates
+}
+
+async fn delete_task(client: &mut Client, task_id: &str) {
+    let task = Some(pb::TaskRef {
+        line_number: 0,
+        task_id: task_id.into(),
+    });
+    let delete = pb::Mutation {
+        kind: Some(mutation::Kind::Delete(pb::Delete {
+            task,
+            leave_blank: false,
+        })),
+    };
+    client
+        .apply(pb::ApplyRequest {
+            path: "todo.txt".into(),
+            mutations: vec![delete],
+            ..pb::ApplyRequest::default()
+        })
+        .await
+        .unwrap();
+}
+
+/// ADR 0032: two identical lines are a duplicate group in `ListConflicts`, oldest id first, and a
+/// `Watch` change carries the file's group count; deleting one copy drops it to zero.
+#[tokio::test]
+async fn identical_lines_are_a_duplicate_group_until_one_is_deleted() {
+    use tokio_stream::StreamExt;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("todo.txt"),
+        "buy milk id:01M2D3AAAAAAAAAAAAAAAAAAAA\nwalk id:01M2D3CCCCCCCCCCCCCCCCCCCC\nbuy milk id:01M2D3BBBBBBBBBBBBBBBBBBBB\n",
+    )
+    .unwrap();
+    let (mut client, _stop) = serve(dir.path()).await;
+    let found = duplicates_of(&mut client).await;
+    assert_eq!(found.len(), 1, "{found:?}");
+    let lines: Vec<(&str, u32)> = found[0]
+        .tasks
+        .iter()
+        .map(|t| (t.task_id.as_str(), t.line_number))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            ("01M2D3AAAAAAAAAAAAAAAAAAAA", 1),
+            ("01M2D3BBBBBBBBBBBBBBBBBBBB", 3)
+        ]
+    );
+
+    let mut watch = client
+        .watch(pb::WatchRequest {
+            paths: vec!["todo.txt".into()],
+            workspace: None,
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    apply_add(&mut client, "call mum").await;
+    assert_eq!(watch.next().await.unwrap().unwrap().duplicate_groups, 1);
+    delete_task(&mut client, "01M2D3AAAAAAAAAAAAAAAAAAAA").await;
+    assert_eq!(watch.next().await.unwrap().unwrap().duplicate_groups, 0);
+    assert!(duplicates_of(&mut client).await.is_empty());
+}

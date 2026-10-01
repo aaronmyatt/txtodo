@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use crate::actor::{Commit, CommitTail, FileActor};
-use crate::handle::{ActorError, ActorMsg, Applied, ConflictRow, Resolution};
+use crate::handle::{ActorError, ActorMsg, Applied, ConflictRow, FileConflicts, Resolution};
 use crate::mirror::file_like;
 use crate::mutation::{TaskRef, resolve};
 use crate::reconcile::change_ops;
@@ -142,7 +142,7 @@ impl FileActor {
     }
 
     /// Open flags with the line each task sits on now (0 when it is no longer in the file).
-    pub(crate) fn on_conflicts(&self) -> Result<Vec<ConflictRow>, ActorError> {
+    pub(crate) fn on_conflicts(&self) -> Result<FileConflicts, ActorError> {
         let rows = self.lock_store().open_flags(&self.cfg.path)?;
         let out: Vec<ConflictRow> = rows
             .into_iter()
@@ -152,7 +152,10 @@ impl FileActor {
             })
             .collect();
         debug_assert!(out.iter().all(|c| c.row.file == self.cfg.path));
-        Ok(out)
+        Ok(FileConflicts {
+            flags: out,
+            duplicates: crate::duplicates::duplicate_groups(&self.state),
+        })
     }
 
     /// Resolves one flag: `Merged` keeps the file; `Mine`/`Theirs` write that side's description
@@ -200,7 +203,7 @@ impl FileActor {
                 source: None,
             },
         })?;
-        debug_assert!(self.on_conflicts()?.iter().all(|c| c.row.task != id));
+        debug_assert!(self.on_conflicts()?.flags.iter().all(|c| c.row.task != id));
         Ok(Applied {
             applied: u32::try_from(change.ops.len()).unwrap_or(u32::MAX),
             hash: change.hash,
