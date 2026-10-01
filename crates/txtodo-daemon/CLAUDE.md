@@ -271,8 +271,10 @@ multiplex every workspace's traffic — not done by this task).
   endpoint is online, retrying on `DIAL_KNOWN_PEER_INTERVAL` the same way `lan.rs`'s resync does.
   `relay.rs::bind` also now records the bound node id in `Health.relay_last_outcome`
   (`"bound as <hex>; awaiting connections"`) so a peer (or a test) can learn it without a new RPC.
-  `--no-lan` (`main.rs::start_lan`) skips `lan::start` entirely, for a forced-relay test that must
-  prove no LAN path exists to converge through instead. `crates/txtodo-daemon/tests/
+  `--no-lan` (`device_lan::LanMode::RelayOnly`) binds no LAN endpoint and runs no discovery, for a
+  forced-relay test that must prove no LAN path exists to converge through instead; it still runs
+  the relay-only auto-dial tick (`relay_autodial::run_without_lan`), which before 2026-10-01 lived
+  only inside the LAN task and so was off too (p2p lab finding). `crates/txtodo-daemon/tests/
   relay_converge.rs` is the real two-daemon proof; see its own module doc for what it does and does
   not establish in this sandbox (no Linux/root — no real network-namespace boundary). **Task
   `daemon-workspace-session-multiplex` stage 2 found and fixed a real bug here**: `relay::start` is

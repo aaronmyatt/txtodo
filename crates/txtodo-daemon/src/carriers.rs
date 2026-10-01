@@ -20,8 +20,8 @@ pub(crate) struct Deps {
 
 /// The per-device carriers, started before any workspace opens: the relay control channel (when
 /// a relay is bound), one shared file-carrier (stage 6) and one LAN transport (task
-/// sync-live-push), the last off like relay without a keystore that can keep keys. Kept alive for
-/// `run`'s whole life.
+/// sync-live-push), the last off like relay without a keystore that can keep keys, and only its
+/// relay-only auto-dial under `--no-lan`. Kept alive for `run`'s whole life.
 pub(crate) struct Carriers {
     _control: Option<txtodo_daemon::control_channel::ControlChannelTransport>,
     pub(crate) file: Option<Arc<DeviceFileCarrier>>,
@@ -52,7 +52,7 @@ pub(crate) fn start(args: &Args, sync_allowed: bool, deps: Deps) -> Carriers {
         _file_task: file.clone().map(txtodo_daemon::file_carrier::start),
         file,
         lan: txtodo_daemon::device_lan::start(
-            !args.no_lan && sync_allowed,
+            txtodo_daemon::device_lan::LanMode::from_flags(args.no_lan, sync_allowed),
             identity,
             device_relay,
             clock,

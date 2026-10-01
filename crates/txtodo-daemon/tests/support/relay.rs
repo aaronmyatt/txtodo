@@ -5,6 +5,7 @@
 //! defining module and every descendant).
 
 use super::{Daemon, seed_group_id, seed_workspace_id, write_tree};
+use txtodo_proto::v1::{self as pb, workspace_selector::Selector};
 
 /// `start_with_seeded_group_tree`, plus extra `txtodod` CLI args appended after the standard
 /// `--dir`/`--identity-mode` ones — `--relay`, `--relay-dial-peer`, `--no-lan` (`relay.rs`'s own
@@ -73,6 +74,36 @@ pub fn parse_relay_node_id(relay_last_outcome: &str) -> Option<String> {
         .split(';')
         .next()?;
     (hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())).then(|| hex.to_owned())
+}
+
+impl Daemon {
+    /// Every workspace this daemon has registered: its own `--dir` one, and since task
+    /// `remote-workspace-mirror` a mirror of each workspace a paired peer offered.
+    pub async fn workspaces(&mut self) -> Vec<pb::WorkspaceInfo> {
+        self.client
+            .workspace_list(pb::WorkspaceListRequest {})
+            .await
+            .unwrap_or_else(|e| panic!("workspace_list: {e}"))
+            .into_inner()
+            .workspaces
+    }
+
+    /// `daemon_bytes` for the workspace rooted at `root` (a `WorkspaceInfo.root`): once paired, a
+    /// daemon holds a mirror too, and a selector-less call is refused as ambiguous.
+    pub async fn daemon_bytes_at(&mut self, root: &str) -> Vec<u8> {
+        let req = pb::GetFileRequest {
+            path: "todo.txt".into(),
+            workspace: Some(pb::WorkspaceSelector {
+                selector: Some(Selector::Path(root.to_string())),
+            }),
+        };
+        self.client
+            .get_file(req)
+            .await
+            .unwrap_or_else(|e| panic!("get_file {root}: {e}"))
+            .into_inner()
+            .bytes
+    }
 }
 
 #[cfg(test)]

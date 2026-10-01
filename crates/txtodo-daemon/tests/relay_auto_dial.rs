@@ -22,6 +22,7 @@
 
 mod support;
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 use support::Daemon;
 use support::relay::start_with_seeded_group_args;
@@ -29,6 +30,8 @@ use support::relay::start_with_seeded_group_args;
 const PAIR_DEADLINE: Duration = Duration::from_secs(110);
 const RELAY_BIND_DEADLINE: Duration = Duration::from_secs(20);
 const AUTO_DIAL_DEADLINE: Duration = Duration::from_secs(30);
+/// The control channel's offer, then the mirror's open; a machine that is slow in bursts.
+const MIRROR_DEADLINE: Duration = Duration::from_secs(60);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// One of iroh's own documented public relay servers — the same one `relay_converge.rs` and
 /// `pairing_relay.rs` use.
@@ -110,14 +113,50 @@ async fn wait_for_group_key(b: &mut Daemon) {
     }
 }
 
-/// Polls `to`'s bytes against `from`'s until they match or [`AUTO_DIAL_DEADLINE`] passes — same
-/// shape as `relay_converge.rs::wait_for_relay_convergence`, duplicated rather than shared since
-/// that helper is private to its own file.
-async fn wait_for_convergence(from: &mut Daemon, to: &mut Daemon, label: &str) {
-    let want = from.daemon_bytes().await;
+/// Waits for `to` to mirror `from`'s own `--dir` workspace and returns both roots. Since task
+/// `remote-workspace-mirror` that mirror is where sync lands: two `--dir` workspaces minted apart
+/// never share a workspace id, so they never sync with each other. The offer itself travels the
+/// relay control channel the joiner dials.
+async fn mirror_of(from: &mut Daemon, to: &mut Daemon, label: &str) -> (String, String) {
+    let dir = from.dir.path().canonicalize().unwrap();
+    let own = from
+        .workspaces()
+        .await
+        .into_iter()
+        .find(|w| Path::new(&w.root).canonicalize().ok().as_deref() == Some(dir.as_path()))
+        .unwrap_or_else(|| panic!("{label}: no workspace at {}", dir.display()));
     let start = Instant::now();
     loop {
-        let got = to.daemon_bytes().await;
+        if let Some(mirror) = to
+            .workspaces()
+            .await
+            .into_iter()
+            .find(|w| w.workspace_id == own.workspace_id)
+        {
+            return (own.root, mirror.root);
+        }
+        assert!(
+            start.elapsed() < MIRROR_DEADLINE,
+            "{label}: {} never mirrored within {MIRROR_DEADLINE:?}\n--- peer log ---\n{}",
+            own.workspace_id,
+            to.log_tail(),
+        );
+        tokio::time::sleep(POLL_INTERVAL).await;
+    }
+}
+
+/// Polls `to`'s mirror against `from`'s own workspace until they match or
+/// [`AUTO_DIAL_DEADLINE`] passes — same shape as `relay_converge.rs::wait_for_relay_convergence`,
+/// duplicated rather than shared since that helper is private to its own file.
+async fn wait_for_convergence(
+    (from, from_root): (&mut Daemon, &str),
+    (to, to_root): (&mut Daemon, &str),
+    label: &str,
+) {
+    let want = from.daemon_bytes_at(from_root).await;
+    let start = Instant::now();
+    loop {
+        let got = to.daemon_bytes_at(to_root).await;
         if got == want {
             eprintln!(
                 "relay-auto-dial[{label}]: converged in {:?}",
@@ -127,10 +166,11 @@ async fn wait_for_convergence(from: &mut Daemon, to: &mut Daemon, label: &str) {
         }
         assert!(
             start.elapsed() < AUTO_DIAL_DEADLINE,
-            "{label}: did not converge within {AUTO_DIAL_DEADLINE:?} — auto-dial never kicked in?\nwant={:?}\ngot={:?}\n--- {label} peer log ---\n{}",
+            "{label}: did not converge within {AUTO_DIAL_DEADLINE:?} — auto-dial never kicked in?\nwant={:?}\ngot={:?}\n--- {label} joiner log ---\n{}\n--- {label} initiator log ---\n{}",
             String::from_utf8_lossy(&want),
             String::from_utf8_lossy(&got),
             to.log_tail(),
+            from.log_tail(),
         );
         tokio::time::sleep(POLL_INTERVAL).await;
     }
@@ -174,7 +214,8 @@ async fn joiner_auto_dials_initiator_via_relay_after_pairing_with_no_dial_peer_f
     // No `--relay-dial-peer` on either side, anywhere above: the only thing that can make `b`
     // reach `a` for the initial snapshot (and any further edit) is `relay_autodial.rs`'s own
     // periodic resync-tick check against the devices table `finish_joiner` just populated.
-    wait_for_convergence(&mut a, &mut b, "initial-snapshot").await;
+    let (a_root, b_mirror) = mirror_of(&mut a, &mut b, "a-offered").await;
+    wait_for_convergence((&mut a, &a_root), (&mut b, &b_mirror), "initial-snapshot").await;
 
     // A later edit on `a` must also converge — proves this is `lan.rs`'s own periodic redial
     // shape (auto-dial runs every resync tick, not just once right after pairing), not a
@@ -182,6 +223,14 @@ async fn joiner_auto_dials_initiator_via_relay_after_pairing_with_no_dial_peer_f
     a.external_write(
         "(A) buy milk id:01M2N016AUTODIALTESTA001\n(B) walk the dog id:01M2N016AUTODIALTESTB001\n",
     );
-    a.settle().await;
-    wait_for_convergence(&mut a, &mut b, "later-edit").await;
+    // Not `settle()`: its selector-less read is ambiguous once `a` holds a mirror of `b`'s too.
+    let start = Instant::now();
+    while !String::from_utf8_lossy(&a.daemon_bytes_at(&a_root).await).contains("walk the dog") {
+        assert!(
+            start.elapsed() < AUTO_DIAL_DEADLINE,
+            "a never took its own external edit"
+        );
+        tokio::time::sleep(POLL_INTERVAL).await;
+    }
+    wait_for_convergence((&mut a, &a_root), (&mut b, &b_mirror), "later-edit").await;
 }

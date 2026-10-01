@@ -14,7 +14,10 @@ use txtodo_model::DeviceId;
 use txtodo_store::DeviceRow;
 use txtodo_sync::{DiscoveredPeer, LanEndpoint};
 
-use crate::lan::{LanCtx, dial_and_spawn, spawn_driver};
+use crate::lan::{
+    LanCtx, LanTransport, MAX_CONCURRENT_LAN_SESSIONS, dial_and_spawn, resync_interval,
+    spawn_driver,
+};
 use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
 use crate::live_peers::Carrier;
 use crate::relay_fallback::relay_fallback_dial;
@@ -45,6 +48,13 @@ pub(crate) fn resync_and_dial(
             peer,
         );
     }
+    dial_relay_only(known_peers, ctx, sessions);
+}
+
+/// The relay-only half of a resync tick: every paired device with a relay node id and no LAN
+/// sighting in `known_peers`, not live and not parked, gets one relay dial.
+fn dial_relay_only(known_peers: &KnownPeers, ctx: &LanCtx, sessions: &Arc<Semaphore>) {
+    let live = ctx.identity.live_peers();
     // A parked peer holds no key we share (task sync-drift line 5): this used to dial every device
     // not marked removed, whatever its group.
     let parked = ctx.identity.peer_keys();
@@ -54,6 +64,27 @@ pub(crate) fn resync_and_dial(
     {
         spawn_relay_only_dial(ctx.clone(), node, device, Arc::clone(sessions));
     }
+}
+
+/// `--no-lan` with a relay bound (`device_lan::LanMode::RelayOnly`): the LAN task's resync tick
+/// minus the LAN. No sighting can exist, so every paired device with a relay node id is a
+/// relay-only peer. Before this, `--no-lan` meant no relay auto-dial either (p2p lab finding), and
+/// two relay-paired devices never synced. `ctx.group` is re-read each tick: no
+/// `rebuild_on_group_change` runs here to follow a pairing.
+pub(crate) fn run_without_lan(mut ctx: LanCtx) -> LanTransport {
+    let task = tokio::spawn(async move {
+        let no_sightings = KnownPeers::default();
+        let sessions = Arc::new(Semaphore::new(MAX_CONCURRENT_LAN_SESSIONS));
+        // `tokio::time::interval`: https://docs.rs/tokio/latest/tokio/time/fn.interval.html
+        let mut resync = tokio::time::interval(resync_interval());
+        resync.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            resync.tick().await;
+            ctx.group = ctx.identity.group();
+            dial_relay_only(&no_sightings, &ctx, &sessions);
+        }
+    });
+    LanTransport { task }
 }
 
 /// Every registered, non-removed device with a recorded relay node id that `known_peers` has

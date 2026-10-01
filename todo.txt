@@ -1,4 +1,4 @@
-(C) 2026-09-30 daemon: with --no-lan the relay auto-dial never runs, it lives in the LAN resync tick +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings
+(C) 2026-09-30 daemon: with --no-lan the relay auto-dial never runs, it lives in the LAN resync tick +m11 @sync @daemon — found by the p2p lab, see tasks/p2p-lab/notes.md Findings @doing by:claude-6391ec
 (B) 2026-09-30 daemon: peer clock samples are never stored, so doctor's peer clock rows always say no sample and never flag a peer ahead +m11 @sync @daemon — found by the p2p lab clock-skew scenario, see tasks/p2p-lab/notes.md Findings
 (B) 2026-09-30 cli: txtodo daemon status run inside a git worktree registers that folder as a workspace, and the daemon then stamps id: tags into every list there +m11 @cli @daemon — hit by the p2p-lab session 2026-09-30, see tasks/p2p-lab/notes.md Findings
 (A) 2026-09-30 sync: devices that edit while apart do not converge after they reconnect: anchors name tasks not spots, and one line's edits apply in arrival order +m11 @sync @daemon ref:partition-converge

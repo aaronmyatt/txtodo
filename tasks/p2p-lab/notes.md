@@ -60,7 +60,11 @@ device with `docker exec`.
   failed: refusing to dial group ...: not this endpoint's group". Seen after relay pairing
   (relay-only, nat-holepunch) and after LAN pairing (lan-to-relay). Sync over the relay starts
   only after b1 restarts.
-- **`--no-lan` turns off the relay auto-dial**: it runs inside the LAN resync tick
+- **`--no-lan` turns off the relay auto-dial** (fixed 2026-10-01: `LanMode::RelayOnly` runs
+  that tick alone, `relay_autodial::run_without_lan`; not yet re-run in the lab). With the
+  pairing fix above, `tests/relay_auto_dial.rs` (n0 relay, `--no-lan`, brought up to date for
+  mirrors) synced in 2 of 3 runs and passed in full once; the other run missed its 30 s
+  window after the mirror opened, cause not found (no debug log that run). It runs inside the LAN resync tick
   (crates/txtodo-daemon/src/relay_autodial.rs). relay-only keeps LAN on and pulls the cable.
 - **Peer clock samples are never stored.** In the daemon `last_known_wall_ms` is only ever set
   to `None` (pairing_adopt.rs, pairing_register.rs, relay_autodial.rs); the Hello's skew is only

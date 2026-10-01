@@ -78,7 +78,7 @@ pub(crate) fn resync_interval() -> Duration {
 
 /// The background LAN transport task; `abort()` on daemon shutdown.
 pub struct LanTransport {
-    task: JoinHandle<()>,
+    pub(crate) task: JoinHandle<()>,
 }
 
 impl LanTransport {

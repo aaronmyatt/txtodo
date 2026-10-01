@@ -47,17 +47,42 @@ pub fn open_registry(path: &std::path::Path) -> Option<Arc<Mutex<WorkspaceRegist
     }
 }
 
-/// Starts the one LAN task unless `enabled` is false (`--no-lan`, or a keystore that cannot keep
-/// keys). Returns the table workspaces register on, and the task handle to keep alive. `registry`
-/// feeds the control sessions that carry workspace offers over LAN.
+/// What [`start`] runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LanMode {
+    /// Nothing: a keystore that cannot keep keys turns sync off.
+    Off,
+    /// `--no-lan`: no LAN endpoint or discovery, only the relay-only auto-dial tick that the LAN
+    /// task used to carry (`relay_autodial::run_without_lan`). Before that, `--no-lan` turned the
+    /// auto-dial off too (p2p lab finding). Without a bound relay this is [`LanMode::Off`].
+    RelayOnly,
+    /// The LAN task, whose resync tick also runs the relay-only auto-dial.
+    Full,
+}
+
+impl LanMode {
+    /// The mode for `--no-lan` and whether this device's keystore allows sync at all.
+    pub fn from_flags(no_lan: bool, sync_allowed: bool) -> LanMode {
+        match (sync_allowed, no_lan) {
+            (false, _) => LanMode::Off,
+            (true, true) => LanMode::RelayOnly,
+            (true, false) => LanMode::Full,
+        }
+    }
+}
+
+/// Starts the one LAN task, or under [`LanMode::RelayOnly`] just its relay-only auto-dial.
+/// Returns the table workspaces register on (relay-only sessions drive over it too), and the task
+/// handle to keep alive. `registry` feeds the control sessions that carry workspace offers over
+/// LAN.
 pub fn start(
-    enabled: bool,
+    mode: LanMode,
     identity: Arc<DeviceIdentity>,
     device_relay: Option<Arc<DeviceRelay>>,
     clock: Arc<dyn Clock>,
     registry: Option<Arc<Mutex<WorkspaceRegistry>>>,
 ) -> Option<(Arc<DeviceLan>, LanTransport)> {
-    if !enabled {
+    if mode == LanMode::Off || (mode == LanMode::RelayOnly && device_relay.is_none()) {
         return None;
     }
     let lan = Arc::new(DeviceLan::default());
@@ -70,7 +95,11 @@ pub fn start(
         clock,
         registry,
     };
-    Some((lan, crate::lan::start(ctx)))
+    let task = match mode {
+        LanMode::RelayOnly => crate::relay_autodial::run_without_lan(ctx),
+        _ => crate::lan::start(ctx),
+    };
+    Some((lan, task))
 }
 
 /// One accepted pairing connection (this device as initiator) — same "blocking thread, one permit"
@@ -194,4 +223,19 @@ pub(crate) fn dial_control(
 
 fn log_control_dial_failed(peer: txtodo_model::DeviceId, error: &str) {
     tracing::debug!(%peer, error, "lan_control_dial_failed");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LanMode;
+
+    /// `--no-lan` keeps the relay-only auto-dial (p2p lab finding); only a keystore that cannot
+    /// keep keys turns everything off.
+    #[test]
+    fn no_lan_keeps_the_relay_only_auto_dial() {
+        assert_eq!(LanMode::from_flags(true, true), LanMode::RelayOnly);
+        assert_eq!(LanMode::from_flags(false, true), LanMode::Full);
+        assert_eq!(LanMode::from_flags(true, false), LanMode::Off);
+        assert_eq!(LanMode::from_flags(false, false), LanMode::Off);
+    }
 }
