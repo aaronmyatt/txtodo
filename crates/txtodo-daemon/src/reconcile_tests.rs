@@ -167,7 +167,7 @@ fn first_line_as(edit: &Edit, from: &File) -> String {
 
 /// A `do` of a prioritized line is field ops alone: `Completed` moves the priority into `pri:`
 /// where core `Edit::complete` puts it, so a concurrent priority change wins or loses by its stamp
-/// alone. Reopening is the mirror: `Completed` first, then the priority, then the text edit.
+/// alone. Reopening is the mirror: `Completed`, the priority, then a text edit dropping `pri:`.
 #[test]
 fn completing_a_prioritized_line_is_field_ops_alone() {
     let today = Date::new(2026, 10, 1).unwrap();
@@ -184,7 +184,11 @@ fn completing_a_prioritized_line_is_field_ops_alone() {
     assert_eq!(
         fields_set(&reopened.ops),
         [Field::Completed, Field::Priority],
-        "an open line drops its completion date with the x"
+        "the x takes the completion date with it"
+    );
+    assert!(
+        matches!(reopened.ops.last(), Some(OpKind::EditText { .. })),
+        "the text edit drops the pri: tag"
     );
 }
 
@@ -214,4 +218,78 @@ fn a_do_and_a_newer_priority_change_agree() {
         first.ends_with("pri:C") && !first.contains("pri:A"),
         "{first}"
     );
+}
+
+/// The mirror of the `do` case: A reopens done line 1 (`pri:A`); B, unaware, sets its priority to
+/// C with a newer stamp. Reopening restores whatever `pri:` holds, so every device ends with
+/// `(C)` and no tag.
+#[test]
+fn a_reopen_and_a_newer_priority_change_agree() {
+    let today = Date::new(2026, 10, 1).unwrap();
+    let done = parse_file(first_line_as(&Edit::new().complete(today), &old()).as_bytes());
+    let base = DocState::from_tagged_file(path(), &done).unwrap();
+    for reopen in [
+        Edit::new().uncomplete(),
+        // Reopened with the priority dropped: still `(C)`, the newer change.
+        Edit::new().uncomplete().clear_priority(),
+    ] {
+        let open = txtodo_core::apply(&done.lines[0], &reopen);
+        reopen_meets_newer_priority(&base, &done, &open);
+    }
+}
+
+fn reopen_meets_newer_priority(base: &DocState, done: &File, open: &txtodo_core::OwnedLine) {
+    use crate::state_order_tests::{self as order, at, op};
+    let a: Vec<_> = change_ops(&done.lines[0], open, id(A))
+        .into_iter()
+        .map(|kind| op(at(100, 0, order::A), kind))
+        .collect();
+    let b = [op(
+        at(101, 0, order::B),
+        OpKind::SetField {
+            task: id(A),
+            field: Field::Priority,
+            value: FieldValue::Priority(Some('C')),
+        },
+    )];
+    let bytes = converges_interleaved(base, &a, &b);
+    let first = bytes.lines().next().unwrap();
+    assert!(
+        first.starts_with("(C) ") && !first.contains("pri:"),
+        "{first}"
+    );
+}
+
+/// Reopens already in a log keep replaying to the same line: the shape `mutation_reopen.rs` sent
+/// before (`Completed`, `CompletionDate`, `Priority`, then a text edit dropping `pri:`).
+#[test]
+fn a_stored_reopen_replays_to_the_same_line() {
+    let today = Date::new(2026, 10, 1).unwrap();
+    let done = parse_file(first_line_as(&Edit::new().complete(today), &old()).as_bytes());
+    let open = txtodo_core::apply(&done.lines[0], &Edit::new().uncomplete());
+    let description = |line: &txtodo_core::OwnedLine| match line.parse().unwrap().kind {
+        txtodo_core::LineKind::Task(t) => t.description.to_owned(),
+        txtodo_core::LineKind::Blank => unreachable!("a task line"),
+    };
+    let edits = txtodo_core::diff_text(&description(&done.lines[0]), &description(&open))
+        .into_iter()
+        .map(txtodo_model::TextEdit::from)
+        .collect();
+    let field = |field, value| OpKind::SetField {
+        task: id(A),
+        field,
+        value,
+    };
+    let mut state = DocState::from_tagged_file(path(), &done).unwrap();
+    for op in [
+        field(Field::Completed, FieldValue::Bool(false)),
+        field(Field::CompletionDate, FieldValue::Date(None)),
+        field(Field::Priority, FieldValue::Priority(Some('A'))),
+        OpKind::EditText { task: id(A), edits },
+    ] {
+        state
+            .apply_kind(&op)
+            .unwrap_or_else(|e| panic!("{op:?}: {e}"));
+    }
+    assert_eq!(state.line_of(id(A)).unwrap(), open);
 }

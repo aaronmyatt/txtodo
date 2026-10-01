@@ -35,11 +35,22 @@ pub(crate) fn set_field(
     let i = state
         .content_slot(task)
         .ok_or(StateError::UnknownTask(task))?;
+    let line = state.slot_line(i).clone();
     if state.is_stale_field(task, field, hlc) {
         log_stale_field(task, field);
+        if field == Field::Priority
+            && let Some(restored) = priority_from_tag(&line)
+        {
+            state.replace_entry(
+                i,
+                Entry::Task {
+                    id: task,
+                    line: restored,
+                },
+            );
+        }
         return Ok(());
     }
-    let line = state.slot_line(i).clone();
     let new_line = rewrite_prefix(&line, field, value)
         .ok_or(StateError::Unsupported("SetField on this line"))?;
     debug_assert!(
@@ -59,6 +70,25 @@ pub(crate) fn set_field(
     );
     state.record_field(task, field, hlc);
     Ok(())
+}
+
+/// A reopen sends `Completed = false`, then the priority it restores, then a text edit dropping the
+/// `pri:` tag. When a newer priority change landed on the done line first, that `Priority` op
+/// loses, and the newer value is the one `pri:` holds: it goes into the prefix instead, so both
+/// arrival orders end with the newer priority (task partition-converge). Only an open line with
+/// a `pri:` tag and no `(X)` takes it: a reopen half applied, or a tag a user typed. `None` for
+/// any other line, which a lost op leaves as it is.
+fn priority_from_tag(line: &OwnedLine) -> Option<OwnedLine> {
+    let LineKind::Task(task) = line.parse()?.kind else {
+        return None;
+    };
+    let prefix = Prefix::of(&task);
+    if prefix.completed || prefix.priority.is_some() {
+        return None;
+    }
+    let letter = task.tag("pri")?.chars().next()?;
+    Priority::new(letter)?;
+    rewrite_prefix(line, Field::Priority, FieldValue::Priority(Some(letter)))
 }
 
 /// A peer's `SetField` lost to a newer one on the same field: expected when two devices change one

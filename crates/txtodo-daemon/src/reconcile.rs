@@ -95,8 +95,9 @@ fn reconcile_inner(
 /// puts it, so a `do` of a prioritized line is field ops alone and a peer's concurrent priority
 /// change wins or loses by its stamp, not by arrival order (task partition-converge; it used to
 /// be `Priority = None` plus a text edit adding `pri:A`, and a newer `pri:C` then ended as
-/// `pri:A pri:C` on one device). Reopening is the mirror: the `x` goes first, then the restored
-/// priority lands on an open line, then the text edit drops the `pri:` tag.
+/// `pri:A pri:C` on one device). Reopening is the mirror: the `x` goes first, then the priority
+/// the open line has (always, none included: a peer's newer one in `pri:` wins through it, see
+/// `fields::priority_from_tag`), then the text edit drops the `pri:` tag.
 pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind> {
     let Some(wanted) = task_of(new) else {
         return Vec::new();
@@ -115,7 +116,10 @@ pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind>
         let Some(value) = field_value(new, field) else {
             continue;
         };
-        if field_value(&line, field) == Some(value) {
+        // A reopen always names the priority it leaves, none included: `pri:` still holds the
+        // done line's, so "unchanged" cannot be read off the prefix (`fields::priority_from_tag`).
+        let reopen_priority = field == Field::Priority && completed(old) && !wanted.completed;
+        if field_value(&line, field) == Some(value) && !reopen_priority {
             continue;
         }
         if let (Ok(op), Some(next)) = (
@@ -299,6 +303,10 @@ pub(crate) fn task_of(line: &OwnedLine) -> Option<Task<'_>> {
         LineKind::Task(t) => Some(t),
         LineKind::Blank => None,
     }
+}
+
+fn completed(line: &OwnedLine) -> bool {
+    task_of(line).is_some_and(|t| t.completed)
 }
 
 pub(crate) fn is_task(line: &OwnedLine) -> bool {
