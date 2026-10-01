@@ -1,0 +1,6 @@
+2026-10-01 Watcher: route a notes.md event to the notes registry (get_or_open, then absorb the disk), like txtodo.toml's layout route +m11 @daemon
+2026-10-01 NotesActor: check the disk right before the rename (write_atomic_if); hold the write and keep the base when it is not our last write +m11 @daemon
+2026-10-01 NotesActor: merge a held save three-way (diff base to disk, applied on the current text); drop absorb_disk before writes +m11 @daemon
+2026-10-01 NotesActor: a held base survives a restart (meta held_base/<file>) +m11 @daemon
+2026-10-01 Test: a notes.md save followed only by the watcher's message becomes an op a fresh peer receives +m11 @daemon
+2026-10-01 Lab: lan-converge loses no notes.md token on three seeds +m11 @sync
