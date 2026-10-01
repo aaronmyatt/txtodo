@@ -107,7 +107,7 @@ fn a_version_one_database_migrates_to_two_and_keeps_its_rows() {
     {
         // A pre-M4 file: only 0001 applied, one row in it.
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch(include_str!("../migrations/0001.sql"))
+        conn.execute_batch(include_str!("../../migrations/0001.sql"))
             .unwrap();
         let v: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))

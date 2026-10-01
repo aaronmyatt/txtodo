@@ -73,13 +73,13 @@ fn a_pre_migration_log_opens_with_every_old_row_sourceless() {
         // A schema-7 file: every migration but 0008, with one row written the old way.
         let conn = rusqlite::Connection::open(&path).unwrap();
         for sql in [
-            include_str!("../migrations/0001.sql"),
-            include_str!("../migrations/0002.sql"),
-            include_str!("../migrations/0003.sql"),
-            include_str!("../migrations/0004.sql"),
-            include_str!("../migrations/0005.sql"),
-            include_str!("../migrations/0006.sql"),
-            include_str!("../migrations/0007.sql"),
+            include_str!("../../migrations/0001.sql"),
+            include_str!("../../migrations/0002.sql"),
+            include_str!("../../migrations/0003.sql"),
+            include_str!("../../migrations/0004.sql"),
+            include_str!("../../migrations/0005.sql"),
+            include_str!("../../migrations/0006.sql"),
+            include_str!("../../migrations/0007.sql"),
         ] {
             conn.execute_batch(sql).unwrap();
         }

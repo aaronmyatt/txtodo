@@ -176,7 +176,7 @@ fn an_existing_v1_registry_gains_last_active_without_losing_a_row() {
     let path = dir.path().join("registry.db");
     // A registry exactly as the pre-`last_active_ms` build left it: schema 1, one row.
     let old = rusqlite::Connection::open(&path).unwrap();
-    old.execute_batch(include_str!("../registry_migrations/0001.sql"))
+    old.execute_batch(include_str!("../../registry_migrations/0001.sql"))
         .unwrap();
     old.execute(
         "INSERT INTO workspaces (id, root, added_at, removed_at) VALUES (?1, '/home/a/old', 500, NULL)",

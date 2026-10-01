@@ -183,9 +183,9 @@ fn op_by_id_finds_the_stored_row_and_nothing_else() {
 #[test]
 fn the_crate_has_no_update_or_delete_statement() {
     let sources = [
-        include_str!("../src/lib.rs"),
-        include_str!("../src/ops.rs"),
-        include_str!("../src/error.rs"),
+        include_str!("../../src/lib.rs"),
+        include_str!("../../src/ops.rs"),
+        include_str!("../../src/error.rs"),
     ];
     for src in sources {
         let upper = src.to_uppercase();

@@ -87,10 +87,10 @@ that entry below.
   build refuses a schema-3 file (`SchemaTooNew`), so a downgrade after this needs the column gone.
 
 ## Invariants
-- Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/oplog.rs greps).
+- Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/it/oplog.rs greps).
   Projections, snapshots, meta, tokens, fingerprints and devices are upserts and carry no history
   of their own; a removed device row is kept, never deleted. `registry.rs` is exempt from
-  `tests/oplog.rs`'s grep (scoped to `lib.rs`/`ops.rs`/`error.rs` only, same as `devices.rs`) and
+  `tests/it/oplog.rs`'s grep (scoped to `lib.rs`/`ops.rs`/`error.rs` only, same as `devices.rs`) and
   uses a real `UPDATE`-shaped upsert (`INSERT ... ON CONFLICT(id) DO UPDATE SET removed_at =
   ...`) for the same tombstone reason `devices.rs` does — never a bare `UPDATE`/`DELETE`.
 - Everything here is rebuildable from the files **except sidecar fingerprints**: a tagged
