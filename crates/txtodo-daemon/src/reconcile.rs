@@ -9,6 +9,7 @@
 //! line actually lacks one (budget: one edit in 10k lines ≤ 20 ms, plan §5).
 
 use crate::fastid::fast_id_of;
+use crate::fields::{field_value, rewrite_prefix};
 use std::collections::{BTreeMap, VecDeque};
 use txtodo_core::{Edit, File, LineDiff, LineKind, OwnedLine, Task, diff_lines, diff_text};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId, TextEdit, set_field};
@@ -87,33 +88,49 @@ fn reconcile_inner(
 }
 
 /// Field-level ops for a changed line paired to `task` by the caller (an id read off the line in
-/// tagged mode, a fingerprint match in sidecar mode — this function doesn't care which): priority
-/// first (so a completion that dropped `(A)` does not move it to `pri:`), then dates, completion,
-/// then the description.
+/// tagged mode, a fingerprint match in sidecar mode — this function doesn't care which), then the
+/// description. Each field op is applied to a working copy the way `DocState` applies it
+/// (`fields::rewrite_prefix`), and the text edit is the diff against what they leave.
+/// `Completed` goes first: completing moves a priority into `pri:` where core `Edit::complete`
+/// puts it, so a `do` of a prioritized line is field ops alone and a peer's concurrent priority
+/// change wins or loses by its stamp, not by arrival order (task partition-converge; it used to
+/// be `Priority = None` plus a text edit adding `pri:A`, and a newer `pri:C` then ended as
+/// `pri:A pri:C` on one device). Reopening is the mirror: the `x` goes first, then the restored
+/// priority lands on an open line, then the text edit drops the `pri:` tag.
 pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind> {
-    let (Some(a), Some(b)) = (task_of(old), task_of(new)) else {
+    let Some(wanted) = task_of(new) else {
         return Vec::new();
     };
+    if task_of(old).is_none() {
+        return Vec::new();
+    }
     let mut ops = Vec::new();
-    let mut push = |field: Field, value: FieldValue| {
-        if let Ok(op) = set_field(task, field, value) {
-            ops.push(op);
+    let mut line = old.clone();
+    for field in [
+        Field::Completed,
+        Field::CompletionDate,
+        Field::CreationDate,
+        Field::Priority,
+    ] {
+        let Some(value) = field_value(new, field) else {
+            continue;
+        };
+        if field_value(&line, field) == Some(value) {
+            continue;
         }
+        if let (Ok(op), Some(next)) = (
+            set_field(task, field, value),
+            rewrite_prefix(&line, field, value),
+        ) {
+            ops.push(op);
+            line = next;
+        }
+    }
+    let Some(have) = task_of(&line) else {
+        return ops;
     };
-    if a.priority != b.priority {
-        push(Field::Priority, FieldValue::priority(b.priority));
-    }
-    if a.creation_date != b.creation_date {
-        push(Field::CreationDate, FieldValue::date(b.creation_date));
-    }
-    if a.completed != b.completed {
-        push(Field::Completed, FieldValue::Bool(b.completed));
-    }
-    if a.completion_date != b.completion_date {
-        push(Field::CompletionDate, FieldValue::date(b.completion_date));
-    }
-    if a.description != b.description {
-        let edits: Vec<TextEdit> = diff_text(a.description, b.description)
+    if have.description != wanted.description {
+        let edits: Vec<TextEdit> = diff_text(have.description, wanted.description)
             .into_iter()
             .map(TextEdit::from)
             .collect();

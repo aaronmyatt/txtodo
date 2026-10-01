@@ -83,8 +83,11 @@ fn add_appends_after_the_last_task_and_mints_an_id_when_missing() {
     assert!(matches!(bad, Err(MutationError::NotATask(_))));
 }
 
+/// Completing a prioritized line is field ops alone: `Completed` moves `(A)` into `pri:A` the way
+/// core `Edit::complete` does, so no priority clear and no text edit travel (task
+/// partition-converge: those two made a concurrent priority change end twice in the text).
 #[test]
-fn complete_clears_priority_first_then_marks_done() {
+fn complete_marks_done_and_its_priority_moves_with_it() {
     let s = state();
     let today = Date::new(2026, 9, 12).unwrap();
     let ops = mutation_ops(
@@ -106,13 +109,19 @@ fn complete_clears_priority_first_then_marks_done() {
             }
         })
         .collect();
-    assert_eq!(
-        fields,
-        vec![Field::Priority, Field::Completed, Field::CompletionDate]
-    );
+    assert_eq!(fields, vec![Field::Completed, Field::CompletionDate]);
     assert!(
-        ops.iter().any(|o| matches!(o, OpKind::EditText { .. })),
-        "pri:A lands in the description"
+        !ops.iter().any(|o| matches!(o, OpKind::EditText { .. })),
+        "pri:A comes from the Completed op"
+    );
+    let mut done = s.clone();
+    for op in &ops {
+        done.apply_kind(op).unwrap();
+    }
+    let line = done.line_of(id(A)).unwrap();
+    assert!(
+        line.raw().is_some_and(|raw| raw.ends_with("pri:A")),
+        "{line:?}"
     );
 }
 

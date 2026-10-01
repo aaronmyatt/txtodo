@@ -1,9 +1,10 @@
 //! Reconciler: each LineDiff kind maps to its op, ids are reused or minted, and applying the ops
 //! to the old state reproduces the new file exactly (the actor's postcondition).
 
-use crate::reconcile::{Reconciled, reconcile};
+use crate::reconcile::{Reconciled, change_ops, reconcile};
 use crate::state::{DocState, task_id};
-use txtodo_core::{File, parse_file};
+use crate::state_converge_tests::converges_interleaved;
+use txtodo_core::{Date, Edit, File, parse_file};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind, TaskId};
 
 const A: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAA";
@@ -145,4 +146,72 @@ fn kind_name(op: &OpKind) -> &'static str {
         OpKind::BlankInsert { .. } => "blank_insert",
         OpKind::BlankRemove { .. } => "blank_remove",
     }
+}
+
+/// The fields a batch of ops sets, in order.
+fn fields_set(ops: &[OpKind]) -> Vec<Field> {
+    ops.iter()
+        .filter_map(|op| match op {
+            OpKind::SetField { field, .. } => Some(*field),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `old()`'s first line completed or reopened by core, as reconcile sees it.
+fn first_line_as(edit: &Edit, from: &File) -> String {
+    let mut new = from.clone();
+    new.lines[0] = txtodo_core::apply(&from.lines[0], edit);
+    String::from_utf8(new.to_bytes()).unwrap()
+}
+
+/// A `do` of a prioritized line is field ops alone: `Completed` moves the priority into `pri:`
+/// where core `Edit::complete` puts it, so a concurrent priority change wins or loses by its stamp
+/// alone. Reopening is the mirror: `Completed` first, then the priority, then the text edit.
+#[test]
+fn completing_a_prioritized_line_is_field_ops_alone() {
+    let today = Date::new(2026, 10, 1).unwrap();
+    let done = run(&old(), &first_line_as(&Edit::new().complete(today), &old()));
+    assert_eq!(
+        fields_set(&done.ops),
+        [Field::Completed, Field::CompletionDate]
+    );
+    assert_eq!(done.ops.len(), 2, "no text edit: {:?}", done.ops);
+    let reopened = run(
+        &done.file,
+        &first_line_as(&Edit::new().uncomplete(), &done.file),
+    );
+    assert_eq!(
+        fields_set(&reopened.ops),
+        [Field::Completed, Field::Priority],
+        "an open line drops its completion date with the x"
+    );
+}
+
+/// The chaos finding (report 20261001-231440): A completes `(A)` line 1; B, unaware, sets its
+/// priority to C with a newer stamp. Every device ends with one `pri:C`.
+#[test]
+fn a_do_and_a_newer_priority_change_agree() {
+    use crate::state_order_tests::{self as order, at, op};
+    let base = DocState::from_tagged_file(path(), &old()).unwrap();
+    let today = Date::new(2026, 10, 1).unwrap();
+    let done = txtodo_core::apply(&old().lines[0], &Edit::new().complete(today));
+    let a: Vec<_> = change_ops(&old().lines[0], &done, id(A))
+        .into_iter()
+        .map(|kind| op(at(100, 0, order::A), kind))
+        .collect();
+    let b = [op(
+        at(101, 0, order::B),
+        OpKind::SetField {
+            task: id(A),
+            field: Field::Priority,
+            value: FieldValue::Priority(Some('C')),
+        },
+    )];
+    let bytes = converges_interleaved(&base, &a, &b);
+    let first = bytes.lines().next().unwrap();
+    assert!(
+        first.ends_with("pri:C") && !first.contains("pri:A"),
+        "{first}"
+    );
 }

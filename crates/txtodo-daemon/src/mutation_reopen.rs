@@ -7,7 +7,7 @@ use crate::mutation::{MutationError, TaskRef, resolve};
 use crate::reconcile::change_ops;
 use crate::state::{DocState, is_completed};
 use txtodo_core::Edit;
-use txtodo_model::{Field, OpKind, TaskId};
+use txtodo_model::{OpKind, TaskId};
 
 /// The ops that reopen `task`. Empty when the line is not done: reopening an open task is not an
 /// error and never moves it.
@@ -17,25 +17,11 @@ pub(crate) fn reopen_ops(state: &DocState, task: &TaskRef) -> Result<Vec<OpKind>
         .line_of(id)
         .ok_or(MutationError::NoLine(task.line_number))?;
     let new = txtodo_core::apply(&old, &Edit::new().uncomplete());
+    // `change_ops` clears the `x` first, so the restored `(B)` lands on an open line.
     let mut ops = change_ops(&old, &new, id);
     if ops.is_empty() {
         return Ok(ops);
     }
-    // `change_ops` puts the priority first, which is right for completing (the priority must be
-    // set while the line is open, or it would render as `pri:`). Reopening is the mirror: clear
-    // the `x` first, so the restored `(B)` lands on an open line and is not folded back into a
-    // `pri:B` tag that the description edit then deletes.
-    ops.sort_by_key(|op| match op {
-        OpKind::SetField {
-            field: Field::Completed,
-            ..
-        } => 0,
-        OpKind::SetField {
-            field: Field::CompletionDate,
-            ..
-        } => 1,
-        _ => 2,
-    });
     let after = end_of_open_block(state, id);
     // Already right after its anchor: no move, so it adds no op.
     if state.task_before(i) != after {
