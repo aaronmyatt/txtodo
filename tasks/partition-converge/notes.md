@@ -119,3 +119,9 @@ more natural there, since notes already are a Loro text document.
   newer one, a blank removed past a deleted line, ghosts back at open, the bound. Known gaps: an
   older placement of an anchor arriving after an op anchored on it (the stamp rule's limit, in
   the ADR); history replays from a snapshot start with no ghosts.
+- 2026-10-01, text edits (T1, ADR 0034): `text_history.rs`, used by `DocState` per task and by
+  `NotesState`. Tests: `two_devices_editing_one_description_agree` un-ignored, a description's
+  history back at open, every arrival order of three edits, the bound, and two devices appending to
+  one notes.md (fails without T1: the two lines in opposite orders) with the late side's mirror
+  aligned. Known gaps in the ADR: histories that began at different texts, a completing
+  `SetField` between two concurrent edits.
