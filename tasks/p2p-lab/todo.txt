@@ -1,4 +1,3 @@
-2026-09-29 Add the lab recipes to the justfile (frozen for agents) +m11 @lab @human
 x 2026-09-30 2026-09-29 lab image and the lan/world compose topologies +m11 @lab — one image plays device, router and relay; plain bridges with per-container egress sealing, since internal networks drop mDNS and routed traffic
 x 2026-09-30 2026-09-29 lab runner: background start, lock, Docker autostart, build only when the source changed, teardown +m11 @lab — start returns at once; lock, Docker Desktop start, hash-tagged image, one compose project per scenario, torn down on exit and on SIGTERM
 x 2026-09-30 2026-09-29 lab checks: converge, no duplicate lines, no lost tokens, log tripwires, doctor, daemon alive +m11 @lab — all six checks run and fail real runs; the watch-list warnings are only reported
@@ -12,3 +11,4 @@ x 2026-09-30 2026-09-29 lab scenario chaos: three devices under a seeded fault l
 x 2026-09-30 2026-09-29 lab scenario old-new: the last differing release paired with this tree +m11 @lab @sync — runs: builds v0.0.17 from git archive in under a minute, pairs it with this tree and converges at first; fails today after the partition, like lan-converge
 x 2026-09-30 2026-09-29 lab scenario lan-to-relay: paired on the LAN, the LAN drops, sync goes on over the relay +m11 @lab @sync — runs; the real run filed (A) lab: lan-to-relay into the root todo.txt through the daemon; fails today, diverges on the LAN before any fault and the joiner never dials the relay
 x 2026-09-30 2026-09-29 lab scenario nat-holepunch: easy NATs, record whether a direct path forms +m11 @lab @sync — runs through two easy NATs; fails today, no relay connection at all (joiner group bug); a direct path cannot show until the lab relay has QUIC address discovery
+x 2026-10-01 2026-09-29 Add the lab recipes to the justfile (frozen for agents) +m11 @lab @human — done by the human (commit 2d913ae6): just lab, lab-fg, lab-status
