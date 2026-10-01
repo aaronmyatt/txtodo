@@ -119,8 +119,28 @@ impl FileActor {
     /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by
     /// converging from the state — never surfaced to the client, whose change is already durable.
     pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
+        // The mirror keeps no ghosts (ADR 0033): an op anchored on a line deleted here applied to
+        // the state through its ghost, and the mirror would refuse it. Converging is the expected
+        // path for that batch, not an error (the lab's tripwire counted it as one).
+        if ops.iter().any(|op| self.anchored_on_ghost(op)) {
+            tracing::debug!(file = %self.cfg.path, "mirror_anchor_is_a_ghost_converging");
+            self.converge_mirror();
+            return;
+        }
         let result = self.mirror.flush(ops, &self.state);
         self.after_flush(ops, result);
+    }
+
+    /// Whether `op` is placed after a task the state holds only as a ghost.
+    fn anchored_on_ghost(&self, op: &Op) -> bool {
+        let after = match &op.kind {
+            OpKind::Insert { after, .. }
+            | OpKind::Move { after, .. }
+            | OpKind::BlankInsert { after }
+            | OpKind::BlankRemove { after } => *after,
+            _ => None,
+        };
+        after.is_some_and(|id| self.state.index_of(id).is_none() && self.state.has_placement(id))
     }
 
     fn after_flush(&mut self, ops: &[Op], result: Result<(), MirrorError>) {

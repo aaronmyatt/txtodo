@@ -280,17 +280,22 @@ impl DocState {
         Ok(())
     }
 
-    /// Hides the first shown line after the anchor, which must be a blank: the one its author
-    /// saw there (ghosts in between are skipped).
+    /// Hides the blank its author saw right after the anchor: the first shown blank after it,
+    /// when every shown line in between was placed by a newer op than that blank. RGA puts a
+    /// newer placement after the same anchor before an older one, so only lines the remover never
+    /// saw can sit there (a concurrent add, ADR 0033); any other line means no such blank.
     fn blank_remove(&mut self, after: Option<TaskId>, hlc: Hlc) -> Result<(), StateError> {
         let start = self.anchor_slot(after, hlc)?.map_or(0, |s| s + 1);
-        let next = (start..self.entries.len()).find(|&s| !self.hidden[s]);
-        match next.map(|s| (s, &self.entries[s])) {
-            Some((s, Entry::Blank(_))) => {
-                self.hide_entry(s);
+        let blank = (start..self.entries.len())
+            .find(|&s| !self.hidden[s] && matches!(self.entries[s], Entry::Blank(_)));
+        let between_newer =
+            |b: usize| (start..b).all(|s| self.hidden[s] || self.stamps[s] > self.stamps[b]);
+        match blank.filter(|&b| between_newer(b)) {
+            Some(b) => {
+                self.hide_entry(b);
                 Ok(())
             }
-            _ => Err(StateError::NoBlank(after)),
+            None => Err(StateError::NoBlank(after)),
         }
     }
 }

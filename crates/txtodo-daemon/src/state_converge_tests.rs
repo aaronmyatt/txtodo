@@ -248,3 +248,25 @@ fn description_history_comes_back_from_a_replay_at_open() {
     assert_eq!(from_disk.to_bytes(), never_closed.to_bytes());
     assert_eq!(never_closed.to_bytes(), b"line 1 b a\n");
 }
+
+/// A blank removed after a line, while another device added under that same line: the add lands
+/// between the line and the blank on the adder's side, and the blank still goes everywhere.
+#[test]
+fn a_blank_removed_while_another_device_adds_under_its_line() {
+    let mut start = base(1);
+    start
+        .apply(&op(
+            at(5, 0, A),
+            OpKind::BlankInsert {
+                after: Some(task(1)),
+            },
+        ))
+        .unwrap();
+    for (added, removed) in [
+        (at(100, 0, A), at(101, 0, B)),
+        (at(102, 0, A), at(101, 0, B)),
+    ] {
+        let ops = [insert(9, Some(1), added), blank_remove(1, removed)];
+        assert_eq!(converges_skipping(&start, &ops), "line 1\nline 9\n");
+    }
+}
