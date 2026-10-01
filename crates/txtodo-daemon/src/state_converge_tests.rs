@@ -73,7 +73,7 @@ fn converges_skipping(base: &DocState, ops: &[Op]) -> String {
 }
 
 #[test]
-#[ignore = "partition-converge line 1 (@human): ghost placements or anchors with a placement id"]
+#[ignore = "partition-converge placement decision (@human): ghosts, or anchors with a placement id"]
 fn an_add_after_a_line_another_device_moved_lands_in_one_place() {
     // A adds 9 under line 1; B completes line 1, and `do` moves it to the bottom.
     let ops = [
@@ -84,7 +84,7 @@ fn an_add_after_a_line_another_device_moved_lands_in_one_place() {
 }
 
 #[test]
-#[ignore = "partition-converge line 1 (@human): a deleted anchor needs a ghost to sit after"]
+#[ignore = "partition-converge placement decision (@human): a deleted anchor needs a ghost"]
 fn an_add_after_a_line_another_device_deleted_is_kept_everywhere() {
     let ops = [insert(9, Some(1), at(100, 0, A)), delete(1, at(100, 0, B))];
     let bytes = converges_skipping(&base(2), &ops);

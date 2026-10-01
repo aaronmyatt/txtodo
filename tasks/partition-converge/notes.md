@@ -64,7 +64,7 @@ on A's result) from "B edited at the same time as A" (B's offsets are against th
 skipping the older op gives `base+B` on one device and `base+A+B` on the other.
 `state_converge_tests::two_devices_editing_one_description_agree` shows it (ignored).
 
-Options (an `@human` call, sub-line 7):
+Options (an `@human` call, the "Decide: EditText convergence" line):
 - **T1. Text history per task in `DocState`, replayed in stamp order.** Keep each task's text ops
   since its last whole-text point; on a late arrival, rebuild the description by applying them in
   HLC order, skipping ones that no longer fit. No wire change. Costs: memory per edited task
@@ -75,8 +75,8 @@ Options (an `@human` call, sub-line 7):
 - **T3. Let the mirror decide description bytes** (Loro text already merges by character). Breaks
   "the mirror never decides bytes" (an ADR-level change).
 
-I'd take T1 if line 1 goes with A (same kind of state: kept history, rebuilt at open), T2 if
-line 1 goes with B (one protocol bump for both).
+I'd take T1 if the placement decision goes with A (same kind of state: kept history, rebuilt at
+open), T2 if it goes with B (one protocol bump for both).
 
 ## How to check
 
@@ -90,11 +90,11 @@ line 1 goes with B (one protocol bump for both).
 
 ## As built
 
-- 2026-10-01, sub-line 2: `state_converge_tests.rs` runs every arrival order of two devices' ops,
+- 2026-10-01, the permutation test: `state_converge_tests.rs` runs every arrival order of two devices' ops,
   skipping an op that does not apply as sync does. Two anchor cases and the two-edits case stay
-  ignored until their decisions (lines 1 and 6).
-- 2026-10-01, sub-line 4 (`SetField` half): `DocState.field_stamps` keeps each task field's
+  ignored until their decisions (the two `Decide:` lines).
+- 2026-10-01, stamp-wins fields (`SetField` half): `DocState.field_stamps` keeps each task field's
   newest `SetField` stamp; an older one is a no-op (`set_field_older_than_field`, debug). Taken
   from the replay at open (`adopt_stamps`), settled with a commit like line stamps, dropped when
   the task is deleted or moves to another file. Bounded by the tasks in the document. The
-  `EditText` half waits on line 6.
+  `EditText` half waits on the EditText decision.
