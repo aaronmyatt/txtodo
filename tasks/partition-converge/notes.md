@@ -168,3 +168,15 @@ more natural there, since notes already are a Loro text document.
   without `mutation_reopen.rs`'s own re-sort. Known gaps: ops already in a log keep the old shape,
   so replays of old chaos logs still differ; reopening still sends a text edit, so a concurrent
   priority change on a done line can meet the same mismatch from the other side.
+- 2026-10-02, reopen vs a concurrent priority change (8e647492). A reopen is `Completed = false`,
+  `Priority = B`, a text edit dropping ` pri:B` by position. A newer `Priority = C` on the done line
+  first: `B` lost by stamp, the edit dropped `pri:C`, the line ended open with no priority; the
+  other order ended `(C)`. First try: `Completed = false` restores the priority from `pri:`, as
+  core `uncomplete` does. It converged, but replaying every saved lab log showed 17 of 144 device
+  logs no longer rebuilding their file (an editor reopen stored as `Completed = false` + text edit
+  got a priority back it never had), so it was dropped. As built: a `Priority` op that loses,
+  landing on an open line with a `pri:` tag and no `(X)` (a reopen half applied), moves the tag's
+  letter into the prefix (`fields::priority_from_tag`); the reopen's text edit still drops the
+  tag. A reopen always sends its priority, none included, so a reopen that drops the priority
+  meets the same rule. Every saved log replays to the same bytes as before. Known gap: a `pri:` a
+  user typed on an open line also moves into the prefix if a lost `Priority` op lands on it.
