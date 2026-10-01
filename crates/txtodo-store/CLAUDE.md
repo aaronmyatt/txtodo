@@ -46,7 +46,9 @@ that entry below.
   (updates only `key_epoch`, `false` for an unknown device). `static_public` is a plain 32-byte
   array (this crate cannot depend on txtodo-sync's `DeviceStaticPublic`); the daemon converts at
   its own boundary. `last_known_wall_ms` is `None` until a real peer clock sample is observed —
-  `txtodo doctor` reports "no clock sample yet" rather than guess one.
+  `txtodo doctor` reports "no clock sample yet" rather than guess one. `record_peer_clock(id,
+  now_ms, peer_wall_ms)` (`identity_store_touch.rs`) writes the sample together with `last_seen`,
+  so the skew at that moment is `last_known_wall - last_seen`; `touch_last_seen` keeps the sample.
 - Workspace registry (ADR 0025, task `daemon-workspace-registry`): `registry.rs`'s `Registry` — a
   **separate** SQLite database from `Store`'s own `oplog.db` (a different file, its own
   `PRAGMA user_version` sequence starting at 1, embedded from `registry_migrations/0001.sql` next

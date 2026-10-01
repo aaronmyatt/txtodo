@@ -1,4 +1,4 @@
-//! `IdentityStore::touch_last_seen` — split out of `identity_store.rs` for its line budget, the
+//! `IdentityStore::touch_last_seen`/`record_peer_clock` — split out of `identity_store.rs` for its line budget, the
 //! same pattern as `devices_relay.rs` split out of `devices.rs`. The fix for a real, pre-existing
 //! gap (`txtodo-daemon`'s `devices_grpc.rs::sync_status_impl` doc traces it):
 //! `IdentityStore::register_device`'s own SQL only ever seeds `last_seen` once, from `paired_at`,
@@ -22,7 +22,8 @@ const UPSERT_TOUCH: &str = "INSERT INTO devices \
      (device, name, static_public, paired_at, last_seen, last_known_wall, key_epoch, removed_at, \
       relay_node_id, relay_url) \
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
-     ON CONFLICT(device) DO UPDATE SET last_seen = excluded.last_seen";
+     ON CONFLICT(device) DO UPDATE SET last_seen = excluded.last_seen, \
+     last_known_wall = excluded.last_known_wall";
 
 impl IdentityStore {
     /// Marks `device` seen right now. `false` for a wholly unknown device (should not happen for
@@ -30,6 +31,29 @@ impl IdentityStore {
     /// [`IdentityStore::set_device_key_epoch`]). Never mints a new row (that's
     /// [`IdentityStore::register_device`]'s job).
     pub fn touch_last_seen(&mut self, device: DeviceId, now_ms: u64) -> Result<bool, StoreError> {
+        self.touch(device, now_ms, None)
+    }
+
+    /// [`IdentityStore::touch_last_seen`], plus the peer's own wall clock as its `Hello` gave it.
+    /// Both land in one row write, so `last_seen` is the moment `peer_wall_ms` was read and the
+    /// skew is `last_known_wall - last_seen`, however long ago that was. Until 2026-10-01 nothing
+    /// wrote `last_known_wall` at all (p2p lab finding).
+    pub fn record_peer_clock(
+        &mut self,
+        device: DeviceId,
+        now_ms: u64,
+        peer_wall_ms: u64,
+    ) -> Result<bool, StoreError> {
+        self.touch(device, now_ms, Some(peer_wall_ms))
+    }
+
+    /// `peer_wall_ms` `None` keeps the stored clock sample as it is.
+    fn touch(
+        &mut self,
+        device: DeviceId,
+        now_ms: u64,
+        peer_wall_ms: Option<u64>,
+    ) -> Result<bool, StoreError> {
         let tx = self
             .conn
             .transaction()
@@ -70,7 +94,7 @@ impl IdentityStore {
                 static_public,
                 paired_at,
                 crate::ops::wall_i64(now_ms),
-                last_known_wall,
+                peer_wall_ms.map(crate::ops::wall_i64).or(last_known_wall),
                 key_epoch,
                 removed_at,
                 relay_node_id,
@@ -112,6 +136,42 @@ mod tests {
         let row = store.device(device).unwrap().unwrap();
         assert_eq!(row.last_seen_ms, Some(5_000));
         assert_eq!(row.paired_at_ms, 1_000);
+    }
+
+    #[test]
+    fn record_peer_clock_lands_with_last_seen_and_a_plain_touch_keeps_it() {
+        let dir = tempdir().unwrap();
+        let mut store = IdentityStore::open(&dir.path().join("identity.db")).unwrap();
+        let device = DeviceId::new(Ulid::from_u128(1));
+        store
+            .register_device(&NewDevice {
+                device,
+                name: "peer".to_owned(),
+                static_public: [7; 32],
+                paired_at_ms: 1_000,
+                last_known_wall_ms: None,
+                key_epoch: 0,
+            })
+            .unwrap();
+
+        assert!(store.record_peer_clock(device, 5_000, 425_000).unwrap());
+        let row = store.device(device).unwrap().unwrap();
+        assert_eq!(row.last_seen_ms, Some(5_000));
+        assert_eq!(row.last_known_wall_ms, Some(425_000));
+
+        assert!(store.touch_last_seen(device, 9_000).unwrap());
+        let row = store.device(device).unwrap().unwrap();
+        assert_eq!(row.last_seen_ms, Some(9_000));
+        assert_eq!(
+            row.last_known_wall_ms,
+            Some(425_000),
+            "a plain touch keeps the sample"
+        );
+        assert!(
+            !store
+                .record_peer_clock(DeviceId::new(Ulid::from_u128(2)), 1, 1)
+                .unwrap()
+        );
     }
 
     #[test]
