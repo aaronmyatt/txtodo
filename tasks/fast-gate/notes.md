@@ -94,3 +94,24 @@ Still broken / open:
   relinks every test binary of the crate. Next: the per-crate it/e2e merges.
 - `cargo fmt --all --check` measured 19.5 s once and 0.8 s once: the 19.5 s was I/O contention,
   not rustfmt.
+
+## Merge recipe (from the store and daemon-launch merges, 2026-10-01)
+
+- Fast files → `tests/it/main.rs` (`mod foo;` each). Slow files (start txtodod, network, mDNS,
+  relay, nested cargo build) → `tests/e2e/main.rs` + `[[test]] name = "e2e" path =
+  "tests/e2e/main.rs" test = false` in the crate's Cargo.toml.
+- A file that calls `std::env::set_var`/`remove_var` stays its own `tests/*.rs` binary: plain
+  `cargo test` runs one binary's tests as threads of one process, and these files' own docs say
+  they rely on being alone (daemon-launch `autostart`, `service_disabled`; daemon `debug_hooks`).
+- Per moved file: drop `mod support;`, `use support::` → `use crate::support::`, then
+  `rustfmt` (the import order changes). `include_str!("../x")` → `"../../x"`.
+- Cargo drops a named `--test e2e` when `--tests` or `--all-targets` is also given (checked: 0 e2e
+  tests listed). So CI has separate e2e steps, and the gate chains a second clippy for e2e.
+- `--workspace --test e2e` works as long as one selected package has an e2e target; a lone
+  package without one errors.
+- When txtodo-daemon gets its e2e target, the CI daemon job needs a second command:
+  `cargo nextest run -p txtodo-daemon --test e2e` (the check job excludes the daemon).
+- Measured: store after a src edit 10.0 s → 2.9 s (same load). daemon-launch: its 5 real-daemon
+  tests (67 s each under load in the default set) left the local run; gate 3.7 s after an edit.
+- Stale pointer left for the cli session (crate leased elsewhere today):
+  `crates/txtodo-cli/tests/daemon_autostart.rs:122` names `daemon-launch/tests/upgrade.rs`.

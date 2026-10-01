@@ -68,6 +68,7 @@ const crateOf = (f) => {
   if (f.startsWith("relay/")) return "relay";
   return null;
 };
+const dirOf = (c) => (c === "desktop" ? "apps/desktop/src-tauri" : c === "relay" ? "relay" : `crates/${c}`);
 // Workspace-wide inputs: a change here can break any crate, which is CI's job, not 5 s worth.
 const WORKSPACE_WIDE = /^(Cargo\.(toml|lock)|\.cargo\/|clippy\.toml|rustfmt\.toml|rust-toolchain\.toml)/;
 const glob = (g) => new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*\*/g, "\0").replace(/\*/g, "[^/]*").replace(/\0/g, ".*") + "$");
@@ -104,11 +105,17 @@ if (crates.length) {
   // whole target dir for a build, and the two cannot share output anyway (clippy only checks,
   // nextest needs linked binaries). feedback.sh uses the same dir, so each edit warms this step.
   // `--all-targets` leaves out tests/e2e: that target is `test = false` (CI asks for it by name).
+  // A changed tests/e2e file chains a second clippy for that crate's e2e target into this step
+  // (same target dir, so the two could not overlap anyway). It has to be its own command: cargo
+  // drops a named `--test e2e` when `--all-targets` or `--tests` is also given.
   // https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-reads
+  const lint = `cargo clippy --quiet ${p.join(" ")} --all-targets -- -D warnings`;
+  const e2e = crates.filter((c) => changed.some((f) => f.startsWith(`${dirOf(c)}/tests/e2e/`)));
+  const lintE2e = `cargo clippy --quiet ${e2e.map((c) => `-p ${c}`).join(" ")} --test e2e -- -D warnings`;
   steps.push({
     name: "clippy",
-    cmd: "cargo",
-    argv: ["clippy", "--quiet", ...p, "--all-targets", "--", "-D", "warnings"],
+    cmd: "sh",
+    argv: ["-c", e2e.length ? `${lint} && ${lintE2e}` : lint],
     env: { CARGO_TARGET_DIR: join(ROOT, "target/lint") },
   });
   // The `fast` nextest profile: no slow_* tests, SLOW flagged at 1 s, a hung test killed at 10 s.

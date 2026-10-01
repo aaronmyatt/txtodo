@@ -17,6 +17,12 @@ when `apps/desktop` changed. pre-commit (staged files), pre-push (the pushed com
 Stop gate all run it; slow tests (`slow_*`, real daemons, network) and every dependent crate run in
 CI. Each run's step times go to `.git/fast-gate-times.tsv`.
 
+A crate's slow tests live in its `tests/e2e/` target, marked `test = false` in its Cargo.toml:
+`cargo test`, `cargo nextest run` and `clippy --all-targets` skip it, and only a command that
+names it runs it (`cargo nextest run -p txtodo-daemon-launch --test e2e`). Its fast integration
+tests sit in `tests/it/` as one binary. Cargo drops a named `--test e2e` when `--tests` or
+`--all-targets` is also given, so CI runs e2e as separate steps.
+
 ```bash
 just fast                                   # the fast gate on the working tree
 just fast --base origin/main                # the fast gate on the whole branch

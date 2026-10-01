@@ -1,5 +1,4 @@
 2026-10-01 tag unit tests over 500 ms slow_, PROPTEST_CASES in differential.rs, bin test=false for tui and mcp @test
-2026-10-01 merge tests into it + e2e: txtodo-daemon-launch (pilot, and CI selects e2e) @test
 2026-10-01 merge tests into it + e2e: txtodo-daemon @test
 2026-10-01 merge tests into it + e2e: txtodo-cli @test
 2026-10-01 merge tests into it + e2e: txtodo-tui @test
@@ -12,3 +11,4 @@ x 2026-10-01 2026-10-01 measure baseline: per-test junit times and fast-set line
 x 2026-10-01 2026-10-01 fast-gate.mjs entrypoint + nextest fast profile @ci — changed crates only, all steps in parallel; store warm 0.7 s, after a src edit 9.9 s (test-binary relink); planted fmt/clippy/test failures block
 x 2026-10-01 2026-10-01 wire pre-commit, pre-push, gate.sh, feedback.sh, Pi twin, budgets.json, justfile to fast-gate @ci — pre-commit --staged, pre-push per pushed range, gate.sh/Pi minus other leases; workspace clippy and cargo check left the local hooks
 x 2026-10-01 2026-10-01 merge tests into it + e2e: txtodo-store @test — 12 files into tests/it, same 69 tests, no e2e; gate after a src edit 10.0 s → 2.9 s at the same load
+x 2026-10-01 2026-10-01 merge tests into it + e2e: txtodo-daemon-launch (pilot, and CI selects e2e) @test — ensure_daemon/upgrade/simulated_reboot into tests/e2e (test = false); env-mutating autostart/service_disabled stay own binaries; CI runs --test e2e as own steps; gate after src edit 3.7 s
