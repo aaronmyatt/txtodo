@@ -15,6 +15,9 @@ pub(crate) use order::scratch_op;
 #[path = "state_ghosts.rs"]
 mod ghosts;
 pub use ghosts::MAX_GHOSTS_PER_FILE;
+// A placement that lands late takes the entries that should follow it (ADR 0033).
+#[path = "state_rehome.rs"]
+mod rehome;
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -86,6 +89,9 @@ pub struct DocState {
     /// `stamps[i]`: the HLC of the op that placed `entries[i]`, zero for a line read from disk.
     /// Merge metadata, not content: equality ignores it (task insert-order, `state_order.rs`).
     stamps: Vec<Hlc>,
+    /// `parents[i]`: the anchor placement the op that placed `entries[i]` followed
+    /// (`state_rehome.rs`). Merge metadata, like `stamps`.
+    parents: Vec<order::Parent>,
     /// The stamp of the `SetField` each task's field last took, so an older one arriving late
     /// loses on every device (task partition-converge). Merge metadata, like `stamps`.
     field_stamps: HashMap<(TaskId, Field), Hlc>,
@@ -119,6 +125,7 @@ impl DocState {
         Ok(DocState {
             path,
             hidden: vec![false; entries.len()],
+            parents: vec![None; entries.len()],
             visible: (0..entries.len()).collect(),
             entries,
             stamps,
@@ -209,7 +216,7 @@ impl DocState {
         if self.visible.len() + 1 > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(self.visible.len() + 1));
         }
-        let at = self.slot_after(after, hlc)?;
+        let spot = self.slot_after(after, hlc)?;
         let owned = OwnedLine::from_bytes(line.as_bytes().to_vec(), self.ending);
         if self.mode == IdentityMode::Tagged {
             let parsed_id = owned.parse().and_then(|l| match l.kind {
@@ -224,7 +231,7 @@ impl DocState {
             id: task,
             line: owned,
         };
-        self.insert_entry(at, entry, hlc);
+        self.insert_entry(spot, entry, hlc);
         Ok(())
     }
 
@@ -265,8 +272,9 @@ impl DocState {
         }
         let entry = self.entries[from].clone();
         self.hide_entry(from);
-        let at = self.slot_after(after, hlc)?;
-        self.insert_entry(at, entry, hlc);
+        let spot = self.slot_after(after, hlc)?;
+        self.insert_entry(spot, entry, hlc);
+        self.rehome_onto(task, hlc);
         Ok(())
     }
 
@@ -274,9 +282,9 @@ impl DocState {
         if self.visible.len() + 1 > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(self.visible.len() + 1));
         }
-        let at = self.slot_after(after, hlc)?;
+        let spot = self.slot_after(after, hlc)?;
         let entry = Entry::Blank(OwnedLine::from_bytes(Vec::new(), self.ending));
-        self.insert_entry(at, entry, hlc);
+        self.insert_entry(spot, entry, hlc);
         Ok(())
     }
 

@@ -171,6 +171,22 @@ fn a_move_that_lost_to_a_newer_one_still_leaves_its_spot() {
     }
 }
 
+/// The late anchor (lab lan-converge seed 435090918): B, unaware of A's older move of 2 to the
+/// top, moves 4 under 2 and adds 9 under 4. Where A's move arrives last, 4 and 9 sit under 2's old
+/// spot until it does; then they follow 2, as on a device that had the move first.
+#[test]
+fn lines_placed_under_a_line_follow_its_older_move_when_it_arrives_late() {
+    let ops = [
+        move_after(2, None, at(100, 0, A)),
+        move_after(4, Some(2), at(101, 0, B)),
+        insert(9, Some(4), at(102, 0, B)),
+    ];
+    assert_eq!(
+        converges_skipping(&base(4), &ops),
+        "line 2\nline 4\nline 9\nline 1\nline 3\n"
+    );
+}
+
 #[test]
 fn a_blank_removed_after_a_deleted_line_is_the_one_its_author_saw() {
     let mut start = base(1);

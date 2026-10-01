@@ -45,6 +45,16 @@ pub(crate) fn unplaced() -> Hlc {
     Hlc::zero(DeviceId::new(Ulid::from_u128(0)))
 }
 
+/// The anchor placement an entry's op followed, as that task's id and that placement's stamp:
+/// its parent in RGA's tree (`state_rehome.rs`). `None` for the top, or a line read from disk.
+pub(super) type Parent = Option<(TaskId, Hlc)>;
+
+/// Where an op places its entry: the slot, and the placement it follows.
+pub(super) struct Spot {
+    pub(super) at: usize,
+    pub(super) parent: Parent,
+}
+
 /// The stamp scratch replays place under: newer than every real op, so a scratch op lands where
 /// the same op will once it is stamped with a fresh tick. `DocState::settle_scratch_stamps`
 /// swaps it for that tick when the state is committed.
@@ -73,26 +83,29 @@ pub(crate) fn scratch_op(path: &FilePath, kind: OpKind) -> Op {
 }
 
 impl DocState {
-    /// Puts `entry`, placed by an op stamped `hlc`, at `i`.
-    pub(super) fn insert_entry(&mut self, i: usize, entry: Entry, hlc: Hlc) {
-        self.entries.insert(i, entry);
-        self.stamps.insert(i, hlc);
-        self.hidden.insert(i, false);
+    /// Puts `entry`, placed by an op stamped `hlc`, at `spot`.
+    pub(super) fn insert_entry(&mut self, spot: Spot, entry: Entry, hlc: Hlc) {
+        self.entries.insert(spot.at, entry);
+        self.stamps.insert(spot.at, hlc);
+        self.hidden.insert(spot.at, false);
+        self.parents.insert(spot.at, spot.parent);
         self.reindex();
     }
 
-    /// Slot for an entry placed after `after` by an op stamped `hlc`: right after the anchor's
+    /// Spot for an entry placed after `after` by an op stamped `hlc`: right after the anchor's
     /// placement the op means (`anchor_slot`, ADR 0033), then past every entry placed by a later
     /// op, ghosts included (and so past whatever was placed after those).
-    pub(super) fn slot_after(&self, after: Option<TaskId>, hlc: Hlc) -> Result<usize, StateError> {
-        let mut at = self.anchor_slot(after, hlc)?.map_or(0, |s| s + 1);
+    pub(super) fn slot_after(&self, after: Option<TaskId>, hlc: Hlc) -> Result<Spot, StateError> {
+        let anchor = self.anchor_slot(after, hlc)?;
+        let parent = anchor.and_then(|s| Some((self.entries[s].id()?, self.stamps[s])));
+        let mut at = anchor.map_or(0, |s| s + 1);
         debug_assert!(at <= self.stamps.len());
         // Bounded by the document length.
         while self.stamps.get(at).is_some_and(|placed| *placed > hlc) {
             at += 1;
         }
         debug_assert!(at <= self.entries.len());
-        Ok(at)
+        Ok(Spot { at, parent })
     }
 
     /// Whether a same-file move stamped `hlc` of the entry at `i` loses to the placement it
@@ -164,6 +177,11 @@ impl DocState {
         for placed in self.stamps.iter_mut().filter(|p| **p == scratch) {
             *placed = hlc;
         }
+        for (_, placed) in self.parents.iter_mut().flatten() {
+            if *placed == scratch {
+                *placed = hlc;
+            }
+        }
         for set in self.field_stamps.values_mut().filter(|s| **s == scratch) {
             *set = hlc;
         }
@@ -183,14 +201,18 @@ impl DocState {
         if self.adopt_sequence(replayed) {
             return;
         }
-        let by_task: HashMap<TaskId, Hlc> = replayed
+        let by_task: HashMap<TaskId, (Hlc, Parent)> = replayed
             .visible
             .iter()
-            .filter_map(|&s| Some((replayed.entries[s].id()?, replayed.stamps[s])))
+            .filter_map(|&s| {
+                let id = replayed.entries[s].id()?;
+                Some((id, (replayed.stamps[s], replayed.parents[s])))
+            })
             .collect();
-        for (entry, placed) in self.entries.iter().zip(self.stamps.iter_mut()) {
-            if let Some(stamp) = entry.id().and_then(|id| by_task.get(&id)) {
-                *placed = *stamp;
+        for (s, entry) in self.entries.iter().enumerate() {
+            if let Some(&(stamp, parent)) = entry.id().and_then(|id| by_task.get(&id)) {
+                self.stamps[s] = stamp;
+                self.parents[s] = parent;
             }
         }
         debug_assert_eq!(self.stamps.len(), self.entries.len());

@@ -117,6 +117,7 @@ impl DocState {
     pub(super) fn reindex(&mut self) {
         debug_assert_eq!(self.hidden.len(), self.entries.len());
         debug_assert_eq!(self.stamps.len(), self.entries.len());
+        debug_assert_eq!(self.parents.len(), self.entries.len());
         self.visible = (0..self.entries.len())
             .filter(|&s| !self.hidden[s])
             .collect();
@@ -167,9 +168,11 @@ impl DocState {
             .find(|e| e.id() == Some(task))
             .map(|e| e.line().clone())
             .ok_or(StateError::UnknownTask(task))?;
-        let at = self.slot_after(after, hlc)?;
-        self.insert_entry(at, Entry::Task { id: task, line }, hlc);
+        let spot = self.slot_after(after, hlc)?;
+        let at = spot.at;
+        self.insert_entry(spot, Entry::Task { id: task, line }, hlc);
         self.hide_entry(at);
+        self.rehome_onto(task, hlc);
         Ok(())
     }
 
@@ -194,6 +197,7 @@ impl DocState {
             self.entries.remove(s);
             self.stamps.remove(s);
             self.hidden.remove(s);
+            self.parents.remove(s);
         }
         self.reindex();
         debug_assert_eq!(self.entries.len() - self.visible.len(), max);
@@ -213,6 +217,7 @@ impl DocState {
         self.entries = entries;
         self.stamps.clone_from(&replayed.stamps);
         self.hidden.clone_from(&replayed.hidden);
+        self.parents.clone_from(&replayed.parents);
         self.reindex();
         true
     }

@@ -34,10 +34,14 @@ No wire change and no store change: ghosts are derived from the ops every device
   another device moved lands in one place.
 - Bad: memory grows with deletes and moves, up to the bound. A ghost dropped by the bound
   makes an op anchored on it skip again, as before this ADR.
-- Bad: "newest placement not newer than the op" is a stamp rule, not what the author saw. When
-  an older placement of the anchor (a concurrent move) arrives after an op anchored on it, devices
-  that applied them in different orders can place that op differently. Option B (anchors that
-  carry the anchor's placement op id) closes this, at the cost of a wire change.
+- Bad: "newest placement not newer than the op" is a stamp rule, not what the author saw: a
+  concurrent add can follow a line another device moved. Option B (anchors that carry the
+  anchor's placement op id) gives the author's intent, at the cost of a wire change.
+- Amended 2026-10-01 (lab lan-converge seed 435090918): an older placement of the anchor (a
+  concurrent move) can arrive after an op anchored on it, and the op then sat under the anchor's
+  previous placement on that device only. Each slot now keeps its parent (the placement its op
+  followed); a placement that lands late takes, with what follows them, the entries that should
+  follow it (`state_rehome.rs`). A parent dropped by the ghost bound ends that block early.
 - Neutral: history replays that start from a snapshot (checkout, undo) start with no ghosts from
   before it; snapshots hold only the bytes.
 
