@@ -115,3 +115,31 @@ Still broken / open:
   tests (67 s each under load in the default set) left the local run; gate 3.7 s after an edit.
 - Stale pointer left for the cli session (crate leased elsewhere today):
   `crates/txtodo-cli/tests/daemon_autostart.rs:122` names `daemon-launch/tests/upgrade.rs`.
+
+## Rejected: cargo-hakari workspace-hack (2026-10-01)
+
+Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
+macOS-only dev-dependency of every member (test and clippy builds only; release, no-std, wasm and
+CI untouched). It did unify: crates built 2+ ways across `-p` selections went 100 → 0 (154 extra
+copies, tokio 8 ways, serde_core 7, syn 6).
+
+It made builds slower. Same gate commands (clippy + nextest --no-run) after a one-line edit per
+crate, mean of 3 rounds, separate worktree, load ~15-19 before vs ~10 after:
+- store 2.7 → 4.9 s, daemon-launch 2.5 → 5.1 s, telemetry 2.3 → 4.3 s, sync 3.8 → 4.2 s,
+  mcp 7.3 → 17.8 s, daemon 31.6 → 75.5 s, `--workspace` build 69 → 169 s.
+- Median per edit 3.4 → 4.9 s.
+
+Why:
+- The union carries the desktop's choices into every crate. `tauri-macros` turns on
+  `proc-macro2/span-locations`, which slows every derive (serde, tracing, prost, clap) in every
+  rebuild; before, only desktop builds paid it.
+- Extra copies never cost time per edit: every copy stays on disk, so switching selections does
+  not rebuild them. An edit costs the edited crate's rebuild and its test-binary links, which the
+  it/e2e merge cuts (store 10.0 → 2.9 s) and unification cannot.
+
+Not settled: the hakari run reused the first run's target dir (351k files in deps/), and build
+times rose every round in both runs (daemon 24 → 40 s before, 65 → 86 s after). Something
+accumulates in target/, possibly that directory. A periodic `cargo clean`/cargo-sweep may be a
+speed fix as well as a disk fix; not measured.
+
+Disk stays the job of `cargo clean` or cargo-sweep (https://github.com/holmgr/cargo-sweep).
