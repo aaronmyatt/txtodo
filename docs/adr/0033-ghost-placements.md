@@ -1,0 +1,47 @@
+# 0033 — Keep deleted and moved-away placements as hidden ghost entries
+
+- Status: accepted 2026-10-01 (the owner chose option A in `tasks/partition-converge/notes.md`)
+- Date: 2026-10-01
+- Deciders: project owner
+
+## Context
+Devices that edit while apart do not converge once they reconnect (p2p lab, every scenario with
+a partition or concurrent edits). The ops all arrive; applying them gives different files. The
+main cause: an op's anchor names a task, not a spot (`Insert { after: T }`). If another device
+deleted T meanwhile, the insert is skipped (`sync_op_skipped`) and the line is lost on that
+device, and every line anchored on it after that. If another device moved T (`do` moves a done
+line to the bottom), the insert lands at T's old spot on one device and its new spot on the
+other. The 2026-10-01 lab run lost 5–7 lines per scenario this way.
+
+## Decision
+We will keep every placement a document ever had in `DocState`'s sequence:
+
+- Deleting a task, removing a blank, and moving a task away (same file or to another) hide the
+  entry where it is, with its stamp, instead of removing it. A hidden entry is a ghost: never
+  rendered, never counted in a line number, never returned by any by-position call.
+- An op anchored on task T resolves to T's placement with the newest stamp not newer than the
+  op's own (live or ghost), then RGA's skip rule places it as before (`state_order.rs`).
+- A same-file move older than T's live placement (it lost to a newer move) and a move of a task
+  that is already deleted add their spot as a ghost, so every device ends with the same
+  placements whatever order the ops came in.
+- Ghosts are rebuilt from the log at open (the replay from empty that log repair already runs),
+  and at most `MAX_GHOSTS_PER_FILE` are kept; the oldest go first.
+
+No wire change and no store change: ghosts are derived from the ops every device already holds.
+
+## Consequences
+- Good: an add after a line another device deleted is kept everywhere; an add after a line
+  another device moved lands in one place.
+- Bad: memory grows with deletes and moves, up to the bound. A ghost dropped by the bound
+  makes an op anchored on it skip again, as before this ADR.
+- Bad: "newest placement not newer than the op" is a stamp rule, not what the author saw. When
+  an older placement of the anchor (a concurrent move) arrives after an op anchored on it, devices
+  that applied them in different orders can place that op differently. Option B (anchors that
+  carry the anchor's placement op id) closes this, at the cost of a wire change.
+- Neutral: history replays that start from a snapshot (checkout, undo) start with no ghosts from
+  before it; snapshots hold only the bytes.
+
+## Alternatives considered
+- B. Anchors carry the anchor's placement op id: exact intent, but new `OpKind` variants, new
+  signing bytes and a protocol bump; an older peer cannot decode them.
+- Tombstones only for deletes, no move ghosts: fixes the lost lines but not the moved-anchor case.
