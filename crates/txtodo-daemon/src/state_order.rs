@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 
 use super::{DocState, Entry, StateError};
-use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
+use txtodo_model::{DeviceId, Field, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 
 /// Two states are equal when they hold the same document; which op placed a line is not part of
 /// the document.
@@ -96,6 +96,24 @@ impl DocState {
         self.stamps.get(i).is_some_and(|placed| *placed > hlc)
     }
 
+    /// Whether a `SetField` of `task`'s `field` stamped `hlc` is older than the one the field
+    /// already took. Equal is not stale: one stamp is one commit, applied in sequence.
+    pub(crate) fn is_stale_field(&self, task: TaskId, field: Field, hlc: Hlc) -> bool {
+        self.field_stamps
+            .get(&(task, field))
+            .is_some_and(|set| *set > hlc)
+    }
+
+    /// Records that `task`'s `field` took a `SetField` stamped `hlc`.
+    pub(crate) fn record_field(&mut self, task: TaskId, field: Field, hlc: Hlc) {
+        self.field_stamps.insert((task, field), hlc);
+    }
+
+    /// Drops `task`'s field stamps once it leaves this document (deleted, or moved to another).
+    pub(crate) fn forget_fields(&mut self, task: TaskId) {
+        self.field_stamps.retain(|(t, _), _| *t != task);
+    }
+
     /// After a commit: whatever a scratch replay placed takes the commit's real stamp, the one
     /// its ops carry on every other device.
     pub(crate) fn settle_scratch_stamps(&mut self, hlc: Hlc) {
@@ -104,12 +122,17 @@ impl DocState {
         for placed in self.stamps.iter_mut().filter(|p| **p == scratch) {
             *placed = hlc;
         }
+        for set in self.field_stamps.values_mut().filter(|s| **s == scratch) {
+            *set = hlc;
+        }
         debug_assert_eq!(self.stamps.len(), self.entries.len());
     }
 
     /// Takes the stamps of `replayed` (this document rebuilt from its log, what a peer holds):
     /// all of them when it holds the same lines, else each task's by id, blanks left as they are.
     pub(crate) fn adopt_stamps(&mut self, replayed: &DocState) {
+        // By task id, so they hold whatever lines moved: a field's stamp is the task's, not a spot's.
+        self.field_stamps.clone_from(&replayed.field_stamps);
         if replayed.entries == self.entries {
             self.stamps.clone_from(&replayed.stamps);
             debug_assert_eq!(self.stamps.len(), self.entries.len());

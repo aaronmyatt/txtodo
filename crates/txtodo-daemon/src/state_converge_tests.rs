@@ -92,7 +92,6 @@ fn an_add_after_a_line_another_device_deleted_is_kept_everywhere() {
 }
 
 #[test]
-#[ignore = "partition-converge line 5: SetField does not compare stamps yet"]
 fn two_devices_setting_one_field_agree_on_the_newest() {
     let ops = [
         set_priority(1, 'A', at(100, 0, A)),
@@ -110,4 +109,35 @@ fn two_devices_editing_one_description_agree() {
         append_text(1, 6, " b", at(101, 0, B)),
     ];
     converges_skipping(&base(1), &ops);
+}
+
+#[test]
+fn field_stamps_come_back_from_a_replay_and_settle_with_a_commit() {
+    // Rebuilt at open: the state read from disk takes the replay's field stamps.
+    let mut replayed = base(1);
+    replayed
+        .apply(&set_priority(1, 'B', at(101, 0, B)))
+        .unwrap();
+    let mut reopened = base(1);
+    reopened
+        .apply_kind(&set_priority(1, 'B', at(0, 0, A)).kind)
+        .unwrap();
+    reopened.adopt_stamps(&replayed);
+    reopened
+        .apply(&set_priority(1, 'A', at(100, 0, A)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(B) line 1\n", "the older op lost");
+    // A local scratch edit takes its commit's stamp: a peer op older than that loses, newer wins.
+    reopened
+        .apply_kind(&set_priority(1, 'C', at(0, 0, A)).kind)
+        .unwrap();
+    reopened.settle_scratch_stamps(at(200, 0, A));
+    reopened
+        .apply(&set_priority(1, 'D', at(150, 0, B)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(C) line 1\n");
+    reopened
+        .apply(&set_priority(1, 'E', at(250, 0, B)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(E) line 1\n");
 }

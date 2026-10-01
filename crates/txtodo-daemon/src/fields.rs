@@ -4,24 +4,31 @@
 use crate::state::{DocState, Entry, StateError};
 use crate::textedit::apply_text_edits;
 use txtodo_core::{Edit, LineKind, OwnedLine, Prefix, Priority, description_start, emit_prefix};
-use txtodo_model::{Field, FieldValue, IdentityMode, TaskId, TextEdit};
+use txtodo_model::{Field, FieldValue, Hlc, IdentityMode, TaskId, TextEdit};
 
-/// Applies `SetField`. `Deleted = true` removes the entry; other fields re-emit the prefix.
+/// Applies `SetField` stamped `hlc`. `Deleted = true` removes the entry; other fields re-emit the
+/// prefix, unless the field already took a newer stamp: then the op is older than what is here
+/// and loses on every device, whatever order they got the two in (task partition-converge).
 pub(crate) fn set_field(
     state: &mut DocState,
     task: TaskId,
-    field: Field,
-    value: FieldValue,
+    (field, value): (Field, FieldValue),
+    hlc: Hlc,
 ) -> Result<(), StateError> {
     let i = state.index_of(task).ok_or(StateError::UnknownTask(task))?;
     if field == Field::Deleted {
         return match value {
             FieldValue::Bool(true) => {
                 state.remove_entry(i);
+                state.forget_fields(task);
                 Ok(())
             }
             _ => Err(StateError::Unsupported("undelete via SetField")),
         };
+    }
+    if state.is_stale_field(task, field, hlc) {
+        log_stale_field(task, field);
+        return Ok(());
     }
     let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
     let new_line = rewrite_prefix(&line, field, value)
@@ -37,7 +44,14 @@ pub(crate) fn set_field(
             line: new_line,
         },
     );
+    state.record_field(task, field, hlc);
     Ok(())
+}
+
+/// A peer's `SetField` lost to a newer one on the same field: expected when two devices change one
+/// field at once, so debug. <https://docs.rs/tracing/latest/tracing/macro.debug.html>
+fn log_stale_field(task: TaskId, field: Field) {
+    tracing::debug!(%task, ?field, "set_field_older_than_field");
 }
 
 /// Applies `EditText` to the description; the prefix bytes are spliced from the original.

@@ -1,8 +1,10 @@
 //! In-memory state of one document: the ordered entries the actor owns, materialised to the exact
 //! bytes on disk, mutated only through ops (plan M4 swaps the backing store, same shape).
 
+use std::collections::HashMap;
+
 use txtodo_core::{File, LineEnding, LineKind, OwnedLine};
-use txtodo_model::{FilePath, Hlc, IdentityMode, Op, OpKind, TaskId, Ulid};
+use txtodo_model::{Field, FilePath, Hlc, IdentityMode, Op, OpKind, TaskId, Ulid};
 
 // Where concurrent placements go (task insert-order): each entry's placing stamp and RGA's skip
 // rule. A child module so it can keep `entries` and `stamps` in step without widening them.
@@ -76,6 +78,9 @@ pub struct DocState {
     /// `stamps[i]`: the HLC of the op that placed `entries[i]`, zero for a line read from disk.
     /// Merge metadata, not content: equality ignores it (task insert-order, `state_order.rs`).
     stamps: Vec<Hlc>,
+    /// The stamp of the `SetField` each task's field last took, so an older one arriving late
+    /// loses on every device (task partition-converge). Merge metadata, like `stamps`.
+    field_stamps: HashMap<(TaskId, Field), Hlc>,
     bom: bool,
     ending: LineEnding,
     trailing_newline: bool,
@@ -104,6 +109,7 @@ impl DocState {
             path,
             entries,
             stamps,
+            field_stamps: HashMap::new(),
             bom: file.bom,
             ending: file.ending,
             trailing_newline: file.trailing_newline,
@@ -227,7 +233,7 @@ impl DocState {
         match &op.kind {
             OpKind::Insert { task, after, line } => self.insert(*task, *after, line, op.hlc)?,
             OpKind::SetField { task, field, value } => {
-                crate::fields::set_field(self, *task, *field, *value)?
+                crate::fields::set_field(self, *task, (*field, *value), op.hlc)?
             }
             OpKind::EditText { task, edits } => crate::fields::edit_text(self, *task, edits)?,
             OpKind::Move {
@@ -307,6 +313,7 @@ impl DocState {
         if *to_file != self.path {
             let from = self.index_of(task).ok_or(StateError::UnknownTask(task))?;
             self.remove_entry(from);
+            self.forget_fields(task);
             return Ok(());
         }
         if after == Some(task) {

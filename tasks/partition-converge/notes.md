@@ -87,3 +87,14 @@ line 1 goes with B (one protocol bump for both).
   partition; then `lan-converge` on three seeds, and `chaos`.
 - Op-log comparison (above) first, on any failing report: same ops on both devices means an
   application bug, different counts a delivery bug.
+
+## As built
+
+- 2026-10-01, sub-line 2: `state_converge_tests.rs` runs every arrival order of two devices' ops,
+  skipping an op that does not apply as sync does. Two anchor cases and the two-edits case stay
+  ignored until their decisions (lines 1 and 6).
+- 2026-10-01, sub-line 4 (`SetField` half): `DocState.field_stamps` keeps each task field's
+  newest `SetField` stamp; an older one is a no-op (`set_field_older_than_field`, debug). Taken
+  from the replay at open (`adopt_stamps`), settled with a commit like line stamps, dropped when
+  the task is deleted or moves to another file. Bounded by the tasks in the document. The
+  `EditText` half waits on line 6.
