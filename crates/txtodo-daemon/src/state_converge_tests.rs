@@ -286,3 +286,13 @@ fn a_blank_removed_while_another_device_adds_under_its_line() {
         assert_eq!(converges_skipping(&start, &ops), "line 1\nline 9\n");
     }
 }
+
+/// A peer's edit of a line deleted here applies as a no-op, not an error sync logs as skipped.
+#[test]
+fn an_edit_of_a_line_another_device_deleted_changes_nothing() {
+    let mut state = base(2);
+    state.apply(&delete(1, at(100, 0, A))).unwrap();
+    state.apply(&append_text(1, 6, " b", at(99, 0, B))).unwrap();
+    state.apply(&set_priority(1, 'A', at(99, 1, B))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 2\n");
+}

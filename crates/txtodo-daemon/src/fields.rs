@@ -30,7 +30,9 @@ pub(crate) fn set_field(
             _ => Err(StateError::Unsupported("undelete via SetField")),
         };
     }
-    let i = state.live_slot(task).ok_or(StateError::UnknownTask(task))?;
+    let Some(i) = live_or_gone(state, task)? else {
+        return Ok(());
+    };
     if state.is_stale_field(task, field, hlc) {
         log_stale_field(task, field);
         return Ok(());
@@ -72,7 +74,9 @@ pub(crate) fn edit_text(
     edits: &[TextEdit],
     hlc: Hlc,
 ) -> Result<(), StateError> {
-    let i = state.live_slot(task).ok_or(StateError::UnknownTask(task))?;
+    let Some(i) = live_or_gone(state, task)? else {
+        return Ok(());
+    };
     let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
     let description = description_of(&line).ok_or(StateError::Opaque(i))?;
     let saved = state.text_history_of(task);
@@ -99,6 +103,21 @@ pub(crate) fn edit_text(
         },
     );
     Ok(())
+}
+
+/// The slot of `task`'s shown line; `None` when it is only a ghost (deleted, or moved to another
+/// file): a peer edited it before it saw that, and the edit has no line left to change, on any
+/// device (lab lan-converge seed 435090918). Debug, like a stale field.
+/// <https://docs.rs/tracing/latest/tracing/macro.debug.html>
+fn live_or_gone(state: &DocState, task: TaskId) -> Result<Option<usize>, StateError> {
+    match state.live_slot(task) {
+        Some(i) => Ok(Some(i)),
+        None if state.has_placement(task) => {
+            tracing::debug!(%task, "edit_of_a_gone_task");
+            Ok(None)
+        }
+        None => Err(StateError::UnknownTask(task)),
+    }
 }
 
 /// A task line's description, `None` for anything else.
