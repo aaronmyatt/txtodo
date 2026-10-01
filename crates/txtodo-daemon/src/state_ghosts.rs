@@ -166,10 +166,8 @@ impl DocState {
         hlc: Hlc,
     ) -> Result<(), StateError> {
         let line = self
-            .entries
-            .iter()
-            .find(|e| e.id() == Some(task))
-            .map(|e| e.line().clone())
+            .content_slot(task)
+            .map(|s| self.entries[s].line().clone())
             .ok_or(StateError::UnknownTask(task))?;
         let spot = self.slot_after(after, hlc)?;
         let at = spot.at;
@@ -213,6 +211,11 @@ impl DocState {
             self.parents.remove(s);
             self.erasers.remove(s);
         }
+        // A task with no placement left takes no op any more: its merge metadata goes too.
+        let present: HashSet<TaskId> = self.entries.iter().filter_map(Entry::id).collect();
+        self.field_stamps.retain(|(t, _), _| present.contains(t));
+        self.text_history.retain(|t, _| present.contains(t));
+        self.life.retain(|t, _| present.contains(t));
         self.reindex();
         debug_assert!(self.entries.len() - self.visible.len() <= max);
     }

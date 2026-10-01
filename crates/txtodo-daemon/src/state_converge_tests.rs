@@ -7,7 +7,7 @@ use crate::state::DocState;
 use crate::state_order_tests::{A, B, at, empty, insert, move_after, op, orders, task};
 use txtodo_model::{Field, FieldValue, Hlc, Op, OpKind, TextEdit};
 
-fn set_priority(n: u128, letter: char, hlc: Hlc) -> Op {
+pub(crate) fn set_priority(n: u128, letter: char, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::SetField {
@@ -18,7 +18,7 @@ fn set_priority(n: u128, letter: char, hlc: Hlc) -> Op {
     )
 }
 
-fn delete(n: u128, hlc: Hlc) -> Op {
+pub(crate) fn delete(n: u128, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::SetField {
@@ -29,7 +29,7 @@ fn delete(n: u128, hlc: Hlc) -> Op {
     )
 }
 
-fn append_text(n: u128, at_char: usize, text: &str, hlc: Hlc) -> Op {
+pub(crate) fn append_text(n: u128, at_char: usize, text: &str, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::EditText {
@@ -43,7 +43,7 @@ fn append_text(n: u128, at_char: usize, text: &str, hlc: Hlc) -> Op {
 }
 
 /// Lines 1..=n, one after another, as both devices held them before they parted.
-fn base(n: u128) -> DocState {
+pub(crate) fn base(n: u128) -> DocState {
     let mut state = empty();
     for i in 1..=n {
         let after = (i > 1).then(|| i - 1);
@@ -298,7 +298,7 @@ fn blank_insert(after: u128, hlc: Hlc) -> Op {
 
 /// The bytes of every merge of two devices' ops that keeps each device's own order (sync delivers
 /// one device's ops in order); asserts they are all the same and returns them.
-fn converges_interleaved(base: &DocState, a: &[Op], b: &[Op]) -> String {
+pub(crate) fn converges_interleaved(base: &DocState, a: &[Op], b: &[Op]) -> String {
     fn merges(a: usize, b: usize) -> Vec<Vec<bool>> {
         if a == 0 || b == 0 {
             return vec![vec![a > 0; a + b]];

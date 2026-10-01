@@ -129,13 +129,6 @@ impl DocState {
         self.field_stamps.insert((task, field), hlc);
     }
 
-    /// Drops `task`'s field stamps and description history once it leaves this document
-    /// (deleted, or moved to another).
-    pub(crate) fn forget_fields(&mut self, task: TaskId) {
-        self.field_stamps.retain(|(t, _), _| *t != task);
-        self.forget_text(task);
-    }
-
     /// Drops `task`'s description history: its description changed some other way (a `SetField`
     /// that moves a priority into `pri:`), so the edits kept no longer rebuild it.
     pub(crate) fn forget_text(&mut self, task: TaskId) {
@@ -189,6 +182,7 @@ impl DocState {
         for history in self.text_history.values_mut() {
             history.settle(scratch, hlc);
         }
+        self.settle_life(scratch, hlc);
         debug_assert_eq!(self.stamps.len(), self.entries.len());
     }
 
@@ -199,6 +193,7 @@ impl DocState {
         // By task id, so they hold whatever lines moved: a field's stamp is the task's, not a spot's.
         self.field_stamps.clone_from(&replayed.field_stamps);
         self.text_history.clone_from(&replayed.text_history);
+        self.life.clone_from(&replayed.life);
         if self.adopt_sequence(replayed) {
             return;
         }

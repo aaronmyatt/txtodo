@@ -9,7 +9,7 @@
 //! Kept by `DocState` per task (descriptions) and by `NotesState` (a whole `notes.md`); both clear
 //! it when the text changes some other way, and both take it from the log replay at open.
 
-use txtodo_model::{Hlc, TextEdit};
+use txtodo_model::{DeviceId, Hlc, TextEdit, Ulid};
 
 use crate::textedit::TextEditError;
 
@@ -25,6 +25,9 @@ pub(crate) type ApplyEdits = fn(&str, &[TextEdit]) -> Result<String, TextEditErr
 #[derive(Clone, Debug)]
 pub(crate) struct TextHistory {
     base: String,
+    /// When the base was set whole ([`TextHistory::reset`]): an edit older than that lost to it.
+    /// Zero for a history begun from whatever text was there.
+    since: Hlc,
     edits: Vec<(Hlc, Vec<TextEdit>)>,
 }
 
@@ -33,8 +36,21 @@ impl TextHistory {
     pub(crate) fn new(base: String) -> TextHistory {
         TextHistory {
             base,
+            since: Hlc::zero(DeviceId::new(Ulid::from_u128(0))),
             edits: Vec::new(),
         }
+    }
+
+    /// The text set whole to `text` by an op stamped `at` (a task inserted again, task
+    /// partition-converge): edits up to `at` are dropped, newer ones replayed on it. A set older
+    /// than the one the base already took changes nothing. Returns the text to hold now.
+    pub(crate) fn reset(&mut self, text: String, at: Hlc, apply: ApplyEdits) -> String {
+        if at >= self.since {
+            self.base = text;
+            self.since = at;
+            self.edits.retain(|(h, _)| *h > at);
+        }
+        self.replay(apply)
     }
 
     /// Records `edits` stamped `hlc` on a text that holds `current`, and returns the text to hold
@@ -47,6 +63,10 @@ impl TextHistory {
         edits: &[TextEdit],
         (apply, max): (ApplyEdits, usize),
     ) -> Result<String, TextEditError> {
+        if hlc < self.since {
+            // Made before the text was set whole: that set already decided the text.
+            return Ok(current.to_owned());
+        }
         let late = self.edits.last().is_some_and(|(newest, _)| *newest > hlc);
         let next = if late {
             let at = self.edits.partition_point(|(h, _)| *h <= hlc);
@@ -83,6 +103,9 @@ impl TextHistory {
 
     /// After a commit: edits a scratch replay recorded under `scratch` take the commit's stamp.
     pub(crate) fn settle(&mut self, scratch: Hlc, real: Hlc) {
+        if self.since == scratch {
+            self.since = real;
+        }
         for (h, _) in self.edits.iter_mut().filter(|(h, _)| *h == scratch) {
             *h = real;
         }
@@ -94,7 +117,6 @@ impl TextHistory {
 mod tests {
     use super::*;
     use crate::textedit::apply_notes_edits;
-    use txtodo_model::{DeviceId, Ulid};
 
     fn at(wall: u64) -> Hlc {
         Hlc {
@@ -162,5 +184,20 @@ mod tests {
         assert_eq!(text, "yyyyyx");
         assert_eq!(history.edits.len(), 2);
         assert_eq!(history.base, "yyyx");
+    }
+
+    #[test]
+    fn a_reset_keeps_only_newer_edits_and_older_ones_after_it_lose() {
+        let mut history = TextHistory::new("line".to_owned());
+        let apply = (apply_notes_edits as ApplyEdits, 64);
+        let text = history.apply("line", at(30), &insert(4, " new"), apply);
+        assert_eq!(text.as_deref(), Ok("line new"));
+        assert_eq!(
+            history.reset("LINE".to_owned(), at(20), apply.0),
+            "LINE new"
+        );
+        let late = history.apply("LINE new", at(10), &insert(0, ">"), apply);
+        assert_eq!(late.as_deref(), Ok("LINE new"));
+        assert_eq!(history.reset("old".to_owned(), at(15), apply.0), "LINE new");
     }
 }

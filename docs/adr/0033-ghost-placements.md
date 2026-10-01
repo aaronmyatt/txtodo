@@ -49,6 +49,13 @@ No wire change and no store change: ghosts are derived from the ops every device
   (`state_erase.rs`). One that finds none is kept and may claim a blank that lands later; a
   delete between an eraser and a blank can let it claim that blank. The stamp rule still applies:
   a remove can follow its anchor to a spot a concurrent move gave it and take the blank there.
+- Amended again (task partition-converge, re-inserted ids): an `Insert` of a task that already
+  has a placement (undo of a delete, a move back from another file, the sidecar `do` before
+  37274467) is a new placement, like a move, that sets the whole line at its stamp: each prefix
+  field unless a newer `SetField` set it, and the description restarted with only newer edits
+  replayed (`TextHistory::reset`). A delete and an insert again of one task settle by stamp. A
+  deleted task keeps its field stamps and history and still takes edits, hidden, so what an
+  insert again merges with does not depend on arrival order (`state_reinsert.rs`).
 - Neutral: history replays that start from a snapshot (checkout, undo) start with no ghosts from
   before it; snapshots hold only the bytes.
 

@@ -21,6 +21,9 @@ mod rehome;
 // A `BlankRemove` is kept as an eraser; the blank it hides is settled after every op.
 #[path = "state_erase.rs"]
 mod erase;
+// An `Insert` of a task already here sets its whole line at its stamp.
+#[path = "state_reinsert.rs"]
+mod reinsert;
 
 /// Most lines one document may hold; a 10k-line workspace is the perf target, this is 100× that.
 pub const MAX_LINES_PER_FILE: usize = 1_000_000;
@@ -103,6 +106,8 @@ pub struct DocState {
     /// Each task's description edits since its history began, so a late one is slotted in by
     /// stamp (ADR 0034, `text_history.rs`). Merge metadata, like `stamps`.
     text_history: HashMap<TaskId, crate::text_history::TextHistory>,
+    /// When each task deleted or inserted again here last was (`state_reinsert.rs`).
+    life: HashMap<TaskId, reinsert::Life>,
     bom: bool,
     ending: LineEnding,
     trailing_newline: bool,
@@ -137,6 +142,7 @@ impl DocState {
             stamps,
             field_stamps: HashMap::new(),
             text_history: HashMap::new(),
+            life: HashMap::new(),
             bom: file.bom,
             ending: file.ending,
             trailing_newline: file.trailing_newline,
@@ -225,7 +231,6 @@ impl DocState {
         if self.visible.len() + 1 > MAX_LINES_PER_FILE {
             return Err(StateError::TooManyLines(self.visible.len() + 1));
         }
-        let spot = self.slot_after(after, hlc)?;
         let owned = OwnedLine::from_bytes(line.as_bytes().to_vec(), self.ending);
         if self.mode == IdentityMode::Tagged {
             let parsed_id = owned.parse().and_then(|l| match l.kind {
@@ -236,6 +241,10 @@ impl DocState {
                 return Err(StateError::IdMismatch(task));
             }
         }
+        if self.has_placement(task) {
+            return self.reinsert(task, after, owned, hlc);
+        }
+        let spot = self.slot_after(after, hlc)?;
         let entry = Entry::Task {
             id: task,
             line: owned,
@@ -261,7 +270,6 @@ impl DocState {
             return match self.live_slot(task) {
                 Some(from) => {
                     self.hide_entry(from);
-                    self.forget_fields(task);
                     Ok(())
                 }
                 None if self.has_placement(task) => Ok(()),

@@ -516,7 +516,9 @@ multiplex every workspace's traffic — not done by this task).
   newest stamp not newer than its own (ties: the shown one); each slot keeps that parent, and a
   placement that lands late takes the entries that should follow it (`state_rehome.rs`). A
   `BlankRemove` is a hidden eraser slot; which blank each one hides is settled from the sequence
-  after every op that reshapes it (`state_erase.rs`). Every
+  after every op that reshapes it (`state_erase.rs`). An `Insert` of a task already here sets
+  its whole line at its stamp; a deleted task still takes edits, hidden (`state_reinsert.rs`).
+  Every
   by-position call (`len`, `entry_at`, `index_of`, `task_before`, `line_ids`, `to_bytes`) sees
   only shown lines; slots
   (ghosts included) are internal to `state*.rs` and `fields.rs`. Ghosts come back at open through

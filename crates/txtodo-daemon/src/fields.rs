@@ -17,27 +17,29 @@ pub(crate) fn set_field(
     if field == Field::Deleted {
         return match value {
             // The line stays as a ghost where it was (ADR 0033), so an op a peer anchored on it
-            // still lands; deleting it again, or after it moved away, changes nothing.
-            FieldValue::Bool(true) => match state.live_slot(task) {
-                Some(slot) => {
+            // still lands; deleting it again, or after it moved away, changes nothing. A delete
+            // older than an insert again of the task (`state_reinsert.rs`) leaves it shown.
+            // Its field stamps and history stay: a later insert again merges with them.
+            FieldValue::Bool(true) if state.has_placement(task) => {
+                let hides = state.note_death(task, hlc);
+                if let Some(slot) = state.live_slot(task).filter(|_| hides) {
                     state.hide_entry(slot);
-                    state.forget_fields(task);
-                    Ok(())
                 }
-                None if state.has_placement(task) => Ok(()),
-                None => Err(StateError::UnknownTask(task)),
-            },
+                Ok(())
+            }
+            FieldValue::Bool(true) => Err(StateError::UnknownTask(task)),
             _ => Err(StateError::Unsupported("undelete via SetField")),
         };
     }
-    let Some(i) = live_or_gone(state, task)? else {
-        return Ok(());
-    };
+    // A deleted task still takes it, hidden (`state_reinsert.rs`).
+    let i = state
+        .content_slot(task)
+        .ok_or(StateError::UnknownTask(task))?;
     if state.is_stale_field(task, field, hlc) {
         log_stale_field(task, field);
         return Ok(());
     }
-    let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
+    let line = state.slot_line(i).clone();
     let new_line = rewrite_prefix(&line, field, value)
         .ok_or(StateError::Unsupported("SetField on this line"))?;
     debug_assert!(
@@ -74,10 +76,10 @@ pub(crate) fn edit_text(
     edits: &[TextEdit],
     hlc: Hlc,
 ) -> Result<(), StateError> {
-    let Some(i) = live_or_gone(state, task)? else {
-        return Ok(());
-    };
-    let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
+    let i = state
+        .content_slot(task)
+        .ok_or(StateError::UnknownTask(task))?;
+    let line = state.slot_line(i).clone();
     let description = description_of(&line).ok_or(StateError::Opaque(i))?;
     let saved = state.text_history_of(task);
     let new_line = state
@@ -105,23 +107,8 @@ pub(crate) fn edit_text(
     Ok(())
 }
 
-/// The slot of `task`'s shown line; `None` when it is only a ghost (deleted, or moved to another
-/// file): a peer edited it before it saw that, and the edit has no line left to change, on any
-/// device (lab lan-converge seed 435090918). Debug, like a stale field.
-/// <https://docs.rs/tracing/latest/tracing/macro.debug.html>
-fn live_or_gone(state: &DocState, task: TaskId) -> Result<Option<usize>, StateError> {
-    match state.live_slot(task) {
-        Some(i) => Ok(Some(i)),
-        None if state.has_placement(task) => {
-            tracing::debug!(%task, "edit_of_a_gone_task");
-            Ok(None)
-        }
-        None => Err(StateError::UnknownTask(task)),
-    }
-}
-
 /// A task line's description, `None` for anything else.
-fn description_of(line: &OwnedLine) -> Option<String> {
+pub(crate) fn description_of(line: &OwnedLine) -> Option<String> {
     match line.parse()?.kind {
         LineKind::Task(t) => Some(t.description.to_owned()),
         LineKind::Blank => None,
@@ -130,7 +117,11 @@ fn description_of(line: &OwnedLine) -> Option<String> {
 
 /// Re-emits the prefix with one field changed; a priority on a completed line moves to `pri:`
 /// (core `Edit::complete` rule). `None` when the line is not a task or the value does not fit.
-fn rewrite_prefix(line: &OwnedLine, field: Field, value: FieldValue) -> Option<OwnedLine> {
+pub(crate) fn rewrite_prefix(
+    line: &OwnedLine,
+    field: Field,
+    value: FieldValue,
+) -> Option<OwnedLine> {
     let raw = line.raw()?;
     let LineKind::Task(task) = line.parse()?.kind else {
         return None;
@@ -174,5 +165,20 @@ fn rewrite_prefix(line: &OwnedLine, field: Field, value: FieldValue) -> Option<O
             Some(txtodo_core::apply(&rewritten, &edit))
         }
         None => Some(rewritten),
+    }
+}
+
+/// `field`'s value on a task line, for the four prefix fields; `None` for anything else.
+pub(crate) fn field_value(line: &OwnedLine, field: Field) -> Option<FieldValue> {
+    let LineKind::Task(task) = line.parse()?.kind else {
+        return None;
+    };
+    let prefix = Prefix::of(&task);
+    match field {
+        Field::Completed => Some(FieldValue::Bool(prefix.completed)),
+        Field::CompletionDate => Some(FieldValue::date(prefix.completion_date)),
+        Field::CreationDate => Some(FieldValue::date(prefix.creation_date)),
+        Field::Priority => Some(FieldValue::priority(prefix.priority)),
+        Field::Deleted | Field::Quirks => None,
     }
 }
