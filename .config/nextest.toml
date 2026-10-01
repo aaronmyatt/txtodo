@@ -34,6 +34,12 @@ not (
 )
 '''
 
+# Per-test times for every local run (task fast-gate): target/nextest/<profile>/junit.xml. Read it
+# to find tests over ~500 ms that belong in e2e or need a `slow_` name.
+# https://nexte.st/docs/machine-readable/junit/
+[profile.default.junit]
+path = "junit.xml"
+
 [profile.ci]
 default-filter = 'all()'
 
