@@ -510,6 +510,13 @@ multiplex every workspace's traffic — not done by this task).
   periodic snapshot does, so pairing can seed a second device from it the same way.
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
   after the store commit and a refusal is logged and healed by a rebuild, never a client error.
+- Ghost entries (ADR 0033, `state_ghosts.rs`, 2026-10-01): deleting a task, removing a blank and
+  moving a task away hide the entry where it is, with its stamp; nothing is removed except past
+  `MAX_GHOSTS_PER_FILE` (oldest first). An op anchored on task T follows T's placement with the
+  newest stamp not newer than its own (ties: the shown one). Every by-position call (`len`,
+  `entry_at`, `index_of`, `task_before`, `line_ids`, `to_bytes`) sees only shown lines; slots
+  (ghosts included) are internal to `state*.rs` and `fields.rs`. Ghosts come back at open through
+  `adopt_stamps` from the replay log repair already runs.
 - `SetField` is last-writer-wins per task field by HLC in `DocState` too (`field_stamps`, task
   partition-converge, 2026-10-01): an op older than the field's stamp is a no-op, so arrival order
   does not matter. `EditText` still applies in arrival order: its splices name no base, an open

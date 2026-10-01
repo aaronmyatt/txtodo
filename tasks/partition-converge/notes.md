@@ -108,3 +108,14 @@ more natural there, since notes already are a Loro text document.
   from the replay at open (`adopt_stamps`), settled with a commit like line stamps, dropped when
   the task is deleted or moves to another file. Bounded by the tasks in the document. The
   `EditText` half waits on the EditText decision.
+- 2026-10-01, ghosts (option A, ADR 0033): `state_ghosts.rs` keeps `hidden`/`visible` beside
+  `entries`/`stamps`. Delete, blank remove and move-away hide in place; a stale move and a move of
+  a deleted task add their spot as a ghost; anchors resolve to the newest placement not newer than
+  the op, the shown one on a tie (one commit, or a hydration replay that stamps every op alike: two
+  reconcile-replay tests caught the tie). Rebuilt at open by `adopt_stamps` taking the replay's
+  whole sequence when it shows the same lines by id (a tag-stripping migration included); bounded
+  at 10 000 per document, oldest first. Deleting again, or moving a task that is gone, is now a
+  no-op instead of an error. Tests: the two anchor cases un-ignored, plus a move that lost to a
+  newer one, a blank removed past a deleted line, ghosts back at open, the bound. Known gaps: an
+  older placement of an anchor arriving after an op anchored on it (the stamp rule's limit, in
+  the ADR); history replays from a snapshot start with no ghosts.
