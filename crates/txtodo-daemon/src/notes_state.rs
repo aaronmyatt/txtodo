@@ -16,6 +16,7 @@
 use std::fmt;
 use txtodo_model::{FilePath, Op, OpKind, TextEdit};
 
+use crate::text_history::{MAX_EDITS_PER_NOTES, TextHistory};
 use crate::textedit::{TextEditError, apply_notes_edits};
 
 /// Largest `notes.md` this crate accepts (prose has no line cap, but "as big as the disk" is not
@@ -54,11 +55,23 @@ impl fmt::Display for NotesStateError {
 impl std::error::Error for NotesStateError {}
 
 /// One `notes.md`'s state: the exact file content as one string.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct NotesState {
     path: FilePath,
     text: String,
+    /// The edits since the history began, so a peer's edit that arrives late is slotted in by
+    /// stamp (ADR 0034, `text_history.rs`). Merge metadata: equality ignores it.
+    history: Option<TextHistory>,
 }
+
+/// Two states are equal when they hold the same document.
+impl PartialEq for NotesState {
+    fn eq(&self, other: &NotesState) -> bool {
+        self.path == other.path && self.text == other.text
+    }
+}
+
+impl Eq for NotesState {}
 
 impl NotesState {
     /// An empty document at `path` (no file on disk yet, or the ref: directory was just created).
@@ -66,6 +79,7 @@ impl NotesState {
         NotesState {
             path,
             text: String::new(),
+            history: None,
         }
     }
 
@@ -77,7 +91,11 @@ impl NotesState {
         let text = std::str::from_utf8(bytes)
             .map_err(|_| NotesStateError::NotUtf8)?
             .to_owned();
-        Ok(NotesState { path, text })
+        Ok(NotesState {
+            path,
+            text,
+            history: None,
+        })
     }
 
     /// The document's path.
@@ -95,7 +113,8 @@ impl NotesState {
         self.text.clone().into_bytes()
     }
 
-    /// Applies one `NotesEdit` op. On `Err` the state is unchanged.
+    /// Applies one `NotesEdit` op. One older than an edit already applied rebuilds the text in
+    /// stamp order (ADR 0034). On `Err` the state, its history included, is unchanged.
     pub fn apply(&mut self, op: &Op) -> Result<(), NotesStateError> {
         let OpKind::NotesEdit { file, edits } = &op.kind else {
             return Err(NotesStateError::Unsupported(op_kind_name(&op.kind)));
@@ -103,17 +122,52 @@ impl NotesState {
         if *file != self.path || op.file != self.path {
             return Err(NotesStateError::WrongFile(file.clone()));
         }
-        self.apply_edits(edits)
+        let saved = self.history.clone();
+        let history = self
+            .history
+            .get_or_insert_with(|| TextHistory::new(self.text.clone()));
+        let next = history
+            .apply(
+                &self.text,
+                op.hlc,
+                edits,
+                (apply_notes_edits, MAX_EDITS_PER_NOTES),
+            )
+            .map_err(NotesStateError::Text)
+            .and_then(|next| match next.len() > MAX_NOTES_BYTES {
+                true => Err(NotesStateError::TooManyBytes(next.len())),
+                false => Ok(next),
+            });
+        match next {
+            Ok(next) => {
+                self.text = next;
+                Ok(())
+            }
+            Err(e) => {
+                self.history = saved;
+                Err(e)
+            }
+        }
     }
 
-    /// Applies a bare edit stream, independent of any `Op` wrapper (undo/checkout replay).
+    /// Applies a bare edit stream, independent of any `Op` wrapper (undo/checkout replay). With
+    /// no stamp to order it by, it ends the history.
     pub fn apply_edits(&mut self, edits: &[TextEdit]) -> Result<(), NotesStateError> {
         let next = apply_notes_edits(&self.text, edits).map_err(NotesStateError::Text)?;
         if next.len() > MAX_NOTES_BYTES {
             return Err(NotesStateError::TooManyBytes(next.len()));
         }
         self.text = next;
+        self.history = None;
         Ok(())
+    }
+
+    /// Takes `replayed`'s history (this document rebuilt from its log at open) when it holds the
+    /// same text, so an edit that arrives late after a restart is slotted in as before it.
+    pub(crate) fn adopt_history(&mut self, replayed: &NotesState) {
+        if replayed.text == self.text {
+            self.history.clone_from(&replayed.history);
+        }
     }
 }
 

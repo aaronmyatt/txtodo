@@ -128,6 +128,8 @@ impl NotesActor {
             return Ok(());
         }
         let Some(edits) = repair_edits(&replayed.state, &self.state) else {
+            // The log rebuilds this text: take its edit history too (ADR 0034).
+            self.state.adopt_history(&replayed.state);
             return Ok(());
         };
         tracing::warn!(
@@ -239,7 +241,25 @@ impl NotesActor {
             .collect();
         let range = self.land(&ops, &next)?;
         self.mirror.flush(&applied).map_err(mirror_err)?;
+        self.align_mirror()?;
         self.persist_mirror(range)
+    }
+
+    /// A peer's edit that arrived late rebuilt the text in stamp order (ADR 0034); the mirror took
+    /// the same splices where they fell and holds another text. One edit, logged nowhere, brings it
+    /// to the state's: the mirror never decides bytes, and `persist_mirror` keeps it aligned.
+    fn align_mirror(&mut self) -> Result<(), ActorError> {
+        let mirror_text = self.mirror.text();
+        if mirror_text == self.state.text() {
+            return Ok(());
+        }
+        let edits: Vec<TextEdit> = txtodo_core::diff_text(&mirror_text, self.state.text())
+            .into_iter()
+            .map(TextEdit::from)
+            .collect();
+        let device = self.cfg.device;
+        let fix = self.stamped(edits, self.hlc, Principal::External { device });
+        self.mirror.flush(&[fix]).map_err(mirror_err)
     }
 
     /// The mirror's version, for a peer to export updates since.

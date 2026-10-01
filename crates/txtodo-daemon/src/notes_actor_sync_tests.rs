@@ -287,3 +287,60 @@ fn a_save_taken_on_the_watchers_event_reaches_a_fresh_peer() {
         text
     );
 }
+
+/// ADR 0034: two devices append to one notes.md at once. Each takes the other's edit after its
+/// own, in arrival order on one and late on the other, and both end with the same text in stamp
+/// order; the late side's Loro mirror is brought to that text too.
+#[test]
+fn two_devices_appending_to_one_notes_md_at_once_agree() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (store_a, clock_a, cfg_a) = setup(dir.path(), 1);
+    let mut a = NotesActor::open(cfg_a.clone(), Arc::clone(&store_a), clock_a)
+        .unwrap_or_else(|e| panic!("{e}"));
+    a.edit(
+        "plan\n",
+        Principal::User {
+            device: cfg_a.device,
+        },
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let (store_b, clock_b, cfg_b) = setup(dir.path(), 2);
+    let mut b = NotesActor::open(cfg_b.clone(), Arc::clone(&store_b), clock_b)
+        .unwrap_or_else(|e| panic!("{e}"));
+    b.import_ops(ops_for(&store_a, &cfg_a.path))
+        .unwrap_or_else(|e| panic!("{e}"));
+    // Apart: each appends its own line (b's clock starts 1 ms later, so b's stamp is newer).
+    a.edit(
+        "plan\nfrom a\n",
+        Principal::User {
+            device: cfg_a.device,
+        },
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    b.edit(
+        "plan\nfrom b\n",
+        Principal::User {
+            device: cfg_b.device,
+        },
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let newest = |store: &SharedStore, path: &FilePath| ops_for(store, path).pop().unwrap();
+    let from_a = newest(&store_a, &cfg_a.path);
+    let from_b = newest(&store_b, &cfg_b.path);
+    assert!(
+        from_a.hlc < from_b.hlc,
+        "the test needs b's edit to be the newer"
+    );
+    a.import_ops(vec![from_b]).unwrap_or_else(|e| panic!("{e}"));
+    b.import_ops(vec![from_a]).unwrap_or_else(|e| panic!("{e}"));
+    let text = |actor: &NotesActor| String::from_utf8(actor.contents().0).unwrap_or_default();
+    assert_eq!(text(&a), text(&b));
+    let mirror =
+        crate::notes_mirror::NotesMirror::from_snapshot(&b.mirror_snapshot(), &cfg_b.path, 9)
+            .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        mirror.text(),
+        text(&b),
+        "the late side's mirror matches its text"
+    );
+}
