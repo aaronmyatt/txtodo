@@ -167,6 +167,9 @@ multiplex every workspace's traffic — not done by this task).
   `DeviceList` also carries each peer's `SkewStatus` (`txtodo_model::Skew::check` against
   `last_known_wall_ms`) so `txtodo doctor`'s per-peer clock line (plan M4
   `tasks/model-hlc-skew-guard`) and `txtodo device list` share one RPC and one classification.
+  The sample is the peer's `Hello` wall clock, stored with `last_seen` by
+  `lan_session_dispatch::record_hello_from_peer` before the handshake's skew refusal, and judged
+  against `last_seen`, the moment it was read (2026-10-01; before that nothing stored one).
 - `lan.rs`/`lan_peers.rs`/`lan_session.rs`/`lan_apply.rs`/`sync_ops.rs` (plan M4
   `sync-lan-transport`, daemon-wiring pass): `lan::start(ws, clock)` spawns the background LAN
   transport task — binds `txtodo_sync::LanEndpoint`, starts `Discovery` advertising this device,

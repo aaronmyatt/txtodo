@@ -35,13 +35,14 @@ fn parse_device_id(s: &str) -> Result<DeviceId, Status> {
         .ok_or_else(|| Status::invalid_argument(format!("{s:?} is not a device id")))
 }
 
-/// Classifies a peer's last-known clock reading against `now_ms` via the one shared rule
-/// (`txtodo_model::Skew::check`); `None` (no sample yet) is `Unknown`, never a guessed verdict.
-fn skew_of(last_known_wall_ms: Option<u64>, now_ms: u64) -> (pb::SkewStatus, u64) {
+/// Classifies a peer's last-known clock reading against our own clock at the moment it was read
+/// (`sampled_at_ms`) via the one shared rule (`txtodo_model::Skew::check`); `None` (no sample
+/// yet) is `Unknown`, never a guessed verdict.
+fn skew_of(last_known_wall_ms: Option<u64>, sampled_at_ms: u64) -> (pb::SkewStatus, u64) {
     let Some(peer_ms) = last_known_wall_ms else {
         return (pb::SkewStatus::Unknown, 0);
     };
-    match Skew::check(peer_ms, now_ms) {
+    match Skew::check(peer_ms, sampled_at_ms) {
         Skew::Ok => (pb::SkewStatus::Ok, 0),
         Skew::Behind(ms) => (pb::SkewStatus::Behind, ms),
         Skew::Ahead(ms) => (pb::SkewStatus::Ahead, ms),
@@ -50,7 +51,10 @@ fn skew_of(last_known_wall_ms: Option<u64>, now_ms: u64) -> (pb::SkewStatus, u64
 
 /// `own`: the row's own-device flag (task default-workspace-pairing-consent).
 fn to_pb(row: DeviceRow, self_device: DeviceId, now_ms: u64, own: bool) -> pb::Device {
-    let (skew_status, skew_ms) = skew_of(row.last_known_wall_ms, now_ms);
+    // `record_peer_clock` writes the sample and `last_seen` together, so `last_seen` is when it was
+    // read. Against `now_ms` instead, a peer quiet for 5 min would read as that far behind.
+    let sampled_at_ms = row.last_seen_ms.unwrap_or(now_ms);
+    let (skew_status, skew_ms) = skew_of(row.last_known_wall_ms, sampled_at_ms);
     pb::Device {
         id: row.device.ulid().to_string(),
         name: row.name,
@@ -257,5 +261,32 @@ mod tests {
             skew_of(Some(now_ms + lead), now_ms),
             (pb::SkewStatus::Ahead, lead)
         );
+    }
+
+    /// A sample is judged against when it was read, not against now: an in-step peer that has been
+    /// quiet an hour is still in step, and one that was ahead still reads ahead.
+    #[test]
+    fn a_peer_clock_sample_is_judged_at_its_own_moment() {
+        let row = |wall: u64, seen: u64| DeviceRow {
+            device: DeviceId::new(Ulid::from_u128(2)),
+            name: String::new(),
+            static_public: [0; txtodo_store::DEVICE_STATIC_KEY_BYTES],
+            paired_at_ms: 0,
+            last_seen_ms: Some(seen),
+            last_known_wall_ms: Some(wall),
+            key_epoch: 0,
+            removed_at_ms: None,
+            relay_node_id: None,
+            relay_url: None,
+        };
+        let me = DeviceId::new(Ulid::from_u128(1));
+        let seen = 10 * MAX_PEER_SKEW_AHEAD_MS;
+        let hour_later = seen + 60 * 60 * 1_000;
+        let in_step = to_pb(row(seen, seen), me, hour_later, true);
+        assert_eq!(in_step.skew_status, pb::SkewStatus::Ok as i32);
+        let lead = 7 * 60 * 1_000;
+        let ahead = to_pb(row(seen + lead, seen), me, hour_later, true);
+        assert_eq!(ahead.skew_status, pb::SkewStatus::Ahead as i32);
+        assert_eq!(ahead.skew_ms, lead);
     }
 }

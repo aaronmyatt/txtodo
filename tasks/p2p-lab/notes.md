@@ -66,7 +66,10 @@ device with `docker exec`.
   mirrors) synced in 2 of 3 runs and passed in full once; the other run missed its 30 s
   window after the mirror opened, cause not found (no debug log that run). It runs inside the LAN resync tick
   (crates/txtodo-daemon/src/relay_autodial.rs). relay-only keeps LAN on and pulls the cable.
-- **Peer clock samples are never stored.** In the daemon `last_known_wall_ms` is only ever set
+- **Peer clock samples are never stored** (fixed 2026-10-01: each `Hello`'s wall clock is stored
+  with `last_seen` before the skew refusal, `IdentityStore::record_peer_clock`, and doctor judges
+  it against `last_seen`; `tests/lan_live_push.rs` checks a real session; not yet re-run in the
+  lab). In the daemon `last_known_wall_ms` is only ever set
   to `None` (pairing_adopt.rs, pairing_register.rs, relay_autodial.rs); the Hello's skew is only
   logged at debug (`lan_link_hello_accepted`). So doctor's `peer` rows always say "no clock
   sample yet", and clock-skew's check that a1 flags b1 7 min ahead fails.

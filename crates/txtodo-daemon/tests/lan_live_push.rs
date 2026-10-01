@@ -18,6 +18,7 @@ use support::multi::{
     MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, register_own_peer_at,
     seed_group_id_at,
 };
+use txtodo_proto::v1 as pb;
 
 const FIRST_DEADLINE: Duration = Duration::from_secs(60);
 const PUSH_DEADLINE: Duration = Duration::from_secs(10);
@@ -95,4 +96,18 @@ async fn an_edit_is_pushed_over_the_open_lan_session_with_no_redial() {
         a.log_tail(),
         b.log_tail()
     );
+
+    // A session stores the peer's Hello clock (p2p lab finding: nothing did, so doctor's peer
+    // clock rows always said "no sample"). One machine, one clock: in step.
+    let devices = client_b
+        .device_list(pb::DeviceListRequest { workspace: None })
+        .await
+        .unwrap()
+        .into_inner()
+        .devices;
+    let peer = devices
+        .iter()
+        .find(|d| !d.is_self)
+        .expect("A is in B's devices");
+    assert_eq!(peer.skew_status, pb::SkewStatus::Ok as i32, "{peer:?}");
 }
