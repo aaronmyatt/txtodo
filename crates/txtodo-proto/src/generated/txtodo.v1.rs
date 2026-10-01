@@ -178,6 +178,10 @@ pub struct Change {
     /// same number `ListFiles` would return for this node right now.
     #[prost(message, optional, tag = "5")]
     pub progress: ::core::option::Option<Progress>,
+    /// The file's duplicate groups after this change (ADR 0032), so a client shows or drops its
+    /// banner without polling; 0 from an older daemon.
+    #[prost(uint32, tag = "6")]
+    pub duplicate_groups: u32,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ConflictsRequest {
@@ -186,10 +190,31 @@ pub struct ConflictsRequest {
     #[prost(message, optional, tag = "2")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
 }
+/// One task in a duplicate group.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DuplicateTask {
+    /// ULID text
+    #[prost(string, tag = "1")]
+    pub task_id: ::prost::alloc::string::String,
+    /// 1-based, blank lines counted
+    #[prost(uint32, tag = "2")]
+    pub line_number: u32,
+}
+/// Two or more tasks in one file whose whole lines are the same bytes (ADR 0032). Derived from the
+/// file when asked, never stored. Resolved with `Apply` `Delete`, or by editing one copy.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DuplicateGroup {
+    /// oldest id first: ULIDs sort by mint time
+    #[prost(message, repeated, tag = "1")]
+    pub tasks: ::prost::alloc::vec::Vec<DuplicateTask>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConflictsResponse {
     #[prost(message, repeated, tag = "1")]
     pub flags: ::prost::alloc::vec::Vec<ReviewFlag>,
+    /// empty from an older daemon
+    #[prost(message, repeated, tag = "2")]
+    pub duplicates: ::prost::alloc::vec::Vec<DuplicateGroup>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResolveRequest {

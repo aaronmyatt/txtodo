@@ -87,6 +87,12 @@ Empty from an older daemon. `WorkspaceRename(WorkspaceRenameRequest { workspace_
 `WorkspaceInfo`: device-level like `WorkspaceRemove`, sets or clears that `name` line (as ops, so it
 syncs). UNIMPLEMENTED from an older daemon.
 
+`ConflictsResponse.duplicates` (field 2) and `Change.duplicate_groups` (field 6), ADR 0032 (task
+sync-drift/duplicate-flags, 2026-10-01): a file's exact-duplicate lines as `DuplicateGroup`s
+(`DuplicateTask`: task id as ULID text and 1-based line number, oldest id first), and how many groups
+the file has after a change. Derived by the daemon from the file, never stored; a client resolves one
+with the existing `Apply` `Delete`. Empty/0 from an older daemon.
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.

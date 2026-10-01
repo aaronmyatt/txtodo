@@ -130,6 +130,7 @@ fn responses_and_streams_round_trip() {
         ops: vec![op.clone()],
         review: Vec::new(),
         progress: Some(Progress { done: 1, total: 3 }),
+        duplicate_groups: 2,
     });
     round_trip(&HistoryResponse { ops: vec![op] });
     round_trip(&ApplyResponse {

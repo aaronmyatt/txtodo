@@ -296,6 +296,9 @@ message Change {
   // (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
   // same number `ListFiles` would return for this node right now.
   Progress progress = 5;
+  // The file's duplicate groups after this change (ADR 0032), so a client shows or drops its
+  // banner without polling; 0 from an older daemon.
+  uint32 duplicate_groups = 6;
 }
 
 message ConflictsRequest {
@@ -303,7 +306,22 @@ message ConflictsRequest {
   WorkspaceSelector workspace = 2;
 }
 
-message ConflictsResponse { repeated ReviewFlag flags = 1; }
+// One task in a duplicate group.
+message DuplicateTask {
+  string task_id = 1;       // ULID text
+  uint32 line_number = 2;   // 1-based, blank lines counted
+}
+
+// Two or more tasks in one file whose whole lines are the same bytes (ADR 0032). Derived from the
+// file when asked, never stored. Resolved with `Apply` `Delete`, or by editing one copy.
+message DuplicateGroup {
+  repeated DuplicateTask tasks = 1;  // oldest id first: ULIDs sort by mint time
+}
+
+message ConflictsResponse {
+  repeated ReviewFlag flags = 1;
+  repeated DuplicateGroup duplicates = 2;  // empty from an older daemon
+}
 
 // Which side wins. `MERGED` keeps what is in the file and only clears the flag.
 enum Resolution {
