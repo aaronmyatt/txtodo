@@ -102,6 +102,7 @@ mod pairing_relay_dial;
 mod pairing_state;
 mod pairing_state_error;
 mod pairing_wire;
+mod peer_clock;
 mod peer_keys;
 mod pending_save;
 pub mod pidfile;

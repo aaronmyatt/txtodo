@@ -87,6 +87,7 @@ fn commit_and_ack(
     ops: Vec<Op>,
     ranges: Vec<OriginRange>,
 ) -> Option<Message> {
+    crate::peer_clock::record_ahead_ops(ctx.ws, session.peer(), &ops);
     let landed = commit_incoming_ops(ctx.ws, ctx.rt, ops);
     book_stuck(ctx, session.peer(), &landed);
     let committed_ranges = landed_ranges(&ranges, landed.ops);

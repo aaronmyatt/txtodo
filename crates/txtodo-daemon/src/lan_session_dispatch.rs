@@ -5,14 +5,14 @@
 //! file's module doc for the wire sequence and failure scope this loop implements.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, PoisonError};
+use std::sync::Arc;
 
 use tokio::runtime::Handle;
 use txtodo_model::DeviceId;
-use txtodo_store::{StoreError, WorkspaceId};
+use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    DeviceSigningKey, GroupId, GroupKey, GroupKeys, Link, Message, Session,
-    derive_group_op_signing_key, peek_workspace,
+    DeviceSigningKey, GroupId, GroupKey, GroupKeys, Link, Session, derive_group_op_signing_key,
+    peek_workspace,
 };
 
 use crate::clock::SystemClock;
@@ -78,49 +78,6 @@ fn log_unrouted_workspace_skipped(workspace: WorkspaceId) {
     tracing::debug!(%workspace, "lan_session_unrouted_workspace_message_skipped");
 }
 
-fn log_touch_last_seen_unknown_device(peer: DeviceId) {
-    tracing::debug!(peer = %peer, "lan_session_touch_last_seen_unknown_device");
-}
-
-fn log_touch_last_seen_failed(peer: DeviceId, error: &StoreError) {
-    tracing::warn!(peer = %peer, error = %error, "lan_session_touch_last_seen_failed");
-}
-
-/// Marks the `Hello`'s sender seen now and stores the wall clock it sent: registration only ever
-/// set `last_seen` at pairing, and nothing stored a clock sample, so doctor's peer clock rows always
-/// said "no sample" (p2p lab finding). Runs before the handshake checks (`dispatch_link_frame`): a
-/// peer over `MAX_PEER_SKEW_AHEAD_MS` ahead is refused there, and that is the one doctor must flag.
-/// The frame opened under the group key, so only a group member gets here. Every sync session
-/// (LAN, relay, control channel) runs through this; any route's identity store is the device's one
-/// `devices` table (ADR 0021).
-fn record_hello_from_peer(
-    routes: &BTreeMap<WorkspaceId, WorkspaceRoute>,
-    msg: &Message,
-    now_ms: u64,
-) {
-    let (
-        Message::Hello {
-            device: peer,
-            wall_ms,
-            ..
-        },
-        Some(route),
-    ) = (msg, routes.values().next())
-    else {
-        return;
-    };
-    let result = read(&route.ws)
-        .identity_store()
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .record_peer_clock(*peer, now_ms, *wall_ms);
-    match result {
-        Ok(true) => {}
-        Ok(false) => log_touch_last_seen_unknown_device(*peer),
-        Err(e) => log_touch_last_seen_failed(*peer, &e),
-    }
-}
-
 /// The link-level `Hello` branch of [`dispatch_frame`] — split out purely to keep that
 /// function's own cognitive complexity under this workspace's budget (`clippy.toml`).
 fn dispatch_link_frame(
@@ -133,7 +90,7 @@ fn dispatch_link_frame(
         .map_err(|kind| conn.refused = Some(kind))
         .ok()?;
     let now_ms = any_route_now_ms(&shared.routes);
-    record_hello_from_peer(&shared.routes, &msg, now_ms);
+    crate::peer_clock::record_hello(&shared.routes, &msg, now_ms);
     if !handle_link_hello(&mut conn.session, &msg, now_ms) {
         return None;
     }
