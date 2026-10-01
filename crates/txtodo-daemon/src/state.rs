@@ -89,6 +89,9 @@ pub struct DocState {
     /// The stamp of the `SetField` each task's field last took, so an older one arriving late
     /// loses on every device (task partition-converge). Merge metadata, like `stamps`.
     field_stamps: HashMap<(TaskId, Field), Hlc>,
+    /// Each task's description edits since its history began, so a late one is slotted in by
+    /// stamp (ADR 0034, `text_history.rs`). Merge metadata, like `stamps`.
+    text_history: HashMap<TaskId, crate::text_history::TextHistory>,
     bom: bool,
     ending: LineEnding,
     trailing_newline: bool,
@@ -120,6 +123,7 @@ impl DocState {
             entries,
             stamps,
             field_stamps: HashMap::new(),
+            text_history: HashMap::new(),
             bom: file.bom,
             ending: file.ending,
             trailing_newline: file.trailing_newline,
@@ -170,7 +174,9 @@ impl DocState {
             OpKind::SetField { task, field, value } => {
                 crate::fields::set_field(self, *task, (*field, *value), op.hlc)?
             }
-            OpKind::EditText { task, edits } => crate::fields::edit_text(self, *task, edits)?,
+            OpKind::EditText { task, edits } => {
+                crate::fields::edit_text(self, *task, edits, op.hlc)?
+            }
             OpKind::Move {
                 task,
                 after,

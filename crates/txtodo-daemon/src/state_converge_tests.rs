@@ -98,9 +98,8 @@ fn two_devices_setting_one_field_agree_on_the_newest() {
     assert_eq!(converges_skipping(&base(1), &ops), "(B) line 1\n");
 }
 
+/// ADR 0034: the two splices end in stamp order on both devices.
 #[test]
-#[ignore = "partition-converge (@human): EditText is a splice on its author's text, so stamps alone \
-            cannot order two of them; see notes.md"]
 fn two_devices_editing_one_description_agree() {
     let ops = [
         append_text(1, 6, " a", at(100, 0, A)),
@@ -223,4 +222,29 @@ fn past_the_bound_the_oldest_ghosts_go_first() {
     );
     state.apply(&insert(9, Some(2), at(400, 0, B))).unwrap();
     assert_eq!(state.to_bytes(), b"line 9\nline 4\n");
+}
+
+/// A description's edit history comes back at open from the replay, so an edit that arrives late
+/// after a restart lands where it would have without one.
+#[test]
+fn description_history_comes_back_from_a_replay_at_open() {
+    let early = append_text(1, 6, " a", at(100, 0, A));
+    let later = append_text(1, 6, " b", at(101, 0, B));
+    let mut never_closed = base(1);
+    never_closed.apply(&later).unwrap();
+    never_closed.apply(&early).unwrap();
+    let mut reopened = empty();
+    reopened.apply(&insert(1, None, at(1, 0, A))).unwrap();
+    reopened.apply(&later).unwrap();
+    let mut from_disk = empty();
+    from_disk
+        .apply_kind(&insert(1, None, at(0, 0, A)).kind)
+        .unwrap();
+    from_disk
+        .apply_kind(&append_text(1, 6, " b", at(0, 0, A)).kind)
+        .unwrap();
+    from_disk.adopt_stamps(&reopened);
+    from_disk.apply(&early).unwrap();
+    assert_eq!(from_disk.to_bytes(), never_closed.to_bytes());
+    assert_eq!(never_closed.to_bytes(), b"line 1 b a\n");
 }

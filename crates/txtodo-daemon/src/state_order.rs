@@ -13,7 +13,11 @@
 use std::collections::HashMap;
 
 use super::{DocState, Entry, StateError};
-use txtodo_model::{DeviceId, Field, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
+use crate::text_history::{MAX_EDITS_PER_TASK, TextHistory};
+use crate::textedit::apply_text_edits;
+use txtodo_model::{
+    DeviceId, Field, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, TextEdit, Ulid,
+};
 
 /// Two states are equal when they hold the same document; which op placed a line, and the ghosts
 /// (ADR 0033), are not part of the document.
@@ -111,9 +115,45 @@ impl DocState {
         self.field_stamps.insert((task, field), hlc);
     }
 
-    /// Drops `task`'s field stamps once it leaves this document (deleted, or moved to another).
+    /// Drops `task`'s field stamps and description history once it leaves this document
+    /// (deleted, or moved to another).
     pub(crate) fn forget_fields(&mut self, task: TaskId) {
         self.field_stamps.retain(|(t, _), _| *t != task);
+        self.forget_text(task);
+    }
+
+    /// Drops `task`'s description history: its description changed some other way (a `SetField`
+    /// that moves a priority into `pri:`), so the edits kept no longer rebuild it.
+    pub(crate) fn forget_text(&mut self, task: TaskId) {
+        self.text_history.remove(&task);
+    }
+
+    /// A copy of `task`'s description history, to put back with [`DocState::restore_text`] when
+    /// an edit that recorded into it is refused after all.
+    pub(crate) fn text_history_of(&self, task: TaskId) -> Option<TextHistory> {
+        self.text_history.get(&task).cloned()
+    }
+
+    pub(crate) fn restore_text(&mut self, task: TaskId, saved: Option<TextHistory>) {
+        match saved {
+            Some(history) => self.text_history.insert(task, history),
+            None => self.text_history.remove(&task),
+        };
+    }
+
+    /// `edits` stamped `hlc` on `task`'s description, which is `current` now: the description to
+    /// hold, rebuilt in stamp order when they arrive late (ADR 0034).
+    pub(crate) fn edit_description(
+        &mut self,
+        task: TaskId,
+        current: &str,
+        hlc: Hlc,
+        edits: &[TextEdit],
+    ) -> Result<String, crate::textedit::TextEditError> {
+        self.text_history
+            .entry(task)
+            .or_insert_with(|| TextHistory::new(current.to_owned()))
+            .apply(current, hlc, edits, (apply_text_edits, MAX_EDITS_PER_TASK))
     }
 
     /// After a commit: whatever a scratch replay placed takes the commit's real stamp, the one
@@ -127,6 +167,9 @@ impl DocState {
         for set in self.field_stamps.values_mut().filter(|s| **s == scratch) {
             *set = hlc;
         }
+        for history in self.text_history.values_mut() {
+            history.settle(scratch, hlc);
+        }
         debug_assert_eq!(self.stamps.len(), self.entries.len());
     }
 
@@ -136,6 +179,7 @@ impl DocState {
     pub(crate) fn adopt_stamps(&mut self, replayed: &DocState) {
         // By task id, so they hold whatever lines moved: a field's stamp is the task's, not a spot's.
         self.field_stamps.clone_from(&replayed.field_stamps);
+        self.text_history.clone_from(&replayed.text_history);
         if self.adopt_sequence(replayed) {
             return;
         }

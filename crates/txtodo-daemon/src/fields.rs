@@ -2,7 +2,6 @@
 //! (description). Split from `state.rs` so each module stays under the file budget.
 
 use crate::state::{DocState, Entry, StateError};
-use crate::textedit::apply_text_edits;
 use txtodo_core::{Edit, LineKind, OwnedLine, Prefix, Priority, description_start, emit_prefix};
 use txtodo_model::{Field, FieldValue, Hlc, IdentityMode, TaskId, TextEdit};
 
@@ -43,6 +42,10 @@ pub(crate) fn set_field(
         state.mode() != IdentityMode::Tagged || crate::state::id_of(&new_line) == Some(task),
         "prefix rewrite keeps the id"
     );
+    if description_of(&line) != description_of(&new_line) {
+        // A priority moved into `pri:`: the kept edits no longer rebuild this description.
+        state.forget_text(task);
+    }
     state.replace_entry(
         i,
         Entry::Task {
@@ -60,27 +63,34 @@ fn log_stale_field(task: TaskId, field: Field) {
     tracing::debug!(%task, ?field, "set_field_older_than_field");
 }
 
-/// Applies `EditText` to the description; the prefix bytes are spliced from the original.
+/// Applies `EditText` stamped `hlc` to the description; the prefix bytes are spliced from the
+/// original. A late edit rebuilds the description in stamp order (ADR 0034, `text_history.rs`).
+/// On `Err` the state, its history included, is unchanged.
 pub(crate) fn edit_text(
     state: &mut DocState,
     task: TaskId,
     edits: &[TextEdit],
+    hlc: Hlc,
 ) -> Result<(), StateError> {
     let i = state.live_slot(task).ok_or(StateError::UnknownTask(task))?;
     let line = state.line_of(task).ok_or(StateError::UnknownTask(task))?;
-    let description = match line.parse().map(|l| l.kind) {
-        Some(LineKind::Task(t)) => t.description.to_owned(),
-        _ => return Err(StateError::Opaque(i)),
-    };
-    let new_description =
-        apply_text_edits(&description, edits).map_err(|e| StateError::Text(task, e))?;
-    let edit = Edit::new()
-        .set_description(&new_description)
-        .map_err(|_| StateError::Unsupported("line break"))?;
-    let new_line = txtodo_core::apply(&line, &edit);
-    if state.mode() == IdentityMode::Tagged && crate::state::id_of(&new_line) != Some(task) {
-        return Err(StateError::IdMismatch(task));
-    }
+    let description = description_of(&line).ok_or(StateError::Opaque(i))?;
+    let saved = state.text_history_of(task);
+    let new_line = state
+        .edit_description(task, &description, hlc, edits)
+        .map_err(|e| StateError::Text(task, e))
+        .and_then(|new_description| {
+            let edit = Edit::new()
+                .set_description(&new_description)
+                .map_err(|_| StateError::Unsupported("line break"))?;
+            let new_line = txtodo_core::apply(&line, &edit);
+            if state.mode() == IdentityMode::Tagged && crate::state::id_of(&new_line) != Some(task)
+            {
+                return Err(StateError::IdMismatch(task));
+            }
+            Ok(new_line)
+        })
+        .inspect_err(|_| state.restore_text(task, saved))?;
     state.replace_entry(
         i,
         Entry::Task {
@@ -89,6 +99,14 @@ pub(crate) fn edit_text(
         },
     );
     Ok(())
+}
+
+/// A task line's description, `None` for anything else.
+fn description_of(line: &OwnedLine) -> Option<String> {
+    match line.parse()?.kind {
+        LineKind::Task(t) => Some(t.description.to_owned()),
+        LineKind::Blank => None,
+    }
 }
 
 /// Re-emits the prefix with one field changed; a priority on a completed line moves to `pri:`

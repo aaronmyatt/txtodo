@@ -132,6 +132,7 @@ mod stored_ids;
 mod stuck_sync;
 mod sync_ops;
 pub mod telemetry;
+mod text_history;
 pub mod textedit;
 mod tokens;
 mod tree;
