@@ -125,3 +125,23 @@ more natural there, since notes already are a Loro text document.
   one notes.md (fails without T1: the two lines in opposite orders) with the late side's mirror
   aligned. Known gaps in the ADR: histories that began at different texts, a completing
   `SetField` between two concurrent edits.
+- 2026-10-01, lan-converge seed 435090918 (report 20261001-224649). Both op logs held the same
+  ops; replaying each in its own arrival order gave each device's file, so it was application
+  again. A throwaway probe (load both `oplog.db`s, replay, shrink the op set while the two orders
+  disagree) found three causes:
+  - The late anchor, ADR 0033's known gap: A moved T, B (newer, unaware) placed a line after T;
+    where B's op landed first, the line stayed under T's old spot. Each slot now keeps its parent
+    (the placement its op followed); a placement that lands late moves under it, with what
+    follows them, the entries that should follow it (`state_rehome.rs`, 7a124339). Not under a
+    same-commit placement of T: an op placed before its anchor moved in its own commit stays.
+  - Which blank a `BlankRemove` hides was picked on arrival. A moved T and added a blank under
+    it; B removed "the blank after T": one device hid A's new blank, the other the old one. A
+    `BlankRemove` is now an eraser slot, and the blanks erasers claim are settled from the
+    sequence after each op (`state_erase.rs`, c1bc5b0e). Semantics, not intent: B's remove
+    follows T to A's spot and takes A's blank, so both blanks go.
+  - An edit of a task deleted here was refused (`sync_op_skipped`); it is a no-op now (82af4f76).
+  The mirror converges at debug when a peer batch leaves it apart from the state. Known gaps:
+  an eraser that found no blank can claim one a later delete exposes; a parent dropped by the
+  ghost bound ends its block early. Older reports still differ in replay, all with a task id
+  inserted twice (the sidecar `do` re-insert fixed in 37274467): an `Insert` of an id that
+  already has a placement is not handled (own line).
