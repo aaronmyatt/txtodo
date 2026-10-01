@@ -182,3 +182,106 @@ fn a_synthesized_reconcile_keeps_the_ghosts_a_peer_still_anchors_on() {
     let disk = String::from_utf8(std::fs::read(&file).unwrap_or_default()).unwrap_or_default();
     assert!(disk.contains(&t(9, "x")), "the peer's add landed: {disk:?}");
 }
+
+fn sidecar_actor(dir: &std::path::Path, text: &str) -> (FileActor, SharedStore) {
+    std::fs::write(dir.join("todo.txt"), text).unwrap_or_else(|e| panic!("{e}"));
+    let store: SharedStore = Arc::new(Mutex::new(
+        Store::open(&dir.join("oplog.db")).unwrap_or_else(|e| panic!("store: {e}")),
+    ));
+    let cfg = ActorConfig {
+        path: path(),
+        disk: dir.join("todo.txt"),
+        device: DeviceId::new(Ulid::from_u128(7)),
+        stats: Arc::new(crate::stats::Stats::default()),
+        identity_mode: IdentityMode::Sidecar,
+        tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
+        layout: crate::layout_state::SharedLayout::default(),
+    };
+    let clock: Arc<dyn crate::clock::Clock> = Arc::new(FakeClock::new(1_000));
+    let actor = FileActor::open(cfg, Arc::clone(&store), clock)
+        .unwrap_or_else(|e| panic!("open actor: {e}"));
+    (actor, store)
+}
+
+fn me() -> txtodo_model::Principal {
+    txtodo_model::Principal::User {
+        device: DeviceId::new(Ulid::from_u128(7)),
+    }
+}
+
+/// Completing a dated line keeps its creation date: `Completed` then `CompletionDate` used to
+/// turn `2026-09-01 water plants` into `x 2026-10-01 water plants`.
+#[test]
+fn completing_a_dated_line_keeps_its_creation_date() {
+    use crate::mutation::{Mutation, TaskRef};
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (mut actor, _) =
+        sidecar_actor(dir.path(), "2026-09-01 water plants\n2026-09-02 call mum\n");
+    let today = txtodo_core::Date::new(2026, 10, 1).unwrap_or_else(|| panic!("date"));
+    let task = TaskRef {
+        line_number: 1,
+        task_id: None,
+    };
+    actor
+        .on_apply(vec![Mutation::Complete { task, today }], me(), None)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let disk = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap_or_default();
+    assert_eq!(
+        disk,
+        "2026-09-02 call mum\nx 2026-10-01 2026-09-01 water plants\n"
+    );
+}
+
+/// The lab's partition-edits `do` (sidecar, a CLI `Replace`): a dated line completed and moved
+/// past a trailing blank is reconciled as field ops and moves, never a delete and re-insert of
+/// the same task, whose older re-insert overwrote a peer's newer edit.
+#[test]
+fn a_sidecar_do_of_a_dated_line_is_field_ops_not_a_re_insert() {
+    use crate::mutation::{Mutation, TaskRef};
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let lines: Vec<String> = (1..=6)
+        .map(|n| format!("2026-10-01 t{n} added +lab"))
+        .collect();
+    let text: String = lines.iter().map(|l| format!("{l}\n")).collect();
+    let (mut actor, store) = sidecar_actor(dir.path(), &text);
+    let delete = Mutation::Delete {
+        task: TaskRef {
+            line_number: 6,
+            task_id: None,
+        },
+        leave_blank: true,
+    };
+    actor
+        .on_apply(vec![delete], me(), None)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let file = dir.path().join("todo.txt");
+    let base = crate::actor::hash_of(&std::fs::read(&file).unwrap_or_default());
+    let target = format!(
+        "{}\n{}\n{}\n{}\n\nx 2026-10-01 {}\n",
+        lines[1], lines[2], lines[3], lines[4], lines[0]
+    );
+    let replace = Mutation::Replace {
+        base,
+        contents: target.clone().into_bytes(),
+    };
+    actor
+        .on_apply(vec![replace], me(), None)
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(std::fs::read_to_string(&file).unwrap_or_default(), target);
+    let ops = store
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .for_file(&path(), Seq(8))
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert!(
+        ops.iter().all(|s| !matches!(
+            s.op.kind,
+            OpKind::SetField {
+                field: txtodo_model::Field::Deleted,
+                ..
+            } | OpKind::Insert { .. }
+        )),
+        "{:?}",
+        ops.iter().map(|s| &s.op.kind).collect::<Vec<_>>()
+    );
+}

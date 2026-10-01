@@ -118,7 +118,18 @@ fn rewrite_prefix(line: &OwnedLine, field: Field, value: FieldValue) -> Option<O
     };
     let mut prefix = Prefix::of(&task);
     match (field, value) {
-        (Field::Completed, FieldValue::Bool(b)) => prefix.completed = b,
+        (Field::Completed, FieldValue::Bool(b)) => {
+            prefix.completed = b;
+            // `x <date> text` reads that date as the completion date, so a creation date with
+            // no completion date beside it would come back as one and the creation date would be
+            // lost (it was, on every `Completed` then `CompletionDate` pair `change_ops` sends).
+            // Keep it where it is by repeating it as the completion date until that field's own
+            // op, next in the same batch, sets the real one. todo.txt format:
+            // https://github.com/todotxt/todo.txt#todotxt-format-rules
+            if b && prefix.completion_date.is_none() && prefix.creation_date.is_some() {
+                prefix.completion_date = prefix.creation_date;
+            }
+        }
         (Field::CompletionDate, v) => prefix.completion_date = v.as_date()?,
         (Field::CreationDate, v) => prefix.creation_date = v.as_date()?,
         (Field::Priority, FieldValue::Priority(p)) => prefix.priority = p.and_then(Priority::new),
