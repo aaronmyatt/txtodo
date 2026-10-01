@@ -157,3 +157,14 @@ more natural there, since notes already are a Loro text document.
   this morning with two devices now replays to one file per device. Still differing: two
   three-device chaos reports, one with ops before their task's insert in a2's arrival order, one
   from `do` of a prioritized line (own line).
+- 2026-10-02, `do` of a prioritized line (4b11aeb6). `change_ops` sent `Priority = None` first,
+  then `Completed`, `CompletionDate`, and an `EditText` adding ` pri:A`. With a peer's newer
+  `Priority = C`: applied first, the priority clear lost by stamp, `Completed` moved C into
+  `pri:C`, and the text edit still added `pri:A` (`pri:A pri:C`); applied last, `pri:A` became
+  `pri:C`. Now `change_ops` applies each field op to a working copy as `DocState` does
+  (`rewrite_prefix`), `Completed` first, and diffs the description against that: a `do` is
+  `Completed` + `CompletionDate`, the priority riding along into `pri:` (core `Edit::complete` puts
+  it in the same place). Reopen gets `Completed`, `Priority`, then the text edit dropping `pri:`,
+  without `mutation_reopen.rs`'s own re-sort. Known gaps: ops already in a log keep the old shape,
+  so replays of old chaos logs still differ; reopening still sends a text edit, so a concurrent
+  priority change on a done line can meet the same mismatch from the other side.
