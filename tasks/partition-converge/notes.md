@@ -145,3 +145,15 @@ more natural there, since notes already are a Loro text document.
   ghost bound ends its block early. Older reports still differ in replay, all with a task id
   inserted twice (the sidecar `do` re-insert fixed in 37274467): an `Insert` of an id that
   already has a placement is not handled (own line).
+- 2026-10-01, an `Insert` of a task already here (c7a73622, `state_reinsert.rs`). Shrunk by
+  whole commits, the old logs showed: A's `do` = delete + insert again of line 1 in one commit;
+  B, unaware, appended to line 1, newer. Edit first, the delete hid it and the insert brought the
+  line back without it. Undo of a delete and a move back from another file send the same op
+  today. Now it is a placement like a move, plus a whole-line set at its stamp: each prefix field
+  unless a newer `SetField` set it; the description history restarts at it (`reset`, a base
+  stamp; older edits lose) with newer edits replayed. A delete and an insert again settle by
+  stamp. A delete no longer drops the task's stamps and history, and a deleted task still takes
+  edits, hidden; both go when its last placement is pruned. Replay check: every lab report since
+  this morning with two devices now replays to one file per device. Still differing: two
+  three-device chaos reports, one with ops before their task's insert in a2's arrival order, one
+  from `do` of a prioritized line (own line).
