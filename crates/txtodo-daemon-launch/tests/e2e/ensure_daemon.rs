@@ -1,15 +1,13 @@
 //! Real-`txtodod` acceptance tests for [`txtodo_daemon_launch::ensure_daemon`] (task
 //! `daemon-always-available`, item 7: "per-client cold-start... connects without manual
 //! intervention"). Mirrors `apps/desktop/src-tauri/tests/daemon_spawn.rs`'s shape (hermetic
-//! socket via env override, build the real binary once via `tests/support`), generalized over
+//! socket via env override, build the real binary once via `tests/e2e/support`), generalized over
 //! both target shapes this crate supports: the ADR 0025 global daemon (no extra argv) and a
 //! legacy per-workspace bridge daemon (`--dir <workspace>`, what `txtodo-tui` dials today).
 #![cfg(unix)]
 
-mod support;
-
+use crate::support::{TXTODOD_BIN, WAIT, kill, wait_for_pid};
 use std::time::Instant;
-use support::{TXTODOD_BIN, WAIT, kill, wait_for_pid};
 use txtodo_daemon_launch::{LaunchConfig, ensure_daemon};
 
 #[tokio::test]

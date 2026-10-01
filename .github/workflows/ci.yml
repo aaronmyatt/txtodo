@@ -62,6 +62,12 @@ jobs:
       - name: lint
         if: runner.os != 'Windows'
         run: cargo clippy --workspace --all-targets -- -D warnings
+      # tests/e2e targets are `test = false` (task fast-gate), so `--all-targets` skips them, and
+      # cargo drops a named `--test e2e` when `--tests`/`--all-targets` is also given: own step.
+      # https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+      - name: lint (e2e targets)
+        if: runner.os != 'Windows'
+        run: cargo clippy --workspace --test e2e -- -D warnings
       - name: lint (windows)
         if: runner.os == 'Windows'
         run: cargo clippy --workspace --all-targets --exclude txtodo-cli --exclude txtodo-daemon --exclude txtodo-mcp -- -D warnings
@@ -80,6 +86,12 @@ jobs:
       - name: test (windows)
         if: runner.os == 'Windows'
         run: cargo nextest run --workspace --exclude txtodo-daemon --exclude txtodo-cli --exclude txtodo-mcp --no-fail-fast
+      # Each crate's slow tests (real txtodod, network, mDNS, relay) live in its tests/e2e binary,
+      # `test = false`, so only a step that names it runs them (task fast-gate). The daemon job
+      # runs txtodo-daemon's own. Unix only: every e2e file is `#![cfg(unix)]`.
+      - name: test (e2e)
+        if: runner.os != 'Windows'
+        run: cargo nextest run --workspace --exclude txtodo-daemon --test e2e --no-fail-fast
       # Every real-txtodod integration test across txtodo-cli/txtodo-mcp/txtodo-tui/apps/desktop
       # is #[ignore]d (2026-09-19): each spawns a real daemon and apps/desktop's own
       # support::TXTODOD_BIN can trigger a full daemon/sync/iroh recompile under a different
@@ -100,6 +112,7 @@ jobs:
           .claude/scripts/check-file-length.sh
           .claude/scripts/check-assertions.sh
           .claude/scripts/check-specs-mirror.sh
+          scripts/check-version-sync.sh
       - name: PR size (budgets.json.diffLines, Cargo.lock and todo.txt exempt)
         if: github.event_name == 'pull_request' && runner.os == 'Linux'
         run: |
@@ -169,6 +182,8 @@ jobs:
       # https://github.com/taiki-e/cargo-llvm-cov#merge-coverages-generated-under-different-test-conditions
       - name: coverage (workspace)
         run: cargo llvm-cov --workspace --no-report --no-fail-fast
+      - name: coverage (e2e targets)
+        run: cargo llvm-cov --workspace --no-report --no-fail-fast --test e2e
       - name: coverage (ignored real-txtodod tests)
         run: cargo llvm-cov -p txtodo-cli -p txtodo-mcp -p txtodo-tui -p desktop --no-report --no-fail-fast -- --ignored
       # Generated prost/tonic code is not hand-written logic: leave it out of the line count.

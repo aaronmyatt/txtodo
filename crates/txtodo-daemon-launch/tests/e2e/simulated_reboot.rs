@@ -31,10 +31,8 @@
 //!    unit, not from a second ad-hoc spawn.
 #![cfg(unix)]
 
-mod support;
-
+use crate::support::{TXTODOD_BIN, kill, wait_for_pid};
 use std::time::Duration;
-use support::{TXTODOD_BIN, kill, wait_for_pid};
 use txtodo_daemon_launch::{LaunchConfig, ensure_daemon};
 
 #[tokio::test]

@@ -317,8 +317,8 @@ pub(crate) mod unix_impl {
         /// isolated `TXTODO_SOCKET`/`TXTODO_REGISTRY_DB` via `extra_env` must never be told "already
         /// installed" off the real machine's real `$HOME` — that unit, if any, has nothing to do with
         /// the isolated target, so treating it as installed makes `ensure_daemon` wait forever on a
-        /// socket nothing will bind (`tests/ensure_daemon.rs` deterministically timed out this way on
-        /// any machine with a real installed service, before this guard existed).
+        /// socket nothing will bind (`tests/e2e/ensure_daemon.rs` deterministically timed out this
+        /// way on any machine with a real installed service, before this guard existed).
         #[test]
         fn a_target_with_extra_env_is_never_treated_as_installed() {
             let mut cfg = LaunchConfig::new("/tmp/does-not-matter.sock");

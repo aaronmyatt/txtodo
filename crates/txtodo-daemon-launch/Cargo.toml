@@ -15,6 +15,14 @@ workspace = true
 # sleep between retries) and for the file-lock's spawn_blocking hop.
 tokio = { version = "1", features = ["net", "time", "process", "fs", "rt", "sync"] }
 
+# Real-txtodod tests (task fast-gate): `test = false` keeps them out of `cargo test`, `cargo nextest
+# run`, `clippy --all-targets` and the local fast gate; CI selects them with `--test e2e`.
+# https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+test = false
+
 [dev-dependencies]
 # https://docs.rs/tempfile — every test gets its own on-disk socket dir, no shared global state.
 tempfile = "3"

@@ -5,10 +5,8 @@
 //! `ensure_daemon` reads, and the real daemon then writes its true version back on restart.
 #![cfg(unix)]
 
-mod support;
-
+use crate::support::{TXTODOD_BIN, kill, wait_for_pid};
 use std::path::Path;
-use support::{TXTODOD_BIN, kill, wait_for_pid};
 use txtodo_daemon_launch::{Ensured, LaunchConfig, ensure_daemon};
 
 /// A hermetic global-daemon config under `state_dir`, the same shape `ensure_daemon.rs` uses.
