@@ -33,7 +33,6 @@ type Budgets = {
   slices: { root: string; frozenPaths: string[]; appendOnly: string[] };
   commands: Record<string, string | null> & { feedback: Record<string, string>; feedbackExtensions: string[] };
 };
-const GATE_KEYS = ["format", "lint", "typecheck", "test", "boundaries", "fileLength"] as const;
 const GENERATED_FALLBACK = ["Cargo.lock"]; // used only if budgets.json omits generatedPaths (constitution §6)
 const STRIKES_MAX = 3;
 
@@ -128,7 +127,7 @@ export default function (pi: ExtensionAPI) {
     const findings: string[] = [];
     if (b.commands.feedbackExtensions.includes(ext)) {
       for (const [k, cmd] of Object.entries(b.commands.feedback)) { const r = sh(cmd.replace("{file}", rel), root); if (!r.ok) findings.push(`[${k}] ${r.out.trim()}`); }
-      const fl = sh(b.commands.fileLength as string, root); if (!fl.ok) findings.push(fl.out.trim());
+      const fl = sh(`${b.commands.fileLength as string} '${rel}'`, root); if (!fl.ok) findings.push(fl.out.trim());
     }
     if (rel.endsWith("Cargo.toml")) { const r = sh(b.commands.boundaries as string, root); if (!r.ok) findings.push(r.out.trim()); }
     if (!findings.length) return undefined;
@@ -140,17 +139,14 @@ export default function (pi: ExtensionAPI) {
     const root = ctx.cwd; const b = loadBudgets(root);
     const sessionId = ctx.sessionManager.getSessionId();
     if (!sh("git status --porcelain", root).out.trim()) { releaseSessionLeases(root, sessionId); return; } // clean tree: nothing to gate, and this session's slices are free
-    const { mine, others } = splitLeases(root, sessionId);
-    const pkgArgs = mine.map((c) => `-p ${c}`).join(" ");
+    const { others } = splitLeases(root, sessionId);
     const failures: string[] = [];
-    for (const k of GATE_KEYS) {
-      let cmd = b.commands[k]; if (!cmd) continue;
-      // format/lint/typecheck/test are scoped to this session's own leased crates (a crate leased by
-      // another session can't fail your Stop just because it's mid-edit); boundaries/fileLength stay
-      // whole-tree (cheap, non-compiling, structural). No leased crate → those four are skipped.
-      if (k === "format") { if (!pkgArgs) continue; cmd = cmd.replace("--all", pkgArgs); }
-      else if (k === "lint" || k === "typecheck" || k === "test") { if (!pkgArgs) continue; cmd = cmd.replace("--workspace", pkgArgs); }
-      const r = sh(cmd, root); if (!r.ok) failures.push(`[${k}] \`${cmd}\`\n${r.out.trim().split("\n").slice(-15).join("\n")}`);
+    // One fast gate (task fast-gate), same as gate.sh: the changed crates minus another session's
+    // leased ones. Timings are dropped from a failure so the strike signature (its length) is stable.
+    const fast = b.commands.fast;
+    if (fast) {
+      const r = sh(`${fast} --exclude-crates "${others.join(" ")}"`, root);
+      if (!r.ok) failures.push(`[fast] \`${fast}\`\n${r.out.trim().split("\n").filter((l) => !l.startsWith("  ok ")).map((l) => l.replace(/ +\d+ ms.*$/, "")).slice(-45).join("\n")}`);
     }
     const changed = diffLines(root, [...(b.generatedPaths ?? GENERATED_FALLBACK), ...b.baselinePaths], others);
     if (changed > b.diffLines) failures.push(`[diff] ${changed} changed lines > budget ${b.diffLines}. Split the change and say so.`);

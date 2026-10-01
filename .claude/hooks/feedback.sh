@@ -4,6 +4,8 @@
 # Any feedback command containing --workspace is scoped to `-p <crate>` for the file's own crate
 # (same trick as gate.sh) so e.g. clippy doesn't recheck all 13 crates on every single edit; a file
 # outside crates/<name>/ has no crate to scope to, so that command is skipped for it.
+# commands.feedback.lint builds into target/lint with the same args as the fast gate's clippy step
+# (task fast-gate), so each edit's run leaves that step warm. File-length checks only this file.
 # Informs via additionalContext; never blocks. Lockstep twin: guardrails/index.ts tool_result.
 set -uo pipefail
 IN=$(cat); ROOT=$(node -pe 'JSON.parse(process.argv[1]).cwd' "$IN"); cd "$ROOT"
@@ -19,7 +21,7 @@ if node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands.fe
     esac
     out=$(bash -c "$cmd" 2>&1) || findings+="[$k] $(echo "$out" | tail -20)"$'\n'
   done
-  out=$(.claude/scripts/check-file-length.sh 2>&1) || findings+="$out"$'\n'
+  out=$(.claude/scripts/check-file-length.sh "$FILE" 2>&1) || findings+="$out"$'\n'
 fi
 case "$FILE" in *Cargo.toml) out=$(.claude/scripts/check-boundaries.sh 2>&1) || findings+="$out"$'\n';; esac
 [ -z "$findings" ] && exit 0

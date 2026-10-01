@@ -14,12 +14,14 @@
   "coveragePercent": 72,
   "syncMs": 500,
   "idleRssMb": 50,
+  "fastGateMs": 5000,
   "notes": {
     "payloadKB": "512 KiB per MCP response, set 2026-09-23 (task payload-budget): txtodo-mcp caps each returned line at 4 KiB (doc::MAX_ROW_BYTES, flagged truncated, writes never refused), todo_list at 50 rows per call (tools_read::MAX_LIST_ROWS, a second text block names the next offset), and the whole-file resource at 512 KiB per read (resources::MAX_RESOURCE_BYTES, a second contents item names the next page). history stays under HISTORY_MAX_LIMIT = 1000 ops (~160 KiB). Not check-enforced: the three constants are the enforcement; change them and this number together.",
     "latencyMs": "Plan section 5: reconcile one external line edit in a 10k-line file <= 20 ms on the Linux CI runner.",
     "coveragePercent": "Measured 0% at /setup (2026-09-11, no tests). Promoted to 80 the same day after M1 core tests landed: workspace line coverage measured 97.07%. Ratcheted down to 72 on 2026-09-17: real workspace coverage measured 72.48% (run 35194555930) after M4-M11 growth (gRPC dispatch, generated protobuf code, six main.rs entrypoints, the apps/desktop second stack) outpaced the stale M1 threshold. See tasks/coverage-ratchet-climb/ for the file-by-file gap and the plan to climb back to 80.",
     "syncMs": "Plan M4 sync-bench-m4: 1000 ops between two already-paired loopback daemons converge <= 500 ms, clocked from A's ops durably committed to B holding all 1000 committed (discovery/pairing excluded, that's sync-loopback-converge's own 2s budget). Not check-bench.sh-enforced: a real two-process test doesn't fit criterion's iterate-a-closure model, same reasoning as idleRssMb below. Enforced instead by crates/txtodo-daemon/tests/lan_sync_bench.rs, both the single-frame (1000 ops = exactly one MAX_OPS_PER_BATCH frame) and multi-frame (3000 ops = 3 frames) shapes -- both currently #[ignore]d: real, reproducible CPU-contention flakiness under `cargo test --workspace`, not root-caused, see that file's own doc comments.",
-    "idleRssMb": "Plan M4 sync-bench-m4: an idle daemon (workspace walked, watcher armed, no sync peer, no edits for a settle period) on a 10k-line workspace holds <= 50 MB RSS. Not check-bench.sh-enforced (RSS is a property of a process at rest, not a criterion measurement). Enforced instead by crates/txtodo-daemon/tests/idle_rss.rs, currently #[ignore]d: a real, reproducible, unrelated-to-sync memory issue in the adoption/mirror-build pipeline measures ~1.7 GB (~34x budget) at 10k lines, superlinear growth, not root-caused -- see that file's own doc comment."
+    "idleRssMb": "Plan M4 sync-bench-m4: an idle daemon (workspace walked, watcher armed, no sync peer, no edits for a settle period) on a 10k-line workspace holds <= 50 MB RSS. Not check-bench.sh-enforced (RSS is a property of a process at rest, not a criterion measurement). Enforced instead by crates/txtodo-daemon/tests/idle_rss.rs, currently #[ignore]d: a real, reproducible, unrelated-to-sync memory issue in the adoption/mirror-build pipeline measures ~1.7 GB (~34x budget) at 10k lines, superlinear growth, not root-caused -- see that file's own doc comment.",
+    "fastGateMs": "Task fast-gate, set 2026-10-01 (human ask: local tests and checks under 5 s, slow ones in CI). Wall time of one commands.fast run (.claude/scripts/fast-gate.mjs): rustfmt + file-length on the changed .rs files, clippy and the nextest fast profile on the changed crates only (not dependents), vitest when apps/desktop changed. Over budget warns; --strict fails. Each run is logged to .git/fast-gate-times.tsv. Known over: txtodo-daemon (431 unit tests, ~60 s summed, ~5 s on 14 cores before any build). See tasks/fast-gate/notes.md."
   },
   "slices": {
     "root": "crates",
@@ -130,6 +132,7 @@
     "lint": "cargo clippy --workspace --all-targets -- -D warnings",
     "typecheck": "cargo check --workspace --all-targets",
     "test": "cargo nextest run --workspace",
+    "fast": "node .claude/scripts/fast-gate.mjs",
     "testCoverage": "rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 72",
     "boundaries": ".claude/scripts/check-boundaries.sh",
     "fileLength": ".claude/scripts/check-file-length.sh",
@@ -137,7 +140,7 @@
     "deny": "cargo deny check",
     "feedback": {
       "format": "rustfmt --edition 2024 --check {file}",
-      "lint": "cargo clippy --workspace --all-targets -- -D warnings"
+      "lint": "CARGO_TARGET_DIR=target/lint cargo clippy --quiet --workspace --all-targets -- -D warnings"
     },
     "feedbackExtensions": [
       "rs"

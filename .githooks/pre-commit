@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Blocks the commit if the format check fails (same command CI's `format` step runs).
-# Command comes from .claude/budgets.json so it stays in lockstep with CI and the Stop gate.
+# Blocks the commit if the fast gate fails on what is staged (task fast-gate): rustfmt and
+# file-length on the staged .rs files, clippy and the nextest fast profile on the staged crates,
+# vitest on staged apps/desktop files. Budget: budgets.json.fastGateMs (5 s). Slow tests run in CI.
+# Command comes from .claude/budgets.json so it stays in lockstep with pre-push and the Stop gate.
 # Git hooks: https://git-scm.com/docs/githooks#_pre_commit
 # Bypass in an emergency: git commit --no-verify
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).commands.format')
-echo "pre-commit: $cmd"
-if ! bash -c "$cmd"; then
-  echo "pre-commit: format check failed. Run \`cargo fmt --all\`, re-stage, commit again." >&2
+cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(".claude/budgets.json")).commands.fast')
+if ! bash -c "$cmd --staged"; then
+  echo "pre-commit: fast gate failed. Fix it, re-stage, commit again." >&2
   exit 1
 fi

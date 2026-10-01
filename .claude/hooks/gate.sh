@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# txtodo gate — Claude Code Stop hook. On a dirty tree, boundaries/fileLength run whole-tree (cheap,
-# non-compiling, structural); format/lint/typecheck/test run scoped to this session's own leased
-# crates only (`-p <crate>` in place of `--all`/`--workspace`) — a crate leased by another session
-# can't fail your Stop just because it's mid-edit. No leased crate → those four are skipped, nothing
-# Rust is "yours" to gate. The diff-line budget likewise excludes files under another session's
-# leased crates. All of it must exit 0/within budget or {"decision":"block"} so the run cannot end.
+# txtodo gate — Claude Code Stop hook. On a dirty tree it runs budgets.json.commands.fast (task
+# fast-gate: rustfmt + file-length on changed .rs files, clippy + the nextest fast profile on the
+# changed crates, boundaries/version-sync/specs-mirror when their inputs changed, vitest for
+# apps/desktop) minus crates leased by another session — a crate mid-edit elsewhere can't fail your
+# Stop. The diff-line budget likewise excludes files under another session's leased crates. All of
+# it must exit 0/within budget or {"decision":"block"} so the run cannot end.
 # Loop guard: after 3 identical failing rounds (.git/setup-gate-strikes) it stops blocking and says so —
 # the human decides. Lockstep twin: guardrails/index.ts agent_settled.
 # Clean tree also releases this session's slice leases (see fence.sh) so the next session on that
@@ -37,16 +37,13 @@ LEASES=$(node -e '
       (l.sessionId===sid?mine:others).push(f.slice(0,-5)); }catch{} }
   console.log(mine.join(" ")); console.log(others.join(" "));
 ' "$ROOT" "$SID")
-MYCRATES=$(echo "$LEASES" | sed -n 1p); OTHERCRATES=$(echo "$LEASES" | sed -n 2p)
-PKGARGS=""; for c in $MYCRATES; do PKGARGS="$PKGARGS -p $c"; done
-for k in format lint typecheck test boundaries fileLength; do
-  cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands[process.argv[2]]||""' $B "$k"); [ -z "$cmd" ] && continue
-  case "$k" in
-    format) [ -z "$PKGARGS" ] && continue; cmd=${cmd/--all/$PKGARGS} ;;
-    lint|typecheck|test) [ -z "$PKGARGS" ] && continue; cmd=${cmd/--workspace/$PKGARGS} ;;
-  esac
-  out=$(bash -c "$cmd" 2>&1) || fail+="[$k] \`$cmd\`"$'\n'"$(echo "$out" | tail -15)"$'\n\n'
-done
+OTHERCRATES=$(echo "$LEASES" | sed -n 2p)
+# Timings are dropped from a failure: the strike signature below is the failure text's length, and
+# "812 ms" vs "1203 ms" must not make two identical failures look different.
+cmd=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).commands.fast||""' $B)
+if [ -n "$cmd" ]; then
+  out=$(bash -c "$cmd --exclude-crates \"$OTHERCRATES\"" 2>&1) || fail+="[fast] \`$cmd\`"$'\n'"$(echo "$out" | grep -v '^  ok ' | sed -E 's/ +[0-9]+ ms.*$//' | tail -45)"$'\n\n'
+fi
 MAX=$(node -pe 'JSON.parse(require("fs").readFileSync(process.argv[1])).diffLines' $B)
 EXEMPT=$(node -pe 'const b=JSON.parse(require("fs").readFileSync(process.argv[1]));[...(b.generatedPaths||["Cargo.lock"]),...b.baselinePaths].map(g=>"^"+g.replace(/[.+^${}()|[\]\\]/g,"\\$&").replace(/\*\*/g,".*").replace(/(?<!\.)\*/g,"[^/]*")+"$").join("|")' $B)
 OTHERNUMSTATRE=""; for c in $OTHERCRATES; do OTHERNUMSTATRE="${OTHERNUMSTATRE:+$OTHERNUMSTATRE|}"$'\t'"crates/$c/"; done

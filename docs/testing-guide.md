@@ -11,7 +11,15 @@ that leans on process-global state — sockets, env, the registry — behaves th
 Plain `cargo test` still works for a quick single-crate run, but it shares one process across a
 crate's tests, so a pass there is not the whole story.
 
+The everyday check is the **fast gate** (task fast-gate, budget 5 s): rustfmt and file-length on
+the changed `.rs` files, clippy and the nextest `fast` profile on the changed crates only, vitest
+when `apps/desktop` changed. pre-commit (staged files), pre-push (the pushed commits) and the agent
+Stop gate all run it; slow tests (`slow_*`, real daemons, network) and every dependent crate run in
+CI. Each run's step times go to `.git/fast-gate-times.tsv`.
+
 ```bash
+just fast                                   # the fast gate on the working tree
+just fast --base origin/main                # the fast gate on the whole branch
 just test                                   # everything, the way CI runs it
 cargo nextest run -p txtodo-daemon          # one crate: lib tests + every tests/*.rs integration file
 cargo nextest run -p txtodo-daemon --lib                    # just the lib's own unit tests

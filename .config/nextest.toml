@@ -31,6 +31,7 @@ not (
     ) - test(/^support::/)
     | (binary_id(txtodo-sync)
         & test(/^holepunch_tests::connect_(control|pairing)_has_no_group_parameter_to_gate_on$/))
+    | test(/(^|::)slow_/)
 )
 '''
 
@@ -39,6 +40,16 @@ not (
 # https://nexte.st/docs/machine-readable/junit/
 [profile.default.junit]
 path = "junit.xml"
+
+# The fast gate's profile (.claude/scripts/fast-gate.mjs, task fast-gate). Inherits the default
+# filter above, so a unit test named `slow_*` runs only under `--profile ci`. SLOW is flagged at
+# 1 s and listed at the end; a test still running at 10 s is killed, so a hang costs 10 s, not
+# the 120 s socket wait some harnesses allow.
+# https://nexte.st/docs/features/slow-tests/  https://nexte.st/docs/configuration/#profiles
+[profile.fast]
+slow-timeout = { period = "1s", terminate-after = 10 }
+status-level = "fail"
+final-status-level = "slow"
 
 [profile.ci]
 default-filter = 'all()'

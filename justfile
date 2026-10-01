@@ -2,7 +2,14 @@
 # just manual: https://just.systems/man/en/
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-# fmt + clippy + typecheck + test + boundaries + file length (what the gate and CI run)
+# The fast gate (task fast-gate): what pre-commit, pre-push and the Stop gate run. rustfmt +
+# file-length on the changed .rs files, clippy + the nextest `fast` profile on the changed crates
+# only, vitest when apps/desktop changed. Budget budgets.json.fastGateMs (5 s); slow tests run in CI.
+# `just fast --base origin/main` checks a whole branch.
+fast *args:
+    node .claude/scripts/fast-gate.mjs {{args}}
+
+# fmt + clippy + typecheck + test + boundaries + file length (the whole workspace; slow)
 check: fmt lint typecheck test boundaries no-std
 
 fmt:
@@ -29,7 +36,7 @@ install-nextest:
 
 # line coverage against the floor in budgets.json (rustup toolchain: Homebrew cargo lacks llvm-profdata)
 coverage:
-    rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 80
+    rustup run 1.95.0 cargo llvm-cov --workspace --fail-under-lines 72
 
 boundaries:
     .claude/scripts/check-boundaries.sh
