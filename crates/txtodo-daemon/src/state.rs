@@ -190,6 +190,11 @@ impl DocState {
             .filter_map(|e| Some((e.id()?, e.line())))
     }
 
+    /// Every line with its 0-based index, blanks included (`duplicates.rs` needs line numbers).
+    pub(crate) fn indexed_entries(&self) -> impl Iterator<Item = (usize, &Entry)> {
+        self.entries.iter().enumerate()
+    }
+
     /// Every line's task id in file order, `None` for a blank line (`GetFile`'s `task_ids`).
     pub fn line_ids(&self) -> impl Iterator<Item = Option<TaskId>> + '_ {
         self.entries.iter().map(Entry::id)

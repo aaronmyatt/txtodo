@@ -35,6 +35,7 @@ mod devices_grpc;
 pub mod dir_bridge_guard;
 #[cfg(test)]
 mod dir_bridge_guard_tests;
+pub mod duplicates;
 pub mod expected;
 mod external;
 pub mod fastid;

@@ -54,3 +54,8 @@ file only adds what building it needs.
   count and perf, then CLI, TUI, desktop, then two two-daemon tests (keep newest on a re-minted
   file with no rejoin; edit to differ, and a line typed twice). The "For the ADR to settle" and
   "Known risk" sections above are the pre-ADR record. The ADR is the spec now.
+- 2026-10-01: `duplicates.rs::duplicate_groups(&DocState)`, pure, with table tests. Groups come
+  in the order of their first line; each lists (task id, 1-based line number), oldest id first.
+  One reading the ADR did not spell out: in tagged mode a line's own `id:` tag is left out of the
+  comparison (`id_strip::strip_own_id`), since it is identity, not text, and would otherwise make
+  every line unique. Say if tagged mode should not flag at all.
