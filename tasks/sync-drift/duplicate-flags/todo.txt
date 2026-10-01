@@ -1,4 +1,4 @@
-2026-09-27 cli: txtodo conflicts lists duplicate groups; delete one line, or keep the newest in every group, after a confirm, through Apply Delete +m11 @cli
+2026-09-27 cli: txtodo conflicts lists duplicate groups; delete one line, or keep the newest in every group, after a confirm, through Apply Delete +m11 @cli @doing by:claude-6391ec
 2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui
 2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop
 2026-09-27 Two-daemon test: B re-mints a file, A gets both copies; keep newest on A with no rejoin leaves exactly one copy on both +m11 @daemon @test
