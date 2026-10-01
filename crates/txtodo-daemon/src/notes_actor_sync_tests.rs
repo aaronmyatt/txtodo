@@ -215,8 +215,8 @@ fn a_log_with_no_base_op_is_repaired_at_open_and_a_fresh_peer_gets_the_whole_fil
     );
 }
 
-/// Task editor-save-lost: nothing watches notes.md, so an editor's save used to be replaced by
-/// the next peer op's write. It is now committed first and kept.
+/// Task editor-save-lost: an editor's save used to be replaced by the next peer op's write. Since
+/// task notes-watch the write is held instead, and the watcher's event merges the save three-way.
 #[test]
 fn an_editors_save_survives_a_peers_op_landing_after_it() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
@@ -239,6 +239,12 @@ fn an_editors_save_survives_a_peers_op_landing_after_it() {
         .unwrap_or_else(|e| panic!("{e}"));
     let newest = ops_for(&store_a, &cfg_a.path).pop().unwrap();
     b.import_ops(vec![newest]).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(
+        std::fs::read_to_string(&cfg_b.disk).unwrap_or_default(),
+        "base\nsaved on b\n",
+        "held, not written over"
+    );
+    b.absorb_disk().unwrap_or_else(|e| panic!("{e}"));
     let text = String::from_utf8(b.contents().0).unwrap_or_default();
     assert_eq!(text, "from a\nbase\nsaved on b\n");
     assert_eq!(

@@ -51,3 +51,12 @@ ever made for it.
   emptied notes. `tests/editor_saves.rs::a_notes_md_save_is_taken_on_the_watchers_event` fails
   without the route. Still open: the pre-rename check and three-way merge (a peer's import can
   still read the disk mid-save before the debounce fires, through `absorb_disk` before writes).
+- 2026-10-01, held write and merge (`notes_held.rs`, a child of `notes_actor.rs`): `land` writes
+  through `write_atomic_if`; a disk that is not what we last wrote, the bytes being merged or the
+  new bytes holds the write, keeping the last-written bytes and their mirror snapshot as the
+  base. While held, commits land in the store, state and mirror but not on disk. The watcher's
+  `absorb_disk` (or the next write) merges: the editor's change, base to disk, is applied on a
+  Loro fork of the base snapshot under a fresh peer id and imported, and the import's diff is one
+  `External` op. A disk put back to the base releases the held write. Plain absorb-before-write is
+  gone. `notes_held_tests.rs`; `notes_actor_sync_tests::an_editors_save_survives...` now shows the
+  hold. Known gap: the held base lives in memory only until the restart line lands.

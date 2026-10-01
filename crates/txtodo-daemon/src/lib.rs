@@ -231,6 +231,8 @@ mod notes_actor_sync_tests;
 #[cfg(test)]
 mod notes_actor_tests;
 #[cfg(test)]
+mod notes_held_tests;
+#[cfg(test)]
 mod pairing_grpc_tests;
 #[cfg(test)]
 mod pairing_lan_tests;

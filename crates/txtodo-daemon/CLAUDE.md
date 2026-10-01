@@ -502,8 +502,10 @@ multiplex every workspace's traffic — not done by this task).
   document's path), which is why `StateError::Unsupported`/`ActorError::Unsupported` still name it.
 - `NotesActor` has no tokio mailbox. The watcher routes a debounced `notes.md` event to its actor
   (`watch_task.rs::absorb_notes`, task notes-watch, 2026-10-01): text on disk that is not the
-  projection becomes this device's `External` `NotesEdit`; a missing file records nothing. One
-  writer is `notes_registry.rs`'s `Arc<Mutex<NotesActor>>` per path. Its Loro mirror
+  projection becomes this device's `External` `NotesEdit`; a missing file records nothing. A
+  write checks the disk right before its rename and is held over an unmerged save
+  (`notes_held.rs`); the next event merges it three-way through a Loro fork at the last-written
+  snapshot. One writer is `notes_registry.rs`'s `Arc<Mutex<NotesActor>>` per path. Its Loro mirror
   persists (`Store::put_mirror`) and restores across a restart the same way the task mirror's
   periodic snapshot does, so pairing can seed a second device from it the same way.
 - The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs

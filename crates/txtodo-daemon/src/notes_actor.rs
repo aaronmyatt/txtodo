@@ -13,18 +13,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::actor::{SharedStore, hash_of};
-use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
 use crate::expected::Hash;
 use crate::handle::{ActorError, Applied};
-use crate::history::MAX_REPLAY_PAGES;
 use crate::notes_mirror::NotesMirror;
 use crate::notes_repair::{apply_leniently, log_skipped, repair_edits, replay_leniently};
 use crate::notes_state::NotesState;
-use crate::write::write_atomic;
 use std::sync::PoisonError;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TextEdit};
-use txtodo_store::{MAX_OPS_PER_READ, Projection, Seq, SeqRange};
+use txtodo_store::{Projection, Seq, SeqRange};
+
+// A save the actor has not merged yet is held, never written over (task notes-watch).
+#[path = "notes_held.rs"]
+mod held;
+// Restoring the Loro mirror at open, split out for the file budget.
+#[path = "notes_actor_load.rs"]
+mod load;
 
 /// Where a notes document lives.
 #[derive(Debug, Clone)]
@@ -47,6 +51,13 @@ pub struct NotesActor {
     hlc: Hlc,
     store: SharedStore,
     clock: Arc<dyn Clock>,
+    /// What we last put on disk, and the mirror snapshot that matched it (`notes_held.rs`).
+    written: Vec<u8>,
+    written_snapshot: Vec<u8>,
+    held: Option<held::Held>,
+    /// The disk's hash while a commit merges it, so its write may replace those bytes.
+    merging: Option<Hash>,
+    wrote_last: bool,
 }
 
 impl NotesActor {
@@ -76,15 +87,21 @@ impl NotesActor {
         let state = NotesState::from_bytes(cfg.path.clone(), &state_bytes)?;
         let bytes = state.to_bytes();
         let hash = hash_of(&bytes);
+        let written_snapshot = mirror.snapshot().map_err(mirror_err)?;
         let mut actor = NotesActor {
             hlc: Hlc::zero(cfg.device),
             state,
             mirror,
+            written: bytes.clone(),
             projection: bytes,
             hash,
             cfg,
             store,
             clock,
+            written_snapshot,
+            held: None,
+            merging: None,
+            wrote_last: false,
         };
         actor.absorb_disk_text(&disk_bytes)?;
         if own_text {
@@ -124,74 +141,6 @@ impl NotesActor {
         self.persist_mirror(range)
     }
 
-    /// The mirror and the text to start from. A mirror that will not restore (an op since its
-    /// snapshot that does not fit, say a skipped one after a crash before the snapshot moved) is
-    /// rebuilt from the projection as a new lineage: the mirror never decides bytes, and a notes
-    /// file that will not open refuses every peer op for it.
-    fn load(
-        cfg: &NotesActorConfig,
-        store: &SharedStore,
-        projection: Option<Vec<u8>>,
-        mirror_snapshot: Option<(Vec<u8>, Seq)>,
-    ) -> Result<(NotesMirror, Vec<u8>), ActorError> {
-        let peer = loro_peer(cfg.device);
-        if let Some((snap, since)) = mirror_snapshot {
-            match (
-                Self::restore_mirror(store, &cfg.path, &snap, since, peer),
-                projection,
-            ) {
-                (Ok(mirror), Some(bytes)) => return Ok((mirror, bytes)),
-                (Ok(mirror), None) => {
-                    let bytes = mirror.text().into_bytes();
-                    return Ok((mirror, bytes));
-                }
-                (Err(e), None) => return Err(e),
-                (Err(e), Some(bytes)) => {
-                    tracing::warn!(file = %cfg.path, error = %e, "notes_mirror_restore_failed");
-                    return Self::fresh(cfg, peer, bytes);
-                }
-            }
-        }
-        Self::fresh(cfg, peer, projection.unwrap_or_default())
-    }
-
-    fn fresh(
-        cfg: &NotesActorConfig,
-        peer: u64,
-        bytes: Vec<u8>,
-    ) -> Result<(NotesMirror, Vec<u8>), ActorError> {
-        let state = NotesState::from_bytes(cfg.path.clone(), &bytes)?;
-        let mirror = NotesMirror::from_state(&state, peer).map_err(mirror_err)?;
-        Ok((mirror, bytes))
-    }
-
-    /// The persisted mirror plus the ops committed since it was taken (bounded paging, same shape
-    /// as `history::replay`'s).
-    fn restore_mirror(
-        store: &SharedStore,
-        path: &FilePath,
-        snapshot: &[u8],
-        since: Seq,
-        peer: u64,
-    ) -> Result<NotesMirror, ActorError> {
-        let mut mirror = NotesMirror::from_snapshot(snapshot, path, peer).map_err(mirror_err)?;
-        let mut since = since;
-        for _page in 0..MAX_REPLAY_PAGES {
-            let ops = {
-                let guard = store.lock().unwrap_or_else(PoisonError::into_inner);
-                guard.for_file(path, since)?
-            };
-            let Some(last) = ops.last() else { break };
-            let plain: Vec<Op> = ops.iter().map(|s| s.op.clone()).collect();
-            mirror.flush(&plain).map_err(mirror_err)?;
-            since = last.seq;
-            if ops.len() < MAX_OPS_PER_READ {
-                break;
-            }
-        }
-        Ok(mirror)
-    }
-
     /// Current bytes and hash.
     pub fn contents(&self) -> (Vec<u8>, Hash) {
         (self.projection.clone(), self.hash)
@@ -201,25 +150,8 @@ impl NotesActor {
     /// text (`txtodo_core::diff_text`, the same char-level convention `EditText` uses), so
     /// concurrent edits from two devices still merge character-wise once both land in the mirror.
     pub fn edit(&mut self, new_text: &str, principal: Principal) -> Result<Applied, ActorError> {
-        self.absorb_disk()?;
+        self.merge_if_held()?;
         self.edit_text(new_text, principal)
-    }
-
-    /// Text on disk that is not our projection (an editor's save) committed as this device's
-    /// `External` edit, never written over: before any write (task editor-save-lost; no debounce
-    /// there) and on the watcher's debounced event for the file (task notes-watch, `watch_task.rs`).
-    pub(crate) fn absorb_disk(&mut self) -> Result<(), ActorError> {
-        let disk = std::fs::read(&self.cfg.disk).unwrap_or_default();
-        self.absorb_disk_text(&disk)
-    }
-
-    fn absorb_disk_text(&mut self, disk: &[u8]) -> Result<(), ActorError> {
-        if hash_of(disk) != self.hash {
-            let device = self.cfg.device;
-            let text = String::from_utf8_lossy(disk).into_owned();
-            self.edit_text(&text, Principal::External { device })?;
-        }
-        Ok(())
     }
 
     fn edit_text(&mut self, new_text: &str, principal: Principal) -> Result<Applied, ActorError> {
@@ -249,7 +181,15 @@ impl NotesActor {
         updates: &[u8],
         peer: DeviceId,
     ) -> Result<Applied, ActorError> {
-        self.absorb_disk()?;
+        self.merge_if_held()?;
+        self.import_updates_as(updates, Principal::User { device: peer })
+    }
+
+    fn import_updates_as(
+        &mut self,
+        updates: &[u8],
+        principal: Principal,
+    ) -> Result<Applied, ActorError> {
         let (before, after) = self.mirror.import(updates).map_err(mirror_err)?;
         if before == after {
             return Ok(self.no_op_applied());
@@ -259,7 +199,7 @@ impl NotesActor {
             .map(TextEdit::from)
             .collect();
         let hlc = self.tick()?;
-        let op = self.stamped(edits, hlc, Principal::User { device: peer });
+        let op = self.stamped(edits, hlc, principal);
         let mut next = self.state.clone();
         next.apply(&op)?;
         self.commit_without_mirror_flush(vec![op], next)?;
@@ -280,7 +220,7 @@ impl NotesActor {
         if ops.is_empty() {
             return Ok(());
         }
-        self.absorb_disk()?;
+        self.merge_if_held()?;
         let mut next = self.state.clone();
         let skipped: Vec<OpId> = apply_leniently(&mut next, &ops)
             .into_iter()
@@ -377,7 +317,7 @@ impl NotesActor {
         self.state = next.clone();
         self.projection = bytes;
         self.hash = new_hash;
-        write_atomic(&self.cfg.disk, &self.projection)?;
+        self.write_or_hold()?;
         Ok(range)
     }
 
@@ -391,6 +331,8 @@ impl NotesActor {
         };
         let snapshot = self.mirror.snapshot().map_err(mirror_err)?;
         store.put_mirror(&self.cfg.path, &snapshot, seq)?;
+        drop(store);
+        self.note_written_snapshot(&snapshot);
         Ok(())
     }
 }
