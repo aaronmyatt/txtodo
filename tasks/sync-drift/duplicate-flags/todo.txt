@@ -1,4 +1,4 @@
-2026-09-27 core: pure duplicate_groups(&DocState): tasks in one file whose whole lines are byte-identical, blank lines skipped, oldest id first; table tests (ADR 0032) +m11 @daemon @test
+2026-09-27 core: pure duplicate_groups(&DocState): tasks in one file whose whole lines are byte-identical, blank lines skipped, oldest id first; table tests (ADR 0032) +m11 @daemon @test @doing by:claude-6391ec
 2026-09-27 proto: ConflictsResponse.duplicates (DuplicateGroup: task ids and line numbers, oldest first) and the file's group count on Change; both additive, no new RPC +m11 @daemon
 2026-09-27 daemon: ListConflicts returns the file's duplicate groups from duplicate_groups +m11 @daemon @sync
 2026-09-27 daemon: every Change carries the group count after the commit; the 10k-line perf fixture stays inside its budget +m11 @daemon @test
