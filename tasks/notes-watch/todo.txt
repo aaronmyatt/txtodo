@@ -1,6 +1,6 @@
-2026-10-01 NotesActor: check the disk right before the rename (write_atomic_if); hold the write and keep the base when it is not our last write +m11 @daemon @doing by:claude-6391ec
-2026-10-01 NotesActor: merge a held save three-way (diff base to disk, applied on the current text); drop absorb_disk before writes +m11 @daemon @doing by:claude-6391ec
 2026-10-01 NotesActor: a held base survives a restart (meta held_base/<file>) +m11 @daemon
 2026-10-01 Test: a notes.md save followed only by the watcher's message becomes an op a fresh peer receives +m11 @daemon
 2026-10-01 Lab: lan-converge loses no notes.md token on three seeds +m11 @sync
 x 2026-10-01 2026-10-01 Watcher: route a notes.md event to the notes registry (get_or_open, then absorb the disk), like txtodo.toml's layout route +m11 @daemon — watch_task.rs routes a notes.md event to its actor's absorb_disk; a missing file records nothing; known gap: a peer's import can still read a save mid-write until the pre-rename check lands
+x 2026-10-01 2026-10-01 NotesActor: check the disk right before the rename (write_atomic_if); hold the write and keep the base when it is not our last write +m11 @daemon — land writes through write_atomic_if and holds over a save that is not ours (notes_held.rs); known gap: the held base is in memory until the restart line
+x 2026-10-01 2026-10-01 NotesActor: merge a held save three-way (diff base to disk, applied on the current text); drop absorb_disk before writes +m11 @daemon — the editor's change is made on a Loro fork of the base snapshot and imported; absorb-before-write is gone; notes_held_tests.rs
