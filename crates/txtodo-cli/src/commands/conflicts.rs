@@ -31,6 +31,27 @@ pub enum Action {
         #[arg(long)]
         file: Option<String>,
     },
+    /// Delete one copy of a duplicated line (ADR 0032), after a confirm.
+    Delete {
+        /// The line the copy sits on now; it must be in a duplicate group.
+        line: u32,
+        /// Which document (workspace-relative); the workspace's root list by default.
+        #[arg(long)]
+        file: Option<String>,
+        /// Skip the confirm.
+        #[arg(long)]
+        yes: bool,
+    },
+    /// In every duplicate group, keep the copy with the newest id and delete the rest (one
+    /// confirm, one write).
+    KeepNewest {
+        /// Which document (workspace-relative); the workspace's root list by default.
+        #[arg(long)]
+        file: Option<String>,
+        /// Skip the confirm.
+        #[arg(long)]
+        yes: bool,
+    },
 }
 
 /// Which side wins. A closed clap enum, never a free string, so a typo is a usage error and not
@@ -82,13 +103,20 @@ pub fn run(
         Some(Action::Resolve { line, side, file }) => {
             run_resolve(daemon, *line, *side, file.as_deref().unwrap_or(root))
         }
+        Some(Action::Delete { line, file, yes }) => {
+            dup::run_delete(daemon, file.as_deref().unwrap_or(root), *line, *yes)
+        }
+        Some(Action::KeepNewest { file, yes }) => {
+            dup::run_keep_newest(daemon, file.as_deref().unwrap_or(root), *yes)
+        }
     }
 }
 
-/// `conflicts list`: one block per open flag, or the todo.sh-style "nothing to report" line.
+/// `conflicts list`: one block per open flag, then the file's duplicate groups (ADR 0032), or the
+/// todo.sh-style "nothing to report" line.
 pub fn run_list(daemon: &mut Daemon, file: &str, as_json: bool) -> Result<(), CliError> {
-    let flags = daemon.conflicts(file)?;
-    if flags.is_empty() {
+    let pb::ConflictsResponse { flags, duplicates } = daemon.conflicts(file)?;
+    if flags.is_empty() && duplicates.is_empty() {
         // JSON mode prints nothing: absence of lines means "none", and scripts grep objects.
         if !as_json {
             println!("TODO: no conflicts.");
@@ -118,6 +146,7 @@ pub fn run_list(daemon: &mut Daemon, file: &str, as_json: bool) -> Result<(), Cl
             }
         );
     }
+    dup::print_groups(&duplicates, &lines, as_json);
     Ok(())
 }
 
@@ -203,6 +232,10 @@ fn flag_json(f: &pb::ReviewFlag, current: &str) -> String {
         at = f.raised_at_ms
     )
 }
+
+// Duplicate lines (ADR 0032), split out for this file's budget.
+#[path = "conflicts_dup.rs"]
+mod dup;
 
 /// Unit tests live in the sibling `conflicts_tests.rs` (the repo's `*_tests.rs` precedent); a child
 /// module, so the render helpers stay private to this file.

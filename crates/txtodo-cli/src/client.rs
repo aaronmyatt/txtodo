@@ -282,8 +282,8 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
-    /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
-    pub fn conflicts(&mut self, path: &str) -> Result<Vec<pb::ReviewFlag>, ClientError> {
+    /// A document's open needs_review flags (plan M4) and its duplicate-line groups (ADR 0032).
+    pub fn conflicts(&mut self, path: &str) -> Result<pb::ConflictsResponse, ClientError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
             workspace: self.selector.clone(),
@@ -292,7 +292,7 @@ impl Daemon {
             .rt
             .block_on(self.client.list_conflicts(req))
             .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner().flags)
+        Ok(rep.into_inner())
     }
 
     /// Resolves one flag: writes the chosen side (mine/theirs) or keeps the file (merged), and

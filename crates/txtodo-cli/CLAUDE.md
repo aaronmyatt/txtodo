@@ -47,6 +47,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   a path reads and trims that file, omitted prompts interactively (CLAUDE.md §3.1: never a CLI
   argument or env var). `BundleImport`'s passphrase rides in gRPC request metadata, not a request
   field — that RPC is client-streaming, so its request type is fixed to the streamed `BundleChunk`.
+- `conflicts [list]` also lists the file's duplicate-line groups (ADR 0032, `ConflictsResponse.
+  duplicates`); `conflicts delete <line>` deletes one copy and `conflicts keep-newest` every copy
+  but the newest id in each group, through `Apply` `Delete` by task id, after a `[y/N]` confirm on
+  stderr (`--yes` skips it; a closed stdin is a no) (`commands/conflicts_dup.rs`).
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,

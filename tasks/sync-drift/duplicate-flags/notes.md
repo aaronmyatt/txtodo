@@ -66,3 +66,8 @@ file only adds what building it needs.
   `grpc_conflicts::identical_lines_are_a_duplicate_group_until_one_is_deleted`. Cost: 0.8 ms per
   commit on a 10k-line file (release, one throwaway timing run). The desktop 10k-line e2e perf
   spec (`apps/desktop/e2e/perf.spec.ts`) was not run.
+- 2026-10-01, CLI: `txtodo conflicts` lists groups after the flags (text: the line, then each
+  copy's line, oldest and newest marked; JSON: one object per group). `conflicts delete <line>`
+  refuses a line in no group; `conflicts keep-newest` deletes every copy but the last (newest id)
+  of each group in one `Apply`, by task id since line numbers move inside one batch. Both confirm
+  on stderr; `--yes` skips. `tests/conflicts_dup.rs` runs both against a real global daemon.
