@@ -266,3 +266,11 @@ lab-fg *args:
 
 lab-status:
     scripts/lab/lab.sh status
+
+# The scenarios a run can name.
+lab-list:
+    scripts/lab/lab.sh list
+
+# Leftover containers, old images, old reports.
+lab-clean:
+    scripts/lab/lab.sh clean
