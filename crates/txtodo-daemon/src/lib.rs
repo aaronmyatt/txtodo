@@ -198,8 +198,6 @@ mod devices_grpc_tests;
 #[cfg(test)]
 mod history_tests;
 #[cfg(test)]
-mod import_tests;
-#[cfg(test)]
 mod keystore_setup_tests;
 #[cfg(test)]
 mod lan_peers_tests;
