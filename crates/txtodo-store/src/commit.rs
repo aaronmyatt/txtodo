@@ -138,14 +138,27 @@ impl Store {
         prev_hash: Option<[u8; 32]>,
         extras: &CommitExtras,
     ) -> Result<Option<SeqRange>, StoreError> {
-        let range = self.commit_change_with_inner(ops, projection, prev_hash, extras)?;
+        self.commit_change_numbered((ops, &[]), projection, prev_hash, extras)
+    }
+
+    /// [`Self::commit_change_with`] for a peer's ops whose numbers the sync batch gave
+    /// (ADR 0039): `origin_seqs[i]` is `ops[i]`'s. Empty numbers each op after its device's head.
+    pub fn commit_change_numbered(
+        &mut self,
+        (ops, origin_seqs): (&[Op], &[u64]),
+        projection: &Projection,
+        prev_hash: Option<[u8; 32]>,
+        extras: &CommitExtras,
+    ) -> Result<Option<SeqRange>, StoreError> {
+        let range =
+            self.commit_change_with_inner((ops, origin_seqs), projection, prev_hash, extras)?;
         log_commit_landed(range);
         Ok(range)
     }
 
     fn commit_change_with_inner(
         &mut self,
-        ops: &[Op],
+        (ops, origin_seqs): (&[Op], &[u64]),
         projection: &Projection,
         prev_hash: Option<[u8; 32]>,
         extras: &CommitExtras,
@@ -161,7 +174,7 @@ impl Store {
         let range = if ops.is_empty() {
             None
         } else {
-            Some(insert_ops(&tx, ops, extras.source.as_deref())?)
+            Some(insert_ops(&tx, ops, extras.source.as_deref(), origin_seqs)?)
         };
         upsert_projection(&tx, projection)?;
         let key = prev_hash_key(&projection.file);

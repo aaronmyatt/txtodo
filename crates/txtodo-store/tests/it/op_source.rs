@@ -91,6 +91,6 @@ fn a_pre_migration_log_opens_with_every_old_row_sourceless() {
         .unwrap();
     }
     let store = Store::open(&path).unwrap();
-    assert_eq!(store.user_version().unwrap(), 8);
+    assert_eq!(store.user_version().unwrap(), 9);
     assert!(store.sources_between(Seq(1), Seq(1)).unwrap().is_empty());
 }

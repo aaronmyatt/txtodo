@@ -1,8 +1,10 @@
 //! Per-device heads and runs for sync (plan M4, tasks/sync-protocol-frames). An op's `origin_seq`
-//! is its 1-based rank in its own device's HLC order; a device's head is how many of its ops we
-//! hold. Both are derived from the rows (indexed by `ops_device_hlc`, migration 0002), never
-//! stored, so the log stays append-only. Dense-ness is the sync protocol's job: it commits a
-//! device's ops only as contiguous runs from `head + 1`, so `COUNT(*)` per device is the head.
+//! is its number in its own device's run, stored once with the row (ADR 0039, migration 0009,
+//! unique per device): an op of ours takes the next number; a peer's op takes the one its sync
+//! batch gave it. A device's head is its highest number here. Dense-ness is the sync protocol's
+//! job: it commits a device's ops only as contiguous runs from `head + 1`, so the head is also how
+//! many we hold. It used to be the op's rank in HLC order, which moved when a later op sorted
+//! before ops already sent.
 
 use std::collections::BTreeMap;
 
@@ -16,13 +18,45 @@ use crate::{Store, StoreError};
 pub const MAX_DEVICES_PER_HEADS: usize = 1_024;
 
 const SELECT_HEADS: &str =
-    "SELECT device, COUNT(*) FROM ops GROUP BY device ORDER BY device LIMIT ?1";
-const SELECT_HEAD: &str = "SELECT COUNT(*) FROM ops WHERE device = ?1";
+    "SELECT device, MAX(origin_seq) FROM ops GROUP BY device ORDER BY device LIMIT ?1";
+const SELECT_HEAD: &str = "SELECT COALESCE(MAX(origin_seq), 0) FROM ops WHERE device = ?1";
 const SELECT_RUN: &str = "SELECT seq, payload FROM ops WHERE device = ?1 \
-                          ORDER BY hlc_wall, hlc_counter, seq LIMIT ?2 OFFSET ?3";
+                          AND origin_seq BETWEEN ?2 AND ?3 ORDER BY origin_seq";
 
 fn device_blob(device: DeviceId) -> Vec<u8> {
     device.ulid().to_u128().to_be_bytes().to_vec()
+}
+
+/// Each op's `origin_seq`: `given` when the caller has them (a peer's batch), else the next number
+/// of each op's device, in order, after the highest one stored (an op of ours). One head read per
+/// device in the batch.
+pub(crate) fn number_ops(
+    conn: &rusqlite::Connection,
+    ops: &[txtodo_model::Op],
+    given: &[u64],
+) -> Result<Vec<u64>, StoreError> {
+    if !given.is_empty() {
+        debug_assert_eq!(given.len(), ops.len(), "one number per op");
+        return Ok(given.to_vec());
+    }
+    let mut next: BTreeMap<DeviceId, u64> = BTreeMap::new();
+    let mut out = Vec::with_capacity(ops.len());
+    for op in ops {
+        let device = op.hlc.device;
+        let n = match next.get(&device) {
+            Some(n) => *n,
+            None => {
+                let head: i64 = conn
+                    .query_row(SELECT_HEAD, params![device_blob(device)], |r| r.get(0))
+                    .map_err(StoreError::query("head for numbering"))?;
+                u64::try_from(head).unwrap_or(0) + 1
+            }
+        };
+        out.push(n);
+        next.insert(device, n + 1);
+    }
+    debug_assert_eq!(out.len(), ops.len());
+    Ok(out)
 }
 
 fn device_of(blob: &[u8]) -> Option<DeviceId> {
@@ -118,7 +152,7 @@ impl Store {
         Ok(next)
     }
 
-    /// `device`'s ops with `first <= origin_seq <= last` (1-based, inclusive), in its HLC order.
+    /// `device`'s ops with `first <= origin_seq <= last` (1-based, inclusive), in that order.
     /// A run wider than `MAX_OPS_PER_READ` is refused; a run past the head comes back short.
     pub fn ops_for(
         &self,
@@ -139,7 +173,7 @@ impl Store {
             .map_err(StoreError::query("prepare run"))?;
         let rows = stmt
             .query_map(
-                params![device_blob(device), width as i64, (first - 1) as i64],
+                params![device_blob(device), first as i64, last as i64],
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .map_err(StoreError::query("query run"))?;

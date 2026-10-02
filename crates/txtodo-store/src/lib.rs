@@ -40,9 +40,9 @@ use rusqlite::Connection;
 use std::path::Path;
 
 /// The schema version this build writes and expects.
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 /// Every migration in order, embedded so the binary is self-contained; each sets `user_version`.
-const MIGRATIONS: [(i64, &str); 8] = [
+const MIGRATIONS: [(i64, &str); 9] = [
     (1, include_str!("../migrations/0001.sql")),
     (2, include_str!("../migrations/0002.sql")),
     (3, include_str!("../migrations/0003.sql")),
@@ -51,6 +51,7 @@ const MIGRATIONS: [(i64, &str); 8] = [
     (6, include_str!("../migrations/0006.sql")),
     (7, include_str!("../migrations/0007.sql")),
     (8, include_str!("../migrations/0008.sql")),
+    (9, include_str!("../migrations/0009.sql")),
 ];
 
 /// The first 8 hex digits of a blake3 hash, enough to correlate log lines without logging the

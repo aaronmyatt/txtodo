@@ -14,14 +14,16 @@ that entry below.
 
 ## Public interface
 - `Store::open(path)` — creates, switches to WAL, applies `migrations/000N.sql` in order by
-  `user_version` (now 6), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
+  `user_version` (now 9), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
 - Op log: `append(&[Op]) -> SeqRange` (one transaction, `MAX_APPEND_BATCH`),
   `for_file(file, since: Seq)`, `between(file, &Hlc, &Hlc)` (inclusive, HLC order),
   `for_each_op_id_of_file(file, each) -> count` (raw ids, unordered, fails past `MAX_OP_IDS_PER_FILE`),
   `last_seq()`. Reads return `Stored { seq, op }`, at most `MAX_OPS_PER_READ`.
 - Sync heads (M4): `heads() -> BTreeMap<DeviceId, u64>` (≤ `MAX_DEVICES_PER_HEADS`),
-  `head_of(device)`, `next_origin_seq(device)`, `ops_for(device, first, last)` — origin_seq is
-  the op's rank in its device's HLC order, derived from rows, never a column.
+  `head_of(device)`, `next_origin_seq(device)`, `ops_for(device, first, last)` — `origin_seq` is
+  a column since ADR 0039 (migration 0009, unique per device): an op of ours takes the next number
+  at insert, a peer's op the number its sync batch gave (`commit_change_numbered`); the head is the
+  highest. Rows from before 0009 were numbered by their HLC rank then.
 - Review flags (M4): `raise_flag(&ReviewRow)`, `open_flags(file)` (≤ `MAX_OPEN_FLAGS_PER_READ`,
   oldest first), `clear_flag(file, task, at_ms)` (idempotent upsert). Mirror: `put_mirror(file,
   snapshot, seq)` / `get_mirror(file)` — the Loro snapshot as of a log position.
@@ -110,6 +112,7 @@ that entry below.
 - Every read has an upper bound; every error names the operation and, when known, the path.
 - Ids are stored as 16-byte big-endian BLOBs; wall times as i64 milliseconds.
 - A device's ops are dense by construction (own ops always land; sync commits contiguous runs
-  from `head + 1`), which is what lets `COUNT(*)` per device be the head.
+  from `head + 1`), so the highest `origin_seq` per device is also how many we hold. Migration
+  0009's backfill is the one `UPDATE` of op rows; the number is written with the row after that.
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-model.

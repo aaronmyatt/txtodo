@@ -63,7 +63,7 @@ fn heads_count_each_devices_ops_and_next_origin_seq_is_one_past() {
 }
 
 #[test]
-fn ops_for_returns_a_devices_run_in_its_hlc_order_and_refuses_bad_runs() {
+fn ops_for_returns_a_devices_run_in_its_number_order() {
     let dir = tempfile::tempdir().unwrap();
     let store = seeded(dir.path());
     let ids = |run: &[txtodo_store::Stored]| -> Vec<u128> {
@@ -73,8 +73,8 @@ fn ops_for_returns_a_devices_run_in_its_hlc_order_and_refuses_bad_runs() {
     assert_eq!(ids(&store.ops_for(dev(1), 2, 2).unwrap()), vec![3]);
     assert_eq!(
         ids(&store.ops_for(dev(2), 1, 2).unwrap()),
-        vec![4, 2],
-        "device 2's ops come back in HLC order, not append order"
+        vec![2, 4],
+        "numbered as they were written, not by HLC (ADR 0039)"
     );
     assert!(
         store.ops_for(dev(1), 3, 9).unwrap().len() == 1,
@@ -115,9 +115,114 @@ fn a_version_one_database_migrates_to_two_and_keeps_its_rows() {
         assert_eq!(v, 1);
     }
     let mut store = Store::open(&path).unwrap();
-    assert_eq!(store.user_version().unwrap(), 8);
+    assert_eq!(store.user_version().unwrap(), 9);
     store.append(&[op(9, dev(9), 5)]).unwrap();
     assert_eq!(store.head_of(dev(9)).unwrap(), 1);
     let again = Store::open(&path).unwrap();
-    assert_eq!(again.user_version().unwrap(), 8, "idempotent");
+    assert_eq!(again.user_version().unwrap(), 9, "idempotent");
+}
+
+/// ADR 0039: a later op of ours that sorts before ops already sent (another file actor's clock)
+/// takes the next number; the numbers already handed out do not move.
+#[test]
+fn a_later_op_with_an_older_stamp_takes_the_next_number_and_shifts_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    store
+        .append(&[op(1, dev(1), 500), op(2, dev(1), 600)])
+        .unwrap();
+    let before: Vec<u128> = store
+        .ops_for(dev(1), 1, 2)
+        .unwrap()
+        .iter()
+        .map(|s| s.op.id.ulid().to_u128())
+        .collect();
+
+    store.append(&[op(3, dev(1), 100)]).unwrap();
+
+    let ids = |first, last| -> Vec<u128> {
+        store
+            .ops_for(dev(1), first, last)
+            .unwrap()
+            .iter()
+            .map(|s| s.op.id.ulid().to_u128())
+            .collect()
+    };
+    assert_eq!(ids(1, 2), before, "1 and 2 are still the same ops");
+    assert_eq!(ids(3, 3), vec![3]);
+    assert_eq!(store.head_of(dev(1)).unwrap(), 3);
+}
+
+/// A peer's ops take the numbers their sync batch gave them.
+#[test]
+fn a_peers_ops_keep_the_numbers_they_came_with() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let projection = txtodo_store::Projection {
+        file: FilePath::new("todo.txt").unwrap(),
+        bytes: Vec::new(),
+        hash: [0; 32],
+        written_at_ms: 1,
+    };
+    store
+        .commit_change_numbered(
+            (&[op(1, dev(2), 900), op(2, dev(2), 100)], &[1, 2]),
+            &projection,
+            None,
+            &txtodo_store::CommitExtras::default(),
+        )
+        .unwrap();
+    let run: Vec<u128> = store
+        .ops_for(dev(2), 1, 2)
+        .unwrap()
+        .iter()
+        .map(|s| s.op.id.ulid().to_u128())
+        .collect();
+    assert_eq!(run, vec![1, 2]);
+}
+
+/// Migration 0009 numbers a version-8 log by today's rank: HLC order per device.
+#[test]
+fn a_version_eight_log_is_numbered_by_its_hlc_rank() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("oplog.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for sql in [
+            include_str!("../../migrations/0001.sql"),
+            include_str!("../../migrations/0002.sql"),
+            include_str!("../../migrations/0003.sql"),
+            include_str!("../../migrations/0004.sql"),
+            include_str!("../../migrations/0005.sql"),
+            include_str!("../../migrations/0006.sql"),
+            include_str!("../../migrations/0007.sql"),
+            include_str!("../../migrations/0008.sql"),
+        ] {
+            conn.execute_batch(sql).unwrap();
+        }
+        // Written in this order; device 1's HLC order is 3, 1, 2.
+        for (n, wall) in [(1u128, 200u64), (2, 300), (3, 100)] {
+            let o = op(n, dev(1), wall);
+            conn.execute(
+                "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload) \
+                 VALUES (?1, ?2, 0, ?3, 'external', 'todo.txt', 'blank_insert', ?4)",
+                rusqlite::params![
+                    n.to_be_bytes().to_vec(),
+                    wall as i64,
+                    dev(1).ulid().to_u128().to_be_bytes().to_vec(),
+                    postcard::to_allocvec(&o).unwrap(),
+                ],
+            )
+            .unwrap();
+        }
+    }
+    let store = Store::open(&path).unwrap();
+    let run: Vec<u128> = store
+        .ops_for(dev(1), 1, 3)
+        .unwrap()
+        .iter()
+        .map(|s| s.op.id.ulid().to_u128())
+        .collect();
+    assert_eq!(run, vec![3, 1, 2]);
+    assert_eq!(store.head_of(dev(1)).unwrap(), 3);
 }

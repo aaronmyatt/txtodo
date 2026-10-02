@@ -58,8 +58,8 @@ pub fn cap_source(source: &str) -> &str {
     &source[..end]
 }
 
-const INSERT_OP: &str = "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload, source) \
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)";
+const INSERT_OP: &str = "INSERT INTO ops (op_id, hlc_wall, hlc_counter, device, principal, file, kind, payload, source, origin_seq) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)";
 const SELECT_SOURCES: &str =
     "SELECT seq, source FROM ops WHERE seq BETWEEN ?1 AND ?2 AND source IS NOT NULL";
 const SELECT_SINCE: &str =
@@ -114,11 +114,14 @@ fn decode_row(seq: i64, payload: Vec<u8>) -> Result<Stored, StoreError> {
 }
 
 /// Validates a batch and inserts every row on `conn`, each stamped with `source` (local to this
-/// device's log, never in the payload); the caller owns the transaction.
+/// device's log, never in the payload) and its `origin_seq` (ADR 0039): `origin_seqs[i]` for
+/// `ops[i]`, or, when `origin_seqs` is empty, the next number of each op's device in batch order
+/// (`heads::number_ops`). The caller owns the transaction.
 pub(crate) fn insert_ops(
     conn: &Connection,
     ops: &[Op],
     source: Option<&str>,
+    origin_seqs: &[u64],
 ) -> Result<SeqRange, StoreError> {
     let source = source.map(cap_source).filter(|s| !s.is_empty());
     if ops.is_empty() {
@@ -127,12 +130,13 @@ pub(crate) fn insert_ops(
     if ops.len() > MAX_APPEND_BATCH {
         return Err(StoreError::BatchTooLarge(ops.len()));
     }
+    let numbers = crate::heads::number_ops(conn, ops, origin_seqs)?;
     let mut stmt = conn
         .prepare_cached(INSERT_OP)
         .map_err(StoreError::query("prepare insert"))?;
     let mut first: Option<i64> = None;
     let mut last = 0i64;
-    for op in ops {
+    for (op, origin_seq) in ops.iter().zip(&numbers) {
         let payload =
             postcard::to_allocvec(op).map_err(|source| StoreError::Codec { seq: -1, source })?;
         stmt.execute(params![
@@ -145,6 +149,7 @@ pub(crate) fn insert_ops(
             kind_tag(&op.kind),
             payload,
             source,
+            i64::try_from(*origin_seq).unwrap_or(i64::MAX),
         ])
         .map_err(StoreError::query("insert op"))?;
         last = conn.last_insert_rowid();
@@ -179,7 +184,7 @@ impl Store {
             .conn
             .transaction()
             .map_err(StoreError::query("begin append"))?;
-        let range = insert_ops(&tx, ops, source)?;
+        let range = insert_ops(&tx, ops, source, &[])?;
         tx.commit().map_err(StoreError::query("commit append"))?;
         Ok(range)
     }
