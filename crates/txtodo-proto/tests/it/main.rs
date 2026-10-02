@@ -6,5 +6,6 @@
 
 mod roundtrip;
 mod roundtrip_duplicates;
+mod roundtrip_protocol;
 mod roundtrip_rejoin;
 mod roundtrip_rename;

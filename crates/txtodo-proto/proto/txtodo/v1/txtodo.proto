@@ -832,12 +832,21 @@ message SyncStatusResponse {
     // several times in a row, so it holds no key we share (task sync-drift line 5). Held in
     // memory; false from an older daemon.
     bool parked = 4;
+    // The sync protocol this peer's frames or `Hello` carried, when it is not ours (`protocol`
+    // below): the two devices refuse each other and nothing syncs until the older one is
+    // upgraded (task sync-divergence-check/protocol-mismatch). Seen on this daemon's own dials,
+    // held in memory, cleared once a session with the peer greets; 0 = same, not seen, or an
+    // older daemon.
+    uint32 their_protocol = 5;
   }
   repeated Peer peers = 1;
   // Approximate, not a precise per-peer ack count (tasks/tui/notes.md: no per-peer synced-seq is
   // persisted anywhere yet) — local ops committed since the most-out-of-touch peer's last_seen_ms.
   // 0 peers means 0 pending: nothing to be pending against.
   uint64 pending_ops = 2;
+  // This daemon's sync protocol (`txtodo_sync::PROTOCOL_VERSION`), to name beside a peer's
+  // `their_protocol`; 0 from an older daemon.
+  uint32 protocol = 3;
 }
 
 // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---

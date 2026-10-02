@@ -234,8 +234,10 @@ fn sync_status_messages_round_trip() {
                 refusals: 3,
             }],
             parked: true,
+            their_protocol: 0,
         }],
         pending_ops: 3,
+        protocol: 2,
     });
     // No peers, nothing pending — the empty case this RPC's own doc calls out.
     round_trip(&SyncStatusResponse::default());
