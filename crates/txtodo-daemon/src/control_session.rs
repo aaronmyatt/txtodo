@@ -193,7 +193,13 @@ fn recv_control(
     group: GroupId,
     keys: &GroupKeys,
 ) -> Result<ControlMessage, PeerSignal> {
-    let frame = link.recv().map_err(|_| PeerSignal::Silent)?;
+    let frame = link.recv().map_err(|e| match e {
+        // A peer on another sync protocol (task sync-divergence-check/protocol-mismatch).
+        txtodo_sync::LinkError::Frame(txtodo_sync::FrameError::UnknownVersion { got, .. }) => {
+            PeerSignal::OtherProtocol(got)
+        }
+        _ => PeerSignal::Silent,
+    })?;
     txtodo_sync::open_control(&frame, group, keys).map_err(|e| {
         let kind = control_error_kind(&e);
         tracing::debug!(error = %e, kind, "control_channel_open_failed");

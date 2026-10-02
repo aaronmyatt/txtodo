@@ -249,6 +249,8 @@ mod peer_keys_dial_tests;
 #[cfg(test)]
 mod peer_keys_tests;
 #[cfg(test)]
+mod peer_protocol_tests;
+#[cfg(test)]
 mod pending_save_sidecar_tests;
 #[cfg(test)]
 mod pending_save_tests;

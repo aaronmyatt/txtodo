@@ -84,7 +84,7 @@ async fn a_session_whose_peer_never_sends_its_hello_is_not_greeted() {
     assert!(!end.greeted());
 }
 
-fn identity_in(dir: &std::path::Path, key: [u8; 32]) -> DeviceIdentity {
+pub(crate) fn identity_in(dir: &std::path::Path, key: [u8; 32]) -> DeviceIdentity {
     let identity = DeviceIdentity::open_in_memory(dir, &FakeClock::new(1_000))
         .unwrap_or_else(|e| panic!("identity: {e}"));
     identity

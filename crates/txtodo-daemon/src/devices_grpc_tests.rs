@@ -168,3 +168,38 @@ async fn a_peer_says_where_its_sync_is_stuck_and_whether_it_is_parked() {
         crate::peer_keys::PARK_AFTER
     );
 }
+
+/// Task sync-divergence-check/protocol-mismatch: a peer on another sync protocol is named beside
+/// ours, and a peer that greeted reads as the same protocol (0).
+#[tokio::test]
+async fn a_peer_on_another_protocol_is_named_beside_ours() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), "one\n");
+    let clock = Arc::new(FakeClock::new(1_000));
+    let ws = Workspace::open(dir.path(), clock as Arc<dyn Clock>).unwrap_or_else(|e| panic!("{e}"));
+    register_peer(&ws, 1, 500);
+    register_peer(&ws, 2, 500);
+    let theirs = txtodo_sync::PROTOCOL_VERSION + 1;
+    ws.peer_keys().book_session(
+        Some(device(1)),
+        crate::peer_keys::SessionEnd::OtherProtocol(theirs),
+    );
+    let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
+
+    let resp = svc
+        .sync_status_impl(Request::new(pb::SyncStatusRequest { workspace: None }))
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert_eq!(resp.protocol, u32::from(txtodo_sync::PROTOCOL_VERSION));
+    let their = |n: u128| {
+        let id = device(n).ulid().to_string();
+        resp.peers
+            .iter()
+            .find(|p| p.device == id)
+            .unwrap()
+            .their_protocol
+    };
+    assert_eq!((their(1), their(2)), (u32::from(theirs), 0));
+}

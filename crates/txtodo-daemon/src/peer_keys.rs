@@ -8,6 +8,12 @@
 //! left alone. It comes back when a pairing registers it, when it is sighted on the LAN in our
 //! group, when a frame of its opens (it dialed us), when our own group changes, or on restart.
 //!
+//! **Another protocol** (task sync-divergence-check/protocol-mismatch). A peer whose frame or link
+//! `Hello` carries another sync protocol than ours refuses us and we refuse it: nothing syncs until
+//! the older device is upgraded. The protocol it spoke is kept per known peer and shown in
+//! `SyncStatus` (`other_protocol`), so clients can say so; a session that greets clears it. Not
+//! parked: the peer holds our key, and dialing it is how we learn it was upgraded.
+//!
 //! **Logging.** An open failure warns once per peer and kind per daemon run (`peer_open_failed`,
 //! with the peer id); repeats go to debug. An incoming session's peer is not known until its
 //! `Hello` opens, so the failures of incoming sessions share one `unknown` peer.
@@ -32,6 +38,9 @@ pub(crate) const MAX_TRACKED_PEERS: usize = 256;
 /// (`CryptoError::WrongGroup`, named in `lan_session_shared.rs`'s `crypto_error_kind`).
 pub(crate) const WRONG_GROUP: &str = "wrong_group";
 
+/// The kind logged for a peer on another sync protocol.
+pub(crate) const OTHER_PROTOCOL: &str = "other_protocol";
+
 /// What one session showed about its peer's key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PeerSignal {
@@ -39,6 +48,8 @@ pub(crate) enum PeerSignal {
     Opened,
     /// A frame of the peer's came and did not open: the failure's kind.
     OpenFailed(&'static str),
+    /// The peer's frame or link `Hello` carried this sync protocol, not ours.
+    OtherProtocol(u16),
     /// Nothing to go on: no frame came, or the session never started.
     Silent,
 }
@@ -50,19 +61,26 @@ pub(crate) enum SessionEnd {
     Greeted(DeviceId),
     /// The peer's link `Hello` came and did not open: the failure's kind.
     Refused(&'static str),
+    /// The peer's frame or link `Hello` carried this sync protocol, not ours.
+    OtherProtocol(u16),
     /// No `Hello` of the peer's was accepted for another reason: nothing to send with, the link
     /// closed first, or the `Hello` opened but was refused (logged where it was refused).
     NoHello,
 }
 
 impl SessionEnd {
-    /// From what the session saw: the peer its accepted `Hello` named, else why the `Hello` did
-    /// not open.
-    pub(crate) fn of(peer: Option<DeviceId>, refused: Option<&'static str>) -> SessionEnd {
-        match (peer, refused) {
-            (Some(peer), _) => SessionEnd::Greeted(peer),
-            (None, Some(kind)) => SessionEnd::Refused(kind),
-            (None, None) => SessionEnd::NoHello,
+    /// From what the session saw: the peer its accepted `Hello` named, else the other protocol it
+    /// spoke, else why the `Hello` did not open.
+    pub(crate) fn of(
+        peer: Option<DeviceId>,
+        refused: Option<&'static str>,
+        other_protocol: Option<u16>,
+    ) -> SessionEnd {
+        match (peer, other_protocol, refused) {
+            (Some(peer), _, _) => SessionEnd::Greeted(peer),
+            (None, Some(protocol), _) => SessionEnd::OtherProtocol(protocol),
+            (None, None, Some(kind)) => SessionEnd::Refused(kind),
+            (None, None, None) => SessionEnd::NoHello,
         }
     }
 
@@ -77,6 +95,7 @@ impl SessionEnd {
         match self {
             SessionEnd::Greeted(_) => PeerSignal::Opened,
             SessionEnd::Refused(kind) => PeerSignal::OpenFailed(kind),
+            SessionEnd::OtherProtocol(protocol) => PeerSignal::OtherProtocol(protocol),
             SessionEnd::NoHello => PeerSignal::Silent,
         }
     }
@@ -89,6 +108,8 @@ struct PeerKey {
     wrong_group: u32,
     /// Open-failure kinds already warned about this run: a closed set, a handful at most.
     warned: BTreeSet<&'static str>,
+    /// The sync protocol the peer last spoke when it was not ours; `None` once a session greets.
+    other_protocol: Option<u16>,
 }
 
 impl PeerKey {
@@ -122,6 +143,14 @@ impl PeerKeys {
             PeerSignal::Opened => {
                 if let Some(peer) = peer {
                     self.forget(peer, "opened");
+                    self.set_other_protocol(peer, None);
+                }
+            }
+            PeerSignal::OtherProtocol(protocol) => {
+                let noted = self.note_failure(peer, OTHER_PROTOCOL);
+                log_open_failed(peer, OTHER_PROTOCOL, channel, noted.first);
+                if let Some(peer) = peer {
+                    self.set_other_protocol(peer, Some(protocol));
                 }
             }
             PeerSignal::OpenFailed(kind) => {
@@ -139,7 +168,7 @@ impl PeerKeys {
     pub(crate) fn book_session(&self, dialed: Option<DeviceId>, end: SessionEnd) {
         let peer = match end {
             SessionEnd::Greeted(peer) => Some(peer),
-            SessionEnd::Refused(_) | SessionEnd::NoHello => dialed,
+            SessionEnd::Refused(_) | SessionEnd::OtherProtocol(_) | SessionEnd::NoHello => dialed,
         };
         self.book(peer, end.signal(), "sync");
     }
@@ -169,6 +198,22 @@ impl PeerKeys {
         Noted {
             first,
             parked_now: key.wrong_group == PARK_AFTER,
+        }
+    }
+
+    /// The sync protocol `peer` last spoke when it was not ours (module doc, "Another protocol").
+    pub(crate) fn other_protocol(&self, peer: DeviceId) -> Option<u16> {
+        self.lock()
+            .get(&Some(peer))
+            .and_then(|key| key.other_protocol)
+    }
+
+    fn set_other_protocol(&self, peer: DeviceId, protocol: Option<u16>) {
+        let mut peers = self.lock();
+        if let Some(key) = peers.get_mut(&Some(peer)) {
+            key.other_protocol = protocol;
+        } else if protocol.is_some() && peers.len() < MAX_TRACKED_PEERS {
+            peers.entry(Some(peer)).or_default().other_protocol = protocol;
         }
     }
 

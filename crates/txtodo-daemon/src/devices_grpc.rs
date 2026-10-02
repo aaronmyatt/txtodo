@@ -200,10 +200,16 @@ impl TxtodoService {
                     .map(|(w, s)| crate::stuck_sync::to_pb(w, s))
                     .collect(),
                 parked: keys.is_parked(r.device),
+                // Task sync-divergence-check/protocol-mismatch: refused both ways until upgraded.
+                their_protocol: keys.other_protocol(r.device).map_or(0, u32::from),
             })
             .collect();
         let pending_ops = pending_ops_since(self, &active_peers)?;
-        Ok(Response::new(pb::SyncStatusResponse { peers, pending_ops }))
+        Ok(Response::new(pb::SyncStatusResponse {
+            peers,
+            pending_ops,
+            protocol: u32::from(txtodo_sync::PROTOCOL_VERSION),
+        }))
     }
 
     /// Removes a device and rotates the group key to the remaining devices (plan M4

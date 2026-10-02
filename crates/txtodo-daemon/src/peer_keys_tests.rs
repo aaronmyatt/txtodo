@@ -131,14 +131,20 @@ fn peers_past_the_cap_are_not_tracked() {
 #[test]
 fn only_a_greeted_session_is_a_successful_dial() {
     assert_eq!(
-        SessionEnd::of(Some(peer(1)), None),
+        SessionEnd::of(Some(peer(1)), None, None),
         SessionEnd::Greeted(peer(1))
     );
     assert_eq!(
-        SessionEnd::of(None, Some(WRONG_GROUP)),
+        SessionEnd::of(None, Some(WRONG_GROUP), None),
         SessionEnd::Refused(WRONG_GROUP)
     );
-    assert_eq!(SessionEnd::of(None, None), SessionEnd::NoHello);
+    assert_eq!(
+        SessionEnd::of(None, Some("frame"), Some(3)),
+        SessionEnd::OtherProtocol(3),
+        "another protocol names the refusal better than its kind"
+    );
+    assert!(!SessionEnd::OtherProtocol(3).greeted());
+    assert_eq!(SessionEnd::of(None, None, None), SessionEnd::NoHello);
     assert!(SessionEnd::Greeted(peer(1)).greeted());
     assert!(!SessionEnd::Refused(WRONG_GROUP).greeted());
     assert!(!SessionEnd::NoHello.greeted());

@@ -57,6 +57,9 @@ struct Conn {
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
     /// Why the peer's link `Hello` did not open, when it came and did not (task sync-drift line 5).
     refused: Option<&'static str>,
+    /// The sync protocol a frame or the link `Hello` of the peer's carried, when not ours (task
+    /// sync-divergence-check/protocol-mismatch): the session ends, and `peer_keys.rs` keeps it.
+    other_protocol: Option<u16>,
 }
 
 /// Any one routed workspace's own clock, for stamping the link-level `Hello` and re-checking skew
@@ -90,6 +93,12 @@ fn dispatch_link_frame(
         .map_err(|kind| conn.refused = Some(kind))
         .ok()?;
     let now_ms = any_route_now_ms(&shared.routes);
+    // `handle_link_hello` refuses it; keep which protocol the peer spoke (`peer_keys.rs`).
+    if let txtodo_sync::Message::Hello { protocol, .. } = &msg
+        && *protocol != txtodo_sync::PROTOCOL_VERSION
+    {
+        conn.other_protocol = Some(*protocol);
+    }
     crate::peer_clock::record_hello(&shared.routes, &msg, now_ms);
     if !handle_link_hello(&mut conn.session, &msg, now_ms) {
         return None;
@@ -163,10 +172,17 @@ fn dispatch_frame(
 
 /// Waits up to [`POLL`] for a frame: `Ok(None)` when none came, `Err(())` once the link is gone
 /// (a real close, or a failure logged here).
-fn recv_polled(link: &mut dyn Link) -> Result<Option<txtodo_sync::Frame>, ()> {
+fn recv_polled(link: &mut dyn Link, conn: &mut Conn) -> Result<Option<txtodo_sync::Frame>, ()> {
     match link.recv_timeout(POLL) {
         Ok(frame) => Ok(frame),
         Err(txtodo_sync::LinkError::Closed) => Err(()),
+        // A peer on another sync protocol: its frames carry another version (`Frame::decode`).
+        Err(txtodo_sync::LinkError::Frame(txtodo_sync::FrameError::UnknownVersion {
+            got, ..
+        })) => {
+            conn.other_protocol = Some(got);
+            Err(())
+        }
         Err(e) => {
             tracing::debug!(error = %e, "lan_session_recv_failed");
             Err(())
@@ -180,7 +196,7 @@ fn turn(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) -> Option<
     if shared.table.generation() != shared.generation {
         return log_routes_changed();
     }
-    if let Some(frame) = recv_polled(link).ok()? {
+    if let Some(frame) = recv_polled(link, conn).ok()? {
         conn.live.heard();
         dispatch_frame(link, shared, conn, &frame)?;
     }
@@ -347,7 +363,8 @@ pub(crate) fn drive_shared_session(
         live: Live::new(Arc::new(SystemClock)),
         routes: BTreeMap::new(),
         refused: None,
+        other_protocol: None,
     };
     run_shared_message_loop(link, &shared, &mut conn);
-    SessionEnd::of(conn.session.peer(), conn.refused)
+    SessionEnd::of(conn.session.peer(), conn.refused, conn.other_protocol)
 }
