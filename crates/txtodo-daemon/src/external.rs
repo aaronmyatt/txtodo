@@ -113,6 +113,11 @@ impl FileActor {
         if self.log_and_skip_own_write(&bytes) {
             return Ok(None);
         }
+        // Written from our previous bytes, over our latest write: three-way (`save_base.rs`).
+        if self.hold_if_based_on_prev_write(&bytes)? {
+            self.merge_pending_save()?;
+            return Ok(None);
+        }
         let principal = Principal::External {
             device: self.cfg.device,
         };

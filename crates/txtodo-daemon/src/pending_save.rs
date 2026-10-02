@@ -34,6 +34,13 @@ pub(crate) struct PendingSave {
     base_ids: Vec<Option<TaskId>>,
 }
 
+impl PendingSave {
+    /// A save merged three-way against `base` (`save_base.rs`: our previous write).
+    pub(crate) fn new(base: Vec<u8>, base_ids: Vec<Option<TaskId>>) -> PendingSave {
+        PendingSave { base, base_ids }
+    }
+}
+
 /// A pending save whose file has sat still this long is merged after any message, in case the
 /// watcher's event never comes; the event itself normally arrives after 150 ms.
 const SETTLED: Duration = Duration::from_secs(1);
@@ -55,6 +62,12 @@ impl FileActor {
             && self.write_projection_if_ours(ours)?;
         if wrote {
             self.settle_held()?;
+            // What an editor may still have open: the bytes this write replaced, unless it
+            // replaced a save being merged (then the editor's own text is the base it knows).
+            self.prev_write = None;
+            if merging.is_none() {
+                self.remember_prev_write(before_bytes, before);
+            }
         } else if self.pending_save.is_none() {
             self.hold(PendingSave {
                 base: before_bytes,
@@ -68,7 +81,7 @@ impl FileActor {
 
     /// Holds writes for `pending`, and keeps its base in the store: a restart before the merge
     /// resumes it three-way (`restore_held`) instead of reading the held ops as deleted lines.
-    fn hold(&mut self, pending: PendingSave) -> Result<(), ActorError> {
+    pub(crate) fn hold(&mut self, pending: PendingSave) -> Result<(), ActorError> {
         let encoded = encode_held(&pending);
         let key = held_key(&self.cfg.path);
         self.lock_store().meta_set(&key, &encoded)?;

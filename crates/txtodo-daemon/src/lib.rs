@@ -123,6 +123,7 @@ mod relay_fallback_tests;
 mod relay_state;
 mod replace;
 pub mod runtime_exit;
+mod save_base;
 pub mod serve;
 pub mod server;
 mod server_actors;
@@ -247,6 +248,8 @@ mod pairing_lan_tests;
 mod peer_keys_dial_tests;
 #[cfg(test)]
 mod peer_keys_tests;
+#[cfg(test)]
+mod pending_save_sidecar_tests;
 #[cfg(test)]
 mod pending_save_tests;
 #[cfg(test)]

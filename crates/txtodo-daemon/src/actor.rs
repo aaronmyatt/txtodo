@@ -95,6 +95,8 @@ pub struct FileActor {
     pub(crate) parked: crate::sync_park::Parked,
     /// Every op this document's log holds, order-free (`op_set_hash.rs`).
     pub(crate) op_set: crate::op_set_hash::OpSetHash,
+    /// What our latest write replaced, a possible base for a save racing it (`save_base.rs`).
+    pub(crate) prev_write: Option<crate::save_base::PrevWrite>,
 }
 
 impl FileActor {
@@ -132,6 +134,7 @@ impl FileActor {
             absorbing: None,
             parked: crate::sync_park::Parked::default(),
             op_set,
+            prev_write: None,
         };
         actor.recover()?;
         actor.repair_log()?;
