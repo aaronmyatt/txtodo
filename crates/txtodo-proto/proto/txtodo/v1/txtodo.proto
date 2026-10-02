@@ -818,6 +818,15 @@ message SyncStatusResponse {
     uint64 last_ms = 5;        // daemon clock at the latest refusal
     uint32 refusals = 6;       // refusals of this file's run in a row, at least 1
   }
+  // One file whose ops this device and a peer hold alike, but which the two render as different
+  // bytes (ADR 0035, task sync-divergence-check): an application bug, never a peer that is behind.
+  // Seen from the peer's `Digest`; held in memory, cleared when a later digest agrees, and on
+  // restart.
+  message Split {
+    string workspace_id = 1;   // ULID text, same form as WorkspaceSelector.workspace_id
+    string file = 2;           // workspace-relative path, `/` separators
+    uint64 since_ms = 3;       // daemon clock when it was first seen split
+  }
   // One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
   // SyncStatus design section).
   message Peer {
@@ -838,6 +847,9 @@ message SyncStatusResponse {
     // held in memory, cleared once a session with the peer greets; 0 = same, not seen, or an
     // older daemon.
     uint32 their_protocol = 5;
+    // Files split with this peer: same ops, different bytes (see `Split`). Empty from an older
+    // daemon.
+    repeated Split splits = 6;
   }
   repeated Peer peers = 1;
   // Approximate, not a precise per-peer ack count (tasks/tui/notes.md: no per-peer synced-seq is

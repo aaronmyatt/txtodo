@@ -93,6 +93,12 @@ sync-drift/duplicate-flags, 2026-10-01): a file's exact-duplicate lines as `Dupl
 the file has after a change. Derived by the daemon from the file, never stored; a client resolves one
 with the existing `Apply` `Delete`. Empty/0 from an older daemon.
 
+`SyncStatusResponse.protocol` (field 3) and `Peer.their_protocol` (field 5), task
+sync-divergence-check/protocol-mismatch, 2026-10-02: this daemon's sync protocol and the one a peer
+speaks when it is not ours (0 = same, not seen, or an older daemon). `Peer.splits` (field 6,
+`Split`: workspace id, file, since), ADR 0035: files this device and the peer hold the same ops for
+but render differently, from the peer's `Digest`. All from daemon memory; empty/0 from an older one.
+
 ## Invariants
 - Generated output is a generated artifact (diff-budget exempt, committed alone).
 - May depend only on: nothing in the workspace.

@@ -235,6 +235,7 @@ fn sync_status_messages_round_trip() {
             }],
             parked: true,
             their_protocol: 0,
+            splits: Vec::new(),
         }],
         pending_ops: 3,
         protocol: 2,
