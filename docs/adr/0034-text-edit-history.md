@@ -43,3 +43,12 @@ No wire change.
 - T2. Each edit names the text it was made on: exact, but a wire change and a protocol bump.
 - T3. Let the Loro mirror decide description and notes bytes: it merges by character already,
   but it breaks "the mirror never decides bytes".
+
+## Amendment 2026-10-02
+The first "Bad" above (a completing `SetField` between two concurrent edits) is narrowed. When
+completing a line moves its priority into `pri:`, the description's history is no longer dropped:
+the rewrite is kept as an append at its op's stamp (`Change::Append`), applied at the end of
+whatever text the replay builds. A text edit that arrives late is then slotted in by stamp on every
+device. Found by ADR 0035's digest check in the lab (lan-converge seed 202: two appends made
+apart, one device completing the prioritized line, the appends in different orders). A
+description changed any other way by a `SetField` still drops its history.

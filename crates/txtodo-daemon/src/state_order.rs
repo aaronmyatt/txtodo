@@ -129,8 +129,9 @@ impl DocState {
         self.field_stamps.insert((task, field), hlc);
     }
 
-    /// Drops `task`'s description history: its description changed some other way (a `SetField`
-    /// that moves a priority into `pri:`), so the edits kept no longer rebuild it.
+    /// Drops `task`'s description history: its description changed some other way, so the edits
+    /// kept no longer rebuild it. (A priority moved into `pri:` is kept instead:
+    /// [`DocState::append_to_description`].)
     pub(crate) fn forget_text(&mut self, task: TaskId) {
         self.text_history.remove(&task);
     }
@@ -161,6 +162,22 @@ impl DocState {
             .entry(task)
             .or_insert_with(|| TextHistory::new(current.to_owned()))
             .apply(current, hlc, edits, (apply_text_edits, MAX_EDITS_PER_TASK))
+    }
+
+    /// `suffix` appended to `task`'s description, which is `current` now, by an op stamped `hlc`
+    /// (a priority moved into `pri:`): the description to hold, kept in the history so a late
+    /// edit still rebuilds in stamp order (`text_history.rs`).
+    pub(crate) fn append_to_description(
+        &mut self,
+        task: TaskId,
+        current: &str,
+        hlc: Hlc,
+        suffix: &str,
+    ) -> String {
+        self.text_history
+            .entry(task)
+            .or_insert_with(|| TextHistory::new(current.to_owned()))
+            .append(current, hlc, suffix, (apply_text_edits, MAX_EDITS_PER_TASK))
     }
 
     /// After a commit: whatever a scratch replay placed takes the commit's real stamp, the one

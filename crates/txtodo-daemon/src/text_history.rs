@@ -8,6 +8,12 @@
 //!
 //! Kept by `DocState` per task (descriptions) and by `NotesState` (a whole `notes.md`); both clear
 //! it when the text changes some other way, and both take it from the log replay at open.
+//!
+//! One other way is kept instead: completing a line with a priority appends `pri:X` to its
+//! description (`fields.rs`). That rewrite is recorded as [`Change::Append`] at its op's stamp, so a
+//! text edit that arrives late is still slotted in by stamp, and the suffix lands at the end of
+//! whatever text the replay builds. A splice would not: its offset is the end of the text its
+//! device saw, which a late edit slotted in front of it moves (lab lan-converge seed 202).
 
 use txtodo_model::{DeviceId, Hlc, TextEdit, Ulid};
 
@@ -21,6 +27,24 @@ pub(crate) const MAX_EDITS_PER_NOTES: usize = 256;
 /// How a text applies a splice: descriptions and notes count differently (`textedit.rs`).
 pub(crate) type ApplyEdits = fn(&str, &[TextEdit]) -> Result<String, TextEditError>;
 
+/// One change a history keeps.
+#[derive(Clone, Debug)]
+pub(crate) enum Change {
+    /// A splice at char offsets on the text its author saw: an `EditText` or `NotesEdit`.
+    Splice(Vec<TextEdit>),
+    /// Text added at the end, whatever text is there: a priority moved into `pri:`.
+    Append(String),
+}
+
+impl Change {
+    fn on(&self, text: &str, apply: ApplyEdits) -> Result<String, TextEditError> {
+        match self {
+            Change::Splice(edits) => apply(text, edits),
+            Change::Append(suffix) => Ok(format!("{text}{suffix}")),
+        }
+    }
+}
+
 /// One text's base and the edits made on it since, oldest stamp first.
 #[derive(Clone, Debug)]
 pub(crate) struct TextHistory {
@@ -28,7 +52,7 @@ pub(crate) struct TextHistory {
     /// When the base was set whole ([`TextHistory::reset`]): an edit older than that lost to it.
     /// Zero for a history begun from whatever text was there.
     since: Hlc,
-    edits: Vec<(Hlc, Vec<TextEdit>)>,
+    edits: Vec<(Hlc, Change)>,
 }
 
 impl TextHistory {
@@ -61,6 +85,30 @@ impl TextHistory {
         current: &str,
         hlc: Hlc,
         edits: &[TextEdit],
+        how: (ApplyEdits, usize),
+    ) -> Result<String, TextEditError> {
+        self.record(current, hlc, Change::Splice(edits.to_vec()), how)
+    }
+
+    /// Records `suffix` appended to the end of the text by an op stamped `hlc` (module doc), and
+    /// returns the text to hold now. Never refused: an append fits any text.
+    pub(crate) fn append(
+        &mut self,
+        current: &str,
+        hlc: Hlc,
+        suffix: &str,
+        how: (ApplyEdits, usize),
+    ) -> String {
+        let change = Change::Append(suffix.to_owned());
+        self.record(current, hlc, change, how)
+            .unwrap_or_else(|_| format!("{current}{suffix}"))
+    }
+
+    fn record(
+        &mut self,
+        current: &str,
+        hlc: Hlc,
+        change: Change,
         (apply, max): (ApplyEdits, usize),
     ) -> Result<String, TextEditError> {
         if hlc < self.since {
@@ -70,11 +118,11 @@ impl TextHistory {
         let late = self.edits.last().is_some_and(|(newest, _)| *newest > hlc);
         let next = if late {
             let at = self.edits.partition_point(|(h, _)| *h <= hlc);
-            self.edits.insert(at, (hlc, edits.to_vec()));
+            self.edits.insert(at, (hlc, change));
             self.replay(apply)
         } else {
-            let next = apply(current, edits)?;
-            self.edits.push((hlc, edits.to_vec()));
+            let next = change.on(current, apply)?;
+            self.edits.push((hlc, change));
             next
         };
         self.trim(apply, max);
@@ -85,8 +133,8 @@ impl TextHistory {
     fn replay(&self, apply: ApplyEdits) -> String {
         self.edits
             .iter()
-            .fold(self.base.clone(), |text, (_, edits)| {
-                apply(&text, edits).unwrap_or(text)
+            .fold(self.base.clone(), |text, (_, change)| {
+                change.on(&text, apply).unwrap_or(text)
             })
     }
 
@@ -95,7 +143,7 @@ impl TextHistory {
     fn trim(&mut self, apply: ApplyEdits, max: usize) {
         while self.edits.len() > max {
             let (_, oldest) = self.edits.remove(0);
-            if let Ok(text) = apply(&self.base, &oldest) {
+            if let Ok(text) = oldest.on(&self.base, apply) {
                 self.base = text;
             }
         }

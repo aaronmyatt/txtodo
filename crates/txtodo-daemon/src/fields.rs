@@ -57,10 +57,11 @@ pub(crate) fn set_field(
         state.mode() != IdentityMode::Tagged || crate::state::id_of(&new_line) == Some(task),
         "prefix rewrite keeps the id"
     );
-    if description_of(&line) != description_of(&new_line) {
-        // A priority moved into `pri:`: the kept edits no longer rebuild this description.
-        state.forget_text(task);
-    }
+    let new_line = if description_of(&line) == description_of(&new_line) {
+        new_line
+    } else {
+        keep_in_history(state, task, &line, new_line, hlc)
+    };
     state.replace_entry(
         i,
         Entry::Task {
@@ -70,6 +71,35 @@ pub(crate) fn set_field(
     );
     state.record_field(task, field, hlc);
     Ok(())
+}
+
+/// A prefix rewrite changed the description: a priority moved into `pri:`, appended at its end.
+/// That append goes into the description's history at `hlc` (ADR 0034, amended 2026-10-02), so a
+/// text edit made apart and arriving late is slotted in before it on every device, and the line it
+/// returns is the one the history rebuilds. Any other change drops the history, as before.
+fn keep_in_history(
+    state: &mut DocState,
+    task: TaskId,
+    old_line: &OwnedLine,
+    new_line: OwnedLine,
+    hlc: Hlc,
+) -> OwnedLine {
+    let (Some(old), Some(new)) = (description_of(old_line), description_of(&new_line)) else {
+        state.forget_text(task);
+        return new_line;
+    };
+    let Some(suffix) = new.strip_prefix(old.as_str()) else {
+        state.forget_text(task);
+        return new_line;
+    };
+    let held = state.append_to_description(task, &old, hlc, suffix);
+    if held == new {
+        return new_line;
+    }
+    match Edit::new().set_description(&held) {
+        Ok(edit) => txtodo_core::apply(&new_line, &edit),
+        Err(_) => new_line,
+    }
 }
 
 /// A reopen sends `Completed = false`, then the priority it restores, then a text edit dropping the
