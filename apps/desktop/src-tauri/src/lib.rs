@@ -10,6 +10,7 @@ mod commands_connect;
 mod commands_duplicates;
 mod commands_notes;
 mod commands_pairing;
+mod commands_sync;
 mod commands_tokens;
 mod commands_ui_log;
 mod commands_universal;
@@ -109,6 +110,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands::resolve,
         commands::list_conflicts,
         commands_duplicates::list_duplicates,
+        commands_sync::sync_status,
         commands_ui_log::ui_log,
         commands_version::build_info,
         commands_window::set_pinned,

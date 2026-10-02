@@ -180,6 +180,28 @@ export function listConflicts(path: string): Promise<ReviewFlag[]> {
 	return invoke("list_conflicts", { path });
 }
 
+/** One paired peer's sync state. Mirrors `desktop_lib::commands_sync::SyncPeerDto`. */
+export interface SyncPeer {
+	device: string;
+	lag_ms: number;
+	parked: boolean;
+	stuck: number;
+	/** The sync protocol it speaks when not ours (then nothing syncs with it); 0 = same. */
+	their_protocol: number;
+}
+
+/** Mirrors `desktop_lib::commands_sync::SyncStatusDto`. */
+export interface SyncStatus {
+	/** This daemon's sync protocol; 0 from an older daemon. */
+	protocol: number;
+	peers: SyncPeer[];
+}
+
+/** Paired peers' sync state, from the daemon's `SyncStatus` (polled: no `Watch` event carries it). */
+export function syncStatus(): Promise<SyncStatus> {
+	return invoke("sync_status");
+}
+
 /** One copy in a duplicate group. Mirrors `desktop_lib::dto_duplicates::DuplicateTaskDto`. */
 export interface DuplicateTask {
 	task_id: string;

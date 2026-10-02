@@ -67,6 +67,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		}
 		case "list_duplicates":
 			return [] as T;
+		case "sync_status":
+			return { protocol: 2, peers: [] } as T;
 		case "resolve": {
 			const task = args?.task as TaskRef;
 			const path = args?.path as string;

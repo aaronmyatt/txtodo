@@ -10,6 +10,7 @@
 	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
+	import ProtocolMismatchBanner from "./ProtocolMismatchBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import { openingWorkspace } from "$lib/stores/loading";
 	import DetailView from "./DetailView.svelte";
@@ -135,6 +136,7 @@
 		</div>
 	{/if}
 
+	<ProtocolMismatchBanner />
 	<SkillHintBanner />
 
 	<div class="top-nav">

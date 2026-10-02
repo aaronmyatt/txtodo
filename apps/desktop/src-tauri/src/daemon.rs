@@ -6,6 +6,7 @@
 //! return [`DaemonError::UnsupportedPlatform`] instead of assuming a `unix:` socket works.
 
 mod spawn;
+mod sync;
 mod workspace;
 
 pub use spawn::ensure_daemon;
