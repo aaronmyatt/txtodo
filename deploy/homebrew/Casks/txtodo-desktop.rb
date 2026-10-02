@@ -20,15 +20,15 @@
 # Cask DSL: https://docs.brew.sh/Cask-Cookbook · on_arm/on_intel: same Formula::Arch selectors
 # Formula/txtodo.rb already uses (https://rubydoc.brew.sh/Formula.html).
 cask "txtodo-desktop" do
-  version "0.0.2"
+  version "0.0.19"
 
   on_arm do
-    sha256 "38913af9a8fb8eadc3c7070d52402d97dffdc4f6728410170331970f76750fab"
+    sha256 "30ad23e49734b3f333879a89e6deec69502fea816ce3fe937e54edba012a9d1b"
 
     url "https://github.com/aaronmyatt/txtodo/releases/download/v#{version}/desktop-macos-aarch64.dmg"
   end
   on_intel do
-    sha256 "ba1ab5658e770ce6b3867babebb9f473fb1e71472725c692c7be3d582265e2f7"
+    sha256 "aa83b56241ad0d80bf8be6c5073af94d75b8ab95802db22e54f0a9af19953ffc"
 
     url "https://github.com/aaronmyatt/txtodo/releases/download/v#{version}/desktop-macos-x86_64.dmg"
   end
@@ -49,8 +49,8 @@ cask "txtodo-desktop" do
   depends_on :macos
 
   # `productName` in apps/desktop/src-tauri/tauri.conf.json is what `tauri build` actually names
-  # the bundle — renamed from "desktop" to "txtodo" as part of the app's branding pass, so this
-  # now matches what CI really ships.
+  # the bundle. It was "desktop" through v0.0.2 (that .dmg holds desktop.app) and is "txtodo" from
+  # v0.0.3 on (checked by mounting both .dmgs), so this stanza changes with the version bump.
   app "txtodo.app"
 
   # Same three locations Apple's own sandboxing/App Support convention puts a document-free
