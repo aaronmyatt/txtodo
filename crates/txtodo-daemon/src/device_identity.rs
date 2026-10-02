@@ -50,7 +50,7 @@ const IDENTITY_DB_FILE: &str = "identity.db";
 /// The `meta` key holding this device's id.
 const DEVICE_ID_KEY: &str = "device_id";
 /// The `meta` key holding this device's sync group id (plan M4 pairing). `pub`, not `pub(crate)`:
-/// `tests/support/mod.rs` (a separate integration-test crate) seeds a shared group id directly for
+/// `tests/e2e/support/mod.rs` (a separate integration-test crate) seeds a shared group id directly for
 /// the real two-daemon LAN tests, the device-global analogue of `workspace_mint::GROUP_ID_KEY`.
 pub const GROUP_ID_KEY: &str = "group_id";
 /// The `meta` key holding the group key epoch this device currently seals ops under.

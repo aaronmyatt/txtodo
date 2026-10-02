@@ -57,7 +57,7 @@ pub(crate) fn record_disk(ws: &Workspace, principal: Principal) {
         // Read under the actor's lock, never before it: a peer's import holds the lock while it
         // writes the file, so bytes read before the lock can be older than the actor's, and
         // recording them would undo the peer's change (a synced rename reverted: CI run
-        // 36295564374, `tests/workspace_name.rs`).
+        // 36295564374, `tests/e2e/workspace_name.rs`).
         let Ok(text) = std::fs::read_to_string(&disk) else {
             return Ok(0);
         };

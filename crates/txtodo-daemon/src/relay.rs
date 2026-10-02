@@ -64,7 +64,7 @@ use crate::server::SharedWorkspace;
 
 /// n0's own public relay (named in `docs.rs/iroh`'s own `Endpoint::builder` doctest,
 /// `use1-1.relay.n0.iroh.link`) — already proven reliable by this repo's own real-relay tests
-/// (`tests/relay_converge.rs`, `tests/pairing_relay.rs`). Task `relay-default-public-url`: used
+/// (`tests/e2e/relay_converge.rs`, `tests/e2e/pairing_relay.rs`). Task `relay-default-public-url`: used
 /// whenever `--relay`/`$TXTODO_RELAY_URL`/config `relay_url` and `--no-relay` are all absent, so
 /// cross-network sync works with zero setup. Safe to default on — every `Op` is AEAD-sealed before
 /// it ever reaches a relay (design §4.6), so a relay only ever routes ciphertext, the same threat

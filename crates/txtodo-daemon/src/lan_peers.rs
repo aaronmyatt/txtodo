@@ -53,7 +53,7 @@ impl DialState {
 
 /// Logged for every real sighting, dialed or not — the only externally observable (via the JSON
 /// log) proof that discovery itself worked, independent of whether the connect step that follows
-/// succeeds. `tests/lan_discovery.rs` polls for exactly this line.
+/// succeeds. `tests/e2e/lan_discovery.rs` polls for exactly this line.
 fn log_peer_found(peer: &DiscoveredPeer) {
     tracing::info!(peer = %peer.device, addresses = ?peer.addresses, "lan_peer_found");
 }

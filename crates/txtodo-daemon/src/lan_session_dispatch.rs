@@ -326,7 +326,7 @@ pub(crate) fn drive_shared_session(
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —
     // that a peer relationship with more than one open workspace shares this single connection
-    // rather than opening one per workspace (`tests/relay_multiplex.rs` greps for it). `workspaces
+    // rather than opening one per workspace (`tests/e2e/relay_multiplex.rs` greps for it). `workspaces
     // = 1` for the common single-workspace case is exactly as informative and equally cheap to
     // emit, so this is not gated on the count.
     tracing::info!(

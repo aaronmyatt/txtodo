@@ -22,7 +22,7 @@
 //!
 //! **Real same-host, cross-process connect works.** A real `iroh` QUIC connect only ever fails
 //! between two endpoints in the *same process*; two real `txtodod` processes on one host connect
-//! and sync for real (`tests/lan_loopback_converge.rs`). `LanEndpoint::connect` prefers
+//! and sync for real (`tests/e2e/lan_loopback_converge.rs`). `LanEndpoint::connect` prefers
 //! non-loopback addresses, loopback only as a last resort.
 
 use std::sync::Arc;
@@ -59,7 +59,7 @@ pub(crate) const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const RESYNC_INTERVAL: Duration = Duration::from_secs(15);
 
 /// Overrides `RESYNC_INTERVAL`, in milliseconds. A test seam like `debug_hooks.rs`'s
-/// `TXTODO_TEST_HOOKS`: `tests/lan_loopback_converge.rs` asserts a second-direction edit lands
+/// `TXTODO_TEST_HOOKS`: `tests/e2e/lan_loopback_converge.rs` asserts a second-direction edit lands
 /// within 2 s, which only a redial delivers, so the harnesses set this to 1000.
 pub const RESYNC_INTERVAL_ENV_VAR: &str = "TXTODO_RESYNC_INTERVAL_MS";
 

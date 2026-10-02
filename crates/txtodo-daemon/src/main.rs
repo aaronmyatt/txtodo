@@ -300,7 +300,7 @@ fn start_loader(
 /// directly — that always resolves the true-global location regardless of mode, so a
 /// `--dir`-bridge-started daemon would silently write logs to the real machine's
 /// `$XDG_DATA_HOME/txtodo/logs/` instead of `<dir>/.txtodo/logs` (a real regression this crate's
-/// own daemon-slice pass caught via `tests/lan_discovery.rs`'s log-tailing assertion). `state_dir`
+/// own daemon-slice pass caught via `tests/e2e/lan_discovery.rs`'s log-tailing assertion). `state_dir`
 /// is already resolved correctly per mode by `resolve_state_dir`.
 fn lock_and_start_logging(
     args: &Args,

@@ -136,7 +136,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - name: daemon tests
-        run: cargo nextest run -p txtodo-daemon
+        run: cargo nextest run -p txtodo-daemon --no-fail-fast
+      # The daemon's real-txtodod tests live in its `test = false` tests/e2e binary (task
+      # fast-gate), so only a step that names it runs them; the matrix's e2e step excludes this crate.
+      # https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+      - name: daemon tests (e2e)
+        run: cargo nextest run -p txtodo-daemon --test e2e --no-fail-fast
 
   no-std:
     # core must build without std (plan M1): a target with no OS proves no std:: path leaked in

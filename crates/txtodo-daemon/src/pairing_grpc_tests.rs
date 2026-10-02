@@ -2,7 +2,7 @@
 //! instances, using `PairingRegistry`'s relay-seam methods for the daemon-to-daemon leg that has
 //! no transport yet (`pairing_grpc.rs`'s module doc explains why). Whitebox on purpose: the group
 //! key must never appear on the wire, so verifying it landed needs `Workspace::key_store()`, which
-//! only crate-internal code can reach — not a `tests/grpc.rs`-style external integration test.
+//! only crate-internal code can reach — not a `tests/it/grpc.rs`-style external integration test.
 
 use std::path::Path;
 use std::sync::{Arc, RwLock};

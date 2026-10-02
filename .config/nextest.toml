@@ -6,7 +6,7 @@
 #   below spawn real daemons, a real relay or real mDNS (3-60 s each), or wait out a fixed 30 s
 #   dial timeout (the two holepunch tests).
 # - Full set locally: `cargo nextest run --profile ci ...` (or `NEXTEST_PROFILE=ci`).
-# - One left-out file: `cargo nextest run --ignore-default-filter -E 'binary_id(txtodo-daemon::crash)'`
+# - One left-out file: `cargo nextest run -p txtodo-daemon --test e2e --ignore-default-filter -E 'test(/^crash::/)'`
 # - CI sets NEXTEST_PROFILE=ci (.github/workflows/ci.yml), so nothing is skipped there.
 # Default set: https://nexte.st/docs/selecting/#running-a-subset-of-tests-by-default
 # Filterset DSL (binary_id = `<package>` for a lib, `<package>::<test file>` for tests/*.rs; `-` is
@@ -21,13 +21,11 @@ nextest-version = { required = "0.9.77" }
 default-filter = '''
 not (
     (
-        binary_id(txtodo-daemon::crash)
-        | binary_id(txtodo-daemon::relay_multiplex)
-        | binary_id(txtodo-daemon::default_workspace_foreign)
-        | binary_id(txtodo-daemon::layout_sync)
-        | binary_id(txtodo-daemon::pairing_lan)
-        | (binary_id(txtodo-daemon::relay_converge)
-            & test(=two_real_daemons_converge_via_relay_with_lan_disabled))
+        binary_id(txtodo-daemon::e2e)
+        & (
+            test(/^(crash|relay_multiplex|default_workspace_foreign|layout_sync|pairing_lan)::/)
+            | test(=relay_converge::two_real_daemons_converge_via_relay_with_lan_disabled)
+        )
     ) - test(/^support::/)
     | (binary_id(txtodo-sync)
         & test(/^holepunch_tests::connect_(control|pairing)_has_no_group_parameter_to_gate_on$/))

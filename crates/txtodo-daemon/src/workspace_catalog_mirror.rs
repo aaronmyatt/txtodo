@@ -86,7 +86,7 @@ impl WorkspaceCatalog {
     /// offers every workspace it holds, mirrors too). The alias is never registered here, so the
     /// "ever held" rule misses it. Mirrored, it became a second, empty workspace answering to the
     /// alias, which could take the sync route from the real default and starve the peer's mirror
-    /// (`tests/default_workspace_foreign.rs`, CI run 36299140047).
+    /// (`tests/e2e/default_workspace_foreign.rs`, CI run 36299140047).
     fn is_this_devices_alias(&self, id: WorkspaceId) -> bool {
         id == crate::default_workspace::default_alias(self.open_args.identity.device())
     }
