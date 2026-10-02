@@ -95,6 +95,7 @@ pub fn kind_tag(k: &OpKind) -> &'static str {
         OpKind::NotesEdit { .. } => "notes_edit",
         OpKind::BlankInsert { .. } => "blank_insert",
         OpKind::BlankRemove { .. } => "blank_remove",
+        OpKind::RemoveTag { .. } => "remove_tag",
     }
 }
 
