@@ -182,6 +182,23 @@ back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
   `tests/daemon_autostart.rs:20` (both name `crates/txtodo-cli/tests/daemon_mode.rs`), and the
   daemon's CLAUDE.md "txtodo-cli's `tests/bundle.rs`".
 
+## txtodo-tui merge (2026-10-02)
+
+- `tests/it`: `parity`, `complete_keeps_row` (no daemon). `tests/e2e`: the 16 files that drive the
+  app against a real `txtodod`, plus `support/`. Their 29 CI-only `#[ignore]`s are gone; ci.yml's
+  ignored-only steps drop `-p txtodo-tui`. Module docs say "in `tests/e2e`" where they said
+  "`#[ignore]`d like this crate's other real-daemon tests". CLAUDE.md's run line is `--test e2e`.
+- Same 34 tests. it 4 (179 with the lib) in 0.13 s; e2e `--profile ci` 30 in 0.5 s. With txtodod
+  already built these are fast: the old `#[ignore]` was about the nested txtodod build, not the run.
+- Gate on the merge commit: 4.75 s (clippy 1.6 s, nextest 4.7 s). Under budget.
+- `tests/parity.rs` pointers (src docs, CLAUDE.md, check-parity.sh, specs/client-parity.toml) follow.
+  ADR 0031 keeps the old path (an accepted ADR).
+- Pending for the desktop merge line: `apps/desktop/src-tauri/tests/daemon_spawn.rs:23-24` names
+  `crates/txtodo-cli/tests/daemon_mode.rs` and `crates/txtodo-tui/tests/daemon_autostart.rs`, now
+  under `tests/e2e/`. Left out here: any desktop change runs desktop's tests in the gate (~110 s).
+  mcp's `tests/daemon_autostart.rs:8` and `tests/support/mod.rs:31` name the tui support path:
+  for the mcp line.
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a

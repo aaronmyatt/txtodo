@@ -1,4 +1,3 @@
-2026-10-01 merge tests into it + e2e: txtodo-tui @test @doing by:claude-opus-backlog
 2026-10-01 merge tests into it + e2e: txtodo-mcp @test
 2026-10-01 merge tests into it + e2e: desktop (src-tauri) @test
 2026-10-01 merge tests into it + e2e: relay, txtodo-core, txtodo-proto, txtodo-crdt @test
@@ -12,3 +11,4 @@ x 2026-10-01 2026-10-01 merge tests into it + e2e: txtodo-daemon-launch (pilot, 
 x 2026-10-02 2026-10-01 tag unit tests over 500 ms slow_, PROPTEST_CASES in differential.rs, bin test=false for tui and mcp @test — 24 unit tests ≥ 0.5 s named slow_ (daemon 17, sync 5, cli, tui); differential 1 000 cases locally, 10 000 under CI; tui/mcp bins test=false; known gap: daemon and cli gates still 61 s / 32 s until their tests/*.rs merge
 x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-daemon @test — 18 files in tests/it, 32 + support in a test = false tests/e2e, debug_hooks alone; CI daemon job runs --test e2e; gate after an edit 61 s → 12 s; known gap: still over 5 s (lib + txtodod relink), and 4 stale pointers in other crates' comments (notes)
 x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-cli @test — 8 files in tests/it, 11 + support in a test = false tests/e2e; the 15 CI-only #[ignore]s are gone, CI's e2e step runs them; cli nextest after an edit 32 s → 4 s; known gap: 3 fast no-daemon tests sit in e2e files
+x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-tui @test — parity and complete_keeps_row in tests/it, 16 real-daemon files + support in a test = false tests/e2e; 29 CI-only #[ignore]s gone; gate 4.75 s; known gap: one desktop comment still names the old paths (desktop line)
