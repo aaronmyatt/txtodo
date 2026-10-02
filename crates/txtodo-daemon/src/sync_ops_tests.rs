@@ -300,6 +300,16 @@ fn an_op_that_needs_another_devices_insert_waits_for_it() {
             .unwrap();
         assert_eq!(actor.parked.len(), 1);
         assert!(actor.projection.is_empty());
+        let logged = crate::op_set_hash::OpSetHash::of_file(
+            &store.lock().unwrap(),
+            &FilePath::new("todo.txt").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            actor.op_set(),
+            logged,
+            "a parked op is in the log, so in the op set"
+        );
     }
     let mut reopened = open(dir.path(), &store, &clock);
     assert_eq!(
@@ -317,6 +327,7 @@ fn an_op_that_needs_another_devices_insert_waits_for_it() {
     let logged = rows(&store);
     let again = open(dir.path(), &store, &clock);
     assert_eq!(again.projection, reopened.projection);
+    assert_eq!(again.op_set(), reopened.op_set());
     assert_eq!(
         rows(&store),
         logged,

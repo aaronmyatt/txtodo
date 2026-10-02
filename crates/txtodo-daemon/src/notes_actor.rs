@@ -59,6 +59,8 @@ pub struct NotesActor {
     merging: Option<Hash>,
     wrote_last: bool,
     held_stored: bool,
+    /// Every op this document's log holds, order-free (`op_set_hash.rs`).
+    op_set: crate::op_set_hash::OpSetHash,
 }
 
 impl NotesActor {
@@ -82,6 +84,11 @@ impl NotesActor {
             let projection = guard.get_projection(&cfg.path)?.map(|p| p.bytes);
             (projection, guard.get_mirror(&cfg.path)?)
         };
+        // Before `restore_held`: what it, `absorb_disk_text` and `repair_log` commit folds in on top.
+        let op_set = {
+            let guard = store.lock().unwrap_or_else(PoisonError::into_inner);
+            crate::op_set_hash::OpSetHash::of_file(&guard, &cfg.path)?
+        };
         // Text with no projection behind it came from a peer's mirror snapshot, not this log.
         let own_text = projection.is_some();
         let (mirror, state_bytes) = Self::load(&cfg, &store, projection, mirror_snapshot)?;
@@ -104,6 +111,7 @@ impl NotesActor {
             merging: None,
             wrote_last: false,
             held_stored: false,
+            op_set,
         };
         actor.restore_held()?;
         actor.absorb_disk_text(&disk_bytes)?;
@@ -144,6 +152,11 @@ impl NotesActor {
         let next = self.state.clone();
         let range = self.land(&[op], &next)?;
         self.persist_mirror(range)
+    }
+
+    /// Every op this document's log holds, order-free (task sync-divergence-check).
+    pub fn op_set(&self) -> crate::op_set_hash::OpSetHash {
+        self.op_set
     }
 
     /// Current bytes and hash.
@@ -337,6 +350,7 @@ impl NotesActor {
             let mut store = self.store.lock().unwrap_or_else(PoisonError::into_inner);
             store.commit_change(ops, &projection, Some(self.hash))?
         };
+        self.op_set.add_ops(ops);
         self.state = next.clone();
         self.projection = bytes;
         self.hash = new_hash;

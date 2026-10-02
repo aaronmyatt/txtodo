@@ -91,6 +91,7 @@ pub mod notes_mirror;
 pub mod notes_registry;
 mod notes_repair;
 pub mod notes_state;
+pub mod op_set_hash;
 mod pairing_adopt;
 mod pairing_group_key;
 mod pairing_grpc;
@@ -236,6 +237,8 @@ mod notes_actor_sync_tests;
 mod notes_actor_tests;
 #[cfg(test)]
 mod notes_held_tests;
+#[cfg(test)]
+mod op_set_hash_tests;
 #[cfg(test)]
 mod pairing_grpc_tests;
 #[cfg(test)]

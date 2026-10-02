@@ -79,6 +79,11 @@ fn a_peers_ops_import_into_a_fresh_actor_and_land_on_disk() {
         .unwrap_or_else(|e| panic!("{e}"));
     b.import_ops(ops).unwrap_or_else(|e| panic!("import: {e}"));
     assert_eq!(b.contents().0, b"first\nsecond\n");
+    assert_eq!(
+        b.op_set(),
+        a.op_set(),
+        "same ops on both devices, same op-set hash"
+    );
     let on_disk = std::fs::read_to_string(&cfg_b.disk).unwrap_or_default();
     assert_eq!(on_disk, "first\nsecond\n");
     assert_eq!(

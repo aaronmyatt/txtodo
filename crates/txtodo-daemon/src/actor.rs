@@ -93,6 +93,8 @@ pub struct FileActor {
     pub(crate) absorbing: Option<Hash>,
     /// Peer ops waiting for a task from another device to land (`sync_park.rs`).
     pub(crate) parked: crate::sync_park::Parked,
+    /// Every op this document's log holds, order-free (`op_set_hash.rs`).
+    pub(crate) op_set: crate::op_set_hash::OpSetHash,
 }
 
 impl FileActor {
@@ -107,6 +109,13 @@ impl FileActor {
             DocState::from_file(cfg.path.clone(), &File::default(), &[], cfg.identity_mode)?;
         let mirror = Mirror::from_state(&empty, loro_peer(cfg.device))
             .map_err(|e| ActorError::Mirror(e.to_string()))?;
+        // Before `recover`: the ops it and `repair_log` commit are folded in on top.
+        let op_set = {
+            let guard = store
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            crate::op_set_hash::OpSetHash::of_file(&guard, &cfg.path)?
+        };
         let mut actor = FileActor {
             hlc: Hlc::zero(cfg.device),
             state: empty,
@@ -122,6 +131,7 @@ impl FileActor {
             pending_save: None,
             absorbing: None,
             parked: crate::sync_park::Parked::default(),
+            op_set,
         };
         actor.recover()?;
         actor.repair_log()?;
@@ -225,6 +235,11 @@ impl FileActor {
         self.writes_total
     }
 
+    /// Every op this document's log holds, order-free (task sync-divergence-check).
+    pub fn op_set(&self) -> crate::op_set_hash::OpSetHash {
+        self.op_set
+    }
+
     pub(crate) fn lock_store(&self) -> std::sync::MutexGuard<'_, Store> {
         // A poisoned lock still has consistent data (SQLite transactions); keep going.
         self.store
@@ -297,6 +312,7 @@ impl FileActor {
         }
         let new_hash = hash_of(&bytes);
         let range = self.persist_change(&ops, &bytes, &tail, &next)?;
+        self.op_set.add_ops(&ops);
         let before = std::mem::replace(&mut self.state, next);
         let before_bytes = std::mem::replace(&mut self.projection, bytes);
         let before_hash = std::mem::replace(&mut self.hash, new_hash);
