@@ -90,3 +90,20 @@ one; this check is how we hear about the rest.
   import re-registers the workspace's documents, so this should not happen; not tested.
 - Cost at open: one extra indexed read per document. Not measured on a big workspace.
 
+- Lines 1, 2, 4 (2026-10-02, ADR 0035): `txtodo-sync` `Message::Digest` (tag 5, `FileDigest { path,
+  ops, bytes }`, `MAX_DIGEST_FILES` 1 024) and `PROTOCOL_VERSION` 3 (1cd21707). Daemon (b8db65c0):
+  `sync_digest.rs` sends a digest per workspace when the session has heard nothing for 1 s, nothing
+  is in flight or owed to that workspace, and it committed since its last digest; each file's
+  op-set hash and byte hash, parked files left out (`ActorHandle::digest`, open notes actors too).
+  `on_digest` books equal-ops-different-bytes in `split_files.rs`, clears on agreement;
+  `SyncStatus.Peer.splits` (3c83c910). Test: a cfg(test) actor message skews the byte hash one side
+  reports (the file itself is untouched); both sides flag todo.txt after one quiet period and
+  clear it once it agrees (`sync_digest_tests.rs`, 0.6 s).
+- Known gaps: the seam skews the reported hash, not a real render, so the test proves the
+  protocol and bookkeeping, not that a real split is caught (the lab line does that); a notes
+  document is compared only while its actor is open (discovered ones are opened at start); the
+  digest walks every document of the workspace on the session thread, one actor ask each, which is
+  not measured on a big workspace; splits live in memory and a restart forgets them until the next
+  digest.
+- dc5e48c3: a peer advertising another protocol on the LAN is booked from its mDNS sighting
+  (discovery skipped it, so it was never dialed and never named).
