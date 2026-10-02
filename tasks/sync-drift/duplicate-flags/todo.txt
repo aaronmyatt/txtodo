@@ -1,4 +1,4 @@
-2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui
+2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui @doing by:claude-opus-backlog
 2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop
 2026-09-27 Two-daemon test: B re-mints a file, A gets both copies; keep newest on A with no rejoin leaves exactly one copy on both +m11 @daemon @test
 2026-09-27 Two-daemon test: an edit on A that makes two lines differ drops the group on both; a line typed twice on A shows as a group on both +m11 @daemon @test
