@@ -28,8 +28,29 @@ pub(super) fn sync_checks(
         if peer.parked {
             rows.push(parked_row(&label));
         }
+        if peer.their_protocol != 0 {
+            rows.push(protocol_row(&label, peer.their_protocol, status.protocol));
+        }
     }
     rows
+}
+
+/// A peer on another sync protocol (task sync-divergence-check/protocol-mismatch): the two refuse
+/// each other, so nothing syncs until the older one is upgraded. A FAIL: it never heals by itself.
+fn protocol_row(label: &str, theirs: u32, ours: u32) -> Check {
+    let older = if theirs > ours {
+        "this device is older: upgrade txtodo here"
+    } else {
+        "that device is older: upgrade txtodo there"
+    };
+    check(
+        "sync",
+        Status::Fail,
+        format!(
+            "{label}: speaks sync protocol {theirs}, this device {ours}; not syncing until both \
+             match, {older}"
+        ),
+    )
 }
 
 /// `name (id)` when the device list names the peer, else its id.
@@ -127,7 +148,33 @@ mod tests {
                 ..pb::sync_status_response::Peer::default()
             }],
             pending_ops: 0,
+            protocol: 2,
         }
+    }
+
+    #[test]
+    fn a_peer_on_another_protocol_fails_and_says_which_device_to_upgrade() {
+        let mut newer = status(Vec::new(), false);
+        newer.peers[0].their_protocol = 3;
+        let rows = sync_checks(Some(&newer), &[named_peer()], &[]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, Status::Fail, "it never heals by itself");
+        let detail = &rows[0].detail;
+        assert!(
+            detail.starts_with(&format!(
+                "laptop ({PEER}): speaks sync protocol 3, this device 2; not syncing"
+            )),
+            "{detail}"
+        );
+        assert!(detail.ends_with("upgrade txtodo here"), "{detail}");
+        let mut older = status(Vec::new(), false);
+        older.peers[0].their_protocol = 1;
+        let rows = sync_checks(Some(&older), &[], &[]);
+        assert!(rows[0].detail.ends_with("upgrade txtodo there"));
+        assert!(
+            sync_checks(Some(&status(Vec::new(), false)), &[], &[]).is_empty(),
+            "the same protocol (0) is no row"
+        );
     }
 
     fn named_peer() -> pb::Device {
