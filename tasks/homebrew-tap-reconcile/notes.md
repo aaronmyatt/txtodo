@@ -84,3 +84,18 @@ human's to create and store as a repo secret; the job is staged as a patch, sinc
   verbatim from the tap at `befb1fa` (v0.0.19; the formula here was at v0.0.13, the cask at v0.0.2).
   Both pass `ruby -c`. The tap moved on by hand twice since this task was filed (0.0.14, 0.0.19);
   until the decide line lands, the next bump will fork them again.
+
+## Found 2026-10-02: the tap already bumps itself
+- The tap has `.github/workflows/autobump.yml` (since 2026-09-20, see `BREW_TAP.patch.md`): daily at
+  04:25 UTC and on demand, it downloads the newest release, verifies every Sigstore bundle, stamps
+  with the tap's `bin/update-formula.sh` and `bin/update-cask.sh`, and opens a PR from
+  `bump/<tag>`. It runs green every day; the tap is on v0.0.19, the latest release. The inventory
+  above (09-25) missed it, so "bumping the tap is manual" was already false when this was decided.
+- Two PRs are still open in the tap: #9 (v0.0.15) and #8 (v0.0.10), both superseded.
+- So a `release.yml` push job and a PAT buy only speed (minutes, not up to a day). The fork is the
+  real problem, and it has a no-secret fix: autobump fetches `deploy/homebrew/*` from this repo
+  at the release tag (public raw URL) instead of running its own `bin/` copy; then `bin/` goes.
+- Options for the owner:
+  - A: keep autobump, point it at this repo's scripts, delete the tap's `bin/`. No token.
+  - B: as decided: `release.yml` job + PAT pushes to the tap; autobump stays as a fallback or goes.
+  - I'd take A: same result a day later at worst, no cross-repo credential.
