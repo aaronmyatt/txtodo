@@ -92,3 +92,10 @@ file only adds what building it needs.
   Manifest: desktop `differs` (buttons, no key). Known gaps: Playwright not run and nobody has
   looked at it; the group row has no dismiss (a group is cleared by fixing it). By hand: two
   identical lines in a list, check the second banner row, Review, keep newest; one copy left.
+- 2026-10-02, two-daemon tests (`tests/e2e/duplicate_groups.rs`). A re-mint is simulated as two
+  Sidecar daemons that adopt the same line apart (each mints its own id), then pair: both hold both
+  copies and list the same group. Keep newest on A, no rejoin: one copy on both. An edit on A that
+  makes them differ: the group goes on both. A line typed twice on A: a group on both. Found on
+  the way: the TUI and desktop "keep" sent each delete's line number with its id; the daemon
+  resolves the line first, and the second delete's line has moved, so under Sidecar it would have
+  deleted the wrong line. Both now send line 0, like the CLI (1f8eec29, 05b20677).
