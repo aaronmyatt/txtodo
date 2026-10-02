@@ -6,17 +6,17 @@
 pub mod global_socket;
 pub mod layout;
 pub mod migrate;
-/// Global-mode multi-workspace daemon harness, split out for this file's own line budget — see
-/// its own doc.
+/// Global-mode multi-workspace daemon harness, split out for this file's own line budget.
 pub mod multi;
 #[allow(unused_imports)] // each test file uses a different subset of these re-exports
 pub use multi::wait_until_all_open;
+/// `ListConflicts` duplicate groups and deletes by id (`duplicate_groups.rs`).
+pub mod duplicates;
 /// Pairing helpers, split out for this file's own line budget — see its own doc.
 pub mod pairing;
 /// Relay/forced-relay helpers, split out for this file's own line budget — see its own doc.
 pub mod relay;
-/// Fixture-writing and pre-daemon state-seeding helpers, split out for this file's own line
-/// budget — see its own doc.
+/// Fixture-writing and pre-daemon state-seeding helpers, split out for this file's line budget.
 mod seed;
 
 use seed::write_tree;

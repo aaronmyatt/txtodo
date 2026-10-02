@@ -14,6 +14,7 @@ mod default_workspace_foreign;
 mod default_workspace_pairing;
 mod default_workspace_sync;
 mod dir_bridge_refused;
+mod duplicate_groups;
 mod editor_saves;
 mod external_edits;
 mod external_edits_sidecar;
