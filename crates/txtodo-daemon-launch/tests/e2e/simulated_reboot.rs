@@ -1,7 +1,7 @@
 //! `#[ignore]`d simulated-reboot proof for task `daemon-always-available`, item 7's second half
 //! ("simulated-reboot case: service installed, process killed, recovers via the installed unit
 //! rather than triggering another ad-hoc spawn"). Same convention this repo already uses for a
-//! real-OS-infra gap it can't close in a sandbox — see `crates/txtodo-daemon/tests/idle_rss.rs`
+//! real-OS-infra gap it can't close in a sandbox — see `crates/txtodo-daemon/tests/e2e/idle_rss.rs`
 //! and `tests/lan_sync_bench.rs`'s own doc comments for the precedent this follows.
 //!
 //! **Why this can't run unattended here**: [`ensure_daemon`]'s best-effort persistent-service
