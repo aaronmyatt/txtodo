@@ -50,6 +50,9 @@ pub const MAX_OPS_PER_BATCH: usize = 1_000;
 pub const MAX_WANT_RANGES: usize = 1_024;
 /// Most devices one `Hello` may report heads for.
 pub const MAX_HEADS: usize = 1_024;
+/// Most files one `Digest` carries; a bigger workspace sends several. With paths of at most
+/// `FILE_PATH_MAX_BYTES` (1 KiB) that stays near 1 MiB, under `MAX_FRAME_BYTES`.
+pub const MAX_DIGEST_FILES: usize = 1_024;
 
 /// The sync group two devices must share; the crypto task binds it to the group key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -125,6 +128,28 @@ pub enum Message {
         /// What the sender already holds for this workspace, per origin device.
         heads: Heads,
     },
+    /// Per file, an order-free hash of the file's op set and a hash of its bytes, sent when a live
+    /// session goes quiet (ADR 0035, `PROTOCOL_VERSION` 3). Equal op sets with different bytes is a
+    /// split the receiver reports; it never changes a file. A workspace with more than
+    /// [`MAX_DIGEST_FILES`] files sends several. Appended: tag 5.
+    Digest {
+        /// Which open workspace these files are in — see the module doc.
+        workspace: u128,
+        /// The files, any order; a file with peer ops waiting is left out.
+        files: Vec<FileDigest>,
+    },
+}
+
+/// One file in a [`Message::Digest`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileDigest {
+    /// Workspace-relative path, `/` separators (`txtodo_model::FilePath`).
+    pub path: String,
+    /// XOR of blake3 over the raw bytes of every op id in the file (`txtodo-daemon`'s
+    /// `OpSetHash`): equal on two devices that hold the same ops, whatever their order.
+    pub ops: [u8; 32],
+    /// blake3 of the file's bytes as this device renders them.
+    pub bytes: [u8; 32],
 }
 
 /// Why a message could not be encoded or decoded.
@@ -198,7 +223,8 @@ impl Message {
             Message::Want { workspace, .. }
             | Message::Ops { workspace, .. }
             | Message::Ack { workspace, .. }
-            | Message::Greet { workspace, .. } => {
+            | Message::Greet { workspace, .. }
+            | Message::Digest { workspace, .. } => {
                 Some(WorkspaceId::new(Ulid::from_u128(*workspace)))
             }
         }
@@ -255,6 +281,7 @@ impl Message {
             }
             Message::Ack { committed, .. } => ranges_ok("ack ranges", committed),
             Message::Greet { heads, .. } => cap("heads", heads.len(), MAX_HEADS),
+            Message::Digest { files, .. } => cap("digest files", files.len(), MAX_DIGEST_FILES),
         }
     }
 }

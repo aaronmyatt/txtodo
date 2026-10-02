@@ -346,5 +346,6 @@ pub(crate) fn name_of(msg: &Message) -> &'static str {
         Message::Ops { .. } => "Ops",
         Message::Ack { .. } => "Ack",
         Message::Greet { .. } => "Greet",
+        Message::Digest { .. } => "Digest",
     }
 }

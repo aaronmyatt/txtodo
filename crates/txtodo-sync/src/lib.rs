@@ -77,8 +77,8 @@ pub use lan_link::{IrohLink, LanEndpoint, LanError};
 pub use lan_op_signing::{LAN_OP_SIGN_INFO, derive_group_op_signing_key};
 pub use link::{ChannelLink, Link, LinkError, MAX_QUEUED_FRAMES, channel_link_pair};
 pub use message::{
-    GroupId, Heads, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError,
-    OriginRange,
+    FileDigest, GroupId, Heads, MAX_DIGEST_FILES, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES,
+    Message, MessageError, OriginRange,
 };
 pub use nonce_registry::{
     MAX_CONCURRENT_PAIRINGS, Nonce, NonceError, NonceRegistry, PAIRING_WINDOW_MS,

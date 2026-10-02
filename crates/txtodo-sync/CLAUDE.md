@@ -5,10 +5,12 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 
 ## Public interface
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
-  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 2, bumped 1 -> 2 by
-  task `daemon-workspace-session-multiplex`, root todo, stage 1), `MAX_FRAME_BYTES`.
-- `Message::{Hello, Want, Ops, Ack, Greet}` (append-only variants — `Greet` added stage 2, index 4,
-  no `PROTOCOL_VERSION` bump since appending a variant is exactly the safe case), `Message::{encode,
+  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 3; 1 -> 2 by
+  task `daemon-workspace-session-multiplex`, 2 -> 3 by ADR 0035), `MAX_FRAME_BYTES`.
+- `Message::{Hello, Want, Ops, Ack, Greet, Digest}` (append-only variants — `Greet` added stage 2,
+  index 4, no bump; `Digest { workspace, files: Vec<FileDigest { path, ops, bytes }> }` index 5,
+  ADR 0035, with the 2 -> 3 bump because a v2 peer drops the link on it; cap
+  `MAX_DIGEST_FILES`), `Message::{encode,
   decode, check_caps, workspace}`, `MessageError`, `Heads = BTreeMap<DeviceId, u64>`, `OriginRange`,
   `GroupId`, caps `MAX_OPS_PER_BATCH` / `MAX_WANT_RANGES` / `MAX_HEADS`. `Ops` carries
   `signatures: Vec<Signature>` parallel to `ops` (`sync-reject-tests`); a length mismatch is

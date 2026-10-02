@@ -13,7 +13,10 @@ pub const MAGIC: [u8; 4] = *b"TXTO";
 /// Bumped 1 -> 2 (task `daemon-workspace-session-multiplex`, root todo, stage 1): `Want`/`Ops`/
 /// `Ack` gained a `workspace` field, a wire break (postcard is not self-describing — an old peer
 /// decoding a new-shape struct gets garbage, not an error — see the module doc).
-pub const PROTOCOL_VERSION: u16 = 2;
+/// Bumped 2 -> 3 (ADR 0035): `Message::Digest` appended. An appended variant is safe to decode, but
+/// a v2 peer drops the link on one it cannot read, and there is no capability signal to send it
+/// only to a peer that knows it; so v2 and v3 refuse each other's frames instead.
+pub const PROTOCOL_VERSION: u16 = 3;
 /// Largest body we will decode. Checked against the header *before* any allocation.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Header size in bytes: magic (4) + version (2) + len (4).

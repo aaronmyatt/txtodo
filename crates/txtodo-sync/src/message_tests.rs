@@ -8,7 +8,8 @@ use std::path::PathBuf;
 
 use crate::frame::{Frame, FrameError, PROTOCOL_VERSION};
 use crate::message::{
-    GroupId, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message, MessageError, OriginRange,
+    FileDigest, GroupId, MAX_DIGEST_FILES, MAX_HEADS, MAX_OPS_PER_BATCH, MAX_WANT_RANGES, Message,
+    MessageError, OriginRange,
 };
 use crate::sign::Signature;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
@@ -135,6 +136,17 @@ fn every_message_matches_its_checked_in_golden() {
             },
         },
     );
+    golden(
+        "digest",
+        &Message::Digest {
+            workspace: WS,
+            files: vec![FileDigest {
+                path: "tasks/a/todo.txt".to_owned(),
+                ops: [0x11; 32],
+                bytes: [0x22; 32],
+            }],
+        },
+    );
 }
 
 #[test]
@@ -159,12 +171,16 @@ fn variant_tags_are_frozen_in_declaration_order() {
             workspace: WS,
             heads: BTreeMap::new(),
         },
+        Message::Digest {
+            workspace: WS,
+            files: Vec::new(),
+        },
     ]
     .iter()
     .map(|m| m.encode().unwrap().body[0])
     .collect();
     // postcard writes the variant index first; appending a variant keeps these, inserting breaks them.
-    assert_eq!(tags, vec![0, 1, 2, 3, 4]);
+    assert_eq!(tags, vec![0, 1, 2, 3, 4, 5]);
     assert_eq!(
         Message::Ack {
             workspace: 0,
@@ -258,6 +274,37 @@ fn caps_are_checked_after_decode_too() {
         Message::decode(&frame).unwrap_err(),
         MessageError::BackwardsRange(range(1, 2, 1))
     );
+}
+
+/// ADR 0035: a `Digest` past `MAX_DIGEST_FILES` is refused on both paths, and one at the cap fits
+/// a frame even with the longest paths.
+#[test]
+fn a_digest_is_capped_both_ways_and_a_full_one_fits_a_frame() {
+    let file = |n: usize| FileDigest {
+        path: format!("{n:0>1020}.txt"),
+        ops: [1; 32],
+        bytes: [2; 32],
+    };
+    let full = Message::Digest {
+        workspace: WS,
+        files: (0..MAX_DIGEST_FILES).map(file).collect(),
+    };
+    assert!(
+        full.encode().is_ok(),
+        "1 KiB paths at the cap stay under MAX_FRAME_BYTES"
+    );
+    let over = Message::Digest {
+        workspace: WS,
+        files: (0..=MAX_DIGEST_FILES).map(file).collect(),
+    };
+    let too_many = MessageError::TooMany {
+        what: "digest files",
+        len: MAX_DIGEST_FILES + 1,
+        max: MAX_DIGEST_FILES,
+    };
+    assert_eq!(over.encode().unwrap_err(), too_many);
+    let frame = Frame::new(postcard::to_allocvec(&over).unwrap()).unwrap();
+    assert_eq!(Message::decode(&frame).unwrap_err(), too_many);
 }
 
 #[test]
