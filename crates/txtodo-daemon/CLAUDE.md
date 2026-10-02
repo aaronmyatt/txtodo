@@ -132,7 +132,7 @@ multiplex every workspace's traffic — not done by this task).
   before a single byte lands; re-import is idempotent via `existing_op_ids`. Deliberately
   key-free (plan M8, 2026-09-13 decision): `BundleManifest` carries no group key, ever — only the
   exporting device's *public* signing key. `bundle_tests.rs` covers the todo.txt `@test` items
-  in-process (no socket); `txtodo-cli`'s `tests/bundle.rs` is the real two-daemon, real-socket
+  in-process (no socket); `txtodo-cli`'s `tests/e2e/bundle.rs` is the real two-daemon, real-socket
   proof of the CLI-facing half.
 - `workspace_error` (`WorkspaceError`) and `workspace_mint` (device/group/identity-mode load-or-
   mint helpers) are split out of `workspace.rs` for its line budget, the same pattern as

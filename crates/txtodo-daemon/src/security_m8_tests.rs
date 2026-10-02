@@ -78,7 +78,7 @@ fn sealed_frame(
 /// The relay put/get cycle (relay-reference, M8): a real sealed blob through the real
 /// `relay::store::Store`, then its queued wake-up drained through the real `relay::push::NoopPush`
 /// -- the same steps `http.rs`'s `put_blob` handler drives (already proven real end to end by
-/// `relay/tests/http_smoke.rs`; this test's own job is the logging, not re-proving the HTTP
+/// `relay/tests/it/http_smoke.rs`; this test's own job is the logging, not re-proving the HTTP
 /// wiring).
 fn relay_put_get_cycle(sealed: &[u8]) {
     use relay::push::Push as _;
