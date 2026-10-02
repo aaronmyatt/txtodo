@@ -11,9 +11,13 @@ description = "ratatui client (M10)."
 name = "txtodo_tui"
 path = "src/lib.rs"
 
+# main.rs has no tests: `test = false` skips building and linking an empty unit-test binary for it
+# on every test run (task fast-gate). Integration tests still get the binary via CARGO_BIN_EXE_*.
+# https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
 [[bin]]
 name = "txtodo-tui"
 path = "src/main.rs"
+test = false
 
 [dependencies]
 txtodo-core.workspace = true

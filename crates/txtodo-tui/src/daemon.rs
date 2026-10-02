@@ -340,7 +340,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn wait_until_ready_times_out_without_a_daemon() {
+    async fn slow_wait_until_ready_times_out_without_a_daemon() {
         let sock = std::env::temp_dir().join("txtodo-tui-test-no-such-daemon-2.sock");
         let mut daemon = Daemon::connect(&sock, None).await.unwrap();
         let result = daemon.wait_until_ready().await;
