@@ -16,7 +16,8 @@ const SELECT_VOUCHED: &str = "SELECT EXISTS (SELECT 1 FROM own_vouches v \
      WHERE v.device = ?1 AND d.own_device = 1 AND d.removed_at IS NULL)";
 const SELECT_DIRECT_OWN: &str = "SELECT device FROM devices \
      WHERE own_device = 1 AND removed_at IS NULL ORDER BY device LIMIT ?1";
-const SELECT_IS_DIRECT_OWN: &str = "SELECT EXISTS (SELECT 1 FROM devices WHERE device = ?1 AND own_device = 1 AND removed_at IS NULL)";
+const SELECT_IS_DIRECT_OWN: &str = "SELECT EXISTS (SELECT 1 FROM devices \
+     WHERE device = ?1 AND own_device = 1 AND removed_at IS NULL)";
 const DELETE_VOUCHES: &str = "DELETE FROM own_vouches WHERE voucher = ?1";
 const INSERT_VOUCH: &str = "INSERT OR IGNORE INTO own_vouches (voucher, device) VALUES (?1, ?2)";
 

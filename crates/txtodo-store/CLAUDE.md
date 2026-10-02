@@ -86,6 +86,12 @@ that entry below.
   defaults to 1, so every row that predates it counts as own; `register_device_as(new, own)` records
   it with the registration, `is_own_device(id)` reads it (`false` for an unknown device). An older
   build refuses a schema-3 file (`SchemaTooNew`), so a downgrade after this needs the column gone.
+  Own carries across one shared device (ADR 0029's 2026-10-02 amendment, `identity_store_own.rs`,
+  `identity_migrations/0004.sql`, schema 4): `own_vouches (voucher, device)` holds the list each
+  direct own peer sent; `set_own_vouches(voucher, devices)` replaces it (a delete then inserts: a
+  list, not history), `direct_own_devices()` is what this device sends, `is_direct_own(id)` gates
+  whose list is taken, and `is_own_device(id)` is the direct row when there is one, else a vouch
+  from a direct own device that is not removed.
 
 ## Invariants
 - Append-only op log: no `UPDATE`/`DELETE` statement exists in this crate (tests/it/oplog.rs greps).
