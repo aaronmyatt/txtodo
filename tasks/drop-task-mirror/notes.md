@@ -14,6 +14,10 @@ it, and it logs mirror errors in every lab chaos and clock-skew run. Design and 
   every worktree and git history; `import_updates`/`export_since`/`version` only in
   `import_tests.rs`. Not covered: a client reading the store's mirror row from SQLite directly.
 
-## Open questions
+## Decided 2026-10-02 (owner)
+- ADR 0038 accepted. Conflict review A: the `needs_review` flags and `Resolve`'s Mine/Theirs go
+  with the mirror; the conflicts view keeps duplicate groups only.
+
+## Open questions (answered above)
 - Same-word conflict review (`needs_review` flags) dies with the import path. A: drop it (today's
   behaviour); B: rebuild it on the state's text history (ADR 0034), its own ADR. See the ADR.

@@ -1,6 +1,6 @@
 # 0038 — Drop the Loro mirror of todo.txt documents
 
-- Status: proposed
+- Status: accepted 2026-10-02 (the owner chose conflict review A in `tasks/drop-task-mirror/notes.md`)
 - Date: 2026-10-02
 - Deciders: project owner
 
@@ -47,13 +47,14 @@ We will remove the Loro mirror of `todo.txt` documents and the import path built
   not which engine.
 - No wire change and no protocol bump: the mirror never reached the wire.
 
-Open question for the owner: same-word conflict review.
+Same-word conflict review (decided 2026-10-02: A):
 
 - A: drop it with the mirror. The conflicts view keeps duplicate groups only, which is what users
   see today. The `needs_review` table and `Resolve`'s Mine/Theirs go too.
 - B: rebuild it on the op path. The state's text history (ADR 0034) already sees two concurrent
   `EditText`s on one description and could raise a flag there. That needs its own ADR.
-- Recommended: A now; B as its own line if same-word review is wanted.
+- The owner chose A: it goes with the mirror. B stays open as its own ADR if same-word review is
+  wanted later.
 
 ## Consequences
 - Good: the mirror errors stop, and the lab's mirror tripwire can go.
