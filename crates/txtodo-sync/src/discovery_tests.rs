@@ -288,7 +288,7 @@ fn backoff_grows_exponentially_and_never_exceeds_the_cap() {
 /// the other browses and resolves it, driven off the callback with a bounded timeout rather than a
 /// sleep. This is the one test in this file that touches the network for real.
 #[test]
-fn two_real_daemons_discover_each_other_on_the_lan() {
+fn slow_two_real_daemons_discover_each_other_on_the_lan() {
     let advertiser_device = device(1000);
     let group = GroupId(42);
     let advertiser_node = node(200);
@@ -328,7 +328,7 @@ fn two_real_daemons_discover_each_other_on_the_lan() {
 /// not a raw `mdns_sd::ServiceDaemon` standing in for a foreign browser. Exercises the exact seam
 /// `lan.rs` drives in production.
 #[tokio::test]
-async fn discovery_browse_finds_a_real_advertiser_through_the_wrapped_event_stream() {
+async fn slow_discovery_browse_finds_a_real_advertiser_through_the_wrapped_event_stream() {
     let advertiser_device = device(2000);
     let group = GroupId(43);
     let advertiser_node = node(201);

@@ -23,7 +23,7 @@ fn tmp_path(name: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn create_then_open_round_trips_every_key_id() {
+fn slow_create_then_open_round_trips_every_key_id() {
     let path = tmp_path("roundtrip");
     let pass = Secret::new(b"correct horse battery staple".to_vec());
     let store = FileKeyStore::create(&path, &pass).unwrap();
@@ -48,7 +48,7 @@ fn create_then_open_round_trips_every_key_id() {
 }
 
 #[test]
-fn create_refuses_to_overwrite_an_existing_file() {
+fn slow_create_refuses_to_overwrite_an_existing_file() {
     let path = tmp_path("noclobber");
     let pass = Secret::new(b"first passphrase".to_vec());
     FileKeyStore::create(&path, &pass).unwrap();

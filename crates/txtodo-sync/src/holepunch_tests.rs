@@ -110,7 +110,7 @@ async fn foreign_group_is_refused_before_dialing() {
 /// foreign, and the new one gets past the gate. Past the gate the dial goes out to a relay this
 /// test cannot reach, so the timeout or a non-`ForeignGroup` error both prove the gate let it by.
 #[tokio::test]
-async fn set_group_moves_the_connect_gate() {
+async fn slow_set_group_moves_the_connect_gate() {
     let cfg = RelayConfig {
         url: "https://relay.example.org".to_string(),
         max_peers: 1,
