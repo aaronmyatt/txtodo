@@ -131,6 +131,7 @@ pub mod stats;
 mod stored_ids;
 mod stuck_sync;
 mod sync_ops;
+mod sync_park;
 pub mod telemetry;
 mod text_history;
 pub mod textedit;

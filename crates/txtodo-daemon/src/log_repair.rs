@@ -20,6 +20,7 @@ use crate::history::MAX_REPLAY_PAGES;
 use crate::reconcile_replay::replayable_ops;
 use crate::state::DocState;
 use crate::sync_ops::apply_leniently;
+use crate::sync_park::{Parked, apply_parking};
 use txtodo_core::File;
 use txtodo_model::{FilePath, Hlc, IdentityMode, Principal};
 use txtodo_store::{MAX_OPS_PER_READ, Seq, Store};
@@ -33,9 +34,11 @@ impl FileActor {
             let store = self.lock_store();
             replay_from_empty(&store, &self.cfg.path, self.cfg.identity_mode)?
         };
-        let Some(replayed) = replayed else {
+        let Some((replayed, parked)) = replayed else {
             return Ok(());
         };
+        // Ops the log holds that still wait for a task keep waiting here (`sync_park.rs`).
+        self.parked = parked;
         if replayed.to_bytes() == self.projection {
             self.adopt_replayed_stamps(&replayed);
             return Ok(());
@@ -97,26 +100,28 @@ impl FileActor {
 }
 
 /// `path`'s state after every logged op, applied from an empty document in log order and
-/// leniently, with no snapshot. `None` when the log runs past `MAX_REPLAY_PAGES` pages: a
-/// cut-off replay is not the log's text, and a repair must never act on one.
+/// leniently, with no snapshot, an op waiting for a task parked as sync parks it; and the ops
+/// still waiting. `None` when the log runs past `MAX_REPLAY_PAGES` pages: a cut-off replay is not
+/// the log's text, and a repair must never act on one.
 pub(crate) fn replay_from_empty(
     store: &Store,
     path: &FilePath,
     mode: IdentityMode,
-) -> Result<Option<DocState>, ActorError> {
+) -> Result<Option<(DocState, Parked)>, ActorError> {
     let mut state = DocState::from_file(path.clone(), &File::default(), &[], mode)?;
+    let mut parked = Parked::default();
     let mut since = Seq(0);
     for _page in 0..MAX_REPLAY_PAGES {
         let stored = store.for_file(path, since)?;
         let Some(last) = stored.last() else {
-            return Ok(Some(state));
+            return Ok(Some((state, parked)));
         };
         since = last.seq;
         let full = stored.len() >= MAX_OPS_PER_READ;
         let ops: Vec<_> = stored.into_iter().map(|s| s.op).collect();
-        apply_leniently(&mut state, &ops);
+        apply_parking(&mut state, &ops, &mut parked);
         if !full {
-            return Ok(Some(state));
+            return Ok(Some((state, parked)));
         }
     }
     Ok(None)

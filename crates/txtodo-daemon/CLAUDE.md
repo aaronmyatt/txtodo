@@ -415,7 +415,10 @@ multiplex every workspace's traffic — not done by this task).
 - `log_repair` (task todo-log-repair): the `todo.txt` counterpart. After `recover`,
   `FileActor::open` replays the log from empty (no snapshot, lenient, like `on_sync_ops`); when
   that is not the projection it commits `reconcile_replay::replayable_ops(replayed, state)` by
-  task id, file untouched, snapshot forced so `history::replay` starts from the file.
+  task id, file untouched, snapshot forced so `history::replay` starts from the file. A peer op
+  naming a task this file never held (another device's insert not delivered yet) waits instead of
+  being skipped, and is retried after each later commit group, live and in that replay alike;
+  the replay hands what still waits to the actor (`sync_park.rs`, 2026-10-02).
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's
@@ -518,10 +521,8 @@ multiplex every workspace's traffic — not done by this task).
   `BlankRemove` is a hidden eraser slot; which blank each one hides is settled from the sequence
   after every op that reshapes it (`state_erase.rs`). An `Insert` of a task already here sets
   its whole line at its stamp; a deleted task still takes edits, hidden (`state_reinsert.rs`).
-  Every
-  by-position call (`len`, `entry_at`, `index_of`, `task_before`, `line_ids`, `to_bytes`) sees
-  only shown lines; slots
-  (ghosts included) are internal to `state*.rs` and `fields.rs`. Ghosts come back at open through
+  Every by-position call (`len`, `entry_at`, `index_of`, `task_before`, `line_ids`, `to_bytes`)
+  sees only shown lines; slots (ghosts included) are internal to `state*.rs` and `fields.rs`. Ghosts come back at open through
   `adopt_stamps` from the replay log repair already runs.
 - `SetField` is last-writer-wins per task field by HLC in `DocState` too (`field_stamps`, task
   partition-converge, 2026-10-01): an op older than the field's stamp is a no-op, so arrival order

@@ -91,6 +91,8 @@ pub struct FileActor {
     pub(crate) pending_save: Option<crate::pending_save::PendingSave>,
     /// The disk bytes a commit in flight is merging: its write may replace them.
     pub(crate) absorbing: Option<Hash>,
+    /// Peer ops waiting for a task from another device to land (`sync_park.rs`).
+    pub(crate) parked: crate::sync_park::Parked,
 }
 
 impl FileActor {
@@ -119,6 +121,7 @@ impl FileActor {
             writes_total: 0,
             pending_save: None,
             absorbing: None,
+            parked: crate::sync_park::Parked::default(),
         };
         actor.recover()?;
         actor.repair_log()?;

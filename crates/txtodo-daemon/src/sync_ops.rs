@@ -15,6 +15,7 @@
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
 use crate::state::{DocState, StateError};
+use crate::sync_park::apply_parking;
 use txtodo_model::{Op, OpKind, TaskId};
 
 impl ActorHandle {
@@ -47,8 +48,11 @@ impl FileActor {
         }
         self.observe_peer_stamps(&ops);
         let mut next = self.state.clone();
-        for (op, e) in apply_leniently(&mut next, &ops) {
-            log_skipped(op, &e);
+        // An op naming a task another device has not delivered yet waits for it (`sync_park.rs`).
+        let mut parked = self.parked.clone();
+        let parking = apply_parking(&mut next, &ops, &mut parked);
+        for (op, e) in &parking.skipped {
+            log_skipped(op, e);
         }
         let bytes = next.to_bytes();
         let write = bytes != self.projection;
@@ -63,6 +67,11 @@ impl FileActor {
                 ..CommitTail::default()
             },
         })?;
+        self.parked = parked;
+        if parking.landed > 0 {
+            // Ops from earlier batches landed in this one: the mirror only saw this batch.
+            self.converge_mirror();
+        }
         Ok(())
     }
 

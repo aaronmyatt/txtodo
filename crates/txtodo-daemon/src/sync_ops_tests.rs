@@ -279,3 +279,47 @@ fn line_stamps_come_back_after_a_restart() {
     let order: Vec<&str> = text.lines().map(|l| &l[..1]).collect();
     assert_eq!(order, vec!["b", "c", "a"], "{text}");
 }
+
+/// Task partition-converge (lab chaos 20261001-233439): with three devices, C's add after A's line
+/// can arrive before A's line does, since each origin's ops travel as their own run. It waits
+/// instead of being skipped, still waits after a restart, and lands once A's line has; the log
+/// then rebuilds the file, so the next open commits no repair.
+#[test]
+fn an_op_that_needs_another_devices_insert_waits_for_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let (a, c) = (
+        TaskId::new(Ulid::from_u128(91)),
+        TaskId::new(Ulid::from_u128(93)),
+    );
+    {
+        let mut actor = open(dir.path(), &store, &clock);
+        actor
+            .on_sync_ops(vec![op_from(2, 9, 3_000, insert(c, Some(a), "c"))])
+            .unwrap();
+        assert_eq!(actor.parked.len(), 1);
+        assert!(actor.projection.is_empty());
+    }
+    let mut reopened = open(dir.path(), &store, &clock);
+    assert_eq!(
+        reopened.parked.len(),
+        1,
+        "the replay at open parks it again"
+    );
+    reopened
+        .on_sync_ops(vec![op_from(1, 7, 2_000, insert(a, None, "a"))])
+        .unwrap();
+    assert_eq!(reopened.parked.len(), 0);
+    let text = String::from_utf8_lossy(&reopened.projection).into_owned();
+    let order: Vec<&str> = text.lines().map(|l| &l[..1]).collect();
+    assert_eq!(order, vec!["a", "c"], "{text}");
+    let logged = rows(&store);
+    let again = open(dir.path(), &store, &clock);
+    assert_eq!(again.projection, reopened.projection);
+    assert_eq!(
+        rows(&store),
+        logged,
+        "no repair: the log alone rebuilds the file"
+    );
+}
