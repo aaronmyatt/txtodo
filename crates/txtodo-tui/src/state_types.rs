@@ -94,6 +94,24 @@ pub struct ConflictItem {
     pub theirs: String,
 }
 
+/// Two or more lines of the open file that read the same (ADR 0032, task sync-drift
+/// duplicate-flags): the UI-local mirror of `pb::DuplicateGroup`. Never makes a line read-only:
+/// editing one copy so they differ is one of the fixes.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct DuplicateGroup {
+    /// The copies, oldest task id first (ULIDs sort by mint time): the last is the newest.
+    pub copies: Vec<DuplicateCopy>,
+}
+
+/// One copy in a [`DuplicateGroup`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DuplicateCopy {
+    /// Task id (ULID text).
+    pub task_id: String,
+    /// 1-based line number, blank lines counted.
+    pub line_number: u32,
+}
+
 /// Which side of a conflict the human picked in the `r` pane.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resolution {

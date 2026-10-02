@@ -14,7 +14,8 @@ use crate::state_universal::UniversalView;
 
 pub use crate::state_nav::{Focus, Nav, Overlay, Screen, SettingsCard};
 pub use crate::state_types::{
-    ConflictItem, EditDraft, EditTarget, LineState, PeerStatus, Resolution, SyncSnapshot,
+    ConflictItem, DuplicateCopy, DuplicateGroup, EditDraft, EditTarget, LineState, PeerStatus,
+    Resolution, SyncSnapshot,
 };
 
 /// Everything the UI renders from. `cursor == lines.len()` means the trailing "Add a line" row is
@@ -33,7 +34,9 @@ pub struct AppState {
     pub conflicts_open: bool,
     /// Open `needs_review` flags for `path` (plan M4), surfaced via `Watch`.
     pub needs_review: Vec<ConflictItem>,
-    /// Selected index into `needs_review` while the pane is open.
+    /// The open file's duplicate groups (ADR 0032), from `ListConflicts`.
+    pub duplicates: Vec<DuplicateGroup>,
+    /// Selected item while the sheet is open: `needs_review` first, then `duplicates`.
     pub conflict_cursor: usize,
     /// Whether the sync indicator (`s`) is shown.
     pub sync_visible: bool,
@@ -94,6 +97,7 @@ impl AppState {
             editing: None,
             conflicts_open: false,
             needs_review: Vec::new(),
+            duplicates: Vec::new(),
             conflict_cursor: 0,
             sync_visible: false,
             sync: SyncSnapshot::default(),
@@ -180,6 +184,11 @@ impl AppState {
     /// `s`: toggles the sync indicator.
     pub fn toggle_sync_visible(&mut self) {
         self.sync_visible = !self.sync_visible;
+    }
+
+    /// Items the review sheet walks: the flags, then the duplicate groups.
+    pub fn review_len(&self) -> usize {
+        self.needs_review.len() + self.duplicates.len()
     }
 
     /// `r`: toggles the conflict-review pane; resets its cursor on open.

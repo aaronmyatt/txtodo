@@ -58,6 +58,10 @@ pub fn merged_runs(mine: &str, theirs: &str) -> Vec<(String, Option<bool>)> {
 /// under it takes a click.
 pub fn draw(frame: &mut Frame, screen: Rect, state: &AppState, hits: &mut HitMap) {
     hits.push(screen, Target::Inert);
+    if let Some(group) = crate::ui::conflicts::selected_group(state) {
+        crate::ui::duplicate_sheet::draw(frame, screen, state, group, hits);
+        return;
+    }
     let Some(flag) = state.needs_review.get(state.conflict_cursor) else {
         return;
     };
@@ -68,7 +72,7 @@ pub fn draw(frame: &mut Frame, screen: Rect, state: &AppState, hits: &mut HitMap
         width,
         9.min(screen.height),
     );
-    let count = state.needs_review.len();
+    let count = state.review_len();
     let title = format!(
         " Review line {} \u{b7} {} of {count} ",
         flag.line_number,
@@ -77,7 +81,8 @@ pub fn draw(frame: &mut Frame, screen: Rect, state: &AppState, hits: &mut HitMap
     frame.render_widget(Clear, area);
     frame.render_widget(Block::default().borders(Borders::ALL).title(title), area);
     let inner = area.inner(Margin::new(2, 1));
-    frame.render_widget(Paragraph::new(body(flag, count - 1)), inner);
+    let more = count.saturating_sub(state.conflict_cursor + 1);
+    frame.render_widget(Paragraph::new(body(flag, more)), inner);
     buttons(frame, inner, hits);
 }
 

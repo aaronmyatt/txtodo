@@ -94,6 +94,8 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::ConflictsKeepMine => return resolve(state, Resolution::Mine),
         Command::ConflictsKeepTheirs => return resolve(state, Resolution::Theirs),
         Command::ConflictsKeepMerged => return resolve(state, Resolution::Merged),
+        Command::ConflictsKeepNewest => return keep_copy(state, conflicts::Keep::Newest),
+        Command::ConflictsKeepOldest => return keep_copy(state, conflicts::Keep::Oldest),
         Command::OffersOpen | Command::OffersClose => state.offers.toggle(),
         Command::OffersDown => state.offers.move_down(),
         Command::OffersUp => state.offers.move_up(),
@@ -124,6 +126,13 @@ fn toasting(state: &mut AppState, mutation: Option<pb::Mutation>, message: &str)
 
 fn apply(state: &AppState, mutation: Option<pb::Mutation>) -> Option<Action> {
     mutation.map(|m| Action::Apply(apply_of(state, m)))
+}
+
+/// `n`/`o` on a duplicate group: deletes its other copies in one `Apply`.
+fn keep_copy(state: &mut AppState, keep: conflicts::Keep) -> Option<Action> {
+    let req = conflicts::keep_request(state, keep)?;
+    state.shell.pending_toast = Some("Deleted the other copies".to_owned());
+    Some(Action::Apply(req))
 }
 
 fn resolve(state: &AppState, pick: Resolution) -> Option<Action> {

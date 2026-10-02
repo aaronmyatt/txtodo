@@ -30,6 +30,7 @@ pub mod ui {
     pub mod conflict_sheet;
     pub mod conflicts;
     pub mod detail;
+    pub mod duplicate_sheet;
     pub mod edit;
     pub mod footer;
     pub mod header;
@@ -77,6 +78,7 @@ pub mod settings_rows;
 pub mod app;
 pub mod app_apply;
 pub mod app_detail;
+pub mod app_duplicates;
 pub mod app_layout;
 pub mod app_loop;
 pub mod app_offers;

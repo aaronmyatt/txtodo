@@ -54,21 +54,7 @@ pub fn banners(state: &AppState) -> Vec<Banner> {
         b.loud = true;
         out.push(b);
     }
-    let flagged = state.needs_review.len();
-    if flagged > 0 && !state.shell.conflict_banner_hidden {
-        let lines = if flagged == 1 {
-            "line needs"
-        } else {
-            "lines need"
-        };
-        let mut b = banner(
-            format!("{flagged} {lines} review"),
-            "Two devices edited the same line. It is read-only until you pick.",
-        );
-        b.buttons.push(("Review", Command::ConflictsOpen));
-        b.buttons.push(("\u{d7}", Command::ConflictsDismissBanner));
-        out.push(b);
-    }
+    review_banners(state, &mut out);
     if let Some(refused) = &state.shell.refused {
         let mut b = banner(
             format!("Your edit to {} was not saved", state.path),
@@ -95,6 +81,36 @@ pub fn banners(state: &AppState) -> Vec<Banner> {
         out.push(b);
     }
     out
+}
+
+/// The flags banner, then the duplicate-lines one (ADR 0032); both open the review sheet.
+fn review_banners(state: &AppState, out: &mut Vec<Banner>) {
+    let flagged = state.needs_review.len();
+    if flagged > 0 && !state.shell.conflict_banner_hidden {
+        let lines = if flagged == 1 {
+            "line needs"
+        } else {
+            "lines need"
+        };
+        let mut b = banner(
+            format!("{flagged} {lines} review"),
+            "Two devices edited the same line. It is read-only until you pick.",
+        );
+        b.buttons.push(("Review", Command::ConflictsOpen));
+        b.buttons.push(("\u{d7}", Command::ConflictsDismissBanner));
+        out.push(b);
+    }
+    let groups = state.duplicates.len();
+    if groups > 0 {
+        let label = if groups == 1 {
+            "1 line is in the file twice".to_owned()
+        } else {
+            format!("{groups} lines are in the file more than once")
+        };
+        let mut b = banner(label, "Keep one copy, or edit one so they differ.");
+        b.buttons.push(("Review", Command::ConflictsOpen));
+        out.push(b);
+    }
 }
 
 /// Draws `banners` one per row from the top of `area`, buttons flush right, and records the

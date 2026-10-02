@@ -67,6 +67,10 @@ commands! {
     ConflictsKeepTheirs = "conflicts.keep_theirs", ["t"], Sheet;
     /// Keep the merged text.
     ConflictsKeepMerged = "conflicts.keep_merged", ["M"], Sheet;
+    /// Keep the newest copy of a duplicate line, deleting the others.
+    ConflictsKeepNewest = "conflicts.keep_newest", ["n"], Sheet;
+    /// Keep the oldest copy of a duplicate line, deleting the others.
+    ConflictsKeepOldest = "conflicts.keep_oldest", ["o"], Sheet;
     /// Close the conflict review.
     ConflictsClose = "conflicts.close", ["Esc", "r"], Sheet;
     /// Open the workspace offers.

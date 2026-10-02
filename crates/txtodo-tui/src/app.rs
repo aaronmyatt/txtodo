@@ -134,6 +134,7 @@ pub async fn run_in(
     }
     root.clone_into(&mut state.shell.root);
     crate::app_refs::refresh(daemon, &mut state).await;
+    crate::app_duplicates::refresh(daemon, &mut state).await;
     if let Ok(health) = daemon.health().await {
         state.shell.daemon_build =
             crate::buildinfo::other_build(&health.version, &health.release_date);
@@ -275,14 +276,15 @@ async fn resolve(
 ) -> Result<(), DaemonError> {
     daemon.resolve(req).await?;
     state.needs_review.clear();
-    if let Ok(flags) = daemon.list_conflicts(&state.path).await {
-        state.needs_review = flags.flags.into_iter().map(to_conflict_item).collect();
+    if let Ok(found) = daemon.list_conflicts(&state.path).await {
+        state.needs_review = found.flags.into_iter().map(to_conflict_item).collect();
+        crate::app_duplicates::set(state, found.duplicates);
     }
-    // The sheet moves on to the next flag, and closes after the last, as desktop's does.
+    // The sheet moves on to the next item, and closes after the last, as desktop's does.
     state.conflict_cursor = state
         .conflict_cursor
-        .min(state.needs_review.len().saturating_sub(1));
-    if state.needs_review.is_empty() {
+        .min(state.review_len().saturating_sub(1));
+    if state.review_len() == 0 {
         state.conflicts_open = false;
     }
     Ok(())
@@ -318,6 +320,7 @@ pub async fn follow_change(
     let layout_changed = crate::app_layout::is_layout_change(&change);
     let path = change.path.clone();
     let this_document = crate::app_detail::watched_paths(state).contains(&path);
+    let groups = path == state.path && crate::app_duplicates::worth_refresh(state, &change);
     if !change.review.is_empty() {
         state.shell.conflict_banner_hidden = false;
     }
@@ -327,6 +330,9 @@ pub async fn follow_change(
     }
     if this_document {
         crate::app_detail::refetch(daemon, state, &path).await?;
+    }
+    if groups {
+        crate::app_duplicates::refresh(daemon, state).await;
     }
     Ok(None)
 }

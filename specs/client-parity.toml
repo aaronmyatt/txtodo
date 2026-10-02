@@ -222,6 +222,24 @@ tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop: a button per conflict, no key."
 
 [[action]]
+id = "conflicts.keep_newest"
+title = "Keep the newest copy of a duplicate line"
+keys = ["n"]
+scope = "sheet"
+desktop = { status = "planned", surface = "ConflictReviewSheet" }
+tui = { status = "done", surface = "conflict sheet" }
+deviation = ""
+
+[[action]]
+id = "conflicts.keep_oldest"
+title = "Keep the oldest copy of a duplicate line"
+keys = ["o"]
+scope = "sheet"
+desktop = { status = "planned", surface = "ConflictReviewSheet" }
+tui = { status = "done", surface = "conflict sheet" }
+deviation = ""
+
+[[action]]
 id = "conflicts.close"
 title = "Close the conflict review"
 keys = ["Esc", "r"]

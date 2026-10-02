@@ -4,10 +4,23 @@
 //! rather than a hand-rolled `Apply { mutations: [Edit] }` — the daemon already exposes exactly
 //! this operation (writes the chosen side back and clears the flag, both or neither), so
 //! reusing it here avoids a second, possibly-drifting implementation of the same merge rule.
+//!
+//! After the flags the pane walks the file's duplicate groups (ADR 0032): two or more lines that
+//! read the same. `n`/`o` keep the newest or the oldest copy and delete the rest with an ordinary
+//! `Apply` `Delete` by task id, as `txtodo conflicts` does; there is no resolve RPC for them.
 
 use txtodo_proto::v1 as pb;
 
-use crate::state::{AppState, Resolution};
+use crate::state::{AppState, DuplicateGroup, Resolution};
+
+/// Which copy of a duplicate group survives `keep_request`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Keep {
+    /// The newest task id (the last copy): the safe default (ADR 0032).
+    Newest,
+    /// The oldest task id (the first copy).
+    Oldest,
+}
 
 impl From<Resolution> for pb::Resolution {
     fn from(r: Resolution) -> Self {
@@ -19,12 +32,53 @@ impl From<Resolution> for pb::Resolution {
     }
 }
 
-/// `j`/`k` inside the pane, clamped to the flag list.
+/// `j`/`k` inside the pane, clamped to the flags and groups.
 pub fn move_down(state: &mut AppState) {
-    if state.needs_review.is_empty() {
+    let len = state.review_len();
+    if len == 0 {
         return;
     }
-    state.conflict_cursor = (state.conflict_cursor + 1).min(state.needs_review.len() - 1);
+    state.conflict_cursor = (state.conflict_cursor + 1).min(len - 1);
+}
+
+/// The duplicate group under the cursor, when the cursor is past the flags.
+pub fn selected_group(state: &AppState) -> Option<&DuplicateGroup> {
+    let i = state
+        .conflict_cursor
+        .checked_sub(state.needs_review.len())?;
+    state.duplicates.get(i)
+}
+
+/// The `Apply` that deletes every copy of the selected group but the one `keep` names. Deletes go
+/// by task id, so line numbers moving inside the batch do not matter; the line goes, no blank
+/// is left (as `txtodo conflicts keep-newest`).
+pub fn keep_request(state: &AppState, keep: Keep) -> Option<pb::ApplyRequest> {
+    let group = selected_group(state)?;
+    let kept = match keep {
+        Keep::Newest => group.copies.len().checked_sub(1)?,
+        Keep::Oldest => 0,
+    };
+    let mutations: Vec<pb::Mutation> = group
+        .copies
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| i != kept)
+        .map(|(_, copy)| pb::Mutation {
+            kind: Some(pb::mutation::Kind::Delete(pb::Delete {
+                task: Some(pb::TaskRef {
+                    line_number: copy.line_number,
+                    task_id: copy.task_id.clone(),
+                }),
+                leave_blank: false,
+            })),
+        })
+        .collect();
+    if mutations.is_empty() {
+        return None;
+    }
+    let mut req = crate::commands::apply_of(state, mutations[0].clone());
+    req.mutations = mutations;
+    Some(req)
 }
 
 /// `j`/`k` inside the pane, clamped to the flag list.
@@ -51,7 +105,76 @@ pub fn resolve_request(state: &AppState, resolution: Resolution) -> Option<pb::R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::ConflictItem;
+    use crate::state::{ConflictItem, DuplicateCopy};
+
+    fn with_group(state: &mut AppState) {
+        let copy = |id: &str, line| DuplicateCopy {
+            task_id: id.to_owned(),
+            line_number: line,
+        };
+        state.duplicates.push(DuplicateGroup {
+            copies: vec![
+                copy("01J9K3H5Z7Q8X2M4N6P8R0T2V1", 2),
+                copy("01J9K3H5Z7Q8X2M4N6P8R0T2V2", 5),
+                copy("01J9K3H5Z7Q8X2M4N6P8R0T2V3", 7),
+            ],
+        });
+    }
+
+    fn deleted_ids(req: &pb::ApplyRequest) -> Vec<String> {
+        req.mutations
+            .iter()
+            .map(|m| match &m.kind {
+                Some(pb::mutation::Kind::Delete(d)) => {
+                    assert!(!d.leave_blank);
+                    d.task
+                        .as_ref()
+                        .map(|t| t.task_id.clone())
+                        .unwrap_or_default()
+                }
+                other => panic!("not a delete: {other:?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_pane_walks_the_flags_then_the_groups() {
+        let mut state = two_flags();
+        with_group(&mut state);
+        assert!(selected_group(&state).is_none(), "on a flag");
+        assert!(
+            keep_request(&state, Keep::Newest).is_none(),
+            "n does nothing on a flag"
+        );
+        move_down(&mut state);
+        move_down(&mut state);
+        assert_eq!(state.conflict_cursor, 2);
+        assert!(selected_group(&state).is_some());
+        assert!(
+            resolve_request(&state, Resolution::Mine).is_none(),
+            "m does nothing on a group"
+        );
+        move_down(&mut state);
+        assert_eq!(state.conflict_cursor, 2, "clamped at the last group");
+    }
+
+    #[test]
+    fn keeping_a_copy_deletes_the_others_by_task_id() {
+        let mut state = AppState::fixture();
+        state.needs_review.clear();
+        with_group(&mut state);
+        let newest = keep_request(&state, Keep::Newest).unwrap();
+        assert_eq!(
+            deleted_ids(&newest),
+            ["01J9K3H5Z7Q8X2M4N6P8R0T2V1", "01J9K3H5Z7Q8X2M4N6P8R0T2V2"]
+        );
+        assert_eq!(newest.path, "todo.txt");
+        let oldest = keep_request(&state, Keep::Oldest).unwrap();
+        assert_eq!(
+            deleted_ids(&oldest),
+            ["01J9K3H5Z7Q8X2M4N6P8R0T2V2", "01J9K3H5Z7Q8X2M4N6P8R0T2V3"]
+        );
+    }
 
     fn two_flags() -> AppState {
         let mut state = AppState::fixture();
