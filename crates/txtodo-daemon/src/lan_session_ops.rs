@@ -88,10 +88,19 @@ fn commit_and_ack(
     ranges: Vec<OriginRange>,
 ) -> Option<Message> {
     crate::peer_clock::record_ahead_ops(ctx.ws, session.peer(), &ops);
-    let landed = commit_incoming_ops(ctx.ws, ctx.rt, ops);
-    book_stuck(ctx, session.peer(), &landed);
-    let committed_ranges = landed_ranges(&ranges, landed.ops);
-    check_numbers(ctx, &committed_ranges);
+    // Checked against the store and committed under one lock (`sync_commit_gate.rs`): another
+    // session may be landing the same origin's run.
+    let committed_ranges = {
+        let _gate = crate::sync_commit_gate::lock();
+        if !crate::sync_commit_gate::follows_store_heads(ctx.ws, &ranges) {
+            return None;
+        }
+        let landed = commit_incoming_ops(ctx.ws, ctx.rt, ops);
+        book_stuck(ctx, session.peer(), &landed);
+        let committed = landed_ranges(&ranges, landed.ops);
+        check_numbers(ctx, &committed);
+        committed
+    };
     match session.committed(ctx.workspace, &committed_ranges) {
         Ok(ack) => Some(ack),
         Err(e) => {

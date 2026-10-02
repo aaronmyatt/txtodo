@@ -133,6 +133,7 @@ mod state_error;
 pub mod stats;
 mod stored_ids;
 mod stuck_sync;
+mod sync_commit_gate;
 mod sync_digest;
 mod sync_ops;
 mod sync_park;
@@ -280,6 +281,8 @@ mod status_details_tests;
 mod stored_ids_tests;
 #[cfg(test)]
 mod stuck_sync_session_tests;
+#[cfg(test)]
+mod sync_commit_gate_tests;
 #[cfg(test)]
 mod sync_digest_tests;
 #[cfg(test)]

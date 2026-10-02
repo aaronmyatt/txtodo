@@ -336,6 +336,9 @@ fn recv_new_ops(
 /// this is a periodic tick), so `block_in_place` is what makes a nested `block_on` legal here —
 /// without it this panics with "Cannot start a runtime from within a runtime".
 fn commit_ops(ws: &crate::server::SharedWorkspace, rt: &Handle, ops: Vec<txtodo_model::Op>) {
+    // One peer batch at a time with the sync sessions (`sync_commit_gate.rs`). No head check: a
+    // carrier file is read once, in order, so a refused frame would not come again.
+    let _gate = crate::sync_commit_gate::lock();
     tokio::task::block_in_place(|| commit_incoming_ops(ws, rt, ops));
 }
 
