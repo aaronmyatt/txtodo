@@ -69,7 +69,6 @@ fn actor_msg_kind(msg: &ActorMsg) -> &'static str {
         ActorMsg::Progress { .. } => "progress",
         ActorMsg::Subscribe { .. } => "subscribe",
         ActorMsg::Undo { .. } => "undo",
-        ActorMsg::Import { .. } => "import",
         _ => "sync",
     }
 }
@@ -236,13 +235,6 @@ impl FileActor {
             }
             ActorMsg::Checkout { at_wall_ms, reply } => {
                 let _ = reply.send(self.on_checkout(at_wall_ms));
-            }
-            ActorMsg::Import {
-                updates,
-                peer,
-                reply,
-            } => {
-                let _ = reply.send(self.on_import(updates, peer));
             }
             // `handle_sync` (import.rs) takes the rest: Conflicts/Version/Export/Resolve, etc.
             other => self.handle_sync(other),

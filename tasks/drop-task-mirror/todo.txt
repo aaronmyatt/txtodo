@@ -1,5 +1,5 @@
 2026-10-02 daemon: remove the todo.txt mirror upkeep (actor_mirror.rs flush/converge/resync/on_export, sync_ops.rs mirror_after_parking, CommitTail flush and persist_mirror) +m11 @daemon
-2026-10-02 daemon: remove on_import, ActorMsg Import/Export/Version and their ActorHandle methods, with import_tests.rs +m11 @daemon
+2026-10-02 daemon: remove on_import, ActorMsg Import/Export/Version and their ActorHandle methods, with import_tests.rs +m11 @daemon @doing by:claude
 2026-10-02 daemon: delete mirror.rs, mirror_converge.rs, mirror_tests.rs; txtodo-crdt keeps what NotesDoc needs +m11 @daemon @crdt
 2026-10-02 store: stop reading and writing the todo.txt mirror row; old rows stay, ignored +m11 @store
 2026-10-02 conflict review per the decide line: drop the needs_review flags and Resolve Mine/Theirs (A), or file its own ADR (B) +m11 @daemon

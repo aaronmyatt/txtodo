@@ -2,13 +2,10 @@
 //! `sync-lan-transport`). Same `impl FileActor`; split out for the file budget, same pattern as
 //! `import.rs`/`actor_mirror.rs`.
 //!
-//! This is a different path from `import.rs`'s `on_import`: that one merges a peer's *Loro CRDT*
-//! update and derives brand-new local ops (fresh `OpId`s, this device's own `Hlc`) to represent the
-//! diff — the right shape for reconciling a live editor's external edit. The wire protocol's `Ops`
-//! message instead carries the origin device's *own* `Op`s verbatim — each with its own `OpId`,
-//! `Hlc` and `Principal` already fixed by whoever first wrote it — because `heads`/`origin_seq`
-//! dedup (`want.rs`) only works if every peer stores exactly the same ops under exactly the same
-//! identity. So this path never ticks this actor's own clock and never mints anything: it applies
+//! The wire protocol's `Ops` message carries the origin device's *own* `Op`s verbatim — each with
+//! its own `OpId`, `Hlc` and `Principal` already fixed by whoever first wrote it — because
+//! `heads`/`origin_seq` dedup (`want.rs`) only works if every peer stores exactly the same ops
+//! under exactly the same identity. So this path never ticks this actor's own clock and never mints anything: it applies
 //! the batch exactly as it arrived and commits. It does merge the batch's newest stamp into the
 //! clock (the HLC receive rule), so the next local op sorts after it (task insert-order).
 

@@ -1,114 +1,15 @@
-//! The actor's sync-facing paths (plan M4): import a peer's Loro updates, list the open
-//! needs_review flags, resolve one. Same `impl FileActor`; split from `actor.rs` for the file
-//! budget. An import merges in the mirror first (that is where the CRDT lives), derives the ops
-//! that take the state from before to after, applies them to a clone of the state and commits
-//! them with the mirror snapshot in the same transaction. Flags are raised from that commit only
-//! — never on the local edit path.
-
-use std::sync::Arc;
+//! The actor's sync-facing messages (plan M4): list the open needs_review flags, resolve one,
+//! the digest, a peer's ops. Same `impl FileActor`; split from `actor.rs` for the file budget.
+//! The Loro import path that raised flags is gone (ADR 0038), so no new flag is raised.
 
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::handle::{ActorError, ActorMsg, Applied, ConflictRow, FileConflicts, Resolution};
-use crate::mirror::file_like;
 use crate::mutation::{TaskRef, resolve};
 use crate::reconcile::change_ops;
-use crate::state::DocState;
 use txtodo_core::Edit;
-use txtodo_crdt::Stamp;
-use txtodo_model::{DeviceId, OpId, Principal, TaskId};
-use txtodo_store::ReviewRow;
+use txtodo_model::{Principal, TaskId};
 
 impl FileActor {
-    /// Imports `updates` from `peer`. Ops derived from the merge are stamped with one local tick
-    /// and `Principal::User { device: peer }`; same-word conflicts become flags on the change.
-    pub(crate) fn on_import(
-        &mut self,
-        updates: Vec<u8>,
-        peer: DeviceId,
-    ) -> Result<Applied, ActorError> {
-        let imported = self
-            .mirror
-            .import(&updates)
-            .map_err(|e| ActorError::Mirror(e.to_string()))?;
-        if !imported.applied {
-            return Ok(Applied {
-                applied: 0,
-                hash: self.hash,
-                hlc: self.hlc,
-            });
-        }
-        let hlc = self.tick()?;
-        let stamp = Stamp {
-            hlc,
-            principal: Principal::User { device: peer },
-        };
-        let clock = Arc::clone(&self.clock);
-        let mut mint = || OpId::new(clock.new_ulid());
-        let ops = self
-            .mirror
-            .ops_between(&imported, &stamp, &mut mint)
-            .map_err(|e| ActorError::Mirror(e.to_string()))?;
-        let next = self.state_after(&ops)?;
-        let review = self
-            .mirror
-            .review(&imported)
-            .map_err(|e| ActorError::Mirror(e.to_string()))?;
-        let rows = review_rows(&review, self.clock.now_ms());
-        let bytes = next.to_bytes();
-        let write = bytes != self.projection;
-        let change = self.commit(Commit {
-            ops,
-            next,
-            bytes,
-            write,
-            snapshot: false,
-            tail: CommitTail {
-                review: rows,
-                flush: false,
-                clear: None,
-                persist_mirror: true,
-                source: Some(crate::commit::SYNC_SOURCE.to_owned()),
-            },
-        })?;
-        debug_assert!(
-            self.mirror.agrees_with(&self.state),
-            "import left mirror in step"
-        );
-        Ok(Applied {
-            applied: u32::try_from(change.ops.len()).unwrap_or(u32::MAX),
-            hash: change.hash,
-            hlc,
-        })
-    }
-
-    /// The state with the derived ops applied; if the state cannot take them, the mirror's
-    /// canonical rendering becomes the state (bytes over quirks — convergence first).
-    fn state_after(&self, ops: &[txtodo_model::Op]) -> Result<DocState, ActorError> {
-        match self.apply_all(ops) {
-            Ok(next) => Ok(next),
-            Err(e) => self.adopt_mirror_rendering(&e),
-        }
-    }
-
-    /// Every op applied in order to a clone of the current state; stops at the first refusal.
-    fn apply_all(&self, ops: &[txtodo_model::Op]) -> Result<DocState, crate::state::StateError> {
-        let mut next = self.state.clone();
-        for op in ops {
-            next.apply(op)?;
-        }
-        Ok(next)
-    }
-
-    /// The mirror's own rendering, adopted as the state, when the derived ops didn't apply
-    /// cleanly (bytes over quirks — convergence first).
-    fn adopt_mirror_rendering(&self, e: &crate::state::StateError) -> Result<DocState, ActorError> {
-        tracing::warn!(file = %self.cfg.path, error = %e, "import_ops_refused_adopting_mirror");
-        let file = file_like(&self.mirror.canonical_bytes(&self.state), &self.state);
-        let adopted = DocState::from_tagged_file(self.cfg.path.clone(), &file)?;
-        debug_assert!(self.mirror.agrees_with(&adopted));
-        Ok(adopted)
-    }
-
     /// The sync/conflict-resolution messages — split out of `actor.rs::handle_core` purely to
     /// keep that function's line count in budget. The wildcard covers every variant
     /// `handle`/`handle_core` already consumed (never actually reached here).
@@ -260,32 +161,5 @@ impl FileActor {
                 .all(|k| crate::convert::task_of(k) == Some(task))
         );
         Ok(kinds)
-    }
-}
-
-/// Flags as store rows, all raised `now`; an over-cap file is logged, not flagged per task.
-fn review_rows(review: &txtodo_crdt::Review, now: u64) -> Vec<ReviewRow> {
-    warn_overflowed(&review.overflowed);
-    let rows: Vec<ReviewRow> = review.flags.iter().map(|f| row_of(f, now)).collect();
-    debug_assert_eq!(rows.len(), review.flags.len());
-    debug_assert!(rows.iter().all(|r| r.raised_at_ms == now));
-    rows
-}
-
-/// Logs (never flags per task) every file whose review-flag cap overflowed this import.
-fn warn_overflowed(overflowed: &[txtodo_model::FilePath]) {
-    for file in overflowed {
-        tracing::warn!(file = %file, "review_flags_overflowed");
-    }
-}
-
-/// One raised flag as a store row.
-fn row_of(f: &txtodo_crdt::ReviewFlag, now: u64) -> ReviewRow {
-    ReviewRow {
-        file: f.file.clone(),
-        task: f.task,
-        raised_at_ms: now,
-        mine: f.mine.clone().into_bytes(),
-        theirs: f.theirs.clone().into_bytes(),
     }
 }

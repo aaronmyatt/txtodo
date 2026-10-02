@@ -11,7 +11,7 @@ use crate::state::{StateError, TaskCounts};
 use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use txtodo_model::{DeviceId, FilePath, Hlc, HlcError, Principal, RefTag, TaskId};
+use txtodo_model::{FilePath, Hlc, HlcError, Principal, RefTag, TaskId};
 use txtodo_store::{ReviewRow, StoreError, Stored};
 
 /// Mailbox depth per document.
@@ -189,15 +189,6 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<Vec<u8>, ActorError>>,
     },
-    /// A peer's Loro updates to merge (plan M4).
-    Import {
-        /// `LoroDocument::export_updates` bytes from the peer.
-        updates: Vec<u8>,
-        /// The peer.
-        peer: DeviceId,
-        /// Result channel.
-        reply: oneshot::Sender<Result<Applied, ActorError>>,
-    },
     /// Tagged → Sidecar migration of this document (`migrate_sidecar.rs`).
     MigrateToSidecar {
         /// Only count what would change.
@@ -281,7 +272,7 @@ pub enum ActorMsg {
         reply: oneshot::Sender<Option<TaskLineInfo>>,
     },
     /// A peer's already-signed LAN sync ops (`lan.rs`), applied verbatim, never re-stamped
-    /// (`sync_ops.rs`'s module doc explains why this differs from `Import`'s Loro-diff path).
+    /// (`sync_ops.rs`'s module doc).
     SyncOps {
         /// Already filtered to this actor's document (the caller routes by `op.file`).
         ops: Vec<txtodo_model::Op>,
@@ -357,20 +348,6 @@ impl ActorHandle {
     pub async fn checkout(&self, at_wall_ms: u64) -> Result<Vec<u8>, ActorError> {
         self.ask(|reply| ActorMsg::Checkout { at_wall_ms, reply })
             .await?
-    }
-
-    /// Merges a peer's Loro updates.
-    pub async fn import_updates(
-        &self,
-        updates: Vec<u8>,
-        peer: DeviceId,
-    ) -> Result<Applied, ActorError> {
-        self.ask(|reply| ActorMsg::Import {
-            updates,
-            peer,
-            reply,
-        })
-        .await?
     }
 
     /// The open needs_review flags with their current lines.
