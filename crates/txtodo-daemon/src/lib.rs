@@ -226,8 +226,6 @@ mod log_repair_tests;
 #[cfg(test)]
 mod migrate_sidecar_tests;
 #[cfg(test)]
-mod mirror_tests;
-#[cfg(test)]
 mod mutation_reopen_tests;
 #[cfg(test)]
 mod mutation_tests;
