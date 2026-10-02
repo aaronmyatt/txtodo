@@ -180,6 +180,7 @@ fn op_kind_name(kind: &OpKind) -> &'static str {
         OpKind::NotesEdit { .. } => "NotesEdit",
         OpKind::BlankInsert { .. } => "BlankInsert",
         OpKind::BlankRemove { .. } => "BlankRemove",
+        OpKind::RemoveTag { .. } => "RemoveTag",
     }
 }
 

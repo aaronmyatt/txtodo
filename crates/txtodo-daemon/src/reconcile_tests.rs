@@ -145,6 +145,7 @@ fn kind_name(op: &OpKind) -> &'static str {
         OpKind::NotesEdit { .. } => "notes_edit",
         OpKind::BlankInsert { .. } => "blank_insert",
         OpKind::BlankRemove { .. } => "blank_remove",
+        OpKind::RemoveTag { .. } => "remove_tag",
     }
 }
 
@@ -187,8 +188,9 @@ fn completing_a_prioritized_line_is_field_ops_alone() {
         "the x takes the completion date with it"
     );
     assert!(
-        matches!(reopened.ops.last(), Some(OpKind::EditText { .. })),
-        "the text edit drops the pri: tag"
+        matches!(reopened.ops.last(), Some(OpKind::RemoveTag { key, .. }) if key == "pri"),
+        "the pri: tag goes by name, not by offset (ADR 0036): {:?}",
+        reopened.ops
     );
 }
 

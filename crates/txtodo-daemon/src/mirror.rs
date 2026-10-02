@@ -272,7 +272,8 @@ fn touched_task(kind: &OpKind) -> Option<TaskId> {
     match kind {
         OpKind::Insert { task, .. }
         | OpKind::SetField { task, .. }
-        | OpKind::EditText { task, .. } => Some(*task),
+        | OpKind::EditText { task, .. }
+        | OpKind::RemoveTag { task, .. } => Some(*task),
         OpKind::Move { .. }
         | OpKind::BlankInsert { .. }
         | OpKind::BlankRemove { .. }
@@ -289,5 +290,6 @@ fn kind_name(kind: &OpKind) -> &'static str {
         OpKind::BlankInsert { .. } => "BlankInsert",
         OpKind::BlankRemove { .. } => "BlankRemove",
         OpKind::NotesEdit { .. } => "NotesEdit",
+        OpKind::RemoveTag { .. } => "RemoveTag",
     }
 }

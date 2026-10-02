@@ -38,6 +38,9 @@ pub(crate) enum Change {
     /// The first `pri:` tag set to this letter, else ` pri:X` added at the end: a priority moved
     /// into `pri:` by a completion ([`set_pri`]).
     Pri(char),
+    /// The first `key:` tag removed, wherever it is (ADR 0036, `txtodo_model::remove_tag`): a
+    /// reopen dropping `pri:`. No offset, so an older edit slotted in front cannot move it.
+    RemoveTag(String),
 }
 
 impl Change {
@@ -45,6 +48,7 @@ impl Change {
         match self {
             Change::Splice(edits) => apply(text, edits),
             Change::Pri(letter) => Ok(set_pri(text, *letter, true)),
+            Change::RemoveTag(key) => Ok(txtodo_model::remove_tag(text, key)),
         }
     }
 }
@@ -105,6 +109,19 @@ impl TextHistory {
     ) -> String {
         self.record(current, hlc, Change::Pri(letter), how)
             .unwrap_or_else(|_| set_pri(current, letter, true))
+    }
+
+    /// Records the first `key:` tag removed by an op stamped `hlc` (ADR 0036), and returns the
+    /// text to hold now. Never refused: it fits any text.
+    pub(crate) fn remove_tag(
+        &mut self,
+        current: &str,
+        hlc: Hlc,
+        key: &str,
+        how: (ApplyEdits, usize),
+    ) -> String {
+        self.record(current, hlc, Change::RemoveTag(key.to_owned()), how)
+            .unwrap_or_else(|_| txtodo_model::remove_tag(current, key))
     }
 
     /// A newer priority on the done line (module doc): every recorded tag and the base's take

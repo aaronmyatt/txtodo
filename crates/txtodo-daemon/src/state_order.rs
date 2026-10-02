@@ -186,6 +186,21 @@ impl DocState {
         }
     }
 
+    /// `task`'s description, which is `current` now, with its first `key:` tag removed by an op
+    /// stamped `hlc` (ADR 0036): the description to hold, kept in the history like a text edit.
+    pub(crate) fn remove_tag_in_description(
+        &mut self,
+        task: TaskId,
+        current: &str,
+        hlc: Hlc,
+        key: &str,
+    ) -> String {
+        self.text_history
+            .entry(task)
+            .or_insert_with(|| TextHistory::new(current.to_owned()))
+            .remove_tag(current, hlc, key, (apply_text_edits, MAX_EDITS_PER_TASK))
+    }
+
     /// After a commit: whatever a scratch replay placed takes the commit's real stamp, the one
     /// its ops carry on every other device.
     pub(crate) fn settle_scratch_stamps(&mut self, hlc: Hlc) {

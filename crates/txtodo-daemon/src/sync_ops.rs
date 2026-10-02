@@ -149,6 +149,7 @@ fn task_of(kind: &OpKind) -> Option<TaskId> {
         OpKind::Insert { task, .. }
         | OpKind::SetField { task, .. }
         | OpKind::EditText { task, .. }
+        | OpKind::RemoveTag { task, .. }
         | OpKind::Move { task, .. } => Some(*task),
         OpKind::NotesEdit { .. } | OpKind::BlankInsert { .. } | OpKind::BlankRemove { .. } => None,
     }

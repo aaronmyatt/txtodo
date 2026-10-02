@@ -134,17 +134,15 @@ fn a_reopen_against_an_edit_and_a_priority_swap_agrees() {
     assert_eq!(converges_interleaved(&start, &a, &b), "(C) b line 1\n");
 }
 
-/// The reopen is the newer side and B prepended first: every order agrees. Known gap (task
-/// partition-converge, `@human`): the reopen's splice was cut on text without B's prefix, so once
-/// B's edit is slotted in front of it, it deletes `1 pri:` and the line ends `(B) b line:B`. The
-/// op says where to cut, not what, so no device can tell; that needs a wire change.
+/// The reopen is the newer side and B prepended first. Its text edit dropping ` pri:B` by offset
+/// was cut on text without B's prefix, so once B's edit was slotted in front of it every device
+/// ended `(B) b line:B`. It names the tag now (`RemoveTag`, ADR 0036): every order drops the tag.
 #[test]
-fn a_newer_reopen_against_an_older_prepend_agrees() {
+fn a_newer_reopen_against_an_older_prepend_drops_the_tag_not_other_chars() {
     let start = done_with_b();
     let a = reopen(&start, at(22, 0, A));
     let b = [append_text(1, 0, "b ", at(21, 0, B))];
-    let bytes = converges_interleaved(&start, &a, &b);
-    assert!(bytes.starts_with("(B) b line"), "{bytes}");
+    assert_eq!(converges_interleaved(&start, &a, &b), "(B) b line 1\n");
 }
 
 /// Lab sleep run 20261002-081812: B set priority C on the open line before A completed it with B,

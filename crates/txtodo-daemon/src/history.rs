@@ -143,6 +143,7 @@ pub fn inverse(before: &DocState, stored: &Stored) -> Option<OpKind> {
         }
         OpKind::SetField { task, field, .. } => inverse_set_field(before, *task, *field),
         OpKind::EditText { task, edits } => inverse_edit_text(before, *task, edits),
+        OpKind::RemoveTag { task, key } => inverse_remove_tag(before, *task, key),
         OpKind::Move { task, to_file, .. } => {
             let after = before.task_before(before.index_of(*task)?);
             Some(OpKind::Move {
@@ -188,6 +189,22 @@ fn inverse_edit_text(before: &DocState, task: TaskId, edits: &[TextEdit]) -> Opt
         .collect();
     debug_assert!(apply_text_edits(&new, &back).ok().as_deref() == Some(old.as_str()));
     Some(OpKind::EditText { task, edits: back })
+}
+
+/// The text edit that puts back the tag `RemoveTag` dropped; `None` when it dropped nothing.
+fn inverse_remove_tag(before: &DocState, task: TaskId, key: &str) -> Option<OpKind> {
+    let line = before.line_of(task)?;
+    let LineKind::Task(t) = line.parse()?.kind else {
+        return None;
+    };
+    let after = txtodo_model::remove_tag(t.description, key);
+    (after != t.description).then(|| OpKind::EditText {
+        task,
+        edits: txtodo_core::diff_text(&after, t.description)
+            .into_iter()
+            .map(TextEdit::from)
+            .collect(),
+    })
 }
 
 /// Inverse ops for the newest `steps` ops of `path`, newest first, each computed against the

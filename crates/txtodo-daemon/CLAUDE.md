@@ -541,7 +541,9 @@ multiplex every workspace's traffic — not done by this task).
 - `SetField` is last-writer-wins per task field by HLC in `DocState` too (`field_stamps`, task
   partition-converge, 2026-10-01): an op older than the field's stamp is a no-op, so arrival order
   does not matter. `EditText` and `NotesEdit` keep a stamp-ordered history per text (ADR 0034,
-  `text_history.rs`): a late edit is slotted in by stamp and the text rebuilt from its base.
+  `text_history.rs`): a late edit is slotted in by stamp and the text rebuilt from its base. A reopen
+  drops `pri:` with `OpKind::RemoveTag` (ADR 0036, `reconcile::change_ops`, `fields::remove_tag`),
+  kept in that history with no offset, so an older edit slotted in front cannot shift what it cuts.
 - LAN sync (this pass): every wire message is sealed whole with the group key (confidentiality and
   tamper-evidence for the batch), and every op in a `Message::Ops` batch also carries a per-op
   `Signature` (`sync-reject-tests`'s wire shape, merged into this pass), verified via

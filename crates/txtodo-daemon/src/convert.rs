@@ -205,6 +205,7 @@ pub fn task_of(kind: &OpKind) -> Option<TaskId> {
         OpKind::Insert { task, .. }
         | OpKind::SetField { task, .. }
         | OpKind::EditText { task, .. }
+        | OpKind::RemoveTag { task, .. }
         | OpKind::Move { task, .. } => Some(*task),
         OpKind::NotesEdit { .. } | OpKind::BlankInsert { .. } | OpKind::BlankRemove { .. } => None,
     }
@@ -230,6 +231,7 @@ pub fn summary_of(kind: &OpKind) -> String {
         OpKind::NotesEdit { edits, .. } => format!("notes: {} edit(s)", edits.len()),
         OpKind::BlankInsert { after } => format!("blank after {after:?}"),
         OpKind::BlankRemove { after } => format!("remove blank after {after:?}"),
+        OpKind::RemoveTag { key, .. } => format!("remove tag {key}:"),
     }
 }
 

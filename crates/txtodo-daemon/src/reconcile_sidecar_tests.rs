@@ -44,6 +44,7 @@ fn kind_name(op: &OpKind) -> &'static str {
         OpKind::NotesEdit { .. } => "notes_edit",
         OpKind::BlankInsert { .. } => "blank_insert",
         OpKind::BlankRemove { .. } => "blank_remove",
+        OpKind::RemoveTag { .. } => "remove_tag",
     }
 }
 

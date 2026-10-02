@@ -196,6 +196,7 @@ impl DocState {
             OpKind::EditText { task, edits } => {
                 crate::fields::edit_text(self, *task, edits, op.hlc)?
             }
+            OpKind::RemoveTag { task, key } => crate::fields::remove_tag(self, *task, key, op.hlc)?,
             OpKind::Move {
                 task,
                 after,
@@ -323,7 +324,7 @@ impl DocState {
 fn reshapes(kind: &OpKind) -> bool {
     match kind {
         OpKind::SetField { field, .. } => *field == Field::Deleted,
-        OpKind::EditText { .. } | OpKind::NotesEdit { .. } => false,
+        OpKind::EditText { .. } | OpKind::NotesEdit { .. } | OpKind::RemoveTag { .. } => false,
         _ => true,
     }
 }

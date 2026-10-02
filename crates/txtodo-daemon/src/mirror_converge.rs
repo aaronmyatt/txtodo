@@ -229,9 +229,10 @@ fn resolve_anchor(kind: OpKind, resolved: &HashMap<TaskId, TaskId>) -> OpKind {
         },
         OpKind::BlankInsert { after } => OpKind::BlankInsert { after: fix(after) },
         OpKind::BlankRemove { after } => OpKind::BlankRemove { after: fix(after) },
-        other @ (OpKind::SetField { .. } | OpKind::EditText { .. } | OpKind::NotesEdit { .. }) => {
-            other
-        }
+        other @ (OpKind::SetField { .. }
+        | OpKind::EditText { .. }
+        | OpKind::NotesEdit { .. }
+        | OpKind::RemoveTag { .. }) => other,
     }
 }
 

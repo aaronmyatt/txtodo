@@ -79,6 +79,7 @@ fn kinds(ops: &[OpKind]) -> Vec<&'static str> {
             OpKind::BlankInsert { .. } => "blank_insert",
             OpKind::BlankRemove { .. } => "blank_remove",
             OpKind::NotesEdit { .. } => "notes_edit",
+            OpKind::RemoveTag { .. } => "remove_tag",
         })
         .collect()
 }

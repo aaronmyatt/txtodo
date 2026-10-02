@@ -87,6 +87,9 @@ fn reconcile_inner(
     }
 }
 
+/// The tag a done line's priority moves into (core `Edit::complete`).
+const PRI: &str = "pri";
+
 /// Field-level ops for a changed line paired to `task` by the caller (an id read off the line in
 /// tagged mode, a fingerprint match in sidecar mode — this function doesn't care which), then the
 /// description. Each field op is applied to a working copy the way `DocState` applies it
@@ -97,7 +100,9 @@ fn reconcile_inner(
 /// be `Priority = None` plus a text edit adding `pri:A`, and a newer `pri:C` then ended as
 /// `pri:A pri:C` on one device). Reopening is the mirror: the `x` goes first, then the priority
 /// the open line has (always, none included: a peer's newer one in `pri:` wins through it, see
-/// `fields::priority_from_tag`), then the text edit drops the `pri:` tag.
+/// `fields::priority_from_tag`), then a `RemoveTag` drops the `pri:` tag by name (ADR 0036): a text
+/// edit dropping it by offset cut the wrong chars once an older edit was slotted in front of it.
+/// Any other description change is a text edit.
 pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind> {
     let Some(wanted) = task_of(new) else {
         return Vec::new();
@@ -133,7 +138,14 @@ pub fn change_ops(old: &OwnedLine, new: &OwnedLine, task: TaskId) -> Vec<OpKind>
     let Some(have) = task_of(&line) else {
         return ops;
     };
-    if have.description != wanted.description {
+    if txtodo_model::remove_tag(have.description, PRI) == wanted.description
+        && have.description != wanted.description
+    {
+        ops.push(OpKind::RemoveTag {
+            task,
+            key: PRI.to_owned(),
+        });
+    } else if have.description != wanted.description {
         let edits: Vec<TextEdit> = diff_text(have.description, wanted.description)
             .into_iter()
             .map(TextEdit::from)

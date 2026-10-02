@@ -171,17 +171,7 @@ pub(crate) fn edit_text(
     let new_line = state
         .edit_description(task, &description, hlc, edits)
         .map_err(|e| StateError::Text(task, e))
-        .and_then(|new_description| {
-            let edit = Edit::new()
-                .set_description(&new_description)
-                .map_err(|_| StateError::Unsupported("line break"))?;
-            let new_line = txtodo_core::apply(&line, &edit);
-            if state.mode() == IdentityMode::Tagged && crate::state::id_of(&new_line) != Some(task)
-            {
-                return Err(StateError::IdMismatch(task));
-            }
-            Ok(new_line)
-        })
+        .and_then(|new_description| with_description(state, task, &line, &new_description))
         .inspect_err(|_| state.restore_text(task, saved))?;
     state.replace_entry(
         i,
@@ -191,6 +181,55 @@ pub(crate) fn edit_text(
         },
     );
     Ok(())
+}
+
+/// Applies `RemoveTag` stamped `hlc` (ADR 0036): the first `key:` tag of the description goes,
+/// wherever a late edit slotted in front of it put the tag. Kept in the description's history
+/// like a text edit. A bad key, or an `id:` the tagged line needs, is refused, the state unchanged.
+pub(crate) fn remove_tag(
+    state: &mut DocState,
+    task: TaskId,
+    key: &str,
+    hlc: Hlc,
+) -> Result<(), StateError> {
+    if !txtodo_model::valid_tag_key(key) {
+        return Err(StateError::Unsupported("RemoveTag with a bad key"));
+    }
+    let i = state
+        .content_slot(task)
+        .ok_or(StateError::UnknownTask(task))?;
+    let line = state.slot_line(i).clone();
+    let description = description_of(&line).ok_or(StateError::Opaque(i))?;
+    let saved = state.text_history_of(task);
+    let held = state.remove_tag_in_description(task, &description, hlc, key);
+    let new_line = with_description(state, task, &line, &held)
+        .inspect_err(|_| state.restore_text(task, saved))?;
+    state.replace_entry(
+        i,
+        Entry::Task {
+            id: task,
+            line: new_line,
+        },
+    );
+    Ok(())
+}
+
+/// `line` with its description set to `text`; refused when that drops the `id:` a tagged line
+/// needs.
+fn with_description(
+    state: &DocState,
+    task: TaskId,
+    line: &OwnedLine,
+    text: &str,
+) -> Result<OwnedLine, StateError> {
+    let edit = Edit::new()
+        .set_description(text)
+        .map_err(|_| StateError::Unsupported("line break"))?;
+    let new_line = txtodo_core::apply(line, &edit);
+    if state.mode() == IdentityMode::Tagged && crate::state::id_of(&new_line) != Some(task) {
+        return Err(StateError::IdMismatch(task));
+    }
+    Ok(new_line)
 }
 
 /// A task line's description, `None` for anything else.
