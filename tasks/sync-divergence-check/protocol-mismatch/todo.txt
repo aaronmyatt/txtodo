@@ -1,5 +1,5 @@
-2026-10-02 tui: the sync indicator and popup say which peer speaks another protocol and that it is not syncing; a banner says to upgrade the older device +m11 @tui
+2026-10-02 tui: the sync indicator and popup say which peer speaks another protocol and that it is not syncing; a banner says to upgrade the older device +m11 @tui @doing by:claude-opus-backlog
 2026-10-02 desktop: a sync_status command and a banner naming the peer on another protocol, polled +m11 @desktop
-2026-10-02 cli: doctor shows the peer on another protocol and exits 1 +m11 @cli @doing by:claude-opus-backlog
 x 2026-10-02 2026-10-02 proto: SyncStatusResponse.protocol (this daemon's) and Peer.their_protocol (0 = same or not seen); additive +m11 @daemon — d8c93bd4, round-trip and older-daemon tests
 x 2026-10-02 2026-10-02 daemon: book a known peer whose frames or Hello carry another sync protocol (theirs, since, last); cleared when a session with it greets +m11 @daemon @sync — 77853e15: our dials book it from a frame of another version or a Hello with another protocol, kept in peer_keys.rs until a session greets; known gap: an incoming session's peer is unknown, so only our own dials name it
+x 2026-10-02 2026-10-02 cli: doctor shows the peer on another protocol and exits 1 +m11 @cli — 3c4036b1: a FAIL sync row naming both protocols and which device to upgrade
