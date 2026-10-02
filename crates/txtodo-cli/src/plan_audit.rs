@@ -119,6 +119,6 @@ fn sidecar_text_every_plan_is_exact_and_never_a_delete_plus_add() {
 }
 
 #[test]
-fn tagged_text_every_plan_is_exact_and_an_in_place_change_stays_an_edit() {
+fn slow_tagged_text_every_plan_is_exact_and_an_in_place_change_stays_an_edit() {
     audit("tagged", &tagged_files(), true);
 }
