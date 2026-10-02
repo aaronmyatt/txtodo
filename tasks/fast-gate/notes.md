@@ -116,6 +116,28 @@ Still broken / open:
 - Stale pointer left for the cli session (crate leased elsewhere today):
   `crates/txtodo-cli/tests/daemon_autostart.rs:122` names `daemon-launch/tests/upgrade.rs`.
 
+## Slow tags, proptest cases, bin test=false (2026-10-02)
+
+Measured `cargo nextest run --workspace --lib --bins` at load ~2.5: 1,308 tests, 7.5 s wall.
+26 took ≥ 0.4 s. Rule used: ≥ 0.5 s in that run gets a `slow_` name, nothing else.
+- daemon 17 (bundle and bundle_crypto Argon2, the 5 s rejoin, the real-watcher catalog test, LAN
+  session resend/fairness, keystore). Lib run 5.4 → 1.5 s wall.
+- sync 5 (real mDNS, the holepunch gate wait, two Argon2 keystore files). Lib 0.6 s.
+- cli 1 (`plan_audit` tagged, 2.7 s, in the bin target). tui 1 (the 0.6 s ready timeout).
+- Left on purpose: 0.48-0.49 s tests (sync `wrong_passphrase_is_refused_not_corrupted`, daemon
+  `stuck_sync_session`). A sibling of two tagged keystore tests stays untagged at 0.48 s.
+- RATCHET.md's two pointers follow the renames. Old names in older task notes are left as history.
+- `differential.rs`: `with_cases(10_000)` ignored `PROPTEST_CASES`. Now that variable wins, then
+  `CI=true` gives 10 000, else 1 000. 0.64 → 0.07 s locally. ci.yml needs no change.
+- tui and mcp `[[bin]] test = false`: neither main.rs has tests. tests/*.rs still get the binary.
+
+Still slow: the gate on daemon is 61 s, cli 32 s, all from `tests/*.rs` binaries. That is the
+per-crate merge lines, not this one.
+
+Optional, not done: most of the Argon2 cost is a debug build. `[profile.dev.package.argon2]
+opt-level = 3` in the root Cargo.toml (frozen for agents) would likely bring ~12 of these tests
+back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
