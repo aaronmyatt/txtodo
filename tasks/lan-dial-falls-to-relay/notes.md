@@ -62,3 +62,18 @@ Two paired devices on one LAN sync over LAN, not the relay.
   `lan_connect_failed`. The LAN link comes up. The other Mac's log was not read.
 - The relay gap above is not small: 2 907 relay sessions started that day and 2 885
   `lan_relay_session_superseded_by_lan`, about one every 15 s. Filed as its own line.
+
+## The 15 s relay restarts (2026-10-02)
+- This Mac (01A0D8DC…, hex) is the higher id. Its peer row has no relay node id, and its log has
+  no `relay_connect_established` (the dialer's line) since 09-25: every relay session here is
+  incoming. The other Mac (lower id) dials LAN and relay at its tick; the LAN session it dials
+  lives for hours, so its relay-only dial runs while LAN is live.
+- That dial skips a live peer by the `devices` row's id. Most likely cause: the other Mac holds a
+  stale row for this Mac (an older device id with this Mac's relay node id). The dial reaches this
+  Mac, which answers under its real id; that id is live over LAN, so the session is superseded at
+  once, and the stale id is never live, so the next tick dials again. Not confirmed: the other
+  Mac's log and devices table were not read.
+- Built: `LivePeers::note_answered_as` keeps "dialed X, answered as Y" (bounded); the relay-only
+  dial skips X while Y is live, and warns once with
+  `relay_only_dial_answered_by_another_device` naming both. If the restarts go on after the other
+  Mac runs this build and that warning never shows, the cause is something else.

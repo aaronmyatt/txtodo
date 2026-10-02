@@ -20,6 +20,7 @@ use crate::lan::{
 };
 use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
 use crate::live_peers::Carrier;
+use crate::peer_keys::SessionEnd;
 use crate::relay_fallback::relay_fallback_dial;
 
 /// Runs both halves of a resync tick: `lan.rs`'s existing known-peer redial, then this module's
@@ -60,7 +61,7 @@ fn dial_relay_only(known_peers: &KnownPeers, ctx: &LanCtx, sessions: &Arc<Semaph
     let parked = ctx.identity.peer_keys();
     for (device, node) in relay_only_peers(ctx, known_peers)
         .into_iter()
-        .filter(|(device, _)| !live.is_live(*device) && !parked.is_parked(*device))
+        .filter(|(device, _)| !live.is_live_as_dialed(*device) && !parked.is_parked(*device))
     {
         spawn_relay_only_dial(ctx.clone(), node, device, Arc::clone(sessions));
     }
@@ -184,13 +185,27 @@ fn spawn_relay_only_dial(ctx: LanCtx, node: [u8; 32], device: DeviceId, sessions
         match relay_fallback_dial(ctx.clone(), node).await {
             Some(link) => {
                 let keys = ctx.identity.peer_keys().clone();
+                let live = ctx.identity.live_peers().clone();
                 spawn_driver(ctx, (link, Carrier::Relay), permit, move |end| {
+                    note_answer(&live, device, end);
                     keys.book_session(Some(device), end);
                 });
             }
             None => tracing::debug!(peer = %device, "relay_only_auto_dial_failed"),
         }
     });
+}
+
+/// A relay-only dial to `dialed` that another device answered: a `devices` row left from before
+/// that device's identity changed, holding its relay node id (task lan-dial-falls-to-relay). Kept,
+/// so the next tick skips `dialed` while the answering device is live.
+fn note_answer(live: &crate::live_peers::LivePeers, dialed: DeviceId, end: SessionEnd) {
+    if let SessionEnd::Greeted(greeted) = end
+        && greeted != dialed
+        && live.note_answered_as(dialed, greeted)
+    {
+        tracing::warn!(%dialed, %greeted, "relay_only_dial_answered_by_another_device");
+    }
 }
 
 #[cfg(test)]

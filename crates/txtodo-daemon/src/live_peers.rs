@@ -22,11 +22,19 @@ pub(crate) enum Carrier {
     Relay,
 }
 
-/// Cheap to clone: one `Arc<Mutex<_>>`. Counts sessions per peer and carrier, since a LAN and a
+/// Most dialed ids [`LivePeers::note_answered_as`] keeps: one per stale `devices` row, so a
+/// handful in practice (one per device that changed identity since we paired with it).
+const MAX_ANSWERED_AS: usize = 1_024;
+
+/// Cheap to clone: two `Arc<Mutex<_>>`s. Counts sessions per peer and carrier, since a LAN and a
 /// relay session to the same peer can briefly overlap.
 #[derive(Clone, Default)]
 pub(crate) struct LivePeers {
     sessions: Arc<Mutex<BTreeMap<(DeviceId, Carrier), usize>>>,
+    /// Dialed id → the id whose `Hello` answered (task lan-dial-falls-to-relay, the 15 s relay
+    /// restarts). A `devices` row can outlive its device's identity and still carry its relay node
+    /// id: the dial reaches the device under its new id, so "is the dialed id live" never holds.
+    answered_as: Arc<Mutex<BTreeMap<DeviceId, DeviceId>>>,
 }
 
 impl LivePeers {
@@ -47,6 +55,32 @@ impl LivePeers {
     /// Whether a session with `peer` is open now over `carrier`.
     pub(crate) fn is_live_on(&self, peer: DeviceId, carrier: Carrier) -> bool {
         self.lock().contains_key(&(peer, carrier))
+    }
+
+    /// Records that a dial aimed at `dialed` was answered by `greeted`. `true` the first time this
+    /// answer is seen, so the caller warns once. Full and new: not kept (logged by the caller as
+    /// usual; the dial then simply repeats, as before this map).
+    pub(crate) fn note_answered_as(&self, dialed: DeviceId, greeted: DeviceId) -> bool {
+        let mut answered = self
+            .answered_as
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if answered.len() >= MAX_ANSWERED_AS && !answered.contains_key(&dialed) {
+            return false;
+        }
+        answered.insert(dialed, greeted) != Some(greeted)
+    }
+
+    /// [`Self::is_live`] for a dial target: also true when `dialed` last answered as a device
+    /// that is live now.
+    pub(crate) fn is_live_as_dialed(&self, dialed: DeviceId) -> bool {
+        let greeted = self
+            .answered_as
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&dialed)
+            .copied();
+        self.is_live(dialed) || greeted.is_some_and(|g| self.is_live(g))
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<(DeviceId, Carrier), usize>> {
@@ -103,5 +137,45 @@ mod tests {
         assert!(peers.is_live_on(peer, Carrier::Relay));
         drop(relay);
         assert!(!peers.is_live(peer));
+    }
+
+    /// The 15 s relay restarts: a dial to a stale row's id reached a peer live under another id.
+    #[test]
+    fn a_dialed_id_that_answered_as_a_live_peer_counts_as_live() {
+        let peers = LivePeers::default();
+        let (stale, real) = (
+            DeviceId::new(Ulid::from_u128(7)),
+            DeviceId::new(Ulid::from_u128(8)),
+        );
+        let lan = peers.enter(real, Carrier::Lan);
+        assert!(
+            !peers.is_live_as_dialed(stale),
+            "nothing links the two ids yet"
+        );
+        assert!(peers.note_answered_as(stale, real), "first sighting warns");
+        assert!(
+            !peers.note_answered_as(stale, real),
+            "the same answer again does not"
+        );
+        assert!(peers.is_live_as_dialed(stale));
+        drop(lan);
+        assert!(
+            !peers.is_live_as_dialed(stale),
+            "dialed again once the real one is gone"
+        );
+    }
+
+    #[test]
+    fn answered_as_is_bounded() {
+        let peers = LivePeers::default();
+        let real = DeviceId::new(Ulid::from_u128(1));
+        for n in 0..MAX_ANSWERED_AS as u128 {
+            peers.note_answered_as(DeviceId::new(Ulid::from_u128(100 + n)), real);
+        }
+        let one_more = DeviceId::new(Ulid::from_u128(99));
+        assert!(!peers.note_answered_as(one_more, real));
+        let _lan = peers.enter(real, Carrier::Lan);
+        assert!(!peers.is_live_as_dialed(one_more));
+        assert!(peers.is_live_as_dialed(DeviceId::new(Ulid::from_u128(100))));
     }
 }
