@@ -18,6 +18,10 @@ const SELECT_DIRECT_OWN: &str = "SELECT device FROM devices \
      WHERE own_device = 1 AND removed_at IS NULL ORDER BY device LIMIT ?1";
 const SELECT_IS_DIRECT_OWN: &str = "SELECT EXISTS (SELECT 1 FROM devices \
      WHERE device = ?1 AND own_device = 1 AND removed_at IS NULL)";
+const SELECT_VOUCHED_ONLY: &str = "SELECT DISTINCT v.device FROM own_vouches v \
+     JOIN devices d ON d.device = v.voucher \
+     WHERE d.own_device = 1 AND d.removed_at IS NULL \
+     AND v.device NOT IN (SELECT device FROM devices) ORDER BY v.device LIMIT ?1";
 const DELETE_VOUCHES: &str = "DELETE FROM own_vouches WHERE voucher = ?1";
 const INSERT_VOUCH: &str = "INSERT OR IGNORE INTO own_vouches (voucher, device) VALUES (?1, ?2)";
 
@@ -53,18 +57,30 @@ impl IdentityStore {
     /// The list this device vouches with: every direct own device not removed, in id order, at
     /// most [`MAX_DEVICES_PER_READ`].
     pub fn direct_own_devices(&self) -> Result<Vec<DeviceId>, StoreError> {
+        self.device_list(SELECT_DIRECT_OWN)
+    }
+
+    /// The devices that are own only through a vouch (no row here), in id order, at most
+    /// [`MAX_DEVICES_PER_READ`]: with [`Self::direct_own_devices`], every own device this store
+    /// knows of.
+    pub fn vouched_own_devices(&self) -> Result<Vec<DeviceId>, StoreError> {
+        self.device_list(SELECT_VOUCHED_ONLY)
+    }
+
+    /// One device id per row of `sql`, which takes the read cap as `?1`.
+    fn device_list(&self, sql: &str) -> Result<Vec<DeviceId>, StoreError> {
         let mut stmt = self
             .conn
-            .prepare_cached(SELECT_DIRECT_OWN)
-            .map_err(StoreError::query("prepare direct own"))?;
+            .prepare_cached(sql)
+            .map_err(StoreError::query("prepare own devices"))?;
         let rows = stmt
             .query_map(params![MAX_DEVICES_PER_READ as i64], |r| {
                 r.get::<_, Vec<u8>>(0)
             })
-            .map_err(StoreError::query("query direct own"))?;
+            .map_err(StoreError::query("query own devices"))?;
         let mut out = Vec::new();
         for row in rows {
-            let blob = row.map_err(StoreError::query("read direct own"))?;
+            let blob = row.map_err(StoreError::query("read own device"))?;
             out.push(device_of(&blob).ok_or(StoreError::BadDevice(blob.len()))?);
         }
         debug_assert!(out.len() <= MAX_DEVICES_PER_READ);
@@ -134,6 +150,12 @@ mod tests {
         assert!(store.is_direct_own(a1).unwrap());
         assert!(!store.is_direct_own(a2).unwrap(), "vouched is not direct");
         assert_eq!(store.direct_own_devices().unwrap(), vec![a1]);
+        assert_eq!(store.vouched_own_devices().unwrap(), vec![a2]);
+        pair(&mut store, a2, false);
+        assert!(
+            store.vouched_own_devices().unwrap().is_empty(),
+            "a row of its own decides"
+        );
     }
 
     #[test]
