@@ -274,3 +274,13 @@ lab-list:
 # Leftover containers, old images, old reports.
 lab-clean:
     scripts/lab/lab.sh clean
+
+# Background lab on main's commits: tasks/lab-watch/notes.md.
+lab-watch:
+    scripts/lab/watch.sh start
+
+lab-watch-stop:
+    scripts/lab/watch.sh stop
+
+lab-watch-status:
+    scripts/lab/watch.sh status
