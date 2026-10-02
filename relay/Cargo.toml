@@ -12,7 +12,7 @@ name = "relay"
 path = "src/main.rs"
 
 # Deliberately zero dependencies on this workspace's own crypto/parsing crates (see
-# tests/no_txtodo_deps.rs, which greps this manifest — comments below intentionally spell those
+# tests/it/no_txtodo_deps.rs, which greps this manifest — comments below intentionally spell those
 # sibling crate names with a space, never a hyphen, so a doc comment can't trip that guard). The
 # relay is untrusted (design §4.6): it must never be able to parse or decrypt what it stores.
 #

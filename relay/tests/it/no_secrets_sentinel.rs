@@ -1,6 +1,6 @@
 //! logging-flow-test: a no-secrets sentinel test for the relay binary, the same "ZZ-SENTINEL-ZZ"
 //! technique `daemon/src/lan_session_security_tests.rs:26-60` established, adapted to relay's own
-//! constraint: `tests/no_txtodo_deps.rs` forbids any `txtodo-*` dependency (design §4.6 — the relay
+//! constraint: `tests/it/no_txtodo_deps.rs` forbids any `txtodo-*` dependency (design §4.6 — the relay
 //! is untrusted and must stay structurally incapable of decrypting what it stores), so it cannot
 //! use `txtodo_telemetry::testing` either. `LogSink`/`capturing_dispatch` below is a local
 //! reimplementation, same shape as `main.rs::init_tracing`'s own doc comment already describes for

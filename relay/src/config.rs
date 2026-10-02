@@ -4,7 +4,7 @@
 //! matching `txtodo-daemon`'s own `main.rs` arg loop rather than pulling in a flags crate no
 //! other service binary in this workspace uses — so `--help`'s exact text is this module's own
 //! [`HELP`] constant, which `docs/relay.md` is pinned against by
-//! `tests/help_matches_docs.rs` (tasks/docs-relay-selfhost, acceptance: "relay --help output
+//! `tests/it/help_matches_docs.rs` (tasks/docs-relay-selfhost, acceptance: "relay --help output
 //! matches every flag name docs/relay.md mentions").
 
 use crate::bounds::{MAX_BLOB_SIZE, MAX_RETENTION_DAYS};
@@ -14,7 +14,7 @@ use std::path::PathBuf;
 /// Default bind address when `--listen`/`RELAY_LISTEN` is omitted.
 const DEFAULT_LISTEN: &str = "127.0.0.1:8787";
 
-/// The exact text `relay --help` prints — also what `tests/help_matches_docs.rs` and
+/// The exact text `relay --help` prints — also what `tests/it/help_matches_docs.rs` and
 /// `docs/relay.md` are both pinned against. Every flag name here must exist in that doc, and
 /// every flag name in that doc must exist here (tasks/docs-relay-selfhost's drift test).
 pub const HELP: &str = "\

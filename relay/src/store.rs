@@ -1,7 +1,7 @@
 //! Opaque blob store keyed by `(group_id, device_id)` — SQLite via rusqlite
 //! (<https://docs.rs/rusqlite>), bundled amalgamation, WAL mode (same choice `txtodo-store` makes
 //! under ADR 0004, though this crate may not depend on that crate — see
-//! tests/no_txtodo_deps.rs). The `blob` column is `BLOB` with no structure: this is where
+//! tests/it/no_txtodo_deps.rs). The `blob` column is `BLOB` with no structure: this is where
 //! "the relay cannot distinguish op types" is enforced (tasks/relay-reference/notes.md).
 //!
 //! Routing metadata only: group id, device id, envelope length, stored-at. Nothing in this

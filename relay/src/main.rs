@@ -1,6 +1,6 @@
 //! Reference relay binary entry point (M8, design §4.5): parses config, opens the store, and
 //! serves the dumb HTTP surface (put/get/list, wake-on-write) over axum. Deliberately has zero
-//! `txtodo-*` dependencies — see tests/no_txtodo_deps.rs — the relay is untrusted and must never
+//! `txtodo-*` dependencies — see tests/it/no_txtodo_deps.rs — the relay is untrusted and must never
 //! be able to parse ciphertext it stores (design §4.6).
 #![forbid(unsafe_code)]
 // The binary's only human output path, matching txtodo-daemon's own main.rs precedent for the
@@ -54,7 +54,7 @@ struct LogGuard {
 /// files under `<data_dir>/logs`, newest [`LOG_KEEP_FILES`] kept, plus pretty stderr, one shared
 /// `EnvFilter`, non-panicking `.try_init()`), reimplemented here with the same underlying
 /// `tracing-appender`/`tracing-subscriber` primitives rather than depended on: relay must never
-/// take a `txtodo-*` dependency (`tests/no_txtodo_deps.rs`, design §4.6 — it is untrusted and must
+/// take a `txtodo-*` dependency (`tests/it/no_txtodo_deps.rs`, design §4.6 — it is untrusted and must
 /// stay structurally incapable of importing the code that would let it read what it stores); see
 /// `tasks/logging-relay-converge/notes.md` for the full reasoning, including why `RELAY_LOG`
 /// aliasing `TXTODO_LOG` also could not go through `txtodo_telemetry` even if the dependency were

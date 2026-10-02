@@ -70,7 +70,7 @@ access.http = { url = "http://accounts:8080/relay/access" }
 ## 5. Phase 2 — accounts service, OTP-verified email allowlist
 
 New workspace member `accounts/`, axum + rusqlite, mirroring `relay/`'s shape and its
-zero-dependencies-on-txtodo-crates discipline (`relay/tests/no_txtodo_deps.rs` is the precedent —
+zero-dependencies-on-txtodo-crates discipline (`relay/tests/it/no_txtodo_deps.rs` is the precedent —
 this service has no business parsing anything of ours either).
 
 Two tables:

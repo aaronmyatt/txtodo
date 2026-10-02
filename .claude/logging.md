@@ -97,7 +97,7 @@ it (most crates below name their spans explicitly).
 | `txtodo-tui` | Always, file-only | **Never** | `txtodo_telemetry::init_file_only` — the raw-mode alternate-screen terminal cannot tolerate a stray stderr write; the sink is structurally incapable of it, not just configured off. |
 | `txtodo-mcp` | Always | Always | `txtodo_telemetry::init`; **never stdout** — stdout is MCP's own JSON-RPC transport. |
 | `apps/desktop` (src-tauri) | Subscriber installed in `.setup()` | Same layers as `init` | One subscriber for the whole Tauri process; `ui_log` bridges the frontend's own `ui_invoke_*`/`ui_event` lines into it. |
-| `relay` | Always | Always | **Cannot depend on `txtodo-telemetry`** (`relay/tests/no_txtodo_deps.rs` forbids any `txtodo-*` dependency — design §4.6 security boundary). Reimplemented locally in `relay/src/main.rs` with raw `tracing-subscriber`, same JSON+pretty shape. Filter env var is `RELAY_LOG`, falling back to `TXTODO_LOG` (`env("RELAY_LOG").or_else(|| env("TXTODO_LOG"))`) — `RELAY_LOG` always wins when both are set. |
+| `relay` | Always | Always | **Cannot depend on `txtodo-telemetry`** (`relay/tests/it/no_txtodo_deps.rs` forbids any `txtodo-*` dependency — design §4.6 security boundary). Reimplemented locally in `relay/src/main.rs` with raw `tracing-subscriber`, same JSON+pretty shape. Filter env var is `RELAY_LOG`, falling back to `TXTODO_LOG` (`env("RELAY_LOG").or_else(|| env("TXTODO_LOG"))`) — `RELAY_LOG` always wins when both are set. |
 
 ## No-secrets rule
 

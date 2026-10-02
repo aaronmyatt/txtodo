@@ -20,7 +20,7 @@ cellular).
 
 That sentence is the whole contract (design Appendix B: "It stores blobs it can't read and
 forwards pushes. That is all it will ever do."). The relay crate has zero dependencies on this
-workspace's own model/crypto crates — `relay/tests/no_txtodo_deps.rs` asserts this by reading the
+workspace's own model/crypto crates — `relay/tests/it/no_txtodo_deps.rs` asserts this by reading the
 crate's own manifest, so it is structurally incapable of importing the code that would let it
 read what it stores, not merely configured not to.
 
@@ -54,7 +54,7 @@ line always wins over its environment variable.
 | `--help` | | | Print the flag list and exit. |
 
 This table is pinned against the binary's actual `--help` output by
-`relay/tests/help_matches_docs.rs`: a renamed or removed flag fails that test, so this doc and
+`relay/tests/it/help_matches_docs.rs`: a renamed or removed flag fails that test, so this doc and
 the binary cannot silently drift apart.
 
 **The retention and max-blob-bytes numbers above are examples, not a spec.** The real defaults
@@ -86,7 +86,7 @@ Every run writes two places: JSON, daily-rotated (newest 7 kept) at
 stderr, which a process manager (systemd's journal, launchd, Kamal's log driver, ...) captures on
 its own. This is the same JSON-file-plus-pretty-stderr shape every other txtodo binary uses
 (`txtodo_telemetry::init`), reimplemented locally rather than depended on: `relay/` must never
-take a `txtodo-*` dependency (`relay/tests/no_txtodo_deps.rs`, design §4.6) — see
+take a `txtodo-*` dependency (`relay/tests/it/no_txtodo_deps.rs`, design §4.6) — see
 `tasks/logging-relay-converge/notes.md` for the full reasoning. Logs never carry blob payloads or
 group/device ids beyond what's already routing metadata (design §4.6's own contract).
 
