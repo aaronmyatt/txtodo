@@ -136,7 +136,7 @@ fn legacy_log(store: &SharedStore, cfg: &NotesActorConfig) -> Op {
 }
 
 #[test]
-fn a_peers_op_that_does_not_fit_is_skipped_and_the_rest_of_the_batch_lands() {
+fn a_peers_op_that_does_not_fit_waits_and_the_rest_of_the_batch_lands() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
     let (store, clock, cfg) = setup(dir.path(), 2);
     let mut b =
@@ -166,8 +166,50 @@ fn a_peers_op_that_does_not_fit_is_skipped_and_the_rest_of_the_batch_lands() {
     assert_eq!(
         ops_for(&store, &cfg.path).len(),
         2,
-        "the skipped op stays in the log, so heads stay dense"
+        "the waiting op stays in the log, so heads stay dense"
     );
+}
+
+/// Lab chaos 20261002-235331: a2 appended on top of a1's append, and b1 got a2's edit first (two
+/// peers, own carries across). It used to be skipped for good; now it waits, lands once a1's edit
+/// does, and the log replays to the same text.
+#[test]
+fn an_edit_that_arrives_before_the_one_it_builds_on_waits_for_it() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
+    let (store, clock, cfg) = setup(dir.path(), 2);
+    let mut b = NotesActor::open(cfg.clone(), Arc::clone(&store), Arc::clone(&clock))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let (a1, a2) = (
+        DeviceId::new(Ulid::from_u128(1)),
+        DeviceId::new(Ulid::from_u128(3)),
+    );
+    let first = notes_op(
+        911,
+        a1,
+        500,
+        vec![TextEdit::Insert {
+            at: 0,
+            text: "one\n".into(),
+        }],
+    );
+    let on_top = notes_op(
+        912,
+        a2,
+        600,
+        vec![TextEdit::Insert {
+            at: 4,
+            text: "two\n".into(),
+        }],
+    );
+
+    b.import_ops(vec![on_top]).unwrap_or_else(|e| panic!("{e}"));
+    assert!(b.contents().0.is_empty(), "nothing to append to yet");
+    b.import_ops(vec![first]).unwrap_or_else(|e| panic!("{e}"));
+
+    assert_eq!(b.contents().0, b"one\ntwo\n");
+    drop(b);
+    let again = NotesActor::open(cfg, store, clock).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(again.contents().0, b"one\ntwo\n", "the log replays to it");
 }
 
 #[test]

@@ -56,6 +56,9 @@ pub(crate) fn local_digest(
     }
     let cell = read(ws).notes_cell(path)?;
     let notes = cell.lock().unwrap_or_else(PoisonError::into_inner);
+    if notes.has_waiting() {
+        return None;
+    }
     Some(DocDigest {
         ops: notes.op_set(),
         bytes: notes.contents().1,

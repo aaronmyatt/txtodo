@@ -17,7 +17,7 @@ use crate::clock::Clock;
 use crate::expected::Hash;
 use crate::handle::{ActorError, Applied};
 use crate::notes_mirror::NotesMirror;
-use crate::notes_repair::{apply_leniently, log_skipped, repair_edits, replay_leniently};
+use crate::notes_repair::{WaitingEdits, log_skipped, repair_edits, replay_leniently};
 use crate::notes_state::NotesState;
 use std::sync::PoisonError;
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TextEdit};
@@ -61,6 +61,8 @@ pub struct NotesActor {
     held_stored: bool,
     /// Every op this document's log holds, order-free (`op_set_hash.rs`).
     op_set: crate::op_set_hash::OpSetHash,
+    /// Peer edits that did not fit yet (`notes_repair.rs`).
+    waiting: WaitingEdits,
 }
 
 impl NotesActor {
@@ -112,6 +114,7 @@ impl NotesActor {
             wrote_last: false,
             held_stored: false,
             op_set,
+            waiting: WaitingEdits::default(),
         };
         actor.restore_held()?;
         actor.absorb_disk_text(&disk_bytes)?;
@@ -135,6 +138,7 @@ impl NotesActor {
         if !replayed.complete {
             return Ok(());
         }
+        self.waiting = replayed.waiting.clone();
         let Some(edits) = repair_edits(&replayed.state, &self.state) else {
             // The log rebuilds this text: take its edit history too (ADR 0034).
             self.state.adopt_history(&replayed.state);
@@ -157,6 +161,11 @@ impl NotesActor {
     /// Every op this document's log holds, order-free (task sync-divergence-check).
     pub fn op_set(&self) -> crate::op_set_hash::OpSetHash {
         self.op_set
+    }
+
+    /// Whether peer edits wait for one they build on: the text is about to change.
+    pub(crate) fn has_waiting(&self) -> bool {
+        !self.waiting.is_empty()
     }
 
     /// Current bytes and hash.
@@ -240,27 +249,23 @@ impl NotesActor {
         }
         self.merge_if_held()?;
         let mut next = self.state.clone();
-        let skipped: Vec<OpId> = apply_leniently(&mut next, &ops)
-            .into_iter()
-            .map(|(op, e)| {
-                log_skipped(op, &e);
-                op.id
-            })
-            .collect();
-        let applied: Vec<Op> = ops
-            .iter()
-            .filter(|op| !skipped.contains(&op.id))
-            .cloned()
-            .collect();
+        let mut waiting = self.waiting.clone();
+        for (op, e) in waiting.apply(&mut next, &ops) {
+            log_skipped(&op, &e);
+        }
         let range = self.land(&ops, &next)?;
-        self.mirror.flush(&applied).map_err(mirror_err)?;
+        self.waiting = waiting;
+        // The mirror takes the state's text, not the batch's splices: an op that waited lands
+        // later, and an older one the state keeps but cannot place (ADR 0034's rebuild skips it)
+        // would not fit the mirror either.
         self.align_mirror()?;
         self.persist_mirror(range)
     }
 
-    /// A peer's edit that arrived late rebuilt the text in stamp order (ADR 0034); the mirror took
-    /// the same splices where they fell and holds another text. One edit, logged nowhere, brings it
-    /// to the state's: the mirror never decides bytes, and `persist_mirror` keeps it aligned.
+    /// Brings the mirror to the state's text after an import: one edit, logged nowhere. The state
+    /// orders text by stamp (ADR 0034) and keeps edits waiting (`notes_repair.rs`), so the batch's
+    /// splices in arrival order would not give its text. The mirror never decides bytes, and
+    /// `persist_mirror` keeps it aligned.
     fn align_mirror(&mut self) -> Result<(), ActorError> {
         let mirror_text = self.mirror.text();
         if mirror_text == self.state.text() {
