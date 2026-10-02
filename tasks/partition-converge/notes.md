@@ -215,3 +215,13 @@ more natural there, since notes already are a Loro text document.
   over 300 s → 84 s; crash.rs passes in 147 s. Known gap: the other 84 s is per-op linear scans of
   the slot sequence (`live_slot`, `anchor_slot`, `has_placement`, `reindex`, each O(slots)); an
   id → slots index would remove them, a larger change to `DocState`.
+- 2026-10-02, a completion between two concurrent appends (95f4fdee, ADR 0034 amended). Found by
+  the ADR 0035 digest check (lan-converge 202): a1 and b1 each appended to one line while apart; b1
+  also completed it, moving its priority into `pri:`, and that rewrite dropped the description's
+  history, so b1 applied a1's older append after its own. The move is now kept in the history as
+  `Change::Append` at its stamp, so a late edit is slotted in before it and the suffix stays at the
+  end on every replay (a splice would not: its offset moves when an older edit is slotted in front).
+  Replaying all 1 110 saved lab files changes exactly one, b1's file from that run, the wrong side.
+  Lab after: lan-converge 202, 505, 606 pass; chaos 202 converges, fails only on
+  `mirror_refused_converging`. Known gap: any other description change by a `SetField` still drops
+  the history.
