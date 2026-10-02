@@ -1,6 +1,6 @@
 # 0039 — Store each op's `origin_seq` once, when it is made
 
-- Status: proposed (the owner chose A in `tasks/sync-drift/notes.md` §6, 2026-10-02)
+- Status: accepted 2026-10-02 (the owner chose A in `tasks/sync-drift/notes.md` §6)
 - Date: 2026-10-02
 - Deciders: project owner
 

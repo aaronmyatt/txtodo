@@ -1,7 +1,7 @@
 # 0029 — Every user has one default workspace
 
 - Status: accepted; amended 2026-09-24 (own devices only, see Amendment); second amendment
-  2026-10-02 (own carries across) proposed
+  2026-10-02 (own carries across) accepted 2026-10-02
 - Date: 2026-09-21
 - Deciders: project owner (the three decisions below, 2026-09-20)
 
@@ -86,7 +86,7 @@ Consequences of the amendment:
 - The file carrier (`--sync-dir`) has no peer to ask, so it still shares the reserved id with every
   device reading the folder.
 
-## Amendment (2026-10-02, proposed): own carries across one shared device
+## Amendment (2026-10-02, accepted): own carries across one shared device
 Decided by the project owner (task `partition-converge`): two devices that each paired as own with
 a third are own to each other. Lab chaos showed the cost of the per-pairing rule: a1 paired b1 and
 a2 as own, b1 and a2 never paired, so each mirrored the other's default as a Remote workspace,
