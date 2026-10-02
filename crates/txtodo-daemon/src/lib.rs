@@ -77,7 +77,6 @@ mod log_repair;
 mod migrate_grpc;
 pub mod migrate_sidecar;
 pub mod mirror;
-mod mirror_converge;
 mod move_coordinator;
 #[cfg(test)]
 mod move_coordinator_tests;

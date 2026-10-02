@@ -125,11 +125,6 @@ impl Mirror {
         Ok(())
     }
 
-    /// The document this mirror follows.
-    pub(crate) fn path(&self) -> &FilePath {
-        &self.path
-    }
-
     /// Imports a peer's Loro updates; the caller derives ops, reviews, and commits.
     pub fn import(&mut self, bytes: &[u8]) -> Result<Imported, MirrorError> {
         let imported = self.doc.import(bytes).map_err(loro)?;
