@@ -48,6 +48,22 @@ Homebrew's own single-tap-per-user convention
   the default `GITHUB_TOKEN` does not start other workflows. Any push to the bump branch by a
   person does start it, which is how PR #2 got its run.
 
+## Release checklist: bumping the tap by hand
+
+Until the tap update is automated (`tasks/homebrew-tap-reconcile`), every bump since v0.0.13 has
+been by hand. One rule: stamp with `deploy/homebrew/update-release.sh`, never `update-formula.sh`
+or `update-cask.sh` alone. It rewrites the formula and the cask together; stamping them separately
+is how they drifted (its own header says so).
+
+```bash
+gh release download vX.Y.Z --pattern '*macos*' --pattern '*linux*-musl*' --pattern '*.bundle' --dir assets/
+deploy/homebrew/update-release.sh vX.Y.Z assets/   # formula + cask in one pass
+```
+
+Verify each asset's Sigstore `.bundle` before stamping, re-check every stamped hash against its own
+asset after (`tasks/homebrew-tap-reconcile/notes.md` has the `cosign verify-blob` line), then copy
+both `.rb` files to the tap.
+
 ## What the first real bump run showed (2026-09-20)
 
 v0.0.3 was cut to give the autobump something to fire against. The answer to
