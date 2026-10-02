@@ -1,4 +1,4 @@
-# rustfmt.toml pins newline_style = "Unix" and tests/differential.rs diffs generated text against a
+# rustfmt.toml pins newline_style = "Unix" and tests/it/differential.rs diffs generated text against a
 # checked-in .pest; Windows git would otherwise check out CRLF and fail both (CI 2026-09-11).
 # https://git-scm.com/docs/gitattributes#_eol
 * text=auto eol=lf

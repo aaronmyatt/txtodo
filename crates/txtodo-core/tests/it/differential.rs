@@ -25,8 +25,8 @@ use txtodo_core::{Date, LineKind, Mode, Task, parse_file, parse_line};
 #[grammar = "tests/todotxt.pest"]
 struct Generated;
 
-const ABNF: &str = include_str!("../../../specs/todotxt.abnf");
-const PEST: &str = include_str!("todotxt.pest");
+const ABNF: &str = include_str!("../../../../specs/todotxt.abnf");
+const PEST: &str = include_str!("../todotxt.pest");
 
 /// Converts the ABNF to the pest text that `tests/todotxt.pest` must contain.
 fn generate_pest(abnf: &str) -> String {
@@ -42,7 +42,7 @@ fn generate_pest(abnf: &str) -> String {
         .map(anchor)
         .collect();
     format!(
-        "// GENERATED from specs/todotxt.abnf by tests/differential.rs. Do not edit: the test regenerates and diffs.\n\
+        "// GENERATED from specs/todotxt.abnf by tests/it/differential.rs. Do not edit: the test regenerates and diffs.\n\
          {}\n\n// RFC 5234 core rules the ABNF relies on, and the anchored entry point.\nDIGIT = {{ '0'..'9' }}\nSP = {{ \" \" }}\nentry = {{ SOI ~ line }}\n",
         body.join("\n")
     )

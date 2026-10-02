@@ -1,4 +1,4 @@
-// GENERATED from specs/todotxt.abnf by tests/differential.rs. Do not edit: the test regenerates and diffs.
+// GENERATED from specs/todotxt.abnf by tests/it/differential.rs. Do not edit: the test regenerates and diffs.
 line = { completed ~ EOI | incomplete ~ EOI | blank ~ EOI }
 incomplete = { priority ~ (SP ~ date)? ~ (SP ~ description)? ~ EOI | date ~ (SP ~ description)? ~ EOI | description ~ EOI }
 completed = { "x" ~ SP ~ date ~ (SP ~ date)? ~ (SP ~ description)? }

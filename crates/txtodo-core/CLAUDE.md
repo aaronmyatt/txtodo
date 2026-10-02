@@ -31,6 +31,6 @@ Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenie
 - No I/O, no clocks, no async dependency. `no_std` + `alloc` must build.
 - `format(parse(x)) == x` for every corpus line; `tokenize` covers `[0, len)` exactly.
 - Never emits a construct the todo.txt spec does not define.
-- A second parser generated from `specs/todotxt.abnf` (tests/differential.rs) must agree with `parse_line(_, Strict)`.
+- A second parser generated from `specs/todotxt.abnf` (tests/it/differential.rs) must agree with `parse_line(_, Strict)`.
 - Tests: `cargo test -p txtodo-core` (unit, corpus, edge cases, proptest, differential); `just fuzz <target> <secs>`; `just bench-check`; `just no-std`.
 - May depend only on: nothing in the workspace.
