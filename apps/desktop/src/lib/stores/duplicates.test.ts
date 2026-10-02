@@ -19,6 +19,8 @@ describe("keepMutations", () => {
 		const ms = keepMutations(group, "newest");
 		expect(ids(ms)).toEqual(["01J9K3H5Z7Q8X2M4N6P8R0T2V1", "01J9K3H5Z7Q8X2M4N6P8R0T2V2"]);
 		expect(ms.every((m) => m.kind === "delete" && !m.leave_blank)).toBe(true);
+		// By id alone: a line number would be resolved first and moves inside the batch.
+		expect(ms.every((m) => m.kind === "delete" && m.task.line_number === 0)).toBe(true);
 	});
 
 	it("keeping the oldest deletes every newer copy", () => {

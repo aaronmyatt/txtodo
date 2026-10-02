@@ -9,8 +9,10 @@ import type { DuplicateGroup, Mutation } from "$lib/daemon";
  * deleting the older id deletes nothing there). */
 export type KeepChoice = "newest" | "oldest";
 
-/** The deletes that leave only the copy `keep` names. By task id, so line numbers moving inside
- * the batch do not matter; no blank is left behind, as `txtodo conflicts keep-newest`. */
+/** The deletes that leave only the copy `keep` names. By task id alone (`line_number: 0`): the
+ * daemon resolves a line number first, and the second delete's line has moved by then (under
+ * Sidecar it would delete whatever is there now; `txtodo-daemon/src/mutation.rs::resolve`). No
+ * blank is left behind, as `txtodo conflicts keep-newest`. */
 export function keepMutations(group: DuplicateGroup, keep: KeepChoice): Mutation[] {
 	if (group.tasks.length < 2) return [];
 	const kept = keep === "newest" ? group.tasks.length - 1 : 0;
@@ -18,7 +20,7 @@ export function keepMutations(group: DuplicateGroup, keep: KeepChoice): Mutation
 		.filter((_, i) => i !== kept)
 		.map((t) => ({
 			kind: "delete",
-			task: { line_number: t.line_number, task_id: t.task_id },
+			task: { line_number: 0, task_id: t.task_id },
 			leave_blank: false
 		}));
 }
