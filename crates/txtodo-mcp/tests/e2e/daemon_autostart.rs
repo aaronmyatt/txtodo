@@ -1,19 +1,15 @@
 //! Real-`txtodod` proof for task `daemon-always-available`: no daemon running for a `--dir`-style
 //! target, and `txtodo-mcp`'s startup path (`main.rs::ensure_daemon_for_target`, exercised here
 //! directly via the same `LaunchConfig` shape it builds) spawns one and connects — without a
-//! human ever running `txtodo daemon start`. Unlike `tests/global_workspace_routing.rs`'s own
-//! real-daemon test, whose older harness's `daemon_binary()` only asserts `target/debug/txtodod`
-//! already exists (a human must run `cargo build -p txtodo-daemon --bin txtodod` first),
-//! `support::daemon_bin` below builds it on demand instead — the same approach
-//! `crates/txtodo-tui/tests/support/mod.rs::daemon_bin` and `apps/desktop/src-tauri/tests/
+//! human ever running `txtodo daemon start`. `support::daemon_bin` below builds `txtodod` on
+//! demand (every file in `tests/e2e` uses it) — the same approach
+//! `crates/txtodo-tui/tests/e2e/support/mod.rs::daemon_bin` and `apps/desktop/src-tauri/tests/
 //! support/mod.rs::TXTODOD_BIN` use for their own daemon-spawn tests, so it doesn't need a human
 //! to pre-build anything.
 //!
-//! `#[ignore]`d anyway (2026-09-19): every sibling client's real-daemon test is now CI-only (see
-//! `crates/txtodo-cli/tests/daemon_mode.rs`/`daemon_autostart.rs`, `apps/desktop/src-tauri/tests/
-//! daemon_spawn.rs`) — a plain `cargo test -p txtodo-mcp` should stay consistent with the rest of
-//! the workspace rather than being the one client whose real-daemon test still runs locally. Run
-//! in CI via `cargo test -- --ignored` (`.github/workflows/ci.yml`).
+//! In `tests/e2e` like every sibling client's real-daemon test (`crates/txtodo-cli/tests/e2e/`,
+//! `crates/txtodo-tui/tests/e2e/`; desktop's `tests/daemon_spawn.rs` is still `#[ignore]`d), so
+//! a plain `cargo test -p txtodo-mcp` leaves it out and CI runs it with `--test e2e`.
 //!
 //! `run(args)` itself isn't easily unit-testable in isolation without also standing up the full
 //! MCP stdio/HTTP transport, so this replicates the exact sequence `main.rs` performs instead:
@@ -21,12 +17,11 @@
 //! pointed at the freshly built `txtodod`, no daemon pre-spawned), call `ensure_daemon`, then
 //! assert `GrpcMcpBackend::connect_unix` succeeds afterward.
 
-mod support;
+use crate::support;
 
 use txtodo_mcp::backend::McpBackend;
 use txtodo_mcp::grpc_backend::{GrpcMcpBackend, SOCKET_REL};
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn ensure_daemon_spawns_and_connects_with_no_daemon_pre_started() {
     let workspace = support::temp_workspace();

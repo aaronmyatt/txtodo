@@ -5,9 +5,10 @@
 //!
 //! Autostart is off, so before the fix this fails loudly (the server dials the bridge socket
 //! nobody serves and exits) instead of spawning a second daemon from a test. Real `txtodod` +
-//! the real `txtodo-mcp` binary, same `#[ignore]`/prerequisite-build convention as
-//! `cwd_autoregister.rs`: run `cargo build -p txtodo-daemon --bin txtodod` first.
+//! the real `txtodo-mcp` binary, in `tests/e2e` like `cwd_autoregister.rs`.
 #![allow(clippy::expect_used)]
+
+use crate::support;
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -17,17 +18,10 @@ use std::time::Duration;
 use txtodo_mcp::backend::McpBackend;
 use txtodo_mcp::grpc_backend::GrpcMcpBackend;
 
+/// `target/debug/txtodod`, built on first use by [`support::daemon_bin`] (this crate may not
+/// depend on txtodo-daemon, so `CARGO_BIN_EXE_txtodod` does not exist here).
 fn daemon_binary() -> PathBuf {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root");
-    let bin = root.join("target/debug/txtodod");
-    assert!(
-        bin.exists(),
-        "expected {bin:?} to exist — run `cargo build -p txtodo-daemon --bin txtodod` first"
-    );
-    bin
+    support::daemon_bin().to_path_buf()
 }
 
 struct KillOnDrop(Child);
@@ -100,7 +94,6 @@ fn list_through_mcp(dir: &Path, socket: &Path, registry: &Path) -> (String, Stri
 }
 
 #[tokio::test]
-#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
 async fn dir_on_a_root_the_global_daemon_owns_is_served_through_it() {
     // Short path: unix socket paths are capped near 104 bytes on macOS.
     let tmp = tempfile::tempdir().expect("tempdir");

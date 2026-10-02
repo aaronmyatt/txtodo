@@ -3,9 +3,10 @@
 //! was always empty. The ids now come from `GetFile`'s `task_ids`. Drives [`GrpcMcpBackend`]
 //! directly, the backend `schema.rs`'s tool methods delegate to.
 //!
-//! `#[ignore]`d for the same reason as `global_workspace_routing.rs` (see its module doc): it
-//! spawns a separately built `txtodod` this crate may not depend on. Run it with
-//! `cargo build -p txtodo-daemon --bin txtodod && cargo test -p txtodo-mcp --test sidecar_id_tools -- --ignored`.
+//! In `tests/e2e` like `global_workspace_routing.rs` (see its module doc): it spawns a
+//! separately built `txtodod` this crate may not depend on.
+
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -13,22 +14,10 @@ use std::time::Duration;
 use txtodo_mcp::backend::{FieldPatch, GetTarget, ListArgs, McpBackend, MoveAnchor};
 use txtodo_mcp::grpc_backend::GrpcMcpBackend;
 
-/// `target/debug/txtodod`, resolved from this crate's manifest dir (`CARGO_BIN_EXE_<name>` only
-/// covers binaries of the same package). No `#[test]` attribute, so a manual panic, not `expect`.
+/// `target/debug/txtodod`, built on first use by [`support::daemon_bin`] (this crate may not
+/// depend on txtodo-daemon, so `CARGO_BIN_EXE_txtodod` does not exist here).
 fn daemon_binary() -> PathBuf {
-    let root = match PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-    {
-        Ok(p) => p,
-        Err(e) => panic!("workspace root did not resolve: {e}"),
-    };
-    let bin = root.join("target/debug/txtodod");
-    assert!(
-        bin.exists(),
-        "expected {bin:?} to exist — run `cargo build -p txtodo-daemon --bin txtodod` first"
-    );
-    bin
+    support::daemon_bin().to_path_buf()
 }
 
 /// Kills the spawned `txtodod` even if an assertion panics later.
@@ -76,7 +65,6 @@ async fn start_sidecar_daemon(tmp: &Path) -> (KillOnDrop, PathBuf, String) {
 }
 
 #[tokio::test]
-#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
 async fn id_addressed_tools_resolve_a_sidecar_task() {
     // The OS temp dir keeps the unix socket path under SUN_LEN (~104 bytes).
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -148,7 +136,6 @@ async fn id_addressed_tools_resolve_a_sidecar_task() {
 /// Task workspace-layout: with `todo_file = "work.txt"` in `txtodo.toml`, a tool that names no
 /// file adds to, lists and reads `work.txt`, not a `todo.txt` that does not exist.
 #[tokio::test]
-#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
 async fn tools_with_no_file_use_the_layouts_root_list() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let socket = tmp.path().join("txtodod.sock");

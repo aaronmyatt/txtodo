@@ -5,7 +5,7 @@
 use std::process::Command;
 
 #[test]
-fn version_prints_name_version_and_date() {
+fn slow_version_prints_name_version_and_date() {
     let out = Command::new(env!("CARGO_BIN_EXE_txtodo-mcp"))
         .arg("--version")
         .output()

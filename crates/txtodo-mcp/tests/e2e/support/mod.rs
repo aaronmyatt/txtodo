@@ -1,8 +1,5 @@
-//! Shared harness for this crate's real-`txtodod` integration tests (`tests/daemon_autostart.rs`;
-//! `tests/global_workspace_routing.rs` keeps its own inline `daemon_binary()`/`KillOnDrop` for now
-//! rather than being migrated here, out of scope for this change). Not a test binary itself: a
-//! `mod.rs` under a `tests/` subdirectory is cargo's documented way to share code between
-//! integration-test binaries without it being collected as its own test target.
+//! Shared harness for this crate's real-`txtodod` tests, a module of the `tests/e2e` binary. Every
+//! file there finds `txtodod` through [`daemon_bin`]; some still keep their own `KillOnDrop`.
 //! Ref: <https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests>
 #![allow(dead_code)] // not every test file uses every helper here
 
@@ -28,9 +25,10 @@ fn workspace_root() -> PathBuf {
 /// txtodod` if `target/debug/txtodod` doesn't exist yet. No Cargo dependency edge onto
 /// `txtodo-daemon` is added by this (`budgets.json`'s `allowedDeps` forbids it) — this locates the
 /// binary by its ordinary `target/` path instead, the same approach
-/// `crates/txtodo-tui/tests/support/mod.rs::daemon_bin` and
+/// `crates/txtodo-tui/tests/e2e/support/mod.rs::daemon_bin` and
 /// `apps/desktop/src-tauri/tests/support/mod.rs::TXTODOD_BIN` already use. `OnceLock` so every
-/// test in one binary run pays the build cost once.
+/// test in one process pays the lookup once; under nextest (a process per test) a second build
+/// finds cargo's lock and then nothing to do.
 pub fn daemon_bin() -> &'static Path {
     static BIN: OnceLock<PathBuf> = OnceLock::new();
     BIN.get_or_init(|| {

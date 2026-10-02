@@ -372,3 +372,6 @@ prefix (the fast gate's nextest profile skips `slow_*`; CI runs them):
 `tests/it/` (in-process) and `tests/e2e/` (real txtodod). Above, `security_keys_only_in_keystore.rs`
 and `tokens.rs` are now under `crates/txtodo-daemon/tests/it/`; `relay_converge.rs` is under
 `crates/txtodo-daemon/tests/e2e/`. Same tests, same names.
+
+2026-10-02 · `fast-gate`: path moves only. txtodo-mcp's `smoke.rs`, `http_guard.rs` and
+`http_loopback_bind.rs` named above are now under `crates/txtodo-mcp/tests/it/`. Same tests.

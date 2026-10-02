@@ -1,5 +1,6 @@
-//! The in-memory `McpBackend` `tests/smoke.rs` runs the server against (split out for that file's
-//! line budget): records every call and returns canned data — no daemon, no filesystem.
+//! The in-memory `McpBackend` `smoke`, `http_guard` and `http_loopback_bind` run the server against
+//! (its own file for smoke.rs's line budget): records every call and returns canned data, with
+//! no daemon and no filesystem.
 
 use std::sync::Mutex;
 

@@ -1,9 +1,11 @@
 //! Task mcp-cwd-autoregister: `txtodo-mcp` started with no flags in a stray folder that happens
 //! to hold a `todo.txt` must not register that folder (whose name every paired peer would then be
 //! offered — `control_session.rs::outbound_offers` announces every registry entry). It serves the
-//! default workspace instead and says so. Real `txtodod` + the real `txtodo-mcp` binary, same
-//! `#[ignore]`/prerequisite-build convention as `global_workspace_routing.rs`.
+//! default workspace instead and says so. Real `txtodod` + the real `txtodo-mcp` binary, in
+//! `tests/e2e`, like `global_workspace_routing.rs`.
 #![allow(clippy::expect_used)]
+
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -11,20 +13,10 @@ use std::time::Duration;
 use txtodo_mcp::backend::McpBackend;
 use txtodo_mcp::grpc_backend::GrpcMcpBackend;
 
+/// `target/debug/txtodod`, built on first use by [`support::daemon_bin`] (this crate may not
+/// depend on txtodo-daemon, so `CARGO_BIN_EXE_txtodod` does not exist here).
 fn daemon_binary() -> PathBuf {
-    let root = match PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-    {
-        Ok(p) => p,
-        Err(e) => panic!("workspace root did not resolve: {e}"),
-    };
-    let bin = root.join("target/debug/txtodod");
-    assert!(
-        bin.exists(),
-        "expected {bin:?} to exist — run `cargo build -p txtodo-daemon --bin txtodod` first"
-    );
-    bin
+    support::daemon_bin().to_path_buf()
 }
 
 struct KillOnDrop(std::process::Child);
@@ -46,7 +38,6 @@ async fn wait_for_socket(path: &Path) {
 }
 
 #[tokio::test]
-#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
 async fn a_stray_todo_txt_folder_is_served_as_the_default_and_never_registered() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let socket = tmp.path().join("txtodod.sock");

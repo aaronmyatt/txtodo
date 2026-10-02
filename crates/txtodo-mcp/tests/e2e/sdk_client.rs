@@ -20,13 +20,12 @@
 //! test is not one config edit away from the macOS keychain or the user's launchd job.
 //! `TXTODO_NO_AUTOSTART=1` stops the stdio child from spawning a daemon of its own.
 //!
-//! `#[ignore]`d like every sibling real-daemon test (see `tests/daemon_autostart.rs`'s module doc):
-//! CI runs it in ci.yml's `--run-ignored ignored-only` step. Locally:
-//! `cargo test -p txtodo-mcp --test sdk_client -- --ignored`.
-#![cfg(unix)] // unix-socket daemon; ci.yml skips the ignored step on Windows (ADR 0010)
+//! In `tests/e2e` like every sibling real-daemon test (see `daemon_autostart.rs`'s module doc).
+//! Locally: `cargo nextest run -p txtodo-mcp --test e2e -E 'test(/^sdk_client::/)'`.
+#![cfg(unix)] // unix-socket daemon; CI's e2e step skips Windows (ADR 0010)
 #![allow(clippy::expect_used)] // helpers below are not #[test] fns; clippy only exempts those
 
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -169,7 +168,6 @@ async fn add_then_list(client: &Client, line: &str) {
     );
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn stock_rmcp_client_over_stdio_adds_and_lists_on_a_real_daemon() {
     let daemon = start_daemon().await;
@@ -247,7 +245,6 @@ async fn serve_http_on_real_daemon(
     (format!("http://{addr}{MCP_PATH}"), ct, serving)
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn stock_rmcp_client_over_streamable_http_adds_and_lists_on_a_real_daemon() {
     let daemon = start_daemon().await;

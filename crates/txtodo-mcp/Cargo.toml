@@ -15,6 +15,14 @@ name = "txtodo-mcp"
 path = "src/main.rs"
 test = false
 
+# Real-txtodod tests (task fast-gate): `test = false` keeps them out of `cargo test`, `cargo nextest
+# run`, `clippy --all-targets` and the local fast gate; CI selects them with `--test e2e`.
+# https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+test = false
+
 [dependencies]
 txtodo-proto.workspace = true
 txtodo-query.workspace = true
@@ -26,7 +34,7 @@ rmcp = { version = "3.3", default-features = false, features = [
   "server",
   "transport-io",
   "transport-streamable-http-server",
-  # "client" is only exercised by tests/smoke.rs (an in-process reference client over an
+  # "client" is only exercised by tests/it/smoke.rs (an in-process reference client over an
   # in-memory duplex pipe) but Cargo unifies features across dep/dev-dep, so it's listed here.
   "client",
 ] }
@@ -76,7 +84,7 @@ txtodo-daemon-launch = { path = "../txtodo-daemon-launch" }
 [dev-dependencies]
 # https://docs.rs/tempfile — scratch unix sockets for the in-process transport smoke test.
 tempfile = "3"
-# https://docs.rs/tracing-subscriber — only `tests/smoke.rs`'s `mcp_call_span_*` test needs this:
+# https://docs.rs/tracing-subscriber — only `tests/it/smoke.rs`'s `mcp_call_span_*` test needs this:
 # `txtodo_telemetry::testing::LogSink` captures bytes, but proving the `mcp.call` span's own
 # fields land on a JSON line needs a `with_span_events(FmtSpan::CLOSE)` layer, which
 # `txtodo_telemetry::testing::capturing_dispatch` deliberately doesn't build (it mirrors `init`'s
@@ -84,7 +92,7 @@ tempfile = "3"
 # `txtodo-daemon`/`txtodo-telemetry` already use.
 tracing-subscriber = { workspace = true }
 # https://docs.rs/rmcp/latest/rmcp/transport/streamable_http_client/ — rmcp's stock Streamable
-# HTTP client, only for `tests/sdk_client.rs` (task mcp-sdk-smoke: a stock SDK client against the
+# HTTP client, only for `tests/e2e/sdk_client.rs` (task mcp-sdk-smoke: a stock SDK client against the
 # real server, so protocol drift fails a test). Test-only, never in the shipped binary. The
 # `-reqwest` feature pulls reqwest with default features off and no TLS backend (plain
 # http://127.0.0.1 only), so it adds no TLS stack. Features here unify with [dependencies]' rmcp.
@@ -92,7 +100,7 @@ tracing-subscriber = { workspace = true }
 rmcp = { version = "3.3", default-features = false, features = [
   "transport-streamable-http-client-reqwest",
 ] }
-# https://docs.rs/tokio/latest/tokio/process/ — `tests/sdk_client.rs` spawns the real `txtodo-mcp
+# https://docs.rs/tokio/latest/tokio/process/ — `tests/e2e/sdk_client.rs` spawns the real `txtodo-mcp
 # --stdio` binary and talks to its piped stdin/stdout. Named here rather than relied on through
 # txtodo-daemon-launch's own tokio features, which could change under us.
 tokio = { version = "1", features = ["process", "time"] }

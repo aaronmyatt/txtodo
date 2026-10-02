@@ -20,11 +20,11 @@ A task's id comes from the daemon, not from the line: `GetFile` answers one id p
 (`FileContents.task_ids`, task `sidecar-task-ids`) and `doc.rs`'s `FileDoc` pairs them with the text.
 Under Sidecar identity a line has no `id:` tag, so `TaskRow.id` and every id-addressed tool depend on
 it. The first `id:` word in the text is only the fallback for a daemon that sent no ids.
-`tests/sidecar_id_tools.rs` (`#[ignore]`d, needs a built `txtodod`) drives the tools under Sidecar.
+`tests/e2e/sidecar_id_tools.rs` (a real `txtodod`, CI-only) drives the tools under Sidecar.
 
 ## Tools MCP never mirrors
 
-The registered tool set is a closed allow-list (`tests/smoke.rs`'s `EXPECTED_TOOLS`, an exact match).
+The registered tool set is a closed allow-list (`tests/it/smoke.rs`'s `EXPECTED_TOOLS`, an exact match).
 These `txtodo` commands are deliberately not in it, and `no_tool_mirrors_a_trust_boundary_cli_command`
 fails if a tool ever borrows their names: `workspace add|remove` (the device-global registry),
 `pair` (cross-device pairing), `device remove` (group-key rotation, device trust), `identity migrate`

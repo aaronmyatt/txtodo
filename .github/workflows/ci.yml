@@ -92,8 +92,8 @@ jobs:
       - name: test (e2e)
         if: runner.os != 'Windows'
         run: cargo nextest run --workspace --exclude txtodo-daemon --test e2e --no-fail-fast
-      # Every real-txtodod integration test across txtodo-mcp and apps/desktop is
-      # #[ignore]d (2026-09-19; txtodo-cli's and txtodo-tui's moved to tests/e2e, task fast-gate): each
+      # Every real-txtodod integration test in apps/desktop is #[ignore]d (2026-09-19; txtodo-cli's,
+      # txtodo-tui's and txtodo-mcp's moved to their tests/e2e targets, task fast-gate): each
       # spawns a real daemon and apps/desktop's own
       # support::TXTODOD_BIN can trigger a full daemon/sync/iroh recompile under a different
       # feature resolution, measured once at ~14 minutes for 2 tests — by far the slowest tests
@@ -105,7 +105,7 @@ jobs:
       # sweep, txtodo-daemon-launch's simulated_reboot needing a real launchd/systemd session).
       - name: test (ignored — CI-only real-txtodod tests)
         if: runner.os != 'Windows'
-        run: cargo nextest run -p txtodo-mcp -p desktop --no-fail-fast --run-ignored ignored-only
+        run: cargo nextest run -p desktop --no-fail-fast --run-ignored ignored-only
       - name: boundaries + file length + assertions
         if: runner.os != 'Windows'
         run: |
@@ -191,7 +191,7 @@ jobs:
       - name: coverage (e2e targets)
         run: cargo llvm-cov --workspace --no-report --no-fail-fast --test e2e
       - name: coverage (ignored real-txtodod tests)
-        run: cargo llvm-cov -p txtodo-mcp -p desktop --no-report --no-fail-fast -- --ignored
+        run: cargo llvm-cov -p desktop --no-report --no-fail-fast -- --ignored
       # Generated prost/tonic code is not hand-written logic: leave it out of the line count.
       # https://github.com/taiki-e/cargo-llvm-cov#exclude-file-from-coverage
       - name: coverage floor (budgets.json.coveragePercent)

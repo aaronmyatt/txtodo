@@ -9,10 +9,7 @@ use rmcp::model::{CallToolRequestParams, GetPromptRequestParams, ReadResourceReq
 use rmcp::{ClientHandler, ServiceExt};
 use serde_json::json;
 
-#[path = "smoke/fake_backend.rs"]
-mod fake_backend;
-
-use fake_backend::FakeBackend;
+use crate::fake_backend::FakeBackend;
 use txtodo_mcp::schema::McpServer;
 
 /// task `mcp-smoke-span-flake`: every test below takes this lock for its duration, serializing

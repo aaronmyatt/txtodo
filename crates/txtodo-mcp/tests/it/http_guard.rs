@@ -10,10 +10,7 @@ use axum::http::{Request, StatusCode};
 use tokio_util::sync::CancellationToken;
 use tower::ServiceExt;
 
-#[path = "smoke/fake_backend.rs"]
-mod fake_backend;
-
-use fake_backend::FakeBackend;
+use crate::fake_backend::FakeBackend;
 use txtodo_mcp::schema::McpServer;
 use txtodo_mcp::transport::{MCP_PATH, MCP_PORT, http_router};
 

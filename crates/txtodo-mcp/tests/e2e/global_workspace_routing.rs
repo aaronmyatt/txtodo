@@ -6,12 +6,12 @@
 //! (the exact backend `schema.rs`'s tool methods delegate to; going through the full MCP
 //! stdio/HTTP transport on top would only add JSON-RPC framing noise around the same call path).
 //!
-//! `#[ignore]`d and not wired into the automated gate (same precedent as `txtodo-daemon`'s
-//! `tests/idle_rss.rs`/`tests/lan_sync_bench.rs`): it spawns a real, separately-built `txtodod`
-//! binary this crate cannot depend on (`budgets.json`'s `allowedDeps` — a dev-dependency on
-//! `txtodo-daemon` would trip `check-boundaries.sh` exactly like a normal one), so it needs
-//! `cargo build -p txtodo-daemon --bin txtodod` to have already produced
-//! `target/debug/txtodod` before running (`cargo test -p txtodo-mcp -- --ignored`).
+//! In `tests/e2e`: it spawns a real, separately built `txtodod` binary this crate cannot depend
+//! on (`budgets.json`'s `allowedDeps`: a dev-dependency on `txtodo-daemon` would trip
+//! `check-boundaries.sh` exactly like a normal one), which `support::daemon_bin` builds when
+//! `target/debug/txtodod` is missing.
+
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -19,25 +19,10 @@ use std::time::Duration;
 use txtodo_mcp::backend::{ListArgs, McpBackend, WorkspaceInfo};
 use txtodo_mcp::grpc_backend::GrpcMcpBackend;
 
-/// `target/debug/txtodod`, resolved from this crate's own manifest dir (two levels up is the
-/// workspace root — `crates/txtodo-mcp` → `crates` → root) since Cargo's `CARGO_BIN_EXE_<name>`
-/// only covers binaries in the *same* package as the test (`txtodo-daemon`'s own tests use it for
-/// exactly that reason; this crate cannot). No `#[test]` attribute on this fn, so clippy's
-/// "allow expect in tests" heuristic does not reach it — a manual panic instead.
+/// `target/debug/txtodod`, built on first use by [`support::daemon_bin`] (this crate may not
+/// depend on txtodo-daemon, so `CARGO_BIN_EXE_txtodod` does not exist here).
 fn daemon_binary() -> PathBuf {
-    let root = match PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-    {
-        Ok(p) => p,
-        Err(e) => panic!("workspace root did not resolve: {e}"),
-    };
-    let bin = root.join("target/debug/txtodod");
-    assert!(
-        bin.exists(),
-        "expected {bin:?} to exist — run `cargo build -p txtodo-daemon --bin txtodod` first"
-    );
-    bin
+    support::daemon_bin().to_path_buf()
 }
 
 /// Kills the spawned `txtodod` even if an assertion later panics — an orphaned daemon holding this
@@ -126,7 +111,6 @@ fn assert_both_registered(workspaces: &[WorkspaceInfo], ws_a: &Path, ws_b: &Path
 }
 
 #[tokio::test]
-#[ignore = "spawns a real txtodod binary; see module doc for the prerequisite build step"]
 async fn workspace_selector_routes_to_the_named_workspace_not_the_other() {
     let tmp = tempfile::tempdir().expect("tempdir");
     // Short path: unix socket paths are capped at SUN_LEN (~104 bytes on macOS/BSD) — a deeply
