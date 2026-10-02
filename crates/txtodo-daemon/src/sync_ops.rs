@@ -56,6 +56,11 @@ impl FileActor {
         }
         let bytes = next.to_bytes();
         let write = bytes != self.projection;
+        let held_back = parked.without_waiting(&ops);
+        // The commit feeds the mirror the whole batch only when nothing waits or landed;
+        // otherwise `mirror_after_parking` feeds the part that fits.
+        let flush = held_back.is_none() && parking.landed == 0;
+        let feed = (!flush).then(|| held_back.unwrap_or_else(|| ops.clone()));
         self.commit(Commit {
             ops,
             next,
@@ -64,15 +69,35 @@ impl FileActor {
             snapshot: false,
             tail: CommitTail {
                 source: Some("sync".to_owned()),
+                flush,
                 ..CommitTail::default()
             },
         })?;
         self.parked = parked;
-        if parking.landed > 0 {
-            // Ops from earlier batches landed in this one: the mirror only saw this batch.
-            self.converge_mirror();
+        if let Some(feed) = feed {
+            self.mirror_after_parking(parking.landed, &feed);
         }
         Ok(())
+    }
+
+    /// The mirror upkeep the commit left out. `feed` is the batch without its waiting ops: one
+    /// names a task the mirror lacks too, and it would refuse it. Ops from earlier batches that
+    /// landed in this one were never fed, so after feeding what fits, converge adds just those; a
+    /// converge from a mirror that missed the whole batch more often ends in a new lineage (lab
+    /// chaos seed 202, rerun 20261002-210339).
+    fn mirror_after_parking(&mut self, landed: usize, feed: &[Op]) {
+        if landed == 0 {
+            if !feed.is_empty() {
+                self.flush_mirror(feed);
+            }
+            return;
+        }
+        // Expected to leave the mirror short of the landed ops (or stop at a refusal): no
+        // agreement check here, the converge right after is the heal.
+        if let Err(e) = self.mirror.flush(feed, &self.state) {
+            log_feed_refused(&self.cfg.path, &e);
+        }
+        self.converge_mirror();
     }
 
     /// HLC receive rule for the batch's newest stamp (`Hlc::merge`), so this device's next op
@@ -94,6 +119,13 @@ impl FileActor {
 
 fn op_file(ops: &[Op]) -> Option<&txtodo_model::FilePath> {
     ops.first().map(|op| &op.file)
+}
+
+/// tracing `debug!`, split out for the caller's complexity budget: a refusal right before a
+/// converge is expected, not an error.
+/// <https://docs.rs/tracing/latest/tracing/macro.debug.html>
+fn log_feed_refused(file: &txtodo_model::FilePath, e: &crate::mirror::MirrorError) {
+    tracing::debug!(file = %file, error = %e, "mirror_feed_before_converge");
 }
 
 /// tracing `warn!`, split out for the caller's complexity budget.

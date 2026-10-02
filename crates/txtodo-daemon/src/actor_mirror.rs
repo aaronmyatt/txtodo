@@ -200,6 +200,10 @@ impl FileActor {
     /// fails too — or still disagrees afterward — is it rebuilt from scratch (a new lineage,
     /// logged as such).
     pub(crate) fn converge_mirror(&mut self) {
+        #[cfg(test)]
+        {
+            self.mirror_heals += 1;
+        }
         let result = self.mirror.converge_to(&self.state, self.hlc);
         self.after_converge(result);
     }

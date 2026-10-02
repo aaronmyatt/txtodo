@@ -334,3 +334,41 @@ fn an_op_that_needs_another_devices_insert_waits_for_it() {
         "no repair: the log alone rebuilds the file"
     );
 }
+
+/// Lab chaos seed 202 (report 20261002-184539-chaos): b1 logged `mirror_refused_converging` for
+/// its own add after a line another device had not delivered yet, arriving through a Remote mirror
+/// of the shared list. The document parked the add, but the commit still fed it to the mirror,
+/// which lacks that line too. Now the mirror gets only what applied, and heals once, when it lands.
+#[test]
+fn the_mirror_is_not_fed_an_op_that_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let mut actor = open(dir.path(), &store, &clock);
+    let (a, b, c) = (
+        TaskId::new(Ulid::from_u128(95)),
+        TaskId::new(Ulid::from_u128(96)),
+        TaskId::new(Ulid::from_u128(97)),
+    );
+    let heals_at_open = actor.mirror_heals;
+    // Own-device ops (device 1), as a Remote mirror relays them: b fits, c needs a.
+    actor
+        .on_sync_ops(vec![
+            op_from(11, 1, 3_000, insert(b, None, "b")),
+            op_from(12, 1, 3_001, insert(c, Some(a), "c")),
+        ])
+        .unwrap();
+    assert_eq!(actor.parked.len(), 1);
+    assert_eq!(actor.mirror_heals, heals_at_open, "no refusal, no heal");
+    assert!(actor.mirror.agrees_with(&actor.state));
+    actor
+        .on_sync_ops(vec![op_from(10, 7, 2_000, insert(a, None, "a"))])
+        .unwrap();
+    assert_eq!(actor.parked.len(), 0);
+    assert_eq!(
+        actor.mirror_heals,
+        heals_at_open + 1,
+        "one heal once c lands"
+    );
+    assert!(actor.mirror.agrees_with(&actor.state));
+}

@@ -100,6 +100,9 @@ pub struct FileActor {
     /// Test seam: `Digest` reports a skewed byte hash (`ActorMsg::SkewDigestForTest`).
     #[cfg(test)]
     pub(crate) skew_digest: bool,
+    /// Test seam: how many times the mirror was healed from the state (`converge_mirror`).
+    #[cfg(test)]
+    pub(crate) mirror_heals: u32,
 }
 
 impl FileActor {
@@ -140,6 +143,8 @@ impl FileActor {
             prev_write: None,
             #[cfg(test)]
             skew_digest: false,
+            #[cfg(test)]
+            mirror_heals: 0,
         };
         actor.recover()?;
         actor.repair_log()?;
