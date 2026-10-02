@@ -199,6 +199,20 @@ back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
   mcp's `tests/daemon_autostart.rs:8` and `tests/support/mod.rs:31` name the tui support path:
   for the mcp line.
 
+## txtodo-mcp merge (2026-10-02)
+
+- `tests/it`: smoke, http_guard, http_loopback_bind, version. The three files each loaded
+  `smoke/fake_backend.rs` by `#[path]`; in one binary that is clippy's `duplicate_mod`, so it is now
+  `it/fake_backend.rs`, declared once in main.rs. `version` (0.6 s, runs the binary) is `slow_`.
+- `tests/e2e`: the 6 real-txtodod files and `support/`. 8 `#[ignore]`s gone; ci.yml's ignored-only
+  test and coverage steps now name only `-p desktop`.
+- Fixed on the way: 4 files had their own `daemon_binary()` that asserted a prebuilt
+  `target/debug/txtodod`. In CI that only worked because some other step built it first. They now
+  call `support::daemon_bin`, which builds it when missing or empty.
+- Same 69 tests. lib + it 60 in 0.06 s; e2e `--profile ci` 8 in 2.1 s. Merge commit gate: 2.3 s.
+- Pending for the desktop line: `apps/desktop/src-tauri/tests/daemon_spawn.rs:24` and
+  `src/commands_ui_log.rs:75` name old mcp paths.
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
