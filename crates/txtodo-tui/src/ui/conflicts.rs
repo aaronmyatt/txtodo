@@ -50,8 +50,10 @@ pub fn selected_group(state: &AppState) -> Option<&DuplicateGroup> {
 }
 
 /// The `Apply` that deletes every copy of the selected group but the one `keep` names. Deletes go
-/// by task id, so line numbers moving inside the batch do not matter; the line goes, no blank
-/// is left (as `txtodo conflicts keep-newest`).
+/// by task id alone (`line_number: 0`): a line number would be resolved first, and the second
+/// delete's line has moved by then (under Sidecar the daemon would delete whatever is there now;
+/// `txtodo-daemon/src/mutation.rs::resolve`). The line goes, no blank is left (as
+/// `txtodo conflicts keep-newest`).
 pub fn keep_request(state: &AppState, keep: Keep) -> Option<pb::ApplyRequest> {
     let group = selected_group(state)?;
     let kept = match keep {
@@ -66,7 +68,7 @@ pub fn keep_request(state: &AppState, keep: Keep) -> Option<pb::ApplyRequest> {
         .map(|(_, copy)| pb::Mutation {
             kind: Some(pb::mutation::Kind::Delete(pb::Delete {
                 task: Some(pb::TaskRef {
-                    line_number: copy.line_number,
+                    line_number: 0,
                     task_id: copy.task_id.clone(),
                 }),
                 leave_blank: false,
@@ -127,6 +129,11 @@ mod tests {
             .map(|m| match &m.kind {
                 Some(pb::mutation::Kind::Delete(d)) => {
                     assert!(!d.leave_blank);
+                    assert_eq!(
+                        d.task.as_ref().map(|t| t.line_number),
+                        Some(0),
+                        "by id alone"
+                    );
                     d.task
                         .as_ref()
                         .map(|t| t.task_id.clone())
