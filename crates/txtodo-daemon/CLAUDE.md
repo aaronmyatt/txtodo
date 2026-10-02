@@ -420,6 +420,10 @@ multiplex every workspace's traffic — not done by this task).
   naming a task this file never held (another device's insert not delivered yet) waits instead of
   being skipped, and is retried after each later commit group, live and in that replay alike;
   the replay hands what still waits to the actor (`sync_park.rs`, 2026-10-02).
+- `op_set_hash` (task sync-divergence-check, 2026-10-02): `OpSetHash`, XOR of blake3 over each op
+  id, so equal op sets hash equal in any arrival order. `FileActor::op_set()` and
+  `NotesActor::op_set()`: built from `Store::for_each_op_id_of_file` at open, before recovery
+  commits, then folded forward at `commit_inner` / `land`. Not on the wire yet (the `Digest` line).
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's

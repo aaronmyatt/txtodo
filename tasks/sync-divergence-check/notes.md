@@ -67,3 +67,21 @@ one; this check is how we hear about the rest.
   with matching ops (an application bug) vs different ops (a delivery bug). Then lan-converge on
   three seeds, and chaos.
 - By hand: `txtodo doctor` on two paired devices after the seam fires shows the split row.
+
+## As built
+
+- Line 2 (2026-10-02): `crates/txtodo-daemon/src/op_set_hash.rs`. XOR, not a sum: same
+  order-freedom, and an op id is `UNIQUE` in the log (a duplicate insert errors), so nothing is
+  folded in twice. Both actors build it at open from `Store::for_each_op_id_of_file` (one indexed
+  `SELECT op_id`, no payload decode; fails past 50M ops rather than return a partial set), before
+  `recover`/`restore_held` so their commits fold in on top; then at the one commit point each
+  (`FileActor::commit_inner` after `persist_change`, `NotesActor::land` after `commit_change`).
+- Parked peer ops are committed on arrival, so they count. Loro imports (`on_import`) mint local op
+  ids: the two sides agree only once those ops have synced too. Fine for a check that waits for a
+  quiet session.
+- Bypasses: `lan_apply` `log_only` (no actor for that path) and bundle import (`store.append`
+  directly) write ops without an actor; both are picked up by the rebuild at the next open. An
+  actor that is open while a bundle imports into its file would be stale until reopened. Bundle
+  import re-registers the workspace's documents, so this should not happen; not tested.
+- Cost at open: one extra indexed read per document. Not measured on a big workspace.
+
