@@ -268,3 +268,8 @@ more natural there, since notes already are a Loro text document.
   clock-skew; the scenario itself fails, root (A) line), and one local 28-op apply on a1
   (20261002-184539-chaos-rerun), unexplained. Seen on the way: `mirror_converge_disagreed_new_lineage`
   in 3 of 6 chaos runs today, before these changes too (194658), all in sync commits of 20-57 ops.
+- 2026-10-02, ADR 0029 second amendment written, status proposed. Mechanism: an own device sends
+  its direct own list (`ControlMessage::OwnDevices`, appended) on each control session; the
+  receiver keeps it per voucher (`own_vouches`); own = direct own row, or vouched by one. One hop
+  only, so removals end vouches with no cycles. A new control variant ends an old build's session,
+  so protocol 4 → 5. That wire change is the owner's call: the Build line waits on acceptance.

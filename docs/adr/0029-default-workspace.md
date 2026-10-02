@@ -1,6 +1,7 @@
 # 0029 — Every user has one default workspace
 
-- Status: accepted; amended 2026-09-24 (own devices only, see Amendment)
+- Status: accepted; amended 2026-09-24 (own devices only, see Amendment); second amendment
+  2026-10-02 (own carries across) proposed
 - Date: 2026-09-21
 - Deciders: project owner (the three decisions below, 2026-09-20)
 
@@ -84,3 +85,42 @@ Consequences of the amendment:
   not own, so it sees this device's default as a Remote workspace until the two pair directly.
 - The file carrier (`--sync-dir`) has no peer to ask, so it still shares the reserved id with every
   device reading the folder.
+
+## Amendment (2026-10-02, proposed): own carries across one shared device
+Decided by the project owner (task `partition-converge`): two devices that each paired as own with
+a third are own to each other. Lab chaos showed the cost of the per-pairing rule: a1 paired b1 and
+a2 as own, b1 and a2 never paired, so each mirrored the other's default as a Remote workspace,
+under its alias, while a1 already merged all three. Little new exposure: a1 relays a2's ops to b1
+today.
+
+- **Vouch.** On every control session with an own peer, after its offers, a device sends
+  `ControlMessage::OwnDevices { sender, devices }` (appended, tag 3): its direct own devices
+  (`own_device = 1`, not removed), the receiver left out, capped like a device read. It sends it
+  again when that set changes (a pairing, a removal).
+- **Store.** A receiver takes it only from a direct own peer, and replaces that peer's earlier list
+  in a new identity table `own_vouches (voucher, device)` (migration 0004).
+- **Rule.** `is_own_device(peer)` is true for a direct own row, or for a vouch from a voucher that
+  is a direct own row and not removed. A direct row that says not own wins: the human was asked
+  about that device and said no.
+- **One hop.** A list carries direct own devices only, never vouched ones, so a removal ends what
+  it vouched: remove a1 here and its vouches stop counting; a1 removing a2 sends a list without a2.
+  A chain (b1 own with a1, a1 with a2, a2 with c) makes c own to a1 only; c and b1 pair directly.
+- **What changes.** The session gate carries the reserved id to a vouched peer; the offer skip
+  (`is_own_default_alias`) skips its alias; a Remote mirror already made of its alias is removed
+  (its tasks are in the default already, through the voucher). A live session keeps the routes it
+  started with; the build ends sessions with a newly vouched peer so the next one carries the
+  default.
+- **Protocol.** An old build ends a control session on a variant it cannot decode
+  (`OpenFailed("control_message")`), so `PROTOCOL_VERSION` goes 4 → 5: the same split as ADR 0036,
+  a v4 and a v5 device do not sync until both upgrade.
+
+Consequences of this amendment:
+- Own is no longer a fact one human answered for one pair; it is what any own device says. A
+  stolen own device could already read and write the default; now it can also name more devices
+  own, but only devices that already hold the group key.
+- The previous amendment's line "a device that joined through another ... sees this device's default
+  as a Remote workspace until the two pair directly" holds only past one hop.
+
+Rejected: own-ness by group (a group holds foreign devices too); each device writing its own list
+into the shared default as a file (mixes control into user data, and needs the default shared
+first); a peer declaring its own list in its hello (a foreign device could claim any own device).
