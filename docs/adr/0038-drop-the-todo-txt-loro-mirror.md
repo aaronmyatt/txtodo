@@ -1,6 +1,9 @@
 # 0038 — Drop the Loro mirror of todo.txt documents
 
 - Status: accepted 2026-10-02 (the owner chose conflict review A in `tasks/drop-task-mirror/notes.md`)
+- Built 2026-10-02 in the daemon (the mirror, its upkeep, the import/export path); the
+  `txtodo-crdt` list code, the store's mirror row and conflict review are still to go
+  (`tasks/drop-task-mirror`)
 - Date: 2026-10-02
 - Deciders: project owner
 

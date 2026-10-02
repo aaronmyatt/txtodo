@@ -1,6 +1,5 @@
 2026-10-02 store: stop reading and writing the todo.txt mirror row; old rows stay, ignored +m11 @store
 2026-10-02 conflict review per the decide line: drop the needs_review flags and Resolve Mine/Theirs (A), or file its own ADR (B) +m11 @daemon
-2026-10-02 docs: daemon CLAUDE.md mirror invariants, ADR 0038 status, ADR 0036's mirror line +m11 @docs
 2026-10-02 Measure idle RSS (tests/e2e/idle_rss.rs) before and after; note it in notes.md +m11 @daemon @test
 x 2026-10-02 2026-10-02 Decide: accept ADR 0038, and same-word conflict review A (drop) or B (rebuild on the text history) +m11 @daemon @human — decided 2026-10-02 (owner): ADR 0038 accepted, conflict review A (drop)
 x 2026-10-02 2026-10-02 daemon: remove on_import, ActorMsg Import/Export/Version and their ActorHandle methods, with import_tests.rs +m11 @daemon — ab4b9f62, ccc74956, f5c8e7a2 (three commits for the diff budget); on_export and its actor test went with Export
@@ -8,3 +7,4 @@ x 2026-10-02 2026-10-02 daemon: remove the todo.txt mirror upkeep (actor_mirror.
 x 2026-10-02 2026-10-02 daemon: delete mirror.rs, mirror_converge.rs, mirror_tests.rs +m11 @daemon — 8c938048, 0cb18cd3, a7b70977; the daemon now uses only NotesDoc from txtodo-crdt
 2026-10-02 crdt: drop the list code only the todo.txt mirror used; keep what NotesDoc needs (its own crate lease) +m11 @crdt
 x 2026-10-02 2026-10-02 lab: drop mirror_refused_converging from the tripwires (scripts/lab/lib/checks.sh) +m11 @lab — nothing logs it now
+x 2026-10-02 2026-10-02 docs: daemon CLAUDE.md mirror invariants, ADR 0038 status, ADR 0036's mirror line +m11 @docs — the daemon side; known gap: the design doc and the crdt/store CLAUDE.md files still describe the mirror until their lines land

@@ -96,8 +96,7 @@ multiplex every workspace's traffic — not done by this task).
   `serve::serve_global`) need zero changes.
 - Module map: `workspace` (registry, device id, discovery) → `actor` + `external` (FileActor:
   open/recover, apply, external change, commit, undo, checkout) ← `handle` (messages, replies) ·
-  `state` + `fields` (DocState, every OpKind applied) · `mirror` (the Loro document fed every
-  committed op, derived, rebuilt on recover/adopt; plan M4) · `reconcile` + `fastid` (pure diff → ops;
+  `state` + `fields` (DocState, every OpKind applied) · `reconcile` + `fastid` (pure diff → ops;
   first-`id:`-word scan pinned to the parser by a property test) · `mutation` (client intents →
   ops; also `peek_line`, a read-only `TaskRef` resolve) · `replace` (`Mutation::Replace`, a
   whole-document compare-and-swap: refused as `FAILED_PRECONDITION`, nothing written, unless the
@@ -185,7 +184,7 @@ multiplex every workspace's traffic — not done by this task).
   opening every message uses the workspace's epoch-0 group key and serves/commits through
   `lan_apply.rs`'s `serve_want`/`commit_incoming_ops` — the latter calls
   `FileActor::on_sync_ops` (`sync_ops.rs`), the verbatim-apply path for a peer's already-signed ops
-  (never re-stamped, unlike `on_import`'s Loro-diff path). `iroh`/`mdns-sd` never appear in this
+  (never re-stamped). `iroh`/`mdns-sd` never appear in this
   crate; only `txtodo_sync`'s own types do. Sessions are short-lived by design (`IrohLink`'s own
   idle timeout in `txtodo-sync`) and `lan.rs` redials every known peer every `RESYNC_INTERVAL`, so
   a local edit made after an earlier sync round still converges without this module
@@ -419,8 +418,7 @@ multiplex every workspace's traffic — not done by this task).
   task id, file untouched, snapshot forced so `history::replay` starts from the file. A peer op
   naming a task this file never held (another device's insert not delivered yet) waits instead of
   being skipped, and is retried after each later commit group, live and in that replay alike;
-  the replay hands what still waits to the actor (`sync_park.rs`, 2026-10-02). The mirror is fed
-  only the batch's ops that do not wait, and converges once a waiting one lands (lab chaos seed 202).
+  the replay hands what still waits to the actor (`sync_park.rs`, 2026-10-02).
 - `op_set_hash` (task sync-divergence-check, 2026-10-02): `OpSetHash`, XOR of blake3 over each op
   id, so equal op sets hash equal in any arrival order. `FileActor::op_set()` and
   `NotesActor::op_set()`: built from `Store::for_each_op_id_of_file` at open, before recovery
@@ -524,10 +522,9 @@ multiplex every workspace's traffic — not done by this task).
   write checks the disk right before its rename and is held over an unmerged save
   (`notes_held.rs`); the next event merges it three-way through a Loro fork at the last-written
   snapshot. One writer is `notes_registry.rs`'s `Arc<Mutex<NotesActor>>` per path. Its Loro mirror
-  persists (`Store::put_mirror`) and restores across a restart the same way the task mirror's
-  periodic snapshot does, so pairing can seed a second device from it the same way.
-- The mirror never decides bytes: `DocState::to_bytes` is the projection; `Mirror::flush` runs
-  after the store commit and a refusal is logged and healed by a rebuild, never a client error.
+  persists (`Store::put_mirror`) and restores across a restart.
+- No Loro mirror of `todo.txt` (ADR 0038, removed 2026-10-02): `DocState::to_bytes` is the
+  projection and the only copy. Loro is used for `notes.md` alone (`NotesMirror`).
 - Ghost entries (ADR 0033, `state_ghosts.rs`, 2026-10-01): deleting a task, removing a blank and
   moving a task away hide the entry where it is, with its stamp; nothing is removed except past
   `MAX_GHOSTS_PER_FILE` (oldest first). An op anchored on task T follows T's placement with the

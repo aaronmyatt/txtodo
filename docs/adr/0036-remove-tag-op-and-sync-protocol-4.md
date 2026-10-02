@@ -28,7 +28,7 @@ We will add an op that removes a tag by its key.
   the tag all go through there. Any other description change stays an `EditText`.
 - The description's history (ADR 0034) keeps it as a change with no offset, so a replay applies it
   to whatever text is there.
-- The Loro mirror applies it to its description text the same way.
+- The Loro mirror applies it to its description text the same way. (The todo.txt mirror is gone since ADR 0038.)
 - `PROTOCOL_VERSION` goes from 3 to 4: an older peer cannot decode variant 7 and would drop the
   link. Mixed v3/v4 devices refuse each other, which the TUI, the desktop and doctor already show
   (ADR 0035).
