@@ -14,7 +14,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `doctor [--verbose]` (seven fixed checks — including `keystore` and `transport`, the latter
   plan M4 `sync-lan-transport`: relay off, endpoint bound, discovery active, paired — plus one row
   per known sync peer, and from `SyncStatus` one `sync` row per file a peer's ops keep being
-  refused on and per parked peer, `doctor_sync.rs`, sync-drift line 7; exit 1 on any FAIL); `daemon install|start|stop|status [--force]`; `device
+  refused on and per parked peer, `doctor_sync.rs`, sync-drift line 7; a FAIL per peer on another
+  sync protocol and per file split with a peer, same ops and different bytes, ADR 0035; exit 1 on
+  any FAIL); `daemon install|start|stop|status [--force]`; `device
   list|remove <id> [--yes]` (plan M4 tasks/sync-device-remove — removal confirms by making the
   human type the id back unless `--yes`); `workspace rejoin <id> [--yes]` (sync-drift line 8,
   `commands/workspace_rejoin.rs`: a dry run first so a refusal comes before the prompt, then a
