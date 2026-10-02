@@ -97,6 +97,9 @@ pub struct FileActor {
     pub(crate) op_set: crate::op_set_hash::OpSetHash,
     /// What our latest write replaced, a possible base for a save racing it (`save_base.rs`).
     pub(crate) prev_write: Option<crate::save_base::PrevWrite>,
+    /// Test seam: `Digest` reports a skewed byte hash (`ActorMsg::SkewDigestForTest`).
+    #[cfg(test)]
+    pub(crate) skew_digest: bool,
 }
 
 impl FileActor {
@@ -135,6 +138,8 @@ impl FileActor {
             parked: crate::sync_park::Parked::default(),
             op_set,
             prev_write: None,
+            #[cfg(test)]
+            skew_digest: false,
         };
         actor.recover()?;
         actor.repair_log()?;

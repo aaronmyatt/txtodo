@@ -82,6 +82,7 @@ pub struct DeviceIdentity {
     live_peers: crate::live_peers::LivePeers,
     peer_keys: crate::peer_keys::PeerKeys,
     stuck_sync: crate::stuck_sync::StuckSync,
+    split_files: crate::split_files::SplitFiles,
 }
 
 impl DeviceIdentity {
@@ -156,6 +157,7 @@ impl DeviceIdentity {
             live_peers: crate::live_peers::LivePeers::default(),
             peer_keys: crate::peer_keys::PeerKeys::default(),
             stuck_sync: crate::stuck_sync::StuckSync::default(),
+            split_files: crate::split_files::SplitFiles::default(),
         })
     }
 
@@ -201,6 +203,7 @@ impl DeviceIdentity {
         *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
         self.peer_keys.clear();
         self.stuck_sync.clear();
+        self.split_files.clear_all();
     }
     /// The group key epoch this device currently seals ops under; 0 until the first `device
     /// remove` rotates it.
@@ -243,6 +246,10 @@ impl DeviceIdentity {
     /// Where each peer's incoming ops keep being refused (task sync-drift line 7).
     pub(crate) fn stuck_sync(&self) -> &crate::stuck_sync::StuckSync {
         &self.stuck_sync
+    }
+    /// Files split with each peer: same ops, different bytes (ADR 0035, `split_files.rs`).
+    pub(crate) fn split_files(&self) -> &crate::split_files::SplitFiles {
+        &self.split_files
     }
     /// The bound LAN endpoint and every mDNS sighting, for pairing.
     pub(crate) fn pairing_lan(&self) -> &crate::pairing_lan_state::PairingLan {

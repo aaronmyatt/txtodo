@@ -35,6 +35,11 @@ pub(crate) struct Parking {
 
 impl Parked {
     /// How many ops wait (a test seam).
+    /// No op waits here: the document is settled as far as this device knows (ADR 0035's digest).
+    pub(crate) fn is_empty(&self) -> bool {
+        self.ops.is_empty()
+    }
+
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.ops.len()

@@ -26,6 +26,18 @@ impl NotesRegistry {
         NotesRegistry::default()
     }
 
+    /// The actor for `path` when it is open already; never opens one.
+    pub fn get(&self, path: &FilePath) -> Option<NotesCell> {
+        let actors = self.actors.lock().unwrap_or_else(PoisonError::into_inner);
+        actors.get(path).cloned()
+    }
+
+    /// Every open notes document's path.
+    pub fn paths(&self) -> Vec<FilePath> {
+        let actors = self.actors.lock().unwrap_or_else(PoisonError::into_inner);
+        actors.keys().cloned().collect()
+    }
+
     /// The actor for `cfg.path`, opening it from disk/store on first use.
     pub fn get_or_open(
         &self,

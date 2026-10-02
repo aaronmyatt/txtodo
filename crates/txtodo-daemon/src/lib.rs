@@ -45,6 +45,7 @@ pub mod global_service;
 mod global_service_helpers;
 pub mod handle;
 mod handle_apply;
+mod handle_sync;
 mod health_grpc;
 pub mod history;
 mod id_strip;
@@ -127,11 +128,13 @@ mod save_base;
 pub mod serve;
 pub mod server;
 mod server_actors;
+mod split_files;
 pub mod state;
 mod state_error;
 pub mod stats;
 mod stored_ids;
 mod stuck_sync;
+mod sync_digest;
 mod sync_ops;
 mod sync_park;
 pub mod telemetry;
@@ -280,6 +283,8 @@ mod status_details_tests;
 mod stored_ids_tests;
 #[cfg(test)]
 mod stuck_sync_session_tests;
+#[cfg(test)]
+mod sync_digest_tests;
 #[cfg(test)]
 mod sync_ops_tests;
 #[cfg(test)]

@@ -296,5 +296,9 @@ pub(crate) fn handle_workspace_message(
             log_hello_on_workspace_frame(ctx.workspace);
             true
         }
+        Message::Digest { files, .. } => {
+            crate::sync_digest::on_digest(ctx, session.peer(), files);
+            true
+        }
     }
 }

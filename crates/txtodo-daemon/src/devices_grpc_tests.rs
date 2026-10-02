@@ -184,6 +184,9 @@ async fn a_peer_on_another_protocol_is_named_beside_ours() {
         Some(device(1)),
         crate::peer_keys::SessionEnd::OtherProtocol(theirs),
     );
+    let split_ws = txtodo_store::WorkspaceId::new(Ulid::from_u128(9));
+    let todo = txtodo_model::FilePath::new("todo.txt").unwrap();
+    assert!(ws.split_files().book(device(2), split_ws, todo, 4_000));
     let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
 
     let resp = svc
@@ -202,4 +205,16 @@ async fn a_peer_on_another_protocol_is_named_beside_ours() {
             .their_protocol
     };
     assert_eq!((their(1), their(2)), (u32::from(theirs), 0));
+    // ADR 0035: a split file rides on its peer.
+    let two = device(2).ulid().to_string();
+    let splits = &resp.peers.iter().find(|p| p.device == two).unwrap().splits;
+    assert_eq!(splits.len(), 1);
+    assert_eq!(
+        (
+            splits[0].workspace_id.as_str(),
+            splits[0].file.as_str(),
+            splits[0].since_ms
+        ),
+        (split_ws.to_string().as_str(), "todo.txt", 4_000)
+    );
 }

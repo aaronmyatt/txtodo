@@ -423,7 +423,16 @@ multiplex every workspace's traffic — not done by this task).
 - `op_set_hash` (task sync-divergence-check, 2026-10-02): `OpSetHash`, XOR of blake3 over each op
   id, so equal op sets hash equal in any arrival order. `FileActor::op_set()` and
   `NotesActor::op_set()`: built from `Store::for_each_op_id_of_file` at open, before recovery
-  commits, then folded forward at `commit_inner` / `land`. Not on the wire yet (the `Digest` line).
+  commits, then folded forward at `commit_inner` / `land`. On the wire in `Digest` (below).
+- `sync_digest` + `split_files` (ADR 0035, 2026-10-02): a live session sends a `Message::Digest` per
+  workspace once quiet for `DIGEST_QUIET` (1 s), nothing in flight or owed, and the workspace
+  committed since its last one (`DigestSender`, `lan_session_dispatch::turn`). Each file's op-set
+  and byte hash (`ActorHandle::digest`, `None` with ops parked; open notes actors too). On receipt
+  (`on_digest`): equal op sets with different bytes book the file as split with that peer
+  (`SplitFiles`, device-wide, in memory), equal bytes clear it, different op sets say nothing.
+  `SyncStatus.Peer.splits`. `ActorMsg::SkewDigestForTest` (cfg(test)) skews the reported byte
+  hash, `sync_digest_tests.rs`. A peer on another protocol is also booked from an in-group mDNS
+  sighting (`PeerKeys::sighted_protocol`): discovery skips such a peer, so it is never dialed.
 - `Workspace::clock()` exposes the injected `Clock` (entropy/time still enter only through it);
   `TxtodoService::workspace()` is `pub(crate)` (not private) so sibling modules like `progress`,
   `tokens`, `activity`, `pairing_grpc` and `notes` can reach the workspace/store at all — Rust's

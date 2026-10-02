@@ -186,7 +186,7 @@ impl TxtodoService {
             .into_iter()
             .filter(|r| r.removed_at_ms.is_none() && r.device != self_device)
             .collect();
-        let (stuck, keys) = (ws.stuck_sync(), ws.peer_keys());
+        let (stuck, keys, splits) = (ws.stuck_sync(), ws.peer_keys(), ws.split_files());
         let peers = active_peers
             .iter()
             .map(|r| pb::sync_status_response::Peer {
@@ -202,6 +202,12 @@ impl TxtodoService {
                 parked: keys.is_parked(r.device),
                 // Task sync-divergence-check/protocol-mismatch: refused both ways until upgraded.
                 their_protocol: keys.other_protocol(r.device).map_or(0, u32::from),
+                // ADR 0035: same ops, different bytes, from this peer's `Digest`.
+                splits: splits
+                    .of(r.device)
+                    .into_iter()
+                    .map(crate::split_files::to_pb)
+                    .collect(),
             })
             .collect();
         let pending_ops = pending_ops_since(self, &active_peers)?;

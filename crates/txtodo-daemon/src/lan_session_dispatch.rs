@@ -60,6 +60,8 @@ struct Conn {
     /// The sync protocol a frame or the link `Hello` of the peer's carried, when not ours (task
     /// sync-divergence-check/protocol-mismatch): the session ends, and `peer_keys.rs` keeps it.
     other_protocol: Option<u16>,
+    /// Per workspace, when its last `Digest` went out (ADR 0035, `sync_digest.rs`).
+    digests: crate::sync_digest::DigestSender,
 }
 
 /// Any one routed workspace's own clock, for stamping the link-level `Hello` and re-checking skew
@@ -206,7 +208,16 @@ fn turn(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) -> Option<
         signing_key: &shared.signing_key,
         routes: &conn.routes,
     };
-    conn.live.tick(link, &push).then_some(())
+    if !conn.live.tick(link, &push) {
+        return None;
+    }
+    let digest = crate::sync_digest::DigestCtx {
+        rt: &shared.rt,
+        group: shared.group,
+        key: &shared.key,
+        routes: &conn.routes,
+    };
+    conn.digests.tick(link, &conn.live, &digest).then_some(())
 }
 
 /// Runs until the peer closes, goes silent, or the turn cap ends it (the dial side then
@@ -364,6 +375,7 @@ pub(crate) fn drive_shared_session(
         routes: BTreeMap::new(),
         refused: None,
         other_protocol: None,
+        digests: crate::sync_digest::DigestSender::default(),
     };
     run_shared_message_loop(link, &shared, &mut conn);
     SessionEnd::of(conn.session.peer(), conn.refused, conn.other_protocol)

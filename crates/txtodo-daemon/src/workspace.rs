@@ -304,6 +304,17 @@ impl Workspace {
     pub(crate) fn stuck_sync(&self) -> &crate::stuck_sync::StuckSync {
         self.identity.stuck_sync()
     }
+    /// Files split with each peer: same ops, different bytes (ADR 0035), device-wide.
+    pub(crate) fn split_files(&self) -> &crate::split_files::SplitFiles {
+        self.identity.split_files()
+    }
+    /// The open `notes.md` actor for `path`, if it is open (never opens one), and every open one.
+    pub(crate) fn notes_cell(&self, path: &FilePath) -> Option<NotesCell> {
+        self.notes.get(path)
+    }
+    pub(crate) fn notes_paths(&self) -> Vec<FilePath> {
+        self.notes.paths()
+    }
     /// The device-global meta/devices rows (ADR 0021: `adopt_group_key`, `device_remove.rs`,
     /// `debug_hooks.rs`, `devices_grpc.rs` all go through this instead of `store()`).
     pub(crate) fn identity_store(&self) -> &Mutex<txtodo_store::IdentityStore> {

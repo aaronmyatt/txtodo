@@ -158,7 +158,7 @@ impl Live {
                 raise(self.sent.entry(workspace).or_default(), ranges);
             }
             Message::Ack { committed, .. } => self.note_acked(workspace, committed),
-            Message::Hello { .. } => {}
+            Message::Hello { .. } | Message::Digest { .. } => {}
         }
     }
 
@@ -186,6 +186,18 @@ impl Live {
         } else {
             self.waiting_since.remove(&workspace);
         }
+    }
+
+    /// How long since a frame arrived (ADR 0035's quiet session).
+    pub(crate) fn quiet_for(&self) -> Duration {
+        self.clock.now_instant().duration_since(self.last_heard)
+    }
+
+    /// The peer wants `workspace` and nothing is in flight or owed to it.
+    pub(crate) fn idle(&self, workspace: WorkspaceId) -> bool {
+        self.ready.contains(&workspace)
+            && !self.in_flight(workspace)
+            && !self.pending.contains(&workspace)
     }
 
     /// Whether we sent `workspace` runs the peer has not acked.

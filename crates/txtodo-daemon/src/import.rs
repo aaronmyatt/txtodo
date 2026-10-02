@@ -117,6 +117,14 @@ impl FileActor {
             ActorMsg::Conflicts { reply } => {
                 let _ = reply.send(self.on_conflicts());
             }
+            ActorMsg::Digest { reply } => {
+                let _ = reply.send(self.on_digest());
+            }
+            #[cfg(test)]
+            ActorMsg::SkewDigestForTest { on, reply } => {
+                self.skew_digest = on;
+                let _ = reply.send(());
+            }
             ActorMsg::Version { reply } => {
                 let _ = reply.send(self.mirror.version());
             }
@@ -139,6 +147,25 @@ impl FileActor {
             }
             _ => {}
         }
+    }
+
+    /// ADR 0035: the two hashes a `Digest` compares; `None` with peer ops waiting, since a document
+    /// about to change says nothing about a split.
+    fn on_digest(&self) -> Option<crate::sync_digest::DocDigest> {
+        #[cfg(test)]
+        let bytes = if self.skew_digest {
+            crate::actor::hash_of(&[self.projection.as_slice(), b"skewed"].concat())
+        } else {
+            self.hash
+        };
+        #[cfg(not(test))]
+        let bytes = self.hash;
+        self.parked
+            .is_empty()
+            .then_some(crate::sync_digest::DocDigest {
+                ops: self.op_set,
+                bytes,
+            })
     }
 
     /// Open flags with the line each task sits on now (0 when it is no longer in the file).

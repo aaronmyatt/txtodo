@@ -210,6 +210,19 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<FileConflicts, ActorError>>,
     },
+    /// The op-set and byte hashes a `Digest` compares, `None` while peer ops wait (ADR 0035).
+    Digest {
+        /// Result channel.
+        reply: oneshot::Sender<Option<crate::sync_digest::DocDigest>>,
+    },
+    /// Test seam (ADR 0035): `Digest` reports another byte hash while `on`; the file is untouched.
+    #[cfg(test)]
+    SkewDigestForTest {
+        /// Skew or not.
+        on: bool,
+        /// Done.
+        reply: oneshot::Sender<()>,
+    },
     /// The mirror's version as opaque bytes (what a peer exports since).
     Version {
         /// Result channel.
@@ -363,16 +376,6 @@ impl ActorHandle {
     /// The open needs_review flags with their current lines.
     pub async fn conflicts(&self) -> Result<FileConflicts, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
-    }
-
-    /// The mirror's version as opaque bytes.
-    pub async fn version(&self) -> Result<Vec<u8>, ActorError> {
-        self.ask(|reply| ActorMsg::Version { reply }).await
-    }
-
-    /// The Loro updates a peer at `since` is missing.
-    pub async fn export_since(&self, since: Vec<u8>) -> Result<Vec<u8>, ActorError> {
-        self.ask(|reply| ActorMsg::Export { since, reply }).await?
     }
 
     /// Resolves one flag.
