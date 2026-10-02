@@ -225,3 +225,16 @@ more natural there, since notes already are a Loro text document.
   Lab after: lan-converge 202, 505, 606 pass; chaos 202 converges, fails only on
   `mirror_refused_converging`. Known gap: any other description change by a `SetField` still drops
   the history.
+- 2026-10-02, a priority swapped on a done line, and reopens (2560836e, ADR 0034 amended again).
+  New all-arrival-order tests: the swap (`pri:B` to `pri:C` in place) dropped the history and split
+  ("pri a:C" vs "pri:C a"); reopens converged. The kept change is now `Change::Pri(letter)`, set or
+  add as core's `set_tag`. A swap retags every `Pri` change and the base, no stamped entry: two
+  stamped versions failed, one by a test (it put `pri:C` back on a line an older reopen had opened),
+  one by the replay probe (lab sleep 20261002-081812: an older priority that arrived after a newer
+  completion lost to it). A rebuilt text still holding another letter (a pre-4b11aeb6 `do` added
+  the tag by text edit) drops the history, as before: the probe caught that too (chaos
+  20261001-231440 b1). Probe after: the same 252 of 1 110 files differ as before, same files.
+  Known gap (`@human` line): a reopen's splice dropping ` pri:B` cuts the wrong chars once an older
+  prepend is slotted in front of it; every device agrees on the garbled line. The op names offsets,
+  not text, so fixing it needs a wire change: reopen sending a tag removal, or `EditText` carrying
+  the text it deletes. Pinned by `a_newer_reopen_against_an_older_prepend_agrees`.
