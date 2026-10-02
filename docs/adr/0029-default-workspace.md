@@ -72,7 +72,8 @@ with anyone used to union both defaults with no consent step.
   (`lan_session_gate.rs`). With any other peer, known or not, it carries this device's default under
   a derived **alias**, `blake3("txtodo default workspace alias v1" || reserved id || device id)` cut to
   a ULID with a non-zero timestamp (`default_workspace::default_alias`). Offers carry the alias too.
-- An own receiver skips an alias offer (it already merges that list); any other receiver mirrors it
+- An own receiver skips an alias offer (it already merges that list), whichever peer offers it: a
+  peer re-offers the mirrors it holds (fixed 2026-10-02, lab chaos); any other receiver mirrors it
   as a separate Remote workspace (ADR-less task `remote-workspace-mirror`). The two defaults never
   merge. The alias is a permanent derivation, like the reserved id.
 - Migration: devices paired before this count as own (`devices.own_device` defaults to 1).

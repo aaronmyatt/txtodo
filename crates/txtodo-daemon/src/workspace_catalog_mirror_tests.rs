@@ -222,22 +222,8 @@ async fn a_peers_default_alias_is_mirrored_only_from_a_device_that_is_not_own() 
         DeviceId::new(Ulid::from_u128(21)),
         DeviceId::new(Ulid::from_u128(22)),
     );
-    for (peer, is_own) in [(own, true), (foreign, false)] {
-        let new = txtodo_store::NewDevice {
-            device: peer,
-            name: String::new(),
-            static_public: [1; 32],
-            paired_at_ms: 1_000,
-            last_known_wall_ms: None,
-            key_epoch: 0,
-        };
-        f.identity
-            .store()
-            .lock()
-            .unwrap()
-            .register_device_as(&new, is_own)
-            .unwrap();
-    }
+    register(&f, own, true);
+    register(&f, foreign, false);
     let alias = crate::default_workspace::default_alias;
     offer(&f, 21, alias(own));
     offer(&f, 22, alias(foreign));
@@ -263,6 +249,46 @@ fn this_devices_own_default_alias_offered_back_is_not_mirrored() {
     assert!(
         root_of(&f, mine).is_none(),
         "no second workspace for our alias"
+    );
+    assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
+}
+
+fn register(f: &Fixture, peer: DeviceId, own: bool) {
+    let new = txtodo_store::NewDevice {
+        device: peer,
+        name: String::new(),
+        static_public: [1; 32],
+        paired_at_ms: 1_000,
+        last_known_wall_ms: None,
+        key_epoch: 0,
+    };
+    f.identity
+        .store()
+        .lock()
+        .unwrap()
+        .register_device_as(&new, own)
+        .unwrap();
+}
+
+/// A peer re-offers the mirrors it holds, so an own device's alias can reach this device from a
+/// third one that is not own to it (lab chaos 20261001-233439: a1 mirrored its own shared list
+/// twice, once per relayed alias). Still the list the default merges: skipped.
+#[tokio::test]
+async fn an_own_devices_alias_relayed_by_another_device_is_not_mirrored() {
+    let f = fixture();
+    let (own, foreign) = (
+        DeviceId::new(Ulid::from_u128(21)),
+        DeviceId::new(Ulid::from_u128(22)),
+    );
+    register(&f, own, true);
+    register(&f, foreign, false);
+    let relayed = crate::default_workspace::default_alias(own);
+    offer(&f, 22, relayed);
+
+    assert_eq!(f.catalog.mirror_pending_offers(), 0);
+    assert!(
+        root_of(&f, relayed).is_none(),
+        "own default: merged, not mirrored"
     );
     assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
 }

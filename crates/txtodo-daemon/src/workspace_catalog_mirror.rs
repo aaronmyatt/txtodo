@@ -44,7 +44,8 @@ impl WorkspaceCatalog {
         let offers = self.open_args.identity.workspace_offers();
         let mut mirrored = 0;
         for offer in offers.list() {
-            if !self.is_own_default_alias(&offer) && !self.is_this_devices_alias(offer.workspace_id)
+            if !self.is_own_default_alias(offer.workspace_id)
+                && !self.is_this_devices_alias(offer.workspace_id)
             {
                 mirrored += usize::from(self.mirror_offered(offer.workspace_id));
             }
@@ -63,17 +64,22 @@ impl WorkspaceCatalog {
     }
 
     /// An own device's default, offered under its alias (task default-workspace-pairing-consent):
-    /// this device already merges that list under the reserved id, so no mirror.
-    fn is_own_default_alias(&self, offer: &crate::workspace_offer_registry::PendingOffer) -> bool {
-        offer.workspace_id == crate::default_workspace::default_alias(offer.offering_device)
-            && self
-                .open_args
-                .identity
-                .store()
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .is_own_device(offer.offering_device)
-                .unwrap_or(false)
+    /// this device already merges that list under the reserved id, so no mirror. Whoever offers
+    /// it: a peer re-offers the mirrors it holds, so a device that is not own to that one relays
+    /// its alias here too (lab chaos 20261001-233439: a1 mirrored its own shared list twice).
+    fn is_own_default_alias(&self, id: WorkspaceId) -> bool {
+        let store = self
+            .open_args
+            .identity
+            .store()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        // Bounded by `MAX_DEVICES_PER_READ`.
+        store.list_devices().unwrap_or_default().iter().any(|row| {
+            row.removed_at_ms.is_none()
+                && id == crate::default_workspace::default_alias(row.device)
+                && store.is_own_device(row.device).unwrap_or(false)
+        })
     }
 
     /// This device's own default, offered back under its alias by a peer that mirrors it (a peer

@@ -351,7 +351,8 @@ multiplex every workspace's traffic — not done by this task).
   sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the reserved
   default for an own peer and swaps it for this device's `default_alias` otherwise (unknown peers
   too). Control sessions offer the default under that alias; `workspace_catalog_mirror.rs` skips an
-  own device's alias and mirrors any other as a Remote workspace. `PairResult.kept_own_workspace`
+  own device's alias, whichever peer relays it (a peer re-offers its mirrors), and mirrors any
+  other as a Remote workspace. `PairResult.kept_own_workspace`
   says when a joiner kept its default. `tests/default_workspace_foreign.rs` is the two-daemon proof.
   Known gap: the file carrier is not gated (it has no peer to ask about).
 - Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
