@@ -67,7 +67,7 @@ impl FileActor {
                 flush: false,
                 clear: None,
                 persist_mirror: true,
-                source: Some("sync".to_owned()),
+                source: Some(crate::commit::SYNC_SOURCE.to_owned()),
             },
         })?;
         debug_assert!(

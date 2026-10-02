@@ -13,6 +13,7 @@
 //! clock (the HLC receive rule), so the next local op sorts after it (task insert-order).
 
 use crate::actor::{Commit, CommitTail, FileActor};
+use crate::commit::SYNC_SOURCE;
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
 use crate::state::{DocState, StateError};
 use crate::sync_park::apply_parking;
@@ -68,7 +69,7 @@ impl FileActor {
             write,
             snapshot: false,
             tail: CommitTail {
-                source: Some("sync".to_owned()),
+                source: Some(SYNC_SOURCE.to_owned()),
                 flush,
                 ..CommitTail::default()
             },
@@ -88,7 +89,7 @@ impl FileActor {
     fn mirror_after_parking(&mut self, landed: usize, feed: &[Op]) {
         if landed == 0 {
             if !feed.is_empty() {
-                self.flush_mirror(feed);
+                self.flush_mirror(feed, true);
             }
             return;
         }

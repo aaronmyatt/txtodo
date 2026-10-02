@@ -3,6 +3,7 @@
 
 use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
+use crate::commit::SYNC_SOURCE;
 use crate::expected::{ExpectedWrites, Hash, hex8};
 use crate::external::tracing_stub_error;
 use crate::handle::{
@@ -103,6 +104,9 @@ pub struct FileActor {
     /// Test seam: how many times the mirror was healed from the state (`converge_mirror`).
     #[cfg(test)]
     pub(crate) mirror_heals: u32,
+    /// Test seam: heals logged as errors (the lab's tripwire counts these in the logs).
+    #[cfg(test)]
+    pub(crate) mirror_errors: u32,
 }
 
 impl FileActor {
@@ -145,6 +149,8 @@ impl FileActor {
             skew_digest: false,
             #[cfg(test)]
             mirror_heals: 0,
+            #[cfg(test)]
+            mirror_errors: 0,
         };
         actor.recover()?;
         actor.repair_log()?;
@@ -335,7 +341,8 @@ impl FileActor {
             self.write_or_hold(before_hash, before_bytes, &before)?;
         }
         crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
-        self.update_mirror_after_commit(snapshot, tail.flush, &ops);
+        let from_sync = tail.source.as_deref() == Some(SYNC_SOURCE);
+        self.update_mirror_after_commit(snapshot, tail.flush, from_sync, &ops);
         self.raise_flags(&tail.review);
         let change = self.stored_change(new_hash, range, ops, tail.review);
         self.maybe_snapshot(range.map(|r| r.last), snapshot)?;
@@ -372,11 +379,17 @@ impl FileActor {
     }
 
     /// An adopted state (snapshot) isn't the sum of its ops: converge the mirror, don't feed it.
-    fn update_mirror_after_commit(&mut self, snapshot: bool, flush: bool, ops: &[Op]) {
+    fn update_mirror_after_commit(
+        &mut self,
+        snapshot: bool,
+        flush: bool,
+        from_sync: bool,
+        ops: &[Op],
+    ) {
         if snapshot {
             self.converge_mirror();
         } else if flush {
-            self.flush_mirror(ops);
+            self.flush_mirror(ops, from_sync);
         }
     }
 }

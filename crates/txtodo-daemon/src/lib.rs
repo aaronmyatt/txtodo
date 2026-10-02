@@ -288,6 +288,8 @@ mod stuck_sync_session_tests;
 #[cfg(test)]
 mod sync_digest_tests;
 #[cfg(test)]
+mod sync_ops_mirror_tests;
+#[cfg(test)]
 mod sync_ops_tests;
 #[cfg(test)]
 mod text_history_converge_tests;

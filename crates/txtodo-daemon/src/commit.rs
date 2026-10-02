@@ -19,6 +19,9 @@ pub(crate) struct Commit {
     pub(crate) tail: CommitTail,
 }
 
+/// `CommitTail::source` for ops that came through sync: a peer's, or our own relayed back.
+pub(crate) const SYNC_SOURCE: &str = "sync";
+
 /// What a commit does besides landing ops and bytes (plan M4 sync paths).
 pub(crate) struct CommitTail {
     /// needs_review flags to raise with this change.

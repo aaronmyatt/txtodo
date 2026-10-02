@@ -20,7 +20,7 @@ fn peer_device() -> DeviceId {
     DeviceId::new(Ulid::from_u128(2))
 }
 
-fn store(dir: &Path) -> SharedStore {
+pub(crate) fn store(dir: &Path) -> SharedStore {
     Arc::new(Mutex::new(
         Store::open(&dir.join("oplog.db")).unwrap_or_else(|e| panic!("open store: {e}")),
     ))
@@ -38,7 +38,7 @@ fn cfg(dir: &Path) -> ActorConfig {
     }
 }
 
-fn open(dir: &Path, store: &SharedStore, clock: &Arc<FakeClock>) -> FileActor {
+pub(crate) fn open(dir: &Path, store: &SharedStore, clock: &Arc<FakeClock>) -> FileActor {
     let clock: Arc<dyn crate::clock::Clock> = clock.clone();
     FileActor::open(cfg(dir), Arc::clone(store), clock)
         .unwrap_or_else(|e| panic!("open actor: {e}"))
@@ -111,7 +111,7 @@ fn peer_op(n: u128, wall_ms: u64, kind: OpKind) -> Op {
     }
 }
 
-fn insert(task: TaskId, after: Option<TaskId>, name: &str) -> OpKind {
+pub(crate) fn insert(task: TaskId, after: Option<TaskId>, name: &str) -> OpKind {
     OpKind::Insert {
         task,
         after,
@@ -214,7 +214,7 @@ async fn a_move_after_a_task_its_own_commit_inserts_later_applies_once_that_inse
 }
 
 /// A peer op stamped by device `device` at `wall_ms`.
-fn op_from(n: u128, device: u128, wall_ms: u64, kind: OpKind) -> Op {
+pub(crate) fn op_from(n: u128, device: u128, wall_ms: u64, kind: OpKind) -> Op {
     let device = DeviceId::new(Ulid::from_u128(device));
     Op {
         id: OpId::new(Ulid::from_u128(n)),
@@ -333,42 +333,4 @@ fn an_op_that_needs_another_devices_insert_waits_for_it() {
         logged,
         "no repair: the log alone rebuilds the file"
     );
-}
-
-/// Lab chaos seed 202 (report 20261002-184539-chaos): b1 logged `mirror_refused_converging` for
-/// its own add after a line another device had not delivered yet, arriving through a Remote mirror
-/// of the shared list. The document parked the add, but the commit still fed it to the mirror,
-/// which lacks that line too. Now the mirror gets only what applied, and heals once, when it lands.
-#[test]
-fn the_mirror_is_not_fed_an_op_that_waits() {
-    let dir = tempfile::tempdir().unwrap();
-    let store = store(dir.path());
-    let clock = Arc::new(FakeClock::new(1_000));
-    let mut actor = open(dir.path(), &store, &clock);
-    let (a, b, c) = (
-        TaskId::new(Ulid::from_u128(95)),
-        TaskId::new(Ulid::from_u128(96)),
-        TaskId::new(Ulid::from_u128(97)),
-    );
-    let heals_at_open = actor.mirror_heals;
-    // Own-device ops (device 1), as a Remote mirror relays them: b fits, c needs a.
-    actor
-        .on_sync_ops(vec![
-            op_from(11, 1, 3_000, insert(b, None, "b")),
-            op_from(12, 1, 3_001, insert(c, Some(a), "c")),
-        ])
-        .unwrap();
-    assert_eq!(actor.parked.len(), 1);
-    assert_eq!(actor.mirror_heals, heals_at_open, "no refusal, no heal");
-    assert!(actor.mirror.agrees_with(&actor.state));
-    actor
-        .on_sync_ops(vec![op_from(10, 7, 2_000, insert(a, None, "a"))])
-        .unwrap();
-    assert_eq!(actor.parked.len(), 0);
-    assert_eq!(
-        actor.mirror_heals,
-        heals_at_open + 1,
-        "one heal once c lands"
-    );
-    assert!(actor.mirror.agrees_with(&actor.state));
 }

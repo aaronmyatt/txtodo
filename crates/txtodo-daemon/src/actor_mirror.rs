@@ -118,7 +118,8 @@ impl FileActor {
 
     /// Feeds committed ops to the mirror; a refusal is a bug in the mirror, logged and healed by
     /// converging from the state — never surfaced to the client, whose change is already durable.
-    pub(crate) fn flush_mirror(&mut self, ops: &[Op]) {
+    /// `from_sync`: the batch came through sync (`commit::SYNC_SOURCE`).
+    pub(crate) fn flush_mirror(&mut self, ops: &[Op], from_sync: bool) {
         // The mirror keeps no ghosts (ADR 0033): an op anchored on a line deleted here applied to
         // the state through its ghost, and the mirror would refuse it. Converging is the expected
         // path for that batch, not an error (the lab's tripwire counted it as one).
@@ -128,7 +129,7 @@ impl FileActor {
             return;
         }
         let result = self.mirror.flush(ops, &self.state);
-        if self.peer_batch_disagrees(ops, &result) {
+        if self.synced_batch_disagrees(from_sync, ops, &result) {
             self.log_peer_batch_converging();
             self.converge_mirror();
             return;
@@ -148,11 +149,19 @@ impl FileActor {
         after.is_some_and(|id| self.state.index_of(id).is_none() && self.state.has_placement(id))
     }
 
-    /// The state re-homes what a late peer placement should lead and settles which blank each
+    /// The state re-homes what a late placement should lead and settles which blank each
     /// `BlankRemove` hides (ADR 0033, `state_rehome.rs`, `state_erase.rs`); the mirror does
-    /// neither. So a peer's batch that changes the list can leave the two apart, as expected.
-    fn peer_batch_disagrees(&self, ops: &[Op], result: &Result<(), MirrorError>) -> bool {
-        ops.iter().any(|op| op.hlc.device != self.cfg.device)
+    /// neither. So a synced batch that changes the list can leave the two apart, as expected.
+    /// Synced, not "another device's": our own ops come back through sync too (a Remote mirror
+    /// of a list we share, a rejoin), and those used to log `mirror_flush_disagreed_converging`
+    /// in every lab chaos run.
+    fn synced_batch_disagrees(
+        &self,
+        from_sync: bool,
+        ops: &[Op],
+        result: &Result<(), MirrorError>,
+    ) -> bool {
+        (from_sync || ops.iter().any(|op| op.hlc.device != self.cfg.device))
             && reshapes_list(ops)
             && (result.is_err() || !self.mirror.agrees_with(&self.state))
     }
@@ -187,13 +196,23 @@ impl FileActor {
         tracing::debug!(file = %self.cfg.path, ops, "mirror_flushed");
     }
 
-    fn log_flush_disagreed(&self) {
+    fn log_flush_disagreed(&mut self) {
+        self.count_mirror_error();
         tracing::error!(file = %self.cfg.path, "mirror_flush_disagreed_converging");
     }
 
     fn flush_refused(&mut self, e: &MirrorError) {
+        self.count_mirror_error();
         tracing::error!(file = %self.cfg.path, error = %e, "mirror_refused_converging");
         self.converge_mirror();
+    }
+
+    /// Test seam: `mirror_errors` counts the heals logged as errors.
+    fn count_mirror_error(&mut self) {
+        #[cfg(test)]
+        {
+            self.mirror_errors += 1;
+        }
     }
 
     /// Brings the mirror to the state with corrective ops, keeping its lineage; only if that
