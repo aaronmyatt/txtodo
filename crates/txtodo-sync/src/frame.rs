@@ -16,7 +16,9 @@ pub const MAGIC: [u8; 4] = *b"TXTO";
 /// Bumped 2 -> 3 (ADR 0035): `Message::Digest` appended. An appended variant is safe to decode, but
 /// a v2 peer drops the link on one it cannot read, and there is no capability signal to send it
 /// only to a peer that knows it; so v2 and v3 refuse each other's frames instead.
-pub const PROTOCOL_VERSION: u16 = 3;
+/// Bumped 3 -> 4 (ADR 0036): `OpKind::RemoveTag` appended (`txtodo-model`). A v3 peer cannot
+/// decode an `Ops` batch holding one, for the same reason.
+pub const PROTOCOL_VERSION: u16 = 4;
 /// Largest body we will decode. Checked against the header *before* any allocation.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 /// Header size in bytes: magic (4) + version (2) + len (4).

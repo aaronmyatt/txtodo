@@ -7,12 +7,12 @@ use crate::frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROT
 fn header_layout_is_magic_version_le_len_le_then_body() {
     let frame = Frame::new(vec![0xAA, 0xBB, 0xCC]).unwrap();
     let bytes = frame.encode().unwrap();
-    // Frozen forever: any change here is a wire break, not a refactor. `3, 0` is
+    // Frozen forever: any change here is a wire break, not a refactor. `4, 0` is
     // `PROTOCOL_VERSION` LE (bumped 1 -> 2, task `daemon-workspace-session-multiplex`; 2 -> 3,
-    // ADR 0035).
+    // ADR 0035; 3 -> 4, ADR 0036).
     assert_eq!(
         bytes,
-        [b'T', b'X', b'T', b'O', 3, 0, 3, 0, 0, 0, 0xAA, 0xBB, 0xCC]
+        [b'T', b'X', b'T', b'O', 4, 0, 3, 0, 0, 0, 0xAA, 0xBB, 0xCC]
     );
     assert_eq!(bytes.len(), HEADER_BYTES + 3);
     let (back, used) = Frame::decode(&bytes).unwrap();
