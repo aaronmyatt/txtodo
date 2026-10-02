@@ -6,7 +6,8 @@ use txtodo_model::{DeviceId, Ulid};
 
 use crate::aead::{GroupKey, GroupKeys};
 use crate::control::{
-    ControlMessage, ControlMessageError, MAX_WORKSPACE_NAME_BYTES, open_control, seal_control,
+    ControlMessage, ControlMessageError, MAX_OWN_DEVICES, MAX_WORKSPACE_NAME_BYTES, open_control,
+    seal_control,
 };
 use crate::message::GroupId;
 
@@ -45,6 +46,10 @@ fn every_variant_round_trips_through_encode_decode() {
             sender: device(2),
             workspace_id: 42,
         },
+        ControlMessage::OwnDevices {
+            sender: device(1),
+            devices: vec![device(3), device(4)],
+        },
     ];
     for msg in variants {
         let frame = msg.encode().unwrap();
@@ -67,6 +72,22 @@ fn a_name_over_the_cap_is_refused_before_encoding_grows_unbounded() {
         }
         other => panic!("expected NameTooLong, got {other:?}"),
     }
+}
+
+/// ADR 0029's amendment: a vouch list is bounded like any other wire collection.
+#[test]
+fn an_own_devices_list_over_the_cap_is_refused_and_one_at_it_is_not() {
+    let list = |n: usize| ControlMessage::OwnDevices {
+        sender: device(1),
+        devices: (0..n as u128).map(device).collect(),
+    };
+    match list(MAX_OWN_DEVICES + 1).encode() {
+        Err(ControlMessageError::TooManyDevices { len, max }) => {
+            assert_eq!((len, max), (MAX_OWN_DEVICES + 1, MAX_OWN_DEVICES));
+        }
+        other => panic!("expected TooManyDevices, got {other:?}"),
+    }
+    assert!(list(MAX_OWN_DEVICES).encode().is_ok());
 }
 
 #[test]

@@ -48,6 +48,10 @@ fn control_workspace() -> WorkspaceId {
 /// collection in this crate has a named, checked cap; a bare `String` needs one too).
 pub const MAX_WORKSPACE_NAME_BYTES: usize = 256;
 
+/// Most devices one [`ControlMessage::OwnDevices`] may name: the identity store's own read cap
+/// (`txtodo_store::MAX_DEVICES_PER_READ`), repeated here since this crate does not read the store.
+pub const MAX_OWN_DEVICES: usize = 1_024;
+
 /// One control-channel message. Append-only variants, the same postcard-tagged-enum discipline as
 /// `Message` (see that type's own doc for why: postcard tags a variant by index, so inserting or
 /// reordering one renumbers every variant after it).
@@ -88,6 +92,16 @@ pub enum ControlMessage {
         /// Echoes the offer's id.
         workspace_id: u128,
     },
+    /// The sender's direct own devices (ADR 0029, 2026-10-02 amendment: own carries across one
+    /// shared device). Sent only to an own peer, which takes it only from a direct own sender and
+    /// counts each named device as own too. Direct own only, never ones the sender was told of, so
+    /// it stays one hop. Appended: tag 3, `PROTOCOL_VERSION` 5.
+    OwnDevices {
+        /// The vouching device — see `Offer.sender`'s doc.
+        sender: DeviceId,
+        /// At most [`MAX_OWN_DEVICES`]; the receiver itself is left out.
+        devices: Vec<DeviceId>,
+    },
 }
 
 /// Why a `ControlMessage` could not be encoded or decoded. Mirrors [`crate::message::MessageError`]
@@ -99,6 +113,13 @@ pub enum ControlMessageError {
     /// `WorkspaceOffer.name` exceeds [`MAX_WORKSPACE_NAME_BYTES`].
     NameTooLong {
         /// Its length.
+        len: usize,
+        /// The cap.
+        max: usize,
+    },
+    /// `OwnDevices.devices` names more than [`MAX_OWN_DEVICES`].
+    TooManyDevices {
+        /// How many.
         len: usize,
         /// The cap.
         max: usize,
@@ -115,6 +136,9 @@ impl fmt::Display for ControlMessageError {
             ControlMessageError::Frame(e) => write!(f, "frame: {e}"),
             ControlMessageError::NameTooLong { len, max } => {
                 write!(f, "workspace name: {len} bytes exceeds the cap of {max}")
+            }
+            ControlMessageError::TooManyDevices { len, max } => {
+                write!(f, "own devices: {len} exceeds the cap of {max}")
             }
             ControlMessageError::Codec(e) => write!(f, "postcard: {e}"),
             ControlMessageError::TrailingBytes(n) => {
@@ -162,17 +186,26 @@ impl ControlMessage {
         Ok(message)
     }
 
-    /// The one cap this message set needs. Exhaustive over the variants.
+    /// The caps this message set needs. Exhaustive over the variants.
     fn check_caps(&self) -> Result<(), ControlMessageError> {
-        if let ControlMessage::Offer { name, .. } = self
-            && name.len() > MAX_WORKSPACE_NAME_BYTES
-        {
-            return Err(ControlMessageError::NameTooLong {
-                len: name.len(),
-                max: MAX_WORKSPACE_NAME_BYTES,
-            });
+        match self {
+            ControlMessage::Offer { name, .. } if name.len() > MAX_WORKSPACE_NAME_BYTES => {
+                Err(ControlMessageError::NameTooLong {
+                    len: name.len(),
+                    max: MAX_WORKSPACE_NAME_BYTES,
+                })
+            }
+            ControlMessage::OwnDevices { devices, .. } if devices.len() > MAX_OWN_DEVICES => {
+                Err(ControlMessageError::TooManyDevices {
+                    len: devices.len(),
+                    max: MAX_OWN_DEVICES,
+                })
+            }
+            ControlMessage::Offer { .. }
+            | ControlMessage::OfferAck { .. }
+            | ControlMessage::Decline { .. }
+            | ControlMessage::OwnDevices { .. } => Ok(()),
         }
-        Ok(())
     }
 }
 

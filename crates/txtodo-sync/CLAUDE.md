@@ -5,9 +5,10 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
 
 ## Public interface
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
-  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 4; 1 -> 2 by
+  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 5; 1 -> 2 by
   task `daemon-workspace-session-multiplex`, 2 -> 3 by ADR 0035, 3 -> 4 by ADR 0036's
-  `OpKind::RemoveTag`), `MAX_FRAME_BYTES`.
+  `OpKind::RemoveTag`, 4 -> 5 by ADR 0029's amendment: `ControlMessage::OwnDevices { sender,
+  devices }`, tag 3, at most `MAX_OWN_DEVICES`), `MAX_FRAME_BYTES`.
 - `Message::{Hello, Want, Ops, Ack, Greet, Digest}` (append-only variants — `Greet` added stage 2,
   index 4, no bump; `Digest { workspace, files: Vec<FileDigest { path, ops, bytes }> }` index 5,
   ADR 0035, with the 2 -> 3 bump because a v2 peer drops the link on it; cap
