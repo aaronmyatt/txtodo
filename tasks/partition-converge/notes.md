@@ -238,3 +238,12 @@ more natural there, since notes already are a Loro text document.
   prepend is slotted in front of it; every device agrees on the garbled line. The op names offsets,
   not text, so fixing it needs a wire change: reopen sending a tag removal, or `EditText` carrying
   the text it deletes. Pinned by `a_newer_reopen_against_an_older_prepend_agrees`.
+- 2026-10-02, reopen drops `pri:` by name (ADR 0036, the owner chose A). `OpKind::RemoveTag { task,
+  key }` appended as variant 7 (4b46aec8); `txtodo_model::remove_tag` is the one implementation,
+  used by `DocState` (through the text history, no offset) and the Loro mirror (cd3d5b7a).
+  `change_ops` sends it when the description change is exactly the first `pri:` word removed, so
+  reopen, undo of a `do` and an editor save dropping the tag all use it (9b1b9ecc). Sync protocol
+  3 → 4 (5410590e): a v3 peer cannot decode variant 7. The garbled case now ends `(B) b line 1` in
+  every order. Replay probe unchanged (old logs hold no `RemoveTag`). Known gaps: other concurrent
+  text edits still drift by offset (ADR 0034 T1); a v3 and a v4 device do not sync until both
+  upgrade.
