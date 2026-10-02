@@ -11,7 +11,8 @@ review flags out. As built 2026-09-12.
   `is_deleted`, `description`, `set_description`, `last_blank_id`; `is_blank(id)`,
   `rebuild_line(doc, task)` (canonical, not byte-faithful).
 - `apply(doc, &Op)` — `OpKind → Loro`, one commit per op, exhaustive; Insert of a deleted id
-  resurrects it; `BlankRemove` skips tombstones. `hydrate_file(doc, file, lines, hlc)` — O(n) bulk
+  resurrects it; `BlankRemove` skips tombstones; `RemoveTag` (ADR 0036) deletes the one run of
+  chars `txtodo_model::remove_tag` drops, and reads back out of a diff as a plain `EditText`. `hydrate_file(doc, file, lines, hlc)` — O(n) bulk
   load of an empty list. `from_batch(doc, diff, stamp, mint)` — Loro diff → `Op`s.
 - `Lww { value, hlc }`, `write_if_newer` (ADR 0013: our HLC arbitrates; an equal stamp lands).
 - `detect(doc, &Imported) -> Review { flags: Vec<ReviewFlag { task, file, mine, theirs }>,

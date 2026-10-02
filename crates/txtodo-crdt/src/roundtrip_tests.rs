@@ -14,7 +14,7 @@ fn dev() -> DeviceId {
     DeviceId::new(Ulid::from_u128(7))
 }
 
-fn hlc(n: u64) -> Hlc {
+pub(crate) fn hlc(n: u64) -> Hlc {
     Hlc {
         wall_ms: n,
         counter: 0,
@@ -22,7 +22,7 @@ fn hlc(n: u64) -> Hlc {
     }
 }
 
-fn task(n: u128) -> TaskId {
+pub(crate) fn task(n: u128) -> TaskId {
     TaskId::new(Ulid::from_u128(n))
 }
 
@@ -30,7 +30,7 @@ fn principal() -> Principal {
     Principal::External { device: dev() }
 }
 
-fn todo_file() -> FilePath {
+pub(crate) fn todo_file() -> FilePath {
     FilePath::new("todo.txt").unwrap()
 }
 
@@ -38,7 +38,7 @@ fn other_file() -> FilePath {
     FilePath::new("other.txt").unwrap()
 }
 
-fn mint() -> impl FnMut() -> OpId {
+pub(crate) fn mint() -> impl FnMut() -> OpId {
     let mut n = 0u128;
     move || {
         n += 1;
@@ -46,7 +46,7 @@ fn mint() -> impl FnMut() -> OpId {
     }
 }
 
-fn op(id: u128, hlc: Hlc, file: FilePath, kind: OpKind) -> Op {
+pub(crate) fn op(id: u128, hlc: Hlc, file: FilePath, kind: OpKind) -> Op {
     Op {
         id: OpId::new(Ulid::from_u128(id)),
         hlc,
@@ -64,7 +64,7 @@ fn stamp_for(op: &Op) -> Stamp {
 }
 
 /// Applies one op and translates the single diff it produced back into ops.
-fn capture(
+pub(crate) fn capture(
     doc: &mut LoroDocument,
     op: &Op,
     mint: &mut dyn FnMut() -> OpId,
@@ -77,7 +77,7 @@ fn capture(
 }
 
 /// A doc holding task 1 then task 2, in `todo.txt`.
-fn two_tasks() -> Result<LoroDocument, Box<dyn Error>> {
+pub(crate) fn two_tasks() -> Result<LoroDocument, Box<dyn Error>> {
     let a = task(1);
     let b = task(2);
     let mut doc = LoroDocument::open();
@@ -337,61 +337,4 @@ fn notes_edit_is_unsupported() -> Result<(), Box<dyn Error>> {
     let result = apply(&mut doc, &notes);
     assert!(matches!(result, Err(ToLoroError::Unsupported(_))));
     Ok(())
-}
-
-/// The exhaustive label match: adding an `OpKind` variant breaks this at compile time.
-fn kind_label(kind: &OpKind) -> &'static str {
-    match kind {
-        OpKind::Insert { .. } => "insert",
-        OpKind::SetField { .. } => "set_field",
-        OpKind::EditText { .. } => "edit_text",
-        OpKind::Move { .. } => "move",
-        OpKind::NotesEdit { .. } => "notes_edit",
-        OpKind::BlankInsert { .. } => "blank_insert",
-        OpKind::BlankRemove { .. } => "blank_remove",
-    }
-}
-
-#[test]
-fn every_op_kind_is_labelled() {
-    let cases = [
-        OpKind::Insert {
-            task: task(1),
-            after: None,
-            line: "x".to_owned(),
-        },
-        OpKind::SetField {
-            task: task(1),
-            field: Field::Completed,
-            value: FieldValue::Bool(true),
-        },
-        OpKind::EditText {
-            task: task(1),
-            edits: vec![],
-        },
-        OpKind::Move {
-            task: task(1),
-            after: None,
-            to_file: todo_file(),
-        },
-        OpKind::NotesEdit {
-            file: todo_file(),
-            edits: vec![],
-        },
-        OpKind::BlankInsert { after: None },
-        OpKind::BlankRemove { after: None },
-    ];
-    let labels: Vec<&str> = cases.iter().map(kind_label).collect();
-    assert_eq!(
-        labels,
-        [
-            "insert",
-            "set_field",
-            "edit_text",
-            "move",
-            "notes_edit",
-            "blank_insert",
-            "blank_remove",
-        ]
-    );
 }

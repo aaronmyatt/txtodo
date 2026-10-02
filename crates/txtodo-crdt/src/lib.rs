@@ -20,6 +20,8 @@ mod lww_tests;
 #[cfg(test)]
 mod no_secrets_tests;
 #[cfg(test)]
+mod remove_tag_tests;
+#[cfg(test)]
 mod review_tests;
 #[cfg(test)]
 mod roundtrip_tests;

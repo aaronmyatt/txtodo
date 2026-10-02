@@ -76,6 +76,7 @@ fn apply_inner(doc: &mut LoroDocument, op: &Op) -> Result<(), ToLoroError> {
         }
         OpKind::BlankInsert { after } => blank_insert(doc, op, *after)?,
         OpKind::BlankRemove { after } => blank_remove(doc, op, *after)?,
+        OpKind::RemoveTag { task, key } => remove_tag(doc, *task, key)?,
     }
     doc.commit();
     Ok(())
@@ -92,6 +93,7 @@ fn op_kind_name(kind: &OpKind) -> &'static str {
         OpKind::NotesEdit { .. } => "notes_edit",
         OpKind::BlankInsert { .. } => "blank_insert",
         OpKind::BlankRemove { .. } => "blank_remove",
+        OpKind::RemoveTag { .. } => "remove_tag",
     }
 }
 
@@ -181,6 +183,31 @@ fn edit_text(doc: &mut LoroDocument, task: TaskId, edits: &[TextEdit]) -> Result
     let edits: Vec<txtodo_core::TextEdit> = edits.iter().cloned().map(Into::into).collect();
     replay_edits(&text, &edits)?;
     debug_assert_eq!(text.len_unicode(), text.to_string().chars().count());
+    Ok(())
+}
+
+/// Removes the first `key:` tag from the task's description (ADR 0036), as
+/// `txtodo_model::remove_tag` does to a string: the one contiguous run of chars it drops is
+/// deleted from the `LoroText`. No tag, or a bad key: nothing changes.
+/// <https://docs.rs/loro/latest/loro/struct.LoroText.html#method.delete>
+fn remove_tag(doc: &mut LoroDocument, task: TaskId, key: &str) -> Result<(), ToLoroError> {
+    let text = doc.description_text(task)?;
+    let old = text.to_string();
+    let new = txtodo_model::remove_tag(&old, key);
+    let at = old
+        .chars()
+        .zip(new.chars())
+        .take_while(|(a, b)| a == b)
+        .count();
+    let len = old.chars().count() - new.chars().count();
+    if len > 0 {
+        text.delete(at, len)?;
+    }
+    debug_assert_eq!(
+        text.to_string(),
+        new,
+        "the mirror drops what the state drops"
+    );
     Ok(())
 }
 
