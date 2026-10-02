@@ -40,7 +40,9 @@ can name a v2 peer and later bumps are visible too. A pre-this build shows nothi
 - desktop (6e7f1a13): `sync_status` command and `ProtocolMismatchBanner`, polled every 10 s.
 - Known gaps:
   - Only our own dials name the peer; an incoming session from it ends before its `Hello` decodes,
-    so its peer is unknown. Our next resync dial (about 15 s on LAN) books it.
+    so its peer is unknown. Our next resync dial (about 15 s on LAN) books it. Correction: LAN
+    discovery skips a peer advertising another protocol, so a LAN-only peer was never dialed; an
+    in-group mDNS sighting now books it from its advertised protocol (dc5e48c3).
   - A device on a build from before this shows nothing at all; only the newer side can say it.
   - Restart forgets it until the next dial.
   - Nobody has seen it for real: no two devices on different protocols exist yet. By hand, once the
