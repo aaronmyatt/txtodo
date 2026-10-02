@@ -1,4 +1,4 @@
-2026-10-02 sync: send a Digest of each file when a live session goes quiet, nothing in flight or parked; compare on receipt +m11 @sync
+2026-10-02 sync: send a Digest of each file when a live session goes quiet, nothing in flight or parked; compare on receipt +m11 @sync @doing by:claude-opus-backlog
 2026-10-02 daemon: a file with equal op-set hashes and different byte hashes is booked per peer; SyncStatus.Peer carries it +m11 @daemon
 2026-10-02 cli: doctor shows a split file per peer and exits 1 +m11 @cli
 2026-10-02 test: a debug-only seam renders one device's file differently; the check flags it within one quiet period and clears when bytes agree +m11 @daemon @test
