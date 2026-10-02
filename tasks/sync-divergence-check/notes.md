@@ -47,7 +47,12 @@ one; this check is how we hear about the rest.
   knows it" needs a version bump after all, as the draft guessed.
 - Two ways:
   - A: bump `PROTOCOL_VERSION` 2 → 3 with `Digest`. Mixed old/new devices stop syncing until both
-    upgrade; doctor already shows `protocol_mismatch` for that peer. One release, no flapping.
+    upgrade. One release, no flapping. Correction (2026-10-02, checked): doctor does **not** show
+    the mismatch. A frame of the wrong version fails at decode (`frame.rs:178`); the only trace is
+    a `peer_open_failed` warning in the daemon log (`peer_keys.rs:218`). `SyncStatus.Peer` has no
+    version or refusal field, and peers never exchange app versions, so nothing prompts the other
+    device to upgrade. A bump should ship with a per-peer "speaks protocol N" row in
+    `SyncStatus`/doctor, or the split is silent.
   - B: two releases. First, an unknown `Message` variant is logged and skipped instead of ending
     the connection. Later, `Digest` ships. A device still on a pre-first-release build flaps.
   - I'd take A: the devices are one person's, v0.0.x, and a clean refusal beats a flapping link.
