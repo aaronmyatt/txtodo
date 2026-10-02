@@ -99,6 +99,15 @@ pub enum OpKind {
         /// Predecessor task, or `None` for the top.
         after: Option<TaskId>,
     },
+    /// The first `key:value` tag of the description removed, by name rather than by offset, so a
+    /// late edit slotted in front of it cannot shift what it removes (ADR 0036). What it does to
+    /// the text is [`crate::remove_tag`].
+    RemoveTag {
+        /// Which task.
+        task: TaskId,
+        /// The tag's key, without the colon; [`crate::valid_tag_key`].
+        key: String,
+    },
 }
 
 /// Prefix fields and flags a `SetField` can target.

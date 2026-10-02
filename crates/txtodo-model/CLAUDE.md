@@ -19,8 +19,9 @@ Identity mode (tagged vs. sidecar, `docs/questions.md` Q2) added 2026-09-13.
   `HlcError::{Overflow, PeerAhead}`; `Skew::check(peer_ms, local_ms) -> Skew::{Ok, Behind, Ahead}`
   against `MAX_PEER_SKEW_AHEAD_MS` / `MAX_PEER_SKEW_BEHIND_MS` (5 min each).
 - `Op { id, hlc, principal, file, kind }`; `OpKind` = Insert · SetField · EditText · Move ·
-  NotesEdit · BlankInsert · BlankRemove; `set_field(task, field, value)` is the only SetField
-  constructor; `FieldValue::{date, priority, quirks, as_date, as_quirks}` bridge core types.
+  NotesEdit · BlankInsert · BlankRemove · RemoveTag (ADR 0036, variant 7: the first `key:` tag
+  removed by name; `remove_tag`/`valid_tag_key` in `tag_text.rs` are its one implementation);
+  `set_field(task, field, value)` is the only SetField constructor; `FieldValue::{date, priority, quirks, as_date, as_quirks}` bridge core types.
 - `Op::signing_bytes()` — the canonical postcard bytes a device signature covers. Signature lives in
   the store column, not in `Op`, so there is nothing to strip. Golden in `goldens/op_signing.postcard`.
 - `TextEdit` mirrors `txtodo_core::TextEdit` with `From` both ways; `Principal` displays as

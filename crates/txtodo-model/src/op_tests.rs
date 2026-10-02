@@ -164,3 +164,16 @@ fn principal_display_matches_design_4_8() {
         format!("external@{d}")
     );
 }
+
+/// ADR 0036: `RemoveTag` is appended, so it is variant 7 on the wire and every older variant keeps
+/// its index (the signing golden above stays as it was).
+#[test]
+fn remove_tag_is_variant_7_and_round_trips() {
+    let kind = OpKind::RemoveTag {
+        task: task(),
+        key: "pri".into(),
+    };
+    let bytes = postcard::to_allocvec(&kind).unwrap();
+    assert_eq!(bytes[0], 7, "postcard tags a variant by its index");
+    assert_eq!(postcard::from_bytes::<OpKind>(&bytes).unwrap(), kind);
+}

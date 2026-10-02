@@ -8,6 +8,7 @@ mod identity;
 mod ids;
 mod layout;
 mod op;
+mod tag_text;
 mod tree;
 
 pub use hlc::{Hlc, HlcError, MAX_PEER_SKEW_AHEAD_MS, MAX_PEER_SKEW_BEHIND_MS, Skew};
@@ -15,6 +16,7 @@ pub use identity::{CostWeights, Fingerprint, IdentityMode};
 pub use ids::{DeviceId, FILE_PATH_MAX_BYTES, FilePath, FilePathError, OpId, TaskId, TokenId};
 pub use layout::{LayoutError, WorkspaceLayout};
 pub use op::{Field, FieldMismatch, FieldValue, Op, OpKind, Principal, TextEdit, set_field};
+pub use tag_text::{remove_tag, valid_tag_key};
 pub use tree::{
     Invalidation, MAX_TRACKED_REFS, MAX_TREE_DEPTH, NodeId, NodeInput, Progress, RefTag, TreeError,
     WorkspaceTree, invalidates,

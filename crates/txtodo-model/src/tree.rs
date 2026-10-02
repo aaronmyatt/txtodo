@@ -331,6 +331,8 @@ pub fn invalidates(op: &OpKind, file: &FilePath) -> Invalidation {
         // A description edit is the one that looks like it touches nothing structural but can add
         // or drop a `ref:` tag (see the module doc's rule 2/rule 5 split).
         OpKind::EditText { .. } => Invalidation::edges_only(node),
+        // It can remove a `ref:` tag, the same as a description edit.
+        OpKind::RemoveTag { .. } => Invalidation::edges_only(node),
         OpKind::Move { to_file, .. } => {
             let dest = NodeId::of_file(to_file);
             if dest == node {
