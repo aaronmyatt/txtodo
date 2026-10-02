@@ -204,7 +204,7 @@ M4 — relay, file carrier, bundle. Same plan §5 checklist as the M4 pass above
 `tasks/security-m8-review/`.
 
 - **No secrets in logs — pass.**
-  `crates/txtodo-daemon/src/security_m8_tests.rs::slow_no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle`:
+  `crates/txtodo-daemon/src/security_m8_tests.rs::no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle`:
   a real relay put/get cycle (`relay::store::Store`, wake-up drained through `relay::push::NoopPush`),
   a real `FileCarrier` send/recv cycle, and a real bundle export/import cycle (real workspace, a
   freshly minted device signing key, a real passphrase) — all under one capturing `tracing::Dispatch`.
@@ -214,7 +214,7 @@ M4 — relay, file carrier, bundle. Same plan §5 checklist as the M4 pass above
   appear in captured log text. Reuses `lan_session_security_tests.rs`'s M4 `LogSink`/
   `capturing_dispatch`/`captured_text`/`hex` helpers rather than duplicating them.
 - **Keys only in keystore — pass.**
-  `crates/txtodo-daemon/src/bundle_tests.rs::slow_wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material`:
+  `crates/txtodo-daemon/src/bundle_tests.rs::wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material`:
   the group key never leaves the passphrase wrap; the bundle manifest carries no key bytes in the
   clear. M4's own keystore-argv/env static check is unchanged and still green.
 - **Every network message versioned, authenticated, encrypted, including `Hello` — pass.**
@@ -361,3 +361,9 @@ split out and shipped separately at 512 KiB (`tasks/payload-budget`, 2026-09-23)
 
 M8's deferred item 5 (re-run the MCP-loopback, tokens-never-logged and slug-fuzz tests in the M8
 job) is unblocked: all three now exist. `security-m6-review`'s parent line closes with this entry.
+
+---
+2026-10-02 · `fast-gate`: renames only, no result changed. Two M8 pointers above now carry a `slow_`
+prefix (the fast gate's nextest profile skips `slow_*`; CI runs them):
+`security_m8_tests.rs::slow_no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle` and
+`bundle_tests.rs::slow_wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material`.
