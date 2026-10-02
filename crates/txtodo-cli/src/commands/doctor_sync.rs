@@ -1,8 +1,9 @@
 //! `txtodo doctor`'s `sync` rows (task sync-drift line 7), from `SyncStatus`: per peer, each
-//! workspace where its incoming ops keep being refused, and whether the daemon has parked it for
-//! holding no key we share (line 5). The daemon keeps both in memory, so a restart clears them
-//! until the next refusal. An older daemon sends neither, and with no daemon there is no status:
-//! no rows either way.
+//! workspace where its incoming ops keep being refused, whether the daemon has parked it for
+//! holding no key we share (line 5), the sync protocol it speaks when not ours, and files split
+//! with it (same ops, different bytes; ADR 0035). The daemon keeps these in memory, so a restart
+//! clears them until they are seen again. An older daemon sends none of them, and with no daemon
+//! there is no status: no rows either way.
 
 use super::doctor::{Check, Status, check};
 use std::path::Path;
@@ -31,8 +32,31 @@ pub(super) fn sync_checks(
         if peer.their_protocol != 0 {
             rows.push(protocol_row(&label, peer.their_protocol, status.protocol));
         }
+        rows.extend(peer.splits.iter().map(|s| split_row(&label, s, workspaces)));
     }
     rows
+}
+
+/// A file this device and the peer hold the same ops for but render differently (ADR 0035): an
+/// application bug, not a peer that is behind. A FAIL: sync will not fix it.
+fn split_row(
+    label: &str,
+    s: &pb::sync_status_response::Split,
+    workspaces: &[pb::WorkspaceInfo],
+) -> Check {
+    let place = match workspaces.iter().find(|w| w.workspace_id == s.workspace_id) {
+        Some(w) => Path::new(&w.root).join(&s.file).display().to_string(),
+        None => format!("{} in workspace {}", s.file, s.workspace_id),
+    };
+    check(
+        "sync",
+        Status::Fail,
+        format!(
+            "{label}: {place} differs since {} though both hold the same ops (a bug in txtodo, \
+             not a delay); report it with both devices' logs",
+            local_time(s.since_ms)
+        ),
+    )
 }
 
 /// A peer on another sync protocol (task sync-divergence-check/protocol-mismatch): the two refuse
@@ -150,6 +174,34 @@ mod tests {
             pending_ops: 0,
             protocol: 2,
         }
+    }
+
+    #[test]
+    fn a_split_file_fails_naming_its_path_and_that_the_ops_match() {
+        let mut split = status(Vec::new(), false);
+        split.peers[0].splits.push(pb::sync_status_response::Split {
+            workspace_id: WS.into(),
+            file: "tasks/a/todo.txt".into(),
+            since_ms: 1_790_000_000_000,
+        });
+        let root = pb::WorkspaceInfo {
+            workspace_id: WS.into(),
+            root: "/home/me/todo".into(),
+            ..pb::WorkspaceInfo::default()
+        };
+        let rows = sync_checks(Some(&split), &[named_peer()], &[root]);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].status, Status::Fail);
+        let path = Path::new("/home/me/todo").join("tasks/a/todo.txt");
+        let detail = &rows[0].detail;
+        assert!(
+            detail.starts_with(&format!(
+                "laptop ({PEER}): {} differs since ",
+                path.display()
+            )),
+            "{detail}"
+        );
+        assert!(detail.contains("both hold the same ops"), "{detail}");
     }
 
     #[test]
