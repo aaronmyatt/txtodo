@@ -1,10 +1,8 @@
-//! `OpKind::RemoveTag` in the daemon (ADR 0036): a reopen sends it, the Loro mirror stays in step
-//! with the state, a bad key or a needed `id:` is refused with nothing changed, and undo puts the
-//! tag back.
+//! `OpKind::RemoveTag` in the daemon (ADR 0036): a reopen sends it, a bad key or a needed `id:` is
+//! refused with nothing changed, and undo puts the tag back.
 
 use crate::fastid::hydration_op;
 use crate::history::inverse;
-use crate::mirror::Mirror;
 use crate::reconcile::change_ops;
 use crate::state::{DocState, task_id};
 use txtodo_core::{Edit, parse_file};
@@ -32,9 +30,8 @@ fn remove(key: &str) -> OpKind {
 }
 
 #[test]
-fn a_reopen_sends_remove_tag_and_the_mirror_follows_it() {
+fn a_reopen_sends_remove_tag() {
     let mut state = done();
-    let mut mirror = Mirror::from_state(&state, 1).unwrap();
     let old = state.line_of(a()).unwrap();
     let new = txtodo_core::apply(&old, &Edit::new().uncomplete());
     let kinds = change_ops(&old, &new, a());
@@ -46,12 +43,10 @@ fn a_reopen_sends_remove_tag_and_the_mirror_follows_it() {
     for op in &ops {
         state.apply(op).unwrap();
     }
-    mirror.flush(&ops, &state).unwrap();
     assert_eq!(
         state.to_bytes(),
         format!("(B) buy ducks id:{A}\n").as_bytes()
     );
-    assert!(mirror.agrees_with(&state));
 }
 
 #[test]

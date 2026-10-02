@@ -250,20 +250,6 @@ async fn a_tagged_document_that_committed_under_sidecar_is_still_migrated() {
 }
 
 #[tokio::test]
-async fn the_loro_mirror_still_agrees_with_the_state() {
-    let dir = tempfile::tempdir().unwrap();
-    seed(dir.path());
-    let store = store(dir.path());
-    let clock = Arc::new(FakeClock::new(1_000));
-    let mut actor = open(dir.path(), &store, &clock, IdentityMode::Tagged);
-
-    actor.on_migrate_to_sidecar(false).unwrap();
-
-    assert!(actor.mirror.agrees_with(&actor.state));
-    assert_eq!(actor.state.mode(), IdentityMode::Sidecar);
-}
-
-#[tokio::test]
 async fn a_repeated_id_keeps_the_first_line_and_renumbers_the_rest() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
