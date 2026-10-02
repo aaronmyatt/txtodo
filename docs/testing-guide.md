@@ -38,7 +38,7 @@ Most crates are fast (well under a second). A handful spawn **real `txtodod` pro
 real work over real transports — these take longer and behave differently from a unit test:
 
 - **Real LAN sync** (`pairing_lan.rs`, `lan_loopback_converge.rs`, `nested_ref_sync.rs`,
-  `file_carrier_converge.rs`, `logging_flow_sequence.rs`, `crates/txtodo-cli/tests/pairing.rs`,
+  `file_carrier_converge.rs`, `logging_flow_sequence.rs`, `crates/txtodo-cli/tests/e2e/pairing.rs`,
   …): two or more real `txtodod` processes, real mDNS discovery, real `iroh` QUIC connections on
   your machine's real network interface. No internet access needed — this stays on the LAN/
   loopback — but it does depend on your OS's mDNS/multicast working in whatever sandbox or

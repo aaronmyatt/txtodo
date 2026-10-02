@@ -20,7 +20,7 @@
 //! trigger a full recompile of the daemon/sync/iroh dependency chain under a different feature
 //! resolution than a plain `cargo build` from the workspace root used — measured once at ~14
 //! minutes for this file's 2 tests, vastly the slowest tests in the workspace. CI-only like every
-//! sibling client's own real-daemon test (`crates/txtodo-cli/tests/daemon_mode.rs`, `crates/
+//! sibling client's own real-daemon test (`crates/txtodo-cli/tests/e2e/daemon_mode.rs`, `crates/
 //! txtodo-tui/tests/daemon_autostart.rs`, `crates/txtodo-mcp/tests/daemon_autostart.rs`); the
 //! same applies to this crate's other `support::TXTODOD_BIN` users (`tests/new_rpcs.rs`,
 //! `tests/universal_view.rs`, `tests/workspace_registry.rs`). Run in CI via `cargo test --

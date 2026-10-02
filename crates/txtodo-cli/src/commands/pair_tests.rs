@@ -1,7 +1,7 @@
 //! Unit tests for the pure pieces of `txtodo pair`: the code JSON shape, the identity_mode
 //! mismatch rule, and the explicit-yes confirmation parser. Everything that needs a daemon
 //! (`pair_offer`/`pair_accept`/`pair_confirm_sas`, `ListFiles`/`GetFile`) is exercised instead by
-//! `tests/pairing.rs`'s two-daemon integration test — the repo's own `*_tests.rs` sibling
+//! `tests/e2e/pairing.rs`'s two-daemon integration test — the repo's own `*_tests.rs` sibling
 //! precedent (`commands/conflicts_tests.rs`) keeps these out of `pair.rs` itself.
 
 use super::*;

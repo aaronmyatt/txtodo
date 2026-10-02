@@ -9,7 +9,7 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
+use crate::support;
 
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
@@ -100,8 +100,6 @@ fn tasks(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-// CI-only: spawns a real txtodod (see `daemon_mode.rs`); run via `cargo test -- --ignored`.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn do_archives_through_move_to_end_never_a_whole_file_write() {
     let dir = tempfile::tempdir().unwrap();
@@ -148,8 +146,6 @@ fn plain_stderr(out: &Output) -> String {
     plain
 }
 
-// CI-only: spawns a real txtodod (see `daemon_mode.rs`); run via `cargo test -- --ignored`.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn do_in_sidecar_mode_is_one_complete_too() {
     let dir = tempfile::tempdir().unwrap();
@@ -182,7 +178,6 @@ fn assert_all_through_the_socket(dir: &Path) {
     );
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn dropping_a_blank_line_is_a_guarded_replace_not_a_disk_write() {
     let dir = tempfile::tempdir().unwrap();
@@ -199,7 +194,6 @@ fn dropping_a_blank_line_is_a_guarded_replace_not_a_disk_write() {
     assert_all_through_the_socket(dir.path());
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
     let dir = tempfile::tempdir().unwrap();
@@ -233,7 +227,6 @@ fn sidecar_mode_edits_are_guarded_replaces_not_disk_writes() {
     assert_all_through_the_socket(dir.path());
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn an_add_after_a_trailing_blank_lands_where_direct_mode_puts_it() {
     let dir = tempfile::tempdir().unwrap();

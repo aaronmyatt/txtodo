@@ -188,3 +188,7 @@ Never edit or delete a prior entry.
 binaries: in-process files under `tests/it/`, real-txtodod files and `support/` under `tests/e2e/`
 (`tests/debug_hooks.rs` stays). So the daemon paths above now read `crates/txtodo-daemon/tests/it/grpc.rs`,
 `crates/txtodo-daemon/tests/e2e/support/mod.rs` and `crates/txtodo-daemon/tests/e2e/crash.rs`.
+
+2026-10-02 · `fast-gate`: path moves only. txtodo-cli's tests split the same way: `env.rs`, `add.rs`,
+`list.rs`, `hygiene.rs` (the line-14 entry) are under `crates/txtodo-cli/tests/it/`; `daemon_mode.rs`
+(line 54) is under `crates/txtodo-cli/tests/e2e/`.

@@ -15,7 +15,7 @@
 //! `txtodo` process's own `$PATH`, rather than pointing at it directly.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -52,9 +52,6 @@ fn run_txtodo(workspace: &Path, state_dir: &Path, home: &Path, args: &[&str]) ->
         .unwrap_or_else(|e| panic!("spawn txtodo: {e}"))
 }
 
-// CI-only: spawns a real txtodod and polls its socket, which is what makes this test slow under
-// a plain `cargo test`. Run in CI via `cargo test -- --ignored` (.github/workflows/ci.yml).
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[test]
 fn log_cold_starts_the_global_daemon_with_no_manual_daemon_start() {
     let workspace = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
@@ -119,8 +116,7 @@ fn log_cold_starts_the_global_daemon_with_no_manual_daemon_start() {
 /// Task `daemon-auto-upgrade`: the next command against a running global daemon whose
 /// `txtodod.version` is older than this CLI restarts it with the `txtodod` beside this binary
 /// and says so on stderr. The "older" daemon is the real build with its version file rewritten —
-/// see `crates/txtodo-daemon-launch/tests/upgrade.rs` for the mechanism's own tests.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
+/// see `crates/txtodo-daemon-launch/tests/e2e/upgrade.rs` for the mechanism's own tests.
 #[test]
 fn a_command_restarts_a_running_daemon_older_than_this_cli() {
     let workspace = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));

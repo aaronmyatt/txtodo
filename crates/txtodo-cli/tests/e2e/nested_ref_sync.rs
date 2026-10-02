@@ -10,7 +10,7 @@
 #![cfg(not(windows))]
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
+use crate::support;
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};

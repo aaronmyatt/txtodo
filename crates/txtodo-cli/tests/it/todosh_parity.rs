@@ -200,7 +200,7 @@ fn files(dir: &Path) -> Vec<(String, String)> {
 }
 
 #[test]
-fn every_scenario_leaves_byte_identical_files() {
+fn slow_every_scenario_leaves_byte_identical_files() {
     assert!(
         SCENARIOS.len() >= 25,
         "plan M2 asks for at least 25 scenarios"

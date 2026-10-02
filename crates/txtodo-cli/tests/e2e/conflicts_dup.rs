@@ -5,7 +5,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use support::global_daemon::GlobalDaemon;
 

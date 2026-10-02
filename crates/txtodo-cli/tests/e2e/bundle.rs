@@ -6,7 +6,7 @@
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-mod support;
+use crate::support;
 
 use std::path::Path;
 use std::process::{Child, Command, Output, Stdio};
