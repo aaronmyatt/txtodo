@@ -247,3 +247,10 @@ more natural there, since notes already are a Loro text document.
   every order. Replay probe unchanged (old logs hold no `RemoveTag`). Known gaps: other concurrent
   text edits still drift by offset (ADR 0034 T1); a v3 and a v4 device do not sync until both
   upgrade.
+- **Decided 2026-10-02 (human): own carries across devices.** Two devices that each paired as own
+  with a third are own to each other: b1 and a2 share the one default, no Remote mirror of it.
+  Little new exposure: a1 already relays a2's ops to b1. Needs an ADR 0029 amendment, then the build.
+- 2026-10-02, root line `chaos fails, seed 202` is not this decide: b1 and a2 log `mirror refused
+  Insert/Move: no task …` (report 20261002-184539-chaos). The Loro mirror gets an op before the
+  insert it names; dee3d353 parks that op for the document, not for the mirror. The mirror
+  self-heals (`converge_mirror`) and the run converges; only the tripwire fails.

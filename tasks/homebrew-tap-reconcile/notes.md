@@ -72,6 +72,10 @@ How does the tap get updated?
 
 I'd go canonical-here plus automated, but the credential is the human's to choose and provision.
 
+**Decided 2026-10-02 (human): canonical here, pushed by `release.yml`.** The tap's `bin/` copy goes.
+The token (a fine-grained PAT with contents write on the tap only, or a GitHub App) is the
+human's to create and store as a repo secret; the job is staged as a patch, since `.github` is frozen.
+
 ## As built
 
 - Nothing yet. The 0.0.13 tap bump (tap commit `0bde8a7`) was done by hand and did not touch this

@@ -96,3 +96,4 @@
   Not done yet: the TUI still shows no code of its own; that is tui-settings' own line.
 - Found on the way and fixed: other clients' edits never repainted the TUI until a reconnect; Space on a done line never reopened it (Complete leaves done lines alone; the TUI now sends Reopen).
 - Reopen already exists in the proto and daemon (2026-09-20), which the reopen decide line predates.
+- 2026-10-02: human pass done by the human (TUI driven against the c2 mockup). Nothing filed from it.

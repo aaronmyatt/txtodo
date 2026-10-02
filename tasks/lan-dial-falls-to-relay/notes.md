@@ -56,3 +56,9 @@ Two paired devices on one LAN sync over LAN, not the relay.
   with `carrier: Lan` and no `lan_connect_failed` on the lower id (01M2J707…).
 - The higher id relay-dials a LAN peer it has no session with at every resync (15 s) until the
   lower id's LAN session supersedes it; a little wasted relay traffic after each restart.
+
+## Two-Mac check (decided 2026-10-02, human: passed)
+- This Mac's launchd log for 2026-10-02: 4 `lan_shared_session_started` with `carrier=Lan`, no
+  `lan_connect_failed`. The LAN link comes up. The other Mac's log was not read.
+- The relay gap above is not small: 2 907 relay sessions started that day and 2 885
+  `lan_relay_session_superseded_by_lan`, about one every 15 s. Filed as its own line.

@@ -1,4 +1,3 @@
-2026-09-24 Human pass: drive the TUI in a scratch workspace, light and dark terminal, keys and mouse, against the c2 mockup +m11 @tui @human
 x 2026-09-25 2026-09-24 Shared logic in txtodo-core + wasm: search, strict hints, chip edits, Universal grouping +m11 @core ref:shared-core — see tasks/tui-revamp/shared-core/notes.md; known gap: desktop still uses its TS copies until its @parity lines
 x 2026-09-25 2026-09-24 TUI foundation: screens, focus, overlays, keymap + commands, theme, terminal setup +m11 @tui ref:tui-foundation — see tasks/tui-revamp/tui-foundation/notes.md
 x 2026-09-25 2026-09-24 TUI mouse: hit map, click, double-click, wheel, hover, drag reorder +m11 @tui ref:tui-mouse — see tasks/tui-revamp/tui-mouse/notes.md
@@ -22,3 +21,4 @@ x 2026-09-25 2026-09-25 PairOfferResponse.code: add the field to txtodo.proto wi
 x 2026-09-27 2026-09-24 Parity manifest, parity tests and agent rules +m11 @tui @desktop ref:parity-manifest — see tasks/tui-revamp/parity-manifest/notes.md
 x 2026-09-27 2026-09-24 UniversalTasks RPC with rich rows, plus the reopen mutation +m11 @proto @daemon ref:universal-rpc — see tasks/tui-revamp/universal-rpc/notes.md
 x 2026-09-27 2026-09-24 TUI Settings screen: General, Appearance, Workspaces, Shortcuts, Devices, Tokens, Activity +m11 @tui ref:tui-settings — see tasks/tui-revamp/tui-settings/notes.md
+x 2026-10-02 2026-09-24 Human pass: drive the TUI in a scratch workspace, light and dark terminal, keys and mouse, against the c2 mockup +m11 @tui @human — done 2026-10-02 by the human

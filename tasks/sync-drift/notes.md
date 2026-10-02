@@ -82,6 +82,8 @@ never stalls sync without anyone seeing it.
   heads mean, so it needs an ADR.
 - B: keep ranks, and make each device's HLC monotonic across all its files.
 - I'd take A, because a rank derived from a sort will always be fragile.
+- **Decided 2026-10-02 (human): A.** Store `origin_seq` once, when the op is made. Needs an ADR
+  first (store migration, what heads mean, how existing logs get their numbers), then the build.
 
 ### 7. Show stuck sync (layer 3)
 - Today a stuck batch is in the logs only. SyncStatus has `lag_ms` and a rough `pending_ops`.
