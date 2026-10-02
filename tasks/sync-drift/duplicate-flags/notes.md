@@ -83,3 +83,12 @@ file only adds what building it needs.
   flags only from `Watch`, so flags raised before it started show only after the next change.
   By hand: open a list with two identical lines in the TUI, check the banner, `r`, `j` to the
   group, `n`; one copy is left and the banner goes.
+- 2026-10-02, desktop (c612bc4d): `list_duplicates` (its own command, so `list_conflicts` callers
+  keep their shape; the e2e bridge serves it too) and `ChangeDto.duplicate_groups`.
+  `ConflictBanner` adds a row counting groups (read on mount and after a change to the file that
+  has or had any; a failed read means none, so an older daemon cannot break the flags banner) and
+  opens the same sheet, which shows a group once no flag is left: its copies and "keep newest" /
+  "keep oldest", one `applyMutations` of deletes by task id. The buffer is not locked for a group.
+  Manifest: desktop `differs` (buttons, no key). Known gaps: Playwright not run and nobody has
+  looked at it; the group row has no dismiss (a group is cleared by fixing it). By hand: two
+  identical lines in a list, check the second banner row, Review, keep newest; one copy left.
