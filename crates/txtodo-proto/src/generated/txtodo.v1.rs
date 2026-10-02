@@ -998,6 +998,10 @@ pub struct SyncStatusResponse {
     /// 0 peers means 0 pending: nothing to be pending against.
     #[prost(uint64, tag = "2")]
     pub pending_ops: u64,
+    /// This daemon's sync protocol (`txtodo_sync::PROTOCOL_VERSION`), to name beside a peer's
+    /// `their_protocol`; 0 from an older daemon.
+    #[prost(uint32, tag = "3")]
+    pub protocol: u32,
 }
 /// Nested message and enum types in `SyncStatusResponse`.
 pub mod sync_status_response {
@@ -1045,6 +1049,13 @@ pub mod sync_status_response {
         /// memory; false from an older daemon.
         #[prost(bool, tag = "4")]
         pub parked: bool,
+        /// The sync protocol this peer's frames or `Hello` carried, when it is not ours (`protocol`
+        /// below): the two devices refuse each other and nothing syncs until the older one is
+        /// upgraded (task sync-divergence-check/protocol-mismatch). Seen on this daemon's own dials,
+        /// held in memory, cleared once a session with the peer greets; 0 = same, not seen, or an
+        /// older daemon.
+        #[prost(uint32, tag = "5")]
+        pub their_protocol: u32,
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
