@@ -35,6 +35,23 @@ one; this check is how we hear about the rest.
 - **Out of scope:** healing (which side's bytes win is its own ADR-level call, later); the file
   carrier (no peer to compare with).
 
+## For the Decide line: what an old peer does with `Digest` (checked 2026-10-02)
+
+- It ends the connection. An unknown trailing variant is a postcard `Codec` error
+  (`message.rs` decode), `open_and_decode_logged` returns `Err`, `dispatch_workspace_frame`
+  (`lan_session_dispatch.rs:132`) returns `None`, and `None` ends the connection (`dispatch_frame`
+  doc). The peer redials, the next quiet period sends another `Digest`: the link would flap.
+- There is no capability signal to gate on. `Hello.protocol` must equal `PROTOCOL_VERSION`
+  exactly (`session.rs:218`, `ProtocolMismatch`), and so must every frame's version
+  (`frame.rs:178`). `Hello` and `Greet` field layouts are frozen. So "send only to a peer that
+  knows it" needs a version bump after all, as the draft guessed.
+- Two ways:
+  - A: bump `PROTOCOL_VERSION` 2 → 3 with `Digest`. Mixed old/new devices stop syncing until both
+    upgrade; doctor already shows `protocol_mismatch` for that peer. One release, no flapping.
+  - B: two releases. First, an unknown `Message` variant is logged and skipped instead of ending
+    the connection. Later, `Digest` ships. A device still on a pre-first-release build flaps.
+  - I'd take A: the devices are one person's, v0.0.x, and a clean refusal beats a flapping link.
+
 ## Rejected
 
 - B, keep fixing each permutation the lab finds (the owner's call, 2026-10-02): each fix is days;
