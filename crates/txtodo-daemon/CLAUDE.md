@@ -38,7 +38,7 @@ same signature, delegating underneath. `device_remove.rs`/`debug_hooks.rs`/`devi
 read/write the device-global `devices`/`meta` rows via `Workspace::identity_store()`
 (`txtodo_store::IdentityStore`, its own database file — `identity.db`, alongside `registry.db`),
 not the workspace's own `store()`. Practical effect proven by the real two-daemon tests
-(`tests/pairing_lan.rs` et al., unmodified and still green): opening a *second* workspace on an
+(`tests/e2e/pairing_lan.rs` et al., unmodified and still green): opening a *second* workspace on an
 already-paired device inherits the shared group key immediately, no second pairing ceremony
 needed — the sync `Link` itself is still one per open workspace (`daemon-shared-sync-link`, todo
 19's real successor, is the next, separate, larger slice: `workspace_id` on `Op`, a wire/signing
@@ -215,7 +215,7 @@ multiplex every workspace's traffic — not done by this task).
   `DebugSetGroupKey`'s handler and `Workspace::debug_set_group_key`/`has_group_key` — a test-only
   seam still used by `lan_loopback_converge.rs`/`nested_ref_sync.rs` for tests that seed a shared
   group up front rather than exercise pairing itself (`TEST_HOOKS_ENV_VAR` = `TXTODO_TEST_HOOKS`,
-  refused with `UNIMPLEMENTED` unless set to `"1"`); `tests/pairing_lan.rs` pairs for real instead.
+  refused with `UNIMPLEMENTED` unless set to `"1"`); `tests/e2e/pairing_lan.rs` pairs for real instead.
 - `lan_session_shared.rs`/`lan_session_dispatch.rs` (task `daemon-workspace-session-multiplex`
   stage 2, split out of `lan_session.rs` for the file-length budget): the real multiplexed
   read/write loop, `lan_session_dispatch::drive_shared_session(link, routes: &WorkspaceRoutes,
@@ -234,7 +234,7 @@ multiplex every workspace's traffic — not done by this task).
   Emits `lan_shared_session_started` (`workspaces = <count>`) once per connection, at `info` —
   deliberately loud: it is the one line a test can grep to prove a connection actually carried more
   than one workspace, rather than inferring it from convergence alone
-  (`tests/relay_multiplex.rs`). `control_dispatch.rs`'s sync-`ALPN` accept branch
+  (`tests/e2e/relay_multiplex.rs`). `control_dispatch.rs`'s sync-`ALPN` accept branch
   (`dispatch_sync`) calls this directly with `device_relay.routes()` and `device`/`group` read off
   `DeviceIdentity` (ADR 0021) — no first-frame peek needed any more to pick a route, since the
   accept side already knows every workspace it has open; the old peek-and-route-to-one-workspace
@@ -292,7 +292,7 @@ multiplex every workspace's traffic — not done by this task).
   back to whichever workspace won the claim (every other one gets `RelayTransport { task: None }`)
   — if that workspace closes while others sharing the dial peer remain open, the shared dial task
   stops with it; there is no longer-lived, device-level owner to hand it to instead yet.
-  `tests/relay_multiplex.rs` is the real two-daemon, two-workspaces-per-side proof this fix exists
+  `tests/e2e/relay_multiplex.rs` is the real two-daemon, two-workspaces-per-side proof this fix exists
   for.
 - `file_carrier.rs` (plan M8 `relay-converge-test`, wiring `sync-file-carrier`'s
   `txtodo_sync::FileCarrier` into the daemon for the first time — `--sync-dir` has existed in
@@ -311,7 +311,7 @@ multiplex every workspace's traffic — not done by this task).
   thread; `file_carrier.rs` has no per-connection thread to dedicate (a periodic tick, not a
   connection), so its own call site wraps it in `tokio::task::block_in_place` instead — without
   that it panics ("cannot start a runtime from within a runtime").
-  `crates/txtodo-daemon/tests/file_carrier_converge.rs` is the real two-daemon, no-network proof.
+  `crates/txtodo-daemon/tests/e2e/file_carrier_converge.rs` is the real two-daemon, no-network proof.
 - `device_lan.rs` (task `sync-live-push`, 2026-09-24): **LAN is one per device now**, not one per
   workspace — this supersedes the per-workspace `lan::start(ws, clock)` described below. `main.rs`
   (`carriers.rs`) starts one LAN task next to `DeviceRelay`; each workspace registers a route on
@@ -339,12 +339,12 @@ multiplex every workspace's traffic — not done by this task).
   `Landed` (ops, landed files, the refused file and why); a session books it per peer and
   workspace in `stuck_sync.rs` (in memory, cleared when that file's run lands), and `SyncStatus`
   carries it with `peer_keys`' parked flag. The file carrier books nothing: it knows no peer.
-  `tests/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
+  `tests/e2e/lan_live_push.rs` is the two-daemon proof. A session ends when its route table's
   `generation()` moves (a workspace opened or closed), so the reconnect greets the new set.
   **Offers over LAN** (task `default-workspace`, 2026-09-24): the LAN endpoint also accepts
   `CONTROL_ALPN`; each resync tick the lower-id side dials a short control session to every LAN
   peer (`device_lan::dial_control`), the same exchange as the relay control channel.
-  `tests/default_workspace_pairing.rs` pairs over LAN and sees the offer mirrored and synced.
+  `tests/e2e/default_workspace_pairing.rs` pairs over LAN and sees the offer mirrored and synced.
 - Own-device consent (task `default-workspace-pairing-consent`, 2026-09-24): `PairConfirmSas`
   carries the human's "is this your own device?" answer; it rides `JoinerHello`/`PairingGrant` and
   each side registers the peer with `own = mine && theirs` (`register_device_as`). A sync session
@@ -353,7 +353,7 @@ multiplex every workspace's traffic — not done by this task).
   too). Control sessions offer the default under that alias; `workspace_catalog_mirror.rs` skips an
   own device's alias, whichever peer relays it (a peer re-offers its mirrors), and mirrors any
   other as a Remote workspace. `PairResult.kept_own_workspace`
-  says when a joiner kept its default. `tests/default_workspace_foreign.rs` is the two-daemon proof.
+  says when a joiner kept its default. `tests/e2e/default_workspace_foreign.rs` is the two-daemon proof.
   Known gap: the file carrier is not gated (it has no peer to ask about).
 - Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
   records its group-key read on the device's `LanStatus` (`offers_problem`: a keystore failure or a
@@ -376,7 +376,7 @@ multiplex every workspace's traffic — not done by this task).
   `txtodo.toml` and every document into `<root>.rejoin-backup-<UTC time>` beside the root. A guard
   file named `.txtodo` blocks any open while they move; a failure moves them back, never over
   something new. The same registry row reopens the empty folder with a fresh store, which pulls the
-  peer's whole log on the next session. `tests/workspace_rejoin.rs` is the two-daemon proof.
+  peer's whole log on the next session. `tests/e2e/workspace_rejoin.rs` is the two-daemon proof.
   `workspace_registry_grpc.rs` holds the registry handlers, split from `global_service.rs`.
 - `workspace_name.rs` + `workspace_rename.rs` (task workspace-vanity-name, 2026-09-26): a
   workspace's shown name, display only. Stored as a top-level `name` line in `txtodo.toml`, which
@@ -385,7 +385,7 @@ multiplex every workspace's traffic — not done by this task).
   (`WorkspaceOfferRegistry::offered_name`, in memory). Outbound offers carry the shown name.
   `WorkspaceRename` edits the line through the file's notes actor as two ops (old line out, new
   line in), so two renames at once merge into two whole lines; the last one is read on every
-  device, and `layout_file::parse` ignores `name` lines. `tests/workspace_name.rs` is the
+  device, and `layout_file::parse` ignores `name` lines. `tests/e2e/workspace_name.rs` is the
   two-daemon proof.
 - `universal_grpc.rs` (task `tui-revamp/universal-rpc`, 2026-09-25): `UniversalTasks`, device-level
   like `WorkspaceList`. Every ready workspace's root list (`WorkspaceCatalog::ready`, no wait, no
@@ -426,22 +426,22 @@ multiplex every workspace's traffic — not done by this task).
   default privacy does not extend to sibling modules, only descendants, so this was a required
   compiler fix, not a style choice.
 - Tests: unit (`*_tests.rs`, including `sync_ops_tests.rs` and `lan_session_tests.rs` — the latter
-  drives a real `drive_session` over a real `ChannelLink`), `tests/lan_discovery.rs` (two real
+  drives a real `drive_session` over a real `ChannelLink`), `tests/e2e/lan_discovery.rs` (two real
   `txtodod` processes, real mDNS, seeded to share a group before either starts — see its module
   doc for why `DebugSetGroupKey` can't do that instead — proving real discovery at the full daemon
-  level, discovery only), `tests/lan_loopback_converge.rs` (the fuller proof: two real `txtodod`
+  level, discovery only), `tests/e2e/lan_loopback_converge.rs` (the fuller proof: two real `txtodod`
   processes pair through `DebugSetGroupKey`, find each other over real mDNS, and converge a real
   external edit in both directions through a real `iroh` QUIC connection — repeatable sub-2-second,
   in practice sub-2-millisecond, convergence; see its module doc and `lan.rs`'s for the corrected
   same-*process* (not same-host) connect finding this test's own investigation produced),
   `tests/debug_hooks.rs` (`DebugSetGroupKey` refused/allowed by the env var, over a real socket),
-  `tests/lan_sync_bench.rs` (plan M4 `sync-bench-m4`: 1 000 real ops between two real, paired
+  `tests/e2e/lan_sync_bench.rs` (plan M4 `sync-bench-m4`: 1 000 real ops between two real, paired
   daemons converge in single-digit milliseconds, budget 500 ms — not wired into `check-bench.sh`/
   `budgets.json`, both frozen paths this session had no sign-off to touch; see its module doc),
-  `tests/idle_rss.rs` (the same task's other number — `#[ignore]`d: idle RSS at 10k lines measures
+  `tests/e2e/idle_rss.rs` (the same task's other number — `#[ignore]`d: idle RSS at 10k lines measures
   ~1.7 GB against a 50 MB budget, a real and apparently super-linear memory issue in the adoption/
   mirror pipeline, flagged to the human, not root-caused or fixed by this pass),
-  `tests/nested_ref_sync.rs` (`test-nested-ref-sync`: two real `txtodod` processes, a parent → child
+  `tests/e2e/nested_ref_sync.rs` (`test-nested-ref-sync`: two real `txtodod` processes, a parent → child
   → grandchild `ref:` fixture on device A, a totally empty device B — the whole tree, at every
   depth, reaches B's real disk in 390-590 ms; needed no new sync-engine code, only a harness
   addition (`start_with_seeded_group_tree`) to seed A with a multi-file tree before spawn; `child/
@@ -449,15 +449,15 @@ multiplex every workspace's traffic — not done by this task).
   pre-existing gap this test's own module doc traces: `notes.md` written straight to disk never
   becomes an `Op` at all, and even a `notes.md` op would be silently dropped by `lan_apply.rs` on a
   fresh receiver, since `Workspace::register()` refuses to build an actor for a notes document),
-  `tests/grpc.rs` (in-process server on a temp socket),
-  `tests/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
-  `tests/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
-  `tests/activity.rs` (`OpLogStream`), `tests/external_edits.rs` (plan M3's eight scenarios),
-  `tests/editor_saves.rs`, `tests/crash.rs` (kill -9 rounds) — the last three spawn the real binary
-  through `tests/support`. `pairing_grpc_tests.rs` also asserts pairing registers the initiator's
+  `tests/it/grpc.rs` (in-process server on a temp socket),
+  `tests/it/notes_grpc.rs` (`GetNotes`/`EditNotes` over the socket, lazy `ref:` creation),
+  `tests/it/tokens.rs` (create/list/revoke over the socket, `Store::verify_token` checked directly),
+  `tests/it/activity.rs` (`OpLogStream`), `tests/e2e/external_edits.rs` (plan M3's eight scenarios),
+  `tests/e2e/editor_saves.rs`, `tests/e2e/crash.rs` (kill -9 rounds) — the last three spawn the real binary
+  through `tests/e2e/support`. `pairing_grpc_tests.rs` also asserts pairing registers the initiator's
   static public key in the joiner's `devices` table (in-process, single-daemon, whitebox — still
   the right tool for asserting a group key never appears on the wire); `device_remove_tests.rs`
-  covers `Workspace::remove_device`'s guards and rotation. `tests/pairing_lan.rs` (plan M4
+  covers `Workspace::remove_device`'s guards and rotation. `tests/e2e/pairing_lan.rs` (plan M4
   `sync-pairing`'s LAN wiring pass) is the real two-daemon proof `pairing_grpc_tests.rs`
   deliberately isn't: two real `txtodod` processes complete `PairOffer`/`PairAccept`/
   `PairConfirmSas` over the real LAN transport, no `DebugSetGroupKey`, asserting identical SAS
@@ -546,13 +546,13 @@ multiplex every workspace's traffic — not done by this task).
   Real pairing now has a transport over the LAN link (plan M4 `sync-pairing`'s LAN wiring pass,
   `pairing_lan.rs`) — `DebugSetGroupKey` remains for tests that want to seed a shared group
   up front rather than exercise pairing itself (still refused unless `TXTODO_TEST_HOOKS=1`), never
-  a production path; `tests/pairing_lan.rs` is the real two-daemon proof of the production one.
+  a production path; `tests/e2e/pairing_lan.rs` is the real two-daemon proof of the production one.
   **Corrected finding (this pass's own step-3
   investigation):** a real QUIC connect between two `iroh` endpoints *does* work between two real
   `txtodod` processes on the same host — the earlier belief that same-host connects are blocked
   outright was wrong; the actual upstream `noq-proto`/`iroh` bug fires only when both endpoints
   live in the *same process* (`txtodo-sync`'s `endpoint_tests.rs` has the corrected, evidenced
-  diagnosis). `tests/lan_loopback_converge.rs` is the real, repeatable, cross-process proof.
+  diagnosis). `tests/e2e/lan_loopback_converge.rs` is the real, repeatable, cross-process proof.
 - Pairing relay (`pairing_lan.rs`, plan M4 `sync-pairing`'s LAN wiring pass): `process_hello`
   checks `PairingLan::cached_grant` *before* requiring an active `PairingRegistry` session, not
   after — `try_finalize_initiator` clears that session on success (by design), so a retried

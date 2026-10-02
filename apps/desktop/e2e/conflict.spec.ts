@@ -6,7 +6,7 @@
 // "the leg that actually crosses between two daemons ... has no transport yet"; tracked as the
 // still-blocked `sync-loopback-converge` in todo.txt). The daemon team's OWN integration tests hit
 // the same wall and use the identical substitute this spec uses: raise the `needs_review` flag
-// directly in the op-log store (`crates/txtodo-daemon/tests/grpc.rs::raise_flag`, doc comment:
+// directly in the op-log store (`crates/txtodo-daemon/tests/it/grpc.rs::raise_flag`, doc comment:
 // "what an import merge would do... no actual sync is needed") — see
 // `e2e/fixtures.ts::debugRaiseConflict` and `e2e_bridge.rs::cmd_debug_raise_conflict`. Everything
 // downstream of that flag (ListConflicts, the banner, the sheet, ResolveConflict, the on-disk

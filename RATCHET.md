@@ -367,3 +367,8 @@ job) is unblocked: all three now exist. `security-m6-review`'s parent line close
 prefix (the fast gate's nextest profile skips `slow_*`; CI runs them):
 `security_m8_tests.rs::slow_no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle` and
 `bundle_tests.rs::slow_wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material`.
+
+2026-10-02 · `fast-gate`: path moves only. txtodo-daemon's `tests/*.rs` became modules of
+`tests/it/` (in-process) and `tests/e2e/` (real txtodod). Above, `security_keys_only_in_keystore.rs`
+and `tokens.rs` are now under `crates/txtodo-daemon/tests/it/`; `relay_converge.rs` is under
+`crates/txtodo-daemon/tests/e2e/`. Same tests, same names.

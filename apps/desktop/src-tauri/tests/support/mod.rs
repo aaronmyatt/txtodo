@@ -71,7 +71,7 @@ fn wait_for_pid_at(path: &Path) -> u32 {
 }
 
 /// Best-effort SIGKILL by pid, for test cleanup; a daemon we never spawned (already reused)
-/// still gets cleaned up this way. SIGKILL (not `-TERM`), matching `crates/txtodo-daemon/tests/support`'s
+/// still gets cleaned up this way. SIGKILL (not `-TERM`), matching `crates/txtodo-daemon/tests/e2e/support`'s
 /// `Drop` impl: graceful shutdown is the daemon's own concern, not something a test needs to wait on.
 pub fn kill(pid: u32) {
     let _ = Command::new("kill")

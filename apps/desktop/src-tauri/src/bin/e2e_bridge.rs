@@ -59,7 +59,7 @@ use default_workspace::{assert_default_agrees, default_workspace_for};
 
 /// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
 /// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
-/// `crates/txtodo-daemon/tests/grpc.rs::raise_flag`).
+/// `crates/txtodo-daemon/tests/it/grpc.rs::raise_flag`).
 struct BridgeState {
     client: Mutex<DaemonClient>,
     workspace: PathBuf,

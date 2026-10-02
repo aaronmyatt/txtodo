@@ -9,7 +9,7 @@ use txtodo_store::{ReviewRow, Store};
 use super::{ApiError, parse};
 
 /// Raises a `needs_review` flag directly in `.txtodo/oplog.db`, the same way
-/// `crates/txtodo-daemon/tests/grpc.rs::raise_flag` does for the daemon's own tests: "what an
+/// `crates/txtodo-daemon/tests/it/grpc.rs::raise_flag` does for the daemon's own tests: "what an
 /// import merge would do... no actual sync is needed." Real daemon-to-daemon sync has no
 /// transport wired up yet at all (`crates/txtodo-daemon/src/pairing_grpc.rs`'s own doc comment;
 /// see `todo.txt`'s `sync-loopback-converge` entry) — this is not a workaround invented for this

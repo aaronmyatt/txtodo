@@ -9,8 +9,8 @@ was attempted. Below is a new CI job to add to `.github/workflows/ci.yml`. A hum
 2. `git add .github/workflows/ci.yml && git commit`.
 
 Everything the job references already exists in this worktree/commit and is not frozen:
-`crates/txtodo-daemon/tests/support/netns.sh`, `crates/txtodo-daemon/tests/relay_converge.rs`,
-`crates/txtodo-daemon/tests/file_carrier_converge.rs`.
+`crates/txtodo-daemon/tests/e2e/support/netns.sh`, `crates/txtodo-daemon/tests/e2e/relay_converge.rs`,
+`crates/txtodo-daemon/tests/e2e/file_carrier_converge.rs`.
 
 ## What this job does, and what it honestly does not (yet)
 
@@ -52,7 +52,7 @@ certificated relay for CI use, not loosening the test.
   # plan M8 relay-converge-test: the netns topology script (todo.txt item 1) and the daemon-level
   # relay/file-carrier convergence tests, run for real on Linux (needs CAP_NET_ADMIN — root, which
   # ubuntu-latest runners have via sudo). See RELAY_CONVERGE_CI.patch.md for what this job does and
-  # does not prove, and crates/txtodo-daemon/tests/relay_converge.rs's own module doc for the rest.
+  # does not prove, and crates/txtodo-daemon/tests/e2e/relay_converge.rs's own module doc for the rest.
   relay-converge:
     runs-on: ubuntu-latest
     steps:
@@ -64,14 +64,14 @@ certificated relay for CI use, not loosening the test.
         run: cargo build -p txtodo-daemon --bin txtodod --locked
 
       - name: netns.sh up (create the isolated topology)
-        run: sudo crates/txtodo-daemon/tests/support/netns.sh up
+        run: sudo crates/txtodo-daemon/tests/e2e/support/netns.sh up
 
       - name: netns.sh probe (boundary proof — A must NOT reach B directly)
-        run: sudo crates/txtodo-daemon/tests/support/netns.sh probe
+        run: sudo crates/txtodo-daemon/tests/e2e/support/netns.sh probe
 
       - name: netns.sh down (always clean up, even if probe failed)
         if: always()
-        run: sudo crates/txtodo-daemon/tests/support/netns.sh down
+        run: sudo crates/txtodo-daemon/tests/e2e/support/netns.sh down
 
       # Daemon-level convergence: real txtodod processes, real relay/file-carrier transport — see
       # this job's own header comment for exactly what these do and don't prove on their own.

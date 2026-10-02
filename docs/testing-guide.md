@@ -90,7 +90,7 @@ done
 A failing run's panic message names exactly what didn't happen in time:
 
 ```
-thread '...' panicked at crates/txtodo-daemon/tests/logging_flow_sequence.rs:...:
+thread '...' panicked at crates/txtodo-daemon/tests/e2e/logging_flow_sequence.rs:...:
 the joiner's file did not converge to the initiator's within 30s
 want="..."
 got=""

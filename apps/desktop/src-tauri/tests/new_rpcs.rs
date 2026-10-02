@@ -4,7 +4,7 @@
 //! failure. Spirit of `tests/daemon_spawn.rs`; spawn/build helpers shared via `tests/support/mod.rs`.
 //!
 //! `notes.md` itself is implemented (plan M5 landed: `crates/txtodo-daemon/src/notes.rs` +
-//! `refdir_ops.rs::ensure_ref_dir`; see `crates/txtodo-daemon/tests/notes_grpc.rs` for the
+//! `refdir_ops.rs::ensure_ref_dir`; see `crates/txtodo-daemon/tests/it/notes_grpc.rs` for the
 //! real-behavior coverage, including lazy `ref:` creation). The RPC error this test asserts below
 //! comes from a *different* cause: the bare `TaskRef{line_number: 1, task_id: ""}` below doesn't
 //! resolve to any real task in the seeded workspace, so `locate_task` refuses it — this file only
@@ -83,7 +83,7 @@ async fn get_notes_and_edit_notes_refuse_a_taskref_matching_no_real_task() {
     // Doesn't resolve to any task in the seeded workspace (empty `task_id`, and `line_number: 1`
     // is whatever `temp_workspace`'s fixture line is, not this task's own id) — a real RPC-level
     // refusal from `locate_task`, exercised here as smoke coverage of the bridge, not of
-    // `notes.md`'s own storage behavior (that's `crates/txtodo-daemon/tests/notes_grpc.rs`).
+    // `notes.md`'s own storage behavior (that's `crates/txtodo-daemon/tests/it/notes_grpc.rs`).
     let task = pb::TaskRef {
         line_number: 1,
         task_id: String::new(),
@@ -155,7 +155,7 @@ async fn add_task_and_get_id(client: &mut DaemonClient, line: &str) -> String {
 /// server-side (`crates/txtodo-daemon/src/refdir_ops.rs::ensure_ref_dir`) and `get_notes`
 /// afterwards sees the saved text — exercised here at the `DaemonClient` layer the desktop's
 /// `commands_notes.rs` sits on, complementing the daemon-side coverage in
-/// `crates/txtodo-daemon/tests/notes_grpc.rs`.
+/// `crates/txtodo-daemon/tests/it/notes_grpc.rs`.
 #[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge() {

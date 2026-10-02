@@ -73,7 +73,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "net",
 # add a second copy to the dependency tree. New dependency: needs human sign-off + `cargo deny`.
 axum = { version = "0.8", optional = true }
 # `e2e_bridge`'s `debug_raise_conflict` only (conflict.spec.ts): raises a needs_review flag the
-# same way `crates/txtodo-daemon/tests/grpc.rs::raise_flag` does for the daemon's own tests — real
+# same way `crates/txtodo-daemon/tests/it/grpc.rs::raise_flag` does for the daemon's own tests — real
 # daemon-to-daemon sync isn't wired up yet (see tasks/desktop-playwright-tests/notes.md's "As
 # built" for why), so this is the same already-established substitute the daemon team itself uses.
 # Workspace members, not new external dependencies.

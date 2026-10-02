@@ -114,7 +114,7 @@ function seed(dir: string, fixture: FixtureName): void {
 			);
 			return;
 		case "conflict":
-			// No priority prefix, matching `crates/txtodo-daemon/tests/grpc.rs`'s own
+			// No priority prefix, matching `crates/txtodo-daemon/tests/it/grpc.rs`'s own
 			// `resolve_merged_keeps_bytes_and_mine_writes_the_side_back` fixture exactly — see
 			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
 			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
@@ -148,7 +148,7 @@ const CONFLICT_ID_TAG = `id:${CONFLICT_TASK_ID}`;
  * `mine`/`theirs` for the `"conflict"` fixture, each the *whole description field including its
  * `id:` tag* — not just the human-readable words. `ReviewFlagDto`'s own doc comment says "this
  * device's description," which reads like it should exclude tags, but
- * `crates/txtodo-daemon/tests/grpc.rs`'s own `raise_flag` helper embeds the id tag inside `mine`/
+ * `crates/txtodo-daemon/tests/it/grpc.rs`'s own `raise_flag` helper embeds the id tag inside `mine`/
  * `theirs` too (`format!("first task (mine) {id_text}")`) and resolving `mine`/`theirs` without it
  * fails server-side ("inserted line does not carry id ..." — confirmed by hand while writing this
  * spec). Match that exact shape rather than the doc comment's wording.

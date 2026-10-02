@@ -182,3 +182,9 @@ Never edit or delete a prior entry.
   client already depends on) so the CLI and the daemon share one `WorkspaceLayout::new`; and one
   `root_list(&mut TxtodoClient)` helper next to the generated client in `txtodo-proto` for the four
   fetchers. `specs/ref-directories.md` rule 2 now states the rules so the two parsers cannot drift silently.
+
+---
+2026-10-02 · `fast-gate`: path moves only. txtodo-daemon's `tests/*.rs` became modules of two
+binaries: in-process files under `tests/it/`, real-txtodod files and `support/` under `tests/e2e/`
+(`tests/debug_hooks.rs` stays). So the daemon paths above now read `crates/txtodo-daemon/tests/it/grpc.rs`,
+`crates/txtodo-daemon/tests/e2e/support/mod.rs` and `crates/txtodo-daemon/tests/e2e/crash.rs`.
