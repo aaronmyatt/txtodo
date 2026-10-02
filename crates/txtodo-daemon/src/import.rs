@@ -26,12 +26,6 @@ impl FileActor {
                 self.skew_digest = on;
                 let _ = reply.send(());
             }
-            ActorMsg::Version { reply } => {
-                let _ = reply.send(self.mirror.version());
-            }
-            ActorMsg::Export { since, reply } => {
-                let _ = reply.send(self.on_export(&since));
-            }
             ActorMsg::Resolve {
                 task,
                 resolution,

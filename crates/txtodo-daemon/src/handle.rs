@@ -214,18 +214,6 @@ pub enum ActorMsg {
         /// Done.
         reply: oneshot::Sender<()>,
     },
-    /// The mirror's version as opaque bytes (what a peer exports since).
-    Version {
-        /// Result channel.
-        reply: oneshot::Sender<Vec<u8>>,
-    },
-    /// The Loro updates a peer at `since` is missing.
-    Export {
-        /// The peer's `Version` bytes.
-        since: Vec<u8>,
-        /// Result channel.
-        reply: oneshot::Sender<Result<Vec<u8>, ActorError>>,
-    },
     /// Resolve one flag.
     Resolve {
         /// The line.
