@@ -8,7 +8,7 @@ LAB_TRIPWIRES_FAIL=(sync_op_skipped todo_log_repaired notes_log_repaired reconci
 # few runs show their normal level (tasks/p2p-lab/notes.md).
 LAB_TRIPWIRES_WATCH=(lan_sync_ops_refused lan_sync_batch_partly_committed lan_sync_stuck
   peer_open_failed lan_ops_refused workspace_ops_crypto_refused lan_greet_refused
-  lan_link_hello_refused)
+  lan_link_hello_refused lan_sync_numbering_mismatch)
 
 # snapshot <device>: "sha256  ./path" for every file in the default workspace, .txtodo/ and
 # editor temp files left out, sorted so two devices compare line by line.

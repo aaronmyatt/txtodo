@@ -91,6 +91,7 @@ fn commit_and_ack(
     let landed = commit_incoming_ops(ctx.ws, ctx.rt, ops);
     book_stuck(ctx, session.peer(), &landed);
     let committed_ranges = landed_ranges(&ranges, landed.ops);
+    check_numbers(ctx, &committed_ranges);
     match session.committed(ctx.workspace, &committed_ranges) {
         Ok(ack) => Some(ack),
         Err(e) => {
@@ -98,6 +99,27 @@ fn commit_and_ack(
             None
         }
     }
+}
+
+/// ADR 0039: the store numbers a peer's op at the next number of its device, so a run committed
+/// in order from our head lands under the numbers its batch gave. Each landed run's end must now be
+/// our head for that device; one that is not (a log numbered by rank before migration 0009, or a
+/// race between two sessions) is warned about, since later wants by number would then miss ops.
+fn check_numbers(ctx: &SessionCtx<'_>, committed: &[OriginRange]) {
+    let store = crate::lan_session::read(ctx.ws).store().clone();
+    let store = store
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    for r in committed {
+        let head = store.head_of(r.device).unwrap_or(0);
+        if head != r.last {
+            log_numbering_mismatch(r, head);
+        }
+    }
+}
+
+fn log_numbering_mismatch(r: &OriginRange, head: u64) {
+    tracing::warn!(device = %r.device, last = r.last, head, "lan_sync_numbering_mismatch");
 }
 
 /// Books where sync from this session's peer is stuck, or that it no longer is (task sync-drift

@@ -448,3 +448,10 @@ never stalls sync without anyone seeing it.
 - Existing rows numbered by today's rank. A shift that already happened stays frozen; the digest
   check reports it, rejoin fresh repairs it.
 - Bundles carry the number (format + 1); old bundles are ranked on import.
+- 2026-10-02, ADR 0039 built. Store: migration 0009 (`ops.origin_seq`, unique per device,
+  backfilled by HLC rank), heads = `MAX`, runs by number, inserts numbered at the device's next
+  number. Daemon: no plumbing needed, since a batch is one run committed in order from our head;
+  `lan_sync_numbering_mismatch` warns if a landed run's end is not our head. Tests: store unit
+  tests for no shift, kept peer numbers and the v8 backfill. Known gaps: logs that already shifted
+  stay shifted (digest check reports, rejoin repairs); not yet run in the lab (clock-skew is the
+  check: no lost token).

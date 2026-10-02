@@ -38,6 +38,16 @@ We will store `origin_seq` on every op row, set once and never changed.
   each op's `origin_seq` (`BUNDLE_FORMAT_VERSION` + 1); an older bundle is numbered by rank on
   import, as today.
 
+## As built (2026-10-02)
+- The store numbers every insert at the next number of its device (`heads::number_ops`), ours and
+  a peer's alike; `commit_change_numbered` can take explicit numbers but sync does not pass them.
+  A peer's batch is one run, accepted only when it follows our head, and committed in order (one
+  same-file run at a time), so insert order gives exactly `first + i`. After each commit the
+  daemon checks each landed run ends at our head and warns `lan_sync_numbering_mismatch` when not
+  (the lab watches it).
+- Bundles: no format change. Import numbers each device's new ops in the bundle's order, which is
+  the exporter's insert order; that equals the exporter's numbering for rows written after 0009.
+
 ## Consequences
 - A shift that already happened stays: two devices whose ranks parted before the migration freeze
   different numbers for the same op. Heads still match by count, so the run asked for can name ops

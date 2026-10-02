@@ -237,8 +237,9 @@ fn commit_new_ops(
 }
 
 /// `run` without the ops whose id the log already holds (task sync-drift line 2). A device's
-/// "op N" is its rank in its own HLC order (`txtodo_store::heads`), and a later own op can sort
-/// before ops it already sent, so a batch can start with ops we hold. Inserting one again failed
+/// "op N" used to be its rank in its own HLC order, and a later own op could sort before ops it
+/// already sent, so a batch could start with ops we hold; since ADR 0039 the number is stored, but
+/// logs numbered before migration 0009, or a peer on an older build, can still send one. Inserting one again failed
 /// the `UNIQUE` op id and refused the run; the sender resent it every `RESEND_AFTER`, and all
 /// later ops from that device waited behind it. A held id whose op differs is skipped too: the
 /// log is append-only, so the first copy stays, with a warn. `Err` only on a store error.
