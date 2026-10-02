@@ -208,3 +208,10 @@ more natural there, since notes already are a Loro text document.
   Lab, same seed after the fix (report 20261002-103642-chaos): converged, no token lost, no
   `sync_op_skipped`; still fails on `mirror_refused_converging` once each on b1 and a2. Whether
   this run hit the save race at all is down to timing; the unit test is the proof.
+- 2026-10-02, ghost pruning at open (e84a74d0). Sampling a daemon stuck opening a 10k-line,
+  delete-heavy log (the crash.rs shape) showed `prune_ghosts_to` on top: it runs after every op and
+  pruned to the bound itself, so each op past 10 000 ghosts sorted them all to drop one. It now
+  drops to 7 500 (`GHOSTS_AFTER_PRUNE`); still at most 10 000, oldest first. Open on that log:
+  over 300 s → 84 s; crash.rs passes in 147 s. Known gap: the other 84 s is per-op linear scans of
+  the slot sequence (`live_slot`, `anchor_slot`, `has_placement`, `reindex`, each O(slots)); an
+  id → slots index would remove them, a larger change to `DocState`.
