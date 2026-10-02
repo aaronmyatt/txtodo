@@ -205,3 +205,6 @@ more natural there, since notes already are a Loro text document.
   still reads as edits; deleting every just-synced line within 2 s while changing something else
   brings them back. Found on the way: `crash.rs` times out on a quiet machine, before this change
   too: the open-time replay spends minutes in ghost pruning (own line).
+  Lab, same seed after the fix (report 20261002-103642-chaos): converged, no token lost, no
+  `sync_op_skipped`; still fails on `mirror_refused_converging` once each on b1 and a2. Whether
+  this run hit the save race at all is down to timing; the unit test is the proof.
