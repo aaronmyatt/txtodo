@@ -76,7 +76,6 @@ mod live_peers;
 mod log_repair;
 mod migrate_grpc;
 pub mod migrate_sidecar;
-pub mod mirror;
 mod move_coordinator;
 #[cfg(test)]
 mod move_coordinator_tests;
