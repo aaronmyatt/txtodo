@@ -440,3 +440,11 @@ never stalls sync without anyone seeing it.
   - Daemon tests with a `--dir` peer (`default_workspace_pairing`) fail when `TXTODO_REGISTRY_DB`
     is set for the whole run: the harness seeds `<dir>/.txtodo/registry.db`, the env var wins. They
     pass without it.
+
+### 6a. ADR 0039 written (2026-10-02, proposed)
+- `ops.origin_seq` + unique `(device, origin_seq)`, migration 0009. Own ops: max + 1 in the insert's
+  transaction. Peer ops: `first + i` within a batch, since every `Ops` batch is one run of one
+  device in run order. Heads = `MAX`. No wire change, no protocol bump.
+- Existing rows numbered by today's rank. A shift that already happened stays frozen; the digest
+  check reports it, rejoin fresh repairs it.
+- Bundles carry the number (format + 1); old bundles are ranked on import.
