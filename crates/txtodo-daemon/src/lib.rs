@@ -288,6 +288,8 @@ mod sync_digest_tests;
 #[cfg(test)]
 mod sync_ops_tests;
 #[cfg(test)]
+mod sync_park_tests;
+#[cfg(test)]
 mod text_history_converge_tests;
 #[cfg(test)]
 mod unified_diff_tests;
