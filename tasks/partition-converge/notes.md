@@ -261,3 +261,10 @@ more natural there, since notes already are a Loro text document.
   converges. Converging alone from a mirror that missed the whole batch ended in a new lineage twice
   (rerun 20261002-210339). Lab after (20261002-210724): pass, no refusal, no new lineage. Known gap:
   `mirror_flush_disagreed_converging` still logs 7-8 times a run, before and after; not looked at.
+- 2026-10-02, `mirror_flush_disagreed_converging` in chaos. Only devices holding a Remote mirror
+  logged it (13 runs): our own ops back through sync missed the "another device" exemption in
+  `actor_mirror.rs`. Now exempt by source, `commit::SYNC_SOURCE` (lab 20261002-212240: none).
+  Other sources, not fixed: local edits on a device whose peer is past the skew bound (lab
+  clock-skew; the scenario itself fails, root (A) line), and one local 28-op apply on a1
+  (20261002-184539-chaos-rerun), unexplained. Seen on the way: `mirror_converge_disagreed_new_lineage`
+  in 3 of 6 chaos runs today, before these changes too (194658), all in sync commits of 20-57 ops.
