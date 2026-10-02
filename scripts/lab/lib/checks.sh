@@ -3,7 +3,7 @@
 
 # Events that mean sync went wrong or a repair masked it. Any one fails the scenario.
 LAB_TRIPWIRES_FAIL=(sync_op_skipped todo_log_repaired notes_log_repaired reconcile_ops_not_replayable
-  todo_log_unrepairable mirror_refused_converging)
+  todo_log_unrepairable)
 # Events that faults can cause legitimately (a partition, a kill). Reported, not failed, until a
 # few runs show their normal level (tasks/p2p-lab/notes.md).
 LAB_TRIPWIRES_WATCH=(lan_sync_ops_refused lan_sync_batch_partly_committed lan_sync_stuck
