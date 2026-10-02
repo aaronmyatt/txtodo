@@ -107,3 +107,14 @@ one; this check is how we hear about the rest.
   digest.
 - dc5e48c3: a peer advertising another protocol on the LAN is booked from its mDNS sighting
   (discovery skipped it, so it was never dialed and never named).
+- Line 5 (2026-10-02, 6a667c4e): `expect_converged` reads each device's doctor split rows into
+  `splits-<label>.txt` on a timeout and says "with the same ops, an application bug" or "a
+  delivery bug or still in flight"; `check_doctor` already fails a run on a split row. `old-new`
+  skips while the last release speaks another protocol (v0.0.19 speaks 2). Runs (images built from
+  this tree, protocol 3):
+  - lan-converge 101: converged; fails only on the old `mirror_refused_converging` tripwire.
+  - lan-converge 202: **a real split caught**. Both devices hold the same ops for
+    `default/todo.txt` and render one line two ways: two appends to one line made apart, landed in
+    different orders, on a line also completed with a priority (ADR 0034's known gap). Both
+    doctors named it; filed in `tasks/partition-converge/todo.txt`.
+  - lan-converge 303: pass. chaos 404: converged, no loss; fails on the same tripwire.
