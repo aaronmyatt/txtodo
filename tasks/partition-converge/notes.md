@@ -180,3 +180,15 @@ more natural there, since notes already are a Loro text document.
   tag. A reopen always sends its priority, none included, so a reopen that drops the priority
   meets the same rule. Every saved log replays to the same bytes as before. Known gap: a `pri:` a
   user typed on an open line also moves into the prefix if a lost `Priority` op lands on it.
+- 2026-10-02, chaos skipped ops (dee3d353, `sync_park.rs`). The line said the 284 skips on a1 were
+  in its default log; that check matched op ids only, and they were in a1's two Remote mirrors,
+  which hold the same ops. All three devices share the default (a1 paired b1 and a2 as own), but
+  b1 and a2 never paired, so each offers its default to the other under its alias (ADR 0029: by
+  design until they pair), and a peer re-offers every workspace it holds, so a1 got both aliases
+  too and mirrored its own list twice. A mirror pulls the whole history, each origin's ops as their
+  own run, so an op landed before the insert from another device it builds on and was skipped;
+  the log replay skipped it again, same order. The same loses ops on any fresh device or rejoin in
+  a group of three or more. Now such an op (naming a task with no placement here) waits in the
+  actor and is retried after each later commit group; the replay at open parks the same way and
+  hands what waits to the actor. Bounded at 10 000 per document. The mirrors themselves are their
+  own lines: a relayed own-device alias (a1 should skip it), and whether own-ness is transitive.
