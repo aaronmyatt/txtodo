@@ -17,6 +17,9 @@ use txtodo_model::{Hlc, TaskId};
 /// Most ghosts one document keeps. Past it the oldest go: an op anchored on one of those skips,
 /// as every anchor on a deleted line did before ghosts.
 pub const MAX_GHOSTS_PER_FILE: usize = 10_000;
+/// Ghosts left once a prune runs: a quarter below the bound, so the next prune is 2 500 ghosts
+/// away instead of one op away.
+pub const GHOSTS_AFTER_PRUNE: usize = MAX_GHOSTS_PER_FILE - MAX_GHOSTS_PER_FILE / 4;
 
 impl DocState {
     /// Number of lines, blanks included.
@@ -177,9 +180,19 @@ impl DocState {
         Ok(())
     }
 
-    /// Drops the oldest ghosts past [`MAX_GHOSTS_PER_FILE`].
+    /// Past [`MAX_GHOSTS_PER_FILE`], drops the oldest ghosts down to [`GHOSTS_AFTER_PRUNE`]. Runs
+    /// after every op, so pruning to the bound itself sorted every ghost to drop one, on each op
+    /// past it: a delete-heavy 10 000-line log took minutes to replay at open.
     pub(super) fn prune_ghosts(&mut self) {
-        self.prune_ghosts_to(MAX_GHOSTS_PER_FILE);
+        self.prune_ghosts_past(MAX_GHOSTS_PER_FILE, GHOSTS_AFTER_PRUNE);
+    }
+
+    /// More than `max` ghosts: down to `after` (parameters so a test need not make 10 000).
+    pub(crate) fn prune_ghosts_past(&mut self, max: usize, after: usize) {
+        debug_assert!(after <= max);
+        if self.entries.len() - self.visible.len() > max {
+            self.prune_ghosts_to(after);
+        }
     }
 
     /// Drops the oldest ghosts past `max` (a parameter so a test need not make 10 000). An

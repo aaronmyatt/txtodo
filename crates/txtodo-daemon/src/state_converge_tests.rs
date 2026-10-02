@@ -346,6 +346,28 @@ fn a_blank_removed_under_a_line_another_device_moved_with_its_blank() {
     assert_eq!(bytes, "line 2\nline 1\nline 3\n");
 }
 
+/// Pruning runs after every op, so past the bound it drops a batch, not one ghost per op (that
+/// sorted every ghost on each op: a delete-heavy 10 000-line log took minutes to replay at open).
+#[test]
+fn past_the_bound_a_prune_drops_down_to_the_lower_mark() {
+    let mut state = base(5);
+    for n in 1..=3 {
+        state.apply(&delete(n, at(100 + n as u64, 0, A))).unwrap();
+    }
+    state.prune_ghosts_past(3, 1);
+    state.apply(&delete(4, at(200, 0, A))).unwrap();
+    state.prune_ghosts_past(3, 1);
+    assert!(
+        state
+            .clone()
+            .apply(&insert(9, Some(3), at(300, 0, B)))
+            .is_err(),
+        "ghost 3 went with the batch"
+    );
+    state.apply(&insert(9, Some(4), at(300, 0, B))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 9\nline 5\n");
+}
+
 /// Past the bound an eraser goes with the blank it hides: dropping the blank alone would let the
 /// eraser take the next one.
 #[test]
