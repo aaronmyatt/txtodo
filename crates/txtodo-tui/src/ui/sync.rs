@@ -12,12 +12,14 @@ use crate::state::{PeerStatus, SyncSnapshot};
 
 /// Renders the indicator line: `● synced` with no peers and nothing pending; otherwise
 /// `● N peer(s) · lag <max lag>ms · P pending`, plus `· S stuck` when a peer's ops keep being
-/// refused (task sync-drift line 7). Colour signals convergence (green = nothing pending, yellow =
-/// ops still in flight, red = stuck) but is never the only signal (plan §3.3): the text itself
-/// always states the peer, pending and stuck counts.
+/// refused (task sync-drift line 7), and `· N not syncing` for peers on another sync protocol
+/// (task sync-divergence-check/protocol-mismatch). Colour signals convergence (green = nothing
+/// pending, yellow = ops still in flight, red = stuck or not syncing) but is never the only signal
+/// (plan §3.3): the text itself always states the counts.
 pub fn render(sync: &SyncSnapshot) -> Line<'static> {
     let stuck: usize = sync.peers.iter().map(|p| p.stuck.len()).sum();
-    let dot_color = if stuck > 0 {
+    let off = sync.off_protocol().count();
+    let dot_color = if stuck > 0 || off > 0 {
         Color::Red
     } else if sync.pending_ops == 0 {
         Color::Green
@@ -40,11 +42,15 @@ pub fn render(sync: &SyncSnapshot) -> Line<'static> {
     if stuck > 0 {
         spans.push(Span::raw(format!(" \u{b7} {stuck} stuck")));
     }
+    if off > 0 {
+        spans.push(Span::raw(format!(" \u{b7} {off} not syncing")));
+    }
     Line::from(spans)
 }
 
-/// One peer's rows: its lag, then each file its ops are stuck on and whether it is parked.
-fn peer_lines(p: &PeerStatus) -> Vec<Line<'static>> {
+/// One peer's rows: its lag, then each file its ops are stuck on, whether it is parked, and the
+/// other sync protocol it speaks (`ours`: this device's).
+fn peer_lines(p: &PeerStatus, ours: u32) -> Vec<Line<'static>> {
     let short: String = p.device.chars().take(10).collect();
     let mut lines = vec![Line::from(format!("  {short}\u{2026}  lag {}ms", p.lag_ms))];
     lines.extend(
@@ -54,6 +60,12 @@ fn peer_lines(p: &PeerStatus) -> Vec<Line<'static>> {
     );
     if p.parked {
         lines.push(Line::from("    parked: no shared key"));
+    }
+    if p.their_protocol != 0 {
+        lines.push(Line::from(format!(
+            "    not syncing: protocol {} (this device {ours})",
+            p.their_protocol
+        )));
     }
     lines
 }
@@ -69,7 +81,7 @@ pub fn draw_popup(
 ) {
     use ratatui::widgets::{Block, Borders, Clear};
     let mut lines = vec![render(sync)];
-    lines.extend(sync.peers.iter().flat_map(peer_lines));
+    lines.extend(sync.peers.iter().flat_map(|p| peer_lines(p, sync.protocol)));
     let height = u16::try_from(lines.len() + 2)
         .unwrap_or(u16::MAX)
         .min(area.height);
@@ -111,6 +123,7 @@ mod tests {
         let sync = SyncSnapshot {
             peers: vec![peer("a", 100), peer("b", 900)],
             pending_ops: 3,
+            ..SyncSnapshot::default()
         };
         let rendered = text(&render(&sync));
         assert!(rendered.contains("2 peers"));
@@ -127,12 +140,14 @@ mod tests {
         let converged = render(&SyncSnapshot {
             peers: vec![peer("a", 0)],
             pending_ops: 0,
+            ..SyncSnapshot::default()
         });
         assert_eq!(converged.spans[0].style.fg, Some(Color::Green));
 
         let pending = render(&SyncSnapshot {
             peers: vec![peer("a", 0)],
             pending_ops: 1,
+            ..SyncSnapshot::default()
         });
         assert_eq!(pending.spans[0].style.fg, Some(Color::Yellow));
     }
@@ -148,20 +163,43 @@ mod tests {
         let line = render(&SyncSnapshot {
             peers: vec![stuck.clone()],
             pending_ops: 0,
+            ..SyncSnapshot::default()
         });
         assert_eq!(line.spans[0].style.fg, Some(Color::Red));
         assert!(text(&line).ends_with("1 stuck"), "{}", text(&line));
-        let rows: Vec<String> = peer_lines(&stuck).iter().map(text).collect();
+        let rows: Vec<String> = peer_lines(&stuck, 2).iter().map(text).collect();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[1], "    stuck on tasks/a/todo.txt");
         let parked = PeerStatus {
             parked: true,
             ..peer("b", 0)
         };
-        let rows: Vec<String> = peer_lines(&parked).iter().map(text).collect();
+        let rows: Vec<String> = peer_lines(&parked, 2).iter().map(text).collect();
         assert_eq!(
             rows.last().map(String::as_str),
             Some("    parked: no shared key")
+        );
+    }
+
+    /// Task sync-divergence-check/protocol-mismatch: a peer on another sync protocol turns the dot
+    /// red, is counted as not syncing, and its row names both protocols.
+    #[test]
+    fn a_peer_on_another_protocol_is_red_counted_and_named() {
+        let off = PeerStatus {
+            their_protocol: 3,
+            ..peer("01J9K3H5Z7Q8X2M4N6P8R0T2V5", 0)
+        };
+        let line = render(&SyncSnapshot {
+            peers: vec![off.clone(), peer("b", 0)],
+            pending_ops: 0,
+            protocol: 2,
+        });
+        assert_eq!(line.spans[0].style.fg, Some(Color::Red));
+        assert!(text(&line).ends_with("1 not syncing"), "{}", text(&line));
+        let rows: Vec<String> = peer_lines(&off, 2).iter().map(text).collect();
+        assert_eq!(
+            rows.last().map(String::as_str),
+            Some("    not syncing: protocol 3 (this device 2)")
         );
     }
 }

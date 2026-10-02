@@ -136,6 +136,7 @@ impl AppState {
                 ..PeerStatus::default()
             }],
             pending_ops: 2,
+            protocol: 2,
         };
         state.needs_review = vec![ConflictItem {
             task_id: "01J9K3H5Z7Q8X2M4N6P8R0T2V4".to_owned(),

@@ -62,3 +62,34 @@ fn buttons_sit_at_the_right_edge_and_run_their_commands() {
     );
     assert_eq!(hits.at(3, 1), Some(Target::Inert));
 }
+
+/// Task sync-divergence-check/protocol-mismatch: a peer on another sync protocol gets a loud
+/// banner, right after the daemon's own, naming both protocols and which device to upgrade.
+#[test]
+fn a_peer_on_another_protocol_gets_a_loud_banner_saying_which_device_to_upgrade() {
+    let mut state = AppState::fixture();
+    assert!(
+        !banners(&state)
+            .iter()
+            .any(|b| b.label.contains("not syncing"))
+    );
+    state.sync.peers[0].their_protocol = 3;
+    let rows = banners(&state);
+    let b = rows
+        .iter()
+        .find(|b| b.label == "A paired device is not syncing")
+        .unwrap_or_else(|| panic!("{rows:?}"));
+    assert!(b.loud);
+    assert_eq!(
+        b.detail,
+        "01J9K3H5Z7\u{2026} speaks sync protocol 3, this device 2; this device is older: \
+         upgrade txtodo here."
+    );
+    assert_eq!(b.buttons, vec![("Sync", Command::SyncOpen)]);
+    state.sync.peers[0].their_protocol = 1;
+    let rows = banners(&state);
+    assert!(
+        rows.iter()
+            .any(|b| b.detail.ends_with("upgrade txtodo on that device."))
+    );
+}

@@ -54,6 +54,7 @@ pub fn banners(state: &AppState) -> Vec<Banner> {
         b.loud = true;
         out.push(b);
     }
+    out.extend(protocol_banner(state));
     review_banners(state, &mut out);
     if let Some(refused) = &state.shell.refused {
         let mut b = banner(
@@ -81,6 +82,36 @@ pub fn banners(state: &AppState) -> Vec<Banner> {
         out.push(b);
     }
     out
+}
+
+/// A paired device on another sync protocol (task sync-divergence-check/protocol-mismatch): the
+/// two refuse each other, so nothing syncs until the older one is upgraded. Not dismissable: it
+/// never heals by itself.
+fn protocol_banner(state: &AppState) -> Option<Banner> {
+    let sync = &state.sync;
+    let first = sync.off_protocol().next()?;
+    let count = sync.off_protocol().count();
+    let short: String = first.device.chars().take(10).collect();
+    let older = if first.their_protocol > sync.protocol {
+        "this device is older: upgrade txtodo here"
+    } else {
+        "upgrade txtodo on that device"
+    };
+    let label = if count == 1 {
+        "A paired device is not syncing".to_owned()
+    } else {
+        format!("{count} paired devices are not syncing")
+    };
+    let mut b = banner(
+        label,
+        format!(
+            "{short}\u{2026} speaks sync protocol {}, this device {}; {older}.",
+            first.their_protocol, sync.protocol
+        ),
+    );
+    b.buttons.push(("Sync", Command::SyncOpen));
+    b.loud = true;
+    Some(b)
 }
 
 /// The flags banner, then the duplicate-lines one (ADR 0032); both open the review sheet.

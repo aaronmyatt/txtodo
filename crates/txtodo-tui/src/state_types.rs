@@ -70,6 +70,9 @@ pub struct PeerStatus {
     pub stuck: Vec<String>,
     /// The daemon stopped dialing it: it holds no key we share (task sync-drift line 5).
     pub parked: bool,
+    /// The sync protocol it speaks when not ours (task sync-divergence-check/protocol-mismatch):
+    /// the two refuse each other and nothing syncs until the older one is upgraded. 0 = same.
+    pub their_protocol: u32,
 }
 
 /// The sync indicator's last known snapshot.
@@ -79,6 +82,15 @@ pub struct SyncSnapshot {
     pub peers: Vec<PeerStatus>,
     /// Ops applied locally that have not yet reached every peer.
     pub pending_ops: u32,
+    /// This daemon's sync protocol, to name beside a peer's `their_protocol`; 0 = unknown.
+    pub protocol: u32,
+}
+
+impl SyncSnapshot {
+    /// Peers on another sync protocol: they do not sync at all.
+    pub fn off_protocol(&self) -> impl Iterator<Item = &PeerStatus> {
+        self.peers.iter().filter(|p| p.their_protocol != 0)
+    }
 }
 
 /// One flagged conflict for the `r` pane, the UI-local mirror of `pb::ReviewFlag`.

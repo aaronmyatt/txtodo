@@ -77,8 +77,10 @@ fn to_sync_snapshot(resp: pb::SyncStatusResponse) -> SyncSnapshot {
                 lag_ms: p.lag_ms,
                 stuck: p.stuck.into_iter().map(|s| s.file).collect(),
                 parked: p.parked,
+                their_protocol: p.their_protocol,
             })
             .collect(),
         pending_ops: u32::try_from(resp.pending_ops).unwrap_or(u32::MAX),
+        protocol: resp.protocol,
     }
 }
