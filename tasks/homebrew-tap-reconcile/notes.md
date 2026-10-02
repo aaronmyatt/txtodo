@@ -99,3 +99,15 @@ human's to create and store as a repo secret; the job is staged as a patch, sinc
   - A: keep autobump, point it at this repo's scripts, delete the tap's `bin/`. No token.
   - B: as decided: `release.yml` job + PAT pushes to the tap; autobump stays as a fallback or goes.
   - I'd take A: same result a day later at worst, no cross-repo credential.
+
+## Decided 2026-10-02 (owner): A. As built
+- The tap's `autobump.yml` fetches `deploy/homebrew/{update-formula.sh,update-cask.sh,stamp-cask-sha.py}`
+  from this repo at the release tag (contents API, raw) and runs them from a folder that links to
+  the tap's `Formula/` and `Casks/`. The tap's `bin/` fork is gone, with a one-line pointer
+  (`bin/README.md`). Tap commit b23370b.
+- Its checks were still the 12-asset ones while the formula has 16 urls (txtodo-mcp), so the next
+  auto bump would have failed; now 16. Dry run with fake assets at v0.0.20: 16 urls, 16 hashes,
+  cask version and 2 hashes moved.
+- Closed the tap's stale bump PRs #8 (v0.0.10) and #9 (v0.0.15).
+- No `release.yml` job, no token. Known gap: the bump can lag a release by up to a day (daily
+  cron), and the new stamp step has only run dry; the first real run is the 0.0.20 bump.
