@@ -1,4 +1,3 @@
-2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui @doing by:claude-opus-backlog
 2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop
 2026-09-27 Two-daemon test: B re-mints a file, A gets both copies; keep newest on A with no rejoin leaves exactly one copy on both +m11 @daemon @test
 2026-09-27 Two-daemon test: an edit on A that makes two lines differ drops the group on both; a line typed twice on A shows as a group on both +m11 @daemon @test
@@ -9,3 +8,4 @@ x 2026-10-01 2026-09-27 proto: ConflictsResponse.duplicates (DuplicateGroup: tas
 x 2026-10-01 2026-09-27 daemon: ListConflicts returns the file's duplicate groups from duplicate_groups +m11 @daemon @sync — FileConflicts { flags, duplicates } from the actor; grpc_conflicts.rs test
 x 2026-10-01 2026-09-27 daemon: every Change carries the group count after the commit; the 10k-line perf fixture stays inside its budget +m11 @daemon @test — counted from the state after each commit, 0.8 ms at 10k lines (release); known gap: the desktop e2e perf spec was not run
 x 2026-10-01 2026-09-27 cli: txtodo conflicts lists duplicate groups; delete one line, or keep the newest in every group, after a confirm, through Apply Delete +m11 @cli — conflicts lists groups; conflicts delete <line> and keep-newest confirm then Apply Delete by task id; tests/conflicts_dup.rs
+x 2026-10-02 2026-09-27 tui: duplicate groups in the conflicts screen and banner, same two actions; a group never makes the list read-only +m11 @tui — the review sheet walks groups after flags, n/o keep the newest/oldest copy, a banner counts them, never read-only; known gap: not driven against a real daemon, and the by-hand check is still to do

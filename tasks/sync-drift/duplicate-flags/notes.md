@@ -71,3 +71,15 @@ file only adds what building it needs.
   refuses a line in no group; `conflicts keep-newest` deletes every copy but the last (newest id)
   of each group in one `Apply`, by task id since line numbers move inside one batch. Both confirm
   on stderr; `--yes` skips. `tests/conflicts_dup.rs` runs both against a real global daemon.
+- 2026-10-02, TUI (9ab183cf): the review sheet walks the flags, then the groups. A group's sheet
+  shows the line and its copies (oldest, newest); `n` keeps the newest, `o` the oldest, each one
+  `Apply` of `Delete` by task id, no blank left (as the CLI). Picked over the CLI's pair (delete a
+  chosen line; keep-newest in every group) because this file's Design said "delete newer or
+  delete older", and a chosen line is already `dd` in the list. A banner counts the groups.
+  Groups load from `ListConflicts` at startup, after a resolve, and after a change to the open
+  file that has or had groups. Manifest rows `conflicts.keep_newest`/`keep_oldest`, desktop
+  planned. Known gaps: not driven against a real daemon here (needs a duplicated line from a peer
+  or two identical adds; the two-daemon lines cover the daemon side); the TUI still loads review
+  flags only from `Watch`, so flags raised before it started show only after the next change.
+  By hand: open a list with two identical lines in the TUI, check the banner, `r`, `j` to the
+  group, `n`; one copy is left and the banner goes.
