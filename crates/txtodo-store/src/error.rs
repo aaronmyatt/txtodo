@@ -62,6 +62,8 @@ pub enum StoreError {
     BadWorkspaceId(usize),
     /// A stored relay node id is not 32 bytes (the database was edited by hand); the length found.
     BadRelayNodeId(usize),
+    /// One file holds more ops than `for_each_op_id_of_file` reads (`MAX_OP_IDS_PER_FILE`); the file.
+    TooManyOpsInFile(String),
 }
 
 impl StoreError {
@@ -137,6 +139,11 @@ impl fmt::Display for StoreError {
             StoreError::BadRelayNodeId(len) => {
                 write!(f, "stored relay node id is {len} bytes, not 32")
             }
+            StoreError::TooManyOpsInFile(file) => write!(
+                f,
+                "{file} holds more than {} ops; its op ids were not all read",
+                crate::MAX_OP_IDS_PER_FILE
+            ),
         }
     }
 }
@@ -159,7 +166,8 @@ impl std::error::Error for StoreError {
             | StoreError::BadTokenId(_)
             | StoreError::BadStaticPublic(_)
             | StoreError::BadWorkspaceId(_)
-            | StoreError::BadRelayNodeId(_) => None,
+            | StoreError::BadRelayNodeId(_)
+            | StoreError::TooManyOpsInFile(_) => None,
         }
     }
 }

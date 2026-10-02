@@ -17,7 +17,7 @@ that entry below.
   `user_version` (now 6), refuses a newer schema. `user_version()`, `journal_mode()` for doctor and tests.
 - Op log: `append(&[Op]) -> SeqRange` (one transaction, `MAX_APPEND_BATCH`),
   `for_file(file, since: Seq)`, `between(file, &Hlc, &Hlc)` (inclusive, HLC order),
-  `for_each_op_id_of_file(file, each) -> count` (raw ids, unordered, uncapped: the op-set hash),
+  `for_each_op_id_of_file(file, each) -> count` (raw ids, unordered, fails past `MAX_OP_IDS_PER_FILE`),
   `last_seq()`. Reads return `Stored { seq, op }`, at most `MAX_OPS_PER_READ`.
 - Sync heads (M4): `heads() -> BTreeMap<DeviceId, u64>` (≤ `MAX_DEVICES_PER_HEADS`),
   `head_of(device)`, `next_origin_seq(device)`, `ops_for(device, first, last)` — origin_seq is

@@ -26,8 +26,8 @@ pub use heads::MAX_DEVICES_PER_HEADS;
 pub use identity::{FingerprintRow, MAX_FINGERPRINTS_PER_READ};
 pub use identity_store::IdentityStore;
 pub use ops::{
-    MAX_APPEND_BATCH, MAX_OPS_PER_READ, MAX_SOURCE_BYTES, Seq, SeqRange, Stored, cap_source,
-    kind_tag,
+    MAX_APPEND_BATCH, MAX_OP_IDS_PER_FILE, MAX_OPS_PER_READ, MAX_SOURCE_BYTES, Seq, SeqRange,
+    Stored, cap_source, kind_tag,
 };
 pub use projections::{MAX_PROJECTION_BYTES, Projection, Snapshot};
 pub use registry::{

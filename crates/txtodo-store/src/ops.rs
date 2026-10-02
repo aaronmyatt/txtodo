@@ -36,6 +36,9 @@ pub const MAX_OPS_PER_READ: usize = 10_000;
 /// set against the UNIQUE `ops.op_id` index); a real workspace's history stays far below this —
 /// a memory bound, not a feature limit.
 pub const MAX_OP_IDS_FOR_DEDUPE: usize = 500_000;
+/// Most `op_id`s one `for_each_op_id_of_file` call reads. Ids are streamed, not held, so this is a
+/// runaway bound, not a memory one; past it the call fails rather than return a partial set.
+pub const MAX_OP_IDS_PER_FILE: usize = 50_000_000;
 
 /// Longest `source` the log keeps, in bytes (task op-source). A client the daemon does not know
 /// keeps whatever it sent, cut at a char boundary to this.
@@ -335,9 +338,10 @@ impl Store {
 
 impl Store {
     /// Calls `each` with the raw 16-byte `op_id` (big-endian ULID) of every op in `file`, in no
-    /// particular order, and returns how many there were. Streams rows and decodes no payload,
-    /// with no read cap: the daemon folds them into an order-free op-set hash at actor open
-    /// (task sync-divergence-check), and a capped read would give a wrong hash, not a short one.
+    /// particular order, and returns how many there were. Streams rows and decodes no payload.
+    /// The daemon folds them into an order-free op-set hash at actor open (task
+    /// sync-divergence-check), so a short read would give a wrong hash: past
+    /// `MAX_OP_IDS_PER_FILE` this fails with `TooManyOpsInFile` instead.
     pub fn for_each_op_id_of_file(
         &self,
         file: &FilePath,
@@ -356,6 +360,9 @@ impl Store {
             let id: [u8; 16] = bytes
                 .try_into()
                 .map_err(|v: Vec<u8>| StoreError::BadDevice(v.len()))?;
+            if n as usize >= MAX_OP_IDS_PER_FILE {
+                return Err(StoreError::TooManyOpsInFile(file.as_str().to_owned()));
+            }
             each(id);
             n += 1;
         }
