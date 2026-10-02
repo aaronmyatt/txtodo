@@ -62,7 +62,33 @@ expect_converged() {
   fi
   touch "$REPORT_DIR/state/diverged"
   diff_devices "$label" "$@"
-  fail "converge: $label: $* still differ after ${secs}s (diff-${label// /-}.txt)"
+  if [ "$(split_report "$label" "$@")" = split ]; then
+    fail "converge: $label: $* still differ after ${secs}s with the same ops, an application bug (splits-${label// /-}.txt, diff-${label// /-}.txt)"
+  else
+    fail "converge: $label: $* still differ after ${secs}s, no split with matching ops: a delivery bug or still in flight (diff-${label// /-}.txt)"
+  fi
+}
+
+# split_report <label> <device...>: each device's doctor rows for a file split with a peer (same
+# ops, different bytes; ADR 0035) into splits-<label>.txt; prints "split" when any device has one.
+# A split is only booked after a quiet second, so a device still syncing shows none.
+split_report() {
+  local label=$1 dev rows any=""
+  shift
+  local out="$REPORT_DIR/splits-${label// /-}.txt"
+  : >"$out"
+  for dev in "$@"; do
+    rows=$(tx "$dev" --json doctor |
+      jq -r '.[] | select(.name == "sync" and (.detail | test("both hold the same ops"))) | .detail' \
+      2>/dev/null || true)
+    if [ -n "$rows" ]; then
+      any=1
+      printf '%s\n' "$rows" | sed "s/^/$dev: /" >>"$out"
+    fi
+  done
+  if [ -n "$any" ]; then
+    echo split
+  fi
 }
 
 # No non-blank line may appear twice in one list: the sync-drift symptom (every line twice).
