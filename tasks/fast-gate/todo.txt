@@ -1,4 +1,4 @@
-2026-10-01 merge tests into it + e2e: desktop (src-tauri) @test
+2026-10-01 merge tests into it + e2e: desktop (src-tauri) @test @doing by:claude-opus-backlog
 2026-10-01 merge tests into it + e2e: relay, txtodo-core, txtodo-proto, txtodo-crdt @test
 2026-10-01 re-measure gate time per crate and fast-set coverage @test
 x 2026-10-01 2026-10-01 check scripts: batched file-length, one-node boundaries, assertions CI-only @ci — file-length one wc/awk pass (10.7 s → 0.36 s same load), boundaries one node (2.6 s → 0.4 s), same output on a planted tree; assertions stays advisory, only in just boundaries + CI
