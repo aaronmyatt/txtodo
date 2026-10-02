@@ -4,7 +4,7 @@
 
 use crate::fastid::fast_id_of;
 use crate::handle::ActorError;
-use crate::reconcile::task_of;
+use crate::reconcile::{change_ops, task_of};
 use crate::state::DocState;
 use crate::textedit::apply_text_edits;
 use txtodo_core::{File, LineKind, parse_file};
@@ -191,7 +191,8 @@ fn inverse_edit_text(before: &DocState, task: TaskId, edits: &[TextEdit]) -> Opt
 }
 
 /// Inverse ops for the newest `steps` ops of `path`, newest first, each computed against the
-/// state just before its op. Ops without an inverse are skipped.
+/// state just before its op. Ops without an inverse are skipped; a completion's inverse is
+/// several ops (`inverse_completion`), so the result can be longer than `steps`.
 pub fn undo_ops(
     store: &Store,
     path: &FilePath,
@@ -203,12 +204,33 @@ pub fn undo_ops(
     let mut out = Vec::with_capacity(newest.len());
     for stored in &newest {
         let before = replay(store, path, Some(Seq(stored.seq.0 - 1)), mode)?;
-        if let Some(inv) = inverse(&before, stored) {
+        if let Some(reopen) = inverse_completion(&before, stored) {
+            out.extend(reopen);
+        } else if let Some(inv) = inverse(&before, stored) {
             out.push(inv);
         }
     }
-    debug_assert!(out.len() <= steps);
     Ok(out)
+}
+
+/// Undoing a completion is a reopen. A do sends `Completed` alone and its `(X)` moves into
+/// `pri:X` as a side effect (`reconcile::change_ops`), so a lone `Completed=false` would leave
+/// the tag behind. Diff the line after the op back to the line before it, as `reopen_ops` does:
+/// `Completed=false`, the priority, and a text edit dropping `pri:`. `None` for any other op.
+fn inverse_completion(before: &DocState, stored: &Stored) -> Option<Vec<OpKind>> {
+    let OpKind::SetField {
+        task,
+        field: Field::Completed,
+        value: FieldValue::Bool(true),
+    } = &stored.op.kind
+    else {
+        return None;
+    };
+    let old = before.line_of(*task)?;
+    let mut after = before.clone();
+    after.apply(&stored.op).ok()?;
+    let new = after.line_of(*task)?;
+    Some(change_ops(&new, &old, *task))
 }
 
 /// History defaults/caps (design §4.8): unset page size, and the hard cap per call.

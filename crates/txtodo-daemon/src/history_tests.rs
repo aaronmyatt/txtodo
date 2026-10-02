@@ -175,3 +175,42 @@ fn undoing_an_insert_deletes_and_undoing_a_delete_reinserts_the_exact_line() {
         matches!(inverse(&after_b, &del_b), Some(OpKind::Insert { after: Some(a), line, .. }) if a == id(A) && line == format!("walk dog id:{B}"))
     );
 }
+
+/// A do of `(A) ...` is `Completed` alone; the `(A)` → `pri:A` move rides along. Undoing it must
+/// bring `(A)` back, not leave an open line ending in `pri:A` (the TUI's toast Undo caught this).
+#[test]
+fn undoing_a_completion_restores_the_priority_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
+    store
+        .append(&[
+            op(
+                1,
+                1000,
+                OpKind::Insert {
+                    task: id(A),
+                    after: None,
+                    line: format!("(A) call mum @phone id:{A}"),
+                },
+            ),
+            op(
+                2,
+                2000,
+                set_field(id(A), Field::Completed, FieldValue::Bool(true)).unwrap(),
+            ),
+        ])
+        .unwrap();
+    let mut state = replay(&store, &path(), None, IdentityMode::Tagged).unwrap();
+    assert_eq!(
+        String::from_utf8(state.to_bytes()).unwrap(),
+        format!("x call mum @phone id:{A} pri:A\n"),
+        "the do moved the priority into pri:"
+    );
+    for inv in &undo_ops(&store, &path(), 1, IdentityMode::Tagged).unwrap() {
+        state.apply_kind(inv).unwrap();
+    }
+    assert_eq!(
+        String::from_utf8(state.to_bytes()).unwrap(),
+        format!("(A) call mum @phone id:{A}\n")
+    );
+}
