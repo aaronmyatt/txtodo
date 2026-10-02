@@ -254,3 +254,10 @@ more natural there, since notes already are a Loro text document.
   Insert/Move: no task …` (report 20261002-184539-chaos). The Loro mirror gets an op before the
   insert it names; dee3d353 parks that op for the document, not for the mirror. The mirror
   self-heals (`converge_mirror`) and the run converges; only the tripwire fails.
+- 2026-10-02, the mirror and waiting ops (84704ac6). The seed 202 refusals were b1's own ops,
+  relayed in its Remote mirror of a2's default (so `peer_batch_disagrees` did not cover them): the
+  document parked them, but the commit fed the whole batch to the Loro mirror. Now the mirror gets
+  the batch without its waiting ops; when ops from earlier batches land, it is fed what fits, then
+  converges. Converging alone from a mirror that missed the whole batch ended in a new lineage twice
+  (rerun 20261002-210339). Lab after (20261002-210724): pass, no refusal, no new lineage. Known gap:
+  `mirror_flush_disagreed_converging` still logs 7-8 times a run, before and after; not looked at.
