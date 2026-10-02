@@ -24,3 +24,26 @@ can name a v2 peer and later bumps are visible too. A pre-this build shows nothi
   not seen). Additive proto fields, local gRPC only; no peer wire change.
 - Clients: TUI sync indicator, popup row and a banner; desktop has no sync view yet, so a
   `sync_status` command and a banner, polled. Doctor row last.
+
+## As built (2026-10-02)
+
+- proto (d8c93bd4): `SyncStatusResponse.protocol`, `Peer.their_protocol`.
+- daemon (77853e15): `SessionEnd::OtherProtocol(n)` / `PeerSignal::OtherProtocol(n)`, caught in
+  `lan_session_dispatch.rs` (`recv_polled` on `UnknownVersion`, `dispatch_link_frame` on a `Hello`
+  with another `protocol`) and `control_session.rs::recv_control`. `peer_keys.rs` keeps the number
+  per known peer (warned once as `other_protocol`, never parked) until a session greets.
+  `devices_grpc.rs` fills both fields.
+- cli (3c4036b1): doctor FAIL row, "speaks sync protocol 3, this device 2; ... upgrade txtodo here"
+  (or "there"); exits 1.
+- tui (672b2979): red sync dot and "· N not syncing", a popup row, a loud banner with which device
+  to upgrade and a Sync button.
+- desktop (6e7f1a13): `sync_status` command and `ProtocolMismatchBanner`, polled every 10 s.
+- Known gaps:
+  - Only our own dials name the peer; an incoming session from it ends before its `Hello` decodes,
+    so its peer is unknown. Our next resync dial (about 15 s on LAN) books it.
+  - A device on a build from before this shows nothing at all; only the newer side can say it.
+  - Restart forgets it until the next dial.
+  - Nobody has seen it for real: no two devices on different protocols exist yet. By hand, once the
+    bump lands: run a v3 build on one Mac and the v2 release on the other; within a minute the TUI
+    banner and `txtodo doctor` on the v3 one should name the v2 peer, and the desktop banner within
+    10 s after that.
