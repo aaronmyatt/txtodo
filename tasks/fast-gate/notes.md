@@ -162,6 +162,26 @@ back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
 - Still over budget: the daemon's lib alone is ~1.5 s of tests, but any src edit rebuilds the lib
   and relinks it, it and txtodod. 12 s is mostly that.
 
+## txtodo-cli merge (2026-10-02)
+
+- `tests/it`: 8 files that run `txtodo` in direct-file mode (and todo.sh). `tests/e2e`: 11 files
+  that start a real `txtodod`, plus `support/` (it builds txtodod with a nested cargo build).
+- The 15 `#[ignore = "spawns a real txtodod; CI-only..."]` in daemon_mode, daemon_archive and
+  daemon_autostart are removed with their comments: `test = false` does their job now. So ci.yml's
+  `--run-ignored ignored-only` test step and its `-- --ignored` coverage step drop `-p txtodo-cli`;
+  CI's matrix e2e step (`--workspace --exclude txtodo-daemon --test e2e`) runs them instead.
+- `todosh_parity` (2.5 s) is `slow_`. The `real-mdns` test group now matches `pairing::` inside
+  `txtodo-cli::e2e` (checked with `nextest show-config test-groups`).
+- Same 186 tests. it + bin: 139 pass in 0.5 s, 2 `slow_` skipped. e2e `--profile ci`: 45 in 17 s.
+- Gate: cli nextest after a src touch 3.95 s (was 32 s). The commit's own gate took 117 s because
+  a desktop comment changed too, so desktop's tests ran. Keep cross-crate pointer edits out of
+  crate commits, or expect that.
+- Known gap: 3 fast no-daemon tests sit in e2e files (daemon_mode's two "without a daemon" tests,
+  layout's `a_custom_root_list_is_what_direct_file_mode_edits`). They run only in CI now.
+- Stale pointers left in fenced crates: mcp `tests/daemon_autostart.rs:13`, tui
+  `tests/daemon_autostart.rs:20` (both name `crates/txtodo-cli/tests/daemon_mode.rs`), and the
+  daemon's CLAUDE.md "txtodo-cli's `tests/bundle.rs`".
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
