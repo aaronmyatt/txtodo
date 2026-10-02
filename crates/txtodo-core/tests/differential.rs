@@ -1,5 +1,6 @@
 //! Differential test (plan M1): a second parser generated from `specs/todotxt.abnf` by `abnf_to_pest`
-//! must agree with the hand-written strict parser on every corpus line and on 10 000 random lines.
+//! must agree with the hand-written strict parser on every corpus line and on 10 000 random lines in CI
+//! (1 000 locally, see `random_cases`).
 //! The generated grammar is checked in at `tests/todotxt.pest`; `generated_grammar_is_current` regenerates
 //! it and fails on drift, so the ABNF, the pest grammar and the hand parser move together.
 //!
@@ -183,8 +184,22 @@ fn both_parsers_agree_on_the_corpus() {
     assert!(checked >= 50, "corpus has {checked} lines");
 }
 
+/// Random lines to compare: 10 000 in CI, 1 000 locally (0.6 s → under 0.1 s), so the fast gate
+/// (task fast-gate) stays under budget while CI keeps the full sweep. `PROPTEST_CASES` overrides both;
+/// `with_cases` would otherwise ignore it, since proptest reads that variable only in `Config::default`.
+/// GitHub Actions sets `CI=true` on every runner:
+/// https://docs.github.com/en/actions/reference/workflows-and-actions/variables#default-environment-variables
+/// https://docs.rs/proptest/latest/proptest/test_runner/struct.Config.html#structfield.cases
+fn random_cases() -> u32 {
+    let ci = std::env::var_os("CI").is_some_and(|v| !v.is_empty() && v != "false");
+    std::env::var("PROPTEST_CASES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(if ci { 10_000 } else { 1_000 })
+}
+
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(10_000))]
+    #![proptest_config(ProptestConfig::with_cases(random_cases()))]
     #[test]
     fn both_parsers_agree_on_random_lines(raw in "[xX(A-C)0-9 \\-:+@a-c\t.]{0,24}") {
         compare(&raw).map_err(TestCaseError::fail)?;
