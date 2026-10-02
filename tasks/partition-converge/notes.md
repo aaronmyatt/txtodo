@@ -192,3 +192,16 @@ more natural there, since notes already are a Loro text document.
   actor and is retried after each later commit group; the replay at open parks the same way and
   hands what waits to the actor. Bounded at 10 000 per document. The mirrors themselves are their
   own lines: a relayed own-device alias (a1 should skip it), and whether own-ness is transitive.
+- 2026-10-02, an editor save racing a synced add (037c0e36, `save_base.rs`). The lab's
+  `editor_save` copies the file, writes a temp, copies again and renames: a write of ours landing
+  between its second copy and the rename is overwritten and no `CLOBBER` is printed. That is what
+  lost a1r0n3: b1 wrote a1's add, then the save (based on the bytes before it) replaced it, and the
+  reconcile against our latest bytes saw "a1's line became b1's". Under Sidecar the reconciler
+  matched the two lines by position: an `EditText` over a1's line, on every device. The held-save
+  path (save on disk before our write) already merged three-way and was fine; a new Sidecar test
+  shows both. Now each write keeps the bytes it replaced for 2 s (the own-write ring's TTL); a save
+  holding none of the lines our latest write added is held on those bytes and merged three-way by
+  `pending_save.rs`. Known gaps: only one previous write is kept, so a save based on two writes ago
+  still reads as edits; deleting every just-synced line within 2 s while changing something else
+  brings them back. Found on the way: `crash.rs` times out on a quiet machine, before this change
+  too: the open-time replay spends minutes in ghost pruning (own line).
