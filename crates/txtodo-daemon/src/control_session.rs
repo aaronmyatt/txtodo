@@ -54,7 +54,7 @@ pub(crate) fn drive_control_session(
     if !send_all_offers(link, identity, registry, &ctx) {
         return PeerSignal::Silent;
     }
-    read_until_closed(link, identity, ctx.group, &keys)
+    read_until_closed(link, identity, &ctx, &keys)
 }
 
 /// Handles every message the peer sends until the link closes (`Opened` if any came) or one does
@@ -62,14 +62,24 @@ pub(crate) fn drive_control_session(
 fn read_until_closed(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
-    group: GroupId,
+    ctx: &SealCtx<'_>,
     keys: &GroupKeys,
 ) -> PeerSignal {
     let mut seen = PeerSignal::Silent;
+    let mut vouched = false;
     loop {
-        match recv_control(link, group, keys) {
+        match recv_control(link, ctx.group, keys) {
             Ok(msg) => {
                 seen = PeerSignal::Opened;
+                // Once per session, to the first sender that is a direct own device: the list of
+                // ours (ADR 0029's amendment). An accepted session learns its peer only here.
+                if !vouched {
+                    vouched = true;
+                    let peer = crate::own_vouch::sender_of(&msg);
+                    if let Some(own) = crate::own_vouch::own_devices_for(identity, peer) {
+                        let _ = send_control(link, ctx, own);
+                    }
+                }
                 handle_one_message(identity, msg);
             }
             Err(PeerSignal::Silent) => return seen,
@@ -259,6 +269,9 @@ fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
         // Stage 6's own bookkeeping (e.g. stop re-offering a declined workspace to this peer) is
         // not built this pass — logged only, never silently dropped.
         ControlMessage::OfferAck { .. } | ControlMessage::Decline { .. } => log_offer_reply(&msg),
+        ControlMessage::OwnDevices { sender, devices } => {
+            crate::own_vouch::record_own_devices(identity, sender, &devices);
+        }
     }
 }
 

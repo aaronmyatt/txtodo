@@ -273,3 +273,12 @@ more natural there, since notes already are a Loro text document.
   receiver keeps it per voucher (`own_vouches`); own = direct own row, or vouched by one. One hop
   only, so removals end vouches with no cycles. A new control variant ends an old build's session,
   so protocol 4 → 5. That wire change is the owner's call: the Build line waits on acceptance.
+- 2026-10-02, own carries across, built (ADR 0029's amendment, accepted). Store: `own_vouches`,
+  identity schema 4 (`identity_store_own.rs`). Sync: `ControlMessage::OwnDevices`, protocol 5.
+  Daemon: `own_vouch.rs` sends a device's direct own list once per control session to the first
+  direct own sender and takes one only from a direct own sender; the alias skip counts vouched
+  devices; the mirror pass drops a Remote mirror of a now-own alias; a change ends live sessions
+  (`LivePeers::own_generation`). Tests: store unit tests, the cap and round trip, two catalog
+  tests (vouch drops the earlier mirror; only direct own lists count). Known gaps: not run on three
+  devices yet (lab chaos is the check: no Remote mirror of the default on b1 or a2); a v4 and a v5
+  device do not sync.

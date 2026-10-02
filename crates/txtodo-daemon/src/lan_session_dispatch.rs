@@ -42,6 +42,8 @@ struct SharedCtx<'a> {
     /// [`Conn::routes`], chosen from these once the peer is known.
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
     live_peers: LivePeers,
+    /// `live_peers.own_generation()` when the session started (ADR 0029's amendment).
+    own_at: u64,
     device: DeviceId,
     /// What this connection runs over.
     carrier: Carrier,
@@ -198,6 +200,10 @@ fn turn(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &mut Conn) -> Option<
     if shared.table.generation() != shared.generation {
         return log_routes_changed();
     }
+    // The default is routed by own-ness at the greet; a new own device means greeting again.
+    if shared.live_peers.own_generation() != shared.own_at {
+        return log_own_devices_changed();
+    }
     if let Some(frame) = recv_polled(link, conn).ok()? {
         conn.live.heard();
         dispatch_frame(link, shared, conn, &frame)?;
@@ -233,6 +239,11 @@ fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &m
 
 /// A workspace opened or closed since this session greeted its set: end it, and the reconnect
 /// greets the new set (task `sync-live-push`).
+fn log_own_devices_changed() -> Option<()> {
+    tracing::info!("lan_session_own_devices_changed");
+    None
+}
+
 fn log_routes_changed() -> Option<()> {
     tracing::debug!("lan_session_routes_changed_reconnecting");
     None
@@ -318,6 +329,7 @@ fn build_shared_ctx(
         return None;
     };
     let live_peers = read(&first.ws).live_peers().clone();
+    let own_at = live_peers.own_generation();
     Some(SharedCtx {
         table: routes,
         generation,
@@ -328,6 +340,7 @@ fn build_shared_ctx(
         keys,
         routes: all,
         live_peers,
+        own_at,
         device,
         carrier,
     })

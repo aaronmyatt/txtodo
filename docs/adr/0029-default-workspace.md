@@ -121,6 +121,12 @@ Consequences of this amendment:
 - The previous amendment's line "a device that joined through another ... sees this device's default
   as a Remote workspace until the two pair directly" holds only past one hop.
 
+As built (2026-10-02): the list goes once per control session, to the first sender that is a
+direct own device (an accepted session learns its peer only from its first message); control
+sessions run every resync tick, so a pairing or a removal reaches own peers within one. A change to
+the own set bumps `LivePeers::own_generation` and live sync sessions greet again; the mirror pass
+drops a now-own alias's Remote mirror. Store: `own_vouches`, identity schema 4.
+
 Rejected: own-ness by group (a group holds foreign devices too); each device writing its own list
 into the shared default as a file (mixes control into user data, and needs the default shared
 first); a peer declaring its own list in its hello (a foreign device could claim any own device).

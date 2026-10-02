@@ -41,10 +41,12 @@ impl WorkspaceCatalog {
     /// Mirrors every pending offer the skip rule allows, and consumes each one either way.
     /// Returns how many new mirrors it made. Blocks: call it off the async runtime.
     pub fn mirror_pending_offers(&self) -> usize {
+        let own_aliases = self.own_default_aliases();
+        self.drop_own_alias_mirrors(&own_aliases);
         let offers = self.open_args.identity.workspace_offers();
         let mut mirrored = 0;
         for offer in offers.list() {
-            if !self.is_own_default_alias(offer.workspace_id)
+            if !own_aliases.contains(&offer.workspace_id)
                 && !self.is_this_devices_alias(offer.workspace_id)
             {
                 mirrored += usize::from(self.mirror_offered(offer.workspace_id));
@@ -63,23 +65,50 @@ impl WorkspaceCatalog {
         }
     }
 
-    /// An own device's default, offered under its alias (task default-workspace-pairing-consent):
-    /// this device already merges that list under the reserved id, so no mirror. Whoever offers
-    /// it: a peer re-offers the mirrors it holds, so a device that is not own to that one relays
-    /// its alias here too (lab chaos 20261001-233439: a1 mirrored its own shared list twice).
-    fn is_own_default_alias(&self, id: WorkspaceId) -> bool {
+    /// Every own device's default alias (task default-workspace-pairing-consent): this device
+    /// already merges those lists under the reserved id, so none is mirrored. Whoever offers one:
+    /// a peer re-offers the mirrors it holds, so a device that is not own to that one relays its
+    /// alias here too (lab chaos 20261001-233439: a1 mirrored its own shared list twice). Own
+    /// includes a device a direct own peer vouched for (ADR 0029's 2026-10-02 amendment).
+    fn own_default_aliases(&self) -> Vec<WorkspaceId> {
         let store = self
             .open_args
             .identity
             .store()
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        // Bounded by `MAX_DEVICES_PER_READ`.
-        store.list_devices().unwrap_or_default().iter().any(|row| {
-            row.removed_at_ms.is_none()
-                && id == crate::default_workspace::default_alias(row.device)
-                && store.is_own_device(row.device).unwrap_or(false)
-        })
+        // Both bounded by `MAX_DEVICES_PER_READ`.
+        let direct = store
+            .list_devices()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|row| {
+                row.removed_at_ms.is_none() && store.is_own_device(row.device).unwrap_or(false)
+            });
+        let mut own: Vec<_> = direct.map(|row| row.device).collect();
+        own.extend(store.vouched_own_devices().unwrap_or_default());
+        own.into_iter()
+            .map(crate::default_workspace::default_alias)
+            .collect()
+    }
+
+    /// A Remote mirror of a device that has since become own (a vouch arrived after its alias was
+    /// mirrored): its tasks reach the default anyway, so the mirror is removed. Removing it closes
+    /// its routes, so live sessions greet again. The folder stays on disk.
+    fn drop_own_alias_mirrors(&self, own_aliases: &[WorkspaceId]) {
+        let entries = self.list_registered_entries().unwrap_or_default();
+        for entry in entries {
+            if own_aliases.contains(&entry.id) && self.is_remote_root(&entry.root) {
+                self.drop_mirror(entry.id);
+            }
+        }
+    }
+
+    fn drop_mirror(&self, id: WorkspaceId) {
+        match self.remove_registered(id) {
+            Ok(_) => tracing::info!(workspace_id = %id, "workspace_mirror_dropped_now_own"),
+            Err(e) => log_mirror_drop_failed(id, &e),
+        }
     }
 
     /// This device's own default, offered back under its alias by a peer that mirrors it (a peer
@@ -218,4 +247,8 @@ fn log_mirrored(id: WorkspaceId) -> bool {
 fn log_mirror_failed(id: WorkspaceId, e: &Status) -> bool {
     tracing::warn!(workspace_id = %id, error = %e, "workspace_mirror_failed");
     false
+}
+
+fn log_mirror_drop_failed(id: WorkspaceId, e: &Status) {
+    tracing::warn!(workspace_id = %id, error = %e, "workspace_mirror_drop_failed");
 }

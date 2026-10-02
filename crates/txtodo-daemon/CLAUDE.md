@@ -353,6 +353,12 @@ multiplex every workspace's traffic — not done by this task).
   own device's alias, whichever peer relays it (a peer re-offers its mirrors), and mirrors any
   other as a Remote workspace. `PairResult.kept_own_workspace`
   says when a joiner kept its default. `tests/e2e/default_workspace_foreign.rs` is the two-daemon proof.
+  Own carries across one shared device (ADR 0029's 2026-10-02 amendment, `own_vouch.rs`): in each
+  control session a device sends `ControlMessage::OwnDevices` (its direct own devices) once, to the
+  first sender that is direct own, and takes one only from a direct own sender
+  (`IdentityStore::set_own_vouches`). `is_own_device` counts those, so the gate and the alias skip
+  treat a vouched device as own; the mirror pass drops a Remote mirror of a now-own alias; a change
+  bumps `LivePeers::own_generation`, which ends live sync sessions so they greet again.
   Known gap: the file carrier is not gated (it has no peer to ask about).
 - Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
   records its group-key read on the device's `LanStatus` (`offers_problem`: a keystore failure or a

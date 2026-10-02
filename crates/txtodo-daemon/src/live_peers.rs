@@ -35,6 +35,9 @@ pub(crate) struct LivePeers {
     /// restarts). A `devices` row can outlive its device's identity and still carry its relay node
     /// id: the dial reaches the device under its new id, so "is the dialed id live" never holds.
     answered_as: Arc<Mutex<BTreeMap<DeviceId, DeviceId>>>,
+    /// Moves when the own-device set changes (ADR 0029's amendment, `own_vouch.rs`): a session
+    /// greeted under the old set ends so the next one routes the default for the new one.
+    own_generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl LivePeers {
@@ -81,6 +84,18 @@ impl LivePeers {
             .get(&dialed)
             .copied();
         self.is_live(dialed) || greeted.is_some_and(|g| self.is_live(g))
+    }
+
+    /// The own-device set's version; a live session compares it with the one it greeted under.
+    pub(crate) fn own_generation(&self) -> u64 {
+        self.own_generation
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The own-device set changed: every live session greets again.
+    pub(crate) fn bump_own_generation(&self) {
+        self.own_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<(DeviceId, Carrier), usize>> {

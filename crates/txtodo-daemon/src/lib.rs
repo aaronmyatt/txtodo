@@ -91,6 +91,7 @@ pub mod notes_registry;
 mod notes_repair;
 pub mod notes_state;
 pub mod op_set_hash;
+mod own_vouch;
 mod pairing_adopt;
 mod pairing_group_key;
 mod pairing_grpc;

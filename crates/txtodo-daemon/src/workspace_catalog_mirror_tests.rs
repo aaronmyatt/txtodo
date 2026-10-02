@@ -292,3 +292,67 @@ async fn an_own_devices_alias_relayed_by_another_device_is_not_mirrored() {
     );
     assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
 }
+
+/// ADR 0029's amendment, b1's side: a2 never paired here but a1 (own) vouched for it. a2's alias,
+/// mirrored before the vouch came, is dropped on the next pass and never mirrored again; the own
+/// set's change ends live sessions so they greet again under it.
+#[tokio::test]
+async fn a_vouched_devices_alias_is_not_mirrored_and_an_earlier_mirror_of_it_is_dropped() {
+    let f = fixture();
+    let (a1, a2) = (
+        DeviceId::new(Ulid::from_u128(21)),
+        DeviceId::new(Ulid::from_u128(23)),
+    );
+    register(&f, a1, true);
+    let alias = crate::default_workspace::default_alias(a2);
+    offer(&f, 23, alias);
+    assert_eq!(
+        f.catalog.mirror_pending_offers(),
+        1,
+        "not own yet: mirrored"
+    );
+    let generation = f.identity.live_peers().own_generation();
+
+    crate::own_vouch::record_own_devices(&f.identity, a1, &[a2, f.identity.device()]);
+
+    assert!(
+        f.identity
+            .store()
+            .lock()
+            .unwrap()
+            .is_own_device(a2)
+            .unwrap()
+    );
+    assert!(
+        f.identity.live_peers().own_generation() > generation,
+        "sessions greet again"
+    );
+    offer(&f, 23, alias);
+    assert_eq!(f.catalog.mirror_pending_offers(), 0);
+    assert!(root_of(&f, alias).is_none(), "the earlier mirror is gone");
+}
+
+/// Only a direct own device's list counts, and it goes back only to a direct own device.
+#[test]
+fn own_devices_go_only_to_and_come_only_from_a_direct_own_peer() {
+    let f = fixture();
+    let (a1, foreign, x) = (
+        DeviceId::new(Ulid::from_u128(21)),
+        DeviceId::new(Ulid::from_u128(22)),
+        DeviceId::new(Ulid::from_u128(24)),
+    );
+    register(&f, a1, true);
+    register(&f, foreign, false);
+
+    crate::own_vouch::record_own_devices(&f.identity, foreign, &[x]);
+    assert!(!f.identity.store().lock().unwrap().is_own_device(x).unwrap());
+
+    assert!(crate::own_vouch::own_devices_for(&f.identity, foreign).is_none());
+    match crate::own_vouch::own_devices_for(&f.identity, a1) {
+        Some(txtodo_sync::ControlMessage::OwnDevices { sender, devices }) => {
+            assert_eq!(sender, f.identity.device());
+            assert!(devices.is_empty(), "a1 is left out of its own list");
+        }
+        other => panic!("expected OwnDevices, got {other:?}"),
+    }
+}
