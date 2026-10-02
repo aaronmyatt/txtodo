@@ -1,4 +1,4 @@
-2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop
+2026-09-27 desktop: duplicate groups in ConflictBanner and the review sheet, same two actions; the buffer stays editable (unlike hasPendingReview) +m11 @desktop @doing by:claude-opus-backlog
 2026-09-27 Two-daemon test: B re-mints a file, A gets both copies; keep newest on A with no rejoin leaves exactly one copy on both +m11 @daemon @test
 2026-09-27 Two-daemon test: an edit on A that makes two lines differ drops the group on both; a line typed twice on A shows as a group on both +m11 @daemon @test
 x 2026-09-27 2026-09-27 Draft ADR 0032: duplicate-line flags (a flag for two tasks with one text; raised on import and by a one-time scan; clears itself; resolved by deleting one) +m11 @daemon @sync @docs — proposed: docs/adr/0032-duplicate-lines-as-derived-conflicts.md; it derives groups from the file (no store, scan or clear) and keeps the newest by default; if accepted, the store, raise, scan and clear lines go (see notes.md)
