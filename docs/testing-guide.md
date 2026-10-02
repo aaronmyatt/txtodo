@@ -27,10 +27,11 @@ tests sit in `tests/it/` as one binary. Cargo drops a named `--test e2e` when `-
 just fast                                   # the fast gate on the working tree
 just fast --base origin/main                # the fast gate on the whole branch
 just test                                   # everything, the way CI runs it
-cargo nextest run -p txtodo-daemon          # one crate: lib tests + every tests/*.rs integration file
+cargo nextest run -p txtodo-daemon          # one crate: lib tests + tests/it (fast, in-process)
 cargo nextest run -p txtodo-daemon --lib                    # just the lib's own unit tests
-cargo nextest run -p txtodo-daemon --test pairing_lan       # one integration test file
-cargo nextest run -p txtodo-daemon --test pairing_lan --no-capture   # see println!/log output live
+cargo nextest run -p txtodo-daemon --test e2e               # the real-txtodod tests (test = false)
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^pairing_lan::/)'   # one e2e file
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^pairing_lan::/)' --no-capture   # live output
 cargo nextest run -p txtodo-daemon -E 'test(pairs_for_real)'         # by name: a filter expression
 ```
 
@@ -56,10 +57,10 @@ exactly why, and the test's own doc comment above it has the full story. Run one
 `--ignored` if you want to see it for yourself:
 
 ```bash
-cargo nextest run -p txtodo-daemon --test idle_rss --run-ignored ignored-only              # real, unfixed memory issue
-cargo nextest run -p txtodo-daemon --test lan_sync_bench --run-ignored ignored-only        # CPU-contention-sensitive bench
-cargo nextest run -p txtodo-daemon --test pairing_relay --run-ignored ignored-only         # two real-network-timing findings
-cargo nextest run -p txtodo-daemon --test logging_flow_sequence --run-ignored ignored-only # see §2 below
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^idle_rss::/)' --run-ignored ignored-only  # real, unfixed memory issue
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^lan_sync_bench::/)' --run-ignored ignored-only  # CPU-contention-sensitive bench
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^pairing_relay::/)' --run-ignored ignored-only  # two real-network-timing findings
+cargo nextest run -p txtodo-daemon --test e2e -E 'test(/^logging_flow_sequence::/)' --run-ignored ignored-only  # see §2 below
 ```
 
 (`cargo test ... -- --ignored` is the equivalent under plain cargo.)
@@ -83,7 +84,7 @@ The simplest way — run it several times in a row and watch it flip between pas
 ```bash
 cargo build -p txtodo-daemon --bin txtodod   # build once
 for i in $(seq 1 6); do
-  cargo test -p txtodo-daemon --test logging_flow_sequence -- --ignored --nocapture 2>&1 | tail -6
+  cargo test -p txtodo-daemon --test e2e logging_flow_sequence:: -- --ignored --nocapture 2>&1 | tail -6
 done
 ```
 
@@ -145,7 +146,7 @@ test there.
 ```bash
 git worktree add /tmp/baseline-check <the commit before your change>
 cd /tmp/baseline-check
-for i in $(seq 1 4); do cargo test -p txtodo-daemon --test logging_flow_sequence -- --ignored 2>&1 | tail -3; done
+for i in $(seq 1 4); do cargo test -p txtodo-daemon --test e2e logging_flow_sequence:: -- --ignored 2>&1 | tail -3; done
 cd -
 git worktree remove /tmp/baseline-check --force
 ```

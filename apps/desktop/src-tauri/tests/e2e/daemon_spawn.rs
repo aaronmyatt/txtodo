@@ -13,21 +13,21 @@
 //! exclusion, so this file's tests reached that build and failed on `windows-latest` for every PR
 //! touching `apps/desktop` or `txtodo-daemon` (found on PR #4, 2026-09-16). Same `#![cfg(unix)]`
 //! pattern `crates/txtodo-daemon`'s own real-daemon test files already use (e.g.
-//! `tests/lan_discovery.rs`).
+//! `tests/e2e/lan_discovery.rs`).
 //!
-//! `#[ignore]`d (2026-09-19): spawns a real daemon per test and, worse, `support::TXTODOD_BIN`'s
-//! own `cargo build -p txtodo-daemon --bin txtodod` (invoked from inside the test process) can
-//! trigger a full recompile of the daemon/sync/iroh dependency chain under a different feature
+//! In `tests/e2e` (it was `#[ignore]`d from 2026-09-19): spawns a real daemon per test and,
+//! worse, `support::TXTODOD_BIN`'s own `cargo build -p txtodo-daemon --bin txtodod` (invoked
+//! from inside the test process) can trigger a full recompile of the daemon/sync/iroh dependency chain under a different feature
 //! resolution than a plain `cargo build` from the workspace root used — measured once at ~14
 //! minutes for this file's 2 tests, vastly the slowest tests in the workspace. CI-only like every
 //! sibling client's own real-daemon test (`crates/txtodo-cli/tests/e2e/daemon_mode.rs`, `crates/
-//! txtodo-tui/tests/daemon_autostart.rs`, `crates/txtodo-mcp/tests/daemon_autostart.rs`); the
-//! same applies to this crate's other `support::TXTODOD_BIN` users (`tests/new_rpcs.rs`,
-//! `tests/universal_view.rs`, `tests/workspace_registry.rs`). Run in CI via `cargo test --
-//! --ignored` (`.github/workflows/ci.yml`).
+//! txtodo-tui/tests/e2e/daemon_autostart.rs`, `crates/txtodo-mcp/tests/e2e/daemon_autostart.rs`);
+//! the same applies to this crate's other `support::TXTODOD_BIN` users (`new_rpcs.rs`,
+//! `universal_view.rs`, `workspace_registry.rs`). CI runs them with `--test e2e`
+//! (`.github/workflows/ci.yml`).
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::{self, DaemonClient};
@@ -52,7 +52,6 @@ fn path_selector(path: &std::path::Path) -> pb::WorkspaceSelector {
     }
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn fresh_install_spawns_the_global_daemon_and_lists_files() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
@@ -86,7 +85,6 @@ async fn fresh_install_spawns_the_global_daemon_and_lists_files() {
     kill(wait_for_global_pid(state_dir.path()));
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn already_running_global_daemon_is_reused_not_duplicated() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));

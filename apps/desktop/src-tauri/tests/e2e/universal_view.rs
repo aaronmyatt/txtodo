@@ -9,11 +9,10 @@
 // Unix-only: see tests/daemon_spawn.rs's own doc comment (task desktop-windows-daemon-tests) for
 // why -- same support::TXTODOD_BIN dependency, same fix.
 //
-// #[ignore]d (2026-09-19): CI-only, see tests/daemon_spawn.rs's own doc comment for the full
-// rationale.
+// In tests/e2e: CI-only, see daemon_spawn.rs's own doc comment for the full rationale.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::DaemonClient;
@@ -30,7 +29,6 @@ fn seeded_dir(seed: &str) -> tempfile::TempDir {
     dir
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn get_file_for_reaches_another_workspace_without_moving_the_clients_own_selector() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
@@ -93,7 +91,6 @@ async fn get_file_for_reaches_another_workspace_without_moving_the_clients_own_s
 
 /// Task workspace-layout: the universal view reads each workspace's own root list, named by the
 /// `todo_file` in its `txtodo.toml`, without moving the client's own selector.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn root_list_for_names_each_workspaces_own_todo_file() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));

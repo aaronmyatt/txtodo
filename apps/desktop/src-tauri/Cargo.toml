@@ -26,6 +26,14 @@ name = "e2e_bridge"
 path = "src/bin/e2e_bridge.rs"
 required-features = ["e2e-bridge"]
 
+# Real-txtodod tests (task fast-gate): `test = false` keeps them out of `cargo test`, `cargo nextest
+# run`, `clippy --all-targets` and the local fast gate; CI selects them with `--test e2e`.
+# https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+test = false
+
 [features]
 e2e-bridge = ["dep:axum", "dep:txtodo-store", "dep:txtodo-model"]
 

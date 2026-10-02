@@ -8,11 +8,10 @@
 // Unix-only: see tests/daemon_spawn.rs's own doc comment (task desktop-windows-daemon-tests) for
 // why -- same support::TXTODOD_BIN dependency, same fix.
 //
-// #[ignore]d (2026-09-19): CI-only, see tests/daemon_spawn.rs's own doc comment for the full
-// rationale.
+// In tests/e2e: CI-only, see daemon_spawn.rs's own doc comment for the full rationale.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::DaemonClient;
@@ -55,7 +54,6 @@ fn seeded_dir(seed: &str) -> tempfile::TempDir {
     dir
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn add_list_remove_round_trip_and_add_is_idempotent() {
     let (mut client, pid, _state_dir) = connected().await;
@@ -103,7 +101,6 @@ async fn add_list_remove_round_trip_and_add_is_idempotent() {
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn switch_workspace_retargets_every_call_with_no_reconnect() {
     let (mut client, pid, _state_dir) = connected().await;
@@ -132,7 +129,6 @@ async fn switch_workspace_retargets_every_call_with_no_reconnect() {
 /// A fresh daemon still registers exactly one workspace on its own — the reserved default (task
 /// `default-workspace`) — so "empty registry" here means "no workspace the user themselves
 /// added", not zero rows.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn an_unbound_client_is_ready_and_lists_only_the_default_workspace() {
     let (mut client, pid, _state_dir) = connected().await;

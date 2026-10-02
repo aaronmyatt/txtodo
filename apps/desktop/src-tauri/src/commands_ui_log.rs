@@ -72,7 +72,7 @@ mod tests {
 
     /// Proves `ui_log`'s `ipc.ui_log` span and its forwarded event actually reach a real
     /// subscriber — not just "it compiled" — the same `txtodo_telemetry::testing::LogSink` +
-    /// `with_span_events(FmtSpan::CLOSE)` pattern `crates/txtodo-mcp/tests/smoke.rs`'s
+    /// `with_span_events(FmtSpan::CLOSE)` pattern `crates/txtodo-mcp/tests/it/smoke.rs`'s
     /// `mcp_call_span_names_tool_and_records_principal` test uses (a span with no event inside it
     /// never otherwise reaches the writer). Also doubles as the empirical proof that
     /// `#[tracing::instrument]` above `#[tauri::command]` works for a Tauri command: `ui_log` is

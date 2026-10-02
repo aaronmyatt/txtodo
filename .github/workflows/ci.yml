@@ -88,24 +88,14 @@ jobs:
         run: cargo nextest run --workspace --exclude txtodo-daemon --exclude txtodo-cli --exclude txtodo-mcp --no-fail-fast
       # Each crate's slow tests (real txtodod, network, mDNS, relay) live in its tests/e2e binary,
       # `test = false`, so only a step that names it runs them (task fast-gate). The daemon job
-      # runs txtodo-daemon's own. Unix only: every e2e file is `#![cfg(unix)]`.
+      # runs txtodo-daemon's own. Unix only: every e2e file is `#![cfg(unix)]`. These replaced the
+      # old `--run-ignored ignored-only` step: apps/desktop's support::TXTODOD_BIN builds txtodod
+      # with a nested cargo build under its own feature resolution (once ~14 minutes for 2 tests),
+      # so this is still the slowest step. Other crates' #[ignore]s are deliberate and stay ignored
+      # (txtodo-sync upstream bugs, the crdt `just sim` sweep, daemon-launch's simulated_reboot).
       - name: test (e2e)
         if: runner.os != 'Windows'
         run: cargo nextest run --workspace --exclude txtodo-daemon --test e2e --no-fail-fast
-      # Every real-txtodod integration test in apps/desktop is #[ignore]d (2026-09-19; txtodo-cli's,
-      # txtodo-tui's and txtodo-mcp's moved to their tests/e2e targets, task fast-gate): each
-      # spawns a real daemon and apps/desktop's own
-      # support::TXTODOD_BIN can trigger a full daemon/sync/iroh recompile under a different
-      # feature resolution, measured once at ~14 minutes for 2 tests — by far the slowest tests
-      # in the workspace. Kept out of the step above so a plain `cargo test` stays fast; this
-      # step is the only place they run. Skipped on Windows: every file involved is
-      # `#![cfg(unix)]` (ADR 0010) or already excluded above, so there is nothing to run there.
-      # Named packages, not `--workspace`: other crates' #[ignore]s are deliberate and would
-      # fail or crawl here (txtodo-sync's upstream-bug tests, txtodo-crdt's 1000-run `just sim`
-      # sweep, txtodo-daemon-launch's simulated_reboot needing a real launchd/systemd session).
-      - name: test (ignored — CI-only real-txtodod tests)
-        if: runner.os != 'Windows'
-        run: cargo nextest run -p desktop --no-fail-fast --run-ignored ignored-only
       - name: boundaries + file length + assertions
         if: runner.os != 'Windows'
         run: |
@@ -182,16 +172,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # https://github.com/taiki-e/cargo-llvm-cov#continuous-integration
       - uses: taiki-e/install-action@cargo-llvm-cov
-      # Three steps, one merged number: the plain run leaves the real-txtodod tests out (they are
-      # #[ignore]d, see the check job), which alone cost ~2 points of line coverage, so the
-      # second run adds exactly those, and `report` gates the merged total.
+      # Two runs, one merged number: the plain run leaves out each crate's test = false tests/e2e
+      # target (real txtodod), which alone is ~2 points of line coverage, so the second run adds
+      # exactly those, and `report` gates the merged total.
       # https://github.com/taiki-e/cargo-llvm-cov#merge-coverages-generated-under-different-test-conditions
       - name: coverage (workspace)
         run: cargo llvm-cov --workspace --no-report --no-fail-fast
       - name: coverage (e2e targets)
         run: cargo llvm-cov --workspace --no-report --no-fail-fast --test e2e
-      - name: coverage (ignored real-txtodod tests)
-        run: cargo llvm-cov -p desktop --no-report --no-fail-fast -- --ignored
       # Generated prost/tonic code is not hand-written logic: leave it out of the line count.
       # https://github.com/taiki-e/cargo-llvm-cov#exclude-file-from-coverage
       - name: coverage floor (budgets.json.coveragePercent)

@@ -1,5 +1,5 @@
-//! Shared spawn helpers for this crate's daemon-backed integration tests (`tests/daemon_spawn.rs`,
-//! `tests/new_rpcs.rs`). Not a test binary itself: a `mod.rs` under a `tests/` subdirectory is
+//! Shared spawn helpers for this crate's daemon-backed tests in `tests/e2e` (`daemon_spawn.rs`,
+//! `new_rpcs.rs`, ...). Not a test binary itself: a `mod.rs` under a `tests/` subdirectory is
 //! cargo's documented way to share code between integration-test binaries without it being
 //! collected as its own test target.
 //! Ref: <https://doc.rust-lang.org/book/ch11-03-test-organization.html#submodules-in-integration-tests>

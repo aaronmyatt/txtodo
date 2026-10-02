@@ -11,14 +11,13 @@
 //! asserts that a bad `TaskRef` comes back as a real, typed RPC error, never a connect/transport
 //! failure, not that the feature is unimplemented.
 //!
-//! Unix-only: see `tests/daemon_spawn.rs`'s own doc comment (task `desktop-windows-daemon-tests`)
+//! Unix-only: see `daemon_spawn.rs`'s own doc comment (task `desktop-windows-daemon-tests`)
 //! for why — same `support::TXTODOD_BIN` dependency, same fix.
 //!
-//! `#[ignore]`d (2026-09-19): CI-only, see `tests/daemon_spawn.rs`'s own doc comment for the full
-//! rationale.
+//! In `tests/e2e`: CI-only, see `daemon_spawn.rs`'s own doc comment for the full rationale.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use desktop_lib::daemon::{DaemonClient, DaemonError};
 use support::{TXTODOD_BIN, kill, temp_workspace, wait_for_global_pid};
@@ -60,7 +59,6 @@ async fn connected_client(dir: &std::path::Path) -> (DaemonClient, u32, tempfile
     (client, pid, state)
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn list_conflicts_reaches_the_daemon_with_none_open() {
     let dir = temp_workspace();
@@ -75,7 +73,6 @@ async fn list_conflicts_reaches_the_daemon_with_none_open() {
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn get_notes_and_edit_notes_refuse_a_taskref_matching_no_real_task() {
     let dir = temp_workspace();
@@ -156,7 +153,6 @@ async fn add_task_and_get_id(client: &mut DaemonClient, line: &str) -> String {
 /// afterwards sees the saved text — exercised here at the `DaemonClient` layer the desktop's
 /// `commands_notes.rs` sits on, complementing the daemon-side coverage in
 /// `crates/txtodo-daemon/tests/it/notes_grpc.rs`.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge() {
     let dir = temp_workspace();
@@ -194,7 +190,6 @@ async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge()
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn pair_offer_reaches_the_daemon_with_the_five_documented_fields() {
     let dir = temp_workspace();
@@ -214,7 +209,6 @@ async fn pair_offer_reaches_the_daemon_with_the_five_documented_fields() {
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn pair_accept_and_pair_confirm_sas_reach_the_daemon() {
     let dir = temp_workspace();
@@ -235,7 +229,6 @@ async fn pair_accept_and_pair_confirm_sas_reach_the_daemon() {
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn tokens_create_list_and_revoke_round_trip_through_the_bridge() {
     let dir = temp_workspace();
@@ -284,7 +277,6 @@ async fn tokens_create_list_and_revoke_round_trip_through_the_bridge() {
     kill(pid);
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn op_log_drains_the_stream_into_a_vec() {
     let dir = temp_workspace();
