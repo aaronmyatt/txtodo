@@ -212,8 +212,8 @@ fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
 }
 
 /// The handful of commands the six Playwright scenarios need (tasks/desktop-playwright-tests):
-/// `list_files`, `get_file`, `apply`, `history`, `list_conflicts`, `resolve`, `get_notes`,
-/// `edit_notes`, plus the test-only `debug_raise_conflict` (conflict.spec.ts — see that
+/// `list_files`, `get_file`, `apply`, `history`, `list_conflicts`, `list_duplicates`, `resolve`,
+/// `get_notes`, `edit_notes`, plus the test-only `debug_raise_conflict` (conflict.spec.ts — see that
 /// function's doc comment). `watch`/`daemon_status`/pairing/tokens/activity are unused by those
 /// scenarios and intentionally not wired here — `e2e/shim/event.ts` polls the commands above
 /// instead of using a real `Watch` stream (see that file's module doc for why that's still "real
@@ -278,6 +278,7 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         "apply" => cmd_apply(&mut client, req.args).await?,
         "history" => cmd_history(&mut client, req.args).await?,
         "list_conflicts" => cmd_list_conflicts(&mut client, req.args).await?,
+        "list_duplicates" => cmd_list_duplicates(&mut client, req.args).await?,
         "resolve" => cmd_resolve(&mut client, req.args).await?,
         "get_notes" | "edit_notes" | "ref_dir" => {
             dispatch_notes_cmd(&mut client, &req.cmd, req.args).await?
@@ -359,6 +360,18 @@ async fn cmd_list_conflicts(client: &mut DaemonClient, args: Value) -> Result<Va
     let resp = client.list_conflicts(&r.path).await?;
     let dtos: Vec<ReviewFlagDto> = resp.flags.into_iter().map(ReviewFlagDto::from).collect();
     Ok(serde_json::to_value(dtos)?)
+}
+
+async fn cmd_list_duplicates(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        path: String,
+    }
+    let r: Req = parse(args)?;
+    let resp = client.list_conflicts(&r.path).await?;
+    Ok(serde_json::to_value(
+        desktop_lib::dto_duplicates::groups_of(resp),
+    )?)
 }
 
 async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {

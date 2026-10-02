@@ -6,15 +6,37 @@
 	import { onDestroy, onMount, tick } from "svelte";
 	import DiffView from "./DiffView.svelte";
 	import { diffText } from "$lib/wasmCore";
-	import { resolveConflict, type ResolveChoice } from "$lib/daemon";
+	import {
+		applyMutations,
+		resolveConflict,
+		type DuplicateGroup,
+		type ResolveChoice
+	} from "$lib/daemon";
+	import { copiesLabel, keepMutations, type KeepChoice } from "$lib/stores/duplicates";
 	import {
 		isResurrectCandidate,
 		pendingConflicts,
 		type PendingConflict
 	} from "$lib/stores/conflicts";
 
-	let { path, flags, onClose }: { path: string; flags: PendingConflict[]; onClose: () => void } =
-		$props();
+	// Flags first, then the file's duplicate groups (ADR 0032): a group is shown once no flag is
+	// left. Keeping one copy deletes the others through an ordinary `applyMutations`, then
+	// `onGroupResolved` re-reads the groups (the daemon derives them; nothing here to remove).
+	let {
+		path,
+		flags,
+		groups = [],
+		onClose,
+		onGroupResolved = async () => {}
+	}: {
+		path: string;
+		flags: PendingConflict[];
+		groups?: DuplicateGroup[];
+		onClose: () => void;
+		onGroupResolved?: () => Promise<void>;
+	} = $props();
+
+	const currentGroup = $derived(flags.length === 0 ? groups[0] : undefined);
 
 	// Always review the first pending flag. `flags` is a reactive prop derived from the store
 	// (see ConflictBanner), so resolving one shrinks it and this naturally advances to the next
@@ -39,9 +61,9 @@
 		if (current) buildMergedPreview(current.mine, current.theirs);
 	});
 
-	// Auto-close once every flag this sheet was opened for has been resolved.
+	// Auto-close once every flag and group this sheet was opened for has been resolved.
 	$effect(() => {
-		if (flags.length === 0) onClose();
+		if (flags.length === 0 && groups.length === 0) onClose();
 	});
 
 	function focusableElements(): HTMLElement[] {
@@ -100,6 +122,21 @@
 	 * not a write of new content — this preview and that daemon call are deliberately two
 	 * different things.
 	 */
+	/** Keeps one copy of the current group: one `applyMutations` of deletes by task id. */
+	async function keep(choice: KeepChoice) {
+		if (!currentGroup || resolving) return;
+		resolving = true;
+		error = "";
+		try {
+			await applyMutations(path, keepMutations(currentGroup, choice));
+			await onGroupResolved();
+		} catch (e) {
+			error = String(e);
+		} finally {
+			resolving = false;
+		}
+	}
+
 	async function resolve(choice: ResolveChoice) {
 		if (!current || resolving) return;
 		resolving = true;
@@ -132,7 +169,9 @@
 		bind:this={dialogEl}
 		onkeydown={onKeydown}
 	>
-		<h2 id="conflict-review-heading">Review conflicting edit</h2>
+		<h2 id="conflict-review-heading">
+			{currentGroup ? "Review a duplicate line" : "Review conflicting edit"}
+		</h2>
 
 		{#if current}
 			{#if isResurrectCandidate(current)}
@@ -161,8 +200,30 @@
 				</button>
 			</div>
 
-			{#if flags.length > 1}
-				<p class="remaining">{flags.length - 1} more after this</p>
+			{#if flags.length + groups.length > 1}
+				<p class="remaining">{flags.length + groups.length - 1} more after this</p>
+			{/if}
+		{:else if currentGroup}
+			<p>
+				The same text is on {copiesLabel(currentGroup)}. Keep one copy, or edit one so they
+				differ: the buffer stays editable.
+			</p>
+
+			{#if error}
+				<p class="error" role="alert">{error}</p>
+			{/if}
+
+			<div class="actions">
+				<button type="button" disabled={resolving} onclick={() => keep("newest")}>
+					keep newest
+				</button>
+				<button type="button" disabled={resolving} onclick={() => keep("oldest")}>
+					keep oldest
+				</button>
+			</div>
+
+			{#if groups.length > 1}
+				<p class="remaining">{groups.length - 1} more after this</p>
 			{/if}
 		{/if}
 

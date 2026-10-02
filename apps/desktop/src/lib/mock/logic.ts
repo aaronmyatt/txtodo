@@ -118,7 +118,7 @@ export function applyMutations(path: string, mutations: Mutation[]): ApplyResult
 	}));
 	opLog.unshift(...opsForLog);
 
-	emit("daemon-change", { path, hash: hashOf(f), ops: opsForLog, review: [] });
+	emit("daemon-change", { path, hash: hashOf(f), ops: opsForLog, review: [], duplicate_groups: 0 });
 	return { applied: mutations.length, hash: hashOf(f), hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
 }
 

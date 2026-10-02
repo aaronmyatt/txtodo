@@ -161,6 +161,8 @@ pub struct ChangeDto {
     pub ops: Vec<OpSummaryDto>,
     /// `needs_review` flags this change raised, if any.
     pub review: Vec<ReviewFlagDto>,
+    /// The file's duplicate groups after the change (ADR 0032); 0 from an older daemon.
+    pub duplicate_groups: u32,
 }
 
 impl From<pb::Change> for ChangeDto {
@@ -170,6 +172,7 @@ impl From<pb::Change> for ChangeDto {
             hash: hex(&c.hash),
             ops: c.ops.into_iter().map(OpSummaryDto::from).collect(),
             review: c.review.into_iter().map(ReviewFlagDto::from).collect(),
+            duplicate_groups: c.duplicate_groups,
         }
     }
 }

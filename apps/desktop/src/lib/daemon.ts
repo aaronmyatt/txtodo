@@ -153,6 +153,8 @@ export interface Change {
 	hash: string;
 	ops: OpSummary[];
 	review: ReviewFlag[];
+	/** The file's duplicate groups after the change (ADR 0032); 0 from an older daemon. */
+	duplicate_groups: number;
 }
 
 /** Ensures the one shared `Watch` stream (every document) is forwarding each change as a
@@ -176,6 +178,24 @@ export function onDaemonChange(cb: (change: Change) => void): Promise<UnlistenFn
  * on mount/refresh rather than trusting the accumulation alone (design §4.7). */
 export function listConflicts(path: string): Promise<ReviewFlag[]> {
 	return invoke("list_conflicts", { path });
+}
+
+/** One copy in a duplicate group. Mirrors `desktop_lib::dto_duplicates::DuplicateTaskDto`. */
+export interface DuplicateTask {
+	task_id: string;
+	line_number: number;
+}
+
+/** Two or more lines of one file that read the same (ADR 0032), oldest task id first, so the last
+ * copy is the newest. Mirrors `desktop_lib::dto_duplicates::DuplicateGroupDto`. */
+export interface DuplicateGroup {
+	tasks: DuplicateTask[];
+}
+
+/** The document's duplicate groups, derived by the daemon when asked. Resolved with an ordinary
+ * `applyMutations` delete, or by editing one copy so they differ. */
+export function listDuplicates(path: string): Promise<DuplicateGroup[]> {
+	return invoke("list_duplicates", { path });
 }
 
 /** Resolves one `needs_review` flag; maps to the daemon's `ResolveConflict` RPC, the same

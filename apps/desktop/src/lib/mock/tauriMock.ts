@@ -65,6 +65,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			const path = args?.path as string;
 			return (path === "todo.txt" ? conflicts.map((c) => ({ ...c })) : []) as T;
 		}
+		case "list_duplicates":
+			return [] as T;
 		case "resolve": {
 			const task = args?.task as TaskRef;
 			const path = args?.path as string;

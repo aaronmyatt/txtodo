@@ -226,18 +226,18 @@ id = "conflicts.keep_newest"
 title = "Keep the newest copy of a duplicate line"
 keys = ["n"]
 scope = "sheet"
-desktop = { status = "planned", surface = "ConflictReviewSheet" }
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
 tui = { status = "done", surface = "conflict sheet" }
-deviation = ""
+deviation = "Desktop: a button per group, no key."
 
 [[action]]
 id = "conflicts.keep_oldest"
 title = "Keep the oldest copy of a duplicate line"
 keys = ["o"]
 scope = "sheet"
-desktop = { status = "planned", surface = "ConflictReviewSheet" }
+desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
 tui = { status = "done", surface = "conflict sheet" }
-deviation = ""
+deviation = "Desktop: a button per group, no key."
 
 [[action]]
 id = "conflicts.close"
