@@ -104,6 +104,14 @@ rmcp = { version = "3.3", default-features = false, features = [
 # --stdio` binary and talks to its piped stdin/stdout. Named here rather than relied on through
 # txtodo-daemon-launch's own tokio features, which could change under us.
 tokio = { version = "1", features = ["process", "time"] }
+# https://docs.rs/rustls — test-only, for `tests/e2e/sdk_client.rs`'s HTTP test. That test speaks
+# plain http://127.0.0.1, but the e2e targets build with `--workspace`, where cargo unifies features:
+# iroh (in the sync crates) turns on reqwest's `rustls-no-provider`, and under that feature building
+# rmcp's reqwest client panics unless a process-wide crypto provider was installed first. Same pin as
+# relay/Cargo.toml; `ring` is the provider the rest of the workspace already resolves to.
+# Feature unification: https://doc.rust-lang.org/cargo/reference/features.html#feature-unification
+# Providers: https://docs.rs/rustls/latest/rustls/#cryptography-providers
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 [lints]
 workspace = true

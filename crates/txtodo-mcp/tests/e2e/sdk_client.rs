@@ -247,6 +247,12 @@ async fn serve_http_on_real_daemon(
 
 #[tokio::test]
 async fn stock_rmcp_client_over_streamable_http_adds_and_lists_on_a_real_daemon() {
+    // rmcp's reqwest client needs a process-wide rustls crypto provider whenever cargo's workspace
+    // feature unification has turned on reqwest's `rustls-no-provider` (iroh does, via the sync
+    // crates) — without one, building the client panics even though nothing here speaks TLS.
+    // `install_default` returns Err if a provider is already installed, so the result is discarded.
+    // Ref: https://docs.rs/rustls/latest/rustls/crypto/struct.CryptoProvider.html#method.install_default
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let daemon = start_daemon().await;
     let (url, ct, serving) = serve_http_on_real_daemon(&daemon.socket()).await;
 
