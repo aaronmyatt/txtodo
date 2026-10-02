@@ -139,3 +139,15 @@ fn a_known_peer_keeps_its_protocol_until_a_session_greets_and_is_never_parked() 
         "an unknown peer names nobody"
     );
 }
+
+#[test]
+fn an_in_group_sighting_names_a_peer_on_another_protocol_and_ours_clears_it() {
+    let keys = PeerKeys::default();
+    keys.sighted_protocol(peer(1), PROTOCOL_VERSION);
+    assert_eq!(keys.other_protocol(peer(1)), None);
+    keys.sighted_protocol(peer(1), THEIRS);
+    keys.sighted_protocol(peer(1), THEIRS);
+    assert_eq!(keys.other_protocol(peer(1)), Some(THEIRS));
+    keys.sighted_protocol(peer(1), PROTOCOL_VERSION);
+    assert_eq!(keys.other_protocol(peer(1)), None, "it advertises ours now");
+}

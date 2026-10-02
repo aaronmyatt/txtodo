@@ -71,6 +71,9 @@ pub(crate) fn remember_any_sighting(identity: &DeviceIdentity, sighting: &Sighti
     identity.pairing_lan().remember(&peer);
     if sighting.announcement.group == identity.group() {
         identity.peer_keys().forget(peer.device, "sighted");
+        identity
+            .peer_keys()
+            .sighted_protocol(peer.device, sighting.announcement.proto);
     }
 }
 

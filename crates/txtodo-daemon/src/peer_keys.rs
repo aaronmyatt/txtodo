@@ -201,6 +201,17 @@ impl PeerKeys {
         }
     }
 
+    /// An in-group mDNS sighting of `peer` advertising sync protocol `proto`: discovery skips a
+    /// peer on another protocol (`txtodo_sync::PeerTable::observe`), so a LAN-only peer would
+    /// never be dialed, and never named, without this. Our own protocol clears it.
+    pub(crate) fn sighted_protocol(&self, peer: DeviceId, proto: u16) {
+        if proto == txtodo_sync::PROTOCOL_VERSION {
+            self.set_other_protocol(peer, None);
+        } else if self.other_protocol(peer) != Some(proto) {
+            self.book(Some(peer), PeerSignal::OtherProtocol(proto), "mdns");
+        }
+    }
+
     /// The sync protocol `peer` last spoke when it was not ours (module doc, "Another protocol").
     pub(crate) fn other_protocol(&self, peer: DeviceId) -> Option<u16> {
         self.lock()
