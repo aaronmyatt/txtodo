@@ -76,3 +76,7 @@ I'd go canonical-here plus automated, but the credential is the human's to choos
 
 - Nothing yet. The 0.0.13 tap bump (tap commit `0bde8a7`) was done by hand and did not touch this
   repo's staged copies, deliberately — reconciling them is this task, not a silent side effect.
+- 2026-10-02: this repo's `deploy/homebrew/Formula/txtodo.rb` and `Casks/txtodo-desktop.rb` copied
+  verbatim from the tap at `befb1fa` (v0.0.19; the formula here was at v0.0.13, the cask at v0.0.2).
+  Both pass `ruby -c`. The tap moved on by hand twice since this task was filed (0.0.14, 0.0.19);
+  until the decide line lands, the next bump will fork them again.
