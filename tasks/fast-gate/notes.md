@@ -213,6 +213,22 @@ back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
 - Pending for the desktop line: `apps/desktop/src-tauri/tests/daemon_spawn.rs:24` and
   `src/commands_ui_log.rs:75` name old mcp paths.
 
+## desktop (src-tauri) merge (2026-10-02)
+
+- All 4 `tests/*.rs` start a real `txtodod`: they and `support/` are `tests/e2e`, no `tests/it`.
+  14 `#[ignore]`s gone. Docs reworded ("In `tests/e2e`").
+- No crate has a CI-only real-daemon `#[ignore]` left, so ci.yml lost both the
+  `--run-ignored ignored-only` test step and the `-- --ignored` coverage step. The e2e step's
+  comment keeps the reason it is slow (desktop's nested txtodod build, once ~14 min). Other crates'
+  deliberate `#[ignore]`s (sync upstream bugs, crdt sim sweep, simulated_reboot, daemon's idle_rss,
+  lan_sync_bench...) now run nowhere in CI, same as before for all but the four client crates.
+- The deferred desktop pointers (cli, tui, mcp paths) are fixed here. docs/testing-guide.md's
+  `--test <file>` commands became `--test e2e -E 'test(/^<file>::/)'`.
+- Same 14 tests: e2e `--profile ci` 14 in 32 s (nested txtodod build included). lib 16 in 0.02 s.
+- Gate on the merge commit: 0.73 s. A desktop change used to cost ~110 s in the gate.
+- Not done: desktop's own `src/main.rs` bin target still builds an empty unit-test binary
+  (`test = false` was only asked for tui and mcp).
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
