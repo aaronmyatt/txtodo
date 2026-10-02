@@ -245,6 +245,42 @@ Every test in these four is in-process, so each got `tests/it` and no `tests/e2e
 - Stale pointers in fenced crates: daemon `src/security_m8_tests.rs:81` (`relay/tests/http_smoke.rs`),
   store `Cargo.toml:27` (`tests/no_secrets_sentinel.rs`, store's own, merged 2026-10-01).
 
+## Re-measure (2026-10-02, after every merge)
+
+Gate (`fast-gate.mjs`) after a one-line comment appended to each crate's lib.rs (or main.rs),
+then run again with nothing new. Load 3.7-6.3 (another session's cargo). ms, cold / warm:
+
+| crate | cold | warm | | crate | cold | warm |
+|---|---|---|---|---|---|---|
+| ffi | 2,426 | 509 | | relay | 5,334 | 585 |
+| query | 2,356 | 489 | | sync | 6,675 | 1,196 |
+| workspace-paths | 2,461 | 523 | | mcp | 6,871 | 620 |
+| proto | 3,779 | 531 | | crdt | 7,173 | 598 |
+| cli | 4,245 | 1,058 | | tui | 7,592 | 703 |
+| daemon-launch | 4,595 | 545 | | desktop | 8,795 | 665 |
+| core | 4,797 | 762 | | model | 8,810 | 589 |
+| store | 5,068 | 626 | | telemetry | 12,837 | 526 |
+| | | | | daemon | 32,877 | 2,758 |
+
+- 7 of 17 crates are under 5 s right after an edit; all 17 are under 3 s warm. Before: cli 32 s,
+  daemon 61 s, desktop ~110 s, crdt ~80 s (the sim ran locally).
+- Nearly all of a cold run is nextest's build: rebuild the crate, relink its test binaries.
+  Clippy is 0.2-4.3 s. Tests themselves: the whole fast set is 1,509 tests in 3.2 s.
+- Daemon is the outlier: its lib, lib tests, `it`, `debug_hooks` and the `txtodod` bin (one test)
+  all relink. telemetry 12.8 s cold is build too (0.5 s warm); not looked into.
+
+Fast-set line coverage (`cargo llvm-cov nextest --workspace`, default profile, generated code left
+out, same as CI's report): **73.41%** (1,509 tests, 37 skipped). Baseline 74.38%. The ~1 point is
+the new `slow_` tests (bundle/keystore Argon2, crdt sim, plan audit) and the three no-daemon cli
+tests now in e2e files. CI's number is unchanged in kind: it still runs everything.
+
+Ideas, not done:
+- `[profile.dev.package.argon2] opt-level = 3` (root Cargo.toml) might let ~12 Argon2 `slow_`
+  tests back into the fast set.
+- The daemon's `txtodod` bin target holds one unit test; moving it into the lib and setting
+  `test = false` on the bin would save one daemon-sized link per edit.
+- Smaller crates (model, telemetry) cost more than expected cold; worth a `--timings` look.
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a
