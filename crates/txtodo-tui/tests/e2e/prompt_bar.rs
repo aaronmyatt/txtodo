@@ -1,16 +1,15 @@
 //! Quick Add from the prompt bar against a real `txtodod` (task `tui-revamp/tui-prompt`):
 //! Ctrl-Space, a line with a chip, Enter; the line lands in the root list and a toast names the
-//! workspace. Unix-only and `#[ignore]`d like this crate's other real-daemon tests.
+//! workspace. Unix-only and in `tests/e2e` like this crate's other real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use txtodo_tui::app::perform;
 use txtodo_tui::input::Input;
 use txtodo_tui::state::AppState;
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn ctrl_space_a_chip_and_enter_add_to_the_root_list() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n").await;

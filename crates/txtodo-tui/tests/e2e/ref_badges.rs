@@ -1,14 +1,13 @@
 //! `ref:` badges against a real `txtodod` (task `tui-revamp/tui-tasks`): the Tasks rows read each
 //! line's sub-list progress, or a notes mark, from the daemon's file tree. Unix-only and
-//! `#[ignore]`d like this crate's other real-daemon tests.
+//! In `tests/e2e` like this crate's other real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_tui::state::AppState;
 use txtodo_tui::state_tasks::RefBadge;
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn rows_get_their_sub_list_progress_and_notes_marks() {
     let (_real, mut daemon) = support::RealDaemon::start_with_files(&[

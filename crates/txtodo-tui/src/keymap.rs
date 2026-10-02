@@ -1,6 +1,6 @@
 //! Every key the TUI binds, in one table keyed by the parity manifest's action ids (task
 //! `tui-revamp/tui-foundation`, ADR 0031). `specs/client-parity.toml` lists the same actions;
-//! `tests/parity.rs` fails when the two disagree, and the Help screen renders from them.
+//! `tests/it/parity.rs` fails when the two disagree, and the Help screen renders from them.
 //!
 //! Key names follow the manifest's header: a printable key is itself (`G` is shift-g), named keys
 //! are `Enter` `Esc` `Space` `Up` …, modifiers join with `-` (`Ctrl-Space`, `Alt-Up`,

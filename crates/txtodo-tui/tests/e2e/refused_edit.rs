@@ -1,9 +1,9 @@
 //! A refused edit against a real `txtodod` (task `tui-revamp/tui-shell`): the loop keeps going,
 //! the edit's text is kept for the banner's Copy edit, and the next saved edit clears it.
-//! Unix-only and `#[ignore]`d like this crate's other real-daemon tests.
+//! Unix-only and in `tests/e2e` like this crate's other real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_proto::v1 as pb;
 use txtodo_tui::action::Action;
@@ -27,7 +27,6 @@ fn edit(line_number: u32, text: &str) -> Action {
     })
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn a_refused_edit_is_kept_for_copy_until_the_next_saved_one() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;

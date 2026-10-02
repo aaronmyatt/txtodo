@@ -29,9 +29,9 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
 - `manifest`: `specs/client-parity.toml` built in; Help and Settings › Shortcuts render from it.
   `prefs`: the TUI's own `tui.conf`. `clipboard`: OSC 52.
 - Tests: unit tests per module (`AppState::fixture()`, hand-drawn hit maps, `TestBackend`);
-  real-daemon tests under `tests/` are `#[ignore]`d: run them with
+  real-daemon tests are in the `test = false` `tests/e2e` target: run them with
   `TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_AUTOSTART=1 cargo nextest run -p txtodo-tui
-  --run-ignored all`.
+  --test e2e`.
 
 ## Parity
 `specs/client-parity.toml` is the one list of user-facing actions and where this client and the
@@ -42,7 +42,7 @@ desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
   `tasks/desktop-ui-revamp/todo.txt`, this one's in `tasks/tui-revamp/todo.txt`.
 - No silent deviations: a different key or a missing feature is a `differs` or `na` row with its
   one-line `deviation`.
-- `tests/parity.rs` fails when `keymap::BINDINGS` and the manifest's
+- `tests/it/parity.rs` fails when `keymap::BINDINGS` and the manifest's
   `tui.status = "done"`/`"differs"` rows disagree (keys and scope), or a `differs`/`na` row has no
   deviation. The Help screen renders from the manifest.
 

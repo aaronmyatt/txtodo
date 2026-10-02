@@ -19,6 +19,14 @@ name = "txtodo-tui"
 path = "src/main.rs"
 test = false
 
+# Real-txtodod tests (task fast-gate): `test = false` keeps them out of `cargo test`, `cargo nextest
+# run`, `clippy --all-targets` and the local fast gate; CI selects them with `--test e2e`.
+# https://doc.rust-lang.org/cargo/reference/cargo-targets.html#the-test-field
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+test = false
+
 [dependencies]
 txtodo-core.workspace = true
 txtodo-proto.workspace = true

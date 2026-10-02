@@ -6,12 +6,12 @@
 //! Unix-only (ADR 0010): a real `txtodod` means a real unix socket, same reasoning
 //! `src/daemon.rs`'s own unit tests were just gated for.
 //!
-//! `#[ignore]`d (2026-09-19): spawns a real daemon per test; CI-only, see `tests/
+//! In `tests/e2e`: spawns a real daemon per test; CI-only, see `tests/e2e/
 //! daemon_autostart.rs`'s own doc comment for the full rationale shared across this crate's
 //! real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_proto::v1 as pb;
 use txtodo_tui::action::Action;
@@ -35,7 +35,6 @@ async fn press(
     }
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn dd_deletes_a_line_through_apply_and_repaints() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\n").await;
@@ -70,7 +69,6 @@ async fn dd_deletes_a_line_through_apply_and_repaints() {
     assert_eq!(state.lines[1].raw, "call mom");
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn space_completes_a_line_through_apply() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -110,7 +108,6 @@ async fn space_completes_a_line_through_apply() {
 
 /// Task complete-to-bottom against a real daemon: the done line goes to the bottom of the file and
 /// the cursor stays on row 0, where the next open task now is.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn space_moves_the_done_line_down_and_the_cursor_stays_on_its_row() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\n").await;
@@ -141,7 +138,6 @@ async fn space_moves_the_done_line_down_and_the_cursor_stays_on_its_row() {
 
 /// root todo 9: `J` reorders the selected line to sit right after its neighbor, through a real
 /// `MoveBefore` mutation and repaint.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn capital_j_reorders_the_line_after_its_neighbor() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;
@@ -168,7 +164,6 @@ async fn capital_j_reorders_the_line_after_its_neighbor() {
 }
 
 /// The `K` half of the same feature: reorders the selected line before its neighbor.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn capital_k_reorders_the_line_before_its_neighbor() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;
@@ -195,7 +190,6 @@ async fn capital_k_reorders_the_line_before_its_neighbor() {
     assert_eq!(_real.disk(), "call mom\nbuy milk\nwalk dog\n");
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn i_edit_and_enter_saves_through_apply() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;
@@ -236,7 +230,6 @@ async fn i_edit_and_enter_saves_through_apply() {
     assert_eq!(_real.disk(), "buy milk +errand\n");
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn apply_is_visible_on_a_separate_watch_stream() {
     // "repaint via Watch": a second, independent client watching the same path sees the change
@@ -281,7 +274,6 @@ async fn apply_is_visible_on_a_separate_watch_stream() {
 }
 
 /// Task workspace-layout: the TUI opens the root list the layout names, not a hard-coded todo.txt.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn the_root_list_is_the_layouts_todo_file() {
     let (_real, mut daemon) = support::RealDaemon::start_with_files(&[
@@ -299,7 +291,6 @@ async fn the_root_list_is_the_layouts_todo_file() {
 /// line reorders through the daemon without addressing the blank, and a refusal the daemon does
 /// make (here: an `Apply` aimed at the blank line by hand) lands on the status line instead of
 /// ending the session.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn capital_j_past_a_blank_line_reorders_and_a_refusal_stays_in_the_loop() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n\ncall mom\n").await;

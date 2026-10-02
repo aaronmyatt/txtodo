@@ -1,11 +1,11 @@
 //! The Universal screen against a real `txtodod` (task `tui-revamp/tui-universal`): its rows come
 //! from `UniversalTasks`; `x` completes a row in its workspace and the toast's Undo takes it back;
 //! Enter opens
-//! the row on its line in Tasks. Unix-only and `#[ignore]`d like this crate's other real-daemon
+//! the row on its line in Tasks. Unix-only and in `tests/e2e` like this crate's other real-daemon
 //! tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use txtodo_tui::app::perform;
@@ -24,7 +24,6 @@ async fn press(daemon: &mut Daemon, input: &mut Input, state: &mut AppState, key
     }
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn x_completes_undo_takes_it_back_and_enter_opens_the_line() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\n(A) call mum @phone\n").await;

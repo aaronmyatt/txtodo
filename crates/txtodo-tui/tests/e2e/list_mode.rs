@@ -1,9 +1,9 @@
 //! List mode against a real `txtodod` (task `tui-revamp/tui-tasks`): `/` finds a line, Enter
 //! jumps to it, `x` completes it through `Apply`, and `u` takes the whole change back through the
-//! daemon's `Undo`. Unix-only and `#[ignore]`d like this crate's other real-daemon tests.
+//! daemon's `Undo`. Unix-only and in `tests/e2e` like this crate's other real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use txtodo_tui::app::perform;
@@ -23,7 +23,6 @@ async fn press(daemon: &mut Daemon, input: &mut Input, state: &mut AppState, key
     }
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn search_then_x_then_u_round_trips() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;

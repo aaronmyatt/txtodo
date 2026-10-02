@@ -3,7 +3,7 @@
 # change and specs/client-parity.toml does not, since the manifest must change in the same commit as
 # any user-facing action. Never fails: it prints a warning and exits 0 (human decide line, 2026-09-25:
 # "advisory only, never blocking the gate"). The gate shows the warning; the tests are the hard check
-# (crates/txtodo-tui/tests/parity.rs, apps/desktop/src/lib/keys.parity.test.ts).
+# (crates/txtodo-tui/tests/it/parity.rs, apps/desktop/src/lib/keys.parity.test.ts).
 # Changed = tracked files that differ from HEAD, plus untracked ones.
 # Ref: https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---name-only
 set -uo pipefail

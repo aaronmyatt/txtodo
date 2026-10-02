@@ -11,7 +11,7 @@
 //! `src/daemon.rs`'s own unit tests were just gated for.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_telemetry::testing::{LogSink, capturing_dispatch};
 use txtodo_tui::app::perform;

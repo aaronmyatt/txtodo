@@ -1,16 +1,15 @@
 //! `:w <workspace>` against a real `txtodod` (task `tui-revamp/tui-foundation`): the client points
 //! at the other workspace, opens its root list and asks the loop to re-watch; a name that picks
-//! nothing says so on the status line and changes nothing. Unix-only and `#[ignore]`d like the
+//! nothing says so on the status line and changes nothing. Unix-only and in `tests/e2e` like the
 //! crate's other real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_tui::action::Action;
 use txtodo_tui::app::perform;
 use txtodo_tui::state::AppState;
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn colon_w_switches_to_another_registered_workspace() {
     let (_real, mut daemon) = support::RealDaemon::start("first list line\n").await;
@@ -65,7 +64,6 @@ async fn colon_w_switches_to_another_registered_workspace() {
 
 /// `W` against a real daemon (task `tui-revamp/tui-shell`): the popup lists the registered
 /// workspaces with their open counts, and its Enter switches to the selected one.
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn the_w_popup_lists_workspaces_with_counts_and_switches() {
     let (_real, mut daemon) = support::RealDaemon::start("first list line\n").await;

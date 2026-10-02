@@ -1,7 +1,7 @@
 //! Shared harness for the real-`txtodod` integration tests (recommended build order step 5):
 //! spawns the daemon binary on a temp workspace, wraps a [`Daemon`] against its socket, and
 //! writes files "from outside" to simulate an external edit. Slice-local by design, mirroring
-//! `crates/txtodo-daemon/tests/support/mod.rs`'s own doc ("constitution §7: no cross-slice
+//! `crates/txtodo-daemon/tests/e2e/support/mod.rs`'s own doc ("constitution §7: no cross-slice
 //! helpers") — this crate cannot depend on `txtodo-daemon` (`allowedDeps["txtodo-tui"]` is
 //! `[txtodo-core, txtodo-proto]` only), so `CARGO_BIN_EXE_txtodod` is never set here (Cargo only
 //! sets that variable for a binary in the *same* package as the test). [`daemon_bin`] locates —

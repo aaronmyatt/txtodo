@@ -1,11 +1,11 @@
 //! The detail panel against a real `txtodod` (task `tui-revamp/tui-detail`): open a line, add its
 //! first sub-task (the daemon makes the `ref:` folder and tags the parent), drill into that
 //! sub-task, write its notes, go back up and reopen it to find them. Driven through `Input` and
-//! `app::perform`, as the event loop does. Unix-only and `#[ignore]`d like this crate's other
+//! `app::perform`, as the event loop does. Unix-only and in `tests/e2e` like this crate's other
 //! real-daemon tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use txtodo_tui::app::perform;
@@ -28,7 +28,6 @@ fn typed(text: &str) -> Vec<KeyCode> {
     text.chars().map(KeyCode::Char).collect()
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn drill_add_a_sub_task_write_notes_and_find_them_again() {
     let (real, mut daemon) = support::RealDaemon::start("plan the trip\n").await;

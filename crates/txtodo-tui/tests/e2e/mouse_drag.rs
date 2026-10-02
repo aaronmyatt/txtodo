@@ -2,10 +2,10 @@
 //! `MoveBefore`/`MoveToEnd`, and the cursor lands on the moved line. A real `txtodod` on a temp
 //! workspace, driven through `Input::on_mouse` and `app::perform`, the seams the event loop calls.
 //!
-//! `#[ignore]`d like this crate's other real-daemon tests; see `tests/daemon_autostart.rs`.
+//! In `tests/e2e` like this crate's other real-daemon tests; see `tests/e2e/daemon_autostart.rs`.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
@@ -38,7 +38,6 @@ async fn drag(daemon: &mut txtodo_tui::daemon::Daemon, state: &mut AppState, fro
         .unwrap_or_else(|e| panic!("perform: {e}"));
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn dragging_a_row_up_and_down_reorders_the_file() {
     let (real, mut daemon) = support::RealDaemon::start("buy milk\ncall mom\nwalk dog\n").await;

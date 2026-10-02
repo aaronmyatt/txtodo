@@ -1,10 +1,10 @@
 //! Settings against a real `txtodod` (task `tui-revamp/tui-settings`): the Workspaces card adds a
 //! typed folder and removes it again (two `d`s); the Tokens card creates a token whose secret
-//! shows once, then revokes it. Unix-only and `#[ignore]`d like this crate's other real-daemon
+//! shows once, then revokes it. Unix-only and in `tests/e2e` like this crate's other real-daemon
 //! tests.
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_tui::action::Action;
 use txtodo_tui::app::perform;
@@ -32,7 +32,6 @@ fn typed(state: &mut AppState, text: &str) -> Option<Action> {
     on_text_key(state, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn workspaces_and_tokens_round_trip() {
     let (_real, mut daemon) = support::RealDaemon::start("buy milk\n").await;

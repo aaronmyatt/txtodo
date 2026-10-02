@@ -2,7 +2,7 @@
 # app and the TUI each stand on every one of them. ADR 0031 (accepted 2026-09-25).
 # Plan: tasks/tui-revamp/parity-manifest/notes.md.
 #
-# Checked by crates/txtodo-tui/tests/parity.rs (every `tui.status = "done"` id is bound in
+# Checked by crates/txtodo-tui/tests/it/parity.rs (every `tui.status = "done"` id is bound in
 # `keymap::BINDINGS` with the same keys, and the reverse) and apps/desktop/src/lib/keys.parity.test.ts
 # (the same against `keys.ts`). The TUI Help screen and the desktop Help page and Shortcuts card
 # render from this file. Change it in the same commit as the client change it describes; the client

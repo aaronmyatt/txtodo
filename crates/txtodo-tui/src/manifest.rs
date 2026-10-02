@@ -1,5 +1,5 @@
 //! `specs/client-parity.toml`, built into the binary (ADR 0031, task `tui-revamp/tui-settings`):
-//! the Help screen and Settings › Shortcuts render from it, and `tests/parity.rs` holds the keymap
+//! the Help screen and Settings › Shortcuts render from it, and `tests/it/parity.rs` holds the keymap
 //! to it. Read with a small parser for the subset the manifest uses (one `key = value` per line;
 //! values are basic strings, arrays of strings, or inline tables of those), the same one the
 //! desktop's `keys.parity.test.ts` carries, so this crate takes no TOML dependency. Anything outside

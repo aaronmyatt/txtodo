@@ -2,7 +2,7 @@
 //! and sync state (click or `s` for the sync popup), the cursor's line, messages (pending offers,
 //! the last refusal), then this screen's key hints and this build's version, right-aligned. On a
 //! narrow terminal the version goes first, then the hints. Hint keys come from `keymap::BINDINGS`,
-//! which `tests/parity.rs` holds to the manifest.
+//! which `tests/it/parity.rs` holds to the manifest.
 //! Ref: <https://docs.rs/ratatui/latest/ratatui/text/struct.Line.html#method.width>
 
 use std::time::{Duration, Instant};

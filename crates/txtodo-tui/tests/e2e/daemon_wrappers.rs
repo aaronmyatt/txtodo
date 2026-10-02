@@ -1,9 +1,9 @@
 //! The per-area `Daemon` wrappers (task `tui-revamp/tui-foundation`) against a real `txtodod`:
 //! each call reaches its RPC and comes back with what the screens will read. Unix-only and
-//! `#[ignore]`d like the crate's other real-daemon tests (see `tests/daemon_autostart.rs`).
+//! In `tests/e2e` like the crate's other real-daemon tests (see `tests/e2e/daemon_autostart.rs`).
 #![cfg(unix)]
 
-mod support;
+use crate::support;
 
 use txtodo_proto::v1 as pb;
 use txtodo_tui::daemon::Daemon;
@@ -22,7 +22,6 @@ async fn line(daemon: &mut Daemon, n: u32) -> pb::TaskRef {
     }
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn the_registry_and_universal_rows_answer() {
     let (_real, mut daemon) = support::RealDaemon::start(TODO).await;
@@ -46,7 +45,6 @@ async fn the_registry_and_universal_rows_answer() {
     );
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn notes_ref_dir_history_and_undo_answer() {
     let (_real, mut daemon) = support::RealDaemon::start(TODO).await;
@@ -77,7 +75,6 @@ async fn notes_ref_dir_history_and_undo_answer() {
         .unwrap_or_else(|e| panic!("undo: {e}"));
 }
 
-#[ignore = "spawns a real txtodod; CI-only, see ci.yml's --ignored step"]
 #[tokio::test]
 async fn tokens_and_devices_answer() {
     let (_real, mut daemon) = support::RealDaemon::start(TODO).await;
