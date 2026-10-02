@@ -164,20 +164,26 @@ impl DocState {
             .apply(current, hlc, edits, (apply_text_edits, MAX_EDITS_PER_TASK))
     }
 
-    /// `suffix` appended to `task`'s description, which is `current` now, by an op stamped `hlc`
-    /// (a priority moved into `pri:`): the description to hold, kept in the history so a late
-    /// edit still rebuilds in stamp order (`text_history.rs`).
-    pub(crate) fn append_to_description(
+    /// `task`'s description, which is `current` now, given `pri:<letter>` by an op stamped `hlc`:
+    /// added by a completion (`add`) or swapped in place by a newer priority. The description to
+    /// hold, kept in the history so a late edit still rebuilds in stamp order (`text_history.rs`);
+    /// `None` when the history cannot swap it.
+    pub(crate) fn set_pri_in_description(
         &mut self,
         task: TaskId,
         current: &str,
         hlc: Hlc,
-        suffix: &str,
-    ) -> String {
-        self.text_history
+        (letter, add): (char, bool),
+    ) -> Option<String> {
+        let history = self
+            .text_history
             .entry(task)
-            .or_insert_with(|| TextHistory::new(current.to_owned()))
-            .append(current, hlc, suffix, (apply_text_edits, MAX_EDITS_PER_TASK))
+            .or_insert_with(|| TextHistory::new(current.to_owned()));
+        if add {
+            Some(history.set_pri(current, hlc, letter, (apply_text_edits, MAX_EDITS_PER_TASK)))
+        } else {
+            history.swap_pri(letter, apply_text_edits)
+        }
     }
 
     /// After a commit: whatever a scratch replay placed takes the commit's real stamp, the one

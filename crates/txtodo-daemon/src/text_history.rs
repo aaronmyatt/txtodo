@@ -9,11 +9,14 @@
 //! Kept by `DocState` per task (descriptions) and by `NotesState` (a whole `notes.md`); both clear
 //! it when the text changes some other way, and both take it from the log replay at open.
 //!
-//! One other way is kept instead: completing a line with a priority appends `pri:X` to its
-//! description (`fields.rs`). That rewrite is recorded as [`Change::Append`] at its op's stamp, so a
-//! text edit that arrives late is still slotted in by stamp, and the suffix lands at the end of
-//! whatever text the replay builds. A splice would not: its offset is the end of the text its
-//! device saw, which a late edit slotted in front of it moves (lab lan-converge seed 202).
+//! One other way is kept instead: a priority on a done line lives in its description as `pri:X`
+//! (`fields.rs`). Completing the line adds the tag; that is recorded as [`Change::Pri`] at its
+//! op's stamp, so a text edit that arrives late is still slotted in by stamp, and the tag is set on
+//! whatever text the replay builds. A splice would not: its offsets are where the tag sat in the
+//! text its device saw, which a late edit slotted in front of it moves (lab lan-converge seed 202).
+//! A priority changed on the done line swaps the tag in place ([`TextHistory::swap_pri`]): the
+//! priority is last writer wins (`fields.rs` drops an older one), so the winner's letter is the
+//! one every recorded tag and the base hold, whatever order the completion and the swap arrive in.
 
 use txtodo_model::{DeviceId, Hlc, TextEdit, Ulid};
 
@@ -32,15 +35,16 @@ pub(crate) type ApplyEdits = fn(&str, &[TextEdit]) -> Result<String, TextEditErr
 pub(crate) enum Change {
     /// A splice at char offsets on the text its author saw: an `EditText` or `NotesEdit`.
     Splice(Vec<TextEdit>),
-    /// Text added at the end, whatever text is there: a priority moved into `pri:`.
-    Append(String),
+    /// The first `pri:` tag set to this letter, else ` pri:X` added at the end: a priority moved
+    /// into `pri:` by a completion ([`set_pri`]).
+    Pri(char),
 }
 
 impl Change {
     fn on(&self, text: &str, apply: ApplyEdits) -> Result<String, TextEditError> {
         match self {
             Change::Splice(edits) => apply(text, edits),
-            Change::Append(suffix) => Ok(format!("{text}{suffix}")),
+            Change::Pri(letter) => Ok(set_pri(text, *letter, true)),
         }
     }
 }
@@ -90,18 +94,32 @@ impl TextHistory {
         self.record(current, hlc, Change::Splice(edits.to_vec()), how)
     }
 
-    /// Records `suffix` appended to the end of the text by an op stamped `hlc` (module doc), and
-    /// returns the text to hold now. Never refused: an append fits any text.
-    pub(crate) fn append(
+    /// Records `pri:` set to `letter` by a completion stamped `hlc` (module doc), and returns the
+    /// text to hold now. Never refused: it fits any text.
+    pub(crate) fn set_pri(
         &mut self,
         current: &str,
         hlc: Hlc,
-        suffix: &str,
+        letter: char,
         how: (ApplyEdits, usize),
     ) -> String {
-        let change = Change::Append(suffix.to_owned());
-        self.record(current, hlc, change, how)
-            .unwrap_or_else(|_| format!("{current}{suffix}"))
+        self.record(current, hlc, Change::Pri(letter), how)
+            .unwrap_or_else(|_| set_pri(current, letter, true))
+    }
+
+    /// A newer priority on the done line (module doc): every recorded tag and the base's take
+    /// `letter`, and the text is rebuilt. Returns the text to hold now; `None` when it still holds
+    /// another letter, a tag a text edit added (a `do` before 4b11aeb6 sent one), which this cannot
+    /// retag: the caller drops the history then.
+    pub(crate) fn swap_pri(&mut self, letter: char, apply: ApplyEdits) -> Option<String> {
+        self.base = set_pri(&self.base, letter, false);
+        for (_, change) in &mut self.edits {
+            if let Change::Pri(held) = change {
+                *held = letter;
+            }
+        }
+        let text = self.replay(apply);
+        (set_pri(&text, letter, false) == text).then_some(text)
     }
 
     fn record(
@@ -161,6 +179,38 @@ impl TextHistory {
     }
 }
 
+/// `text` with its first `pri:` tag word set to `pri:<letter>`, else, if `add`, with
+/// ` pri:<letter>` added at the end (no space on an empty text): what core's `Edit::set_tag` does
+/// to a description. `fields::keep_in_history` checks the two agree before it records a
+/// [`Change::Pri`].
+pub(crate) fn set_pri(text: &str, letter: char, add: bool) -> String {
+    let mut start = 0;
+    for word in text.split(' ') {
+        if is_pri(word) {
+            let end = start + word.len();
+            return format!("{}pri:{letter}{}", &text[..start], &text[end..]);
+        }
+        start += word.len() + 1;
+    }
+    if !add {
+        text.to_owned()
+    } else if text.is_empty() {
+        format!("pri:{letter}")
+    } else {
+        format!("{text} pri:{letter}")
+    }
+}
+
+/// Whether `text` holds a `pri:` tag word.
+pub(crate) fn has_pri(text: &str) -> bool {
+    text.split(' ').any(is_pri)
+}
+
+/// `pri:` with a value, as core reads a tag word.
+fn is_pri(word: &str) -> bool {
+    word.len() > "pri:".len() && word.starts_with("pri:")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,6 +241,18 @@ mod tests {
                 .unwrap_or(text);
         }
         text
+    }
+
+    #[test]
+    fn set_pri_swaps_the_first_tag_or_adds_one_at_the_end() {
+        assert_eq!(set_pri("call mum", 'A', true), "call mum pri:A");
+        assert_eq!(set_pri("call mum", 'A', false), "call mum");
+        assert_eq!(set_pri("", 'A', true), "pri:A");
+        assert_eq!(
+            set_pri("call pri:B mum pri:C", 'A', false),
+            "call pri:A mum pri:C"
+        );
+        assert_eq!(set_pri("pri: is empty", 'A', true), "pri: is empty pri:A");
     }
 
     #[test]

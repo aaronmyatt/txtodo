@@ -73,10 +73,13 @@ pub(crate) fn set_field(
     Ok(())
 }
 
-/// A prefix rewrite changed the description: a priority moved into `pri:`, appended at its end.
-/// That append goes into the description's history at `hlc` (ADR 0034, amended 2026-10-02), so a
-/// text edit made apart and arriving late is slotted in before it on every device, and the line it
-/// returns is the one the history rebuilds. Any other change drops the history, as before.
+/// A prefix rewrite changed the description: a priority moved into `pri:` on a done line, added
+/// at the end or swapped in place. That goes into the description's history at `hlc` (ADR 0034,
+/// amended 2026-10-02), so a text edit made apart and arriving late is slotted in before it on
+/// every device, and the line it returns is the one the history rebuilds. A tag swapped in place
+/// sets the letter of every tag the history holds instead (`TextHistory::swap_pri`): only the
+/// newest priority gets here. A change the history's own `set_pri` would not make the same way,
+/// or a swap it cannot make, drops the history, as before.
 fn keep_in_history(
     state: &mut DocState,
     task: TaskId,
@@ -84,15 +87,14 @@ fn keep_in_history(
     new_line: OwnedLine,
     hlc: Hlc,
 ) -> OwnedLine {
-    let (Some(old), Some(new)) = (description_of(old_line), description_of(&new_line)) else {
+    let kept = moved_into_pri(old_line, &new_line).and_then(|(old, new, pri)| {
+        let held = state.set_pri_in_description(task, &old, hlc, pri)?;
+        Some((held, new))
+    });
+    let Some((held, new)) = kept else {
         state.forget_text(task);
         return new_line;
     };
-    let Some(suffix) = new.strip_prefix(old.as_str()) else {
-        state.forget_text(task);
-        return new_line;
-    };
-    let held = state.append_to_description(task, &old, hlc, suffix);
     if held == new {
         return new_line;
     }
@@ -100,6 +102,30 @@ fn keep_in_history(
         Ok(edit) => txtodo_core::apply(&new_line, &edit),
         Err(_) => new_line,
     }
+}
+
+/// The old and new descriptions and `(letter, added)` when the rewrite moved a priority into
+/// `pri:` exactly as `text_history::set_pri` would: added when the old text had no tag, else
+/// swapped. `None` for any other change.
+fn moved_into_pri(
+    old_line: &OwnedLine,
+    new_line: &OwnedLine,
+) -> Option<(String, String, (char, bool))> {
+    let (old, new) = (description_of(old_line)?, description_of(new_line)?);
+    let letter = moved_priority(new_line)?;
+    let add = !crate::text_history::has_pri(&old);
+    (crate::text_history::set_pri(&old, letter, add) == new).then_some((old, new, (letter, add)))
+}
+
+/// The letter a done line's `pri:` tag holds, `None` on an open line or without one.
+fn moved_priority(line: &OwnedLine) -> Option<char> {
+    let LineKind::Task(task) = line.parse()?.kind else {
+        return None;
+    };
+    if !Prefix::of(&task).completed {
+        return None;
+    }
+    task.tag("pri")?.chars().next()
 }
 
 /// A reopen sends `Completed = false`, then the priority it restores, then a text edit dropping the

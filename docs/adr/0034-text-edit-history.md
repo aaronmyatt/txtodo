@@ -52,3 +52,20 @@ whatever text the replay builds. A text edit that arrives late is then slotted i
 device. Found by ADR 0035's digest check in the lab (lan-converge seed 202: two appends made
 apart, one device completing the prioritized line, the appends in different orders). A
 description changed any other way by a `SetField` still drops its history.
+
+## Amendment 2026-10-02 (second)
+The kept change is now `Change::Pri(letter)`: the first `pri:` tag set to the letter, else
+` pri:X` added at the end, as core's `Edit::set_tag`. A priority changed on a done line (`pri:B`
+swapped to `pri:C` in place) used to drop the history too; it now sets the letter of every
+`Pri` change the history holds and of the base's tag (`TextHistory::swap_pri`), with no stamped
+entry of its own. The priority is last writer wins, so only the newest value reaches it, and the
+completion's tag shows that value in any arrival order. A stamped swap entry was tried first: it
+put `pri:C` back on a line an older reopen had opened, and lost to an older priority that arrived
+after a newer completion (lab sleep run 20261002-081812). When the rebuilt text still holds
+another letter (a tag a text edit added: a `do` before 4b11aeb6 sent one), the history is dropped
+as before. Every saved lab log replays to the same bytes as before.
+
+Known gap: a reopen's text edit drops ` pri:B` by offset. An older edit slotted in front of it
+(another device prepending to the done line) moves the text, and the splice cuts the wrong chars
+on every device alike: converged, but garbled. The op says where to cut, not what, so no device
+can tell; that needs a wire change (task partition-converge, `@human`).
