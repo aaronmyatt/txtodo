@@ -1,0 +1,2 @@
+2026-10-02 Find where a1's live state left its log at seq 65..68: drive a FileActor through the same local and sync commits and diff internal state with the replay +lab @daemon @sync
+2026-10-02 Lost tokens: re-run clock-skew 1072683562 after ADR 0039's build; expect no lost token +lab @sync
