@@ -46,3 +46,9 @@ Two separate failures.
 If (2) is the skew guard breaking "local ops are newest", the fix is a stamp rule: e.g. a local
 op stamps past the newest stamp in its document even when the wall merge is refused. That changes
 what the skew guard means (ADR 0033/0034 rules lean on it): likely an ADR, `@human`.
+
+## Re-run after ADR 0039 (c5dded44, report 20261002-232638-w67844-5462-clock-skew)
+- Delivery is fixed: both devices hold the same ops in every file, same counts, same top numbers.
+- Still one lost token on both: a1r4n1, a1's editor append to `tasks/lab/notes.md`. a1's log holds
+  only 2 notes ops of its own, so the append never became an op on a1: a local notes save, not sync.
+- The `todo.txt` split is unchanged.

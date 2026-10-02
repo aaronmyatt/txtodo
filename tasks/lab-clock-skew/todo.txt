@@ -1,2 +1,3 @@
 2026-10-02 Find where a1's live state left its log at seq 65..68: drive a FileActor through the same local and sync commits and diff internal state with the replay +lab @daemon @sync
-2026-10-02 Lost tokens: re-run clock-skew 1072683562 after ADR 0039's build; expect no lost token +lab @sync
+x 2026-10-02 2026-10-02 Lost tokens: re-run clock-skew 1072683562 after ADR 0039's build; expect no lost token +lab @sync — delivery fixed by ADR 0039; one token still lost: a1's own notes.md editor append never became an op (own line)
+2026-10-02 a1's editor append to tasks/lab/notes.md never became an op (clock-skew 20261002-232638): find where a notes save is lost +lab @daemon
