@@ -67,6 +67,9 @@ const SELECT_BETWEEN: &str = "SELECT seq, payload FROM ops WHERE file = ?1 \
 const SELECT_PAGE_GLOBAL: &str =
     "SELECT seq, payload FROM ops WHERE seq > ?1 ORDER BY seq LIMIT ?2";
 const SELECT_ALL_OP_IDS: &str = "SELECT op_id FROM ops LIMIT ?1";
+// `ops_file_hlc (file, ...)` has `file` as its leading column, so SQLite finds the rows through it.
+// Ref: https://www.sqlite.org/queryplanner.html#searching (an index's leftmost column)
+const SELECT_FILE_OP_IDS: &str = "SELECT op_id FROM ops WHERE file = ?1";
 // `op_id` is `UNIQUE` (migration 0001), so SQLite keeps an index on it and this is one lookup.
 // Ref: https://www.sqlite.org/lang_createtable.html#unique_constraints
 const SELECT_BY_OP_ID: &str = "SELECT seq, payload FROM ops WHERE op_id = ?1";
@@ -327,6 +330,36 @@ impl Store {
             "hit the dedupe read bound"
         );
         Ok(out)
+    }
+}
+
+impl Store {
+    /// Calls `each` with the raw 16-byte `op_id` (big-endian ULID) of every op in `file`, in no
+    /// particular order, and returns how many there were. Streams rows and decodes no payload,
+    /// with no read cap: the daemon folds them into an order-free op-set hash at actor open
+    /// (task sync-divergence-check), and a capped read would give a wrong hash, not a short one.
+    pub fn for_each_op_id_of_file(
+        &self,
+        file: &FilePath,
+        mut each: impl FnMut([u8; 16]),
+    ) -> Result<u64, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(SELECT_FILE_OP_IDS)
+            .map_err(StoreError::query("prepare file op ids"))?;
+        let rows = stmt
+            .query_map(params![file.as_str()], |r| r.get::<_, Vec<u8>>(0))
+            .map_err(StoreError::query("query file op ids"))?;
+        let mut n = 0u64;
+        for row in rows {
+            let bytes = row.map_err(StoreError::query("read op_id"))?;
+            let id: [u8; 16] = bytes
+                .try_into()
+                .map_err(|v: Vec<u8>| StoreError::BadDevice(v.len()))?;
+            each(id);
+            n += 1;
+        }
+        Ok(n)
     }
 }
 

@@ -165,6 +165,39 @@ fn total_ops_and_existing_op_ids_count_every_file() {
 }
 
 #[test]
+fn for_each_op_id_of_file_yields_that_files_ids_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let todo = FilePath::new("todo.txt").unwrap();
+    let mut none = Vec::new();
+    assert_eq!(
+        store
+            .for_each_op_id_of_file(&todo, |id| none.push(id))
+            .unwrap(),
+        0
+    );
+    assert!(none.is_empty());
+    store
+        .append(&[
+            op(1, 10, 0, "todo.txt"),
+            op(2, 10, 1, "q4/todo.txt"),
+            op(3, 11, 0, "todo.txt"),
+        ])
+        .unwrap();
+    let mut ids = Vec::new();
+    let n = store
+        .for_each_op_id_of_file(&todo, |id| ids.push(id))
+        .unwrap();
+    ids.sort_unstable();
+    let raw = |n: u128| Ulid::from_u128(n).to_u128().to_be_bytes();
+    assert_eq!(
+        (n, ids),
+        (2, vec![raw(1), raw(3)]),
+        "q4/todo.txt's op is not todo.txt's"
+    );
+}
+
+#[test]
 fn op_by_id_finds_the_stored_row_and_nothing_else() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = open(dir.path());
