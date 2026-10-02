@@ -119,9 +119,7 @@ impl FileActor {
             snapshot: false,
             tail: CommitTail {
                 review: Vec::new(),
-                flush: true,
                 clear: Some((id, self.clock.now_ms())),
-                persist_mirror: false,
                 source: None,
             },
         })?;

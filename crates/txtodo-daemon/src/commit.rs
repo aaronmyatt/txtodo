@@ -23,31 +23,16 @@ pub(crate) struct Commit {
 pub(crate) const SYNC_SOURCE: &str = "sync";
 
 /// What a commit does besides landing ops and bytes (plan M4 sync paths).
+#[derive(Default)]
 pub(crate) struct CommitTail {
     /// needs_review flags to raise with this change.
     pub(crate) review: Vec<ReviewRow>,
-    /// Feed the ops to the mirror afterwards (false when the mirror already holds them: import).
-    pub(crate) flush: bool,
     /// Clear this flag in the store transaction (a resolution).
     pub(crate) clear: Option<(TaskId, u64)>,
-    /// Store the mirror snapshot in the store transaction (an import).
-    pub(crate) persist_mirror: bool,
     /// Which client made the change, stamped on every op of the commit (task op-source): a
     /// client's own name, `"sync"` for ops from another device, `"external"` for a disk edit.
     /// Kept in this device's op log only, never in an op.
     pub(crate) source: Option<String>,
-}
-
-impl Default for CommitTail {
-    fn default() -> CommitTail {
-        CommitTail {
-            review: Vec::new(),
-            flush: true,
-            clear: None,
-            persist_mirror: false,
-            source: None,
-        }
-    }
 }
 
 impl FileActor {

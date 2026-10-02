@@ -116,6 +116,14 @@ impl NotesMirror {
     }
 }
 
+/// The Loro peer id for a device: the ULID's low 64 bits (its random half).
+pub(crate) fn loro_peer(device: txtodo_model::DeviceId) -> u64 {
+    let bits = device.ulid().to_u128();
+    let peer = (bits & u128::from(u64::MAX)) as u64;
+    debug_assert_eq!(u128::from(peer), bits & u128::from(u64::MAX));
+    peer
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

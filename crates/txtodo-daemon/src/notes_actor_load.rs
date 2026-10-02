@@ -3,10 +3,10 @@
 
 use super::{NotesActor, NotesActorConfig, mirror_err};
 use crate::actor::SharedStore;
-use crate::actor_mirror::loro_peer;
 use crate::handle::ActorError;
 use crate::history::MAX_REPLAY_PAGES;
 use crate::notes_mirror::NotesMirror;
+use crate::notes_mirror::loro_peer;
 use crate::notes_state::NotesState;
 use std::sync::PoisonError;
 use txtodo_model::{FilePath, Op};

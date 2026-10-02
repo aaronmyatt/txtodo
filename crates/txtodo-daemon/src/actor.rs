@@ -1,15 +1,12 @@
 //! One `FileActor` per synced document: the single writer (design §4.3; M3 crash-recovery startup
 //! is `recover`'s own doc, `external.rs`).
 
-use crate::actor_mirror::loro_peer;
 use crate::clock::Clock;
-use crate::commit::SYNC_SOURCE;
 use crate::expected::{ExpectedWrites, Hash, hex8};
 use crate::external::tracing_stub_error;
 use crate::handle::{
     ACTOR_MAILBOX_CAP, ActorError, ActorHandle, ActorMsg, Change, Contents, WATCH_CAP,
 };
-use crate::mirror::Mirror;
 use crate::state::DocState;
 use crate::tree_dirty::TreeDirty;
 use std::path::PathBuf;
@@ -77,8 +74,6 @@ fn actor_msg_kind(msg: &ActorMsg) -> &'static str {
 pub struct FileActor {
     pub(crate) cfg: ActorConfig,
     pub(crate) state: DocState,
-    /// The Loro merge engine fed every committed op (see `mirror.rs`); derived, never the truth.
-    pub(crate) mirror: Mirror,
     pub(crate) projection: Vec<u8>,
     pub(crate) hash: Hash,
     pub(crate) hlc: Hlc,
@@ -100,12 +95,6 @@ pub struct FileActor {
     /// Test seam: `Digest` reports a skewed byte hash (`ActorMsg::SkewDigestForTest`).
     #[cfg(test)]
     pub(crate) skew_digest: bool,
-    /// Test seam: how many times the mirror was healed from the state (`converge_mirror`).
-    #[cfg(test)]
-    pub(crate) mirror_heals: u32,
-    /// Test seam: heals logged as errors (the lab's tripwire counts these in the logs).
-    #[cfg(test)]
-    pub(crate) mirror_errors: u32,
 }
 
 impl FileActor {
@@ -118,8 +107,6 @@ impl FileActor {
         let (changes, _) = broadcast::channel(WATCH_CAP);
         let empty =
             DocState::from_file(cfg.path.clone(), &File::default(), &[], cfg.identity_mode)?;
-        let mirror = Mirror::from_state(&empty, loro_peer(cfg.device))
-            .map_err(|e| ActorError::Mirror(e.to_string()))?;
         // Before `recover`: the ops it and `repair_log` commit are folded in on top.
         let op_set = {
             let guard = store
@@ -130,7 +117,6 @@ impl FileActor {
         let mut actor = FileActor {
             hlc: Hlc::zero(cfg.device),
             state: empty,
-            mirror,
             projection: Vec::new(),
             hash: hash_of(&[]),
             cfg,
@@ -146,10 +132,6 @@ impl FileActor {
             prev_write: None,
             #[cfg(test)]
             skew_digest: false,
-            #[cfg(test)]
-            mirror_heals: 0,
-            #[cfg(test)]
-            mirror_errors: 0,
         };
         actor.recover()?;
         actor.repair_log()?;
@@ -333,8 +315,6 @@ impl FileActor {
             self.write_or_hold(before_hash, before_bytes, &before)?;
         }
         crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
-        let from_sync = tail.source.as_deref() == Some(SYNC_SOURCE);
-        self.update_mirror_after_commit(snapshot, tail.flush, from_sync, &ops);
         self.raise_flags(&tail.review);
         let change = self.stored_change(new_hash, range, ops, tail.review);
         self.maybe_snapshot(range.map(|r| r.last), snapshot)?;
@@ -368,20 +348,5 @@ impl FileActor {
                 .commit_change_with(ops, &projection, Some(self.hash), &extras)?;
         log_persisted(range);
         Ok(range)
-    }
-
-    /// An adopted state (snapshot) isn't the sum of its ops: converge the mirror, don't feed it.
-    fn update_mirror_after_commit(
-        &mut self,
-        snapshot: bool,
-        flush: bool,
-        from_sync: bool,
-        ops: &[Op],
-    ) {
-        if snapshot {
-            self.converge_mirror();
-        } else if flush {
-            self.flush_mirror(ops, from_sync);
-        }
     }
 }

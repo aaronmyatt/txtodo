@@ -12,9 +12,9 @@
 
 use super::{NotesActor, mirror_err};
 use crate::actor::hash_of;
-use crate::actor_mirror::loro_peer;
 use crate::handle::ActorError;
 use crate::notes_mirror::NotesMirror;
+use crate::notes_mirror::loro_peer;
 use crate::write::write_atomic_if;
 use std::sync::PoisonError;
 use txtodo_model::{Principal, TextEdit};
