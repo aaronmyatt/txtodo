@@ -229,6 +229,22 @@ back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
 - Not done: desktop's own `src/main.rs` bin target still builds an empty unit-test binary
   (`test = false` was only asked for tui and mcp).
 
+## relay, core, proto, crdt merges (2026-10-02)
+
+Every test in these four is in-process, so each got `tests/it` and no `tests/e2e`. One commit each.
+- relay: 5 files, 23 tests (lib + bin + it) in 0.03 s. Merge commit gate 5.3 s (relink).
+- core: 4 files, 81 tests in 0.28 s. `differential.proptest-regressions` moved beside
+  `it/differential.rs` (proptest looks next to the source). `tests/todotxt.pest` did not move: the
+  `#[grammar]` path and `include_str!("../todotxt.pest")` point at it; the generated header now
+  names `tests/it/differential.rs` on both sides. Gate 0.75 s.
+- proto: 4 files, 16 tests in 0.02 s. Gate 4.4 s.
+- crdt: `conflicts` and `sim`; `sim/{device,rng}.rs` → `it/sim/`. `twenty_fixed_seeds_converge`
+  (79 s) and `the_same_seed_twice...` (6 s) are now `slow_`: they ran in every local nextest run,
+  so any crdt edit cost 80 s. `just sim` now runs `--test it sim:: -- --ignored`. Default 38 tests in
+  0.04 s; ci 40 in 79 s. Gate 6.1 s (relink after the move).
+- Stale pointers in fenced crates: daemon `src/security_m8_tests.rs:81` (`relay/tests/http_smoke.rs`),
+  store `Cargo.toml:27` (`tests/no_secrets_sentinel.rs`, store's own, merged 2026-10-01).
+
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
 Tried: one feature set for every shared dependency, via a hakari workspace-hack crate wired as a

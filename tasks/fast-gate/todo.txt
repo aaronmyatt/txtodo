@@ -1,4 +1,3 @@
-2026-10-01 merge tests into it + e2e: relay, txtodo-core, txtodo-proto, txtodo-crdt @test @doing by:claude-opus-backlog
 2026-10-01 re-measure gate time per crate and fast-set coverage @test
 x 2026-10-01 2026-10-01 check scripts: batched file-length, one-node boundaries, assertions CI-only @ci — file-length one wc/awk pass (10.7 s → 0.36 s same load), boundaries one node (2.6 s → 0.4 s), same output on a planted tree; assertions stays advisory, only in just boundaries + CI
 x 2026-10-01 2026-10-01 measure baseline: per-test junit times and fast-set line coverage @test — fast set 74.38% lines vs CI 81.57%; gap is client code that needs a real daemon; see tasks/fast-gate/notes.md
@@ -12,3 +11,4 @@ x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-cli @test — 8 files 
 x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-tui @test — parity and complete_keeps_row in tests/it, 16 real-daemon files + support in a test = false tests/e2e; 29 CI-only #[ignore]s gone; gate 4.75 s; known gap: one desktop comment still names the old paths (desktop line)
 x 2026-10-02 2026-10-01 merge tests into it + e2e: txtodo-mcp @test — 4 files in tests/it (one shared fake_backend), 6 real-daemon files + support in a test = false tests/e2e; 8 #[ignore]s gone; e2e files build txtodod when missing instead of assuming it; gate 2.3 s
 x 2026-10-02 2026-10-01 merge tests into it + e2e: desktop (src-tauri) @test — all 4 real-daemon files + support in a test = false tests/e2e; 14 #[ignore]s gone and CI's ignored-only steps removed; desktop gate ~110 s → 0.7 s; known gap: desktop's main.rs bin still links an empty test binary
+x 2026-10-02 2026-10-01 merge tests into it + e2e: relay, txtodo-core, txtodo-proto, txtodo-crdt @test — each crate's tests/*.rs in one tests/it (all in-process, no e2e); crdt's 79 s fixed-seed sim and 6 s same-seed check are slow_, just sim follows; known gap: 2 stale pointers in daemon and store comments
