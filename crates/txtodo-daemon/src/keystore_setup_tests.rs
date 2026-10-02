@@ -27,7 +27,7 @@ fn two_separate_keystores_mint_different_seeds() {
 /// combined with `txtodo-sync`'s `bind_with_secret_key_is_stable_across_binds`, this is what makes
 /// a restarted daemon's relay node id actually stay put instead of only "the same object twice".
 #[test]
-fn survives_a_real_keystore_file_reopen() {
+fn slow_survives_a_real_keystore_file_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("keystore");
     let passphrase = Secret::new(b"test-passphrase".to_vec());

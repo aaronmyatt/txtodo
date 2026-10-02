@@ -250,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn a_retry_joins_the_pending_read_instead_of_prompting_again() {
+    fn slow_a_retry_joins_the_pending_read_instead_of_prompting_again() {
         let store = TimeoutKeyStore::new(
             Counting {
                 delay: Duration::from_millis(300),

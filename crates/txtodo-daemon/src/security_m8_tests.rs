@@ -225,7 +225,7 @@ fn assert_no_secret_leaked(sink: &LogSink, secrets: &[(&str, &[u8])]) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle() {
+async fn slow_no_secrets_appear_in_logs_across_relay_file_carrier_and_bundle() {
     // Same reason as `lan_session_security_tests.rs`: sibling tests in this binary log with no
     // subscriber of their own (task tracing-set-default-audit).
     pin_global_trace_floor();

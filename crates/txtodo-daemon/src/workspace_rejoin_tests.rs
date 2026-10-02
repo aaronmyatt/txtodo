@@ -152,7 +152,7 @@ async fn a_dry_run_names_the_plan_and_the_peer_and_changes_nothing() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_rejoin_moves_the_copy_aside_and_reopens_the_folder_empty_under_the_same_id() {
+async fn slow_a_rejoin_moves_the_copy_aside_and_reopens_the_folder_empty_under_the_same_id() {
     let f = fixture();
     // On the real watcher (`watch_opt_in`): the rejoin moves every file out from under a live
     // watch, closes it, and opens a new one on the same root, as it does in txtodod.

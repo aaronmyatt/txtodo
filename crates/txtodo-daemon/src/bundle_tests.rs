@@ -108,7 +108,7 @@ fn ops_of(ws: &Workspace, file: &str) -> Vec<txtodo_store::Stored> {
 /// @test: export on A, import on a fresh B gives identical file bytes and identical op-log state
 /// (seq, op_id, HLC, principal).
 #[tokio::test]
-async fn export_a_import_fresh_b_are_byte_identical_with_the_same_op_log() {
+async fn slow_export_a_import_fresh_b_are_byte_identical_with_the_same_op_log() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");
@@ -141,7 +141,7 @@ async fn export_a_import_fresh_b_are_byte_identical_with_the_same_op_log() {
 /// partial state. Flips one byte of a `FileHash.blake3` inside the *clear* manifest — a
 /// tamper the AEAD layer never sees, so it must be caught by the hash re-check instead.
 #[tokio::test]
-async fn one_flipped_manifest_hash_byte_fails_distinctly_with_no_partial_state() {
+async fn slow_one_flipped_manifest_hash_byte_fails_distinctly_with_no_partial_state() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");
@@ -176,7 +176,7 @@ async fn one_flipped_manifest_hash_byte_fails_distinctly_with_no_partial_state()
 /// @test: wrong-passphrase import fails without writing any state; the clear manifest carries no
 /// key material (also checks the key-free decision is enforced in the wire format itself).
 #[tokio::test]
-async fn wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material() {
+async fn slow_wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_material() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");
@@ -212,7 +212,7 @@ async fn wrong_passphrase_writes_nothing_and_the_manifest_carries_no_key_materia
 
 /// @test: a nested-`ref:` workspace round-trips through export/import, reproducing the whole tree.
 #[tokio::test]
-async fn a_nested_ref_workspace_round_trips_the_whole_tree() {
+async fn slow_a_nested_ref_workspace_round_trips_the_whole_tree() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");
@@ -248,7 +248,7 @@ async fn a_nested_ref_workspace_round_trips_the_whole_tree() {
 /// budget — checked structurally: many chunks, each at most `CHUNK_PLAINTEXT_MAX` (+ the AEAD
 /// tag) of ciphertext, never one giant blob.
 #[tokio::test]
-async fn a_large_op_tail_streams_in_multiple_bounded_chunks() {
+async fn slow_a_large_op_tail_streams_in_multiple_bounded_chunks() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");
@@ -287,7 +287,7 @@ async fn a_large_op_tail_streams_in_multiple_bounded_chunks() {
 /// Re-importing an already-landed bundle is idempotent: duplicate `op_id`s are skipped, not
 /// re-applied (design §4.5's own invariant, backed by the `ops.op_id` UNIQUE index).
 #[tokio::test]
-async fn reimporting_the_same_bundle_is_idempotent() {
+async fn slow_reimporting_the_same_bundle_is_idempotent() {
     let dir_a = tempfile::tempdir().unwrap();
     let dir_b = tempfile::tempdir().unwrap();
     touch(&dir_a.path().join("todo.txt"), "");

@@ -164,7 +164,7 @@ pub(crate) async fn finish(pair: Pair) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_batch_the_peer_never_got_is_sent_again_in_the_same_session() {
+async fn slow_a_batch_the_peer_never_got_is_sent_again_in_the_same_session() {
     let pair = start_pair(OPS_FRAME_MIN);
     let _stop = StopOnDrop(Arc::clone(&pair.stop));
     let (a, device_b) = (Arc::clone(&pair.a), pair.device_b);
@@ -191,7 +191,7 @@ async fn a_batch_the_peer_never_got_is_sent_again_in_the_same_session() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_copy_of_a_batch_already_held_is_acked_and_the_session_carries_on() {
+async fn slow_a_copy_of_a_batch_already_held_is_acked_and_the_session_carries_on() {
     // Every frame B sends is dropped for a while, its Ack for the batch included.
     let pair = start_pair(0);
     let _stop = StopOnDrop(Arc::clone(&pair.stop));

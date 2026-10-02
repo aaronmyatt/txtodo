@@ -273,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypt_then_decrypt_round_trips_multiple_chunks() {
+    fn slow_encrypt_then_decrypt_round_trips_multiple_chunks() {
         let header = BundleHeader::fresh().unwrap();
         let mut enc = BundleEncryptor::new(&header, b"correct horse battery staple").unwrap();
         let c0 = enc.encrypt_next(b"hello ").unwrap();
@@ -286,7 +286,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_passphrase_fails_to_open_the_first_chunk() {
+    fn slow_wrong_passphrase_fails_to_open_the_first_chunk() {
         let header = BundleHeader::fresh().unwrap();
         let enc = BundleEncryptor::new(&header, b"right").unwrap();
         let c0 = enc.encrypt_last(b"secret").unwrap();
@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn a_flipped_ciphertext_byte_fails_the_aead_tag() {
+    fn slow_a_flipped_ciphertext_byte_fails_the_aead_tag() {
         let header = BundleHeader::fresh().unwrap();
         let enc = BundleEncryptor::new(&header, b"passphrase").unwrap();
         let mut c0 = enc.encrypt_last(b"payload").unwrap();

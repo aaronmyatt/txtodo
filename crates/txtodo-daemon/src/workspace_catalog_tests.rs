@@ -263,7 +263,7 @@ async fn list_registered_entries_reports_every_add_and_remove_drops_from_open() 
 /// a write from outside the daemon, an editor save, reaches the open workspace's actor. On
 /// `SystemClock`, because the watcher's debounce never comes due on a frozen `FakeClock`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn an_outside_edit_reaches_the_open_workspace_through_the_real_watcher() {
+async fn slow_an_outside_edit_reaches_the_open_workspace_through_the_real_watcher() {
     use std::time::{Duration, Instant};
     let registry_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let registry = WorkspaceRegistry::open(&registry_dir.path().join("registry.db"))

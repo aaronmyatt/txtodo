@@ -115,7 +115,7 @@ fn fixture() -> Fixture {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
+async fn slow_a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
     let f = fixture();
     let (big_id, small_id) = (f.big_id, f.small_id);
     let signing_key = derive_group_op_signing_key(&f.key);
