@@ -10,11 +10,11 @@
 //! the replay at open run the same function over the same order, so they agree; the replay hands
 //! what still waits to the actor. Bounded: past [`MAX_PARKED_OPS`] the oldest is skipped as before.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 
 use crate::state::{DocState, StateError};
 use crate::sync_ops::apply_leniently;
-use txtodo_model::{Op, OpId};
+use txtodo_model::Op;
 
 /// Most ops one document keeps waiting for a task.
 pub(crate) const MAX_PARKED_OPS: usize = 10_000;
@@ -43,25 +43,6 @@ impl Parked {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         self.ops.len()
-    }
-
-    /// `batch` without the ops still waiting here, or `None` when none of them waits. The mirror
-    /// lacks the task a waiting op names too and would refuse it (lab chaos seed 202:
-    /// `mirror_refused_converging`), so it is fed only the rest.
-    pub(crate) fn without_waiting(&self, batch: &[Op]) -> Option<Vec<Op>> {
-        // HashSet: one lookup per batch op against up to MAX_PARKED_OPS waiting ones.
-        // <https://doc.rust-lang.org/std/collections/struct.HashSet.html>
-        let waiting: HashSet<OpId> = self.ops.iter().map(|(op, _)| op.id).collect();
-        if !batch.iter().any(|op| waiting.contains(&op.id)) {
-            return None;
-        }
-        let rest: Vec<Op> = batch
-            .iter()
-            .filter(|op| !waiting.contains(&op.id))
-            .cloned()
-            .collect();
-        debug_assert!(rest.len() < batch.len());
-        Some(rest)
     }
 
     /// Retries every waiting op until a round lands none; returns how many landed.

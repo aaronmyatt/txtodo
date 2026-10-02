@@ -162,19 +162,14 @@ impl FileActor {
             bytes,
             write,
             snapshot: false,
-            tail: CommitTail {
-                flush: dups.is_empty(),
-                ..CommitTail::default()
-            },
+            tail: CommitTail::default(),
         };
         if let Err(e) = self.commit(plan) {
             self.cfg.identity_mode = before;
             return Err(e);
         }
         if !dups.is_empty() {
-            // The ops do not add up to the state, and the old mirror held the repeated ids it
-            // cannot converge from: pin a snapshot for replay and start a fresh mirror lineage.
-            self.resync_mirror();
+            // The ops do not add up to the state: pin a snapshot for replay.
             self.maybe_snapshot(None, true)?;
         }
         Ok(())
