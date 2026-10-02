@@ -1030,6 +1030,22 @@ pub mod sync_status_response {
         #[prost(uint32, tag = "6")]
         pub refusals: u32,
     }
+    /// One file whose ops this device and a peer hold alike, but which the two render as different
+    /// bytes (ADR 0035, task sync-divergence-check): an application bug, never a peer that is behind.
+    /// Seen from the peer's `Digest`; held in memory, cleared when a later digest agrees, and on
+    /// restart.
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+    pub struct Split {
+        /// ULID text, same form as WorkspaceSelector.workspace_id
+        #[prost(string, tag = "1")]
+        pub workspace_id: ::prost::alloc::string::String,
+        /// workspace-relative path, `/` separators
+        #[prost(string, tag = "2")]
+        pub file: ::prost::alloc::string::String,
+        /// daemon clock when it was first seen split
+        #[prost(uint64, tag = "3")]
+        pub since_ms: u64,
+    }
     /// One paired peer's lag, the UI-local `PeerStatus`'s wire counterpart (tasks/tui/notes.md's
     /// SyncStatus design section).
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1056,6 +1072,10 @@ pub mod sync_status_response {
         /// older daemon.
         #[prost(uint32, tag = "5")]
         pub their_protocol: u32,
+        /// Files split with this peer: same ops, different bytes (see `Split`). Empty from an older
+        /// daemon.
+        #[prost(message, repeated, tag = "6")]
+        pub splits: ::prost::alloc::vec::Vec<Split>,
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
