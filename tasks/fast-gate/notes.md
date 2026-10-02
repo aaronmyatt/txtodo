@@ -126,7 +126,8 @@ Measured `cargo nextest run --workspace --lib --bins` at load ~2.5: 1,308 tests,
 - cli 1 (`plan_audit` tagged, 2.7 s, in the bin target). tui 1 (the 0.6 s ready timeout).
 - Left on purpose: 0.48-0.49 s tests (sync `wrong_passphrase_is_refused_not_corrupted`, daemon
   `stuck_sync_session`). A sibling of two tagged keystore tests stays untagged at 0.48 s.
-- RATCHET.md's two pointers follow the renames. Old names in older task notes are left as history.
+- RATCHET.md is append-only: a dated entry at its end names the two renamed tests (a first in-place
+  sed edit was reverted in 34fe3e87; the fence hook does not see sed). Older task notes keep old names.
 - `differential.rs`: `with_cases(10_000)` ignored `PROPTEST_CASES`. Now that variable wins, then
   `CI=true` gives 10 000, else 1 000. 0.64 → 0.07 s locally. ci.yml needs no change.
 - tui and mcp `[[bin]] test = false`: neither main.rs has tests. tests/*.rs still get the binary.
@@ -137,6 +138,29 @@ per-crate merge lines, not this one.
 Optional, not done: most of the Argon2 cost is a debug build. `[profile.dev.package.argon2]
 opt-level = 3` in the root Cargo.toml (frozen for agents) would likely bring ~12 of these tests
 back under 0.5 s, so they could lose the `slow_` name and rejoin the fast set.
+
+## txtodo-daemon merge (2026-10-02)
+
+- `tests/it`: 18 files that serve a `Workspace` in-process or scan the source tree. `tests/e2e`: 32
+  files that start a real `txtodod` (28 through `support`, 4 with their own `Command`), plus
+  `support/`. `tests/debug_hooks.rs` stays its own binary (sets an env var).
+- In e2e files `mod support;` became `use crate::support;`, so `support::x` and `use support::x`
+  resolve unchanged. `crash.rs` declared support but used none of it: line dropped.
+- `it` had two slow tests: `mutation_placement` 5.3 s and `concurrent_apply` 2.3 s. Both `slow_`.
+- nextest.toml's six left-out daemon tests now match inside `txtodo-daemon::e2e` by module path.
+  Same six as before (checked by listing under both profiles).
+- ci.yml daemon job: a second step, `cargo nextest run -p txtodo-daemon --test e2e`. The matrix's
+  e2e lint and coverage steps already use `--workspace --test e2e`, so they pick it up.
+- Measured: lib + it + debug_hooks 578 tests, 7.1 s. e2e `--profile ci`: 60 pass, 7 ignored, 190 s.
+  Gate on the daemon after the move: 61 s → 12.2 s (clippy 4.5 s, nextest 12.2 s with a relink).
+- Pointers: the daemon crate, desktop, budgets.json, RELAY_CONVERGE_CI.patch.md (netns.sh path)
+  and docs/testing-guide.md follow. ABSTRACTIONS.md and RATCHET.md got dated append entries.
+- Stale pointers left in other crates' comments (fenced, one crate per session): crdt
+  `tests/conflicts.rs:314`, tui `tests/support/mod.rs:4`, daemon-launch `src/autostart.rs:13` and
+  `tests/autostart.rs:5` (debug_hooks did not move, so those two are still right),
+  `tests/e2e/simulated_reboot.rs:4` (`idle_rss.rs`). Fix in each crate's own merge line.
+- Still over budget: the daemon's lib alone is ~1.5 s of tests, but any src edit rebuilds the lib
+  and relinks it, it and txtodod. 12 s is mostly that.
 
 ## Rejected: cargo-hakari workspace-hack (2026-10-01)
 
