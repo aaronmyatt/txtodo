@@ -23,18 +23,17 @@
     clippy::print_stdout
 )]
 
-mod sim {
-    pub mod device;
-    pub mod rng;
-}
+// it/sim/device.rs and it/sim/rng.rs: this file is the `sim` module of the `it` binary.
+mod device;
+mod rng;
 
 use std::collections::BTreeSet;
 
 use txtodo_crdt::{LoroDocument, apply, is_blank, rebuild_line};
 use txtodo_model::{FilePath, OpKind, TaskId};
 
-use sim::device::Device;
-use sim::rng::Rng;
+use device::Device;
+use rng::Rng;
 
 /// However many partition/sync rounds it takes, a run that has not converged by this many is
 /// stuck, not slow — the task notes ask for a bounded loop, never an infinite one.
@@ -299,14 +298,14 @@ fn seeds(count: u64) -> Vec<u64> {
 }
 
 #[test]
-fn twenty_fixed_seeds_converge() {
+fn slow_twenty_fixed_seeds_converge() {
     for seed in 0..20u64 {
         run_scenario(SimConfig::new(seed)).unwrap_or_else(|e| panic!("{e}"));
     }
 }
 
 #[test]
-fn the_same_seed_twice_produces_the_same_converged_state() {
+fn slow_the_same_seed_twice_produces_the_same_converged_state() {
     let a = run_scenario(SimConfig::new(12345)).unwrap();
     let b = run_scenario(SimConfig::new(12345)).unwrap();
     assert_eq!(
@@ -345,7 +344,7 @@ fn a_diverged_device_fails_the_convergence_assertion() {
 }
 
 /// Plan M4 acceptance: 1 000 runs × 5 devices × 200 ops, zero convergence failures. Too slow for
-/// the default `cargo test`; run via `just sim` or `cargo test -p txtodo-crdt --test sim --
+/// the default `cargo test`; run via `just sim` or `cargo test -p txtodo-crdt --test it sim:: --
 /// --ignored`.
 #[test]
 #[ignore = "the full 1000-run sweep; see `just sim`"]

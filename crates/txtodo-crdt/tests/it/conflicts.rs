@@ -119,7 +119,7 @@ fn converge(a: &mut LoroDocument, b: &mut LoroDocument) {
 
 #[test]
 fn row_count_matches_this_table() {
-    let spec = include_str!("../../../specs/conflicts.md");
+    let spec = include_str!("../../../../specs/conflicts.md");
     let rows = spec
         .lines()
         .skip_while(|l| !l.starts_with("## Rows"))
@@ -311,7 +311,7 @@ fn two_task_doc() -> (LoroDocument, LoroDocument) {
 /// `crates/txtodo-daemon/src/reconcile.rs`'s
 /// `stripped_ids_are_recovered_by_content_and_unknown_lines_are_minted`; sidecar mode's by
 /// `crates/txtodo-daemon/src/reconcile_sidecar_tests.rs` and
-/// `crates/txtodo-daemon/tests/external_edits_sidecar.rs` (a real daemon, no `id:` tag at any
+/// `crates/txtodo-daemon/tests/e2e/external_edits_sidecar.rs` (a real daemon, no `id:` tag at any
 /// point).
 #[test]
 #[ignore = "covered by txtodo-daemon's reconcile_tests/reconcile_sidecar_tests, not expressible as a pure CRDT-merge test"]
