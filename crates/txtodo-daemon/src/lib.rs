@@ -140,6 +140,7 @@ mod sync_commit_gate;
 mod sync_digest;
 mod sync_ops;
 mod sync_park;
+mod sync_skew_hold;
 pub mod telemetry;
 mod text_history;
 pub mod textedit;
@@ -301,6 +302,8 @@ mod sync_digest_tests;
 mod sync_ops_tests;
 #[cfg(test)]
 mod sync_park_tests;
+#[cfg(test)]
+mod sync_skew_hold_tests;
 #[cfg(test)]
 mod text_history_converge_tests;
 #[cfg(test)]
