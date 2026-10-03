@@ -112,6 +112,8 @@ mod progress;
 pub mod reconcile;
 mod reconcile_replay;
 pub mod reconcile_sidecar;
+#[cfg(test)]
+mod reconcile_skew_tests;
 pub mod refdir;
 mod refdir_grpc;
 mod refdir_ops;

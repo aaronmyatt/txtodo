@@ -6,6 +6,7 @@ use crate::handle::{ActorError, Applied, Change};
 use crate::reconcile::{Reconciled, reconcile};
 use crate::reconcile_sidecar::{Side, reconcile_sidecar};
 use crate::state::DocState;
+use crate::sync_ops::apply_leniently;
 use crate::write::read_or_empty;
 use std::sync::Arc;
 use txtodo_core::{File, parse_file};
@@ -202,6 +203,11 @@ impl FileActor {
         let settled = self.settle_reconciled(r)?;
         let (next, exact) = (settled.next, settled.exact);
         let ops = self.stamp(settled.kinds, principal)?;
+        let (next, target) = if exact {
+            self.as_logged(&ops, target)
+        } else {
+            (next, target)
+        };
         tracing::info!(
             ops = ops.len(),
             minted,
@@ -218,6 +224,25 @@ impl FileActor {
             exact,
             write_back,
         })
+    }
+
+    /// The state an exact reconcile commits, as every replay of the log and every peer builds it:
+    /// `ops` applied by their real stamp onto the current state. The reconciler placed them as if
+    /// newer than every op here, which a fresh tick is, unless a peer's stamp past the skew bound
+    /// was applied without being merged into the clock (lab clock-skew 1072683562). Then a move
+    /// or a field it sets loses to that newer op, and the file takes what the log says rather than
+    /// the edit as typed; committing the reconciler's render instead left this device's state off
+    /// its own log, and the next peer op anchored on it split the file.
+    fn as_logged(&self, ops: &[Op], target: Vec<u8>) -> (DocState, Vec<u8>) {
+        let mut next = self.state.clone();
+        for (op, e) in apply_leniently(&mut next, ops) {
+            log_reconcile_op_skipped(&self.cfg.path, op, &e);
+        }
+        let bytes = next.to_bytes();
+        if bytes != target {
+            log_placed_older_than_held(&self.cfg.path, ops.len());
+        }
+        (next, bytes)
     }
 
     /// Diffs `old` (our last projection) against `new` (the bytes just read): tagged mode reads
@@ -319,4 +344,14 @@ impl FileActor {
         debug_assert!(self.writes_total > 0);
         Ok(())
     }
+}
+
+/// <https://docs.rs/tracing/latest/tracing/macro.warn.html>
+fn log_reconcile_op_skipped(path: &FilePath, op: &Op, e: &crate::state::StateError) {
+    tracing::warn!(file = %path, op = %op.id.ulid(), error = %e, "reconcile_op_skipped");
+}
+
+/// A reconcile whose render the log cannot give: an op here is newer than this device's clock.
+fn log_placed_older_than_held(path: &FilePath, ops: usize) {
+    tracing::warn!(file = %path, ops, "reconcile_placed_older_than_held");
 }
