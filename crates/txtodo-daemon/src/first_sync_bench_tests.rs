@@ -25,8 +25,8 @@ use crate::lan_session_tests::drive_session;
 use crate::mutation::{Mutation, TaskRef};
 use crate::server::SharedWorkspace;
 
-/// Rounds of edits; each round every device makes [`ACTIONS`] edits, then all three sync.
-const ROUNDS: usize = 20;
+/// Rounds: every device makes [`ACTIONS`] edits, then all sync. 6 is ~20 s; see notes.md.
+const ROUNDS: usize = 6;
 const ACTIONS: usize = 40;
 /// Sub-lists (`tasks/s<k>/todo.txt`, each with a `notes.md`).
 const SUBLISTS: usize = 4;

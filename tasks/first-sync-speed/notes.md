@@ -188,3 +188,26 @@ Open question for a human: build the checkpoint, or keep replay from empty.
   prefix differ). A proptest pins it to `strip_own_id`, and it found that case on the first run.
 - Bench, 20 rounds, debug, no subscriber: session 15.3 → 11.7 s, direct per-origin 8.8 → 6.9 s,
   direct HLC 13.1 → 10.3 s. The byte cut (subscriber case) is not timed by the bench.
+
+## After (2026-10-03, debug build)
+
+Same bench, same seed, no Watch subscriber. Times in ms.
+
+| phase | before, 20 rounds | after, 20 rounds | after, 60 rounds (8 217 ops) |
+| --- | --- | --- | --- |
+| session (real link) | 9 106, lost edits in 4 lists | 11 695, converges | 48 047 (3 674 commits) |
+| direct, per-origin order | 8 980, lost edits | 6 864, converges | 21 533 |
+| direct, HLC order | 12 900 | 10 279 | 35 325 |
+| reopen | 695 | 124 | 602 |
+
+- The real fix is correctness: a fresh device no longer loses text edits, and a log already stored
+  in per-origin order replays to the same text.
+- The session is still slower than before (11.7 vs 9.1 s), because HLC order makes more same-file
+  runs and so more commits. One commit per batch (`@human` line) is what would pay that back; it
+  is the biggest cost left, with the file write and fsync per commit.
+- The cost per op grows with the history (4.3 ms at 20 rounds, 5.8 ms at 60): every commit renders,
+  clones and writes the whole file.
+- The session is ~13 s over direct HLC at 60 rounds: per-op signing and verify (debug curve math)
+  and smaller batches (one origin's burst each, so more acks). Not looked at further.
+- Release build not measured. CI runs the bench at 6 rounds (~20 s), which still loses edits
+  without the text-edit wait; `TXTODO_BENCH_ROUNDS=20` or `60` for the numbers above.
