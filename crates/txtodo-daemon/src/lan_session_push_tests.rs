@@ -16,9 +16,9 @@ use crate::server::SharedWorkspace;
 
 /// A `ChannelLink` the test can close from outside: once `stop` is set, the next wait reports the
 /// link closed, and the driver returns.
-struct StoppableLink {
-    inner: ChannelLink,
-    stop: Arc<AtomicBool>,
+pub(crate) struct StoppableLink {
+    pub(crate) inner: ChannelLink,
+    pub(crate) stop: Arc<AtomicBool>,
 }
 
 impl Link for StoppableLink {

@@ -196,6 +196,8 @@ mod device_remove_tests;
 #[cfg(test)]
 mod devices_grpc_tests;
 #[cfg(test)]
+mod first_sync_bench_tests;
+#[cfg(test)]
 mod history_tests;
 #[cfg(test)]
 mod keystore_setup_tests;
