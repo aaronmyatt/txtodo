@@ -97,6 +97,9 @@ goodlink() {
 # https://github.com/wolfcw/libfaketime#readme
 set_clock() {
   dx "$1" sh -c "printf '%s\n' '$2' >/lab/.faketime"
+  # Past the cache, so the next round's ops carry the new time: clock-skew seed 424242 ran its
+  # "+7m" round inside the second and every op was stamped +2m, so a1 had nothing ahead to flag.
+  sleep 2
   if [ "$2" != "+0" ]; then
     fault_note "clock $1"
   fi
