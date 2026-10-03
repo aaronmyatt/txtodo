@@ -7,8 +7,9 @@
 //!
 //! What to push is a head diff, never a queue: per workspace, `Live` tracks what the peer holds
 //! for sure (`held`: its `Greet`, every run it sent us, every run it acked) and, apart from that,
-//! what we have sent it since (`sent`). A push is `want(sent, local heads)` served through the same
-//! `serve_want` a `Want` uses, so nothing in flight goes twice. Ops the peer gave us are held by
+//! what we have sent it since (`sent`). A push is `want(sent, local heads)`, one batch at a time
+//! with the origins merged by HLC (`lan_serve_merged.rs`), the same path a `Want` is served by, so
+//! nothing in flight goes twice. Ops the peer gave us are held by
 //! definition, so nothing echoes back. A workspace is pushed to only once the peer's `Want` for it
 //! was served: the stream is ordered, so the pushed batch lands after the batches it asked for.
 //!
@@ -35,7 +36,7 @@ use txtodo_sync::{
 
 use crate::clock::Clock;
 use crate::device_relay::WorkspaceRoute;
-use crate::lan_apply::serve_want;
+use crate::lan_serve_merged::serve_merged;
 use crate::lan_session::{read, read_heads};
 use crate::lan_session_shared::send_message;
 use crate::live_peers::{Carrier, LiveGuard, LivePeers};
@@ -287,46 +288,40 @@ impl Live {
             _ => read_heads(&route.ws),
         };
         self.seen_commits.insert(id, (commits, local.clone()));
-        let Some(batch) = self.next_batch(id, &local) else {
+        let runs = self.next_runs(id, &local);
+        if runs.is_empty() {
             self.pending.remove(&id);
             return true;
-        };
+        }
         self.pending.insert(id);
         if self.in_flight_ops(id) >= WINDOW_BATCHES * MAX_OPS_PER_BATCH as u64 {
             return true;
         }
-        let messages = match serve_want(&route.ws, &[batch], id, ctx.signing_key) {
-            Ok(m) => m,
+        let (message, ranges) = match serve_merged(&route.ws, &runs, id, ctx.signing_key) {
+            Ok(Some(batch)) => batch,
+            Ok(None) => return true,
             Err(e) => return log_push_serve_failed(id, &e),
         };
-        for message in messages {
-            if send_message(link, ctx.group, id, ctx.key, message).is_err() {
-                return false;
-            }
+        if send_message(link, ctx.group, id, ctx.key, message).is_err() {
+            return false;
         }
-        self.note_sent(id, &[batch]);
-        log_pushed(id, batch);
+        self.note_sent(id, &ranges);
+        log_pushed(id, &ranges);
         true
     }
 
-    /// The next run to send `id`'s peer, one batch wide: up to what its `Want` asked for while
-    /// that is still owed, else up to the local heads.
-    fn next_batch(&mut self, id: WorkspaceId, local: &Heads) -> Option<OriginRange> {
+    /// The runs `id`'s peer still lacks, one per origin: up to what its `Want` asked for while
+    /// that is still owed, else up to the local heads. `serve_merged` takes one batch from them.
+    fn next_runs(&mut self, id: WorkspaceId, local: &Heads) -> Vec<OriginRange> {
         let sent = self.sent.get(&id).cloned().unwrap_or_default();
         let owed = self.asked.get(&id).map(|asked| want(&sent, asked));
-        let runs = match owed {
+        match owed {
             Some(runs) if !runs.is_empty() => runs,
             _ => {
                 self.asked.remove(&id);
                 want(&sent, local)
             }
-        };
-        let first = runs.first()?;
-        let width = MAX_OPS_PER_BATCH as u64;
-        Some(OriginRange {
-            last: first.last.min(first.first + width - 1),
-            ..*first
-        })
+        }
     }
 
     /// Ops sent to `id`'s peer and not acked yet.
@@ -392,6 +387,7 @@ fn log_push_rewound(workspace: WorkspaceId) {
     tracing::info!(%workspace, "lan_push_rewound_unacked");
 }
 
-fn log_pushed(workspace: WorkspaceId, run: OriginRange) {
-    tracing::debug!(%workspace, first = run.first, last = run.last, "lan_ops_pushed");
+fn log_pushed(workspace: WorkspaceId, runs: &[OriginRange]) {
+    let ops: u64 = runs.iter().map(|r| r.last - r.first + 1).sum();
+    tracing::debug!(%workspace, runs = runs.len(), ops, "lan_ops_pushed");
 }

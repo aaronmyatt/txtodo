@@ -1,4 +1,3 @@
-2026-10-03 sender: interleave origins in HLC order instead of one device's whole run at a time, so little parks @sync @daemon
 2026-10-03 DocState: id to slot index; drop the O(slots) scans in live_slot, anchor_slot, has_placement, reindex @daemon
 2026-10-03 Parked::retry: re-test only the groups waiting on what just landed, not the whole queue; no silent skip past MAX_PARKED_OPS @daemon @sync
 2026-10-03 apply: one commit per received batch, not one per same-file run @daemon
@@ -8,3 +7,4 @@
 2026-10-03 EditText: an edit that does not fit yet waits for the one it builds on, as notes.md does since 9efd4c74; the bench loses edits under per-origin order @daemon @sync
 2026-10-03 commit: stop parsing every line on every commit for Change::duplicate_groups (~37% of a sync commit in the bench) @daemon
 x 2026-10-03 2026-10-03 bench: first sync of a long multi-origin history (3+ devices, moves, notes.md, sub-lists); record the baseline in notes.md @sync @test — in-crate first_sync_bench_tests.rs; baseline in notes.md (debug only, release not run); found per-origin order loses EditTexts
+x 2026-10-03 2026-10-03 sender: interleave origins in HLC order instead of one device's whole run at a time, so little parks @sync @daemon — lan_serve_merged.rs, each origin once per batch for 0.0.20 receivers; the new device converges, reopen 6x faster; known gap: session 60% slower until one commit per batch

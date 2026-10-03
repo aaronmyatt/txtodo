@@ -77,3 +77,19 @@ ends with lines missing their last edit: A has `task 24 … +e342 +e852`, the ne
 `task 24 … +e342`, in all 4 lists. HLC order converges. Likely an `EditText` that builds on
 another origin's edit lands first, does not fit, and is skipped for good: the notes.md case that
 9efd4c74 fixed, but for todo.txt. The bench now prints every file that differs and fails on it.
+
+## As built
+
+### Sender interleave (2026-10-03)
+
+- `lan_serve_merged.rs`: `Live::push` takes one batch from the owed runs merged by HLC (lazy
+  128-op reads per origin), not the first origin's run. The batch ends where an origin would come
+  back, so each origin appears once: a 0.0.20 receiver checks every run against its store head
+  before the commit (`sync_commit_gate.rs`) and would refuse a second run of the same origin.
+  `file_carrier.rs` still uses `serve_want` (per-origin).
+- Bench, 20 rounds, debug: the session device now converges (it lost edits before). Reopen
+  695 → 117 ms: its log is in HLC order now, so the replay at open parks nothing.
+- Known cost: session 9.1 → 14.6 s. HLC order cuts a batch into more same-file runs, so more
+  commits (the same gap as direct_hlc vs direct_origin), and batches are smaller (an origin's
+  burst, not 1 000 ops), so more acks. The per-batch commit line is what pays this back.
+- Devices that already hold a log in per-origin order keep it; their replay at open still parks.

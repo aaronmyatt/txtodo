@@ -36,7 +36,10 @@ pub(crate) fn serve_want(
 /// Signs every op in `ops` in order, dropping (and logging) any op whose canonical bytes cannot be
 /// computed rather than sending an unsigned op — `Session::on_ops` would refuse the whole batch on
 /// a length mismatch anyway, so failing loud here is no worse and names the op.
-fn sign_ops(ops: &[Op], signing_key: &DeviceSigningKey) -> Option<Vec<txtodo_sync::Signature>> {
+pub(crate) fn sign_ops(
+    ops: &[Op],
+    signing_key: &DeviceSigningKey,
+) -> Option<Vec<txtodo_sync::Signature>> {
     ops.iter()
         .map(|op| {
             sign(op, signing_key)

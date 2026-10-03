@@ -60,6 +60,7 @@ mod keystore_timeout;
 pub mod lan;
 mod lan_apply;
 mod lan_peers;
+mod lan_serve_merged;
 mod lan_session;
 mod lan_session_dispatch;
 mod lan_session_gate;
@@ -203,6 +204,8 @@ mod history_tests;
 mod keystore_setup_tests;
 #[cfg(test)]
 mod lan_peers_tests;
+#[cfg(test)]
+mod lan_serve_merged_tests;
 #[cfg(test)]
 mod lan_session_dup_tests;
 #[cfg(test)]
