@@ -33,6 +33,9 @@ fn ops_or_refuse(
         }
         _ => std::collections::BTreeMap::new(),
     };
+    // What another session already committed counts as held here too (lab chaos 1072683562): the
+    // peer learns it from what we relay, then pushes past where this session's heads stood.
+    let _ = session.catch_up(ctx.workspace, &crate::lan_session::read_heads(ctx.ws));
     match session.on_ops(ctx.workspace, msg, &device_keys) {
         Ok(ops) => Ok(ops),
         Err(SessionError::Gap(gap)) => {
