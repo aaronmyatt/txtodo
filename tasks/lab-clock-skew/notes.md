@@ -52,3 +52,37 @@ what the skew guard means (ADR 0033/0034 rules lean on it): likely an ADR, `@hum
 - Still one lost token on both: a1r4n1, a1's editor append to `tasks/lab/notes.md`. a1's log holds
   only 2 notes ops of its own, so the append never became an op on a1: a local notes save, not sync.
 - The `todo.txt` split is unchanged.
+
+## 2026-10-03: found and fixed (two of three)
+
+- **todo.txt split (64f420f7).** Not the skew guard as such: the CLI's `Replace` fallback (a `do`
+  that reflowed lines) is reconciled like an editor save. The reconciler placed its ops with a
+  scratch stamp newer than everything, then relabelled them with the real stamp, which was older
+  than b1's +7m lines (merge refused). A replay placed them by the real stamp: a1's move of
+  b1r3n5 is stale there and only adds a ghost. Same bytes, different ghosts; b1's next `do`
+  anchored on b1r3n5 split the file. Probe: replaying a1's log with only seq 52..62 applied that
+  way gave a1's file exactly. Fix: an exact reconcile commits its ops applied by their real stamp
+  (`external.rs::as_logged`); when that differs from the render it warns
+  `reconcile_placed_older_than_held` and writes what the log says.
+- **Lost notes append, skew under the bound (cf5f74ce).** The op existed (seq 51) but the notes
+  actor never applied the HLC receive rule and started its clock at zero, so a1's append was
+  stamped older than b1's +2m edit it was typed after; the stamp-ordered rebuild (ADR 0034) slot
+  it in front, where it did not fit. Fix: `notes_clock.rs` (receive rule on import, newest
+  logged stamp at open).
+- **Lab (217f13f2).** `set_clock` returned inside libfaketime's 1 s cache, so on some seeds the
+  "+7m" round ran at the old time (seed 424242: the skew-guard check failed on 0.0.20 too).
+- Tried and reverted (7249bffe, f5b9fe99): hold back peer ops stamped past the bound. A device
+  whose own clock is behind then held back every op from a correct one (seed 777, "b1 10 min
+  behind" stalled); a device cannot tell whose clock is wrong.
+- Lab on cf5f74ce: all 11 scenarios pass (seed 1072683562); clock-skew passes 4 of 5 seeds since
+  the `set_clock` fix.
+
+## Still open: skew past the bound (seed 777)
+
+b1's notes edit carries b1's own +7m stamp (its HLC never goes back); a1 refuses the merge, takes
+the edit, and its append typed after it is stamped older, slotted in front, and lost on both. Any
+local edit typed on lines a peer stamped more than 5 min ahead can do this (a todo.txt move snaps
+back, consistently). Rare in practice (needs clocks 5+ min apart and both editing one file).
+The fix is a stamp rule: a local edit takes a stamp past the newest one in its document even when
+the clock merge is refused. That amends the skew-guard decision (`tasks/model-hlc-skew-guard`,
+option A); a human call, not taken for 0.0.21.
