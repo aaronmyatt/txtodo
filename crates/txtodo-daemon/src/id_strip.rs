@@ -20,6 +20,58 @@ pub(crate) fn strip_own_id(line: &OwnedLine) -> Option<(TaskId, OwnedLine)> {
     Some((id, stripped))
 }
 
+/// [`strip_own_id`]'s bytes, without parsing the line where the cut is plain: the own `id:`
+/// word with the space after it (a space or the line start before it), or with the space before
+/// it at the end of a line whose word before is not a prefix token (`x`, `(A)`, a date). Anything
+/// else (a tab beside it, a line that is all prefix) takes the parse: `Edit::remove_tag` works
+/// inside the description, so the space after a prefix stays. `duplicates.rs` runs this over every
+/// line on each commit with a Watch subscriber (task first-sync-speed: the parse was ~37% of a
+/// sync commit); a property test below pins it to `strip_own_id`.
+pub(crate) fn without_own_id(line: &OwnedLine) -> Option<Vec<u8>> {
+    fast_id_of(line)?;
+    let raw = line.raw()?;
+    let bytes = raw.as_bytes();
+    let (start, end) = own_id_word(raw)?;
+    let before = start.checked_sub(1).map(|i| bytes[i]);
+    let cut = match (before, bytes.get(end)) {
+        (None | Some(b' '), Some(b' ')) => Some((start, end + 1)),
+        (Some(b' '), None) if !after_prefix_token(&raw[..start - 1]) => Some((start - 1, end)),
+        _ => None,
+    };
+    let Some((from, to)) = cut else {
+        return strip_own_id(line).map(|(_, stripped)| stripped.bytes().to_vec());
+    };
+    let mut out = Vec::with_capacity(bytes.len());
+    out.extend_from_slice(&bytes[..from]);
+    out.extend_from_slice(&bytes[to..]);
+    Some(out)
+}
+
+/// The byte span of the first whitespace-delimited `id:` word with a value: the word `fast_id_of`
+/// reads. Every separator is one ASCII byte, so word starts add up.
+fn own_id_word(raw: &str) -> Option<(usize, usize)> {
+    let mut at = 0;
+    for word in raw.split(|c: char| c.is_ascii_whitespace()) {
+        if word.strip_prefix("id:").is_some_and(|v| !v.is_empty()) {
+            return Some((at, at + word.len()));
+        }
+        at += word.len() + 1;
+    }
+    None
+}
+
+/// Whether `head`'s last word could be part of a todo.txt prefix (`x`, `(A)`, a date), or `head`
+/// has none: then the next word may start the description.
+fn after_prefix_token(head: &str) -> bool {
+    let Some(last) = head.split(|c: char| c.is_ascii_whitespace()).next_back() else {
+        return true;
+    };
+    let b = last.as_bytes();
+    let priority = b.len() == 3 && b[0] == b'(' && b[1].is_ascii_uppercase() && b[2] == b')';
+    let date = b.len() == 10 && b[4] == b'-' && b[7] == b'-';
+    last.is_empty() || last == "x" || priority || date
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,6 +155,39 @@ mod tests {
             let original = format!("{head} id:{ID}{tail}");
             let expected = format!("{head}{tail}");
             prop_assert_eq!(stripped(&original), Some(expected));
+        }
+    }
+
+    fn token() -> impl Strategy<Value = String> {
+        prop_oneof![
+            "[a-z]{1,4}".prop_map(|w| w),
+            Just(format!("id:{ID}")),
+            Just(format!("id:{OTHER}")),
+            Just("id:".to_owned()),
+            Just("id:nope".to_owned()),
+            Just(format!("(id:{OTHER})")),
+            Just("(A)".to_owned()),
+            Just("x 2026-09-19".to_owned()),
+            Just("pri:A".to_owned()),
+        ]
+    }
+
+    proptest! {
+        // The byte cut `duplicates.rs` uses gives exactly `strip_own_id`'s bytes.
+        #[test]
+        fn without_own_id_matches_strip_own_id(
+            words in proptest::collection::vec(token(), 0..6),
+            seps in proptest::collection::vec(prop_oneof![Just(" "), Just("  "), Just("\t")], 6),
+            lead in prop_oneof![Just(""), Just(" ")],
+        ) {
+            let mut s = lead.to_owned();
+            for (w, sep) in words.iter().zip(&seps) {
+                s.push_str(w);
+                s.push_str(sep);
+            }
+            let l = line(s.trim_end_matches(['\t', ' ']));
+            let want = strip_own_id(&l).map(|(_, stripped)| stripped.bytes().to_vec());
+            prop_assert_eq!(without_own_id(&l), want);
         }
     }
 }

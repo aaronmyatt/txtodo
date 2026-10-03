@@ -117,3 +117,74 @@ op, as `reindex` already does: a constant factor at best. Revisit if a 10k-line 
   log lacks the op it waits for.
 - Bench, 20 rounds, debug: session 15.3 s, direct per-origin 8.8 s, direct HLC 13.1 s, reopen
   114 ms. The queue is short in this history, so the targeted retry does not show in time here.
+
+### One commit per batch: needs a human call (2026-10-03)
+
+The fsync per commit is ~40% of a sync commit, so fewer commits is the big win, but the obvious
+way is not safe:
+- A batch interleaves files inside one origin's run (X, Y, X). Grouping its ops by file inserts
+  that origin's ops out of order. The store takes a peer's numbers as given (ADR 0039), so the
+  numbering survives, but heads are `MAX(origin_seq)`: if file X's commit then fails (disk, or
+  the `blocked/todo.txt` mkdir case `lan_session_resend_tests` covers), Y's later ops already
+  landed past X's missing ones, the ack and heads skip them, and nobody sends them again. Today
+  that case stops the batch at X and the sender retries: stuck, not lost.
+- Safe: one store transaction per batch across every file it touches (all ops plus each file's
+  projection and `prev_hash`), then the file writes. That needs a multi-file commit in
+  `txtodo-store` and a prepare/commit turn between `FileActor`s, which changes the
+  one-writer-per-file commit path the daemon's invariants rest on. ADR-sized.
+- Smaller: coalesce the file writes in a sync burst. Commit to the store per run as now, but
+  write the file only when no more peer ops for it are queued. Needs `prev_hash` to mean "the
+  bytes last written", not "the previous projection", or `recover` reads the file as a foreign
+  edit. Touches crash recovery.
+- Smaller still: plain `fsync` instead of `F_FULLFSYNC` for sync commits. A durability call.
+
+Open question for a human: which of these, if any. Until then the bench pays one fsync per
+same-file run, and HLC order makes more runs than per-origin order (13.1 vs 8.8 s, debug).
+
+### Resend at once: dropped (2026-10-03)
+
+A receiver could ask again with a `Want` from its head, and a sender could take a mid-session
+`Want` as "rewind to here" (an old sender only raises `asked`, so it is compatible). But no
+refusal is helped by asking at once:
+- Gate refusal (`sync_commit_gate.rs`): the ops before the batch are in another session's import.
+  Asked again now, it is refused again; it has to wait for that commit.
+- A run that fails in `commit_incoming_ops` (mkdir, disk): the cause stays. Asking at once loops;
+  `RESEND_AFTER` is the backoff, and `stuck_sync.rs` books it.
+- Out of step with nothing held: only happens after one of the two above.
+The bench refuses nothing, so there is nothing to measure either.
+
+Seen while reading, not changed: after a gate refusal `commit_and_ack` returns before
+`Session::committed`, so the session stays `Importing` and the next batch (`WINDOW_BATCHES` = 2
+keeps one in flight) is "unexpected Ops" and ends the connection; the reconnect resyncs. Ending the
+import with `committed(&[])` would keep the link up and leave it to `RESEND_AFTER`. I could not
+build a case that fires the gate (a run that passes the session's heads check starts at or before
+the store's head), so no test and no change.
+
+### Replay from a snapshot: needs a human call (2026-10-03)
+
+`repair_log` replays from empty on purpose: it checks that the log alone, which is all a peer
+gets, rebuilds the file. The `snapshots` table holds bytes only. A replay started from them has no
+ghosts, stamps, parents, field stamps or text history for the snapshot's lines, and ADR 0033/0034
+merges need those; `adopt_stamps` is also how ghosts come back at open. So "replay from the
+latest snapshot" means persisting a `DocState` checkpoint with its merge metadata, taken from a
+replay of the log, and replaying only what follows it. That is a new store table and a persisted
+format: ADR-sized.
+
+How much it would buy: reopen in the bench is 114 ms (debug, 2 743 ops, 5 lists) now that the log
+is in HLC order; it was 695 ms when the log was in per-origin order. Devices that already hold a
+per-origin log still pay the parking in that replay.
+
+Open question for a human: build the checkpoint, or keep replay from empty.
+
+### Duplicate count per commit (2026-10-03)
+
+- `commit.rs`: `Change::duplicate_groups` is counted only when the actor has a Watch subscriber;
+  `watch_forward.rs` is its only reader. With none it is 0, and a client that subscribes later
+  lists conflicts itself. Known gap: a subscriber that joins between the count and the broadcast
+  gets 0 for that one change.
+- `id_strip.rs`: `without_own_id` cuts the own `id:` word out by bytes where the cut is plain (the
+  usual `… id:X` at the end of a line) and falls back to `strip_own_id`'s parse otherwise
+  (`remove_tag` works inside the description, so a tab beside the word or a line that is all
+  prefix differ). A proptest pins it to `strip_own_id`, and it found that case on the first run.
+- Bench, 20 rounds, debug, no subscriber: session 15.3 → 11.7 s, direct per-origin 8.8 → 6.9 s,
+  direct HLC 13.1 → 10.3 s. The byte cut (subscriber case) is not timed by the bench.

@@ -53,8 +53,14 @@ impl FileActor {
                 op,
             })
             .collect();
-        // After the state swap: the groups the file has now (ADR 0032).
-        let groups = crate::duplicates::duplicate_groups(&self.state).len();
+        // After the state swap: the groups the file has now (ADR 0032). Only a Watch subscriber
+        // reads the count (`watch_forward.rs`), so with none a sync burst skips a pass over every
+        // line per commit; one that subscribes later lists conflicts itself.
+        let groups = if self.changes.receiver_count() > 0 {
+            crate::duplicates::duplicate_groups(&self.state).len()
+        } else {
+            0
+        };
         Change {
             path: self.cfg.path.clone(),
             hash,

@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use crate::id_strip::strip_own_id;
+use crate::id_strip::without_own_id;
 use crate::state::{DocState, Entry};
 use txtodo_core::OwnedLine;
 use txtodo_model::{IdentityMode, TaskId};
@@ -63,8 +63,8 @@ pub(crate) fn to_duplicate_group(group: &DuplicateGroup) -> txtodo_proto::v1::Du
 /// two would ever match; that tag is identity, not text, and is left out. Everything else counts.
 fn comparable(mode: IdentityMode, line: &OwnedLine) -> Cow<'_, [u8]> {
     match mode {
-        IdentityMode::Tagged => match strip_own_id(line) {
-            Some((_, stripped)) => Cow::Owned(stripped.bytes().to_vec()),
+        IdentityMode::Tagged => match without_own_id(line) {
+            Some(stripped) => Cow::Owned(stripped),
             None => Cow::Borrowed(line.bytes()),
         },
         IdentityMode::Sidecar => Cow::Borrowed(line.bytes()),
