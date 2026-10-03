@@ -59,3 +59,45 @@ fn a_group_naming_a_task_not_here_yet_waits_whole_and_lands_as_on_its_author() {
     assert_eq!(b, a);
     assert!(parked.is_empty());
 }
+
+fn append_text(n: u128, at_char: usize, text: &str, hlc: txtodo_model::Hlc) -> Op {
+    crate::state_order_tests::op(
+        hlc,
+        txtodo_model::OpKind::EditText {
+            task: crate::state_order_tests::task(n),
+            edits: vec![txtodo_model::TextEdit::Insert {
+                at: at_char,
+                text: text.to_owned(),
+            }],
+        },
+    )
+}
+
+/// Task first-sync-speed: B appended to C's edit of a line; B's edit came first (B's run before
+/// C's). It used to be skipped for good, and the line kept only C's edit.
+#[test]
+fn a_text_edit_built_on_one_not_here_yet_waits_for_it() {
+    let line = insert(1, None, at(10, 0, A));
+    let c_edit = append_text(1, 6, " +c", at(20, 0, C));
+    let b_edit = append_text(1, 9, " +b", at(30, 0, 2));
+    let (text, parked) = render(&[
+        std::slice::from_ref(&line),
+        std::slice::from_ref(&b_edit),
+        std::slice::from_ref(&c_edit),
+    ]);
+    assert_eq!(text, "line 1 +c +b\n");
+    assert!(parked.is_empty());
+}
+
+/// Each landing retries what waits on the task it touched: a chain lands in one go, and an op
+/// waiting on another task keeps waiting.
+#[test]
+fn a_landing_retries_the_ops_waiting_on_its_task_in_a_chain() {
+    let six = insert(6, Some(5), at(40, 0, C));
+    let five = insert(5, Some(4), at(30, 0, 2));
+    let nine = insert(9, Some(8), at(50, 0, C));
+    let four = insert(4, None, at(20, 0, A));
+    let (text, parked) = render(&[&[six, five, nine], std::slice::from_ref(&four)]);
+    assert_eq!(text, "line 4\nline 5\nline 6\n");
+    assert_eq!(parked.len(), 1, "9 still waits for 8");
+}

@@ -93,3 +93,27 @@ another origin's edit lands first, does not fit, and is skipped for good: the no
   commits (the same gap as direct_hlc vs direct_origin), and batches are smaller (an origin's
   burst, not 1 000 ops), so more acks. The per-batch commit line is what pays this back.
 - Devices that already hold a log in per-origin order keep it; their replay at open still parks.
+
+### Slot index: dropped (2026-10-03)
+
+The slot scans are ~4% of a sync commit in the bench (`has_placement`; `live_slot` and
+`anchor_slot` under 1%). Slots shift on every insert, so an id-to-slot index needs a rebuild per
+op, as `reindex` already does: a constant factor at best. Revisit if a 10k-line bench says so.
+
+### Parking: targeted retry, text edits wait (2026-10-03)
+
+- `sync_park.rs`: waiting ops are kept by arrival number with an index from each task they name.
+  A group that lands retries only the groups naming a task it touched (inserted, edited, moved),
+  in the same round order the whole-queue rescan had; a failed op keeps its number, so the queue
+  order is as before.
+- An `EditText` that does not fit (`StateError::Text`) now waits on its task like a missing one,
+  and lands once an edit of that line does. This was the bench's lost-edits bug; all four phases
+  converge now, per-origin order included, so logs already stored in that order replay right too.
+- Changed on purpose: an op that fails on retry with an error that cannot wait is skipped there
+  (logged `sync_op_skipped`); it used to stay in the queue and be retried after every landing.
+- Past `MAX_PARKED_OPS` the oldest is still skipped, now with its own warn,
+  `sync_parked_overflow`. Not fixed: it is lost until something replays it, and a replay of the
+  same order overflows the same way. With HLC-ordered batches a queue that long needs a peer whose
+  log lacks the op it waits for.
+- Bench, 20 rounds, debug: session 15.3 s, direct per-origin 8.8 s, direct HLC 13.1 s, reopen
+  114 ms. The queue is short in this history, so the targeted retry does not show in time here.
