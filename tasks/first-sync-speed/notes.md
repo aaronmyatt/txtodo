@@ -238,3 +238,23 @@ Same bench, same seed, no Watch subscriber. Times in ms.
   the per-run store commit (what A could still save), ~6% applying ops.
 - e2e (real daemons, `--profile ci`): 36 of 37 sync and save tests pass; `relay_converge`'s
   LAN-disabled test timed out while the others ran beside it, and passed twice alone.
+
+## Regression: lab chaos 1072683562 (2026-10-03)
+
+- From 0d159b40 (HLC-merged sends) chaos stalled: b1 ended with 12 of a1's 55 ops and 2 of a2's
+  88; senders logged `lan_push_rewound_unacked` every 10 s, receivers `lan_ops_out_of_step_skipped`
+  at debug ("run 27..=27 does not follow head 4").
+- Cause, older than this task: a session's heads come from the store when it opens and then move
+  only with what that session commits. With own devices carrying each other's ops, a device took
+  origin D's ops through its other session and relayed them; the peer took them as held and
+  pushed D's next op, which this session refused as a gap. The peer rewound to the same place,
+  forever. Merged batches relay several origins at once, so it went from rare to every run.
+- Fix (29b43b23, dcafc0c1): `Session::catch_up` raises a session's heads to the store's before an
+  `Ops` batch is checked, and `advance` takes a run that starts inside the heads and ends past them
+  (its held ops are skipped at commit; a run held whole is still refused). In-process proof:
+  `lan_session_mesh_tests.rs` (three devices linked pairwise, all adding) failed 3 of 3 before, 8
+  of 8 after.
+- Lab on dcafc0c1: 10 of 11 scenarios pass (clock-skew is its own open line). Chaos passed on seeds
+  1072683562, 424242, 9001 and 31337 (twice); one more run of 31337 converged and lost nothing but
+  a1's doctor still flagged a same-ops split from 04:01:14 (report 20261003-120036-chaos), noted on
+  the open group-parking order line.
