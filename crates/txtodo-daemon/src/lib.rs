@@ -177,6 +177,7 @@ mod workspace_rename;
 /// instead of each reimplementing its fallback chain.
 pub use txtodo_workspace_paths as workspace_registry_paths;
 pub mod write;
+mod write_defer;
 
 #[cfg(test)]
 mod actor_tests;
@@ -326,3 +327,5 @@ mod workspace_rejoin_tests;
 mod workspace_rename_tests;
 #[cfg(test)]
 mod workspace_tests;
+#[cfg(test)]
+mod write_defer_tests;

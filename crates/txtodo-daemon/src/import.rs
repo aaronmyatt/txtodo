@@ -34,8 +34,8 @@ impl FileActor {
             } => {
                 let _ = reply.send(self.on_resolve(task, resolution, principal));
             }
-            ActorMsg::SyncOps { ops, reply } => {
-                let _ = reply.send(self.on_sync_ops(ops));
+            ActorMsg::SyncOps { ops, defer, reply } => {
+                let _ = reply.send(self.on_sync_run(ops, defer));
             }
             ActorMsg::MigrateToSidecar { dry_run, reply } => {
                 let _ = reply.send(self.on_migrate_to_sidecar(dry_run));
@@ -120,7 +120,7 @@ impl FileActor {
             tail: CommitTail {
                 review: Vec::new(),
                 clear: Some((id, self.clock.now_ms())),
-                source: None,
+                ..CommitTail::default()
             },
         })?;
         debug_assert!(self.on_conflicts()?.flags.iter().all(|c| c.row.task != id));

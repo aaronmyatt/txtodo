@@ -33,6 +33,9 @@ pub(crate) struct CommitTail {
     /// client's own name, `"sync"` for ops from another device, `"external"` for a disk edit.
     /// Kept in this device's op log only, never in an op.
     pub(crate) source: Option<String>,
+    /// A peer batch's run whose file comes up again later in the batch: the write waits for that
+    /// run (`write_defer.rs`).
+    pub(crate) defer_write: bool,
 }
 
 impl FileActor {

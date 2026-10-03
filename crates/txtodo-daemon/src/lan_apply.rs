@@ -134,6 +134,7 @@ fn commit_one_file(
     rt: &Handle,
     path: &FilePath,
     ops: Vec<Op>,
+    defer: bool,
 ) -> Result<(), Refusal> {
     if crate::walker::is_skipped_path(path) {
         return log_only(ws, path, &ops);
@@ -146,7 +147,7 @@ fn commit_one_file(
         return commit_notes_file(ws, path, ops);
     }
     let handle = get_or_create_actor(ws, path)?;
-    rt.block_on(handle.sync_import_ops(ops))
+    rt.block_on(handle.sync_import_run(ops, defer))
         .map_err(|e| log_refused(path, &e))
 }
 
@@ -207,36 +208,61 @@ pub(crate) struct Landed {
 /// file used to commit later ops over a missing earlier one. The caller acks only the prefix
 /// ([`landed_ranges`]), and the peer sends the rest again. An op the log already holds counts as
 /// landed ([`not_yet_stored`]).
+///
+/// Only a file's last run in the batch writes it (`write_defer.rs`); when the batch stops before
+/// that run, every file a run left a write owed on is flushed.
 pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> Landed {
     let total = ops.len();
     let mut landed = Landed::default();
-    for (path, run) in same_file_runs(ops) {
-        let len = run.len();
-        if let Err(why) = commit_new_ops(ws, rt, &path, run) {
+    let runs = same_file_runs(ops);
+    let mut owed: Vec<FilePath> = Vec::new();
+    for (i, (path, run)) in runs.iter().enumerate() {
+        let defer = runs[i + 1..].iter().any(|(p, _)| p == path);
+        if let Err(why) = commit_new_ops(ws, rt, path, run.clone(), defer) {
             log_partly_committed(landed.ops, total);
-            landed.refused = Some((path, why));
+            landed.refused = Some((path.clone(), why));
+            owed.iter().for_each(|p| flush_file(ws, rt, p));
             break;
         }
-        landed.ops += len;
-        landed.files.push(path);
+        if defer && !owed.contains(path) {
+            owed.push(path.clone());
+        }
+        landed.ops += run.len();
+        landed.files.push(path.clone());
     }
     debug_assert!(landed.ops <= total);
     landed
 }
 
+/// Asks `path`'s actor to write a projection a run left owed; one with none ignores it.
+fn flush_file(ws: &SharedWorkspace, rt: &Handle, path: &FilePath) {
+    let Some(handle) = read(ws).actor(path).cloned() else {
+        return;
+    };
+    if let Err(e) = rt.block_on(handle.send(crate::handle::ActorMsg::FlushWrite)) {
+        tracing::warn!(file = %path, error = %e, "lan_sync_flush_failed");
+    }
+}
+
 /// One same-file run, minus the ops the log already holds. A run of nothing but held ops
-/// commits nothing and still counts as landed, so the ack covers it.
+/// commits nothing and still counts as landed, so the ack covers it. `defer`: a later run of the
+/// batch is on this file too (`write_defer.rs`).
 fn commit_new_ops(
     ws: &SharedWorkspace,
     rt: &Handle,
     path: &FilePath,
     run: Vec<Op>,
+    defer: bool,
 ) -> Result<(), Refusal> {
     let fresh = not_yet_stored(ws, path, run)?;
     if fresh.is_empty() {
+        // The file's last run, all held: an earlier run may still owe the write.
+        if !defer {
+            flush_file(ws, rt, path);
+        }
         return Ok(());
     }
-    commit_one_file(ws, rt, path, fresh)
+    commit_one_file(ws, rt, path, fresh, defer)
 }
 
 /// `run` without the ops whose id the log already holds (task sync-drift line 2). A device's

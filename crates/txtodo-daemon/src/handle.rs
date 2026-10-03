@@ -132,6 +132,8 @@ pub enum ActorMsg {
     /// Stop once the messages ahead of this one are handled (a rejoin closing its workspace,
     /// task sync-drift line 8): a handle still held elsewhere must not keep the store open.
     Stop,
+    /// Write a projection a peer batch left owed (`write_defer.rs`); any other message does too.
+    FlushWrite,
     /// Intent-level mutations from a client.
     Apply {
         /// What to do, in order; later ones see earlier ones applied.
@@ -264,6 +266,8 @@ pub enum ActorMsg {
     SyncOps {
         /// Already filtered to this actor's document (the caller routes by `op.file`).
         ops: Vec<txtodo_model::Op>,
+        /// A later run of the batch is on this file too: leave the write to it (`write_defer.rs`).
+        defer: bool,
         /// Result channel.
         reply: oneshot::Sender<Result<(), ActorError>>,
     },

@@ -17,16 +17,34 @@ use crate::sync_park::apply_parking;
 use txtodo_model::{Op, OpKind, TaskId};
 
 impl ActorHandle {
-    /// Sends a peer's already-signed LAN sync ops (`lan.rs`) to this document's actor. `ops` must
-    /// already be filtered to this handle's own `path` — moved out of `handle.rs` purely to keep
-    /// that file within its line budget, same pattern as `refdir.rs`/`notes_lookup.rs`.
+    /// A whole batch for this document in one run (test seam): [`Self::sync_import_run`].
+    #[cfg(test)]
     pub(crate) async fn sync_import_ops(&self, ops: Vec<Op>) -> Result<(), ActorError> {
+        self.sync_import_run(ops, false).await
+    }
+
+    /// Sends one run of a peer's already-signed LAN sync ops (`lan.rs`) to this document's actor.
+    /// `ops` must already be filtered to this handle's own `path` — moved out of `handle.rs` purely
+    /// to keep that file within its line budget. `defer` when a later run of the batch is on this
+    /// file too, so only the last one writes the file (`write_defer.rs`).
+    pub(crate) async fn sync_import_run(
+        &self,
+        ops: Vec<Op>,
+        defer: bool,
+    ) -> Result<(), ActorError> {
         debug_assert!(ops.iter().all(|o| &o.file == self.path()));
-        self.ask(|reply| ActorMsg::SyncOps { ops, reply }).await?
+        self.ask(|reply| ActorMsg::SyncOps { ops, defer, reply })
+            .await?
     }
 }
 
 impl FileActor {
+    /// One whole batch in one run (test seam): [`Self::on_sync_run`].
+    #[cfg(test)]
+    pub(crate) fn on_sync_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
+        self.on_sync_run(ops, false)
+    }
+
     /// Applies `ops` (already filtered to this actor's `path` by the caller — one commit is one
     /// document, same invariant `commit_change_with` asserts) in the order they arrived, and
     /// commits every one of them to the log, applied or not (task `sync-poison-op`, 2026-09-25).
@@ -36,7 +54,8 @@ impl FileActor {
     /// anchored on a later insert needed, and skipped if it still does not fit, with a warn that
     /// names it. It stays in the log so heads stay dense and other peers still get it. Only a
     /// store or disk failure refuses the batch now.
-    pub(crate) fn on_sync_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
+    /// `defer` leaves the file write to a later run of the batch on this file (`write_defer.rs`).
+    pub(crate) fn on_sync_run(&mut self, ops: Vec<Op>, defer: bool) -> Result<(), ActorError> {
         debug_assert!(
             ops.iter().all(|o| o.file == self.cfg.path),
             "the caller routes by op.file before calling here"
@@ -62,6 +81,7 @@ impl FileActor {
             snapshot: false,
             tail: CommitTail {
                 source: Some(SYNC_SOURCE.to_owned()),
+                defer_write: defer,
                 ..CommitTail::default()
             },
         })?;

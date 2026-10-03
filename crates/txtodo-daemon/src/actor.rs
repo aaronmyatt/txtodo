@@ -92,6 +92,8 @@ pub struct FileActor {
     pub(crate) op_set: crate::op_set_hash::OpSetHash,
     /// What our latest write replaced, a possible base for a save racing it (`save_base.rs`).
     pub(crate) prev_write: Option<crate::save_base::PrevWrite>,
+    /// A peer batch's write owed until the file's last run in it (`write_defer.rs`).
+    pub(crate) deferred: Option<crate::write_defer::Deferred>,
     /// Test seam: `Digest` reports a skewed byte hash (`ActorMsg::SkewDigestForTest`).
     #[cfg(test)]
     pub(crate) skew_digest: bool,
@@ -130,6 +132,7 @@ impl FileActor {
             parked: crate::sync_park::Parked::default(),
             op_set,
             prev_write: None,
+            deferred: None,
             #[cfg(test)]
             skew_digest: false,
         };
@@ -165,9 +168,17 @@ impl FileActor {
             self.handle(msg);
             self.merge_settled_save();
         }
+        self.flush_write_logged();
     }
 
     fn handle(&mut self, msg: ActorMsg) {
+        // Only a peer batch runs with a write owed (`write_defer.rs`): anything else sees the file.
+        if !matches!(msg, ActorMsg::SyncOps { .. }) {
+            self.flush_write_logged();
+        }
+        if matches!(msg, ActorMsg::FlushWrite) {
+            return;
+        }
         // Handled here, not in `handle_core`, purely to keep that function's line count in budget.
         if let ActorMsg::Progress { reply } = msg {
             let _ = reply.send(self.state.task_counts());
@@ -311,8 +322,12 @@ impl FileActor {
         let before_hash = std::mem::replace(&mut self.hash, new_hash);
         // Disk first: a first mirror flush after a restart materialises the whole Loro snapshot.
         // A save we have not merged is never written over (`pending_save.rs`).
-        if write {
-            self.write_or_hold(before_hash, before_bytes, &before)?;
+        // A peer batch's run may leave the write to the file's last run (`write_defer.rs`).
+        match (write, tail.defer_write && self.can_defer_write()) {
+            (true, true) => self.defer_write(before_hash, before_bytes, before),
+            (true, false) => self.write_after(before_hash, before_bytes, before)?,
+            (false, true) => {}
+            (false, false) => self.flush_write()?,
         }
         crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
         self.raise_flags(&tail.review);
@@ -343,9 +358,12 @@ impl FileActor {
             written_at_ms: self.clock.now_ms(),
         };
         let extras = self.commit_extras(tail, next)?;
-        let range =
-            self.lock_store()
-                .commit_change_with(ops, &projection, Some(self.hash), &extras)?;
+        let range = self.lock_store().commit_change_with(
+            ops,
+            &projection,
+            Some(self.disk_hash()),
+            &extras,
+        )?;
         log_persisted(range);
         Ok(range)
     }

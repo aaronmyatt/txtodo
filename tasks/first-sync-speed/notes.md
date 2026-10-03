@@ -211,3 +211,30 @@ Same bench, same seed, no Watch subscriber. Times in ms.
   and smaller batches (one origin's burst each, so more acks). Not looked at further.
 - Release build not measured. CI runs the bench at 6 rounds (~20 s), which still loses edits
   without the text-edit wait; `TXTODO_BENCH_ROUNDS=20` or `60` for the numbers above.
+
+## Decided (2026-10-03, human)
+
+- One commit per batch: B, coalesce the file writes. A (one store transaction per batch) is
+  deferred to its own root line, `ref:sync-batch-txn`, with the write-up there.
+- Replay from a snapshot: B, keep replay from empty.
+
+### Coalesced file writes (B, as built 2026-10-03)
+
+- `write_defer.rs`: `commit_incoming_ops` marks each same-file run with whether a later run of
+  the batch is on that file; such a run commits to the store and leaves the file write owed
+  (`FileActor::deferred`: the bytes, hash and state really on disk). The file's last run writes
+  once; a batch that stops early sends `ActorMsg::FlushWrite` to each file it left owed.
+- While a write is owed, a commit's `prev_hash` is the hash on disk (`disk_hash`), so a crash
+  mid-batch reopens as "disk is `prev_hash`: finish the rename". The test runs two owed commits;
+  with the old `prev_hash` it fails (checked).
+- Any message but a peer batch writes what is owed first, and `Stop` and the end of the mailbox
+  do too. So clients, the watcher and `Replace`'s disk check see the file as before; an editor
+  save that landed meanwhile is held and merged three-way against the owed bytes (tested).
+- Not deferred: notes.md and `txtodo.toml` runs (their own actors), and runs while a save is held
+  or being merged.
+- Bench, 20 rounds, debug: session 11.7 → 3.4 s, direct per-origin 6.9 → 2.2 s, direct HLC
+  10.3 → 2.4 s, reopen 113 ms; all converge.
+- After B, inside `on_sync_run`: ~45% the remaining file writes (one per file per batch), ~15–25%
+  the per-run store commit (what A could still save), ~6% applying ops.
+- e2e (real daemons, `--profile ci`): 36 of 37 sync and save tests pass; `relay_converge`'s
+  LAN-disabled test timed out while the others ran beside it, and passed twice alone.
