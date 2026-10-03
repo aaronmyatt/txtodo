@@ -51,7 +51,7 @@ fn path(p: &str) -> FilePath {
 
 /// A device on the real clock (`FakeClock`s started alike mint the same ids), joined to `lead`'s
 /// group and workspace when given.
-fn device(dir: &std::path::Path, lead: Option<&SharedWorkspace>) -> SharedWorkspace {
+pub(crate) fn device(dir: &std::path::Path, lead: Option<&SharedWorkspace>) -> SharedWorkspace {
     std::fs::write(dir.join("todo.txt"), "").unwrap_or_else(|e| panic!("write: {e}"));
     let clock: Arc<dyn Clock> = Arc::new(SystemClock);
     let ws = crate::workspace::Workspace::open_with_default_mode(
