@@ -29,6 +29,8 @@ mod held;
 // Restoring the Loro mirror at open, split out for the file budget.
 #[path = "notes_actor_load.rs"]
 mod load;
+#[path = "notes_clock.rs"]
+mod stamps;
 
 /// Where a notes document lives.
 #[derive(Debug, Clone)]
@@ -116,6 +118,7 @@ impl NotesActor {
             op_set,
             waiting: WaitingEdits::default(),
         };
+        actor.adopt_logged_clock()?;
         actor.restore_held()?;
         actor.absorb_disk_text(&disk_bytes)?;
         if own_text {
@@ -248,6 +251,7 @@ impl NotesActor {
             return Ok(());
         }
         self.merge_if_held()?;
+        self.observe_peer_stamps(&ops);
         let mut next = self.state.clone();
         let mut waiting = self.waiting.clone();
         for (op, e) in waiting.apply(&mut next, &ops) {

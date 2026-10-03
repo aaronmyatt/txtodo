@@ -246,6 +246,8 @@ mod notes_actor_sync_tests;
 #[cfg(test)]
 mod notes_actor_tests;
 #[cfg(test)]
+mod notes_clock_tests;
+#[cfg(test)]
 mod notes_held_tests;
 #[cfg(test)]
 mod op_set_hash_tests;

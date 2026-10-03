@@ -9,7 +9,10 @@ use std::sync::{Arc, Mutex, PoisonError};
 use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TextEdit, Ulid};
 use txtodo_store::{Projection, Seq, Store};
 
-fn setup(dir: &std::path::Path, n: u128) -> (SharedStore, Arc<dyn Clock>, NotesActorConfig) {
+pub(crate) fn setup(
+    dir: &std::path::Path,
+    n: u128,
+) -> (SharedStore, Arc<dyn Clock>, NotesActorConfig) {
     let store: SharedStore = Arc::new(Mutex::new(
         Store::open(&dir.join(format!("oplog-{n}.db"))).unwrap_or_else(|e| panic!("{e}")),
     ));
@@ -23,7 +26,7 @@ fn setup(dir: &std::path::Path, n: u128) -> (SharedStore, Arc<dyn Clock>, NotesA
     (store, clock, cfg)
 }
 
-fn ops_for(store: &SharedStore, path: &FilePath) -> Vec<Op> {
+pub(crate) fn ops_for(store: &SharedStore, path: &FilePath) -> Vec<Op> {
     let guard = store.lock().unwrap_or_else(PoisonError::into_inner);
     guard
         .for_file(path, Seq(0))
