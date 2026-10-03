@@ -151,6 +151,15 @@ impl Session {
         Ok(self.workspace(workspace)?.wanted())
     }
 
+    /// Raises `workspace`'s heads to `held` (the store's) where it is ahead, outside an import:
+    /// another session on this device committed those ops (lab chaos 1072683562). The peer learns
+    /// what we hold from what we send it, so it then pushes past where this session's own heads
+    /// stood, and every batch was refused as a gap, resent and refused again.
+    pub fn catch_up(&mut self, workspace: WorkspaceId, held: &Heads) -> Result<(), SessionError> {
+        self.workspace_mut(workspace)?.catch_up(held);
+        Ok(())
+    }
+
     /// Our own link-level `Hello`: device, group, protocol and wall clock, sent exactly once per
     /// connection before any workspace's own `Greet` is legal to send. `heads` is always empty —
     /// `Hello`'s field layout is frozen (module doc); each workspace reports its own heads via

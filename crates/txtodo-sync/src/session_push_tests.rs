@@ -122,10 +122,13 @@ fn a_push_with_a_gap_or_a_repeat_is_refused_and_changes_nothing() {
         })),
         "5 is missing"
     );
-    assert!(matches!(
-        s.on_ops(ws(), &ops(vec![range(2, 4, 5)]), &BTreeMap::new()),
-        Err(SessionError::Gap(_))
-    ));
+    assert!(
+        matches!(
+            s.on_ops(ws(), &ops(vec![range(2, 3, 4)]), &BTreeMap::new()),
+            Err(SessionError::Gap(_))
+        ),
+        "held whole: a repeat"
+    );
     assert_eq!(s.state(ws()).unwrap(), SessionState::Idle);
     assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 4)]));
 }
@@ -207,4 +210,29 @@ fn a_partial_commit_acks_the_prefix_and_the_rest_is_wanted_again() {
     assert_eq!(s.wanted(ws()).unwrap(), &[range(2, 7, 10)]);
     s.on_ops(ws(), &ops(vec![range(2, 7, 10)]), &BTreeMap::new())
         .unwrap();
+}
+
+/// Lab chaos 1072683562: the store got device 2's ops up to 26 through another session; the peer
+/// learned that and pushed 27. Caught up first, the session takes it; a run that starts inside
+/// what the store holds is taken too.
+#[test]
+fn a_session_caught_up_to_the_store_takes_a_push_past_its_own_heads() {
+    let mut s = settled();
+    let next = ops(vec![range(2, 27, 27)]);
+    assert!(matches!(
+        s.on_ops(ws(), &next, &BTreeMap::new()),
+        Err(SessionError::Gap(_))
+    ));
+    s.catch_up(ws(), &heads(&[(2, 26)])).unwrap();
+    assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 26)]));
+    s.on_ops(ws(), &next, &BTreeMap::new()).unwrap();
+    s.committed(ws(), &[range(2, 27, 27)]).unwrap();
+
+    s.catch_up(ws(), &heads(&[(2, 30)])).unwrap();
+    s.on_ops(ws(), &ops(vec![range(2, 28, 31)]), &BTreeMap::new())
+        .unwrap();
+    s.committed(ws(), &[range(2, 28, 31)]).unwrap();
+    assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 31)]));
+    s.catch_up(ws(), &heads(&[(2, 3)])).unwrap();
+    assert_eq!(s.heads(ws()).unwrap(), &heads(&[(2, 31)]), "never back");
 }

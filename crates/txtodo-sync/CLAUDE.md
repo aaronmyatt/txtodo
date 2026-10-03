@@ -73,7 +73,10 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   that follows the heads is accepted whether asked for or not, and one that does not is a `Gap`
   and commits nothing, so a wanted batch that lands after a failed one can no longer leave a hole
   in the store (its head is a per-device op count). `committed(id, prefix)` acks a prefix of the
-  batch; the rest stays wanted. `Link::recv_timeout(wait) ->
+  batch; the rest stays wanted. `catch_up(id, store_heads)` (2026-10-03, lab chaos 1072683562)
+  raises a workspace's heads to the store's outside an import, and `advance` takes a run that
+  starts inside the heads and ends past them (a repeat held whole is still a `Gap`).
+  `Link::recv_timeout(wait) ->
   Result<Option<Frame>, LinkError>` lets a long-lived driver do work between frames (`ChannelLink`
   and `IrohLink` implement it; the default calls `recv`).
 - Crypto: `sign(op, &DeviceSigningKey) -> Signature`, `verify(op, &Signature, &DevicePublicKey)`,

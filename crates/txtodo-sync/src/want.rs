@@ -37,11 +37,13 @@ pub fn want(local: &Heads, remote: &Heads) -> Vec<OriginRange> {
 }
 
 /// Advances `heads` past a run just committed. Committing `first..=last` for a device whose head
-/// is `first - 1` is the normal case; anything else is a gap and is refused so a hole can never be
-/// papered over.
+/// is `first - 1` is the normal case. A run that starts inside what we hold and ends past it is
+/// fine too: its held ops are skipped at commit, and a session that caught its heads up to the
+/// store (`Session::catch_up`) gets those from a peer that knew less. A run starting past the head
+/// is a gap, and one we hold whole is a repeat: both are refused, so a hole is never papered over.
 pub fn advance(heads: &mut Heads, committed: &OriginRange) -> Result<(), Gap> {
     let head = heads.get(&committed.device).copied().unwrap_or(0);
-    if committed.first != head + 1 {
+    if committed.first > head + 1 || committed.last <= head {
         return Err(Gap {
             device_head: head,
             range: *committed,

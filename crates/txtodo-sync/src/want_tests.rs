@@ -67,9 +67,12 @@ fn advance_moves_a_head_only_by_a_run_that_follows_it() {
             range: hole
         })
     );
-    let repeat = range(1, 8, 9);
+    let repeat = range(1, 7, 8);
     assert!(matches!(advance(&mut h, &repeat), Err(Gap { .. })));
     assert_eq!(h, heads(&[(1, 8), (2, 1)]), "a refused run changes nothing");
+    // Starts inside what we hold, ends past it: a peer that knew less of a store we caught up to.
+    advance(&mut h, &range(1, 7, 10)).unwrap();
+    assert_eq!(h, heads(&[(1, 10), (2, 1)]));
 }
 
 fn head_map() -> impl Strategy<Value = Heads> {

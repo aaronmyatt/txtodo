@@ -62,6 +62,35 @@ impl WorkspaceSession {
         &self.wanted
     }
 
+    /// [`Session::catch_up`](crate::session::Session::catch_up): heads raised to `held` where it
+    /// is ahead, what that covers no longer wanted. Not while importing: the batch in flight was
+    /// checked against the heads as they were.
+    pub(crate) fn catch_up(&mut self, held: &Heads) {
+        if self.state == SessionState::Importing {
+            return;
+        }
+        let ahead: Vec<OriginRange> = held
+            .iter()
+            .filter(|(d, h)| **h > self.heads.get(*d).copied().unwrap_or(0))
+            .map(|(d, h)| OriginRange {
+                device: *d,
+                first: 1,
+                last: *h,
+            })
+            .collect();
+        for r in &ahead {
+            self.heads.insert(r.device, r.last);
+        }
+        consume(&mut self.wanted, &ahead);
+        if self.state == SessionState::Wanting && self.wanted.is_empty() {
+            self.state = SessionState::Idle;
+        }
+        debug_assert!(
+            held.iter()
+                .all(|(d, h)| self.heads.get(d).is_some_and(|x| x >= h))
+        );
+    }
+
     /// `Idle → Greeted`: the `Greet` to send. Stage 2: this used to be the `Hello` itself
     /// (single-workspace design); now the link-level `Hello` is `Session::link_hello`'s own job,
     /// sent once per connection, and this is purely this workspace's own announcement of what it
