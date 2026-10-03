@@ -211,22 +211,7 @@ pub(crate) struct Landed {
 ///
 /// Only a file's last run in the batch writes it (`write_defer.rs`); when the batch stops before
 /// that run, every file a run left a write owed on is flushed.
-///
-/// It stops, too, at the first op stamped past this device's clock by more than the skew bound
-/// (`sync_skew_hold.rs`).
-pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, mut ops: Vec<Op>) -> Landed {
-    let held_back = crate::sync_skew_hold::first_ahead(ws, &ops).map(|i| ops.split_off(i));
-    let mut landed = commit_in_order(ws, rt, ops);
-    if let Some(first) = held_back.as_ref().and_then(|rest| rest.first())
-        && landed.refused.is_none()
-    {
-        landed.refused = Some((first.file.clone(), crate::sync_skew_hold::held_back(first)));
-    }
-    landed
-}
-
-/// [`commit_incoming_ops`] once the batch is within this clock's reach.
-fn commit_in_order(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> Landed {
+pub(crate) fn commit_incoming_ops(ws: &SharedWorkspace, rt: &Handle, ops: Vec<Op>) -> Landed {
     let total = ops.len();
     let mut landed = Landed::default();
     let runs = same_file_runs(ops);
