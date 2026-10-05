@@ -89,3 +89,6 @@
   `detail::draw_sub_list` (the editor runs on the swapped-in sub-list, so the panel draws it).
   The bottom `edit >`/`add >` overlay is gone; the `:` line keeps the bottom row.
   - Long lines scroll sideways inside the field (`field.rs`).
+- Parent field: drawn by `field.rs` like every other field, with the same edge mark
+  (`row_edit::draw_mark`) in the label's trailing space. Tab into it still puts the caret at the
+  end (keyboard default); a click puts it under the pointer (the click line).

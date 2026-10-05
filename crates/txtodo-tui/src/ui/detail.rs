@@ -151,6 +151,8 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
             let style = crate::theme::current().input_style();
             let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
             if panel_has_keys(state) {
+                // The label's trailing space takes the edge mark, as an edited row's gutter does.
+                row_edit::draw_mark(frame, field_area);
                 frame.set_cursor_position(cell);
             }
         }

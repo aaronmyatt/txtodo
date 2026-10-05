@@ -62,14 +62,9 @@ impl Rows {
 pub fn draw(frame: &mut Frame, rows: Rows, index: usize, draft: &EditDraft) -> Option<Rect> {
     let field_area = rows.field_area(index)?;
     let theme = theme::current();
-    let mark = Rect::new(field_area.x - 1, field_area.y, 1, 1);
     // The list underneath drew this row reversed; clear it so the field's own style is all there is.
     frame.render_widget(Clear, field_area);
-    frame.render_widget(Clear, mark);
-    frame.render_widget(
-        Paragraph::new(MARK).style(Style::new().fg(theme.accent()).add_modifier(Modifier::BOLD)),
-        mark,
-    );
+    draw_mark(frame, field_area);
     let cell = field::draw(
         frame,
         field_area,
@@ -79,6 +74,23 @@ pub fn draw(frame: &mut Frame, rows: Rows, index: usize, draft: &EditDraft) -> O
     );
     frame.set_cursor_position(cell);
     Some(field_area)
+}
+
+/// The accent edge mark in the cell just left of `field_area`, the sign of a field being edited.
+pub fn draw_mark(frame: &mut Frame, field_area: Rect) {
+    let Some(x) = field_area.x.checked_sub(1) else {
+        return;
+    };
+    let mark = Rect::new(x, field_area.y, 1, 1);
+    frame.render_widget(Clear, mark);
+    frame.render_widget(
+        Paragraph::new(MARK).style(
+            Style::new()
+                .fg(theme::current().accent())
+                .add_modifier(Modifier::BOLD),
+        ),
+        mark,
+    );
 }
 
 #[cfg(test)]

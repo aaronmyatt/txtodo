@@ -1,4 +1,3 @@
-Parent line field uses TextInput in place; caret no longer forced to the end +m11 @tui
 Notes editor: soft wrap, caret on wrapped rows, width-aware column +m11 @tui
 Click to place the caret: hit targets carry field origin + scroll; col/row to offset in list rows, sub rows, parent, notes, prompt bar, search +m11 @tui
 Mouse while editing: click inside the field moves the caret; click outside saves and leaves the edit +m11 @tui
@@ -13,3 +12,4 @@ x 2026-10-05 Edit style tokens in theme.rs: high-contrast input bg/fg and accent
 x 2026-10-05 Focus is visible: detail panel border lights when it has the keyboard; root list highlight dims when focus is elsewhere +m11 @tui — accent panel edge and part labels follow nav.focus; selection reversed only where the keys go, underlined elsewhere
 x 2026-10-05 Fix: clicking the parent line or notes gives the detail panel the keyboard (nav.focus = Detail) +m11 @tui — focus_part sets nav.focus = Detail; unit test
 x 2026-10-05 List and sub-list edit in place: the row itself becomes the input (h-scroll for long lines); drop the bottom edit >/add > overlay +m11 @tui — ui/row_edit.rs: the edited row is the field (accent mark, tint, real cursor, sideways scroll) in the root list and the sub-list; the bottom edit > overlay is gone
+x 2026-10-05 Parent line field uses TextInput in place; caret no longer forced to the end +m11 @tui — parent draft drawn by field.rs with the edge mark and real cursor; Tab keeps caret-at-end, click placement lands with the click line

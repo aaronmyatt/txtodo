@@ -104,6 +104,11 @@ fn the_parent_field_puts_the_real_cursor_on_its_caret() {
         cursor(&state),
         Some(ratatui::layout::Position::new(9 + 5, 2))
     );
+    let (rows, _) = drawn(&state);
+    assert!(
+        rows[2].contains("Parent \u{258c}Water the plants"),
+        "{rows:?}"
+    );
     state.nav.focus = crate::state_nav::Focus::List;
     assert_eq!(cursor(&state), None, "no cursor while keys go to the list");
 }
