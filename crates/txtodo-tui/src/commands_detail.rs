@@ -28,6 +28,10 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Option<Action>> {
         Command::DetailEditNotes => focus_part(state, Part::Notes),
         Command::DetailStartSublist => focus_part(state, Part::Sub),
         Command::DetailCompleteParent => complete_parent(state),
+        Command::DetailBreakdown => {
+            state.detail.breakdown = !state.detail.breakdown;
+            None
+        }
         _ => return None,
     })
 }

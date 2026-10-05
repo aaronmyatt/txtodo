@@ -36,9 +36,16 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     let inner = block.inner(area);
     frame.render_widget(block, area);
     hits.push(area, Target::Inert);
-    let [crumbs, parent, sub_label, sub, notes_label, notes] = Layout::vertical([
+    // `v`: the parent's fields, one per row, under the parent line.
+    let fields = if state.detail.breakdown {
+        txtodo_core::breakdown::fields(&level.parent.raw)
+    } else {
+        Vec::new()
+    };
+    let parent_rows = 1 + u16::try_from(fields.len()).unwrap_or(0);
+    let [crumbs, parent_area, sub_label, sub, notes_label, notes] = Layout::vertical([
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(parent_rows),
         Constraint::Length(1),
         Constraint::Fill(1),
         Constraint::Length(1),
@@ -46,7 +53,12 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     ])
     .areas(inner);
     draw_crumbs(frame, crumbs, state, hits);
+    let parent = Rect {
+        height: 1.min(parent_area.height),
+        ..parent_area
+    };
     draw_parent(frame, parent, state, level, hits);
+    draw_breakdown(frame, parent_area, &fields);
     let part = state.detail.part;
     let sub_text = if level.doc.lines.is_empty() {
         "Sub-list \u{b7} none yet: a adds the first sub-task".to_owned()
@@ -165,6 +177,32 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
             frame.render_widget(Paragraph::new(Line::from(spans)), text_area);
         }
     }
+}
+
+/// The parent's fields under its row, `name = value` with the names right-aligned, sqlite
+/// `.mode line` style (core `breakdown::fields`).
+fn draw_breakdown(frame: &mut Frame, area: Rect, fields: &[(String, String)]) {
+    let width = fields
+        .iter()
+        .map(|(n, _)| n.chars().count())
+        .max()
+        .unwrap_or(0);
+    let dim = Style::new().add_modifier(Modifier::DIM);
+    let lines: Vec<Line> = fields
+        .iter()
+        .map(|(name, value)| {
+            Line::from(vec![
+                Span::styled(format!("   {name:>width$} = "), dim),
+                Span::raw(value.clone()),
+            ])
+        })
+        .collect();
+    let below = Rect {
+        y: area.y + 1,
+        height: area.height.saturating_sub(1),
+        ..area
+    };
+    frame.render_widget(Paragraph::new(lines), below);
 }
 
 /// Whether keys go to the panel at all (its part then says which field).

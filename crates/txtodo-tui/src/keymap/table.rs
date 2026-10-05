@@ -119,6 +119,8 @@ commands! {
     DetailStartSublist = "detail.start_sublist", [], Detail;
     /// Edit the notes.
     DetailEditNotes = "detail.edit_notes", [], Detail;
+    /// Show or hide the parent line field by field.
+    DetailBreakdown = "detail.breakdown", ["v"], Detail;
     /// Give the prompt bar the keyboard.
     PromptFocus = "prompt.focus", ["Ctrl-Space", "Ctrl-Shift-Space"], Global;
     /// Add the prompt bar's line to this workspace.

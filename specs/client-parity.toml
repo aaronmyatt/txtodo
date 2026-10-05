@@ -966,6 +966,15 @@ tui = { status = "done", surface = "detail panel" }
 deviation = ""
 
 [[action]]
+id = "detail.breakdown"
+title = "Show the parent line field by field"
+keys = ["v"]
+scope = "detail"
+desktop = { status = "planned", surface = "DetailView" }
+tui = { status = "done", surface = "detail panel" }
+deviation = ""
+
+[[action]]
 id = "workspace.switch"
 title = "Switch to a workspace"
 keys = []

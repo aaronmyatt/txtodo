@@ -191,3 +191,26 @@ fn long_notes_wrap_and_the_cursor_follows_onto_the_second_row() {
     // 14 words of 5 cells: 11 fit the first row (55 cells), 3 on the second, caret after them.
     assert_eq!((usize::from(at.y), at.x), (first + 1, 1 + 15));
 }
+
+#[test]
+fn v_shows_the_parent_field_by_field_under_its_row() {
+    let mut state = AppState::fixture();
+    state.detail.levels.push(Level {
+        parent: Parent {
+            line_number: 1,
+            raw: "(A) 2026-10-05 call mum @phone due:2026-10-09".to_owned(),
+            ..Parent::default()
+        },
+        ..Level::default()
+    });
+    let (rows, _) = drawn(&state);
+    assert!(!rows.join("\n").contains("priority ="), "off by default");
+    state.detail.breakdown = true;
+    let (rows, _) = drawn(&state);
+    let all = rows.join("\n");
+    assert!(rows[3].contains("done = no"), "{all}");
+    assert!(
+        all.contains("priority = (A)") && all.contains("     due = 2026-10-09"),
+        "{all}"
+    );
+}

@@ -112,6 +112,8 @@ pub struct Detail {
     pub levels: Vec<Level>,
     /// The part with the keyboard.
     pub part: Part,
+    /// The parent line is shown field by field under itself (`v`).
+    pub breakdown: bool,
 }
 
 impl Detail {
