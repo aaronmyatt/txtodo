@@ -63,3 +63,15 @@
   - Only `X ` at the very start of the line, and `(a) ` to `(z) ` at the start or after the done
     marker and its dates. Elsewhere `X` and `(a)` are just words.
   - Only on app writes (Add, Edit), never on an external edit and never as a side effect of sync.
+
+## As built
+- New lines dated (2026-10-05): `txtodo_core::line_fixes::stamp_created` (moved from the CLI's
+  `add.rs`, which now calls it). The daemon stamps at the wire, `convert::parse_mutation(m, today)`,
+  so only an `Add` a client sent gets a date; the `Add`s the daemon makes itself (a cross-file
+  move's arriving line, `move_coordinator.rs`) keep theirs. `today` is `local_date::today_local()`
+  (jiff, new daemon dep), read once per `Apply`.
+  - MCP's "the daemon stamps it" refusal is now true; no MCP change needed.
+  - Known gap: an added `x foo` (done marker, no date) is not done to the parser, so it gets a
+    creation date in front of the `x`. The typed-`x` line fixes that.
+  - The CLI e2e `daemon_autostart` tests need autostart on; they fail under
+    `TXTODO_NO_AUTOSTART=1`, which is expected, not this change.
