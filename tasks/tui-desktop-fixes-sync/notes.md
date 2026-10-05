@@ -100,3 +100,7 @@
   only the `Add`. The prompt bar's Quick Add still appends.
   - Manifest: `list.first` is now "Top row: Add a line". Desktop's own top input is root todo
     line "the Add a line input should be at the top of the page".
+- Hidden `ref:` (TUI): `state_tasks::without_ref` for the painted parent and its draft;
+  `save_parent` puts the old slug back with `with_ref` unless the user typed a `ref:` of their
+  own. So the panel cannot cut its own link by an edit. The `id:` tag stays in the draft (design
+  §7) and is hidden only when painted, as before.
