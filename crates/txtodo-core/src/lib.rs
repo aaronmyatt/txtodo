@@ -13,6 +13,7 @@ mod edit;
 mod error;
 mod file;
 mod format;
+pub mod line_fixes;
 mod line_length;
 mod lint;
 mod parse;
