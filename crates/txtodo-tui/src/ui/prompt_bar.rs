@@ -43,7 +43,8 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, now: Instant, hits:
         .saturating_sub(u16::try_from(hint_width).unwrap_or(u16::MAX));
     frame.render_widget(Paragraph::new(Line::from(mark)), area);
     let field_area = Rect::new(area.x + mark_width, area.y, field_width, 1);
-    let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, Style::new());
+    let style = crate::theme::current().input_style();
+    let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
     frame.set_cursor_position(cell);
     if let Some(text) = hint {
         let rect = Rect::new(

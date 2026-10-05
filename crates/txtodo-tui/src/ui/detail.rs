@@ -138,7 +138,8 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
                 width: text_area.width - label_width,
                 ..text_area
             };
-            let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, Style::new());
+            let style = crate::theme::current().input_style();
+            let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
             if panel_has_keys(state) {
                 frame.set_cursor_position(cell);
             }
@@ -214,6 +215,8 @@ fn draw_notes(frame: &mut Frame, area: Rect, level: &Level, focused: bool) {
     let body = if placeholder {
         Paragraph::new(" No notes yet. Tab here to write some.")
             .style(Style::new().add_modifier(Modifier::DIM))
+    } else if focused {
+        Paragraph::new(lines).style(crate::theme::current().input_style())
     } else {
         Paragraph::new(lines)
     };

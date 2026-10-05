@@ -86,7 +86,7 @@ fn draw_command_line(frame: &mut Frame, area: Rect, cmd: &str, hits: &mut HitMap
         rect.width.saturating_sub(1),
         rect.height,
     );
-    let style = Style::new().add_modifier(Modifier::BOLD);
+    let style = crate::theme::current().input_style();
     let cell = field::draw(frame, field_area, cmd, cmd.len(), style);
     frame.set_cursor_position(cell);
     hits.push(rect, Target::Inert);
@@ -121,7 +121,7 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
         let rect = draw_overlay(frame, list_area, Line::from(label.clone()));
         let used = u16::try_from(label.len()).unwrap_or(0).min(rect.width);
         let field_area = Rect::new(rect.x + used, rect.y, rect.width - used, rect.height);
-        let style = Style::new().add_modifier(Modifier::BOLD);
+        let style = crate::theme::current().input_style();
         let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
         frame.set_cursor_position(cell);
         hits.push(rect, Target::Inert);

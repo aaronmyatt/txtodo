@@ -76,6 +76,33 @@ impl Theme {
         }
     }
 
+    /// A text field while it has the keyboard (task `tui-text-editing`): ink on a tinted
+    /// background, so the field stands out from both the paper and the reversed selection row.
+    /// 24-bit: a pale blue on light paper, a deep navy on dark. 16 colours: black on light yellow
+    /// for light, bold white on blue for dark, the pairs every 16-colour scheme keeps readable.
+    pub fn input_style(self) -> Style {
+        match (self.depth, self.dark) {
+            (Depth::TrueColor, false) => Style::new().fg(rgb(0x0a0a0a)).bg(rgb(0xdbeafe)),
+            (Depth::TrueColor, true) => Style::new().fg(rgb(0xf5f5f5)).bg(rgb(0x1e3a8a)),
+            (Depth::Ansi16, false) => Style::new().fg(Color::Black).bg(Color::LightYellow),
+            (Depth::Ansi16, true) => Style::new()
+                .fg(Color::White)
+                .bg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        }
+    }
+
+    /// The accent that marks where the keyboard is: an edited row's edge mark and the border of
+    /// the pane with the keyboard. Desktop's focus ring blue (`--tok-project`'s hue band).
+    pub fn accent(self) -> Color {
+        match (self.depth, self.dark) {
+            (Depth::TrueColor, false) => rgb(0x1d4ed8),
+            (Depth::TrueColor, true) => rgb(0x60a5fa),
+            (Depth::Ansi16, false) => Color::Blue,
+            (Depth::Ansi16, true) => Color::LightBlue,
+        }
+    }
+
     /// The foreground colour of `kind`; `Color::Reset` (the ink) for plain text.
     pub fn token_color(self, kind: TokenKind) -> Color {
         let Some(slot) = slot_of(kind) else {
@@ -190,6 +217,24 @@ mod tests {
                     Color::Reset,
                     "text is ink"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn an_input_never_looks_like_the_paper_or_the_selection() {
+        for dark in [false, true] {
+            for depth in [Depth::TrueColor, Depth::Ansi16] {
+                let style = Theme { dark, depth }.input_style();
+                assert!(
+                    style.bg.is_some_and(|bg| bg != Color::Reset),
+                    "a tinted field"
+                );
+                assert!(
+                    style.fg.is_some(),
+                    "its own ink, whatever the terminal's is"
+                );
+                assert!(!style.add_modifier.contains(Modifier::REVERSED));
             }
         }
     }

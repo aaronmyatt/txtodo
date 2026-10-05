@@ -74,3 +74,7 @@
     line, the prompt bar, the parent field (only when `nav.focus == Detail`), the notes.
   - `terminal.rs` sets a steady bar on enter and `DefaultUserShape` on leave and in the panic hook.
   - Gap: the header search and Settings fields still draw `▏` (their line moves them to fields).
+- Style: `Theme::input_style()` (ink on a tint: pale blue / navy in 24-bit, black on light yellow /
+  bold white on blue in 16 colours) and `Theme::accent()` (desktop's focus blue). Never REVERSED,
+  so a field cannot look like the selected row. Every field with the keyboard and the focused
+  notes area use it.
