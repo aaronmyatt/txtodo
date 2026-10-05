@@ -127,3 +127,7 @@
   unit tests with wide and combining characters (`text_input`, `field`, `notes_wrap`); mouse flows
   in `mouse_text_tests.rs`; e2e `detail_panel::a_click_inside_the_parent_line_types_where_it_landed`
   against a real daemon. Settings fields have no cursor test of their own.
+- Parity: `edit.place_caret`, `edit.click_away_saves` (both done in both clients: desktop's
+  CodeMirror drops a caret on click and commits on blur) and `list.click_to_edit` (desktop
+  `differs`: its list is a text buffer, any click is a caret). Click-only rows, `keys = []`, so
+  Help lists them and no binding is needed. No desktop `@parity` line: nothing lags.

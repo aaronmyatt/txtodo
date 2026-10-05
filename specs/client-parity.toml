@@ -165,6 +165,33 @@ desktop = { status = "done", surface = "FileView" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
+[[action]]
+id = "edit.place_caret"
+title = "Put the caret where you click"
+keys = []
+scope = "edit"
+desktop = { status = "done", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = ""
+
+[[action]]
+id = "edit.click_away_saves"
+title = "Save the edit by clicking somewhere else"
+keys = []
+scope = "edit"
+desktop = { status = "done", surface = "FileView, DetailView (blur)" }
+tui = { status = "done", surface = "Tasks, detail panel" }
+deviation = ""
+
+[[action]]
+id = "list.click_to_edit"
+title = "Edit the selected line where you click it"
+keys = []
+scope = "list"
+desktop = { status = "differs", surface = "FileView" }
+tui = { status = "done", surface = "Tasks, detail panel sub-list" }
+deviation = "Desktop's list is a text buffer, so any click puts a caret there; the TUI selects on the first click and edits on a click on the selected line."
+
 # ==== Panes the revamp replaces (TUI as of 2026-09-24) =============================================
 
 [[action]]
