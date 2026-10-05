@@ -251,6 +251,34 @@ async fn a_dangling_ref_on_another_line_still_claims_its_slug() {
 }
 
 #[tokio::test]
+async fn resolve_predicts_the_slug_ensure_will_claim_when_a_folder_is_already_there() {
+    let dir = tempfile::tempdir().unwrap();
+    // An orphaned folder (its line lost its `ref:`) keeps the name `roadmap`.
+    std::fs::create_dir(dir.path().join("roadmap")).unwrap();
+    let store = store(dir.path());
+    let handle = open(dir.path(), &store).spawn();
+    handle
+        .apply(
+            vec![crate::mutation::Mutation::Add {
+                line: "(A) roadmap".into(),
+            }],
+            user(),
+        )
+        .await
+        .unwrap();
+    let line = TaskRef {
+        line_number: 1,
+        task_id: None,
+    };
+    let predicted = handle.resolve_ref_dir(line.clone()).await.unwrap();
+    let claimed = handle.ensure_ref_dir(line, user()).await.unwrap();
+    assert_eq!(
+        (predicted.slug.as_str(), claimed.slug.as_str()),
+        ("roadmap-2", "roadmap-2")
+    );
+}
+
+#[tokio::test]
 async fn rename_ref_dir_moves_the_directory_and_rewrites_the_tag() {
     let dir = tempfile::tempdir().unwrap();
     let store = store(dir.path());

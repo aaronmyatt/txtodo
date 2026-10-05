@@ -119,8 +119,9 @@ impl FileActor {
     }
 
     /// Read-only counterpart to `ensure_ref_dir`: the line's existing `ref:` slug, or the slug
-    /// lazy creation would use — computed the same way, but never committing a tag or touching the
-    /// filesystem (`txtodo open`'s negative-space requirement, tasks/cli-ref-commands/notes.md).
+    /// lazy creation would use — computed the same way (a folder already on disk takes its name,
+    /// as `try_create_dir` would find), but never committing a tag or writing to the filesystem
+    /// (`txtodo open`'s negative-space requirement, tasks/cli-ref-commands/notes.md).
     pub(crate) fn resolve_ref_dir(&self, task: TaskRef) -> Result<RefDirQuery, ActorError> {
         let (_, id) = mutation::resolve(&self.state, &task)?;
         let line = self.state.line_of(id).ok_or(StateError::UnknownTask(id))?;
@@ -136,7 +137,8 @@ impl FileActor {
             .unwrap_or_else(|| fallback_slug(id));
         for attempt in 0..=MAX_SLUG_COLLISIONS {
             let candidate = suffixed(&base, attempt);
-            if !slug_taken_in_doc(&self.state, &candidate, id) {
+            let on_disk = self.own_dir().join(&candidate).exists();
+            if !slug_taken_in_doc(&self.state, &candidate, id) && !on_disk {
                 return Ok(RefDirQuery {
                     task_id: id,
                     slug: candidate,
