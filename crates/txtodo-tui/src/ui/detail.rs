@@ -197,10 +197,7 @@ fn draw_notes(frame: &mut Frame, area: Rect, level: &Level, focused: bool) {
             if !(focused && n == caret_line) {
                 return Line::raw(format!(" {text}"));
             }
-            let split = text
-                .char_indices()
-                .nth(caret_col)
-                .map_or(text.len(), |(i, _)| i);
+            let split = crate::text_input::offset_at_column(text, caret_col);
             let (before, after) = text.split_at(split);
             Line::from(vec![
                 Span::raw(format!(" {before}")),

@@ -1,5 +1,4 @@
-Shared TextInput: one buffer+caret for every field, grapheme moves, display-width columns, Delete; add unicode-width + unicode-segmentation +m11 @tui
-Real terminal cursor: one set_cursor_position per frame for the focused field, bar shape; drop the ▏ spans +m11 @tui
+Real terminal cursor: one set_cursor_position per frame for the focused field, bar shape; drop the ▏ spans +m11 @tui @doing by:claude
 Edit style tokens in theme.rs: high-contrast input bg/fg and accent border, light and dark, 16-colour fallback +m11 @tui
 Focus is visible: detail panel border lights when it has the keyboard; root list highlight dims when focus is elsewhere +m11 @tui
 Fix: clicking the parent line or notes gives the detail panel the keyboard (nav.focus = Detail) +m11 @tui
@@ -13,3 +12,4 @@ Search, : line and Settings fields move to TextInput (caret, click, cursor) +m11
 Tests: TestBackend cursor-position asserts per field; click-to-offset unit tests with wide chars; e2e edit by click in detail_panel +m11 @tui @test
 specs/client-parity.toml + Help: rows for click-to-caret and click-to-edit; desktop @parity lines if it differs +m11 @tui @parity
 Human pass: edit every field by keys and mouse, light and dark terminal +m11 @tui @human
+x 2026-10-05 Shared TextInput: one buffer+caret for every field, grapheme moves, display-width columns, Delete; add unicode-width + unicode-segmentation +m11 @tui — text_input.rs, grapheme moves and display-cell columns; Delete in the line editor; known gap: search, : line and Settings fields still push/pop (line 12)

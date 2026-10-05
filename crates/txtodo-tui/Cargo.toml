@@ -64,6 +64,13 @@ txtodo-workspace-paths = { path = "../txtodo-workspace-paths" }
 # tui-revamp/tui-settings; dep approved on its decide line 2026-09-25). Same version and features as
 # txtodo-cli's `txtodo pair`: no default features, so no `image`/`svg`/`pic` pull-in.
 qrcode = { version = "0.14", default-features = false }
+# https://docs.rs/unicode-segmentation — grapheme boundaries, so one Left/Backspace in a text field
+# moves over one user-seen character (task tui-text-editing; approved by the human 2026-10-05).
+# Already in Cargo.lock through ratatui.
+unicode-segmentation = "1.13"
+# https://docs.rs/unicode-width — display cells per grapheme, so a click maps to the character
+# under it and the real cursor lands on wide characters correctly (same task and approval).
+unicode-width = "0.2"
 
 [dev-dependencies]
 # https://docs.rs/tempfile — integration tests get a scratch workspace dir, like txtodo-daemon's own

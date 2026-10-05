@@ -8,6 +8,7 @@ use std::time::Instant;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::state_detail::Notes;
+use crate::text_input;
 
 /// Applies one key to `notes` at `now`; `true` when it was an editing or caret key.
 pub fn on_key(notes: &mut Notes, key: KeyEvent, now: Instant) -> bool {
@@ -46,41 +47,22 @@ pub fn on_key(notes: &mut Notes, key: KeyEvent, now: Instant) -> bool {
 }
 
 fn insert(notes: &mut Notes, c: char) {
-    notes.text.insert(notes.caret, c);
-    notes.caret += c.len_utf8();
+    text_input::insert(&mut notes.text, &mut notes.caret, c);
 }
 
 fn backspace(notes: &mut Notes) -> bool {
-    let Some(prev) = notes.text[..notes.caret].chars().next_back() else {
-        return false;
-    };
-    notes.caret -= prev.len_utf8();
-    notes.text.remove(notes.caret);
-    true
+    text_input::backspace(&mut notes.text, &mut notes.caret)
 }
 
 fn delete(notes: &mut Notes) -> bool {
-    if notes.caret >= notes.text.len() {
-        return false;
-    }
-    notes.text.remove(notes.caret);
-    true
+    text_input::delete(&mut notes.text, notes.caret)
 }
 
 fn step(notes: &mut Notes, forward: bool) -> bool {
-    let next = if forward {
-        notes.text[notes.caret..]
-            .chars()
-            .next()
-            .map(|c| notes.caret + c.len_utf8())
+    if forward {
+        text_input::right(&notes.text, &mut notes.caret);
     } else {
-        notes.text[..notes.caret]
-            .chars()
-            .next_back()
-            .map(|c| notes.caret - c.len_utf8())
-    };
-    if let Some(at) = next {
-        notes.caret = at;
+        text_input::left(&notes.text, &mut notes.caret);
     }
     true
 }
@@ -99,7 +81,7 @@ fn line_end(text: &str, at: usize) -> usize {
 fn line_step(notes: &mut Notes, down: bool) -> bool {
     let text = &notes.text;
     let start = line_start(text, notes.caret);
-    let column = text[start..notes.caret].chars().count();
+    let column = text_input::column_of(&text[start..], notes.caret - start);
     let target = if down {
         let end = line_end(text, notes.caret);
         if end >= text.len() {
@@ -113,20 +95,15 @@ fn line_step(notes: &mut Notes, down: bool) -> bool {
         line_start(text, start - 1)
     };
     let end = line_end(text, target);
-    notes.caret = text[target..end]
-        .char_indices()
-        .nth(column)
-        .map_or(end, |(i, _)| target + i);
+    notes.caret = target + text_input::offset_at_column(&text[target..end], column);
     true
 }
 
-/// The caret as `(line, column)` in chars, for drawing it.
+/// The caret as `(line, column)`, the column in display cells, for drawing it.
 pub fn caret_position(notes: &Notes) -> (usize, usize) {
     let before = &notes.text[..notes.caret];
     let line = before.matches('\n').count();
-    let column = before[line_start(&notes.text, notes.caret)..]
-        .chars()
-        .count();
+    let column = text_input::width(&before[line_start(&notes.text, notes.caret)..]);
     (line, column)
 }
 

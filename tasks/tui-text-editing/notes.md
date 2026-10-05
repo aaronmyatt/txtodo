@@ -57,3 +57,13 @@
 ## Open questions
 - Does click-to-edit clash with drag reorder or double-click-to-open timing? Decide while building
   that line; check the drag threshold in `mouse.rs` first.
+
+## As built
+- `src/text_input.rs`: free functions over a `String` plus a byte caret, not a struct. `EditDraft`
+  and `Notes` keep their own fields and call through, so no caller had to change.
+  - Moves, Backspace and Delete step one grapheme (unicode-segmentation). Columns are display
+    cells (unicode-width).
+  - `offset_at_column` maps a click to the nearest boundary; `scroll_for`/`visible_from` give a
+    stateless horizontal scroll: the caret sits on the last cell once it passes the right edge.
+  - The line editor gained Delete. The notes editor's Up/Down keep a display column, not a char
+    count.

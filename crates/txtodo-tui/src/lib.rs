@@ -20,6 +20,7 @@ pub mod state_tasks;
 pub mod state_types;
 pub mod state_universal;
 pub mod terminal;
+pub mod text_input;
 pub mod theme;
 
 /// Widgets, each rendering a pure function of `&state::AppState` (design §7's per-row/pane split):

@@ -27,7 +27,8 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   the tick, and deadlines (notes autosave, the prompt hint). `terminal`: raw mode, mouse, kitty
   keys, all undone on exit and on panic.
 - `manifest`: `specs/client-parity.toml` built in; Help and Settings › Shortcuts render from it.
-  `prefs`: the TUI's own `tui.conf`. `clipboard`: OSC 52.
+  `prefs`: the TUI's own `tui.conf`. `clipboard`: OSC 52. `text_input`: the caret logic every text
+  field shares (grapheme moves, display-cell columns, click-to-offset).
 - Tests: unit tests per module (`AppState::fixture()`, hand-drawn hit maps, `TestBackend`);
   real-daemon tests are in the `test = false` `tests/e2e` target: run them with
   `TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_AUTOSTART=1 cargo nextest run -p txtodo-tui
@@ -65,4 +66,5 @@ desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
 - May depend only on: txtodo-core, txtodo-proto, txtodo-telemetry, txtodo-daemon-launch,
   txtodo-workspace-paths (external: ratatui, crossterm, tonic, tokio, hyper-util, tower, jiff —
   same socket-dial set `txtodo-cli` already carries, `cargo deny check` clean as of 2026-09-13,
-  human sign-off still outstanding; plus qrcode for the pairing QR, approved 2026-09-25).
+  human sign-off still outstanding; plus qrcode for the pairing QR, approved 2026-09-25; plus
+  unicode-segmentation and unicode-width for text fields, approved 2026-10-05).

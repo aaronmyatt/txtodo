@@ -8979,6 +8979,8 @@ dependencies = [
  "txtodo-proto",
  "txtodo-telemetry",
  "txtodo-workspace-paths",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]

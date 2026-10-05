@@ -6,6 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use txtodo_proto::v1 as pb;
 
 use crate::state::{AppState, EditDraft, EditTarget};
+use crate::text_input;
 
 /// Which vim key opened the editor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,31 +37,22 @@ pub fn cancel(state: &mut AppState) {
 
 /// Inserts one character at the caret.
 pub fn insert_char(draft: &mut EditDraft, c: char) {
-    draft.buffer.insert(draft.caret, c);
-    draft.caret += c.len_utf8();
+    text_input::insert(&mut draft.buffer, &mut draft.caret, c);
 }
 
-/// Deletes the character before the caret, if any.
+/// Deletes the grapheme before the caret, if any.
 pub fn backspace(draft: &mut EditDraft) {
-    let Some(prev) = draft.buffer[..draft.caret].chars().next_back() else {
-        return;
-    };
-    draft.caret -= prev.len_utf8();
-    draft.buffer.remove(draft.caret);
+    text_input::backspace(&mut draft.buffer, &mut draft.caret);
 }
 
-/// Moves the caret one character left, clamped at the start.
+/// Moves the caret one grapheme left, clamped at the start.
 pub fn move_left(draft: &mut EditDraft) {
-    if let Some(prev) = draft.buffer[..draft.caret].chars().next_back() {
-        draft.caret -= prev.len_utf8();
-    }
+    text_input::left(&draft.buffer, &mut draft.caret);
 }
 
-/// Moves the caret one character right, clamped at the end.
+/// Moves the caret one grapheme right, clamped at the end.
 pub fn move_right(draft: &mut EditDraft) {
-    if let Some(next) = draft.buffer[draft.caret..].chars().next() {
-        draft.caret += next.len_utf8();
-    }
+    text_input::right(&draft.buffer, &mut draft.caret);
 }
 
 /// One keystroke while the editor has focus. Enter/Esc are handled by `app.rs` (Enter needs to
@@ -70,6 +62,9 @@ pub fn on_key(draft: &mut EditDraft, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Char(c) => insert_char(draft, c),
         KeyCode::Backspace => backspace(draft),
+        KeyCode::Delete => {
+            text_input::delete(&mut draft.buffer, draft.caret);
+        }
         KeyCode::Left => move_left(draft),
         KeyCode::Right => move_right(draft),
         KeyCode::Home => draft.caret = 0,
@@ -150,6 +145,16 @@ mod tests {
         move_left(&mut draft);
         insert_char(&mut draft, 'b');
         assert_eq!(draft.buffer, "abc");
+    }
+
+    #[test]
+    fn delete_removes_the_character_after_the_caret() {
+        let mut draft = EditDraft::new_line();
+        insert_char(&mut draft, 'a');
+        insert_char(&mut draft, 'b');
+        move_left(&mut draft);
+        assert!(on_key(&mut draft, KeyEvent::from(KeyCode::Delete)));
+        assert_eq!((draft.buffer.as_str(), draft.caret), ("a", 1));
     }
 
     #[test]
