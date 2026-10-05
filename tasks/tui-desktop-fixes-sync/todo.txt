@@ -1,4 +1,4 @@
-daemon: an Edit that makes a line done (typed x, desktop x chip) gets the completion date and moves to the bottom, like Complete +m11 @daemon
+daemon: an Edit that makes a line done (typed x, desktop x chip) gets the completion date and moves to the bottom, like Complete +m11 @daemon @doing by:claude
 core + daemon: one normaliser for X to x and (a) to (A), applied on Add and Edit +m11 @core @daemon
 daemon: resolve_ref_dir checks the filesystem for slug collisions like ensure_ref_dir +m11 @daemon
 tui: + Add a line row at the top of the list, per the decide line +m11 @tui — one Apply: Add, then a move before the first line
