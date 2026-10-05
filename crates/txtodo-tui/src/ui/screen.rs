@@ -10,7 +10,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{ListState, Paragraph};
 
-use crate::hit::{HitMap, Target};
+use crate::hit::{Field, HitMap, Target};
 use crate::state::AppState;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
@@ -121,7 +121,7 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
     if let (Some(draft), false) = (&state.editing, sub_list_edit) {
         let rows = row_edit::Rows::of(state, list_area, list_state.offset());
         if let Some(field) = row_edit::draw(frame, rows, state.cursor, draft) {
-            hits.push(field, Target::Inert);
+            hits.push(field, Target::Field(Field::LineEdit, field));
         }
     }
 }

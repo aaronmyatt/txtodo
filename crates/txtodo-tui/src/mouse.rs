@@ -4,8 +4,9 @@
 //! terminal-free, so it is tested over a fixed map.
 //!
 //! crossterm reports no double-click: two left presses on the same cell within [`DOUBLE_CLICK`]
-//! make one. The mouse only acts in list mode; while a line is being edited, the `:` line is open
-//! or a sheet is up, the keyboard has the screen.
+//! make one. While a line is being edited, a press on it moves the caret and a press anywhere
+//! else saves it (`mouse_text`); a release on the already-selected row's text starts editing it
+//! there. While the `:` line is open or a sheet is up, the keyboard has the screen.
 //! Ref: <https://docs.rs/crossterm/latest/crossterm/event/struct.MouseEvent.html>
 
 use std::time::{Duration, Instant};
@@ -30,6 +31,19 @@ const WHEEL_ROWS: isize = 3;
 pub struct Mouse {
     last_press: Option<(u16, u16, Instant)>,
     dragging: Option<usize>,
+    /// A press on the already-selected row's text: its release (no drag) starts an edit there.
+    armed: Option<Arm>,
+    /// The text an edit started by a click began with, so a quick second press on an untouched
+    /// draft can be read as the double-click that opens the row.
+    click_edit: Option<String>,
+}
+
+/// A pending click-to-edit: the row, whether it is the sub-list's, and where its rows start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Arm {
+    row: usize,
+    sub: bool,
+    left: u16,
 }
 
 impl Mouse {
@@ -41,6 +55,17 @@ impl Mouse {
         now: Instant,
     ) -> Option<Action> {
         let target = state.hits.at(ev.column, ev.row);
+        if state.editing.is_some() {
+            self.dragging = None;
+            self.armed = None;
+            return match ev.kind {
+                MouseEventKind::Down(MouseButton::Left) => {
+                    self.press_editing(state, target, &ev, now)
+                }
+                _ => None,
+            };
+        }
+        self.click_edit = None;
         if busy(state) {
             state.hover = None;
             self.dragging = None;
@@ -54,7 +79,7 @@ impl Mouse {
             MouseEventKind::ScrollDown => wheel(state, target, true),
             MouseEventKind::ScrollUp => wheel(state, target, false),
             MouseEventKind::Down(MouseButton::Left) => self.press(state, target, &ev, now),
-            MouseEventKind::Up(MouseButton::Left) => self.release(state, target),
+            MouseEventKind::Up(MouseButton::Left) => self.release(state, target, ev.column),
             _ => None,
         }
     }
@@ -102,9 +127,22 @@ impl Mouse {
                     .flatten();
             }
             Target::DetailRow(index) => return self.press_sub_row(state, index, ev, now),
+            Target::Field(which, area) => {
+                crate::mouse_text::press_field(state, which, area, ev.column, ev.row);
+                return None;
+            }
             Target::Inert => return None,
         };
         let double = self.is_double(ev, now);
+        let was_selected = state.cursor == row && state.nav.focus == crate::state_nav::Focus::List;
+        if was_selected && !double {
+            let left = state.hits.list().map_or(0, |l| l.area.x);
+            self.armed = Some(Arm {
+                row,
+                sub: false,
+                left,
+            });
+        }
         state.cursor = row;
         // A click on the list takes the keyboard back from the search field or the panel.
         state.nav.focus = crate::state_nav::Focus::List;
@@ -127,6 +165,20 @@ impl Mouse {
     ) -> Option<Action> {
         let double = self.is_double(ev, now);
         self.dragging = None;
+        let selected = state.detail.top().map(|l| l.doc.cursor);
+        let sub_has_keys = crate::mouse_text::in_detail(state)
+            && state.detail.part == crate::state_detail::Part::Sub;
+        if sub_has_keys && selected == Some(index) && !double {
+            let left = state
+                .hits
+                .area_at(ev.column, ev.row)
+                .map_or(0, |(r, _)| r.x);
+            self.armed = Some(Arm {
+                row: index,
+                sub: true,
+                left,
+            });
+        }
         state.nav.focus = crate::state_nav::Focus::Detail;
         state.detail.part = crate::state_detail::Part::Sub;
         crate::state_detail::with_sub_list(state, |s| {
@@ -198,18 +250,62 @@ impl Mouse {
         double
     }
 
-    fn release(&mut self, state: &mut AppState, target: Option<Target>) -> Option<Action> {
-        let from = self.dragging.take()?;
-        match target? {
-            Target::Row(to) if to != from => commands::move_row(state, from, to),
+    fn release(
+        &mut self,
+        state: &mut AppState,
+        target: Option<Target>,
+        column: u16,
+    ) -> Option<Action> {
+        let armed = self.armed.take();
+        let from = self.dragging.take();
+        match (target?, from) {
+            (Target::Row(to), Some(from)) if to != from => commands::move_row(state, from, to),
+            (Target::Row(to) | Target::DetailRow(to), _) if armed.is_some_and(|a| a.row == to) => {
+                let arm = armed?;
+                self.click_edit = crate::mouse_text::edit_at(state, arm.sub, arm.left, column);
+                None
+            }
             _ => None,
         }
     }
+
+    /// A press while a line is being edited: on the line, the caret moves there (or, the quick
+    /// second press of a double-click on a draft a click just opened and nobody typed in, the row
+    /// opens instead); anywhere else, the edit is saved.
+    fn press_editing(
+        &mut self,
+        state: &mut AppState,
+        target: Option<Target>,
+        ev: &MouseEvent,
+        now: Instant,
+    ) -> Option<Action> {
+        let double = self.is_double(ev, now);
+        if let Some(Target::Field(crate::hit::Field::LineEdit, area)) = target {
+            let untouched = self
+                .click_edit
+                .as_ref()
+                .is_some_and(|text| state.editing.as_ref().is_some_and(|d| &d.buffer == text));
+            if double && untouched {
+                self.click_edit = None;
+                return crate::mouse_text::open_instead(state);
+            }
+            crate::mouse_text::press_field(
+                state,
+                crate::hit::Field::LineEdit,
+                area,
+                ev.column,
+                ev.row,
+            );
+            return None;
+        }
+        self.click_edit = None;
+        crate::mouse_text::save_edit(state)
+    }
 }
 
-/// Whether something other than the list has the keyboard.
+/// Whether something other than the list has the keyboard (the line editor is handled first).
 fn busy(state: &AppState) -> bool {
-    state.editing.is_some() || state.command.is_some() || state.conflicts_open || state.offers.open
+    state.command.is_some() || state.conflicts_open || state.offers.open
 }
 
 fn row_of(target: Option<Target>) -> Option<usize> {
@@ -227,6 +323,7 @@ fn row_of(target: Option<Target>) -> Option<usize> {
         | Target::UniversalContext(_)
         | Target::SettingsCard(_)
         | Target::SettingsRow(_)
+        | Target::Field(..)
         | Target::Inert => None,
     }
 }
@@ -245,7 +342,7 @@ fn wheel(state: &mut AppState, target: Option<Target>, down: bool) -> Option<Act
             crate::state_detail::with_sub_list(state, |s| repeat(s, step, steps));
             None
         }
-        Some(Target::Command(Command::DetailEditNotes)) => {
+        Some(Target::Field(crate::hit::Field::Notes, _)) => {
             let notes = &mut state.detail.top_mut()?.notes;
             let code = if down { KeyCode::Down } else { KeyCode::Up };
             for _ in 0..steps {

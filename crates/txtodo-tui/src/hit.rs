@@ -37,8 +37,23 @@ pub enum Target {
     SettingsCard(usize),
     /// A row of the Settings card in view.
     SettingsRow(usize),
+    /// A text field, and where its text is drawn: a click puts the caret under the pointer.
+    Field(Field, Rect),
     /// An overlay's body: it takes the click, and nothing underneath gets it.
     Inert,
+}
+
+/// Which text field a [`Target::Field`] is (task `tui-text-editing`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    /// The line being edited, in the root list or the sub-list.
+    LineEdit,
+    /// The detail panel's parent line (a field once clicked).
+    Parent,
+    /// The detail panel's notes.
+    Notes,
+    /// The prompt bar's draft.
+    Prompt,
 }
 
 /// Where the Tasks list was drawn, and which row sat at its top.
@@ -79,12 +94,17 @@ impl HitMap {
 
     /// The topmost target under the cell at (`column`, `row`).
     pub fn at(&self, column: u16, row: u16) -> Option<Target> {
+        self.area_at(column, row).map(|(_, target)| target)
+    }
+
+    /// The topmost target under the cell at (`column`, `row`), with the rect it was recorded over.
+    pub fn area_at(&self, column: u16, row: u16) -> Option<(Rect, Target)> {
         let cell = Position::new(column, row);
         self.targets
             .iter()
             .rev()
             .find(|(area, _)| area.contains(cell))
-            .map(|(_, target)| *target)
+            .copied()
     }
 }
 

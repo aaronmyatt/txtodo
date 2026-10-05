@@ -73,6 +73,7 @@ pub mod input_detail;
 pub mod keymap;
 pub mod manifest;
 pub mod mouse;
+pub mod mouse_text;
 pub mod pair_code;
 pub mod prompt;
 pub mod search;

@@ -11,7 +11,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph};
 
-use crate::hit::{HitMap, Target};
+use crate::hit::{Field, HitMap, Target};
 use crate::keymap::Command;
 use crate::state::AppState;
 use crate::state_detail::{Level, Part, swap_in};
@@ -68,7 +68,7 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
         level,
         part == Part::Notes && panel_has_keys(state),
     );
-    hits.push(notes, Target::Command(Command::DetailEditNotes));
+    hits.push(notes, Target::Field(Field::Notes, notes));
 }
 
 /// A part's label, reversed while it has the keyboard.
@@ -140,14 +140,16 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
     let label_width = u16::try_from(label.width())
         .unwrap_or(0)
         .min(text_area.width);
+    let field_area = Rect {
+        x: text_area.x + label_width,
+        width: text_area.width - label_width,
+        ..text_area
+    };
+    // The text itself is a field target, so a click lands the caret on the character under it.
+    hits.push(field_area, Target::Field(Field::Parent, field_area));
     match &level.parent_draft {
         Some(draft) => {
             frame.render_widget(Paragraph::new(Line::from(label)), text_area);
-            let field_area = Rect {
-                x: text_area.x + label_width,
-                width: text_area.width - label_width,
-                ..text_area
-            };
             let style = crate::theme::current().input_style();
             let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
             if panel_has_keys(state) {
@@ -208,7 +210,7 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
     if let (Some(draft), true) = (&state.editing, panel_has_keys(state)) {
         let rows = row_edit::Rows::of(&view, area, first);
         if let Some(field) = row_edit::draw(frame, rows, view.cursor, draft) {
-            hits.push(field, Target::Inert);
+            hits.push(field, Target::Field(Field::LineEdit, field));
         }
     }
 }

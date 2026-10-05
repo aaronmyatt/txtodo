@@ -1,6 +1,3 @@
-Click to place the caret: hit targets carry field origin + scroll; col/row to offset in list rows, sub rows, parent, notes, prompt bar, search +m11 @tui
-Mouse while editing: click inside the field moves the caret; click outside saves and leaves the edit +m11 @tui
-Click on the selected row's text starts an edit at that point (a click on an unselected row still only selects) +m11 @tui
 Search, : line and Settings fields move to TextInput (caret, click, cursor) +m11 @tui
 Tests: TestBackend cursor-position asserts per field; click-to-offset unit tests with wide chars; e2e edit by click in detail_panel +m11 @tui @test
 specs/client-parity.toml + Help: rows for click-to-caret and click-to-edit; desktop @parity lines if it differs +m11 @tui @parity
@@ -13,3 +10,6 @@ x 2026-10-05 Fix: clicking the parent line or notes gives the detail panel the k
 x 2026-10-05 List and sub-list edit in place: the row itself becomes the input (h-scroll for long lines); drop the bottom edit >/add > overlay +m11 @tui — ui/row_edit.rs: the edited row is the field (accent mark, tint, real cursor, sideways scroll) in the root list and the sub-list; the bottom edit > overlay is gone
 x 2026-10-05 Parent line field uses TextInput in place; caret no longer forced to the end +m11 @tui — parent draft drawn by field.rs with the edge mark and real cursor; Tab keeps caret-at-end, click placement lands with the click line
 x 2026-10-05 Notes editor: soft wrap, caret on wrapped rows, width-aware column +m11 @tui — soft wrap (word, then grapheme), cursor and Up/Down by visual rows, display-cell columns
+x 2026-10-05 Click to place the caret: hit targets carry field origin + scroll; col/row to offset in list rows, sub rows, parent, notes, prompt bar, search +m11 @tui — Target::Field + mouse_text.rs: list editor, parent, notes, prompt; known gap: a click after a mid-line id: tag on the parent lands early; search is line 12's
+x 2026-10-05 Mouse while editing: click inside the field moves the caret; click outside saves and leaves the edit +m11 @tui — a press on the line moves the caret, elsewhere saves via EditCommit and does nothing more
+x 2026-10-05 Click on the selected row's text starts an edit at that point (a click on an unselected row still only selects) +m11 @tui — arm on press, edit on release with no drag; a quick second press on the untouched draft opens the row instead, so double-click-to-open survives

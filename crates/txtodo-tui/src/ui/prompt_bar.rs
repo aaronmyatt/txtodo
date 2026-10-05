@@ -11,7 +11,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
-use crate::hit::{HitMap, Target};
+use crate::hit::{Field, HitMap, Target};
 use crate::keymap::Command;
 use crate::prompt::{CHIPS, hint};
 use crate::state::AppState;
@@ -46,6 +46,7 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, now: Instant, hits:
     let style = crate::theme::current().input_style();
     let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
     frame.set_cursor_position(cell);
+    hits.push(field_area, Target::Field(Field::Prompt, field_area));
     if let Some(text) = hint {
         let rect = Rect::new(
             field_area.right(),

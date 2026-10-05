@@ -98,3 +98,20 @@
   - Wrap width = panel width - 2 (left margin, a spare cell for a caret at a full row's end). The
     panel stores it in `Notes.wrap_width` (a `Cell`, since drawing borrows the state) so Up/Down
     move by the rows on screen; before the first draw they fall back to logical lines.
+- Clicks on text (`mouse_text.rs`, driven from `mouse.rs`): `Target::Field(Field, Rect)` carries
+  where the text was drawn; the click maps back through the same code that drew it
+  (`field::offset_at`, `notes_wrap`). Fields: the line being edited (root and sub-list), the
+  parent line, the notes, the prompt bar draft.
+  - A click on the painted parent line opens the field with the caret under the pointer; the
+    notes take the keyboard and the caret at the wrapped row and column.
+  - Known gap: the parent line is painted with its `id:` tag hidden but edited raw, so a click
+    after a mid-line `id:` tag lands that many cells early. `id:` is almost always last.
+- While editing: a press on the line moves the caret; a press anywhere else saves (Enter's
+  `EditCommit`) and does nothing more, so one event never makes two changes.
+- Click to edit: a press on the row that is already selected (and whose list has the keys) arms;
+  the release on the same row, with no drag, starts the edit with the caret under the pointer.
+  - Open question settled: drag reorder still starts on press and moves on release over another
+    row, so it never arms an edit. A double-click on the selected row: the first click opens an
+    edit, the second press (within 400 ms, draft untouched) drops it and opens the row, so
+    double-click-to-open still works everywhere.
+- `mouse.rs` is at 391 lines of the 400 budget: the next mouse change should move code out.
