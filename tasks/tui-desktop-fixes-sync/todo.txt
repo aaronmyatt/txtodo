@@ -1,4 +1,4 @@
-daemon: Add stamps the creation date; fix the MCP todo_add docs and refusal that claim it already does +m11 @daemon @mcp
+daemon: Add stamps the creation date; fix the MCP todo_add docs and refusal that claim it already does +m11 @daemon @mcp @doing by:claude
 daemon: an Edit that makes a line done (typed x, desktop x chip) gets the completion date and moves to the bottom, like Complete +m11 @daemon
 core + daemon: one normaliser for X to x and (a) to (A), applied on Add and Edit +m11 @core @daemon
 daemon: resolve_ref_dir checks the filesystem for slug collisions like ensure_ref_dir +m11 @daemon
