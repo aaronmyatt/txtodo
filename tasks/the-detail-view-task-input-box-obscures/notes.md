@@ -1,0 +1,2 @@
+This makes reading the task difficult in the desktop detail view
+Let's also add a task breakdown view, perhaps a vertical view like `.mode line` in sqlite to give an alternative way to read the todo.txt syntax, particularly if there's a long task description

@@ -1,0 +1,1 @@
+Removing it immediately severs the link and creates a new ref:path/
