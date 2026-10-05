@@ -83,6 +83,15 @@ tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
 [[action]]
+id = "list.add_on_top"
+title = "Add a line from the row on top; it lands at the top of the list"
+keys = []
+scope = "list"
+desktop = { status = "planned", surface = "FileView" }
+tui = { status = "done", surface = "Tasks, detail panel sub-list" }
+deviation = ""
+
+[[action]]
 id = "list.last"
 title = "Last line"
 keys = ["G"]
