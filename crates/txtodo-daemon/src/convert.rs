@@ -135,14 +135,15 @@ fn parse_hash(bytes: &[u8]) -> Result<[u8; 32], Status> {
 /// One wire mutation into the typed one. A client's new line gets `today` as its creation date
 /// here, at the wire, so lines the daemon adds for its own reasons (a cross-file move's arriving
 /// line) keep the date they had (`txtodo_core::line_fixes`, ADR 0011). Unless `literal` (the CLI,
-/// which computes every line itself, todo.sh style), a line typed done gets `today` as its
-/// completion date and an edit that marks one done moves it down.
+/// which computes every line itself, todo.sh style), `X `/`(a) ` slips are fixed, a line typed
+/// done gets `today` as its completion date, and an edit that marks one done moves it down.
 pub fn parse_mutation(m: pb::Mutation, today: Date, literal: bool) -> Result<Mutation, Status> {
     let fix = |line: String| {
         if literal {
             line
         } else {
-            txtodo_core::line_fixes::date_done(&line, today)
+            let fixed = txtodo_core::line_fixes::fix_case(&line);
+            txtodo_core::line_fixes::date_done(&fixed, today)
         }
     };
     let kind = m

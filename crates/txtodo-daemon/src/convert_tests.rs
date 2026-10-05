@@ -121,6 +121,15 @@ fn a_line_typed_done_is_dated_and_settles_unless_the_cli_sent_it() {
         ("x 2026-10-05 call mum", true),
         "typed done: dated, and it settles"
     );
+    let Mutation::Edit { new_line, .. } =
+        parse_mutation(edit("X (a) call mum"), today, false).unwrap()
+    else {
+        panic!("an edit")
+    };
+    assert_eq!(
+        new_line, "x 2026-10-05 call mum pri:A",
+        "case fixed, then dated"
+    );
     let Mutation::Edit {
         new_line, settle, ..
     } = parse_mutation(edit("x call mum"), today, true).unwrap()
