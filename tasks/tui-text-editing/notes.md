@@ -122,3 +122,8 @@
   - Each draws through `field.rs` with the input tint and the real cursor while it has the keys,
     and records a `Field::Search|Command|SettingsFilter|SettingsField` target for clicks.
   - No `▏` is drawn anywhere now.
+- Tests: TestBackend `cursor_visible`/`cursor_position` asserts for the root editor, the `:` line,
+  the prompt bar, the parent, the notes (wrapped too), a sub-line, the search; click-to-offset
+  unit tests with wide and combining characters (`text_input`, `field`, `notes_wrap`); mouse flows
+  in `mouse_text_tests.rs`; e2e `detail_panel::a_click_inside_the_parent_line_types_where_it_landed`
+  against a real daemon. Settings fields have no cursor test of their own.

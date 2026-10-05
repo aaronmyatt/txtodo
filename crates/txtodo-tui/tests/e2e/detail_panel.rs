@@ -85,3 +85,62 @@ async fn drill_add_a_sub_task_write_notes_and_find_them_again() {
     assert_eq!(reopened.text, "passports first");
     assert!(!reopened.dirty());
 }
+
+/// Draws one 80x24 frame of `state`, as the event loop does, so the mouse has a hit map; returns
+/// the screen's rows as text.
+fn frame(state: &mut AppState) -> Vec<String> {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap_or_else(|e| panic!("{e}"));
+    let mut hits = txtodo_tui::hit::HitMap::default();
+    terminal
+        .draw(|f| hits = txtodo_tui::ui::screen::draw(f, state))
+        .unwrap_or_else(|e| panic!("{e}"));
+    state.hits = hits;
+    terminal
+        .backend()
+        .buffer()
+        .content()
+        .chunks(80)
+        .map(|r| r.iter().map(|c| c.symbol()).collect())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_click_inside_the_parent_line_types_where_it_landed() {
+    use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    let (real, mut daemon) = support::RealDaemon::start("plan the trip\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+    press(&mut daemon, &mut input, &mut state, &[KeyCode::Enter]).await;
+    assert!(state.detail.is_open(), "Enter opens the line");
+
+    // Click on the "t" of "trip" in the panel's parent line.
+    let rows = frame(&mut state);
+    let y = rows
+        .iter()
+        .position(|r| r.contains("Parent  plan the trip"))
+        .unwrap_or_else(|| panic!("the parent row: {rows:#?}"));
+    let x = rows[y].find("trip").unwrap_or(0);
+    let click = MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: u16::try_from(x).unwrap_or(0),
+        row: u16::try_from(y).unwrap_or(0),
+        modifiers: KeyModifiers::NONE,
+    };
+    assert_eq!(input.on_mouse(&mut state, click), None);
+
+    let mut keys = typed("big ");
+    keys.push(KeyCode::Enter);
+    press(&mut daemon, &mut input, &mut state, &keys).await;
+    assert_eq!(state.last_error, None);
+    assert!(
+        real.disk().contains("plan the big trip"),
+        "typed where the click landed: {}",
+        real.disk()
+    );
+}

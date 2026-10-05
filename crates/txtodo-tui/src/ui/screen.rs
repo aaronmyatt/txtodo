@@ -192,4 +192,34 @@ mod tests {
         state.nav.screen = Screen::Universal;
         assert_eq!(drawn(&state).at(0, 1), None, "no list on another screen");
     }
+
+    /// Where the terminal cursor is after drawing `state` on a 40x9 terminal, if shown.
+    fn cursor(state: &AppState) -> Option<ratatui::layout::Position> {
+        let backend = ratatui::backend::TestBackend::new(40, 9);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap_or_else(|e| panic!("{e}"));
+        terminal
+            .draw(|f| {
+                draw(f, state);
+            })
+            .unwrap_or_else(|e| panic!("{e}"));
+        let backend = terminal.backend();
+        backend.cursor_visible().then(|| backend.cursor_position())
+    }
+
+    #[test]
+    fn the_cursor_marks_the_root_line_editor_and_the_command_line_and_nothing_else() {
+        let mut state = AppState::fixture();
+        state.needs_review.clear();
+        assert_eq!(cursor(&state), None, "list mode: no cursor");
+        state.cursor = 3;
+        crate::commands::run(&mut state, crate::keymap::Command::ListEditStart);
+        let at = cursor(&state).unwrap_or_else(|| panic!("a cursor while editing"));
+        // Row 3 of the list sits under the header and the sub-toolbar; the caret is at the start.
+        assert_eq!(at.y, 2 + 3);
+        state.editing = None;
+        state.command = Some("w home".to_owned());
+        state.command_caret.set("w home", 1);
+        let at = cursor(&state).unwrap_or_else(|| panic!("a cursor on the : line"));
+        assert_eq!((at.x, at.y), (2, 6), "after \":w\", on the list's last row");
+    }
 }
