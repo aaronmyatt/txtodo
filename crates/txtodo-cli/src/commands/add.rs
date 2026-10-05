@@ -1,9 +1,7 @@
 //! `add` / `addm`: todo.sh `add` with `-t` (date on add), then the `id:` stamp (plan M2, decision 9).
 
 use crate::{CliError, Ctx, clock, store};
-use txtodo_core::{
-    Date, Edit, EditError, File, LineKind, Mode, OwnedLine, Ulid, apply, parse_line,
-};
+use txtodo_core::{Date, Edit, EditError, File, OwnedLine, Ulid, apply};
 
 /// todo.sh `cleaninput` + `uppercasePriority`: CR and LF become spaces; a leading `(a)` becomes `(A)`.
 pub fn clean(input: &str) -> String {
@@ -19,25 +17,6 @@ pub fn clean(input: &str) -> String {
     s
 }
 
-/// Inserts `today ` after an optional `(P) ` prefix (todo.sh `-t`), unless the line already carries a
-/// creation date or is completed — todo.sh would stamp twice; the spec has one creation date.
-pub fn stamp(line: &str, today: Date) -> String {
-    let dated = match parse_line(line, Mode::Lenient).map(|l| l.kind) {
-        Ok(LineKind::Task(t)) => t.completed || t.creation_date.is_some(),
-        Ok(LineKind::Blank) | Err(_) => false,
-    };
-    if dated {
-        return line.to_string();
-    }
-    let at = match line.as_bytes() {
-        [b'(', p, b')', b' ', ..] if p.is_ascii_uppercase() => 4,
-        _ => 0,
-    };
-    let out = format!("{}{today} {}", &line[..at], &line[at..]);
-    debug_assert!(out.len() == line.len() + 11, "one date and one space added");
-    out
-}
-
 /// One `add`: clean, stamp, tag with `id` when given, append. Returns the line number and its text.
 pub fn add_line(
     file: &mut File,
@@ -45,7 +24,7 @@ pub fn add_line(
     today: Date,
     id: Option<Ulid>,
 ) -> Result<(usize, String), EditError> {
-    let text = stamp(&clean(input), today);
+    let text = txtodo_core::line_fixes::stamp_created(&clean(input), today);
     let mut line = OwnedLine::from_bytes(text.into_bytes(), file.ending);
     if let Some(id) = id {
         let edit = Edit::new().set_tag("id", &id.to_string())?;
@@ -109,15 +88,6 @@ mod tests {
         assert_eq!(clean("(a) two\r\nlines"), "(A) two  lines");
         assert_eq!(clean("(A) fine"), "(A) fine");
         assert_eq!(clean("(ab) not a priority"), "(ab) not a priority");
-    }
-
-    #[test]
-    fn stamp_goes_after_the_priority_and_never_twice() {
-        assert_eq!(stamp("call mum", today()), "2026-09-11 call mum");
-        assert_eq!(stamp("(B) call mum", today()), "(B) 2026-09-11 call mum");
-        assert_eq!(stamp("2026-01-01 old", today()), "2026-01-01 old");
-        assert_eq!(stamp("x 2026-01-01 done", today()), "x 2026-01-01 done");
-        assert_eq!(stamp("", today()), "2026-09-11 ");
     }
 
     #[test]
