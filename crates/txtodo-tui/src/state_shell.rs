@@ -11,6 +11,8 @@ pub struct Shell {
     pub root: String,
     /// The header search field's text (the Tasks search, task `tui-revamp/tui-tasks`).
     pub search: String,
+    /// The search field's caret.
+    pub search_caret: crate::text_input::TailCaret,
     /// This session's recent queries, newest first (the suggestions panel).
     pub recent_searches: Vec<String>,
     /// The prompt bar's draft (task `tui-revamp/tui-prompt`); kept while it loses the keyboard.
@@ -121,6 +123,7 @@ impl Default for Shell {
         Shell {
             root: String::new(),
             search: String::new(),
+            search_caret: crate::text_input::TailCaret::default(),
             recent_searches: Vec::new(),
             prompt: crate::state::EditDraft::new_line(),
             prompt_typed_at: None,

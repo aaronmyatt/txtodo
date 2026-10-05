@@ -11,7 +11,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph};
 
 use crate::commands_settings::visible_cards;
-use crate::hit::{HitMap, Target};
+use crate::hit::{Field, HitMap, Target};
 use crate::settings_rows::{SRow, rows};
 use crate::state::AppState;
 use crate::state_nav::SettingsCard;
@@ -35,7 +35,7 @@ pub fn draw(
     let [top, list] = Layout::vertical([Constraint::Length(2), Constraint::Min(1)]).areas(body);
     let settings = &state.settings;
     let filter = if settings.filtering {
-        format!("/ {}\u{258f}", settings.filter)
+        format!("/ {}", settings.filter)
     } else if settings.filter.is_empty() {
         "/ filters the cards".to_owned()
     } else {
@@ -52,6 +52,18 @@ pub fn draw(
         ),
     ]);
     frame.render_widget(Paragraph::new(heading), top);
+    if settings.filtering {
+        // Past " {title} ", the two spaces and "/ ".
+        let lead = u16::try_from(Span::raw(format!(" {} ", card.title())).width() + 4).unwrap_or(0);
+        let at = Rect::new(
+            top.x + lead.min(top.width),
+            top.y,
+            top.width.saturating_sub(lead),
+            1,
+        );
+        let input = (settings.filter.as_str(), settings.filter_caret);
+        draw_input(frame, at, input, Field::SettingsFilter, hits);
+    }
     let rows = rows(card, state);
     match (card, &state.settings.pairing) {
         (SettingsCard::Devices, Pairing::Offer(offer)) => {
@@ -129,6 +141,37 @@ fn draw_rows(frame: &mut Frame, area: Rect, state: &AppState, rows: &[SRow], hit
             );
         }
     }
+    // The field being typed, over the rest of its row: past the label and "› ".
+    let shown = settings
+        .row
+        .checked_sub(first)
+        .and_then(|i| u16::try_from(i).ok());
+    if let (Some(text), Some(row), Some(i)) = (&settings.field, rows.get(settings.row), shown)
+        && row.field
+        && i < area.height
+    {
+        let label = Span::raw(format!(" {:<LABEL$}", row.label)).width() + 2;
+        let lead = u16::try_from(label).unwrap_or(0).min(area.width);
+        let at = Rect::new(area.x + lead, area.y + i, area.width - lead, 1);
+        let input = (text.as_str(), settings.field_caret);
+        draw_input(frame, at, input, Field::SettingsField, hits);
+    }
+}
+
+/// A Settings text field with the keyboard, its text and caret: tinted, the real cursor on the
+/// caret, clickable.
+fn draw_input(
+    frame: &mut Frame,
+    area: Rect,
+    (text, tail): (&str, crate::text_input::TailCaret),
+    which: Field,
+    hits: &mut HitMap,
+) {
+    frame.render_widget(ratatui::widgets::Clear, area);
+    let style = crate::theme::current().input_style();
+    let cell = crate::ui::field::draw(frame, area, text, tail.at(text), style);
+    frame.set_cursor_position(cell);
+    hits.push(area, Target::Field(which, area));
 }
 
 /// One row: the label, then its value, what is being typed, or the removal question.
@@ -142,7 +185,7 @@ fn row_line(row: &SRow, selected: bool, state: &AppState) -> Line<'static> {
         Style::new().add_modifier(Modifier::BOLD)
     };
     let value = match (&settings.field, selected && row.field) {
-        (Some(text), true) => Span::raw(format!("\u{203a} {text}\u{258f}")),
+        (Some(text), true) => Span::raw(format!("\u{203a} {text}")),
         _ if selected && settings.confirm == Some(settings.row) => Span::styled(
             "press d again to remove",
             Style::new().add_modifier(Modifier::BOLD),

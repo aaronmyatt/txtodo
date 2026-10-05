@@ -120,10 +120,14 @@ pub struct SettingsView {
     pub row: usize,
     /// The card filter while `/` has the keyboard, or its last text.
     pub filter: String,
+    /// The card filter's caret.
+    pub filter_caret: crate::text_input::TailCaret,
     /// `/` has the keyboard.
     pub filtering: bool,
     /// The text of the field being typed in the selected row.
     pub field: Option<String>,
+    /// The field's caret.
+    pub field_caret: crate::text_input::TailCaret,
     /// The row awaiting a second Enter to confirm (remove, revoke).
     pub confirm: Option<usize>,
     /// This client's preferences.

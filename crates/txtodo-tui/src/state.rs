@@ -44,6 +44,8 @@ pub struct AppState {
     pub sync: SyncSnapshot,
     /// The `:` command line's in-progress buffer (`None` when not in command mode). `:q` quits.
     pub command: Option<String>,
+    /// The `:` line's caret.
+    pub command_caret: crate::text_input::TailCaret,
     /// Set once `:q` is entered; the event loop exits when this is true.
     pub should_quit: bool,
     /// Advisory-only (`crate::skill_hint::needed`), painted in the status line by `ui/screen.rs`.
@@ -102,6 +104,7 @@ impl AppState {
             sync_visible: false,
             sync: SyncSnapshot::default(),
             command: None,
+            command_caret: crate::text_input::TailCaret::default(),
             should_quit: false,
             skill_hint: false,
             workspace_label: None,

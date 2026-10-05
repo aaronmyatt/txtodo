@@ -115,3 +115,10 @@
     edit, the second press (within 400 ms, draft untouched) drops it and opens the row, so
     double-click-to-open still works everywhere.
 - `mouse.rs` is at 391 lines of the 400 budget: the next mouse change should move code out.
+- Small fields: the header search, the `:` line and the Settings filter and field keep their
+  `String`s and gain a `text_input::TailCaret` (bytes back from the end), because a lot of code
+  sets that text without knowing about a caret (suggestion picks, clears, a field opened with its
+  value): new text leaves the caret at its end. `text_input::edit_key` is their one key handler.
+  - Each draws through `field.rs` with the input tint and the real cursor while it has the keys,
+    and records a `Field::Search|Command|SettingsFilter|SettingsField` target for clicks.
+  - No `▏` is drawn anywhere now.

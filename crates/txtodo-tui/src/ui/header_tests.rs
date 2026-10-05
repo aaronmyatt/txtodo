@@ -75,12 +75,31 @@ fn a_long_workspace_name_is_cut() {
 }
 
 #[test]
-fn a_query_shows_its_caret_while_focused_and_its_count_pill() {
+fn a_query_is_a_field_with_the_cursor_while_focused_and_keeps_its_count_pill() {
     let mut state = AppState::fixture();
     state.nav.focus = Focus::Search;
     state.shell.search = "is:open".to_owned();
     state.cursor = 3;
-    let (text, _) = drawn(&state, 100);
-    assert!(text.contains("/ is:open\u{258f}"), "{text}");
+    let mut terminal = Terminal::new(TestBackend::new(100, 1)).unwrap_or_else(|e| panic!("{e}"));
+    let mut hits = HitMap::default();
+    terminal
+        .draw(|f| draw(f, f.area(), &state, &mut hits))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|c| c.symbol())
+        .collect();
+    assert!(text.contains("/ is:open "), "{text}");
+    assert!(!text.contains('\u{258f}'), "no drawn caret: {text}");
     assert!(text.contains(" 2/2 "), "{text}");
+    // The cursor sits after "is:open", and that cell is the search field.
+    let at = terminal.backend().cursor_position();
+    assert_eq!(at.x, column_of(&text, "/ is:open") + 2 + 7);
+    assert!(matches!(
+        hits.at(at.x - 1, 0),
+        Some(Target::Field(crate::hit::Field::Search, _))
+    ));
 }

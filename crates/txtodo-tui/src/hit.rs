@@ -54,6 +54,14 @@ pub enum Field {
     Notes,
     /// The prompt bar's draft.
     Prompt,
+    /// The header search.
+    Search,
+    /// The `:` line.
+    Command,
+    /// The Settings card filter.
+    SettingsFilter,
+    /// The field being typed in a Settings row.
+    SettingsField,
 }
 
 /// Where the Tasks list was drawn, and which row sat at its top.

@@ -6,7 +6,7 @@
 
 use std::time::Instant;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
 
 use crate::action::Action;
 use crate::commands;
@@ -119,11 +119,9 @@ fn on_command_key(state: &mut AppState, key: KeyEvent) -> Option<Action> {
     match key.code {
         KeyCode::Esc => state.cancel_command(),
         KeyCode::Enter => return run_palette(state),
-        KeyCode::Backspace => {
-            buf.pop();
+        _ => {
+            crate::text_input::edit_key(buf, &mut state.command_caret, key);
         }
-        KeyCode::Char(c) => buf.push(c),
-        _ => {}
     }
     None
 }
@@ -165,16 +163,8 @@ fn on_search_key(state: &mut AppState, key: KeyEvent, name: Option<&str>) -> Opt
     if let Some(binding) = bound {
         return commands::run(state, binding.command);
     }
-    let plain = !key
-        .modifiers
-        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
-    match key.code {
-        KeyCode::Char(c) if plain => state.shell.search.push(c),
-        KeyCode::Backspace => {
-            state.shell.search.pop();
-        }
-        _ => {}
-    }
+    let shell = &mut state.shell;
+    crate::text_input::edit_key(&mut shell.search, &mut shell.search_caret, key);
     None
 }
 

@@ -51,8 +51,11 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     let right = tabs(state.nav.screen, area.width >= WIDE);
     let used: usize = left.iter().chain(&right).map(|p| p.span.width()).sum();
     let room = usize::from(area.width).saturating_sub(used + 2);
+    let left_width: usize = left.iter().map(|p| p.span.width()).sum();
+    let search_x = area.x + u16::try_from(left_width).unwrap_or(0);
     let mut parts = left;
-    if room >= usize::from(SEARCH_MIN) {
+    let search = room >= usize::from(SEARCH_MIN);
+    if search {
         parts.push(search_field(state, room));
     } else {
         parts.push(part(" ".repeat(room), Style::new(), None));
@@ -60,6 +63,29 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     parts.push(part("  ", Style::new(), None));
     parts.extend(right);
     place(frame, area, parts, hits);
+    if search && state.nav.focus == Focus::Search {
+        let part = Rect::new(search_x, area.y, u16::try_from(room).unwrap_or(0), 1);
+        draw_search_input(frame, state, part, hits);
+    }
+}
+
+/// The search while it has the keyboard: past its `/ `, up to its count pill, a tinted field with
+/// the real cursor on the caret.
+fn draw_search_input(frame: &mut Frame, state: &AppState, part: Rect, hits: &mut HitMap) {
+    let pill = crate::search::pill(state).map_or(0, |p| Span::raw(format!(" {p} ")).width());
+    let lead = 2.min(part.width);
+    let width = part
+        .width
+        .saturating_sub(lead)
+        .saturating_sub(u16::try_from(pill).unwrap_or(u16::MAX));
+    let area = Rect::new(part.x + lead, part.y, width, 1);
+    let text = &state.shell.search;
+    let caret = state.shell.search_caret.at(text);
+    frame.render_widget(ratatui::widgets::Clear, area);
+    let style = crate::theme::current().input_style();
+    let cell = crate::ui::field::draw(frame, area, text, caret, style);
+    frame.set_cursor_position(cell);
+    hits.push(area, Target::Field(crate::hit::Field::Search, area));
 }
 
 /// Draws `parts` left to right from `area`'s left edge, recording each target's cells.
@@ -98,15 +124,14 @@ pub fn workspace_name(state: &AppState) -> String {
     format!("{cut}\u{2026}")
 }
 
-/// The search field, `width` columns wide and underlined as a field: the query (with a caret while
-/// it has the keyboard) or a dim placeholder naming the open file, and the count pill (`i/N`) at
+/// The search field, `width` columns wide and underlined as a field: the query (drawn over as an
+/// input while it has the keyboard) or a dim placeholder naming the open file, and the count pill (`i/N`) at
 /// its right end. A click focuses it, like `/`.
 fn search_field(state: &AppState, width: usize) -> Part {
     let file = std::path::Path::new(&state.path)
         .file_name()
         .map_or_else(|| state.path.clone(), |n| n.to_string_lossy().into_owned());
     let focused = state.nav.focus == Focus::Search;
-    let caret = if focused { "\u{258f}" } else { "" };
     let (text, style) = if state.shell.search.is_empty() && !focused {
         (
             format!("/ Search {file}"),
@@ -114,7 +139,7 @@ fn search_field(state: &AppState, width: usize) -> Part {
         )
     } else {
         (
-            format!("/ {}{caret}", state.shell.search),
+            format!("/ {}", state.shell.search),
             Style::new().add_modifier(Modifier::UNDERLINED),
         )
     };

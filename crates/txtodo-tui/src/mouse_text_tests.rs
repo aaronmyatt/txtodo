@@ -164,3 +164,17 @@ fn a_click_in_the_notes_gives_them_the_keyboard_and_the_caret() {
     let level = state.detail.top().unwrap_or_else(|| panic!("a level"));
     assert_eq!(&level.notes.text[level.notes.caret..], "n moss");
 }
+
+#[test]
+fn a_click_in_the_search_or_the_command_line_moves_its_caret() {
+    let mut state = listed();
+    state.nav.focus = Focus::Search;
+    state.shell.search = "hello".to_owned();
+    let search = Rect::new(10, 0, 20, 1);
+    press_field(&mut state, Field::Search, search, 12, 0);
+    assert_eq!(state.shell.search_caret.at(&state.shell.search), 2);
+    state.command = Some("w home".to_owned());
+    press_field(&mut state, Field::Command, Rect::new(1, 9, 30, 1), 2, 9);
+    let cmd = state.command.clone().unwrap_or_default();
+    assert_eq!(state.command_caret.at(&cmd), 1);
+}

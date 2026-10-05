@@ -37,7 +37,32 @@ pub fn press_field(state: &mut AppState, which: Field, area: Rect, x: u16, y: u1
         }
         Field::Parent => press_parent(state, area, x),
         Field::Notes => press_notes(state, area, x, y),
+        Field::Search => {
+            let shell = &mut state.shell;
+            place(&shell.search, &mut shell.search_caret, area, x);
+        }
+        Field::Command => {
+            if let Some(cmd) = &state.command {
+                place(cmd, &mut state.command_caret, area, x);
+            }
+        }
+        Field::SettingsFilter => {
+            let settings = &mut state.settings;
+            place(&settings.filter, &mut settings.filter_caret, area, x);
+        }
+        Field::SettingsField => {
+            let settings = &mut state.settings;
+            if let Some(text) = &settings.field {
+                place(text, &mut settings.field_caret, area, x);
+            }
+        }
     }
+}
+
+/// Moves a tail-kept caret to the click at `x` in a field drawn over `area`.
+fn place(text: &str, tail: &mut text_input::TailCaret, area: Rect, x: u16) {
+    let caret = field::offset_at(area, text, tail.at(text), x);
+    tail.set(text, caret);
 }
 
 /// The parent line: a click on the painted line opens the field with the caret under the pointer

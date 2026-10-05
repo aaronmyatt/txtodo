@@ -256,21 +256,14 @@ pub fn on_text_key(state: &mut AppState, key: crossterm::event::KeyEvent) -> Opt
             settings.filter.clear();
         }
         KeyCode::Esc => settings.field = None,
-        KeyCode::Backspace => {
-            if filtering {
-                settings.filter.pop();
-            } else if let Some(f) = settings.field.as_mut() {
-                f.pop();
+        _ if filtering => {
+            crate::text_input::edit_key(&mut settings.filter, &mut settings.filter_caret, key);
+        }
+        _ => {
+            if let Some(f) = settings.field.as_mut() {
+                crate::text_input::edit_key(f, &mut settings.field_caret, key);
             }
         }
-        KeyCode::Char(c) => {
-            if filtering {
-                settings.filter.push(c);
-            } else if let Some(f) = settings.field.as_mut() {
-                f.push(c);
-            }
-        }
-        _ => {}
     }
     if filtering {
         let cards = visible_cards(state);

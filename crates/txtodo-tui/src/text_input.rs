@@ -7,6 +7,7 @@
 //! <https://docs.rs/unicode-width/0.2/unicode_width/trait.UnicodeWidthStr.html>,
 //! <https://unicode.org/reports/tr29/#Grapheme_Cluster_Boundaries>
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
@@ -111,6 +112,55 @@ pub fn visible_from(line: &str, scroll: usize) -> (&str, usize) {
     ("", cells.saturating_sub(scroll))
 }
 
+/// A caret kept as bytes back from the end of its text, for fields whose text other code sets
+/// without knowing about a caret (the search, the `:` line, Settings): new text puts it at the end.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TailCaret(pub usize);
+
+impl TailCaret {
+    /// The caret as a byte offset into `text`, on a grapheme boundary.
+    pub fn at(self, text: &str) -> usize {
+        let mut at = text.len().saturating_sub(self.0);
+        while !text.is_char_boundary(at) {
+            at += 1;
+        }
+        match prev_boundary(text, at).and_then(|p| next_boundary(text, p)) {
+            Some(snapped) if snapped > at => text.len().min(snapped),
+            _ => at,
+        }
+    }
+
+    /// Puts the caret at byte offset `caret` of `text`.
+    pub fn set(&mut self, text: &str, caret: usize) {
+        self.0 = text.len() - caret.min(text.len());
+    }
+}
+
+/// One key on a one-row field kept with a [`TailCaret`]: a plain character types, Backspace and
+/// Delete remove, Left/Right/Home/End move. `false` for any other key.
+pub fn edit_key(text: &mut String, tail: &mut TailCaret, key: KeyEvent) -> bool {
+    let mut caret = tail.at(text);
+    let plain = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+    match key.code {
+        KeyCode::Char(c) if plain => insert(text, &mut caret, c),
+        KeyCode::Backspace => {
+            backspace(text, &mut caret);
+        }
+        KeyCode::Delete => {
+            delete(text, caret);
+        }
+        KeyCode::Left => left(text, &mut caret),
+        KeyCode::Right => right(text, &mut caret),
+        KeyCode::Home => caret = 0,
+        KeyCode::End => caret = text.len(),
+        _ => return false,
+    }
+    tail.set(text, caret);
+    true
+}
+
 /// Soft-wraps one line (no `\n`) to rows at most `width` cells wide, as byte ranges into it. Breaks
 /// after the last space that fits, or between graphemes inside a word too long for a row. A
 /// space at a break stays at the end of its row, so every byte belongs to exactly one row.
@@ -172,6 +222,25 @@ mod tests {
         let mut caret = 1;
         insert(&mut text, &mut caret, 'b');
         assert_eq!((text.as_str(), caret), ("abc", 2));
+    }
+
+    #[test]
+    fn a_tail_caret_types_in_the_middle_and_stays_at_the_end_of_new_text() {
+        let mut text = String::from("ac");
+        let mut tail = TailCaret::default();
+        let key = |code| KeyEvent::new(code, KeyModifiers::NONE);
+        assert!(edit_key(&mut text, &mut tail, key(KeyCode::Left)));
+        assert!(edit_key(&mut text, &mut tail, key(KeyCode::Char('b'))));
+        assert_eq!((text.as_str(), tail.at(&text)), ("abc", 2));
+        assert!(edit_key(&mut text, &mut tail, key(KeyCode::Delete)));
+        assert_eq!(text, "ab");
+        let replaced = String::from("something else");
+        assert_eq!(
+            tail.at(&replaced),
+            replaced.len(),
+            "text set elsewhere: caret at its end"
+        );
+        assert!(!edit_key(&mut text, &mut tail, key(KeyCode::Enter)));
     }
 
     #[test]

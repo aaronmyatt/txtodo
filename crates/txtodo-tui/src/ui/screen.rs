@@ -72,13 +72,14 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
         );
     }
     if let Some(cmd) = &state.command {
-        draw_command_line(frame, main_area, cmd, &mut hits);
+        let caret = state.command_caret.at(cmd);
+        draw_command_line(frame, main_area, cmd, caret, &mut hits);
     }
     hits
 }
 
-/// The `:` line over the bottom row of `area`, the real cursor at its end.
-fn draw_command_line(frame: &mut Frame, area: Rect, cmd: &str, hits: &mut HitMap) {
+/// The `:` line over the bottom row of `area`, the real cursor on its caret.
+fn draw_command_line(frame: &mut Frame, area: Rect, cmd: &str, caret: usize, hits: &mut HitMap) {
     let rect = draw_overlay(frame, area, Line::from(":"));
     let field_area = Rect::new(
         rect.x + 1,
@@ -87,9 +88,10 @@ fn draw_command_line(frame: &mut Frame, area: Rect, cmd: &str, hits: &mut HitMap
         rect.height,
     );
     let style = crate::theme::current().input_style();
-    let cell = field::draw(frame, field_area, cmd, cmd.len(), style);
+    let cell = field::draw(frame, field_area, cmd, caret, style);
     frame.set_cursor_position(cell);
     hits.push(rect, Target::Inert);
+    hits.push(field_area, Target::Field(Field::Command, field_area));
 }
 
 /// The Tasks screen: the sub-toolbar, the line list and the overlays that sit on it.
