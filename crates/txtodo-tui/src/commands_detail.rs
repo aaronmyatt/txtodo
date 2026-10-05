@@ -75,7 +75,9 @@ pub fn leave(state: &mut AppState, keep: usize) -> Option<Action> {
 fn focus_part(state: &mut AppState, part: Part) -> Option<Action> {
     let level = state.detail.top_mut()?;
     level.parent_draft = (part == Part::Parent).then(|| {
-        let line = LineState::from_raw(level.parent.line_number, level.parent.raw.clone());
+        // Edited without its `ref:` tag; `save_parent` puts it back.
+        let shown = crate::state_tasks::without_ref(&level.parent.raw);
+        let line = LineState::from_raw(level.parent.line_number, shown);
         EditDraft::for_line(&line, false)
     });
     state.detail.part = part;
@@ -121,13 +123,15 @@ pub fn save_parent(state: &mut AppState) -> Option<Action> {
     let draft = level.parent_draft.take()?;
     state.detail.part = Part::Sub;
     let level = state.detail.top()?;
-    if draft.buffer == level.parent.raw {
+    let slug = crate::state_tasks::ref_slug(&level.parent.raw);
+    let new_line = crate::state_tasks::with_ref(&draft.buffer, slug);
+    if new_line == level.parent.raw {
         return None;
     }
     let mutation = pb::Mutation {
         kind: Some(pb::mutation::Kind::Edit(pb::Edit {
             task: Some(task_ref(&level.parent)),
-            new_line: draft.buffer,
+            new_line,
         })),
     };
     let mut req = apply_of(state, mutation);

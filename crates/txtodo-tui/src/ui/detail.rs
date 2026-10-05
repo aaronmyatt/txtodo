@@ -160,9 +160,8 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
         }
         None => {
             let mut spans = vec![label];
-            spans.extend(
-                crate::paint::paint_line(&level.parent.raw, level.parent.completed, false).spans,
-            );
+            let shown = crate::state_tasks::without_ref(&level.parent.raw);
+            spans.extend(crate::paint::paint_line(&shown, level.parent.completed, false).spans);
             frame.render_widget(Paragraph::new(Line::from(spans)), text_area);
         }
     }
