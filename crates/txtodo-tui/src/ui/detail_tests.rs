@@ -170,3 +170,24 @@ fn a_sub_line_is_edited_on_its_own_row_inside_the_panel() {
     assert!(row.contains("\u{258c}water ferns"), "{rows:?}");
     assert!(!rows.join("").contains("edit >"), "no separate edit row");
 }
+
+#[test]
+fn long_notes_wrap_and_the_cursor_follows_onto_the_second_row() {
+    let mut state = AppState::fixture();
+    one_level(&mut state);
+    state.nav.focus = crate::state_nav::Focus::Detail;
+    state.detail.part = Part::Notes;
+    // The panel is 60 wide: 58 cells of text per row.
+    let text = "word ".repeat(14);
+    state.detail.levels[0].notes.caret = text.len();
+    state.detail.levels[0].notes.text = text;
+    let (rows, _) = drawn(&state);
+    let first = rows
+        .iter()
+        .position(|r| r.starts_with(" word"))
+        .unwrap_or(0);
+    assert!(rows[first + 1].starts_with(" word"), "wrapped: {rows:?}");
+    let at = cursor(&state).unwrap_or_else(|| panic!("a cursor"));
+    // 14 words of 5 cells: 11 fit the first row (55 cells), 3 on the second, caret after them.
+    assert_eq!((usize::from(at.y), at.x), (first + 1, 1 + 15));
+}

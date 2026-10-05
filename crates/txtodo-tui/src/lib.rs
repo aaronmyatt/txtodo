@@ -40,6 +40,7 @@ pub mod ui {
     pub mod list;
     pub mod mark;
     pub mod notes_edit;
+    pub mod notes_wrap;
     pub mod offers;
     pub mod prompt_bar;
     pub mod row;

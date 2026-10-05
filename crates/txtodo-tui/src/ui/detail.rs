@@ -16,7 +16,7 @@ use crate::keymap::Command;
 use crate::state::AppState;
 use crate::state_detail::{Level, Part, swap_in};
 use crate::state_nav::Focus;
-use crate::ui::{field, header::workspace_name, notes_edit, row, row_edit};
+use crate::ui::{field, header::workspace_name, notes_wrap, row, row_edit};
 
 /// Draws the panel into `area` and records its targets.
 pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) {
@@ -213,36 +213,43 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
     }
 }
 
-/// The notes, a caret drawn while they have the keyboard; the view follows the caret's line.
+/// The notes, soft-wrapped to the panel, tinted with the real cursor on the caret while they have
+/// the keyboard; the view follows the caret's row.
 fn draw_notes(frame: &mut Frame, area: Rect, level: &Level, focused: bool) {
-    let (caret_line, caret_col) = notes_edit::caret_position(&level.notes);
+    let notes = &level.notes;
+    if notes.text.is_empty() && !focused {
+        frame.render_widget(
+            Paragraph::new(" No notes yet. Tab here to write some.")
+                .style(Style::new().add_modifier(Modifier::DIM)),
+            area,
+        );
+        return;
+    }
+    // One cell of margin at the left, and one spare at the right so a caret at a full row's end
+    // still has a cell.
+    let width = area.width.saturating_sub(2).max(1);
+    notes.wrap_width.set(width);
+    let rows = notes_wrap::rows(&notes.text, usize::from(width));
+    let (caret_row, caret_col) = notes_wrap::caret_cell(&notes.text, &rows, notes.caret);
     let height = usize::from(area.height.max(1));
-    let top = caret_line.saturating_sub(height - 1);
-    let lines: Vec<Line> = level
-        .notes
-        .text
-        .split('\n')
+    let top = caret_row.saturating_sub(height - 1);
+    let lines: Vec<Line> = rows
+        .iter()
         .skip(top)
         .take(height)
-        .map(|text| Line::raw(format!(" {text}")))
+        .map(|r| Line::raw(format!(" {}", &notes.text[r.clone()])))
         .collect();
-    let placeholder = level.notes.text.is_empty() && !focused;
-    let body = if placeholder {
-        Paragraph::new(" No notes yet. Tab here to write some.")
-            .style(Style::new().add_modifier(Modifier::DIM))
-    } else if focused {
-        Paragraph::new(lines).style(crate::theme::current().input_style())
+    let style = if focused {
+        crate::theme::current().input_style()
     } else {
-        Paragraph::new(lines)
+        Style::new()
     };
-    frame.render_widget(body, area);
+    frame.render_widget(Paragraph::new(lines).style(style), area);
     if focused && area.width > 0 && area.height > 0 {
-        // One cell of margin, then the caret's display column; cut lines keep it on the last cell
-        // until the notes wrap.
         let column = u16::try_from(caret_col + 1)
             .unwrap_or(u16::MAX)
             .min(area.width - 1);
-        let row = u16::try_from(caret_line - top).unwrap_or(0);
+        let row = u16::try_from(caret_row - top).unwrap_or(0);
         frame.set_cursor_position((area.x + column, area.y + row));
     }
 }

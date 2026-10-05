@@ -111,6 +111,33 @@ pub fn visible_from(line: &str, scroll: usize) -> (&str, usize) {
     ("", cells.saturating_sub(scroll))
 }
 
+/// Soft-wraps one line (no `\n`) to rows at most `width` cells wide, as byte ranges into it. Breaks
+/// after the last space that fits, or between graphemes inside a word too long for a row. A
+/// space at a break stays at the end of its row, so every byte belongs to exactly one row.
+pub fn wrap(line: &str, width: usize) -> Vec<std::ops::Range<usize>> {
+    let width = width.max(1);
+    let mut rows = Vec::new();
+    let mut start = 0;
+    let mut cells = 0;
+    let mut after_space = None;
+    for (i, g) in line.grapheme_indices(true) {
+        let w = self::width(g);
+        if cells + w > width && i > start {
+            let cut = after_space.filter(|&b| b > start).unwrap_or(i);
+            rows.push(start..cut);
+            start = cut;
+            cells = self::width(&line[start..i]);
+            after_space = None;
+        }
+        cells += w;
+        if g == " " {
+            after_space = Some(i + 1);
+        }
+    }
+    rows.push(start..line.len());
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +199,22 @@ mod tests {
         assert_eq!(scroll_for(line, 10, 5), 6);
         let (shown, pad) = visible_from(line, 6);
         assert_eq!((shown, pad), ("ghij", 0));
+    }
+
+    #[test]
+    fn wrap_breaks_after_a_space_and_inside_a_long_word() {
+        let line = "water the ferns";
+        let rows: Vec<&str> = wrap(line, 10).into_iter().map(|r| &line[r]).collect();
+        assert_eq!(rows, ["water the ", "ferns"]);
+        let word = "abcdefgh";
+        let rows: Vec<&str> = wrap(word, 3).into_iter().map(|r| &word[r]).collect();
+        assert_eq!(rows, ["abc", "def", "gh"]);
+        let empty = wrap("", 5);
+        assert_eq!(
+            (empty.len(), empty[0].clone()),
+            (1, 0..0),
+            "an empty line is one row"
+        );
     }
 
     #[test]

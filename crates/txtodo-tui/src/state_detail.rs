@@ -75,6 +75,10 @@ pub struct Notes {
     pub saved: String,
     /// When the last key was typed: autosave waits for a pause.
     pub typed_at: Option<Instant>,
+    /// The width the panel last wrapped the notes to (0 before the first draw), so Up/Down move
+    /// by the rows on screen. A `Cell` because drawing only borrows the state.
+    /// Ref: <https://doc.rust-lang.org/std/cell/struct.Cell.html>
+    pub wrap_width: std::cell::Cell<u16>,
 }
 
 impl Notes {

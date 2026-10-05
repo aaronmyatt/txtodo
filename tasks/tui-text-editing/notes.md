@@ -92,3 +92,9 @@
 - Parent field: drawn by `field.rs` like every other field, with the same edge mark
   (`row_edit::draw_mark`) in the label's trailing space. Tab into it still puts the caret at the
   end (keyboard default); a click puts it under the pointer (the click line).
+- Notes wrap: `text_input::wrap` (after the last space that fits, else between graphemes) and
+  `ui/notes_wrap.rs` (rows over the whole text, caret row/cell, offset at a row/column, visual
+  Up/Down). A caret at a soft break starts the next row.
+  - Wrap width = panel width - 2 (left margin, a spare cell for a caret at a full row's end). The
+    panel stores it in `Notes.wrap_width` (a `Cell`, since drawing borrows the state) so Up/Down
+    move by the rows on screen; before the first draw they fall back to logical lines.

@@ -9,6 +9,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::state_detail::Notes;
 use crate::text_input;
+use crate::ui::notes_wrap;
 
 /// Applies one key to `notes` at `now`; `true` when it was an editing or caret key.
 pub fn on_key(notes: &mut Notes, key: KeyEvent, now: Instant) -> bool {
@@ -28,8 +29,8 @@ pub fn on_key(notes: &mut Notes, key: KeyEvent, now: Instant) -> bool {
         KeyCode::Delete => delete(notes),
         KeyCode::Left => return step(notes, false),
         KeyCode::Right => return step(notes, true),
-        KeyCode::Up => return line_step(notes, false),
-        KeyCode::Down => return line_step(notes, true),
+        KeyCode::Up => return row_step(notes, false),
+        KeyCode::Down => return row_step(notes, true),
         KeyCode::Home => {
             notes.caret = line_start(&notes.text, notes.caret);
             return true;
@@ -75,6 +76,17 @@ fn line_start(text: &str, at: usize) -> usize {
 /// The byte offset where the line holding `at` ends (before its `\n`).
 fn line_end(text: &str, at: usize) -> usize {
     text[at..].find('\n').map_or(text.len(), |i| at + i)
+}
+
+/// Up or Down by the rows on screen once the panel has wrapped the notes, else by lines.
+fn row_step(notes: &mut Notes, down: bool) -> bool {
+    let width = usize::from(notes.wrap_width.get());
+    if width == 0 {
+        return line_step(notes, down);
+    }
+    let rows = notes_wrap::rows(&notes.text, width);
+    notes.caret = notes_wrap::step(&notes.text, &rows, notes.caret, down);
+    true
 }
 
 /// Up or Down: the same column on the line above or below, or its end when it is shorter.
