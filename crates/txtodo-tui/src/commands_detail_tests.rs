@@ -80,3 +80,13 @@ fn the_parent_field_saves_only_a_changed_line_to_the_parents_list() {
     assert_eq!(req.path, "todo.txt");
     assert_eq!(state.detail.part, Part::Sub);
 }
+
+#[test]
+fn clicking_the_parent_or_the_notes_from_the_list_gives_the_panel_the_keyboard() {
+    for command in [Command::DetailEditParent, Command::DetailEditNotes] {
+        let mut state = with_level(false);
+        state.nav.focus = Focus::List;
+        run(&mut state, command);
+        assert_eq!(state.nav.focus, Focus::Detail, "{command:?}");
+    }
+}

@@ -81,3 +81,5 @@
 - Focus: the panel's top edge is the accent, bold, while `nav.focus == Detail`, dim otherwise. A
   part's label is reversed only while the panel has the keys. `ui::list::selection_style`: the
   selected row is reversed in the list the keys go to and only underlined in the other one.
+- Focus fix: `commands_detail::focus_part` now sets `nav.focus = Detail`, so a click on the parent
+  or the notes from the list moves the keys with the caret (and lights the panel edge).

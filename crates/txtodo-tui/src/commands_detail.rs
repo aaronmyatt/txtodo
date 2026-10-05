@@ -70,7 +70,8 @@ pub fn leave(state: &mut AppState, keep: usize) -> Option<Action> {
     save
 }
 
-/// Gives `part` the keyboard. The parent field starts a fresh draft of the parent line.
+/// Gives `part` the keyboard, and the panel too: a click on the parent or the notes comes from
+/// whichever pane had it. The parent field starts a fresh draft of the parent line.
 fn focus_part(state: &mut AppState, part: Part) -> Option<Action> {
     let level = state.detail.top_mut()?;
     level.parent_draft = (part == Part::Parent).then(|| {
@@ -78,6 +79,7 @@ fn focus_part(state: &mut AppState, part: Part) -> Option<Action> {
         EditDraft::for_line(&line, false)
     });
     state.detail.part = part;
+    state.nav.focus = Focus::Detail;
     None
 }
 
