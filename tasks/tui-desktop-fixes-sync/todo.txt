@@ -1,4 +1,4 @@
-tui: + Add a line row at the top of the list, per the decide line +m11 @tui — one Apply: Add, then a move before the first line
+tui: + Add a line row at the top of the list, per the decide line +m11 @tui — one Apply: Add, then a move before the first line @doing by:claude
 tui: detail panel hides the ref tag on the parent line like the id tag, and keeps it on save +m11 @tui
 tui: detail panel follows a changed ref after a parent edit (re-resolve Level.dir) +m11 @tui
 tui: line breakdown view in the detail panel, one field per row like sqlite .mode line +m11 @tui
