@@ -85,3 +85,7 @@
     never settle.
   - An ambiguous `x (A) 2026-09-01 call mum` reads as done on 2026-09-01 (lenient), so it is left
     as it is.
+- Case slips (2026-10-05): `line_fixes::fix_case`: a leading `X ` becomes `x `, a lower-case
+  `(a) ` becomes `(A) ` at the start or after the done marker and up to two dates. The wire runs
+  it before `date_done`, so `X (a) call mum` lands as `x <today> call mum pri:A`. The CLI keeps
+  its own todo.sh `clean` (it already upper-cases a leading priority) and is taken literally.
