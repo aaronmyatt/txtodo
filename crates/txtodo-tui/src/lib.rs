@@ -43,6 +43,7 @@ pub mod ui {
     pub mod offers;
     pub mod prompt_bar;
     pub mod row;
+    pub mod row_edit;
     pub mod screen;
     pub mod search_panel;
     pub mod settings;

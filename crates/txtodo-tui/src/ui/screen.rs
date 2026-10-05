@@ -11,11 +11,11 @@ use ratatui::text::Line;
 use ratatui::widgets::{ListState, Paragraph};
 
 use crate::hit::{HitMap, Target};
-use crate::state::{AppState, EditTarget};
+use crate::state::AppState;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
     banner, conflict_sheet, detail, field, footer, header, help, list, offers, prompt_bar,
-    search_panel, settings, subbar, sync, toast, universal, workspace_menu,
+    row_edit, search_panel, settings, subbar, sync, toast, universal, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -116,26 +116,17 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
         offers::draw(frame, list_area, state);
         hits.push(list_area, Target::Inert);
     }
-    if let Some(draft) = &state.editing {
-        let label = format!("{}> ", edit_label(&draft.target));
-        let rect = draw_overlay(frame, list_area, Line::from(label.clone()));
-        let used = u16::try_from(label.len()).unwrap_or(0).min(rect.width);
-        let field_area = Rect::new(rect.x + used, rect.y, rect.width - used, rect.height);
-        let style = crate::theme::current().input_style();
-        let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
-        frame.set_cursor_position(cell);
-        hits.push(rect, Target::Inert);
+    // The root list's own line editor, drawn on its row; a sub-line's is the panel's to draw.
+    let sub_list_edit = state.nav.focus == Focus::Detail && state.detail.is_open();
+    if let (Some(draft), false) = (&state.editing, sub_list_edit) {
+        let rows = row_edit::Rows::of(state, list_area, list_state.offset());
+        if let Some(field) = row_edit::draw(frame, rows, state.cursor, draft) {
+            hits.push(field, Target::Inert);
+        }
     }
 }
 
-fn edit_label(target: &EditTarget) -> &'static str {
-    match target {
-        EditTarget::Existing { .. } => "edit ",
-        EditTarget::NewLine => "add ",
-    }
-}
-
-/// One bold line over the bottom of `area` (the edit and `:` lines); returns where it went.
+/// One bold line over the bottom of `area` (the `:` line); returns where it went.
 fn draw_overlay(frame: &mut Frame, area: Rect, content: Line<'static>) -> Rect {
     let y = area.y + area.height.saturating_sub(1);
     let rect = Rect::new(area.x, y, area.width, 1.min(area.height));

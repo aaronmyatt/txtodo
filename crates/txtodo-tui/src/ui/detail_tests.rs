@@ -141,3 +141,27 @@ fn the_panel_edge_lights_only_while_it_has_the_keyboard() {
     state.nav.focus = crate::state_nav::Focus::List;
     assert_ne!(edge_fg(&state), crate::theme::current().accent());
 }
+
+#[test]
+fn a_sub_line_is_edited_on_its_own_row_inside_the_panel() {
+    let mut state = AppState::fixture();
+    one_level(&mut state);
+    state.detail.levels[0].doc = Doc {
+        path: "tasks/plants/todo.txt".to_owned(),
+        lines: vec![
+            LineState::from_raw(1, "fill the can"),
+            LineState::from_raw(2, "water ferns"),
+        ],
+        cursor: 1,
+        ..Doc::default()
+    };
+    state.nav.focus = crate::state_nav::Focus::Detail;
+    state.detail.part = Part::Sub;
+    let line = LineState::from_raw(2, "water ferns");
+    state.editing = Some(crate::state::EditDraft::for_line(&line, false));
+    let (rows, _) = drawn(&state);
+    let at = cursor(&state).unwrap_or_else(|| panic!("a cursor on the edited row"));
+    let row = &rows[usize::from(at.y)];
+    assert!(row.contains("\u{258c}water ferns"), "{rows:?}");
+    assert!(!rows.join("").contains("edit >"), "no separate edit row");
+}

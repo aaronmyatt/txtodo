@@ -83,3 +83,9 @@
   selected row is reversed in the list the keys go to and only underlined in the other one.
 - Focus fix: `commands_detail::focus_part` now sets `nav.focus = Detail`, so a click on the parent
   or the notes from the list moves the keys with the caret (and lights the panel edge).
+- In place: `ui/row_edit.rs` draws the draft over the edited row itself (Clear first, since the list
+  drew it reversed): an accent `▌` in the gutter's trailing cell, the tinted field right of it,
+  the cursor on the caret. Root list from `screen::draw_tasks`, sub-list from
+  `detail::draw_sub_list` (the editor runs on the swapped-in sub-list, so the panel draws it).
+  The bottom `edit >`/`add >` overlay is gone; the `:` line keeps the bottom row.
+  - Long lines scroll sideways inside the field (`field.rs`).

@@ -16,7 +16,7 @@ use crate::keymap::Command;
 use crate::state::AppState;
 use crate::state_detail::{Level, Part, swap_in};
 use crate::state_nav::Focus;
-use crate::ui::{field, header::workspace_name, notes_edit, row};
+use crate::ui::{field, header::workspace_name, notes_edit, row, row_edit};
 
 /// Draws the panel into `area` and records its targets.
 pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) {
@@ -200,6 +200,13 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
                 Rect::new(area.x, y, area.width, 1),
                 Target::DetailRow(first + i),
             );
+        }
+    }
+    // A sub-line being edited: the line editor runs on the swapped-in sub-list, so draw it here.
+    if let (Some(draft), true) = (&state.editing, panel_has_keys(state)) {
+        let rows = row_edit::Rows::of(&view, area, first);
+        if let Some(field) = row_edit::draw(frame, rows, view.cursor, draft) {
+            hits.push(field, Target::Inert);
         }
     }
 }
