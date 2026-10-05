@@ -31,9 +31,12 @@ fn up(column: u16, row: u16) -> MouseEvent {
 /// The fixture with its list drawn over the top ten rows.
 fn listed() -> AppState {
     let mut state = AppState::fixture();
+    let view = state.clone();
     state
         .hits
-        .record_list(Rect::new(0, 0, 60, 10), 0, state.row_count());
+        .record_list(Rect::new(0, 0, 60, 10), 0, view.row_count(), |r| {
+            view.index_at_row(r)
+        });
     state
 }
 
@@ -52,9 +55,10 @@ fn a_click_on_the_selected_rows_text_edits_it_with_the_caret_under_the_pointer()
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
     let x = text_left(&state) + 4; // the "2" of "(A) 2026-..."
-    mouse.on_event(&mut state, down(x, 0), t0);
+    // Index 0 is on screen row 1: the Add-a-line row is drawn on top.
+    mouse.on_event(&mut state, down(x, 1), t0);
     assert!(state.editing.is_none(), "nothing until the release");
-    mouse.on_event(&mut state, up(x, 0), t0);
+    mouse.on_event(&mut state, up(x, 1), t0);
     let draft = state.editing.as_ref().unwrap_or_else(|| panic!("editing"));
     assert_eq!(draft.caret, 4);
     assert_eq!(&draft.buffer[draft.caret..draft.caret + 4], "2026");
@@ -65,8 +69,8 @@ fn a_click_on_an_unselected_row_only_selects_it() {
     let mut state = listed();
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
-    mouse.on_event(&mut state, down(8, 3), t0);
-    mouse.on_event(&mut state, up(8, 3), t0);
+    mouse.on_event(&mut state, down(8, 4), t0);
+    mouse.on_event(&mut state, up(8, 4), t0);
     assert_eq!(state.cursor, 3);
     assert!(state.editing.is_none());
 }
@@ -76,14 +80,14 @@ fn a_double_click_on_the_selected_row_still_opens_it() {
     let mut state = listed();
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
-    mouse.on_event(&mut state, down(8, 0), t0);
-    mouse.on_event(&mut state, up(8, 0), t0);
+    mouse.on_event(&mut state, down(8, 1), t0);
+    mouse.on_event(&mut state, up(8, 1), t0);
     // The edit the first click started is drawn as a field over the row.
-    state.hits.push(
-        Rect::new(2, 0, 58, 1),
-        Target::Field(Field::LineEdit, Rect::new(2, 0, 58, 1)),
-    );
-    let action = mouse.on_event(&mut state, down(8, 0), t0 + DOUBLE_CLICK);
+    let field = Rect::new(2, 1, 58, 1);
+    state
+        .hits
+        .push(field, Target::Field(Field::LineEdit, field));
+    let action = mouse.on_event(&mut state, down(8, 1), t0 + DOUBLE_CLICK);
     assert!(
         matches!(action, Some(Action::OpenDetail(_))),
         "opens: {action:?}"

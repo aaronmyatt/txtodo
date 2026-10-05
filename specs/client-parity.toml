@@ -75,7 +75,7 @@ deviation = ""
 
 [[action]]
 id = "list.first"
-title = "First line"
+title = "Top row: Add a line"
 keys = ["g g"]
 scope = "list"
 desktop = { status = "planned", surface = "FileView" }

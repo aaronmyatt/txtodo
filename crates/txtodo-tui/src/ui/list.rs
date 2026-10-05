@@ -17,8 +17,8 @@ use crate::ui::row;
 /// intentionally *not* baked in here — the caller applies it via `ListState` /
 /// `List::highlight_style`, the idiomatic ratatui split between content and selection chrome.
 pub fn rows(state: &AppState) -> Vec<Line<'static>> {
-    (0..=state.lines.len())
-        .map(|i| row::paint(state, i))
+    (0..state.row_count())
+        .map(|r| row::paint(state, state.index_at_row(r)))
         .collect()
 }
 
@@ -29,9 +29,9 @@ pub fn list_widget(state: &AppState) -> List<'static> {
     let items = rows(state)
         .into_iter()
         .enumerate()
-        .map(|(i, line)| {
+        .map(|(r, line)| {
             let item = ListItem::new(line);
-            if state.hover == Some(i) {
+            if state.hover == Some(state.index_at_row(r)) {
                 item.style(hover)
             } else {
                 item
@@ -77,12 +77,12 @@ mod tests {
     }
 
     #[test]
-    fn rows_includes_trailing_add_line_row() {
+    fn rows_start_with_the_add_line_row() {
         let state = AppState::fixture();
         let rows = rows(&state);
         assert_eq!(rows.len(), state.lines.len() + 1);
         let last: String = rows
-            .last()
+            .first()
             .unwrap()
             .spans
             .iter()
@@ -102,9 +102,12 @@ mod tests {
     #[test]
     fn j_and_k_move_one_row_and_clamp() {
         let mut state = AppState::fixture();
-        press(&mut state, &[key('k')]);
-        assert_eq!(state.cursor, 0, "k clamps at the top");
-        press(&mut state, &[key('j')]);
+        press(&mut state, &[key('k'), key('k')]);
+        assert!(
+            state.on_add_line_row(),
+            "k clamps at the Add-a-line row on top"
+        );
+        press(&mut state, &[key('j'), key('j')]);
         assert_eq!(state.cursor, 1);
     }
 
@@ -114,9 +117,13 @@ mod tests {
         state.move_last();
         let mut input = crate::input::Input::default();
         let _ = input.on_key(&mut state, key('g'));
-        assert_eq!(state.cursor, state.lines.len(), "one g does nothing yet");
+        assert_eq!(
+            state.cursor,
+            state.lines.len() - 1,
+            "one g does nothing yet"
+        );
         let _ = input.on_key(&mut state, key('g'));
-        assert_eq!(state.cursor, 0, "gg jumps to the first line");
+        assert!(state.on_add_line_row(), "gg jumps to the top row");
     }
 
     #[test]
@@ -130,12 +137,12 @@ mod tests {
     }
 
     #[test]
-    fn capital_g_jumps_to_the_add_line_row() {
+    fn capital_g_jumps_to_the_last_line() {
         let mut state = AppState::fixture();
         press(
             &mut state,
             &[KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)],
         );
-        assert!(state.on_add_line_row());
+        assert_eq!(state.cursor, state.lines.len() - 1);
     }
 }

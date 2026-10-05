@@ -218,7 +218,7 @@ fn dd_deletes_the_selected_line() {
 #[test]
 fn dd_on_the_add_line_row_does_nothing() {
     let mut state = AppState::fixture();
-    state.move_last();
+    state.move_first();
     let mut input = Input::default();
     input.on_key(&mut state, key('d'));
     assert!(input.on_key(&mut state, key('d')).is_none());
@@ -298,7 +298,7 @@ fn colon_an_action_id_runs_that_command() {
     let mut state = AppState::fixture();
     let mut input = Input::default();
     assert_eq!(type_command(&mut input, &mut state, "list.last"), None);
-    assert!(state.on_add_line_row());
+    assert_eq!(state.cursor, state.lines.len() - 1, "the last line");
     let quit = type_command(&mut input, &mut state, "app.quit");
     assert_eq!(quit, Some(Action::Quit));
 }
@@ -370,6 +370,6 @@ fn slash_types_a_query_enter_jumps_and_esc_twice_leaves() {
     input.on_key(&mut state, esc);
     assert_eq!(state.shell.search, "", "Esc clears");
     input.on_key(&mut state, esc);
-    input.on_key(&mut state, key('j'));
-    assert_eq!(state.cursor, 4, "Esc again leaves; j moves the list");
+    input.on_key(&mut state, key('k'));
+    assert_eq!(state.cursor, 2, "Esc again leaves; k moves the list");
 }

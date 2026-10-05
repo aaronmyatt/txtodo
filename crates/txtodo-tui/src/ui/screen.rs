@@ -110,9 +110,10 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
     // Ref: https://docs.rs/ratatui/latest/ratatui/widgets/struct.ListState.html
     let mut list_state = ListState::default()
         .with_offset(state.scroll)
-        .with_selected(Some(state.cursor));
+        .with_selected(Some(state.row_of(state.cursor)));
     frame.render_stateful_widget(list::list_widget(state), list_area, &mut list_state);
-    hits.record_list(list_area, list_state.offset(), state.row_count());
+    let index_at = |r| state.index_at_row(r);
+    hits.record_list(list_area, list_state.offset(), state.row_count(), index_at);
 
     if state.offers.open {
         offers::draw(frame, list_area, state);
@@ -122,7 +123,7 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
     let sub_list_edit = state.nav.focus == Focus::Detail && state.detail.is_open();
     if let (Some(draft), false) = (&state.editing, sub_list_edit) {
         let rows = row_edit::Rows::of(state, list_area, list_state.offset());
-        if let Some(field) = row_edit::draw(frame, rows, state.cursor, draft) {
+        if let Some(field) = row_edit::draw(frame, rows, state.row_of(state.cursor), draft) {
             hits.push(field, Target::Field(Field::LineEdit, field));
         }
     }
@@ -167,8 +168,12 @@ mod tests {
         state.needs_review.clear();
         let hits = drawn(&state);
         assert_eq!(hits.at(0, 1), None, "the sub-toolbar");
-        assert_eq!(hits.at(0, 2), Some(Target::Row(0)), "under the sub-toolbar");
-        assert_eq!(hits.at(0, 6), Some(Target::Row(4)), "the Add-a-line row");
+        assert_eq!(
+            hits.at(0, 2),
+            Some(Target::Row(4)),
+            "under the sub-toolbar, the Add-a-line row"
+        );
+        assert_eq!(hits.at(0, 6), Some(Target::Row(3)), "the last line");
         assert_eq!(
             hits.at(0, 7),
             Some(Target::Command(crate::keymap::Command::PromptFocus)),
@@ -214,8 +219,9 @@ mod tests {
         state.cursor = 3;
         crate::commands::run(&mut state, crate::keymap::Command::ListEditStart);
         let at = cursor(&state).unwrap_or_else(|| panic!("a cursor while editing"));
-        // Row 3 of the list sits under the header and the sub-toolbar; the caret is at the start.
-        assert_eq!(at.y, 2 + 3);
+        // Index 3 is the list's row 4 (the Add-a-line row is on top), under the header and the
+        // sub-toolbar; the caret is at the start.
+        assert_eq!(at.y, 2 + 4);
         state.editing = None;
         state.command = Some("w home".to_owned());
         state.command_caret.set("w home", 1);

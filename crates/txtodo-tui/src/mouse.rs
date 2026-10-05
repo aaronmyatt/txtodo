@@ -382,7 +382,8 @@ fn scroll(state: &mut AppState, rows: isize) -> Option<Action> {
     let top = state.scroll.saturating_add_signed(rows);
     state.scroll = top.min(state.row_count().saturating_sub(height));
     let bottom = (state.scroll + height - 1).min(last_row);
-    state.cursor = state.cursor.clamp(state.scroll, bottom);
+    let row = state.row_of(state.cursor).clamp(state.scroll, bottom);
+    state.cursor = state.index_at_row(row);
     None
 }
 

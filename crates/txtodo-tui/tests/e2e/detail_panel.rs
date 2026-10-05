@@ -64,12 +64,12 @@ async fn drill_add_a_sub_task_write_notes_and_find_them_again() {
         real.disk()
     );
 
-    // Down to the new sub-task, then a level deeper.
+    // To the new sub-task (gg is the Add-a-line row on top, j the first line), then a level deeper.
     press(
         &mut daemon,
         &mut input,
         &mut state,
-        &[KeyCode::Char('g'), KeyCode::Char('g')],
+        &[KeyCode::Char('g'), KeyCode::Char('g'), KeyCode::Char('j')],
     )
     .await;
     press(&mut daemon, &mut input, &mut state, &[KeyCode::Enter]).await;

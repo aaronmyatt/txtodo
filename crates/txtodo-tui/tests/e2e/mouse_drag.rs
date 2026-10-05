@@ -22,11 +22,17 @@ fn left(kind: fn(MouseButton) -> MouseEventKind, row: u16) -> MouseEvent {
     }
 }
 
-/// Drags row `from` onto row `to` of a list drawn from the top of a 40x10 screen.
+/// Drags line `from` onto line `to` (indexes) of a list drawn from the top of a 40x10 screen,
+/// the Add-a-line row on its first row.
 async fn drag(daemon: &mut txtodo_tui::daemon::Daemon, state: &mut AppState, from: u16, to: u16) {
+    let view = state.clone();
     state
         .hits
-        .record_list(Rect::new(0, 0, 40, 10), 0, state.row_count());
+        .record_list(Rect::new(0, 0, 40, 10), 0, view.row_count(), |r| {
+            view.index_at_row(r)
+        });
+    let row = |i: u16| u16::try_from(view.row_of(usize::from(i))).unwrap_or(0);
+    let (from, to) = (row(from), row(to));
     let mut input = Input::default();
     input.on_mouse(state, left(MouseEventKind::Down, from));
     input.on_mouse(state, left(MouseEventKind::Drag, to));
@@ -51,11 +57,11 @@ async fn dragging_a_row_up_and_down_reorders_the_file() {
     assert_eq!(real.disk(), "walk dog\nbuy milk\ncall mom\n");
     assert_eq!(state.lines[state.cursor].raw, "walk dog");
 
-    drag(&mut daemon, &mut state, 0, 3).await;
+    drag(&mut daemon, &mut state, 0, 2).await;
     assert_eq!(
         real.disk(),
         "buy milk\ncall mom\nwalk dog\n",
-        "onto Add-a-line"
+        "onto the last line: the end"
     );
     assert_eq!(state.lines[state.cursor].raw, "walk dog");
 

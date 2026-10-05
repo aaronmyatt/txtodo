@@ -86,12 +86,20 @@ impl HitMap {
         self.targets.push((area, target));
     }
 
-    /// Records the Tasks list: one-cell-high rows from `offset`, `rows` of them in all.
-    pub fn record_list(&mut self, area: Rect, offset: usize, rows: usize) {
+    /// Records the Tasks list: one-cell-high rows from `offset`, `rows` of them in all, each
+    /// naming the index `index_at` says is drawn on it.
+    pub fn record_list(
+        &mut self,
+        area: Rect,
+        offset: usize,
+        rows: usize,
+        index_at: impl Fn(usize) -> usize,
+    ) {
         self.list = Some(ListView { area, offset });
         let visible = rows.saturating_sub(offset).min(usize::from(area.height));
         for (i, y) in (area.y..).take(visible).enumerate() {
-            self.push(Rect::new(area.x, y, area.width, 1), Target::Row(offset + i));
+            let target = Target::Row(index_at(offset + i));
+            self.push(Rect::new(area.x, y, area.width, 1), target);
         }
     }
 
@@ -123,7 +131,7 @@ mod tests {
     #[test]
     fn rows_map_from_the_scroll_offset_and_stop_at_the_last_row() {
         let mut hits = HitMap::default();
-        hits.record_list(Rect::new(0, 2, 40, 5), 3, 6);
+        hits.record_list(Rect::new(0, 2, 40, 5), 3, 6, |r| r);
         assert_eq!(hits.at(0, 2), Some(Target::Row(3)), "top row is the offset");
         assert_eq!(hits.at(39, 4), Some(Target::Row(5)));
         assert_eq!(hits.at(0, 5), None, "only rows 3..6 exist");
@@ -134,7 +142,7 @@ mod tests {
     #[test]
     fn a_later_rect_covers_an_earlier_one() {
         let mut hits = HitMap::default();
-        hits.record_list(Rect::new(0, 0, 40, 10), 0, 10);
+        hits.record_list(Rect::new(0, 0, 40, 10), 0, 10, |r| r);
         hits.push(Rect::new(0, 9, 40, 1), Target::Inert);
         assert_eq!(hits.at(5, 9), Some(Target::Inert));
         assert_eq!(hits.at(5, 8), Some(Target::Row(8)));

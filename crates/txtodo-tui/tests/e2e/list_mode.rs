@@ -59,3 +59,30 @@ async fn search_then_x_then_u_round_trips() {
     assert_eq!(state.last_error, None);
     assert_eq!(state.lines[1].raw, "call mom");
 }
+
+#[tokio::test]
+async fn a_line_typed_on_the_add_row_on_top_lands_at_the_top_dated() {
+    let (real, mut daemon) = support::RealDaemon::start("buy milk\n\ncall mom\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+    let mut keys = vec![KeyCode::Char('g'), KeyCode::Char('g'), KeyCode::Char('i')];
+    keys.extend("walk dog".chars().map(KeyCode::Char));
+    keys.push(KeyCode::Enter);
+    press(&mut daemon, &mut input, &mut state, &keys).await;
+    assert_eq!(state.last_error, None);
+    let disk = real.disk();
+    let first = disk.lines().next().unwrap_or_default();
+    // The daemon dates the new line (ADR 0011); the TUI's move puts it above the first task.
+    assert!(
+        first.ends_with(" walk dog") && first.len() == 11 + 8,
+        "{disk:?}"
+    );
+    assert!(
+        disk.ends_with("buy milk\n\ncall mom\n"),
+        "the rest as it was: {disk:?}"
+    );
+}

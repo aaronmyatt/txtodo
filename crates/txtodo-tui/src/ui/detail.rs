@@ -184,14 +184,14 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
     let mut doc = level.doc.clone();
     swap_in(&mut view, &mut doc);
     view.tasks.refs.clear();
-    let items: Vec<ListItem> = (0..=view.lines.len())
-        .map(|i| ListItem::new(row::paint(&view, i)))
+    let items: Vec<ListItem> = (0..view.row_count())
+        .map(|r| ListItem::new(row::paint(&view, view.index_at_row(r))))
         .collect();
     let highlight =
         crate::ui::list::selection_style(state.detail.part == Part::Sub && panel_has_keys(state));
     let mut list_state = ListState::default()
         .with_offset(view.scroll)
-        .with_selected(Some(view.cursor));
+        .with_selected(Some(view.row_of(view.cursor)));
     frame.render_stateful_widget(
         List::new(items).highlight_style(highlight),
         area,
@@ -199,17 +199,17 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
     );
     let first = list_state.offset();
     for (i, y) in (area.y..area.bottom()).enumerate() {
-        if first + i <= view.lines.len() {
+        if first + i < view.row_count() {
             hits.push(
                 Rect::new(area.x, y, area.width, 1),
-                Target::DetailRow(first + i),
+                Target::DetailRow(view.index_at_row(first + i)),
             );
         }
     }
     // A sub-line being edited: the line editor runs on the swapped-in sub-list, so draw it here.
     if let (Some(draft), true) = (&state.editing, panel_has_keys(state)) {
         let rows = row_edit::Rows::of(&view, area, first);
-        if let Some(field) = row_edit::draw(frame, rows, view.cursor, draft) {
+        if let Some(field) = row_edit::draw(frame, rows, view.row_of(view.cursor), draft) {
             hits.push(field, Target::Field(Field::LineEdit, field));
         }
     }

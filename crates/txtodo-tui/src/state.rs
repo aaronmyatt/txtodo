@@ -18,15 +18,16 @@ pub use crate::state_types::{
     Resolution, SyncSnapshot,
 };
 
-/// Everything the UI renders from. `cursor == lines.len()` means the trailing "Add a line" row is
-/// selected (design §3.1: "the last line of the document is always an empty Add a line row").
+/// Everything the UI renders from. `cursor == lines.len()` means the "Add a line" row is selected.
+/// That row is drawn first, above the lines (task tui-desktop-fixes-sync); `row_of` and
+/// `index_at_row` map between an index and the row it is drawn on.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AppState {
     /// The workspace-relative path currently open, e.g. `"todo.txt"`.
     pub path: String,
     /// Every line of the document, in file order.
     pub lines: Vec<LineState>,
-    /// Index into `lines`; `lines.len()` selects the trailing Add-a-line row.
+    /// Index into `lines`; `lines.len()` selects the Add-a-line row (drawn at the top).
     pub cursor: usize,
     /// The single-line editor's draft, when `i`/`a`/`A` is active; `None` otherwise.
     pub editing: Option<EditDraft>,
@@ -150,9 +151,22 @@ impl AppState {
         state
     }
 
-    /// The number of selectable rows: every line, plus the trailing Add-a-line row.
+    /// The number of selectable rows: every line, plus the Add-a-line row.
     pub fn row_count(&self) -> usize {
         self.lines.len() + 1
+    }
+
+    /// The row index `i` is drawn on: the Add-a-line row first, then the lines in file order.
+    pub fn row_of(&self, i: usize) -> usize {
+        if i >= self.lines.len() { 0 } else { i + 1 }
+    }
+
+    /// The index drawn on row `row` (the inverse of [`AppState::row_of`]).
+    pub fn index_at_row(&self, row: usize) -> usize {
+        match row {
+            0 => self.lines.len(),
+            r => (r - 1).min(self.lines.len()),
+        }
     }
 
     /// The line the cursor is on; `None` when the cursor is on the trailing Add-a-line row.
@@ -165,24 +179,25 @@ impl AppState {
         self.cursor == self.lines.len()
     }
 
-    /// `j`: one row down, clamped at the Add-a-line row.
+    /// `j`: one row down, clamped at the last line.
     pub fn move_down(&mut self) {
-        self.cursor = (self.cursor + 1).min(self.lines.len());
+        let row = (self.row_of(self.cursor) + 1).min(self.row_count() - 1);
+        self.cursor = self.index_at_row(row);
     }
 
-    /// `k`: one row up, clamped at the first line.
+    /// `k`: one row up, clamped at the Add-a-line row.
     pub fn move_up(&mut self) {
-        self.cursor = self.cursor.saturating_sub(1);
+        self.cursor = self.index_at_row(self.row_of(self.cursor).saturating_sub(1));
     }
 
-    /// `gg`: jump to the first line.
+    /// `gg`: jump to the top row, the Add-a-line row.
     pub fn move_first(&mut self) {
-        self.cursor = 0;
+        self.cursor = self.lines.len();
     }
 
-    /// `G`: jump to the last row (the Add-a-line row, since it is always the last row).
+    /// `G`: jump to the bottom row, the last line (the Add-a-line row when there are none).
     pub fn move_last(&mut self) {
-        self.cursor = self.lines.len();
+        self.cursor = self.index_at_row(self.row_count() - 1);
     }
 
     /// `s`: toggles the sync indicator.
@@ -245,20 +260,31 @@ mod tests {
     }
 
     #[test]
-    fn navigation_clamps_at_the_add_line_row() {
+    fn navigation_runs_from_the_add_line_row_on_top_to_the_last_line() {
         let mut state = AppState::fixture();
         assert_eq!(state.row_count(), state.lines.len() + 1);
-        state.move_last();
-        assert!(state.on_add_line_row());
-        state.move_down();
+        state.move_first();
+        assert!(state.on_add_line_row(), "the top row");
+        state.move_up();
         assert!(
             state.on_add_line_row(),
-            "moving down past the end stays clamped"
+            "moving up past the top stays clamped"
         );
-        state.move_first();
-        assert_eq!(state.cursor, 0);
-        state.move_up();
-        assert_eq!(state.cursor, 0, "moving up past the start stays clamped");
+        state.move_down();
+        assert_eq!(state.cursor, 0, "then the first line");
+        state.move_last();
+        assert_eq!(state.cursor, state.lines.len() - 1);
+        state.move_down();
+        assert_eq!(
+            state.cursor,
+            state.lines.len() - 1,
+            "clamped at the last line"
+        );
+        assert_eq!((state.row_of(state.lines.len()), state.row_of(0)), (0, 1));
+        assert_eq!(
+            (state.index_at_row(0), state.index_at_row(1)),
+            (state.lines.len(), 0)
+        );
     }
 
     #[test]

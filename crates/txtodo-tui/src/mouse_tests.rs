@@ -26,9 +26,12 @@ fn up(row: u16) -> MouseEvent {
 /// The fixture with a hand-drawn hit map: the list over `height` rows from the top, no overlays.
 fn fixture(height: u16) -> AppState {
     let mut state = AppState::fixture();
+    let view = state.clone();
     state
         .hits
-        .record_list(Rect::new(0, 0, 40, height), 0, state.row_count());
+        .record_list(Rect::new(0, 0, 40, height), 0, view.row_count(), |r| {
+            view.index_at_row(r)
+        });
     state
 }
 
@@ -49,10 +52,11 @@ fn a_click_selects_the_row_and_a_quick_second_one_opens_its_detail() {
     let mut state = fixture(10);
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
-    assert_eq!(mouse.on_event(&mut state, down(3), t0), None);
+    // Screen row 4 is index 3: the Add-a-line row is drawn on top.
+    assert_eq!(mouse.on_event(&mut state, down(4), t0), None);
     assert_eq!(state.cursor, 3);
-    mouse.on_event(&mut state, up(3), t0);
-    let action = mouse.on_event(&mut state, down(3), t0 + DOUBLE_CLICK);
+    mouse.on_event(&mut state, up(4), t0);
+    let action = mouse.on_event(&mut state, down(4), t0 + DOUBLE_CLICK);
     let Some(Action::OpenDetail(parent)) = action else {
         panic!("a double-click opens the detail: {action:?}");
     };
@@ -64,16 +68,16 @@ fn a_slow_second_click_or_one_on_another_row_is_just_a_click() {
     let mut state = fixture(10);
     let mut mouse = Mouse::default();
     let t0 = Instant::now();
-    mouse.on_event(&mut state, down(0), t0);
+    mouse.on_event(&mut state, down(1), t0);
     mouse.on_event(
         &mut state,
-        down(0),
+        down(1),
         t0 + DOUBLE_CLICK + Duration::from_millis(1),
     );
     assert!(!state.detail.is_open(), "too slow");
     mouse.on_event(
         &mut state,
-        down(1),
+        down(2),
         t0 + DOUBLE_CLICK + Duration::from_millis(2),
     );
     assert!(state.editing.is_none(), "another row");
@@ -90,9 +94,9 @@ fn the_wheel_scrolls_the_view_and_pulls_the_cursor_along() {
         state.scroll, 3,
         "clamped to the last full view (5 rows, 2 high)"
     );
-    assert_eq!(state.cursor, 3, "pulled into view");
+    assert_eq!(state.cursor, 2, "pulled into view: row 3 is index 2");
     mouse.on_event(&mut state, at(MouseEventKind::ScrollUp, 0), now);
-    assert_eq!((state.scroll, state.cursor), (0, 1));
+    assert_eq!((state.scroll, state.cursor), (0, 0), "row 1 is index 0");
 }
 
 #[test]
@@ -100,8 +104,8 @@ fn the_pointer_hovers_a_row_and_leaving_the_list_clears_it() {
     let mut state = fixture(10);
     let mut mouse = Mouse::default();
     let now = Instant::now();
-    mouse.on_event(&mut state, at(MouseEventKind::Moved, 1), now);
-    assert_eq!(state.hover, Some(1));
+    mouse.on_event(&mut state, at(MouseEventKind::Moved, 2), now);
+    assert_eq!(state.hover, Some(1), "row 2 is index 1");
     mouse.on_event(&mut state, at(MouseEventKind::Moved, 9), now);
     assert_eq!(state.hover, None, "no row there");
 }
@@ -109,11 +113,13 @@ fn the_pointer_hovers_a_row_and_leaving_the_list_clears_it() {
 #[test]
 fn dragging_a_row_moves_it_to_where_it_is_dropped() {
     let now = Instant::now();
+    // By index: index 4 is the Add-a-line row, drawn on row 0; index i is on row i + 1.
+    let row = |i: u16| if i == 4 { 0 } else { i + 1 };
     let drag = |from: u16, to: u16| {
         let mut state = fixture(10);
         let mut mouse = Mouse::default();
-        mouse.on_event(&mut state, down(from), now);
-        let action = mouse.on_event(&mut state, up(to), now);
+        mouse.on_event(&mut state, down(row(from)), now);
+        let action = mouse.on_event(&mut state, up(row(to)), now);
         (action, state.cursor)
     };
     let (action, cursor) = drag(3, 0);
@@ -130,11 +136,11 @@ fn dragging_a_row_moves_it_to_where_it_is_dropped() {
         Some(4),
         "a blank drop row counts as the task above it"
     );
-    let (action, cursor) = drag(0, 4);
+    let (action, cursor) = drag(3, 4);
     assert_eq!(
         (anchor(action), cursor),
-        (None, 3),
-        "the Add-a-line row is the end"
+        (Some(1), 0),
+        "the Add-a-line row, on top, is the top"
     );
     assert_eq!(drag(3, 3).0, None, "dropped where it started");
     assert_eq!(drag(2, 0).0, None, "a blank line is never moved");

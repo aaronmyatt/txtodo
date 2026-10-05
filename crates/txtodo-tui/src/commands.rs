@@ -50,8 +50,12 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
             return apply(state, m);
         }
         Command::EditCommit => {
-            let m = edit::commit(state);
-            return apply(state, m);
+            let all = edit::commit_all(state);
+            return (!all.is_empty()).then(|| {
+                let mut req = apply_of(state, pb::Mutation::default());
+                req.mutations = all;
+                Action::Apply(req)
+            });
         }
         Command::EditCancel => edit::cancel(state),
         other => return run_panes(state, other),
@@ -249,6 +253,8 @@ fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
 /// where `to` is, blank lines never addressed (`to` may be the Add-a-line row: the end). Nothing
 /// when `from` is not a task or the drop would not move it. The cursor goes where it lands.
 pub(crate) fn move_row(state: &mut AppState, from: usize, to: usize) -> Option<Action> {
+    // The Add-a-line row is drawn on top: a drop there means the top of the list.
+    let to = if to >= state.lines.len() { 0 } else { to };
     if under_review(state, from) {
         state.last_error = Some(READ_ONLY.to_owned());
         return None;

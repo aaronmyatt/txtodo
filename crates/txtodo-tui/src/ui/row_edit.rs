@@ -43,10 +43,10 @@ impl Rows {
         }
     }
 
-    /// The field for row `index`: the row right of the gutter and the mark, or `None` when the
-    /// row is scrolled out of view.
-    pub fn field_area(self, index: usize) -> Option<Rect> {
-        let shown = index.checked_sub(self.offset)?;
+    /// The field for screen row `row` of the list: right of the gutter and the mark, or `None`
+    /// when the row is scrolled out of view.
+    pub fn field_area(self, row: usize) -> Option<Rect> {
+        let shown = row.checked_sub(self.offset)?;
         let y = self.area.y + u16::try_from(shown).ok()?;
         if y >= self.area.bottom() {
             return None;
@@ -57,10 +57,10 @@ impl Rows {
     }
 }
 
-/// Draws `draft` over row `index` of `rows` and puts the cursor on its caret. Returns the field's
-/// area, `None` when the row is out of view.
-pub fn draw(frame: &mut Frame, rows: Rows, index: usize, draft: &EditDraft) -> Option<Rect> {
-    let field_area = rows.field_area(index)?;
+/// Draws `draft` over screen row `row` of `rows` and puts the cursor on its caret. Returns the
+/// field's area, `None` when the row is out of view.
+pub fn draw(frame: &mut Frame, rows: Rows, row: usize, draft: &EditDraft) -> Option<Rect> {
+    let field_area = rows.field_area(row)?;
     let theme = theme::current();
     // The list underneath drew this row reversed; clear it so the field's own style is all there is.
     frame.render_widget(Clear, field_area);
