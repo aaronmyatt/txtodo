@@ -7,6 +7,7 @@
 
 extern crate alloc;
 
+pub mod breakdown;
 pub mod chips;
 mod diff;
 mod edit;
