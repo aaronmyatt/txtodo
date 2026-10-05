@@ -118,6 +118,53 @@ pub async fn refetch(
         }
     }
     refresh_parents(state);
+    follow_refs(daemon, state).await
+}
+
+/// The levels whose parent's `ref:` no longer names the folder the level shows: the user typed a
+/// new slug, or the tag went (an edit elsewhere). Pure, for testing.
+pub fn stale_levels(state: &AppState) -> Vec<usize> {
+    let shown = |dir: &str| dir.rsplit('/').next().map(str::to_owned);
+    state
+        .detail
+        .levels
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            let slug = crate::state_tasks::ref_slug(&l.parent.raw).map(str::to_owned);
+            // A level opened on a line with no `ref:` yet shows the folder lazy creation would
+            // use; it is only stale once the line names another one.
+            slug.is_some() && slug != shown(&l.dir)
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Points each stale level at the folder its parent now names (`RefDir`, no creation) and reads
+/// that folder's sub-list, so the panel follows a renamed `ref:`.
+async fn follow_refs(daemon: &mut Daemon, state: &mut AppState) -> Result<(), DaemonError> {
+    for i in stale_levels(state) {
+        let parent = state.detail.levels[i].parent.clone();
+        let info = match daemon.ref_dir(&parent.path, task_ref(&parent), false).await {
+            Ok(info) => info,
+            Err(DaemonError::Rpc(status)) => {
+                state.last_error = Some(status.message().to_owned());
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        let path = format!("{}/todo.txt", info.dir);
+        let lines = read_lines(daemon, &path).await?.unwrap_or_default();
+        let level = &mut state.detail.levels[i];
+        level.dir = info.dir;
+        level.dir_exists = info.dir_exists;
+        level.doc = Doc {
+            path,
+            lines,
+            ..Doc::default()
+        };
+        state.rewatch = true;
+    }
     Ok(())
 }
 
@@ -227,3 +274,7 @@ pub fn watched_paths(state: &AppState) -> Vec<String> {
     );
     paths
 }
+
+#[cfg(test)]
+#[path = "app_detail_tests.rs"]
+mod tests;

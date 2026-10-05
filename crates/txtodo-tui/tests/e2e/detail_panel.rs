@@ -149,3 +149,35 @@ async fn a_click_inside_the_parent_line_types_where_it_landed() {
         real.disk()
     );
 }
+
+#[tokio::test]
+async fn the_panel_follows_a_ref_typed_into_the_parent_line() {
+    let (_real, mut daemon) = support::RealDaemon::start("plan the trip\n").await;
+    let file = daemon
+        .get_file("todo.txt")
+        .await
+        .unwrap_or_else(|e| panic!("get_file: {e}"));
+    let mut state = AppState::from_document("todo.txt", &String::from_utf8_lossy(&file.bytes));
+    let mut input = Input::default();
+    press(&mut daemon, &mut input, &mut state, &[KeyCode::Enter]).await;
+    let mut add = vec![KeyCode::Char('a')];
+    add.extend(typed("pack the bags"));
+    add.push(KeyCode::Enter);
+    press(&mut daemon, &mut input, &mut state, &add).await;
+    let before = state.detail.levels[0].dir.clone();
+    assert!(before.ends_with("plan-the-trip"), "{before}");
+
+    // Shift-Tab from the sub-list is the parent field; the ref: tag is hidden there, so typing a
+    // new one is the user's own and wins.
+    let mut keys = vec![KeyCode::BackTab, KeyCode::End];
+    keys.extend(typed(" ref:voyage"));
+    keys.push(KeyCode::Enter);
+    press(&mut daemon, &mut input, &mut state, &keys).await;
+    assert_eq!(state.last_error, None);
+    let level = &state.detail.levels[0];
+    assert!(level.dir.ends_with("voyage"), "followed: {}", level.dir);
+    assert!(
+        level.doc.lines.is_empty(),
+        "the new folder has no sub-list yet"
+    );
+}
