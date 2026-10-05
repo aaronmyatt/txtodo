@@ -74,6 +74,7 @@ mod layout_rpc;
 pub mod layout_state;
 mod layout_sync;
 mod live_peers;
+pub mod local_date;
 mod log_repair;
 mod migrate_grpc;
 pub mod migrate_sidecar;

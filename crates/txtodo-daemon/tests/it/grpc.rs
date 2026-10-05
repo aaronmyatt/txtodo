@@ -129,7 +129,11 @@ async fn list_apply_watch_and_get_over_the_socket() {
     let bytes = get_todo(&mut client).await;
     let text = String::from_utf8(bytes.clone()).unwrap();
     assert!(
-        text.contains("(A) seed line id:") && text.contains("(B) from the socket id:"),
+        text.contains("(A) seed line id:")
+            && text.contains(&format!(
+                "(B) {} from the socket id:",
+                txtodo_daemon::local_date::today_local()
+            )),
         "{text}"
     );
     assert_eq!(

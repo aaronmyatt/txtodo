@@ -42,6 +42,10 @@ tonic = "0.14"
 blake3 = "1"
 # https://docs.rs/humantime — RFC 3339 parse/format for a token's `expires` field (design §6.2)
 humantime = "2"
+# https://docs.rs/jiff — today's local date for the creation date on a client's new line (ADR 0011:
+# the daemon's local date at write time; task tui-desktop-fixes-sync). Same crate and version the
+# CLI, MCP and TUI already use for their own date stamps.
+jiff = "0.2"
 # https://docs.rs/notify — FSEvents / inotify / ReadDirectoryChangesW (plan M3 watcher)
 notify = "8"
 # https://docs.rs/tracing — span reconcile{file} and structured events (plan §5)

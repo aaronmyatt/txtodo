@@ -104,9 +104,12 @@ async fn the_first_add_to_a_fresh_ref_dirs_list_registers_it() {
         .unwrap()
         .into_inner()
         .bytes;
-    assert!(String::from_utf8_lossy(&bytes).starts_with("draft the outline"));
+    assert!(String::from_utf8_lossy(&bytes).starts_with(&format!(
+        "{} draft the outline",
+        txtodo_daemon::local_date::today_local()
+    )));
     let on_disk = std::fs::read_to_string(dir.path().join(&sub)).unwrap();
-    assert!(on_disk.starts_with("draft the outline"), "{on_disk}");
+    assert!(on_disk.contains(" draft the outline"), "{on_disk}");
     let listed = client
         .list_files(pb::ListFilesRequest::default())
         .await

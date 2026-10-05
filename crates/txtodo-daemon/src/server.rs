@@ -110,10 +110,11 @@ impl Txtodo for TxtodoService {
         let path = parse_path(&req.path)?;
         let device = self.workspace().device();
         let principal = parse_principal(req.agent, device)?;
+        let today = crate::local_date::today_local();
         let mutations = req
             .mutations
             .into_iter()
-            .map(parse_mutation)
+            .map(|m| parse_mutation(m, today))
             .collect::<Result<Vec<_>, _>>()?;
         if req.dry_run {
             let p = self.route_preview(path, mutations, principal).await?;

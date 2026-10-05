@@ -125,7 +125,8 @@ async fn a_dry_run_batch_returns_the_diff_and_leaves_the_file_and_op_log_alone()
         diff.contains("walk the dog with the puppy"),
         "the edit: {diff}"
     );
-    assert!(diff.contains("+book the vet"), "the add: {diff}");
+    // A new line is dated today on the way in (ADR 0011).
+    assert!(diff.contains(" book the vet"), "the add: {diff}");
     assert!(out.applied >= 3, "{out:?}");
     assert!(
         out.hash.is_none() && out.hlc.is_none(),
@@ -156,7 +157,7 @@ async fn the_real_batch_then_makes_what_the_dry_run_showed() {
         text.contains("walk the dog with the puppy") && text.contains("book the vet"),
         "{text}"
     );
-    assert!(dry.diff.unwrap().contains("+book the vet"));
+    assert!(dry.diff.unwrap().contains(" book the vet"));
 }
 
 #[tokio::test]

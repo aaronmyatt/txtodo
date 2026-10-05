@@ -198,8 +198,11 @@ async fn a_later_mutation_in_a_batch_sees_the_earlier_one() {
         .await
         .unwrap()
         .into_inner();
+    // The add is dated today on the way in (ADR 0011), then completed on the client's date.
+    let today = txtodo_daemon::local_date::today_local();
     assert!(
-        rep.diff.contains("+x 2026-09-20 water the plants"),
+        rep.diff
+            .contains(&format!("+x 2026-09-20 {today} water the plants")),
         "{}",
         rep.diff
     );
