@@ -91,3 +91,12 @@
   its own todo.sh `clean` (it already upper-cases a leading priority) and is taken literally.
 - `resolve_ref_dir` now skips a slug whose folder exists on disk (a metadata read, no write), so
   it predicts what `ensure_ref_dir` claims; unit test with an orphaned `roadmap/` folder.
+- Add row on top (TUI, 2026-10-05): indexes are unchanged (`cursor == lines.len()` is still the
+  Add row); `AppState::row_of`/`index_at_row` map to screen rows, used by the list and sub-list
+  drawing, `HitMap::record_list` (now takes the mapping), the wheel, `row_edit` and drag (a drop on
+  the Add row means the top). `j`/`k`/`gg`/`G` walk the rows as drawn: `gg` is the Add row, `G`
+  the last line. `edit::commit_all` sends a new line as `Add` + `MoveBefore` the first task in one
+  `Apply` (the line number is the last task's + 2, where `add_ops` appends); an empty list sends
+  only the `Add`. The prompt bar's Quick Add still appends.
+  - Manifest: `list.first` is now "Top row: Add a line". Desktop's own top input is root todo
+    line "the Add a line input should be at the top of the page".
