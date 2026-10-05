@@ -1,4 +1,4 @@
-tui: line breakdown view in the detail panel, one field per row like sqlite .mode line +m11 @tui
+tui: line breakdown view in the detail panel, one field per row like sqlite .mode line +m11 @tui @doing by:claude
 specs/client-parity.toml: a row for each of the above with desktop and tui status; @parity lines for the lagging client +m11 @tui @desktop @parity
 Human pass: each fix above in the TUI and the desktop side by side +m11 @tui @desktop @human
 x 2026-10-05 Decide: dates on Add and on a typed x: add today to the Add and Edit mutations (wire change, client clock per ADR 0011) or the daemon's clock. I'd take the mutation field +m11 @proto @daemon @human — decided 2026-10-05 (agent, delegated by the human): the daemon's clock per ADR 0011, not a new mutation field; trade-offs in notes.md
