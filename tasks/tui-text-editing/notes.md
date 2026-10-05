@@ -78,3 +78,6 @@
   bold white on blue in 16 colours) and `Theme::accent()` (desktop's focus blue). Never REVERSED,
   so a field cannot look like the selected row. Every field with the keyboard and the focused
   notes area use it.
+- Focus: the panel's top edge is the accent, bold, while `nav.focus == Detail`, dim otherwise. A
+  part's label is reversed only while the panel has the keys. `ui::list::selection_style`: the
+  selected row is reversed in the list the keys go to and only underlined in the other one.

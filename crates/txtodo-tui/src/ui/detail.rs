@@ -23,7 +23,16 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     let Some(level) = state.detail.top() else {
         return;
     };
-    let block = Block::default().borders(Borders::TOP);
+    // The top border is the panel's edge: the accent, bold, while keys go to the panel, so it is
+    // plain which half of the screen typing lands in.
+    let edge = if panel_has_keys(state) {
+        Style::new()
+            .fg(crate::theme::current().accent())
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::new().add_modifier(Modifier::DIM)
+    };
+    let block = Block::default().borders(Borders::TOP).border_style(edge);
     let inner = block.inner(area);
     frame.render_widget(block, area);
     hits.push(area, Target::Inert);
@@ -44,13 +53,14 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
     } else {
         format!("Sub-list \u{b7} {}", level.doc.path)
     };
-    label(frame, sub_label, &sub_text, part == Part::Sub);
+    let keys = panel_has_keys(state);
+    label(frame, sub_label, &sub_text, keys && part == Part::Sub);
     draw_sub_list(frame, sub, state, hits);
     label(
         frame,
         notes_label,
         &format!("Notes \u{b7} {}/notes.md", level.dir),
-        part == Part::Notes,
+        keys && part == Part::Notes,
     );
     draw_notes(
         frame,
@@ -173,12 +183,8 @@ fn draw_sub_list(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut Hit
     let items: Vec<ListItem> = (0..=view.lines.len())
         .map(|i| ListItem::new(row::paint(&view, i)))
         .collect();
-    let focused = state.detail.part == Part::Sub;
-    let highlight = if focused {
-        Style::new().add_modifier(Modifier::REVERSED)
-    } else {
-        Style::new()
-    };
+    let highlight =
+        crate::ui::list::selection_style(state.detail.part == Part::Sub && panel_has_keys(state));
     let mut list_state = ListState::default()
         .with_offset(view.scroll)
         .with_selected(Some(view.cursor));

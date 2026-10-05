@@ -122,3 +122,22 @@ fn the_notes_put_the_real_cursor_on_their_caret() {
     assert_eq!((at.x, usize::from(at.y)), (2, first + 1));
     assert!(!rows.join("").contains('\u{258f}'), "no drawn caret");
 }
+
+#[test]
+fn the_panel_edge_lights_only_while_it_has_the_keyboard() {
+    let mut state = AppState::fixture();
+    one_level(&mut state);
+    let edge_fg = |state: &AppState| {
+        let mut terminal =
+            Terminal::new(TestBackend::new(60, 12)).unwrap_or_else(|e| panic!("{e}"));
+        let mut hits = HitMap::default();
+        terminal
+            .draw(|f| draw(f, f.area(), state, &mut hits))
+            .unwrap_or_else(|e| panic!("{e}"));
+        terminal.backend().buffer()[(30, 0)].fg
+    };
+    state.nav.focus = crate::state_nav::Focus::Detail;
+    assert_eq!(edge_fg(&state), crate::theme::current().accent());
+    state.nav.focus = crate::state_nav::Focus::List;
+    assert_ne!(edge_fg(&state), crate::theme::current().accent());
+}

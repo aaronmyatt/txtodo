@@ -9,6 +9,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{List, ListItem};
 
 use crate::state::AppState;
+use crate::state_nav::Focus;
 use crate::ui::row;
 
 /// One [`Line`] per row: every document line, then the trailing Add-a-line row, each painted by
@@ -37,7 +38,18 @@ pub fn list_widget(state: &AppState) -> List<'static> {
             }
         })
         .collect::<Vec<_>>();
-    List::new(items).highlight_style(Style::new().add_modifier(Modifier::REVERSED))
+    let has_keys = matches!(state.nav.focus, Focus::List | Focus::Edit);
+    List::new(items).highlight_style(selection_style(has_keys))
+}
+
+/// The selected row: reversed while its list has the keyboard, else only underlined, so the row
+/// stays findable without competing with the pane (or field) the keys go to.
+pub fn selection_style(has_keys: bool) -> Style {
+    if has_keys {
+        Style::new().add_modifier(Modifier::REVERSED)
+    } else {
+        Style::new().add_modifier(Modifier::UNDERLINED)
+    }
 }
 
 #[cfg(test)]
@@ -47,6 +59,21 @@ mod tests {
 
     fn key(c: char) -> KeyEvent {
         KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn the_selection_is_reversed_only_where_the_keys_go() {
+        assert!(
+            selection_style(true)
+                .add_modifier
+                .contains(Modifier::REVERSED)
+        );
+        let away = selection_style(false);
+        assert!(!away.add_modifier.contains(Modifier::REVERSED));
+        assert!(
+            away.add_modifier.contains(Modifier::UNDERLINED),
+            "still findable"
+        );
     }
 
     #[test]
