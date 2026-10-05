@@ -104,3 +104,9 @@
   `save_parent` puts the old slug back with `with_ref` unless the user typed a `ref:` of their
   own. So the panel cannot cut its own link by an edit. The `id:` tag stays in the draft (design
   §7) and is hidden only when painted, as before.
+- Following a ref (TUI): after every refetch, `app_detail::stale_levels` finds levels whose
+  parent's `ref:` names another folder; `follow_refs` re-resolves them (`RefDir`, no creation) and
+  reads that folder's sub-list. e2e: typing ` ref:voyage` into the parent moves the panel there.
+  - Known gap: typing a new slug only re-tags the line; the old folder is orphaned, not renamed
+    (renaming is `RenameRefDir`, which nothing in the TUI calls). The hidden-`ref:` save makes
+    this rare: only a `ref:` the user types on purpose does it.
