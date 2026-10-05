@@ -89,3 +89,5 @@
   `(a) ` becomes `(A) ` at the start or after the done marker and up to two dates. The wire runs
   it before `date_done`, so `X (a) call mum` lands as `x <today> call mum pri:A`. The CLI keeps
   its own todo.sh `clean` (it already upper-cases a leading priority) and is taken literally.
+- `resolve_ref_dir` now skips a slug whose folder exists on disk (a metadata read, no write), so
+  it predicts what `ensure_ref_dir` claims; unit test with an orphaned `roadmap/` folder.
