@@ -36,7 +36,7 @@ fn paths_ulids_and_task_refs_are_validated_once() {
         })),
     };
     let today = Date::new(2026, 10, 5).unwrap();
-    assert!(parse_mutation(zero, today).is_err());
+    assert!(parse_mutation(zero, today, false).is_err());
     let bad_date = pb::Mutation {
         kind: Some(mutation::Kind::Complete(pb::Complete {
             task: Some(pb::TaskRef {
@@ -46,19 +46,19 @@ fn paths_ulids_and_task_refs_are_validated_once() {
             today: "yesterday".into(),
         })),
     };
-    assert!(parse_mutation(bad_date, today).is_err());
+    assert!(parse_mutation(bad_date, today, false).is_err());
     let add = |line: &str| pb::Mutation {
         kind: Some(mutation::Kind::Add(pb::Add { line: line.into() })),
     };
     assert_eq!(
-        parse_mutation(add("(B) call mum"), today).unwrap(),
+        parse_mutation(add("(B) call mum"), today, false).unwrap(),
         Mutation::Add {
             line: "(B) 2026-10-05 call mum".into()
         },
         "a client's new line gets today's date"
     );
     assert_eq!(
-        parse_mutation(add("2026-01-01 old"), today).unwrap(),
+        parse_mutation(add("2026-01-01 old"), today, false).unwrap(),
         Mutation::Add {
             line: "2026-01-01 old".into()
         },
@@ -95,5 +95,41 @@ fn principals_and_summaries_render() {
     assert_eq!(
         summary_of(&OpKind::BlankInsert { after: None }),
         "blank after None"
+    );
+}
+
+#[test]
+fn a_line_typed_done_is_dated_and_settles_unless_the_cli_sent_it() {
+    let today = Date::new(2026, 10, 5).unwrap();
+    let edit = |line: &str| pb::Mutation {
+        kind: Some(mutation::Kind::Edit(pb::Edit {
+            task: Some(pb::TaskRef {
+                line_number: 1,
+                task_id: String::new(),
+            }),
+            new_line: line.into(),
+        })),
+    };
+    let Mutation::Edit {
+        new_line, settle, ..
+    } = parse_mutation(edit("x call mum"), today, false).unwrap()
+    else {
+        panic!("an edit")
+    };
+    assert_eq!(
+        (new_line.as_str(), settle),
+        ("x 2026-10-05 call mum", true),
+        "typed done: dated, and it settles"
+    );
+    let Mutation::Edit {
+        new_line, settle, ..
+    } = parse_mutation(edit("x call mum"), today, true).unwrap()
+    else {
+        panic!("an edit")
+    };
+    assert_eq!(
+        (new_line.as_str(), settle),
+        ("x call mum", false),
+        "the CLI's text is taken as it is"
     );
 }

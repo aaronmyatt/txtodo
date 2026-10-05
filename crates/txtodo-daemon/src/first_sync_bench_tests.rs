@@ -135,10 +135,10 @@ async fn act(ws: &SharedWorkspace, rng: &mut Rng, n: usize) {
         },
         (4..=5, _) => {
             let at = rng.below(lines);
-            let old = lines_of(ws, &list).swap_remove(at);
             Mutation::Edit {
                 task: line(at),
-                new_line: format!("{old} +e{n}"),
+                new_line: format!("{} +e{n}", lines_of(ws, &list).swap_remove(at)),
+                settle: true,
             }
         }
         (6, _) => Mutation::Complete {

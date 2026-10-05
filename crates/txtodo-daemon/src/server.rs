@@ -114,7 +114,7 @@ impl Txtodo for TxtodoService {
         let mutations = req
             .mutations
             .into_iter()
-            .map(|m| parse_mutation(m, today))
+            .map(|m| parse_mutation(m, today, req.source == "cli"))
             .collect::<Result<Vec<_>, _>>()?;
         if req.dry_run {
             let p = self.route_preview(path, mutations, principal).await?;

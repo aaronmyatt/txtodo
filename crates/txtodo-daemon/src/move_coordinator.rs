@@ -155,7 +155,14 @@ async fn rewrite_ref_tag(
     let new_line = txtodo_core::apply(&owned, &ref_tag_edit(Some(final_slug)));
     let new_line = new_line.raw().unwrap_or_default().to_owned();
     origin
-        .apply(dest, vec![Mutation::Edit { task, new_line }])
+        .apply(
+            dest,
+            vec![Mutation::Edit {
+                task,
+                new_line,
+                settle: false,
+            }],
+        )
         .await?;
     Ok(())
 }

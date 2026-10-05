@@ -184,6 +184,7 @@ fn edit_replaces_the_line_but_must_keep_the_id() {
         &Mutation::Edit {
             task: line(1, None),
             new_line: edited,
+            settle: false,
         },
         &mut mint(),
     )
@@ -201,10 +202,43 @@ fn edit_replaces_the_line_but_must_keep_the_id() {
         &Mutation::Edit {
             task: line(1, None),
             new_line: "no id".into(),
+            settle: false,
         },
         &mut mint(),
     );
     assert_eq!(dropped, Err(MutationError::IdChanged(id(A))));
+}
+
+#[test]
+fn an_edit_that_marks_a_line_done_moves_it_down_only_when_asked_to_settle() {
+    let s = state();
+    let done = format!("x 2026-10-05 2026-09-11 buy ducks +farm id:{A} pri:A");
+    let edit = |settle| Mutation::Edit {
+        task: line(1, Some(A)),
+        new_line: done.clone(),
+        settle,
+    };
+    let moved = mutation_ops(&s, &edit(true), &mut mint()).unwrap();
+    assert!(
+        moved.iter().any(|o| matches!(o, OpKind::Move { .. })),
+        "{moved:?}"
+    );
+    let kept = mutation_ops(&s, &edit(false), &mut mint()).unwrap();
+    assert!(
+        !kept.iter().any(|o| matches!(o, OpKind::Move { .. })),
+        "the CLI's edit stays put"
+    );
+    // Editing a line that was already done, or the last task, moves nothing.
+    let last = Mutation::Edit {
+        task: line(3, Some(B)),
+        new_line: format!("x 2026-10-05 walk the dog @home id:{B}"),
+        settle: true,
+    };
+    let ops = mutation_ops(&s, &last, &mut mint()).unwrap();
+    assert!(
+        !ops.iter().any(|o| matches!(o, OpKind::Move { .. })),
+        "already last"
+    );
 }
 
 #[test]

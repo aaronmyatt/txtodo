@@ -48,6 +48,10 @@ pub enum Mutation {
         task: TaskRef,
         /// New text without ending.
         new_line: String,
+        /// When this edit turns an open line done, also move it to the end of its file, as
+        /// `Complete` does (task tui-desktop-fixes-sync: a typed `x `, desktop's x chip). Off for
+        /// the CLI, whose diff already places every line, and for the daemon's own edits.
+        settle: bool,
     },
     /// Move to another document (plan §3.2.8, root todo.txt task 16). Always cross-file: a
     /// same-file reorder is not part of this client API.
@@ -293,7 +297,11 @@ fn mutation_ops_inner(
             }
             Ok(ops)
         }
-        Mutation::Edit { task, new_line } => edit_ops(state, task, new_line),
+        Mutation::Edit {
+            task,
+            new_line,
+            settle,
+        } => edit_ops(state, task, new_line, *settle),
         Mutation::Move { task, to } => move_ops(state, task, to),
         Mutation::MoveToEnd { task } => move_to_end_ops(state, task),
         Mutation::Reopen { task } => reopen_ops(state, task),
@@ -358,6 +366,7 @@ fn edit_ops(
     state: &DocState,
     task: &TaskRef,
     new_line: &str,
+    settle: bool,
 ) -> Result<Vec<OpKind>, MutationError> {
     let (_, id) = resolve(state, task)?;
     let new = task_line(new_line)?;
@@ -367,7 +376,14 @@ fn edit_ops(
     let old = state
         .line_of(id)
         .ok_or(MutationError::NoLine(task.line_number))?;
-    Ok(change_ops(&old, &new, id))
+    let mut ops = change_ops(&old, &new, id);
+    let done = |l: &OwnedLine| l.raw().is_some_and(txtodo_core::line_fixes::is_completed);
+    // Marked done by this edit: down to the end of the file, once, like `Complete` (and nothing
+    // when it is the last task already).
+    if settle && !done(&old) && done(&new) && state.task_before(state.len()) != Some(id) {
+        ops.extend(move_to_end_ops(state, task)?);
+    }
+    Ok(ops)
 }
 
 /// Validates client text into a task line (LF ending; the state re-ends it on insert).

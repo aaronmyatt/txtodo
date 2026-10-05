@@ -134,14 +134,23 @@ fn parse_hash(bytes: &[u8]) -> Result<[u8; 32], Status> {
 
 /// One wire mutation into the typed one. A client's new line gets `today` as its creation date
 /// here, at the wire, so lines the daemon adds for its own reasons (a cross-file move's arriving
-/// line) keep the date they had (`txtodo_core::line_fixes`, ADR 0011).
-pub fn parse_mutation(m: pb::Mutation, today: Date) -> Result<Mutation, Status> {
+/// line) keep the date they had (`txtodo_core::line_fixes`, ADR 0011). Unless `literal` (the CLI,
+/// which computes every line itself, todo.sh style), a line typed done gets `today` as its
+/// completion date and an edit that marks one done moves it down.
+pub fn parse_mutation(m: pb::Mutation, today: Date, literal: bool) -> Result<Mutation, Status> {
+    let fix = |line: String| {
+        if literal {
+            line
+        } else {
+            txtodo_core::line_fixes::date_done(&line, today)
+        }
+    };
     let kind = m
         .kind
         .ok_or_else(|| Status::invalid_argument("empty mutation"))?;
     Ok(match kind {
         mutation::Kind::Add(a) => Mutation::Add {
-            line: txtodo_core::line_fixes::stamp_created(&a.line, today),
+            line: txtodo_core::line_fixes::stamp_created(&fix(a.line), today),
         },
         mutation::Kind::Complete(c) => {
             let today = Date::parse(&c.today)
@@ -153,7 +162,8 @@ pub fn parse_mutation(m: pb::Mutation, today: Date) -> Result<Mutation, Status> 
         }
         mutation::Kind::Edit(e) => Mutation::Edit {
             task: parse_task_ref(e.task)?,
-            new_line: e.new_line,
+            new_line: fix(e.new_line),
+            settle: !literal,
         },
         mutation::Kind::Move(mv) => Mutation::Move {
             task: parse_task_ref(mv.task)?,
