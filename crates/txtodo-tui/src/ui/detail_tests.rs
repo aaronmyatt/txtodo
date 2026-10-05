@@ -65,3 +65,60 @@ fn the_panel_shows_crumbs_parent_sub_list_and_notes() {
     .unwrap_or(0);
     assert_eq!(hits.at(5, sub_row), Some(Target::DetailRow(0)));
 }
+
+/// Draws `state` and returns where the terminal cursor ended up, `None` when it is hidden.
+fn cursor(state: &AppState) -> Option<ratatui::layout::Position> {
+    let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap_or_else(|e| panic!("{e}"));
+    let mut hits = HitMap::default();
+    terminal
+        .draw(|f| draw(f, f.area(), state, &mut hits))
+        .unwrap_or_else(|e| panic!("{e}"));
+    // Ref: https://docs.rs/ratatui/0.30/ratatui/backend/struct.TestBackend.html#method.cursor_visible
+    let backend = terminal.backend();
+    backend.cursor_visible().then(|| backend.cursor_position())
+}
+
+fn one_level(state: &mut AppState) {
+    state.detail.levels.push(Level {
+        parent: Parent {
+            line_number: 1,
+            raw: "Water the plants".to_owned(),
+            ..Parent::default()
+        },
+        ..Level::default()
+    });
+}
+
+#[test]
+fn the_parent_field_puts_the_real_cursor_on_its_caret() {
+    let mut state = AppState::fixture();
+    one_level(&mut state);
+    state.nav.focus = crate::state_nav::Focus::Detail;
+    state.detail.part = Part::Parent;
+    let line = LineState::from_raw(1, "Water the plants");
+    let mut draft = crate::state::EditDraft::for_line(&line, true);
+    draft.caret = "Water".len();
+    state.detail.levels[0].parent_draft = Some(draft);
+    // " Parent  " is nine cells; the panel's top border is row 0, crumbs row 1, parent row 2.
+    assert_eq!(
+        cursor(&state),
+        Some(ratatui::layout::Position::new(9 + 5, 2))
+    );
+    state.nav.focus = crate::state_nav::Focus::List;
+    assert_eq!(cursor(&state), None, "no cursor while keys go to the list");
+}
+
+#[test]
+fn the_notes_put_the_real_cursor_on_their_caret() {
+    let mut state = AppState::fixture();
+    one_level(&mut state);
+    state.nav.focus = crate::state_nav::Focus::Detail;
+    state.detail.part = Part::Notes;
+    state.detail.levels[0].notes.text = "ab\ncd".to_owned();
+    state.detail.levels[0].notes.caret = 4; // after "c"
+    let (rows, _) = drawn(&state);
+    let first = rows.iter().position(|r| r.starts_with(" ab")).unwrap_or(0);
+    let at = cursor(&state).unwrap_or_else(|| panic!("a cursor in the notes"));
+    assert_eq!((at.x, usize::from(at.y)), (2, first + 1));
+    assert!(!rows.join("").contains('\u{258f}'), "no drawn caret");
+}

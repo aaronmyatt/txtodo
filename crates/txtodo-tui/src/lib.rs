@@ -33,6 +33,7 @@ pub mod ui {
     pub mod detail;
     pub mod duplicate_sheet;
     pub mod edit;
+    pub mod field;
     pub mod footer;
     pub mod header;
     pub mod help;

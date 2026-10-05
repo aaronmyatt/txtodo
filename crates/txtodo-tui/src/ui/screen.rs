@@ -14,8 +14,8 @@ use crate::hit::{HitMap, Target};
 use crate::state::{AppState, EditTarget};
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, conflict_sheet, detail, footer, header, help, list, offers, prompt_bar, search_panel,
-    settings, subbar, sync, toast, universal, workspace_menu,
+    banner, conflict_sheet, detail, field, footer, header, help, list, offers, prompt_bar,
+    search_panel, settings, subbar, sync, toast, universal, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -72,10 +72,24 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
         );
     }
     if let Some(cmd) = &state.command {
-        let line = Line::from(format!(":{cmd}"));
-        hits.push(draw_overlay(frame, main_area, line), Target::Inert);
+        draw_command_line(frame, main_area, cmd, &mut hits);
     }
     hits
+}
+
+/// The `:` line over the bottom row of `area`, the real cursor at its end.
+fn draw_command_line(frame: &mut Frame, area: Rect, cmd: &str, hits: &mut HitMap) {
+    let rect = draw_overlay(frame, area, Line::from(":"));
+    let field_area = Rect::new(
+        rect.x + 1,
+        rect.y,
+        rect.width.saturating_sub(1),
+        rect.height,
+    );
+    let style = Style::new().add_modifier(Modifier::BOLD);
+    let cell = field::draw(frame, field_area, cmd, cmd.len(), style);
+    frame.set_cursor_position(cell);
+    hits.push(rect, Target::Inert);
 }
 
 /// The Tasks screen: the sub-toolbar, the line list and the overlays that sit on it.
@@ -103,8 +117,14 @@ fn draw_tasks(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap
         hits.push(list_area, Target::Inert);
     }
     if let Some(draft) = &state.editing {
-        let line = Line::from(format!("{}> {}", edit_label(&draft.target), draft.buffer));
-        hits.push(draw_overlay(frame, list_area, line), Target::Inert);
+        let label = format!("{}> ", edit_label(&draft.target));
+        let rect = draw_overlay(frame, list_area, Line::from(label.clone()));
+        let used = u16::try_from(label.len()).unwrap_or(0).min(rect.width);
+        let field_area = Rect::new(rect.x + used, rect.y, rect.width - used, rect.height);
+        let style = Style::new().add_modifier(Modifier::BOLD);
+        let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, style);
+        frame.set_cursor_position(cell);
+        hits.push(rect, Target::Inert);
     }
 }
 

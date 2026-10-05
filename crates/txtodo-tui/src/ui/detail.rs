@@ -15,7 +15,8 @@ use crate::hit::{HitMap, Target};
 use crate::keymap::Command;
 use crate::state::AppState;
 use crate::state_detail::{Level, Part, swap_in};
-use crate::ui::{header::workspace_name, notes_edit, row};
+use crate::state_nav::Focus;
+use crate::ui::{field, header::workspace_name, notes_edit, row};
 
 /// Draws the panel into `area` and records its targets.
 pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) {
@@ -51,7 +52,12 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMap) 
         &format!("Notes \u{b7} {}/notes.md", level.dir),
         part == Part::Notes,
     );
-    draw_notes(frame, notes, level, part == Part::Notes);
+    draw_notes(
+        frame,
+        notes,
+        level,
+        part == Part::Notes && panel_has_keys(state),
+    );
     hits.push(notes, Target::Command(Command::DetailEditNotes));
 }
 
@@ -105,27 +111,11 @@ fn draw_crumbs(frame: &mut Frame, area: Rect, state: &AppState, hits: &mut HitMa
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-/// The parent line, or its draft with a caret while the field has the keyboard, and "Mark done".
+/// The parent line, or its draft as a field while it has the keyboard, and "Mark done".
 fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, hits: &mut HitMap) {
     hits.push(area, Target::Command(Command::DetailEditParent));
-    let mut spans = vec![Span::styled(
-        " Parent  ",
-        Style::new().add_modifier(Modifier::DIM),
-    )];
-    match &level.parent_draft {
-        Some(draft) => {
-            let (before, after) = draft.buffer.split_at(draft.caret);
-            spans.push(Span::raw(before.to_owned()));
-            spans.push(Span::styled(
-                "\u{258f}",
-                Style::new().add_modifier(Modifier::BOLD),
-            ));
-            spans.push(Span::raw(after.to_owned()));
-        }
-        None => spans.extend(
-            crate::paint::paint_line(&level.parent.raw, level.parent.completed, false).spans,
-        ),
-    }
+    let label = Span::styled(" Parent  ", Style::new().add_modifier(Modifier::DIM));
+    let mut text_area = area;
     if !level.parent.completed && crate::commands_detail::all_sub_tasks_done(state) {
         let button = " Mark done ";
         let width = u16::try_from(button.len()).unwrap_or(0);
@@ -135,11 +125,37 @@ fn draw_parent(frame: &mut Frame, area: Rect, state: &AppState, level: &Level, h
             rect,
         );
         hits.push(rect, Target::Command(Command::DetailCompleteParent));
-        let text_area = Rect::new(area.x, area.y, area.width.saturating_sub(width + 1), 1);
-        frame.render_widget(Paragraph::new(Line::from(spans)), text_area);
-        return;
+        text_area.width = area.width.saturating_sub(width + 1);
     }
-    frame.render_widget(Paragraph::new(Line::from(spans)), area);
+    let label_width = u16::try_from(label.width())
+        .unwrap_or(0)
+        .min(text_area.width);
+    match &level.parent_draft {
+        Some(draft) => {
+            frame.render_widget(Paragraph::new(Line::from(label)), text_area);
+            let field_area = Rect {
+                x: text_area.x + label_width,
+                width: text_area.width - label_width,
+                ..text_area
+            };
+            let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, Style::new());
+            if panel_has_keys(state) {
+                frame.set_cursor_position(cell);
+            }
+        }
+        None => {
+            let mut spans = vec![label];
+            spans.extend(
+                crate::paint::paint_line(&level.parent.raw, level.parent.completed, false).spans,
+            );
+            frame.render_widget(Paragraph::new(Line::from(spans)), text_area);
+        }
+    }
+}
+
+/// Whether keys go to the panel at all (its part then says which field).
+fn panel_has_keys(state: &AppState) -> bool {
+    state.nav.focus == Focus::Detail
 }
 
 /// The sub-list's rows, painted as the root list's are, the cursor reversed while it has the
@@ -190,21 +206,9 @@ fn draw_notes(frame: &mut Frame, area: Rect, level: &Level, focused: bool) {
         .notes
         .text
         .split('\n')
-        .enumerate()
         .skip(top)
         .take(height)
-        .map(|(n, text)| {
-            if !(focused && n == caret_line) {
-                return Line::raw(format!(" {text}"));
-            }
-            let split = crate::text_input::offset_at_column(text, caret_col);
-            let (before, after) = text.split_at(split);
-            Line::from(vec![
-                Span::raw(format!(" {before}")),
-                Span::styled("\u{258f}", Style::new().add_modifier(Modifier::BOLD)),
-                Span::raw(after.to_owned()),
-            ])
-        })
+        .map(|text| Line::raw(format!(" {text}")))
         .collect();
     let placeholder = level.notes.text.is_empty() && !focused;
     let body = if placeholder {
@@ -214,6 +218,15 @@ fn draw_notes(frame: &mut Frame, area: Rect, level: &Level, focused: bool) {
         Paragraph::new(lines)
     };
     frame.render_widget(body, area);
+    if focused && area.width > 0 && area.height > 0 {
+        // One cell of margin, then the caret's display column; cut lines keep it on the last cell
+        // until the notes wrap.
+        let column = u16::try_from(caret_col + 1)
+            .unwrap_or(u16::MAX)
+            .min(area.width - 1);
+        let row = u16::try_from(caret_line - top).unwrap_or(0);
+        frame.set_cursor_position((area.x + column, area.y + row));
+    }
 }
 
 #[cfg(test)]

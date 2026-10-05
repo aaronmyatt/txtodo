@@ -16,6 +16,7 @@ use crate::keymap::Command;
 use crate::prompt::{CHIPS, hint};
 use crate::state::AppState;
 use crate::state_nav::Focus;
+use crate::ui::field;
 
 /// Draws the bar into `area` (one row) and, while it has the keyboard, the chips over the row
 /// above `area`.
@@ -32,24 +33,30 @@ pub fn draw(frame: &mut Frame, area: Rect, state: &AppState, now: Instant, hits:
     }
     hits.push(area, Target::Inert);
     let draft = &state.shell.prompt;
-    let (before, after) = draft.buffer.split_at(draft.caret);
-    let mut spans = vec![
-        Span::styled(" \u{203a} ", Style::new().add_modifier(Modifier::BOLD)),
-        Span::raw(before.to_owned()),
-        Span::styled("\u{258f}", Style::new().add_modifier(Modifier::BOLD)),
-        Span::raw(after.to_owned()),
-    ];
-    if let Some(hint) = hint(state, now) {
-        let used: usize = spans.iter().map(Span::width).sum();
-        let text = format!("{hint} ");
-        let gap = usize::from(area.width).saturating_sub(used + Span::raw(text.as_str()).width());
-        spans.push(Span::raw(" ".repeat(gap.max(2))));
-        spans.push(Span::styled(
-            text,
-            Style::new().add_modifier(Modifier::ITALIC),
-        ));
+    let mark = Span::styled(" \u{203a} ", Style::new().add_modifier(Modifier::BOLD));
+    let hint = hint(state, now).map(|h| format!("  {h} "));
+    let hint_width = hint.as_deref().map_or(0, |h| Span::raw(h).width());
+    let mark_width = u16::try_from(mark.width()).unwrap_or(0).min(area.width);
+    let field_width = area
+        .width
+        .saturating_sub(mark_width)
+        .saturating_sub(u16::try_from(hint_width).unwrap_or(u16::MAX));
+    frame.render_widget(Paragraph::new(Line::from(mark)), area);
+    let field_area = Rect::new(area.x + mark_width, area.y, field_width, 1);
+    let cell = field::draw(frame, field_area, &draft.buffer, draft.caret, Style::new());
+    frame.set_cursor_position(cell);
+    if let Some(text) = hint {
+        let rect = Rect::new(
+            field_area.right(),
+            area.y,
+            area.right() - field_area.right(),
+            1,
+        );
+        frame.render_widget(
+            Paragraph::new(text).style(Style::new().add_modifier(Modifier::ITALIC)),
+            rect,
+        );
     }
-    frame.render_widget(Paragraph::new(Line::from(spans)), area);
     if area.y > 0 {
         draw_chips(frame, Rect::new(area.x, area.y - 1, area.width, 1), hits);
     }
@@ -124,15 +131,30 @@ mod tests {
         let now = Instant::now();
         state.shell.prompt_typed_at = Some(now);
         let (rows, hits) = drawn(&state, now + crate::prompt::HINT_AFTER);
-        assert!(
-            rows[1].starts_with(" \u{203a} (a) call\u{258f}"),
-            "{rows:?}"
-        );
+        assert!(rows[1].starts_with(" \u{203a} (a) call "), "{rows:?}");
+        assert!(!rows[1].contains('\u{258f}'), "no drawn caret: {rows:?}");
         assert!(
             rows[1].contains("Priority letters are uppercase"),
             "{rows:?}"
         );
         assert!(rows[0].contains(" (A) a"), "{rows:?}");
         assert_eq!(hits.at(2, 0), Some(Target::Chip(0)));
+    }
+
+    #[test]
+    fn the_terminal_cursor_sits_on_the_caret() {
+        let mut state = AppState::fixture();
+        state.nav.focus = Focus::Prompt;
+        state.shell.prompt.buffer = "call mum".to_owned();
+        state.shell.prompt.caret = 4;
+        let mut terminal = Terminal::new(TestBackend::new(40, 2)).unwrap_or_else(|e| panic!("{e}"));
+        let mut hits = HitMap::default();
+        terminal
+            .draw(|f| draw(f, Rect::new(0, 1, 40, 1), &state, Instant::now(), &mut hits))
+            .unwrap_or_else(|e| panic!("{e}"));
+        // " › " is three cells, then "call" puts the caret on cell 7.
+        terminal
+            .backend_mut()
+            .assert_cursor_position(ratatui::layout::Position::new(7, 1));
     }
 }

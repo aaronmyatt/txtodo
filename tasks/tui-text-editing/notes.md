@@ -67,3 +67,10 @@
     stateless horizontal scroll: the caret sits on the last cell once it passes the right edge.
   - The line editor gained Delete. The notes editor's Up/Down keep a display column, not a char
     count.
+- Real cursor: `ui/field.rs` draws a one-row field (scrolled for the caret) and returns the caret's
+  cell; the caller calls `Frame::set_cursor_position` only while the field has the keyboard.
+  ratatui hides the cursor on any frame that does not set it.
+  - Wired: the list/sub-list editor (still the bottom overlay until the in-place line), the `:`
+    line, the prompt bar, the parent field (only when `nav.focus == Detail`), the notes.
+  - `terminal.rs` sets a steady bar on enter and `DefaultUserShape` on leave and in the panic hook.
+  - Gap: the header search and Settings fields still draw `▏` (their line moves them to fields).

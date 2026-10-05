@@ -10,6 +10,7 @@
 use std::io::{Write, stdout};
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crossterm::cursor::SetCursorStyle;
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyboardEnhancementFlags, PopKeyboardEnhancementFlags,
     PushKeyboardEnhancementFlags,
@@ -39,6 +40,9 @@ pub fn enter() -> ratatui::DefaultTerminal {
     install_panic_hook();
     // Best effort: a terminal that refuses mouse reports or keyboard flags still works by key.
     let _ = execute!(stdout(), EnableMouseCapture);
+    // A bar, not a block, so the cursor reads as "text goes here" between two characters.
+    // Ref: https://docs.rs/crossterm/0.29/crossterm/cursor/enum.SetCursorStyle.html
+    let _ = execute!(stdout(), SetCursorStyle::SteadyBar);
     // Sends the protocol's query plus a primary device attributes query every terminal answers,
     // so a terminal without the protocol answers "no" rather than timing out.
     // Ref: https://docs.rs/crossterm/latest/crossterm/terminal/fn.supports_keyboard_enhancement.html
@@ -66,6 +70,7 @@ fn undo_extras() {
         let _ = execute!(out, PopKeyboardEnhancementFlags);
     }
     let _ = execute!(out, DisableMouseCapture);
+    let _ = execute!(out, SetCursorStyle::DefaultUserShape);
     let _ = out.flush();
 }
 
