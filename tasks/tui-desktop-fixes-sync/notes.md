@@ -115,3 +115,7 @@
   tag in order. TUI: `v` in the panel (`detail.breakdown`, `Detail.breakdown`) draws them under
   the parent row, names right-aligned. Desktop gets it as an `@parity` line in
   `tasks/desktop-ui-revamp/todo.txt` (wasm export still to add in `txtodo-ffi`).
+- Manifest: `list.add_on_top` (TUI done, desktop planned) and `detail.breakdown` (same), each with
+  a desktop `@parity` line in `tasks/desktop-ui-revamp/todo.txt`. The dates, the case fixes and
+  done-moves-down are daemon behaviour every client gets, not client actions, so they have no
+  rows; the hidden `ref:` is a display rule, also no row.
