@@ -1,6 +1,6 @@
 //! What the daemon does to a line an app writes, before it lands (task
-//! `tui-desktop-fixes-sync`): today's creation date on a new line, and today's completion date on
-//! a line typed done (`x ` and no date). Here, not in each client, so
+//! `tui-desktop-fixes-sync`): today's creation date on a new line, today's completion date on a
+//! line typed done (`x ` and no date), and the case slips fixed (`X ` to `x `, `(a) ` to `(A) `). Here, not in each client, so
 //! the CLI, the TUI, the desktop app and MCP all get the same line for the same input (ADR 0031:
 //! shared logic lives in core). Pure text in, text out; the caller supplies today's local date
 //! (ADR 0011).
@@ -51,6 +51,36 @@ pub fn date_done(line: &str, today: Date) -> String {
     out
 }
 
+/// Fixes the two case slips the spec has no room for, only where they are unambiguous: a leading
+/// `X ` becomes the done marker `x `, and a lower-case priority `(a) ` becomes `(A) ` at the start
+/// of the line or after the done marker and its dates. Anywhere else `X` and `(a)` are words.
+pub fn fix_case(line: &str) -> String {
+    let mut out = line.to_string();
+    if out.starts_with("X ") {
+        out.replace_range(0..1, "x");
+    }
+    let mut at = 0;
+    if out.starts_with("x ") {
+        at = 2;
+        // Up to two dates after the marker: completion, then creation.
+        for _ in 0..2 {
+            if out.get(at..at + 10).and_then(Date::parse).is_some()
+                && out[at + 10..].starts_with(' ')
+            {
+                at += 11;
+            }
+        }
+    }
+    if let [b'(', p, b')', b' ', ..] = out.as_bytes()[at..]
+        && p.is_ascii_lowercase()
+    {
+        let upper = char::from(p.to_ascii_uppercase());
+        out.replace_range(at + 1..at + 2, upper.encode_utf8(&mut [0; 4]));
+    }
+    debug_assert!(out.len() == line.len(), "case fixes keep the length");
+    out
+}
+
 /// Whether `line` is done: lenient parsing, so `x call mum` (no date yet) counts.
 pub fn is_completed(line: &str) -> bool {
     matches!(
@@ -92,6 +122,20 @@ mod tests {
         );
         assert_eq!(date_done("xylophone", today()), "xylophone");
         assert!(is_completed("x 2026-09-01 a") && is_completed("x a") && !is_completed("a"));
+    }
+
+    #[test]
+    fn case_slips_are_fixed_only_where_unambiguous() {
+        assert_eq!(fix_case("X call mum"), "x call mum");
+        assert_eq!(fix_case("(a) call mum"), "(A) call mum");
+        assert_eq!(fix_case("x (b) call mum"), "x (B) call mum");
+        assert_eq!(
+            fix_case("x 2026-09-11 2026-09-01 (c) call"),
+            "x 2026-09-11 2026-09-01 (C) call"
+        );
+        assert_eq!(fix_case("X-ray the pipes"), "X-ray the pipes");
+        assert_eq!(fix_case("call (a) mum X ok"), "call (a) mum X ok");
+        assert_eq!(fix_case("(ab) not a priority"), "(ab) not a priority");
     }
 
     #[test]
