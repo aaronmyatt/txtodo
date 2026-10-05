@@ -1,4 +1,3 @@
-daemon: an Edit that makes a line done (typed x, desktop x chip) gets the completion date and moves to the bottom, like Complete +m11 @daemon @doing by:claude
 core + daemon: one normaliser for X to x and (a) to (A), applied on Add and Edit +m11 @core @daemon
 daemon: resolve_ref_dir checks the filesystem for slug collisions like ensure_ref_dir +m11 @daemon
 tui: + Add a line row at the top of the list, per the decide line +m11 @tui — one Apply: Add, then a move before the first line
@@ -12,3 +11,4 @@ x 2026-10-05 Decide: the top Add a line input: the new line lands at the top of 
 x 2026-10-05 Decide: done lines move down on every write that marks them done, not a timed sweep. I'd take on-write +m11 @daemon @human — decided 2026-10-05 (agent, delegated by the human): on-write; known gap: a line marked done in another editor waits for archive; see notes.md
 x 2026-10-05 tui: send today on Add and Edit once the mutations carry it +m11 @tui — dropped 2026-10-05: the daemon stamps dates with its own clock, so the TUI sends nothing
 x 2026-10-05 daemon: Add stamps the creation date; fix the MCP todo_add docs and refusal that claim it already does +m11 @daemon @mcp — core line_fixes::stamp_created, stamped at the wire (client Adds only), daemon's local date; MCP's claim is now true; known gap: an added 'x foo' gets a date before the x
+x 2026-10-05 daemon: an Edit that makes a line done (typed x, desktop x chip) gets the completion date and moves to the bottom, like Complete +m11 @daemon — core date_done at the wire for client Adds and Edits; Edit.settle moves a line marked done to the end like Complete; the CLI is taken literally so do -A keeps its place

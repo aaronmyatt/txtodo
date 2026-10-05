@@ -71,7 +71,17 @@
   move's arriving line, `move_coordinator.rs`) keep theirs. `today` is `local_date::today_local()`
   (jiff, new daemon dep), read once per `Apply`.
   - MCP's "the daemon stamps it" refusal is now true; no MCP change needed.
-  - Known gap: an added `x foo` (done marker, no date) is not done to the parser, so it gets a
-    creation date in front of the `x`. The typed-`x` line fixes that.
+  - Correction: an added `x foo` is done to the lenient parser, so it never got a creation date
+    in front of the `x`; it now gets a completion date (next entry).
   - The CLI e2e `daemon_autostart` tests need autostart on; they fail under
     `TXTODO_NO_AUTOSTART=1`, which is expected, not this change.
+- Typed done (2026-10-05): `line_fixes::date_done` turns `x call mum` into `x <today> call mum`
+  the way `Complete` does (a priority becomes `pri:`); `is_completed` reads leniently. The wire
+  (`parse_mutation(m, today, literal)`) runs it on a client's `Add` and `Edit`, and
+  `Mutation::Edit` gained `settle`: an edit that turns an open line done also moves it to the end,
+  like `Complete`, unless it is already the last task.
+  - The CLI is taken literally (`source == "cli"`: no fixes, no settle). Its diff already places
+    every line, and `do -A` must keep its place. The daemon's own edits (a move's `ref:` rewrite)
+    never settle.
+  - An ambiguous `x (A) 2026-09-01 call mum` reads as done on 2026-09-01 (lenient), so it is left
+    as it is.
