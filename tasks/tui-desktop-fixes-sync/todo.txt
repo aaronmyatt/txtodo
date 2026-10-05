@@ -1,4 +1,4 @@
-core + daemon: one normaliser for X to x and (a) to (A), applied on Add and Edit +m11 @core @daemon
+core + daemon: one normaliser for X to x and (a) to (A), applied on Add and Edit +m11 @core @daemon @doing by:claude
 daemon: resolve_ref_dir checks the filesystem for slug collisions like ensure_ref_dir +m11 @daemon
 tui: + Add a line row at the top of the list, per the decide line +m11 @tui — one Apply: Add, then a move before the first line
 tui: detail panel hides the ref tag on the parent line like the id tag, and keeps it on save +m11 @tui
