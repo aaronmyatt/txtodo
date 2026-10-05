@@ -110,3 +110,8 @@
   - Known gap: typing a new slug only re-tags the line; the old folder is orphaned, not renamed
     (renaming is `RenameRefDir`, which nothing in the TUI calls). The hidden-`ref:` save makes
     this rare: only a `ref:` the user types on purpose does it.
+- Breakdown (2026-10-05): core `breakdown::fields(line)` gives `(name, value)` rows: `done`,
+  `priority`, `created`, `completed`, `text` always, then `projects`/`contexts` when any, then each
+  tag in order. TUI: `v` in the panel (`detail.breakdown`, `Detail.breakdown`) draws them under
+  the parent row, names right-aligned. Desktop gets it as an `@parity` line in
+  `tasks/desktop-ui-revamp/todo.txt` (wasm export still to add in `txtodo-ffi`).
