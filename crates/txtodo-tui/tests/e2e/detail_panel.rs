@@ -52,7 +52,12 @@ async fn drill_add_a_sub_task_write_notes_and_find_them_again() {
     assert_eq!(state.last_error, None);
     let level = &state.detail.levels[0];
     assert!(level.dir_exists, "the first sub-task made the folder");
-    assert_eq!(level.doc.lines[0].raw, "pack the bags");
+    // The daemon dates a new line on the way in (ADR 0011).
+    let raw = &level.doc.lines[0].raw;
+    assert!(
+        raw.ends_with(" pack the bags") && raw.len() == 11 + 13,
+        "{raw}"
+    );
     assert!(
         real.disk().contains("ref:"),
         "the parent is tagged: {}",
