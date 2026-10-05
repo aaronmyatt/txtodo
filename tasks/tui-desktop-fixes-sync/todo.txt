@@ -1,4 +1,4 @@
-tui: detail panel hides the ref tag on the parent line like the id tag, and keeps it on save +m11 @tui
+tui: detail panel hides the ref tag on the parent line like the id tag, and keeps it on save +m11 @tui @doing by:claude
 tui: detail panel follows a changed ref after a parent edit (re-resolve Level.dir) +m11 @tui
 tui: line breakdown view in the detail panel, one field per row like sqlite .mode line +m11 @tui
 specs/client-parity.toml: a row for each of the above with desktop and tui status; @parity lines for the lagging client +m11 @tui @desktop @parity
