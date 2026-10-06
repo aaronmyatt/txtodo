@@ -85,7 +85,9 @@ export type FixtureName =
 	| "fresh"
 	// A workspace whose root list is `work.txt` (`txtodo.toml`, task workspace-layout): every
 	// client must read the layout instead of assuming `todo.txt` (task layout-client-gaps).
-	| "custom-root";
+	| "custom-root"
+	// One done line and one open line, for the done styling guard (editing-contract.spec.ts).
+	| "done";
 
 function seed(dir: string, fixture: FixtureName): void {
 	switch (fixture) {
@@ -118,6 +120,9 @@ function seed(dir: string, fixture: FixtureName): void {
 			// `resolve_merged_keeps_bytes_and_mine_writes_the_side_back` fixture exactly — see
 			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
 			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
+			return;
+		case "done":
+			writeFileSync(join(dir, "todo.txt"), "x 2026-10-01 2026-09-30 pay rent @home\ncall mum @phone\n");
 			return;
 		case "fresh":
 			return; // nothing to seed: the daemon creates the default workspace itself
