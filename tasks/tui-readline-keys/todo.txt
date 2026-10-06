@@ -1,0 +1,7 @@
+2026-10-06 text_input: line start/end and readline word back/forward (UAX 29 word bounds), unit tests with +project, due:, CJK and emoji +m11 @tui
+2026-10-06 keymap + manifest: Ctrl-a, Ctrl-e, Alt-b/Alt-Left, Alt-f/Alt-Right in scope edit, acting on the focused field; desktop differs +m11 @tui @parity
+2026-10-06 Wire the motions into every field: line and sub-line editor, parent, prompt bar, notes (logical line), search, : line, Settings filter and field +m11 @tui
+2026-10-06 Prompt bar: Alt-b is word back now; the (B) chip key moves to Alt-B; chip hints, Help and the manifest deviation updated +m11 @tui
+2026-10-06 Help: say Alt keys need Option sent as Meta, naming the Terminal.app, iTerm2 and Ghostty settings +m11 @tui
+2026-10-06 Tests: one input test per field kind for each motion; parity test green +m11 @tui @test
+2026-10-06 Human pass: the motions in Ghostty, iTerm2 and Terminal.app, Option-as-Meta on and off +m11 @tui @human
