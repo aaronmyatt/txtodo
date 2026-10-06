@@ -154,7 +154,7 @@ txtodo/
 
 ### 3.3 Keyboard and accessibility floor (desktop)
 
-- Every action reachable from the keyboard. Line list is a listbox; popover traps focus; detail view is a page, not a modal.
+- Every action reachable from the keyboard. Line list is a listbox; popover traps focus; detail view is a bottom panel under the list, not a modal (amended 2026-09-27, human decision 2 in tasks/desktop-ui-revamp/notes.md; was "a page").
 - Colours are never the only signal: completed lines are struck through, refs have an icon, errors have text.
 
 ---

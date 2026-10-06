@@ -12,6 +12,8 @@
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import { editorStatus } from "$lib/stores/editorStatus";
 	import { searchQuery } from "$lib/stores/search";
+	import Icon from "$lib/icons/Icon.svelte";
+	import { isTypingTarget } from "$lib/keys";
 	import ProtocolMismatchBanner from "./ProtocolMismatchBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import { openingWorkspace } from "$lib/stores/loading";
@@ -42,6 +44,12 @@
 	 * `Breadcrumb`'s `onNavigate` contract exactly, so both it and the back button share this. */
 	function navigateToLevel(stackLength: number) {
 		detail = detail.slice(0, stackLength);
+	}
+
+	/** Esc closes the detail panel, unless an editor or field took it (it discards there). */
+	function onWindowKeydown(e: KeyboardEvent) {
+		if (e.key !== "Escape" || detail.length === 0 || e.defaultPrevented || isTypingTarget(e.target)) return;
+		navigateToLevel(0);
 	}
 
 	async function retry() {
@@ -127,6 +135,8 @@
 	});
 </script>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
 <main class="main-view">
 	{#if status !== "connected"}
 		<div class="banner tx-strip tx-strip-inverse" role="alert">
@@ -150,7 +160,6 @@
 
 	{#if $currentWorkspaceRoot}
 	{#key `${$currentWorkspaceRoot}|${ROOT_PATH}`}
-		{#if detail.length === 0}
 			<ConflictBanner path={ROOT_PATH} />
 
 			<!-- Sub-toolbar: which list, and its counts (the logo's letters: t open, x done). -->
@@ -167,10 +176,18 @@
 					</span>
 				{/if}
 			</div>
-			<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
-		{:else}
-			<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
-		{/if}
+			<div class="buffer">
+				<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
+			</div>
+			{#if detail.length > 0}
+				<!-- The detail as a bottom panel (decision 2, 2026-09-27): the buffer above stays. -->
+				<section class="detail-panel" aria-label="Task detail">
+					<button type="button" class="close-detail" aria-label="Close detail" onclick={() => navigateToLevel(0)}>
+						<Icon name="x" />
+					</button>
+					<DetailView steps={detail} rootPath={ROOT_PATH} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
+				</section>
+			{/if}
 	{/key}
 	{/if}
 </main>
@@ -197,6 +214,42 @@
 		display: flex;
 		gap: 0.75rem;
 		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+	}
+
+	.buffer {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	/* The mockup's bottom panel: 55% of the height under a 2px ink rule, scrolling on its own. */
+	.detail-panel {
+		position: relative;
+		flex-shrink: 0;
+		height: 55%;
+		overflow-y: auto;
+		border-top: 2px solid var(--color-base-content);
+		background: var(--color-base-100);
+	}
+
+	.close-detail {
+		position: absolute;
+		top: 0.75rem;
+		right: 0.75rem;
+		z-index: 1;
+		display: inline-flex;
+		padding: 0.3rem;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		--icon-size: 1rem;
+	}
+
+	.close-detail:hover {
+		background: var(--color-base-200);
 	}
 
 	.match {

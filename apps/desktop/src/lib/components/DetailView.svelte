@@ -45,7 +45,8 @@
 	let {
 		steps,
 		onNavigateInto,
-		onNavigateToLevel
+		onNavigateToLevel,
+		rootPath = ""
 	}: {
 		/** The full navigation stack; `steps[steps.length - 1]` is this instance's own level. */
 		steps: DetailParams[];
@@ -53,6 +54,8 @@
 		onNavigateInto: (params: DetailParams) => void;
 		/** A breadcrumb crumb was clicked: truncate the stack to this length (0 = home/root). */
 		onNavigateToLevel: (stackLength: number) => void;
+		/** The root list the buffer above already shows; its conflict banner is not repeated here. */
+		rootPath?: string;
 	} = $props();
 
 	const current = $derived(steps[steps.length - 1]);
@@ -344,7 +347,9 @@
 		<p class="error" role="alert">{loadError}</p>
 	{/if}
 
-	<ConflictBanner path={current.file} />
+	{#if current.file !== rootPath}
+		<ConflictBanner path={current.file} />
+	{/if}
 
 	<section class="parent" aria-label="Parent task">
 		<div class="parent-line" bind:this={parentEditorEl}></div>
@@ -447,7 +452,9 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		padding: 2rem;
+		max-width: 48rem;
+		margin: 0 auto;
+		padding: 1rem 1.25rem;
 		font-family: var(--font-sans);
 	}
 
