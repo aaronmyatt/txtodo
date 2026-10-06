@@ -358,7 +358,7 @@ export function switchWorkspace(root: string): Promise<void> {
 	return invoke("switch_workspace", { root });
 }
 
-/** One `op_log_all()` row: an `OpEvent` (see `src/devices/types.ts`) tagged with its source
+/** One `op_log_all()` row: an op-log entry tagged with its source
  * workspace — the field `OpLogEntry` itself doesn't carry (task
  * `desktop-activity-cross-workspace`; tagged client-side, not on the wire). Mirrors
  * `desktop_lib::dto::AggregatedOpLogEntryDto`. */

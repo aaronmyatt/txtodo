@@ -4,7 +4,7 @@
 // daemon is the only source of truth.
 // Ref: https://v2.tauri.app/develop/calling-rust/
 import { invoke } from "$lib/tauriShim";
-import type { Device, DeviceRemoveResult, OffersProblem, OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
+import type { Device, DeviceRemoveResult, OffersProblem, PairOffer, PairResult, Scope, Token } from "./types";
 
 /** Why offers from paired devices are blocked, if they are (empty `problem` when not). */
 export function offersProblem(): Promise<OffersProblem> {
@@ -42,14 +42,6 @@ export function tokenList(): Promise<Token[]> {
 /** Revokes a token by id; the daemon refuses it on its next use. */
 export function tokenRevoke(id: string): Promise<boolean> {
 	return invoke("token_revoke", { id });
-}
-
-/**
- * Newest ops across every tracked file, at most ~200, newest first. A one-shot bounded fetch, not
- * a live stream — call again (a refresh button, or on focus) to see anything new.
- */
-export function opLog(): Promise<OpEvent[]> {
-	return invoke("op_log");
 }
 
 /** Devices paired into this workspace's sync group, removed ones included (`DeviceList`). */

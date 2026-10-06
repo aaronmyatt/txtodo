@@ -5,34 +5,12 @@
 
 use crate::commands::ensure_connected;
 use crate::daemon::DaemonClient;
-use crate::dto::{AggregatedOpLogEntryDto, OpLogEntryDto, is_ready_or_unknown};
+use crate::dto::{AggregatedOpLogEntryDto, is_ready_or_unknown};
 use crate::state::AppState;
 use tauri::{AppHandle, State};
 use txtodo_proto::v1 as pb;
 
-/// Newest ops across every tracked file, at most 200, newest first: one bounded read, not a live
-/// tail — unlike [`crate::commands::watch`], this returns the whole page at once instead of
-/// pushing `daemon-change` events.
-#[tracing::instrument(name = "ipc.op_log", skip_all)]
-#[tauri::command]
-pub async fn op_log(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<Vec<OpLogEntryDto>, String> {
-    op_log_inner(app, state).await
-}
-
-async fn op_log_inner(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<Vec<OpLogEntryDto>, String> {
-    ensure_connected(&app, &state).await?;
-    let mut client = state.client_snapshot().await?;
-    let entries = client.op_log().await.map_err(|e| e.to_string())?;
-    Ok(entries.into_iter().map(OpLogEntryDto::from).collect())
-}
-
-/// Same 200-entry, newest-first bound as [`op_log`], but merged across every *registered*
+/// Newest ops, at most 200, newest first, merged across every *registered*
 /// workspace (`WorkspaceList`; `WorkspaceCatalog::resolve` opens each on demand as its selector is
 /// used, per that RPC's own doc — no daemon-side "currently open" list needed). A workspace whose
 /// root no longer exists, or whose fetch fails, is skipped rather than failing the whole call
@@ -47,7 +25,7 @@ pub async fn op_log_all(
     op_log_all_inner(app, state).await
 }
 
-/// Same bound `op_log`'s own daemon-side stream caps at.
+/// Same bound the daemon's own `OpLogStream` caps at.
 const OP_LOG_ALL_CAP: usize = 200;
 
 async fn op_log_all_inner(

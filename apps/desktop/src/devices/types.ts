@@ -107,21 +107,6 @@ export interface TokenCreateReq {
 }
 
 /**
- * One `op_log()` row. Mirrors `OpLogEntryDto` (apps/desktop/src-tauri/src/dto_activity.rs) — the
- * same source `txtodo blame` reads.
- */
-export interface OpEvent {
-	/** `"you@dev"` / `"agent:name@dev"` / `"external@dev"`. */
-	principal: string;
-	/** One-line human summary of the mutation. */
-	op: string;
-	/** Unix ms. */
-	at_ms: number;
-	/** `cli` / `tui` / `desktop` / `mcp` / `sync` / `external`; empty or absent for an old op. */
-	source?: string;
-}
-
-/**
  * Why offers from paired devices are blocked (task control-channel-keystore-visibility), e.g. the
  * OS keychain not answering the group-key read. Mirrors `OffersProblemDto`; empty when fine.
  */

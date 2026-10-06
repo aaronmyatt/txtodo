@@ -68,21 +68,12 @@
 	   borders and secondary text tones are left as calibrated — only the primary text color moved. */
 	--color-text: var(--color-base-content);
 	/* Greys are neutral now, not the old blue-grey (the mockup's palette). */
-	--color-text-secondary: #404040;
 	--color-text-muted: #737373;
-	--color-text-faint: #a3a3a3;
 
 	--color-border: #d4d4d4;
 	--color-border-subtle: var(--color-base-300);
 
 	--color-danger: var(--color-error);
-	--color-warning-text: #92400e;
-	--color-warning-bg: #fffbeb;
-	--color-warning-border: #b45309;
-	--color-attention-bg: #fef3c7;
-	--color-attention-text: #78350f;
-	--color-banner-bg: #fde68a;
-	--color-banner-text: #1f2937;
 
 	/* todo.txt syntax palette (todotxtLanguage.ts) — Tailwind 500/700 band, per that file's own doc. */
 	--tok-completion-marker: #15803d;
@@ -125,18 +116,9 @@
 	--color-hover-overlay: rgba(255, 255, 255, 0.08);
 
 	/* Brand pass: "inverse mono" — true white-on-black. Same scoping note as :root above. */
-	--color-text-secondary: #d4d4d4;
 	--color-text-muted: #a3a3a3;
-	--color-text-faint: #737373;
 
 	--color-border: #404040;
-	--color-warning-text: #fbbf24;
-	--color-warning-bg: #3f2f10;
-	--color-warning-border: #b45309;
-	--color-attention-bg: #3a2f14;
-	--color-attention-text: #fcd34d;
-	--color-banner-bg: #4a3b12;
-	--color-banner-text: #fde68a;
 
 	/* Shifted one band brighter (Tailwind 400) than light's 500/700 — readable against a dark bg. */
 	--tok-completion-marker: #4ade80;

@@ -139,7 +139,6 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_devices::device_list,
         commands_devices::device_remove,
         commands_tokens::token_revoke,
-        commands_activity::op_log,
         commands_activity::op_log_all,
     ]
 }

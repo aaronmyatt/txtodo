@@ -95,8 +95,6 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return tokens.map((t) => ({ ...t, secret: "" })) as T;
 		case "token_revoke":
 			return mockTokenRevoke(args) as unknown as T;
-		case "op_log":
-			return opLog.map((e) => ({ principal: e.principal, op: e.summary, at_ms: e.at_ms })) as T;
 		case "op_log_all": {
 			// The one mock workspace's log, tagged with it, as the real fan-out tags each row.
 			const owner = workspaces[0];
