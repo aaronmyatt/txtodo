@@ -221,6 +221,13 @@
 		--icon-size: 1rem;
 	}
 
+	/* A ring outside the ink border while the box has the keyboard (its border is always ink). */
+	.search:focus-within {
+		box-shadow:
+			0 0 0 2px var(--color-base-100),
+			0 0 0 4px var(--color-base-content);
+	}
+
 	.search :global(.search-icon) {
 		opacity: 0.6;
 	}

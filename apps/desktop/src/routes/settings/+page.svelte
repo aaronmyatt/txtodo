@@ -67,7 +67,9 @@
 		settling = false;
 		chosen = id;
 		active = id;
-		scrollToCard(id, "smooth");
+		// matchMedia: https://developer.mozilla.org/en-US/docs/Web/API/Window/matchMedia
+		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		scrollToCard(id, still ? "auto" : "smooth");
 		history.replaceState(history.state, "", `#${id}`);
 	}
 
