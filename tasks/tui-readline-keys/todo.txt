@@ -1,4 +1,4 @@
-2026-10-06 text_input: line start/end and readline word back/forward (UAX 29 word bounds), unit tests with +project, due:, CJK and emoji +m11 @tui
+2026-10-06 text_input: line start/end and readline word back/forward (UAX 29 word bounds), unit tests with +project, due:, CJK and emoji +m11 @tui @doing by:claude
 2026-10-06 text_input: kill and yank: Ctrl-W and Alt-Backspace (word back), Alt-D (word forward), Ctrl-U and Ctrl-K (to line start/end), Ctrl-Y yanks the last kill +m11 @tui
 2026-10-06 text_input: Ctrl-B/Ctrl-F by character, Ctrl-D and Ctrl-H delete, Ctrl-T and Alt-T transpose characters/words, Alt-U/Alt-L/Alt-C upper/lower/capitalize a word +m11 @tui
 2026-10-06 text_input: per-field undo, Ctrl-_ takes back the field's last edit (readline undo), apart from the list's u +m11 @tui
