@@ -63,3 +63,14 @@
   caret ends after the swapped pair. `Undo` keeps snapshots; a run of typed characters is one step.
   - Ideographs are one word each (UAX #29 has no dictionary), so `Alt-F` over Japanese moves one
     character at a time.
+- Keys and wiring: twenty `edit.*` commands in `keymap/table.rs` (scope `edit`), with manifest
+  rows (desktop `differs`: CodeMirror has the Ctrl ones on macOS only, the rest are platform keys).
+  `Input::on_key_at` hands a readline key to `fields::run` first whenever a text field has the
+  keyboard (`fields::focused`, same order as the key routing), so no field's own handler sees it;
+  in list mode the keys do nothing. `fields.rs` reaches each field's text and caret (byte or
+  `TailCaret`), keeps the shared `Kill` and the per-field `Undo` in `Shell`, records an undo step
+  after any key that changed the field (a typing run is one), and starts the steps over when the
+  keyboard moves to another field.
+  - `Ctrl-_` arrives as Ctrl-7 from legacy terminals (byte 0x1F); `keymap::key_name` names it
+    `Ctrl-_`. `Ctrl-/` is bound too.
+  - Edits made here mark the notes typed (autosave) and re-pick the Settings card for the filter.
