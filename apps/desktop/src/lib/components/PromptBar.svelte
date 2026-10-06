@@ -6,7 +6,8 @@
 	// the buffer. The nine chips float above the bar while it has the keyboard, so nothing shifts.
 	// The strict-mode hint shows once typing pauses and never blocks (design §2.3).
 	import { onMount } from "svelte";
-	import { applyMutations, listFiles, onPromptBarFocus } from "$lib/daemon";
+	import { applyMutations, getFile, listFiles, onPromptBarFocus } from "$lib/daemon";
+	import { addOnTopMutations } from "$lib/todotxt/addOnTop";
 	import { editorStatus } from "$lib/stores/editorStatus";
 	import Mark from "$lib/brand/Mark.svelte";
 	import { meterFor, type Meter } from "$lib/brand/meter";
@@ -71,7 +72,12 @@
 		adding = true;
 		error = "";
 		try {
-			await applyMutations(await currentPath(), [{ kind: "add", line: text }]);
+			// At the top of the list, like the TUI's add (2026-10-06 feedback): an `add` then a
+			// `move_before` the first task, in one Apply, against the list as the daemon has it now.
+			// A list the daemon does not have yet (a fresh workspace) just gets the plain add.
+			const path = await currentPath();
+			const doc = await getFile(path).catch(() => null);
+			await applyMutations(path, doc ? addOnTopMutations(doc.text, doc.task_ids ?? [], text) : [{ kind: "add", line: text }]);
 			editor?.setText("");
 			onAdded?.();
 		} catch (e) {
