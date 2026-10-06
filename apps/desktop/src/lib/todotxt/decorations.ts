@@ -47,6 +47,31 @@ export const idTagsHidden: Extension = ViewPlugin.fromClass(
 	{ decorations: (v) => v.decorations }
 );
 
+const refTagMatcher = new MatchDecorator({
+	regexp: /\bref:\S+/g,
+	decoration: () => Decoration.replace({})
+});
+
+/** Hides `ref:` tags inline, for the detail view's parent line (root todo "ref tag path is visible
+ * in the desktop detail view"); `keepRefTag` puts the original back on save. Atomic, so Backspace
+ * next to one cannot eat it a character at a time.
+ * https://codemirror.net/docs/ref/#view.EditorView^atomicRanges */
+export const refTagsHidden: Extension = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+		constructor(view: EditorView) {
+			this.decorations = refTagMatcher.createDeco(view);
+		}
+		update(update: ViewUpdate) {
+			this.decorations = refTagMatcher.updateDeco(update, this.decorations);
+		}
+	},
+	{
+		decorations: (v) => v.decorations,
+		provide: (plugin) => EditorView.atomicRanges.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none)
+	}
+);
+
 /** Renders `n/m` (open/total) or a notes icon at the end of a `ref:` line. */
 class RefIndicatorWidget extends WidgetType {
 	constructor(private readonly indicator: RefIndicator) {

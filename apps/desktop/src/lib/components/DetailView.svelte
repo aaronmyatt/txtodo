@@ -15,7 +15,8 @@
 	import { EditorView, keymap } from "@codemirror/view";
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
-	import { idTagsHidden } from "$lib/todotxt/decorations";
+	import { idTagsHidden, refTagsHidden } from "$lib/todotxt/decorations";
+	import { keepRefTag } from "$lib/todotxt/keepRefTag";
 	import { singleLineFilter } from "$lib/todotxt/singleLineFilter";
 	import {
 		applyMutations,
@@ -187,8 +188,9 @@
 
 	async function commitParentEdit() {
 		if (!parentView || !parentDirty) return;
-		const next = parentView.state.doc.toString();
 		const base = parentBaseline;
+		// The hidden `ref:` survives any edit here (`keepRefTag`): it is the link to this panel.
+		const next = keepRefTag(base, parentView.state.doc.toString());
 		parentDirty = false;
 		if (next === base) return;
 		saveError = "";
@@ -246,6 +248,7 @@
 				extensions: [
 					todotxtLanguage,
 					idTagsHidden,
+					refTagsHidden,
 					// A long parent line wraps onto more rows instead of scrolling sideways under a
 					// scrollbar that covered the text (root todo "the detail view task input box
 					// obscures…"). Still one logical line: `singleLineFilter` and Enter keep it so.
