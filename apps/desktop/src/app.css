@@ -150,8 +150,13 @@
 }
 
 body {
+	/* No browser margin, so the shell reaches the window edge. (The rule +layout.svelte put in
+	   <svelte:head> was `:global(body)` in a plain <style>, which no browser understands.) */
+	margin: 0;
 	background: var(--color-bg);
 	color: var(--color-text);
+	/* Pages without a font of their own (Universal, Settings, Help) read prose in the sans. */
+	font-family: var(--font-sans);
 }
 
 /* Browsers default a <button>'s text color to the platform's `buttontext` keyword, not the

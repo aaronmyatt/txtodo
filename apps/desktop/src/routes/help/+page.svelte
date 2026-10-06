@@ -3,15 +3,10 @@
 	// functionality and keybinding descriptions"). Static content only — everything below is a
 	// direct transcription of this app's own shortcuts/features, not a generic template; keep it
 	// in sync by hand when a keymap or feature changes (no generator exists for this yet).
-	import ThemeToggle from "$lib/components/ThemeToggle.svelte";
 	import VersionInfo from "$lib/components/VersionInfo.svelte";
 </script>
 
 <main class="help-page">
-	<div class="top-nav">
-		<a href="/">‹ Back</a>
-		<ThemeToggle />
-	</div>
 	<h1>Help</h1>
 	<p><VersionInfo /></p>
 
@@ -131,11 +126,6 @@
 		color: var(--color-text);
 	}
 
-	.top-nav {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
 
 	h1 {
 		margin: 0;

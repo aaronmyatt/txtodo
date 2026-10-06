@@ -13,6 +13,18 @@
 	import "@fontsource/jetbrains-mono/latin-500.css";
 	import "@fontsource/jetbrains-mono/latin-700.css";
 	import { resolvedTheme } from "$lib/stores/theme";
+	import { getCurrentWindow } from "@tauri-apps/api/window";
+	import AppShell from "$lib/components/AppShell.svelte";
+
+	// The quick-add window (routes/+page.svelte) is a bare popover: no header. Outside a Tauri
+	// webview (`npm run dev`, Playwright) there is no window label, so the shell shows.
+	const isQuickAdd = (() => {
+		try {
+			return getCurrentWindow().label === "quick-add";
+		} catch {
+			return false;
+		}
+	})();
 
 	let { children }: { children: Snippet } = $props();
 
@@ -24,15 +36,8 @@
 	});
 </script>
 
-<svelte:head>
-	<style>
-		/* Zeroes the browser's default ~8px body margin so a full-bleed view (MainView's editor)
-		   truly reaches the window edge — app.html's wrapper div is `display: contents`, so this is
-		   the only place a stray margin could sneak in. */
-		:global(body) {
-			margin: 0;
-		}
-	</style>
-</svelte:head>
-
-{@render children()}
+{#if isQuickAdd}
+	{@render children()}
+{:else}
+	<AppShell>{@render children()}</AppShell>
+{/if}

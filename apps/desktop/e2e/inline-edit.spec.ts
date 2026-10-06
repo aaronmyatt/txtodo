@@ -76,7 +76,8 @@ test("blur commits an in-progress edit", async ({ page }) => {
 	await page.keyboard.type(" +errand");
 
 	// Focus something outside the CM6 editor entirely.
-	await page.locator(".top-nav h1").click();
+	// The header search: a plain field outside the editor, so focusing it blurs the buffer.
+	await page.getByRole("textbox", { name: "Search" }).click();
 
 	await expect.poll(() => readFileSync(todoPath, "utf8")).toContain("+errand");
 });

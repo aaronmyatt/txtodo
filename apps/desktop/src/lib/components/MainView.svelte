@@ -15,13 +15,10 @@
 	import { openingWorkspace } from "$lib/stores/loading";
 	import DetailView from "./DetailView.svelte";
 	import FileView from "./FileView.svelte";
-	import PinToggle from "./PinToggle.svelte";
 	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import VersionInfo from "./VersionInfo.svelte";
 	import { layoutFallbackMessage } from "$lib/layoutFallback";
 	import { LAYOUT_CHANGE_PATH } from "$lib/todotxt/lineInfo";
-	import ThemeToggle from "./ThemeToggle.svelte";
-	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
 	// The root list is `todo_file` from the workspace's layout (task workspace-layout), `todo.txt`
 	// until the answer arrives; nested lists stay `todo.txt`.
@@ -139,21 +136,6 @@
 	<ProtocolMismatchBanner />
 	<SkillHintBanner />
 
-	<div class="top-nav">
-		<div class="top-nav-left">
-			<WorkspaceSwitcher />
-			<h1>txtodo</h1>
-		</div>
-		<div class="top-nav-actions">
-			<ThemeToggle />
-			<PinToggle />
-			<a href="/universal">Universal view</a>
-			<a href="/devices">Devices &amp; agents</a>
-			<a href="/help" class="help-link" aria-label="Help">?</a>
-			<VersionInfo />
-		</div>
-	</div>
-
 	<RejectedEditBanner />
 	<VersionInfo banner />
 	{#if $workspaceLayoutError}
@@ -184,53 +166,20 @@
 		font-size: 0.85rem;
 	}
 
-	.top-nav {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		padding: 0.75rem 1rem 0;
-	}
 
-	.top-nav-left {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
 
-	.top-nav-actions {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
 
-	.help-link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		text-decoration: none;
-		color: inherit;
-	}
 
 	.main-view {
 		display: flex;
+		flex: 1;
 		flex-direction: column;
-		height: 100vh;
+		min-height: 0;
 		background: var(--color-bg);
 		color: var(--color-text);
 		font-family: var(--font-sans);
 	}
 
-	.top-nav h1 {
-		margin: 0;
-		font-family: var(--font-brand);
-		font-size: 1.25rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-	}
 
 	.layout-fallback {
 		margin: 0.5rem 1rem;

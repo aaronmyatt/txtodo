@@ -78,10 +78,7 @@
 </script>
 
 <main class="universal">
-	<div class="top-nav">
-		<a href="/">‹ Back</a>
-		<h1>Universal view</h1>
-	</div>
+	<h1>Universal</h1>
 
 	{#if error}
 		<p class="error" role="alert">{error}</p>
@@ -152,13 +149,8 @@
 		box-sizing: border-box;
 	}
 
-	.top-nav {
-		display: flex;
-		align-items: baseline;
-		gap: 1rem;
-	}
 
-	.top-nav h1 {
+	.universal h1 {
 		margin: 0;
 	}
 

@@ -31,7 +31,8 @@ test("editing a line inline and blurring commits it, changing only that line on 
 
 	// Commit happens on blur (FileView.svelte: "blur or Cmd/Ctrl+S the buffer goes through the
 	// reconciler") — click something outside the editor entirely.
-	await page.locator(".top-nav h1").click();
+	// The header search: a plain field outside the editor, so focusing it blurs the buffer.
+	await page.getByRole("textbox", { name: "Search" }).click();
 
 	await expect.poll(() => readFileSync(todoPath, "utf8")).not.toBe(before);
 
