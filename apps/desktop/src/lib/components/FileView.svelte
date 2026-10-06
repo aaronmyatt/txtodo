@@ -41,6 +41,7 @@
 	import type { DetailParams } from "$lib/types";
 	import { EMPTY_STATUS, editorStatus, SAVED_MS, type SaveState } from "$lib/stores/editorStatus";
 	import { docCounts } from "$lib/todotxt/counts";
+	import { editorPrefs } from "$lib/stores/editorPrefs";
 
 	interface Props {
 		path: string;
@@ -128,6 +129,11 @@
 	// document rebuild. The hovered line is a state field instead (`$lib/todotxt/hoverLine.ts`).
 	const lineDecoCompartment = new Compartment();
 	const editableCompartment = new Compartment();
+	// The gutter and the long-line hint follow the editor prefs (`$lib/stores/editorPrefs`).
+	const gutterCompartment = new Compartment();
+	const lengthHintCompartment = new Compartment();
+	const gutterFor = (on: boolean) => (on ? [lineNumbers(), highlightActiveLineGutter()] : []);
+	const lengthHintFor = (on: boolean) => (on ? longLineHint : []);
 
 	function setDirty(next: boolean) {
 		if (next === dirty) return;
@@ -169,12 +175,11 @@
 			mainViewBaseTheme,
 			// Chrome (task desktop-ui-revamp): https://codemirror.net/docs/ref/#view.lineNumbers,
 			// #view.highlightActiveLine, #view.drawSelection (draws the caret the theme styles).
-			lineNumbers(),
+			gutterCompartment.of(gutterFor(get(editorPrefs).lineNumbers)),
 			highlightActiveLine(),
-			highlightActiveLineGutter(),
 			drawSelection(),
 			idTagsHidden, // always hidden — §3.1
-			longLineHint, // root todo 9
+			lengthHintCompartment.of(lengthHintFor(get(editorPrefs).lengthHint)), // root todo 9
 			lineDecoCompartment.of(lineDecorations(path, filesByPath)),
 			hoverLine,
 			EditorView.domEventHandlers({
@@ -459,6 +464,17 @@
 		}
 		clearTimeout(reorderTimer);
 		view?.destroy();
+	});
+
+	// Settings > Appearance can flip the gutter or the long-line hint while the buffer is open.
+	$effect(() => {
+		const { lineNumbers: numbers, lengthHint } = $editorPrefs;
+		view?.dispatch({
+			effects: [
+				gutterCompartment.reconfigure(gutterFor(numbers)),
+				lengthHintCompartment.reconfigure(lengthHintFor(lengthHint))
+			]
+		});
 	});
 
 	// Reflects a pending-review flag that appears/clears *while already mounted* (entering/leaving

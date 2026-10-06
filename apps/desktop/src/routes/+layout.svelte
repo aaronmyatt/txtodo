@@ -13,6 +13,7 @@
 	import "@fontsource/jetbrains-mono/latin-500.css";
 	import "@fontsource/jetbrains-mono/latin-700.css";
 	import { resolvedTheme } from "$lib/stores/theme";
+	import { editorPrefs } from "$lib/stores/editorPrefs";
 	import { getCurrentWindow } from "@tauri-apps/api/window";
 	import AppShell from "$lib/components/AppShell.svelte";
 
@@ -33,6 +34,13 @@
 	// localStorage/matchMedia, neither available at prerender time under adapter-static.
 	$effect(() => {
 		document.documentElement.dataset.theme = $resolvedTheme;
+	});
+
+	// The editor's sizes, for every FileView and the detail parent line (`$lib/stores/editorPrefs`).
+	$effect(() => {
+		const root = document.documentElement.style;
+		root.setProperty("--editor-font-size", `${$editorPrefs.fontSize}px`);
+		root.setProperty("--editor-line-height", `${$editorPrefs.lineHeight}px`);
 	});
 </script>
 

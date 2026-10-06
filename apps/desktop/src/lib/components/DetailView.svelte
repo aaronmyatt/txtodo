@@ -477,7 +477,7 @@
 
 	.parent-line {
 		width: 100%;
-		font-size: 1rem;
+		font-size: var(--editor-font-size, 1rem);
 	}
 
 	.parent-line :global(.cm-editor) {
