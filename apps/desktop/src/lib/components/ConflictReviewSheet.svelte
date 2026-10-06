@@ -232,6 +232,7 @@
 </div>
 
 <style>
+	/* The mockup's dialog: a 2px ink outline, round box, flat; pill buttons, ink first. */
 	.scrim {
 		position: fixed;
 		inset: 0;
@@ -243,48 +244,77 @@
 	}
 
 	.sheet {
-		background: var(--color-bg-elevated);
-		color: var(--color-text);
-		border-radius: 8px;
+		background: var(--color-base-100);
+		color: var(--color-base-content);
+		border: 2px solid var(--color-base-content);
+		border-radius: var(--radius-box);
 		padding: 1.5rem;
 		max-width: 32rem;
 		width: 90%;
 		max-height: 80vh;
 		overflow-y: auto;
+		font-size: 0.875rem;
+	}
+
+	h2 {
+		margin: 0 0 1rem;
+		font-family: var(--font-brand);
+		font-size: 1rem;
 	}
 
 	.merged-preview {
-		font-family: ui-monospace, Menlo, monospace;
-		background: var(--color-surface-muted);
-		padding: 0.5rem;
-		border-radius: 4px;
+		font-family: var(--font-mono);
+		background: var(--color-base-200);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-field);
 	}
 
 	.resurrect-note {
-		color: var(--color-warning-text);
-		font-weight: 600;
+		color: var(--color-warning);
+		font-weight: 700;
 	}
 
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
 		margin-top: 1rem;
 	}
 
+	.actions button,
+	.close {
+		padding: 0.3rem 0.9rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.actions button:first-child {
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+	}
+
+	.actions button:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
 	.error {
-		color: var(--color-danger);
+		color: var(--color-error);
 	}
 
 	.remaining {
-		font-size: 0.85rem;
-		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
 	}
 
 	.close {
 		margin-top: 1rem;
-		background: transparent;
-		border: 1px solid var(--color-border);
-		border-radius: 4px;
-		padding: 0.25rem 0.75rem;
+		border-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
 	}
 </style>

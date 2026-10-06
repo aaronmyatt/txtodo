@@ -166,3 +166,55 @@ button {
 	color: inherit;
 	font: inherit;
 }
+
+/* Banner strips (task desktop-ui-revamp, the c2 mockup's banners): full-width rows under the
+   header, small mono text, a pill button at the right. `.tx-strip` is paper with an ink rule
+   under it (conflicts, hints, a refused edit); `.tx-strip-inverse` is the inverse tile, for the
+   daemon being away and other "nothing works until this is fixed" states. */
+.tx-strip {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin: 0;
+	padding: 0.375rem 1rem;
+	border-bottom: 2px solid var(--color-base-content);
+	background: var(--color-base-100);
+	color: var(--color-base-content);
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+}
+
+.tx-strip-inverse {
+	border-bottom-color: transparent;
+	background: var(--color-base-content);
+	color: var(--color-base-100);
+}
+
+.tx-strip > span:not(.warn):first-of-type,
+.tx-strip > .warn + span {
+	flex: 1;
+}
+
+.tx-strip button {
+	padding: 0.15rem 0.7rem;
+	border: 0;
+	border-radius: 999px;
+	background: var(--color-primary);
+	color: var(--color-primary-content);
+	font: inherit;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.tx-strip-inverse button {
+	background: var(--color-base-100);
+	color: var(--color-base-content);
+}
+
+.tx-strip button.dismiss {
+	padding: 0 0.4rem;
+	background: transparent;
+	color: inherit;
+	font-size: 1rem;
+	font-weight: 400;
+}

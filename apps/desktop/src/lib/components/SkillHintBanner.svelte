@@ -20,33 +20,9 @@
 </script>
 
 {#if needed && !dismissed}
-	<div class="banner" role="status">
+	<div class="banner tx-strip" role="status">
 		<span>No agent playbook installed — run <code>txtodo skill install</code> in a terminal</span>
 		<button type="button" class="dismiss" onclick={dismiss} aria-label="Dismiss">×</button>
 	</div>
 {/if}
 
-<style>
-	.banner {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		background: var(--color-attention-bg);
-		color: var(--color-attention-text);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		margin: 0.75rem 1rem;
-	}
-
-	.banner span {
-		flex: 1;
-	}
-
-	.dismiss {
-		background: transparent;
-		border: none;
-		font-size: 1.1rem;
-		cursor: pointer;
-		color: inherit;
-	}
-</style>

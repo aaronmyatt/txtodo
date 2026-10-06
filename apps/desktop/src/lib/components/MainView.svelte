@@ -127,7 +127,7 @@
 
 <main class="main-view">
 	{#if status !== "connected"}
-		<div class="banner" role="alert">
+		<div class="banner tx-strip tx-strip-inverse" role="alert">
 			<span>Daemon: {status}</span>
 			<button onclick={retry}>Retry</button>
 		</div>
@@ -189,16 +189,5 @@
 		font-size: 0.85rem;
 	}
 
-	.banner {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		background: var(--color-banner-bg);
-		color: var(--color-banner-text);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		margin: 0.75rem 1rem 0;
-	}
 
 </style>

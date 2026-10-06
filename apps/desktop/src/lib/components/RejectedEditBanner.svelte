@@ -16,34 +16,10 @@
 </script>
 
 {#each $rejectedEdits as edit (`${edit.workspace}\n${edit.path}`)}
-	<div class="banner" role="alert">
+	<div class="banner tx-strip" role="alert">
 		<span>Your edit to {edit.path} was not saved: {edit.error}</span>
 		<button type="button" onclick={() => copyEdit(edit)}>Copy edit</button>
 		<button type="button" class="dismiss" onclick={() => rejectedEdits.clear(edit.workspace, edit.path)} aria-label="Dismiss">×</button>
 	</div>
 {/each}
 
-<style>
-	.banner {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		background: var(--color-attention-bg);
-		color: var(--color-attention-text);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		margin: 0.75rem 1rem;
-	}
-
-	.banner span {
-		flex: 1;
-	}
-
-	.dismiss {
-		background: transparent;
-		border: none;
-		font-size: 1.1rem;
-		cursor: pointer;
-		color: inherit;
-	}
-</style>

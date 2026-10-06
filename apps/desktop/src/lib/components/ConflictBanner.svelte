@@ -25,6 +25,7 @@
 	} from "$lib/daemon";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { groupsLabel } from "$lib/stores/duplicates";
+	import Icon from "$lib/icons/Icon.svelte";
 	import ConflictReviewSheet from "./ConflictReviewSheet.svelte";
 
 	let { path }: { path: string } = $props();
@@ -91,7 +92,8 @@
 </script>
 
 {#if flags.length > 0 && !dismissed}
-	<div class="banner" role="status">
+	<div class="banner tx-strip" role="status">
+		<span class="warn"><Icon name="warn" /></span>
 		<span>{flags.length} task{flags.length === 1 ? "" : "s"} need review</span>
 		<button type="button" onclick={openSheet}>Review</button>
 		<button type="button" class="dismiss" onclick={dismiss} aria-label="Dismiss">×</button>
@@ -99,7 +101,7 @@
 {/if}
 
 {#if groups.length > 0}
-	<div class="banner" role="status">
+	<div class="banner tx-strip" role="status">
 		<span>{groupsLabel(groups.length)}</span>
 		<button type="button" onclick={openSheet}>Review</button>
 	</div>
@@ -110,26 +112,8 @@
 {/if}
 
 <style>
-	.banner {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		background: var(--color-attention-bg);
-		color: var(--color-attention-text);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		margin: 0.75rem 1rem;
-	}
-
-	.banner span {
-		flex: 1;
-	}
-
-	.dismiss {
-		background: transparent;
-		border: none;
-		font-size: 1.1rem;
-		cursor: pointer;
-		color: inherit;
+	.warn {
+		display: inline-flex;
+		color: var(--color-warning);
 	}
 </style>

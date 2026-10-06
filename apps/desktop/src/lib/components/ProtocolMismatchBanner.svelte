@@ -34,25 +34,9 @@
 </script>
 
 {#if banner}
-	<div class="banner" role="alert">
+	<div class="banner tx-strip tx-strip-inverse" role="alert">
 		<strong>{banner.label}</strong>
 		<span>{banner.detail}</span>
 	</div>
 {/if}
 
-<style>
-	.banner {
-		display: flex;
-		align-items: baseline;
-		gap: 0.75rem;
-		background: var(--color-attention-bg);
-		color: var(--color-attention-text);
-		padding: 0.5rem 1rem;
-		border-radius: 6px;
-		margin: 0.75rem 1rem;
-	}
-
-	.banner span {
-		flex: 1;
-	}
-</style>
