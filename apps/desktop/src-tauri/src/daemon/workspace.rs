@@ -66,14 +66,36 @@ impl DaemonClient {
     /// client's own selector: the universal view reads every workspace's list. An older daemon
     /// that does not know the RPC has only ever had `todo.txt`.
     pub async fn root_list_for(&mut self, selector: pb::WorkspaceSelector) -> String {
+        self.layout_for(selector).await.todo_file
+    }
+
+    /// `selector`'s whole layout (`refs_dir` and `todo_file`), with the same older-daemon default
+    /// as [`Self::root_list_for`]: `tasks` beside a `todo.txt`.
+    pub async fn layout_for(&mut self, selector: pb::WorkspaceSelector) -> pb::WorkspaceLayoutInfo {
         let req = pb::WorkspaceLayoutRequest {
             workspace: Some(selector),
             ..pb::WorkspaceLayoutRequest::default()
         };
         match self.inner.workspace_layout(req).await {
-            Ok(resp) => resp.into_inner().todo_file,
-            Err(_) => "todo.txt".to_owned(),
+            Ok(resp) => resp.into_inner(),
+            Err(_) => pb::WorkspaceLayoutInfo {
+                refs_dir: "tasks".to_owned(),
+                todo_file: "todo.txt".to_owned(),
+                ..pb::WorkspaceLayoutInfo::default()
+            },
         }
+    }
+
+    /// `list_files` against `selector`, never touching this client's own: the universal view's
+    /// `ref:` progress for every workspace.
+    pub async fn list_files_for(
+        &mut self,
+        selector: pb::WorkspaceSelector,
+    ) -> Result<pb::ListFilesResponse, DaemonError> {
+        let req = pb::ListFilesRequest {
+            workspace: Some(selector),
+        };
+        Ok(self.inner.list_files(req).await?.into_inner())
     }
 
     /// The daemon's own version and release date: a selector-less `Health`, which the daemon

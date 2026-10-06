@@ -35,7 +35,7 @@ path = "tests/e2e/main.rs"
 test = false
 
 [features]
-e2e-bridge = ["dep:axum", "dep:txtodo-store", "dep:txtodo-model"]
+e2e-bridge = ["dep:axum", "dep:txtodo-store"]
 
 [build-dependencies]
 # https://docs.rs/tauri-build — embeds tauri.conf.json and generates capability schemas
@@ -49,6 +49,9 @@ txtodo-proto = { workspace = true }
 # view's aggregation (commands_universal.rs) parses each workspace's todo.txt with this, never a
 # hand-rolled substring scan. Workspace member, not a new external dependency.
 txtodo-core = { workspace = true }
+# The workspace layout (`WorkspaceLayout::ref_dir_of`): where a root line's `ref:` sub-list lives,
+# for the Universal view's `n/m` pill. Workspace member, not a new external dependency.
+txtodo-model = { workspace = true }
 # Shared JSON-rolling-file + pretty-stderr tracing init (root todo.txt `logging-desktop`), the
 # same one every other txtodo binary (`txtodod`, `txtodo`, `tui`, `mcp`, `relay`) uses.
 txtodo-telemetry = { workspace = true }
@@ -86,7 +89,6 @@ axum = { version = "0.8", optional = true }
 # built" for why), so this is the same already-established substitute the daemon team itself uses.
 # Workspace members, not new external dependencies.
 txtodo-store = { workspace = true, optional = true }
-txtodo-model = { workspace = true, optional = true }
 
 [dev-dependencies]
 # https://docs.rs/tempfile — every test gets its own workspace dir, like crates/txtodo-daemon/tests

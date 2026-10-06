@@ -151,3 +151,51 @@ async fn root_list_for_names_each_workspaces_own_todo_file() {
 
     kill(pid);
 }
+
+/// The Universal view's `ref:` pill (task desktop-ui-revamp): `layout_for` says where ref dirs
+/// live, and `list_files_for` carries each sub-list's `done`/`total` for another workspace.
+#[tokio::test]
+async fn list_files_for_carries_a_ref_sub_lists_progress() {
+    let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let mut cfg = DesktopConfig::new(state_dir.path());
+    cfg.daemon_bin = Some(TXTODOD_BIN.clone());
+    cfg.global_socket_override = Some(state_dir.path().join("txtodod.sock"));
+    cfg.global_registry_override = Some(state_dir.path().join("registry.db"));
+    let sock = desktop_lib::daemon::ensure_daemon(&cfg)
+        .await
+        .unwrap_or_else(|e| panic!("ensure_daemon: {e}"));
+
+    let dir = seeded_dir("Plan the trip ref:trip");
+    std::fs::create_dir_all(dir.path().join("tasks/trip")).expect("mkdir tasks/trip");
+    std::fs::write(
+        dir.path().join("tasks/trip/todo.txt"),
+        "x 2026-10-01 Book flights\nBook hotel\nPack\n",
+    )
+    .expect("write sub-list");
+
+    let selector = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(
+            dir.path().display().to_string(),
+        )),
+    };
+    let mut client = DaemonClient::connect(&sock, Some(selector.clone()))
+        .await
+        .unwrap_or_else(|e| panic!("connect: {e}"));
+    let pid = wait_for_global_pid(state_dir.path());
+    client.workspace_add(dir.path()).await.expect("register");
+
+    assert_eq!(client.layout_for(selector.clone()).await.refs_dir, "tasks");
+    let files = client
+        .list_files_for(selector)
+        .await
+        .expect("list_files_for")
+        .files;
+    let sub = files
+        .iter()
+        .find(|f| f.path == "tasks/trip/todo.txt")
+        .expect("the sub-list is listed");
+    let progress = sub.progress.expect("a todo.txt row has progress");
+    assert_eq!((progress.done, progress.total), (1, 3));
+
+    kill(pid);
+}

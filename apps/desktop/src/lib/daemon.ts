@@ -383,8 +383,8 @@ export function opLogAll(): Promise<AggregatedOpLogEntry[]> {
 	return invoke("op_log_all");
 }
 
-/** One open (`!completed`) task line from some workspace's root `todo.txt`, tagged with enough
- * workspace identity to switch to it and label it. Mirrors
+/** One task line from some workspace's root `todo.txt` (done ones only when asked for), tagged
+ * with enough workspace identity to switch to it and label it. Mirrors
  * `desktop_lib::dto_universal::UniversalTaskDto`. */
 export interface UniversalTask {
 	workspace_id: string;
@@ -395,6 +395,17 @@ export interface UniversalTask {
 	priority: string | null;
 	contexts: string[];
 	description: string;
+	done: boolean;
+	/** `YYYY-MM-DD` after the `x`, if any. */
+	completion_date: string | null;
+	/** The `due:` value as written; read it as a local date (ADR 0011). */
+	due: string | null;
+	/** `+project` tags, `+` included. */
+	projects: string[];
+	/** The line's task id, for a `TaskRef` on that workspace; `""` from an older daemon. */
+	task_id: string;
+	/** The `ref:` sub-list's done of total, when it has one. */
+	ref_progress: { done: number; total: number } | null;
 }
 
 /** Every open task across every registered workspace's root `todo.txt` (ADR 0025, task
@@ -402,8 +413,8 @@ export interface UniversalTask {
  * caller's job, over this flat list. Nested `ref:` sub-lists/notes aren't included (deliberate
  * scope cut, see todo.txt's `desktop-universal-view` entry); a workspace whose fetch fails is
  * silently absent from the result rather than failing the whole call. */
-export function universalTasks(): Promise<UniversalTask[]> {
-	return invoke("universal_tasks");
+export function universalTasks(includeDone = false): Promise<UniversalTask[]> {
+	return invoke("universal_tasks", { includeDone });
 }
 
 /** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved

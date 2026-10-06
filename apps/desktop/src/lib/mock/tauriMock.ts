@@ -136,7 +136,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			setCurrentWorkspaceRoot(args?.root as string);
 			return undefined as T;
 		case "universal_tasks":
-			return universalTasksDto() as T;
+			return universalTasksDto(args?.includeDone === true) as T;
 		case "set_main_popover_dirty":
 			return undefined as T;
 		case "set_pinned":
