@@ -376,3 +376,18 @@ Editor and prompt bar can run in parallel after the shell; Settings needs `edito
   Still open: the human pass (line 49) and the @parity lines, which are features in their own
   right (list mode, `u`, sync indicator, offers, drag, the UniversalTasks RPC, manifest-driven
   help, menu keys).
+- 2026-10-07: test-drive feedback and the @parity lines. Folder picker (tauri-plugin-dialog,
+  signed off). Fixed: a first note turned into a "could not be loaded" error (the panel read the
+  new ref: beside a stale empty path). Logo-only header; Universal opens the detail in place
+  (shared `DetailPanel`); detail at least 75% wide; Esc leaves an editor (`$lib/escape.ts`) and
+  closes an open detail; the prompt bar adds at the top; no "Add a line…" above the root list
+  (sub-lists keep theirs). List mode on the root buffer (`listMode.ts`, keys from the manifest,
+  one command at a time so a fast J then x acts on the new order), `u` and toast Undo over a
+  session change stack (`undo_change`, all of one change's ops), a live sync indicator (no change
+  listener: in the harness each one cost first paint ~500 ms), workspace offers in Settings >
+  Devices (`o`), drag a line by its number (the reorder save does the write), Universal from the
+  `UniversalTasks` RPC (unopened workspaces are opened first; the RPC skips them), Help and
+  Shortcuts from the manifest (`parity/manifest.ts`; keys.parity.test's keys.ts half is on), and
+  `W` for the workspace menu. Known gaps: list mode is root-list only; offers accept/decline not
+  driven end to end (no second device in tests); no drag handle with line numbers off; the
+  daemon's lag_ms still means time since pairing.
