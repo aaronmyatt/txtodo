@@ -1,5 +1,5 @@
 // The header search's text (task desktop-ui-revamp): one query shared by the Tasks buffer and the
-// Universal page, so the search follows you between them. Settings keeps its own filter.
+// Universal page, so the search follows you between them; on Settings it filters the cards.
 import { writable } from "svelte/store";
 
 /** What is typed in the header search; "" when empty. */
@@ -11,3 +11,6 @@ export const searchStep = writable<{ dir: 1 | -1; n: number }>({ dir: 1, n: 0 })
 
 /** How many Universal rows match the header search (its count pill on that page). */
 export const universalHits = writable(0);
+
+/** How many Settings cards match the header search (its count pill on that page). */
+export const settingsHits = writable(0);

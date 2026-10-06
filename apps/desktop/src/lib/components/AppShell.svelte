@@ -11,7 +11,7 @@
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { IconName } from "$lib/icons/icons";
 	import { Chords, isTypingTarget, keyName } from "$lib/keys";
-	import { searchQuery, searchStep, universalHits } from "$lib/stores/search";
+	import { searchQuery, searchStep, settingsHits, universalHits } from "$lib/stores/search";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
@@ -77,6 +77,7 @@
 	const pill = $derived.by(() => {
 		if ($searchQuery.trim() === "") return "";
 		if (path === "/universal") return `${$universalHits}`;
+		if (path === "/settings") return `${$settingsHits}`;
 		if (path !== "/") return "";
 		const { hits, index } = $editorStatus.search;
 		return index > 0 ? `${index}/${hits}` : `${hits}`;
