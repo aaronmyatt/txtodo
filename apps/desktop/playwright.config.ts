@@ -26,6 +26,8 @@ export default defineConfig({
 	use: {
 		baseURL: `http://127.0.0.1:${PORT}`
 	},
+	// Every golden hides what a test machine makes random (the temp workspace's name).
+	expect: { toHaveScreenshot: { stylePath: "./e2e/visual/stable.css" } },
 	webServer: {
 		command: `npm run dev -- --mode e2e --port ${PORT} --strictPort`,
 		port: PORT,

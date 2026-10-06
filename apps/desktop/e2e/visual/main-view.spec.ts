@@ -33,7 +33,7 @@ test("main view: 10k-line fixture shows id-hidden, ref/progress, and the add-a-l
 }) => {
 	// Structural assertions first (fast, and pin down *why* a future pixel diff would fail) —
 	// same "assert the DOM, not just the pixels" principle as the functional suite one level up.
-	await expect(page.locator(".cm-editor")).not.toContainText("id:");
+	await expect(page.locator(".buffer .cm-editor")).not.toContainText("id:");
 	await expect(page.locator(".cm-todotxt-ref-indicator").first()).toContainText("1/2");
 	await expect(page.locator(".cm-todotxt-strike").first()).toBeVisible();
 	await expect(page.locator(".cm-lineNumbers")).toHaveCount(1); // the gutter (desktop-ui-revamp)

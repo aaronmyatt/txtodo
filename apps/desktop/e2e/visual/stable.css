@@ -1,0 +1,10 @@
+/* Injected into every visual golden (playwright.config.ts `expect.toHaveScreenshot.stylePath`).
+   The header names the open workspace, which in a test is a random temp folder: give the name a
+   fixed width and no ink, so its length cannot move pixels or a mask's edge between runs.
+   https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1-option-style-path */
+.ws-name {
+	display: inline-block;
+	width: 8rem;
+	overflow: hidden;
+	color: transparent !important;
+}
