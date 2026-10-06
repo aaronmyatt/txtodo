@@ -67,6 +67,8 @@ pub fn run() {
         txtodo_telemetry::init("desktop", &config::global_state_dir().join("logs")).ok();
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // https://v2.tauri.app/plugin/dialog/ — the folder picker in Settings > Workspaces.
+        .plugin(tauri_plugin_dialog::init())
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(setup)

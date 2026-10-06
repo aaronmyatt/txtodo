@@ -7,6 +7,12 @@
 	import { addWorkspace, listWorkspaces, removeWorkspace, switchWorkspace, workspaceRoot, type WorkspaceInfo } from "$lib/daemon";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import { workspaceLabel } from "$lib/universal/rows";
+	// The native folder picker: https://v2.tauri.app/plugin/dialog/#open-a-file-selector-dialog
+	import { open as openDialog } from "@tauri-apps/plugin-dialog";
+
+	// Only a real Tauri webview has the dialog plugin; `npm run dev` and Playwright keep the path
+	// field alone.
+	const canPick = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 	let list = $state<WorkspaceInfo[]>([]);
 	let error = $state("");
@@ -50,6 +56,14 @@
 	function remove(ws: WorkspaceInfo) {
 		confirming = null;
 		void run(() => removeWorkspace(ws.id, ws.root));
+	}
+
+	/** Choose a folder with the OS picker and add it straight away. */
+	function pick() {
+		void run(async () => {
+			const root = await openDialog({ directory: true, multiple: false, title: "Add a workspace folder" });
+			if (typeof root === "string" && root) await addWorkspace(root);
+		});
 	}
 
 	function add(e: SubmitEvent) {
@@ -100,7 +114,11 @@
 </ul>
 
 <form class="add" onsubmit={add}>
-	<label for="s-ws-path">Add a folder</label>
+	{#if canPick}
+		<button type="button" class="pill solid" disabled={busy} onclick={pick}>Choose a folder…</button>
+		<span class="or">or type a path</span>
+	{/if}
+	<label for="s-ws-path" class:sr={canPick}>Add a folder</label>
 	<input id="s-ws-path" type="text" placeholder="/path/to/folder" bind:value={newPath} spellcheck="false" autocomplete="off" />
 	<button type="submit" class="pill solid" disabled={busy || newPath.trim() === ""}>Add</button>
 </form>
@@ -252,6 +270,21 @@
 	.add input:focus {
 		border-color: var(--color-base-content);
 		outline: none;
+	}
+
+	.or {
+		color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+	}
+
+	/* Visually hidden, still the field's name. */
+	.sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
 	}
 
 	.hint {
