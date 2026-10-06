@@ -1,7 +1,10 @@
 # Desktop UI/UX revamp: the c2-prompt design, end to end (plan M11)
 
-Status: **deferred 2026-09-19 (human call).** The design is signed off; the build is deprioritised
-until the daemon/desktop stabilisation work lands. Nothing here is started. The root line is `(D)`
+Status: **started 2026-10-06 (human call: "Start the revamp work, show me screenshots as you go").**
+Was deferred 2026-09-19. Screenshots go to the human at each visible step (vite dev on the Tauri
+shim + Playwright, a scratch script). Earlier status, for history: deferred 2026-09-19 (human
+call). The design is signed off; the build was deprioritised until the daemon/desktop
+stabilisation work landed. The root line is `(D)`
 and the last open line in file order. It carries no `@human` tag (same as the other deferred items),
 so a loop that reaches it would pick it up: skip it until the human un-defers it. Below, six
 `@human` lines are decisions (they block only their dependants) and the second-to-last is the
@@ -306,4 +309,7 @@ Editor and prompt bar can run in parallel after the shell; Settings needs `edito
 
 ## As built
 
-_Empty until work starts._
+- Before the revamp started (2026-10-05, root todo line on the add input): the "Add a line…" ghost
+  on the trailing blank line is gone; an input above every FileView adds and moves the line to the
+  top (`$lib/todotxt/addOnTop.ts`). The invariant above about the trailing blank line is
+  superseded by that.
