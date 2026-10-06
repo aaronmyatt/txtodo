@@ -12,6 +12,7 @@
 	import type { IconName } from "$lib/icons/icons";
 	import { Chords, isTypingTarget, keyName } from "$lib/keys";
 	import { searchQuery } from "$lib/stores/search";
+	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
@@ -38,6 +39,24 @@
 		"nav.settings": "/settings",
 		"nav.help": "/help"
 	};
+
+	// The footer's key hints for the view in front; `Mod` is ⌘ on macOS, Ctrl elsewhere.
+	const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
+	const hints = $derived(
+		path === "/"
+			? [
+					[`${MOD}S`, "save"],
+					["esc", "discard"],
+					[`${MOD}↵`, "open"],
+					["/", "search"]
+				]
+			: path.startsWith("/help")
+				? [["g t", "tasks"]]
+				: [
+						["/", "search"],
+						["g t", "tasks"]
+					]
+	);
 
 	function onKeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || isTypingTarget(e.target)) return;
@@ -97,6 +116,23 @@
 	<div class="content">
 		{@render children()}
 	</div>
+
+	<!-- The status footer: the main buffer's save state and caret, and the keys for this view. -->
+	<footer class="status-bar">
+		{#if path === "/"}
+			<span class="save" data-save={$editorStatus.save} role="status">
+				<span class="dot" aria-hidden="true"></span>{SAVE_LABEL[$editorStatus.save]}
+			</span>
+			{#if $editorStatus.line > 0}
+				<span>Ln {$editorStatus.line}, Col {$editorStatus.col}</span>
+			{/if}
+		{/if}
+		<span class="hints">
+			{#each hints as [key, what] (key)}
+				<span class="hint"><kbd>{key}</kbd>{what}</span>
+			{/each}
+		</span>
+	</footer>
 </div>
 
 <style>
@@ -240,6 +276,65 @@
 	.actions :global(.icon-button:hover),
 	.actions :global(.icon-button[aria-pressed="true"]) {
 		background: var(--color-base-200);
+	}
+
+	/* The mockup's footer row: h-8, 11px, 60% ink; the save state in full ink with its dot. */
+	.status-bar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 1rem;
+		height: 2rem;
+		padding: 0 1rem;
+		border-top: 2px solid color-mix(in srgb, var(--color-base-content) 20%, transparent);
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+	}
+
+	.save {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 6rem;
+		color: var(--color-base-content);
+		font-weight: 700;
+	}
+
+	.dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 999px;
+		background: var(--color-success);
+	}
+
+	.save[data-save="unsaved"] .dot,
+	.save[data-save="saving"] .dot {
+		background: var(--color-warning);
+	}
+
+	.save[data-save="refused"] .dot {
+		background: var(--color-error);
+	}
+
+	.hints {
+		display: flex;
+		gap: 1rem;
+		margin-left: auto;
+	}
+
+	.hint kbd {
+		margin-right: 0.35rem;
+		padding: 0 0.4rem;
+		border: 1px solid color-mix(in srgb, var(--color-base-content) 40%, transparent);
+		border-radius: 999px;
+		font: inherit;
+	}
+
+	@media (max-width: 767px) {
+		.hints {
+			display: none;
+		}
 	}
 
 	.content {

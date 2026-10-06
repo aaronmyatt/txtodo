@@ -151,7 +151,7 @@
 		{#if detail.length === 0}
 			<ConflictBanner path={ROOT_PATH} />
 
-			<FileView path={ROOT_PATH} depth={0} fill onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
+			<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
 		{:else}
 			<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
 		{/if}

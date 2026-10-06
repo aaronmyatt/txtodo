@@ -32,6 +32,7 @@
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
+	import { editorStatus, SAVED_MS, type SaveState } from "$lib/stores/editorStatus";
 
 	interface Props {
 		path: string;
@@ -51,9 +52,24 @@
 		 * `FileView` used somewhere that never wants a detail view (there is none today, but the
 		 * component itself shouldn't assume one always exists) doesn't have to pass a no-op. */
 		onDetailRequest?: (params: DetailParams) => void;
+		/** This is the main buffer: report its save state and caret to the status footer
+		 * (`$lib/stores/editorStatus`). Only MainView's root view sets it. */
+		reportStatus?: boolean;
 	}
 
-	let { path, depth, fill = false, onDirtyChange, onDetailRequest }: Props = $props();
+	let { path, depth, fill = false, onDirtyChange, onDetailRequest, reportStatus = false }: Props = $props();
+
+	let savedTimer: ReturnType<typeof setTimeout> | undefined;
+	/** Tells the footer the save state, when this is the main buffer. "saved" settles to
+	 * "synced" after a moment. */
+	function reportSave(save: SaveState) {
+		if (!reportStatus) return;
+		clearTimeout(savedTimer);
+		editorStatus.update((s) => ({ ...s, save }));
+		if (save === "saved") {
+			savedTimer = setTimeout(() => editorStatus.update((s) => ({ ...s, save: dirty ? "unsaved" : "synced" })), SAVED_MS);
+		}
+	}
 
 	let containerEl: HTMLDivElement | undefined = $state();
 	let view: EditorView | undefined;
@@ -109,6 +125,7 @@
 		if (next === dirty) return;
 		dirty = next;
 		onDirtyChange?.(next);
+		if (next) reportSave("unsaved");
 	}
 
 	function initialExtensions() {
@@ -162,6 +179,11 @@
 				}
 			}),
 			EditorView.updateListener.of((u) => {
+				if (reportStatus && (u.selectionSet || u.docChanged)) {
+					const head = u.state.selection.main.head;
+					const line = u.state.doc.lineAt(head);
+					editorStatus.update((s) => ({ ...s, line: line.number, col: head - line.from + 1 }));
+				}
 				if (!u.docChanged) return;
 				docLineCount = u.state.doc.lines;
 				const text = u.state.doc.toString();
@@ -267,12 +289,15 @@
 		if (!view || !dirty) return;
 		const next = view.state.doc.toString();
 		setDirty(false);
+		reportSave("saving");
 		applyEditableGate(); // a pending review that arrived mid-edit is only enforced once clean
 		const error = await commitOutgoing(path, { text: baseline, hash: baselineHash }, next, true);
 		if (error === null) {
 			commitError = "";
+			reportSave("saved");
 			return;
 		}
+		reportSave("refused");
 		// Keep the buffer dirty and untouched: the edit was rejected, not applied. Calling
 		// refreshDoc() here would silently overwrite the human's text with the daemon's
 		// pre-edit content (root cause 4, tasks/desktop-concurrent-edit-loss/notes.md) — restore
@@ -289,6 +314,7 @@
 		if (!view || !dirty) return;
 		view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: baseline } });
 		setDirty(false);
+		reportSave("synced");
 		commitError = "";
 		applyEditableGate();
 	}
@@ -403,6 +429,8 @@
 
 	onDestroy(() => {
 		unlistenChange?.();
+		clearTimeout(savedTimer);
+		if (reportStatus) editorStatus.set({ save: "synced", line: 0, col: 0 });
 		// Best-effort, fire-and-forget commit: a dirty buffer must never just vanish with the
 		// component (an unmount going back to the root view is a "switch" too, same as the
 		// `$effect` below). The `Apply` call outlives the component; nothing here awaits it, since
