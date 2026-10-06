@@ -12,8 +12,8 @@
   search, the `:` line, the Settings filter and field.
 
 ## Decisions (2026-10-06, agent; the human delegated these calls)
-- **Words are readline words: runs of letters and digits** (UAX #29 word bounds, so CJK and accents
-  count). `Alt-F` goes to the end of the current or next word, `Alt-B` to the start of the current
+- **Words are readline words: runs of letters and digits**, counted by grapheme (an accent stays
+  with its letter; a run of ideographs is one word; an emoji is not a word). `Alt-F` goes to the end of the current or next word, `Alt-B` to the start of the current
   or previous one. So `+home`, `due:2026-10-09` and `@phone` take more than one hop.
   - Rejected: whitespace words (vim `W`). One hop per todo.txt token is handy, but it is not what
     `Alt-B`/`Alt-F` do in a shell, and the muscle memory is the point.
@@ -56,13 +56,12 @@
 
 ## As built
 - `src/readline.rs` (2026-10-06): one `Op` per key and `apply(op, text, caret, kill)`, pure, over
-  the `String` + byte caret every field keeps. Words are UAX #29 word-bound segments holding a
-  letter or digit; `Ctrl-W` alone goes back to a space (readline's `unix-word-rubout`). `Kill` is
+  the `String` + byte caret every field keeps. Words are runs of graphemes holding a letter or
+  digit (first built on UAX #29 word bounds, which join `list.last` and `don't` into one word, so
+  dropped for readline's rule); `Ctrl-W` alone goes back to a space (readline's `unix-word-rubout`). `Kill` is
   the one shared slot: kills in a row join (backward in front, forward behind), any other op starts
   it over. `Ctrl-K` at a line's end takes the line break. `Ctrl-T`/`Alt-T` follow readline: the
   caret ends after the swapped pair. `Undo` keeps snapshots; a run of typed characters is one step.
-  - Ideographs are one word each (UAX #29 has no dictionary), so `Alt-F` over Japanese moves one
-    character at a time.
 - Keys and wiring: twenty `edit.*` commands in `keymap/table.rs` (scope `edit`), with manifest
   rows (desktop `differs`: CodeMirror has the Ctrl ones on macOS only, the rest are platform keys).
   `Input::on_key_at` hands a readline key to `fields::run` first whenever a text field has the
@@ -74,3 +73,11 @@
   - `Ctrl-_` arrives as Ctrl-7 from legacy terminals (byte 0x1F); `keymap::key_name` names it
     `Ctrl-_`. `Ctrl-/` is bound too.
   - Edits made here mark the notes typed (autosave) and re-pick the Settings card for the filter.
+- Prompt chips: all nine take `Alt-Shift` and their letter (`prompt::CHIPS` keys are capitals);
+  Help's chip list and the `prompt.chip` deviation say so. An input test shows `Alt-B` applying
+  `(B)` while `Alt-b` moves a word.
+- Help: the `edit` heading is "Editing text (every field)", with the Option-as-Meta note under it.
+- Tests: `readline_tests.rs` (every op, kill joining, undo grouping), `fields_tests.rs` (line
+  editor, prompt, search, `:` line, Settings filter, notes, shared kill slot, undo with Ctrl-7,
+  list mode untouched). Not covered by a test: the parent field (same `Slot::Byte` path as the
+  line editor).
