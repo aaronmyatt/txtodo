@@ -154,6 +154,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return undefined as T;
 		case "universal_tasks":
 			return universalTasksDto(args?.includeDone === true) as T;
+		case "skill_hint":
+			return false as T; // the mock machine already has the skill installed: no banner
 		case "quick_add_hotkey":
 			return ["Super", "Shift", "Space"] as T;
 		case "universal_set_done":
