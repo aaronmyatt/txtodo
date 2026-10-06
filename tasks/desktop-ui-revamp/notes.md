@@ -313,3 +313,12 @@ Editor and prompt bar can run in parallel after the shell; Settings needs `edito
   on the trailing blank line is gone; an input above every FileView adds and moves the line to the
   top (`$lib/todotxt/addOnTop.ts`). The invariant above about the trailing blank line is
   superseded by that.
+- 2026-10-06: foundation and shell. Mockups in `docs/design/desktop-ui-revamp/`. CSS floor macOS
+  13.3 / webkit2gtk 2.40 (`minimumSystemVersion`, `build.cssTarget: safari16.4`). Tailwind 4 +
+  DaisyUI 5 in `src/tailwind.css`: no preflight, DaisyUI root bases off, and **component classes
+  prefixed `d-`** (unprefixed, DaisyUI restyled the app's own `checkbox`, `countdown`, `diff`,
+  `footer` and `tabs` classes; seen on the token scopes). So mockup markup ports as `d-btn`,
+  `d-menu`, ... Themes are DaisyUI variables in `app.css` under the same `data-theme`; the old
+  `--color-*` names read from them. JetBrains Mono 400/500/700 self-hosted. `Icon.svelte`,
+  `Mark.svelte` (+ `mark.ts`). `AppShell.svelte` in `+layout.svelte` (not in the quick-add
+  window). `/settings` with section ids; `/devices` redirects.
