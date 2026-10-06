@@ -225,6 +225,9 @@ export const mainViewBaseTheme = EditorView.baseTheme({
 	},
 	".cm-lineNumbers .cm-gutterElement": { padding: "0 0.75rem 0 1rem", fontSize: "0.75em" },
 	".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--color-base-content) 7%, transparent)" },
+	// List mode's current line (the buffer without the keyboard): an ink bar at its left edge, so
+	// j/k read as moving a cursor, as the TUI's highlighted row does.
+	"&:not(.cm-focused) .cm-activeLine": { boxShadow: "inset 3px 0 0 var(--color-base-content)" },
 	".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--color-base-content)" },
 	// A block over the character, see-through so the letter under it still reads: ink at 35%.
 	// (A difference blend does not work here: CM's cursor layer sits in its own stacking context,
