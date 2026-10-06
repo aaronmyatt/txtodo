@@ -1,4 +1,4 @@
-2026-10-06 Human pass: the motions and edits in Ghostty, iTerm2 and Terminal.app, Option-as-Meta on and off +m11 @tui @human
+x 2026-10-06 Human pass: the motions and edits in Ghostty, iTerm2 and Terminal.app, Option-as-Meta on and off +m11 @tui @human
 x 2026-10-06 2026-10-06 text_input: line start/end and readline word back/forward (UAX 29 word bounds), unit tests with +project, due:, CJK and emoji +m11 @tui — readline.rs line_start/line_end/word_back/word_forward; ideographs are one word each
 x 2026-10-06 2026-10-06 text_input: kill and yank: Ctrl-W and Alt-Backspace (word back), Alt-D (word forward), Ctrl-U and Ctrl-K (to line start/end), Ctrl-Y yanks the last kill +m11 @tui — readline.rs Kill slot, joining kills, Ctrl-K takes the line break at a line end
 x 2026-10-06 2026-10-06 text_input: Ctrl-B/Ctrl-F by character, Ctrl-D and Ctrl-H delete, Ctrl-T and Alt-T transpose characters/words, Alt-U/Alt-L/Alt-C upper/lower/capitalize a word +m11 @tui — readline.rs char motions, deletes, transposes and word case as readline does them

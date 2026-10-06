@@ -1,4 +1,4 @@
-Human pass: each fix above in the TUI and the desktop side by side +m11 @tui @desktop @human
+x Human pass: each fix above in the TUI and the desktop side by side +m11 @tui @desktop @human
 x 2026-10-05 Decide: dates on Add and on a typed x: add today to the Add and Edit mutations (wire change, client clock per ADR 0011) or the daemon's clock. I'd take the mutation field +m11 @proto @daemon @human — decided 2026-10-05 (agent, delegated by the human): the daemon's clock per ADR 0011, not a new mutation field; trade-offs in notes.md
 x 2026-10-05 Decide: the top Add a line input: the new line lands at the top of the file, or still at the end. I'd take the top +m11 @tui @desktop @human — decided 2026-10-05 (agent, delegated by the human): top of the file, as one Apply of Add then a move; CLI and MCP still append; see notes.md
 x 2026-10-05 Decide: done lines move down on every write that marks them done, not a timed sweep. I'd take on-write +m11 @daemon @human — decided 2026-10-05 (agent, delegated by the human): on-write; known gap: a line marked done in another editor waits for archive; see notes.md

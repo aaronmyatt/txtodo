@@ -1,3 +1,5 @@
+> So far things are working satisfactorily, I'll archive the ticket for now.
+
 # snapshot-pairing
 
 ## Goal
