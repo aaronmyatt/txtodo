@@ -85,7 +85,9 @@ pub fn toggle_priority(raw: &str, caret: usize, letter: char) -> (String, usize)
     let text = if current == Some(letter) {
         String::from(rest)
     } else if rest.is_empty() {
-        format!("({letter})")
+        // An empty field gets the space too, so the next word typed is the description, not
+        // glued to the priority (`(B)call` is no priority at all).
+        format!("({letter}) ")
     } else {
         format!("({letter}) {rest}")
     };
@@ -232,6 +234,16 @@ mod tests {
         assert_eq!(chip("call  mum", 5, "due:"), (s("call due: mum"), 9));
         let done = toggle_complete_text("call mum", TODAY);
         assert_eq!(chip("call mum", 0, "x"), (done.clone(), done.len()));
+    }
+
+    #[test]
+    fn a_priority_chip_on_an_empty_field_brings_its_space() {
+        assert_eq!(chip("", 0, "B"), (String::from("(B) "), 4));
+        assert_eq!(
+            chip("(B) ", 4, "B"),
+            (String::new(), 0),
+            "and takes it away again"
+        );
     }
 
     #[test]
