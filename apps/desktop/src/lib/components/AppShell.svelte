@@ -5,10 +5,12 @@
 	// MainView, the universal, devices and help pages each drew.
 	// Ref: https://svelte.dev/docs/kit/$app-state#page
 	import type { Snippet } from "svelte";
+	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import Mark from "$lib/brand/Mark.svelte";
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { IconName } from "$lib/icons/icons";
+	import { Chords, isTypingTarget, keyName } from "$lib/keys";
 	import { searchQuery } from "$lib/stores/search";
 	import PinToggle from "./PinToggle.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
@@ -24,7 +26,33 @@
 	];
 
 	const path = $derived(page.url.pathname);
+
+	// The shell's keys (`$lib/keys.ts`): `/` focuses the search, `g t|u|s` go to a view, `?` opens
+	// Help. Never while the reader is typing in a field, an editor or a dialog.
+	// Ref: https://svelte.dev/docs/kit/$app-navigation#goto
+	let searchEl: HTMLInputElement | undefined = $state();
+	const chords = new Chords();
+	const ROUTES: Record<string, string> = {
+		"nav.tasks": "/",
+		"nav.universal": "/universal",
+		"nav.settings": "/settings",
+		"nav.help": "/help"
+	};
+
+	function onKeydown(e: KeyboardEvent) {
+		if (e.defaultPrevented || isTypingTarget(e.target)) return;
+		const name = keyName(e);
+		if (!name) return;
+		const hit = chords.resolve(name, e.timeStamp);
+		if (hit.kind === "none") return;
+		e.preventDefault();
+		if (hit.kind !== "command") return;
+		if (hit.id === "search.focus") searchEl?.focus();
+		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);
+	}
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="shell">
 	<header class="header">
@@ -43,6 +71,7 @@
 				autocomplete="off"
 				spellcheck="false"
 				bind:value={$searchQuery}
+				bind:this={searchEl}
 			/>
 			<kbd>/</kbd>
 		</label>

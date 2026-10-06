@@ -560,7 +560,7 @@ id = "search.focus"
 title = "Search"
 keys = ["/"]
 scope = "global"
-desktop = { status = "planned", surface = "header search" }
+desktop = { status = "done", surface = "header search (AppShell, keys.ts)" }
 tui = { status = "done", surface = "header search" }
 deviation = ""
 
@@ -605,7 +605,7 @@ id = "nav.tasks"
 title = "Go to Tasks"
 keys = ["g t"]
 scope = "global"
-desktop = { status = "planned", surface = "header tabs" }
+desktop = { status = "done", surface = "header views (AppShell, keys.ts)" }
 tui = { status = "done", surface = "header tabs" }
 deviation = ""
 
@@ -614,16 +614,16 @@ id = "nav.universal"
 title = "Go to Universal"
 keys = ["g u"]
 scope = "global"
-desktop = { status = "differs", surface = "MainView link", keys = [] }
+desktop = { status = "done", surface = "header views (AppShell, keys.ts)" }
 tui = { status = "done", surface = "header tabs" }
-deviation = "Desktop reaches Universal by a top-bar link today; the g chord comes with the revamp."
+deviation = ""
 
 [[action]]
 id = "nav.settings"
 title = "Go to Settings"
 keys = ["g s"]
 scope = "global"
-desktop = { status = "planned", surface = "header tabs" }
+desktop = { status = "done", surface = "header views (AppShell, keys.ts)" }
 tui = { status = "done", surface = "header tabs" }
 deviation = ""
 
@@ -632,9 +632,9 @@ id = "nav.help"
 title = "Help: keys, search operators, the prompt bar"
 keys = ["?"]
 scope = "global"
-desktop = { status = "differs", surface = "/help", keys = [] }
+desktop = { status = "done", surface = "header help button, /help (keys.ts)" }
 tui = { status = "done", surface = "Help screen" }
-deviation = "Desktop reaches Help by the ? link in the top bar; no key yet."
+deviation = ""
 
 [[action]]
 id = "nav.workspace_menu"
@@ -1227,7 +1227,7 @@ id = "nav.devices"
 title = "Devices and agents"
 keys = []
 scope = "global"
-desktop = { status = "done", surface = "MainView link to /devices" }
+desktop = { status = "done", surface = "header Settings view (/settings; /devices redirects)" }
 tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
