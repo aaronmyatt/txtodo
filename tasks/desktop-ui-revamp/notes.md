@@ -322,3 +322,42 @@ Editor and prompt bar can run in parallel after the shell; Settings needs `edito
   `--color-*` names read from them. JetBrains Mono 400/500/700 self-hosted. `Icon.svelte`,
   `Mark.svelte` (+ `mark.ts`). `AppShell.svelte` in `+layout.svelte` (not in the quick-add
   window). `/settings` with section ids; `/devices` redirects.
+- 2026-10-06: prompt bar and the shared editor. `LineEditor.svelte` (CM6 one-line field, strict
+  hint after 400ms, `chip()`) under both `PromptBar.svelte` and `EditPopover.svelte`. Chips go
+  through the core's `apply_chip` (wasm), so desktop and TUI agree; the TS chip copy in
+  `editPopoverLogic.ts` is gone. The new e2e found `(B)` + typing gave `(B)call` (no priority);
+  core now puts the space after a priority chip on an empty field (f8322191). Known gap: the
+  per-list "Add a line…" input stays above the buffer, so the main view has two add fields; left
+  for the human pass (line 49) rather than dropped, since that input was a human ask.
+- 2026-10-06: Quick Add. The hotkey goes through `hotkey_target(dirty, main_focused)`
+  (`quick_add.rs`, unit-tested): an open main edit wins, a frontmost main window gets
+  `prompt-bar-focus`, anywhere else the window. The window is `PromptBar` with `windowed`
+  (chips in the flow, keyboard on mount, `resolvePath` asks the daemon, hides on add/Esc).
+  Found on the way: CM6 `baseTheme` styles reach every editor on the page, so the buffer's
+  padding made the prompt field tall; `LineEditor` now has its own scoped `EditorView.theme`.
+  SvelteKit's first-load focus reset blurred the field; `autofocus` on the content keeps it.
+  `isQuickAddWindow()` (`$lib/windowLabel.ts`) honours `?window=quick-add` in dev and e2e only.
+  Known gap: none of this was tried in a real Tauri build yet (hotkey, hide, remount).
+- 2026-10-06: Universal data, page, complete/undo. `universal_tasks(include_done)` rows carry
+  done, completion date, due, projects, task id and `ref_progress` (sub-list `ListFiles` counts,
+  path from `WorkspaceLayout::ref_dir_of`; `txtodo-model` is now a regular desktop dep). The page
+  is `UniversalView` + `UniversalRow` + `UniversalStats` over pure `universal/rows.ts`; rows use
+  `segments.ts` (Lezer `highlightCode`, same `tok-*` classes as the editor) and `due.ts`.
+  Complete/reopen act on the row's own workspace (`universal_set_done`, `apply_for`), never the
+  app's open one; reopen is an `Edit` to the core's `toggle_complete_text` (the TS
+  `toggleComplete` the plan named was deleted with the chip move). Undo = daemon `Undo` on that
+  file (`universal_undo`); known gap: it undoes the newest op there, whoever made it. App-wide
+  toasts: `stores/toast.ts` + `Toasts.svelte` in the shell.
+- 2026-10-06: Settings, all seven cards. `lib/settings/sections.ts` (ids, keywords,
+  `sectionMatches`, `activeSection`) + `SettingsCard` + `settings/*` components; header search
+  hides cards (pill count), sticky nav with scroll-spy. Scrolling uses the scroller's own
+  `scrollTo`, not `scrollIntoView` (that scrolled the whole shell when a card could not reach the
+  top); a nav click or `#hash` keeps its card highlighted until the reader scrolls. General (pin,
+  menu-bar and save-on-blur as always-on rows, daemon + Retry), Appearance (theme, size, line
+  height, numbers, hint, live `EditorPreview`), Workspaces (badges, Open, Remove with inline
+  confirm, add by path; no native picker: that needs `tauri-plugin-dialog`, a new dependency),
+  Shortcuts (`keyTable.ts` from `keys.ts` + `quick_add_hotkey` reading the registered
+  constants), Devices (pairing re-skin + `device_list`/`device_remove` over the daemon's existing
+  RPCs), Tokens (table + `NewTokenDialog`, secret once, never logged), Activity (`ActivityCard`,
+  opLogAll, glyph per principal; the workspace menu's tab bar is gone). Dead now: `devices/api.ts`
+  `opLog` and the Rust `op_log` command (line 50).
