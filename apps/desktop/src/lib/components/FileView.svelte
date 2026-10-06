@@ -32,7 +32,8 @@
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
-	import { editorStatus, SAVED_MS, type SaveState } from "$lib/stores/editorStatus";
+	import { EMPTY_STATUS, editorStatus, SAVED_MS, type SaveState } from "$lib/stores/editorStatus";
+	import { docCounts } from "$lib/todotxt/counts";
 
 	interface Props {
 		path: string;
@@ -186,6 +187,10 @@
 				}
 				if (!u.docChanged) return;
 				docLineCount = u.state.doc.lines;
+				if (reportStatus) {
+					const counts = docCounts(u.state.doc.toString());
+					editorStatus.update((s) => ({ ...s, counts }));
+				}
 				const text = u.state.doc.toString();
 				setDirty(text !== baseline);
 				scheduleReorderSave(text);
@@ -430,7 +435,7 @@
 	onDestroy(() => {
 		unlistenChange?.();
 		clearTimeout(savedTimer);
-		if (reportStatus) editorStatus.set({ save: "synced", line: 0, col: 0 });
+		if (reportStatus) editorStatus.set(EMPTY_STATUS);
 		// Best-effort, fire-and-forget commit: a dirty buffer must never just vanish with the
 		// component (an unmount going back to the root view is a "switch" too, same as the
 		// `$effect` below). The `Apply` call outlives the component; nothing here awaits it, since

@@ -10,6 +10,7 @@
 	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
+	import { editorStatus } from "$lib/stores/editorStatus";
 	import ProtocolMismatchBanner from "./ProtocolMismatchBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import { openingWorkspace } from "$lib/stores/loading";
@@ -151,6 +152,15 @@
 		{#if detail.length === 0}
 			<ConflictBanner path={ROOT_PATH} />
 
+			<!-- Sub-toolbar: which list, and its counts (the logo's letters: t open, x done). -->
+			<div class="subbar">
+				<span class="file">{ROOT_PATH}</span>
+				<span class="counts">
+					<span>t {$editorStatus.counts.open}</span>
+					<span>x {$editorStatus.counts.done}</span>
+					<span>{$editorStatus.counts.lines} lines</span>
+				</span>
+			</div>
 			<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
 		{:else}
 			<DetailView steps={detail} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
@@ -160,6 +170,29 @@
 </main>
 
 <style>
+	/* The mockup's sub-toolbar: h-8, 11px, a 10% ink rule under it. */
+	.subbar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		gap: 0.75rem;
+		height: 2rem;
+		padding: 0 1rem;
+		border-bottom: 2px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+	}
+
+	.file {
+		font-weight: 700;
+	}
+
+	.counts {
+		display: flex;
+		gap: 0.75rem;
+		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+	}
+
 	.opening {
 		margin: 0.5rem 1rem;
 		color: var(--color-text-muted, inherit);
