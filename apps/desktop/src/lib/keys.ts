@@ -5,11 +5,14 @@
 // Mod-Enter) stay in the editors' own keymaps.
 // Ref: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key
 
-/** One binding: the manifest id (also what the shell runs), its keys, and a short title. */
+/** One binding: the manifest id (also what the shell runs), its keys, and a short title.
+ * `list` bindings act on the Tasks buffer's current line, only while nothing has the keyboard
+ * (list mode: after Esc, or before anything is clicked). */
 export interface Binding {
 	id: string;
 	keys: readonly string[];
 	title: string;
+	scope?: "list";
 }
 
 /** The shell's bindings, in the manifest's names (`g t` is a chord: g, then t within 900 ms). */
@@ -18,8 +21,25 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "nav.tasks", keys: ["g t"], title: "Go to Tasks" },
 	{ id: "nav.universal", keys: ["g u"], title: "Go to Universal" },
 	{ id: "nav.settings", keys: ["g s"], title: "Go to Settings" },
-	{ id: "nav.help", keys: ["?"], title: "Open Help" }
+	{ id: "nav.help", keys: ["?"], title: "Open Help" },
+	// List mode (specs/client-parity.toml list.*, the TUI's keys).
+	{ id: "list.down", keys: ["j", "Down"], title: "Next line", scope: "list" },
+	{ id: "list.up", keys: ["k", "Up"], title: "Previous line", scope: "list" },
+	{ id: "list.first", keys: ["g g"], title: "First line", scope: "list" },
+	{ id: "list.last", keys: ["G"], title: "Last line", scope: "list" },
+	{ id: "list.edit_start", keys: ["i"], title: "Edit the line, caret at the start", scope: "list" },
+	{ id: "list.edit_end", keys: ["a", "A"], title: "Edit the line, caret at the end", scope: "list" },
+	{ id: "list.toggle_complete", keys: ["x", "Space"], title: "Complete or reopen the line", scope: "list" },
+	{ id: "list.delete", keys: ["d d"], title: "Delete the line", scope: "list" },
+	{ id: "list.move_down", keys: ["J", "Alt-Down"], title: "Move the line down", scope: "list" },
+	{ id: "list.move_up", keys: ["K", "Alt-Up"], title: "Move the line up", scope: "list" },
+	{ id: "detail.open", keys: ["Enter"], title: "Open the line's detail", scope: "list" }
 ];
+
+/** Whether binding `id` is a list-mode one. */
+export function isListCommand(id: string): boolean {
+	return BINDINGS.some((b) => b.id === id && b.scope === "list");
+}
 
 /** How long the second key of a chord may wait (the manifest's 900 ms). */
 export const CHORD_MS = 900;
@@ -36,7 +56,16 @@ export interface KeyLike {
  * (`?`, `G`), modified keys are `Ctrl-`/`Alt-`/`Super-` joined. */
 export function keyName(e: KeyLike): string | null {
 	if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return null;
-	const key = e.key === " " ? "Space" : e.key;
+	// The manifest's names for the keys whose DOM names differ (`ArrowDown` is `Down`).
+	const NAMES: Record<string, string> = {
+		" ": "Space",
+		ArrowDown: "Down",
+		ArrowUp: "Up",
+		ArrowLeft: "Left",
+		ArrowRight: "Right",
+		Escape: "Esc"
+	};
+	const key = NAMES[e.key] ?? e.key;
 	const mods = `${e.metaKey ? "Super-" : ""}${e.ctrlKey ? "Ctrl-" : ""}${e.altKey ? "Alt-" : ""}`;
 	return mods + key;
 }

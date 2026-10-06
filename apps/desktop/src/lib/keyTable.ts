@@ -55,6 +55,10 @@ export function keyGroups(hotkey: string[]): KeyGroup[] {
 		},
 		{ title: "Go to", rows: fromBindings(["nav.tasks", "nav.universal", "nav.settings", "nav.help"]) },
 		{
+			title: "Tasks list (Esc first, so nothing has the keyboard)",
+			rows: fromBindings(BINDINGS.filter((b) => b.scope === "list").map((b) => b.id))
+		},
+		{
 			title: "Universal",
 			rows: [
 				{ keys: [presses("j"), presses("k")], title: "Move" },

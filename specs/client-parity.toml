@@ -60,7 +60,7 @@ id = "list.down"
 title = "Next line"
 keys = ["j", "Down"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -69,7 +69,7 @@ id = "list.up"
 title = "Previous line"
 keys = ["k", "Up"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -78,16 +78,16 @@ id = "list.first"
 title = "Top row: Add a line"
 keys = ["g g"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "differs", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
-deviation = ""
+deviation = "The TUI's top row is its add row; the desktop adds from the prompt bar, so g g goes to the first line."
 
 [[action]]
 id = "list.add_on_top"
 title = "Add a line from the row on top; it lands at the top of the list"
 keys = []
 scope = "list"
-desktop = { status = "done", surface = "FileView (an input above the list)" }
+desktop = { status = "done", surface = "PromptBar (the line lands at the top); FileView input above a sub-list" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
 deviation = ""
 
@@ -96,7 +96,7 @@ id = "list.last"
 title = "Last line"
 keys = ["G"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -105,7 +105,7 @@ id = "list.edit_start"
 title = "Edit the line, caret at the start"
 keys = ["i"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -114,7 +114,7 @@ id = "list.edit_end"
 title = "Edit the line, caret at the end"
 keys = ["a", "A"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -123,16 +123,16 @@ id = "list.delete"
 title = "Delete the line"
 keys = ["d d"]
 scope = "list"
-desktop = { status = "differs", surface = "FileView", keys = ["Mod-Shift-k"] }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
-deviation = "Desktop has no list mode yet: CodeMirror's default Mod-Shift-k deletes the line."
+deviation = ""
 
 [[action]]
 id = "list.toggle_complete"
 title = "Complete or reopen the line"
 keys = ["x", "Space"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -141,18 +141,18 @@ id = "list.move_down"
 title = "Move the line down"
 keys = ["J", "Alt-Down"]
 scope = "list"
-desktop = { status = "differs", surface = "FileView", keys = ["Alt-Down"] }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks; or drag the row" }
-deviation = "Desktop has CodeMirror's Alt-Down line move and no list mode yet. Only the TUI drags a row so far."
+deviation = "Only the TUI drags a row so far."
 
 [[action]]
 id = "list.move_up"
 title = "Move the line up"
 keys = ["K", "Alt-Up"]
 scope = "list"
-desktop = { status = "differs", surface = "FileView", keys = ["Alt-Up"] }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks; or drag the row" }
-deviation = "Desktop has CodeMirror's Alt-Up line move and no list mode yet. Only the TUI drags a row so far."
+deviation = "Only the TUI drags a row so far."
 
 # ==== Editing a line ===============================================================================
 
@@ -713,9 +713,9 @@ id = "detail.open"
 title = "Open the line's detail: sub-list and notes"
 keys = ["Enter", "Mod-Enter"]
 scope = "list"
-desktop = { status = "differs", surface = "FileView", keys = ["Mod-Enter"] }
+desktop = { status = "done", surface = "FileView (list mode), or Mod-Enter in the buffer" }
 tui = { status = "differs", surface = "detail panel; or double-click", keys = ["Enter", "Ctrl-Enter"] }
-deviation = "Desktop has no list mode yet, so only Mod-Enter from the buffer. A terminal cannot see Cmd: the TUI binds Ctrl-Enter."
+deviation = "A terminal cannot see Cmd: the TUI binds Ctrl-Enter."
 
 [[action]]
 id = "detail.next_part"

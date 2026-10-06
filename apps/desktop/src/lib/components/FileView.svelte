@@ -11,6 +11,10 @@
 	// detail-view task mounts this again at `depth + 1` for a `ref:` directory's todo.txt.
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
+	import { onListCommand } from "$lib/listCommands";
+	import { docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
+	import { applyChipCore } from "$lib/wasmCore";
+	import { localToday } from "./editPopoverLogic";
 	import { leaveEditor } from "$lib/escape";
 	import { onDestroy, onMount, untrack } from "svelte";
 	import { Compartment, EditorState } from "@codemirror/state";
@@ -68,9 +72,19 @@
 		/** This is the main buffer: report its save state and caret to the status footer
 		 * (`$lib/stores/editorStatus`). Only MainView's root view sets it. */
 		reportStatus?: boolean;
+		/** List mode's commands act on this buffer (`$lib/listCommands.ts`): MainView's root view. */
+		listCommands?: boolean;
 	}
 
-	let { path, depth, fill = false, onDirtyChange, onDetailRequest, reportStatus = false }: Props = $props();
+	let {
+		path,
+		depth,
+		fill = false,
+		onDirtyChange,
+		onDetailRequest,
+		reportStatus = false,
+		listCommands = false
+	}: Props = $props();
 
 	let savedTimer: ReturnType<typeof setTimeout> | undefined;
 	/** Tells the footer the save state, when this is the main buffer. "saved" settles to
@@ -409,6 +423,10 @@
 			if (current !== contents.text) {
 				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: contents.text } });
 			}
+			if (pendingCursor !== null) {
+				placeCursor(pendingCursor);
+				pendingCursor = null;
+			}
 		} catch (e) {
 			if (seq !== refreshSeq) return; // a newer refresh already superseded this one
 			loadError = String(e);
@@ -438,7 +456,57 @@
 
 	let unlistenChange: (() => void) | undefined;
 
+	// List mode (specs/client-parity.toml list.*; `$lib/todotxt/listMode.ts`): while nothing has
+	// the keyboard, the caret's line is the current line. Moves set the caret; edits go to the
+	// daemon, and the caret lands where the command says once its change repaints the list.
+	let pendingCursor: number | null = null;
+
+	/** Puts the caret at the start of `line` (clamped) and scrolls it into view, without focus. */
+	function placeCursor(line: number) {
+		if (!view) return;
+		const n = Math.min(Math.max(line, 1), view.state.doc.lines);
+		const at = view.state.doc.line(n).from;
+		view.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: "nearest" }) });
+	}
+
+	async function runListCommand(id: string) {
+		if (!view) return;
+		const current = view.state.doc.lineAt(view.state.selection.main.head);
+		const doc = { lines: docLines(baseline), taskIds: baselineTaskIds };
+		const target = moveTarget(id, current.number, doc);
+		if (target !== null) return placeCursor(target);
+		if (id === "list.edit_start" || id === "list.edit_end") {
+			const at = id === "list.edit_start" ? current.from : current.to;
+			view.dispatch({ selection: { anchor: at } });
+			return view.focus();
+		}
+		if (id === "detail.open") return requestDetail(current.number);
+		if (dirty) await commit();
+		if (dirty) return; // the buffer was refused: its error is already showing
+		const reopen = async (line: string) => (await applyChipCore(line, 0, "x", localToday()))?.text ?? line;
+		const change = await listMutations(id, current.number, doc, localToday(), reopen);
+		if (!change) return;
+		try {
+			pendingCursor = change.cursor;
+			await applyMutations(path, change.mutations, baselineWorkspace);
+			commitError = "";
+			// Repaint now, not on the change event: the next key must see the new order.
+			await refreshDoc();
+		} catch (err) {
+			pendingCursor = null;
+			commitError = String(err);
+		}
+	}
+
 	onMount(() => {
+		// One command at a time: a key pressed while the last one is still landing waits for it,
+		// so it acts on the list as it now is (a fast `J` then `x` used to hit the old line).
+		let listQueue = Promise.resolve();
+		const offList = listCommands
+			? onListCommand((id) => {
+					listQueue = listQueue.then(() => runListCommand(id)).catch(() => {});
+				})
+			: undefined;
 		view = new EditorView({ state: EditorState.create({ doc: "", extensions: initialExtensions() }), parent: containerEl });
 		lastStep = get(searchStep).n;
 		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed.
@@ -463,6 +531,7 @@
 
 		return () => {
 			cancelled = true;
+			offList?.();
 		};
 	});
 

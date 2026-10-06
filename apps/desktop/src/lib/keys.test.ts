@@ -12,6 +12,16 @@ describe("keyName", () => {
 		expect(press(" ")).toBe("Space");
 		expect(press("k", { ctrlKey: true })).toBe("Ctrl-k");
 		expect(press("Shift")).toBeNull();
+		expect(press("ArrowDown", { altKey: true })).toBe("Alt-Down");
+		expect(press("Escape")).toBe("Esc");
+	});
+
+	it("tells g g (list) from g t (nav) by the second key", () => {
+		const chords = new Chords();
+		chords.resolve("g", 0);
+		expect(chords.resolve("g", 5)).toEqual({ kind: "command", id: "list.first" });
+		chords.resolve("d", 10);
+		expect(chords.resolve("d", 15)).toEqual({ kind: "command", id: "list.delete" });
 	});
 });
 
@@ -29,6 +39,6 @@ describe("Chords", () => {
 		expect(chords.resolve("t", CHORD_MS + 1)).toEqual({ kind: "none" });
 		chords.resolve("g", 0);
 		expect(chords.resolve("/", 5)).toEqual({ kind: "command", id: "search.focus" });
-		expect(chords.resolve("x", 6)).toEqual({ kind: "none" });
+		expect(chords.resolve("q", 6)).toEqual({ kind: "none" });
 	});
 });

@@ -10,8 +10,9 @@
 	import Mark from "$lib/brand/Mark.svelte";
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { IconName } from "$lib/icons/icons";
-	import { Chords, isTypingTarget, keyName } from "$lib/keys";
+	import { Chords, isTypingTarget, keyName, isListCommand } from "$lib/keys";
 	import { searchQuery, searchStep, settingsHits, universalHits } from "$lib/stores/search";
+	import { runListCommand } from "$lib/listCommands";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
@@ -87,11 +88,16 @@
 		if (e.defaultPrevented || isTypingTarget(e.target)) return;
 		const name = keyName(e);
 		if (!name) return;
+		// List mode needs the Tasks page with nothing holding the keyboard: a focused button keeps
+		// its own Space and Enter.
+		const listMode = path === "/" && (document.activeElement === null || document.activeElement === document.body);
 		const hit = chords.resolve(name, e.timeStamp);
 		if (hit.kind === "none") return;
+		if (hit.kind === "command" && isListCommand(hit.id) && !listMode) return;
 		e.preventDefault();
 		if (hit.kind !== "command") return;
-		if (hit.id === "search.focus") searchEl?.focus();
+		if (isListCommand(hit.id)) runListCommand(hit.id);
+		else if (hit.id === "search.focus") searchEl?.focus();
 		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);
 	}
 </script>
