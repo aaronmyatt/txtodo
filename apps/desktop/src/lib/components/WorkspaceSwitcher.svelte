@@ -1,9 +1,11 @@
 <script lang="ts">
-	// Workspace + Activity nav sidebar (task desktop-workspace-nav-sidebar, storyboard screens
-	// 07/08): replaces the old anchored dropdown with a dismissable left-nav sidebar toggled from
-	// MainView's titlebar. Same pick/add/remove/refresh daemon calls as before (ADR 0025, task
-	// desktop-workspace-switcher) — only the shell moved; MainView still wraps its file view in
-	// `{#key $currentWorkspaceRoot}` so a switch remounts FileView/ConflictBanner.
+	// The workspace menu (task desktop-ui-revamp, the c2 mockup's header dropdown; was a left-nav
+	// sidebar, task desktop-workspace-nav-sidebar): a pill in the AppShell header naming the open
+	// workspace, opening a panel under it with each workspace's open count, the current one
+	// checked, missing roots greyed, and a "Manage workspaces" link to Settings. Same
+	// pick/add/remove/rename/refresh daemon calls as before (ADR 0025); MainView still wraps its
+	// file view in `{#key $currentWorkspaceRoot}` so a switch remounts FileView/ConflictBanner.
+	// The Activity tab stays here until Settings' Activity card takes it over (its own line).
 	//
 	// Esc/outside-click dismiss and focus-on-open/restore-on-close follow
 	// ConflictReviewSheet.svelte's own pattern (this codebase's existing "dismissable floating
@@ -15,16 +17,17 @@
 	// The Activity tab renders ActivityTab.svelte (task desktop-activity-cross-workspace): a
 	// separate component, not inlined here, to keep this file focused on the sidebar shell itself.
 	import { tick } from "svelte";
-	import { fly } from "svelte/transition";
 	import {
 		addWorkspace,
 		listWorkspaces,
 		removeWorkspace,
 		renameWorkspace,
 		switchWorkspace,
+		universalTasks,
 		workspaceRoot,
 		type WorkspaceInfo
 	} from "$lib/daemon";
+	import Icon from "$lib/icons/Icon.svelte";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import ActivityTab from "./ActivityTab.svelte";
 
@@ -43,9 +46,39 @@
 	let asideRef: HTMLElement | undefined = $state();
 	let previouslyFocused: HTMLElement | null = null;
 
+	// Open tasks per workspace root, from the one cross-workspace list the daemon already serves
+	// (`universalTasks`, open lines of each root list); empty when that fetch fails.
+	let openCounts = $state<Map<string, number>>(new Map());
+
 	async function refresh() {
 		workspaces = await listWorkspaces();
+		universalTasks()
+			.then((tasks) => {
+				const counts = new Map<string, number>();
+				for (const t of tasks) counts.set(t.workspace_root, (counts.get(t.workspace_root) ?? 0) + 1);
+				openCounts = counts;
+			})
+			.catch(() => (openCounts = new Map()));
 	}
+
+	/** The folder a root ends in. */
+	function folderOf(root: string): string {
+		return root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+	}
+
+	/** What the trigger and a row call a workspace: its name when it has one, else its folder. */
+	function title(ws: WorkspaceInfo): string {
+		return shownName(ws) || (ws.is_default ? "Default" : folderOf(ws.root));
+	}
+
+	const currentTitle = $derived.by(() => {
+		const ws = workspaces.find((w) => w.root === $currentWorkspaceRoot);
+		return ws ? title(ws) : folderOf($currentWorkspaceRoot ?? "") || "Workspace";
+	});
+	// Fill the trigger's name as soon as the open workspace is known, not only once the menu opens.
+	$effect(() => {
+		if ($currentWorkspaceRoot) refresh().catch(() => {});
+	});
 
 	// The name every paired device shows (task workspace-vanity-name), beside the path only when it
 	// says more than the folder does: a mirror's folder is named by the workspace id.
@@ -211,22 +244,25 @@
 	}
 </script>
 
+<div class="ws-switcher">
 <button
 	type="button"
-	class="nav-toggle"
+	class="ws-trigger"
 	bind:this={toggleRef}
 	onclick={toggle}
 	aria-expanded={open}
 	aria-label={open ? "Close workspace navigation" : "Open workspace navigation"}
+	title={$currentWorkspaceRoot ?? undefined}
 >
-	<span aria-hidden="true">▤</span>
+	<span class="ws-name">{currentTitle}</span>
+	<Icon name="down" />
 </button>
 
 {#if open}
 	<!-- A plain div, not <aside>: svelte-check's a11y rule flags a landmark element (aside) being
 	     given an interactive role like "menu" — same fix ConflictReviewSheet.svelte uses for its
 	     own dialog role. -->
-	<div class="nav-sidebar" role="menu" bind:this={asideRef} transition:fly={{ x: -280, duration: 180 }}>
+	<div class="ws-menu" role="menu" bind:this={asideRef}>
 		<div class="tabs" role="tablist" aria-label="Workspace navigation">
 			<button
 				type="button"
@@ -281,10 +317,19 @@
 									disabled={busy}
 									title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
 								>
-									{#if ws.is_default}<span class="default-label">Default</span>{/if}
-									{#if ws.is_remote}<span class="default-label" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
-									{#if shownName(ws)}<span class="default-label">{shownName(ws)}</span>{/if}
-									{ws.root}
+									<span class="mark-slot" aria-hidden="true">
+										{#if ws.root === $currentWorkspaceRoot}<Icon name="check" />{/if}
+									</span>
+									<span class="entry-text">
+										<span class="entry-title">
+											{title(ws)}
+											{#if ws.is_remote}<span class="tag" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
+										</span>
+										<span class="entry-path">{ws.root}</span>
+									</span>
+									{#if openCounts.has(ws.root)}
+										<span class="count" title="Open tasks">t {openCounts.get(ws.root)}</span>
+									{/if}
 									{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
 									{#if ws.load_state === "queued" || ws.load_state === "loading"}
 										<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
@@ -326,6 +371,7 @@
 					/>
 					<button type="submit" disabled={busy}>Add</button>
 				</form>
+				<a class="manage" href="/settings#workspaces" onclick={closeSidebar}>Manage workspaces</a>
 			</div>
 		{:else}
 			<div id="nav-panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-activity">
@@ -334,31 +380,64 @@
 		{/if}
 	</div>
 {/if}
+</div>
 
 <style>
-	.nav-toggle {
-		background: transparent;
-		border: 1px solid var(--color-border);
-		border-radius: 6px;
-		padding: 0.25rem 0.5rem;
-		color: inherit;
-		cursor: pointer;
-		font-size: 1rem;
-		line-height: 1;
+	.ws-switcher {
+		position: relative;
+		flex-shrink: 0;
 	}
 
-	.nav-sidebar {
-		position: fixed;
-		inset: 0 auto 0 0;
-		z-index: 20;
-		width: min(24rem, 85vw);
+	.ws-trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 14rem;
+		padding: 0.25rem 0.5rem;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		--icon-size: 0.875rem;
+	}
+
+	.ws-trigger:hover,
+	.ws-trigger[aria-expanded="true"] {
+		background: var(--color-base-200);
+	}
+
+	.ws-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	/* The mockup's dropdown: a 2px ink outline, rounded box, under the trigger. */
+	.ws-menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		left: 0;
+		z-index: 30;
 		display: flex;
 		flex-direction: column;
-		background: var(--color-bg-elevated);
-		color: var(--color-text);
-		border-right: 1px solid var(--color-border);
-		box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+		width: min(24rem, 90vw);
+		max-height: 70vh;
 		padding: 0.5rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: var(--radius-box);
+		background: var(--color-base-100);
+		color: var(--color-base-content);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+	}
+
+	.manage {
+		margin-top: 0.5rem;
+		padding: 0.35rem 0.4rem;
+		color: inherit;
+		font-weight: 700;
 	}
 
 	.tabs {
@@ -405,7 +484,11 @@
 	}
 
 	.entry {
+		display: flex;
 		flex: 1;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
 		text-align: left;
 		background: transparent;
 		border: none;
@@ -418,8 +501,43 @@
 		white-space: nowrap;
 	}
 
-	li.current .entry {
-		font-weight: 600;
+	.mark-slot {
+		display: inline-flex;
+		flex: none;
+		width: 1rem;
+		--icon-size: 1rem;
+	}
+
+	.entry-text {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.entry-title {
+		font-weight: 700;
+	}
+
+	.entry-path {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		opacity: 0.6;
+	}
+
+	.tag {
+		margin-left: 0.35rem;
+		font-weight: 400;
+		opacity: 0.7;
+	}
+
+	.count {
+		flex: none;
+		padding: 0 0.45rem;
+		border-radius: 999px;
+		background: var(--color-base-content);
+		color: var(--color-base-100);
+		font-weight: 700;
 	}
 
 	/* tasks/test-registry-leak-cleanup: a dead (deleted or never-real) temp-dir registration
@@ -451,10 +569,6 @@
 		background: var(--color-hover-overlay);
 	}
 
-	.default-label {
-		font-weight: 600;
-		margin-right: 0.4rem;
-	}
 	.remove {
 		background: transparent;
 		border: none;

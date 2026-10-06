@@ -503,7 +503,7 @@
 
 	/* Same field look as DetailView's "Add a sub-task" input. */
 	.add-line {
-		margin: 0 0 0.4rem;
+		margin: 0.5rem 1rem 0.4rem;
 	}
 
 	.add-line input {
