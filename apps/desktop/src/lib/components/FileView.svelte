@@ -117,7 +117,8 @@
 	let baselineWorkspace = "";
 	// The daemon's task id per line of `baseline` (`FileContents.task_ids`), for the top input's move.
 	let baselineTaskIds: string[] = [];
-	// The "Add a line…" input above the list (root todo line on it; TUI `list.add_on_top`).
+	// The "Add a line…" input above a sub-list (root todo line on it; TUI `list.add_on_top`); the
+	// root list adds through the prompt bar instead.
 	let newLine = $state("");
 	let adding = $state(false);
 	// A pending "the human only moved a line" save (task desktop-reorder-propagates): a reorder
@@ -576,18 +577,22 @@
 		<p class="error" role="alert">{commitError}</p>
 	{/if}
 
-	<form class="add-line" onsubmit={addOnTop}>
-		<input
-			type="text"
-			aria-label="Add a line"
-			placeholder="Add a line…"
-			bind:value={newLine}
-			disabled={adding || hasPendingReview}
-			onkeydown={(e) => {
-				if (e.key === "Escape") newLine = "";
-			}}
-		/>
-	</form>
+	<!-- Sub-lists only: the root list adds through the prompt bar at the foot of the window, which
+	     puts the line at the top the same way (2026-10-06 feedback). A sub-list has no other add. -->
+	{#if depth > 0}
+		<form class="add-line" onsubmit={addOnTop}>
+			<input
+				type="text"
+				aria-label="Add a line"
+				placeholder="Add a line…"
+				bind:value={newLine}
+				disabled={adding || hasPendingReview}
+				onkeydown={(e) => {
+					if (e.key === "Escape") newLine = "";
+				}}
+			/>
+		</form>
+	{/if}
 
 	<div class="editor-shell" bind:this={containerEl}></div>
 </div>

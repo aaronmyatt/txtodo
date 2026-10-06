@@ -28,7 +28,7 @@ test.afterEach(() => {
 	daemon.dispose();
 });
 
-test("main view: 10k-line fixture shows id-hidden, ref/progress, and the add-a-line input", async ({
+test("main view: 10k-line fixture shows id-hidden, ref/progress, and the prompt bar", async ({
 	page
 }) => {
 	// Structural assertions first (fast, and pin down *why* a future pixel diff would fail) —
@@ -38,8 +38,9 @@ test("main view: 10k-line fixture shows id-hidden, ref/progress, and the add-a-l
 	await expect(page.locator(".cm-todotxt-strike").first()).toBeVisible();
 	await expect(page.locator(".cm-lineNumbers")).toHaveCount(1); // the gutter (desktop-ui-revamp)
 
-	// The add input sits above the list, not as ghost text on its last line.
-	await expect(page.getByRole("textbox", { name: "Add a line" })).toBeVisible();
+	// The root list adds through the prompt bar (2026-10-06): no input above it, no ghost text.
+	await expect(page.getByRole("textbox", { name: "Add a line" })).toHaveCount(0);
+	await expect(page.getByRole("textbox", { name: "Add a task" })).toBeVisible();
 	await expect(page.locator(".cm-todotxt-add-line-placeholder")).toHaveCount(0);
 
 	await expect(page).toHaveScreenshot("main-view.png");
