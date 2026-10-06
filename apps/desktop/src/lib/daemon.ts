@@ -70,6 +70,8 @@ export type Mutation =
 	| { kind: "edit"; task: TaskRef; new_line: string }
 	| { kind: "move"; task: TaskRef; to_path: string }
 	| { kind: "delete"; task: TaskRef; leave_blank: boolean }
+	// Reorders within the document: `task` lands right before `before` (daemon `MoveBefore`).
+	| { kind: "move_before"; task: TaskRef; before: TaskRef }
 	// The whole document, compare-and-swap against `base_hash` (`FileContents.hash`). Must be the
 	// only mutation of its `applyMutations` call. See `$lib/todotxt/saveBuffer.ts`.
 	| { kind: "replace"; base_hash: string; contents: string };

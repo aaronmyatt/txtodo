@@ -272,6 +272,14 @@ pub enum MutationDto {
         /// `todo.sh` leaves a blank line by default.
         leave_blank: bool,
     },
+    /// Moves a task line right before another in the same document (`pb::MoveBefore`): the top
+    /// "Add a line" input's second step (root todo line on the add input; TUI `list.add_on_top`).
+    MoveBefore {
+        /// The line to move.
+        task: TaskRefDto,
+        /// The line it lands in front of.
+        before: TaskRefDto,
+    },
     /// The whole document, compare-and-swap (`pb::Replace`, daemon `replace.rs`): refused unless
     /// the document's hash is still `base_hash`, else reconciled like an external edit, so an
     /// untouched line keeps its identity and a moved line is a move. The editor saves with it
@@ -305,6 +313,12 @@ impl From<MutationDto> for pb::Mutation {
                 task: Some(task.into()),
                 leave_blank,
             }),
+            MutationDto::MoveBefore { task, before } => {
+                pb::mutation::Kind::MoveBefore(pb::MoveBefore {
+                    task: Some(task.into()),
+                    before: Some(before.into()),
+                })
+            }
             MutationDto::Replace {
                 base_hash,
                 contents,
@@ -351,6 +365,18 @@ mod tests {
         assert!(unhex("abc").is_empty(), "odd length");
         assert!(unhex("zz").is_empty(), "not hex");
         assert!(unhex("é0").is_empty(), "not ascii");
+    }
+
+    #[test]
+    fn a_move_before_mutation_names_both_lines() {
+        let json = r#"{"kind":"move_before","task":{"line_number":6,"task_id":""},"before":{"line_number":2,"task_id":"01M2T868JD32M84JQQ2ABASXW4"}}"#;
+        let dto: MutationDto = serde_json::from_str(json).unwrap_or_else(|e| panic!("{e}"));
+        let pb::Mutation { kind } = dto.into();
+        let Some(pb::mutation::Kind::MoveBefore(m)) = kind else {
+            panic!("expected MoveBefore");
+        };
+        assert_eq!(m.task.map(|t| t.line_number), Some(6));
+        assert_eq!(m.before.map(|t| t.line_number), Some(2));
     }
 
     #[test]

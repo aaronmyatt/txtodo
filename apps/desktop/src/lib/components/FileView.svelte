@@ -20,7 +20,6 @@
 	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo, type Mutation } from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import {
-		addLinePlaceholder,
 		idTagsHidden,
 		lineDecorations,
 		longLineHint,
@@ -28,6 +27,7 @@
 	} from "$lib/todotxt/decorations";
 	import { hoverLine, setHoverLine } from "$lib/todotxt/hoverLine";
 	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
+	import { addOnTopMutations } from "$lib/todotxt/addOnTop";
 	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
@@ -85,6 +85,11 @@
 	// and its unmount save runs after the bridge has moved on to the new workspace: the save names
 	// this root so the bridge can refuse it, and a refusal is parked under it (finding 4).
 	let baselineWorkspace = "";
+	// The daemon's task id per line of `baseline` (`FileContents.task_ids`), for the top input's move.
+	let baselineTaskIds: string[] = [];
+	// The "Add a line…" input above the list (root todo line on it; TUI `list.add_on_top`).
+	let newLine = $state("");
+	let adding = $state(false);
 	// A pending "the human only moved a line" save (task desktop-reorder-propagates): a reorder
 	// reaches the file at once, typed text still waits for blur or Cmd-S.
 	const REORDER_SAVE_DELAY_MS = 300;
@@ -138,7 +143,6 @@
 			todotxtLanguage,
 			mainViewBaseTheme,
 			idTagsHidden, // always hidden — §3.1
-			addLinePlaceholder,
 			longLineHint, // root todo 9
 			lineDecoCompartment.of(lineDecorations(path, filesByPath)),
 			hoverLine,
@@ -342,6 +346,7 @@
 			loadError = "";
 			baseline = contents.text;
 			baselineHash = contents.hash;
+			baselineTaskIds = contents.task_ids ?? [];
 			baselineWorkspace = get(currentWorkspaceRoot);
 			const current = view.state.doc.toString();
 			if (current !== contents.text) {
@@ -350,6 +355,27 @@
 		} catch (e) {
 			if (seq !== refreshSeq) return; // a newer refresh already superseded this one
 			loadError = String(e);
+		}
+	}
+
+	/** The top input's Enter: an unsaved buffer goes first (its line numbers must be the daemon's),
+	 * then the new line as `add` + `move_before` the first task (`$lib/todotxt/addOnTop.ts`). The
+	 * daemon's `Change` repaints the list. A refusal shows on `commitError`; the text stays. */
+	async function addOnTop(e: SubmitEvent) {
+		e.preventDefault();
+		const line = newLine.trim();
+		if (!line || adding) return;
+		adding = true;
+		try {
+			if (dirty) await commit();
+			if (dirty) return; // the buffer was refused: its error is already showing
+			await applyMutations(path, addOnTopMutations(baseline, baselineTaskIds, line), baselineWorkspace);
+			newLine = "";
+			commitError = "";
+		} catch (err) {
+			commitError = String(err);
+		} finally {
+			adding = false;
 		}
 	}
 
@@ -445,6 +471,19 @@
 		<p class="error" role="alert">{commitError}</p>
 	{/if}
 
+	<form class="add-line" onsubmit={addOnTop}>
+		<input
+			type="text"
+			aria-label="Add a line"
+			placeholder="Add a line…"
+			bind:value={newLine}
+			disabled={adding || hasPendingReview}
+			onkeydown={(e) => {
+				if (e.key === "Escape") newLine = "";
+			}}
+		/>
+	</form>
+
 	<div class="editor-shell" bind:this={containerEl}></div>
 </div>
 
@@ -460,6 +499,20 @@
 		flex: 1;
 		min-height: 0;
 		height: 100%;
+	}
+
+	/* Same field look as DetailView's "Add a sub-task" input. */
+	.add-line {
+		margin: 0 0 0.4rem;
+	}
+
+	.add-line input {
+		width: 100%;
+		font: inherit;
+		padding: 0.4rem 0.6rem;
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+		background: var(--color-surface);
 	}
 
 	.error {

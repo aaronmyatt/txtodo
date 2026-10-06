@@ -87,7 +87,7 @@ id = "list.add_on_top"
 title = "Add a line from the row on top; it lands at the top of the list"
 keys = []
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (an input above the list)" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
 deviation = ""
 
