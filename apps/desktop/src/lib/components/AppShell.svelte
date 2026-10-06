@@ -1,8 +1,8 @@
 <script lang="ts">
-	// The window's frame on every page (task desktop-ui-revamp, the c2 mockup's header): the mark and
-	// wordmark, the workspace menu, the header search, the Tasks / Universal / Settings switch and
-	// the pin / theme / help buttons, over the page's own content. Replaces the per-page top bars
-	// MainView, the universal, devices and help pages each drew.
+	// The window's frame on every page (task desktop-ui-revamp, the c2 mockup's header): the mark
+	// alone (no wordmark, 2026-10-06 feedback), the workspace menu, the header search, the Tasks /
+	// Universal / Settings switch and the pin / theme / help buttons, over the page's own content.
+	// Replaces the per-page top bars MainView, the universal, devices and help pages each drew.
 	// Ref: https://svelte.dev/docs/kit/$app-state#page
 	import type { Snippet } from "svelte";
 	import { goto } from "$app/navigation";
@@ -102,7 +102,6 @@
 	<header class="header">
 		<a href="/" class="brand" aria-label="txtodo, Tasks">
 			<Mark class="brand-mark" />
-			<span class="wordmark">txtodo</span>
 		</a>
 		<WorkspaceSwitcher />
 
@@ -199,12 +198,6 @@
 		--mark-size: 1.75rem;
 	}
 
-	.wordmark {
-		font-family: var(--font-brand);
-		font-size: 0.875rem;
-		font-weight: 700;
-		letter-spacing: -0.05em;
-	}
 
 	.search {
 		display: flex;
