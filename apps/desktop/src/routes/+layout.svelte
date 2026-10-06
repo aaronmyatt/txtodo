@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	// Tailwind/DaisyUI layers first, so app.css (unlayered) still wins wherever both style a thing.
+	import "../tailwind.css";
 	import "../app.css";
 	// Brand typeface for the "txtodo" wordmark (MainView's <h1>, --font-brand in app.css), bundled by
 	// Vite from the Fontsource package, latin 700 only. Self-hosted, not Google Fonts: the app and

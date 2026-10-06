@@ -1,6 +1,7 @@
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import tailwindcss from "@tailwindcss/vite";
 // `@types/node` is now present (pulled in as a `vitest` peer devDependency for
 // `src/devices/*.test.ts`), so `node:process` no longer needs a `@ts-expect-error` suppression.
 import process from "node:process";
@@ -8,7 +9,8 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [sveltekit()],
+  // https://tailwindcss.com/docs/installation/using-vite
+  plugins: [tailwindcss(), sveltekit()],
 
   // The CSS floor (task desktop-ui-revamp): the revamp's CSS (Tailwind 4, `color-mix()`, `:has()`,
   // `@layer`, `oklch()`) needs Safari 16.4's engine. macOS 13.3 ships it in WKWebView; Tauri 2's

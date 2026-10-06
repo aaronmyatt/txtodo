@@ -1,0 +1,13 @@
+/* Tailwind 4 + DaisyUI 5, built at compile time (task desktop-ui-revamp, decision 1, 2026-09-27).
+   Preflight (Tailwind's reset) and DaisyUI's root colour, scrollbar and scroll-lock bases are left
+   out on purpose: this file adds the utility and component layers without changing a pixel of the
+   app as it is. The themes port turns the rest on, mapped onto app.css's --color-* tokens.
+   Refs: https://tailwindcss.com/docs/installation/using-vite,
+   https://tailwindcss.com/docs/preflight#disabling-preflight, https://daisyui.com/docs/config/ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@plugin "daisyui" {
+	themes: false;
+	exclude: rootcolor, rootscrollgutter, rootscrolllock, scrollbar;
+}
