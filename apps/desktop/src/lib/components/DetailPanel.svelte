@@ -3,6 +3,8 @@
 	// feedback: opening a Universal row's detail must not leave the page). 55% of the height under a
 	// 2px ink rule, scrolling on its own, with a close button; Esc outside an editor closes it too.
 	import Icon from "$lib/icons/Icon.svelte";
+	import { onMount } from "svelte";
+	import { onEditorEscape } from "$lib/escape";
 	import { isTypingTarget } from "$lib/keys";
 	import type { DetailParams } from "$lib/types";
 	import DetailView from "./DetailView.svelte";
@@ -16,11 +18,14 @@
 
 	let { steps, rootPath, onNavigateInto, onNavigateToLevel }: Props = $props();
 
-	/** Esc closes the panel, unless an editor or field took it (it discards there). */
+	/** Esc closes the panel: from the page, and from an editor (which first discards and lets go,
+	 * `$lib/escape.ts`). A form field's own Esc (search, prompt bar, rename) does not. */
 	function onWindowKeydown(e: KeyboardEvent) {
 		if (e.key !== "Escape" || e.defaultPrevented || isTypingTarget(e.target)) return;
 		onNavigateToLevel(0);
 	}
+
+	onMount(() => onEditorEscape(() => onNavigateToLevel(0)));
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />

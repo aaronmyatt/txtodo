@@ -45,8 +45,11 @@ test("Escape discards a pinned-parent edit without writing the file", async ({ p
 	await page.keyboard.type(" scratch, discard me");
 	await page.keyboard.press("Escape");
 
-	await expect(parentLine).not.toContainText("discard me");
-	await expect(parentLine).toContainText("plan the roadmap");
+	// Esc discards, then leaves the editor, which also closes the panel (2026-10-06 feedback).
+	await expect(page.getByRole("region", { name: "Task detail" })).toHaveCount(0);
+	const buffer = page.locator(".buffer .cm-content");
+	await expect(buffer).toContainText("plan the roadmap");
+	await expect(buffer).not.toContainText("discard me");
 
 	// No `Apply` call was ever made — assert the negative after giving the (nonexistent) write a
 	// moment it would have needed to land.

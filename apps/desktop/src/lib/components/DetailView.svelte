@@ -10,6 +10,7 @@
 	// this component never resolves a `ref:` slug or creates a directory itself. It only reads the
 	// parent line's *own* `ref:` tag (via the same `findRefTag` the main view's decorations use) to
 	// know where the sub-list/notes for THIS task already live, if they do.
+	import { leaveEditor } from "$lib/escape";
 	import { onDestroy, onMount } from "svelte";
 	import { EditorState } from "@codemirror/state";
 	import { EditorView, keymap } from "@codemirror/view";
@@ -274,8 +275,9 @@
 						{
 							key: "Escape",
 							preventDefault: true,
-							run: () => {
+							run: (v) => {
 								discardParentEdit();
+								leaveEditor(v.contentDOM);
 								return true;
 							}
 						},

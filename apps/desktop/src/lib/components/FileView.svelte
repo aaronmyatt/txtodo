@@ -11,6 +11,7 @@
 	// detail-view task mounts this again at `depth + 1` for a `ref:` directory's todo.txt.
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
+	import { leaveEditor } from "$lib/escape";
 	import { onDestroy, onMount, untrack } from "svelte";
 	import { Compartment, EditorState } from "@codemirror/state";
 	import {
@@ -153,8 +154,8 @@
 			// https://codemirror.net/docs/ref/#commands) is the keyboard equivalent of a
 			// double-click, opening the detail view for the line under the caret (plan §3.2).
 			// `Mod-s` commits a dirty buffer early (otherwise blur does it); `Escape` discards it,
-			// reverting to `baseline` — everywhere else Escape is unbound today, so this never
-			// shadows another command.
+			// reverting to `baseline`, then leaves the editor (`$lib/escape.ts`: the shortcuts work
+			// again and an open detail panel closes) — Escape is unbound elsewhere in the buffer.
 			keymap.of([
 				{ key: "Mod-Enter", run: openDetailAtSelection },
 				{
@@ -167,9 +168,9 @@
 				},
 				{
 					key: "Escape",
-					run: () => {
-						if (!dirty) return false;
-						discard();
+					run: (v) => {
+						if (dirty) discard();
+						leaveEditor(v.contentDOM);
 						return true;
 					}
 				},

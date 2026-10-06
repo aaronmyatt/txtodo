@@ -16,6 +16,7 @@
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { markdown } from "@codemirror/lang-markdown";
 	import { editNotes, getNotes, type NotesDoc, type TaskRef } from "$lib/daemon";
+	import { leaveEditor } from "$lib/escape";
 
 	const SAVE_DEBOUNCE_MS = 500;
 
@@ -85,7 +86,24 @@
 					EditorView.lineWrapping,
 					markdown(),
 					cmHistory(),
-					keymap.of([...historyKeymap, ...defaultKeymap]),
+					// Esc saves what is pending at once and leaves the editor (`$lib/escape.ts`); notes
+					// save as you type, so there is nothing to discard.
+					keymap.of([
+						{
+							key: "Escape",
+							run: (v) => {
+								if (saveHandle) {
+									clearTimeout(saveHandle);
+									saveHandle = undefined;
+									void save(v.state.doc.toString());
+								}
+								leaveEditor(v.contentDOM);
+								return true;
+							}
+						},
+						...historyKeymap,
+						...defaultKeymap
+					]),
 					EditorView.updateListener.of((u) => {
 						if (u.docChanged) scheduleSave(u.state.doc.toString());
 					})
