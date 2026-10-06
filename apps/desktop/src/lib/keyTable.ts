@@ -58,7 +58,7 @@ export function keyGroups(hotkey: string[]): KeyGroup[] {
 			title: "Universal",
 			rows: [
 				{ keys: [presses("j"), presses("k")], title: "Move" },
-				{ keys: [presses("Enter")], title: "Open where it lives" },
+				{ keys: [presses("Enter")], title: "Open its detail below" },
 				{ keys: [presses("x")], title: "Complete the focused task" }
 			]
 		},

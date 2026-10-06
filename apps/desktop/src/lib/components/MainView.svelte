@@ -3,21 +3,18 @@
 	// here from the old proof-of-pipeline +page.svelte) and the root `todo.txt` file view, which
 	// edits directly (click a line, type — no popover; see FileView.svelte's own module doc).
 	import { onMount } from "svelte";
-	import { get } from "svelte/store";
 	import { daemonStatus, onDaemonStatus, retryConnect, setMainPopoverDirty, workspaceLayout, workspaceRoot, type DaemonStatus, onDaemonChange } from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
 	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
-	import { currentWorkspaceRoot, pendingUniversalNav, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
+	import { currentWorkspaceRoot, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import { editorStatus } from "$lib/stores/editorStatus";
 	import { searchQuery } from "$lib/stores/search";
-	import Icon from "$lib/icons/Icon.svelte";
-	import { isTypingTarget } from "$lib/keys";
 	import ProtocolMismatchBanner from "./ProtocolMismatchBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import { openingWorkspace } from "$lib/stores/loading";
-	import DetailView from "./DetailView.svelte";
+	import DetailPanel from "./DetailPanel.svelte";
 	import FileView from "./FileView.svelte";
 	import SkillHintBanner from "./SkillHintBanner.svelte";
 	import VersionInfo from "./VersionInfo.svelte";
@@ -46,12 +43,6 @@
 		detail = detail.slice(0, stackLength);
 	}
 
-	/** Esc closes the detail panel, unless an editor or field took it (it discards there). */
-	function onWindowKeydown(e: KeyboardEvent) {
-		if (e.key !== "Escape" || detail.length === 0 || e.defaultPrevented || isTypingTarget(e.target)) return;
-		navigateToLevel(0);
-	}
-
 	async function retry() {
 		status = await retryConnect();
 	}
@@ -66,12 +57,7 @@
 	// Detail levels are pinned to whichever workspace was open when they were pushed (a `{file,
 	// line}` pair meaningless in another workspace's file tree) — drop the stack on every switch
 	// so `{#key}` below never remounts `DetailView` with steps that don't resolve in the new root.
-	// The one exception is a switch the universal view itself just triggered (WorkspaceSwitcher's
-	// own `pick()` never sets `pendingUniversalNav`): then this effect opens exactly the level the
-	// universal view asked for instead of dropping back to root, tagged with `workspaceRoot` so
-	// `Breadcrumb` shows the owning project. `get()` (not `$pendingUniversalNav`) is deliberate: a
-	// one-shot read on the root change that triggered it, not a second reactive dependency that
-	// would re-run this effect on every unrelated store write.
+	// (Universal opens its own detail panel in place now, so nothing hands a level over here.)
 	// With nothing picked the app opens the default workspace (task default-workspace), so there is
 	// always a root: the main view stays empty only until the first `workspaceRoot()` answer.
 	// Bumped at the start of every layout fetch (task layout-hot-reload-clients): a reply whose
@@ -104,13 +90,7 @@
 		workspaceLayoutStore.set(DEFAULT_LAYOUT);
 		workspaceLayoutError.set("");
 		void fetchLayout();
-		const pending = get(pendingUniversalNav);
-		if (pending && pending.workspaceRoot === root) {
-			detail = [{ file: pending.file, line: pending.line, workspaceRoot: pending.workspaceRoot }];
-			pendingUniversalNav.set(null);
-		} else {
-			detail = [];
-		}
+		detail = [];
 	});
 
 	onMount(() => {
@@ -134,8 +114,6 @@
 		};
 	});
 </script>
-
-<svelte:window onkeydown={onWindowKeydown} />
 
 <main class="main-view">
 	{#if status !== "connected"}
@@ -181,12 +159,7 @@
 			</div>
 			{#if detail.length > 0}
 				<!-- The detail as a bottom panel (decision 2, 2026-09-27): the buffer above stays. -->
-				<section class="detail-panel" aria-label="Task detail">
-					<button type="button" class="close-detail" aria-label="Close detail" onclick={() => navigateToLevel(0)}>
-						<Icon name="x" />
-					</button>
-					<DetailView steps={detail} rootPath={ROOT_PATH} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
-				</section>
+				<DetailPanel steps={detail} rootPath={ROOT_PATH} onNavigateInto={openDetail} onNavigateToLevel={navigateToLevel} />
 			{/if}
 	{/key}
 	{/if}
@@ -223,35 +196,6 @@
 		min-height: 0;
 	}
 
-	/* The mockup's bottom panel: 55% of the height under a 2px ink rule, scrolling on its own. */
-	.detail-panel {
-		position: relative;
-		flex-shrink: 0;
-		height: 55%;
-		overflow-y: auto;
-		border-top: 2px solid var(--color-base-content);
-		background: var(--color-base-100);
-	}
-
-	.close-detail {
-		position: absolute;
-		top: 0.75rem;
-		right: 0.75rem;
-		z-index: 1;
-		display: inline-flex;
-		padding: 0.3rem;
-		border: 0;
-		border-radius: 999px;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		--icon-size: 1rem;
-	}
-
-	.close-detail:hover {
-		background: var(--color-base-200);
-	}
-
 	.match {
 		margin-left: auto;
 		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
@@ -263,10 +207,6 @@
 		font-size: 0.85rem;
 	}
 
-
-
-
-
 	.main-view {
 		display: flex;
 		flex: 1;
@@ -277,7 +217,6 @@
 		font-family: var(--font-sans);
 	}
 
-
 	.layout-fallback {
 		margin: 0.5rem 1rem;
 		padding: 0.4rem 0.6rem;
@@ -285,6 +224,5 @@
 		border-radius: 4px;
 		font-size: 0.85rem;
 	}
-
 
 </style>

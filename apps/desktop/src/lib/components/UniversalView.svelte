@@ -4,14 +4,24 @@
 	// context / workspace, workspace and context chips, and a show-done toggle, all over one
 	// bounded `universalTasks(true)` fetch (the model is `$lib/universal/rows.ts`). Clicking a row
 	// switches to its workspace and hands MainView a `PendingUniversalNav` so it opens on that line.
-	import { goto } from "$app/navigation";
 	import { onMount, tick } from "svelte";
-	import { switchWorkspace, universalSetDone, universalTasks, universalUndo, type UniversalTask } from "$lib/daemon";
+	import {
+		switchWorkspace,
+		universalSetDone,
+		universalTasks,
+		universalUndo,
+		workspaceLayout,
+		workspaceRoot,
+		type UniversalTask
+	} from "$lib/daemon";
 	import { showToast } from "$lib/stores/toast";
 	import { searchQuery, searchStep, universalHits } from "$lib/stores/search";
 	import { isActiveQuery, matchesQuery } from "$lib/todotxt/query";
 	import { wasmReady } from "$lib/wasmCore";
-	import { pendingUniversalNav } from "$lib/stores/workspaces";
+	import { currentWorkspaceRoot, workspaceLayoutStore } from "$lib/stores/workspaces";
+	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
+	import type { DetailParams } from "$lib/types";
+	import DetailPanel from "./DetailPanel.svelte";
 	import { localToday } from "./editPopoverLogic";
 	import { contextCounts, groupRows, stats, toRows, type GroupKind, type Row, matchLine, wantsDone } from "$lib/universal/rows";
 	import UniversalFilters from "./UniversalFilters.svelte";
@@ -102,15 +112,31 @@
 		$searchQuery = "";
 	}
 
+	// The detail opens here, as the same bottom panel Tasks uses (2026-10-06 feedback: opening it
+	// must not leave Universal). The detail reads through the app's open workspace, so a row from
+	// another one switches to it first, with that workspace's layout for its ref: folders.
+	let detail = $state<DetailParams[]>([]);
+	let detailRoot = $state("todo.txt");
+
 	async function open(task: UniversalTask) {
 		error = "";
 		try {
-			await switchWorkspace(task.workspace_root);
-			pendingUniversalNav.set({ file: task.root_list, line: task.line_number, workspaceRoot: task.workspace_root });
-			await goto("/");
+			if (task.workspace_root !== $currentWorkspaceRoot) {
+				await switchWorkspace(task.workspace_root);
+				$currentWorkspaceRoot = await workspaceRoot();
+				workspaceLayoutStore.set(await workspaceLayout().catch(() => DEFAULT_LAYOUT));
+			}
+			detailRoot = task.root_list;
+			detail = [{ file: task.root_list, line: task.line_number, workspaceRoot: task.workspace_root }];
 		} catch (e) {
 			error = String(e);
 		}
+	}
+
+	/** `0` closes the panel (and refetches: the detail may have changed rows); `n` keeps n levels. */
+	function navigateToLevel(stackLength: number) {
+		detail = detail.slice(0, stackLength);
+		if (stackLength === 0) void refresh();
 	}
 
 	/** One bounded fetch (done lines included, for the `x done` stat and show-done). */
@@ -162,10 +188,11 @@
 <!-- Refetch when the window comes back: one bounded fetch, not a live tail. -->
 <svelte:window onfocus={() => void refresh()} />
 
+<div class="universal-page">
 <main class="universal">
 	<div class="page">
 		<h1>Universal</h1>
-		<p class="lede">Open tasks from every workspace. Click one to open it where it lives.</p>
+		<p class="lede">Open tasks from every workspace. Click one to open its detail here.</p>
 		<p class="keys"><kbd>j</kbd> <kbd>k</kbd> move <kbd>↵</kbd> open <kbd>x</kbd> complete</p>
 
 		{#if error}
@@ -219,8 +246,20 @@
 		{/if}
 	</div>
 </main>
+{#if detail.length > 0}
+	<DetailPanel steps={detail} rootPath={detailRoot} onNavigateInto={(p) => (detail = [...detail, p])} onNavigateToLevel={navigateToLevel} />
+{/if}
+</div>
 
 <style>
+	/* The page above, the detail panel under it when one is open. */
+	.universal-page {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+
 	.universal {
 		flex: 1;
 		min-height: 0;

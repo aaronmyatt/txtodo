@@ -81,3 +81,17 @@ test("a line with the same context twice renders, with one chip for it", async (
 	await expect(row(page, "call mum")).toBeVisible();
 	await expect(page.getByRole("group", { name: "Filter by context" }).getByRole("button", { name: /@phone/ })).toHaveCount(1);
 });
+
+// 2026-10-06 feedback: a row's detail opens on Universal itself, as the Tasks page's bottom panel.
+test("opening a row shows its detail here, without leaving Universal", async ({ page }) => {
+	await openUniversal(page);
+	await row(page, "call mum").locator("button.open").click();
+	const panel = page.getByRole("region", { name: "Task detail" });
+	await expect(panel).toBeVisible();
+	await expect(panel).toContainText("call mum");
+	await expect(page).toHaveURL(/\/universal$/);
+	await expect(page.getByRole("heading", { name: "Universal", level: 1 })).toBeVisible();
+
+	await page.getByRole("button", { name: "Close detail" }).click();
+	await expect(panel).toHaveCount(0);
+});

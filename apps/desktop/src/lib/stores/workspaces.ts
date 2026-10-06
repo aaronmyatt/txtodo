@@ -17,15 +17,3 @@ export const workspaceLayoutStore = writable<RefLayout>(DEFAULT_LAYOUT);
  * desktop-notes-hidden): MainView shows it instead of silently assuming `tasks/`. */
 export const workspaceLayoutError = writable<string>("");
 
-/** One detail level the universal view (ADR 0025, task desktop-universal-view) asked MainView to
- * open after switching workspaces — consumed exactly once by MainView's own
- * `$currentWorkspaceRoot` effect, which is what actually pushes it onto the detail stack (see
- * that effect's doc comment for why the consumption has to live there, not here). `null` means
- * nothing is pending; a plain value, not a queue, since only one switch is ever in flight. */
-export interface PendingUniversalNav {
-	file: string;
-	line: number;
-	workspaceRoot: string;
-}
-
-export const pendingUniversalNav = writable<PendingUniversalNav | null>(null);
