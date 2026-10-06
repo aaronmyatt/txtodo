@@ -1,7 +1,10 @@
 2026-10-06 text_input: line start/end and readline word back/forward (UAX 29 word bounds), unit tests with +project, due:, CJK and emoji +m11 @tui
-2026-10-06 keymap + manifest: Ctrl-a, Ctrl-e, Alt-b/Alt-Left, Alt-f/Alt-Right in scope edit, acting on the focused field; desktop differs +m11 @tui @parity
-2026-10-06 Wire the motions into every field: line and sub-line editor, parent, prompt bar, notes (logical line), search, : line, Settings filter and field +m11 @tui
-2026-10-06 Prompt bar: Alt-b is word back now; the (B) chip key moves to Alt-B; chip hints, Help and the manifest deviation updated +m11 @tui
+2026-10-06 text_input: kill and yank: Ctrl-W and Alt-Backspace (word back), Alt-D (word forward), Ctrl-U and Ctrl-K (to line start/end), Ctrl-Y yanks the last kill +m11 @tui
+2026-10-06 text_input: Ctrl-B/Ctrl-F by character, Ctrl-D and Ctrl-H delete, Ctrl-T and Alt-T transpose characters/words, Alt-U/Alt-L/Alt-C upper/lower/capitalize a word +m11 @tui
+2026-10-06 text_input: per-field undo, Ctrl-_ takes back the field's last edit (readline undo), apart from the list's u +m11 @tui
+2026-10-06 keymap + manifest: every motion and edit above (Ctrl-a/e, Alt-b/f and Alt-Left/Right, kill, yank, character, transpose, case, Ctrl-_) in scope edit, acting on the focused field; desktop status per key +m11 @tui @parity
+2026-10-06 Wire the motions and edits into every field: line and sub-line editor, parent, prompt bar, notes (logical line; Ctrl-K at a line end joins the next), search, : line, Settings filter and field +m11 @tui
+2026-10-06 Prompt bar: every chip key moves to Alt-Shift (Alt-A, Alt-B, Alt-C, Alt-X, Alt-P, Alt-O, Alt-D, Alt-T, Alt-R), freeing the Alt letters for readline; chip hints, Help and the manifest deviation updated +m11 @tui
 2026-10-06 Help: say Alt keys need Option sent as Meta, naming the Terminal.app, iTerm2 and Ghostty settings +m11 @tui
 2026-10-06 Tests: one input test per field kind for each motion; parity test green +m11 @tui @test
-2026-10-06 Human pass: the motions in Ghostty, iTerm2 and Terminal.app, Option-as-Meta on and off +m11 @tui @human
+2026-10-06 Human pass: the motions and edits in Ghostty, iTerm2 and Terminal.app, Option-as-Meta on and off +m11 @tui @human
