@@ -361,3 +361,18 @@ Editor and prompt bar can run in parallel after the shell; Settings needs `edito
   RPCs), Tokens (table + `NewTokenDialog`, secret once, never logged), Activity (`ActivityCard`,
   opLogAll, glyph per principal; the workspace menu's tab bar is gone). Dead now: `devices/api.ts`
   `opLog` and the Rust `op_log` command (line 50).
+- 2026-10-06: tests, perf, a11y, cleanup. The dev mock answers every invoked command
+  (`mock/coverage.test.ts` fails otherwise). The e2e bridge runs the shipped Universal code
+  (`universal_rows`, `set_done`, `undo` are pub in `desktop_lib`). New specs: search, universal,
+  settings, detail-panel, a11y, quick-add-window, prompt-bar. They found two real bugs: Undo after
+  a completion reverted one op of several (fixed: Undo takes the toggle's `applied` count), and
+  the workspace menu's counts fetch at startup cost the 10k first paint ~500 ms (fixed: fetched on
+  open). Visual: 32 darwin goldens, `e2e/visual/stable.css` blanks the random workspace name; CI
+  still skips e2e/visual. Perf: first paint ~312 ms of 500; a search keystroke 10-35 ms of a new
+  50 ms budget. A11y: every control named, rings on every Tab stop (the header search gained one),
+  `contrast.test.ts` holds AA for both themes from app.css, app-wide reduced motion. Tray: the mark
+  as a macOS template image from raw RGBA (no new crate). Dead code removed (op_log, OpEvent,
+  parseLineStrict, nine CSS tokens). Uncaught errors and render crashes go to desktop.log.
+  Still open: the human pass (line 49) and the @parity lines, which are features in their own
+  right (list mode, `u`, sync indicator, offers, drag, the UniversalTasks RPC, manifest-driven
+  help, menu keys).
