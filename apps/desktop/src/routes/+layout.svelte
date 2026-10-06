@@ -14,18 +14,12 @@
 	import "@fontsource/jetbrains-mono/latin-700.css";
 	import { resolvedTheme } from "$lib/stores/theme";
 	import { editorPrefs } from "$lib/stores/editorPrefs";
-	import { getCurrentWindow } from "@tauri-apps/api/window";
+	import { isQuickAddWindow } from "$lib/windowLabel";
 	import AppShell from "$lib/components/AppShell.svelte";
 
 	// The quick-add window (routes/+page.svelte) is a bare popover: no header. Outside a Tauri
 	// webview (`npm run dev`, Playwright) there is no window label, so the shell shows.
-	const isQuickAdd = (() => {
-		try {
-			return getCurrentWindow().label === "quick-add";
-		} catch {
-			return false;
-		}
-	})();
+	const isQuickAdd = isQuickAddWindow();
 
 	let { children }: { children: Snippet } = $props();
 

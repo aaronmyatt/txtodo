@@ -66,7 +66,7 @@ fn quick_add_shortcut() -> Shortcut {
 pub fn create_window(app: &AppHandle) -> tauri::Result<()> {
     WebviewWindowBuilder::new(app, QUICK_ADD_LABEL, WebviewUrl::App("index.html".into()))
         .title("Quick add")
-        .inner_size(420.0, 120.0)
+        .inner_size(480.0, 150.0)
         .resizable(false)
         .always_on_top(true)
         .decorations(false)

@@ -13,6 +13,21 @@
 	import LineEditor from "./LineEditor.svelte";
 	import { CHIPS } from "./editPopoverLogic";
 
+	interface Props {
+		/** The Quick Add window's own bar: chips always shown in the flow, no top rule, the field
+		 * takes the keyboard on mount. */
+		windowed?: boolean;
+		/** Which list to add to, asked right before each add; the open workspace's root list by
+		 * default. The Quick Add window has its own JS context, so it asks the daemon instead. */
+		resolvePath?: () => Promise<string>;
+		/** After a successful add (the window hides itself). */
+		onAdded?: () => void;
+		/** Esc; by default the keyboard goes back to the buffer. */
+		onEscape?: () => void;
+	}
+
+	let { windowed = false, resolvePath, onAdded, onEscape }: Props = $props();
+
 	let editor: LineEditor | undefined = $state();
 	let focused = $state(false);
 	let error = $state("");
@@ -25,8 +40,10 @@
 		adding = true;
 		error = "";
 		try {
-			await applyMutations($workspaceLayoutStore.todo_file || "todo.txt", [{ kind: "add", line: text }]);
+			const path = resolvePath ? await resolvePath() : $workspaceLayoutStore.todo_file || "todo.txt";
+			await applyMutations(path, [{ kind: "add", line: text }]);
 			editor?.setText("");
+			onAdded?.();
 		} catch (e) {
 			error = String(e);
 		} finally {
@@ -36,20 +53,22 @@
 
 	// The Quick Add hotkey with this window frontmost lands here (`quick_add.rs`).
 	onMount(() => {
+		if (windowed) return;
 		const off = onPromptBarFocus(() => editor?.focus());
 		return () => void off.then((f) => f());
 	});
 
 	/** Esc: back to the buffer (the root list's editor), or simply out of the bar. */
 	function leave() {
+		if (onEscape) return onEscape();
 		const buffer = document.querySelector<HTMLElement>(".buffer .cm-content");
 		if (buffer) buffer.focus();
 		else (document.activeElement as HTMLElement | null)?.blur();
 	}
 </script>
 
-<div class="prompt" class:focused>
-	{#if focused}
+<div class="prompt" class:focused class:windowed>
+	{#if focused || windowed}
 		<!-- mousedown is prevented so a chip never takes the keyboard from the editor. -->
 		<div class="chips" role="toolbar" aria-label="Insert a token">
 			{#each CHIPS as c (c.chip)}
@@ -66,6 +85,7 @@
 				bind:this={editor}
 				placeholder="a new task +project @context"
 				label="Add a task"
+				autofocus={windowed}
 				onSubmit={add}
 				onCancel={leave}
 				onFocusChange={(f) => (focused = f)}
@@ -89,6 +109,21 @@
 		padding: 0.75rem 1rem 0.25rem;
 		border-top: 2px solid var(--color-base-content);
 		background: var(--color-base-100);
+	}
+
+	/* The Quick Add window: the bar is the whole window, so no rule and the chips sit in the flow. */
+	.windowed {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		height: 100%;
+		box-sizing: border-box;
+		padding: 0.75rem 1rem 0.25rem;
+		border-top: 0;
+	}
+
+	.windowed .chips {
+		position: static;
 	}
 
 	.row {

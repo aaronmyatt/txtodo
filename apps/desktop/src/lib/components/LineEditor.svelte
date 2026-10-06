@@ -91,6 +91,16 @@
 		}, HINT_AFTER_MS);
 	}
 
+	// A field, not a buffer. `EditorView.theme` is scoped to this editor and outranks the main
+	// buffer's `baseTheme` (decorations.ts), whose padding and line height otherwise reach every
+	// editor on the page. https://codemirror.net/docs/ref/#view.EditorView^theme
+	const fieldTheme = EditorView.theme({
+		"&": { fontSize: "inherit" },
+		".cm-scroller": { lineHeight: "1.6" },
+		".cm-content": { padding: "0.35rem 0" },
+		".cm-line": { padding: "0" }
+	});
+
 	onMount(() => {
 		view = new EditorView({
 			state: EditorState.create({
@@ -100,7 +110,11 @@
 					cmHistory(),
 					singleLineFilter(),
 					cmPlaceholder(placeholder),
-					EditorView.contentAttributes.of({ "aria-label": label }),
+					// `autofocus` too, or SvelteKit's focus reset after the first navigation takes the
+					// keyboard back to <body>; it keeps an `[autofocus]` element focused instead.
+					// https://svelte.dev/docs/kit/accessibility#Focus-management
+					EditorView.contentAttributes.of(autofocus ? { "aria-label": label, autofocus: "" } : { "aria-label": label }),
+					fieldTheme,
 					// Enter submits, Esc cancels, ahead of the default keymap's newline.
 					// https://codemirror.net/docs/ref/#state.Prec
 					Prec.highest(

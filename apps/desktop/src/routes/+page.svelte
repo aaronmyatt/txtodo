@@ -7,18 +7,11 @@
 	//
 	// One static build serving both windows by label, rather than a second SvelteKit route, is a
 	// deliberate choice — see QuickAdd.svelte's module doc for why.
-	import { getCurrentWindow } from "@tauri-apps/api/window";
+	import { isQuickAddWindow } from "$lib/windowLabel";
 	import MainView from "$lib/components/MainView.svelte";
 	import QuickAdd from "$lib/components/QuickAdd.svelte";
 
-	// `getCurrentWindow()` throws outside a real Tauri webview (e.g. `npm run dev`'s plain-browser
-	// preview, or a Playwright test driving the page directly) — fall back to the main view there.
-	let isQuickAdd = false;
-	try {
-		isQuickAdd = getCurrentWindow().label === "quick-add";
-	} catch {
-		isQuickAdd = false;
-	}
+	const isQuickAdd = isQuickAddWindow();
 </script>
 
 {#if isQuickAdd}
