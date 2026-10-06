@@ -7,6 +7,7 @@
 	import { activeSection, SECTIONS, sectionMatches } from "$lib/settings/sections";
 	import SettingsCard from "$lib/components/SettingsCard.svelte";
 	import GeneralSettings from "$lib/components/settings/GeneralSettings.svelte";
+	import AppearanceSettings from "$lib/components/settings/AppearanceSettings.svelte";
 	import Devices from "../../devices/Devices.svelte";
 	import Tokens from "../../devices/Tokens.svelte";
 	import ActivityFeed from "../../devices/ActivityFeed.svelte";
@@ -14,6 +15,7 @@
 	/** The cards built so far, by section id; a section without one is not shown yet. */
 	const BODIES: Record<string, { body: Snippet; headless?: boolean }> = {
 		general: { body: general },
+		appearance: { body: appearance },
 		devices: { body: devices, headless: true },
 		tokens: { body: tokens, headless: true },
 		activity: { body: activity, headless: true }
@@ -56,6 +58,7 @@
 </script>
 
 {#snippet general()}<GeneralSettings />{/snippet}
+{#snippet appearance()}<AppearanceSettings />{/snippet}
 {#snippet devices()}<Devices />{/snippet}
 {#snippet tokens()}<Tokens />{/snippet}
 {#snippet activity()}<ActivityFeed />{/snippet}
