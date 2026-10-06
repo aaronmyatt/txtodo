@@ -4,7 +4,7 @@
 // daemon is the only source of truth.
 // Ref: https://v2.tauri.app/develop/calling-rust/
 import { invoke } from "$lib/tauriShim";
-import type { Device, DeviceRemoveResult, OffersProblem, PairOffer, PairResult, Scope, Token } from "./types";
+import type { Device, DeviceRemoveResult, Offers, OffersProblem, PairOffer, PairResult, Scope, Token } from "./types";
 
 /** Why offers from paired devices are blocked, if they are (empty `problem` when not). */
 export function offersProblem(): Promise<OffersProblem> {
@@ -53,4 +53,19 @@ export function deviceList(): Promise<Device[]> {
  * this device and the last one. */
 export function deviceRemove(id: string): Promise<DeviceRemoveResult> {
 	return invoke("device_remove", { id });
+}
+
+/** Workspaces paired devices have offered this device (`WorkspacePendingOffers`). */
+export function workspaceOffers(): Promise<Offers> {
+	return invoke("workspace_offers");
+}
+
+/** Accepts an offer: the daemon mirrors that workspace into its own folder. */
+export function acceptOffer(offeringDevice: string, workspaceId: string): Promise<unknown> {
+	return invoke("accept_offer", { offeringDevice, workspaceId });
+}
+
+/** Declines an offer; false when there was no such offer. */
+export function declineOffer(offeringDevice: string, workspaceId: string): Promise<boolean> {
+	return invoke("decline_offer", { offeringDevice, workspaceId });
 }

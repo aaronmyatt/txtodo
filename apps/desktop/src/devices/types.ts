@@ -138,3 +138,19 @@ export interface DeviceRemoveResult {
 	rotated_to_epoch: number;
 	message: string;
 }
+
+/** One workspace a paired device offered (`OfferDto`). */
+export interface Offer {
+	offering_device: string;
+	workspace_id: string;
+	/** A label only; never identity. */
+	name: string;
+	/** The offering device's clock at the offer, unix ms. */
+	offered_at_ms: number;
+}
+
+/** Pending offers; `problem` is set when offers are blocked (then an empty list means blocked). */
+export interface Offers {
+	offers: Offer[];
+	problem: string;
+}

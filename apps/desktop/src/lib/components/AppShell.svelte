@@ -97,7 +97,8 @@
 		if (hit.kind === "command" && isListCommand(hit.id) && !listMode) return;
 		e.preventDefault();
 		if (hit.kind !== "command") return;
-		if (isListCommand(hit.id)) runListCommand(hit.id);
+		if (hit.id === "offers.open") void goto("/settings#offers");
+		else if (isListCommand(hit.id)) runListCommand(hit.id);
 		else if (hit.id === "search.focus") searchEl?.focus();
 		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);
 	}

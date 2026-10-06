@@ -4,6 +4,7 @@
 //! The Universal ones do not restate their bodies: they call the same `desktop_lib` functions
 //! the Tauri commands do, so a Playwright spec exercises the shipped code against a real daemon.
 
+use desktop_lib::commands_offers::offers_with;
 use desktop_lib::commands_sync::SyncStatusDto;
 use desktop_lib::commands_universal::universal_rows;
 use desktop_lib::commands_universal_edit::{RowRef, set_done, undo, undo_change_with};
@@ -15,8 +16,9 @@ use super::activity::cmd_op_log_all;
 use super::{ApiError, parse};
 
 /// The commands this module answers; the caller checks membership first.
-pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 6] = [
+pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 7] = [
     "op_log_all",
+    "workspace_offers",
     "sync_status",
     "universal_tasks",
     "universal_set_done",
@@ -31,11 +33,35 @@ pub(crate) async fn dispatch(
     cmd: &str,
     args: Value,
 ) -> Result<Value, ApiError> {
+    match cmd {
+        "op_log_all" => cmd_op_log_all(client).await,
+        "workspace_offers" => Ok(serde_json::to_value(
+            offers_with(client).await.map_err(ApiError)?,
+        )?),
+        "sync_status" => Ok(serde_json::to_value(SyncStatusDto::from(
+            client.sync_status().await?,
+        ))?),
+        "undo_change" => cmd_undo_change(client, args).await,
+        "universal_tasks" => cmd_universal_tasks(client, args).await,
+        "universal_set_done" => cmd_set_done(client, args).await,
+        _ => cmd_universal_undo(client, args).await,
+    }
+}
+
+async fn cmd_universal_tasks(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct TasksReq {
         include_done: Option<bool>,
     }
+    let r: TasksReq = parse(args)?;
+    let rows = universal_rows(client, r.include_done.unwrap_or(false))
+        .await
+        .map_err(ApiError)?;
+    Ok(serde_json::to_value(rows)?)
+}
+
+async fn cmd_set_done(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct SetDoneReq {
@@ -46,6 +72,20 @@ pub(crate) async fn dispatch(
         done: bool,
         today: String,
     }
+    let r: SetDoneReq = parse(args)?;
+    let row = RowRef {
+        workspace_id: r.workspace_id,
+        path: r.path,
+        line_number: r.line_number,
+        task_id: r.task_id,
+    };
+    let res = set_done(client, row, r.done, r.today)
+        .await
+        .map_err(ApiError)?;
+    Ok(serde_json::to_value(res)?)
+}
+
+async fn cmd_universal_undo(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct UndoReq {
@@ -53,40 +93,11 @@ pub(crate) async fn dispatch(
         path: String,
         steps: Option<u32>,
     }
-    match cmd {
-        "op_log_all" => cmd_op_log_all(client).await,
-        "sync_status" => Ok(serde_json::to_value(SyncStatusDto::from(
-            client.sync_status().await?,
-        ))?),
-        "undo_change" => cmd_undo_change(client, args).await,
-        "universal_tasks" => {
-            let r: TasksReq = parse(args)?;
-            let rows = universal_rows(client, r.include_done.unwrap_or(false))
-                .await
-                .map_err(ApiError)?;
-            Ok(serde_json::to_value(rows)?)
-        }
-        "universal_set_done" => {
-            let r: SetDoneReq = parse(args)?;
-            let row = RowRef {
-                workspace_id: r.workspace_id,
-                path: r.path,
-                line_number: r.line_number,
-                task_id: r.task_id,
-            };
-            let res = set_done(client, row, r.done, r.today)
-                .await
-                .map_err(ApiError)?;
-            Ok(serde_json::to_value(res)?)
-        }
-        _ => {
-            let r: UndoReq = parse(args)?;
-            let res = undo(client, r.workspace_id, &r.path, r.steps.unwrap_or(1))
-                .await
-                .map_err(ApiError)?;
-            Ok(serde_json::to_value(res)?)
-        }
-    }
+    let r: UndoReq = parse(args)?;
+    let res = undo(client, r.workspace_id, &r.path, r.steps.unwrap_or(1))
+        .await
+        .map_err(ApiError)?;
+    Ok(serde_json::to_value(res)?)
 }
 
 /// `undo_change`: one of the session's changes taken back (`u`, a toast's Undo).

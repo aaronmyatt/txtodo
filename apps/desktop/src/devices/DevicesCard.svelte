@@ -1,13 +1,14 @@
 <script lang="ts">
-	// Settings > Devices (task desktop-ui-revamp): pairing on the left, paired devices on the right
-	// (stacked when narrow).
+	// Settings > Devices (task desktop-ui-revamp): pairing on the left, paired devices and the
+	// workspace offers they sent on the right (stacked when narrow).
 	import Devices from "./Devices.svelte";
 	import DeviceList from "./DeviceList.svelte";
+	import OffersList from "./OffersList.svelte";
 </script>
 
 <div class="grid">
 	<div><Devices /></div>
-	<div><DeviceList /></div>
+	<div><DeviceList /><OffersList /></div>
 </div>
 
 <style>

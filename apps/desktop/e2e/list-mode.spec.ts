@@ -75,3 +75,11 @@ test("u undoes the newest change; the toast's Undo undoes a completion", async (
 	await page.keyboard.press("u");
 	await expect(page.getByText("Nothing to undo from this session")).toBeVisible();
 });
+
+// offers.open: o lands on Settings > Devices' workspace offers (none here: no paired device).
+test("o opens the workspace offers in Settings", async ({ page }) => {
+	await page.keyboard.press("o");
+	await expect(page).toHaveURL(/\/settings#offers$/);
+	await expect(page.getByRole("heading", { name: "Workspace offers" })).toBeVisible();
+	await expect(page.getByText("No offers waiting.")).toBeVisible();
+});

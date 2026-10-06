@@ -42,6 +42,48 @@ impl DaemonClient {
         Ok(self.inner.workspace_rename(req).await?.into_inner())
     }
 
+    /// Workspaces paired devices have offered and this device has not answered yet.
+    pub async fn workspace_pending_offers(
+        &mut self,
+    ) -> Result<pb::WorkspacePendingOffersResponse, DaemonError> {
+        Ok(self
+            .inner
+            .workspace_pending_offers(pb::WorkspacePendingOffersRequest {})
+            .await?
+            .into_inner())
+    }
+
+    /// Mirrors one pending offer into the daemon's own folder.
+    pub async fn workspace_accept_offer(
+        &mut self,
+        offering_device: String,
+        workspace_id: String,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        let req = pb::WorkspaceAcceptOfferRequest {
+            offering_device,
+            workspace_id,
+        };
+        Ok(self.inner.workspace_accept_offer(req).await?.into_inner())
+    }
+
+    /// Discards one pending offer; false when there was no such offer.
+    pub async fn workspace_decline_offer(
+        &mut self,
+        offering_device: String,
+        workspace_id: String,
+    ) -> Result<bool, DaemonError> {
+        let req = pb::WorkspaceDeclineOfferRequest {
+            offering_device,
+            workspace_id,
+        };
+        Ok(self
+            .inner
+            .workspace_decline_offer(req)
+            .await?
+            .into_inner()
+            .declined)
+    }
+
     /// Every registered workspace, oldest first.
     pub async fn workspace_list(&mut self) -> Result<Vec<pb::WorkspaceInfo>, DaemonError> {
         Ok(self

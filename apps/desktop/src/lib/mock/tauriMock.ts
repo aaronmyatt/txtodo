@@ -7,6 +7,7 @@
 // call.
 import { mockUniversalSetDone, mockUniversalUndo } from "./universal";
 import { mockDeviceRemove, mockDevices } from "./devices";
+import { mockAnswerOffer, mockOffers } from "./offers";
 import {
 	applyMutations,
 	mockEditNotes,
@@ -93,6 +94,11 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return { problem: "", age_ms: 0 } as T;
 		case "token_create":
 			return mockTokenCreate(args) as T;
+		case "workspace_offers":
+			return mockOffers() as T;
+		case "accept_offer":
+		case "decline_offer":
+			return mockAnswerOffer(args ?? {}) as unknown as T;
 		case "device_list":
 			return mockDevices() as T;
 		case "device_remove":

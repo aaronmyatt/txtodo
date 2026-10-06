@@ -41,7 +41,8 @@
 	function spy() {
 		if (!scroller) return;
 		if (chosen) {
-			active = chosen;
+			// A deep link can name a spot inside a card (`#offers`): highlight that card.
+			active = document.getElementById(chosen)?.closest("section")?.id ?? chosen;
 			return;
 		}
 		const top = scroller.getBoundingClientRect().top;

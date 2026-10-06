@@ -10,6 +10,7 @@ mod commands_connect;
 mod commands_devices;
 mod commands_duplicates;
 mod commands_notes;
+pub mod commands_offers;
 mod commands_pairing;
 pub mod commands_sync;
 mod commands_tokens;
@@ -140,6 +141,9 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_tokens::token_create,
         commands_tokens::token_list,
         commands_devices::device_list,
+        commands_offers::workspace_offers,
+        commands_offers::accept_offer,
+        commands_offers::decline_offer,
         commands_devices::device_remove,
         commands_tokens::token_revoke,
         commands_activity::op_log_all,
