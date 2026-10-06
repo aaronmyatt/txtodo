@@ -8,9 +8,12 @@
 	import { onMount, tick } from "svelte";
 	import { switchWorkspace, universalSetDone, universalTasks, universalUndo, type UniversalTask } from "$lib/daemon";
 	import { showToast } from "$lib/stores/toast";
+	import { searchQuery, searchStep, universalHits } from "$lib/stores/search";
+	import { isActiveQuery, matchesQuery } from "$lib/todotxt/query";
+	import { wasmReady } from "$lib/wasmCore";
 	import { pendingUniversalNav } from "$lib/stores/workspaces";
 	import { localToday } from "./editPopoverLogic";
-	import { contextCounts, groupRows, stats, toRows, type GroupKind, type Row } from "$lib/universal/rows";
+	import { contextCounts, groupRows, stats, toRows, type GroupKind, type Row, matchLine, wantsDone } from "$lib/universal/rows";
 	import UniversalFilters from "./UniversalFilters.svelte";
 	import UniversalRow from "./UniversalRow.svelte";
 	import UniversalStats from "./UniversalStats.svelte";
@@ -37,9 +40,22 @@
 		}
 		return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label));
 	});
-	const inScope = $derived(rows.filter((r) => !hidden.has(r.task.workspace_id) && (showDone || !r.task.done)));
+	// The header search (shared with Tasks): the core's matcher over each row as a line; `is:done`
+	// brings done rows in even with show-done off. The matcher needs the wasm core loaded.
+	let wasmLoaded = $state(false);
+	const query = $derived(wasmLoaded ? $searchQuery : "");
+	const inScope = $derived(
+		rows.filter((r) => !hidden.has(r.task.workspace_id) && (showDone || wantsDone(query) || !r.task.done))
+	);
 	const contexts = $derived(contextCounts(inScope));
-	const shown = $derived(context ? inScope.filter((r) => r.task.contexts.includes(context!)) : inScope);
+	const shown = $derived(
+		inScope.filter(
+			(r) =>
+				(!context || r.task.contexts.includes(context)) &&
+				(!isActiveQuery(query) || matchesQuery(matchLine(r.task), query))
+		)
+	);
+	$effect(() => universalHits.set(shown.length));
 	const groups = $derived(groupRows(shown, group, workspaces.map((w) => w.label)));
 
 	// Keyboard (roving tabindex, https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/#kbd_roving_tabindex):
@@ -83,6 +99,7 @@
 	function resetFilters() {
 		hidden = new Set();
 		context = null;
+		$searchQuery = "";
 	}
 
 	async function open(task: UniversalTask) {
@@ -128,8 +145,22 @@
 		}
 	}
 
-	onMount(refresh);
+	// Enter in the header search hands the keyboard to the first matching row.
+	let lastStep = $searchStep.n;
+	$effect(() => {
+		if ($searchStep.n === lastStep) return;
+		lastStep = $searchStep.n;
+		void focusRow(0);
+	});
+
+	onMount(() => {
+		void refresh();
+		void wasmReady().then(() => (wasmLoaded = true));
+	});
 </script>
+
+<!-- Refetch when the window comes back: one bounded fetch, not a live tail. -->
+<svelte:window onfocus={() => void refresh()} />
 
 <main class="universal">
 	<div class="page">
@@ -159,7 +190,7 @@
 			{#if shown.length === 0}
 				<div class="empty">
 					<p><b>Nothing matches.</b></p>
-					<p class="lede">Loosen the filters above.</p>
+					<p class="lede">Loosen the search or the filters above.</p>
 					<button type="button" class="reset" onclick={resetFilters}>Reset filters</button>
 				</div>
 			{/if}
@@ -180,7 +211,7 @@
 							<span class="rule"></span>
 						</h2>
 						{#each g.rows as r (r.key)}
-							<UniversalRow row={r} {group} onOpen={open} onToggle={toggle} active={r.key === activeKey} />
+							<UniversalRow row={r} {group} {query} onOpen={open} onToggle={toggle} active={r.key === activeKey} />
 						{/each}
 					</section>
 				{/each}

@@ -24,6 +24,18 @@ export interface Row {
 	key: string;
 }
 
+/** The row as a todo.txt line for the search matcher (`query.ts::matchesQuery`): the `x` and
+ * priority back in front of the description, so `is:done` and `(A)` match as in the buffer. */
+export function matchLine(task: UniversalTask): string {
+	if (task.done) return `x ${task.completion_date ? `${task.completion_date} ` : ""}${task.description}`;
+	return task.priority ? `(${task.priority}) ${task.description}` : task.description;
+}
+
+/** Whether the query asks for done lines (`is:done`), which shows them even with show-done off. */
+export function wantsDone(query: string): boolean {
+	return /(^|\s)is:done(\s|$)/i.test(query);
+}
+
 /** Last path segment of an absolute root, for a compact label; the full path if none. */
 export function workspaceLabel(root: string): string {
 	return root.split(/[/\\]/).filter(Boolean).pop() ?? root;

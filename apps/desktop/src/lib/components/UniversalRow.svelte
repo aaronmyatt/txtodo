@@ -2,7 +2,8 @@
 	// One Universal row (task desktop-ui-revamp): the description in the editor's token colours,
 	// then the due badge, the `ref:` sub-list's n/m, and the workspace tile.
 	import type { UniversalTask } from "$lib/daemon";
-	import { segments } from "$lib/todotxt/segments";
+	import { hitRanges, isActiveQuery } from "$lib/todotxt/query";
+	import { markHits, segments } from "$lib/todotxt/segments";
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { GroupKind, Row } from "$lib/universal/rows";
 
@@ -13,9 +14,16 @@
 		onToggle: (row: Row) => void;
 		/** The roving tab stop: only this row's open button is in the tab order. */
 		active: boolean;
+		/** The header search, whose hits are marked in the description. */
+		query: string;
 	}
 
-	let { row, group, onOpen, onToggle, active }: Props = $props();
+	let { row, group, onOpen, onToggle, active, query }: Props = $props();
+
+	const segs = $derived.by(() => {
+		const d = row.task.description;
+		return isActiveQuery(query) ? markHits(segments(d), hitRanges(d, query)) : segments(d);
+	});
 </script>
 
 <div class="row" class:done={row.task.done}>
@@ -33,7 +41,7 @@
 			<span class="tok-priority">({row.task.priority})</span>
 		{/if}
 		<span class="body">
-			{#each segments(row.task.description) as s, i (i)}<span class={s.cls}>{s.text}</span>{/each}
+			{#each segs as s, i (i)}<span class={s.cls} class:hit={s.hit}>{s.text}</span>{/each}
 		</span>
 	</button>
 	{#if row.due}
@@ -96,6 +104,13 @@
 
 	.open:focus-visible {
 		outline: none;
+	}
+
+	/* A hit: the inverse tile in miniature, as in the buffer (search.ts's .cm-hit). */
+	.hit {
+		border-radius: 0.2em;
+		background: var(--color-base-content);
+		color: var(--color-base-100) !important;
 	}
 
 	.row:hover {

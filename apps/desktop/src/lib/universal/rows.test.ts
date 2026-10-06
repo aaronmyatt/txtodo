@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UniversalTask } from "../daemon";
-import { contextCounts, groupRows, stats, toRows } from "./rows";
+import { contextCounts, groupRows, matchLine, stats, toRows, wantsDone } from "./rows";
 
 const task = (over: Partial<UniversalTask>): UniversalTask => ({
 	workspace_id: "W1",
@@ -57,5 +57,17 @@ describe("Universal rows", () => {
 			["@home", 2],
 			["@phone", 2]
 		]);
+	});
+});
+
+describe("search helpers", () => {
+	it("puts the x or priority back for the matcher", () => {
+		expect(matchLine(task({ priority: "A", description: "call mum" }))).toBe("(A) call mum");
+		expect(matchLine(task({ done: true, completion_date: "2026-10-05", description: "call mum" }))).toBe("x 2026-10-05 call mum");
+	});
+
+	it("sees is:done as a word", () => {
+		expect(wantsDone("milk is:done")).toBe(true);
+		expect(wantsDone("is:doner")).toBe(false);
 	});
 });

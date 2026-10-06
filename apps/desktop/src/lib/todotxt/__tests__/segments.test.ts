@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { segments } from "../segments";
+import { markHits, segments } from "../segments";
 
 describe("segments", () => {
 	it("colours projects and contexts and keeps every character", () => {
@@ -8,5 +8,25 @@ describe("segments", () => {
 		expect(segs.map((s) => s.text).join("")).toBe(text);
 		expect(segs.find((s) => s.text === "+work")?.cls).toContain("tok-project");
 		expect(segs.find((s) => s.text === "@home")?.cls).toContain("tok-context");
+	});
+});
+
+describe("markHits", () => {
+	it("splits segments at hit ranges, across a token boundary too", () => {
+		const segs = [
+			{ text: "buy ", cls: "" },
+			{ text: "+milk", cls: "tok-project" }
+		];
+		expect(markHits(segs, [[2, 7]])).toEqual([
+			{ text: "bu", cls: "" },
+			{ text: "y ", cls: "", hit: true },
+			{ text: "+mi", cls: "tok-project", hit: true },
+			{ text: "lk", cls: "tok-project" }
+		]);
+	});
+
+	it("leaves segments alone with no ranges", () => {
+		const segs = [{ text: "a", cls: "" }];
+		expect(markHits(segs, [])).toBe(segs);
 	});
 });

@@ -11,7 +11,7 @@
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { IconName } from "$lib/icons/icons";
 	import { Chords, isTypingTarget, keyName } from "$lib/keys";
-	import { searchQuery, searchStep } from "$lib/stores/search";
+	import { searchQuery, searchStep, universalHits } from "$lib/stores/search";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
@@ -73,9 +73,11 @@
 		}
 	}
 
-	// The count pill: `current/hits` once stepping, else the hit count; Tasks only for now.
+	// The count pill: `current/hits` once stepping, else the hit count; on Universal, its rows.
 	const pill = $derived.by(() => {
-		if (path !== "/" || $searchQuery.trim() === "") return "";
+		if ($searchQuery.trim() === "") return "";
+		if (path === "/universal") return `${$universalHits}`;
+		if (path !== "/") return "";
 		const { hits, index } = $editorStatus.search;
 		return index > 0 ? `${index}/${hits}` : `${hits}`;
 	});
