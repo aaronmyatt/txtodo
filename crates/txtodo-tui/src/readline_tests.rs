@@ -49,8 +49,16 @@ fn words_are_letters_and_digits_so_todo_tokens_take_several_hops() {
 
 #[test]
 fn wide_characters_and_emoji_are_words_or_not_by_their_letters() {
-    // Each ideograph is its own word bound (UAX #29 without a dictionary).
-    assert_eq!(run("|日本 x", &[Op::WordForward]), "日|本 x");
+    assert_eq!(
+        run("|日本 x", &[Op::WordForward]),
+        "日本| x",
+        "a run of ideographs is one word"
+    );
+    assert_eq!(
+        run("list.last|", &[Op::WordBack]),
+        "list.|last",
+        "a dot ends a word"
+    );
     assert_eq!(
         run("a 👍🏽 |b", &[Op::WordBack]),
         "|a 👍🏽 b",

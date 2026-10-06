@@ -91,3 +91,60 @@ fn the_kill_slot_is_shared_between_fields_and_list_mode_ignores_the_keys() {
     keys(&mut state, &mut input, &[ctrl('a'), alt('f'), ctrl('k')]);
     assert_eq!(state.cursor, cursor, "no field: nothing");
 }
+
+#[test]
+fn alt_shift_applies_a_prompt_chip_while_plain_alt_is_readline() {
+    let mut state = AppState::fixture();
+    let mut input = Input::default();
+    state.nav.focus = Focus::Prompt;
+    keys(&mut state, &mut input, &typed("call mum"));
+    let shift_alt = KeyModifiers::ALT | KeyModifiers::SHIFT;
+    keys(&mut state, &mut input, &[(KeyCode::Char('B'), shift_alt)]);
+    assert_eq!(state.shell.prompt.buffer, "(B) call mum");
+    keys(&mut state, &mut input, &[alt('b')]);
+    assert_eq!(
+        state.shell.prompt.caret,
+        "(B) call ".len(),
+        "Alt-b moved back a word"
+    );
+}
+
+#[test]
+fn notes_settings_parent_and_the_command_line_take_them_too() {
+    let mut state = AppState::fixture();
+    let mut input = Input::default();
+    state.command = Some(String::new());
+    keys(&mut state, &mut input, &typed("list.last"));
+    keys(&mut state, &mut input, &[alt('b'), ctrl('k')]);
+    assert_eq!(state.command.as_deref(), Some("list."));
+    state.command = None;
+    state.nav.screen = Screen::Settings(crate::state_nav::SettingsCard::ALL[0]);
+    state.settings.filtering = true;
+    keys(&mut state, &mut input, &typed("dev ices"));
+    keys(&mut state, &mut input, &[ctrl('w')]);
+    assert_eq!(state.settings.filter, "dev ");
+    state.settings.filtering = false;
+    state.nav.screen = Screen::Tasks;
+    state
+        .detail
+        .levels
+        .push(crate::state_detail::Level::default());
+    state.nav.focus = Focus::Detail;
+    state.detail.part = Part::Notes;
+    keys(&mut state, &mut input, &typed("ab"));
+    keys(
+        &mut state,
+        &mut input,
+        &[(KeyCode::Enter, KeyModifiers::NONE)],
+    );
+    keys(&mut state, &mut input, &typed("cd"));
+    keys(&mut state, &mut input, &[ctrl('a'), ctrl('t')]);
+    let notes = &state.detail.levels[0].notes;
+    assert_eq!(
+        notes.text, "ab\ncd",
+        "at a line start Ctrl-T has nothing before it"
+    );
+    assert!(notes.typed_at.is_some());
+    keys(&mut state, &mut input, &[ctrl('e'), ctrl('t')]);
+    assert_eq!(state.detail.levels[0].notes.text, "ab\ndc");
+}

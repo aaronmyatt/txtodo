@@ -1,11 +1,12 @@
 //! Readline's emacs-mode keys for every text field (task `tui-readline-keys`): pure edits on a
 //! `String` and a byte caret, the same pair every field keeps (`text_input`). Motions by line and by
 //! word, kills into one shared slot and the yank back, transposes, word case, and a per-field undo
-//! stack. Words are runs of letters and digits by UAX #29 word bounds, as readline's are; `Ctrl-W`
-//! alone counts whitespace-separated words (readline's `unix-word-rubout`).
+//! stack. Words are runs of letters and digits, as readline's are (so `list.last` and `+home` are
+//! more than one hop), counted by grapheme; `Ctrl-W` alone counts whitespace-separated words
+//! (readline's `unix-word-rubout`).
 //! Refs: <https://tiswww.case.edu/php/chet/readline/readline.html#Commands-For-Moving>,
 //! <https://tiswww.case.edu/php/chet/readline/readline.html#Commands-For-Killing>,
-//! <https://docs.rs/unicode-segmentation/1.13/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.split_word_bound_indices>
+//! <https://docs.rs/unicode-segmentation/1.13/unicode_segmentation/trait.UnicodeSegmentation.html#tymethod.grapheme_indices>
 
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -21,26 +22,38 @@ pub fn line_end(text: &str, caret: usize) -> usize {
     text[caret..].find('\n').map_or(text.len(), |i| caret + i)
 }
 
-/// Whether a word-bound segment is a word: it holds a letter or a digit.
-fn is_word(segment: &str) -> bool {
-    segment.chars().any(char::is_alphanumeric)
+/// The words of `text` as byte ranges: runs of graphemes that hold a letter or a digit
+/// (readline's `isalnum`; an accent stays with its letter, an emoji is not a word).
+fn words(text: &str) -> Vec<(usize, usize)> {
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    for (i, g) in text.grapheme_indices(true) {
+        if !g.chars().any(char::is_alphanumeric) {
+            continue;
+        }
+        match out.last_mut() {
+            Some(last) if last.1 == i => last.1 = i + g.len(),
+            _ => out.push((i, i + g.len())),
+        }
+    }
+    out
 }
 
 /// `Alt-F`: the end of the word the caret is in, or of the next one.
 pub fn word_forward(text: &str, caret: usize) -> usize {
-    text.split_word_bound_indices()
-        .map(|(i, s)| (i, i + s.len(), s))
-        .find(|&(_, end, s)| end > caret && is_word(s))
-        .map_or(text.len(), |(_, end, _)| end)
+    words(text)
+        .into_iter()
+        .find(|&(_, end)| end > caret)
+        .map_or(text.len(), |(_, end)| end)
 }
 
 /// `Alt-B`: the start of the word the caret is in (past its first character), or of the one
 /// before.
 pub fn word_back(text: &str, caret: usize) -> usize {
-    text.split_word_bound_indices()
+    words(text)
+        .into_iter()
         .rev()
-        .find(|&(i, s)| i < caret && is_word(s))
-        .map_or(0, |(i, _)| i)
+        .find(|&(start, _)| start < caret)
+        .map_or(0, |(start, _)| start)
 }
 
 /// `Ctrl-W`'s stop: back over spaces, then back to the previous space (`unix-word-rubout`).
@@ -210,11 +223,7 @@ fn transpose_chars(text: &mut String, caret: &mut usize) {
 /// Readline's `transpose-words`: the word before the caret swaps with the word after it, the caret
 /// lands after both. Nothing when there are not two words to swap.
 fn transpose_words(text: &mut String, caret: &mut usize) {
-    let words: Vec<(usize, usize)> = text
-        .split_word_bound_indices()
-        .filter(|(_, s)| is_word(s))
-        .map(|(i, s)| (i, i + s.len()))
-        .collect();
+    let words = words(text);
     // The second word is the first one ending after the caret; at the end, the last one.
     let second = words
         .iter()

@@ -16,7 +16,7 @@ use crate::state::AppState;
 const SCOPES: [(&str, &str); 9] = [
     ("global", "Anywhere"),
     ("list", "Tasks list"),
-    ("edit", "Editing a line"),
+    ("edit", "Editing text (every field)"),
     ("search", "Search"),
     ("prompt", "Prompt bar"),
     ("detail", "Detail panel"),
@@ -34,6 +34,10 @@ const OPERATORS: [(&str, &str); 5] = [
     ("+project @context due:", "any token, as text"),
 ];
 
+/// Under the editing keys: `Alt` reaches a terminal app only when the terminal sends Option as Meta.
+const ALT_NOTE: &str = "   On macOS, Alt needs Option sent as Meta: Terminal.app \"Use Option as Meta key\", \
+iTerm2 Option key \"Esc+\", Ghostty macos-option-as-alt. Alt-Left/Right work either way.";
+
 /// Every line of the screen, headings bold, keys in a column.
 pub fn lines() -> Vec<Line<'static>> {
     let bold = Style::new().add_modifier(Modifier::BOLD);
@@ -47,6 +51,9 @@ pub fn lines() -> Vec<Line<'static>> {
         }
         out.push(Line::default());
         out.push(Line::styled(format!(" {heading}"), bold));
+        if scope == "edit" {
+            out.push(Line::styled(ALT_NOTE, dim));
+        }
         for s in rows {
             let keys = if s.keys.is_empty() {
                 format!(":{}", s.id)
@@ -69,7 +76,7 @@ pub fn lines() -> Vec<Line<'static>> {
     }
     out.push(Line::default());
     out.push(Line::styled(
-        " Prompt bar chips (Alt and the key, or click)",
+        " Prompt bar chips (Alt-Shift and the letter, or click)",
         bold,
     ));
     for (label, key, _) in crate::prompt::CHIPS {
@@ -103,6 +110,8 @@ mod tests {
         assert!(text[at("Ctrl-c")].contains("Quit"));
         assert!(at(" Search operators") > at(" Settings"));
         assert!(text[at("is:done")].contains("done lines"));
-        assert!(text[at("Alt-a")].contains("(A)"));
+        assert!(text[at("Alt-A")].contains("(A)"));
+        assert!(text[at("Alt-b / Alt-Left")].contains("word"));
+        assert!(at("Option sent as Meta") == at(" Editing text") + 1);
     }
 }

@@ -139,7 +139,7 @@ mod tests {
             rows[1].contains("Priority letters are uppercase"),
             "{rows:?}"
         );
-        assert!(rows[0].contains(" (A) a"), "{rows:?}");
+        assert!(rows[0].contains(" (A) A"), "{rows:?}");
         assert_eq!(hits.at(2, 0), Some(Target::Chip(0)));
     }
 

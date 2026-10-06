@@ -1022,7 +1022,7 @@ keys = []
 scope = "prompt"
 desktop = { status = "done", surface = "Quick Add window (EditPopover)" }
 tui = { status = "done", surface = "prompt bar" }
-deviation = "The TUI also takes Alt and a chip key in the field (a b c x p o d t r); desktop clicks them."
+deviation = "The TUI also takes Alt-Shift and a chip letter in the field (A B C X P O D T R; plain Alt letters are readline keys); desktop clicks them."
 
 [[action]]
 id = "edit.undo"

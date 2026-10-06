@@ -22,15 +22,15 @@ pub const HINT_AFTER: Duration = Duration::from_millis(150);
 
 /// The chips, in the c2 order: their label, their `Alt` key and the chip.
 pub const CHIPS: [(&str, char, &str); 9] = [
-    ("(A)", 'a', "A"),
-    ("(B)", 'b', "B"),
-    ("(C)", 'c', "C"),
-    ("x", 'x', "x"),
-    ("+", 'p', "+"),
-    ("@", 'o', "@"),
-    ("due:", 'd', "due:"),
-    ("t:", 't', "t:"),
-    ("rec:", 'r', "rec:"),
+    ("(A)", 'A', "A"),
+    ("(B)", 'B', "B"),
+    ("(C)", 'C', "C"),
+    ("x", 'X', "x"),
+    ("+", 'P', "+"),
+    ("@", 'O', "@"),
+    ("due:", 'D', "due:"),
+    ("t:", 'T', "t:"),
+    ("rec:", 'R', "rec:"),
 ];
 
 /// Runs a prompt command; `None` for any other command.
@@ -80,7 +80,8 @@ pub fn apply(state: &mut AppState, index: usize) {
 }
 
 /// A key while the bar has the keyboard (its bindings, Enter and Esc, are resolved before this):
-/// `Alt` and a chip's key applies the chip, anything else edits the draft.
+/// `Alt-Shift` and a chip's letter applies the chip, anything else edits the draft. Shifted, so the
+/// plain Alt letters stay readline's (task tui-readline-keys).
 pub fn on_key(state: &mut AppState, key: KeyEvent, now: Instant) {
     if key.modifiers.contains(KeyModifiers::ALT)
         && let KeyCode::Char(c) = key.code
@@ -153,13 +154,13 @@ mod tests {
         typed(&mut state, "call mum");
         on_key(
             &mut state,
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::ALT),
+            KeyEvent::new(KeyCode::Char('A'), KeyModifiers::ALT | KeyModifiers::SHIFT),
             Instant::now(),
         );
         assert_eq!(state.shell.prompt.buffer, "(A) call mum");
         on_key(
             &mut state,
-            KeyEvent::new(KeyCode::Char('o'), KeyModifiers::ALT),
+            KeyEvent::new(KeyCode::Char('O'), KeyModifiers::ALT | KeyModifiers::SHIFT),
             Instant::now(),
         );
         assert!(
