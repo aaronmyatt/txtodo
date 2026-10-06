@@ -6,6 +6,7 @@
 // `invoke(cmd, args)` switch tying the two to the Tauri command names `daemon.ts`/`devices/api.ts`
 // call.
 import { mockUniversalSetDone, mockUniversalUndo } from "./universal";
+import { mockDeviceRemove, mockDevices } from "./devices";
 import {
 	applyMutations,
 	mockEditNotes,
@@ -86,6 +87,10 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return { problem: "", age_ms: 0 } as T;
 		case "token_create":
 			return mockTokenCreate(args) as T;
+		case "device_list":
+			return mockDevices() as T;
+		case "device_remove":
+			return mockDeviceRemove(args ?? {}) as unknown as T;
 		case "token_list":
 			return tokens.map((t) => ({ ...t, secret: "" })) as T;
 		case "token_revoke":

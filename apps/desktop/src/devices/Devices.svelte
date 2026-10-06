@@ -194,7 +194,7 @@
 </script>
 
 <section class="devices">
-	<h2>Pair a device</h2>
+	<h3>Pair a device</h3>
 	{#if blockedReason}
 		<p class="state-warning" role="status">
 			Workspaces from your other devices are not arriving: {blockedReason}. See
@@ -204,7 +204,7 @@
 
 	{#if mode === "idle"}
 		<div class="actions">
-			<button type="button" onclick={startOffer}>Show my code</button>
+			<button type="button" class="primary" onclick={startOffer}>Show my code</button>
 			<button type="button" onclick={startScan}>Scan a peer's code</button>
 		</div>
 	{:else}
@@ -295,43 +295,74 @@
 {/snippet}
 
 <style>
+	/* Re-skinned for Settings > Devices (task desktop-ui-revamp): ink outline panes, pill buttons,
+	   the SAS words large and spaced so two people can read them aloud. */
 	.devices {
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
 	}
+	h3 {
+		margin: 0;
+		font-size: 0.875rem;
+	}
+	.devices button {
+		align-self: flex-start;
+		padding: 0.25rem 0.9rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.devices button.primary {
+		border-color: var(--color-primary);
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+	}
 	.actions {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 0.5rem;
-	}
-	.back {
-		align-self: flex-start;
 	}
 	.pane {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.5rem;
-		border: 1px solid var(--color-border);
-		border-radius: 8px;
 		padding: 1rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: var(--radius-box);
+	}
+	.pane img {
+		padding: 0.5rem;
+		border-radius: var(--radius-field);
+		/* A QR code needs a light quiet zone to scan, whatever the theme. */
+		background: #fff;
 	}
 	.camera {
 		width: 100%;
 		max-width: 320px;
-		border-radius: 6px;
+		border-radius: var(--radius-field);
 		/* Deliberately a fixed dark viewfinder background (not a themed surface) — this is what
 		   shows before the camera feed paints, regardless of light/dark mode. */
 		background: #111827;
 	}
 	.hint {
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
+		margin: 0;
+		color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
 	}
 	.sas {
-		font-size: 1.1rem;
-		font-weight: 600;
-		letter-spacing: 0.02em;
+		margin: 0.25rem 0;
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		word-spacing: 0.3em;
 	}
 	.sas-confirm {
 		display: flex;
@@ -339,20 +370,30 @@
 		align-items: flex-start;
 		gap: 0.4rem;
 	}
+	.own-device {
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+	}
 	.state-expired,
 	.state-blocked,
 	.state-error {
-		color: var(--color-danger);
-		font-weight: 600;
+		color: var(--color-error, #dc2626);
+		font-weight: 700;
 	}
 	.state-warning {
-		color: var(--color-warning-text);
+		color: var(--color-warning, #d97706);
 	}
 	.state-ok {
-		color: var(--color-success);
-		font-weight: 600;
+		color: var(--color-success, #15803d);
+		font-weight: 700;
 	}
 	.countdown {
+		margin: 0;
+		font-size: 0.75rem;
+		font-weight: 700;
 		font-variant-numeric: tabular-nums;
+	}
+	p {
+		margin: 0;
 	}
 </style>

@@ -7,6 +7,7 @@
 mod commands;
 mod commands_activity;
 mod commands_connect;
+mod commands_devices;
 mod commands_duplicates;
 mod commands_notes;
 mod commands_pairing;
@@ -25,6 +26,7 @@ mod commands_workspace;
 // crosses the Tauri IPC bridge to the frontend — so this doesn't newly expose anything.
 pub mod dto;
 mod dto_activity;
+mod dto_devices;
 pub mod dto_duplicates;
 mod dto_notes;
 mod dto_pairing;
@@ -134,6 +136,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_pairing::offers_problem,
         commands_tokens::token_create,
         commands_tokens::token_list,
+        commands_devices::device_list,
+        commands_devices::device_remove,
         commands_tokens::token_revoke,
         commands_activity::op_log,
         commands_activity::op_log_all,

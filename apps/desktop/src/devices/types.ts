@@ -129,3 +129,27 @@ export interface OffersProblem {
 	problem: string;
 	age_ms: number;
 }
+
+/** One paired device (Settings > Devices). Mirrors `desktop_lib::dto_devices::DeviceDto`. */
+export interface Device {
+	/** ULID text. */
+	id: string;
+	name: string;
+	/** This device; never removable. */
+	is_self: boolean;
+	removed: boolean;
+	/** Unix ms; 0 when unknown. */
+	paired_at_ms: number;
+	/** Unix ms; 0 = never contacted since it was registered. */
+	last_seen_ms: number;
+	own_device: boolean;
+}
+
+/** What removing a device did. `message` is the daemon's caveat (removal does not un-share
+ * history), shown as is. Mirrors `DeviceRemoveDto`. */
+export interface DeviceRemoveResult {
+	removed: boolean;
+	already_removed: boolean;
+	rotated_to_epoch: number;
+	message: string;
+}

@@ -4,7 +4,7 @@
 // daemon is the only source of truth.
 // Ref: https://v2.tauri.app/develop/calling-rust/
 import { invoke } from "$lib/tauriShim";
-import type { OffersProblem, OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
+import type { Device, DeviceRemoveResult, OffersProblem, OpEvent, PairOffer, PairResult, Scope, Token } from "./types";
 
 /** Why offers from paired devices are blocked, if they are (empty `problem` when not). */
 export function offersProblem(): Promise<OffersProblem> {
@@ -50,4 +50,15 @@ export function tokenRevoke(id: string): Promise<boolean> {
  */
 export function opLog(): Promise<OpEvent[]> {
 	return invoke("op_log");
+}
+
+/** Devices paired into this workspace's sync group, removed ones included (`DeviceList`). */
+export function deviceList(): Promise<Device[]> {
+	return invoke("device_list");
+}
+
+/** Removes a device and rotates the group key to the rest (`DeviceRemove`). The daemon refuses
+ * this device and the last one. */
+export function deviceRemove(id: string): Promise<DeviceRemoveResult> {
+	return invoke("device_remove", { id });
 }
