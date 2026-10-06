@@ -141,18 +141,18 @@ id = "list.move_down"
 title = "Move the line down"
 keys = ["J", "Alt-Down"]
 scope = "list"
-desktop = { status = "done", surface = "FileView (list mode)" }
+desktop = { status = "done", surface = "FileView (list mode); or drag the line's number" }
 tui = { status = "done", surface = "Tasks; or drag the row" }
-deviation = "Only the TUI drags a row so far."
+deviation = ""
 
 [[action]]
 id = "list.move_up"
 title = "Move the line up"
 keys = ["K", "Alt-Up"]
 scope = "list"
-desktop = { status = "done", surface = "FileView (list mode)" }
+desktop = { status = "done", surface = "FileView (list mode); or drag the line's number" }
 tui = { status = "done", surface = "Tasks; or drag the row" }
-deviation = "Only the TUI drags a row so far."
+deviation = ""
 
 # ==== Editing a line ===============================================================================
 

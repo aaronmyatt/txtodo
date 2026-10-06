@@ -11,6 +11,7 @@
 	// detail-view task mounts this again at `depth + 1` for a `ref:` directory's todo.txt.
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
+	import { dragLines, startLineDrag } from "$lib/todotxt/dragLines";
 	import { newestChange, popChange, popIfNewest } from "$lib/stores/changes";
 	import { showToast } from "$lib/stores/toast";
 	import { onListCommand } from "$lib/listCommands";
@@ -163,7 +164,18 @@
 	// The gutter and the long-line hint follow the editor prefs (`$lib/stores/editorPrefs`).
 	const gutterCompartment = new Compartment();
 	const lengthHintCompartment = new Compartment();
-	const gutterFor = (on: boolean) => (on ? [lineNumbers(), highlightActiveLineGutter()] : []);
+	// The line numbers double as drag handles (`$lib/todotxt/dragLines.ts`): press one, drag, drop.
+	const gutterFor = (on: boolean) =>
+		on
+			? [
+					lineNumbers({
+						domEventHandlers: {
+							mousedown: (v, block, event) => startLineDrag(v, v.state.doc.lineAt(block.from).number, event as MouseEvent)
+						}
+					}),
+					highlightActiveLineGutter()
+				]
+			: [];
 	const lengthHintFor = (on: boolean) => (on ? longLineHint : []);
 
 	function setDirty(next: boolean) {
@@ -204,6 +216,7 @@
 			]),
 			todotxtLanguage,
 			mainViewBaseTheme,
+			dragLines(),
 			// Chrome (task desktop-ui-revamp): https://codemirror.net/docs/ref/#view.lineNumbers,
 			// #view.highlightActiveLine, #view.drawSelection (draws the caret the theme styles).
 			gutterCompartment.of(gutterFor(get(editorPrefs).lineNumbers)),
