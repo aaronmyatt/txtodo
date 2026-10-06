@@ -71,3 +71,13 @@ test("the header search filters rows, Enter hands the keyboard to them, and x co
 	await page.keyboard.press("x");
 	await expect.poll(() => readFileSync(join(daemon.dir, "todo.txt"), "utf8")).toMatch(/^x \d{4}-\d{2}-\d{2} .*call mum/m);
 });
+
+// 2026-09-24: a line naming the same context twice keyed two {#each} items alike and hung the
+// page on "Loading…". Guard: such a line renders, and so does its context chip, once.
+test("a line with the same context twice renders, with one chip for it", async ({ page }) => {
+	writeFileSync(join(daemon.dir, "todo.txt"), "(A) buy milk +home @errand\ncall mum @phone @phone\n");
+	await expect.poll(() => readFileSync(join(daemon.dir, "todo.txt"), "utf8")).toContain("@phone @phone");
+	await openUniversal(page);
+	await expect(row(page, "call mum")).toBeVisible();
+	await expect(page.getByRole("group", { name: "Filter by context" }).getByRole("button", { name: /@phone/ })).toHaveCount(1);
+});
