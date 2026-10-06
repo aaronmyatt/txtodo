@@ -58,4 +58,14 @@ test("first keystroke into empty notes lazily creates the ref: directory", async
 	// server-side — crates/txtodo-daemon/src/refdir_ops.rs::ensure_ref_dir).
 	const parentText = readFileSync(join(daemon.dir, "todo.txt"), "utf8");
 	expect(parentText).toContain(`ref:${slug}`);
+
+	// Root todo 2026-10-06: the editor stays (no "could not be loaded" error once the tag lands),
+	// and typing more goes on saving into the same notes.md.
+	await expect(page.getByText("Notes could not be loaded")).toHaveCount(0);
+	await expect(notesEditor).toBeVisible();
+	await notesEditor.click();
+	await page.keyboard.press("End");
+	await page.keyboard.type(", then more");
+	await expect.poll(() => readFileSync(notesPath, "utf8")).toBe("first note, then more");
+	await expect(page.getByText("Notes could not be loaded")).toHaveCount(0);
 });

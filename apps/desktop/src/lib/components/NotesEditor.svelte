@@ -29,16 +29,34 @@
 	let saveError = $state("");
 	let saveHandle: ReturnType<typeof setTimeout> | undefined;
 	let lastSavedText = ""; // guards the no-op case: focus-out with nothing typed saves nothing.
+	// The last load found no notes.md (the task had no `ref:` yet). The first save creates the
+	// folder and the tag, so the parent must hear the new path, or it reads the tag plus the old
+	// empty path as "an older daemon looked elsewhere" and swaps the editor for an error.
+	let pathUnknown = false;
 
 	async function load() {
 		try {
 			const doc = await getNotes(task);
 			loadError = "";
 			lastSavedText = doc.text;
+			pathUnknown = doc.path === "";
 			view?.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc.text } });
 			onLoaded?.(doc);
 		} catch (e) {
 			loadError = String(e);
+		}
+	}
+
+	/** After the save that created notes.md: tell the parent where it is, without touching the
+	 * editor (the reader may still be typing). */
+	async function reportNewPath() {
+		try {
+			const doc = await getNotes(task);
+			if (doc.path === "") return;
+			pathUnknown = false;
+			onLoaded?.(doc);
+		} catch {
+			// The save itself worked; the footer path just stays unknown until the next load.
 		}
 	}
 
@@ -53,6 +71,7 @@
 		try {
 			await editNotes(task, text);
 			lastSavedText = text;
+			if (pathUnknown) await reportNewPath();
 		} catch (e) {
 			saveError = String(e);
 		}
