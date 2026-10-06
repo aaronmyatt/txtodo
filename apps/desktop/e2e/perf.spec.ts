@@ -16,7 +16,9 @@ import { TEN_K_DOC_LINES } from "./tenKFixture";
 /** `.claude/budgets.json` `perf.firstPaint10kMs`, read at load so the spec and the budget can't
  * drift. Ref: https://nodejs.org/api/fs.html#fsreadfilesyncpath-options */
 const BUDGETS = join(dirname(fileURLToPath(import.meta.url)), "../../../.claude/budgets.json");
-const FIRST_PAINT_BUDGET_MS: number = JSON.parse(readFileSync(BUDGETS, "utf8")).perf.firstPaint10kMs;
+const BUDGET = JSON.parse(readFileSync(BUDGETS, "utf8"));
+const FIRST_PAINT_BUDGET_MS: number = BUDGET.perf.firstPaint10kMs;
+const SEARCH_KEYSTROKE_BUDGET_MS: number = BUDGET.searchKeystrokeMs;
 if (typeof FIRST_PAINT_BUDGET_MS !== "number") {
 	throw new Error(`${BUDGETS} has no numeric perf.firstPaint10kMs`);
 }
@@ -43,6 +45,38 @@ test("10k-line first paint stays within the perf budget", async ({ page }) => {
 		// eslint-disable-next-line no-console -- perf numbers belong in the test log, not hidden
 		console.log(`10k-line first paint: ${paintMs}ms (budget ${FIRST_PAINT_BUDGET_MS}ms)`);
 		expect(paintMs).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS);
+	} finally {
+		daemon.dispose();
+	}
+});
+
+test("a header-search keystroke over 10k lines stays within the budget", async ({ page }) => {
+	const daemon: DaemonHandle = await spawnDaemon("ten-k");
+	try {
+		await gotoWithDaemon(page, daemon);
+		await page.waitForSelector(`[data-line-count='${TEN_K_DOC_LINES}']`);
+		// Each keystroke: the input event, then two animation frames, so the count, the marks and
+		// the fades have painted. requestAnimationFrame:
+		// https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame
+		const perKey = await page.evaluate(async () => {
+			const input = document.querySelector<HTMLInputElement>('input[aria-label="Search"]');
+			if (!input) throw new Error("no header search");
+			const out: number[] = [];
+			let query = "";
+			for (const ch of "task 99") {
+				query += ch;
+				const t0 = performance.now();
+				input.value = query;
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+				await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+				out.push(Math.round(performance.now() - t0));
+			}
+			return out;
+		});
+		// eslint-disable-next-line no-console -- perf numbers belong in the test log, not hidden
+		console.log(`search keystroke ms: ${perKey.join(", ")} (budget ${SEARCH_KEYSTROKE_BUDGET_MS}ms)`);
+		await expect(page.getByRole("status", { name: "Matching lines" })).not.toHaveText("0");
+		expect(Math.max(...perKey)).toBeLessThanOrEqual(SEARCH_KEYSTROKE_BUDGET_MS);
 	} finally {
 		daemon.dispose();
 	}
