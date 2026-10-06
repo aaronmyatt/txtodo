@@ -11,9 +11,11 @@
 		group: GroupKind;
 		onOpen: (task: UniversalTask) => void;
 		onToggle: (row: Row) => void;
+		/** The roving tab stop: only this row's open button is in the tab order. */
+		active: boolean;
 	}
 
-	let { row, group, onOpen, onToggle }: Props = $props();
+	let { row, group, onOpen, onToggle, active }: Props = $props();
 </script>
 
 <div class="row" class:done={row.task.done}>
@@ -26,7 +28,7 @@
 		aria-label={row.task.done ? "Mark not done" : "Mark done"}
 		onclick={() => onToggle(row)}><Icon name="x" /></button
 	>
-	<button type="button" class="open" onclick={() => onOpen(row.task)}>
+	<button type="button" class="open" data-key={row.key} tabindex={active ? 0 : -1} onclick={() => onOpen(row.task)}>
 		{#if group !== "priority" && row.task.priority}
 			<span class="tok-priority">({row.task.priority})</span>
 		{/if}
@@ -83,6 +85,17 @@
 		gap: 0.75rem;
 		padding: 0.375rem 0.5rem;
 		border-radius: var(--radius-field);
+	}
+
+	/* A visible 2px ring on the whole row while its open button has the keyboard.
+	   :has() https://developer.mozilla.org/en-US/docs/Web/CSS/:has */
+	.row:has(.open:focus-visible) {
+		outline: 2px solid var(--color-base-content);
+		outline-offset: -2px;
+	}
+
+	.open:focus-visible {
+		outline: none;
 	}
 
 	.row:hover {

@@ -5,12 +5,13 @@
 	// bounded `universalTasks(true)` fetch (the model is `$lib/universal/rows.ts`). Clicking a row
 	// switches to its workspace and hands MainView a `PendingUniversalNav` so it opens on that line.
 	import { goto } from "$app/navigation";
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import { switchWorkspace, universalSetDone, universalTasks, universalUndo, type UniversalTask } from "$lib/daemon";
 	import { showToast } from "$lib/stores/toast";
 	import { pendingUniversalNav } from "$lib/stores/workspaces";
 	import { localToday } from "./editPopoverLogic";
-	import { contextCounts, GROUP_KINDS, groupRows, stats, toRows, type GroupKind, type Row } from "$lib/universal/rows";
+	import { contextCounts, groupRows, stats, toRows, type GroupKind, type Row } from "$lib/universal/rows";
+	import UniversalFilters from "./UniversalFilters.svelte";
 	import UniversalRow from "./UniversalRow.svelte";
 	import UniversalStats from "./UniversalStats.svelte";
 
@@ -40,6 +41,37 @@
 	const contexts = $derived(contextCounts(inScope));
 	const shown = $derived(context ? inScope.filter((r) => r.task.contexts.includes(context!)) : inScope);
 	const groups = $derived(groupRows(shown, group, workspaces.map((w) => w.label)));
+
+	// Keyboard (roving tabindex, https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/#kbd_roving_tabindex):
+	// one row is the tab stop; j/k/arrows/Home/End move it, Enter opens (the button's own click),
+	// x completes. `focusKey` survives a refetch, so the ring stays on the same task, or on the
+	// row now at its place when that task left the list.
+	const flat = $derived(groups.flatMap((g) => g.rows));
+	let focusKey = $state<string | null>(null);
+	const activeKey = $derived(flat.some((r) => r.key === focusKey) ? focusKey : (flat[0]?.key ?? null));
+	let listEl: HTMLElement | undefined = $state();
+
+	async function focusRow(i: number) {
+		const r = flat[Math.max(0, Math.min(flat.length - 1, i))];
+		if (!r) return;
+		focusKey = r.key;
+		await tick();
+		listEl?.querySelector<HTMLElement>(`[data-key="${CSS.escape(r.key)}"]`)?.focus();
+	}
+
+	function onListKeydown(e: KeyboardEvent) {
+		const key = (e.target as HTMLElement).closest<HTMLElement>("[data-key]")?.dataset.key;
+		if (!key || e.metaKey || e.ctrlKey || e.altKey) return;
+		const i = flat.findIndex((r) => r.key === key);
+		const moves: Record<string, number> = { j: i + 1, ArrowDown: i + 1, k: i - 1, ArrowUp: i - 1, Home: 0, End: flat.length - 1 };
+		if (e.key in moves) {
+			e.preventDefault();
+			void focusRow(moves[e.key]);
+		} else if (e.key === "x" && flat[i]) {
+			e.preventDefault();
+			void toggle(flat[i], i);
+		}
+	}
 
 	function toggleWorkspace(id: string) {
 		const next = new Set(hidden);
@@ -77,12 +109,15 @@
 
 	/** Completes or reopens a row in its own workspace, then offers Undo (the daemon's Undo on
 	 * that file, so it reverses exactly this op unless something else wrote there meanwhile). */
-	async function toggle(r: Row) {
+	async function toggle(r: Row, index?: number) {
 		error = "";
 		const { task } = r;
+		const hadFocus = index !== undefined;
 		try {
 			await universalSetDone(task, !task.done, localToday());
 			await refresh();
+			// A completed row may leave the list (show done off): keep the keyboard at its place.
+			if (hadFocus) await focusRow(flat.some((x) => x.key === r.key) ? flat.findIndex((x) => x.key === r.key) : index);
 			showToast(`${task.done ? "Reopened" : "Completed"} in ${r.ws}`, () => {
 				void universalUndo(task.workspace_id, task.root_list)
 					.then(refresh)
@@ -100,6 +135,7 @@
 	<div class="page">
 		<h1>Universal</h1>
 		<p class="lede">Open tasks from every workspace. Click one to open it where it lives.</p>
+		<p class="keys"><kbd>j</kbd> <kbd>k</kbd> move <kbd>↵</kbd> open <kbd>x</kbd> complete</p>
 
 		{#if error}
 			<p class="error" role="alert">{error}</p>
@@ -110,45 +146,26 @@
 		{:else}
 			<UniversalStats {totals} />
 
-			<div class="controls">
-				<div class="caps group-by">
-					Group
-					<div class="join" role="group" aria-label="Group by">
-						{#each GROUP_KINDS as g (g.kind)}
-							<button type="button" class:on={group === g.kind} aria-pressed={group === g.kind} onclick={() => (group = g.kind)}>
-								{g.label}
-							</button>
-						{/each}
-					</div>
-				</div>
-				<div class="chips" role="group" aria-label="Workspaces">
-					{#each workspaces as w (w.id)}
-						<button type="button" class="chip" class:on={!hidden.has(w.id)} aria-pressed={!hidden.has(w.id)} onclick={() => toggleWorkspace(w.id)}>
-							{w.label} <span class="n">{w.open}</span>
-						</button>
-					{/each}
-				</div>
-				<label class="done-toggle"><input type="checkbox" bind:checked={showDone} /> show done</label>
-			</div>
-			{#if contexts.length > 0}
-				<div class="chips" role="group" aria-label="Filter by context">
-					{#each contexts as [c, n] (c)}
-						<button type="button" class="chip mono" class:on={context === c} aria-pressed={context === c} onclick={() => (context = context === c ? null : c)}>
-							{c} <span class="n">{n}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
+			<UniversalFilters
+				bind:group
+				bind:showDone
+				bind:context
+				{workspaces}
+				{hidden}
+				{contexts}
+				onToggleWorkspace={toggleWorkspace}
+			/>
 
 			{#if shown.length === 0}
 				<div class="empty">
 					<p><b>Nothing matches.</b></p>
 					<p class="lede">Loosen the filters above.</p>
-					<button type="button" class="chip on" onclick={resetFilters}>Reset filters</button>
+					<button type="button" class="reset" onclick={resetFilters}>Reset filters</button>
 				</div>
 			{/if}
 
-			<div class="groups">
+			<!-- svelte-ignore a11y_no_static_element_interactions: the keys belong to the row buttons inside; this only delegates. -->
+			<div class="groups" bind:this={listEl} onkeydown={onListKeydown} onfocusin={(e) => (focusKey = (e.target as HTMLElement).dataset.key ?? focusKey)}>
 				{#each groups as g (g.name)}
 					<section aria-label={g.name}>
 						<h2>
@@ -163,7 +180,7 @@
 							<span class="rule"></span>
 						</h2>
 						{#each g.rows as r (r.key)}
-							<UniversalRow row={r} {group} onOpen={open} onToggle={toggle} />
+							<UniversalRow row={r} {group} onOpen={open} onToggle={toggle} active={r.key === activeKey} />
 						{/each}
 					</section>
 				{/each}
@@ -201,12 +218,17 @@
 		font-size: 0.875rem;
 	}
 
-	.caps {
+	.keys {
+		margin: 0.5rem 0 0;
 		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.05em;
-		text-transform: uppercase;
 		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+	}
+
+	.keys kbd {
+		padding: 0 0.3rem;
+		border: 1px solid currentColor;
+		border-radius: 0.3rem;
+		font: inherit;
 	}
 
 	.overdue {
@@ -221,95 +243,24 @@
 		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
 	}
 
-	.controls {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem 1rem;
-		margin-top: 1.25rem;
-	}
-
-	.group-by {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.join {
-		display: inline-flex;
-		border: 2px solid var(--color-base-content);
-		border-radius: 999px;
-		overflow: hidden;
-	}
-
-	.join button {
-		padding: 0.15rem 0.6rem;
-		border: 0;
-		background: transparent;
-		color: var(--color-base-content);
-		font: inherit;
-		font-size: 11px;
-		letter-spacing: normal;
-		text-transform: none;
-		cursor: pointer;
-	}
-
-	.join button + button {
-		border-left: 2px solid var(--color-base-content);
-	}
-
-	.join button.on,
-	.chip.on {
-		background: var(--color-primary);
-		color: var(--color-primary-content);
-	}
-
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.375rem;
-		margin-top: 0.75rem;
-	}
-
-	.controls .chips {
-		margin-top: 0;
-	}
-
-	.chip {
-		padding: 0.1rem 0.6rem;
-		border: 2px solid var(--color-base-content);
-		border-radius: 999px;
-		background: transparent;
-		color: var(--color-base-content);
-		font: inherit;
-		font-size: 11px;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	.n {
-		opacity: 0.7;
-	}
-
-	.done-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-left: auto;
-		font-size: 0.75rem;
-		cursor: pointer;
-	}
-
-	.done-toggle input {
-		accent-color: var(--color-base-content);
-	}
-
 	.empty {
 		margin-top: 2.5rem;
 		padding: 2rem;
 		border: 2px dashed color-mix(in srgb, var(--color-base-content) 30%, transparent);
 		border-radius: var(--radius-box);
 		text-align: center;
+	}
+
+	.reset {
+		padding: 0.25rem 0.9rem;
+		border: 0;
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
 	}
 
 	.empty p {
