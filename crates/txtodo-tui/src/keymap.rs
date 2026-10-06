@@ -116,6 +116,12 @@ impl Command {
 pub fn key_name(key: &KeyEvent) -> Option<String> {
     let named = match key.code {
         KeyCode::Char(' ') => "Space",
+        // A legacy terminal sends Ctrl-_ (and Ctrl-/) as byte 0x1F, which crossterm reads as
+        // Ctrl-7; nothing binds Ctrl-7, so it is named for what was pressed.
+        // Ref: https://docs.rs/crossterm/0.29/crossterm/event/struct.KeyEvent.html
+        KeyCode::Char('7') if key.modifiers == KeyModifiers::CONTROL => {
+            return Some("Ctrl-_".to_owned());
+        }
         KeyCode::Char(c) => return Some(with_mods(key.modifiers, &c.to_string(), false)),
         KeyCode::Enter => "Enter",
         KeyCode::Esc => "Esc",

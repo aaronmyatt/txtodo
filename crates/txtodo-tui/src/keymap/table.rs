@@ -55,6 +55,46 @@ commands! {
     EditCommit = "edit.commit", ["Enter"], Edit;
     /// Discard the edit.
     EditCancel = "edit.cancel", ["Esc"], Edit;
+    /// Caret to the start of the line.
+    EditLineStart = "edit.line_start", ["Ctrl-a"], Edit;
+    /// Caret to the end of the line.
+    EditLineEnd = "edit.line_end", ["Ctrl-e"], Edit;
+    /// Caret back one word.
+    EditWordBack = "edit.word_back", ["Alt-b", "Alt-Left"], Edit;
+    /// Caret forward one word.
+    EditWordForward = "edit.word_forward", ["Alt-f", "Alt-Right"], Edit;
+    /// Caret back one character.
+    EditCharBack = "edit.char_back", ["Ctrl-b"], Edit;
+    /// Caret forward one character.
+    EditCharForward = "edit.char_forward", ["Ctrl-f"], Edit;
+    /// Delete the character under the caret.
+    EditDeleteForward = "edit.delete_forward", ["Ctrl-d"], Edit;
+    /// Delete the character before the caret.
+    EditDeleteBack = "edit.delete_back", ["Ctrl-h"], Edit;
+    /// Cut back to the previous space.
+    EditKillSpaceWord = "edit.kill_space_word", ["Ctrl-w"], Edit;
+    /// Cut back to the start of the word.
+    EditKillWordBack = "edit.kill_word_back", ["Alt-Backspace"], Edit;
+    /// Cut to the end of the word.
+    EditKillWordForward = "edit.kill_word_forward", ["Alt-d"], Edit;
+    /// Cut back to the start of the line.
+    EditKillLineBack = "edit.kill_line_back", ["Ctrl-u"], Edit;
+    /// Cut to the end of the line.
+    EditKillLineForward = "edit.kill_line_forward", ["Ctrl-k"], Edit;
+    /// Paste the last cut.
+    EditYank = "edit.yank", ["Ctrl-y"], Edit;
+    /// Swap the characters around the caret.
+    EditTransposeChars = "edit.transpose_chars", ["Ctrl-t"], Edit;
+    /// Swap the words around the caret.
+    EditTransposeWords = "edit.transpose_words", ["Alt-t"], Edit;
+    /// Upper-case to the end of the word.
+    EditUpcase = "edit.upcase", ["Alt-u"], Edit;
+    /// Lower-case to the end of the word.
+    EditDowncase = "edit.downcase", ["Alt-l"], Edit;
+    /// Capitalize the word.
+    EditCapitalize = "edit.capitalize", ["Alt-c"], Edit;
+    /// Undo the field's last edit.
+    EditUndo = "edit.undo_field", ["Ctrl-_", "Ctrl-/"], Edit;
     /// Open the conflict review.
     ConflictsOpen = "conflicts.open", ["r"], List;
     /// Next conflict.

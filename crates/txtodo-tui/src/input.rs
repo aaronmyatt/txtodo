@@ -51,7 +51,6 @@ impl Input {
         now: Instant,
     ) -> Option<Action> {
         let name = keymap::key_name(&key);
-        let in_detail = state.nav.focus == Focus::Detail && state.detail.is_open();
         // Quit wins everywhere, a text field included: raw mode made Ctrl-c a key, not SIGINT.
         if name
             .as_deref()
@@ -59,6 +58,26 @@ impl Input {
         {
             return commands::run(state, Command::AppQuit);
         }
+        // Readline's keys in whichever text field has the keyboard (task tui-readline-keys).
+        let readline = name.as_deref().and_then(crate::fields::command_for);
+        if let (Some(command), Some(_)) = (readline, crate::fields::focused(state)) {
+            return commands::run(state, command);
+        }
+        let before = crate::fields::before_key(state);
+        let action = self.route(state, key, name, now);
+        crate::fields::after_key(state, before, &key);
+        action
+    }
+
+    /// Hands a key to whatever has the keyboard.
+    fn route(
+        &mut self,
+        state: &mut AppState,
+        key: KeyEvent,
+        name: Option<String>,
+        now: Instant,
+    ) -> Option<Action> {
+        let in_detail = state.nav.focus == Focus::Detail && state.detail.is_open();
         if state.command.is_some() {
             return on_command_key(state, key);
         }

@@ -16,6 +16,10 @@ pub const READ_ONLY: &str = "that line needs review first: r";
 
 /// Runs one command against `state`: the daemon call it needs, if any.
 pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
+    if crate::fields::op_of(command).is_some() || command == Command::EditUndo {
+        crate::fields::run(state, command);
+        return None;
+    }
     if changes_the_line(command) && under_review(state, state.cursor) {
         state.last_error = Some(READ_ONLY.to_owned());
         return None;

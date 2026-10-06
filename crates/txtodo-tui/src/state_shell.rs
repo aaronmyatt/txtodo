@@ -41,6 +41,12 @@ pub struct Shell {
     pub next_change: u64,
     /// How far the Help screen is scrolled, in lines.
     pub help_scroll: u16,
+    /// The one kill slot every text field shares (`Ctrl-Y`; task tui-readline-keys).
+    pub kill: crate::readline::Kill,
+    /// The undo steps of the field with the keyboard (`Ctrl-_`).
+    pub field_undo: crate::readline::Undo,
+    /// Which field those steps belong to; a different one starts them over.
+    pub field_undo_owner: Option<crate::fields::FieldId>,
 }
 
 /// One change this session made, as the daemon's `Undo` takes it back.
@@ -138,6 +144,9 @@ impl Default for Shell {
             changes: Vec::new(),
             next_change: 0,
             help_scroll: 0,
+            kill: crate::readline::Kill::default(),
+            field_undo: crate::readline::Undo::default(),
+            field_undo_owner: None,
         }
     }
 }

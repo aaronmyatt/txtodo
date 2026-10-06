@@ -201,6 +201,191 @@ desktop = { status = "differs", surface = "FileView" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
 deviation = "Desktop's list is a text buffer, so any click puts a caret there; the TUI selects on the first click and edits on a click on the selected line."
 
+# ==== Readline keys in every text field (task tui-readline-keys) ===================================
+# Scope `edit` here means any TUI text field: the line editor, parent, notes, prompt bar, search,
+# the : line and Settings fields. Alt needs the terminal to send Option as Meta on macOS.
+
+[[action]]
+id = "edit.line_start"
+title = "Caret to the start of the line"
+keys = ["Ctrl-a"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.line_end"
+title = "Caret to the end of the line"
+keys = ["Ctrl-e"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.word_back"
+title = "Caret back one word"
+keys = ["Alt-b", "Alt-Left"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.word_forward"
+title = "Caret forward one word"
+keys = ["Alt-f", "Alt-Right"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.char_back"
+title = "Caret back one character"
+keys = ["Ctrl-b"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.char_forward"
+title = "Caret forward one character"
+keys = ["Ctrl-f"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.delete_forward"
+title = "Delete the character under the caret"
+keys = ["Ctrl-d"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.delete_back"
+title = "Delete the character before the caret"
+keys = ["Ctrl-h"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.kill_space_word"
+title = "Cut back to the previous space"
+keys = ["Ctrl-w"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.kill_word_back"
+title = "Cut back to the start of the word"
+keys = ["Alt-Backspace"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.kill_word_forward"
+title = "Cut to the end of the word"
+keys = ["Alt-d"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.kill_line_back"
+title = "Cut back to the start of the line"
+keys = ["Ctrl-u"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.kill_line_forward"
+title = "Cut to the end of the line"
+keys = ["Ctrl-k"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.yank"
+title = "Paste the last cut"
+keys = ["Ctrl-y"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.transpose_chars"
+title = "Swap the characters around the caret"
+keys = ["Ctrl-t"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor: CodeMirror gives this key on macOS only (its emacs-style keys); elsewhere the platform's own keys."
+
+[[action]]
+id = "edit.transpose_words"
+title = "Swap the words around the caret"
+keys = ["Alt-t"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.upcase"
+title = "Upper-case to the end of the word"
+keys = ["Alt-u"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.downcase"
+title = "Lower-case to the end of the word"
+keys = ["Alt-l"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.capitalize"
+title = "Capitalize the word"
+keys = ["Alt-c"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+[[action]]
+id = "edit.undo_field"
+title = "Undo the field's last edit"
+keys = ["Ctrl-_", "Ctrl-/"]
+scope = "edit"
+desktop = { status = "differs", surface = "FileView, DetailView" }
+tui = { status = "done", surface = "every text field" }
+deviation = "Desktop is a browser text editor and uses the platform's keys for this (Option/Ctrl with arrows or Backspace, Mod-z undo), not readline's."
+
+
 # ==== Panes the revamp replaces (TUI as of 2026-09-24) =============================================
 
 [[action]]

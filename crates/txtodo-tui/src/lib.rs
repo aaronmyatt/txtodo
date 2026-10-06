@@ -69,6 +69,7 @@ pub mod daemon_history;
 pub mod daemon_notes;
 pub mod daemon_tokens;
 pub mod daemon_workspace;
+pub mod fields;
 pub mod input;
 pub mod input_detail;
 pub mod keymap;

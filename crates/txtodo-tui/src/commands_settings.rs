@@ -266,14 +266,19 @@ pub fn on_text_key(state: &mut AppState, key: crossterm::event::KeyEvent) -> Opt
         }
     }
     if filtering {
-        let cards = visible_cards(state);
-        if let (Some(card), Some(first)) = (card(state), cards.first())
-            && !cards.contains(&card)
-        {
-            show_card(state, *first);
-        }
+        follow_filter(state);
     }
     None
+}
+
+/// After the card filter changed: the first card it keeps comes into view if the one shown went.
+pub fn follow_filter(state: &mut AppState) {
+    let cards = visible_cards(state);
+    if let (Some(card), Some(first)) = (card(state), cards.first())
+        && !cards.contains(&card)
+    {
+        show_card(state, *first);
+    }
 }
 
 #[cfg(test)]
