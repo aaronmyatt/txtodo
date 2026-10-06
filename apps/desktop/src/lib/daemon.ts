@@ -38,6 +38,12 @@ export function onDaemonStatus(cb: (status: DaemonStatus) => void): Promise<Unli
 	return listen<DaemonStatus>("daemon-status", (event) => cb(event.payload));
 }
 
+/** Subscribes to `prompt-bar-focus`: the Quick Add hotkey pressed while the main window is
+ * frontmost (`quick_add.rs::hotkey_target`), so the prompt bar takes the keyboard. */
+export function onPromptBarFocus(cb: () => void): Promise<UnlistenFn> {
+	return listen("prompt-bar-focus", () => cb());
+}
+
 /** Mirrors `desktop_lib::dto::FileContentsDto` (`GetFile`'s response). */
 export interface FileContents {
 	path: string;

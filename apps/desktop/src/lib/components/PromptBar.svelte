@@ -5,7 +5,8 @@
 	// identity, never the UI) and keeps the keyboard for the next one; Esc hands the keyboard back to
 	// the buffer. The nine chips float above the bar while it has the keyboard, so nothing shifts.
 	// The strict-mode hint shows once typing pauses and never blocks (design §2.3).
-	import { applyMutations } from "$lib/daemon";
+	import { onMount } from "svelte";
+	import { applyMutations, onPromptBarFocus } from "$lib/daemon";
 	import Mark from "$lib/brand/Mark.svelte";
 	import Icon from "$lib/icons/Icon.svelte";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
@@ -32,6 +33,12 @@
 			adding = false;
 		}
 	}
+
+	// The Quick Add hotkey with this window frontmost lands here (`quick_add.rs`).
+	onMount(() => {
+		const off = onPromptBarFocus(() => editor?.focus());
+		return () => void off.then((f) => f());
+	});
 
 	/** Esc: back to the buffer (the root list's editor), or simply out of the bar. */
 	function leave() {

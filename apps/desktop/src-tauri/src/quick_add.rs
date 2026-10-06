@@ -1,5 +1,5 @@
 //! Menu-bar quick-add: a hidden, always-on-top window mounting the shared `EditPopover`, shown
-//! and focused by a global hotkey (tasks/desktop-quick-add/notes.md, plan M7, plan §7 §3.2). This
+//! and focused by a global hotkey (or, with the main window frontmost, its prompt bar instead) (tasks/desktop-quick-add/notes.md, plan M7, plan §7 §3.2). This
 //! module only opens/focuses windows and reads the "is the main popover dirty" guard — it never
 //! touches the daemon or the file itself (design §7: that's the frontend's `Apply` call via
 //! `$lib/daemon.ts`, the exact same path the main view's popover uses).
@@ -22,6 +22,36 @@ pub const QUICK_ADD_LABEL: &str = "quick-add";
 /// — this window is hidden between uses, never destroyed, so its Svelte app only mounts once;
 /// each hotkey press still needs a fresh, empty, focused input.
 const QUICK_ADD_SHOWN_EVENT: &str = "quick-add-shown";
+
+/// The main window's label (`tauri.conf.json`).
+const MAIN_LABEL: &str = "main";
+
+/// Event the main window's `PromptBar.svelte` listens for (`onPromptBarFocus` in `$lib/daemon.ts`)
+/// to take the keyboard.
+const PROMPT_BAR_FOCUS_EVENT: &str = "prompt-bar-focus";
+
+/// Where one hotkey press goes (tasks/desktop-ui-revamp, "Prompt bar and Quick Add").
+#[derive(Debug, PartialEq, Eq)]
+enum HotkeyTarget {
+    /// An edit is open in the main window: bring it forward, never open a second editor on top.
+    MainEditor,
+    /// The main window is frontmost: its prompt bar is the Quick Add, no window needed.
+    PromptBar,
+    /// Anywhere else: the separate always-on-top window.
+    QuickAddWindow,
+}
+
+/// The hotkey's choice, kept free of Tauri so it is unit-testable. The dirty guard wins: losing an
+/// open edit's place is worse than a slower add.
+fn hotkey_target(main_dirty: bool, main_focused: bool) -> HotkeyTarget {
+    if main_dirty {
+        HotkeyTarget::MainEditor
+    } else if main_focused {
+        HotkeyTarget::PromptBar
+    } else {
+        HotkeyTarget::QuickAddWindow
+    }
+}
 
 /// `Cmd/Ctrl+Shift+Space` (notes.md's default, "user-configurable later") — kept as one named
 /// function so changing the binding later is a one-line edit, not a hunt through `setup`.
@@ -57,17 +87,21 @@ pub fn register_shortcut(app: &AppHandle) -> Result<(), ShortcutError> {
             if event.state != ShortcutState::Pressed {
                 return; // fire on key-down only; ignore the matching key-up event
             }
-            // Guard (notes.md): "the shortcut must not fire while the popover already has an
-            // unsaved edit in the main window" — `set_main_popover_dirty` keeps this in sync from
-            // `EditPopover`'s `onDirtyChange`.
             let dirty = app
                 .state::<AppState>()
                 .main_popover_dirty
                 .load(Ordering::Relaxed);
-            if dirty {
-                focus_main_window(app);
-            } else {
-                focus_quick_add(app);
+            // `is_focused` reads the OS's key-window state; a global shortcut does not take focus,
+            // so it is still the window the user was in.
+            // Ref: https://docs.rs/tauri/2/tauri/webview/struct.WebviewWindow.html#method.is_focused
+            let main_focused = app
+                .get_webview_window(MAIN_LABEL)
+                .and_then(|w| w.is_focused().ok())
+                .unwrap_or(false);
+            match hotkey_target(dirty, main_focused) {
+                HotkeyTarget::MainEditor => focus_main_window(app),
+                HotkeyTarget::PromptBar => focus_prompt_bar(app),
+                HotkeyTarget::QuickAddWindow => focus_quick_add(app),
             }
         })
 }
@@ -88,8 +122,34 @@ pub(crate) fn focus_quick_add(app: &AppHandle) {
 /// The guarded path: the main popover is mid-edit, so the hotkey brings that window forward
 /// instead of opening a second, unrelated editor on top of it.
 fn focus_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// The main window is frontmost: hand its prompt bar the keyboard.
+fn focus_prompt_bar(app: &AppHandle) {
+    let _ = app.emit_to(MAIN_LABEL, PROMPT_BAR_FOCUS_EVENT, ());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HotkeyTarget, hotkey_target};
+
+    #[test]
+    fn an_open_edit_in_the_main_window_wins() {
+        assert_eq!(hotkey_target(true, true), HotkeyTarget::MainEditor);
+        assert_eq!(hotkey_target(true, false), HotkeyTarget::MainEditor);
+    }
+
+    #[test]
+    fn a_frontmost_main_window_uses_its_prompt_bar() {
+        assert_eq!(hotkey_target(false, true), HotkeyTarget::PromptBar);
+    }
+
+    #[test]
+    fn anywhere_else_opens_the_quick_add_window() {
+        assert_eq!(hotkey_target(false, false), HotkeyTarget::QuickAddWindow);
     }
 }
