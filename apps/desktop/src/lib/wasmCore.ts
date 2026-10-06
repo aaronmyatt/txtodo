@@ -2,7 +2,7 @@
 // Shared by the edit popover (strict-mode validation) and the conflict-review DiffView so
 // neither reinvents wasm loading. Both underlying calls are synchronous in Rust; the `async`
 // here is only to hide the one-time WASM `init()` from callers.
-import init, { diff_text, parse_line_strict } from "./wasm-core/txtodo_ffi";
+import init, { breakdown_fields, diff_text, parse_line_strict } from "./wasm-core/txtodo_ffi";
 
 /** Mirrors `crates/txtodo-ffi/src/parse_check.rs`'s `StrictCheck`. */
 export type StrictCheckResult =
@@ -32,4 +32,16 @@ export async function parseLineStrict(raw: string): Promise<StrictCheckResult> {
 export async function diffText(a: string, b: string): Promise<DiffSegment[]> {
   await ensureInit();
   return diff_text(a, b) as DiffSegment[];
+}
+
+/** One row of a line shown field by field (`txtodo_core::breakdown::fields`). */
+export interface BreakdownField {
+  name: string;
+  value: string;
+}
+
+/** `line` field by field, like sqlite's `.mode line`: the rows the TUI's `v` shows. */
+export async function breakdownFields(line: string): Promise<BreakdownField[]> {
+  await ensureInit();
+  return breakdown_fields(line) as BreakdownField[];
 }

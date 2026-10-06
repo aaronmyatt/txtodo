@@ -1164,9 +1164,9 @@ id = "detail.breakdown"
 title = "Show the parent line field by field"
 keys = ["v"]
 scope = "detail"
-desktop = { status = "planned", surface = "DetailView" }
+desktop = { status = "differs", surface = "DetailView", keys = [] }
 tui = { status = "done", surface = "detail panel" }
-deviation = ""
+deviation = "Desktop: a Fields button under the parent line, no key: the panel's editors hold the keyboard, where a letter types."
 
 [[action]]
 id = "workspace.switch"

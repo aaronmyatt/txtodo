@@ -35,6 +35,7 @@
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
 	import { lineOfTask, taskIdAt } from "$lib/todotxt/taskIds";
 	import type { DetailParams } from "$lib/types";
+	import { breakdownFields, type BreakdownField } from "$lib/wasmCore";
 	import Breadcrumb from "./Breadcrumb.svelte";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import FileView from "./FileView.svelte";
@@ -96,6 +97,19 @@
 	const notesState = $derived(
 		notesMode({ parentLine, parentTaskId, hasRefTag: refTag !== null, notesPathMissing })
 	);
+
+	// The parent line field by field (root todo "the detail view task input box obscures…"; manifest
+	// `detail.breakdown`): core's rows through wasm, behind a toggle. A button, not the TUI's `v`:
+	// this panel's editors hold the keyboard, where a letter types.
+	let fieldsOpen = $state(false);
+	let fields = $state<BreakdownField[]>([]);
+	$effect(() => {
+		const line = parentLine;
+		if (!fieldsOpen) return;
+		void breakdownFields(line).then((rows) => {
+			if (line === parentLine) fields = rows;
+		});
+	});
 
 	// Starting a sub-list on a task that has none yet (task desktop-sublist-start): the section
 	// shows one add-line input instead of a FileView. Nothing is written until the first submit.
@@ -339,6 +353,22 @@
 				Mark parent done
 			</button>
 		{/if}
+		<button
+			type="button"
+			class="fields-toggle"
+			aria-expanded={fieldsOpen}
+			onclick={() => (fieldsOpen = !fieldsOpen)}
+		>
+			{fieldsOpen ? "Hide fields" : "Fields"}
+		</button>
+		{#if fieldsOpen}
+			<dl class="fields" aria-label="Parent line, field by field">
+				{#each fields as field (field.name + field.value)}
+					<dt>{field.name}</dt>
+					<dd>{field.value}</dd>
+				{/each}
+			</dl>
+		{/if}
 	</section>
 
 	<section class="sublist" aria-label="Sub-list">
@@ -449,6 +479,35 @@
 
 	.parent-line :global(.cm-editor) {
 		outline: none;
+	}
+
+	.fields-toggle {
+		align-self: flex-start;
+		font-size: 0.85rem;
+	}
+
+	/* sqlite `.mode line`: names right-aligned in one column, `=`, the values. */
+	.fields {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.1rem 0.5rem;
+		margin: 0;
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 0.85rem;
+	}
+
+	.fields dt {
+		text-align: right;
+		color: var(--color-text-muted, inherit);
+	}
+
+	.fields dt::after {
+		content: " =";
+	}
+
+	.fields dd {
+		margin: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.mark-done-offer {

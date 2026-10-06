@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
 	apply_chip,
+	breakdown_fields,
 	due_bucket,
 	due_label,
 	group_rows,
@@ -25,6 +26,20 @@ beforeAll(() => {
 });
 
 describe("wasm core: shared logic", () => {
+	it("breakdown_fields gives the TUI's field rows", () => {
+		const rows = breakdown_fields("(A) 2026-10-05 call mum @phone due:2026-10-09");
+		expect(rows.map((r: { name: string }) => r.name)).toEqual([
+			"done",
+			"priority",
+			"created",
+			"completed",
+			"text",
+			"contexts",
+			"due"
+		]);
+		expect(rows[4]).toEqual({ name: "text", value: "call mum" });
+	});
+
 	it("matches_query ANDs terms, excludes -terms and knows is:done", () => {
 		expect(matches_query("(A) Call Mum @phone", "mum @PHONE")).toBe(true);
 		expect(matches_query("(A) Call Mum @phone", "-phone")).toBe(false);
