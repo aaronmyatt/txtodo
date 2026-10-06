@@ -131,3 +131,13 @@ fn a_daemon_refusal_keeps_its_line_and_any_spec_rule() {
     let bare = status(tonic::Status::not_found("no such task"));
     assert!(bare.line.is_none() && bare.spec_rule.is_none());
 }
+
+#[test]
+fn an_added_line_is_found_by_its_body_whatever_the_daemon_did_to_the_prefix() {
+    assert_eq!(body("(A) 2026-10-06 tui: readline"), "tui: readline");
+    assert_eq!(body("(a) tui: readline"), "tui: readline");
+    assert_eq!(body("x 2026-10-06 call mum pri:A"), "call mum pri:A");
+    assert_eq!(body("X call mum"), "call mum");
+    assert_eq!(body("xylophone lesson"), "xylophone lesson");
+    assert_eq!(body("call"), "call", "one word, no prefix");
+}

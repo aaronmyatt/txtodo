@@ -114,12 +114,40 @@ async fn find_added_row(
     workspace: WorkspaceArg,
 ) -> Result<TaskRow, McpError> {
     let after = get_file_doc(client, path, workspace).await?;
+    // The daemon may rewrite the prefix on the way in (today's date, `(a)` to `(A)`, a typed `x `
+    // dated), so the line is found by what follows the prefix.
+    let want = body(text.trim());
     parse::lines(&after.text)
         .into_iter()
         .rev()
-        .find(|(_, raw)| raw.contains(text.trim()))
+        .find(|(_, raw)| body(raw).contains(want))
         .map(|(n, raw)| after.row(n, raw))
         .ok_or_else(|| McpError::daemon("added task could not be re-read"))
+}
+
+/// A line without its todo.txt prefix: the done marker (`x`/`X`), a priority (any case) and up to
+/// two dates, in any of the orders a typed or a stamped line has them.
+pub(crate) fn body(raw: &str) -> &str {
+    let is_date = |w: &str| {
+        w.len() == 10
+            && w.bytes().enumerate().all(|(i, b)| match i {
+                4 | 7 => b == b'-',
+                _ => b.is_ascii_digit(),
+            })
+    };
+    let is_priority = |w: &str| matches!(w.as_bytes(), [b'(', p, b')'] if p.is_ascii_alphabetic());
+    let mut rest = raw;
+    for _ in 0..4 {
+        let Some((word, after)) = rest.split_once(' ') else {
+            break;
+        };
+        if word == "x" || word == "X" || is_date(word) || is_priority(word) {
+            rest = after;
+        } else {
+            break;
+        }
+    }
+    rest
 }
 
 /// `todo_complete` (`done: true`) / `todo_uncomplete` (`done: false`).
