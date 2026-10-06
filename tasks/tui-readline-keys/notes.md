@@ -53,3 +53,13 @@
 - **In the notes, `Ctrl-K` at the end of a line deletes the line break** (emacs), so repeated
   `Ctrl-K` empties a block; `Ctrl-U` kills back to the start of the logical line.
 - Not included: `Alt-R` (revert line, same as Esc here), `Alt-.` (last argument: no history).
+
+## As built
+- `src/readline.rs` (2026-10-06): one `Op` per key and `apply(op, text, caret, kill)`, pure, over
+  the `String` + byte caret every field keeps. Words are UAX #29 word-bound segments holding a
+  letter or digit; `Ctrl-W` alone goes back to a space (readline's `unix-word-rubout`). `Kill` is
+  the one shared slot: kills in a row join (backward in front, forward behind), any other op starts
+  it over. `Ctrl-K` at a line's end takes the line break. `Ctrl-T`/`Alt-T` follow readline: the
+  caret ends after the swapped pair. `Undo` keeps snapshots; a run of typed characters is one step.
+  - Ideographs are one word each (UAX #29 has no dictionary), so `Alt-F` over Japanese moves one
+    character at a time.
