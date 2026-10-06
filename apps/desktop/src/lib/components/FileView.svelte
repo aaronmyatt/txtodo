@@ -507,6 +507,7 @@
 	}
 
 	.add-line input {
+		box-sizing: border-box; /* padding and border inside the 100%, or it runs off the right edge */
 		width: 100%;
 		font: inherit;
 		padding: 0.4rem 0.6rem;
