@@ -44,8 +44,11 @@
 	// (`universalTasks`, open lines of each root list); empty when that fetch fails.
 	let openCounts = $state<Map<string, number>>(new Map());
 
+	// The counts only show in the open menu, so they are fetched only then: at startup the fetch
+	// reads every workspace's root list and cost the 10k-line first paint ~500ms (e2e/perf.spec.ts).
 	async function refresh() {
 		workspaces = await listWorkspaces();
+		if (!open) return;
 		universalTasks()
 			.then((tasks) => {
 				const counts = new Map<string, number>();
