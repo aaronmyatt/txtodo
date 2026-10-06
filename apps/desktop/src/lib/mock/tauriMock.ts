@@ -138,6 +138,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return undefined as T;
 		case "universal_tasks":
 			return universalTasksDto(args?.includeDone === true) as T;
+		case "quick_add_hotkey":
+			return ["Super", "Shift", "Space"] as T;
 		case "universal_set_done":
 			return mockUniversalSetDone(args ?? {}) as unknown as T;
 		case "universal_undo":

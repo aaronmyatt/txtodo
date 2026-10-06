@@ -56,7 +56,30 @@ fn hotkey_target(main_dirty: bool, main_focused: bool) -> HotkeyTarget {
 /// `Cmd/Ctrl+Shift+Space` (notes.md's default, "user-configurable later") — kept as one named
 /// function so changing the binding later is a one-line edit, not a hunt through `setup`.
 fn quick_add_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::SUPER | Modifiers::SHIFT), Code::Space)
+    Shortcut::new(Some(HOTKEY_MODS), HOTKEY_CODE)
+}
+
+const HOTKEY_MODS: Modifiers = Modifiers::SUPER.union(Modifiers::SHIFT);
+const HOTKEY_CODE: Code = Code::Space;
+
+/// The hotkey as key names (`["Super", "Shift", "Space"]`) for Settings > Shortcuts and Help,
+/// read from the same constants the registration uses, so the page can never show a stale key.
+pub(crate) fn hotkey_parts() -> Vec<String> {
+    let mut parts = Vec::new();
+    for (flag, name) in [
+        (Modifiers::SUPER, "Super"),
+        (Modifiers::CONTROL, "Ctrl"),
+        (Modifiers::ALT, "Alt"),
+        (Modifiers::SHIFT, "Shift"),
+    ] {
+        if HOTKEY_MODS.contains(flag) {
+            parts.push(name.to_owned());
+        }
+    }
+    // `Code`'s Debug is its W3C name (`Space`, `KeyA`):
+    // https://w3c.github.io/uievents-code/#code-value-tables
+    parts.push(format!("{HOTKEY_CODE:?}"));
+    parts
 }
 
 /// Creates the quick-add window hidden; `lib.rs`'s `setup` calls this once at startup. Hidden
@@ -146,6 +169,11 @@ mod tests {
     #[test]
     fn a_frontmost_main_window_uses_its_prompt_bar() {
         assert_eq!(hotkey_target(false, true), HotkeyTarget::PromptBar);
+    }
+
+    #[test]
+    fn the_hotkey_reads_as_its_key_names() {
+        assert_eq!(super::hotkey_parts(), vec!["Super", "Shift", "Space"]);
     }
 
     #[test]

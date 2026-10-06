@@ -9,6 +9,7 @@
 	import GeneralSettings from "$lib/components/settings/GeneralSettings.svelte";
 	import AppearanceSettings from "$lib/components/settings/AppearanceSettings.svelte";
 	import WorkspacesSettings from "$lib/components/settings/WorkspacesSettings.svelte";
+	import ShortcutsSettings from "$lib/components/settings/ShortcutsSettings.svelte";
 	import Devices from "../../devices/Devices.svelte";
 	import Tokens from "../../devices/Tokens.svelte";
 	import ActivityFeed from "../../devices/ActivityFeed.svelte";
@@ -18,6 +19,7 @@
 		general: { body: general },
 		appearance: { body: appearance },
 		workspaces: { body: workspaces },
+		shortcuts: { body: shortcuts },
 		devices: { body: devices, headless: true },
 		tokens: { body: tokens, headless: true },
 		activity: { body: activity, headless: true }
@@ -69,6 +71,7 @@
 {#snippet general()}<GeneralSettings />{/snippet}
 {#snippet appearance()}<AppearanceSettings />{/snippet}
 {#snippet workspaces()}<WorkspacesSettings />{/snippet}
+{#snippet shortcuts()}<ShortcutsSettings />{/snippet}
 {#snippet devices()}<Devices />{/snippet}
 {#snippet tokens()}<Tokens />{/snippet}
 {#snippet activity()}<ActivityFeed />{/snippet}
