@@ -1,8 +1,10 @@
-//! The cross-workspace bridge commands: `op_log_all` (body in `activity.rs`) and the Universal
+//! The cross-workspace bridge commands: `op_log_all` (body in `activity.rs`), `sync_status` (the
+//! footer's indicator) and the Universal
 //! ones (task desktop-ui-revamp), `universal_tasks`, `universal_set_done` and `universal_undo`.
 //! The Universal ones do not restate their bodies: they call the same `desktop_lib` functions
 //! the Tauri commands do, so a Playwright spec exercises the shipped code against a real daemon.
 
+use desktop_lib::commands_sync::SyncStatusDto;
 use desktop_lib::commands_universal::universal_rows;
 use desktop_lib::commands_universal_edit::{RowRef, set_done, undo, undo_change_with};
 use desktop_lib::daemon::DaemonClient;
@@ -13,8 +15,9 @@ use super::activity::cmd_op_log_all;
 use super::{ApiError, parse};
 
 /// The commands this module answers; the caller checks membership first.
-pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 5] = [
+pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 6] = [
     "op_log_all",
+    "sync_status",
     "universal_tasks",
     "universal_set_done",
     "universal_undo",
@@ -52,6 +55,9 @@ pub(crate) async fn dispatch(
     }
     match cmd {
         "op_log_all" => cmd_op_log_all(client).await,
+        "sync_status" => Ok(serde_json::to_value(SyncStatusDto::from(
+            client.sync_status().await?,
+        ))?),
         "undo_change" => cmd_undo_change(client, args).await,
         "universal_tasks" => {
             let r: TasksReq = parse(args)?;

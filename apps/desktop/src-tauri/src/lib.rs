@@ -11,7 +11,7 @@ mod commands_devices;
 mod commands_duplicates;
 mod commands_notes;
 mod commands_pairing;
-mod commands_sync;
+pub mod commands_sync;
 mod commands_tokens;
 mod commands_ui_log;
 pub mod commands_universal;

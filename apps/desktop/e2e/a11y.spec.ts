@@ -39,7 +39,8 @@ test("every control on each page has a name, and the nav marks the page", async 
 	for (const link of ["Universal", "Settings"]) {
 		await page.getByRole("link", { name: link }).click();
 		await expect(page.getByRole("link", { name: link })).toHaveAttribute("aria-current", "page");
-		await page.waitForLoadState("networkidle");
+		// The page's own heading, not network idle: the footer's sync indicator polls.
+		await expect(page.getByRole("heading", { name: link, level: 1 })).toBeVisible();
 		expect(await unnamed(page)).toEqual([]);
 	}
 });

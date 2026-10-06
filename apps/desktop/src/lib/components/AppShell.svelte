@@ -17,6 +17,7 @@
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
 	import Toasts from "./Toasts.svelte";
+	import SyncIndicator from "./SyncIndicator.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -154,7 +155,7 @@
 	<Toasts />
 	<PromptBar />
 
-	<!-- The status footer: the main buffer's save state and caret, and the keys for this view. -->
+	<!-- The status footer: the main buffer's save state and caret, sync, and the keys for this view. -->
 	<footer class="status-bar">
 		{#if path === "/"}
 			<span class="save" data-save={$editorStatus.save} role="status">
@@ -164,6 +165,7 @@
 				<span>Ln {$editorStatus.line}, Col {$editorStatus.col}</span>
 			{/if}
 		{/if}
+		<SyncIndicator />
 		<span class="hints">
 			{#each hints as [key, what] (key)}
 				<span class="hint"><kbd>{key}</kbd>{what}</span>

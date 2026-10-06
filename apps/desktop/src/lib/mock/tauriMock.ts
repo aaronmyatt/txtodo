@@ -71,7 +71,12 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "list_duplicates":
 			return [] as T;
 		case "sync_status":
-			return { protocol: 2, peers: [] } as T;
+			// One synthetic peer, in step, so the footer's sync indicator has something to say.
+			return {
+				protocol: 2,
+				pending_ops: 0,
+				peers: [{ device: "01MOCKDEVICE00000000LAPTOP", lag_ms: 400, parked: false, stuck: 0, stuck_files: [], their_protocol: 0 }]
+			} as T;
 		case "resolve": {
 			const task = args?.task as TaskRef;
 			const path = args?.path as string;

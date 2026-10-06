@@ -528,7 +528,7 @@ id = "sync.open"
 title = "Sync details"
 keys = ["s"]
 scope = "list"
-desktop = { status = "planned", surface = "status footer", keys = [] }
+desktop = { status = "done", surface = "status footer indicator and popup" }
 tui = { status = "done", surface = "footer sync popup" }
 deviation = ""
 

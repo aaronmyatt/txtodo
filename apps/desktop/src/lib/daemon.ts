@@ -204,6 +204,8 @@ export interface SyncPeer {
 	lag_ms: number;
 	parked: boolean;
 	stuck: number;
+	/** The files its ops keep being refused on (`stuck` of them). */
+	stuck_files: string[];
 	/** The sync protocol it speaks when not ours (then nothing syncs with it); 0 = same. */
 	their_protocol: number;
 }
@@ -213,6 +215,8 @@ export interface SyncStatus {
 	/** This daemon's sync protocol; 0 from an older daemon. */
 	protocol: number;
 	peers: SyncPeer[];
+	/** Ops this device holds that a peer has not taken yet. */
+	pending_ops: number;
 }
 
 /** Paired peers' sync state, from the daemon's `SyncStatus` (polled: no `Watch` event carries it). */

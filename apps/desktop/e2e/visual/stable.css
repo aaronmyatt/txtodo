@@ -8,3 +8,9 @@
 	overflow: hidden;
 	color: transparent !important;
 }
+
+/* The footer's sync indicator appears on its first read, 1.5 s after load: whether a golden
+   catches it is timing, not design. Its own spec covers it (e2e/sync-indicator.spec.ts). */
+.sync {
+	visibility: hidden;
+}

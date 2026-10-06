@@ -1,7 +1,6 @@
 //! `sync_status`: what the desktop shows about paired peers (task
-//! sync-divergence-check/protocol-mismatch). Today only the peers on another sync protocol are
-//! drawn (`ProtocolMismatchBanner.svelte`); the DTO carries the rest of a peer's row for a later
-//! sync view.
+//! sync-divergence-check/protocol-mismatch): the protocol-mismatch banner, and the status footer's
+//! sync indicator with its popup (`SyncIndicator.svelte`, the TUI's `s`).
 
 use crate::commands::ensure_connected;
 use crate::state::AppState;
@@ -20,6 +19,8 @@ pub struct SyncPeerDto {
     pub parked: bool,
     /// Files its ops keep being refused on.
     pub stuck: usize,
+    /// Those files, by path, for the sync popup.
+    pub stuck_files: Vec<String>,
     /// The sync protocol it speaks when not ours; 0 = same, not seen, or an older daemon.
     pub their_protocol: u32,
 }
@@ -31,12 +32,15 @@ pub struct SyncStatusDto {
     pub protocol: u32,
     /// Paired peers.
     pub peers: Vec<SyncPeerDto>,
+    /// Ops this device holds that a peer has not taken yet.
+    pub pending_ops: u64,
 }
 
 impl From<pb::SyncStatusResponse> for SyncStatusDto {
     fn from(r: pb::SyncStatusResponse) -> SyncStatusDto {
         SyncStatusDto {
             protocol: r.protocol,
+            pending_ops: r.pending_ops,
             peers: r
                 .peers
                 .into_iter()
@@ -45,6 +49,7 @@ impl From<pb::SyncStatusResponse> for SyncStatusDto {
                     lag_ms: p.lag_ms,
                     parked: p.parked,
                     stuck: p.stuck.len(),
+                    stuck_files: p.stuck.into_iter().map(|s| s.file).collect(),
                     their_protocol: p.their_protocol,
                 })
                 .collect(),
