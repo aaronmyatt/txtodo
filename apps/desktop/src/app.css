@@ -9,20 +9,17 @@
 :root {
 	color-scheme: light;
 
-	/* Every todo.txt CM6 surface (FileView, EditPopover, DetailView's pinned parent line) shares
-	   this — see todotxtLanguage.ts's `todotxtColorTheme`. Not theme-dependent, so it lives only
-	   here, not duplicated under `[data-theme="dark"]`. Chosen over CM6's default generic
-	   `monospace` after comparing it against Courier New, JetBrains Mono/Fira Code, Georgia, and
-	   Verdana on the real task list: it's the system-native mono (crisp, no extra weight to load)
-	   and keeps dates/tags/priorities aligned in columns, unlike the two non-monospace options.
+	/* Every todo.txt CM6 surface (FileView, EditPopover, DetailView's pinned parent line) and the
+	   chrome share JetBrains Mono, the logo's typeface (task desktop-ui-revamp: 400/500 for text,
+	   700 for the wordmark and headings), self-hosted from Fontsource (+layout.svelte). A mono font
+	   keeps dates/tags/priorities aligned in columns; the system mono is the fallback.
 	   Ref (`ui-monospace` generic family): https://developer.mozilla.org/en-US/docs/Web/CSS/font-family#monospace_fonts */
-	--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-	/* Centralized UI sans stack (was duplicated inline in MainView.svelte and DetailView.svelte). */
-	--font-sans: Inter, Avenir, Helvetica, Arial, sans-serif;
+	/* Plain sans for prose (design: "plain sans only for prose"). The system UI font: no Inter. */
+	--font-sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
 
-	/* Brand typeface: the "txtodo" wordmark's own font, used only where the app names itself
-	   (MainView's <h1>) — not a general UI font swap. Loaded via Google Fonts in app.html. */
+	/* The wordmark and headings. */
 	--font-brand: "JetBrains Mono", var(--font-mono);
 
 	/* DaisyUI 5's theme variables (task desktop-ui-revamp: the c2 mockup's "txtodo" theme, ink on

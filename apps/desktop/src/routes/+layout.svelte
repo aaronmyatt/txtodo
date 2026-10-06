@@ -3,11 +3,14 @@
 	// Tailwind/DaisyUI layers first, so app.css (unlayered) still wins wherever both style a thing.
 	import "../tailwind.css";
 	import "../app.css";
-	// Brand typeface for the "txtodo" wordmark (MainView's <h1>, --font-brand in app.css), bundled by
-	// Vite from the Fontsource package, latin 700 only. Self-hosted, not Google Fonts: the app and
-	// the visual goldens never touch the network for it (a slow fetch timed out the screenshots'
-	// font wait, and offline the wordmark fell back to another font). OFL-1.1.
+	// JetBrains Mono, the brand typeface (task desktop-ui-revamp): 400/500 for the buffer and the
+	// chrome (--font-mono), 700 for the wordmark and headings (--font-brand). Bundled by Vite from
+	// the Fontsource package, latin only. Self-hosted, never Google Fonts: the app and the visual
+	// goldens never touch the network for it (a slow fetch timed out the screenshots' font wait, and
+	// offline the wordmark fell back to another font). OFL-1.1.
 	// Ref: https://fontsource.org/fonts/jetbrains-mono/install
+	import "@fontsource/jetbrains-mono/latin-400.css";
+	import "@fontsource/jetbrains-mono/latin-500.css";
 	import "@fontsource/jetbrains-mono/latin-700.css";
 	import { resolvedTheme } from "$lib/stores/theme";
 
