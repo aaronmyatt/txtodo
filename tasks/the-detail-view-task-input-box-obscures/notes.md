@@ -16,3 +16,10 @@ Let's also add a task breakdown view, perhaps a vertical view like `.mode line` 
   rows under the parent line behind a "Fields" toggle button.
   - Desktop takes a button, not `v`: the panel's editors hold the keyboard most of the time, so a
     letter key would type. Manifest row becomes `differs` with that deviation.
+
+## As built
+- As built (2026-10-06): `EditorView.lineWrapping` on the parent editor (4cef8879);
+  `breakdown_fields` in `crates/txtodo-ffi/src/wasm.rs` with `wasm-core/` regenerated (8252edb4);
+  `wasmCore.breakdownFields` and a Fields toggle under the parent line rendering a `<dl>` grid,
+  names right-aligned with `=`. Vitest covers the wasm export; nothing tests the toggle itself.
+  - Not checked by eye: the wrapped parent and the Fields grid in light and dark.
