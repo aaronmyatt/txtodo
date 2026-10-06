@@ -417,6 +417,24 @@ export function universalTasks(includeDone = false): Promise<UniversalTask[]> {
 	return invoke("universal_tasks", { includeDone });
 }
 
+/** Marks a Universal row done or not done in *its* workspace (`commands_universal_edit.rs`); the
+ * app's own open workspace never moves. `today` is the local date (ADR 0011). */
+export function universalSetDone(task: UniversalTask, done: boolean, today: string): Promise<ApplyResult> {
+	return invoke("universal_set_done", {
+		workspaceId: task.workspace_id,
+		path: task.root_list,
+		lineNumber: task.line_number,
+		taskId: task.task_id,
+		done,
+		today
+	});
+}
+
+/** Undoes the newest op on `path` in that workspace: the toast's Undo after a Universal toggle. */
+export function universalUndo(workspaceId: string, path: string): Promise<ApplyResult> {
+	return invoke("universal_undo", { workspaceId, path });
+}
+
 /** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved
  * edit right now (tasks/desktop-quick-add/notes.md: "if the main popover is open and dirty, the
  * hotkey focuses the main window instead"). Best-effort: callers swallow the rejection rather than

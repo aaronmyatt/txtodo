@@ -14,6 +14,7 @@ mod commands_sync;
 mod commands_tokens;
 mod commands_ui_log;
 mod commands_universal;
+mod commands_universal_edit;
 mod commands_version;
 mod commands_window;
 mod commands_workspace;
@@ -121,6 +122,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_workspace::rename_workspace,
         commands_workspace::switch_workspace,
         commands_universal::universal_tasks,
+        commands_universal_edit::universal_set_done,
+        commands_universal_edit::universal_undo,
         commands_notes::get_notes,
         commands_notes::edit_notes,
         commands_notes::ref_dir,

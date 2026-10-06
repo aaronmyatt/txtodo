@@ -6,10 +6,11 @@
 	// switches to its workspace and hands MainView a `PendingUniversalNav` so it opens on that line.
 	import { goto } from "$app/navigation";
 	import { onMount } from "svelte";
-	import { switchWorkspace, universalTasks, type UniversalTask } from "$lib/daemon";
+	import { switchWorkspace, universalSetDone, universalTasks, universalUndo, type UniversalTask } from "$lib/daemon";
+	import { showToast } from "$lib/stores/toast";
 	import { pendingUniversalNav } from "$lib/stores/workspaces";
 	import { localToday } from "./editPopoverLogic";
-	import { contextCounts, GROUP_KINDS, groupRows, stats, toRows, type GroupKind } from "$lib/universal/rows";
+	import { contextCounts, GROUP_KINDS, groupRows, stats, toRows, type GroupKind, type Row } from "$lib/universal/rows";
 	import UniversalRow from "./UniversalRow.svelte";
 	import UniversalStats from "./UniversalStats.svelte";
 
@@ -63,7 +64,8 @@
 		}
 	}
 
-	onMount(async () => {
+	/** One bounded fetch (done lines included, for the `x done` stat and show-done). */
+	async function refresh() {
 		try {
 			tasks = await universalTasks(true);
 		} catch (e) {
@@ -71,7 +73,27 @@
 		} finally {
 			loading = false;
 		}
-	});
+	}
+
+	/** Completes or reopens a row in its own workspace, then offers Undo (the daemon's Undo on
+	 * that file, so it reverses exactly this op unless something else wrote there meanwhile). */
+	async function toggle(r: Row) {
+		error = "";
+		const { task } = r;
+		try {
+			await universalSetDone(task, !task.done, localToday());
+			await refresh();
+			showToast(`${task.done ? "Reopened" : "Completed"} in ${r.ws}`, () => {
+				void universalUndo(task.workspace_id, task.root_list)
+					.then(refresh)
+					.catch((e) => (error = String(e)));
+			});
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	onMount(refresh);
 </script>
 
 <main class="universal">
@@ -141,7 +163,7 @@
 							<span class="rule"></span>
 						</h2>
 						{#each g.rows as r (r.key)}
-							<UniversalRow row={r} {group} onOpen={open} />
+							<UniversalRow row={r} {group} onOpen={open} onToggle={toggle} />
 						{/each}
 					</section>
 				{/each}

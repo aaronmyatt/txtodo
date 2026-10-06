@@ -98,6 +98,31 @@ impl DaemonClient {
         Ok(self.inner.list_files(req).await?.into_inner())
     }
 
+    /// `apply` against `selector`, never touching this client's own: completing a task from the
+    /// Universal view, in whichever workspace that row lives.
+    pub async fn apply_for(
+        &mut self,
+        selector: pb::WorkspaceSelector,
+        mut req: pb::ApplyRequest,
+    ) -> Result<pb::ApplyResponse, DaemonError> {
+        req.workspace = Some(selector);
+        Ok(self.inner.apply(req).await?.into_inner())
+    }
+
+    /// Undoes the newest op on `path` in `selector`'s workspace (the Universal view's Undo).
+    pub async fn undo_for(
+        &mut self,
+        selector: pb::WorkspaceSelector,
+        path: &str,
+    ) -> Result<pb::ApplyResponse, DaemonError> {
+        let req = pb::UndoRequest {
+            path: path.to_owned(),
+            steps: 1,
+            workspace: Some(selector),
+        };
+        Ok(self.inner.undo(req).await?.into_inner())
+    }
+
     /// The daemon's own version and release date: a selector-less `Health`, which the daemon
     /// answers at once with the device totals even while workspaces are still opening, so this
     /// never waits on an open (task version-info). An older daemon sends an empty date.

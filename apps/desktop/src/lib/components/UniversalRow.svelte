@@ -3,12 +3,29 @@
 	// then the due badge, the `ref:` sub-list's n/m, and the workspace tile.
 	import type { UniversalTask } from "$lib/daemon";
 	import { segments } from "$lib/todotxt/segments";
+	import Icon from "$lib/icons/Icon.svelte";
 	import type { GroupKind, Row } from "$lib/universal/rows";
 
-	let { row, group, onOpen }: { row: Row; group: GroupKind; onOpen: (task: UniversalTask) => void } = $props();
+	interface Props {
+		row: Row;
+		group: GroupKind;
+		onOpen: (task: UniversalTask) => void;
+		onToggle: (row: Row) => void;
+	}
+
+	let { row, group, onOpen, onToggle }: Props = $props();
 </script>
 
 <div class="row" class:done={row.task.done}>
+	<!-- The round mark: done fills it with ink. Out of the tab order; `x` on a row does the same. -->
+	<button
+		type="button"
+		class="mark-btn"
+		class:is-done={row.task.done}
+		tabindex="-1"
+		aria-label={row.task.done ? "Mark not done" : "Mark done"}
+		onclick={() => onToggle(row)}><Icon name="x" /></button
+	>
 	<button type="button" class="open" onclick={() => onOpen(row.task)}>
 		{#if group !== "priority" && row.task.priority}
 			<span class="tok-priority">({row.task.priority})</span>
@@ -29,6 +46,37 @@
 </div>
 
 <style>
+	/* The mockup's .tx-mark-btn. */
+	.mark-btn {
+		display: grid;
+		flex-shrink: 0;
+		place-items: center;
+		width: 1.2rem;
+		height: 1.2rem;
+		padding: 0;
+		border: 2px solid color-mix(in srgb, var(--color-base-content) 50%, transparent);
+		border-radius: 999px;
+		background: transparent;
+		color: transparent;
+		cursor: pointer;
+		transition:
+			border-color 0.12s,
+			background-color 0.12s,
+			color 0.12s;
+		--icon-size: 0.7rem;
+	}
+
+	.mark-btn:hover {
+		border-color: var(--color-base-content);
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+	}
+
+	.mark-btn.is-done {
+		border-color: var(--color-base-content);
+		background: var(--color-base-content);
+		color: var(--color-base-100);
+	}
+
 	.row {
 		display: flex;
 		align-items: center;

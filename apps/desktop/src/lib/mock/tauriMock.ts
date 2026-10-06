@@ -5,6 +5,7 @@
 // State lives in `./state.ts`, command behaviour in `./logic.ts` — this file is only the
 // `invoke(cmd, args)` switch tying the two to the Tauri command names `daemon.ts`/`devices/api.ts`
 // call.
+import { mockUniversalSetDone, mockUniversalUndo } from "./universal";
 import {
 	applyMutations,
 	mockEditNotes,
@@ -137,6 +138,10 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return undefined as T;
 		case "universal_tasks":
 			return universalTasksDto(args?.includeDone === true) as T;
+		case "universal_set_done":
+			return mockUniversalSetDone(args ?? {}) as unknown as T;
+		case "universal_undo":
+			return mockUniversalUndo(args ?? {}) as unknown as T;
 		case "set_main_popover_dirty":
 			return undefined as T;
 		case "set_pinned":

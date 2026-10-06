@@ -15,6 +15,7 @@
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
+	import Toasts from "./Toasts.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -142,6 +143,7 @@
 		{@render children()}
 	</div>
 
+	<Toasts />
 	<PromptBar />
 
 	<!-- The status footer: the main buffer's save state and caret, and the keys for this view. -->
