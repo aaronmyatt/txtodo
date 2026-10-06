@@ -14,6 +14,7 @@
 	import { searchQuery, searchStep } from "$lib/stores/search";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
+	import PromptBar from "./PromptBar.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
 	import WorkspaceSwitcher from "./WorkspaceSwitcher.svelte";
 
@@ -140,6 +141,8 @@
 	<div class="content">
 		{@render children()}
 	</div>
+
+	<PromptBar />
 
 	<!-- The status footer: the main buffer's save state and caret, and the keys for this view. -->
 	<footer class="status-bar">
@@ -321,7 +324,6 @@
 		gap: 1rem;
 		height: 2rem;
 		padding: 0 1rem;
-		border-top: 2px solid color-mix(in srgb, var(--color-base-content) 20%, transparent);
 		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
 		font-family: var(--font-mono);
 		font-size: 0.6875rem;

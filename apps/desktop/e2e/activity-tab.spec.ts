@@ -38,7 +38,7 @@ test("merges in a second registered workspace, tagged with its own root", async 
 	try {
 		await page.getByRole("button", { name: "Open workspace navigation" }).click();
 		await page.getByPlaceholder("/path/to/workspace").fill(secondDir);
-		await page.getByRole("button", { name: "Add" }).click();
+		await page.getByRole("button", { name: "Add", exact: true }).click();
 		// Registering doesn't open it; the Activity tab's own fan-out is what triggers adoption.
 		await page.getByRole("tab", { name: "Activity" }).click();
 
@@ -58,7 +58,7 @@ test("a registered workspace whose directory is gone is skipped, not blanking th
 
 	await page.getByRole("button", { name: "Open workspace navigation" }).click();
 	await page.getByPlaceholder("/path/to/workspace").fill(goneDir);
-	await page.getByRole("button", { name: "Add" }).click();
+	await page.getByRole("button", { name: "Add", exact: true }).click();
 	// Gone before the daemon ever opens it — `root_exists` is checked fresh on every list, not
 	// cached from add-time, so this reproduces a workspace that's registered but unreachable.
 	rmSync(goneDir, { recursive: true, force: true });

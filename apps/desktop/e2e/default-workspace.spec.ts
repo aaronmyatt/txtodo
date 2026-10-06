@@ -35,7 +35,8 @@ test("a task typed into the main view lands in the default workspace's todo.txt"
 	const todoPath = join(daemon.dir, "todo.txt");
 	expect(readFileSync(todoPath, "utf8")).toBe("");
 
-	await page.locator(".cm-content").first().click();
+	// The root buffer, not the prompt bar (both are CodeMirror editors).
+	await page.locator(".buffer .cm-content").click();
 	await page.keyboard.type("first task in the default workspace");
 	// The header search: a plain field outside the editor, so focusing it blurs the buffer.
 	await page.getByRole("textbox", { name: "Search" }).click();

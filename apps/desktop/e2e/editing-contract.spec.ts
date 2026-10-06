@@ -54,7 +54,7 @@ test("the buffer is read-only while a line needs review", async ({ page }) => {
 	});
 	await gotoWithDaemon(page, daemon);
 	await expect(page.getByRole("button", { name: "Review" })).toBeVisible();
-	const content = page.locator(".cm-content").first();
+	const content = page.locator(".buffer .cm-content");
 	await expect(content).toHaveAttribute("contenteditable", "false");
 	await page.locator(".cm-line").first().click();
 	await page.keyboard.type("zzz");

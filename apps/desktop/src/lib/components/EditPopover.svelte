@@ -14,23 +14,15 @@
 	// view/detail view (`taskRef` set, host calls `applyEdit`) and quick-add (`taskRef` null — no
 	// existing line yet, host calls `applyMutations(.., [{kind:"add", ...}])`) without either
 	// duplicating writes or forking into two components.
-	import { onDestroy, onMount } from "svelte";
-	import { EditorState, Prec, type Extension } from "@codemirror/state";
-	import { EditorView, keymap } from "@codemirror/view";
-	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
-	// Ref: https://codemirror.net/docs/ref/ (EditorState, EditorView, keymap, Prec)
-	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
-	import { singleLineFilter } from "$lib/todotxt/singleLineFilter";
-	import { parseLineStrict, type StrictCheckResult } from "$lib/wasmCore";
+	import { onMount } from "svelte";
 	import { history as fetchHistory, type TaskRef } from "$lib/daemon";
+	import LineEditor from "./LineEditor.svelte";
 	import {
-		applyChip,
+		CHIPS,
 		decodeUlidTimestampMs,
 		formatRelativeTime,
 		isNoOpEdit,
-		localToday,
-		shortDevice,
-		type Chip
+		shortDevice
 	} from "./editPopoverLogic";
 
 	let {
@@ -59,28 +51,11 @@
 		onDirtyChange?: (dirty: boolean) => void;
 	} = $props();
 
-	// The chips the popover renders, in plan §3.2's order: priority replace/remove, completion
-	// toggle, then the insert-at-caret tokens.
-	const CHIPS: { chip: Chip; label: string }[] = [
-		{ chip: "A", label: "(A)" },
-		{ chip: "B", label: "(B)" },
-		{ chip: "C", label: "(C)" },
-		{ chip: "x", label: "x" },
-		{ chip: "+", label: "+" },
-		{ chip: "@", label: "@" },
-		{ chip: "due:", label: "due:" },
-		{ chip: "t:", label: "t:" },
-		{ chip: "rec:", label: "rec:" }
-	];
-
-	const VALIDATE_DEBOUNCE_MS = 150;
-
-	let editorHost: HTMLDivElement | undefined;
-	let view: EditorView | undefined;
-	let strictError = $state<Extract<StrictCheckResult, { ok: false }> | null>(null);
+	// The editor, chips and strict hint are `LineEditor` (task desktop-ui-revamp: one single-line
+	// editor for the prompt bar, the Quick Add window and this popover).
+	let editor: LineEditor | undefined = $state();
 	// Only the "<device>, <relative time>" half comes from the async History lookup; "Line N" is
-	// derived from the (fixed, for this popover's lifetime) `taskRef` prop rather than captured
-	// once into `$state`, so it can't go stale relative to a changed prop.
+	// derived from the (fixed, for this popover's lifetime) `taskRef` prop.
 	let historySuffix = $state("");
 	// Empty (no footer text at all) when there's no existing line yet — quick-add's case.
 	let footer = $derived.by(() => {
@@ -88,48 +63,9 @@
 		return historySuffix ? `Line ${taskRef.line_number} · ${historySuffix}` : `Line ${taskRef.line_number}`;
 	});
 	let saveError = $state("");
-	let validateHandle: ReturnType<typeof setTimeout> | undefined;
 
-	function currentText(): string {
-		return view ? view.state.doc.toString() : initialLine;
-	}
-
-	function scheduleValidate(text: string) {
-		if (validateHandle) clearTimeout(validateHandle);
-		validateHandle = setTimeout(async () => {
-			const result = await parseLineStrict(text);
-			strictError = result.ok ? null : result;
-		}, VALIDATE_DEBOUNCE_MS);
-	}
-
-	/** Enter saves, Esc cancels; `Prec.highest` so these win over `defaultKeymap`/`historyKeymap`
-	 * (https://codemirror.net/docs/ref/#state.Prec). Never blocked by a strict-mode error (design
-	 * §2.3): lenient save always wins. */
-	function saveCancelKeymap(): Extension {
-		return Prec.highest(
-			keymap.of([
-				{
-					key: "Enter",
-					preventDefault: true,
-					run: () => {
-						saveAndClose();
-						return true;
-					}
-				},
-				{
-					key: "Escape",
-					preventDefault: true,
-					run: () => {
-						onCancel();
-						return true;
-					}
-				}
-			])
-		);
-	}
-
-	async function saveAndClose() {
-		const next = currentText();
+	/** Never blocked by a strict-mode hint (design §2.3): lenient save always wins. */
+	async function saveAndClose(next: string) {
 		if (isNoOpEdit(initialLine, next)) {
 			onCancel();
 			return;
@@ -140,18 +76,6 @@
 		} catch (e) {
 			saveError = String(e);
 		}
-	}
-
-	function clickChip(chip: Chip) {
-		if (!view) return;
-		const raw = currentText();
-		const caret = view.state.selection.main.head;
-		const { text, caret: nextCaret } = applyChip(raw, caret, chip, localToday());
-		view.dispatch({
-			changes: { from: 0, to: raw.length, insert: text },
-			selection: { anchor: nextCaret }
-		});
-		view.focus();
 	}
 
 	async function loadFooter() {
@@ -174,51 +98,29 @@
 	}
 
 	onMount(() => {
-		view = new EditorView({
-			state: EditorState.create({
-				doc: initialLine,
-				extensions: [
-					todotxtLanguage,
-					cmHistory(),
-					singleLineFilter(),
-					saveCancelKeymap(),
-					keymap.of([...historyKeymap, ...defaultKeymap]),
-					EditorView.updateListener.of((u) => {
-						if (u.docChanged) {
-							const text = u.state.doc.toString();
-							scheduleValidate(text);
-							onDirtyChange?.(text !== initialLine);
-						}
-					})
-				]
-			}),
-			parent: editorHost
-		});
-		view.focus();
-		scheduleValidate(initialLine);
 		loadFooter();
-	});
-
-	onDestroy(() => {
-		if (validateHandle) clearTimeout(validateHandle);
-		view?.destroy();
-		onDirtyChange?.(false); // this instance is gone (saved/cancelled) — nothing left to guard
 	});
 </script>
 
 <div class="popover" style={popoverStyle()} role="dialog" aria-label="Edit task">
-	<div class="editor" bind:this={editorHost}></div>
+	<div class="editor">
+		<LineEditor
+			bind:this={editor}
+			initial={initialLine}
+			autofocus
+			onSubmit={saveAndClose}
+			{onCancel}
+			{onDirtyChange}
+		/>
+	</div>
 
-	{#if strictError}
-		<p class="error">{strictError.message}</p>
-	{/if}
 	{#if saveError}
 		<p class="error">{saveError}</p>
 	{/if}
 
 	<div class="chips">
 		{#each CHIPS as c (c.chip)}
-			<button type="button" onclick={() => clickChip(c.chip)}>{c.label}</button>
+			<button type="button" onclick={() => editor?.chip(c.chip)}>{c.label}</button>
 		{/each}
 	</div>
 
@@ -226,7 +128,7 @@
 		<span class="location">{footer}</span>
 		<div class="actions">
 			<button type="button" onclick={onCancel}>Cancel</button>
-			<button type="button" class="primary" onclick={saveAndClose}>Save</button>
+			<button type="button" class="primary" onclick={() => saveAndClose(editor?.text() ?? initialLine)}>Save</button>
 		</div>
 	</div>
 </div>

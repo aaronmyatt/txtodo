@@ -5,6 +5,19 @@
 /** Token chips per plan §3.2 / notes.md's `Chip` union — the exact nine the popover renders. */
 export type Chip = "A" | "B" | "C" | "+" | "@" | "due:" | "t:" | "rec:" | "x";
 
+/** The nine chips in plan §3.2's order: priority, completion, then the insert-at-caret tokens. */
+export const CHIPS: { chip: Chip; label: string }[] = [
+	{ chip: "A", label: "(A)" },
+	{ chip: "B", label: "(B)" },
+	{ chip: "C", label: "(C)" },
+	{ chip: "x", label: "x" },
+	{ chip: "+", label: "+" },
+	{ chip: "@", label: "@" },
+	{ chip: "due:", label: "due:" },
+	{ chip: "t:", label: "t:" },
+	{ chip: "rec:", label: "rec:" }
+];
+
 /** Result of a text transform that also has to move the caret along with the edit. */
 export interface ChipResult {
 	text: string;
