@@ -8,6 +8,7 @@
 	import SettingsCard from "$lib/components/SettingsCard.svelte";
 	import GeneralSettings from "$lib/components/settings/GeneralSettings.svelte";
 	import AppearanceSettings from "$lib/components/settings/AppearanceSettings.svelte";
+	import WorkspacesSettings from "$lib/components/settings/WorkspacesSettings.svelte";
 	import Devices from "../../devices/Devices.svelte";
 	import Tokens from "../../devices/Tokens.svelte";
 	import ActivityFeed from "../../devices/ActivityFeed.svelte";
@@ -16,6 +17,7 @@
 	const BODIES: Record<string, { body: Snippet; headless?: boolean }> = {
 		general: { body: general },
 		appearance: { body: appearance },
+		workspaces: { body: workspaces },
 		devices: { body: devices, headless: true },
 		tokens: { body: tokens, headless: true },
 		activity: { body: activity, headless: true }
@@ -51,14 +53,22 @@
 		void tick().then(spy);
 	});
 
+	let cardsEl: HTMLElement | undefined = $state();
+
 	onMount(() => {
 		const id = location.hash.slice(1);
 		if (id) void tick().then(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
+		// Cards grow as their data arrives without any scroll event, so the spy re-reads on resize:
+		// https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver
+		const resize = new ResizeObserver(() => spy());
+		if (cardsEl) resize.observe(cardsEl);
+		return () => resize.disconnect();
 	});
 </script>
 
 {#snippet general()}<GeneralSettings />{/snippet}
 {#snippet appearance()}<AppearanceSettings />{/snippet}
+{#snippet workspaces()}<WorkspacesSettings />{/snippet}
 {#snippet devices()}<Devices />{/snippet}
 {#snippet tokens()}<Tokens />{/snippet}
 {#snippet activity()}<ActivityFeed />{/snippet}
@@ -73,7 +83,7 @@
 				</button>
 			{/each}
 		</nav>
-		<div class="cards">
+		<div class="cards" bind:this={cardsEl}>
 			{#each shown as s (s.id)}
 				<SettingsCard section={s} headless={BODIES[s.id].headless}>
 					{@render BODIES[s.id].body()}
