@@ -5,17 +5,13 @@
 	// checked, missing roots greyed, and a "Manage workspaces" link to Settings. Same
 	// pick/add/remove/rename/refresh daemon calls as before (ADR 0025); MainView still wraps its
 	// file view in `{#key $currentWorkspaceRoot}` so a switch remounts FileView/ConflictBanner.
-	// The Activity tab stays here until Settings' Activity card takes it over (its own line).
+	// Activity lives in Settings > Activity now (it was this menu's second tab).
 	//
 	// Esc/outside-click dismiss and focus-on-open/restore-on-close follow
 	// ConflictReviewSheet.svelte's own pattern (this codebase's existing "dismissable floating
 	// panel" idiom) — its Tab focus-trap is not reused here since this sidebar is a `role="menu"`
 	// disclosure, not a modal `role="dialog"`, so content behind it stays reachable while it's
 	// open. Ref (disclosure pattern): https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
-	// Ref (tabs pattern): https://www.w3.org/WAI/ARIA/apg/patterns/tabs/
-	//
-	// The Activity tab renders ActivityTab.svelte (task desktop-activity-cross-workspace): a
-	// separate component, not inlined here, to keep this file focused on the sidebar shell itself.
 	import { tick } from "svelte";
 	import {
 		addWorkspace,
@@ -29,10 +25,8 @@
 	} from "$lib/daemon";
 	import Icon from "$lib/icons/Icon.svelte";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
-	import ActivityTab from "./ActivityTab.svelte";
 
 	let open = $state(false);
-	let activeTab = $state<"workspaces" | "activity">("workspaces");
 	let workspaces = $state<WorkspaceInfo[]>([]);
 	let newPath = $state("");
 	let error = $state("");
@@ -263,121 +257,90 @@
 	     given an interactive role like "menu" — same fix ConflictReviewSheet.svelte uses for its
 	     own dialog role. -->
 	<div class="ws-menu" role="menu" bind:this={asideRef}>
-		<div class="tabs" role="tablist" aria-label="Workspace navigation">
-			<button
-				type="button"
-				role="tab"
-				id="nav-tab-workspaces"
-				aria-selected={activeTab === "workspaces"}
-				aria-controls="nav-panel-workspaces"
-				class:active={activeTab === "workspaces"}
-				onclick={() => (activeTab = "workspaces")}
-			>
-				Workspaces
-			</button>
-			<button
-				type="button"
-				role="tab"
-				id="nav-tab-activity"
-				aria-selected={activeTab === "activity"}
-				aria-controls="nav-panel-activity"
-				class:active={activeTab === "activity"}
-				onclick={() => (activeTab = "activity")}
-			>
-				Activity
-			</button>
-		</div>
-
-		{#if activeTab === "workspaces"}
-			<div id="nav-panel-workspaces" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-workspaces">
-				{#if error}
-					<p class="error" role="alert">{error}</p>
-				{/if}
-				<ul>
-					{#each workspaces as ws (ws.id)}
-						<li class:current={ws.root === $currentWorkspaceRoot} class:missing={!ws.root_exists}>
-							{#if renaming === ws.id}
-								<form class="rename-form" onsubmit={(e) => rename(e, ws)}>
-									<input
-										type="text"
-										aria-label={`Name for ${ws.root}`}
-										placeholder="empty shows the folder's name"
-										bind:this={renameRef}
-										bind:value={newName}
-										onkeydown={onRenameKeydown}
-										disabled={busy}
-									/>
-									<button type="submit" disabled={busy}>Save</button>
-								</form>
-							{:else}
-								<button
-									type="button"
-									class="entry"
-									onclick={() => pick(ws.root)}
+		<div id="nav-panel-workspaces" class="tab-panel">
+			{#if error}
+				<p class="error" role="alert">{error}</p>
+			{/if}
+			<ul>
+				{#each workspaces as ws (ws.id)}
+					<li class:current={ws.root === $currentWorkspaceRoot} class:missing={!ws.root_exists}>
+						{#if renaming === ws.id}
+							<form class="rename-form" onsubmit={(e) => rename(e, ws)}>
+								<input
+									type="text"
+									aria-label={`Name for ${ws.root}`}
+									placeholder="empty shows the folder's name"
+									bind:this={renameRef}
+									bind:value={newName}
+									onkeydown={onRenameKeydown}
 									disabled={busy}
-									title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
-								>
-									<span class="mark-slot" aria-hidden="true">
-										{#if ws.root === $currentWorkspaceRoot}<Icon name="check" />{/if}
+								/>
+								<button type="submit" disabled={busy}>Save</button>
+							</form>
+						{:else}
+							<button
+								type="button"
+								class="entry"
+								onclick={() => pick(ws.root)}
+								disabled={busy}
+								title={ws.root_exists ? undefined : "This workspace's directory no longer exists on disk"}
+							>
+								<span class="mark-slot" aria-hidden="true">
+									{#if ws.root === $currentWorkspaceRoot}<Icon name="check" />{/if}
+								</span>
+								<span class="entry-text">
+									<span class="entry-title">
+										{title(ws)}
+										{#if ws.is_remote}<span class="tag" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
 									</span>
-									<span class="entry-text">
-										<span class="entry-title">
-											{title(ws)}
-											{#if ws.is_remote}<span class="tag" title="Synced from another of your devices; txtodo keeps it in its own data folder">Remote</span>{/if}
-										</span>
-										<span class="entry-path">{ws.root}</span>
-									</span>
-									{#if openCounts.has(ws.root)}
-										<span class="count" title="Open tasks">t {openCounts.get(ws.root)}</span>
-									{/if}
-									{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
-									{#if ws.load_state === "queued" || ws.load_state === "loading"}
-										<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
-									{:else if ws.load_state === "failed"}
-										<span class="load-label failed" title={ws.load_error}>failed to open</span>
-									{/if}
-								</button>
+									<span class="entry-path">{ws.root}</span>
+								</span>
+								{#if openCounts.has(ws.root)}
+									<span class="count" title="Open tasks">t {openCounts.get(ws.root)}</span>
+								{/if}
+								{#if !ws.root_exists}<span class="missing-label">missing</span>{/if}
+								{#if ws.load_state === "queued" || ws.load_state === "loading"}
+									<span class="load-label" role="status">{ws.load_state === "loading" ? "opening…" : "waiting to open"}</span>
+								{:else if ws.load_state === "failed"}
+									<span class="load-label failed" title={ws.load_error}>failed to open</span>
+								{/if}
+							</button>
+							<button
+								type="button"
+								class="remove"
+								aria-label={`Rename ${ws.root}`}
+								title="Rename: the name every paired device shows"
+								onclick={() => startRename(ws)}
+								disabled={busy}
+							>
+								&#9998;
+							</button>
+							{#if ws.root !== $currentWorkspaceRoot && !ws.is_default}
 								<button
 									type="button"
 									class="remove"
-									aria-label={`Rename ${ws.root}`}
-									title="Rename: the name every paired device shows"
-									onclick={() => startRename(ws)}
+									aria-label={`Remove ${ws.root}`}
+									onclick={() => remove(ws)}
 									disabled={busy}
 								>
-									&#9998;
+									&times;
 								</button>
-								{#if ws.root !== $currentWorkspaceRoot && !ws.is_default}
-									<button
-										type="button"
-										class="remove"
-										aria-label={`Remove ${ws.root}`}
-										onclick={() => remove(ws)}
-										disabled={busy}
-									>
-										&times;
-									</button>
-								{/if}
 							{/if}
-						</li>
-					{/each}
-				</ul>
-				<form onsubmit={add}>
-					<input
-						type="text"
-						placeholder="/path/to/workspace"
-						bind:value={newPath}
-						disabled={busy}
-					/>
-					<button type="submit" disabled={busy}>Add</button>
-				</form>
-				<a class="manage" href="/settings#workspaces" onclick={closeSidebar}>Manage workspaces</a>
-			</div>
-		{:else}
-			<div id="nav-panel-activity" class="tab-panel" role="tabpanel" aria-labelledby="nav-tab-activity">
-				<ActivityTab />
-			</div>
-		{/if}
+						{/if}
+					</li>
+				{/each}
+			</ul>
+			<form onsubmit={add}>
+				<input
+					type="text"
+					placeholder="/path/to/workspace"
+					bind:value={newPath}
+					disabled={busy}
+				/>
+				<button type="submit" disabled={busy}>Add</button>
+			</form>
+			<a class="manage" href="/settings#workspaces" onclick={closeSidebar}>Manage workspaces</a>
+		</div>
 	</div>
 {/if}
 </div>
@@ -438,28 +401,6 @@
 		padding: 0.35rem 0.4rem;
 		color: inherit;
 		font-weight: 700;
-	}
-
-	.tabs {
-		display: flex;
-		gap: 0.25rem;
-		border-bottom: 1px solid var(--color-border-subtle);
-		margin-bottom: 0.5rem;
-	}
-
-	.tabs button {
-		background: transparent;
-		border: none;
-		color: var(--color-text-muted);
-		cursor: pointer;
-		padding: 0.5rem 0.75rem;
-		border-bottom: 2px solid transparent;
-	}
-
-	.tabs button.active {
-		color: var(--color-text);
-		border-bottom-color: var(--color-text);
-		font-weight: 600;
 	}
 
 	.tab-panel {

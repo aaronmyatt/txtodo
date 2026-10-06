@@ -26,8 +26,9 @@ test("toggle opens the sidebar, focuses it, and Esc closes it and returns focus 
 	const sidebar = page.getByRole("menu");
 	await expect(sidebar).toBeVisible();
 	// Focus moved into the sidebar on open (plan §3.3: "never leave focus stranded").
-	await expect(sidebar).toContainText("Workspaces");
-	await expect(page.getByRole("tab", { name: "Workspaces" })).toBeFocused();
+	await expect(sidebar).toContainText("Manage workspaces");
+	// The first control in the menu has the keyboard.
+	await expect(sidebar.locator(":focus")).toHaveCount(1);
 
 	await page.keyboard.press("Escape");
 	await expect(sidebar).toBeHidden();
@@ -44,26 +45,12 @@ test("clicking outside the sidebar dismisses it", async ({ page }) => {
 	await expect(sidebar).toBeHidden();
 });
 
-test("the tab bar switches between the Workspaces and Activity panels", async ({ page }) => {
+test("the menu lists workspaces and no longer has an Activity tab (it is in Settings)", async ({ page }) => {
 	await page.getByRole("button", { name: "Open workspace navigation" }).click();
 	const sidebar = page.getByRole("menu");
-
-	const workspacesTab = page.getByRole("tab", { name: "Workspaces" });
-	const activityTab = page.getByRole("tab", { name: "Activity" });
-	await expect(workspacesTab).toHaveAttribute("aria-selected", "true");
 	await expect(sidebar).toContainText(daemon.dir);
-
-	await activityTab.click();
-	await expect(activityTab).toHaveAttribute("aria-selected", "true");
-	await expect(workspacesTab).toHaveAttribute("aria-selected", "false");
-	// Real content now (desktop-activity-cross-workspace), not a placeholder — the Workspaces
-	// panel's own full-path entries are gone, replaced by the Activity feed's refresh control.
-	await expect(sidebar.getByRole("button", { name: "Refresh" })).toBeVisible();
-	await expect(sidebar).not.toContainText(daemon.dir);
-
-	await workspacesTab.click();
-	await expect(workspacesTab).toHaveAttribute("aria-selected", "true");
-	await expect(sidebar).toContainText(daemon.dir);
+	await expect(page.getByRole("tab", { name: "Activity" })).toHaveCount(0);
+	await expect(sidebar.getByRole("link", { name: "Manage workspaces" })).toBeVisible();
 });
 
 // Task workspace-vanity-name: the name every paired device shows, set from a workspace's row.

@@ -12,17 +12,17 @@
 	import ShortcutsSettings from "$lib/components/settings/ShortcutsSettings.svelte";
 	import DevicesCard from "../../devices/DevicesCard.svelte";
 	import Tokens from "../../devices/Tokens.svelte";
-	import ActivityFeed from "../../devices/ActivityFeed.svelte";
+	import ActivityCard from "$lib/components/settings/ActivityCard.svelte";
 
-	/** The cards built so far, by section id; a section without one is not shown yet. */
-	const BODIES: Record<string, { body: Snippet; headless?: boolean }> = {
+	/** Each section's card body, by section id. */
+	const BODIES: Record<string, { body: Snippet }> = {
 		general: { body: general },
 		appearance: { body: appearance },
 		workspaces: { body: workspaces },
 		shortcuts: { body: shortcuts },
 		devices: { body: devices },
 		tokens: { body: tokens },
-		activity: { body: activity, headless: true }
+		activity: { body: activity }
 	};
 
 	const shown = $derived(SECTIONS.filter((s) => BODIES[s.id] && sectionMatches(s, $searchQuery)));
@@ -74,7 +74,7 @@
 {#snippet shortcuts()}<ShortcutsSettings />{/snippet}
 {#snippet devices()}<DevicesCard />{/snippet}
 {#snippet tokens()}<Tokens />{/snippet}
-{#snippet activity()}<ActivityFeed />{/snippet}
+{#snippet activity()}<ActivityCard />{/snippet}
 
 <main class="settings" bind:this={scroller} onscroll={spy}>
 	<div class="page">
@@ -88,7 +88,7 @@
 		</nav>
 		<div class="cards" bind:this={cardsEl}>
 			{#each shown as s (s.id)}
-				<SettingsCard section={s} headless={BODIES[s.id].headless}>
+				<SettingsCard section={s}>
 					{@render BODIES[s.id].body()}
 				</SettingsCard>
 			{/each}

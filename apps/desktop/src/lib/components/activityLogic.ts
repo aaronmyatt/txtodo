@@ -1,4 +1,4 @@
-// Pure logic for `ActivityTab.svelte` (task desktop-activity-cross-workspace) — no DOM, no Tauri,
+// Pure logic for `settings/ActivityCard.svelte` (task desktop-activity-cross-workspace) — no DOM, no Tauri,
 // so it is plain-function testable, the same split `editPopoverLogic.ts` uses for its component.
 
 /** Pure string check (notes.md: "no new backend signal required") — `principal` is already
@@ -13,4 +13,14 @@ export function isAgent(principal: string): boolean {
 export function shortRoot(root: string): string {
 	const parts = root.split("/").filter(Boolean);
 	return parts[parts.length - 1] ?? root;
+}
+
+/** Who did it, as one glyph for the row (task desktop-ui-revamp): you, an agent, the sync from
+ * another device, or an edit made outside txtodo. */
+export type PrincipalKind = "you" | "agent" | "external";
+
+export function principalKind(principal: string): PrincipalKind {
+	if (isAgent(principal)) return "agent";
+	if (principal.startsWith("external")) return "external";
+	return "you";
 }
