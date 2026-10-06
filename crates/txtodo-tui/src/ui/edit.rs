@@ -2,7 +2,7 @@
 //! `Edit`/`Add` mutation the daemon turns into an op (design §3.2, §7). Pure `AppState` mutation —
 //! no I/O; `app.rs` sends the mutation `commit` returns through a real `Daemon::apply`.
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use txtodo_proto::v1 as pb;
 
 use crate::state::{AppState, EditDraft, EditTarget};
@@ -59,8 +59,12 @@ pub fn move_right(draft: &mut EditDraft) {
 /// call `commit` and dispatch the resulting mutation to the daemon; Esc calls `cancel`), so this
 /// only covers buffer edits. Returns `true` when the key was handled.
 pub fn on_key(draft: &mut EditDraft, key: KeyEvent) -> bool {
+    // A Ctrl or Alt chord nothing claimed is not text: it must not type its letter.
+    let plain = !key
+        .modifiers
+        .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
     match key.code {
-        KeyCode::Char(c) => insert_char(draft, c),
+        KeyCode::Char(c) if plain => insert_char(draft, c),
         KeyCode::Backspace => backspace(draft),
         KeyCode::Delete => {
             text_input::delete(&mut draft.buffer, draft.caret);

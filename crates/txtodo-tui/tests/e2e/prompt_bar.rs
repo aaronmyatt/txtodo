@@ -22,7 +22,11 @@ async fn ctrl_space_a_chip_and_enter_add_to_the_root_list() {
             .chars()
             .map(|c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)),
     );
-    keys.push(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::ALT));
+    // The (A) chip: Alt-Shift and its letter (plain Alt letters are readline keys).
+    keys.push(KeyEvent::new(
+        KeyCode::Char('A'),
+        KeyModifiers::ALT | KeyModifiers::SHIFT,
+    ));
     keys.push(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     for key in keys {
         if let Some(action) = input.on_key(&mut state, key) {
