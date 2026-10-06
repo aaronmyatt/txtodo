@@ -1,5 +1,8 @@
 # desktop-universal-view
 
+> **Superseded by `desktop-ui-revamp`** (2026-10-06). The revamp rebuilt this screen; read
+> `tasks/desktop-ui-revamp/notes.md` first. What follows is the history of the old build.
+
 ## Summary
 
 Desktop: universal view aggregating tasks (and their `ref:` sub-lists/notes) by priority and

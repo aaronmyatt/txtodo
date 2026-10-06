@@ -10,28 +10,44 @@
 - **Auto-starts the daemon.** On launch, dials `<workspace>/.txtodo/txtodod.sock`; spawns
   `txtodod --dir <workspace>` if nothing answers. A banner shows `spawning` / `connecting` /
   `dead` and offers Retry — the daemon being absent is a state, never a crash.
-- **Live file view.** Renders `todo.txt` read-only in CodeMirror 6, todo.txt syntax highlighted
-  (priority, dates, `+project`, `@context`, `key:val`). Updates in real time over a `Watch`
-  stream — no manual refresh.
-- **Click-to-edit popover.** Click a line to edit its raw text; saves as an `Apply` mutation
-  addressed by line number + ULID task id, so a stale edit against a moved/deleted line is
-  rejected rather than silently corrupting the wrong line.
+- **One shell, three pages.** A header with the workspace menu, a search box, and Tasks /
+  Universal / Settings; a prompt bar at the foot of every page; a status line with save state and
+  the caret. Ink-on-paper light and dark themes (Tailwind 4 + DaisyUI 5, components prefixed
+  `d-`). Design record: `docs/design/desktop-ui-revamp/`.
+- **Live, editable buffer.** The root list is a CodeMirror 6 buffer you edit in place, todo.txt
+  syntax coloured, saved on the fly and on blur. Updates arrive over a `Watch` stream. Double-click
+  or Cmd/Ctrl+Enter opens a line's detail (sub-list or notes) in a panel below.
+- **Search.** The header search matches with the shared core (words, `-word`, `is:open`,
+  `is:done`): it marks and steps through hits on Tasks, filters rows on Universal and cards on
+  Settings.
+- **Prompt bar and Quick Add.** Enter adds to the root list; chips insert `(A)`, `x`, `due:`
+  and friends by the core's rules (the TUI's too). The mark beside it fills as tasks get done.
+  The global hotkey (Cmd/Ctrl+Shift+Space) focuses the bar when the app is in front, else opens
+  the Quick Add window, which is the same bar.
+- **Universal.** Tasks from every workspace: stats, group by priority / due / project / context /
+  workspace, chips, show done, due badges, `ref:` progress; complete or reopen in the row's own
+  workspace, with Undo; keyboard-first (j/k, Enter, x).
 - **Conflict review.** A banner reports open `needs_review` flags (two devices edited the same
   word); the review sheet shows a diff and lets you resolve `mine` / `theirs` / `merged`.
+- **Settings.** General, Appearance (theme and editor prefs with a live preview), Workspaces,
+  Shortcuts (generated from `src/lib/keyTable.ts`, the same table `/help` shows), Devices, Tokens
+  and Activity, with a sticky section nav and `/settings#<card>` deep links.
 - **Device pairing.** Show a QR code (`pair_offer`) or scan a peer's with the camera
   (`pair_accept`), then compare a 6-word SAS out loud and confirm on **both** devices —
   confirmation is always an explicit second tap, never automatic. No group key or private key
-  ever appears in the QR payload.
+  ever appears in the QR payload. Settings lists paired devices; removing one rotates the group
+  key (`DeviceRemove`).
 - **Capability tokens.** Create named, scoped, revocable bearer tokens (`read`, `write:add`,
   `write:complete`, `write:edit`, `write:delete`, `raw`, plus `project:`/`context:`/`file:`
   restrictors) — e.g. for handing an agent write access to one file only. The secret is shown
   once, at creation, and never again.
-- **Activity feed.** The newest ~200 ops across the workspace, newest first, with who did what
-  and when. One bounded fetch (refresh button + refetch on window focus), not a live tail.
+- **Activity feed.** The newest ops across every workspace, newest first, with who did what and
+  when (Settings > Activity). One bounded fetch (refresh button + refetch on window focus), not a
+  live tail.
 - **Always-on background app.** A persistent tray/menu-bar icon (Open, Quick Add, Quit) keeps the
   app reachable after the window closes — closing the main window hides it rather than quitting;
   the tray's Quit item is the only thing that actually exits. An optional pin-on-top toggle in the
-  top nav keeps the window above others, persisted across restarts. The macOS dock icon stays
+  header keeps the window above others, persisted across restarts. The macOS dock icon stays
   visible always (a deliberate choice, not a true menu-bar-only app — see
   `tasks/desktop-always-on/notes.md`).
 
@@ -98,8 +114,12 @@ src-tauri/src/
   dto*.rs              serde DTOs crossing the IPC bridge (prost types aren't Serialize)
 src/
   lib/daemon.ts         typed wrappers over every Tauri command + event
-  lib/components/       MainView, FileView (CodeMirror), EditPopover, conflict UI
+  lib/components/       AppShell, MainView, FileView (CodeMirror), PromptBar + LineEditor,
+                        Universal*, settings/*, conflict UI
+  lib/keys.ts, keyTable.ts   shell bindings and the shortcuts reference
+  lib/universal/, lib/settings/   pure models for those pages (Vitest)
   lib/lang/              todo.txt Lezer grammar for syntax highlighting
   lib/wasm-core/         generated bindings to crates/txtodo-ffi (diffing, etc.)
-  devices/               pairing, tokens, and activity-feed panes (routes/devices)
+  devices/               pairing, paired devices and tokens (Settings cards)
+  routes/                /, /universal, /settings, /help (/devices redirects to Settings)
 ```

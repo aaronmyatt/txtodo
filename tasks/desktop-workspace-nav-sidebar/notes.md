@@ -1,5 +1,8 @@
 # Dismissable left-nav workspace switcher (storyboard screens 07/08)
 
+> **Superseded by `desktop-ui-revamp`** (2026-10-06). The revamp rebuilt this screen; read
+> `tasks/desktop-ui-revamp/notes.md` first. What follows is the history of the old build.
+
 ## Goal
 
 Replace `WorkspaceSwitcher.svelte`'s anchored dropdown with a dismissable left-nav sidebar, and
