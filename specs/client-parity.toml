@@ -767,7 +767,7 @@ id = "universal.down"
 title = "Next row"
 keys = ["j", "Down"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -776,7 +776,7 @@ id = "universal.up"
 title = "Previous row"
 keys = ["k", "Up"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -785,7 +785,7 @@ id = "universal.first"
 title = "First row"
 keys = ["Home"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -794,7 +794,7 @@ id = "universal.last"
 title = "Last row"
 keys = ["End"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -803,7 +803,7 @@ id = "universal.open"
 title = "Open the row on its line in its workspace"
 keys = ["Enter"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -812,7 +812,7 @@ id = "universal.complete"
 title = "Complete the row, with an Undo toast"
 keys = ["x"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -821,16 +821,16 @@ id = "universal.group"
 title = "Next grouping: priority, due, project, context, workspace"
 keys = ["Tab"]
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "differs", surface = "/universal (the Group buttons)", keys = [] }
 tui = { status = "done", surface = "Universal screen" }
-deviation = ""
+deviation = "On a page Tab moves the keyboard between controls, so the desktop groups with the Group buttons; the TUI cycles with Tab."
 
 [[action]]
 id = "universal.show_done"
 title = "Show done tasks too"
 keys = []
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -839,7 +839,7 @@ id = "universal.reset"
 title = "Reset filters: every workspace and context, no done tasks"
 keys = []
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 
@@ -848,7 +848,7 @@ id = "universal.filter_workspace"
 title = "Show or hide a workspace (one stays on)"
 keys = []
 scope = "universal"
-desktop = { status = "planned", surface = "/universal" }
+desktop = { status = "done", surface = "/universal" }
 tui = { status = "done", surface = "Universal screen" }
 deviation = ""
 

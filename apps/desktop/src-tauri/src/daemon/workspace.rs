@@ -177,6 +177,19 @@ impl DaemonClient {
         Ok(self.inner.undo(req).await?.into_inner())
     }
 
+    /// Every registered workspace's root-list tasks in one call (`UniversalTasks`): the daemon
+    /// parses each line once, the same rows the TUI and `txtodo` read.
+    pub async fn universal_tasks(
+        &mut self,
+        include_done: bool,
+    ) -> Result<pb::UniversalTasksResponse, DaemonError> {
+        Ok(self
+            .inner
+            .universal_tasks(pb::UniversalTasksRequest { include_done })
+            .await?
+            .into_inner())
+    }
+
     /// The daemon's own version and release date: a selector-less `Health`, which the daemon
     /// answers at once with the device totals even while workspaces are still opening, so this
     /// never waits on an open (task version-info). An older daemon sends an empty date.
