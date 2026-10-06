@@ -22,6 +22,7 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "nav.universal", keys: ["g u"], title: "Go to Universal" },
 	{ id: "nav.settings", keys: ["g s"], title: "Go to Settings" },
 	{ id: "nav.help", keys: ["?"], title: "Open Help" },
+	{ id: "nav.workspace_menu", keys: ["W"], title: "Open the workspace menu" },
 	// List mode (specs/client-parity.toml list.*, the TUI's keys).
 	{ id: "list.down", keys: ["j", "Down"], title: "Next line", scope: "list" },
 	{ id: "list.up", keys: ["k", "Up"], title: "Previous line", scope: "list" },

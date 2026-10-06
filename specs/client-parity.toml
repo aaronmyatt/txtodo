@@ -641,7 +641,7 @@ id = "nav.workspace_menu"
 title = "Switch workspace"
 keys = ["W"]
 scope = "global"
-desktop = { status = "planned", surface = "header workspace menu" }
+desktop = { status = "done", surface = "header workspace menu (keys.ts)" }
 tui = { status = "done", surface = "W popup" }
 deviation = ""
 
@@ -650,7 +650,7 @@ id = "workspace_menu.down"
 title = "Next workspace in the menu"
 keys = ["j", "Down"]
 scope = "sheet"
-desktop = { status = "planned", surface = "header workspace menu" }
+desktop = { status = "done", surface = "header workspace menu" }
 tui = { status = "done", surface = "W popup" }
 deviation = ""
 
@@ -659,7 +659,7 @@ id = "workspace_menu.up"
 title = "Previous workspace in the menu"
 keys = ["k", "Up"]
 scope = "sheet"
-desktop = { status = "planned", surface = "header workspace menu" }
+desktop = { status = "done", surface = "header workspace menu" }
 tui = { status = "done", surface = "W popup" }
 deviation = ""
 
@@ -668,7 +668,7 @@ id = "workspace_menu.open"
 title = "Switch to the workspace, or Manage workspaces"
 keys = ["Enter"]
 scope = "sheet"
-desktop = { status = "planned", surface = "header workspace menu" }
+desktop = { status = "done", surface = "header workspace menu" }
 tui = { status = "done", surface = "W popup" }
 deviation = ""
 
@@ -677,7 +677,7 @@ id = "workspace_menu.close"
 title = "Close the workspace menu"
 keys = ["Esc", "W"]
 scope = "sheet"
-desktop = { status = "planned", surface = "header workspace menu" }
+desktop = { status = "done", surface = "header workspace menu" }
 tui = { status = "done", surface = "W popup" }
 deviation = ""
 

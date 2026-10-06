@@ -13,6 +13,7 @@
 	import { Chords, isTypingTarget, keyName, isListCommand } from "$lib/keys";
 	import { searchQuery, searchStep, settingsHits, universalHits } from "$lib/stores/search";
 	import { runListCommand } from "$lib/listCommands";
+	import { requestWorkspaceMenu } from "$lib/workspaceMenu";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import PromptBar from "./PromptBar.svelte";
@@ -98,6 +99,7 @@
 		e.preventDefault();
 		if (hit.kind !== "command") return;
 		if (hit.id === "offers.open") void goto("/settings#offers");
+		else if (hit.id === "nav.workspace_menu") requestWorkspaceMenu();
 		else if (isListCommand(hit.id)) runListCommand(hit.id);
 		else if (hit.id === "search.focus") searchEl?.focus();
 		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);

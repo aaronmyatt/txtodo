@@ -12,7 +12,8 @@
 	// panel" idiom) — its Tab focus-trap is not reused here since this sidebar is a `role="menu"`
 	// disclosure, not a modal `role="dialog"`, so content behind it stays reachable while it's
 	// open. Ref (disclosure pattern): https://www.w3.org/WAI/ARIA/apg/patterns/disclosure/
-	import { tick } from "svelte";
+	import { onMount, tick } from "svelte";
+	import { onWorkspaceMenuRequest } from "$lib/workspaceMenu";
 	import {
 		addWorkspace,
 		listWorkspaces,
@@ -134,6 +135,35 @@
 	function onWindowKeydown(e: KeyboardEvent) {
 		if (e.key === "Escape") closeSidebar();
 	}
+
+	/** The TUI's menu keys on a focused row (workspace_menu.*): j/k or the arrows move, Enter
+	 * opens (the row's own click), W closes like Esc. A rename field keeps its letters. */
+	function onMenuKeydown(e: KeyboardEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.classList.contains("entry")) return;
+		const rows = [...(asideRef?.querySelectorAll<HTMLElement>("button.entry:not([disabled])") ?? [])];
+		const i = rows.indexOf(target);
+		const go = (n: number) => rows[Math.max(0, Math.min(rows.length - 1, n))]?.focus();
+		if (e.key === "j" || e.key === "ArrowDown") go(i + 1);
+		else if (e.key === "k" || e.key === "ArrowUp") go(i - 1);
+		else if (e.key === "W") closeSidebar();
+		else return;
+		e.preventDefault();
+	}
+
+	// `W` from anywhere (`$lib/workspaceMenu.ts`) opens it, and closes it when open; opening puts
+	// the keyboard on the open workspace's row.
+	onMount(() =>
+		onWorkspaceMenuRequest(() => {
+			if (open) return closeSidebar();
+			void openSidebar().then(() => {
+				const row =
+					asideRef?.querySelector<HTMLElement>("li.current button.entry") ??
+					asideRef?.querySelector<HTMLElement>("button.entry");
+				row?.focus();
+			});
+		})
+	);
 
 	// Outside-click dismiss: bound to `window` only while open (removed on close), checking the
 	// event target against the sidebar's own node and the toggle button (a click on the toggle
@@ -259,7 +289,7 @@
 	<!-- A plain div, not <aside>: svelte-check's a11y rule flags a landmark element (aside) being
 	     given an interactive role like "menu" — same fix ConflictReviewSheet.svelte uses for its
 	     own dialog role. -->
-	<div class="ws-menu" role="menu" bind:this={asideRef}>
+	<div class="ws-menu" role="menu" tabindex="-1" bind:this={asideRef} onkeydown={onMenuKeydown}>
 		<div id="nav-panel-workspaces" class="tab-panel">
 			{#if error}
 				<p class="error" role="alert">{error}</p>

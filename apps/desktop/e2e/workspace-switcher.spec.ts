@@ -72,3 +72,20 @@ test("a row's rename sets the shown name; Esc cancels it without closing the sid
 	await expect(input).toBeHidden();
 	await expect(row).toContainText("Groceries");
 });
+
+// nav.workspace_menu and workspace_menu.*: W opens the menu on the open workspace's row; j/k move;
+// W closes it again.
+test("W opens the menu with the keyboard on a row; j/k move; W closes", async ({ page }) => {
+	await expect(page.locator(".buffer .cm-content")).toBeVisible();
+	await page.keyboard.press("Shift+W");
+	const sidebar = page.getByRole("menu");
+	await expect(sidebar).toBeVisible();
+	const focused = () => page.evaluate(() => document.activeElement?.classList.contains("entry") ?? false);
+	await expect.poll(focused).toBe(true);
+	await page.keyboard.press("j");
+	await expect.poll(focused).toBe(true);
+	await page.keyboard.press("k");
+	await expect.poll(focused).toBe(true);
+	await page.keyboard.press("Shift+W");
+	await expect(sidebar).toBeHidden();
+});
