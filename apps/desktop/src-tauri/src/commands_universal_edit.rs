@@ -130,6 +130,50 @@ pub async fn undo(
     Ok(ApplyResultDto::from(resp))
 }
 
+/// Takes back one of this session's changes (`u` and a toast's Undo, list.undo / toast.undo):
+/// `steps` ops on `path`, the count the change's own `Apply` reported. `workspace_root` names the
+/// workspace it was made in; empty means the open one.
+#[tracing::instrument(name = "ipc.undo_change", skip_all)]
+#[tauri::command]
+pub async fn undo_change(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    steps: u32,
+    workspace_root: Option<String>,
+) -> Result<ApplyResultDto, String> {
+    ensure_connected(&app, &state).await?;
+    let mut client = state.client_snapshot().await?;
+    undo_change_with(
+        &mut client,
+        &path,
+        steps,
+        workspace_root.as_deref().unwrap_or(""),
+    )
+    .await
+}
+
+/// The body of [`undo_change`] over any connected client (the e2e bridge runs it too).
+pub async fn undo_change_with(
+    client: &mut DaemonClient,
+    path: &str,
+    steps: u32,
+    workspace_root: &str,
+) -> Result<ApplyResultDto, String> {
+    let steps = steps.max(1);
+    let resp = if workspace_root.is_empty() {
+        client.undo(path, steps).await
+    } else {
+        let sel = pb::WorkspaceSelector {
+            selector: Some(pb::workspace_selector::Selector::Path(
+                workspace_root.to_owned(),
+            )),
+        };
+        client.undo_for(sel, path, steps).await
+    };
+    Ok(ApplyResultDto::from(resp.map_err(|e| e.apply_text())?))
+}
+
 /// Line `line_number` (1-based) of `text` reopened, or None when it is not a done task.
 fn reopened_line(text: &str, line_number: u32, today: &str) -> Option<String> {
     let raw = text.lines().nth((line_number as usize).checked_sub(1)?)?;

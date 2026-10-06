@@ -57,3 +57,21 @@ test("i edits the line, and Enter opens its detail", async ({ page }) => {
 	await page.keyboard.press("Enter");
 	await expect(page.getByRole("region", { name: "Task detail" })).toContainText("call mum");
 });
+
+// list.undo / toast.undo: u takes back this session's newest change, all its ops, and a toast's
+// Undo takes back the change it named.
+test("u undoes the newest change; the toast's Undo undoes a completion", async ({ page }) => {
+	const before = file();
+	await page.keyboard.press("Shift+J");
+	await expect.poll(file).toMatch(/^call mum/);
+	await page.keyboard.press("u");
+	await expect.poll(file).toBe(before);
+
+	await page.keyboard.press("x");
+	await expect.poll(file).toMatch(/^x \d{4}-\d{2}-\d{2} .*buy milk/m);
+	await page.getByRole("button", { name: "Undo" }).click();
+	await expect.poll(file).toBe(before);
+
+	await page.keyboard.press("u");
+	await expect(page.getByText("Nothing to undo from this session")).toBeVisible();
+});

@@ -93,6 +93,22 @@ export interface ApplyResult {
 	hlc_counter: number;
 }
 
+// Mock-only undo: the text before each apply, newest last. `undo_change` restores the newest one
+// for its path (the real daemon inverts ops instead).
+const snapshots: { path: string; text: string }[] = [];
+
+export function mockUndoChange(path: string): ApplyResult {
+	const i = snapshots.findLastIndex((s) => s.path === path);
+	const f = files.get(path);
+	if (i < 0 || !f) throw new Error("mock daemon: nothing to undo");
+	const [{ text }] = snapshots.splice(i, 1);
+	f.text = text;
+	f.hashSeq += 1;
+	const hlcCounter = nextHlcCounter();
+	emit("daemon-change", { path, hash: hashOf(f), ops: [], review: [], duplicate_groups: 0 });
+	return { applied: 1, hash: hashOf(f), hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
+}
+
 export function applyMutations(path: string, mutations: Mutation[]): ApplyResult {
 	const f = files.get(path);
 	if (!f) throw new Error(`mock daemon: unknown path "${path}"`);
@@ -100,6 +116,7 @@ export function applyMutations(path: string, mutations: Mutation[]): ApplyResult
 	// turns that into this token (`$lib/todotxt/saveBuffer.ts::FAILED_PRECONDITION_TOKEN`).
 	const stale = mutations.some((m) => m.kind === "replace" && m.base_hash !== hashOf(f));
 	if (stale) throw "failed-precondition: the document changed since it was read";
+	snapshots.push({ path, text: f.text });
 	let lines = f.text.split("\n");
 	for (const m of mutations) lines = applyOneMutation(lines, m);
 	f.text = lines.join("\n");

@@ -19,7 +19,8 @@ import {
 	mockTokenCreate,
 	mockTokenRevoke,
 	type Mutation,
-	type TaskRef
+	type TaskRef,
+	mockUndoChange
 } from "./logic";
 import {
 	conflicts,
@@ -156,6 +157,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return false as T; // the mock machine already has the skill installed: no banner
 		case "quick_add_hotkey":
 			return ["Super", "Shift", "Space"] as T;
+		case "undo_change":
+			return mockUndoChange(args?.path as string) as unknown as T;
 		case "universal_set_done":
 			return mockUniversalSetDone(args ?? {}) as unknown as T;
 		case "universal_undo":

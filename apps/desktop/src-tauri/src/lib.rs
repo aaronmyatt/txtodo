@@ -129,6 +129,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_universal::universal_tasks,
         commands_universal_edit::universal_set_done,
         commands_universal_edit::universal_undo,
+        commands_universal_edit::undo_change,
         commands_notes::get_notes,
         commands_notes::edit_notes,
         commands_notes::ref_dir,

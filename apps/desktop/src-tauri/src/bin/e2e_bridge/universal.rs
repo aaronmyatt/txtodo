@@ -4,7 +4,7 @@
 //! the Tauri commands do, so a Playwright spec exercises the shipped code against a real daemon.
 
 use desktop_lib::commands_universal::universal_rows;
-use desktop_lib::commands_universal_edit::{RowRef, set_done, undo};
+use desktop_lib::commands_universal_edit::{RowRef, set_done, undo, undo_change_with};
 use desktop_lib::daemon::DaemonClient;
 use serde::Deserialize;
 use serde_json::Value;
@@ -13,11 +13,12 @@ use super::activity::cmd_op_log_all;
 use super::{ApiError, parse};
 
 /// The commands this module answers; the caller checks membership first.
-pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 4] = [
+pub(crate) const CROSS_WORKSPACE_CMDS: [&str; 5] = [
     "op_log_all",
     "universal_tasks",
     "universal_set_done",
     "universal_undo",
+    "undo_change",
 ];
 
 /// Args arrive in the frontend's camelCase, as Tauri maps them:
@@ -51,6 +52,7 @@ pub(crate) async fn dispatch(
     }
     match cmd {
         "op_log_all" => cmd_op_log_all(client).await,
+        "undo_change" => cmd_undo_change(client, args).await,
         "universal_tasks" => {
             let r: TasksReq = parse(args)?;
             let rows = universal_rows(client, r.include_done.unwrap_or(false))
@@ -79,4 +81,21 @@ pub(crate) async fn dispatch(
             Ok(serde_json::to_value(res)?)
         }
     }
+}
+
+/// `undo_change`: one of the session's changes taken back (`u`, a toast's Undo).
+async fn cmd_undo_change(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct UndoChangeReq {
+        path: String,
+        steps: u32,
+        workspace_root: Option<String>,
+    }
+    let r: UndoChangeReq = parse(args)?;
+    let root = r.workspace_root.unwrap_or_default();
+    let res = undo_change_with(client, &r.path, r.steps, &root)
+        .await
+        .map_err(ApiError)?;
+    Ok(serde_json::to_value(res)?)
 }

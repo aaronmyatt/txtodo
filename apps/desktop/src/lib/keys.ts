@@ -33,6 +33,7 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "list.delete", keys: ["d d"], title: "Delete the line", scope: "list" },
 	{ id: "list.move_down", keys: ["J", "Alt-Down"], title: "Move the line down", scope: "list" },
 	{ id: "list.move_up", keys: ["K", "Alt-Up"], title: "Move the line up", scope: "list" },
+	{ id: "list.undo", keys: ["u"], title: "Undo this session's last change", scope: "list" },
 	{ id: "detail.open", keys: ["Enter"], title: "Open the line's detail", scope: "list" }
 ];
 

@@ -749,7 +749,7 @@ id = "list.undo"
 title = "Undo the last change (the daemon's Undo)"
 keys = ["u"]
 scope = "list"
-desktop = { status = "planned", surface = "FileView" }
+desktop = { status = "done", surface = "FileView (list mode)" }
 tui = { status = "done", surface = "Tasks" }
 deviation = ""
 
@@ -938,7 +938,7 @@ id = "toast.undo"
 title = "Undo from a toast"
 keys = []
 scope = "global"
-desktop = { status = "planned", surface = "toast" }
+desktop = { status = "done", surface = "toast" }
 tui = { status = "done", surface = "toast" }
 deviation = ""
 

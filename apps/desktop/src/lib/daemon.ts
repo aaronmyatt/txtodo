@@ -5,6 +5,7 @@
 import { invoke, listen, type UnlistenFn } from "./tauriShim";
 import type { BuildInfo } from "./versionInfo";
 import { retryWhileLoading } from "./loadingRetry";
+import { recordChange, type SessionChange } from "./stores/changes";
 
 /** Mirrors `desktop_lib::status::DaemonStatus` (serde `rename_all = "snake_case"`). */
 export type DaemonStatus = "connected" | "connecting" | "spawning" | "dead";
@@ -111,8 +112,17 @@ export function buildInfo(): Promise<BuildInfo> {
  * switch can never land in the other workspace's file. Omit it for a call that has no buffer.
  * Tauri maps this camelCase key to the command's `workspace_root` argument:
  * https://v2.tauri.app/develop/calling-rust/#passing-arguments */
-export function applyMutations(path: string, mutations: Mutation[], workspaceRoot?: string): Promise<ApplyResult> {
-	return invoke("apply", { path, mutations, workspaceRoot: workspaceRoot ?? null });
+export async function applyMutations(path: string, mutations: Mutation[], workspaceRoot?: string): Promise<ApplyResult> {
+	const result = await invoke<ApplyResult>("apply", { path, mutations, workspaceRoot: workspaceRoot ?? null });
+	// Every change this app makes is one `u` can take back (`$lib/stores/changes.ts`).
+	recordChange({ path, ops: result.applied, workspaceRoot: workspaceRoot ?? "" });
+	return result;
+}
+
+/** Takes back one of this session's changes: its `ops` on `path`, through the daemon's Undo
+ * (`commands_universal_edit.rs::undo_change`). */
+export function undoChange(change: SessionChange): Promise<ApplyResult> {
+	return invoke("undo_change", { path: change.path, steps: change.ops, workspaceRoot: change.workspaceRoot || null });
 }
 
 /** Whole-line replacement on one workspace-relative document (`Apply`); the daemon derives

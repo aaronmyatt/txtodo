@@ -11,6 +11,8 @@
 	// detail-view task mounts this again at `depth + 1` for a `ref:` directory's todo.txt.
 	//
 	// CM6 basics: https://codemirror.net/docs/ref/
+	import { newestChange, popChange, popIfNewest } from "$lib/stores/changes";
+	import { showToast } from "$lib/stores/toast";
 	import { onListCommand } from "$lib/listCommands";
 	import { docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
 	import { applyChipCore } from "$lib/wasmCore";
@@ -29,7 +31,16 @@
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { get } from "svelte/store";
-	import { applyMutations, getFile, listFiles, onDaemonChange, watch, type FileInfo, type Mutation } from "$lib/daemon";
+	import {
+		applyMutations,
+		getFile,
+		listFiles,
+		onDaemonChange,
+		undoChange,
+		watch,
+		type FileInfo,
+		type Mutation
+	} from "$lib/daemon";
 	import { dirOf } from "$lib/todotxt/lineInfo";
 	import {
 		idTagsHidden,
@@ -481,6 +492,7 @@
 			return view.focus();
 		}
 		if (id === "detail.open") return requestDetail(current.number);
+		if (id === "list.undo") return undoNewest();
 		if (dirty) await commit();
 		if (dirty) return; // the buffer was refused: its error is already showing
 		const reopen = async (line: string) => (await applyChipCore(line, 0, "x", localToday()))?.text ?? line;
@@ -492,10 +504,40 @@
 			commitError = "";
 			// Repaint now, not on the change event: the next key must see the new order.
 			await refreshDoc();
+			offerUndo(id, current.text);
 		} catch (err) {
 			pendingCursor = null;
 			commitError = String(err);
 		}
+	}
+
+	/** `u`: takes back this session's newest change, all its ops (`$lib/stores/changes.ts`). */
+	async function undoNewest() {
+		const change = popChange();
+		if (!change) return void showToast("Nothing to undo from this session");
+		try {
+			await undoChange(change);
+			await refreshDoc();
+		} catch (err) {
+			commitError = String(err);
+		}
+	}
+
+	/** A toast after a completion or a delete, whose Undo takes back exactly that change while it
+	 * is still the newest (toast.undo). */
+	function offerUndo(id: string, line: string) {
+		const words: Record<string, string> = {
+			"list.toggle_complete": /^x /.test(line) ? "Reopened" : "Completed",
+			"list.delete": "Deleted"
+		};
+		const change = newestChange();
+		if (!words[id] || !change) return;
+		showToast(words[id], () => {
+			if (!popIfNewest(change)) return void showToast("A later change came first; press u to step back");
+			void undoChange(change)
+				.then(refreshDoc)
+				.catch((err) => (commitError = String(err)));
+		});
 	}
 
 	onMount(() => {
