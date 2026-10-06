@@ -20,7 +20,7 @@
 	const NAV: { href: string; label: string; icon: IconName; match: (path: string) => boolean }[] = [
 		{ href: "/", label: "Tasks", icon: "list", match: (p) => p === "/" },
 		{ href: "/universal", label: "Universal", icon: "stack", match: (p) => p.startsWith("/universal") },
-		{ href: "/devices", label: "Settings", icon: "sliders", match: (p) => p.startsWith("/devices") }
+		{ href: "/settings", label: "Settings", icon: "sliders", match: (p) => p.startsWith("/settings") }
 	];
 
 	const path = $derived(page.url.pathname);

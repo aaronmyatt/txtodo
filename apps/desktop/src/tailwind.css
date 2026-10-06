@@ -7,7 +7,11 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+/* `prefix`: DaisyUI's component classes are `d-btn`, `d-menu`, ... The app already uses
+   `checkbox`, `countdown`, `diff`, `footer` and `tabs` as its own class names, which DaisyUI's
+   unprefixed components restyled (the token scopes' checkboxes came out as circles). */
 @plugin "daisyui" {
 	themes: false;
+	prefix: "d-";
 	exclude: rootcolor, rootscrollgutter, rootscrolllock, scrollbar;
 }
