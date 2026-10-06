@@ -81,3 +81,6 @@
   editor, prompt, search, `:` line, Settings filter, notes, shared kill slot, undo with Ctrl-7,
   list mode untouched). Not covered by a test: the parent field (same `Slot::Byte` path as the
   line editor).
+- e2e caught `Alt-a` typing an `a` once chips moved: `ui/edit.rs::on_key` (line editor, parent,
+  prompt) typed any `Char`, modifiers ignored. Now only a plain or shifted character types; the
+  notes and `TailCaret` fields already skipped Ctrl/Alt.
