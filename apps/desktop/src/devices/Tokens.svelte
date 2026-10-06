@@ -3,27 +3,26 @@
 	// their scopes (never the secret, except the one-time creation moment), revoke by id. All
 	// caveat/macaroon logic lives in the daemon; this component only builds a `scopes: string[]`
 	// from checkbox + restrictor state and calls `token_create`/`token_list`/`token_revoke`.
+	// Re-skinned for Settings > Tokens (task desktop-ui-revamp): a table, revoke behind a confirm,
+	// and creation in NewTokenDialog.svelte.
 	import { onMount } from "svelte";
-	import { tokenCreate, tokenList, tokenRevoke } from "./api";
-	import { BASE_SCOPES, RESTRICTOR_PREFIXES, type RestrictorPrefix, type Scope, type Token } from "./types";
+	import { tokenList, tokenRevoke } from "./api";
+	import type { Token } from "./types";
+	import NewTokenDialog from "./NewTokenDialog.svelte";
+
+	let newToken: NewTokenDialog | undefined = $state();
 
 	let tokens = $state<Token[]>([]);
 	let loadError = $state("");
 	let loading = $state(true);
 
-	let name = $state("");
-	let checked = $state<Record<string, boolean>>({});
-	let restrictors = $state<Record<RestrictorPrefix, string>>({ project: "", context: "", file: "" });
-	let expiresInput = $state(""); // yyyy-mm-dd from <input type=date>, or empty = no expiry
-	let createError = $state("");
-	let creating = $state(false);
-
-	/** Non-empty only immediately after a successful create — the one moment the secret exists. */
-	let justCreated = $state<Token | null>(null);
-	let copied = $state(false);
-
 	let revokeError = $state("");
 	let revokingId = $state("");
+	let confirmingId = $state("");
+
+	function dateOf(ms: number): string {
+		return ms > 0 ? new Date(ms).toLocaleDateString() : "";
+	}
 
 	async function load() {
 		loading = true;
@@ -39,69 +38,8 @@
 
 	onMount(load);
 
-	function scopesFromForm(): Scope[] {
-		const scopes: Scope[] = [];
-		for (const s of BASE_SCOPES) {
-			if (checked[s]) scopes.push(s);
-		}
-		for (const prefix of RESTRICTOR_PREFIXES) {
-			const value = restrictors[prefix].trim();
-			if (value) scopes.push(`${prefix}:${value}` as Scope);
-		}
-		return scopes;
-	}
-
-	function expiresRfc3339(): string {
-		if (!expiresInput) return "";
-		// `<input type=date>` gives "yyyy-mm-dd"; midnight UTC on that day, as RFC 3339.
-		return new Date(`${expiresInput}T00:00:00Z`).toISOString();
-	}
-
-	async function createToken() {
-		createError = "";
-		const scopes = scopesFromForm();
-		if (!name.trim()) {
-			createError = "Name is required.";
-			return;
-		}
-		if (scopes.length === 0) {
-			createError = "Pick at least one scope.";
-			return;
-		}
-		creating = true;
-		try {
-			const token = await tokenCreate(name.trim(), scopes, expiresRfc3339());
-			justCreated = token;
-			copied = false;
-			name = "";
-			checked = {};
-			restrictors = { project: "", context: "", file: "" };
-			expiresInput = "";
-			await load();
-		} catch (e) {
-			createError = e instanceof Error ? e.message : String(e);
-		} finally {
-			creating = false;
-		}
-	}
-
-	async function copySecret() {
-		if (!justCreated?.secret) return;
-		try {
-			await navigator.clipboard.writeText(justCreated.secret);
-			copied = true;
-		} catch {
-			// Clipboard permission denied or unavailable — the secret stays on screen to select
-			// manually; nothing to fabricate here.
-		}
-	}
-
-	function dismissSecret() {
-		justCreated = null;
-		copied = false;
-	}
-
 	async function revoke(id: string) {
+		confirmingId = "";
 		revokeError = "";
 		revokingId = id;
 		try {
@@ -119,150 +57,150 @@
 	}
 </script>
 
-<section class="tokens">
-	<h2>Tokens</h2>
+<div class="head">
+	<p class="lede">Let an agent or script use txtodo with only the rights you give it.</p>
+	<button type="button" class="pill solid" onclick={() => newToken?.open()}>New token</button>
+</div>
 
-	<form onsubmit={(e) => { e.preventDefault(); createToken(); }}>
-		<label>
-			Name
-			<input type="text" bind:value={name} placeholder="claude-code" />
-		</label>
-
-		<fieldset>
-			<legend>Scopes</legend>
-			{#each BASE_SCOPES as scope (scope)}
-				<label class="checkbox">
-					<input type="checkbox" bind:checked={checked[scope]} />
-					{scope}
-				</label>
-			{/each}
-		</fieldset>
-
-		<fieldset>
-			<legend>Restrict to (optional)</legend>
-			<label>
-				project:
-				<input type="text" bind:value={restrictors.project} placeholder="+work" />
-			</label>
-			<label>
-				context:
-				<input type="text" bind:value={restrictors.context} placeholder="@phone" />
-			</label>
-			<label>
-				file:
-				<input type="text" bind:value={restrictors.file} placeholder="work.txt" />
-			</label>
-		</fieldset>
-
-		<label>
-			Expires
-			<input type="date" bind:value={expiresInput} />
-			<span class="hint">Empty = never expires.</span>
-		</label>
-
-		<button type="submit" disabled={creating}>{creating ? "Creating…" : "Create token"}</button>
-		{#if createError}<p class="state-error">{createError}</p>{/if}
-	</form>
-
-	{#if justCreated}
-		<div class="secret-reveal" role="alert">
-			<p class="state-warning">Copy this now — it will not be shown again.</p>
-			<code>{justCreated.secret}</code>
-			<div class="actions">
-				<button type="button" onclick={copySecret}>{copied ? "Copied" : "Copy"}</button>
-				<button type="button" onclick={dismissSecret}>Done</button>
-			</div>
-		</div>
-	{/if}
-
-	<h3>Existing tokens</h3>
-	{#if loading}
-		<p>Loading…</p>
-	{:else if loadError}
-		<p class="state-error">{loadError}</p>
-	{:else if tokens.length === 0}
-		<p>No tokens yet.</p>
-	{:else}
-		{#if revokeError}<p class="state-error">{revokeError}</p>{/if}
-		<ul>
+{#if loading}
+	<p class="lede">Loading…</p>
+{:else if loadError}
+	<p class="state-error">{loadError}</p>
+{:else if tokens.length === 0}
+	<p class="lede">No tokens yet.</p>
+{:else}
+	{#if revokeError}<p class="state-error">{revokeError}</p>{/if}
+	<table>
+		<thead>
+			<tr><th>Name</th><th>Scopes</th><th>Created</th><th>Expires</th><th><span class="sr">Actions</span></th></tr>
+		</thead>
+		<tbody>
 			{#each tokens as t (t.id)}
-				<li>
-					<strong>{t.name}</strong>
-					<span class="scopes">{t.scopes.join(", ")}</span>
-					<span class="hint">{t.expires ? `expires ${t.expires}` : "no expiry"}</span>
-					<button type="button" disabled={revokingId === t.id} onclick={() => revoke(t.id)}>
-						{revokingId === t.id ? "Revoking…" : "Revoke"}
-					</button>
-				</li>
+				<tr>
+					<td class="name">{t.name}</td>
+					<td><span class="scopes">{#each t.scopes as sc (sc)}<span class="scope">{sc}</span>{/each}</span></td>
+					<td class="dim">{dateOf(t.created_at_ms)}</td>
+					<td class="dim">{t.expires ? t.expires.slice(0, 10) : "never"}</td>
+					<td class="act">
+						{#if confirmingId === t.id}
+							<button type="button" class="pill danger" disabled={revokingId === t.id} onclick={() => revoke(t.id)}>
+								{revokingId === t.id ? "Revoking…" : "Revoke"}
+							</button>
+							<button type="button" class="pill" onclick={() => (confirmingId = "")}>Cancel</button>
+						{:else}
+							<button type="button" class="pill" aria-label="Revoke {t.name}" onclick={() => (confirmingId = t.id)}>Revoke</button>
+						{/if}
+					</td>
+				</tr>
 			{/each}
-		</ul>
-	{/if}
-</section>
+		</tbody>
+	</table>
+{/if}
+
+<NewTokenDialog bind:this={newToken} onCreated={load} />
 
 <style>
-	.tokens {
+	.head {
 		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 28rem;
-	}
-	fieldset {
-		border: 1px solid var(--color-border);
-		border-radius: 6px;
-	}
-	.checkbox {
-		display: inline-flex;
+		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.25rem;
-		margin-right: 0.75rem;
-	}
-	.hint {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-	}
-	.secret-reveal {
-		border: 1px solid var(--color-warning-border);
-		background: var(--color-warning-bg);
-		border-radius: 8px;
-		padding: 0.75rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		max-width: 28rem;
-	}
-	.secret-reveal code {
-		word-break: break-all;
-	}
-	ul {
-		list-style: none;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	li {
-		display: flex;
-		align-items: center;
+		justify-content: space-between;
 		gap: 0.75rem;
-		border: 1px solid var(--color-border-subtle);
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
+		margin-bottom: 1rem;
 	}
+
+	.lede,
+	.dim {
+		margin: 0;
+		color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.8125rem;
+	}
+
+	th {
+		padding: 0 0.5rem 0.4rem 0;
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+		font-size: 11px;
+		letter-spacing: 0.05em;
+		text-align: left;
+		text-transform: uppercase;
+	}
+
+	td {
+		padding: 0.5rem 0.5rem 0.5rem 0;
+		border-top: 2px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+		vertical-align: middle;
+	}
+
+	.name {
+		font-weight: 700;
+	}
+
 	.scopes {
-		font-family: monospace;
-		font-size: 0.85rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
 	}
+
+	.scope {
+		padding: 0 0.4rem;
+		border: 2px solid color-mix(in srgb, var(--color-base-content) 25%, transparent);
+		border-radius: 999px;
+		font-size: 11px;
+	}
+
+	.act {
+		white-space: nowrap;
+		text-align: right;
+	}
+
+	.sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+
+	.pill {
+		padding: 0.2rem 0.8rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.pill:disabled {
+		opacity: 0.45;
+	}
+
+	.pill.solid {
+		border-color: var(--color-primary);
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+	}
+
+	.pill.danger {
+		border-color: var(--color-error, #dc2626);
+		background: var(--color-error, #dc2626);
+		color: var(--color-error-content, #fff);
+	}
+
 	.state-error {
-		color: var(--color-danger);
-		font-weight: 600;
+		margin: 0;
+		color: var(--color-error, #dc2626);
+		font-weight: 700;
+		font-size: 0.8125rem;
 	}
-	.state-warning {
-		color: var(--color-warning-text);
-		font-weight: 600;
-	}
+
 </style>

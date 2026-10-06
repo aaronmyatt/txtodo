@@ -21,7 +21,7 @@
 		workspaces: { body: workspaces },
 		shortcuts: { body: shortcuts },
 		devices: { body: devices },
-		tokens: { body: tokens, headless: true },
+		tokens: { body: tokens },
 		activity: { body: activity, headless: true }
 	};
 
