@@ -46,10 +46,15 @@ function nextRequestId(): string {
 // `npm run dev` (no Tauri runtime) this call always rejects, and per this task's brief, `ui_log`
 // failing must never itself throw or break the caller's own business logic.
 // Ref (Tauri v2 `invoke`): https://v2.tauri.app/reference/javascript/api/namespacecore/#invoke
-function logToRust(level: "info" | "warn", message: string, fields: Record<string, unknown>): void {
+function logToRust(level: "info" | "warn" | "error", message: string, fields: Record<string, unknown>): void {
 	tauriInvoke<void>("ui_log", { level, message, fields }).catch(() => {
 		// Deliberately silent — see doc comment above.
 	});
+}
+
+/** An uncaught frontend error into desktop.log (`$lib/crashLog.ts`); never throws. */
+export function logError(message: string, fields: Record<string, unknown>): void {
+	logToRust("error", message, fields);
 }
 
 export function invoke<T>(cmd: string, args?: InvokeArgs, options?: InvokeOptions): Promise<T> {

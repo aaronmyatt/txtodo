@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from "svelte";
+	import { onMount, type Snippet } from "svelte";
 	// Tailwind/DaisyUI layers first, so app.css (unlayered) still wins wherever both style a thing.
 	import "../tailwind.css";
 	import "../app.css";
@@ -16,12 +16,23 @@
 	import { editorPrefs } from "$lib/stores/editorPrefs";
 	import { isQuickAddWindow } from "$lib/windowLabel";
 	import AppShell from "$lib/components/AppShell.svelte";
+	import { describeError, installCrashLog } from "$lib/crashLog";
+	import { logError } from "$lib/tauriShim";
 
 	// The quick-add window (routes/+page.svelte) is a bare popover: no header. Outside a Tauri
 	// webview (`npm run dev`, Playwright) there is no window label, so the shell shows.
 	const isQuickAdd = isQuickAddWindow();
 
 	let { children }: { children: Snippet } = $props();
+
+	// Uncaught errors and unhandled rejections land in desktop.log (`$lib/crashLog.ts`).
+	onMount(() => installCrashLog(window, logError));
+
+	/** A render error inside the page: log it, and show a way back instead of a blank window.
+	 * https://svelte.dev/docs/svelte/svelte-boundary */
+	function onPageError(error: unknown) {
+		logError("render error", { ...describeError(error) });
+	}
 
 	// `<html data-theme>` is what app.css's `[data-theme="dark"]` overrides key off — set here
 	// (rather than in app.html before hydration) since the resolved value depends on
@@ -38,8 +49,52 @@
 	});
 </script>
 
+{#snippet page()}
+	<svelte:boundary onerror={onPageError}>
+		{@render children()}
+		{#snippet failed(error, reset)}
+			<div class="crashed" role="alert">
+				<p><b>This page broke.</b> The error is in desktop.log.</p>
+				<p class="why">{describeError(error).message}</p>
+				<button type="button" onclick={reset}>Try again</button>
+			</div>
+		{/snippet}
+	</svelte:boundary>
+{/snippet}
+
 {#if isQuickAdd}
-	{@render children()}
+	{@render page()}
 {:else}
-	<AppShell>{@render children()}</AppShell>
+	<AppShell>{@render page()}</AppShell>
 {/if}
+
+<style>
+	.crashed {
+		margin: 3rem auto;
+		max-width: 32rem;
+		padding: 1.5rem;
+		border: 2px solid var(--color-base-content);
+		border-radius: var(--radius-box);
+		font-family: var(--font-mono);
+	}
+
+	.crashed p {
+		margin: 0 0 0.75rem;
+	}
+
+	.why {
+		color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+		font-size: 0.8125rem;
+	}
+
+	.crashed button {
+		padding: 0.25rem 0.9rem;
+		border: 0;
+		border-radius: 999px;
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+</style>
