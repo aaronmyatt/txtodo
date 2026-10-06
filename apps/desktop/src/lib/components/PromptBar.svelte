@@ -6,8 +6,10 @@
 	// the buffer. The nine chips float above the bar while it has the keyboard, so nothing shifts.
 	// The strict-mode hint shows once typing pauses and never blocks (design §2.3).
 	import { onMount } from "svelte";
-	import { applyMutations, onPromptBarFocus } from "$lib/daemon";
+	import { applyMutations, listFiles, onPromptBarFocus } from "$lib/daemon";
+	import { editorStatus } from "$lib/stores/editorStatus";
 	import Mark from "$lib/brand/Mark.svelte";
+	import { meterFor, type Meter } from "$lib/brand/meter";
 	import Icon from "$lib/icons/Icon.svelte";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
 	import LineEditor from "./LineEditor.svelte";
@@ -34,14 +36,42 @@
 	let adding = $state(false);
 	let hint = $state<string | null>(null);
 
+	function currentPath(): Promise<string> {
+		return resolvePath ? resolvePath() : Promise.resolve($workspaceLayoutStore.todo_file || "todo.txt");
+	}
+
+	// The live mark: the root list's done/total from the daemon. In the main window it is fetched
+	// whenever the root buffer's own counts move (load, edits, remote changes, a workspace switch),
+	// and only once the buffer has lines: a `ListFiles` in flight during startup cost the 10k-line
+	// first paint ~500ms (e2e/perf.spec.ts). The Quick Add window has no buffer; it asks on mount,
+	// which is every show. `meterSeq` drops a reply that lost to a newer refresh.
+	let meter = $state<Meter | null>(null);
+	let meterSeq = 0;
+	async function refreshMeter() {
+		const seq = ++meterSeq;
+		try {
+			const [path, files] = await Promise.all([currentPath(), listFiles()]);
+			if (seq === meterSeq) meter = meterFor(files, path);
+		} catch {
+			// No daemon: the plain mark stays.
+		}
+	}
+
+	$effect(() => {
+		if (windowed) return;
+		const { open, done, lines } = $editorStatus.counts;
+		if (lines === 0) return;
+		void [open, done];
+		void refreshMeter();
+	});
+
 	async function add(line: string) {
 		const text = line.trim();
 		if (!text || adding) return;
 		adding = true;
 		error = "";
 		try {
-			const path = resolvePath ? await resolvePath() : $workspaceLayoutStore.todo_file || "todo.txt";
-			await applyMutations(path, [{ kind: "add", line: text }]);
+			await applyMutations(await currentPath(), [{ kind: "add", line: text }]);
 			editor?.setText("");
 			onAdded?.();
 		} catch (e) {
@@ -53,7 +83,10 @@
 
 	// The Quick Add hotkey with this window frontmost lands here (`quick_add.rs`).
 	onMount(() => {
-		if (windowed) return;
+		if (windowed) {
+			void refreshMeter();
+			return;
+		}
 		const off = onPromptBarFocus(() => editor?.focus());
 		return () => void off.then((f) => f());
 	});
@@ -79,7 +112,7 @@
 		</div>
 	{/if}
 	<div class="row">
-		<Mark class="prompt-mark" />
+		<Mark class="prompt-mark" progress={meter?.progress ?? null} title={meter?.title ?? "txtodo"} />
 		<div class="field">
 			<LineEditor
 				bind:this={editor}

@@ -33,3 +33,13 @@ test("Enter in the prompt bar adds the line and keeps the keyboard", async ({ pa
 	// (https://codemirror.net/docs/ref/#view.placeholder), so it stands in for "the field is empty".
 	await expect(field.locator(".cm-placeholder")).toBeVisible();
 });
+
+test("the mark is a live meter of the root list's done over total", async ({ page }) => {
+	const mark = page.locator(".prompt-mark title");
+	await expect(mark).toHaveText(/^0 of \d+ done$/);
+	const before = Number((await mark.textContent())?.match(/of (\d+)/)?.[1]);
+	await page.getByRole("textbox", { name: "Add a task" }).click();
+	await page.keyboard.type("one more");
+	await page.keyboard.press("Enter");
+	await expect(mark).toHaveText(`0 of ${before + 1} done`);
+});
