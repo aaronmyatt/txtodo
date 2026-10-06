@@ -1,3 +1,3 @@
-2026-10-06 ffi: breakdown_fields export over core breakdown::fields; regenerate wasm-core +m11 @desktop @core @doing by:claude
-2026-10-06 desktop: a Fields toggle under the parent line shows it field by field; manifest detail.breakdown desktop differs (button, no key) +m11 @desktop @parity
+2026-10-06 desktop: a Fields toggle under the parent line shows it field by field; manifest detail.breakdown desktop differs (button, no key) +m11 @desktop @parity @doing by:claude
 x 2026-10-06 2026-10-06 desktop: DetailView's parent line wraps (EditorView.lineWrapping) instead of scrolling sideways +m11 @desktop — 4cef8879, EditorView.lineWrapping on the parent editor
+x 2026-10-06 2026-10-06 ffi: breakdown_fields export over core breakdown::fields; regenerate wasm-core +m11 @desktop @core — breakdown_fields in wasm.rs; wasm-core regenerated with scripts/build-wasm-core.sh
