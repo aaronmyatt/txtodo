@@ -450,12 +450,6 @@ export function universalUndo(workspaceId: string, path: string, steps: number):
 	return invoke("universal_undo", { workspaceId, path, steps });
 }
 
-/** The Quick Add hotkey as key names (`["Super", "Shift", "Space"]`), read from the Rust side's
- * registration so Settings and Help never show a stale key. */
-export function quickAddHotkey(): Promise<string[]> {
-	return invoke("quick_add_hotkey");
-}
-
 /** Tells the quick-add global hotkey's guard whether the main window's popover has an unsaved
  * edit right now (tasks/desktop-quick-add/notes.md: "if the main popover is open and dirty, the
  * hotkey focuses the main window instead"). Best-effort: callers swallow the rejection rather than

@@ -1,22 +1,12 @@
 <script lang="ts">
-	// The keys reference (`$lib/keyTable.ts`), shared by Settings > Shortcuts and the Help page. The
-	// hotkey comes from the Rust side; until it answers (or outside Tauri without the mock) its row
-	// is simply absent.
-	import { onMount } from "svelte";
-	import { quickAddHotkey } from "$lib/daemon";
+	// The keys reference (`$lib/keyTable.ts`, from specs/client-parity.toml), shared by Settings >
+	// Shortcuts and the Help page.
 	import { keyGroups, keyLabel } from "$lib/keyTable";
 
-	let hotkey = $state<string[]>([]);
-	const groups = $derived(keyGroups(hotkey));
+	const groups = keyGroups();
 	// navigator.platform is deprecated but still the plainest "is this a Mac" read in WebKit:
 	// https://developer.mozilla.org/en-US/docs/Web/API/Navigator/platform
 	const mac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform || navigator.userAgent);
-
-	onMount(() => {
-		quickAddHotkey()
-			.then((h) => (hotkey = h))
-			.catch(() => {});
-	});
 </script>
 
 <table>

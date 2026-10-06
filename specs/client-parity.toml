@@ -78,7 +78,7 @@ id = "list.first"
 title = "Top row: Add a line"
 keys = ["g g"]
 scope = "list"
-desktop = { status = "differs", surface = "FileView (list mode)" }
+desktop = { status = "differs", surface = "FileView (list mode)", keys = ["g g"] }
 tui = { status = "done", surface = "Tasks" }
 deviation = "The TUI's top row is its add row; the desktop adds from the prompt bar, so g g goes to the first line."
 
@@ -569,7 +569,7 @@ id = "search.next"
 title = "Next match"
 keys = ["Enter"]
 scope = "search"
-desktop = { status = "planned", surface = "header search" }
+desktop = { status = "done", surface = "header search" }
 tui = { status = "done", surface = "header search" }
 deviation = ""
 
@@ -578,7 +578,7 @@ id = "search.prev"
 title = "Previous match"
 keys = ["Shift-Enter"]
 scope = "search"
-desktop = { status = "planned", surface = "header search" }
+desktop = { status = "done", surface = "header search" }
 tui = { status = "done", surface = "header search" }
 deviation = ""
 
@@ -596,7 +596,7 @@ id = "search.clear"
 title = "Clear the search, then leave it"
 keys = ["Esc"]
 scope = "search"
-desktop = { status = "planned", surface = "header search" }
+desktop = { status = "done", surface = "header search" }
 tui = { status = "done", surface = "header search" }
 deviation = ""
 
@@ -686,16 +686,16 @@ id = "prompt.focus"
 title = "Quick Add in the prompt bar"
 keys = ["Mod-Shift-Space"]
 scope = "global"
-desktop = { status = "planned", surface = "prompt bar" }
+desktop = { status = "differs", surface = "prompt bar (the global hotkey while the app is in front)", keys = ["Super-Shift-Space"] }
 tui = { status = "differs", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
-deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart."
+deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart. The desktop's hotkey is Super-Shift-Space (Cmd on a Mac, the Windows key elsewhere): the same key as Quick Add, which opens the bar when the app is in front."
 
 [[action]]
 id = "prompt.submit"
 title = "Add the line to this workspace"
 keys = ["Enter"]
 scope = "prompt"
-desktop = { status = "planned", surface = "prompt bar" }
+desktop = { status = "done", surface = "prompt bar, Quick Add window" }
 tui = { status = "done", surface = "prompt bar" }
 deviation = ""
 
@@ -704,7 +704,7 @@ id = "prompt.cancel"
 title = "Leave the prompt bar"
 keys = ["Esc"]
 scope = "prompt"
-desktop = { status = "planned", surface = "prompt bar" }
+desktop = { status = "done", surface = "prompt bar (back to the buffer), Quick Add window (hides it)" }
 tui = { status = "done", surface = "prompt bar" }
 deviation = ""
 
@@ -857,54 +857,54 @@ id = "settings.down"
 title = "Next Settings row"
 keys = ["j", "Down"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "settings.up"
 title = "Previous Settings row"
 keys = ["k", "Up"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "settings.next_card"
 title = "Next Settings card"
 keys = ["Tab", "l", "Right"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "settings.prev_card"
 title = "Previous Settings card"
 keys = ["Shift-Tab", "h", "Left"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "settings.activate"
 title = "Run the row: a button, a toggle, a field"
 keys = ["Enter", "Space"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "settings.remove"
 title = "Remove what the row lists (press twice)"
 keys = ["d"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "differs", surface = "/settings", keys = [] }
 tui = { status = "done", surface = "Settings screen" }
-deviation = ""
+deviation = "Settings is a page of cards: Tab and Shift-Tab move between controls, Enter or Space presses one, and the section nav jumps to a card."
 
 [[action]]
 id = "help.down"
@@ -929,7 +929,7 @@ id = "settings.filter"
 title = "Filter the settings cards"
 keys = ["/"]
 scope = "settings"
-desktop = { status = "planned", surface = "/settings" }
+desktop = { status = "done", surface = "/settings (the header search hides cards)" }
 tui = { status = "done", surface = "Settings screen" }
 deviation = ""
 
@@ -1209,7 +1209,7 @@ id = "activity.refresh"
 title = "Refresh the activity feed"
 keys = []
 scope = "settings"
-desktop = { status = "done", surface = "ActivityTab" }
+desktop = { status = "done", surface = "Settings > Activity (ActivityCard)" }
 tui = { status = "done", surface = "Settings > Activity" }
 deviation = ""
 
@@ -1263,7 +1263,7 @@ id = "devices.list"
 title = "List paired devices"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Devices" }
+desktop = { status = "done", surface = "Settings > Devices (DeviceList)" }
 tui = { status = "done", surface = "Settings > Devices" }
 deviation = ""
 
@@ -1272,7 +1272,7 @@ id = "devices.revoke"
 title = "Revoke a paired device (rotates the group key)"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Devices" }
+desktop = { status = "done", surface = "Settings > Devices (Remove, behind a confirm)" }
 tui = { status = "done", surface = "Settings > Devices (d, twice)" }
 deviation = ""
 
@@ -1310,7 +1310,7 @@ id = "workspace.pick_folder"
 title = "Add a workspace from a folder picker"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Workspaces" }
+desktop = { status = "done", surface = "Settings > Workspaces (Choose a folder…)" }
 tui = { status = "na", surface = "" }
 deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add)."
 
@@ -1328,7 +1328,7 @@ id = "appearance.text_size"
 title = "Text size"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Appearance" }
+desktop = { status = "done", surface = "Settings > Appearance" }
 tui = { status = "na", surface = "" }
 deviation = "The terminal emulator owns the text size; the TUI cannot change it."
 
@@ -1337,7 +1337,7 @@ id = "appearance.line_height"
 title = "Line height"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Appearance" }
+desktop = { status = "done", surface = "Settings > Appearance" }
 tui = { status = "na", surface = "" }
 deviation = "A terminal draws one row per cell; there is no line height to set."
 
@@ -1346,7 +1346,7 @@ id = "appearance.line_numbers"
 title = "Show line numbers"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Appearance" }
+desktop = { status = "done", surface = "Settings > Appearance" }
 tui = { status = "done", surface = "Settings > Appearance" }
 deviation = ""
 
@@ -1355,6 +1355,6 @@ id = "appearance.length_hint"
 title = "Mark lines past 100 characters"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "Settings > Appearance" }
+desktop = { status = "done", surface = "Settings > Appearance" }
 tui = { status = "done", surface = "Settings > Appearance" }
 deviation = ""

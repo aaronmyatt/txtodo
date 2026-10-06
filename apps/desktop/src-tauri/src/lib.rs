@@ -120,7 +120,6 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_ui_log::ui_log,
         commands_version::build_info,
         commands_window::set_pinned,
-        commands_window::quick_add_hotkey,
         commands_workspace::list_workspaces,
         commands_workspace::workspace_layout,
         commands_workspace::add_workspace,

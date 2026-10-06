@@ -16,9 +16,3 @@ use tauri::Window;
 pub fn set_pinned(window: Window, pinned: bool) -> Result<(), String> {
     window.set_always_on_top(pinned).map_err(|e| e.to_string())
 }
-
-/// The Quick Add hotkey as key names, for Settings > Shortcuts and Help (`quick_add.rs`).
-#[tauri::command]
-pub fn quick_add_hotkey() -> Vec<String> {
-    crate::quick_add::hotkey_parts()
-}

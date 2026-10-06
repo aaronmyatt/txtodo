@@ -62,9 +62,11 @@ fn quick_add_shortcut() -> Shortcut {
 const HOTKEY_MODS: Modifiers = Modifiers::SUPER.union(Modifiers::SHIFT);
 const HOTKEY_CODE: Code = Code::Space;
 
-/// The hotkey as key names (`["Super", "Shift", "Space"]`) for Settings > Shortcuts and Help,
-/// read from the same constants the registration uses, so the page can never show a stale key.
-pub(crate) fn hotkey_parts() -> Vec<String> {
+/// The hotkey as key names (`["Super", "Shift", "Space"]`), from the same constants the
+/// registration uses. Help and Shortcuts show the manifest's `quick_add.open` row; the test below
+/// keeps that row and this registration the same key.
+#[cfg(test)]
+fn hotkey_parts() -> Vec<String> {
     let mut parts = Vec::new();
     for (flag, name) in [
         (Modifiers::SUPER, "Super"),
@@ -174,6 +176,22 @@ mod tests {
     #[test]
     fn the_hotkey_reads_as_its_key_names() {
         assert_eq!(super::hotkey_parts(), vec!["Super", "Shift", "Space"]);
+    }
+
+    /// specs/client-parity.toml's `quick_add.open` row is what Help and Shortcuts show: it must
+    /// name the key this file registers.
+    #[test]
+    fn the_manifest_names_the_registered_hotkey() {
+        let manifest = include_str!("../../../../specs/client-parity.toml");
+        let row = manifest
+            .split("[[action]]")
+            .find(|r| r.contains("id = \"quick_add.open\""))
+            .unwrap_or_default();
+        let keys = format!("keys = [\"{}\"]", super::hotkey_parts().join("-"));
+        assert!(
+            row.contains(&keys),
+            "quick_add.open should have {keys}: {row}"
+        );
     }
 
     #[test]
