@@ -448,13 +448,16 @@
 </div>
 
 <style>
+	/* At least three quarters of the panel's width (2026-10-06 feedback: 48rem left most of a wide
+	   window empty); the right padding keeps clear of the panel's close button. */
 	.detail-view {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		max-width: 48rem;
+		width: max(75%, min(100%, 48rem));
 		margin: 0 auto;
-		padding: 1rem 1.25rem;
+		padding: 1rem 3rem 1rem 1.25rem;
+		box-sizing: border-box;
 		font-family: var(--font-sans);
 	}
 
