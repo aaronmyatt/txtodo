@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+  C · Prompt — the keyboard-first one, dark first. No sheet, no frame: the todo.txt buffer runs
+  edge to edge like a text editor, and Quick Add stops being a separate window — it is a prompt
+  bar that lives under the buffer. The logo is the progress meter: its four strokes draw in as
+  you complete tasks (t-stem, hook, then the x), so finishing work literally finishes the mark.
+
+    What's new vs. today's app            What is deliberately unchanged
+    - persistent prompt bar = Quick Add   - raw text buffer, one line per task, syntax colors
+      (chips appear while it has focus)   - blur / Cmd+S saves, Esc discards
+    - live mark: strokes draw with        - Cmd+Enter / double-click opens the detail view
+      done/total (type "x " and watch)    - "Add a line…", done dimmed+struck, ref: n/m, 100-char hint
+    - detail = bottom panel, buffer       - Quick Add hotkey Cmd/Ctrl+Shift+Space (here: focuses
+      stays visible above it                the prompt)
+    - line numbers, block caret
+
+  Try: type "x " at the start of a line and watch the mark · click the prompt to see the chips
+       · double-click the "roadmap" line · Cmd+Shift+Space · "⋯" for banners · sun/moon.
+-->
+<html lang="en" data-theme="txtodo-dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>txtodo — C · Prompt</title>
+
+  <!-- Ref: https://daisyui.com/docs/cdn/  ·  https://tailwindcss.com/docs/installation/play-cdn -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/txtodo.css" />
+  <style type="text/tailwindcss">
+    @theme {
+      --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+  <style>
+    #c-editor { --tx-lh: 26px; --tx-fs: 14px; --tx-pad-y: 0.75rem; --tx-pad-x: 1rem; --tx-active-bg: color-mix(in oklab, var(--color-base-content) 8%, transparent); }
+    /* Block caret where supported (Chromium 139+); everywhere else it falls back to the bar.
+       Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/caret-shape */
+    #c-editor .tx-input { caret-shape: block; }
+    #c-editor .tx-gutter { border-right: 2px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); }
+    #c-editor .tx-g { padding-right: 0.75rem; }
+    /* The mark inherits currentColor; keep it full ink while the ghost stays faint. */
+    #c-mark { color: var(--color-base-content); }
+  </style>
+</head>
+
+<body class="flex h-dvh flex-col bg-base-100 font-mono text-base-content">
+
+  <div data-demo-target="daemon" class="hidden">
+    <div role="alert" class="flex items-center gap-3 bg-base-content px-4 py-1.5 text-xs text-base-100">
+      <span class="loading loading-spinner loading-xs"></span>
+      <b>daemon: connecting</b>
+      <span class="opacity-70">txtodod isn't answering yet. Edits stay in the buffer.</span>
+      <button class="btn btn-xs ml-auto border-0 bg-base-100 text-base-content hover:bg-base-300">Retry</button>
+    </div>
+  </div>
+  <div data-demo-target="conflict" class="hidden">
+    <div role="alert" class="flex items-center gap-3 border-b-2 border-base-content px-4 py-1.5 text-xs">
+      <span data-tx-icon="warn" class="text-warning"></span>
+      <b>1 line needs review</b>
+      <span class="text-base-content/70">Two devices edited the same word. Read-only until you pick.</span>
+      <button class="btn btn-xs btn-primary ml-auto">Review</button>
+    </div>
+  </div>
+
+  <header class="flex h-11 shrink-0 items-center gap-3 border-b-2 border-base-content/20 px-4 text-xs">
+    <a href="#" class="flex items-center gap-2" aria-label="txtodo"><span data-tx-mark class="w-7"></span><span class="text-sm font-bold tracking-tighter">txtodo</span></a>
+    <span class="text-base-content/40">/</span>
+    <details class="dropdown">
+      <summary class="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 hover:bg-base-200">~/notes <span data-tx-icon="down" class="size-3.5"></span></summary>
+      <ul id="c-ws" class="menu dropdown-content z-30 mt-2 w-72 rounded-box border-2 border-base-content bg-base-100 p-2"></ul>
+    </details>
+    <span class="text-base-content/40">/</span>
+    <span class="font-bold">todo.txt</span>
+
+    <span id="c-counts" class="ml-3 flex gap-3"></span>
+
+    <div class="ml-auto flex items-center gap-0.5">
+      <a href="#" class="btn btn-ghost btn-xs hidden gap-1.5 md:inline-flex"><span data-tx-icon="stack" class="size-3.5"></span> Universal</a>
+      <a href="#" class="btn btn-ghost btn-xs hidden gap-1.5 md:inline-flex"><span data-tx-icon="devices" class="size-3.5"></span> Devices &amp; agents</a>
+      <button id="c-pin" class="btn btn-ghost btn-xs btn-square" aria-label="Pin on top" aria-pressed="false"><span data-tx-icon="pin" class="size-4"></span></button>
+      <button data-tx-theme-toggle class="btn btn-ghost btn-xs btn-square" aria-label="Toggle theme">
+        <span data-tx-icon="moon" class="tx-only-light size-4"></span><span data-tx-icon="sun" class="tx-only-dark size-4"></span>
+      </button>
+      <a href="#" class="btn btn-ghost btn-xs btn-square" aria-label="Help"><span data-tx-icon="help" class="size-4"></span></a>
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-ghost btn-xs btn-square" aria-label="Demo states"><span data-tx-icon="dots" class="size-4"></span></summary>
+        <ul class="menu dropdown-content z-30 mt-1 w-60 rounded-box border-2 border-base-content bg-base-100 p-2 font-sans">
+          <li class="menu-title">Demo states</li>
+          <li><button data-demo="daemon">Daemon offline</button></li>
+          <li><button data-demo="conflict">Conflict to review</button></li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <main class="flex min-h-0 flex-1 flex-col">
+    <div id="c-editor" class="min-h-0 flex-1" data-tx-main></div>
+
+    <!-- Detail: bottom panel. The buffer above stays put, so scroll position and context survive. -->
+    <section id="c-detail" class="relative hidden h-[55%] shrink-0 overflow-y-auto border-t-2 border-base-content bg-base-100 px-5 py-4 font-sans" aria-label="Task detail">
+      <div id="c-detail-body" class="mx-auto h-full max-w-3xl"></div>
+      <button id="c-detail-close" class="btn btn-ghost btn-sm btn-square absolute right-3 top-3" aria-label="Close detail"><span data-tx-icon="x" class="size-4"></span></button>
+    </section>
+  </main>
+
+  <!-- Prompt bar = Quick Add. `group` lets the chips show only while anything inside has focus. -->
+  <footer class="group relative shrink-0 border-t-2 border-base-content bg-base-100">
+    <div id="c-qa" class="px-4 pb-1 pt-3" data-tx-qa></div>
+    <div class="flex h-8 items-center gap-4 px-4 text-[11px] text-base-content/60">
+      <span id="c-status" class="flex min-w-24 items-center gap-2 font-bold text-base-content"></span>
+      <span id="c-caret">Ln 1, Col 1</span>
+      <span class="ml-auto hidden items-center gap-4 md:flex">
+        <span><kbd class="kbd kbd-xs">⌘S</kbd> save</span>
+        <span><kbd class="kbd kbd-xs">esc</kbd> discard</span>
+        <span><kbd class="kbd kbd-xs">⌘↵</kbd> open</span>
+        <span><kbd class="kbd kbd-xs">⌘⇧␣</kbd> prompt</span>
+      </span>
+    </div>
+  </footer>
+
+  <script src="shared/todotxt.js"></script>
+  <script src="shared/data.js"></script>
+  <script src="shared/txtodo-ui.js"></script>
+  <script src="shared/smoke.js"></script>
+  <script>
+    const T = TodoTxt, D = TxData, UI = TxUI;
+    const $ = (id) => document.getElementById(id);
+    UI.initChrome({ defaultTheme: "dark" });
+
+    // ---- prompt bar: Quick Add with the live mark as its prompt glyph ----
+    const qa = UI.mountQuickAdd($("c-qa"), {
+      prompt: "none",
+      footer: false,
+      addLabel: "Add",
+      onSubmit: (v) => { UI.appendTask(editor, v); closeDetail(); },
+      onCancel: () => editor.focus(),
+    });
+    const row = $("c-qa").firstElementChild;
+    row.insertAdjacentHTML("afterbegin", `<span id="c-mark" data-tx-mark="live" class="w-11 shrink-0" title=""></span>`);
+    UI.fillMarks(row);
+    const chips = $("c-qa").querySelector(".tx-qa-chips");
+    // Floats above the bar while anything inside has focus, so focusing never shifts the layout.
+    chips.classList.add("hidden", "group-focus-within:flex", "absolute", "bottom-full", "left-4", "pb-2");
+    chips.querySelectorAll("button").forEach((b) => b.classList.add("bg-base-100"));
+    $("c-qa").querySelector(".tx-qa-add").classList.add("rounded-full");
+
+    // ---- status, counts, and the mark's progress ----
+    const STATUS = {
+      clean: () => `<span class="status status-success"></span> synced`,
+      dirty: () => `<span class="status status-warning animate-pulse"></span> unsaved`,
+      saving: () => `<span class="loading loading-spinner loading-xs"></span> saving`,
+      saved: () => `${UI.icon("check", "size-3.5 text-success")} saved`,
+    };
+    const renderStatus = (s) => ($("c-status").innerHTML = STATUS[s]());
+    function renderCounts(v) {
+      const s = T.stats(v);
+      $("c-counts").innerHTML = `<span><b>t</b> ${s.open}</span><span><b>x</b> ${s.done}</span>`;
+      $("c-mark").title = `${s.done} of ${s.total} done`;
+      UI.setMarkProgress($("c-mark"), s.total ? s.done / s.total : 0);
+    }
+
+    // ---- the buffer, edge to edge ----
+    const editor = UI.createEditor($("c-editor"), {
+      value: D.DOC,
+      gutter: "numbers",
+      onStatus: renderStatus,
+      onCaret: (c) => ($("c-caret").textContent = `Ln ${c.line}, Col ${c.col}`),
+      onChange: renderCounts,
+      onDetail: (n, text) => text.trim() && openDetail(text),
+    });
+    renderStatus("clean");
+    renderCounts(D.DOC);
+
+    // ---- detail: bottom panel ----
+    function openDetail(text) {
+      $("c-detail").classList.remove("hidden");
+      UI.mountDetail($("c-detail-body"), { line: text, workspace: "notes", onExit: closeDetail, dense: true });
+    }
+    function closeDetail() { $("c-detail").classList.add("hidden"); }
+    $("c-detail-close").addEventListener("click", closeDetail);
+
+    // ---- keyboard + small chrome ----
+    UI.hotkeys({ quickAdd: () => qa.focus() });
+    $("c-ws").innerHTML =
+      D.WORKSPACES.map((w, i) => `<li><a class="${i === 0 ? "menu-active" : ""}"><b>${w.name}</b><span class="ml-auto text-xs opacity-60">${w.open} open</span></a></li>`).join("") +
+      `<li class="mt-1 border-t-2 border-base-content/10 pt-1"><a>${UI.icon("plus", "size-4")} Add a folder</a></li>`;
+    $("c-pin").addEventListener("click", (e) => {
+      const b = e.currentTarget, on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", String(on));
+      b.classList.toggle("btn-active", on);
+    });
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.dropdown[open]").forEach((d) => d.contains(e.target) || d.removeAttribute("open"));
+    });
+    UI.bindDemo({ conflict: (on) => editor.setReadOnly(on) });
+  </script>
+</body>
+</html>

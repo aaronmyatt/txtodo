@@ -1,0 +1,349 @@
+<!doctype html>
+<!--
+  B · Tile — the bold one. The whole window is the app icon: an inverse tile (black frame, white
+  ink) with the working surface cut into it as a rounded white sheet, the way the mark sits in
+  the icon. A slim rail holds the workspaces (each a tiny tile) and the three screens. Shows the
+  system past the editor: Universal view and Devices & agents in the same language.
+
+    What's new vs. today's app           What is deliberately unchanged
+    - rail: workspace tiles + nav        - the sheet is the raw todo.txt buffer (same engine as A)
+      replace the top-left menu + links  - blur / Cmd+S saves, Esc discards, Cmd+Enter / dbl-click
+    - Quick Add = palette with the         opens the detail view — still a PAGE swap here
+      nine token chips                   - Universal view groups by priority + context filter
+    - progress bar in the footer         - Devices: pairing (QR + SAS), tokens, activity
+
+  Try: rail icons · type, then click a round mark · double-click the "roadmap" line
+       · Universal view rows jump back to their line · Cmd+Shift+Space · "⋯" for banners.
+-->
+<html lang="en" data-theme="txtodo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>txtodo — B · Tile</title>
+
+  <!-- Ref: https://daisyui.com/docs/cdn/  ·  https://tailwindcss.com/docs/installation/play-cdn -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/txtodo.css" />
+  <style type="text/tailwindcss">
+    @theme {
+      --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+  <style>
+    #b-editor { --tx-lh: 30px; --tx-fs: 15px; --tx-pad-y: 0.9rem; --tx-active-bg: var(--color-base-200); --tx-hover-bg: color-mix(in oklab, var(--color-base-200) 55%, transparent); }
+
+    /* Rail buttons sit on the inverse frame, so DaisyUI's .btn (light hover wash) is the wrong tool. */
+    .rail-btn { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 1rem; color: color-mix(in oklab, var(--color-neutral-content) 75%, transparent); transition: background-color .12s, color .12s; }
+    .rail-btn:hover { background: color-mix(in oklab, var(--color-neutral-content) 16%, transparent); color: var(--color-neutral-content); }
+    .rail-btn[aria-current="page"], .rail-btn[aria-pressed="true"] { background: var(--color-neutral-content); color: var(--color-neutral); }
+    .ws-tile { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; border-radius: 1rem; border: 2px solid color-mix(in oklab, var(--color-neutral-content) 35%, transparent); color: var(--color-neutral-content); font: 700 0.9rem var(--tx-font); letter-spacing: -0.04em; }
+    .ws-tile:hover { border-color: var(--color-neutral-content); }
+    .ws-tile[aria-current="true"] { background: var(--color-neutral-content); border-color: var(--color-neutral-content); color: var(--color-neutral); }
+    .row-btn:hover { background: var(--color-base-200); }
+  </style>
+</head>
+
+<body class="h-dvh overflow-hidden bg-neutral font-sans text-neutral-content">
+
+  <div class="flex h-full gap-2 p-2 sm:gap-3 sm:p-3">
+
+    <!-- Rail ------------------------------------------------------------------------------- -->
+    <nav class="rail flex w-14 shrink-0 flex-col items-center gap-2.5 py-1 sm:w-[3.25rem]" aria-label="Main">
+      <a href="#" class="mb-1 mt-1 block w-11 text-neutral-content" aria-label="txtodo home"><span data-tx-mark class="block w-full"></span></a>
+
+      <div id="b-ws" class="flex flex-col items-center gap-2.5"></div>
+      <span class="my-1 h-0.5 w-6 rounded-full bg-neutral-content/30"></span>
+
+      <div id="b-nav" class="flex flex-col items-center gap-2.5">
+        <button class="rail-btn tooltip tooltip-right" data-tip="Tasks" data-view="tasks" aria-label="Tasks"><span data-tx-icon="list"></span></button>
+        <button class="rail-btn tooltip tooltip-right" data-tip="Universal view" data-view="universal" aria-label="Universal view"><span data-tx-icon="stack"></span></button>
+        <button class="rail-btn tooltip tooltip-right" data-tip="Devices &amp; agents" data-view="devices" aria-label="Devices and agents"><span data-tx-icon="devices"></span></button>
+      </div>
+
+      <div class="mt-auto flex flex-col items-center gap-2.5">
+        <button id="b-pin" class="rail-btn tooltip tooltip-right" data-tip="Pin on top" aria-label="Pin on top" aria-pressed="false"><span data-tx-icon="pin"></span></button>
+        <button data-tx-theme-toggle class="rail-btn tooltip tooltip-right" data-tip="Theme" aria-label="Toggle theme">
+          <span data-tx-icon="moon" class="tx-only-light"></span><span data-tx-icon="sun" class="tx-only-dark"></span>
+        </button>
+        <details class="dropdown dropdown-right dropdown-end">
+          <summary class="rail-btn cursor-pointer" aria-label="Demo states"><span data-tx-icon="dots"></span></summary>
+          <ul class="menu dropdown-content z-30 ml-2 w-60 rounded-box border-2 border-base-content bg-base-100 p-2 text-base-content">
+            <li class="menu-title">Demo states</li>
+            <li><button data-demo="daemon">Daemon offline</button></li>
+            <li><button data-demo="conflict">Conflict to review</button></li>
+          </ul>
+        </details>
+      </div>
+    </nav>
+
+    <!-- Sheet ------------------------------------------------------------------------------ -->
+    <div class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] bg-base-100 text-base-content">
+
+      <div data-demo-target="daemon" class="hidden">
+        <div role="alert" class="flex items-center gap-3 bg-base-content px-8 py-2 text-sm text-base-100">
+          <span class="loading loading-spinner loading-xs"></span>
+          <span class="font-mono font-bold">daemon: connecting</span>
+          <span class="opacity-70">txtodod isn't answering yet. Edits stay in the buffer.</span>
+          <button class="btn btn-xs ml-auto border-0 bg-base-100 text-base-content hover:bg-base-300">Retry</button>
+        </div>
+      </div>
+      <div data-demo-target="conflict" class="hidden">
+        <div role="alert" class="flex items-center gap-3 border-b-2 border-base-content px-8 py-2 text-sm">
+          <span data-tx-icon="warn" class="text-warning"></span>
+          <span class="font-mono font-bold">1 line needs review</span>
+          <span class="text-base-content/70">Two devices edited the same word. Read-only until you pick.</span>
+          <button class="btn btn-xs btn-primary ml-auto">Review</button>
+        </div>
+      </div>
+
+      <header class="flex h-16 shrink-0 items-center gap-4 border-b-2 border-base-content/10 px-6">
+        <div id="b-crumb" class="min-w-0 flex-1 font-mono text-sm"></div>
+        <button id="b-qa-open" class="btn btn-primary gap-2 rounded-full">
+          <span data-tx-icon="plus" class="size-4"></span> Quick add
+          <kbd class="kbd kbd-xs hidden border-0 font-mono md:inline-flex">⌘⇧␣</kbd>
+        </button>
+      </header>
+
+      <!-- View: Tasks --------------------------------------------------------------------- -->
+      <section id="b-view-tasks" class="flex min-h-0 flex-1 flex-col">
+        <div id="b-editor-wrap" class="flex min-h-0 flex-1 flex-col">
+          <div id="b-editor" class="flex-1" data-tx-main></div>
+          <footer class="flex h-12 shrink-0 items-center gap-5 border-t-2 border-base-content/10 px-6 font-mono text-xs">
+            <span id="b-status" class="flex min-w-24 items-center gap-2 font-bold"></span>
+            <span class="flex items-center gap-3">
+              <progress id="b-progress" class="progress progress-primary h-2 w-32" value="0" max="1"></progress>
+              <span id="b-progress-label" class="text-base-content/70"></span>
+            </span>
+            <span id="b-caret" class="hidden text-base-content/60 sm:inline">Ln 1, Col 1</span>
+            <span class="ml-auto hidden items-center gap-4 text-base-content/60 lg:flex">
+              <span><kbd class="kbd kbd-xs">⌘S</kbd> save</span>
+              <span><kbd class="kbd kbd-xs">esc</kbd> discard</span>
+              <span><kbd class="kbd kbd-xs">⌘↵</kbd> open line</span>
+            </span>
+          </footer>
+        </div>
+        <!-- Detail is a page, not a modal (plan §3.3): it replaces the editor area. -->
+        <div id="b-detail" class="hidden min-h-0 flex-1 overflow-y-auto px-6 py-6 sm:px-10"></div>
+      </section>
+
+      <!-- View: Universal ------------------------------------------------------------------ -->
+      <section id="b-view-universal" class="hidden min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
+        <div class="mx-auto max-w-3xl">
+          <h1 class="font-mono text-3xl font-bold tracking-tighter">Universal view</h1>
+          <p class="mt-1 text-sm text-base-content/70">Open tasks from every workspace, by priority. Click one to jump to its line.</p>
+          <div id="b-ctx" class="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filter by context"></div>
+          <div id="b-groups" class="mt-6 flex flex-col gap-7"></div>
+        </div>
+      </section>
+
+      <!-- View: Devices & agents ---------------------------------------------------------- -->
+      <section id="b-view-devices" class="hidden min-h-0 flex-1 overflow-y-auto px-6 py-8 sm:px-10">
+        <div class="mx-auto max-w-5xl">
+          <h1 class="font-mono text-3xl font-bold tracking-tighter">Devices &amp; agents</h1>
+          <p class="mt-1 text-sm text-base-content/70">Pair a device, hand an agent a scoped token, see who changed what.</p>
+
+          <div class="mt-6 grid gap-6 lg:grid-cols-[22rem_1fr]">
+            <div class="rounded-box border-2 border-base-content p-5">
+              <h2 class="font-mono text-lg font-bold tracking-tight">Pair a device</h2>
+              <div role="tablist" class="tabs tabs-box mt-3 rounded-full">
+                <button role="tab" class="tab tab-active rounded-full">Show code</button>
+                <button role="tab" class="tab rounded-full">Scan</button>
+              </div>
+              <div id="b-qr" class="mx-auto mt-4 w-52 text-base-content"></div>
+              <div class="mt-3 flex items-center gap-2 text-xs text-base-content/70">
+                <progress class="progress progress-primary h-1.5 flex-1" value="47" max="60"></progress> expires in 47s
+              </div>
+              <p class="mt-3 text-xs text-base-content/60">Placeholder pattern, not a real code. The QR never carries a group key.</p>
+              <div class="mt-4 border-t-2 border-base-content/10 pt-4">
+                <p class="text-sm font-semibold">Say these six words out loud</p>
+                <div class="mt-2 flex flex-wrap gap-1.5 font-mono">
+                  <span class="badge badge-outline badge-lg">otter</span><span class="badge badge-outline badge-lg">lamp</span><span class="badge badge-outline badge-lg">cedar</span>
+                  <span class="badge badge-outline badge-lg">nine</span><span class="badge badge-outline badge-lg">quiet</span><span class="badge badge-outline badge-lg">river</span>
+                </div>
+                <button class="btn btn-primary btn-block mt-3 rounded-full">They match — confirm here</button>
+                <p class="mt-2 text-xs text-base-content/60">Confirming is always a second, deliberate tap on both devices.</p>
+              </div>
+            </div>
+
+            <div class="flex min-w-0 flex-col gap-6">
+              <div class="rounded-box border-2 border-base-content/20 p-5">
+                <div class="flex items-center gap-3">
+                  <h2 class="font-mono text-lg font-bold tracking-tight">Capability tokens</h2>
+                  <button class="btn btn-sm btn-outline ml-auto rounded-full"><span data-tx-icon="key" class="size-4"></span> New token</button>
+                </div>
+                <div class="mt-3 overflow-x-auto">
+                  <table class="table">
+                    <thead><tr class="font-mono"><th>name</th><th>scopes</th><th>last used</th><th></th></tr></thead>
+                    <tbody class="font-mono text-sm">
+                      <tr><td class="whitespace-nowrap font-bold">claude-desk</td><td><div class="flex flex-wrap gap-1"><span class="badge badge-sm badge-outline">read</span><span class="badge badge-sm badge-outline">write:edit</span><span class="badge badge-sm badge-outline">file:todo.txt</span></div></td><td class="text-base-content/70">4m ago</td><td class="text-right"><button class="btn btn-xs btn-ghost">revoke</button></td></tr>
+                      <tr><td class="whitespace-nowrap font-bold">phone-shortcut</td><td><div class="flex flex-wrap gap-1"><span class="badge badge-sm badge-outline">write:add</span></div></td><td class="text-base-content/70">yesterday</td><td class="text-right"><button class="btn btn-xs btn-ghost">revoke</button></td></tr>
+                      <tr><td class="whitespace-nowrap font-bold">ci-agent</td><td><div class="flex flex-wrap gap-1"><span class="badge badge-sm badge-outline">read</span><span class="badge badge-sm badge-outline">project:txtodo</span></div></td><td class="text-base-content/70">3d ago</td><td class="text-right"><button class="btn btn-xs btn-ghost">revoke</button></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="mt-2 text-xs text-base-content/60">A token's secret is shown once, at creation, and never again.</p>
+              </div>
+
+              <div class="rounded-box border-2 border-base-content/20 p-5">
+                <div class="flex items-center gap-3">
+                  <h2 class="font-mono text-lg font-bold tracking-tight">Activity</h2>
+                  <button class="btn btn-sm btn-ghost btn-square ml-auto" aria-label="Refresh"><span data-tx-icon="sync" class="size-4"></span></button>
+                </div>
+                <ul class="mt-2 font-mono text-sm">
+                  <li class="flex items-center gap-3 border-t-2 border-base-content/10 py-2.5 first:border-t-0"><span class="tok-completion-marker">x</span><span><b>mara-laptop</b> completed <span class="text-base-content/70">"pay the electricity bill"</span></span><span class="ml-auto text-xs text-base-content/60">2m</span></li>
+                  <li class="flex items-center gap-3 border-t-2 border-base-content/10 py-2.5"><span class="tok-priority">~</span><span><b>claude-desk</b> edited line 3</span><span class="ml-auto text-xs text-base-content/60">4m</span></li>
+                  <li class="flex items-center gap-3 border-t-2 border-base-content/10 py-2.5"><span class="tok-project">+</span><span><b>phone-shortcut</b> added <span class="text-base-content/70">"buy milk and oat bars"</span></span><span class="ml-auto text-xs text-base-content/60">1h</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Quick Add: palette -->
+  <dialog id="b-qa" class="modal items-start pt-[14vh]">
+    <div class="modal-box w-full max-w-2xl overflow-hidden rounded-box border-2 border-base-content bg-base-100 p-0">
+      <div class="flex items-center gap-3 bg-neutral px-5 py-3 text-neutral-content">
+        <span data-tx-mark class="w-8"></span>
+        <span class="font-mono font-bold tracking-tight">quick add</span>
+        <kbd class="kbd kbd-xs ml-auto border-0 font-mono">esc</kbd>
+      </div>
+      <div id="b-qa-body" class="p-5" data-tx-qa></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+  </dialog>
+
+  <script src="shared/todotxt.js"></script>
+  <script src="shared/data.js"></script>
+  <script src="shared/txtodo-ui.js"></script>
+  <script src="shared/smoke.js"></script>
+  <script>
+    const T = TodoTxt, D = TxData, UI = TxUI;
+    const $ = (id) => document.getElementById(id);
+    UI.initChrome({ defaultTheme: "auto" });
+    UI.fillMarks();
+
+    // ---- rail: workspace tiles + screens ----
+    $("b-ws").innerHTML =
+      D.WORKSPACES.map((w, i) => `<button class="ws-tile tooltip tooltip-right" data-tip="${w.name} · ${w.open} open" aria-current="${i === 0}" aria-label="${w.name}">${w.name.slice(0, 2)}</button>`).join("") +
+      `<button class="rail-btn tooltip tooltip-right" data-tip="Add a folder" aria-label="Add a folder">${UI.icon("plus")}</button>`;
+
+    const VIEWS = { tasks: "b-view-tasks", universal: "b-view-universal", devices: "b-view-devices" };
+    function show(view) {
+      Object.entries(VIEWS).forEach(([k, id]) => $(id).classList.toggle("hidden", k !== view));
+      document.querySelectorAll("#b-nav [data-view]").forEach((b) => (b.dataset.view === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
+      $("b-crumb").innerHTML =
+        view === "tasks"
+          ? `<div class="breadcrumbs p-0 text-sm"><ul><li>notes</li><li class="font-bold">todo.txt</li></ul></div>`
+          : `<span class="font-bold">${view === "universal" ? "All workspaces" : "Sync"}</span>`;
+      if (view === "universal") renderUniversal();
+    }
+    document.querySelectorAll("#b-nav [data-view]").forEach((b) => b.addEventListener("click", () => show(b.dataset.view)));
+
+    // ---- tasks: the editor ----
+    const STATUS = {
+      clean: () => `<span class="status status-success"></span> synced`,
+      dirty: () => `<span class="status status-warning animate-pulse"></span> unsaved`,
+      saving: () => `<span class="loading loading-spinner loading-xs"></span> saving`,
+      saved: () => `${UI.icon("check", "size-4 text-success")} saved`,
+    };
+    const renderStatus = (s) => ($("b-status").innerHTML = STATUS[s]());
+    const renderProgress = (v) => {
+      const s = T.stats(v);
+      $("b-progress").value = s.done;
+      $("b-progress").max = Math.max(1, s.total);
+      $("b-progress-label").textContent = `${s.done} of ${s.total} done`;
+    };
+    const editor = UI.createEditor($("b-editor"), {
+      value: D.DOC,
+      gutter: "marks",
+      onStatus: renderStatus,
+      onCaret: (c) => ($("b-caret").textContent = `Ln ${c.line}, Col ${c.col}`),
+      onChange: renderProgress,
+      onDetail: (n, text) => text.trim() && openDetail(text),
+    });
+    renderStatus("clean");
+    renderProgress(D.DOC);
+
+    // ---- detail: page swap ----
+    function openDetail(text) {
+      $("b-editor-wrap").classList.add("hidden");
+      $("b-detail").classList.remove("hidden");
+      const host = $("b-detail");
+      host.innerHTML = `<div class="mx-auto h-full max-w-3xl" id="b-detail-inner"></div>`;
+      UI.mountDetail($("b-detail-inner"), { line: text, workspace: "notes", onExit: closeDetail });
+    }
+    function closeDetail() {
+      $("b-detail").classList.add("hidden");
+      $("b-editor-wrap").classList.remove("hidden");
+    }
+
+    // ---- universal view (derived live from the editor's text) ----
+    let ctxFilter = null;
+    function renderUniversal() {
+      const lines = editor.getValue().split("\n").map((text, i) => ({ text, n: i + 1 })).filter((l) => l.text.trim() && !T.completedInfo(l.text));
+      const ctxs = [...new Set(lines.flatMap((l) => l.text.match(/@\S+/g) || []))].sort();
+      $("b-ctx").innerHTML = ctxs
+        .map((c) => `<button class="btn btn-sm rounded-full font-mono ${ctxFilter === c ? "btn-primary" : "btn-outline"}" data-ctx="${c}">${c}</button>`)
+        .join("");
+      $("b-ctx").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { ctxFilter = ctxFilter === b.dataset.ctx ? null : b.dataset.ctx; renderUniversal(); }));
+      const shown = ctxFilter ? lines.filter((l) => l.text.includes(ctxFilter)) : lines;
+      const groups = ["A", "B", "C", null].map((p) => ({ p, rows: shown.filter((l) => T.priorityOf(l.text) === p) })).filter((g) => g.rows.length);
+      $("b-groups").innerHTML = groups
+        .map(
+          (g) => `<section><h2 class="mb-2 flex items-center gap-3 font-mono text-sm font-bold">${g.p ? `<span class="tok-priority text-base">(${g.p})</span>` : `<span class="text-base-content/60">no priority</span>`}<span class="h-0.5 flex-1 rounded-full bg-base-content/10"></span></h2>
+            <div class="flex flex-col">${g.rows
+              .map((l) => {
+                const body = l.text.replace(/^\([A-Z]\) /, "").replace(/^\d{4}-\d{2}-\d{2} /, "");
+                const html = T.tokenize(body).map((s) => (s.cls ? `<span class="${s.cls}">${s.text.replace(/</g, "&lt;")}</span>` : s.text)).join("");
+                return `<button class="row-btn flex items-center gap-3 rounded-field px-3 py-2 text-left font-mono text-sm" data-n="${l.n}"><span class="min-w-0 flex-1 truncate">${html}</span><span class="badge badge-sm badge-outline">notes</span></button>`;
+              })
+              .join("")}</div></section>`
+        )
+        .join("") || `<p class="font-mono text-sm text-base-content/60">Nothing open for ${ctxFilter}.</p>`;
+      $("b-groups").querySelectorAll("[data-n]").forEach((b) => b.addEventListener("click", () => { show("tasks"); editor.goToLine(Number(b.dataset.n)); }));
+    }
+
+    // ---- devices: a placeholder pairing pattern (rounded modules, not scannable) ----
+    function qr(seed = 11, n = 25, c = 8) {
+      let s = seed;
+      const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+      const corner = (r, k) => (r < 8 && k < 8) || (r < 8 && k >= n - 8) || (r >= n - 8 && k < 8);
+      let out = "";
+      for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (!corner(r, k) && rnd() > 0.5) out += `<rect x="${k * c + 0.5}" y="${r * c + 0.5}" width="${c - 1}" height="${c - 1}" rx="2.4"/>`;
+      const finder = (x, y) => `<rect x="${(x + 0.5) * c}" y="${(y + 0.5) * c}" width="${6 * c}" height="${6 * c}" rx="${1.8 * c}" fill="none" stroke="currentColor" stroke-width="${c}"/><rect x="${(x + 2) * c}" y="${(y + 2) * c}" width="${3 * c}" height="${3 * c}" rx="${c}"/>`;
+      return `<svg viewBox="0 0 ${n * c} ${n * c}" fill="currentColor" role="img" aria-label="Pairing code placeholder">${out}${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}</svg>`;
+    }
+    $("b-qr").innerHTML = qr();
+
+    // ---- quick add palette ----
+    const dlg = $("b-qa");
+    const qa = UI.mountQuickAdd($("b-qa-body"), {
+      prompt: "none",
+      onSubmit: (v) => { UI.appendTask(editor, v); dlg.close(); show("tasks"); closeDetail(); },
+      onCancel: () => dlg.close(),
+    });
+    const openQA = () => { qa.reset(); dlg.showModal(); qa.focus(); };
+    $("b-qa-open").addEventListener("click", openQA);
+    UI.hotkeys({ quickAdd: openQA });
+
+    // ---- small chrome ----
+    $("b-pin").addEventListener("click", (e) => {
+      const b = e.currentTarget;
+      b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true"));
+    });
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.dropdown[open]").forEach((d) => d.contains(e.target) || d.removeAttribute("open"));
+    });
+    UI.bindDemo({ conflict: (on) => editor.setReadOnly(on) });
+    show("tasks");
+  </script>
+</body>
+</html>

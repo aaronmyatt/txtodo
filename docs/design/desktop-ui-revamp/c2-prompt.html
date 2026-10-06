@@ -1,0 +1,561 @@
+<!doctype html>
+<!--
+  C2 · Prompt — the second pass on c-prompt.html. Same skeleton (edge-to-edge buffer, prompt bar as
+  Quick Add, the mark as progress meter), now with three real screens and a search bar.
+
+    New in this pass                                Unchanged
+    - search bar in the header (press /):           - the buffer is the raw todo.txt text
+      · Tasks: hits invert, other lines fade,       - blur / Cmd+S saves, Esc discards
+        Enter / Shift+Enter step through matches    - Cmd+Enter / double-click opens detail
+      · Universal: filters rows across workspaces   - prompt bar = Quick Add, chips on focus
+      · Settings: filters the cards                 - the mark draws in as tasks are completed
+    - Universal: stat strip, group by priority /
+      due / project / context / workspace, workspace
+      + context chips, complete with a click or x,
+      j/k to move, Enter to open, Undo toast
+    - Settings: general, appearance (live preview),
+      workspaces, shortcuts, devices (pairing flow),
+      tokens (create → secret once), activity
+    - a real workspace switcher: three docs
+
+  "proposed" badges in Settings mark rows the app does not have yet.
+  Try: press / and type "desk" · g u (Universal) · x on a row · g s (Settings) · drag Text size ·
+       New token · Show a code → "Demo: the other device scanned" · ⋯ menu for banners.
+-->
+<html lang="en" data-theme="txtodo-dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>txtodo — C2 · Prompt</title>
+
+  <!-- Ref: https://daisyui.com/docs/cdn/  ·  https://tailwindcss.com/docs/installation/play-cdn -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/txtodo.css" />
+  <style type="text/tailwindcss">
+    @theme {
+      --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+  <style>
+    #c-editor { --tx-lh: 26px; --tx-fs: 14px; --tx-pad-y: 0.75rem; --tx-pad-x: 1rem; --tx-active-bg: color-mix(in oklab, var(--color-base-content) 8%, transparent); }
+    /* Block caret where supported (Chromium 139+); elsewhere it falls back to the bar.
+       Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/caret-shape */
+    #c-editor .tx-input { caret-shape: block; }
+    #c-editor .tx-gutter { border-right: 2px solid color-mix(in oklab, var(--color-base-content) 12%, transparent); }
+    #c-editor .tx-g { padding-right: 0.75rem; }
+    #c-mark { color: var(--color-base-content); }
+
+    /* Search: an ink pill; the suggestion panel opens while anything inside has focus.
+       Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-within */
+    #c-search .input { border-color: color-mix(in oklab, var(--color-base-content) 30%, transparent); background: var(--color-base-100); }
+    #c-search:focus-within .input { border-color: var(--color-base-content); outline: 2px solid var(--color-base-content); outline-offset: 1px; }
+    #c-q-panel { display: none; }
+    #c-search:focus-within #c-q-panel { display: block; }
+    #c-search:focus-within #c-q-kbd { display: none; }
+    /* Once you have typed, the suggestions step aside so they never cover the matches below. */
+    #c-search.has-q .q-sugg { display: none; }
+    #c-search.has-q #c-q-hint { margin-top: 0; border-top: 0; padding-top: 0; }
+
+    /* Universal rows: the whole row lights up for hover and for keyboard focus. */
+    .u-row:hover, .u-row:has(.u-open:focus-visible) { background: color-mix(in oklab, var(--color-base-content) 7%, transparent); }
+    .u-open:focus-visible { outline: none; }
+    .s-nav-btn:hover { background: color-mix(in oklab, var(--color-base-content) 10%, transparent); }
+  </style>
+</head>
+
+<body class="flex h-dvh flex-col bg-base-100 font-mono text-base-content">
+
+  <div data-demo-target="daemon" class="hidden">
+    <div role="alert" class="flex items-center gap-3 bg-base-content px-4 py-1.5 text-xs text-base-100">
+      <span class="loading loading-spinner loading-xs"></span>
+      <b>daemon: connecting</b>
+      <span class="opacity-70">txtodod isn't answering yet. Edits stay in the buffer.</span>
+      <button class="btn btn-xs ml-auto border-0 bg-base-100 text-base-content hover:bg-base-300">Retry</button>
+    </div>
+  </div>
+  <div data-demo-target="conflict" class="hidden">
+    <div role="alert" class="flex items-center gap-3 border-b-2 border-base-content px-4 py-1.5 text-xs">
+      <span data-tx-icon="warn" class="text-warning"></span>
+      <b>1 line needs review</b>
+      <span class="text-base-content/70">Two devices edited the same word. Read-only until you pick.</span>
+      <button class="btn btn-xs btn-primary ml-auto">Review</button>
+    </div>
+  </div>
+
+  <header class="relative z-20 flex h-12 shrink-0 items-center gap-3 border-b-2 border-base-content/20 px-4 text-xs">
+    <a href="#" class="flex shrink-0 items-center gap-2" aria-label="txtodo"><span data-tx-mark class="w-7"></span><span class="hidden text-sm font-bold tracking-tighter lg:inline">txtodo</span></a>
+    <details class="dropdown shrink-0">
+      <summary class="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 hover:bg-base-200"><span id="c-ws-label">~/notes</span> <span data-tx-icon="down" class="size-3.5"></span></summary>
+      <ul id="c-ws" class="menu dropdown-content z-30 mt-2 w-72 rounded-box border-2 border-base-content bg-base-100 p-2"></ul>
+    </details>
+
+    <!-- Search -->
+    <div id="c-search" class="relative mx-auto min-w-0 max-w-xl flex-1">
+      <label class="input input-sm h-8 w-full gap-2 rounded-full">
+        <span data-tx-icon="search" class="size-4 shrink-0 opacity-60"></span>
+        <input id="c-q" type="text" class="min-w-0 grow" placeholder="Search todo.txt" autocomplete="off" spellcheck="false" aria-label="Search" />
+        <span id="c-q-count" class="hidden shrink-0 rounded-full bg-base-content px-2 py-0.5 text-[10px] font-bold tabular-nums text-base-100"></span>
+        <button id="c-q-clear" type="button" class="hidden shrink-0 rounded-full p-0.5 opacity-60 hover:opacity-100" aria-label="Clear search"><span data-tx-icon="x" class="size-3.5"></span></button>
+        <kbd id="c-q-kbd" class="kbd kbd-xs shrink-0">/</kbd>
+      </label>
+      <div id="c-q-panel" class="absolute inset-x-0 top-full z-30 pt-2">
+        <div id="c-q-panel-body" class="rounded-box border-2 border-base-content bg-base-100 p-3 text-[11px]"></div>
+      </div>
+    </div>
+
+    <div id="c-nav" class="join shrink-0">
+      <button class="btn btn-xs join-item gap-1.5" data-nav="tasks"><span data-tx-icon="list" class="size-3.5"></span><span class="hidden xl:inline">Tasks</span></button>
+      <button class="btn btn-xs join-item gap-1.5" data-nav="universal"><span data-tx-icon="stack" class="size-3.5"></span><span class="hidden xl:inline">Universal</span></button>
+      <button class="btn btn-xs join-item gap-1.5" data-nav="settings"><span data-tx-icon="sliders" class="size-3.5"></span><span class="hidden xl:inline">Settings</span></button>
+    </div>
+    <div class="flex shrink-0 items-center gap-0.5">
+      <button id="c-pin" class="btn btn-ghost btn-xs btn-square" aria-label="Pin on top" aria-pressed="false"><span data-tx-icon="pin" class="size-4"></span></button>
+      <button data-tx-theme-toggle class="btn btn-ghost btn-xs btn-square" aria-label="Toggle theme">
+        <span data-tx-icon="moon" class="tx-only-light size-4"></span><span data-tx-icon="sun" class="tx-only-dark size-4"></span>
+      </button>
+      <a href="#" class="btn btn-ghost btn-xs btn-square" aria-label="Help"><span data-tx-icon="help" class="size-4"></span></a>
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-ghost btn-xs btn-square" aria-label="Demo states"><span data-tx-icon="dots" class="size-4"></span></summary>
+        <ul class="menu dropdown-content z-30 mt-1 w-60 rounded-box border-2 border-base-content bg-base-100 p-2 font-sans">
+          <li class="menu-title">Demo states</li>
+          <li><button data-demo="daemon">Daemon offline</button></li>
+          <li><button data-demo="conflict">Conflict to review</button></li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <main class="relative flex min-h-0 flex-1 flex-col">
+
+    <!-- Tasks -->
+    <section id="v-tasks" class="flex min-h-0 flex-1 flex-col">
+      <div class="flex h-8 shrink-0 items-center gap-3 border-b-2 border-base-content/10 px-4 text-[11px]">
+        <span class="font-bold">todo.txt</span>
+        <span id="c-counts" class="flex gap-3 text-base-content/70"></span>
+        <span id="c-search-info" class="ml-auto hidden text-base-content/70"></span>
+      </div>
+      <div id="c-editor" class="min-h-0 flex-1" data-tx-main></div>
+      <!-- Detail: bottom panel; the buffer above stays put. -->
+      <section id="c-detail" class="relative hidden h-[55%] shrink-0 overflow-y-auto border-t-2 border-base-content bg-base-100 px-5 py-4 font-sans" aria-label="Task detail">
+        <div id="c-detail-body" class="mx-auto h-full max-w-3xl"></div>
+        <button id="c-detail-close" class="btn btn-ghost btn-sm btn-square absolute right-3 top-3" aria-label="Close detail"><span data-tx-icon="x" class="size-4"></span></button>
+      </section>
+    </section>
+
+    <section id="v-universal" class="hidden min-h-0 flex-1 overflow-y-auto" aria-label="Universal view"></section>
+    <section id="v-settings" class="hidden min-h-0 flex-1 overflow-y-auto" aria-label="Settings"></section>
+  </main>
+
+  <!-- Prompt bar = Quick Add on every screen. -->
+  <footer class="group relative shrink-0 border-t-2 border-base-content bg-base-100">
+    <div id="c-qa" class="px-4 pb-1 pt-3" data-tx-qa></div>
+    <div class="flex h-8 items-center gap-4 px-4 text-[11px] text-base-content/60">
+      <span id="c-status" class="flex min-w-24 items-center gap-2 font-bold text-base-content"></span>
+      <span id="c-caret">Ln 1, Col 1</span>
+      <span id="c-hints" class="ml-auto hidden items-center gap-4 md:flex"></span>
+    </div>
+  </footer>
+
+  <div id="c-toasts" class="toast toast-end z-50 mb-24"></div>
+
+  <script src="shared/todotxt.js"></script>
+  <script src="shared/data.js"></script>
+  <script src="shared/txtodo-ui.js"></script>
+  <script src="shared/smoke.js"></script>
+  <script src="c2/universal.js"></script>
+  <script src="c2/settings.js"></script>
+  <script>
+    const T = TodoTxt, D = TxData, UI = TxUI;
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    UI.initChrome({ defaultTheme: "dark" });
+
+    // ---- workspaces: three real docs; the buffer shows the current one ----
+    const KEYS = ["notes", "txtodo", "home"];
+    const WS = {
+      notes: { name: "notes", path: "~/notes", doc: D.DOC },
+      txtodo: { name: "txtodo", path: "~/Development/txtodo", doc: D.WS_DOCS.txtodo },
+      home: { name: "home", path: "~/home-list", doc: D.WS_DOCS.home },
+    };
+    let cur = "notes";
+    const S = { view: "tasks", q: "", qSettings: "", pin: false, themePref: "dark" };
+    const docOf = (k) => (k === cur ? editor.getValue() : WS[k].doc);
+
+    // ---- toasts (with optional Undo) ----
+    function toast(msg, undo) {
+      const t = document.createElement("div");
+      t.className = "alert flex items-center gap-3 border-2 border-base-content bg-base-100 py-2 font-mono text-xs text-base-content shadow-none";
+      t.innerHTML = `<span>${esc(msg)}</span>${undo ? `<button type="button" class="btn btn-xs btn-primary rounded-full">Undo</button>` : ""}`;
+      const kill = () => t.remove();
+      if (undo) t.querySelector("button").addEventListener("click", () => { undo(); kill(); });
+      $("c-toasts").appendChild(t);
+      setTimeout(kill, 5000);
+    }
+
+    // ---- prompt bar: Quick Add with the live mark ----
+    const qa = UI.mountQuickAdd($("c-qa"), {
+      prompt: "none",
+      footer: false,
+      onSubmit: (v) => { UI.appendTask(editor, v); closeDetail(); toast(`Added to ${WS[cur].name}`); if (S.view === "universal") U.render(); },
+      onCancel: () => editor.focus(),
+    });
+    const row = $("c-qa").firstElementChild;
+    row.insertAdjacentHTML("afterbegin", `<span id="c-mark" data-tx-mark="live" class="w-11 shrink-0" title=""></span>`);
+    UI.fillMarks(row);
+    const chips = $("c-qa").querySelector(".tx-qa-chips");
+    chips.classList.add("hidden", "group-focus-within:flex", "absolute", "bottom-full", "left-4", "pb-2");
+    chips.querySelectorAll("button").forEach((b) => b.classList.add("bg-base-100"));
+    $("c-qa").querySelector(".tx-qa-add").classList.add("rounded-full");
+
+    // ---- status / counts / mark ----
+    const STATUS = {
+      clean: () => `<span class="status status-success"></span> synced`,
+      dirty: () => `<span class="status status-warning animate-pulse"></span> unsaved`,
+      saving: () => `<span class="loading loading-spinner loading-xs"></span> saving`,
+      saved: () => `${UI.icon("check", "size-3.5 text-success")} saved`,
+    };
+    function renderCounts(v) {
+      const s = T.stats(v);
+      $("c-counts").innerHTML = `<span><b>t</b> ${s.open}</span><span><b>x</b> ${s.done}</span><span>${s.lines} lines</span>`;
+      $("c-mark").title = `${s.done} of ${s.total} done`;
+      UI.setMarkProgress($("c-mark"), s.total ? s.done / s.total : 0);
+    }
+
+    // ---- the buffer ----
+    const editor = UI.createEditor($("c-editor"), {
+      value: D.DOC,
+      refs: D.WS_REFS.notes,
+      gutter: "numbers",
+      onStatus: (s) => ($("c-status").innerHTML = STATUS[s]()),
+      onCaret: (c) => ($("c-caret").textContent = `Ln ${c.line}, Col ${c.col}`),
+      onChange: (v) => { renderCounts(v); if (S.view === "universal") U.render(); },
+      onDetail: (n, text) => text.trim() && openDetail(text),
+      onSearch: (info) => { paintTaskInfo(info); if (S.view === "tasks") paintCount(info.active ? (info.total ? `${info.index}/${info.total}` : "0") : ""); },
+    });
+    $("c-status").innerHTML = STATUS.clean();
+    renderCounts(D.DOC);
+
+    function openDetail(text) {
+      $("c-detail").classList.remove("hidden");
+      UI.mountDetail($("c-detail-body"), { line: text, workspace: WS[cur].name, onExit: closeDetail, dense: true });
+    }
+    function closeDetail() { $("c-detail").classList.add("hidden"); }
+    $("c-detail-close").addEventListener("click", closeDetail);
+
+    // ---- switching workspaces ----
+    function switchWorkspace(key) {
+      if (key === cur) return;
+      editor.commit();
+      WS[cur].doc = editor.getValue();
+      cur = key;
+      editor.setValue(WS[key].doc);
+      editor.setRefs(D.WS_REFS[key]);
+      $("c-ws-label").textContent = WS[key].path;
+      closeDetail();
+      renderWsMenu();
+      if (Settings) Settings.render();
+      applySearch();
+    }
+    function renderWsMenu() {
+      $("c-ws").innerHTML =
+        KEYS.map((k) => `<li><a data-ws="${k}" class="${k === cur ? "menu-active" : ""}"><b>${k}</b><span class="ml-auto text-xs opacity-60">${T.stats(docOf(k)).open} open</span></a></li>`).join("") +
+        `<li class="mt-1 border-t-2 border-base-content/10 pt-1"><a data-manage>${UI.icon("sliders", "size-4")} Manage workspaces</a></li>`;
+    }
+    $("c-ws").addEventListener("click", (e) => {
+      const a = e.target.closest("a");
+      if (!a) return;
+      a.closest("details").removeAttribute("open");
+      if (a.dataset.manage !== undefined) { go("settings"); Settings.scrollTo("workspaces"); return; }
+      switchWorkspace(a.dataset.ws);
+      go("tasks");
+    });
+
+    // ---- Universal + Settings ----
+    function mutate(ws, fn) {
+      const next = fn(docOf(ws));
+      if (ws === cur) editor.setValue(next); else WS[ws].doc = next;
+      renderWsMenu();
+      U.render();
+      if (S.view === "universal" && S.q) paintCount(String(U.count));
+    }
+    const U = C2Universal.mount($("v-universal"), {
+      workspaces: KEYS,
+      docOf,
+      mutate,
+      toast,
+      open: (ws, line) => { switchWorkspace(ws); go("tasks"); requestAnimationFrame(() => editor.goToLine(line)); },
+      clearSearch: () => setQ(""),
+    });
+
+    let fromSettings = false;
+    const autoTheme = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    function setThemePref(p) {
+      fromSettings = true;
+      S.themePref = p;
+      UI.setTheme(p === "system" ? autoTheme() : p);
+      fromSettings = false;
+      Settings.syncTheme(p);
+    }
+    function setPin(on, { fromSettings: fs = false } = {}) {
+      S.pin = on;
+      $("c-pin").setAttribute("aria-pressed", String(on));
+      $("c-pin").classList.toggle("btn-active", on);
+      if (!fs && Settings) Settings.syncPin(on);
+    }
+    function flashDaemon() {
+      const t = document.querySelector('[data-demo-target="daemon"]');
+      t.classList.remove("hidden");
+      setTimeout(() => t.classList.add("hidden"), 1600);
+    }
+    const Settings = C2Settings.mount($("v-settings"), {
+      editorHost: $("c-editor"),
+      workspaces: WS,
+      docOf,
+      current: () => cur,
+      switchWorkspace,
+      openTasks: () => go("tasks"),
+      toast,
+      getPin: () => S.pin,
+      setPin,
+      themePref: () => S.themePref,
+      setThemePref,
+      flashDaemon,
+    });
+    // The header toggle changes the theme too; keep the Settings segmented control honest.
+    document.addEventListener("tx-theme", (e) => { if (!fromSettings) { S.themePref = e.detail; Settings.syncTheme(S.themePref); } });
+    $("c-pin").addEventListener("click", () => setPin(!S.pin));
+
+    // ---- navigation ----
+    const PLACEHOLDER = { tasks: "Search todo.txt", universal: "Search all workspaces", settings: "Search settings" };
+    const HINTS = {
+      tasks: [["⌘S", "save"], ["esc", "discard"], ["⌘↵", "open"], ["/", "search"], ["⌘⇧␣", "prompt"]],
+      universal: [["j k", "move"], ["↵", "open"], ["x", "complete"], ["/", "search"], ["⌘⇧␣", "prompt"]],
+      settings: [["/", "search"], ["g t", "tasks"], ["g u", "universal"], ["⌘⇧␣", "prompt"]],
+    };
+    function go(view) {
+      S.view = view;
+      ["tasks", "universal", "settings"].forEach((v) => $("v-" + v).classList.toggle("hidden", v !== view));
+      document.querySelectorAll("[data-nav]").forEach((b) => {
+        const on = b.dataset.nav === view;
+        b.classList.toggle("btn-primary", on);
+        b.classList.toggle("btn-outline", !on);
+        b.setAttribute("aria-current", on ? "page" : "false");
+      });
+      qEl.placeholder = PLACEHOLDER[view];
+      qEl.value = view === "settings" ? S.qSettings : S.q;
+      $("c-caret").classList.toggle("hidden", view !== "tasks");
+      $("c-hints").innerHTML = HINTS[view].map(([k, w]) => `<span><kbd class="kbd kbd-xs">${k}</kbd> ${w}</span>`).join("");
+      if (view !== "tasks") closeDetail();
+      if (view === "universal") U.render();
+      if (view === "settings") Settings.render();
+      applySearch();
+    }
+    document.querySelectorAll("[data-nav]").forEach((b) => b.addEventListener("click", () => go(b.dataset.nav)));
+
+    // ---- search ----
+    const qEl = $("c-q");
+    const currentQ = () => (S.view === "settings" ? S.qSettings : S.q);
+    function setQ(v) {
+      if (S.view === "settings") S.qSettings = v; else S.q = v;
+      qEl.value = v;
+      applySearch();
+    }
+    function paintCount(label) {
+      const c = $("c-q-count");
+      c.textContent = label;
+      c.classList.toggle("hidden", !label);
+      $("c-q-clear").classList.toggle("hidden", !qEl.value);
+      $("c-search").classList.toggle("has-q", !!qEl.value);
+    }
+    function paintTaskInfo(info) {
+      const el = $("c-search-info");
+      el.classList.toggle("hidden", !info.active);
+      if (info.active) el.innerHTML = info.total ? `${info.total} of ${info.lines} lines match · <kbd class="kbd kbd-xs">↵</kbd> next <kbd class="kbd kbd-xs">⇧↵</kbd> previous` : `No lines match`;
+    }
+    function applySearch() {
+      const q = currentQ();
+      if (S.view === "settings") {
+        paintCount(q ? String(Settings.setQuery(q)) : (Settings.setQuery(""), ""));
+      } else {
+        const info = editor.setSearch(S.q); // the buffer always mirrors the query, so Tasks is ready when you return
+        if (S.view === "universal") paintCount(S.q ? String(U.setQuery(S.q)) : (U.setQuery(""), ""));
+        else paintCount(info.active ? (info.total ? `${info.index}/${info.total}` : "0") : "");
+      }
+      renderSearchPanel();
+    }
+    function tally(docs, re) {
+      const m = new Map();
+      docs.forEach((d) => (d.match(re) || []).forEach((t) => m.set(t, (m.get(t) || 0) + 1)));
+      return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+    }
+    function renderSearchPanel() {
+      const chip = (t) => `<button type="button" data-term="${esc(t)}" class="btn btn-xs btn-outline rounded-full font-mono ${currentQ().toLowerCase().split(/\s+/).includes(t.toLowerCase()) ? "btn-active" : ""}">${esc(t)}</button>`;
+      const head = (t) => `<div class="mb-1.5 font-bold uppercase tracking-wider text-base-content/60">${t}</div>`;
+      let html;
+      if (S.view === "settings") {
+        html = `<div class="q-sugg">${head("Jump to")}<div class="flex flex-wrap gap-1.5">${["theme", "font", "hotkey", "workspace", "token", "pair", "daemon"].map(chip).join("")}</div></div>`;
+      } else {
+        const docs = S.view === "universal" ? KEYS.map(docOf) : [editor.getValue()];
+        const terms = [...tally(docs, /@\S+/g).slice(0, 6), ...tally(docs, /\+\S+/g).slice(0, 5), "(A)", "(B)", "(C)", "is:open", "is:done", "due:"];
+        const recent = ["@desk is:open", "due:2026-09", "+work (A)"];
+        html = `<div class="q-sugg">${head("Add a filter")}<div class="flex flex-wrap gap-1.5">${terms.map(chip).join("")}</div>` +
+          `<div class="mt-3">${head("Recent")}<div class="flex flex-wrap gap-1.5">${recent.map((r) => `<button type="button" data-set="${esc(r)}" class="btn btn-xs btn-ghost rounded-full font-mono">${esc(r)}</button>`).join("")}</div></div></div>`;
+      }
+      html += `<div id="c-q-hint" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t-2 border-base-content/10 pt-2 text-base-content/60"><span>Words are AND-ed</span>${S.view === "tasks" ? `<span><kbd class="kbd kbd-xs">↵</kbd> next match</span>` : ""}${S.view === "universal" ? `<span><kbd class="kbd kbd-xs">↓</kbd> to the list</span>` : ""}<span><kbd class="kbd kbd-xs">esc</kbd> clear</span></div>`;
+      $("c-q-panel-body").innerHTML = html;
+    }
+    // Keep focus in the input while clicking suggestions (the panel only shows while focused).
+    $("c-q-panel-body").addEventListener("mousedown", (e) => e.preventDefault());
+    $("c-q-panel-body").addEventListener("click", (e) => {
+      const t = e.target.closest("[data-term]");
+      const s = e.target.closest("[data-set]");
+      if (t) {
+        const words = currentQ().split(/\s+/).filter(Boolean);
+        const i = words.findIndex((w) => w.toLowerCase() === t.dataset.term.toLowerCase());
+        i >= 0 ? words.splice(i, 1) : words.push(t.dataset.term);
+        setQ(words.join(" "));
+      } else if (s) setQ(s.dataset.set);
+    });
+    $("c-q-clear").addEventListener("mousedown", (e) => e.preventDefault());
+    $("c-q-clear").addEventListener("click", () => { setQ(""); qEl.focus(); });
+    qEl.addEventListener("input", () => {
+      if (S.view === "settings") S.qSettings = qEl.value; else S.q = qEl.value;
+      applySearch();
+    });
+    qEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (S.view === "tasks") editor.searchNav(e.shiftKey ? -1 : 1);
+        else if (S.view === "universal") U.focusFirst();
+      } else if (e.key === "ArrowDown" && S.view === "universal") {
+        e.preventDefault();
+        U.focusFirst();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        qEl.value ? setQ("") : qEl.blur();
+      }
+    });
+
+    // ---- global keys: "/" search, "g" then t / u / s ----
+    let chord = 0;
+    document.addEventListener("keydown", (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target.matches && e.target.matches("input, textarea, select, [contenteditable]")) return;
+      if (e.key === "/") { e.preventDefault(); qEl.focus(); qEl.select(); return; }
+      if (chord && Date.now() - chord < 900) {
+        const to = { t: "tasks", u: "universal", s: "settings" }[e.key];
+        chord = 0;
+        if (to) { e.preventDefault(); go(to); }
+      } else if (e.key === "g") chord = Date.now();
+    });
+    UI.hotkeys({ quickAdd: () => qa.focus() });
+
+    // ---- small chrome ----
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.dropdown[open]").forEach((d) => d.contains(e.target) || d.removeAttribute("open"));
+    });
+    UI.bindDemo({ conflict: (on) => editor.setReadOnly(on) });
+    renderWsMenu();
+    go("tasks");
+
+    // ---- extra self-checks for ?selftest (see shared/smoke.js) ----
+    window.TxSmokeExtra = [
+      async (check, { sleep, fire, type }) => {
+        const host = document.querySelector("[data-tx-main]");
+        const count = () => $("c-q-count").textContent;
+
+        // search in the buffer
+        type(qEl, "desk");
+        await sleep(40);
+        check("search inverts hits in the buffer", host.querySelectorAll(".tx-hit").length >= 3, host.querySelectorAll(".tx-hit").length);
+        check("search fades non-matching lines", host.querySelectorAll(".tx-line.is-dim").length >= 8, host.querySelectorAll(".tx-line.is-dim").length);
+        check("search count reads 1/3", count() === "1/3", count());
+        fire(qEl, "keydown", { key: "Enter" });
+        check("Enter steps to the next match", count() === "2/3", count());
+        fire(qEl, "keydown", { key: "Enter", shiftKey: true });
+        check("Shift+Enter steps back", count() === "1/3", count());
+        type(qEl, "is:done");
+        await sleep(40);
+        check("is:done matches the 3 done lines", count() === "1/3" && host.querySelectorAll(".tx-line:not(.is-dim):not(:empty)").length >= 3);
+        fire(qEl, "keydown", { key: "Escape" });
+        check("Esc clears the search", qEl.value === "" && host.querySelectorAll(".tx-hit").length === 0 && host.querySelectorAll(".is-dim").length === 0);
+
+        // Universal
+        document.querySelector('[data-nav="universal"]').click();
+        await sleep(40);
+        const uni = $("v-universal");
+        const rows = () => uni.querySelectorAll(".u-row").length;
+        check("Universal opens", !uni.classList.contains("hidden"));
+        check("lists every open task across 3 workspaces (21)", rows() === 21, rows());
+        check("stat strip shows an overdue count", /Overdue/.test(uni.textContent) && uni.querySelector("#u-stats .text-error"));
+        uni.querySelector('[data-group="due"]').click();
+        check("group by due gives Overdue / Today / This week", ["Overdue", "Today", "This week"].every((g) => uni.textContent.includes(g)));
+        uni.querySelector('[data-group="priority"]').click();
+        uni.querySelector('.u-row [data-act="toggle"]').click();
+        check("completing a row removes it and offers Undo", rows() === 20 && $("c-toasts").textContent.includes("Undo"), rows());
+        $("c-toasts").querySelector("button").click();
+        check("Undo brings it back", rows() === 21, rows());
+        type(qEl, "is:done");
+        await sleep(40);
+        check("header search: is:done shows the 6 done tasks", rows() === 6, rows());
+        type(qEl, "phone");
+        await sleep(40);
+        check("header search narrows rows (phone → 3)", rows() === 3 && uni.querySelectorAll(".tx-hit").length >= 3, rows());
+        fire(qEl, "keydown", { key: "Escape" });
+        uni.querySelector('#u-ws [data-ws="home"]').click();
+        check("workspace chip filters (home off → 16)", rows() === 16, rows());
+        uni.querySelector('#u-ws [data-ws="home"]').click();
+        uni.querySelector(".u-open").click();
+        await sleep(60);
+        check("opening a row switches workspace and shows Tasks", !$("v-tasks").classList.contains("hidden") && cur === "txtodo" && host.querySelector(".tx-input").value.includes("flaky daemon"), cur);
+        $("c-ws").querySelector('[data-ws="notes"]').click();
+        check("workspace menu switches back to notes", cur === "notes" && host.querySelector(".tx-input").value.includes("Q4 roadmap"));
+
+        // Settings
+        document.querySelector('[data-nav="settings"]').click();
+        await sleep(40);
+        const set = $("v-settings");
+        check("Settings has 7 sections", set.querySelectorAll("[data-s]").length === 7, set.querySelectorAll("[data-s]").length);
+        set.querySelector('[data-seg="theme"] [data-v="light"]').click();
+        check("theme control switches to light", document.documentElement.dataset.theme === "txtodo");
+        set.querySelector('[data-seg="theme"] [data-v="dark"]').click();
+        const size = set.querySelector("#s-size");
+        size.value = "17";
+        size.dispatchEvent(new Event("input", { bubbles: true }));
+        check("text size applies to the buffer live", host.style.getPropertyValue("--tx-fs") === "17px", host.style.getPropertyValue("--tx-fs"));
+        size.value = "14";
+        size.dispatchEvent(new Event("input", { bubbles: true }));
+        type(qEl, "token");
+        await sleep(40);
+        check("search filters settings to the tokens card", [...set.querySelectorAll("[data-s]")].filter((s) => !s.classList.contains("hidden")).length === 1);
+        fire(qEl, "keydown", { key: "Escape" });
+        set.querySelector("#s-token-new").click();
+        set.querySelector("#s-token-form").requestSubmit();
+        check("token form asks for a name", /name/i.test(set.querySelector("#s-token-err").textContent), set.querySelector("#s-token-err").textContent);
+        const f = set.querySelector("#s-token-form");
+        f.elements.name.value = "release-bot";
+        f.querySelector('input[value="write:add"]').checked = true;
+        f.requestSubmit();
+        check("creating a token shows its secret once", /^txd_[A-Z0-9]{32}$/.test((set.querySelector("#s-secret") || {}).textContent || ""), (set.querySelector("#s-secret") || {}).textContent);
+        check("the new token joins the table", set.querySelectorAll("#s-token-rows tr").length === 4 && set.querySelector("#s-token-rows").textContent.includes("release-bot"));
+        set.querySelector("[data-close]").click();
+        set.querySelector('[data-pair="code"]').click();
+        check("pairing: Show a code renders a pattern", set.querySelectorAll("#s-pair svg rect").length > 60);
+        set.querySelector('[data-pair="sas"]').click();
+        check("pairing: six words to compare", set.querySelectorAll("#s-pair .badge-lg").length === 6);
+        set.querySelector('[data-pair="waiting"]').click();
+        await sleep(2000);
+        check("pairing: reaches Paired", /Paired with/.test(set.querySelector("#s-pair").textContent));
+        set.querySelector('[data-pair="done"]').click();
+        check("the new device is listed", set.querySelector("#s-device-list").textContent.includes("pixel-9-pro"));
+        go("tasks");
+      },
+    ];
+  </script>
+</body>
+</html>

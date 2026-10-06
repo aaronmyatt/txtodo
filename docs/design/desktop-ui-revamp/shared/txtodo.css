@@ -1,0 +1,347 @@
+/* Shared by every mockup. Plain (unlayered) CSS, loaded AFTER daisyui.css so it wins the cascade.
+ *
+ * Three jobs:
+ *   1. Two DaisyUI themes that turn the logo's flavor into tokens: pure black/white ("ink on
+ *      paper"), a flat inverse tile as `primary`, fat 2px strokes, round everything.
+ *   2. The todo.txt token palette — same names and values as apps/desktop/src/app.css `--tok-*`.
+ *   3. The overlay text editor (.tx-*) every mockup shares, so the core editing feel is identical
+ *      and only the chrome around it changes. Engine: shared/txtodo-ui.js.
+ *
+ * Ref (DaisyUI 5 custom themes): https://daisyui.com/docs/themes/
+ * Ref (DaisyUI CDN usage):      https://daisyui.com/docs/cdn/
+ * Ref (cascade layers):         https://developer.mozilla.org/en-US/docs/Web/CSS/@layer
+ */
+
+/* ---- 1. Themes --------------------------------------------------------------------------- */
+
+:root {
+  --tx-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Light = the logo's white tile / black mark. `primary` is the inverse tile itself. */
+:root[data-theme="txtodo"] {
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f5f5f5;
+  --color-base-300: #e5e5e5;
+  --color-base-content: #000000;
+  --color-primary: #000000;
+  --color-primary-content: #ffffff;
+  --color-secondary: #262626;
+  --color-secondary-content: #ffffff;
+  --color-accent: #000000;
+  --color-accent-content: #ffffff;
+  --color-neutral: #000000;
+  --color-neutral-content: #ffffff;
+  --color-info: #1d4ed8;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #ffffff;
+  --color-warning: #b45309;
+  --color-warning-content: #ffffff;
+  --color-error: #b91c1c;
+  --color-error-content: #ffffff;
+  /* Round caps → round shapes. --border matches the mark's heavy stroke; --depth 0 = flat. */
+  --radius-selector: 999px;
+  --radius-field: 0.75rem;
+  --radius-box: 1.1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 0;
+  --noise: 0;
+
+  --tok-completion-marker: #15803d;
+  --tok-priority: #b45309;
+  --tok-date: #6d28d9;
+  --tok-project: #1d4ed8;
+  --tok-context: #be185d;
+  --tok-tag-key: #57534e;
+  --tok-tag-value: #78716c;
+  --tok-id-tag: #9ca3af;
+}
+
+/* Dark = the icon-source-inverse tile: true black, white mark. */
+:root[data-theme="txtodo-dark"] {
+  color-scheme: dark;
+  --color-base-100: #000000;
+  --color-base-200: #0f0f0f;
+  --color-base-300: #262626;
+  --color-base-content: #ffffff;
+  --color-primary: #ffffff;
+  --color-primary-content: #000000;
+  --color-secondary: #d4d4d4;
+  --color-secondary-content: #000000;
+  --color-accent: #ffffff;
+  --color-accent-content: #000000;
+  --color-neutral: #171717;
+  --color-neutral-content: #ffffff;
+  --color-info: #60a5fa;
+  --color-info-content: #000000;
+  --color-success: #4ade80;
+  --color-success-content: #000000;
+  --color-warning: #fbbf24;
+  --color-warning-content: #000000;
+  --color-error: #f87171;
+  --color-error-content: #000000;
+  --radius-selector: 999px;
+  --radius-field: 0.75rem;
+  --radius-box: 1.1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 0;
+  --noise: 0;
+
+  --tok-completion-marker: #4ade80;
+  --tok-priority: #fbbf24;
+  --tok-date: #a78bfa;
+  --tok-project: #60a5fa;
+  --tok-context: #f472b6;
+  --tok-tag-key: #d6d3d1;
+  --tok-tag-value: #a8a29e;
+  --tok-id-tag: #6b7280;
+}
+
+/* Unlayered CSS beats every layered rule regardless of specificity, and Tailwind's utilities are
+ * layered. So anything a page might want to override with a utility (`bg-base-200` on <body>, a
+ * `size-4` on an icon) goes in the low-priority `base` layer or into an attribute instead.
+ * Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/@layer#the_cascade_and_layers */
+@layer base {
+  body {
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Inverse selection = the tile flipping. Editor text is excluded, see .tx-input::selection. */
+  ::selection {
+    background: var(--color-base-content);
+    color: var(--color-base-100);
+  }
+}
+
+/* Show-by-theme helpers. !important so they beat a sibling utility like `flex` on the same element. */
+:root:not([data-theme="txtodo-dark"]) .tx-only-dark { display: none !important; }
+:root[data-theme="txtodo-dark"] .tx-only-light { display: none !important; }
+
+/* Monoline icons: same round caps/joins as assets/brand/tx-mark.svg. Default size is the svg's
+ * own width/height attribute (see icon() in txtodo-ui.js) so `size-4` etc. can still override it. */
+.tx-icon {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tx-mark { display: inline-block; line-height: 0; }
+.tx-mark svg { width: 100%; height: auto; overflow: visible; display: block; }
+.tx-mark-live path { transition: stroke-dashoffset 0.6s cubic-bezier(0.6, 0, 0.2, 1); }
+.tx-mark-live.no-anim path { transition: none; }
+
+/* ---- 2. Editor tokens (theme-independent classes) -------------------------------------------- */
+
+.tok-completion-marker { color: var(--tok-completion-marker); font-weight: 600; }
+.tok-priority { color: var(--tok-priority); font-weight: 700; }
+.tok-date { color: var(--tok-date); }
+.tok-project { color: var(--tok-project); }
+.tok-context { color: var(--tok-context); }
+.tok-tag-key { color: var(--tok-tag-key); font-weight: 600; }
+.tok-tag-value { color: var(--tok-tag-value); }
+.tok-id-tag { color: var(--tok-id-tag); }
+.tok-text { color: var(--color-base-content); }
+
+/* ---- 3. The overlay editor ------------------------------------------------------------------- */
+/* A transparent <textarea> (native caret, selection, IME, undo) sits on top of a highlighted
+ * mirror that is scrolled in lockstep. Both must share font, size, line-height and insets.
+ * Ref (pattern):   https://css-tricks.com/creating-an-editable-textarea-that-supports-syntax-highlighted-code/
+ * Ref (::selection): https://developer.mozilla.org/en-US/docs/Web/CSS/::selection */
+
+.tx-editor {
+  --tx-lh: 28px;
+  --tx-fs: 15px;
+  --tx-pad-x: 1.25rem;
+  --tx-pad-y: 1rem;
+  --tx-gutter-w: 0px;
+  --tx-inset: calc(var(--tx-gutter-w) + var(--tx-pad-x));
+  position: relative;
+  /* Contain the mirror/textarea/gutter z-indexes (1-3) so an editor never paints over a popover
+   * or floating chip row that sits outside it. Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/isolation */
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 0;
+  font-family: var(--tx-font);
+  font-size: var(--tx-fs);
+  line-height: var(--tx-lh);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+.tx-editor.has-gutter { --tx-gutter-w: 3.25rem; }
+
+.tx-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--color-base-content);
+}
+.tx-mirror-inner {
+  padding-top: var(--tx-pad-y);
+  min-width: 100%;
+  width: max-content;
+  will-change: transform;
+}
+.tx-line {
+  position: relative;
+  height: var(--tx-lh);
+  line-height: var(--tx-lh);
+  white-space: pre;
+  padding: 0 var(--tx-pad-x) 0 var(--tx-inset);
+}
+.tx-line.is-done { opacity: 0.55; }
+.tx-line.is-hover { background: var(--tx-hover-bg, color-mix(in oklab, var(--color-base-content) 5%, transparent)); }
+.tx-line.is-active { background: var(--tx-active-bg, color-mix(in oklab, var(--color-base-content) 7%, transparent)); }
+/* Search: a hit is the inverse tile in miniature (ink block, paper text); misses fade back. */
+.tx-line.is-dim { opacity: 0.3; }
+.tx-line.is-cur { background: color-mix(in oklab, var(--color-base-content) 10%, transparent); }
+.tx-hit {
+  background: var(--color-base-content);
+  color: var(--color-base-100) !important;
+  border-radius: 0.2em;
+  box-shadow: 0 0 0 1px var(--color-base-content);
+}
+.tx-strike { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+/* Advisory only: root todo 9 (a line past LINE_LENGTH_HINT chars). Nothing blocks a longer line. */
+.tx-long {
+  text-decoration: underline wavy color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  text-decoration-skip-ink: none;
+}
+.tx-placeholder {
+  color: color-mix(in oklab, var(--color-base-content) 38%, transparent);
+  font-style: italic;
+}
+.tx-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-left: 0.9em;
+  height: 1.55em;
+  padding: 0 0.6em;
+  border: 1.5px solid color-mix(in oklab, currentColor 40%, transparent);
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+}
+.tx-ref .tx-icon { width: 1.05em; height: 1.05em; stroke-width: 3; }
+
+.tx-input {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--tx-pad-y) var(--tx-pad-x) calc(var(--tx-pad-y) + 30vh) var(--tx-inset);
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: auto;
+  white-space: pre;
+  tab-size: 4;
+  font: inherit;
+  letter-spacing: inherit;
+  color: transparent;
+  background: transparent;
+  caret-color: var(--tx-caret, var(--color-base-content));
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-base-content) 28%, transparent) transparent;
+}
+.tx-input::selection {
+  background: color-mix(in oklab, var(--color-base-content) 22%, transparent);
+  color: transparent;
+}
+.tx-editor.is-readonly .tx-input { cursor: not-allowed; }
+
+/* Single-line flavor (quick-add, detail title): no scroll-past-end, fixed height. */
+.tx-editor.tx-single { --tx-pad-y: 0.6rem; height: calc(var(--tx-lh) + 1.2rem); }
+.tx-editor.tx-single .tx-input { padding-bottom: var(--tx-pad-y); overflow-y: hidden; }
+.tx-editor.tx-single .tx-mirror-inner { padding-top: var(--tx-pad-y); }
+
+/* Gutter sits ABOVE the textarea (z 3) so its mark buttons stay clickable. */
+.tx-gutter {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--tx-gutter-w);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+.tx-gutter-inner { padding-top: var(--tx-pad-y); will-change: transform; }
+.tx-g {
+  height: var(--tx-lh);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.85rem;
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--color-base-content) 35%, transparent);
+}
+.tx-g.is-active { color: var(--color-base-content); }
+.tx-mark-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--color-base-content) 50%, transparent);
+  background: transparent;
+  color: transparent;
+  transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+}
+.tx-mark-btn:hover { border-color: var(--color-base-content); color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
+.tx-mark-btn.is-done { background: var(--color-base-content); border-color: var(--color-base-content); color: var(--color-base-100); }
+.tx-mark-btn .tx-icon { width: 0.7rem; height: 0.7rem; stroke-width: 4.5; }
+
+/* Quick-add / detail pieces shared by the mountQuickAdd / mountDetail helpers. */
+.tx-qa-chips button { font-family: var(--tx-font); font-weight: 700; }
+.tx-notes {
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  font-family: var(--tx-font);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* Bordered field wrapper (quick-add, detail title). DaisyUI's CDN build only ships plain and
+ * `hover:` variants for its color utilities, so focus styling lives here instead of
+ * `focus-within:border-base-content`. Ref: https://developer.mozilla.org/en-US/docs/Web/CSS/:focus-within */
+.tx-field {
+  border: 2px solid color-mix(in oklab, var(--color-base-content) 25%, transparent);
+  border-radius: var(--radius-field);
+  background: var(--color-base-100);
+  transition: border-color 0.12s;
+}
+.tx-field:focus-within,
+.tx-field.tx-field-strong { border-color: var(--color-base-content); }
+
+/* Demo-state buttons ([data-demo]) show a dot while on. */
+[data-demo][aria-pressed="true"]::before { content: "● "; }
+
+/* Dropdowns built on <details> stay open until toggled; pages close them on outside click. */
+details.dropdown > summary { list-style: none; }
+details.dropdown > summary::-webkit-details-marker { display: none; }
+
+/* Settings-driven editor prefs (c2). Set on the editor host by C2Settings.applyPrefs(). */
+.tx-editor.has-gutter.hide-numbers { --tx-gutter-w: 0px; }
+.tx-editor.hide-numbers .tx-gutter { display: none; }
+.tx-editor.no-long-hint .tx-long { text-decoration: none; }

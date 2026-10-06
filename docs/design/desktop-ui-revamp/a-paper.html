@@ -1,0 +1,215 @@
+<!doctype html>
+<!--
+  A · Paper — the quiet one. The task list is a sheet of paper on a desk; the brand lives in the
+  strokes (heavy round-cap lines, pill selectors, the mark) and in true black on true white.
+  Editing is untouched: the sheet IS the todo.txt buffer.
+
+    What's new vs. today's app          What is deliberately unchanged
+    - status bar: sync state, Ln/Col,   - raw text, one line per task, syntax colors
+      counts, key hints                 - click → caret, blur / Cmd+S saves, Esc discards
+    - gutter: round done-toggle per     - Cmd+Enter / double-click opens the detail view
+      line (types "x <date> " for you)  - "Add a line…" ghost, dimmed+struck done lines
+    - active-line rail (the "t" stem)   - ref: n/m + notes glyph, wavy underline past 100 chars
+    - detail = slide-over, not a page   - Quick Add hotkey Cmd/Ctrl+Shift+Space
+
+  Try: type in the sheet · click a round mark · double-click the "roadmap" line · Cmd+Shift+Space
+       · "⋯" menu for the daemon-offline and conflict banners · moon/sun for the theme.
+-->
+<html lang="en" data-theme="txtodo">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>txtodo — A · Paper</title>
+
+  <!-- Order matters: DaisyUI first so its layers sit below Tailwind's utilities.
+       Ref: https://daisyui.com/docs/cdn/  ·  https://tailwindcss.com/docs/installation/play-cdn -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="shared/txtodo.css" />
+  <style type="text/tailwindcss">
+    @theme {
+      --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+  <style>
+    /* The active line grows a rounded rail — the stem of the "t" — instead of a background wash. */
+    #a-editor { --tx-lh: 32px; --tx-fs: 14px; --tx-pad-y: 1.1rem; --tx-active-bg: transparent; --tx-hover-bg: color-mix(in oklab, var(--color-base-content) 4%, transparent); }
+    #a-editor .tx-line.is-active::before {
+      content: ""; position: absolute; left: calc(var(--tx-gutter-w) - 0.5rem); top: 7px; bottom: 7px;
+      width: 4px; border-radius: 99px; background: var(--color-base-content);
+    }
+  </style>
+</head>
+
+<body class="flex h-dvh flex-col bg-base-200 font-sans text-base-content">
+
+  <!-- Demo banners (toggled from the ⋯ menu). Inverse strip = the icon tile as a status color. -->
+  <div data-demo-target="daemon" class="hidden">
+    <div role="alert" class="flex items-center gap-3 bg-base-content px-4 py-2 text-sm text-base-100">
+      <span class="loading loading-spinner loading-xs"></span>
+      <span class="font-mono font-bold">daemon: connecting</span>
+      <span class="opacity-70">txtodod isn't answering yet. Edits stay in the buffer.</span>
+      <button class="btn btn-xs ml-auto border-0 bg-base-100 text-base-content hover:bg-base-300">Retry</button>
+    </div>
+  </div>
+  <div data-demo-target="conflict" class="hidden">
+    <div role="alert" class="flex items-center gap-3 border-b-2 border-base-content bg-base-100 px-4 py-2 text-sm">
+      <span data-tx-icon="warn" class="text-warning"></span>
+      <span class="font-mono font-bold">1 line needs review</span>
+      <span class="text-base-content/70">Two devices edited the same word. The list is read-only until you pick.</span>
+      <button class="btn btn-xs btn-primary ml-auto">Review</button>
+    </div>
+  </div>
+
+  <header class="navbar min-h-14 gap-2 border-b-2 border-base-content/10 bg-base-100 px-4">
+    <div class="flex flex-1 items-center gap-2">
+      <a href="#" class="flex items-center gap-2.5" aria-label="txtodo">
+        <span data-tx-mark class="w-9"></span>
+        <span class="font-mono text-xl font-bold tracking-tighter">txtodo</span>
+      </a>
+      <details class="dropdown ml-3">
+        <summary class="btn btn-ghost btn-sm gap-1.5 font-mono">~/notes <span data-tx-icon="down" class="size-4"></span></summary>
+        <ul id="a-ws" class="menu dropdown-content z-30 mt-1 w-72 rounded-box border-2 border-base-content bg-base-100 p-2"></ul>
+      </details>
+    </div>
+
+    <div class="flex items-center gap-1">
+      <button id="a-qa-open" class="btn btn-primary btn-sm gap-2">
+        <span data-tx-icon="plus" class="size-4"></span> Quick add
+        <kbd class="kbd kbd-xs hidden border-0 font-mono md:inline-flex">⌘⇧␣</kbd>
+      </button>
+      <span class="mx-1 hidden h-5 w-0.5 rounded-full bg-base-content/20 sm:block"></span>
+      <a href="#" class="btn btn-ghost btn-sm hidden gap-2 lg:inline-flex"><span data-tx-icon="stack" class="size-4"></span> Universal</a>
+      <a href="#" class="btn btn-ghost btn-sm hidden gap-2 lg:inline-flex"><span data-tx-icon="devices" class="size-4"></span> Devices &amp; agents</a>
+      <button id="a-pin" class="btn btn-ghost btn-sm btn-square" aria-label="Pin on top" aria-pressed="false"><span data-tx-icon="pin"></span></button>
+      <button data-tx-theme-toggle class="btn btn-ghost btn-sm btn-square" aria-label="Toggle theme">
+        <span data-tx-icon="moon" class="tx-only-light"></span><span data-tx-icon="sun" class="tx-only-dark"></span>
+      </button>
+      <a href="#" class="btn btn-ghost btn-sm btn-square" aria-label="Help"><span data-tx-icon="help"></span></a>
+      <details class="dropdown dropdown-end">
+        <summary class="btn btn-ghost btn-sm btn-square" aria-label="Demo states"><span data-tx-icon="dots"></span></summary>
+        <ul class="menu dropdown-content z-30 mt-1 w-60 rounded-box border-2 border-base-content bg-base-100 p-2">
+          <li class="menu-title">Demo states</li>
+          <li><button data-demo="daemon">Daemon offline</button></li>
+          <li><button data-demo="conflict">Conflict to review</button></li>
+        </ul>
+      </details>
+    </div>
+  </header>
+
+  <main class="min-h-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">
+    <!-- The sheet. 2px hairline in ink at 20% keeps it quiet; the mark and type carry the brand. -->
+    <section class="mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-box border-2 border-base-content/20 bg-base-100" aria-label="todo.txt">
+      <div class="flex h-12 items-center gap-3 border-b-2 border-base-content/10 px-5 text-sm">
+        <span data-tx-icon="file" class="size-4 text-base-content/60"></span>
+        <span class="font-mono font-bold">todo.txt</span>
+        <span id="a-counts" class="flex gap-1.5"></span>
+        <span class="ml-auto hidden text-xs text-base-content/60 sm:inline">click a line and type · double-click opens it</span>
+      </div>
+      <div id="a-editor" class="flex-1" data-tx-main></div>
+    </section>
+  </main>
+
+  <footer class="flex h-10 items-center gap-5 border-t-2 border-base-content/10 bg-base-100 px-4 font-mono text-xs">
+    <span id="a-status" class="flex min-w-24 items-center gap-2 font-bold"></span>
+    <span id="a-caret" class="text-base-content/60">Ln 1, Col 1</span>
+    <span class="ml-auto hidden items-center gap-4 text-base-content/60 md:flex">
+      <span><kbd class="kbd kbd-xs">⌘S</kbd> save</span>
+      <span><kbd class="kbd kbd-xs">esc</kbd> discard</span>
+      <span><kbd class="kbd kbd-xs">⌘↵</kbd> open line</span>
+    </span>
+  </footer>
+
+  <!-- Detail: slide-over. The real app swaps the whole page; this keeps the list in view. -->
+  <div id="a-scrim" class="fixed inset-0 z-40 hidden bg-base-content/20"></div>
+  <aside id="a-detail" class="fixed inset-y-0 right-0 z-50 w-[min(38rem,100%)] translate-x-full overflow-y-auto border-l-2 border-base-content bg-base-100 p-5 transition-transform duration-200" aria-label="Task detail"></aside>
+
+  <!-- Quick Add: the Cmd/Ctrl+Shift+Space window, as a modal. -->
+  <dialog id="a-qa" class="modal">
+    <div class="modal-box max-w-xl rounded-box border-2 border-base-content bg-base-100 p-5">
+      <h2 class="mb-3 font-mono text-sm font-bold tracking-tight">Quick add</h2>
+      <div id="a-qa-body" data-tx-qa></div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+  </dialog>
+
+  <script src="shared/todotxt.js"></script>
+  <script src="shared/data.js"></script>
+  <script src="shared/txtodo-ui.js"></script>
+  <script src="shared/smoke.js"></script>
+  <script>
+    const T = TodoTxt, D = TxData, UI = TxUI;
+    const $ = (id) => document.getElementById(id);
+    UI.initChrome({ defaultTheme: "auto" });
+    UI.fillMarks();
+
+    // ---- status bar: sync state, caret, counts ----
+    const STATUS = {
+      clean: () => `<span class="status status-success"></span> synced`,
+      dirty: () => `<span class="status status-warning animate-pulse"></span> unsaved`,
+      saving: () => `<span class="loading loading-spinner loading-xs"></span> saving`,
+      saved: () => `${UI.icon("check", "size-4 text-success")} saved`,
+    };
+    const renderStatus = (s) => ($("a-status").innerHTML = STATUS[s]());
+    const renderCounts = (v) => {
+      const s = T.stats(v);
+      const chip = (letter, n) => `<span class="badge badge-outline gap-1.5 font-mono"><b>${letter}</b>${n}</span>`;
+      $("a-counts").innerHTML = chip("t", s.open) + chip("x", s.done);
+    };
+
+    // ---- the editor (shared engine; gutter = round done-toggles) ----
+    const editor = UI.createEditor($("a-editor"), {
+      value: D.DOC,
+      gutter: "marks",
+      onStatus: renderStatus,
+      onCaret: (c) => ($("a-caret").textContent = `Ln ${c.line}, Col ${c.col}`),
+      onChange: renderCounts,
+      onDetail: (n, text) => text.trim() && openDetail(text),
+    });
+    renderStatus("clean");
+    renderCounts(D.DOC);
+
+    // ---- detail slide-over ----
+    const aside = $("a-detail"), scrim = $("a-scrim");
+    function openDetail(text) {
+      UI.mountDetail(aside, { line: text, workspace: "notes", onExit: closeDetail });
+      aside.classList.remove("translate-x-full");
+      scrim.classList.remove("hidden");
+    }
+    function closeDetail() {
+      aside.classList.add("translate-x-full");
+      scrim.classList.add("hidden");
+    }
+    scrim.addEventListener("click", closeDetail);
+
+    // ---- quick add ----
+    const dlg = $("a-qa");
+    const qa = UI.mountQuickAdd($("a-qa-body"), {
+      onSubmit: (v) => { UI.appendTask(editor, v); dlg.close(); },
+      onCancel: () => dlg.close(),
+    });
+    const openQA = () => { qa.reset(); dlg.showModal(); qa.focus(); };
+    $("a-qa-open").addEventListener("click", openQA);
+    UI.hotkeys({ quickAdd: openQA });
+
+    // ---- small chrome ----
+    $("a-ws").innerHTML =
+      D.WORKSPACES.map((w, i) => `<li><a class="${i === 0 ? "menu-active" : ""} font-mono"><span class="font-bold">${w.name}</span><span class="ml-auto text-xs opacity-60">${w.open} open</span></a></li>`).join("") +
+      `<li class="mt-1 border-t-2 border-base-content/10 pt-1"><a class="font-mono">${UI.icon("plus", "size-4")} Add a folder</a></li>`;
+    $("a-pin").addEventListener("click", (e) => {
+      const b = e.currentTarget, on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", String(on));
+      b.classList.toggle("btn-active", on);
+    });
+    document.addEventListener("click", (e) => {
+      document.querySelectorAll("details.dropdown[open]").forEach((d) => d.contains(e.target) || d.removeAttribute("open"));
+    });
+    // A pending review makes the list read-only, as in FileView.svelte.
+    UI.bindDemo({ conflict: (on) => editor.setReadOnly(on) });
+  </script>
+</body>
+</html>
