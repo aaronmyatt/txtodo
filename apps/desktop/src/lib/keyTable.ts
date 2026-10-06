@@ -41,7 +41,9 @@ export function keyGroups(hotkey: string[]): KeyGroup[] {
 				{ keys: [presses("Mod-Enter")], title: "Open the detail for the line" },
 				{ keys: [presses("Mod-s")], title: "Save now (it also saves on blur)" },
 				{ keys: [presses("Escape")], title: "Discard the edit" },
-				{ keys: [presses("Mod-z")], title: "Undo" }
+				// The main list has no undo history of its own (FileView has no history()); the
+				// one-line editors and notes do.
+				{ keys: [presses("Mod-z")], title: "Undo in the prompt bar and detail (not the list)" }
 			]
 		},
 		{
