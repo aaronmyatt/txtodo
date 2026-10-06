@@ -1,6 +1,7 @@
 // Pure logic for `EditPopover.svelte` — no DOM, no Tauri, no CodeMirror, so it is plain-function
 // testable (tasks/desktop-edit-popover/notes.md, plan §3.2). Grammar reference:
-// `specs/todotxt.abnf` (`priority`, `completed`/`incomplete`, `pri-tag`).
+// `specs/todotxt.abnf` (`priority`, `completed`/`incomplete`, `pri-tag`). What a chip does to the
+// text lives in the shared core (`txtodo_core::chips`, via `wasmCore.applyChipCore`), not here.
 
 /** Token chips per plan §3.2 / notes.md's `Chip` union — the exact nine the popover renders. */
 export type Chip = "A" | "B" | "C" | "+" | "@" | "due:" | "t:" | "rec:" | "x";
@@ -17,110 +18,6 @@ export const CHIPS: { chip: Chip; label: string }[] = [
 	{ chip: "t:", label: "t:" },
 	{ chip: "rec:", label: "rec:" }
 ];
-
-/** Result of a text transform that also has to move the caret along with the edit. */
-export interface ChipResult {
-	text: string;
-	caret: number;
-}
-
-const DATE_SRC = "\\d{4}-\\d{2}-\\d{2}";
-// `completed = "x" SP date [SP date] [SP description]` (specs/todotxt.abnf line 14).
-const COMPLETED_LINE_RE = new RegExp(`^x (${DATE_SRC})(?: (${DATE_SRC}))?(?: (.*))?$`);
-// A bare leading date, once any priority has been stripped: the `date [SP description]` arm of
-// `incomplete` (specs/todotxt.abnf line 13), read here as the completion's creation date.
-const LEADING_DATE_RE = new RegExp(`^(${DATE_SRC})(?: (.*))?$`);
-const PRI_TAG_RE = /^pri:([A-Z])$/;
-
-/** Strips a leading `(X) ` or bare `(X)` priority (specs/todotxt.abnf's `priority` rule). */
-function stripPriority(raw: string): { letter: string; rest: string } | null {
-	const m = raw.match(/^\(([A-Z])\) ?/);
-	if (!m) return null;
-	return { letter: m[1], rest: raw.slice(m[0].length) };
-}
-
-/**
- * `x` chip: on -> prepend `x <today> ` and, if a priority exists, replace it with a trailing
- * `pri:<P>` tag (spec-conformant, `core-complete-pri`); off -> reverse that. Plain string in,
- * plain string out — the caller (`applyChip`) decides where the caret lands afterwards.
- */
-export function toggleComplete(raw: string, today: string): string {
-	const completed = raw.match(COMPLETED_LINE_RE);
-	if (completed) {
-		const [, , creationDate, description = ""] = completed;
-		const words = description.length > 0 ? description.split(" ") : [];
-		let priority: string | null = null;
-		const remaining = words.filter((w) => {
-			if (priority === null) {
-				const m = w.match(PRI_TAG_RE);
-				if (m) {
-					priority = m[1];
-					return false;
-				}
-			}
-			return true;
-		});
-		const parts: string[] = [];
-		if (priority) parts.push(`(${priority})`);
-		if (creationDate) parts.push(creationDate);
-		if (remaining.length > 0) parts.push(remaining.join(" "));
-		return parts.join(" ");
-	}
-
-	const stripped = stripPriority(raw);
-	const rest = stripped ? stripped.rest : raw;
-	const dated = rest.match(LEADING_DATE_RE);
-	const creationDate = dated ? dated[1] : null;
-	const description = dated ? (dated[2] ?? "") : rest;
-
-	const parts = ["x", today];
-	if (creationDate) parts.push(creationDate);
-	if (description) parts.push(description);
-	if (stripped) parts.push(`pri:${stripped.letter}`);
-	return parts.join(" ");
-}
-
-/** Priority chip: replaces the current priority, or removes it when the same letter is tapped
- * again. The edit only ever touches the `(X) ` prefix, so any caret at or after it shifts by
- * exactly the prefix's length delta; a caret inside a removed prefix just clamps to 0. */
-function applyPriorityChip(raw: string, caret: number, letter: "A" | "B" | "C"): ChipResult {
-	const stripped = stripPriority(raw);
-	const rest = stripped ? stripped.rest : raw;
-	const oldPrefixLen = raw.length - rest.length;
-	const removing = stripped?.letter === letter;
-	const text = removing ? rest : rest.length > 0 ? `(${letter}) ${rest}` : `(${letter})`;
-	const newPrefixLen = text.length - rest.length;
-	const newCaret = Math.max(0, Math.min(text.length, caret + (newPrefixLen - oldPrefixLen)));
-	return { text, caret: newCaret };
-}
-
-/** Every other chip: insert the raw token at the caret. A leading space is added only when the
- * caret isn't already at a word boundary (line start, or preceded by whitespace) — this is the
- * "must not double-space" invariant from notes.md. */
-function insertAtCaret(raw: string, caret: number, token: string): ChipResult {
-	const before = raw.slice(0, caret);
-	const after = raw.slice(caret);
-	const atBoundary = before.length === 0 || /\s$/.test(before);
-	const insert = atBoundary ? token : ` ${token}`;
-	return { text: before + insert + after, caret: before.length + insert.length };
-}
-
-/** Applies one chip tap at `caret` in `raw`, returning the new text and where the caret should
- * land. `today` (`YYYY-MM-DD`, local zone — see `localToday`) is only used by the `x` chip. */
-export function applyChip(raw: string, caret: number, chip: Chip, today: string): ChipResult {
-	switch (chip) {
-		case "A":
-		case "B":
-		case "C":
-			return applyPriorityChip(raw, caret, chip);
-		case "x": {
-			const text = toggleComplete(raw, today);
-			return { text, caret: text.length };
-		}
-		default:
-			return insertAtCaret(raw, caret, chip);
-	}
-}
 
 /** A save that would write back the exact original line is a no-op: no `Apply`, no op-log entry
  * (notes.md "Edge cases & invariants"). */

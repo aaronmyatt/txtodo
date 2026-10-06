@@ -2,7 +2,7 @@
 // Shared by the edit popover (strict-mode validation) and the conflict-review DiffView so
 // neither reinvents wasm loading. Both underlying calls are synchronous in Rust; the `async`
 // here is only to hide the one-time WASM `init()` from callers.
-import init, { breakdown_fields, diff_text, parse_line_strict, strict_hint } from "./wasm-core/txtodo_ffi";
+import init, { apply_chip, breakdown_fields, diff_text, parse_line_strict, strict_hint } from "./wasm-core/txtodo_ffi";
 
 /** Mirrors `crates/txtodo-ffi/src/parse_check.rs`'s `StrictCheck`. */
 export type StrictCheckResult =
@@ -71,4 +71,16 @@ export async function breakdownFields(line: string): Promise<BreakdownField[]> {
 export async function strictHint(line: string): Promise<string | null> {
   await ensureInit();
   return strict_hint(line) ?? null;
+}
+
+/** One chip tap through the shared core (`txtodo_core::chips`, the TUI's prompt bar's rules):
+ * the new text and caret, carets in UTF-16 units like CodeMirror's; null for an unknown chip. */
+export async function applyChipCore(
+  raw: string,
+  caret: number,
+  chip: string,
+  today: string
+): Promise<{ text: string; caret: number } | null> {
+  await ensureInit();
+  return (apply_chip(raw, caret, chip, today) as { text: string; caret: number } | null) ?? null;
 }

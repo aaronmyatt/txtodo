@@ -11,8 +11,8 @@
 	import { defaultKeymap, history as cmHistory, historyKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { singleLineFilter } from "$lib/todotxt/singleLineFilter";
-	import { strictHint } from "$lib/wasmCore";
-	import { applyChip, localToday, type Chip } from "./editPopoverLogic";
+	import { applyChipCore, strictHint } from "$lib/wasmCore";
+	import { localToday, type Chip } from "./editPopoverLogic";
 
 	interface Props {
 		/** The text it starts with. */
@@ -70,13 +70,14 @@
 		view?.focus();
 	}
 
-	/** One chip tap (`editPopoverLogic.applyChip`, the core's chip rules), keeping the keyboard. */
-	export function chip(c: Chip) {
+	/** One chip tap, by the shared core's chip rules (the TUI prompt bar's), keeping the keyboard. */
+	export async function chip(c: Chip) {
 		if (!view) return;
 		const raw = text();
 		const caret = view.state.selection.main.head;
-		const { text: next, caret: at } = applyChip(raw, caret, c, localToday());
-		view.dispatch({ changes: { from: 0, to: raw.length, insert: next }, selection: { anchor: at } });
+		const result = await applyChipCore(raw, caret, c, localToday());
+		if (!view || !result || text() !== raw) return; // typed meanwhile: drop the stale tap
+		view.dispatch({ changes: { from: 0, to: raw.length, insert: result.text }, selection: { anchor: result.caret } });
 		view.focus();
 	}
 

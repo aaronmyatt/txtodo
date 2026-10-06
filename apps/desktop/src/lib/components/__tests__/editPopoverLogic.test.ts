@@ -6,98 +6,12 @@
 // in a whole framework as a drive-by of this task.
 import { describe, expect, it } from "vitest";
 import {
-	applyChip,
 	decodeUlidTimestampMs,
 	formatRelativeTime,
 	isNoOpEdit,
 	localToday,
-	shortDevice,
-	toggleComplete
+	shortDevice
 } from "../editPopoverLogic";
-
-describe("applyChip: priority chips", () => {
-	it("adds a priority to a line that has none", () => {
-		expect(applyChip("call mum", 0, "A", "2026-09-12")).toEqual({
-			text: "(A) call mum",
-			caret: 4
-		});
-	});
-
-	it("removes the priority when the same chip is tapped again", () => {
-		expect(applyChip("(A) call mum", 0, "A", "2026-09-12")).toEqual({
-			text: "call mum",
-			caret: 0
-		});
-	});
-
-	it("replaces one priority with another, keeping the caret's relative offset", () => {
-		expect(applyChip("(B) call mum", 5, "A", "2026-09-12")).toEqual({
-			text: "(A) call mum",
-			caret: 5
-		});
-	});
-
-	it("removes a bare priority with no trailing description", () => {
-		expect(applyChip("(A)", 0, "A", "2026-09-12")).toEqual({ text: "", caret: 0 });
-	});
-});
-
-describe("applyChip: insert-at-caret chips (no double-spacing)", () => {
-	it("does not add a leading space when the caret is already at a word boundary", () => {
-		expect(applyChip("call mum ", 9, "+", "2026-09-12")).toEqual({
-			text: "call mum +",
-			caret: 10
-		});
-	});
-
-	it("adds exactly one leading space when the caret is mid/after a word", () => {
-		expect(applyChip("call mum", 8, "+", "2026-09-12")).toEqual({
-			text: "call mum +",
-			caret: 10
-		});
-	});
-
-	it("inserts inside the line, not just at the end", () => {
-		expect(applyChip("call mum", 4, "@", "2026-09-12")).toEqual({
-			text: "call @ mum",
-			caret: 6
-		});
-	});
-
-	it("skips the leading space when inserting right after an existing space", () => {
-		expect(applyChip("call  mum", 5, "due:", "2026-09-12")).toEqual({
-			text: "call due: mum",
-			caret: 9
-		});
-	});
-});
-
-describe("applyChip: x (completion toggle)", () => {
-	it("delegates to toggleComplete and puts the caret at the end", () => {
-		const today = "2026-09-12";
-		const result = applyChip("call mum", 0, "x", today);
-		expect(result.text).toBe(toggleComplete("call mum", today));
-		expect(result.caret).toBe(result.text.length);
-	});
-});
-
-describe("toggleComplete", () => {
-	it("completes a plain line: prepends x <today>", () => {
-		expect(toggleComplete("call mum", "2026-09-12")).toBe("x 2026-09-12 call mum");
-	});
-
-	it("uncompletes back to the exact original plain line", () => {
-		const completed = toggleComplete("call mum", "2026-09-12");
-		expect(toggleComplete(completed, "2026-09-12")).toBe("call mum");
-	});
-
-	it("round-trips a prioritised, dated line through pri: preservation (core-complete-pri)", () => {
-		const original = "(A) 2026-09-01 call mum +home";
-		const completed = toggleComplete(original, "2026-09-12");
-		expect(completed).toBe("x 2026-09-12 2026-09-01 call mum +home pri:A");
-		expect(toggleComplete(completed, "2026-09-12")).toBe(original);
-	});
-});
 
 describe("isNoOpEdit", () => {
 	it("is true only for an unchanged line", () => {
