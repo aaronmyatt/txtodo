@@ -11,6 +11,7 @@
 //! both happen in the frontend, over the flat list this command returns.
 
 use crate::commands::ensure_connected;
+use crate::daemon::DaemonClient;
 use crate::dto::is_ready_or_unknown;
 use crate::dto_universal::{RefProgressDto, UniversalTaskDto};
 use crate::state::AppState;
@@ -38,6 +39,15 @@ async fn universal_tasks_inner(
 ) -> Result<Vec<UniversalTaskDto>, String> {
     ensure_connected(&app, &state).await?;
     let mut client = state.client_snapshot().await?;
+    universal_rows(&mut client, include_done).await
+}
+
+/// The aggregation itself, over any connected client: the Tauri command above and the e2e
+/// bridge (`src/bin/e2e_bridge/universal.rs`) both run this, so Playwright tests the real body.
+pub async fn universal_rows(
+    client: &mut DaemonClient,
+    include_done: bool,
+) -> Result<Vec<UniversalTaskDto>, String> {
     let workspaces = client.workspace_list().await.map_err(|e| e.to_string())?;
 
     let mut tasks = Vec::new();

@@ -43,6 +43,8 @@ pub struct UniversalTaskDto {
 /// A `ref:` sub-list's `done` of `total` task lines (the daemon's `ListFiles` counts).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct RefProgressDto {
+    /// Done task lines in the sub-list.
     pub done: u32,
+    /// Task lines in the sub-list, blanks excluded.
     pub total: u32,
 }

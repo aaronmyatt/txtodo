@@ -430,9 +430,10 @@ export function universalSetDone(task: UniversalTask, done: boolean, today: stri
 	});
 }
 
-/** Undoes the newest op on `path` in that workspace: the toast's Undo after a Universal toggle. */
-export function universalUndo(workspaceId: string, path: string): Promise<ApplyResult> {
-	return invoke("universal_undo", { workspaceId, path });
+/** Undoes the newest `steps` ops on `path` in that workspace: the toast's Undo after a Universal
+ * toggle, with the toggle's own `ApplyResult.applied` (a completion is several ops). */
+export function universalUndo(workspaceId: string, path: string, steps: number): Promise<ApplyResult> {
+	return invoke("universal_undo", { workspaceId, path, steps });
 }
 
 /** The Quick Add hotkey as key names (`["Super", "Shift", "Space"]`), read from the Rust side's

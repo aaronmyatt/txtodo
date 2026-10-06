@@ -5,6 +5,7 @@
 //! completion toggle gives (`txtodo_core::chips::toggle_complete_text`, the prompt bar's `x`).
 
 use crate::commands::ensure_connected;
+use crate::daemon::DaemonClient;
 use crate::dto::ApplyResultDto;
 use crate::state::AppState;
 use tauri::{AppHandle, State};
@@ -32,6 +33,40 @@ pub async fn universal_set_done(
 ) -> Result<ApplyResultDto, String> {
     ensure_connected(&app, &state).await?;
     let mut client = state.client_snapshot().await?;
+    let row = RowRef {
+        workspace_id,
+        path,
+        line_number,
+        task_id,
+    };
+    set_done(&mut client, row, done, today).await
+}
+
+/// One Universal row, as the frontend names it.
+pub struct RowRef {
+    /// The row's workspace (ULID text); never the app's open one by default.
+    pub workspace_id: String,
+    /// That workspace's root list, which `line_number` counts in.
+    pub path: String,
+    /// 1-based over every line, blanks included.
+    pub line_number: u32,
+    /// The line's task id; `""` from an older daemon.
+    pub task_id: String,
+}
+
+/// The body of [`universal_set_done`] over any connected client (the e2e bridge runs it too).
+pub async fn set_done(
+    client: &mut DaemonClient,
+    row: RowRef,
+    done: bool,
+    today: String,
+) -> Result<ApplyResultDto, String> {
+    let RowRef {
+        workspace_id,
+        path,
+        line_number,
+        task_id,
+    } = row;
     let sel = selector(workspace_id);
     let task = Some(pb::TaskRef {
         line_number,
@@ -64,7 +99,9 @@ pub async fn universal_set_done(
     Ok(ApplyResultDto::from(resp))
 }
 
-/// Undoes the newest op on `path` in that workspace: the toast's Undo right after a toggle.
+/// Undoes the newest `steps` ops on `path` in that workspace: the toast's Undo right after a
+/// toggle passes the toggle's own `applied` count (a completion is several ops: the flag, the
+/// date, the move to the bottom), so exactly that toggle is reversed.
 #[tracing::instrument(name = "ipc.universal_undo", skip_all)]
 #[tauri::command]
 pub async fn universal_undo(
@@ -72,11 +109,22 @@ pub async fn universal_undo(
     state: State<'_, AppState>,
     workspace_id: String,
     path: String,
+    steps: Option<u32>,
 ) -> Result<ApplyResultDto, String> {
     ensure_connected(&app, &state).await?;
     let mut client = state.client_snapshot().await?;
+    undo(&mut client, workspace_id, &path, steps.unwrap_or(1)).await
+}
+
+/// The body of [`universal_undo`] over any connected client (the e2e bridge runs it too).
+pub async fn undo(
+    client: &mut DaemonClient,
+    workspace_id: String,
+    path: &str,
+    steps: u32,
+) -> Result<ApplyResultDto, String> {
     let resp = client
-        .undo_for(selector(workspace_id), &path)
+        .undo_for(selector(workspace_id), path, steps.max(1))
         .await
         .map_err(|e| e.apply_text())?;
     Ok(ApplyResultDto::from(resp))

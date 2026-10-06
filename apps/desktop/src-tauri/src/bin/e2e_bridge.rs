@@ -43,7 +43,6 @@ use workspace::dispatch_workspace_cmd;
 
 #[path = "e2e_bridge/activity.rs"]
 mod activity;
-use activity::cmd_op_log_all;
 
 #[path = "e2e_bridge/conflict.rs"]
 mod conflict;
@@ -52,6 +51,9 @@ use conflict::cmd_debug_raise_conflict;
 #[path = "e2e_bridge/refdir.rs"]
 mod refdir;
 use refdir::dispatch_notes_cmd;
+
+#[path = "e2e_bridge/universal.rs"]
+mod universal;
 
 #[path = "e2e_bridge/default_workspace.rs"]
 mod default_workspace;
@@ -253,9 +255,9 @@ async fn invoke(
     }
     // Same reasoning as the workspace-command branch above: its own branch, not a 9th arm in
     // `invoke_core`'s match, to stay under this crate's cognitive-complexity budget.
-    if req.cmd == "op_log_all" {
+    if universal::CROSS_WORKSPACE_CMDS.contains(&req.cmd.as_str()) {
         let mut client = state.client.lock().await;
-        let value = cmd_op_log_all(&mut client).await?;
+        let value = universal::dispatch(&mut client, &req.cmd, req.args).await?;
         return Ok(Json(value).into_response());
     }
     invoke_core(state, req).await

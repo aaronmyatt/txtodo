@@ -131,12 +131,12 @@
 		const { task } = r;
 		const hadFocus = index !== undefined;
 		try {
-			await universalSetDone(task, !task.done, localToday());
+			const { applied } = await universalSetDone(task, !task.done, localToday());
 			await refresh();
 			// A completed row may leave the list (show done off): keep the keyboard at its place.
 			if (hadFocus) await focusRow(flat.some((x) => x.key === r.key) ? flat.findIndex((x) => x.key === r.key) : index);
 			showToast(`${task.done ? "Reopened" : "Completed"} in ${r.ws}`, () => {
-				void universalUndo(task.workspace_id, task.root_list)
+				void universalUndo(task.workspace_id, task.root_list, applied)
 					.then(refresh)
 					.catch((e) => (error = String(e)));
 			});

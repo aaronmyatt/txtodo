@@ -109,15 +109,17 @@ impl DaemonClient {
         Ok(self.inner.apply(req).await?.into_inner())
     }
 
-    /// Undoes the newest op on `path` in `selector`'s workspace (the Universal view's Undo).
+    /// Undoes the newest `steps` ops on `path` in `selector`'s workspace (the Universal view's
+    /// Undo). Steps count ops, not applies: a completion appends several.
     pub async fn undo_for(
         &mut self,
         selector: pb::WorkspaceSelector,
         path: &str,
+        steps: u32,
     ) -> Result<pb::ApplyResponse, DaemonError> {
         let req = pb::UndoRequest {
             path: path.to_owned(),
-            steps: 1,
+            steps,
             workspace: Some(selector),
         };
         Ok(self.inner.undo(req).await?.into_inner())
