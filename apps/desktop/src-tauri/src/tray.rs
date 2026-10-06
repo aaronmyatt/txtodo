@@ -27,15 +27,36 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::new()
         .menu(&menu)
         .on_menu_event(on_menu_event);
-    // Best effort: a missing default window icon (e.g. a stripped-down test build with no bundle
-    // icons configured) still gets a tray entry with the platform's own fallback glyph rather
-    // than failing the whole setup.
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
+    builder = with_icon(app, builder);
     let tray = builder.build(app)?;
     app.manage(tray);
     Ok(())
+}
+
+/// The mark as a black-on-clear template image, which macOS recolours for light and dark menu
+/// bars. Raw RGBA (`icons/tray-template.rgba`, 50 x 32, rendered from `assets/brand/tx-mark.svg`
+/// by `scripts/render-tray-icon.mjs`), so no PNG decoder is needed.
+/// Ref: https://docs.rs/tauri/2/tauri/image/struct.Image.html#method.new ·
+/// https://docs.rs/tauri/2/tauri/tray/struct.TrayIconBuilder.html#method.icon_as_template
+#[cfg(target_os = "macos")]
+fn with_icon(
+    _app: &AppHandle,
+    builder: TrayIconBuilder<tauri::Wry>,
+) -> TrayIconBuilder<tauri::Wry> {
+    const TEMPLATE: &[u8] = include_bytes!("../icons/tray-template.rgba");
+    builder
+        .icon(tauri::image::Image::new(TEMPLATE, 50, 32))
+        .icon_as_template(true)
+}
+
+/// Elsewhere a black glyph can vanish on a dark panel, so the tray keeps the app icon (the mark on
+/// its own tile). Best effort: a build with no bundle icons gets the platform's fallback glyph.
+#[cfg(not(target_os = "macos"))]
+fn with_icon(app: &AppHandle, builder: TrayIconBuilder<tauri::Wry>) -> TrayIconBuilder<tauri::Wry> {
+    match app.default_window_icon() {
+        Some(icon) => builder.icon(icon.clone()),
+        None => builder,
+    }
 }
 
 fn on_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
