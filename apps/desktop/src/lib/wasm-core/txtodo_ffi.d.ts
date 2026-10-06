@@ -8,6 +8,12 @@
 export function apply_chip(raw: string, caret: number, chip: string, today: string): any;
 
 /**
+ * A line field by field, like sqlite's `.mode line`: `[{ name, value }]` in display order
+ * (`txtodo_core::breakdown::fields`), the rows the TUI's `v` shows.
+ */
+export function breakdown_fields(line: string): any;
+
+/**
  * Char-level diff between `a` ("mine") and `b` ("theirs"), for the conflict-review `DiffView`
  * (`tasks/desktop-conflict-review/notes.md`). Returns a JS array of `{ op: "equal" | "insert" |
  * "delete", text: string }` segments, in order; concatenating every segment's `text` reconstructs `b`.
@@ -62,6 +68,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly apply_chip: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
+    readonly breakdown_fields: (a: number, b: number) => any;
     readonly diff_text: (a: number, b: number, c: number, d: number) => any;
     readonly due_bucket: (a: number, b: number, c: number, d: number) => [number, number];
     readonly due_label: (a: number, b: number, c: number, d: number) => any;

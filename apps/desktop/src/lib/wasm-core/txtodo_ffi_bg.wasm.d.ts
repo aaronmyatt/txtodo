@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const apply_chip: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
+export const breakdown_fields: (a: number, b: number) => any;
 export const diff_text: (a: number, b: number, c: number, d: number) => any;
 export const due_bucket: (a: number, b: number, c: number, d: number) => [number, number];
 export const due_label: (a: number, b: number, c: number, d: number) => any;

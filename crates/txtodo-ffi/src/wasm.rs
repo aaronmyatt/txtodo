@@ -111,6 +111,20 @@ pub fn group_rows(rows: Array, by: &str, today: &str, workspaces: Array) -> JsVa
     out.into()
 }
 
+/// A line field by field, like sqlite's `.mode line`: `[{ name, value }]` in display order
+/// (`txtodo_core::breakdown::fields`), the rows the TUI's `v` shows.
+#[wasm_bindgen]
+pub fn breakdown_fields(line: &str) -> JsValue {
+    let out = Array::new();
+    for (name, value) in txtodo_core::breakdown::fields(line) {
+        let obj = Object::new();
+        set(&obj, "name", JsValue::from_str(&name));
+        set(&obj, "value", JsValue::from_str(&value));
+        out.push(&obj);
+    }
+    out.into()
+}
+
 /// One `{ done, priority?, due?, project?, context?, workspace }` object; a missing or mistyped
 /// field reads as absent.
 fn row_from_js(value: &JsValue) -> OwnedRow {

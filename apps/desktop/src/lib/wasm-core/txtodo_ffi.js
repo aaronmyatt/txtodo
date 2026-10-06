@@ -21,6 +21,19 @@ export function apply_chip(raw, caret, chip, today) {
 }
 
 /**
+ * A line field by field, like sqlite's `.mode line`: `[{ name, value }]` in display order
+ * (`txtodo_core::breakdown::fields`), the rows the TUI's `v` shows.
+ * @param {string} line
+ * @returns {any}
+ */
+export function breakdown_fields(line) {
+    const ptr0 = passStringToWasm0(line, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.breakdown_fields(ptr0, len0);
+    return ret;
+}
+
+/**
  * Char-level diff between `a` ("mine") and `b` ("theirs"), for the conflict-review `DiffView`
  * (`tasks/desktop-conflict-review/notes.md`). Returns a JS array of `{ op: "equal" | "insert" |
  * "delete", text: string }` segments, in order; concatenating every segment's `text` reconstructs `b`.
