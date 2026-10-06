@@ -42,6 +42,9 @@
 	import { EMPTY_STATUS, editorStatus, SAVED_MS, type SaveState } from "$lib/stores/editorStatus";
 	import { docCounts } from "$lib/todotxt/counts";
 	import { editorPrefs } from "$lib/stores/editorPrefs";
+	import { searchQuery, searchStep } from "$lib/stores/search";
+	import { hitLines, search, setQuery, stepHit } from "$lib/todotxt/search";
+	import { wasmReady } from "$lib/wasmCore";
 
 	interface Props {
 		path: string;
@@ -74,6 +77,7 @@
 	function reportSave(save: SaveState) {
 		if (!reportStatus) return;
 		clearTimeout(savedTimer);
+		clearTimeout(countTimer);
 		editorStatus.update((s) => ({ ...s, save }));
 		if (save === "saved") {
 			savedTimer = setTimeout(() => editorStatus.update((s) => ({ ...s, save: dirty ? "unsaved" : "synced" })), SAVED_MS);
@@ -176,6 +180,7 @@
 			// Chrome (task desktop-ui-revamp): https://codemirror.net/docs/ref/#view.lineNumbers,
 			// #view.highlightActiveLine, #view.drawSelection (draws the caret the theme styles).
 			gutterCompartment.of(gutterFor(get(editorPrefs).lineNumbers)),
+			search(),
 			highlightActiveLine(),
 			drawSelection(),
 			idTagsHidden, // always hidden — §3.1
@@ -208,6 +213,7 @@
 				if (reportStatus) {
 					const counts = docCounts(u.state.doc.toString());
 					editorStatus.update((s) => ({ ...s, counts }));
+					countHitsSoon();
 				}
 				const text = u.state.doc.toString();
 				setDirty(text !== baseline);
@@ -432,6 +438,14 @@
 
 	onMount(() => {
 		view = new EditorView({ state: EditorState.create({ doc: "", extensions: initialExtensions() }), parent: containerEl });
+		lastStep = get(searchStep).n;
+		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed.
+		if (reportStatus) {
+			void wasmReady().then(() => {
+				view?.dispatch({ effects: setQuery.of(get(searchQuery)) });
+				countHitsSoon();
+			});
+		}
 
 		let cancelled = false;
 		(async () => {
@@ -464,6 +478,34 @@
 		}
 		clearTimeout(reorderTimer);
 		view?.destroy();
+	});
+
+	// The header search drives the main buffer's search (task desktop-ui-revamp): the query goes in
+	// as an effect, the hit count follows a moment later (it walks the whole document), and
+	// Enter / Shift+Enter step through the hits without taking focus from the search field.
+	let countTimer: ReturnType<typeof setTimeout> | undefined;
+	function countHitsSoon() {
+		if (!reportStatus) return;
+		clearTimeout(countTimer);
+		countTimer = setTimeout(() => {
+			if (!view) return;
+			const hits = hitLines(view.state).length;
+			editorStatus.update((s) => ({ ...s, search: { hits, index: 0 } }));
+		}, 60);
+	}
+	$effect(() => {
+		const query = $searchQuery;
+		if (!reportStatus || !view) return;
+		view.dispatch({ effects: setQuery.of(query) });
+		countHitsSoon();
+	});
+	let lastStep = 0;
+	$effect(() => {
+		const step = $searchStep;
+		if (!reportStatus || !view || step.n === lastStep) return;
+		lastStep = step.n;
+		const hit = stepHit(view, step.dir);
+		editorStatus.update((s) => ({ ...s, search: hit ? { hits: hit.total, index: hit.index } : { hits: 0, index: 0 } }));
 	});
 
 	// Settings > Appearance can flip the gutter or the long-line hint while the buffer is open.

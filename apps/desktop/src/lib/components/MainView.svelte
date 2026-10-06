@@ -11,6 +11,7 @@
 	import type { DetailParams } from "$lib/types";
 	import ConflictBanner from "./ConflictBanner.svelte";
 	import { editorStatus } from "$lib/stores/editorStatus";
+	import { searchQuery } from "$lib/stores/search";
 	import ProtocolMismatchBanner from "./ProtocolMismatchBanner.svelte";
 	import RejectedEditBanner from "./RejectedEditBanner.svelte";
 	import { openingWorkspace } from "$lib/stores/loading";
@@ -160,6 +161,11 @@
 					<span>x {$editorStatus.counts.done}</span>
 					<span>{$editorStatus.counts.lines} lines</span>
 				</span>
+				{#if $searchQuery.trim() !== ""}
+					<span class="match">
+						{$editorStatus.search.hits} of {$editorStatus.counts.lines} lines match
+					</span>
+				{/if}
 			</div>
 			<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
 		{:else}
@@ -190,6 +196,11 @@
 	.counts {
 		display: flex;
 		gap: 0.75rem;
+		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+	}
+
+	.match {
+		margin-left: auto;
 		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
 	}
 

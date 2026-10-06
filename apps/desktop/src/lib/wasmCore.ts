@@ -16,10 +16,29 @@ export interface DiffSegment {
 }
 
 let ready: Promise<void> | null = null;
+let loaded = false;
 
 function ensureInit(): Promise<void> {
-  ready ??= init().then(() => undefined);
+  ready ??= init().then(() => {
+    loaded = true;
+  });
   return ready;
+}
+
+/** Resolves once the wasm core is loaded; after that its exports may be called synchronously
+ * (the editor's search needs that). */
+export function wasmReady(): Promise<void> {
+  return ensureInit();
+}
+
+/** Whether the wasm core is loaded (so a synchronous caller can use it right now). */
+export function isWasmLoaded(): boolean {
+  return loaded;
+}
+
+/** For tests: marks the core loaded after the caller ran `initSync` itself. */
+export function markWasmLoaded(): void {
+  loaded = true;
 }
 
 /** Strict-mode validity check for one todo.txt line (edit popover's inline error). */

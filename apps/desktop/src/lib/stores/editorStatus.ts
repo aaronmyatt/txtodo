@@ -11,6 +11,9 @@ export interface EditorStatus {
 	save: SaveState;
 	/** The buffer's open tasks, done tasks and lines (`$lib/todotxt/counts`). */
 	counts: DocCounts;
+	/** The header search over this buffer: matching lines, and which of them is current (1-based,
+	 * 0 before the first Enter). */
+	search: { hits: number; index: number };
 	/** 1-based caret line and column; 0 when no buffer is showing. */
 	line: number;
 	col: number;
@@ -19,6 +22,7 @@ export interface EditorStatus {
 export const EMPTY_STATUS: EditorStatus = {
 	save: "synced",
 	counts: { open: 0, done: 0, lines: 0 },
+	search: { hits: 0, index: 0 },
 	line: 0,
 	col: 0
 };

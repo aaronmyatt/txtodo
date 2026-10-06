@@ -11,7 +11,7 @@
 	import Icon from "$lib/icons/Icon.svelte";
 	import type { IconName } from "$lib/icons/icons";
 	import { Chords, isTypingTarget, keyName } from "$lib/keys";
-	import { searchQuery } from "$lib/stores/search";
+	import { searchQuery, searchStep } from "$lib/stores/search";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
 	import ThemeToggle from "./ThemeToggle.svelte";
@@ -58,6 +58,26 @@
 					]
 	);
 
+	/** Keys in the search field: Enter / Shift+Enter step through the hits (focus stays here),
+	 * Esc clears, and a second Esc leaves the field. */
+	function onSearchKeydown(e: KeyboardEvent) {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			searchStep.update((s) => ({ dir: e.shiftKey ? -1 : 1, n: s.n + 1 }));
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			if ($searchQuery !== "") $searchQuery = "";
+			else searchEl?.blur();
+		}
+	}
+
+	// The count pill: `current/hits` once stepping, else the hit count; Tasks only for now.
+	const pill = $derived.by(() => {
+		if (path !== "/" || $searchQuery.trim() === "") return "";
+		const { hits, index } = $editorStatus.search;
+		return index > 0 ? `${index}/${hits}` : `${hits}`;
+	});
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || isTypingTarget(e.target)) return;
 		const name = keyName(e);
@@ -91,7 +111,11 @@
 				spellcheck="false"
 				bind:value={$searchQuery}
 				bind:this={searchEl}
+				onkeydown={onSearchKeydown}
 			/>
+			{#if pill}
+				<span class="pill" role="status" aria-live="polite" aria-label="Matching lines">{pill}</span>
+			{/if}
 			<kbd>/</kbd>
 		</label>
 
@@ -201,6 +225,17 @@
 		background: transparent;
 		color: inherit;
 		font: inherit;
+	}
+
+	.pill {
+		flex: none;
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+		background: var(--color-base-content);
+		color: var(--color-base-100);
+		font-size: 0.625rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.search kbd {
