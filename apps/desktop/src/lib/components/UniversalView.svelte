@@ -1,65 +1,62 @@
 <script lang="ts">
-	// Universal view (ADR 0025, task desktop-universal-view): every registered workspace's open
-	// tasks in one flat list from `universalTasks()`, grouped by priority and filterable by
-	// `@context` — both done here, over the daemon's unsorted result (see $lib/daemon.ts's own doc
-	// comment on why grouping is the caller's job). Clicking a task switches to its workspace and
-	// hands MainView a `PendingUniversalNav` so it opens straight to that line, tagged with
-	// `workspaceRoot` so `Breadcrumb` shows the owning project — see MainView.svelte's
-	// `$currentWorkspaceRoot` effect, the actual consumer.
+	// Universal (ADR 0025; rebuilt for task desktop-ui-revamp from the c2 mockup): every registered
+	// workspace's root-list tasks in one page. A stat strip, group by priority / due / project /
+	// context / workspace, workspace and context chips, and a show-done toggle, all over one
+	// bounded `universalTasks(true)` fetch (the model is `$lib/universal/rows.ts`). Clicking a row
+	// switches to its workspace and hands MainView a `PendingUniversalNav` so it opens on that line.
 	import { goto } from "$app/navigation";
 	import { onMount } from "svelte";
 	import { switchWorkspace, universalTasks, type UniversalTask } from "$lib/daemon";
 	import { pendingUniversalNav } from "$lib/stores/workspaces";
+	import { localToday } from "./editPopoverLogic";
+	import { contextCounts, GROUP_KINDS, groupRows, stats, toRows, type GroupKind } from "$lib/universal/rows";
+	import UniversalRow from "./UniversalRow.svelte";
+	import UniversalStats from "./UniversalStats.svelte";
 
 	let tasks = $state<UniversalTask[]>([]);
 	let loading = $state(true);
 	let error = $state("");
-	let activeContexts = $state<Set<string>>(new Set());
+	let group = $state<GroupKind>("priority");
+	let showDone = $state(false);
+	let context = $state<string | null>(null);
+	/** Workspace ids switched off by their chip; at least one always stays on. */
+	let hidden = $state<Set<string>>(new Set());
 
-	const allContexts = $derived([...new Set(tasks.flatMap((t) => t.contexts))].sort());
-	const filtered = $derived(
-		activeContexts.size === 0 ? tasks : tasks.filter((t) => t.contexts.some((c) => activeContexts.has(c)))
-	);
-	const groups = $derived(groupByPriority(filtered));
-
-	function groupByPriority(list: UniversalTask[]): [string, UniversalTask[]][] {
-		const buckets = new Map<string, UniversalTask[]>();
-		for (const task of list) {
-			const key = task.priority ?? "";
-			const bucket = buckets.get(key);
-			if (bucket) bucket.push(task);
-			else buckets.set(key, [task]);
+	const today = localToday();
+	const rows = $derived(toRows(tasks, today));
+	const totals = $derived(stats(rows));
+	/** Workspaces by label, in name order, with their open counts. */
+	const workspaces = $derived.by(() => {
+		const byId = new Map<string, { id: string; label: string; open: number }>();
+		for (const r of rows) {
+			const w = byId.get(r.task.workspace_id) ?? { id: r.task.workspace_id, label: r.ws, open: 0 };
+			if (!r.task.done) w.open++;
+			byId.set(w.id, w);
 		}
-		// "" (no priority) sorts last, like todo.sh's own listing convention.
-		return [...buckets.entries()].sort(([a], [b]) => (a || "~").localeCompare(b || "~"));
+		return [...byId.values()].sort((a, b) => a.label.localeCompare(b.label));
+	});
+	const inScope = $derived(rows.filter((r) => !hidden.has(r.task.workspace_id) && (showDone || !r.task.done)));
+	const contexts = $derived(contextCounts(inScope));
+	const shown = $derived(context ? inScope.filter((r) => r.task.contexts.includes(context!)) : inScope);
+	const groups = $derived(groupRows(shown, group, workspaces.map((w) => w.label)));
+
+	function toggleWorkspace(id: string) {
+		const next = new Set(hidden);
+		if (next.has(id)) next.delete(id);
+		else if (workspaces.length - next.size > 1) next.add(id);
+		hidden = next;
 	}
 
-	function toggleContext(ctx: string) {
-		const next = new Set(activeContexts);
-		if (next.has(ctx)) next.delete(ctx);
-		else next.add(ctx);
-		activeContexts = next;
-	}
-
-	/** Last path segment of an absolute root, for a compact label; falls back to the full path. */
-	function projectLabel(root: string): string {
-		return (
-			root
-				.split(/[/\\]/)
-				.filter(Boolean)
-				.pop() ?? root
-		);
+	function resetFilters() {
+		hidden = new Set();
+		context = null;
 	}
 
 	async function open(task: UniversalTask) {
 		error = "";
 		try {
 			await switchWorkspace(task.workspace_root);
-			pendingUniversalNav.set({
-				file: task.root_list,
-				line: task.line_number,
-				workspaceRoot: task.workspace_root
-			});
+			pendingUniversalNav.set({ file: task.root_list, line: task.line_number, workspaceRoot: task.workspace_root });
 			await goto("/");
 		} catch (e) {
 			error = String(e);
@@ -68,7 +65,7 @@
 
 	onMount(async () => {
 		try {
-			tasks = await universalTasks();
+			tasks = await universalTasks(true);
 		} catch (e) {
 			error = String(e);
 		} finally {
@@ -78,156 +75,271 @@
 </script>
 
 <main class="universal">
-	<h1>Universal</h1>
+	<div class="page">
+		<h1>Universal</h1>
+		<p class="lede">Open tasks from every workspace. Click one to open it where it lives.</p>
 
-	{#if error}
-		<p class="error" role="alert">{error}</p>
-	{/if}
+		{#if error}
+			<p class="error" role="alert">{error}</p>
+		{/if}
 
-	{#if loading}
-		<p>Loading…</p>
-	{:else}
-		{#if allContexts.length > 0}
-			<div class="contexts" role="group" aria-label="Filter by context">
-				{#each allContexts as ctx (ctx)}
-					<button
-						type="button"
-						class="chip"
-						class:active={activeContexts.has(ctx)}
-						onclick={() => toggleContext(ctx)}
-					>
-						{ctx}
-					</button>
+		{#if loading}
+			<p class="lede" role="status">Loading&hellip;</p>
+		{:else}
+			<UniversalStats {totals} />
+
+			<div class="controls">
+				<div class="caps group-by">
+					Group
+					<div class="join" role="group" aria-label="Group by">
+						{#each GROUP_KINDS as g (g.kind)}
+							<button type="button" class:on={group === g.kind} aria-pressed={group === g.kind} onclick={() => (group = g.kind)}>
+								{g.label}
+							</button>
+						{/each}
+					</div>
+				</div>
+				<div class="chips" role="group" aria-label="Workspaces">
+					{#each workspaces as w (w.id)}
+						<button type="button" class="chip" class:on={!hidden.has(w.id)} aria-pressed={!hidden.has(w.id)} onclick={() => toggleWorkspace(w.id)}>
+							{w.label} <span class="n">{w.open}</span>
+						</button>
+					{/each}
+				</div>
+				<label class="done-toggle"><input type="checkbox" bind:checked={showDone} /> show done</label>
+			</div>
+			{#if contexts.length > 0}
+				<div class="chips" role="group" aria-label="Filter by context">
+					{#each contexts as [c, n] (c)}
+						<button type="button" class="chip mono" class:on={context === c} aria-pressed={context === c} onclick={() => (context = context === c ? null : c)}>
+							{c} <span class="n">{n}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
+
+			{#if shown.length === 0}
+				<div class="empty">
+					<p><b>Nothing matches.</b></p>
+					<p class="lede">Loosen the filters above.</p>
+					<button type="button" class="chip on" onclick={resetFilters}>Reset filters</button>
+				</div>
+			{/if}
+
+			<div class="groups">
+				{#each groups as g (g.name)}
+					<section aria-label={g.name}>
+						<h2>
+							<span
+								class:tok-priority={group === "priority" && g.name.startsWith("(")}
+								class:tok-project={group === "project" && g.name.startsWith("+")}
+								class:tok-context={group === "context" && g.name.startsWith("@")}
+								class:overdue={g.name === "Overdue"}
+								class:soon={g.name === "Today"}
+								class:muted={g.name.startsWith("No ")}>{g.name}</span>
+							<span class="count">{g.rows.length}</span>
+							<span class="rule"></span>
+						</h2>
+						{#each g.rows as r (r.key)}
+							<UniversalRow row={r} {group} onOpen={open} />
+						{/each}
+					</section>
 				{/each}
 			</div>
 		{/if}
-
-		{#if filtered.length === 0}
-			<p>
-				No open tasks{activeContexts.size > 0
-					? " for the selected contexts"
-					: " across any registered workspace"}.
-			</p>
-		{/if}
-
-		{#each groups as [priority, group] (priority)}
-			<section>
-				<h2>{priority ? `(${priority})` : "No priority"}</h2>
-				<ul>
-					{#each group as task (task.workspace_id + ':' + task.line_number + ':' + task.description)}
-						<li>
-							<button type="button" class="task" onclick={() => open(task)}>
-								<span class="description">{task.description}</span>
-								<span class="meta">
-									<span class="project">{projectLabel(task.workspace_root)}</span>
-									<!-- A plain list of strings needs no key. Keying by value throws when a line
-										repeats a context (e.g. `@human ... @human`).
-										Ref: https://svelte.dev/docs/svelte/each#Keyed-each-blocks -->
-									{#each task.contexts as ctx}
-										<span class="context">{ctx}</span>
-									{/each}
-								</span>
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/each}
-	{/if}
+	</div>
 </main>
 
 <style>
 	.universal {
-		display: flex;
-		flex-direction: column;
-		gap: 1.25rem;
-		padding: 1.5rem 2rem 3rem;
-		height: 100vh;
+		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
-		background: var(--color-bg);
-		color: var(--color-text);
-		box-sizing: border-box;
+		background: var(--color-base-100);
+		color: var(--color-base-content);
+		font-family: var(--font-mono);
 	}
 
+	.page {
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 1.5rem 1.25rem 3rem;
+	}
 
-	.universal h1 {
+	h1 {
 		margin: 0;
+		font-size: 1.5rem;
+		letter-spacing: -0.05em;
 	}
 
-	.contexts {
+	.lede {
+		margin: 0.25rem 0 0;
+		color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+		font-family: var(--font-sans);
+		font-size: 0.875rem;
+	}
+
+	.caps {
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+	}
+
+	.overdue {
+		color: var(--color-error, #dc2626);
+	}
+
+	.soon {
+		color: var(--color-warning, #d97706);
+	}
+
+	.muted {
+		color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+	}
+
+	.controls {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.4rem;
+		align-items: center;
+		gap: 0.5rem 1rem;
+		margin-top: 1.25rem;
+	}
+
+	.group-by {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.join {
+		display: inline-flex;
+		border: 2px solid var(--color-base-content);
+		border-radius: 999px;
+		overflow: hidden;
+	}
+
+	.join button {
+		padding: 0.15rem 0.6rem;
+		border: 0;
+		background: transparent;
+		color: var(--color-base-content);
+		font: inherit;
+		font-size: 11px;
+		letter-spacing: normal;
+		text-transform: none;
+		cursor: pointer;
+	}
+
+	.join button + button {
+		border-left: 2px solid var(--color-base-content);
+	}
+
+	.join button.on,
+	.chip.on {
+		background: var(--color-primary);
+		color: var(--color-primary-content);
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		margin-top: 0.75rem;
+	}
+
+	.controls .chips {
+		margin-top: 0;
 	}
 
 	.chip {
-		background: transparent;
-		border: 1px solid var(--color-border, currentColor);
+		padding: 0.1rem 0.6rem;
+		border: 2px solid var(--color-base-content);
 		border-radius: 999px;
-		padding: 0.15rem 0.65rem;
-		color: inherit;
+		background: transparent;
+		color: var(--color-base-content);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 700;
 		cursor: pointer;
-		font-size: 0.85rem;
 	}
 
-	.chip.active {
-		background: var(--color-hover-bg, rgba(128, 128, 128, 0.25));
-		font-weight: 600;
+	.n {
+		opacity: 0.7;
 	}
 
-	section h2 {
-		font-size: 1rem;
-		opacity: 0.75;
-		margin: 0 0 0.4rem;
+	.done-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-left: auto;
+		font-size: 0.75rem;
+		cursor: pointer;
 	}
 
-	ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
+	.done-toggle input {
+		accent-color: var(--color-base-content);
+	}
+
+	.empty {
+		margin-top: 2.5rem;
+		padding: 2rem;
+		border: 2px dashed color-mix(in srgb, var(--color-base-content) 30%, transparent);
+		border-radius: var(--radius-box);
+		text-align: center;
+	}
+
+	.empty p {
+		margin: 0 0 0.25rem;
+	}
+
+	.groups {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: 1.75rem;
+		margin-top: 1.5rem;
 	}
 
-	.task {
-		width: 100%;
+	h2 {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		text-align: left;
-		background: transparent;
-		border: none;
-		border-radius: 6px;
-		padding: 0.45rem 0.6rem;
-		color: inherit;
-		cursor: pointer;
+		align-items: center;
+		gap: 0.75rem;
+		margin: 0 0 0.5rem;
+		font-size: 1rem;
 	}
 
-	.task:hover {
-		background: var(--color-hover-bg, rgba(128, 128, 128, 0.15));
+	.count {
+		padding: 0 0.4rem;
+		border-radius: 999px;
+		background: var(--color-base-200);
+		font-size: 0.75rem;
+		font-weight: 400;
 	}
 
-	.description {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.rule {
+		flex: 1;
+		height: 2px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--color-base-content) 10%, transparent);
 	}
 
-	.meta {
-		display: flex;
-		gap: 0.4rem;
-		flex-shrink: 0;
-		opacity: 0.7;
-		font-size: 0.85rem;
+	/* Group headings in the editor's token colours (todotxtLanguage.ts). */
+	h2 .tok-priority {
+		color: var(--tok-priority);
+		font-size: 1.125rem;
 	}
 
-	.project {
-		font-style: italic;
+	h2 .tok-project {
+		color: var(--tok-project);
+	}
+
+	h2 .tok-context {
+		color: var(--tok-context);
 	}
 
 	.error {
-		color: var(--color-banner-text, crimson);
+		color: var(--color-error, crimson);
 	}
+
 </style>

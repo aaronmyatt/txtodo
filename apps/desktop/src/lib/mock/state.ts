@@ -148,18 +148,22 @@ export function universalTasksDto(includeDone = false) {
 	const text = files.get("todo.txt")?.text ?? "";
 	return text
 		.split("\n")
-		.filter((line) => line.trim().length > 0 && (includeDone || !line.startsWith("x ")))
-		.map((line) => {
+		.map((line, i) => ({ line, n: i + 1 }))
+		.filter(({ line }) => line.trim().length > 0 && (includeDone || !line.startsWith("x ")))
+		.map(({ line, n }) => {
 			const priorityMatch = /^\(([A-Z])\)\s+/.exec(line);
 			const done = /^x /.test(line);
 			return {
 				workspace_id: owner.id,
 				workspace_root: owner.root,
 				root_list: "todo.txt",
-				line_number: 0, // not meaningful in this mock: same seeded doc for every workspace
+				line_number: n,
 				priority: priorityMatch?.[1] ?? null,
 				contexts: [...line.matchAll(/@\S+/g)].map((m) => m[0]),
-				description: line.replace(/^\([A-Z]\)\s+/, "").replace(/^\d{4}-\d{2}-\d{2}\s+/, ""),
+				description: line
+					.replace(/^x (\d{4}-\d{2}-\d{2} ){1,2}/, "")
+					.replace(/^\([A-Z]\)\s+/, "")
+					.replace(/^\d{4}-\d{2}-\d{2}\s+/, ""),
 				done,
 				completion_date: done ? (/^x (\d{4}-\d{2}-\d{2})/.exec(line)?.[1] ?? null) : null,
 				due: /(?:^|\s)due:(\S+)/.exec(line)?.[1] ?? null,
