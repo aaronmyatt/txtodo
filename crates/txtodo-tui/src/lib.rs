@@ -9,6 +9,7 @@ pub mod clipboard;
 pub mod hit;
 pub mod paint;
 pub mod prefs;
+pub mod readline;
 pub mod skill_hint;
 pub mod state;
 pub mod state_detail;
