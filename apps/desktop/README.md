@@ -48,6 +48,9 @@
   comment for what CI does per release target instead.
 - macOS/Linux only for now — the sync transport is unix-socket only; Windows named pipes land
   in plan M10.
+- Webview floor: macOS 13.3+ (WKWebView as Safari 16.4; `bundle.macOS.minimumSystemVersion`), or
+  Linux with webkit2gtk-4.1 2.40+. The UI's CSS (Tailwind 4, `color-mix()`, `:has()`, `@layer`,
+  `oklch()`) needs it; Vite's `build.cssTarget` is set to match.
 
 ## Development
 

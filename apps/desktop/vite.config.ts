@@ -10,6 +10,12 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(({ mode }) => ({
   plugins: [sveltekit()],
 
+  // The CSS floor (task desktop-ui-revamp): the revamp's CSS (Tailwind 4, `color-mix()`, `:has()`,
+  // `@layer`, `oklch()`) needs Safari 16.4's engine. macOS 13.3 ships it in WKWebView; Tauri 2's
+  // Linux floor, webkit2gtk-4.1 2.40+, has the same features. Lowering CSS below it gains nothing
+  // but rewrites. https://vite.dev/config/build-options#build-csstarget
+  build: { cssTarget: "safari16.4" },
+
   // `vite dev --mode e2e` (apps/desktop/playwright.config.ts's webServer) swaps the real
   // `@tauri-apps/api/*` modules for the test-only HTTP-bridge shims under e2e/shim/ — see that
   // directory's module docs. Every other mode (plain `npm run dev`, `vitest`, `tauri dev`) is

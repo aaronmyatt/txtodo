@@ -31,6 +31,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/txtodod"]
+    "externalBin": ["binaries/txtodod"],
+    "macOS": {
+      "minimumSystemVersion": "13.3"
+    }
   }
 }
