@@ -232,6 +232,11 @@
 				extensions: [
 					todotxtLanguage,
 					idTagsHidden,
+					// A long parent line wraps onto more rows instead of scrolling sideways under a
+					// scrollbar that covered the text (root todo "the detail view task input box
+					// obscures…"). Still one logical line: `singleLineFilter` and Enter keep it so.
+					// https://codemirror.net/docs/ref/#view.EditorView^lineWrapping
+					EditorView.lineWrapping,
 					singleLineFilter(),
 					cmHistory(),
 					// `Prec.highest` isn't needed here since these are the only Enter/Escape bindings —
