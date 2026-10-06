@@ -45,8 +45,7 @@
 <div class="activity">
 	<div class="header">
 		<p class="hint">
-			Every workspace, newest first.{#if lastRefreshedMs}
-				Refreshed {relativeTime(lastRefreshedMs)}.{/if}
+			Every workspace, newest first.{#if lastRefreshedMs}{" "}Refreshed {relativeTime(lastRefreshedMs)}.{/if}
 		</p>
 		<button type="button" class="pill" onclick={load} disabled={loading}>
 			{loading ? "Refreshing…" : "Refresh"}

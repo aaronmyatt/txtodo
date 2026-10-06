@@ -97,6 +97,17 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockTokenRevoke(args) as unknown as T;
 		case "op_log":
 			return opLog.map((e) => ({ principal: e.principal, op: e.summary, at_ms: e.at_ms })) as T;
+		case "op_log_all": {
+			// The one mock workspace's log, tagged with it, as the real fan-out tags each row.
+			const owner = workspaces[0];
+			return opLog.map((e) => ({
+				principal: e.principal,
+				op: e.summary,
+				at_ms: e.at_ms,
+				workspace_id: owner?.id ?? "",
+				workspace_root: owner?.root ?? ""
+			})) as T;
+		}
 		case "get_notes":
 			return mockGetNotes((args?.task as TaskRef).task_id) as T;
 		case "ref_dir":

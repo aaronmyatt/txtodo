@@ -31,9 +31,19 @@
 	let scroller: HTMLElement | undefined = $state();
 	let active = $state<string | null>(null);
 
+	/** The card the reader asked for (a nav click or a deep link). It stays highlighted, even when
+	 * it is too short to reach the top, until the reader scrolls on their own. */
+	let chosen = "";
+	/** While the page settles (cards above grow as data comes in), a deep link lands again. */
+	let settling = false;
+
 	/** Scroll-spy: the card whose top passed a line a third down the view. */
 	function spy() {
 		if (!scroller) return;
+		if (chosen) {
+			active = chosen;
+			return;
+		}
 		const top = scroller.getBoundingClientRect().top;
 		const tops = shown.flatMap((s) => {
 			const el = document.getElementById(s.id);
@@ -43,11 +53,28 @@
 		active = activeSection(tops, scroller.clientHeight / 3, atEnd);
 	}
 
+	/** Scrolls only the Settings scroller so card `id` is at its top (scrollIntoView would also
+	 * scroll the shell around it when the card cannot reach the top).
+	 * https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollTo */
+	function scrollToCard(id: string, behavior: ScrollBehavior = "auto") {
+		const el = document.getElementById(id);
+		if (!scroller || !el) return;
+		const top = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 16;
+		scroller.scrollTo({ top, behavior });
+	}
+
 	function go(id: string) {
-		// scrollIntoView: https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView
-		document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+		settling = false;
+		chosen = id;
 		active = id;
+		scrollToCard(id, "smooth");
 		history.replaceState(history.state, "", `#${id}`);
+	}
+
+	/** The reader's own wheel, key or pointer in the page: back to following the scroll. */
+	function letGo() {
+		chosen = "";
+		settling = false;
 	}
 
 	$effect(() => {
@@ -58,13 +85,30 @@
 	let cardsEl: HTMLElement | undefined = $state();
 
 	onMount(() => {
-		const id = location.hash.slice(1);
-		if (id) void tick().then(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
-		// Cards grow as their data arrives without any scroll event, so the spy re-reads on resize:
-		// https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver
-		const resize = new ResizeObserver(() => spy());
+		chosen = location.hash.slice(1);
+		settling = chosen !== "";
+		const land = () => settling && scrollToCard(chosen);
+		void tick().then(() => {
+			land();
+			spy();
+		});
+		const timer = setTimeout(() => (settling = false), 2000);
+		// Passive: these only watch, they never stop the scroll.
+		// https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#passive
+		const watched = ["wheel", "keydown", "pointerdown"] as const;
+		for (const type of watched) scroller?.addEventListener(type, letGo, { passive: true });
+		// Cards grow as their data arrives without any scroll event, so the spy re-reads on resize
+		// (and a settling deep link lands again): https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver
+		const resize = new ResizeObserver(() => {
+			land();
+			spy();
+		});
 		if (cardsEl) resize.observe(cardsEl);
-		return () => resize.disconnect();
+		return () => {
+			clearTimeout(timer);
+			resize.disconnect();
+			for (const type of watched) scroller?.removeEventListener(type, letGo);
+		};
 	});
 </script>
 
