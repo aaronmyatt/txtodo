@@ -36,7 +36,7 @@ test("main view: 10k-line fixture shows id-hidden, ref/progress, and the add-a-l
 	await expect(page.locator(".cm-editor")).not.toContainText("id:");
 	await expect(page.locator(".cm-todotxt-ref-indicator").first()).toContainText("1/2");
 	await expect(page.locator(".cm-todotxt-strike").first()).toBeVisible();
-	await expect(page.locator(".cm-lineNumbers")).toHaveCount(0);
+	await expect(page.locator(".cm-lineNumbers")).toHaveCount(1); // the gutter (desktop-ui-revamp)
 
 	// The add input sits above the list, not as ghost text on its last line.
 	await expect(page.getByRole("textbox", { name: "Add a line" })).toBeVisible();

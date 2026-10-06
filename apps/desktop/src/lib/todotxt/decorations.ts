@@ -207,8 +207,35 @@ export const longLineHint: Extension = ViewPlugin.fromClass(
  * https://codemirror.net/docs/ref/#view.EditorView^baseTheme) and `.cm-cursor` here override those
  * with app.css's tokens; everything else in this theme was already color-scheme-agnostic. */
 export const mainViewBaseTheme = EditorView.baseTheme({
-	"&": { backgroundColor: "var(--color-bg)", color: "var(--color-text)" },
-	"&.cm-focused .cm-cursor": { borderLeftColor: "var(--color-text)" },
+	// The buffer's chrome (task desktop-ui-revamp, the c2 mockup's editor): text size and a px line
+	// height from CSS vars (editorPrefs sets them; px because decoration row maths assume it), a
+	// line-number gutter behind a 10% ink rule, the caret's line tinted 7%, and a block caret.
+	"&": {
+		backgroundColor: "var(--color-bg)",
+		color: "var(--color-text)",
+		fontSize: "var(--editor-font-size, 15px)"
+	},
+	".cm-scroller": { lineHeight: "var(--editor-line-height, 28px)", fontVariantLigatures: "none" },
+	".cm-content": { padding: "1rem 0" },
+	".cm-line": { padding: "0 1.25rem" },
+	".cm-gutters": {
+		backgroundColor: "transparent",
+		borderRight: "2px solid color-mix(in srgb, var(--color-base-content) 10%, transparent)",
+		color: "color-mix(in srgb, var(--color-base-content) 40%, transparent)"
+	},
+	".cm-lineNumbers .cm-gutterElement": { padding: "0 0.75rem 0 1rem", fontSize: "0.75em" },
+	".cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--color-base-content) 7%, transparent)" },
+	".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--color-base-content)" },
+	// A block over the character, see-through so the letter under it still reads: ink at 35%.
+	// (A difference blend does not work here: CM's cursor layer sits in its own stacking context,
+	// so it blends with nothing and paints solid.) CSS, not `caret-shape`, which is Chromium-only
+	// and WKWebView ignores. https://codemirror.net/docs/ref/#view.drawSelection
+	".cm-cursor, .cm-dropCursor": {
+		borderLeft: "none",
+		width: "0.6em",
+		marginLeft: "0",
+		backgroundColor: "color-mix(in srgb, var(--color-base-content) 35%, transparent)"
+	},
 	".cm-todotxt-done": { opacity: "0.55" },
 	".cm-todotxt-strike": { textDecoration: "line-through" },
 	".cm-todotxt-hover": { backgroundColor: "var(--color-hover-overlay)" },

@@ -13,7 +13,14 @@
 	// CM6 basics: https://codemirror.net/docs/ref/
 	import { onDestroy, onMount, untrack } from "svelte";
 	import { Compartment, EditorState } from "@codemirror/state";
-	import { EditorView, keymap } from "@codemirror/view";
+	import {
+		drawSelection,
+		EditorView,
+		highlightActiveLine,
+		highlightActiveLineGutter,
+		keymap,
+		lineNumbers
+	} from "@codemirror/view";
 	import { defaultKeymap } from "@codemirror/commands";
 	import { todotxtLanguage } from "$lib/lang/todotxtLanguage";
 	import { get } from "svelte/store";
@@ -160,6 +167,12 @@
 			]),
 			todotxtLanguage,
 			mainViewBaseTheme,
+			// Chrome (task desktop-ui-revamp): https://codemirror.net/docs/ref/#view.lineNumbers,
+			// #view.highlightActiveLine, #view.drawSelection (draws the caret the theme styles).
+			lineNumbers(),
+			highlightActiveLine(),
+			highlightActiveLineGutter(),
+			drawSelection(),
 			idTagsHidden, // always hidden — §3.1
 			longLineHint, // root todo 9
 			lineDecoCompartment.of(lineDecorations(path, filesByPath)),
