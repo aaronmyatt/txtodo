@@ -209,12 +209,15 @@ fn inverse_remove_tag(before: &DocState, task: TaskId, key: &str) -> Option<OpKi
 
 /// Inverse ops for the newest `steps` ops of `path`, newest first, each computed against the
 /// state just before its op. Ops without an inverse are skipped; a completion's inverse is
-/// several ops (`inverse_completion`), so the result can be longer than `steps`.
+/// several ops (`inverse_completion`), so the result can be longer than `steps`. A move's or a
+/// re-insert's `after` anchor is checked against `live`, the document the inverses will apply to
+/// (`live_anchor`).
 pub fn undo_ops(
     store: &Store,
     path: &FilePath,
     steps: u16,
     mode: IdentityMode,
+    live: &DocState,
 ) -> Result<Vec<OpKind>, ActorError> {
     let steps = usize::from(steps.max(1));
     let newest = store.newest(path, steps)?;
@@ -224,10 +227,56 @@ pub fn undo_ops(
         if let Some(reopen) = inverse_completion(&before, stored) {
             out.extend(reopen);
         } else if let Some(inv) = inverse(&before, stored) {
-            out.push(inv);
+            out.push(reanchor(inv, &before, live));
         }
     }
     Ok(out)
+}
+
+/// `inv` with its `after` anchor moved onto a line `live` knows (`live_anchor`); other ops as is.
+fn reanchor(inv: OpKind, before: &DocState, live: &DocState) -> OpKind {
+    match inv {
+        OpKind::Move {
+            task,
+            after,
+            to_file,
+        } => OpKind::Move {
+            task,
+            after: live_anchor(before, after, live),
+            to_file,
+        },
+        OpKind::Insert { task, after, line } => OpKind::Insert {
+            task,
+            after: live_anchor(before, after, live),
+            line,
+        },
+        other => other,
+    }
+}
+
+/// The anchor an inverse can actually use. History names the line that was above, by the id it
+/// had then; the live document may not know that id any more (the line is gone, or a sync left
+/// the same line under another id), and placing after an unknown task fails the whole undo with
+/// "no task X in this document" (2026-10-10). So: that id if `live` has it; else the live task
+/// with the same line text; else the same for the next line up in `before`; else the top.
+fn live_anchor(before: &DocState, after: Option<TaskId>, live: &DocState) -> Option<TaskId> {
+    let mut candidate = after;
+    while let Some(id) = candidate {
+        if live.has_placement(id) {
+            return Some(id);
+        }
+        let raw = before.line_of(id).and_then(|l| l.raw().map(str::to_owned));
+        if let Some(raw) = raw {
+            let same = live
+                .task_lines()
+                .find(|(_, l)| l.raw() == Some(raw.as_str()));
+            if let Some((live_id, _)) = same {
+                return Some(live_id);
+            }
+        }
+        candidate = before.task_before(before.index_of(id)?);
+    }
+    None
 }
 
 /// Undoing a completion is a reopen. A do sends `Completed` alone and its `(X)` moves into

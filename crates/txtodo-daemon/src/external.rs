@@ -300,7 +300,13 @@ impl FileActor {
     ) -> Result<Applied, ActorError> {
         let kinds = {
             let store = self.lock_store();
-            crate::history::undo_ops(&store, &self.cfg.path, steps, self.cfg.identity_mode)?
+            crate::history::undo_ops(
+                &store,
+                &self.cfg.path,
+                steps,
+                self.cfg.identity_mode,
+                &self.state,
+            )?
         };
         let ops = self.stamp(kinds, &principal)?;
         let mut next = self.state.clone();

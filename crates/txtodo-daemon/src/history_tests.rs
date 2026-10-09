@@ -115,7 +115,8 @@ fn replay_and_checkout_render_intermediate_states() {
 #[test]
 fn inverses_restore_the_previous_state_and_undo_ops_are_newest_first() {
     let (_dir, store) = seeded();
-    let inverses = undo_ops(&store, &path(), 2, IdentityMode::Tagged).unwrap();
+    let live = replay(&store, &path(), None, IdentityMode::Tagged).unwrap();
+    let inverses = undo_ops(&store, &path(), 2, IdentityMode::Tagged, &live).unwrap();
     assert_eq!(inverses.len(), 2);
     assert!(
         matches!(&inverses[0], OpKind::EditText { .. }),
@@ -206,11 +207,75 @@ fn undoing_a_completion_restores_the_priority_prefix() {
         format!("x call mum @phone id:{A} pri:A\n"),
         "the do moved the priority into pri:"
     );
-    for inv in &undo_ops(&store, &path(), 1, IdentityMode::Tagged).unwrap() {
+    let live = state.clone();
+    for inv in &undo_ops(&store, &path(), 1, IdentityMode::Tagged, &live).unwrap() {
         state.apply_kind(inv).unwrap();
     }
     assert_eq!(
         String::from_utf8(state.to_bytes()).unwrap(),
         format!("(A) call mum @phone id:{A}\n")
+    );
+}
+
+/// Undoing a move puts the line back after the line that was above it. When the live document no
+/// longer knows that line by the id history has (gone, or the same line known under another id
+/// after a sync), the undo anchors on the nearest earlier line the live document does know,
+/// matching by text first, rather than failing with "no task X in this document" (2026-10-10).
+#[test]
+fn undoing_a_move_anchors_on_a_line_the_live_document_knows() {
+    const C: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAC";
+    const B2: &str = "01ARZ3NDEKTSV4RRFFQ69G5FB2";
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
+    let insert = |n, wall, task: &str, after: Option<&str>, line: &str| {
+        op(
+            n,
+            wall,
+            OpKind::Insert {
+                task: id(task),
+                after: after.map(id),
+                line: line.to_owned(),
+            },
+        )
+    };
+    store
+        .append(&[
+            insert(1, 1000, A, None, "alpha"),
+            insert(2, 2000, B, Some(A), "bravo"),
+            insert(3, 3000, C, Some(B), "charlie"),
+            op(
+                4,
+                4000,
+                OpKind::Move {
+                    task: id(C),
+                    after: None,
+                    to_file: path(),
+                },
+            ),
+        ])
+        .unwrap();
+    // The live document: C on top, and "bravo" known under another id (B2), not B.
+    let text = "charlie\nalpha\nbravo\n";
+    let file = txtodo_core::parse_file(text.as_bytes());
+    let live = crate::state::DocState::from_file(
+        path(),
+        &file,
+        &[Some(id(C)), Some(id(A)), Some(id(B2))],
+        IdentityMode::Sidecar,
+    )
+    .unwrap();
+
+    let inverses = undo_ops(&store, &path(), 1, IdentityMode::Sidecar, &live).unwrap();
+    assert!(
+        matches!(&inverses[..], [OpKind::Move { after: Some(a), .. }] if *a == id(B2)),
+        "back after bravo by its live id: {inverses:?}"
+    );
+    let mut state = live.clone();
+    for inv in &inverses {
+        state.apply_kind(inv).unwrap();
+    }
+    assert_eq!(
+        String::from_utf8(state.to_bytes()).unwrap(),
+        "alpha\nbravo\ncharlie\n"
     );
 }
