@@ -146,8 +146,10 @@ async fn timed(label: &str, socket: &Path, paths: Vec<String>, adds: usize) -> R
     run
 }
 
-/// `agent{tag} task{i}` → `Some(i)`; anything else → `None`.
+/// `YYYY-MM-DD agent{tag} task{i}` → `Some(i)`; anything else → `None`. The daemon dates a
+/// client's new line on the way in (ADR 0011), so every add lands with today's date first.
 fn task_index(line: &str, tag: usize) -> Option<usize> {
+    let (_date, line) = line.split_once(' ')?;
     let rest = line.strip_prefix(&format!("agent{tag} task"))?;
     rest.split(' ').next()?.parse().ok()
 }

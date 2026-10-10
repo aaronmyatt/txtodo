@@ -112,7 +112,12 @@ fn tail(lines: &[String]) -> usize {
 fn model(seed: &[String], op: Op) -> Lines {
     let mut lines = seed.to_vec();
     match op {
-        Op::Add => lines.insert(tail(&lines), "z".into()),
+        // The daemon dates a client's new line on the way in (ADR 0011, core's stamp_created);
+        // the CLI's replay is unaffected because `txtodo add` sends the line already dated.
+        Op::Add => {
+            let today = txtodo_daemon::local_date::today_local();
+            lines.insert(tail(&lines), format!("{today} z"));
+        }
         Op::Delete {
             line,
             leave_blank: true,
