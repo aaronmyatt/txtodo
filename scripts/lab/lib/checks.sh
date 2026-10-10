@@ -102,12 +102,46 @@ check_duplicates() {
   fi
 }
 
+# Ops a `txtodo --json log` page holds at most (the daemon's HISTORY_MAX_LIMIT).
+LAB_LOG_MAX=1000
+
+# editor_took <device...>: tokens whose line an editor save deleted or rewrote, into
+# state/editor-took. The workload's CLOBBER check races the daemon: a sync write that lands
+# between the editor script's last copy and its mv is overwritten unseen (lan-converge seed
+# 1072683562, 2026-10-10). The op log has no such gap: the reconcile of a disk edit is logged
+# with source "external" on the device that saw it, so a delete or text edit there is the editor
+# taking that line. Listed in editor-took.txt too, so a reconcile that takes too much stays
+# visible in the report.
+# `txtodo log --json` row shape: crates/txtodo-cli/src/commands/history.rs (op_json); the
+# set_field summary is `{field:?} = {value:?}`: crates/txtodo-daemon/src/convert.rs (summary_of).
+# jq `index` on an array: https://jqlang.org/manual/#index-rindex
+editor_took() {
+  local dev ops st="$REPORT_DIR/state"
+  : >"$st/editor-took"
+  for dev in "$@"; do
+    ops=$(tx "$dev" --json log -n "$LAB_LOG_MAX") || continue
+    if [ "$(printf '%s\n' "$ops" | grep -c .)" -ge "$LAB_LOG_MAX" ]; then
+      log "check: $dev has over $LAB_LOG_MAX ops; editor takes older than that are not excused"
+    fi
+    # An insert's summary is its line's first 60 chars, which holds the token.
+    printf '%s\n' "$ops" | jq -rs '
+      (map(select(.source == "external" and (.kind == "edit_text" or
+        (.kind == "set_field" and .summary == "Deleted = Bool(true)")))) | map(.task) | unique) as $took
+      | .[] | select(.kind == "insert" and (.task as $t | $took | index($t))) | .summary' |
+      tokens_in >>"$st/editor-took"
+  done
+  sort -u -o "$st/editor-took" "$st/editor-took"
+  if [ -s "$st/editor-took" ]; then
+    cp "$st/editor-took" "$REPORT_DIR/editor-took.txt"
+  fi
+}
+
 # Every token the workload wrote and nothing later removed must still be on the device.
 check_no_loss() {
   local dev=$1 st="$REPORT_DIR/state" missing
-  touch "$st/added" "$st/touched" "$st/soft"
+  touch "$st/added" "$st/touched" "$st/soft" "$st/editor-took"
   sort -u "$st/added" >"$st/expected.all"
-  sort -u "$st/touched" "$st/soft" >"$st/excused"
+  sort -u "$st/touched" "$st/soft" "$st/editor-took" >"$st/excused"
   comm -23 "$st/expected.all" "$st/excused" >"$st/expected"
   dx "$dev" sh -c "cd $WS && find . -path ./.txtodo -prune -o -type f -print | xargs -r cat" |
     tokens_in | sort -u >"$st/present-$dev"
@@ -158,6 +192,7 @@ final_checks() {
   local dev
   expect_converged final "${CONVERGE_TIMEOUT:-180}" "$@"
   collect_all "$@"
+  editor_took "$@"
   for dev in "$@"; do
     check_duplicates "$dev"
     check_no_loss "$dev"
