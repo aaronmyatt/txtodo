@@ -57,3 +57,17 @@ test("the mark is a live meter of the root list's done over total", async ({
   await page.keyboard.press("Enter");
   await expect(mark).toHaveText(`0 of ${before + 1} done`);
 });
+
+// prompt.focus: n, with nothing holding the keyboard, gives the bar the keyboard; the n is not typed.
+test("n focuses the prompt bar", async ({ page }) => {
+  await expect(page.locator(".buffer .cm-content")).toContainText("call mum");
+  await page.keyboard.press("n");
+  const field = page.getByRole("textbox", { name: "Add a task" });
+  await expect(field).toBeFocused();
+  // The saved line starts "pay rent", not "npay rent": the n was not typed into the bar.
+  await page.keyboard.type("pay rent");
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => readFileSync(join(daemon.dir, "todo.txt"), "utf8"))
+    .toMatch(/^\d{4}-\d{2}-\d{2} pay rent/);
+});

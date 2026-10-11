@@ -32,6 +32,12 @@
 	let { windowed = false, resolvePath, onAdded, onEscape }: Props = $props();
 
 	let editor: LineEditor | undefined = $state();
+
+	/** Gives the bar the keyboard: the `n` key (specs/client-parity.toml prompt.focus), resolved by
+	 * AppShell. Svelte 5 component exports: https://svelte.dev/docs/svelte/bind#bind:this */
+	export function focus() {
+		editor?.focus();
+	}
 	let focused = $state(false);
 	let error = $state("");
 	let adding = $state(false);

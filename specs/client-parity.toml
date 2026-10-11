@@ -684,11 +684,11 @@ deviation = ""
 [[action]]
 id = "prompt.focus"
 title = "Quick Add in the prompt bar"
-keys = ["Mod-Shift-Space"]
+keys = ["n", "Mod-Shift-Space"]
 scope = "global"
-desktop = { status = "differs", surface = "prompt bar (the global hotkey while the app is in front)", keys = ["Super-Shift-Space"] }
-tui = { status = "differs", surface = "prompt bar", keys = ["Ctrl-Space", "Ctrl-Shift-Space"] }
-deviation = "Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart. The desktop's hotkey is Super-Shift-Space (Cmd on a Mac, the Windows key elsewhere): the same key as Quick Add, which opens the bar when the app is in front."
+desktop = { status = "differs", surface = "prompt bar (the global hotkey while the app is in front)", keys = ["n", "Super-Shift-Space"] }
+tui = { status = "differs", surface = "prompt bar", keys = ["n", "Ctrl-Space", "Ctrl-Shift-Space"] }
+deviation = "Both bind n, the one-key way in (2026-10-11). Terminals cannot see Cmd, and most send nothing for Ctrl-Shift-Space unless the kitty keyboard protocol is on: the TUI binds Ctrl-Space, and Ctrl-Shift-Space where it can tell them apart. The desktop's hotkey is Super-Shift-Space (Cmd on a Mac, the Windows key elsewhere): the same key as Quick Add, which opens the bar when the app is in front."
 
 [[action]]
 id = "prompt.submit"

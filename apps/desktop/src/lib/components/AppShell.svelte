@@ -37,6 +37,7 @@
 	// Help. Never while the reader is typing in a field, an editor or a dialog.
 	// Ref: https://svelte.dev/docs/kit/$app-navigation#goto
 	let searchEl: HTMLInputElement | undefined = $state();
+	let promptBar: PromptBar | undefined = $state();
 	const chords = new Chords();
 	const ROUTES: Record<string, string> = {
 		"nav.tasks": "/",
@@ -102,6 +103,7 @@
 		else if (hit.id === "nav.workspace_menu") requestWorkspaceMenu();
 		else if (isListCommand(hit.id)) runListCommand(hit.id);
 		else if (hit.id === "search.focus") searchEl?.focus();
+		else if (hit.id === "prompt.focus") promptBar?.focus();
 		else if (ROUTES[hit.id]) void goto(ROUTES[hit.id]);
 	}
 </script>
@@ -156,7 +158,7 @@
 	</div>
 
 	<Toasts />
-	<PromptBar />
+	<PromptBar bind:this={promptBar} />
 
 	<!-- The status footer: the main buffer's save state and caret, sync, and the keys for this view. -->
 	<footer class="status-bar">

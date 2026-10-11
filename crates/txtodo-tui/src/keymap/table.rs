@@ -162,7 +162,7 @@ commands! {
     /// Show or hide the parent line field by field.
     DetailBreakdown = "detail.breakdown", ["v"], Detail;
     /// Give the prompt bar the keyboard.
-    PromptFocus = "prompt.focus", ["Ctrl-Space", "Ctrl-Shift-Space"], Global;
+    PromptFocus = "prompt.focus", ["n", "Ctrl-Space", "Ctrl-Shift-Space"], Global;
     /// Add the prompt bar's line to this workspace.
     PromptSubmit = "prompt.submit", ["Enter"], Prompt;
     /// Leave the prompt bar.
