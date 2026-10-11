@@ -77,3 +77,12 @@ Two paired devices on one LAN sync over LAN, not the relay.
   dial skips X while Y is live, and warns once with
   `relay_only_dial_answered_by_another_device` naming both. If the restarts go on after the other
   Mac runs this build and that warning never shows, the cause is something else.
+
+## Checked 2026-10-11 (agent, asked to decide @human lines), this Mac only
+- This Mac (higher id) is the one that saw the restarts as `lan_relay_session_superseded_by_lan`.
+  Its log (`~/.local/share/txtodo/logs/txtodod.log.*`, daemon v0.0.21): 7, 6, 7, 22 and 5 of them
+  on 10-07 … 10-11, hours apart (10-10: 00:09, 00:57, 03:05, 03:13, …), never one every 15 s.
+  That is the network coming and going, not the relay-only dial looping.
+- Not read: the other Mac's log, where `relay_only_dial_answered_by_another_device` would show.
+- Decision: close the line on this evidence. If the 15 s rhythm comes back, reopen with the other
+  Mac's log; the warn line above names both ids.
