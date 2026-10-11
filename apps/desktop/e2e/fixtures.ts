@@ -87,7 +87,10 @@ export type FixtureName =
 	// client must read the layout instead of assuming `todo.txt` (task layout-client-gaps).
 	| "custom-root"
 	// One done line and one open line, for the done styling guard (editing-contract.spec.ts).
-	| "done";
+	| "done"
+	// Two lines in the root list and two in its first line's sub-list, so list-parity.spec.ts runs
+	// one set of list checks against each (task desktop-list-parity).
+	| "parity";
 
 function seed(dir: string, fixture: FixtureName): void {
 	switch (fixture) {
@@ -96,6 +99,12 @@ function seed(dir: string, fixture: FixtureName): void {
 			return;
 		case "popover":
 			writeFileSync(join(dir, "todo.txt"), "(A) call mum id:01ARZ3NDEKTSV4RRFFQ69G5FAV\n");
+			return;
+		case "parity":
+			writeFileSync(join(dir, "todo.txt"), "plan the roadmap ref:q4-roadmap id:01ARZ3NDEKTSV4RRFFQ69G5FA4\ncall mum\n");
+			mkdirSync(join(dir, "tasks", "q4-roadmap"), { recursive: true });
+			writeFileSync(join(dir, "tasks", "q4-roadmap", "todo.txt"), "draft the outline\nbook the venue\n");
+			writeFileSync(join(dir, "tasks", "q4-roadmap", "notes.md"), "Q4 goals.\n");
 			return;
 		case "nested": {
 			writeFileSync(

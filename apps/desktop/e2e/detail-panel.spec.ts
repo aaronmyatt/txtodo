@@ -53,13 +53,3 @@ test("list keys act on an open detail's sub-list, then on the root again", async
 	await page.keyboard.press("x");
 	await expect.poll(() => read("todo.txt")).toMatch(/^x \d{4}-\d{2}-\d{2} .*plan the roadmap/);
 });
-
-// tasks/desktop-list-parity: the header search marks hits in an open detail's sub-list too.
-test("the header search marks hits in the sub-list", async ({ page }) => {
-	const panel = page.getByRole("region", { name: "Task detail" });
-	await page.locator(".buffer .cm-content").getByText("plan the roadmap").dblclick();
-	await expect(panel).toContainText("draft the outline");
-	await page.getByRole("textbox", { name: "Search" }).fill("outline");
-	await expect(panel.locator(".cm-hit")).toHaveText("outline");
-	await expect(page.locator(".buffer .cm-line.cm-dim")).toContainText("plan the roadmap");
-});

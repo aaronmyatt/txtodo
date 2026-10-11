@@ -60,3 +60,6 @@ listener (last focused/clicked FileView wins, root by default) instead of broadc
   in the sub-list".
 - Left root-only on purpose, per the audit: footer status, quick-add dirty guard, fill layout.
 - Still open: the add input, waiting on the human's call (line 2).
+- e2e/list-parity.spec.ts (fixture `parity`) runs j/k, J + u, x + toast Undo, d d and search once
+  on the root list and once on a detail's sub-list. A new list behaviour gets its check there.
+  The sub-list search check moved there from detail-panel.spec.ts.
