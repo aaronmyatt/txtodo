@@ -28,6 +28,7 @@ mod logo;
 #[cfg(test)]
 mod plan_audit;
 mod plan_check;
+mod register_guard;
 mod store;
 
 use clap::Parser;
@@ -109,6 +110,8 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => {
+            // Before any request names this folder: a read-only command never registers it.
+            register_guard::check(&mut daemon, &ctx.paths.dir, &cli.command)?;
             // `workspace …` is about the registry, not a document: asking the layout here would
             // make the daemon open and register the resolved `--dir`/cwd as a side effect
             // (`workspace list` from any folder registered it; `accept --dir x` tried to

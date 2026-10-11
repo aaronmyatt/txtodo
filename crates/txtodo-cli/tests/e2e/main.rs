@@ -16,6 +16,7 @@ mod daemon_autostart;
 mod daemon_mode;
 mod layout;
 mod nested_ref_sync;
+mod no_implicit_register;
 mod pairing;
 mod sub_scope;
 mod workspace;

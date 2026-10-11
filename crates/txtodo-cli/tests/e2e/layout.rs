@@ -54,6 +54,17 @@ impl Drop for GlobalDaemon {
 
 /// Runs `txtodo` against `daemon`'s socket, from `dir` — which must have no `.txtodo/txtodod.sock`
 /// of its own, so `client::select` has nothing to fall back to except the global daemon.
+/// Registers `dir`: a read never registers a folder (task cli-no-implicit-register).
+fn register(daemon: &GlobalDaemon, dir: &Path) {
+    let root = dir.display().to_string();
+    let out = txtodo(daemon, dir, &["workspace", "add", &root]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
     assert!(
         !dir.join(".txtodo").join("txtodod.sock").exists(),
@@ -89,6 +100,7 @@ fn open_and_sub_resolve_an_existing_ref_dir_in_tasks() {
     let ws = workspace("(A) plan the launch ref:plan\n");
     std::fs::create_dir_all(ws.path().join("tasks/plan")).unwrap();
     std::fs::write(ws.path().join("tasks/plan/todo.txt"), "draft the outline\n").unwrap();
+    register(&daemon, ws.path());
 
     let open = txtodo(&daemon, ws.path(), &["open", "1"]);
     assert!(
@@ -337,6 +349,7 @@ fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
         "plan the launch id:01ARZ3NDEKTSV4RRFFQ69G5FAV\n",
     )
     .unwrap();
+    register(&daemon, ws.path());
     let run = |args: &[&str]| {
         let out = txtodo(&daemon, ws.path(), args);
         assert!(
