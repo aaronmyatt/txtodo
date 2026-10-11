@@ -217,6 +217,9 @@ impl Daemon {
         let req = pb::WatchRequest {
             paths,
             workspace: self.selector.clone(),
+            // A toast in a terminal nobody may be looking at is no reason to hold the daemon's OS
+            // notice (ADR 0041).
+            shows_notices: false,
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
