@@ -6,10 +6,10 @@
 
 mod commit;
 mod devices;
-mod flags;
 mod heads;
 mod identity;
 mod identity_store;
+mod mirror;
 mod no_secrets_sentinel;
 mod op_source;
 mod oplog;

@@ -8,12 +8,12 @@ mod commit;
 mod devices;
 mod devices_relay;
 mod error;
-mod flags;
 mod heads;
 mod identity;
 mod identity_store;
 mod identity_store_own;
 mod identity_store_touch;
+mod mirror;
 mod ops;
 mod projections;
 mod registry;
@@ -22,10 +22,10 @@ mod tokens;
 pub use commit::{CommitExtras, prev_hash_key};
 pub use devices::{DEVICE_STATIC_KEY_BYTES, DeviceRow, MAX_DEVICES_PER_READ, NewDevice};
 pub use error::StoreError;
-pub use flags::{MAX_MIRROR_BYTES, MAX_OPEN_FLAGS_PER_READ, ReviewRow};
 pub use heads::MAX_DEVICES_PER_HEADS;
 pub use identity::{FingerprintRow, MAX_FINGERPRINTS_PER_READ};
 pub use identity_store::IdentityStore;
+pub use mirror::MAX_MIRROR_BYTES;
 pub use ops::{
     MAX_APPEND_BATCH, MAX_OP_IDS_PER_FILE, MAX_OPS_PER_READ, MAX_SOURCE_BYTES, Seq, SeqRange,
     Stored, cap_source, kind_tag,

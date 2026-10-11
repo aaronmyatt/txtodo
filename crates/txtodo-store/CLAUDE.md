@@ -24,10 +24,10 @@ that entry below.
   a column since ADR 0039 (migration 0009, unique per device): an op of ours takes the next number
   at insert, a peer's op the number its sync batch gave (`commit_change_numbered`); the head is the
   highest. Rows from before 0009 were numbered by their HLC rank then.
-- Review flags (M4): `raise_flag(&ReviewRow)`, `open_flags(file)` (≤ `MAX_OPEN_FLAGS_PER_READ`,
-  oldest first), `clear_flag(file, task, at_ms)` (idempotent upsert). Mirror: `put_mirror(file,
-  snapshot, seq)` / `get_mirror(file)` — the Loro snapshot as of a log position; notes.md only since ADR 0038
-  (a todo.txt commit lands none; old todo.txt rows stay, ignored).
+- Mirror (`mirror.rs`): `put_mirror(file, snapshot, seq)` / `get_mirror(file)` — the Loro snapshot
+  as of a log position; notes.md only since ADR 0038 (a todo.txt commit lands none; old todo.txt
+  rows stay, ignored). The review flags API (`raise_flag`, `open_flags`, `clear_flag`,
+  `CommitExtras::clear`) went with conflict review A; the `review_flags` table stays, ignored.
 - Projections: `put_projection(&Projection)` / `get_projection(file)`; `MAX_PROJECTION_BYTES`.
 - Snapshots: `put_snapshot(file, &Snapshot { seq, state })` / `latest_snapshot(file)`.
 - Meta: `meta_set(key, bytes)` / `meta_get(key)` — device id, later encrypted keys.
