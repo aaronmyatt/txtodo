@@ -169,7 +169,7 @@ pub(crate) enum Command {
         #[arg(long)]
         file: Option<String>,
     },
-    /// Open needs_review flags and resolve them (daemon mode): `list` (default) or `resolve`.
+    /// Duplicate lines (daemon mode): `list` (default), `delete <line>` or `keep-newest`.
     Conflicts {
         #[command(subcommand)]
         action: Option<crate::commands::conflicts::Action>,
