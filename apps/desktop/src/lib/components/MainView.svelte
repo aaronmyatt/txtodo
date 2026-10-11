@@ -155,7 +155,7 @@
 				{/if}
 			</div>
 			<div class="buffer">
-				<FileView path={ROOT_PATH} depth={0} fill reportStatus listCommands onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
+				<FileView path={ROOT_PATH} depth={0} fill reportStatus onDirtyChange={handleDirtyChange} onDetailRequest={openDetail} />
 			</div>
 			{#if detail.length > 0}
 				<!-- The detail as a bottom panel (decision 2, 2026-09-27): the buffer above stays. -->

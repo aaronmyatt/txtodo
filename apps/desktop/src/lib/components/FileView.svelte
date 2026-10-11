@@ -14,7 +14,7 @@
 	import { dragLines, startLineDrag } from "$lib/todotxt/dragLines";
 	import { newestChange, popChange, popIfNewest } from "$lib/stores/changes";
 	import { showToast } from "$lib/stores/toast";
-	import { onListCommand } from "$lib/listCommands";
+	import { listBuffer } from "$lib/listCommands";
 	import { docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
 	import { applyChipCore } from "$lib/wasmCore";
 	import { localToday } from "./editPopoverLogic";
@@ -84,8 +84,6 @@
 		/** This is the main buffer: report its save state and caret to the status footer
 		 * (`$lib/stores/editorStatus`). Only MainView's root view sets it. */
 		reportStatus?: boolean;
-		/** List mode's commands act on this buffer (`$lib/listCommands.ts`): MainView's root view. */
-		listCommands?: boolean;
 	}
 
 	let {
@@ -94,8 +92,7 @@
 		fill = false,
 		onDirtyChange,
 		onDetailRequest,
-		reportStatus = false,
-		listCommands = false
+		reportStatus = false
 	}: Props = $props();
 
 	let savedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -112,6 +109,10 @@
 	}
 
 	let containerEl: HTMLDivElement | undefined = $state();
+	let rootEl: HTMLDivElement | undefined = $state();
+	// Whether list mode's keys act on this list (`$lib/listCommands.ts`); only that list shows its
+	// current line, so with a detail open the eye can tell which one the keys move.
+	let activeList = $state(false);
 	let view: EditorView | undefined;
 	let filesByPath = $state<Map<string, FileInfo>>(new Map());
 	let loadError = $state("");
@@ -556,12 +557,19 @@
 	onMount(() => {
 		// One command at a time: a key pressed while the last one is still landing waits for it,
 		// so it acts on the list as it now is (a fast `J` then `x` used to hit the old line).
+		// Every list takes list mode's keys while it is the active one (`$lib/listCommands.ts`): from
+		// its mount (a sub-list mounts as its detail opens), and again on a click or focus inside it.
 		let listQueue = Promise.resolve();
-		const offList = listCommands
-			? onListCommand((id) => {
-					listQueue = listQueue.then(() => runListCommand(id)).catch(() => {});
-				})
-			: undefined;
+		const list = listBuffer(
+			(id) => {
+				listQueue = listQueue.then(() => runListCommand(id)).catch(() => {});
+			},
+			(active) => (activeList = active)
+		);
+		// Capture phase, so the editor's own handlers cannot stop it first.
+		// Ref: https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener#capture
+		rootEl?.addEventListener("pointerdown", list.activate, true);
+		rootEl?.addEventListener("focusin", list.activate, true);
 		view = new EditorView({ state: EditorState.create({ doc: "", extensions: initialExtensions() }), parent: containerEl });
 		lastStep = get(searchStep).n;
 		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed.
@@ -586,7 +594,7 @@
 
 		return () => {
 			cancelled = true;
-			offList?.();
+			list.release();
 		};
 	});
 
@@ -693,7 +701,7 @@
 	});
 </script>
 
-<div class="file-view" class:fill style={`--depth: ${depth};`} data-line-count={docLineCount}>
+<div class="file-view" class:fill class:active-list={activeList} bind:this={rootEl} style={`--depth: ${depth};`} data-line-count={docLineCount}>
 	{#if loadError}
 		<p class="error" role="alert">{loadError}</p>
 	{/if}
@@ -774,6 +782,12 @@
 		border-radius: 0;
 		max-height: none;
 		height: 100%;
+	}
+
+	/* Only the list that has list mode's keys marks its current line. */
+	.file-view:not(.active-list) .editor-shell :global(.cm-activeLine),
+	.file-view:not(.active-list) .editor-shell :global(.cm-activeLineGutter) {
+		background: transparent;
 	}
 
 	.file-view.fill .editor-shell :global(.cm-editor) {

@@ -1,4 +1,4 @@
-2026-10-10 Desktop: root list and sub-lists behave the same +m11 @desktop ref:desktop-list-parity
+2026-10-10 Desktop: root list and sub-lists behave the same +m11 @desktop ref:desktop-list-parity @doing by:claude
 2026-10-11 Improve the TUI logo and introduce an ascii logo to the txtodo CLI --help ref:improve-the-tui-and-introduce-an-ascii-l
 2026-10-11 introduce debounced notifications so that each client on each device will notify the user when (sub)tasks are edited/deleted/completed +m11 ref:change-notifications
 2026-10-11 add shortcut convenience to focus the new task input
