@@ -35,7 +35,11 @@ pub fn install_of(exe: &Path, macos: bool) -> Install {
     if text.contains("/Cellar/") || text.contains("/linuxbrew/") {
         return Install::Brew;
     }
-    if text.contains("/.cargo/bin/") {
+    // `just install`'s folder, or a binary still in a checkout's cargo `target/`.
+    if text.contains("/.cargo/bin/")
+        || text.contains("/target/debug/")
+        || text.contains("/target/release/")
+    {
         return Install::Source;
     }
     match (macos, exe.parent()) {
@@ -96,23 +100,42 @@ fn latest_tag() -> Result<String, CliError> {
         .ok_or_else(|| CliError::Message(format!("no release tag in GitHub's answer: {url}")))
 }
 
-/// `txtodo upgrade [--check]`.
-pub fn run(check: bool) -> Result<(), CliError> {
+/// `txtodo upgrade [--check] [--json]`. With `--json`, `--check` prints one object for the TUI
+/// and desktop to read: `{"current","latest","newer","command"}`.
+pub fn run(check: bool, as_json: bool) -> Result<(), CliError> {
     let tag = latest_tag()?;
-    if !is_newer(&tag, VERSION) {
-        println!("txtodo {VERSION} is the newest release ({tag}).");
-        return Ok(());
-    }
+    let newer = is_newer(&tag, VERSION);
     let exe = std::env::current_exe()
         .and_then(std::fs::canonicalize)
         .map_err(CliError::Io)?;
     let install = install_of(&exe, cfg!(target_os = "macos"));
+    if as_json && check {
+        println!(
+            "{}",
+            check_json(VERSION, &tag, newer, &command_for(&install, &tag))
+        );
+        return Ok(());
+    }
+    if !newer {
+        println!("txtodo {VERSION} is the newest release ({tag}).");
+        return Ok(());
+    }
     println!("txtodo {VERSION} → {tag}");
     println!("  {}", command_for(&install, &tag));
     if check {
         return Ok(());
     }
     upgrade(&install, &tag, &exe)
+}
+
+/// `--check --json`'s one line.
+fn check_json(current: &str, latest: &str, newer: bool, command: &str) -> String {
+    format!(
+        r#"{{"current":{},"latest":{},"newer":{newer},"command":{}}}"#,
+        crate::json::str(current),
+        crate::json::str(latest),
+        crate::json::str(command)
+    )
 }
 
 /// Runs the upgrade for `install`, then restarts the daemon with the new `txtodod`.
@@ -195,6 +218,8 @@ mod tests {
         assert_eq!(install_of(brew, true), Install::Brew);
         let source = Path::new("/Users/me/.cargo/bin/txtodo");
         assert_eq!(install_of(source, true), Install::Source);
+        let checkout = Path::new("/Users/me/txtodo/target/debug/txtodo");
+        assert_eq!(install_of(checkout, true), Install::Source);
         let script = Path::new("/Users/me/.local/bin/txtodo");
         assert_eq!(
             install_of(script, true),
@@ -206,6 +231,14 @@ mod tests {
             install_of(script, false),
             Install::Manual,
             "the script is macOS only"
+        );
+    }
+
+    #[test]
+    fn check_json_is_one_object() {
+        assert_eq!(
+            check_json("0.0.22", "v0.0.23", true, "brew upgrade x"),
+            r#"{"current":"0.0.22","latest":"v0.0.23","newer":true,"command":"brew upgrade x"}"#
         );
     }
 

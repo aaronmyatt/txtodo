@@ -66,7 +66,7 @@ fn main() -> ExitCode {
 fn run(cli: &Cli) -> Result<(), CliError> {
     // About this binary, not a workspace: before any path or config is resolved.
     if let Command::Upgrade { check } = &cli.command {
-        return commands::upgrade::run(*check);
+        return commands::upgrade::run(*check, cli.json);
     }
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
