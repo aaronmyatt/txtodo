@@ -1,0 +1,4 @@
+2026-10-11 Pure debounce + filter: ops from Watch in, one notice out (own device+source dropped, 3 s window, kind → verb); unit tests +m11 @desktop
+2026-10-11 desktop: OS notification from the notice while the window is unfocused; Settings toggle, default on +m11 @desktop
+2026-10-11 TUI: the same notice as a toast +m11 @tui
+2026-10-11 Complete the parent line in ./todo.txt +m11
