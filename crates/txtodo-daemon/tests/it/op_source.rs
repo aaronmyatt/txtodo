@@ -154,3 +154,36 @@ async fn history_carries_the_source_too() {
     assert_eq!(ops[0].source, "", "no source named, none invented");
     assert_eq!(ops[1].source, "cli");
 }
+
+/// Task change-notifications: a Watch subscriber sees which client made each change, so a client
+/// can stay quiet about its own edits and tell the human about everyone else's.
+#[tokio::test]
+async fn watch_carries_the_source_too() {
+    use tokio_stream::StreamExt;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "seed\n").unwrap();
+    let (mut client, _stop) = serve_in(dir.path(), IdentityMode::Sidecar).await;
+    let mut watch = client
+        .watch(pb::WatchRequest {
+            paths: vec!["todo.txt".into()],
+            workspace: None,
+        })
+        .await
+        .unwrap()
+        .into_inner();
+
+    client
+        .apply(req(vec![add("from an agent")], "mcp", false))
+        .await
+        .unwrap();
+    client
+        .apply(req(vec![add("from nobody")], "", false))
+        .await
+        .unwrap();
+
+    let agent = watch.next().await.unwrap().unwrap();
+    assert_eq!(agent.ops.len(), 1);
+    assert_eq!(agent.ops[0].source, "mcp");
+    let nobody = watch.next().await.unwrap().unwrap();
+    assert_eq!(nobody.ops[0].source, "", "no source named, none invented");
+}

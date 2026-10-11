@@ -52,7 +52,14 @@ pub(crate) async fn forward_changes(
             Ok(c) => pb::Change {
                 path: c.path.to_string(),
                 hash: c.hash.to_vec(),
-                ops: c.ops.iter().map(to_summary).collect(),
+                ops: c
+                    .ops
+                    .iter()
+                    .map(|s| pb::OpSummary {
+                        source: c.source.clone().unwrap_or_default(),
+                        ..to_summary(s)
+                    })
+                    .collect(),
                 // Line numbers are not known on the broadcast path; ListConflicts has them.
                 review: c
                     .review

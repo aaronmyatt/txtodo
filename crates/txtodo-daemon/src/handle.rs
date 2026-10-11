@@ -46,6 +46,9 @@ pub struct Change {
     pub review: Vec<ReviewRow>,
     /// The file's duplicate groups afterwards (ADR 0032).
     pub duplicate_groups: u32,
+    /// Which client made every op of this change (`CommitTail::source`, task op-source), so a
+    /// Watch subscriber can tell its own edits from another client's (task change-notifications).
+    pub source: Option<String>,
 }
 
 pub use crate::conflict_row::{ConflictRow, FileConflicts, Resolution};

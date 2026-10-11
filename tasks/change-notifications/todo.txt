@@ -2,3 +2,4 @@
 2026-10-11 desktop: OS notification from the notice while the window is unfocused; Settings toggle, default on +m11 @desktop
 2026-10-11 TUI: the same notice as a toast +m11 @tui
 2026-10-11 Complete the parent line in ./todo.txt +m11
+x 2026-10-11 2026-10-11 daemon: Watch ops carry their source (the client that made them), as History's do; today it is empty +m11 @daemon — handle::Change carries the commit's source; op_source.rs pins it

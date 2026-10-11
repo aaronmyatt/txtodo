@@ -1,5 +1,5 @@
 2026-10-10 Desktop: root list and sub-lists behave the same +m11 @desktop ref:desktop-list-parity — 2026-10-11: list keys, undo and search work on sub-lists; left: the add-input call (@human sub-line)
-2026-10-11 introduce debounced notifications so that each client on each device will notify the user when (sub)tasks are edited/deleted/completed +m11 ref:change-notifications
+2026-10-11 introduce debounced notifications so that each client on each device will notify the user when (sub)tasks are edited/deleted/completed +m11 ref:change-notifications @doing by:claude
 2026-10-11 add shortcut convenience to focus the new task input
 2026-10-11 Enable dragging and dropping images to a task note ref:enable-dragging-and-dropping-images-to-a +m11 @desktop
 (B) 2026-09-25 daemon: the LAN dial to a reachable peer fails and the link runs over the relay +m11 @daemon @sync ref:lan-dial-falls-to-relay — code done 2026-09-25 (see tasks/lan-dial-falls-to-relay/notes.md); only the two-Mac check is left — two-Mac check passed 2026-10-02; the 15 s relay restarts are left

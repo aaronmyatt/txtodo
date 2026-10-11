@@ -331,7 +331,7 @@ impl FileActor {
         }
         crate::tree::mark_dirty_for(&self.cfg.tree_dirty, &ops);
         self.raise_flags(&tail.review);
-        let change = self.stored_change(new_hash, range, ops, tail.review);
+        let change = self.stored_change(new_hash, range, ops, tail);
         self.maybe_snapshot(range.map(|r| r.last), snapshot)?;
         self.broadcast(&change);
         debug_assert_eq!(
