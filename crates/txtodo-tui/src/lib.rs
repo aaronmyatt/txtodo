@@ -29,7 +29,6 @@ pub mod theme;
 /// (`s` indicator) and `screen` (the top-level frame composing all of them).
 pub mod ui {
     pub mod banner;
-    pub mod conflict_sheet;
     pub mod conflicts;
     pub mod detail;
     pub mod duplicate_sheet;

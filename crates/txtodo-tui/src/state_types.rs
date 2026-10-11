@@ -59,7 +59,7 @@ impl LineState {
 /// One peer in the sync indicator (`s`), the UI-local mirror of `pb::SyncStatusResponse::Peer`
 /// (`app.rs::to_sync_snapshot` maps one to the other) — kept as its own type rather than using
 /// the generated `pb` one directly so this module and `ui/sync.rs` stay daemon/proto-free and
-/// fixture-testable, the same idiom `ConflictItem` already uses for `pb::ReviewFlag`.
+/// fixture-testable, the same idiom `DuplicateGroup` uses for `pb::DuplicateGroup`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PeerStatus {
     /// Device id (ULID text).
@@ -93,19 +93,6 @@ impl SyncSnapshot {
     }
 }
 
-/// One flagged conflict for the `r` pane, the UI-local mirror of `pb::ReviewFlag`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ConflictItem {
-    /// Task id (ULID text).
-    pub task_id: String,
-    /// 1-based line number the task sits on now; `0` when it is no longer in the file.
-    pub line_number: u32,
-    /// This device's description at flag time.
-    pub mine: String,
-    /// The peer's description at flag time.
-    pub theirs: String,
-}
-
 /// Two or more lines of the open file that read the same (ADR 0032, task sync-drift
 /// duplicate-flags): the UI-local mirror of `pb::DuplicateGroup`. Never makes a line read-only:
 /// editing one copy so they differ is one of the fixes.
@@ -122,17 +109,6 @@ pub struct DuplicateCopy {
     pub task_id: String,
     /// 1-based line number, blank lines counted.
     pub line_number: u32,
-}
-
-/// Which side of a conflict the human picked in the `r` pane.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resolution {
-    /// Keep this device's text.
-    Mine,
-    /// Keep the peer's text.
-    Theirs,
-    /// Keep whatever is in the file now; only clears the flag.
-    Merged,
 }
 
 /// What the single-line editor (`i`/`a`/`A`) is currently composing.

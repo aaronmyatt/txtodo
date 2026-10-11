@@ -101,12 +101,6 @@ commands! {
     ConflictsDown = "conflicts.down", ["j", "Down"], Sheet;
     /// Previous conflict.
     ConflictsUp = "conflicts.up", ["k", "Up"], Sheet;
-    /// Keep mine.
-    ConflictsKeepMine = "conflicts.keep_mine", ["m"], Sheet;
-    /// Keep theirs.
-    ConflictsKeepTheirs = "conflicts.keep_theirs", ["t"], Sheet;
-    /// Keep the merged text.
-    ConflictsKeepMerged = "conflicts.keep_merged", ["M"], Sheet;
     /// Keep the newest copy of a duplicate line, deleting the others.
     ConflictsKeepNewest = "conflicts.keep_newest", ["n"], Sheet;
     /// Keep the oldest copy of a duplicate line, deleting the others.
@@ -221,8 +215,6 @@ commands! {
     AppDismissSkillHint = "app.dismiss_skill_hint", [], Global;
     /// Copy the edit the daemon refused (OSC 52).
     AppCopyRefusedEdit = "app.copy_refused_edit", [], Global;
-    /// Hide the conflict banner until the next flag.
-    ConflictsDismissBanner = "conflicts.dismiss_banner", [], Global;
     /// Undo the change the newest toast reports.
     ToastUndo = "toast.undo", [], Global;
     /// Next workspace in the popup.

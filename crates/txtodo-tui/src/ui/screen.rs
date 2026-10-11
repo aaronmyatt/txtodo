@@ -14,7 +14,7 @@ use crate::hit::{Field, HitMap, Target};
 use crate::state::AppState;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, conflict_sheet, detail, field, footer, header, help, list, offers, prompt_bar,
+    banner, detail, duplicate_sheet, field, footer, header, help, list, offers, prompt_bar,
     row_edit, search_panel, settings, subbar, sync, toast, universal, workspace_menu,
 };
 
@@ -59,7 +59,7 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
         search_panel::draw(frame, screen, header_area.bottom(), state, &mut hits);
     }
     if state.conflicts_open {
-        conflict_sheet::draw(frame, frame.area(), state, &mut hits);
+        duplicate_sheet::draw_selected(frame, frame.area(), state, &mut hits);
     }
     if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
         let screen = frame.area();
@@ -160,12 +160,15 @@ mod tests {
     #[test]
     fn a_frame_maps_rows_to_cells_and_an_overlay_covers_them() {
         let mut state = AppState::fixture();
+        state
+            .duplicates
+            .push(crate::state::DuplicateGroup::default());
         assert_eq!(
             drawn(&state).at(0, 1),
             Some(Target::Inert),
-            "the conflict banner"
+            "the duplicate-lines banner"
         );
-        state.needs_review.clear();
+        state.duplicates.clear();
         let hits = drawn(&state);
         assert_eq!(hits.at(0, 1), None, "the sub-toolbar");
         assert_eq!(
@@ -214,7 +217,6 @@ mod tests {
     #[test]
     fn the_cursor_marks_the_root_line_editor_and_the_command_line_and_nothing_else() {
         let mut state = AppState::fixture();
-        state.needs_review.clear();
         assert_eq!(cursor(&state), None, "list mode: no cursor");
         state.cursor = 3;
         crate::commands::run(&mut state, crate::keymap::Command::ListEditStart);

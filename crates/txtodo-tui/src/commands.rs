@@ -7,21 +7,14 @@ use txtodo_proto::v1 as pb;
 
 use crate::action::Action;
 use crate::keymap::Command;
-use crate::state::{AppState, Resolution};
+use crate::state::AppState;
 use crate::ui::edit::{self, OpenKey};
 use crate::ui::{conflicts, offers};
-
-/// What the status line says when a command would change a line under review.
-pub const READ_ONLY: &str = "that line needs review first: r";
 
 /// Runs one command against `state`: the daemon call it needs, if any.
 pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
     if crate::fields::op_of(command).is_some() || command == Command::EditUndo {
         crate::fields::run(state, command);
-        return None;
-    }
-    if changes_the_line(command) && under_review(state, state.cursor) {
-        state.last_error = Some(READ_ONLY.to_owned());
         return None;
     }
     match command {
@@ -67,41 +60,12 @@ pub fn run(state: &mut AppState, command: Command) -> Option<Action> {
     None
 }
 
-/// Whether `command` edits, moves, completes or deletes the selected line.
-fn changes_the_line(command: Command) -> bool {
-    matches!(
-        command,
-        Command::ListEditStart
-            | Command::ListEditEnd
-            | Command::ListDelete
-            | Command::ListToggleComplete
-            | Command::ListMoveDown
-            | Command::ListMoveUp
-    )
-}
-
-/// Whether the line at `idx` carries a `needs_review` flag: it is read-only until the flag is
-/// resolved, like desktop's buffer (per line here, since the TUI edits line by line).
-pub(crate) fn under_review(state: &AppState, idx: usize) -> bool {
-    let Some(line) = state.lines.get(idx) else {
-        return false;
-    };
-    let id = line.task_ref_id();
-    state
-        .needs_review
-        .iter()
-        .any(|f| (!id.is_empty() && f.task_id == id) || f.line_number == line.line_number)
-}
-
 /// The conflict and offer sheets, the sync pane, the palette and quitting.
 fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
     match command {
         Command::ConflictsOpen | Command::ConflictsClose => state.toggle_conflicts(),
         Command::ConflictsDown => conflicts::move_down(state),
         Command::ConflictsUp => conflicts::move_up(state),
-        Command::ConflictsKeepMine => return resolve(state, Resolution::Mine),
-        Command::ConflictsKeepTheirs => return resolve(state, Resolution::Theirs),
-        Command::ConflictsKeepMerged => return resolve(state, Resolution::Merged),
         Command::ConflictsKeepNewest => return keep_copy(state, conflicts::Keep::Newest),
         Command::ConflictsKeepOldest => return keep_copy(state, conflicts::Keep::Oldest),
         Command::OffersOpen | Command::OffersClose => state.offers.toggle(),
@@ -141,10 +105,6 @@ fn keep_copy(state: &mut AppState, keep: conflicts::Keep) -> Option<Action> {
     let req = conflicts::keep_request(state, keep)?;
     state.shell.pending_toast = Some("Deleted the other copies".to_owned());
     Some(Action::Apply(req))
-}
-
-fn resolve(state: &AppState, pick: Resolution) -> Option<Action> {
-    conflicts::resolve_request(state, pick).map(Action::Resolve)
 }
 
 /// Space / `x`: completes the selected line, or reopens it when it is done. The daemon's
@@ -259,10 +219,6 @@ fn move_selected_up(state: &mut AppState) -> Option<pb::Mutation> {
 pub(crate) fn move_row(state: &mut AppState, from: usize, to: usize) -> Option<Action> {
     // The Add-a-line row is drawn on top: a drop there means the top of the list.
     let to = if to >= state.lines.len() { 0 } else { to };
-    if under_review(state, from) {
-        state.last_error = Some(READ_ONLY.to_owned());
-        return None;
-    }
     let task = Some(task_ref_at(state, from)?);
     let (kind, lands_at) = if to < from {
         let before = next_task_from(state, to).filter(|&b| b != from)?;

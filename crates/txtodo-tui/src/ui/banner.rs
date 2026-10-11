@@ -114,23 +114,9 @@ fn protocol_banner(state: &AppState) -> Option<Banner> {
     Some(b)
 }
 
-/// The flags banner, then the duplicate-lines one (ADR 0032); both open the review sheet.
+/// The duplicate-lines banner (ADR 0032); it opens the review sheet. (The `needs_review` flags
+/// banner went with the Loro mirror, ADR 0038.)
 fn review_banners(state: &AppState, out: &mut Vec<Banner>) {
-    let flagged = state.needs_review.len();
-    if flagged > 0 && !state.shell.conflict_banner_hidden {
-        let lines = if flagged == 1 {
-            "line needs"
-        } else {
-            "lines need"
-        };
-        let mut b = banner(
-            format!("{flagged} {lines} review"),
-            "Two devices edited the same line. It is read-only until you pick.",
-        );
-        b.buttons.push(("Review", Command::ConflictsOpen));
-        b.buttons.push(("\u{d7}", Command::ConflictsDismissBanner));
-        out.push(b);
-    }
     let groups = state.duplicates.len();
     if groups > 0 {
         let label = if groups == 1 {

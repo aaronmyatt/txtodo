@@ -416,33 +416,6 @@ tui = { status = "done", surface = "conflict sheet" }
 deviation = "Desktop lists every conflict at once; there is nothing to move through."
 
 [[action]]
-id = "conflicts.keep_mine"
-title = "Keep mine"
-keys = ["m"]
-scope = "sheet"
-desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "conflict sheet" }
-deviation = "Desktop: a button per conflict, no key."
-
-[[action]]
-id = "conflicts.keep_theirs"
-title = "Keep theirs"
-keys = ["t"]
-scope = "sheet"
-desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "conflict sheet" }
-deviation = "Desktop: a button per conflict, no key."
-
-[[action]]
-id = "conflicts.keep_merged"
-title = "Keep the merged text"
-keys = ["M"]
-scope = "sheet"
-desktop = { status = "differs", surface = "ConflictReviewSheet", keys = [] }
-tui = { status = "done", surface = "conflict sheet" }
-deviation = "Desktop: a button per conflict, no key."
-
-[[action]]
 id = "conflicts.keep_newest"
 title = "Keep the newest copy of a duplicate line"
 keys = ["n"]
@@ -1094,15 +1067,6 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "RejectedEditBanner" }
 tui = { status = "done", surface = "banner (OSC 52)" }
-deviation = ""
-
-[[action]]
-id = "conflicts.dismiss_banner"
-title = "Hide the conflict banner for now"
-keys = []
-scope = "global"
-desktop = { status = "done", surface = "ConflictBanner" }
-tui = { status = "done", surface = "banner" }
 deviation = ""
 
 [[action]]

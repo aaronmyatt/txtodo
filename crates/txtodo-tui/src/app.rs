@@ -201,7 +201,6 @@ fn action_kind(action: &Action) -> &'static str {
     match action {
         Action::Quit => "quit",
         Action::Apply(_) => "apply",
-        Action::Resolve(_) => "resolve",
         Action::AcceptOffer(_) => "accept_offer",
         Action::DeclineOffer(_) => "decline_offer",
         Action::SwitchWorkspace(_) => "switch_workspace",
@@ -234,7 +233,6 @@ async fn perform_inner(
         Action::DeclineOffer(req) => {
             crate::app_offers::perform_decline(daemon, state, req).await?;
         }
-        Action::Resolve(req) => resolve(daemon, state, req).await?,
         other => perform_screens(daemon, state, other).await?,
     }
     Ok(true)
@@ -268,28 +266,6 @@ async fn perform_screens(
     }
 }
 
-/// Resolves one conflict, then re-reads the flags the daemon still holds for the document.
-async fn resolve(
-    daemon: &mut Daemon,
-    state: &mut AppState,
-    req: pb::ResolveRequest,
-) -> Result<(), DaemonError> {
-    daemon.resolve(req).await?;
-    state.needs_review.clear();
-    if let Ok(found) = daemon.list_conflicts(&state.path).await {
-        state.needs_review = found.flags.into_iter().map(to_conflict_item).collect();
-        crate::app_duplicates::set(state, found.duplicates);
-    }
-    // The sheet moves on to the next item, and closes after the last, as desktop's does.
-    state.conflict_cursor = state
-        .conflict_cursor
-        .min(state.review_len().saturating_sub(1));
-    if state.review_len() == 0 {
-        state.conflicts_open = false;
-    }
-    Ok(())
-}
-
 /// Puts `text` on the clipboard through the terminal; a failed write says so.
 fn copy(state: &mut AppState, text: &str) {
     if let Err(e) = crate::clipboard::copy(text) {
@@ -321,11 +297,7 @@ pub async fn follow_change(
     let path = change.path.clone();
     let this_document = crate::app_detail::watched_paths(state).contains(&path);
     let groups = path == state.path && crate::app_duplicates::worth_refresh(state, &change);
-    if !change.review.is_empty() {
-        state.shell.conflict_banner_hidden = false;
-    }
     crate::app_notices::take(state, &change);
-    apply_change(state, change);
     if layout_changed {
         return crate::app_layout::follow_root_list(daemon, state).await;
     }
@@ -336,20 +308,4 @@ pub async fn follow_change(
         crate::app_duplicates::refresh(daemon, state).await;
     }
     Ok(None)
-}
-
-/// One `Watch` change's review flags, appended to the conflict list.
-fn apply_change(state: &mut AppState, change: pb::Change) {
-    for flag in change.review {
-        state.needs_review.push(to_conflict_item(flag));
-    }
-}
-
-fn to_conflict_item(flag: pb::ReviewFlag) -> crate::state::ConflictItem {
-    crate::state::ConflictItem {
-        task_id: flag.task_id,
-        line_number: flag.line_number,
-        mine: flag.mine,
-        theirs: flag.theirs,
-    }
 }

@@ -10,8 +10,6 @@ use txtodo_proto::v1 as pb;
 pub enum Action {
     /// Send `ApplyRequest` and, on success, re-baseline from the reply.
     Apply(pb::ApplyRequest),
-    /// Send `ResolveConflict`.
-    Resolve(pb::ResolveRequest),
     /// `o` pane `a`: accept a peer's offered workspace; the daemon mirrors it into a folder of its
     /// own choosing (task `remote-workspace-mirror`), so nothing is typed.
     AcceptOffer(pb::WorkspaceAcceptOfferRequest),
