@@ -23,7 +23,12 @@ impl DocState {
         // Each pass moves one block for good (its head's parent becomes this placement); bounded
         // by the document length.
         for _ in 0..self.entries.len() {
-            let Some(head) = (0..self.entries.len()).find(|&s| self.follows_older(s, task, placed))
+            // The last such block first: each lands right after the placement, before the ones
+            // moved already, so blocks of one commit keep the order that commit gave them
+            // (tasks/chaos-replay-order cause 2: first-to-last flipped a blank and a line).
+            let Some(head) = (0..self.entries.len())
+                .rev()
+                .find(|&s| self.follows_older(s, task, placed))
             else {
                 return;
             };
