@@ -1,5 +1,5 @@
-2026-10-11 human check: close the desktop, complete a task on the other Mac, see one notice naming that device; open the desktop, repeat, see only the desktop's +m11 @human
-2026-10-11 Complete the parent line in ./todo.txt +m11
+x 2026-10-11 human check: close the desktop, complete a task on the other Mac, see one notice naming that device; open the desktop, repeat, see only the desktop's +m11 @human
+x 2026-10-11 Complete the parent line in ./todo.txt +m11
 x 2026-10-11 2026-10-11 spike: can a launchd txtodod (no app bundle) show a macOS notice via notify-rust? if not, osascript with the text as argv; decides the notifier +m11 @daemon — decided without the spike: osascript/notify-send with argv, see notes.md
 x 2026-10-11 2026-10-11 docs: ADR, the daemon shows OS notices (it was headless); who owns the notice, sync-only scope +m11 @docs — ADR 0041
 x 2026-10-11 2026-10-11 core: notice::Debouncer that keeps only one source (sync), beside new(own); unit tests +m11 @core — Debouncer::only_from
