@@ -80,7 +80,7 @@ pub struct Notice {
 }
 
 /// Folds other clients' ops into one notice per burst.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Debouncer {
     own_source: String,
     first_at: Option<u64>,
