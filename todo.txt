@@ -1,5 +1,4 @@
 2026-10-10 Desktop: root list and sub-lists behave the same +m11 @desktop ref:desktop-list-parity — 2026-10-11: list keys, undo and search work on sub-lists; left: the add-input call (@human sub-line)
-2026-10-11 Improve the TUI logo and introduce an ascii logo to the txtodo CLI --help ref:improve-the-tui-and-introduce-an-ascii-l @doing by:claude
 2026-10-11 introduce debounced notifications so that each client on each device will notify the user when (sub)tasks are edited/deleted/completed +m11 ref:change-notifications
 2026-10-11 add shortcut convenience to focus the new task input
 2026-10-11 Enable dragging and dropping images to a task note ref:enable-dragging-and-dropping-images-to-a +m11 @desktop
@@ -380,3 +379,4 @@ x 2026-10-10 2026-10-10 daemon: Undo of a move fails with "no task X in this doc
 2026-10-11 cli: listall/sub run in an unregistered folder register it, and the daemon then stamps id: into every list there (ADR 0019 says it never should) +m11 @cli @daemon ref:cli-no-implicit-register
 2026-10-11 cli: sub takes a ref slug path (sub crdt-needs-review do 3, nested a/b), not only a root line number that moves +m11 @cli ref:cli-sub-by-slug
 x 2026-10-10 2026-09-19 UI/UX revamp from the c2-prompt mockups: ink/paper theme, header search bar, prompt-bar Quick Add with the live logo mark, Universal and Settings pages +m11 @desktop ref:desktop-ui-revamp — deferred 2026-09-19 (human call): design signed off, build deprioritised for now; plan and mockup map in tasks/desktop-ui-revamp/notes.md id:01M2WSN2PZ701CR2QFX7ZG5ZTD — 2026-10-06: build started (human call) — 2026-10-07: built, see tasks/desktop-ui-revamp/notes.md; only the @human real-build pass is left pri:A
+x 2026-10-11 2026-10-11 Improve the TUI logo and introduce an ascii logo to the txtodo CLI --help ref:improve-the-tui-and-introduce-an-ascii-l — see tasks/improve-the-tui-and-introduce-an-ascii-l/notes.md; known gap: neither logo eyeballed by a human yet

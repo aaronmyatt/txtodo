@@ -26,3 +26,5 @@
   before. The old `┼╰╲╱` split the x into two cells that read as a V. The x is one cell now, so
   its first stroke lights as a lone bold `╲`, the second as a bold `╳`. Unit test pins the glyphs.
   Rejected: letters `tx` (no hook, nothing to light by stroke).
+- CLI: `logo.rs` holds a 7-row ASCII mark; `before_long_help` puts it above `txtodo --help`, `-h`
+  and subcommand help stay without it. A unit test renders both helps and pins that.
