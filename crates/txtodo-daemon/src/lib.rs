@@ -288,6 +288,8 @@ mod state_order_tests;
 #[cfg(test)]
 mod state_reinsert_tests;
 #[cfg(test)]
+mod state_split_group_tests;
+#[cfg(test)]
 mod state_tests;
 #[cfg(test)]
 mod status_details_tests;

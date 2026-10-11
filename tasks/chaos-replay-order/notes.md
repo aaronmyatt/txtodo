@@ -30,3 +30,17 @@
   read `rehome_onto` + `settle` for a blank anchored after a task whose older move lands later.
 - Or prevent split groups: never commit part of a commit group (hold a group's tail until the rest
   of its stamp arrives). Harder: the receiver cannot tell a group is complete.
+
+## Cause 2, sharper (2026-10-11, later)
+- In the 92-op case both devices' groups are split: device Z's older group S1 (a `do`, 20 moves)
+  has its last op, `Move T after U`, logged inside device Y's newer group S2 (a `do`: 14 moves,
+  `BlankInsert after T`, `BlankRemove after V`). a1 has it between S2's `BlankInsert` and its
+  `BlankRemove`; b1 has it before the `BlankInsert`. b1 keeps a blank right after T that a1 does not.
+- The state treats one stamp as one commit applied in order (rehome and RGA never skip equal
+  stamps), so an older op landing *inside* a group is the case it does not cover.
+- Test data: `src/testdata/chaos_split_group_blank.json` (both orders); the failing test
+  `state_split_group_tests::an_older_move_inside_a_newer_groups_blank_ops_renders_the_same` is
+  `#[ignore]`d; `the_split_group_case_still_differs` guards that it stays a real case.
+- Two ways out: (a) settle a group's blank ops the same whichever older op lands inside it
+  (state_rehome / state_erase); (b) never commit part of a commit group, so groups never split
+  in a log. (b) needs the sender to say a group is complete, a wire change: ADR-sized.
