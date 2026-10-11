@@ -44,3 +44,12 @@
 - Two ways out: (a) settle a group's blank ops the same whichever older op lands inside it
   (state_rehome / state_erase); (b) never commit part of a commit group, so groups never split
   in a log. (b) needs the sender to say a group is complete, a wire change: ADR-sized.
+
+## As built (2026-10-11)
+- Cause 2 fixed: `rehome_onto` moved the blocks that followed T's older placement first-to-last;
+  each lands right after T's new placement (equal stamps are not skipped), so two blocks of one
+  commit swapped (`T, line, blank` instead of `T, blank, line`) and the commit's `BlankRemove`
+  claimed another blank. It now moves them last-first. The 92-op case is a plain test now.
+- Both failing reports' full logs (20261011-133013, -144604) replay to one file in either order.
+- Daemon suite under `--profile ci`: 645 pass. Known gap: the lab not re-run by hand; the watcher
+  runs chaos on each main commit, so its next reports are the check.
