@@ -147,6 +147,7 @@ async fn identical_lines_are_a_duplicate_group_until_one_is_deleted() {
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
             workspace: None,
+            shows_notices: false,
         })
         .await
         .unwrap()

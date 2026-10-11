@@ -167,6 +167,7 @@ async fn watch_carries_the_source_too() {
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
             workspace: None,
+            shows_notices: false,
         })
         .await
         .unwrap()

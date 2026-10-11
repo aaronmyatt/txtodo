@@ -92,6 +92,7 @@ pub mod notes_mirror;
 pub mod notes_registry;
 mod notes_repair;
 pub mod notes_state;
+pub mod notices;
 pub mod op_set_hash;
 mod own_vouch;
 mod pairing_adopt;

@@ -252,6 +252,7 @@ async fn a_layout_change_is_announced_on_the_watch_stream() {
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
             workspace: None,
+            shows_notices: false,
         })
         .await
         .unwrap()

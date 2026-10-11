@@ -346,10 +346,10 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     let state_dir = resolve_state_dir(&args, &env)?;
     let socket = workspace_registry_paths::global_socket_path(&env, args.dir.as_deref());
     let (_pid, _logs) = lock_and_start_logging(&args, &state_dir, &socket)?;
+    txtodo_daemon::notices::install_os(args.dir.is_some(), &state_dir);
     let boot_span = boot_log::start_boot_span(&args);
     let _boot = boot_span.enter();
-    // Not the real readiness event: that is `serve.rs::log_socket_bound`, emitted only once the
-    // socket actually binds (`ref:daemon-ready-log-ordering`).
+    // Not the readiness event: `serve.rs::log_socket_bound` is (`ref:daemon-ready-log-ordering`).
     boot_log::log_starting(&socket, &registry_path);
     let registry = WorkspaceRegistry::open(&registry_path)?;
     let clock = Arc::new(SystemClock);

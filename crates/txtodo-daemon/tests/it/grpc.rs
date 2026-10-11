@@ -115,6 +115,7 @@ async fn list_apply_watch_and_get_over_the_socket() {
         .watch(pb::WatchRequest {
             paths: vec!["todo.txt".into()],
             workspace: None,
+            shows_notices: false,
         })
         .await
         .unwrap()

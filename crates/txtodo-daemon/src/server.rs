@@ -99,7 +99,8 @@ impl Txtodo for TxtodoService {
         // ref dirs and can rename the root list (task layout-hot-reload-clients).
         let layout_sub = self.workspace().layout().subscribe();
         tokio::spawn(crate::watch_forward::forward_layout_changes(layout_sub, tx));
-        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+        let stream = crate::notices::Owned::of(r.get_ref().shows_notices, ReceiverStream::new(rx));
+        Ok(Response::new(Box::pin(stream)))
     }
 
     async fn apply(
