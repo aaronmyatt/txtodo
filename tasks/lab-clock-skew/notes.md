@@ -86,3 +86,13 @@ back, consistently). Rare in practice (needs clocks 5+ min apart and both editin
 The fix is a stamp rule: a local edit takes a stamp past the newest one in its document even when
 the clock merge is refused. That amends the skew-guard decision (`tasks/model-hlc-skew-guard`,
 option A); a human call, not taken for 0.0.21.
+
+## Decided 2026-10-11 (agent, asked to decide @human lines): ADR 0040
+- A local edit is stamped past the newest peer stamp its document holds, even when the skew
+  guard refused to merge it; the device clock is left alone; a floor more than 24 h ahead is a
+  broken clock and not followed. Options weighed (merge anyway, hold back, leave it) are in
+  docs/adr/0040-local-stamp-past-held-peer-stamp.md; hold-back was already tried and reverted.
+- Built: `stamp_floor.rs`, both actors' `tick`; test
+  `sync_ops_tests::a_local_edit_sorts_after_a_peer_past_the_skew_bound`.
+- Known gap: the lab's clock-skew seed 777 not re-run by hand; the lab watcher runs it on the
+  next main commit.
