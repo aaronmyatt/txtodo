@@ -17,6 +17,7 @@ mod format;
 pub mod line_fixes;
 mod line_length;
 mod lint;
+pub mod notice;
 mod parse;
 pub mod query;
 mod quirks;
