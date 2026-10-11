@@ -45,3 +45,15 @@
   push each change into a `Debouncer::new("desktop")` held in `AppState`; one tokio task sleeps to
   `next_due`, then shows the notice unless the main window is focused or the Settings toggle
   (localStorage, mirrored to Rust with a `set_change_notices` command, like `pin.ts`) is off.
+
+## Decided 2026-10-11 (agent, asked to decide @human lines): the notification dependency
+- Options: (A) add `tauri-plugin-notification` (Tauri's own plugin, same family as the dialog and
+  global-shortcut plugins already in use); (B) shell out to `osascript -e 'display notification'`
+  (macOS only, no new crate); (C) in-app toasts only (no OS notice while the window is hidden).
+- Pick: A. The point of the feature is a notice while the app is in the background or hidden in
+  the menu bar, which rules out C; B works on macOS only and quoting task text into AppleScript is
+  an injection risk. `cargo deny check` passes with it (advisories, bans, licenses, sources ok).
+- Built: `notify.rs` feeds every Watch change to `txtodo_core::notice::Debouncer::new("desktop")`;
+  one timer task shows each burst unless the main window has focus or the Settings toggle
+  ("Notify on changes", `$lib/stores/changeNotices.ts`, on by default) is off.
+- Known gap: macOS may ask for notification permission on first show; not tried on a real bundle.

@@ -63,6 +63,7 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "run_upgrade":
 			return "txtodo: upgraded (mock)" as T;
 		case "relaunch":
+		case "set_change_notices":
 			return undefined as T;
 		case "apply":
 			return applyMutations(args?.path as string, args?.mutations as Mutation[]) as unknown as T;

@@ -202,6 +202,7 @@ async fn watch_inner(app: AppHandle, state: State<'_, AppState>) -> Result<(), S
     let forwarder_app = app.clone();
     let task = tauri::async_runtime::spawn(async move {
         while let Ok(Some(change)) = stream.message().await {
+            crate::notify::on_change(&forwarder_app, &change);
             let _ = forwarder_app.emit("daemon-change", ChangeDto::from(change));
         }
         // The stream ended (daemon restart or a dropped connection): free the slot so the next

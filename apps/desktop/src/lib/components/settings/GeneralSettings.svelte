@@ -15,6 +15,7 @@
 		type UpdateCheck
 	} from "$lib/daemon";
 	import { pinned, setPinned } from "$lib/stores/pin";
+	import { changeNotices, setChangeNotices } from "$lib/stores/changeNotices";
 	import SettingsRow from "./SettingsRow.svelte";
 
 	let status = $state<DaemonStatus>("connecting");
@@ -68,6 +69,13 @@
 
 <SettingsRow label="Pin on top" description="Keep this window above other windows." for="s-pin">
 	<input id="s-pin" type="checkbox" class="d-toggle" checked={$pinned} onchange={(e) => void setPinned(e.currentTarget.checked)} />
+</SettingsRow>
+<SettingsRow
+	label="Notify on changes"
+	description="A notification when an agent, another device or another app edits, completes or deletes tasks, while this window is in the background. Bursts arrive as one."
+	for="s-notices"
+>
+	<input id="s-notices" type="checkbox" class="d-toggle" checked={$changeNotices} onchange={(e) => void setChangeNotices(e.currentTarget.checked)} />
 </SettingsRow>
 <SettingsRow
 	label="Keep running in the menu bar"

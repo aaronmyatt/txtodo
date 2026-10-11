@@ -5,6 +5,7 @@
 	import { onMount } from "svelte";
 	import { daemonStatus, onDaemonStatus, retryConnect, setMainPopoverDirty, workspaceLayout, workspaceRoot, type DaemonStatus, onDaemonChange } from "$lib/daemon";
 	import { applyStoredPin } from "$lib/stores/pin";
+	import { applyStoredChangeNotices } from "$lib/stores/changeNotices";
 	import { DEFAULT_LAYOUT } from "$lib/todotxt/lineInfo";
 	import { currentWorkspaceRoot, workspaceLayoutStore, workspaceLayoutError } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
@@ -99,6 +100,7 @@
 		// A freshly created OS-level window always starts un-pinned; re-apply whatever was stored
 		// from a previous session (task desktop-always-on).
 		void applyStoredPin();
+		void applyStoredChangeNotices();
 		const unlisten = onDaemonStatus((s) => {
 			status = s;
 		});

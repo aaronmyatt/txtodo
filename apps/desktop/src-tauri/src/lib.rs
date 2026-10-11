@@ -21,6 +21,7 @@ mod commands_upgrade;
 mod commands_version;
 mod commands_window;
 mod commands_workspace;
+mod notify;
 // `pub` (not `mod`): the `e2e-bridge` feature's `src/bin/e2e_bridge.rs` binary is a separate crate
 // target that only sees this library's public surface, and it reuses these DTOs and their
 // `From<pb::...>` conversions directly rather than re-deriving them (tasks/desktop-playwright-
@@ -73,6 +74,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // https://v2.tauri.app/plugin/global-shortcut/ — backs the quick-add hotkey (`quick_add`).
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        // https://v2.tauri.app/plugin/notification/ — another client's changes (`notify.rs`).
+        .plugin(tauri_plugin_notification::init())
         .setup(setup)
         .invoke_handler(handlers())
         .build(tauri::generate_context!())
@@ -121,6 +124,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_upgrade::check_updates,
         commands_upgrade::run_upgrade,
         commands_upgrade::relaunch,
+        notify::set_change_notices,
         commands_window::set_pinned,
         commands_workspace::list_workspaces,
         commands_workspace::workspace_layout,
