@@ -2,7 +2,8 @@
 //! rebuildable: a flag is one row per `(file, task)` holding the description bytes each side had
 //! when it was raised; clearing sets `cleared_at` through the same upsert idiom every other table
 //! here uses, so clearing is idempotent and the crate keeps no `UPDATE` of its own. The mirror
-//! row is the daemon's Loro snapshot at a log position; ops after it are replayed on open.
+//! row is the daemon's Loro snapshot at a log position; ops after it are replayed on open. Only
+//! notes.md documents keep one now: a todo.txt commit lands none (ADR 0038).
 //! Ref: https://www.sqlite.org/lang_upsert.html
 
 use rusqlite::{OptionalExtension, params};

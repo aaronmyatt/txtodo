@@ -26,7 +26,8 @@ that entry below.
   highest. Rows from before 0009 were numbered by their HLC rank then.
 - Review flags (M4): `raise_flag(&ReviewRow)`, `open_flags(file)` (≤ `MAX_OPEN_FLAGS_PER_READ`,
   oldest first), `clear_flag(file, task, at_ms)` (idempotent upsert). Mirror: `put_mirror(file,
-  snapshot, seq)` / `get_mirror(file)` — the Loro snapshot as of a log position.
+  snapshot, seq)` / `get_mirror(file)` — the Loro snapshot as of a log position; notes.md only since ADR 0038
+  (a todo.txt commit lands none; old todo.txt rows stay, ignored).
 - Projections: `put_projection(&Projection)` / `get_projection(file)`; `MAX_PROJECTION_BYTES`.
 - Snapshots: `put_snapshot(file, &Snapshot { seq, state })` / `latest_snapshot(file)`.
 - Meta: `meta_set(key, bytes)` / `meta_get(key)` — device id, later encrypted keys.

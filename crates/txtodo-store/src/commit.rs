@@ -4,7 +4,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::flags::{clear_flag_on, upsert_mirror_on};
+use crate::flags::clear_flag_on;
 use crate::identity::{retire_live_except_on, upsert_fingerprint_on};
 use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
@@ -25,8 +25,6 @@ const SELECT_SNAPSHOT_AT_OR_BEFORE: &str =
 pub struct CommitExtras {
     /// Clear this needs_review flag (task, cleared_at_ms) in the same transaction.
     pub clear: Option<(TaskId, u64)>,
-    /// Store this Loro mirror snapshot at the commit's last seq (or the current last seq).
-    pub mirror: Option<Vec<u8>>,
     /// Sidecar identity mode (docs/questions.md Q2): every live task's fingerprint as of this
     /// commit's new projection, upserted alongside it so identity and content never part ways
     /// across a crash. Empty in tagged mode — nothing to track. A non-empty set is the whole live
@@ -37,24 +35,15 @@ pub struct CommitExtras {
     pub source: Option<String>,
 }
 
-/// Lands the flag clear, the mirror snapshot and/or the fingerprints on `tx`; the caller owns the
+/// Lands the flag clear and/or the fingerprints on `tx`; the caller owns the
 /// transaction.
 fn land_extras(
     tx: &rusqlite::Connection,
     file: &FilePath,
-    range: Option<SeqRange>,
     extras: &CommitExtras,
 ) -> Result<(), StoreError> {
     if let Some((task, at_ms)) = extras.clear {
         clear_flag_on(tx, file, task, at_ms)?;
-    }
-    if let Some(snapshot) = &extras.mirror {
-        let seq = match range {
-            Some(r) => r.last,
-            None => last_seq_on(tx)?,
-        };
-        debug_assert!(seq.0 >= 0);
-        upsert_mirror_on(tx, file, snapshot, seq)?;
     }
     land_fingerprints(tx, file, &extras.fingerprints)?;
     debug_assert!(!file.as_str().is_empty());
@@ -84,15 +73,6 @@ fn land_fingerprints(
     retire_live_except_on(tx, file, &keep, at_ms)?;
     debug_assert_eq!(keep.len(), fingerprints.len(), "one row per task");
     Ok(())
-}
-
-/// The newest seq on `conn` (0 on an empty log); the caller owns the transaction.
-fn last_seq_on(conn: &rusqlite::Connection) -> Result<Seq, StoreError> {
-    let seq: Option<i64> = conn
-        .query_row("SELECT MAX(seq) FROM ops", [], |r| r.get(0))
-        .map_err(StoreError::query("last seq"))?;
-    debug_assert!(seq.is_none_or(|s| s >= 1));
-    Ok(Seq(seq.unwrap_or(0)))
 }
 
 /// The `meta` key holding the hash the projection replaced.
@@ -179,7 +159,7 @@ impl Store {
         upsert_projection(&tx, projection)?;
         let key = prev_hash_key(&projection.file);
         upsert_meta(&tx, &key, prev_hash.as_ref().map_or(&[][..], |h| &h[..]))?;
-        land_extras(&tx, &projection.file, range, extras)?;
+        land_extras(&tx, &projection.file, extras)?;
         tx.commit()
             .map_err(StoreError::query("commit commit_change"))?;
         debug_assert!(range.is_none_or(|r| r.first <= r.last));
