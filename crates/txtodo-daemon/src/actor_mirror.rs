@@ -21,7 +21,6 @@ impl FileActor {
         Ok(CommitExtras {
             fingerprints: self.fingerprints_for(next),
             source: tail.source.clone(),
-            ..CommitExtras::default()
         })
     }
 
