@@ -184,6 +184,20 @@ impl Daemon {
         Ok(self.snapshot(path)?.0)
     }
 
+    /// Bytes of `path` and the daemon's task id per line ("" for a blank; none from an old daemon).
+    pub fn task_ids(&mut self, path: &str) -> Result<(Vec<u8>, Vec<String>), ClientError> {
+        let req = pb::GetFileRequest {
+            path: path.to_owned(),
+            workspace: self.selector.clone(),
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.get_file(req))
+            .map_err(ClientError::Rpc)?
+            .into_inner();
+        Ok((rep.bytes, rep.task_ids))
+    }
+
     /// `get`, plus the document's hash: the base a later `Replace` names, so the daemon can refuse
     /// it if the document changed since this read.
     pub fn snapshot(&mut self, path: &str) -> Result<(Vec<u8>, Vec<u8>), ClientError> {
