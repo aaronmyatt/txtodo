@@ -101,3 +101,54 @@ fn a_landing_retries_the_ops_waiting_on_its_task_in_a_chain() {
     assert_eq!(text, "line 4\nline 5\nline 6\n");
     assert_eq!(parked.len(), 1, "9 still waits for 8");
 }
+
+/// Lab chaos 20261011-144604: b1's log held one commit group's two ops apart, with another
+/// device's op between them (the group came in two runs). Grouping by adjacent stamps then let the
+/// second half apply alone while the first waited for a task, and b1 kept one blank line more than
+/// a1, whose log held the group together. A stamp's ops are one group wherever they sit.
+#[test]
+fn a_group_split_by_another_devices_op_still_waits_whole() {
+    use crate::state_order_tests::{blank_after, op};
+    use txtodo_model::{OpId, OpKind, Ulid};
+    const B: u128 = 2;
+    let base = [
+        insert(1, None, at(10, 0, A)),
+        insert(2, Some(1), at(11, 0, A)),
+        insert(3, Some(2), at(12, 0, A)),
+    ];
+    // C's commit: move 3 after 9 (not here yet) and a blank after 2.
+    let mut g_move = move_after(3, Some(9), at(40, 0, C));
+    g_move.id = OpId::new(Ulid::from_u128(4_001));
+    let mut g_blank = blank_after(Some(2), at(40, 0, C));
+    g_blank.id = OpId::new(Ulid::from_u128(4_002));
+    // B's older move of 2, delivered between the two halves on one device.
+    let m = move_after(2, Some(1), at(30, 0, B));
+    let nine = op(
+        at(20, 0, C),
+        OpKind::Insert {
+            task: crate::state_order_tests::task(9),
+            after: Some(crate::state_order_tests::task(1)),
+            line: "line 9".to_owned(),
+        },
+    );
+    let together: [&[Op]; 4] = [
+        &base,
+        &[g_move.clone(), g_blank.clone()],
+        std::slice::from_ref(&m),
+        std::slice::from_ref(&nine),
+    ];
+    let split: [&[Op]; 5] = [
+        &base,
+        std::slice::from_ref(&g_move),
+        std::slice::from_ref(&m),
+        std::slice::from_ref(&g_blank),
+        std::slice::from_ref(&nine),
+    ];
+    let (t3, _) = render(&together[..3]);
+    let (s4, _) = render(&split[..4]);
+    assert_eq!(s4, t3, "the blank waits with its group until 9 lands");
+    let (t, tp) = render(&together);
+    let (s, sp) = render(&split);
+    assert_eq!(s, t);
+    assert!(tp.is_empty() && sp.is_empty());
+}

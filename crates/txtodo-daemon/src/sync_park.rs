@@ -20,12 +20,17 @@
 //!
 //! Each waiting op is indexed by the tasks it names, so a group that lands retries only the groups
 //! naming a task it touched, not the whole queue (task first-sync-speed).
+//!
+//! A group is a stamp's ops wherever they sit, not only side by side (lab chaos
+//! 20261011-144604): a device can take one commit group in two runs, with another device's op
+//! logged between them. The half that arrives after its group was parked whole joins it, or it
+//! applied alone and left another file than on a device that took the group in one run.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::state::{DocState, StateError};
 use crate::sync_ops::apply_leniently;
-use txtodo_model::{Op, OpKind, TaskId};
+use txtodo_model::{Hlc, Op, OpKind, TaskId};
 
 /// Most ops one document keeps waiting for a task.
 pub(crate) const MAX_PARKED_OPS: usize = 10_000;
@@ -38,6 +43,10 @@ pub(crate) struct Parked {
     next: u64,
     /// The arrival numbers of the waiting ops that name each task.
     by_task: HashMap<TaskId, BTreeSet<u64>>,
+    /// The arrival numbers of the waiting ops of each commit group (one stamp).
+    by_stamp: HashMap<Hlc, BTreeSet<u64>>,
+    /// The groups parked whole for a task not here yet: a later part of one joins it.
+    whole: HashSet<Hlc>,
 }
 
 /// What [`apply_parking`] did beyond applying: ops skipped for good, and how many waiting ops
@@ -65,6 +74,7 @@ impl Parked {
         for task in names(&op).into_iter().flatten() {
             self.by_task.entry(task).or_default().insert(n);
         }
+        self.by_stamp.entry(op.hlc).or_default().insert(n);
         self.ops.insert(n, (op, e));
     }
 
@@ -85,6 +95,13 @@ impl Parked {
 
     fn take(&mut self, n: u64) -> Option<(Op, StateError)> {
         let (op, e) = self.ops.remove(&n)?;
+        if let Some(group) = self.by_stamp.get_mut(&op.hlc) {
+            group.remove(&n);
+            if group.is_empty() {
+                self.by_stamp.remove(&op.hlc);
+                self.whole.remove(&op.hlc);
+            }
+        }
         for task in names(&op).into_iter().flatten() {
             if let Some(waiting) = self.by_task.get_mut(&task) {
                 waiting.remove(&n);
@@ -106,23 +123,23 @@ impl Parked {
             .collect()
     }
 
-    /// The numbers of the commit group `n` is in: its waiting neighbours with the same stamp.
+    /// The numbers of the commit group `n` is in: every waiting op with its stamp, in arrival order.
     fn group_of(&self, n: u64) -> Vec<u64> {
         let Some((op, _)) = self.ops.get(&n) else {
             return Vec::new();
         };
-        let same = |(_, (o, _)): &(&u64, &(Op, StateError))| o.hlc == op.hlc;
-        let mut group: Vec<u64> = self
-            .ops
-            .range(..n)
-            .rev()
-            .take_while(same)
-            .map(|(k, _)| *k)
-            .collect();
-        group.reverse();
-        group.extend(self.ops.range(n..).take_while(same).map(|(k, _)| *k));
+        let group: Vec<u64> = self
+            .by_stamp
+            .get(&op.hlc)
+            .map(|g| g.iter().copied().collect())
+            .unwrap_or_default();
         debug_assert!(group.contains(&n));
         group
+    }
+
+    /// Whether part of the commit group stamped `hlc` waits whole for a task.
+    fn waits_whole(&self, hlc: &Hlc) -> bool {
+        self.whole.contains(hlc)
     }
 
     /// Retries the waiting groups naming a task in `touched`, oldest first, round after round
@@ -138,7 +155,8 @@ impl Parked {
             let mut pos = 0;
             while let Some(n) = round.range(pos..).next().copied() {
                 let group = self.group_of(n);
-                pos = group.last().map_or(n, |last| last + 1);
+                pos = n + 1;
+                round.retain(|k| !group.contains(k));
                 let touched = self.retry_group(state, &group, out);
                 let ready = self.naming(&touched);
                 round.extend(ready.range(pos..));
@@ -166,6 +184,9 @@ impl Parked {
         }
         for n in group {
             self.take(*n);
+        }
+        if let Some(op) = bare.first() {
+            self.whole.remove(&op.hlc);
         }
         let failed = apply_leniently(state, &bare);
         let landed: Vec<&Op> = bare
@@ -195,9 +216,11 @@ impl Parked {
 pub(crate) fn apply_parking(state: &mut DocState, ops: &[Op], parked: &mut Parked) -> Parking {
     let mut out = Parking::default();
     for group in ops.chunk_by(|a, b| a.hlc == b.hlc) {
-        if needs_a_missing_task(state, group) {
+        let joins = group.first().is_some_and(|op| parked.waits_whole(&op.hlc));
+        if joins || needs_a_missing_task(state, group) {
             for op in group {
                 let missing = StateError::UnknownTask(first_name(op));
+                parked.whole.insert(op.hlc);
                 parked.push(op.clone(), missing, &mut out.skipped);
             }
             continue;

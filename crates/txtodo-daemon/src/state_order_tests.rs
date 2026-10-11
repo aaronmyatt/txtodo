@@ -59,7 +59,7 @@ pub(crate) fn move_after(n: u128, after: Option<u128>, hlc: Hlc) -> Op {
     )
 }
 
-fn blank_after(after: Option<u128>, hlc: Hlc) -> Op {
+pub(crate) fn blank_after(after: Option<u128>, hlc: Hlc) -> Op {
     op(
         hlc,
         OpKind::BlankInsert {
