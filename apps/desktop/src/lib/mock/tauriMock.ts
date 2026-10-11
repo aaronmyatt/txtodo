@@ -65,6 +65,10 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "relaunch":
 		case "set_change_notices":
 			return undefined as T;
+		case "save_note_asset":
+			return `assets/00000000-${args?.name as string}` as T;
+		case "read_note_asset":
+			return [] as T;
 		case "apply":
 			return applyMutations(args?.path as string, args?.mutations as Mutation[]) as unknown as T;
 		case "history":

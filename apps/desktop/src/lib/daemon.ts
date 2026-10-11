@@ -105,6 +105,17 @@ export interface UpdateCheck {
 	command: string;
 }
 
+/** Writes a dropped image beside `notesPath` (a workspace-relative notes.md); returns the link
+ * target, `assets/<hash>-<name>` (`commands_assets.rs`). Local to this device: no sync carries it. */
+export function saveNoteAsset(notesPath: string, name: string, bytes: number[]): Promise<string> {
+	return invoke("save_note_asset", { notesPath, name, bytes });
+}
+
+/** The bytes of an `assets/…` image a notes.md links. */
+export function readNoteAsset(notesPath: string, link: string): Promise<number[]> {
+	return invoke("read_note_asset", { notesPath, link });
+}
+
 /** Asks the installed `txtodo` CLI for the newest release; only when the human presses Check. */
 export function checkUpdates(): Promise<UpdateCheck> {
 	return invoke("check_updates");

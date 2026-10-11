@@ -229,6 +229,9 @@ async fn invoke(
     State(state): State<Shared>,
     Json(req): Json<InvokeReq>,
 ) -> Result<Response, ApiError> {
+    if req.cmd == "save_note_asset" || req.cmd == "read_note_asset" {
+        return Ok(Json(note_asset(&state.workspace, &req.cmd, req.args)?).into_response());
+    }
     if req.cmd == "workspace_root" {
         let value = Value::String(state.workspace.display().to_string());
         return Ok(Json(value).into_response());
@@ -279,6 +282,31 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         }
     };
     Ok(Json(value).into_response())
+}
+
+/// `save_note_asset` / `read_note_asset`: files beside a notes.md, no daemon call
+/// (`desktop_lib::commands_assets`, the same functions the app's commands run).
+fn note_asset(root: &std::path::Path, cmd: &str, args: Value) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Req {
+        notes_path: String,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        bytes: Vec<u8>,
+        #[serde(default)]
+        link: String,
+    }
+    let r: Req = parse(args)?;
+    let out = if cmd == "save_note_asset" {
+        desktop_lib::commands_assets::save_asset(root, &r.notes_path, &r.name, &r.bytes)
+            .map(Value::String)
+    } else {
+        desktop_lib::commands_assets::read_asset(root, &r.notes_path, &r.link)
+            .map(|b| serde_json::json!(b))
+    };
+    out.map_err(ApiError)
 }
 
 async fn cmd_list_files(client: &mut DaemonClient) -> Result<Value, ApiError> {

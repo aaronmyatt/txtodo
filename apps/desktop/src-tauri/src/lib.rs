@@ -6,6 +6,7 @@
 
 mod commands;
 mod commands_activity;
+pub mod commands_assets;
 mod commands_connect;
 mod commands_devices;
 mod commands_duplicates;
@@ -125,6 +126,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_upgrade::run_upgrade,
         commands_upgrade::relaunch,
         notify::set_change_notices,
+        commands_assets::save_note_asset,
+        commands_assets::read_note_asset,
         commands_window::set_pinned,
         commands_workspace::list_workspaces,
         commands_workspace::workspace_layout,
