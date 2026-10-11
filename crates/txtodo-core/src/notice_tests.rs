@@ -134,3 +134,13 @@ fn a_burst_that_never_goes_quiet_still_reports() {
     assert_eq!(d.next_due(), Some(MAX_WAIT_MS));
     assert!(d.due(MAX_WAIT_MS).is_some());
 }
+
+#[test]
+fn only_from_counts_one_source_and_drops_the_rest() {
+    let mut d = Debouncer::only_from("sync");
+    assert!(!d.push(0, op("todo.txt", "mcp", "edit_text", "T1", "")));
+    assert!(!d.push(0, op("todo.txt", "", "edit_text", "T1", "")));
+    assert!(d.push(0, op("todo.txt", "sync", "set_field", "T2", DONE)));
+    let n = d.due(QUIET_MS).unwrap();
+    assert_eq!(n.title, "A task was completed on another device");
+}

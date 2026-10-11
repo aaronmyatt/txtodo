@@ -83,6 +83,8 @@ pub struct Notice {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Debouncer {
     own_source: String,
+    /// Only this source counts (the daemon's `sync`), when set; `own_source` is then unused.
+    only_source: Option<String>,
     first_at: Option<u64>,
     last_at: u64,
     /// (path, task id) → the strongest verb seen.
@@ -96,6 +98,7 @@ impl Debouncer {
     pub fn new(own_source: &str) -> Self {
         Self {
             own_source: own_source.to_string(),
+            only_source: None,
             first_at: None,
             last_at: 0,
             tasks: BTreeMap::new(),
@@ -103,9 +106,22 @@ impl Debouncer {
         }
     }
 
+    /// A debouncer that counts only ops from `source` (the daemon: `sync`, another device's ops;
+    /// ADR 0041), every other source dropped.
+    pub fn only_from(source: &str) -> Self {
+        Self {
+            only_source: Some(source.to_string()),
+            ..Self::new("")
+        }
+    }
+
     /// Takes one op at `now_ms`; true when it counts toward a notice.
     pub fn push(&mut self, now_ms: u64, op: OpFacts<'_>) -> bool {
-        if op.source == self.own_source || op.task_id.is_empty() {
+        let dropped = match &self.only_source {
+            Some(only) => op.source != only,
+            None => op.source == self.own_source,
+        };
+        if dropped || op.task_id.is_empty() {
             return false;
         }
         let Some(verb) = verb_of(op.kind, op.summary) else {

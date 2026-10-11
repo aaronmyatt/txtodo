@@ -48,3 +48,10 @@
   with the text passed as an argv item (not spliced into the script). Check on a real Mac first,
   before building the rest.
 - An ADR: the daemon gains user-facing output (it was headless). Write one, short.
+
+## Decided 2026-10-11 (agent, picking this line up): notifier changed to argv shell-out
+- The plan above picked `notify-rust` pending a macOS spike nobody ran. Picked instead: macOS
+  `osascript` and Linux `notify-send`, the title and body passed as argv items (the script reads
+  `item 1/2 of argv`), so no text is ever spliced into AppleScript: the injection risk that made
+  the plan avoid shelling out does not apply. No new dependency, and a LaunchAgent runs in the
+  user's GUI session, where `osascript` may post. ADR 0041.

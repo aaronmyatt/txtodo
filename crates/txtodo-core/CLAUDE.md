@@ -25,7 +25,7 @@ bar's chips, ported from desktop's `editPopoverLogic.ts` with its tests mirrored
 `universal::{days_between, DueBucket, due_bucket, due_label, GroupBy, RowFacts, group_name, group}` (same
 task): the Universal screen's due buckets, due badges and grouping in the c2 mockup's order, against a
 `today` the caller passes (ADR 0011: the client's local calendar).
-`notice::{verb_of, Verb, OpFacts, Notice, Debouncer, QUIET_MS, MAX_WAIT_MS}` (2026-10-11, task
+`notice::{verb_of, Verb, OpFacts, Notice, Debouncer (`new`, `only_from`), QUIET_MS, MAX_WAIT_MS}` (2026-10-11, task
 `change-notifications`): folds another client's `Watch` ops into one worded notice per burst for the
 desktop and the TUI; the caller passes `now`, so no clock here.
 Mode contract: strict = the ABNF exactly (a bare `x` is description text); lenient = total over `&str`, quirks recorded.
