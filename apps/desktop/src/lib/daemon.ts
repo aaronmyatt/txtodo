@@ -87,13 +87,7 @@ export type Mutation =
  * narrow `Mutation`'s union. Structurally identical to `Mutation`'s `"edit"` arm. */
 export type EditMutation = Extract<Mutation, { kind: "edit" }>;
 
-/** Mirrors `desktop_lib::dto::ResolutionDto` (serde `rename_all = "snake_case"` on a fieldless
- * enum serializes as a bare string). `"merged"` keeps whatever is already in the file and only
- * clears the flag — see `ConflictReviewSheet`'s `resolve()` doc comment for why that is not the
- * same thing as this app's client-side merge *preview*. */
-export type ResolveChoice = "mine" | "theirs" | "merged";
-
-/** Result of `apply()`/`resolve()`. Mirrors `desktop_lib::dto::ApplyResultDto`. */
+/** Result of `apply()`. Mirrors `desktop_lib::dto::ApplyResultDto`. */
 export interface ApplyResult {
 	applied: number;
 	hash: string;
@@ -157,20 +151,11 @@ export function history(path: string, taskId: string, limit: number): Promise<Hi
 	return invoke("history", { path, taskId, limit });
 }
 
-/** One `needs_review` flag raised by a change. Mirrors `desktop_lib::dto::ReviewFlagDto`. */
-export interface ReviewFlag {
-	task_id: string;
-	line_number: number;
-	mine: string;
-	theirs: string;
-}
-
 /** One `Watch` event. Mirrors `desktop_lib::dto::ChangeDto`. */
 export interface Change {
 	path: string;
 	hash: string;
 	ops: OpSummary[];
-	review: ReviewFlag[];
 	/** The file's duplicate groups after the change (ADR 0032); 0 from an older daemon. */
 	duplicate_groups: number;
 }
@@ -189,13 +174,6 @@ export function watch(): Promise<void> {
 /** Subscribes to `daemon-change` events forwarded from an active `watch()` stream. */
 export function onDaemonChange(cb: (change: Change) => void): Promise<UnlistenFn> {
 	return listen<Change>("daemon-change", (event) => cb(event.payload));
-}
-
-/** Open `needs_review` flags for one workspace-relative document (plan M4). The daemon is
- * authoritative for this list — callers should reconcile it against any client-accumulated state
- * on mount/refresh rather than trusting the accumulation alone (design §4.7). */
-export function listConflicts(path: string): Promise<ReviewFlag[]> {
-	return invoke("list_conflicts", { path });
 }
 
 /** One paired peer's sync state. Mirrors `desktop_lib::commands_sync::SyncPeerDto`. */
@@ -240,17 +218,6 @@ export interface DuplicateGroup {
  * `applyMutations` delete, or by editing one copy so they differ. */
 export function listDuplicates(path: string): Promise<DuplicateGroup[]> {
 	return invoke("list_duplicates", { path });
-}
-
-/** Resolves one `needs_review` flag; maps to the daemon's `ResolveConflict` RPC, the same
- * `Apply(Edit)` path the edit popover uses, so attribution/sync/history stay automatic and the
- * op itself clears the flag server-side. */
-export function resolveConflict(
-	path: string,
-	task: TaskRef,
-	resolution: ResolveChoice
-): Promise<ApplyResult> {
-	return invoke("resolve", { path, task, resolution });
 }
 
 /** `notes.md` for one task's `ref:` directory (plan M5). Mirrors `desktop_lib::dto::NotesDocDto`.

@@ -78,7 +78,6 @@ export type FixtureName =
 	| "popover"
 	| "nested"
 	| "notes-create"
-	| "conflict"
 	| "ten-k"
 	// A fresh profile: no workspace of its own, so the app opens the daemon's default one
 	// (task default-workspace). `dir` is that default workspace's directory.
@@ -124,12 +123,6 @@ function seed(dir: string, fixture: FixtureName): void {
 				"(A) plan the roadmap id:01ARZ3NDEKTSV4RRFFQ69G5FA3\n"
 			);
 			return;
-		case "conflict":
-			// No priority prefix, matching `crates/txtodo-daemon/tests/it/grpc.rs`'s own
-			// `resolve_merged_keeps_bytes_and_mine_writes_the_side_back` fixture exactly — see
-			// `CONFLICT_MINE`/`CONFLICT_THEIRS`'s doc comment for why the shape matters here.
-			writeFileSync(join(dir, "todo.txt"), `buy milk ${CONFLICT_ID_TAG}\n`);
-			return;
 		case "done":
 			writeFileSync(join(dir, "todo.txt"), "x 2026-10-01 2026-09-30 pay rent @home\ncall mum @phone\n");
 			return;
@@ -150,44 +143,6 @@ function seed(dir: string, fixture: FixtureName): void {
 			mkdirSync(join(dir, "tasks", TEN_K_REF_SLUG), { recursive: true });
 			writeFileSync(join(dir, "tasks", TEN_K_REF_SLUG, "todo.txt"), "x 2026-01-01 done sub-task\n(B) open sub-task\n");
 			return;
-	}
-}
-
-/** The ULID `id:` tag hand-seeded by the `"conflict"` fixture above — `conflict.spec.ts` needs it
- * to address `debugRaiseConflict`/`resolve`. */
-export const CONFLICT_TASK_ID = "01ARZ3NDEKTSV4RRFFQ69G5FA4";
-const CONFLICT_ID_TAG = `id:${CONFLICT_TASK_ID}`;
-
-/**
- * `mine`/`theirs` for the `"conflict"` fixture, each the *whole description field including its
- * `id:` tag* — not just the human-readable words. `ReviewFlagDto`'s own doc comment says "this
- * device's description," which reads like it should exclude tags, but
- * `crates/txtodo-daemon/tests/it/grpc.rs`'s own `raise_flag` helper embeds the id tag inside `mine`/
- * `theirs` too (`format!("first task (mine) {id_text}")`) and resolving `mine`/`theirs` without it
- * fails server-side ("inserted line does not carry id ..." — confirmed by hand while writing this
- * spec). Match that exact shape rather than the doc comment's wording.
- */
-export const CONFLICT_MINE = `buy milk ${CONFLICT_ID_TAG}`;
-export const CONFLICT_THEIRS = `buy oat milk ${CONFLICT_ID_TAG}`;
-
-/**
- * Raises a `needs_review` flag directly in the workspace's op-log store, standing in for the
- * daemon-to-daemon sync this scenario would otherwise need (see conflict.spec.ts's module doc and
- * `e2e_bridge.rs::cmd_debug_raise_conflict`'s doc comment for why: that transport isn't wired up
- * yet at all, tracked separately as `sync-loopback-converge`). Calls the bridge directly rather
- * than through the page, since this is test *setup*, not something the desktop UI itself does.
- */
-export async function debugRaiseConflict(
-	daemon: DaemonHandle,
-	opts: { path: string; taskId: string; mine: string; theirs: string }
-): Promise<void> {
-	const res = await fetch(`http://127.0.0.1:${daemon.port}/invoke`, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ cmd: "debug_raise_conflict", args: opts })
-	});
-	if (!res.ok) {
-		throw new Error(`debug_raise_conflict failed: ${await res.text()}`);
 	}
 }
 

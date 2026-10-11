@@ -2,7 +2,7 @@
 // "system" (follow the OS) — persisted to localStorage, plus the concrete "light"/"dark" value
 // actually applied. `+layout.svelte` writes `resolvedTheme` onto `<html data-theme>`; app.css
 // keys its dark-palette overrides off that attribute.
-// Pure/no Tauri imports on purpose, same rationale as $lib/stores/conflicts.ts: plain store logic
+// Pure/no Tauri imports on purpose, same rationale as $lib/stores/duplicates.ts: plain store logic
 // stays unit-testable without mocking anything browser-only.
 // Ref (matchMedia / prefers-color-scheme): https://developer.mozilla.org/en-US/docs/Web/API/Window/matchMedia
 // Ref (custom stores): https://svelte.dev/docs/svelte/stores#Custom-stores

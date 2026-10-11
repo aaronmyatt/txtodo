@@ -4,17 +4,11 @@
 //   blur commits ......................... inline-edit.spec.ts, save.spec.ts
 //   Cmd/Ctrl+S commits, Esc discards ..... inline-edit.spec.ts
 //   double-click opens the detail ........ detail.spec.ts
-// This file adds Cmd/Ctrl+Enter, the done styling and read-only under review.
+// This file adds Cmd/Ctrl+Enter and the done styling. (Read-only under review went with the
+// needs_review flags, ADR 0038.)
 // Ref: https://playwright.dev/docs/api/class-keyboard#keyboard-press (ControlOrMeta)
 import { expect, test } from "@playwright/test";
-import {
-	CONFLICT_MINE,
-	CONFLICT_TASK_ID,
-	CONFLICT_THEIRS,
-	type DaemonHandle,
-	debugRaiseConflict,
-	spawnDaemon
-} from "./fixtures";
+import { type DaemonHandle, spawnDaemon } from "./fixtures";
 import { gotoWithDaemon } from "./helpers";
 
 let daemon: DaemonHandle | undefined;
@@ -42,21 +36,4 @@ test("a done line is dimmed and its words struck, not its marker or dates", asyn
 	await expect(strike.first()).toContainText("pay rent");
 	await expect(strike.first()).not.toContainText("2026-10-01");
 	await expect(page.locator(".cm-line", { hasText: "call mum" })).not.toHaveClass(/cm-todotxt-done/);
-});
-
-test("the buffer is read-only while a line needs review", async ({ page }) => {
-	daemon = await spawnDaemon("conflict");
-	await debugRaiseConflict(daemon, {
-		path: "todo.txt",
-		taskId: CONFLICT_TASK_ID,
-		mine: CONFLICT_MINE,
-		theirs: CONFLICT_THEIRS
-	});
-	await gotoWithDaemon(page, daemon);
-	await expect(page.getByRole("button", { name: "Review" })).toBeVisible();
-	const content = page.locator(".buffer .cm-content");
-	await expect(content).toHaveAttribute("contenteditable", "false");
-	await page.locator(".cm-line").first().click();
-	await page.keyboard.type("zzz");
-	await expect(page.locator(".cm-line").first()).not.toContainText("zzz");
 });

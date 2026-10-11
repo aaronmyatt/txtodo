@@ -19,7 +19,7 @@
 	import { applyChipCore } from "$lib/wasmCore";
 	import { localToday } from "./editPopoverLogic";
 	import { leaveEditor } from "$lib/escape";
-	import { onDestroy, onMount, untrack } from "svelte";
+	import { onDestroy, onMount } from "svelte";
 	import { Compartment, EditorState } from "@codemirror/state";
 	import {
 		drawSelection,
@@ -52,7 +52,6 @@
 	import { hoverLine, setHoverLine } from "$lib/todotxt/hoverLine";
 	import { isReorderOnly, saveBuffer, type Baseline, type SaveOutcome } from "$lib/todotxt/saveBuffer";
 	import { addOnTopMutations } from "$lib/todotxt/addOnTop";
-	import { flagsForPath, pendingConflicts } from "$lib/stores/conflicts";
 	import { rejectedEdits } from "$lib/stores/rejectedEdits";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import type { DetailParams } from "$lib/types";
@@ -152,16 +151,11 @@
 	// reaches the file at once, typed text still waits for blur or Cmd-S.
 	const REORDER_SAVE_DELAY_MS = 300;
 	let reorderTimer: ReturnType<typeof setTimeout> | undefined;
-	// Pending needs_review flags for this instance's own `path` (design §4.7's store, already fed
-	// by `ConflictBanner`'s `Watch` subscription): the document being edited is the *reconciled
-	// projection*, so a pending flag means it isn't stable yet — read-only until it's resolved.
-	const hasPendingReview = $derived(flagsForPath($pendingConflicts, path).length > 0);
 
 	// Per-instance reconfigurable slots (never shared across FileView instances — see
 	// $lib/todotxt/decorations.ts) so refreshing ref: progress is a cheap dispatch, not a full
 	// document rebuild. The hovered line is a state field instead (`$lib/todotxt/hoverLine.ts`).
 	const lineDecoCompartment = new Compartment();
-	const editableCompartment = new Compartment();
 	// The gutter and the long-line hint follow the editor prefs (`$lib/stores/editorPrefs`).
 	const gutterCompartment = new Compartment();
 	const lengthHintCompartment = new Compartment();
@@ -188,7 +182,6 @@
 
 	function initialExtensions() {
 		return [
-			editableCompartment.of([EditorView.editable.of(!hasPendingReview), EditorState.readOnly.of(hasPendingReview)]),
 			// `Mod-Enter` (Cmd+Enter on macOS, Ctrl+Enter elsewhere — CM6's own convention:
 			// https://codemirror.net/docs/ref/#commands) is the keyboard equivalent of a
 			// double-click, opening the detail view for the line under the caret (plan §3.2).
@@ -360,7 +353,6 @@
 		const next = view.state.doc.toString();
 		setDirty(false);
 		reportSave("saving");
-		applyEditableGate(); // a pending review that arrived mid-edit is only enforced once clean
 		const error = await commitOutgoing(path, { text: baseline, hash: baselineHash }, next, true);
 		if (error === null) {
 			commitError = "";
@@ -371,11 +363,8 @@
 		// Keep the buffer dirty and untouched: the edit was rejected, not applied. Calling
 		// refreshDoc() here would silently overwrite the human's text with the daemon's
 		// pre-edit content (root cause 4, tasks/desktop-concurrent-edit-loss/notes.md) — restore
-		// dirty so the human can fix the text and re-commit, or Escape to discard it. The gate
-		// went read-only above while the buffer was clean, so re-run it now that it is dirty again
-		// (root todo id:01M2WK5DQQ1QXXTGR306Y6PGBK).
+		// dirty so the human can fix the text and re-commit, or Escape to discard it.
 		setDirty(true);
-		applyEditableGate();
 		commitError = error;
 	}
 
@@ -386,23 +375,6 @@
 		setDirty(false);
 		reportSave("synced");
 		commitError = "";
-		applyEditableGate();
-	}
-
-	/** Reconfigures `editableCompartment` from `hasPendingReview` — but never while `dirty`: a
-	 * pending review that shows up *while the human is already mid-edit* must not yank the buffer
-	 * read-only out from under them (that both stops further typing and, via the `blur` a browser
-	 * fires when a focused contenteditable turns non-editable, forces a premature `commit()` the
-	 * daemon would likely reject anyway, since the task is now under review — see `commit`/
-	 * `discard`, which reapply this gate themselves once the edit is no longer dirty). Read via
-	 * `untrack` when called from the `$effect` below so this isn't itself a `dirty` dependency —
-	 * every keystroke would otherwise re-dispatch a reconfigure for nothing. */
-	function applyEditableGate() {
-		if (!view) return;
-		const blocked = hasPendingReview && !untrack(() => dirty);
-		view.dispatch({
-			effects: editableCompartment.reconfigure([EditorView.editable.of(!blocked), EditorState.readOnly.of(blocked)])
-		});
 	}
 
 	async function refreshFilesByPath() {
@@ -653,12 +625,6 @@
 		});
 	});
 
-	// Reflects a pending-review flag that appears/clears *while already mounted* (entering/leaving
-	// read-only) — the initial value is already baked into `initialExtensions()` above.
-	$effect(() => {
-		hasPendingReview; // dependency: `dirty` itself is read untracked inside — see the doc comment
-		applyEditableGate();
-	});
 
 	// A future detail view can swap `path` on a mounted FileView (e.g. selecting a different
 	// sub-list) — re-baseline against the new file rather than assuming `path` is fixed for life.
@@ -718,7 +684,7 @@
 				aria-label="Add a line"
 				placeholder="Add a line…"
 				bind:value={newLine}
-				disabled={adding || hasPendingReview}
+				disabled={adding}
 				onkeydown={(e) => {
 					if (e.key === "Escape") newLine = "";
 				}}
