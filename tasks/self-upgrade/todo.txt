@@ -1,0 +1,5 @@
+2026-10-11 cli: txtodo upgrade --check: latest release tag vs this build, and the install path it would use (brew, curl script, source) +m11 @cli
+2026-10-11 cli: txtodo upgrade runs that path, then restarts the daemon (daemon install --force) +m11 @cli
+2026-10-11 tui: Settings row checks for updates and runs txtodo upgrade on request +m11 @tui
+2026-10-11 desktop: Settings button checks for updates and runs the bundled txtodo upgrade +m11 @desktop
+2026-10-11 Complete the parent line in ./todo.txt +m11
