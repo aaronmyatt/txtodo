@@ -1,6 +1,6 @@
 //! The conflict half of the gRPC surface, in-process (split from `grpc.rs` for its file budget, so
-//! it carries its own copy of that file's small setup helpers): ListConflicts' duplicate groups and
-//! ResolveConflict's refusal (no needs_review flags since ADR 0038) over a temp unix socket.
+//! it carries its own copy of that file's small setup helpers): ListConflicts' duplicate groups over
+//! a temp unix socket. The needs_review flags and ResolveConflict left the proto (ADR 0038).
 //! tonic over UDS: https://github.com/hyperium/tonic/tree/master/examples/src/uds
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
@@ -16,7 +16,7 @@ use tower::service_fn;
 use txtodo_daemon::clock::SystemClock;
 use txtodo_daemon::workspace::Workspace;
 use txtodo_daemon::{serve, server};
-use txtodo_model::{IdentityMode, TaskId, Ulid};
+use txtodo_model::IdentityMode;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 use txtodo_proto::v1::{self as pb, mutation};
 
@@ -81,79 +81,6 @@ async fn apply_add(client: &mut Client, line: &str) -> pb::ApplyResponse {
         .await
         .unwrap_or_else(|e| panic!("apply: {e}"))
         .into_inner()
-}
-
-async fn get_todo(client: &mut Client) -> Vec<u8> {
-    client
-        .get_file(pb::GetFileRequest {
-            path: "todo.txt".into(),
-            workspace: None,
-        })
-        .await
-        .unwrap_or_else(|e| panic!("get: {e}"))
-        .into_inner()
-        .bytes
-}
-
-/// The trailing `id:<ulid>` word the daemon appended to a task line it wrote.
-fn id_tag_of(line: &str) -> &str {
-    line.split_whitespace()
-        .next_back()
-        .expect("line has an id tag")
-}
-
-/// The task id of a line whose trailing word is its `id:` tag.
-fn task_id_of(line: &str) -> TaskId {
-    let id = id_tag_of(line).strip_prefix("id:").expect("id tag is last");
-    TaskId::new(Ulid::parse(id).expect("valid ulid"))
-}
-
-async fn conflicts(client: &mut Client) -> Vec<pb::ReviewFlag> {
-    client
-        .list_conflicts(pb::ConflictsRequest {
-            path: "todo.txt".into(),
-            workspace: None,
-        })
-        .await
-        .unwrap()
-        .into_inner()
-        .flags
-}
-
-/// ADR 0038, conflict review A: nothing raises a needs_review flag, so `ListConflicts` sends none
-/// and `ResolveConflict` refuses with a reason, writing nothing. Both stay on the wire for older
-/// clients until the proto drops them.
-#[tokio::test]
-async fn no_flags_are_listed_and_resolve_refuses() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("todo.txt"), b"").unwrap();
-    let (mut client, _stop) = serve(dir.path()).await;
-    let first = apply_add(&mut client, "buy milk").await;
-    assert_eq!(first.applied, 1);
-    let before = get_todo(&mut client).await;
-    let line = String::from_utf8(before.clone()).unwrap();
-    let task = task_id_of(line.trim_end());
-    assert!(conflicts(&mut client).await.is_empty());
-    let err = client
-        .resolve_conflict(pb::ResolveRequest {
-            path: "todo.txt".into(),
-            task: Some(pb::TaskRef {
-                line_number: 1,
-                task_id: task.to_string(),
-            }),
-            resolution: pb::Resolution::Mine as i32,
-            workspace: None,
-            agent: None,
-        })
-        .await
-        .expect_err("nothing to resolve");
-    assert_eq!(err.code(), tonic::Code::FailedPrecondition);
-    assert!(err.message().contains("ADR 0038"), "{}", err.message());
-    assert_eq!(
-        get_todo(&mut client).await,
-        before,
-        "a refused resolve writes nothing"
-    );
 }
 
 async fn duplicates_of(client: &mut Client) -> Vec<pb::DuplicateGroup> {

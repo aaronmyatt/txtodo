@@ -130,14 +130,6 @@ impl Txtodo for GlobalService {
         svc.list_conflicts(r).instrument(span).await
     }
 
-    async fn resolve_conflict(
-        &self,
-        r: Request<pb::ResolveRequest>,
-    ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let (svc, span) = self.scoped("resolve_conflict", &r).await?;
-        svc.resolve_conflict(r).instrument(span).await
-    }
-
     async fn health(
         &self,
         r: Request<pb::HealthRequest>,

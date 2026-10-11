@@ -170,13 +170,6 @@ impl Txtodo for TxtodoService {
         self.list_conflicts_impl(r).await
     }
 
-    async fn resolve_conflict(
-        &self,
-        r: Request<pb::ResolveRequest>,
-    ) -> Result<Response<pb::ApplyResponse>, Status> {
-        self.resolve_conflict_impl(r).await
-    }
-
     async fn lint(
         &self,
         r: Request<pb::LintRequest>,

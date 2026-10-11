@@ -144,7 +144,6 @@ macro_rules! has_workspace {
 
 has_workspace!(
     pb::ConflictsRequest,
-    pb::ResolveRequest,
     pb::HealthRequest,
     pb::PruneOrphansRequest,
     pb::WorkspaceLayoutRequest,

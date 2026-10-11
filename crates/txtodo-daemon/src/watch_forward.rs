@@ -59,8 +59,6 @@ pub(crate) async fn forward_changes(
                         ..to_summary(s)
                     })
                     .collect(),
-                // No needs_review flags since ADR 0038.
-                review: Vec::new(),
                 progress: watch_progress_of(&svc, &h).await,
                 duplicate_groups: c.duplicate_groups,
             },
@@ -69,7 +67,6 @@ pub(crate) async fn forward_changes(
                     path: h.path().to_string(),
                     hash: c.hash.to_vec(),
                     ops: Vec::new(),
-                    review: Vec::new(),
                     progress: watch_progress_of(&svc, &h).await,
                     // Missed changes: the count as it is now.
                     duplicate_groups: h.conflicts().await.map_or(0, |found| {
