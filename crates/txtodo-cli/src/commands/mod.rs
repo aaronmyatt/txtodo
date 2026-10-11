@@ -20,6 +20,7 @@ pub mod identity;
 pub mod layout;
 pub mod list;
 pub mod mcp;
+pub mod notices;
 pub mod pair;
 pub mod refdir;
 pub mod service;

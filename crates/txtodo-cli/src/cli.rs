@@ -302,6 +302,11 @@ pub enum Command {
         #[command(subcommand)]
         action: commands::skill::Action,
     },
+    /// The daemon's OS notice for changes from another device (ADR 0041): `on`, `off`, `status`.
+    Notices {
+        #[command(subcommand)]
+        action: commands::notices::Action,
+    },
     /// Upgrades to the newest release the way this copy was installed (Homebrew, the install
     /// script, or a source build), then restarts the daemon. `--check` only says what it would do.
     Upgrade {

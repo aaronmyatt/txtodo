@@ -59,6 +59,8 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   a source build it will not touch, else the macOS install script for that tag into the same
   folder); then `daemon install --force` so the new `txtodod` serves. Handled before any
   workspace or config is resolved. `--check` prints and changes nothing.
+- `notices on|off|status` (ADR 0041, `commands/notices.rs`): `off` leaves `notices-off` beside the
+  daemon's socket, `on` removes it; the daemon checks it whenever a notice is due.
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,

@@ -93,6 +93,7 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             return commands::mcp::run(&ctx, *stdio, *http, token.as_deref());
         }
         Command::Skill { action } => return commands::skill::run(action),
+        Command::Notices { action } => return commands::notices::run(&env, *action),
         // A path, not a daemon question: answered even when no daemon is running.
         Command::Workspace {
             action: Some(commands::workspace::Action::Default),
@@ -171,6 +172,7 @@ fn announce_default_workspace(ctx: &Ctx, command: &Command) {
             Command::Doctor { .. }
                 | Command::Daemon { .. }
                 | Command::Skill { .. }
+                | Command::Notices { .. }
                 | Command::Workspace { .. }
         )
     {
@@ -257,6 +259,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Workspace { .. } => "workspace",
         Command::Skill { .. } => "skill",
         Command::Upgrade { .. } => "upgrade",
+        Command::Notices { .. } => "notices",
         Command::Prune { .. } => "prune",
     }
 }
@@ -334,7 +337,8 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Daemon { .. }
         | Command::Mcp { .. }
         | Command::Skill { .. }
-        | Command::Upgrade { .. } => unreachable!("handled before mode selection"),
+        | Command::Upgrade { .. }
+        | Command::Notices { .. } => unreachable!("handled before mode selection"),
         c if daemon_ensure::needs_daemon(c) => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),
