@@ -19,9 +19,9 @@ impl FileActor {
         next: &DocState,
     ) -> Result<CommitExtras, ActorError> {
         Ok(CommitExtras {
-            clear: None, // no needs_review flags since ADR 0038; the store line drops the field
             fingerprints: self.fingerprints_for(next),
             source: tail.source.clone(),
+            ..CommitExtras::default()
         })
     }
 
