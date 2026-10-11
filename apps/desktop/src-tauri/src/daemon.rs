@@ -138,7 +138,8 @@ impl DaemonClient {
             .connect_timeout(CONNECT_TIMEOUT);
         let channel = endpoint.connect_lazy();
         Ok(DaemonClient {
-            inner: pb::txtodo_client::TxtodoClient::new(channel),
+            inner: pb::txtodo_client::TxtodoClient::new(channel)
+                .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
             sock: sock.to_path_buf(),
             selector,
         })

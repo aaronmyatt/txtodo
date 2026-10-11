@@ -9,3 +9,8 @@
 pub mod v1 {
     include!("generated/txtodo.v1.rs");
 }
+
+/// The biggest message a client accepts from the daemon. tonic's default is 4 MiB, and one
+/// `Watch` `Change` after a long sync catch-up carries every op it applied, which can pass that.
+/// Ref: <https://docs.rs/tonic/latest/tonic/client/struct.Grpc.html#method.max_decoding_message_size>
+pub const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;

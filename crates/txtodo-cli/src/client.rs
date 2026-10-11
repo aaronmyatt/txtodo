@@ -7,8 +7,7 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 use tonic::transport::Channel;
-use txtodo_proto::v1::txtodo_client::TxtodoClient;
-use txtodo_proto::v1::{self as pb};
+use txtodo_proto::v1::{self as pb, txtodo_client::TxtodoClient};
 // Unix-domain sockets are the daemon's only transport (ADR 0010), and tokio gates `UnixStream` to
 // unix targets; on Windows the connector is compiled out and `connect` refuses instead.
 #[cfg(unix)]
@@ -161,7 +160,8 @@ impl Daemon {
         debug_assert!(socket.exists(), "connected through an existing socket");
         Ok(Daemon {
             rt,
-            client: TxtodoClient::new(channel),
+            client: TxtodoClient::new(channel)
+                .max_decoding_message_size(txtodo_proto::MAX_MESSAGE_BYTES),
             selector,
             socket,
         })
