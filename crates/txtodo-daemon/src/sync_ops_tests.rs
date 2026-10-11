@@ -246,6 +246,28 @@ fn a_peers_batch_moves_this_devices_clock_past_its_stamps() {
     assert!(next > ahead.hlc);
 }
 
+/// ADR 0040 (lab clock-skew seed 777): a peer 7 minutes ahead is past the skew bound, so its stamp
+/// is not merged into the clock, yet this device's next edit still sorts after it; the device's
+/// clock itself stays where it was until that edit.
+#[test]
+fn a_local_edit_sorts_after_a_peer_past_the_skew_bound() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let mut actor = open(dir.path(), &store, &clock);
+    let a = TaskId::new(Ulid::from_u128(72));
+    let far = peer_op(1, 1_000 + 7 * 60_000, insert(a, None, "a"));
+    actor.on_sync_ops(vec![far.clone()]).unwrap();
+    assert!(actor.hlc < far.hlc, "the merge was refused");
+    let next = actor.tick().unwrap();
+    assert!(
+        (next.wall_ms, next.counter) > (far.hlc.wall_ms, far.hlc.counter),
+        "{next:?} vs {:?}",
+        far.hlc
+    );
+    assert_eq!(next.device, local_device());
+}
+
 /// Task insert-order: which op placed each line comes back from the log at open, so a
 /// restarted device orders a late concurrent op like one that never restarted.
 #[test]

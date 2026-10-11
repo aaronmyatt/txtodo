@@ -51,6 +51,8 @@ pub struct NotesActor {
     projection: Vec<u8>,
     hash: Hash,
     hlc: Hlc,
+    /// The newest peer stamp the skew guard refused to merge: local stamps go past it (ADR 0040).
+    ahead_floor: Option<Hlc>,
     store: SharedStore,
     clock: Arc<dyn Clock>,
     /// What we last put on disk, and the mirror snapshot that matched it (`notes_held.rs`).
@@ -102,6 +104,7 @@ impl NotesActor {
         let written_snapshot = mirror.snapshot().map_err(mirror_err)?;
         let mut actor = NotesActor {
             hlc: Hlc::zero(cfg.device),
+            ahead_floor: None,
             state,
             mirror,
             written: bytes.clone(),
@@ -310,7 +313,9 @@ impl NotesActor {
 
     fn tick(&mut self) -> Result<Hlc, ActorError> {
         let before = self.hlc;
-        let hlc = self.hlc.tick(self.clock.now_ms())?;
+        let now = self.clock.now_ms();
+        let hlc = crate::stamp_floor::past_floor(self.hlc.tick(now)?, self.ahead_floor, now);
+        self.hlc = hlc;
         debug_assert!(hlc > before, "tick is strictly monotone");
         Ok(hlc)
     }

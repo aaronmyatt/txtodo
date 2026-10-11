@@ -77,6 +77,8 @@ pub struct FileActor {
     pub(crate) projection: Vec<u8>,
     pub(crate) hash: Hash,
     pub(crate) hlc: Hlc,
+    /// The newest peer stamp the skew guard refused to merge: local stamps go past it (ADR 0040).
+    pub(crate) ahead_floor: Option<Hlc>,
     pub(crate) store: SharedStore,
     pub(crate) clock: Arc<dyn Clock>,
     pub(crate) expected: ExpectedWrites,
@@ -118,6 +120,7 @@ impl FileActor {
         };
         let mut actor = FileActor {
             hlc: Hlc::zero(cfg.device),
+            ahead_floor: None,
             state: empty,
             projection: Vec::new(),
             hash: hash_of(&[]),
@@ -254,7 +257,9 @@ impl FileActor {
     /// One HLC tick per batch, before it applies; a failed batch has harmlessly spent a tick.
     pub(crate) fn tick(&mut self) -> Result<Hlc, ActorError> {
         let before = self.hlc;
-        let hlc = self.hlc.tick(self.clock.now_ms())?;
+        let now = self.clock.now_ms();
+        let hlc = crate::stamp_floor::past_floor(self.hlc.tick(now)?, self.ahead_floor, now);
+        self.hlc = hlc;
         debug_assert!(hlc > before, "tick is strictly monotone");
         debug_assert_eq!(hlc.device, self.cfg.device);
         Ok(hlc)
