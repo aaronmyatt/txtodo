@@ -1,18 +1,16 @@
 //! A Loro text doc for one `notes.md` (plan M5, tasks/crdt-notes-doc): a single root `LoroText`,
-//! no tasks map, no movable list — notes are prose, not task lines, so this is deliberately a
-//! different, smaller document shape than [`crate::LoroDocument`] rather than a reuse of it (see
-//! that type's module doc: the tasks map/movable list machinery has no meaning for prose).
+//! no tasks map, no movable list — notes are prose, not task lines. (The todo.txt task-list
+//! document it once sat beside went with ADR 0038.)
 //!
-//! Edits replay through [`crate::to_loro::replay_edits`], the same dual-indexed `TextEdit` walk a
-//! task's description uses, so two devices' concurrent edits to different parts of the text merge
-//! character-wise the same way. Loro text API: <https://docs.rs/loro/latest/loro/struct.LoroText.html>.
+//! Edits replay through [`crate::text::replay_edits`], a dual-indexed `TextEdit` walk, so two
+//! devices' concurrent edits to different parts of the text merge character-wise. Loro text API: <https://docs.rs/loro/latest/loro/struct.LoroText.html>.
 
 use std::fmt;
 
 use loro::{ExportMode, LoroDoc, LoroText, VersionVector};
 use txtodo_model::TextEdit;
 
-use crate::to_loro::replay_edits;
+use crate::text::replay_edits;
 
 /// Root container name for the notes text; the only container this document ever holds.
 const NOTES_TEXT_ROOT: &str = "notes";
@@ -49,8 +47,8 @@ impl From<loro::LoroEncodeError> for NotesDocError {
     }
 }
 
-/// The Loro-backed document behind one `notes.md`. In-memory only, like [`crate::LoroDocument`]:
-/// `txtodo-store` is the durable truth and this is rebuilt from a snapshot plus replayed ops.
+/// The Loro-backed document behind one `notes.md`. In-memory only: `txtodo-store` is the durable
+/// truth and this is rebuilt from a snapshot plus replayed ops.
 pub struct NotesDoc {
     doc: LoroDoc,
 }
@@ -64,7 +62,7 @@ impl NotesDoc {
     }
 
     /// An empty document seeded with `initial` as one insert, for a fresh lineage (no snapshot
-    /// exists yet — mirrors [`crate::LoroDocument::open`] plus one hydrate step).
+    /// exists yet).
     pub fn hydrate(initial: &str) -> Result<NotesDoc, NotesDocError> {
         let doc = NotesDoc::open();
         if !initial.is_empty() {
@@ -82,7 +80,7 @@ impl NotesDoc {
         })
     }
 
-    /// Pins the Loro peer id, like [`crate::LoroDocument::set_peer`].
+    /// Pins the Loro peer id.
     pub fn set_peer(&self, peer: u64) -> Result<(), NotesDocError> {
         self.doc.set_peer_id(peer)?;
         debug_assert_eq!(self.doc.peer_id(), peer);

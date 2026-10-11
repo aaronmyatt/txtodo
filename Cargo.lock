@@ -8852,11 +8852,8 @@ name = "txtodo-crdt"
 version = "0.0.22"
 dependencies = [
  "loro",
- "tracing",
- "tracing-subscriber",
  "txtodo-core",
  "txtodo-model",
- "txtodo-store",
 ]
 
 [[package]]

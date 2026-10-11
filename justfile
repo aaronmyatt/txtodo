@@ -48,13 +48,6 @@ boundaries:
 deny:
     cargo deny check
 
-# the full crdt-sync-simulator sweep (plan M4 acceptance: 1000 runs, random seeds each time);
-# CI runs 20 fixed seeds (`slow_twenty_fixed_seeds_converge`; local nextest skips `slow_*`) —
-# this is deliberately not part of `check`. The sim is the `sim` module of crdt's tests/it binary.
-# TXTODO_SIM_SEED=<n> reruns exactly one seed to reproduce a failure this prints.
-sim:
-    cargo test -p txtodo-crdt --release --test it sim:: -- --ignored --nocapture
-
 # fuzz <target> <secs>: plan M0 wants this; cargo-fuzz needs nightly and is installed at M1, not by /setup
 fuzz target secs="60":
     PATH="$(dirname "$(rustup which --toolchain nightly cargo)"):$PATH" cargo fuzz run --fuzz-dir crates/txtodo-core/fuzz {{target}} -- -max_total_time={{secs}}

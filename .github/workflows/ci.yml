@@ -92,7 +92,7 @@ jobs:
       # old `--run-ignored ignored-only` step: apps/desktop's support::TXTODOD_BIN builds txtodod
       # with a nested cargo build under its own feature resolution (once ~14 minutes for 2 tests),
       # so this is still the slowest step. Other crates' #[ignore]s are deliberate and stay ignored
-      # (txtodo-sync upstream bugs, the crdt `just sim` sweep, daemon-launch's simulated_reboot).
+      # (txtodo-sync upstream bugs, daemon-launch's simulated_reboot).
       - name: test (e2e)
         if: runner.os != 'Windows'
         run: cargo nextest run --workspace --exclude txtodo-daemon --test e2e --no-fail-fast
