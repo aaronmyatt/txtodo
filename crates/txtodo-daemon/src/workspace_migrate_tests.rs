@@ -28,6 +28,13 @@ fn open(root: &Path) -> Workspace {
         .unwrap_or_else(|e| panic!("open workspace: {e}"))
 }
 
+/// An existing Tagged workspace: since ADR 0019 a new one always opens Sidecar, so the mode is
+/// given, as an old store would hold it.
+fn open_tagged(root: &Path) -> Workspace {
+    Workspace::open_with_default_mode(root, Arc::new(FakeClock::new(1_000)), IdentityMode::Tagged)
+        .unwrap_or_else(|e| panic!("open workspace: {e}"))
+}
+
 fn seed(root: &Path) {
     touch(&root.join("todo.txt"), &format!("one id:{A}\ntwo id:{B}\n"));
     touch(&root.join("q4/todo.txt"), &format!("three id:{C}\n"));
@@ -37,7 +44,7 @@ fn seed(root: &Path) {
 async fn a_tagged_workspace_converts_and_stays_sidecar_across_a_reopen() {
     let dir = tempfile::tempdir().unwrap();
     seed(dir.path());
-    let mut ws = open(dir.path());
+    let mut ws = open_tagged(dir.path());
     assert_eq!(ws.identity_mode(), IdentityMode::Tagged);
 
     let handles = ws.begin_sidecar_migration().unwrap();
@@ -59,7 +66,7 @@ async fn a_tagged_workspace_converts_and_stays_sidecar_across_a_reopen() {
 async fn a_dry_run_changes_nothing_and_leaves_the_mode_alone() {
     let dir = tempfile::tempdir().unwrap();
     seed(dir.path());
-    let ws = open(dir.path());
+    let ws = open_tagged(dir.path());
     let before = read(&dir.path().join("todo.txt"));
 
     let report = migrate_documents(ws.document_handles(), true).await;
@@ -73,7 +80,7 @@ async fn a_dry_run_changes_nothing_and_leaves_the_mode_alone() {
 async fn a_second_run_finds_nothing_left_to_strip() {
     let dir = tempfile::tempdir().unwrap();
     seed(dir.path());
-    let mut ws = open(dir.path());
+    let mut ws = open_tagged(dir.path());
     let first = ws.begin_sidecar_migration().unwrap();
     migrate_documents(first, false).await;
 
@@ -82,4 +89,21 @@ async fn a_second_run_finds_nothing_left_to_strip() {
 
     assert!(report.failures.is_empty());
     assert_eq!(report.stripped, 0);
+}
+
+/// Task cli-no-implicit-register: a folder whose lists already carry a few `id:` tags (an old
+/// checkout) opens as Sidecar (ADR 0019), and opening it writes no `id:` into any line.
+#[tokio::test]
+async fn opening_a_partly_tagged_folder_stamps_no_id() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), &format!("one id:{A}\ntwo\n"));
+    touch(&dir.path().join("q4/todo.txt"), "three\nfour\n");
+    let ws = open(dir.path());
+    assert_eq!(ws.identity_mode(), IdentityMode::Sidecar);
+    drop(ws);
+    assert_eq!(
+        read(&dir.path().join("todo.txt")),
+        format!("one id:{A}\ntwo\n")
+    );
+    assert_eq!(read(&dir.path().join("q4/todo.txt")), "three\nfour\n");
 }

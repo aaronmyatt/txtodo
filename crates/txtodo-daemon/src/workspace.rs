@@ -137,12 +137,7 @@ impl Workspace {
         identity: Arc<DeviceIdentity>,
     ) -> Result<Workspace, WorkspaceError> {
         let layout = crate::layout_file::initial(root);
-        let extra = layout.custom_root_list().map(|p| root.join(p.as_str()));
-        let identity_mode = load_or_mint_identity_mode(
-            &mut store,
-            (root, extra.as_deref()),
-            default_identity_mode,
-        )?;
+        let identity_mode = load_or_mint_identity_mode(&mut store, default_identity_mode)?;
         let started_at_ms = clock.now_ms();
         let placeholder_workspace_id = WorkspaceId::new(clock.new_ulid());
         let lan_status = identity.lan_status().clone();
