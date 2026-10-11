@@ -4,6 +4,10 @@
 //! files. Now a read-only command run where no registered workspace is checks first, and fails
 //! with the fix instead. A command that writes (`add`, `do`, …) still registers, as designed
 //! (task cli-workspace-autoregister). Never a silent fallback to direct-file mode.
+//!
+//! The same registry answer scopes a `--dir` that points inside a registered workspace (a ref
+//! dir, say) to that workspace's list there, as `sub` does, instead of the daemon refusing a
+//! folder inside one it already holds (task cli-sub-by-slug).
 
 use std::path::{Path, PathBuf};
 
@@ -64,15 +68,40 @@ pub fn is_inside(dir: &Path, roots: &[PathBuf]) -> bool {
     roots.iter().any(|root| dir.starts_with(root))
 }
 
-/// Refuses a read-only `command` in `dir` when no registered workspace holds it. Only for the
-/// global daemon (`selector` set); a per-folder daemon serves its one workspace. An older daemon
-/// without `WorkspaceList` is let through, as before.
-pub fn check(daemon: &mut Daemon, dir: &Path, command: &Command) -> Result<(), CliError> {
-    if daemon.selector.is_none() || !is_read_only(command) {
-        return Ok(());
+/// A `--dir` inside a registered workspace: its root, and the list there, workspace-relative.
+pub struct Scoped {
+    pub root: PathBuf,
+    pub list: String,
+}
+
+/// The list `here` names inside `root`, when it is strictly inside it.
+pub fn scoped_list(here: &Path, root: &Path) -> Option<String> {
+    let rel = here.strip_prefix(root).ok()?;
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    let parts: Vec<String> = rel
+        .iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    Some(format!("{}/todo.txt", parts.join("/")))
+}
+
+/// Against the global daemon (`selector` set): a `dir` strictly inside a registered workspace is
+/// `Scoped` to it (unless a `--list` already scopes the run); a read-only `command` in a folder no
+/// registered workspace holds is refused with the fix. A per-folder daemon serves its one
+/// workspace; an older daemon without `WorkspaceList` is let through, as before.
+pub fn check(
+    daemon: &mut Daemon,
+    dir: &Path,
+    command: &Command,
+    has_list: bool,
+) -> Result<Option<Scoped>, CliError> {
+    if daemon.selector.is_none() {
+        return Ok(None);
     }
     let Ok(workspaces) = daemon.workspace_list() else {
-        return Ok(());
+        return Ok(None);
     };
     let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let roots: Vec<PathBuf> = workspaces
@@ -80,8 +109,16 @@ pub fn check(daemon: &mut Daemon, dir: &Path, command: &Command) -> Result<(), C
         .map(|w| canon(Path::new(&w.root)))
         .collect();
     let here = canon(dir);
-    if is_inside(&here, &roots) {
-        return Ok(());
+    if !has_list {
+        let inside = roots
+            .iter()
+            .find_map(|root| scoped_list(&here, root).map(|list| (root.clone(), list)));
+        if let Some((root, list)) = inside {
+            return Ok(Some(Scoped { root, list }));
+        }
+    }
+    if !is_read_only(command) || is_inside(&here, &roots) {
+        return Ok(None);
     }
     Err(CliError::Message(format!(
         "{} is not a txtodo workspace, and reading it would register it. \
@@ -89,6 +126,34 @@ pub fn check(daemon: &mut Daemon, dir: &Path, command: &Command) -> Result<(), C
         here.display(),
         here.display()
     )))
+}
+
+/// Runs this command again as `--dir <root> --list <list>`, the rest of the arguments as given
+/// but the original `--dir`. The child prints its own output and errors.
+pub fn rerun_scoped(scoped: &Scoped) -> Result<(), CliError> {
+    let mut rest = Vec::new();
+    let mut args = std::env::args_os().skip(1);
+    while let Some(a) = args.next() {
+        if a == "--dir" {
+            args.next();
+        } else if !a.to_string_lossy().starts_with("--dir=") {
+            rest.push(a);
+        }
+    }
+    let exe = std::env::current_exe().map_err(CliError::Io)?;
+    let status = std::process::Command::new(exe)
+        .arg("--dir")
+        .arg(&scoped.root)
+        .arg("--list")
+        .arg(&scoped.list)
+        .args(rest)
+        .status()
+        .map_err(CliError::Io)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CliError::Reported)
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +189,21 @@ mod tests {
         ] {
             assert!(!is_read_only(&parsed(args)), "{args:?}");
         }
+    }
+
+    #[test]
+    fn a_folder_inside_a_root_is_that_roots_list() {
+        let root = Path::new("/w/repo");
+        assert_eq!(
+            scoped_list(Path::new("/w/repo/tasks/a"), root).as_deref(),
+            Some("tasks/a/todo.txt")
+        );
+        assert_eq!(
+            scoped_list(root, root),
+            None,
+            "the root itself is not scoped"
+        );
+        assert_eq!(scoped_list(Path::new("/w/other"), root), None);
     }
 
     #[test]

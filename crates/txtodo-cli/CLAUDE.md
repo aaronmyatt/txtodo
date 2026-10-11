@@ -117,6 +117,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   `--yes`, `sub … <one of those>`) never registers a folder: against the global daemon, in a
   folder no registered workspace holds, it fails naming `txtodo workspace add` and `--no-daemon`
   (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers.
+- `sub ITEM CMD…`: ITEM is a root line number, or a `ref:` slug path (`trip`, `trip/flights`)
+  resolved list by list through `RefDir` (`commands/sub_slug.rs`, task cli-sub-by-slug). A
+  `--dir` strictly inside a registered workspace re-runs as `--dir <root> --list <dir>/todo.txt`
+  (`register_guard::rerun_scoped`) instead of the daemon refusing it.
 - todo.sh parity is a test: `tests/it/todosh_parity.rs` (direct mode). `tests/e2e/daemon_mode.rs` spawns a
   real txtodod (built on demand with cargo — this crate may not depend on the daemon crate).
 - `add` always stamps today's local date; it stamps `id:<ULID>` too only when `Config::id_tags()`

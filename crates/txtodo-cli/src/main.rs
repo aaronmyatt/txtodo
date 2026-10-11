@@ -111,7 +111,14 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => {
             // Before any request names this folder: a read-only command never registers it.
-            register_guard::check(&mut daemon, &ctx.paths.dir, &cli.command)?;
+            if let Some(scoped) = register_guard::check(
+                &mut daemon,
+                &ctx.paths.dir,
+                &cli.command,
+                cli.list.is_some(),
+            )? {
+                return register_guard::rerun_scoped(&scoped);
+            }
             // `workspace …` is about the registry, not a document: asking the layout here would
             // make the daemon open and register the resolved `--dir`/cwd as a side effect
             // (`workspace list` from any folder registered it; `accept --dir x` tried to

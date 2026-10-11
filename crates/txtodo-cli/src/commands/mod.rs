@@ -24,6 +24,7 @@ pub mod pair;
 pub mod refdir;
 pub mod service;
 pub mod skill;
+pub mod sub_slug;
 pub mod text;
 pub mod upgrade;
 pub mod workspace;

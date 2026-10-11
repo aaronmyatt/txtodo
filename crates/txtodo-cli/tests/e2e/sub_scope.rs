@@ -99,3 +99,73 @@ fn assert_only_the_workspace_is_registered(daemon: &GlobalDaemon, ws: &Path, ref
     assert!(why.contains("inside the registered workspace"), "{why}");
     assert!(why.contains(&root.display().to_string()), "{why}");
 }
+
+/// A registered workspace whose line `plan trip` has a sub-list, itself with a nested one.
+fn seed_trip(daemon: &GlobalDaemon, root: &Path) {
+    std::fs::write(root.join("todo.txt"), "call mum\nplan trip ref:trip\n").unwrap();
+    std::fs::create_dir_all(root.join("tasks/trip/flights")).unwrap();
+    std::fs::write(
+        root.join("tasks/trip/todo.txt"),
+        "book hotel\npack bags\nflights ref:flights\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("tasks/trip/flights/todo.txt"), "compare fares\n").unwrap();
+    let add = daemon.txtodo(root, &["workspace", "add", &root.display().to_string()]);
+    assert!(add.status.success(), "{}", stderr(&add));
+}
+
+/// Task cli-sub-by-slug: `sub <slug>` names a sub-list by its `ref:` slug, so a root line above it
+/// completing (which moves its number) changes nothing; `a/b` reaches a nested ref; an unknown
+/// slug names the closest.
+#[test]
+fn sub_by_slug_reaches_the_sub_list_whatever_its_line_number() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    let ws = tempfile::tempdir().unwrap();
+    let root = ws.path();
+    seed_trip(&daemon, root);
+
+    // Line 1 completes and moves down: `plan trip` is line 1 now, `trip` still names it.
+    assert!(daemon.txtodo(root, &["do", "1"]).status.success());
+    let done = daemon.txtodo(root, &["sub", "trip", "do", "2"]);
+    assert!(done.status.success(), "{}", stderr(&done));
+    let trip = std::fs::read_to_string(root.join("tasks/trip/todo.txt")).unwrap();
+    assert!(
+        trip.lines()
+            .any(|l| l.starts_with("x ") && l.contains("pack bags")),
+        "{trip}"
+    );
+
+    let nested = daemon.txtodo(root, &["sub", "trip/flights", "ls"]);
+    assert!(
+        stdout(&nested).contains("compare fares"),
+        "{}",
+        stderr(&nested)
+    );
+
+    let wrong = daemon.txtodo(root, &["sub", "trp", "ls"]);
+    assert!(!wrong.status.success());
+    assert!(stderr(&wrong).contains("ref:trip"), "{}", stderr(&wrong));
+}
+
+/// Task cli-sub-by-slug: `--dir <ref dir>` works that list through its workspace, as `sub` does,
+/// instead of the daemon refusing a folder inside one it holds.
+#[test]
+fn a_dir_inside_the_workspace_scopes_to_that_list() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    let ws = tempfile::tempdir().unwrap();
+    let root = ws.path();
+    seed_trip(&daemon, root);
+    let by_dir = daemon.txtodo(root, &["--dir", "tasks/trip", "ls"]);
+    assert!(by_dir.status.success(), "{}", stderr(&by_dir));
+    assert!(
+        stdout(&by_dir).contains("book hotel"),
+        "{}",
+        stdout(&by_dir)
+    );
+    assert!(
+        !root.join("tasks/trip/.txtodo").exists(),
+        "the ref dir is no workspace"
+    );
+}

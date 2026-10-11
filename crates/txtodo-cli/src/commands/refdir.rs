@@ -81,17 +81,12 @@ fn edit_in_editor(current: &[u8]) -> Result<String, CliError> {
 /// existing `ref:` tag (typed error otherwise); a dangling one (rule 9) is healed first, same as
 /// the first sub-list write would, since the tag already exists and `ensure` can mint no new one.
 pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Result<(), CliError> {
-    let task = task_ref(item, "sub ITEM# COMMAND...")?;
-    let probe = daemon.ref_dir(&ctx.paths.todo_file, task.clone(), false)?;
-    if !probe.has_ref_tag {
-        return Err(CliError::Message(format!(
-            "txtodo: line {item} has no ref: tag; run `txtodo notes {item}` first"
-        )));
-    }
-    let info = daemon.ref_dir(&ctx.paths.todo_file, task, true)?;
-    // `info.dir` is workspace-relative with `/` separators, and a sub-list is always the ref
-    // dir's `todo.txt` (rule 3), whatever the workspace calls its root list.
-    let list = format!("{}/todo.txt", info.dir);
+    // A number is a root line; anything else a slug path (`trip`, `trip/flights`).
+    let list = if item.parse::<u32>().is_ok() {
+        list_of_line(ctx, daemon, item)?
+    } else {
+        crate::commands::sub_slug::resolve(daemon, &ctx.paths.todo_file, item)?
+    };
     let exe = std::env::current_exe().map_err(CliError::Io)?;
     let status = std::process::Command::new(exe)
         .arg("--dir")
@@ -107,6 +102,21 @@ pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Re
         // The child already printed its own error; only the exit status carries over.
         Err(CliError::Reported)
     }
+}
+
+/// The sub-list of root line `item`, claiming the ref dir (one op batch) when the tag is there.
+fn list_of_line(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<String, CliError> {
+    let task = task_ref(item, "sub ITEM# COMMAND...")?;
+    let probe = daemon.ref_dir(&ctx.paths.todo_file, task.clone(), false)?;
+    if !probe.has_ref_tag {
+        return Err(CliError::Message(format!(
+            "txtodo: line {item} has no ref: tag; run `txtodo notes {item}` first"
+        )));
+    }
+    let info = daemon.ref_dir(&ctx.paths.todo_file, task, true)?;
+    // `info.dir` is workspace-relative with `/` separators, and a sub-list is always the ref
+    // dir's `todo.txt` (rule 3), whatever the workspace calls its root list.
+    Ok(format!("{}/todo.txt", info.dir))
 }
 
 /// `prune --orphans [--yes]`: lists directories no line points to (rule 10); deletes them only

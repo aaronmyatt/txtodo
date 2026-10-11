@@ -20,3 +20,13 @@ file by hand.
 - `--dir` pointing inside a workspace resolves to that workspace plus `--list`, rather than
   refusing.
 - Unknown slug → typed error naming the slug and the nearest existing one.
+
+## As built (2026-10-11)
+- `sub <slug>[/<nested>]`: each segment is looked up among the `ref:` tags of the list before it
+  (root list first) and its line's ref dir asked of the daemon (`RefDir`, ensure false), then the
+  same `--list` re-exec. An unknown slug names the closest (edit distance) in that list.
+- `--dir` strictly inside a registered workspace: one `WorkspaceList` (the same call the
+  read-only guard makes) finds the root; the CLI re-runs as `--dir <root> --list <rel>/todo.txt`.
+- e2e: `sub_scope.rs` (slug after a root line moved, nested path, unknown slug, `--dir tasks/trip`).
+- Known gap: `sub <slug>` never creates a ref dir (only an existing `ref:` tag is followed); a line
+  number still does, as before.
