@@ -112,6 +112,10 @@ pub struct WatchRequest {
     pub paths: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
     pub workspace: ::core::option::Option<WorkspaceSelector>,
+    /// This client shows its own change notices (the desktop): while any Watch stream that set this
+    /// is open, the daemon shows none of its own (ADR 0041). False from an older client.
+    #[prost(bool, tag = "3")]
+    pub shows_notices: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct OpSummary {

@@ -260,6 +260,9 @@ message FileContents {
 message WatchRequest {
   repeated string paths = 1;
   WorkspaceSelector workspace = 2;
+  // This client shows its own change notices (the desktop): while any Watch stream that set this
+  // is open, the daemon shows none of its own (ADR 0041). False from an older client.
+  bool shows_notices = 3;
 }
 
 message OpSummary {

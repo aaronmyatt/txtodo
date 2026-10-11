@@ -167,6 +167,7 @@ fn requests_round_trip() {
     round_trip(&WatchRequest {
         paths: vec!["todo.txt".into(), "q4/todo.txt".into()],
         workspace: None,
+        shows_notices: true,
     });
     round_trip(&HistoryRequest {
         path: String::new(),

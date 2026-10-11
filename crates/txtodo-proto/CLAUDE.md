@@ -5,7 +5,7 @@ Protobuf definitions and generated gRPC types.
 
 ## Public interface
 `ListFiles`, `GetFile`, `Watch`, `Apply`, `History`, `Undo`, `Checkout`, `Health`,
-`ListConflicts` (duplicate groups only; `ResolveConflict`, `ReviewFlag`, `Resolution` and the
+`WatchRequest.shows_notices` (ADR 0041: the daemon holds its own notices while one is open). `ListConflicts` (duplicate groups only; `ResolveConflict`, `ReviewFlag`, `Resolution` and the
 `flags`/`review` fields went with ADR 0038, their numbers `reserved`), `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
 `PairConfirmSas`, `PairAwaitPeer` (plan M4 `sync-pairing`'s LAN wiring pass: the initiator polls
 this — `PairResult.sas` empty means "still waiting" — to learn a joiner's `PairAccept` has reached
