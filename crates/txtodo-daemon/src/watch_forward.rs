@@ -2,9 +2,8 @@
 //! rule-5 progress attached (plan M5, tasks/proto-tree-progress). Split out of `server.rs` purely
 //! to keep that file within its line budget, same pattern as `progress.rs`/`notes.rs`.
 
-use crate::convert::to_flag;
 use crate::convert::to_summary;
-use crate::handle::{ActorHandle, ConflictRow};
+use crate::handle::ActorHandle;
 use crate::progress::watch_progress_of;
 use crate::server::TxtodoService;
 use tokio::sync::broadcast::error::RecvError;
@@ -60,17 +59,8 @@ pub(crate) async fn forward_changes(
                         ..to_summary(s)
                     })
                     .collect(),
-                // Line numbers are not known on the broadcast path; ListConflicts has them.
-                review: c
-                    .review
-                    .iter()
-                    .map(|row| {
-                        to_flag(&ConflictRow {
-                            row: row.clone(),
-                            line_number: 0,
-                        })
-                    })
-                    .collect(),
+                // No needs_review flags since ADR 0038.
+                review: Vec::new(),
                 progress: watch_progress_of(&svc, &h).await,
                 duplicate_groups: c.duplicate_groups,
             },

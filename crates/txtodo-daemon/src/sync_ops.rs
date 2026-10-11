@@ -82,7 +82,6 @@ impl FileActor {
             tail: CommitTail {
                 source: Some(SYNC_SOURCE.to_owned()),
                 defer_write: defer,
-                ..CommitTail::default()
             },
         })?;
         self.parked = parked;

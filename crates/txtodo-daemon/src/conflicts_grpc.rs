@@ -1,17 +1,17 @@
 //! `ListConflicts` / `ResolveConflict` (plan M7, design §4.7) and the read-only `Lint` RPC (task
 //! `mcp-hygiene-parity`), moved out of `server.rs` for its line budget — the same `impl
-//! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`.
+//! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`. Since ADR 0038
+//! (conflict review A) `ListConflicts` sends duplicate groups only and `ResolveConflict` refuses:
+//! nothing raises a needs_review flag. Both stay on the wire until the proto drops them.
 
-use crate::convert::{
-    applied_of, parse_principal, parse_resolution, parse_task_ref, status_of, to_flag,
-};
+use crate::convert::status_of;
 use crate::duplicates::to_duplicate_group;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
 
 impl TxtodoService {
-    /// The open `needs_review` flags of one document.
+    /// One document's duplicate groups; `flags` is always empty (ADR 0038).
     pub(crate) async fn list_conflicts_impl(
         &self,
         r: Request<pb::ConflictsRequest>,
@@ -19,27 +19,20 @@ impl TxtodoService {
         let h = self.actor(&r.get_ref().path)?;
         let found = h.conflicts().await.map_err(status_of)?;
         Ok(Response::new(pb::ConflictsResponse {
-            flags: found.flags.iter().map(to_flag).collect(),
+            flags: Vec::new(),
             duplicates: found.duplicates.iter().map(to_duplicate_group).collect(),
         }))
     }
 
-    /// Resolves one flag, keeping mine, theirs or the merged text.
+    /// Refuses: there is no needs_review flag to resolve since ADR 0038. An older client that
+    /// still calls it gets a reason it can show, not an unimplemented RPC.
     pub(crate) async fn resolve_conflict_impl(
         &self,
-        r: Request<pb::ResolveRequest>,
+        _r: Request<pb::ResolveRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let req = r.into_inner();
-        let h = self.actor(&req.path)?;
-        let task = parse_task_ref(req.task)?;
-        let resolution = parse_resolution(req.resolution)?;
-        // Unset agent = the user on this device; an MCP agent's resolution is attributed to it.
-        let principal = parse_principal(req.agent, self.workspace().device())?;
-        let a = h
-            .resolve(task, resolution, principal)
-            .await
-            .map_err(status_of)?;
-        Ok(Response::new(applied_of(a)))
+        Err(Status::failed_precondition(
+            "no needs_review flags since ADR 0038: there is nothing to resolve",
+        ))
     }
 
     /// `txtodo lint` for one document: `txtodo_core::lint_findings` over the exact bytes the

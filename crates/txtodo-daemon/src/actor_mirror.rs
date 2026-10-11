@@ -8,8 +8,8 @@ use crate::handle::ActorError;
 use crate::identity_fingerprint::fingerprint_of;
 use crate::reconcile::task_of;
 use crate::state::DocState;
-use txtodo_model::{FilePath, IdentityMode};
-use txtodo_store::{CommitExtras, FingerprintRow, ReviewRow};
+use txtodo_model::IdentityMode;
+use txtodo_store::{CommitExtras, FingerprintRow};
 
 impl FileActor {
     /// The store-transaction extras a commit tail asks for.
@@ -19,7 +19,7 @@ impl FileActor {
         next: &DocState,
     ) -> Result<CommitExtras, ActorError> {
         Ok(CommitExtras {
-            clear: tail.clear,
+            clear: None, // no needs_review flags since ADR 0038; the store line drops the field
             fingerprints: self.fingerprints_for(next),
             source: tail.source.clone(),
         })
@@ -44,25 +44,6 @@ impl FileActor {
                 })
             })
             .collect()
-    }
-
-    /// Stores the flags a change raised; a store failure is logged, the change is already durable.
-    pub(crate) fn raise_flags(&mut self, rows: &[ReviewRow]) {
-        if rows.is_empty() {
-            return;
-        }
-        let path = self.cfg.path.clone();
-        let mut store = self.lock_store();
-        for row in rows {
-            if let Err(e) = store.raise_flag(row) {
-                Self::log_raise_flag_failed(&path, &e);
-            }
-        }
-        debug_assert!(rows.iter().all(|r| r.file == self.cfg.path));
-    }
-
-    fn log_raise_flag_failed(path: &FilePath, e: &txtodo_store::StoreError) {
-        tracing::error!(file = %path, error = %e, "raise_flag_failed");
     }
 
     /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that

@@ -6,8 +6,8 @@ use crate::actor::FileActor;
 use crate::expected::Hash;
 use crate::handle::Change;
 use crate::state::DocState;
-use txtodo_model::{Op, TaskId};
-use txtodo_store::{ReviewRow, Seq, SeqRange, Stored};
+use txtodo_model::Op;
+use txtodo_store::{Seq, SeqRange, Stored};
 
 /// One persisted change, ready to commit.
 pub(crate) struct Commit {
@@ -25,10 +25,6 @@ pub(crate) const SYNC_SOURCE: &str = "sync";
 /// What a commit does besides landing ops and bytes (plan M4 sync paths).
 #[derive(Default)]
 pub(crate) struct CommitTail {
-    /// needs_review flags to raise with this change.
-    pub(crate) review: Vec<ReviewRow>,
-    /// Clear this flag in the store transaction (a resolution).
-    pub(crate) clear: Option<(TaskId, u64)>,
     /// Which client made the change, stamped on every op of the commit (task op-source): a
     /// client's own name, `"sync"` for ops from another device, `"external"` for a disk edit.
     /// Kept in this device's op log only, never in an op.
@@ -47,7 +43,7 @@ impl FileActor {
         ops: Vec<Op>,
         tail: CommitTail,
     ) -> Change {
-        let CommitTail { review, source, .. } = tail;
+        let CommitTail { source, .. } = tail;
         let first = range.map_or(0, |r| r.first.0);
         let stored: Vec<Stored> = ops
             .into_iter()
@@ -69,7 +65,6 @@ impl FileActor {
             path: self.cfg.path.clone(),
             hash,
             ops: stored,
-            review,
             duplicate_groups: u32::try_from(groups).unwrap_or(u32::MAX),
             // As the op log keeps it, so Watch and History name a client the same way.
             source: source.map(|s| txtodo_store::cap_source(&s).to_owned()),

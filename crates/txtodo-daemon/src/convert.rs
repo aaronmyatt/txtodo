@@ -1,7 +1,7 @@
 //! The gRPC boundary: proto messages are parsed into typed values once, here (constitution §3:
 //! parse, don't validate); ops are rendered into `OpSummary` for log/blame/Watch. Pure.
 
-use crate::handle::{ActorError, ConflictRow, Resolution};
+use crate::handle::ActorError;
 use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::refdir::RefDirError;
 use crate::state::TaskCounts;
@@ -58,7 +58,6 @@ fn status_kind(e: ActorError) -> Status {
         ActorError::Mutation(_) => Status::invalid_argument(e.to_string()),
         ActorError::Unsupported(_) => Status::unimplemented(e.to_string()),
         ActorError::Mirror(_) => Status::internal(e.to_string()),
-        ActorError::NoFlag(_) => Status::failed_precondition(e.to_string()),
         ActorError::Gone(_) => Status::unavailable(e.to_string()),
         ActorError::State(_) | ActorError::Store(_) | ActorError::Write(_) | ActorError::Hlc(_) => {
             Status::internal(e.to_string())
@@ -247,29 +246,6 @@ pub fn summary_of(kind: &OpKind) -> String {
         OpKind::BlankInsert { after } => format!("blank after {after:?}"),
         OpKind::BlankRemove { after } => format!("remove blank after {after:?}"),
         OpKind::RemoveTag { key, .. } => format!("remove tag {key}:"),
-    }
-}
-
-/// An open flag as the wire sees it.
-pub fn to_flag(c: &ConflictRow) -> pb::ReviewFlag {
-    pb::ReviewFlag {
-        task_id: c.row.task.to_string(),
-        line_number: u32::try_from(c.line_number).unwrap_or(u32::MAX),
-        mine: String::from_utf8_lossy(&c.row.mine).into_owned(),
-        theirs: String::from_utf8_lossy(&c.row.theirs).into_owned(),
-        raised_at_ms: c.row.raised_at_ms,
-    }
-}
-
-/// The wire resolution into the closed enum; unspecified is an error, not a default.
-pub fn parse_resolution(raw: i32) -> Result<Resolution, Status> {
-    match pb::Resolution::try_from(raw) {
-        Ok(pb::Resolution::Mine) => Ok(Resolution::Mine),
-        Ok(pb::Resolution::Theirs) => Ok(Resolution::Theirs),
-        Ok(pb::Resolution::Merged) => Ok(Resolution::Merged),
-        Ok(pb::Resolution::Unspecified) | Err(_) => Err(Status::invalid_argument(
-            "resolution must be mine, theirs or merged",
-        )),
     }
 }
 

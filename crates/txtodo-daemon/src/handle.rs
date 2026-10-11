@@ -12,7 +12,7 @@ use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use txtodo_model::{FilePath, Hlc, HlcError, Principal, RefTag, TaskId};
-use txtodo_store::{ReviewRow, StoreError, Stored};
+use txtodo_store::{StoreError, Stored};
 
 /// Mailbox depth per document.
 pub const ACTOR_MAILBOX_CAP: usize = 256;
@@ -42,8 +42,6 @@ pub struct Change {
     pub hash: Hash,
     /// The ops appended, with their seqs.
     pub ops: Vec<Stored>,
-    /// needs_review flags this change raised (an import), if any.
-    pub review: Vec<ReviewRow>,
     /// The file's duplicate groups afterwards (ADR 0032).
     pub duplicate_groups: u32,
     /// Which client made every op of this change (`CommitTail::source`, task op-source), so a
@@ -51,7 +49,7 @@ pub struct Change {
     pub source: Option<String>,
 }
 
-pub use crate::conflict_row::{ConflictRow, FileConflicts, Resolution};
+pub use crate::conflict_row::FileConflicts;
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
 /// FailedPrecondition; the rest are Internal.
@@ -69,8 +67,6 @@ pub enum ActorError {
     Hlc(HlcError),
     /// The Loro mirror could not be built when the actor opened (a bug, not a client error).
     Mirror(String),
-    /// A resolution named a task with no open needs_review flag.
-    NoFlag(TaskId),
     /// The actor task has stopped.
     Gone(FilePath),
     /// Not supported by a `DocState` document (undelete-via-`SetField`; `NotesEdit` is handled by
@@ -91,7 +87,6 @@ impl fmt::Display for ActorError {
             ActorError::Write(e) => write!(f, "{e}"),
             ActorError::Hlc(e) => write!(f, "{e}"),
             ActorError::Mirror(m) => write!(f, "mirror: {m}"),
-            ActorError::NoFlag(t) => write!(f, "no open needs_review flag for task {t}"),
             ActorError::Gone(p) => write!(f, "actor for {p} has stopped"),
             ActorError::Unsupported(what) => write!(f, "{what} is not supported yet"),
             ActorError::RefDir(e) => write!(f, "{e}"),
@@ -201,7 +196,7 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<crate::migrate_sidecar::Migrated, ActorError>>,
     },
-    /// The open needs_review flags.
+    /// The document's duplicate lines (ADR 0032).
     Conflicts {
         /// Result channel.
         reply: oneshot::Sender<Result<FileConflicts, ActorError>>,
@@ -218,17 +213,6 @@ pub enum ActorMsg {
         on: bool,
         /// Done.
         reply: oneshot::Sender<()>,
-    },
-    /// Resolve one flag.
-    Resolve {
-        /// The line.
-        task: TaskRef,
-        /// Which side.
-        resolution: Resolution,
-        /// Who asks.
-        principal: Principal,
-        /// Result channel.
-        reply: oneshot::Sender<Result<Applied, ActorError>>,
     },
     /// Lazy `ref:` creation (`refdir.rs`): the tag and directory as one op batch.
     EnsureRefDir {
@@ -345,25 +329,9 @@ impl ActorHandle {
             .await?
     }
 
-    /// The open needs_review flags with their current lines.
+    /// The document's duplicate groups (ADR 0032).
     pub async fn conflicts(&self) -> Result<FileConflicts, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
-    }
-
-    /// Resolves one flag.
-    pub async fn resolve(
-        &self,
-        task: TaskRef,
-        resolution: Resolution,
-        principal: Principal,
-    ) -> Result<Applied, ActorError> {
-        self.ask(|reply| ActorMsg::Resolve {
-            task,
-            resolution,
-            principal,
-            reply,
-        })
-        .await?
     }
 
     // ensure_ref_dir/rename_ref_dir/resolve_ref_dir/ref_tags (refdir.rs) and task_line
