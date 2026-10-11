@@ -142,3 +142,32 @@ fn a_line_typed_done_is_dated_and_settles_unless_the_cli_sent_it() {
         "the CLI's text is taken as it is"
     );
 }
+
+/// Desktop and TUI word their change notices from these summaries (`txtodo_core::notice`): a
+/// change in `summary_of`'s wording for these fields must show up here, not as silent notices.
+#[test]
+fn notices_read_completion_and_deletion_off_the_summary() {
+    use txtodo_core::notice::{Verb, verb_of};
+    use txtodo_model::{Field, FieldValue};
+    let set = |field, value| {
+        let kind = OpKind::SetField {
+            task: TaskId::new(Ulid::from_u128(1)),
+            field,
+            value,
+        };
+        verb_of(kind_tag(&kind), &summary_of(&kind))
+    };
+    assert_eq!(
+        set(Field::Completed, FieldValue::Bool(true)),
+        Some(Verb::Completed)
+    );
+    assert_eq!(
+        set(Field::Deleted, FieldValue::Bool(true)),
+        Some(Verb::Deleted)
+    );
+    assert_eq!(
+        set(Field::Completed, FieldValue::Bool(false)),
+        Some(Verb::Edited)
+    );
+    assert_eq!(set(Field::CompletionDate, FieldValue::Date(None)), None);
+}
