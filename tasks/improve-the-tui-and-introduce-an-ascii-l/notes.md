@@ -20,3 +20,9 @@
 
 ## Out
 - No colour or animation in the CLI logo.
+
+## As built
+- TUI mark: `┼╲ ╳` (t with its bar, the bar's hook down like a check, a gap, the x), 4 cells as
+  before. The old `┼╰╲╱` split the x into two cells that read as a V. The x is one cell now, so
+  its first stroke lights as a lone bold `╲`, the second as a bold `╳`. Unit test pins the glyphs.
+  Rejected: letters `tx` (no hook, nothing to light by stroke).
