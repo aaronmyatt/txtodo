@@ -246,6 +246,27 @@ fn a_peers_batch_moves_this_devices_clock_past_its_stamps() {
     assert!(next > ahead.hlc);
 }
 
+/// Lab lan-to-relay flake: the LAN and relay sessions to one peer both let one op through the
+/// held check before either committed; the second run must skip it, not refuse on the `UNIQUE` id.
+#[test]
+fn a_run_repeating_an_op_already_held_skips_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let mut actor = open(dir.path(), &store, &clock);
+    let a = TaskId::new(Ulid::from_u128(73));
+    let b = TaskId::new(Ulid::from_u128(74));
+    let first = peer_op(1, 900, insert(a, None, "a"));
+    actor.on_sync_ops(vec![first.clone()]).unwrap();
+    let rows_before = rows(&store);
+    let second = peer_op(2, 950, insert(b, Some(a), "b"));
+    actor.on_sync_ops(vec![first, second]).unwrap();
+    assert_eq!(rows(&store), rows_before + 1, "only the new op is logged");
+    let text = String::from_utf8(actor.state.to_bytes()).unwrap();
+    let words: Vec<&str> = text.lines().filter_map(|l| l.split(' ').next()).collect();
+    assert_eq!(words, ["a", "b"], "{text}");
+}
+
 /// ADR 0040 (lab clock-skew seed 777): a peer 7 minutes ahead is past the skew bound, so its stamp
 /// is not merged into the clock, yet this device's next edit still sorts after it; the device's
 /// clock itself stays where it was until that edit.
