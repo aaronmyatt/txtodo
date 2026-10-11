@@ -57,6 +57,13 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 		case "build_info":
 			// The mock daemon is always "this build": no mismatch banner in mock mode.
 			return { version: "0.0.2", release_date: "2026-09-20", daemon_version: "0.0.2", daemon_release_date: "2026-09-20" } as T;
+		case "check_updates":
+			// The mock is always the newest release: the Updates row's quiet path.
+			return { current: "0.0.2", latest: "v0.0.2", newer: false, command: "" } as T;
+		case "run_upgrade":
+			return "txtodo: upgraded (mock)" as T;
+		case "relaunch":
+			return undefined as T;
 		case "apply":
 			return applyMutations(args?.path as string, args?.mutations as Mutation[]) as unknown as T;
 		case "history":

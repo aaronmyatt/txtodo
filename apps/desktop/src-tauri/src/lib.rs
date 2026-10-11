@@ -17,6 +17,7 @@ mod commands_tokens;
 mod commands_ui_log;
 pub mod commands_universal;
 pub mod commands_universal_edit;
+mod commands_upgrade;
 mod commands_version;
 mod commands_window;
 mod commands_workspace;
@@ -117,6 +118,9 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_sync::sync_status,
         commands_ui_log::ui_log,
         commands_version::build_info,
+        commands_upgrade::check_updates,
+        commands_upgrade::run_upgrade,
+        commands_upgrade::relaunch,
         commands_window::set_pinned,
         commands_workspace::list_workspaces,
         commands_workspace::workspace_layout,

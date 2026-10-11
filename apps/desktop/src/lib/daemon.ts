@@ -95,6 +95,31 @@ export interface ApplyResult {
 	hlc_counter: number;
 }
 
+/** What `txtodo upgrade --check --json` said (task self-upgrade). Mirrors
+ * `desktop_lib::commands_upgrade::UpdateCheckDto`. */
+export interface UpdateCheck {
+	current: string;
+	latest: string;
+	newer: boolean;
+	/** What the upgrade runs. */
+	command: string;
+}
+
+/** Asks the installed `txtodo` CLI for the newest release; only when the human presses Check. */
+export function checkUpdates(): Promise<UpdateCheck> {
+	return invoke("check_updates");
+}
+
+/** Runs `txtodo upgrade` (the release for this install, then the daemon restart); its last line. */
+export function runUpgrade(): Promise<string> {
+	return invoke("run_upgrade");
+}
+
+/** Starts the app again on the upgraded build. */
+export function relaunch(): Promise<void> {
+	return invoke("relaunch");
+}
+
 /** This app's build and, when it answers, the daemon's (`commands_version.rs::build_info`). */
 export function buildInfo(): Promise<BuildInfo> {
 	return invoke("build_info");

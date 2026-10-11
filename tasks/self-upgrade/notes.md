@@ -36,3 +36,16 @@
 ## Open questions
 - None blocking. Linux: the curl script is macOS-only, so a non-brew Linux install gets the
   release URL to fetch by hand.
+
+## As built (2026-10-11)
+- CLI `upgrade [--check] [--json]` (`commands/upgrade.rs`): tag from the `releases/latest`
+  redirect via `curl`; install kind from the binary's path (cellar → brew; `.cargo/bin` or a
+  checkout's `target/` → source, refused with the command to run; else macOS → install script
+  for that tag into the same folder; else the release page). Then `daemon install --force`.
+- TUI: Settings > General "Updates" row (`app_upgrade.rs`); the upgrade runs after quitting, in
+  the restored terminal, so brew or the script can talk to the human.
+- Desktop: Settings > General "Updates" row (`commands_upgrade.rs`); looks for the CLI beside the
+  app, then `~/.local/bin`, Homebrew's and `~/.cargo/bin`; Relaunch restarts the app.
+- Checked live: `upgrade --check` says 0.0.22 is the newest (v0.0.22).
+- Known gaps: the upgrade run itself is untested until a release newer than this build exists;
+  the desktop app does not bundle `txtodo`, so a desktop-only install cannot upgrade from the app.
