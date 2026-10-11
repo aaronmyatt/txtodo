@@ -22,8 +22,6 @@ impl FileActor {
             clear: tail.clear,
             fingerprints: self.fingerprints_for(next),
             source: tail.source.clone(),
-            // A todo.txt commit lands no mirror row (ADR 0038); only notes.md keeps one.
-            ..CommitExtras::default()
         })
     }
 
