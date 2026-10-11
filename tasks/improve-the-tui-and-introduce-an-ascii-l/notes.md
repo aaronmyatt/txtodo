@@ -1,0 +1,1 @@
+The TUI logo looks like trash. See $HOME/Downloads/Screenshot 2026-10-08 at 1.37.27 PM
