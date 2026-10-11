@@ -28,9 +28,9 @@ use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool, tool_handler, tool_router};
 
 use crate::backend::{
-    AddArgs, ArchiveArgs, BatchArgs, ConflictsListArgs, ConflictsResolveArgs, DeleteArgs, EditArgs,
-    GetTarget, HistoryArgs, IdArgs, LintArgs, ListArgs, McpBackend, MoveArgs, NotesGetArgs,
-    NotesSetArgs, RawArgs, SearchArgs,
+    AddArgs, ArchiveArgs, BatchArgs, ConflictsListArgs, DeleteArgs, EditArgs, GetTarget,
+    HistoryArgs, IdArgs, LintArgs, ListArgs, McpBackend, MoveArgs, NotesGetArgs, NotesSetArgs,
+    RawArgs, SearchArgs,
 };
 use crate::{prompts, resources, tools_read, tools_write};
 
@@ -199,29 +199,13 @@ impl McpServer {
         fields(tool = "todo_conflicts_list", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "List open merge-conflict flags (two devices rewrote the same task): the task, both texts."
+        description = "List the file's duplicate lines (lines that read the same): each group's copies, oldest first. Fix one with todo_delete on the other copies."
     )]
     pub async fn todo_conflicts_list(
         &self,
         Parameters(args): Parameters<ConflictsListArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         tools_read::conflicts_list(self.backend.as_ref(), args).await
-    }
-
-    /// `todo_conflicts_resolve`.
-    #[tracing::instrument(
-        name = "mcp.call",
-        skip_all,
-        fields(tool = "todo_conflicts_resolve", principal = %self.backend.principal())
-    )]
-    #[tool(
-        description = "Resolve one conflicted task keeping mine, theirs or merged (the file as it is). Attributed to the agent."
-    )]
-    pub async fn todo_conflicts_resolve(
-        &self,
-        Parameters(args): Parameters<ConflictsResolveArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        tools_write::conflicts_resolve(self.backend.as_ref(), args).await
     }
 
     /// `todo_delete`.

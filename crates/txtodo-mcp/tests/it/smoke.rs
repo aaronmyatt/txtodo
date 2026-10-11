@@ -41,7 +41,6 @@ const EXPECTED_TOOLS: &[&str] = &[
     // task `mcp-hygiene-parity` / `mcp-conflicts-parity`
     "todo_lint",
     "todo_conflicts_list",
-    "todo_conflicts_resolve",
 ];
 
 /// The `txtodo` CLI commands MCP deliberately never mirrors (root todo
@@ -271,11 +270,6 @@ fn tool_routes() -> Vec<(&'static str, serde_json::Value, &'static str)> {
         ),
         ("todo_lint", json!({}), "lint"),
         ("todo_conflicts_list", json!({}), "conflicts_list"),
-        (
-            "todo_conflicts_resolve",
-            json!({"id": id, "side": "mine"}),
-            "conflicts_resolve",
-        ),
     ]
 }
 

@@ -297,29 +297,3 @@ pub struct ConflictsListArgs {
     /// Which registered workspace this targets; see [`WorkspaceArg`].
     pub workspace: WorkspaceArg,
 }
-
-/// Which side of a merge conflict wins (`todo_conflicts_resolve`), mirroring the daemon's
-/// `Resolution`: this device's text at flag time, the peer's, or what is already in the file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ConflictSide {
-    /// This device's description when the two sides diverged.
-    Mine,
-    /// The peer's description when the two sides diverged.
-    Theirs,
-    /// Keep the file as it is and only clear the flag; nothing is written.
-    Merged,
-}
-
-/// `todo_conflicts_resolve` args.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ConflictsResolveArgs {
-    /// The conflicted task.
-    pub id: TaskId,
-    /// Which side to keep.
-    pub side: ConflictSide,
-    /// Workspace-relative ref path; defaults to the document the task is found in.
-    pub file: Option<RefPath>,
-    /// Which registered workspace this targets; see [`WorkspaceArg`].
-    pub workspace: WorkspaceArg,
-}

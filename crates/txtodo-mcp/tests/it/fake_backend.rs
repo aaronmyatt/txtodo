@@ -5,8 +5,8 @@
 use std::sync::Mutex;
 
 use txtodo_mcp::backend::{
-    ApplyOutcome, ConflictFlag, ConflictSide, FieldPatch, FileMeta, GetTarget, Hlc, LintFinding,
-    ListArgs, McpBackend, MoveAnchor, OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
+    ApplyOutcome, DuplicateGroup, FieldPatch, FileMeta, GetTarget, Hlc, LintFinding, ListArgs,
+    McpBackend, MoveAnchor, OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
     WorkspaceInfo,
 };
 use txtodo_mcp::error::McpError;
@@ -168,19 +168,9 @@ impl McpBackend for FakeBackend {
         &self,
         _file: Option<RefPath>,
         _w: WorkspaceArg,
-    ) -> Result<Vec<ConflictFlag>, McpError> {
+    ) -> Result<Vec<DuplicateGroup>, McpError> {
         self.record("conflicts_list");
         Ok(Vec::new())
-    }
-    async fn conflicts_resolve(
-        &self,
-        _id: TaskId,
-        _side: ConflictSide,
-        _file: Option<RefPath>,
-        _w: WorkspaceArg,
-    ) -> Result<ApplyOutcome, McpError> {
-        self.record("conflicts_resolve");
-        Ok(ApplyOutcome::default())
     }
     async fn list_files(&self, _w: WorkspaceArg) -> Result<Vec<FileMeta>, McpError> {
         self.record("list_files");

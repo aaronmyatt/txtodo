@@ -12,8 +12,8 @@ use txtodo_proto::v1 as pb;
 use txtodo_proto::v1::txtodo_client::TxtodoClient;
 
 use crate::backend::{
-    ApplyOutcome, ConflictFlag, ConflictSide, FieldPatch, FileMeta, GetTarget, Hlc, LintFinding,
-    ListArgs, McpBackend, MoveAnchor, OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
+    ApplyOutcome, DuplicateGroup, FieldPatch, FileMeta, GetTarget, Hlc, LintFinding, ListArgs,
+    McpBackend, MoveAnchor, OpSummary, RefPath, TaskId, TaskRow, TodoOp, WorkspaceArg,
     WorkspaceInfo,
 };
 use crate::error::McpError;
@@ -254,18 +254,8 @@ impl McpBackend for GrpcMcpBackend {
         &self,
         file: Option<RefPath>,
         workspace: WorkspaceArg,
-    ) -> Result<Vec<ConflictFlag>, McpError> {
+    ) -> Result<Vec<DuplicateGroup>, McpError> {
         crate::grpc_hygiene::conflicts_list(self.client(), file, workspace).await
-    }
-
-    async fn conflicts_resolve(
-        &self,
-        id: TaskId,
-        side: ConflictSide,
-        file: Option<RefPath>,
-        workspace: WorkspaceArg,
-    ) -> Result<ApplyOutcome, McpError> {
-        crate::grpc_hygiene::conflicts_resolve(self.ctx(), id, side, file, workspace).await
     }
 
     async fn list_files(&self, workspace: WorkspaceArg) -> Result<Vec<FileMeta>, McpError> {
