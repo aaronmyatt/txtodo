@@ -41,6 +41,8 @@ pub enum SettingsAction {
     RevokeToken(String),
     /// Write the preferences file.
     SavePrefs,
+    /// Ask `txtodo upgrade --check` (task self-upgrade).
+    CheckUpdates,
 }
 
 /// The card in view, if Settings is showing.
@@ -218,6 +220,18 @@ fn run_act(state: &mut AppState, act: Act) -> Option<Action> {
             Some(Action::Copy(secret))
         }
         Act::RefreshActivity => Some(Action::Settings(SettingsAction::Refresh)),
+        other => run_update_act(&other),
+    }
+}
+
+/// The "Updates" row (task self-upgrade): check, or quit and upgrade.
+fn run_update_act(act: &Act) -> Option<Action> {
+    match act {
+        Act::CheckUpdates => Some(Action::Settings(SettingsAction::CheckUpdates)),
+        Act::Upgrade => {
+            crate::app_upgrade::request_after_exit();
+            Some(Action::Quit)
+        }
         _ => None,
     }
 }

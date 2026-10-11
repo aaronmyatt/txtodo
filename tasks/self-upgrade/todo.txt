@@ -1,5 +1,5 @@
-2026-10-11 tui: Settings row checks for updates and runs txtodo upgrade on request +m11 @tui
 2026-10-11 desktop: Settings button checks for updates and runs the bundled txtodo upgrade +m11 @desktop
 2026-10-11 Complete the parent line in ./todo.txt +m11
 x 2026-10-11 2026-10-11 cli: txtodo upgrade --check: latest release tag vs this build, and the install path it would use (brew, curl script, source) +m11 @cli — redirect of releases/latest via curl; install kind from the binary path; checked live: 0.0.22 is newest
 x 2026-10-11 2026-10-11 cli: txtodo upgrade runs that path, then restarts the daemon (daemon install --force) +m11 @cli — brew upgrade or install.sh with TXTODO_VERSION/TXTODO_BIN_DIR, then daemon install --force; known gap: the run path is untested until a release newer than this build exists
+x 2026-10-11 2026-10-11 tui: Settings row checks for updates and runs txtodo upgrade on request +m11 @tui — Settings > General Updates row: Enter runs txtodo upgrade --check --json; on a newer release Enter quits and runs txtodo upgrade in the restored terminal (app_upgrade.rs); known gap: not driven in a real terminal

@@ -92,4 +92,5 @@ pub mod app_offers;
 pub mod app_refs;
 pub mod app_settings;
 pub mod app_universal;
+pub mod app_upgrade;
 pub mod app_workspace;

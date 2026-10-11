@@ -53,6 +53,10 @@ pub enum Act {
     RevokeToken(String),
     /// Read the activity feed again.
     RefreshActivity,
+    /// Ask `txtodo upgrade --check` for the newest release.
+    CheckUpdates,
+    /// Quit and run `txtodo upgrade`.
+    Upgrade,
 }
 
 /// One row.
@@ -141,6 +145,7 @@ fn general(state: &AppState) -> Vec<SRow> {
             "Restart",
             "run `txtodo daemon stop`, then `txtodo daemon start`",
         ),
+        crate::app_upgrade::row(state),
         not_here("Pin on top", "A terminal has no window to pin."),
         not_here("Menu bar", "A terminal has no tray or menu bar icon."),
     ]

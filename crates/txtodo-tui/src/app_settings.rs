@@ -33,6 +33,10 @@ pub async fn perform(
             save_prefs(state);
             return Ok(());
         }
+        SettingsAction::CheckUpdates => {
+            crate::app_upgrade::check(state).await;
+            return Ok(());
+        }
         SettingsAction::AddWorkspace(path) => daemon
             .workspace_add(&path)
             .await

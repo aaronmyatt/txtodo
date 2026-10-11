@@ -146,4 +146,25 @@ pub struct SettingsView {
     pub activity: Vec<ActivityRow>,
     /// Pairing.
     pub pairing: Pairing,
+    /// The last update check (`app_upgrade.rs`).
+    pub update: UpdateCheck,
+}
+
+/// What the "Updates" row knows (task self-upgrade).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum UpdateCheck {
+    /// Not asked yet: nothing goes to the network until Enter.
+    #[default]
+    NotChecked,
+    /// This build is the newest release (its tag).
+    Current(String),
+    /// A newer release, and the command `txtodo upgrade` will run for it.
+    Available {
+        /// The release tag.
+        latest: String,
+        /// What the upgrade runs.
+        command: String,
+    },
+    /// The check failed: why, in one line.
+    Failed(String),
 }

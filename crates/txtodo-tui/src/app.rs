@@ -103,7 +103,8 @@ async fn async_main() -> ExitCode {
     // `WorkspaceInfo.root` is canonical; the W popup finds the open workspace by comparing it.
     let root = workspace.canonicalize().unwrap_or(workspace);
     match run_in(&mut daemon, &root_list, &root.to_string_lossy(), label).await {
-        Ok(()) => ExitCode::SUCCESS,
+        // Settings > General's "Updates" row asked for it: the terminal is ours again.
+        Ok(()) => crate::app_upgrade::run_if_requested().unwrap_or(ExitCode::SUCCESS),
         Err(e) => {
             eprintln!("txtodo-tui: {e}");
             ExitCode::FAILURE
