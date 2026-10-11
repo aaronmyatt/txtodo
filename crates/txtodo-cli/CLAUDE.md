@@ -53,6 +53,12 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   duplicates`); `conflicts delete <line>` deletes one copy and `conflicts keep-newest` every copy
   but the newest id in each group, through `Apply` `Delete` by task id, after a `[y/N]` confirm on
   stderr (`--yes` skips it; a closed stdin is a no) (`commands/conflicts_dup.rs`).
+- `upgrade [--check]` (task self-upgrade, `commands/upgrade.rs`): the newest release tag from where
+  GitHub's `releases/latest` redirects (`curl`, only when asked), compared with this build; the
+  install kind read off the binary's path (Homebrew cellar → `brew upgrade`, `$CARGO_HOME/bin` →
+  a source build it will not touch, else the macOS install script for that tag into the same
+  folder); then `daemon install --force` so the new `txtodod` serves. Handled before any
+  workspace or config is resolved. `--check` prints and changes nothing.
 - Line numbers are the ids: 1-based over every line, blanks included.
 - Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
@@ -82,7 +88,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   adapter, `plan_mutations`), `archive_plan` (`archive`'s reorder as `MoveToEnd`s), `base_guard` (`RequireBase` for
   line-number-only batches), `plan_check` (replays a plan the way the daemon applies it), `bundle`
   (`export`/`import`, plan M8 `cli-bundle`), `commands::{add, list, edit, archive, text, fileops, hygiene,
-  history, doctor, service, conflicts, env, pair, device, refdir, mcp}`; `main` = `dispatch`
+  history, doctor, service, conflicts, env, pair, device, refdir, mcp, upgrade}`; `main` = `dispatch`
   (direct) and `dispatch_daemon`; `cli` (the `Cli`/`Command` clap grammar) and `commands::env` are
   split out of `main.rs` purely for its own file-length budget.
 

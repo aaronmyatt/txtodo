@@ -25,6 +25,7 @@ pub mod refdir;
 pub mod service;
 pub mod skill;
 pub mod text;
+pub mod upgrade;
 pub mod workspace;
 pub mod workspace_offers;
 pub mod workspace_rejoin;

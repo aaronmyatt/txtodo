@@ -64,6 +64,10 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> Result<(), CliError> {
+    // About this binary, not a workspace: before any path or config is resolved.
+    if let Command::Upgrade { check } = &cli.command {
+        return commands::upgrade::run(*check);
+    }
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
     let config = Config::load(&config_file).map_err(CliError::Config)?;
@@ -242,6 +246,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Bundle { .. } => "bundle",
         Command::Workspace { .. } => "workspace",
         Command::Skill { .. } => "skill",
+        Command::Upgrade { .. } => "upgrade",
         Command::Prune { .. } => "prune",
     }
 }
@@ -318,7 +323,8 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Doctor { .. }
         | Command::Daemon { .. }
         | Command::Mcp { .. }
-        | Command::Skill { .. } => unreachable!("handled before mode selection"),
+        | Command::Skill { .. }
+        | Command::Upgrade { .. } => unreachable!("handled before mode selection"),
         c if daemon_ensure::needs_daemon(c) => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
         Command::Addm { text } => commands::add::run(ctx, &text.join(" "), true),

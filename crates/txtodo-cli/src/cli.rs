@@ -302,6 +302,13 @@ pub enum Command {
         #[command(subcommand)]
         action: commands::skill::Action,
     },
+    /// Upgrades to the newest release the way this copy was installed (Homebrew, the install
+    /// script, or a source build), then restarts the daemon. `--check` only says what it would do.
+    Upgrade {
+        /// Print this build, the newest release and the upgrade command; change nothing.
+        #[arg(long)]
+        check: bool,
+    },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).
     Prune {
