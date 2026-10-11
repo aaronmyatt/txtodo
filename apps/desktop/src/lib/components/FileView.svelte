@@ -572,13 +572,13 @@
 		rootEl?.addEventListener("focusin", list.activate, true);
 		view = new EditorView({ state: EditorState.create({ doc: "", extensions: initialExtensions() }), parent: containerEl });
 		lastStep = get(searchStep).n;
-		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed.
-		if (reportStatus) {
-			void wasmReady().then(() => {
-				view?.dispatch({ effects: setQuery.of(get(searchQuery)) });
-				countHitsSoon();
-			});
-		}
+		// Matching runs in the wasm core: once it has loaded, apply whatever is already typed. Every
+		// list marks the header search's hits (a detail's sub-list too); only the main buffer counts
+		// them for the pill (task desktop-list-parity).
+		void wasmReady().then(() => {
+			view?.dispatch({ effects: setQuery.of(get(searchQuery)) });
+			countHitsSoon();
+		});
 
 		let cancelled = false;
 		(async () => {
@@ -629,7 +629,7 @@
 	}
 	$effect(() => {
 		const query = $searchQuery;
-		if (!reportStatus || !view) return;
+		if (!view) return;
 		view.dispatch({ effects: setQuery.of(query) });
 		countHitsSoon();
 	});

@@ -53,3 +53,10 @@ listener (last focused/clicked FileView wins, root by default) instead of broadc
 - Tests: `listCommands.test.ts`, and e2e/detail-panel.spec.ts "list keys act on an open detail's
   sub-list, then on the root again". Known gap: e2e/visual/detail-view.spec.ts not re-run; its root
   buffer loses the current-line tint while the detail is open, so its snapshot may need updating.
+
+## Rest of the audit (2026-10-11)
+- Search: every list now marks the header search's hits and fades misses. The pill's count and
+  Enter's stepping stay on the root buffer: one pill, one count. e2e: "the header search marks hits
+  in the sub-list".
+- Left root-only on purpose, per the audit: footer status, quick-add dirty guard, fill layout.
+- Still open: the add input, waiting on the human's call (line 2).
