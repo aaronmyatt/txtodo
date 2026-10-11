@@ -175,7 +175,7 @@ async fn reconnect_watch_inner(
     if *reconnects > MAX_RECONNECT_ATTEMPTS {
         return Err(DaemonError::Timeout);
     }
-    let watch = daemon.watch(vec![state.path.clone()]).await?;
+    let watch = daemon.watch(Vec::new()).await?; // every list, as `Watching::open`
     let file = daemon.get_file(&state.path).await?;
     rebaseline(state, &file);
     Ok(watch)
@@ -324,6 +324,7 @@ pub async fn follow_change(
     if !change.review.is_empty() {
         state.shell.conflict_banner_hidden = false;
     }
+    crate::app_notices::take(state, &change);
     apply_change(state, change);
     if layout_changed {
         return crate::app_layout::follow_root_list(daemon, state).await;

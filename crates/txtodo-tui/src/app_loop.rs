@@ -59,7 +59,7 @@ async fn run_loop_inner(
 ) -> Result<(), DaemonError> {
     let mut input = Input::default();
     let mut events = spawn_input_reader();
-    let mut watching = Watching::open(daemon, state).await?;
+    let mut watching = Watching::open(daemon).await?;
     let mut sync_tick = tokio::time::interval(SYNC_STATUS_INTERVAL);
 
     loop {
@@ -67,6 +67,7 @@ async fn run_loop_inner(
         let deadline = [
             crate::app_detail::autosave_due(state),
             crate::prompt::hint_due(state),
+            crate::app_notices::due(state),
         ]
         .into_iter()
         .flatten()
@@ -102,6 +103,7 @@ async fn on_wake(
             if crate::app_detail::autosave_due(state).is_some_and(|due| due <= now) {
                 crate::app_detail::save_dirty_notes(daemon, state).await?;
             }
+            crate::app_notices::show_due(state);
         }
     }
     Ok(true)
@@ -146,10 +148,12 @@ struct Watching {
 }
 
 impl Watching {
-    /// Starts watching `state`'s document.
-    async fn open(daemon: &mut Daemon, state: &AppState) -> Result<Watching, DaemonError> {
+    /// Starts watching the workspace.
+    async fn open(daemon: &mut Daemon) -> Result<Watching, DaemonError> {
         Ok(Watching {
-            stream: Some(daemon.watch(vec![state.path.clone()]).await?),
+            // Every list, not only the open one: `follow_change` refetches the open ones, and a
+            // change anywhere can be another client's worth a notice (`app_notices.rs`).
+            stream: Some(daemon.watch(Vec::new()).await?),
             reconnects: 0,
         })
     }
@@ -247,8 +251,7 @@ async fn handle_input(
     let keep_going = perform(daemon, state, action).await?;
     // A workspace switch moved `path` to another workspace: its old stream watches the old one.
     if std::mem::take(&mut state.rewatch) {
-        let paths = crate::app_detail::watched_paths(state);
-        watching.stream = Some(daemon.watch(paths).await?);
+        watching.stream = Some(daemon.watch(Vec::new()).await?);
     }
     Ok(keep_going)
 }

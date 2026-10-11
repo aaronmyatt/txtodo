@@ -88,6 +88,7 @@ pub mod app_detail;
 pub mod app_duplicates;
 pub mod app_layout;
 pub mod app_loop;
+pub mod app_notices;
 pub mod app_offers;
 pub mod app_refs;
 pub mod app_settings;

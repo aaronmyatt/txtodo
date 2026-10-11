@@ -36,3 +36,12 @@
   strongest verb per task, sends after 3 s quiet or 15 s max, and words "A task was completed by
   an agent" / "3 tasks changed on another device" + counts and lists. No line text: Watch ops
   don't carry it. A daemon test (`convert_tests.rs`) pins the summary wording it reads.
+- TUI (`app_notices.rs`): every Watch change feeds `Shell::notices`; its due time joins the
+  loop's deadlines and the notice shows as a toast ("A task was completed by an agent · in
+  todo.txt"). The TUI watched only its open lists before; it now watches every list (empty
+  `paths`, as the desktop does), or a sub-list edit elsewhere would never reach it.
+- Desktop: waits on a human sign-off for `tauri-plugin-notification` (new dependency, the
+  Cargo.toml rule). Plan once signed off: register the plugin; in `commands.rs`' Watch forwarder
+  push each change into a `Debouncer::new("desktop")` held in `AppState`; one tokio task sleeps to
+  `next_due`, then shows the notice unless the main window is focused or the Settings toggle
+  (localStorage, mirrored to Rust with a `set_change_notices` command, like `pin.ts`) is off.

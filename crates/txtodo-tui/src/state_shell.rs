@@ -33,6 +33,8 @@ pub struct Shell {
     pub saved_at: Option<Instant>,
     /// Toasts, oldest first.
     pub toasts: Vec<Toast>,
+    /// Other clients' changes, folded into one toast per burst (`app_notices.rs`).
+    pub notices: txtodo_core::notice::Debouncer,
     /// What the next Apply toasts when it lands; dropped when it is refused.
     pub pending_toast: Option<String>,
     /// This session's changes, newest last: what `u` and a toast's Undo take back.
@@ -140,6 +142,7 @@ impl Default for Shell {
             refused: None,
             saved_at: None,
             toasts: Vec::new(),
+            notices: txtodo_core::notice::Debouncer::new("tui"),
             pending_toast: None,
             changes: Vec::new(),
             next_change: 0,
