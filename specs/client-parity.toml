@@ -87,7 +87,7 @@ id = "list.add_on_top"
 title = "Add a line from the row on top; it lands at the top of the list"
 keys = []
 scope = "list"
-desktop = { status = "done", surface = "PromptBar (the line lands at the top); FileView input above a sub-list" }
+desktop = { status = "done", surface = "PromptBar: the line lands at the top of the active list, the root or an open sub-list" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
 deviation = ""
 

@@ -1,8 +1,9 @@
 <script lang="ts">
 	// The prompt bar (task desktop-ui-revamp, the c2 mockup's Quick Add on every screen): at the
 	// foot of the main window, the shared single-line editor with the mark beside it and an Add
-	// button. Enter adds the line to the open workspace's root list (the daemon stamps the date and
-	// identity, never the UI) and keeps the keyboard for the next one; Esc hands the keyboard back to
+	// button. Enter adds the line to the active list (`$lib/listCommands.ts`: the root list, or an
+	// open detail's sub-list once it has the keys; task desktop-list-parity) — the daemon stamps the
+	// date and identity, never the UI — and keeps the keyboard for the next one; Esc hands the keyboard back to
 	// the buffer. The nine chips float above the bar while it has the keyboard, so nothing shifts.
 	// The strict-mode hint shows once typing pauses and never blocks (design §2.3).
 	import { onMount } from "svelte";
@@ -13,6 +14,7 @@
 	import { meterFor, type Meter } from "$lib/brand/meter";
 	import Icon from "$lib/icons/Icon.svelte";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
+	import { activeListPath } from "$lib/listCommands";
 	import LineEditor from "./LineEditor.svelte";
 	import { CHIPS } from "./editPopoverLogic";
 
@@ -43,8 +45,12 @@
 	let adding = $state(false);
 	let hint = $state<string | null>(null);
 
+	const rootPath = $derived($workspaceLayoutStore.todo_file || "todo.txt");
+	// Where Enter adds: the Quick Add window asks; the main window adds to the active list.
+	const target = $derived(windowed ? rootPath : ($activeListPath ?? rootPath));
+
 	function currentPath(): Promise<string> {
-		return resolvePath ? resolvePath() : Promise.resolve($workspaceLayoutStore.todo_file || "todo.txt");
+		return resolvePath ? resolvePath() : Promise.resolve(target);
 	}
 
 	// The live mark: the root list's done/total from the daemon. In the main window it is fetched
@@ -143,7 +149,7 @@
 	</div>
 	<!-- One line kept free under the row, so the hint or an error never moves the bar. -->
 	<p class="note" class:error={!!error} role="status">
-		{#if error}Could not add: {error}{:else if hint}{hint}{/if}
+		{#if error}Could not add: {error}{:else if hint}{hint}{:else if target !== rootPath}Adds to {target}{/if}
 	</p>
 </div>
 

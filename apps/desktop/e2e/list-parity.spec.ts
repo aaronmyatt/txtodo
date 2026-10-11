@@ -98,3 +98,18 @@ for (const t of TARGETS) {
 		});
 	});
 }
+
+// The add-input decision (2026-10-11, tasks/desktop-list-parity/notes.md): no list has its own add
+// input; the prompt bar (n) adds at the top of whichever list has the keys.
+for (const t of TARGETS) {
+	test(`${t.name}: n and the prompt bar add at the top of this list`, async ({ page }) => {
+		await t.open(page);
+		const file = () => readFileSync(join(daemon.dir, t.file), "utf8");
+		await page.keyboard.press("n");
+		await expect(page.getByRole("textbox", { name: "Add a task" })).toBeFocused();
+		await page.keyboard.type("water the plants");
+		await page.keyboard.press("Enter");
+		await expect.poll(file).toMatch(/^\d{4}-\d{2}-\d{2} water the plants/);
+		await expect(page.getByRole("textbox", { name: "Add a line" })).toHaveCount(0);
+	});
+}

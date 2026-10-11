@@ -63,3 +63,16 @@ listener (last focused/clicked FileView wins, root by default) instead of broadc
 - e2e/list-parity.spec.ts (fixture `parity`) runs j/k, J + u, x + toast Undo, d d and search once
   on the root list and once on a detail's sub-list. A new list behaviour gets its check there.
   The sub-list search check moved there from detail-panel.spec.ts.
+
+## Decided 2026-10-11 (agent, asked to decide @human lines): the add input
+- Options: (A) an "Add a line…" input on every list, root included; (B) none: the prompt bar adds.
+- Pick: B, with the prompt bar adding to the active list (the root, or an open detail's sub-list
+  once it has the keys). The note under the bar says "Adds to <path>" when that is not the root.
+- Why: the human already took the input off the root list on 2026-10-06 (commit 10547521) in
+  favour of the prompt bar; B keeps that call and gives sub-lists the same single way in, and
+  `n` (prompt.focus) now reaches it from either list. A would undo the earlier call.
+- Cost: adding to a sub-list now goes through the bottom bar, further from the list; the
+  "Adds to" note is there so it never lands somewhere unexpected. Easy to revert: the FileView
+  input lived in one `{#if depth > 0}` block.
+- Built: `listCommands.ts::activeListPath`, PromptBar's target, FileView's input removed;
+  e2e/list-parity.spec.ts checks n + Enter on both lists.
