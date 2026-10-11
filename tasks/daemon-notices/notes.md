@@ -1,0 +1,50 @@
+# The daemon notifies when no desktop is open
+
+## Goal
+- Asked by the human 2026-10-11: with the desktop closed, the user still hears about tasks edited,
+  deleted or completed on another device.
+- The desktop, when open, gives the richer notice (it also covers local agents and editor saves,
+  skips while focused, has a Settings toggle). While it is connected, the daemon stays quiet.
+- Follows tasks/change-notifications (done): `txtodo_core::notice::Debouncer`, Watch ops with a
+  `source`, the desktop's `notify.rs`.
+
+## Design
+- What counts: only ops whose `source` is `sync` (made on another device). Local agents, the CLI
+  and editor saves stay a client-only notice, as today. Same kinds and verbs as the clients
+  (`notice::verb_of`), same 3 s quiet / 15 s max burst.
+- Core: `Debouncer` today drops one own source. The daemon needs the reverse: keep only `sync`.
+  Add a constructor for that (`Debouncer::only_from("sync")` or similar) beside `new`.
+- Who owns the notice: a new `bool shows_notices = 3` on `WatchRequest` (additive, old clients send
+  false). The daemon counts open Watch streams that set it; while the count is above 0 it shows
+  nothing. The burst is checked at show time, not at push time, so a desktop that opens mid-burst
+  still wins.
+- The desktop sets `shows_notices` on its Watch whenever it is connected, toggle on or off: toggle
+  off means quiet from both, not "hand it to the daemon". The TUI does not set it: a toast in a
+  terminal the user may not be looking at is not a reason to hold the OS notice.
+- OS notifier in the daemon: `notify-rust` (macOS via mac-notification-sys, Linux via D-Bus,
+  Windows toast). Best effort: no session bus (headless Linux, a relay host) or a refused
+  permission logs once at warn and turns daemon notices off until restart. Behind a small
+  `Notifier` trait so tests record notices instead of showing them.
+  Ref: https://docs.rs/notify-rust
+- Off switch: `txtodo notices on|off` writes or removes a marker file in the daemon's state dir;
+  the daemon checks it at show time (no RPC, no config file). `TXTODO_NO_NOTICES=1` also turns it
+  off, and the test harnesses set it.
+- Wording: the notice says which device when the op's `device` maps to a paired device name
+  (`DeviceList`), else "another device".
+
+## Decided 2026-10-11 (agent)
+- Supersede signal. Options: (A) `WatchRequest.shows_notices` field; (B) the daemon guesses from a
+  Watch stream with no paths, or from the desktop process being alive. Pick A: explicit, additive,
+  one field; B breaks when the TUI also watches every list (it does now).
+- Notifier. Options: (A) `notify-rust`, one crate for three OSes; (B) shell out to `osascript` /
+  `notify-send` per OS. Pick A: no text quoting into a script (the injection risk the desktop
+  decision named), and Linux/Windows come free. New dependency: `cargo deny check` before landing.
+- Scope "across devices" literally (`sync` only). Widening to agents later is one line in the
+  filter.
+
+## Open questions
+- macOS: does a launchd LaunchAgent binary with no app bundle get to show a notice on current
+  macOS? `mac-notification-sys` borrows a bundle id; if that is refused, fall back to `osascript`
+  with the text passed as an argv item (not spliced into the script). Check on a real Mac first,
+  before building the rest.
+- An ADR: the daemon gains user-facing output (it was headless). Write one, short.

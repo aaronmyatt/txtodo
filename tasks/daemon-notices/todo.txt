@@ -1,0 +1,11 @@
+2026-10-11 spike: can a launchd txtodod (no app bundle) show a macOS notice via notify-rust? if not, osascript with the text as argv; decides the notifier +m11 @daemon
+2026-10-11 docs: ADR, the daemon shows OS notices (it was headless); who owns the notice, sync-only scope +m11 @docs
+2026-10-11 core: notice::Debouncer that keeps only one source (sync), beside new(own); unit tests +m11 @core
+2026-10-11 proto: WatchRequest.shows_notices (bool, additive); a client that shows its own notices says so +m11 @proto
+2026-10-11 daemon: count open Watch streams with shows_notices; hold daemon notices while any is open +m11 @daemon
+2026-10-11 daemon: feed every commit's sync ops to the debouncer; at due time show one OS notice via a Notifier trait unless a notice owner is connected; tests with a recording Notifier +m11 @daemon
+2026-10-11 daemon: notifier failure (no session bus, permission refused) logs once at warn and turns notices off until restart +m11 @daemon
+2026-10-11 cli: txtodo notices on|off, a marker file in the daemon state dir checked at show time; TXTODO_NO_NOTICES=1 for test harnesses +m11 @cli @daemon
+2026-10-11 desktop: set shows_notices on its Watch whenever connected (toggle off = quiet from both) +m11 @desktop
+2026-10-11 human check: close the desktop, complete a task on the other Mac, see one notice naming that device; open the desktop, repeat, see only the desktop's +m11 @human
+2026-10-11 Complete the parent line in ./todo.txt +m11
