@@ -5,7 +5,8 @@ Protobuf definitions and generated gRPC types.
 
 ## Public interface
 `ListFiles`, `GetFile`, `Watch`, `Apply`, `History`, `Undo`, `Checkout`, `Health`,
-`ListConflicts`, `ResolveConflict`, `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
+`ListConflicts` (duplicate groups only; `ResolveConflict`, `ReviewFlag`, `Resolution` and the
+`flags`/`review` fields went with ADR 0038, their numbers `reserved`), `GetNotes`, `EditNotes`, `PairOffer`, `PairAccept`,
 `PairConfirmSas`, `PairAwaitPeer` (plan M4 `sync-pairing`'s LAN wiring pass: the initiator polls
 this — `PairResult.sas` empty means "still waiting" — to learn a joiner's `PairAccept` has reached
 it over the real LAN transport and show a real SAS, without the RPC itself ever blocking),

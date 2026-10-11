@@ -128,7 +128,6 @@ fn responses_and_streams_round_trip() {
         path: "todo.txt".into(),
         hash: vec![3; 32],
         ops: vec![op.clone()],
-        review: Vec::new(),
         progress: Some(Progress { done: 1, total: 3 }),
         duplicate_groups: 2,
     });

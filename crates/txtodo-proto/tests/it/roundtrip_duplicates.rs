@@ -10,7 +10,6 @@ use txtodo_proto::v1::{ConflictsResponse, DuplicateGroup, DuplicateTask};
 #[test]
 fn a_conflicts_response_with_duplicates_round_trips() {
     let resp = ConflictsResponse {
-        flags: Vec::new(),
         duplicates: vec![DuplicateGroup {
             tasks: vec![
                 DuplicateTask {

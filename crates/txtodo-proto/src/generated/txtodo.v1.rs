@@ -144,24 +144,6 @@ pub struct OpSummary {
     #[prost(string, tag = "10")]
     pub source: ::prost::alloc::string::String,
 }
-/// One needs_review flag: the description each side had when they diverged (plan M4).
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ReviewFlag {
-    /// ULID text
-    #[prost(string, tag = "1")]
-    pub task_id: ::prost::alloc::string::String,
-    /// 1-based line the task sits on now; 0 when it is no longer in the file
-    #[prost(uint32, tag = "2")]
-    pub line_number: u32,
-    /// this device's description at flag time
-    #[prost(string, tag = "3")]
-    pub mine: ::prost::alloc::string::String,
-    /// the peer's description at flag time
-    #[prost(string, tag = "4")]
-    pub theirs: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "5")]
-    pub raised_at_ms: u64,
-}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Change {
     #[prost(string, tag = "1")]
@@ -170,9 +152,6 @@ pub struct Change {
     pub hash: ::prost::alloc::vec::Vec<u8>,
     #[prost(message, repeated, tag = "3")]
     pub ops: ::prost::alloc::vec::Vec<OpSummary>,
-    /// flags raised by this change (an import), if any
-    #[prost(message, repeated, tag = "4")]
-    pub review: ::prost::alloc::vec::Vec<ReviewFlag>,
     /// This ref's fresh rule-5 progress when `path` is a todo.txt the change could have affected
     /// (plan M5, tasks/proto-tree-progress); unset otherwise. Never a second source of truth: the
     /// same number `ListFiles` would return for this node right now.
@@ -210,25 +189,9 @@ pub struct DuplicateGroup {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConflictsResponse {
-    #[prost(message, repeated, tag = "1")]
-    pub flags: ::prost::alloc::vec::Vec<ReviewFlag>,
     /// empty from an older daemon
     #[prost(message, repeated, tag = "2")]
     pub duplicates: ::prost::alloc::vec::Vec<DuplicateGroup>,
-}
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ResolveRequest {
-    #[prost(string, tag = "1")]
-    pub path: ::prost::alloc::string::String,
-    #[prost(message, optional, tag = "2")]
-    pub task: ::core::option::Option<TaskRef>,
-    #[prost(enumeration = "Resolution", tag = "3")]
-    pub resolution: i32,
-    #[prost(message, optional, tag = "4")]
-    pub workspace: ::core::option::Option<WorkspaceSelector>,
-    /// unset = the user on this device (task mcp-conflicts-parity: an MCP agent's resolution is attributed to it)
-    #[prost(message, optional, tag = "5")]
-    pub agent: ::core::option::Option<AgentPrincipal>,
 }
 /// A line addressed two ways; the daemon rejects the mutation when they disagree (stale client).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -537,10 +500,10 @@ pub struct NotesDoc {
     pub hash: ::prost::alloc::vec::Vec<u8>,
 }
 /// `GetNotes`'s own request: a bare `TaskRef` carries no workspace selector, and every nested use
-/// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/`ResolveRequest`/
+/// of `TaskRef` (inside `Complete`/`Edit`/`Move`/`Delete`/`MoveToEnd`/
 /// `NotesEditRequest`/`RefDirRequest`) would carry a meaningless unused one if the field lived on
-/// `TaskRef` itself — so `GetNotes` gets its own wrapper, the same shape `ResolveRequest` already
-/// uses to pair a `TaskRef` with call-specific fields.
+/// `TaskRef` itself — so `GetNotes` gets its own wrapper pairing a `TaskRef` with call-specific
+/// fields.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetNotesRequest {
     #[prost(message, optional, tag = "1")]
@@ -1344,39 +1307,6 @@ impl FileKind {
         }
     }
 }
-/// Which side wins. `MERGED` keeps what is in the file and only clears the flag.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum Resolution {
-    Unspecified = 0,
-    Mine = 1,
-    Theirs = 2,
-    Merged = 3,
-}
-impl Resolution {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "RESOLUTION_UNSPECIFIED",
-            Self::Mine => "RESOLUTION_MINE",
-            Self::Theirs => "RESOLUTION_THEIRS",
-            Self::Merged => "RESOLUTION_MERGED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "RESOLUTION_UNSPECIFIED" => Some(Self::Unspecified),
-            "RESOLUTION_MINE" => Some(Self::Mine),
-            "RESOLUTION_THEIRS" => Some(Self::Theirs),
-            "RESOLUTION_MERGED" => Some(Self::Merged),
-            _ => None,
-        }
-    }
-}
 /// How a device's last-known clock reading compares to ours (txtodo_model::Skew), shared by
 /// `txtodo device list` and `txtodo doctor`'s per-peer clock line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1713,7 +1643,9 @@ pub mod txtodo_client {
             req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "Health"));
             self.inner.unary(req, path, codec).await
         }
-        /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+        /// A document's duplicate lines (ADR 0032). The needs_review flags it also listed, and
+        /// `ResolveConflict`, went with the Loro mirror (ADR 0038): an older client's call to
+        /// `ResolveConflict` now gets UNIMPLEMENTED.
         pub async fn list_conflicts(
             &mut self,
             request: impl tonic::IntoRequest<super::ConflictsRequest>,
@@ -1736,29 +1668,6 @@ pub mod txtodo_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListConflicts"));
-            self.inner.unary(req, path, codec).await
-        }
-        /// Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
-        /// and clears the flag — both or neither.
-        pub async fn resolve_conflict(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ResolveRequest>,
-        ) -> std::result::Result<tonic::Response<super::ApplyResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic_prost::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/txtodo.v1.Txtodo/ResolveConflict",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ResolveConflict"));
             self.inner.unary(req, path, codec).await
         }
         /// notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
@@ -2593,7 +2502,9 @@ pub mod txtodo_server {
             &self,
             request: tonic::Request<super::HealthRequest>,
         ) -> std::result::Result<tonic::Response<super::HealthResponse>, tonic::Status>;
-        /// Open needs_review flags for a document (plan M4): two devices rewrote the same word.
+        /// A document's duplicate lines (ADR 0032). The needs_review flags it also listed, and
+        /// `ResolveConflict`, went with the Loro mirror (ADR 0038): an older client's call to
+        /// `ResolveConflict` now gets UNIMPLEMENTED.
         async fn list_conflicts(
             &self,
             request: tonic::Request<super::ConflictsRequest>,
@@ -2601,12 +2512,6 @@ pub mod txtodo_server {
             tonic::Response<super::ConflictsResponse>,
             tonic::Status,
         >;
-        /// Resolves one flag: writes the chosen side back (mine/theirs) or keeps the file (merged),
-        /// and clears the flag — both or neither.
-        async fn resolve_conflict(
-            &self,
-            request: tonic::Request<super::ResolveRequest>,
-        ) -> std::result::Result<tonic::Response<super::ApplyResponse>, tonic::Status>;
         /// notes.md for one task's ref: directory (plan M5, design §7). The daemon resolves the task
         /// to its ref dir; the client never resolves a slug or touches the filesystem itself.
         async fn get_notes(
@@ -3336,49 +3241,6 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListConflictsSvc(inner);
-                        let codec = tonic_prost::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/txtodo.v1.Txtodo/ResolveConflict" => {
-                    #[allow(non_camel_case_types)]
-                    struct ResolveConflictSvc<T: Txtodo>(pub Arc<T>);
-                    impl<T: Txtodo> tonic::server::UnaryService<super::ResolveRequest>
-                    for ResolveConflictSvc<T> {
-                        type Response = super::ApplyResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::ResolveRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Txtodo>::resolve_conflict(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = ResolveConflictSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
