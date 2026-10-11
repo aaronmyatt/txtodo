@@ -214,6 +214,9 @@ impl DaemonClient {
         let req = pb::WatchRequest {
             paths,
             workspace: self.selector.clone(),
+            // The desktop shows its own notices (`notify.rs`), so the daemon holds its own while
+            // this stream is open (ADR 0041); the Settings toggle off means quiet from both.
+            shows_notices: true,
         };
         Ok(self.inner.watch(req).await?.into_inner())
     }
