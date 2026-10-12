@@ -4,8 +4,6 @@
 //! (ADR 0038). Loro API: <https://docs.rs/loro>.
 #![forbid(unsafe_code)]
 
-mod lww;
 mod notes;
 
-pub use lww::{Lww, write_if_newer};
 pub use notes::{NotesDoc, NotesDocError};
