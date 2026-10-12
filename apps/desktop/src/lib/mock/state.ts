@@ -182,21 +182,6 @@ interface StoredNotes {
 
 export const notesByTaskId = new Map<string, StoredNotes>();
 
-// ---- conflicts (one seeded `needs_review` flag on the root file, for the banner/sheet design) ----
-
-export let conflicts = [
-	{
-		task_id: "01MOCKTASK00000000000001",
-		line_number: 2,
-		mine: "Reply to design feedback on the login screen +authrewrite @work",
-		theirs: "Reply to design feedback on the login copy +authrewrite @work"
-	}
-];
-
-export function setConflicts(next: typeof conflicts): void {
-	conflicts = next;
-}
-
 // ---- capability tokens ----
 
 export interface StoredToken {

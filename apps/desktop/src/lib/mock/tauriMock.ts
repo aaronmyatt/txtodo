@@ -24,7 +24,6 @@ import {
 	mockUndoChange
 } from "./logic";
 import {
-	conflicts,
 	currentWorkspaceRoot,
 	delay,
 	fakeUlid,
@@ -33,7 +32,6 @@ import {
 	listFilesDto,
 	NOW_MS,
 	opLog,
-	setConflicts,
 	setCurrentWorkspaceRoot,
 	tokens,
 	universalTasksDto,
@@ -65,10 +63,6 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return { ops: opLog.slice(0, (args?.limit as number) ?? opLog.length) } as T;
 		case "watch":
 			return undefined as T;
-		case "list_conflicts": {
-			const path = args?.path as string;
-			return (path === "todo.txt" ? conflicts.map((c) => ({ ...c })) : []) as T;
-		}
 		case "list_duplicates":
 			return [] as T;
 		case "sync_status":
@@ -78,12 +72,6 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 				pending_ops: 0,
 				peers: [{ device: "01MOCKDEVICE00000000LAPTOP", lag_ms: 400, parked: false, stuck: 0, stuck_files: [], their_protocol: 0 }]
 			} as T;
-		case "resolve": {
-			const task = args?.task as TaskRef;
-			const path = args?.path as string;
-			setConflicts(conflicts.filter((c) => c.task_id !== task.task_id || c.line_number !== task.line_number));
-			return applyMutations(path, []) as unknown as T;
-		}
 		case "pair_offer":
 			return mockPairOffer() as T;
 		case "pair_accept":

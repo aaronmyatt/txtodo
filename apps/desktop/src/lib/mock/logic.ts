@@ -105,7 +105,7 @@ export function mockUndoChange(path: string): ApplyResult {
 	f.text = text;
 	f.hashSeq += 1;
 	const hlcCounter = nextHlcCounter();
-	emit("daemon-change", { path, hash: hashOf(f), ops: [], review: [], duplicate_groups: 0 });
+	emit("daemon-change", { path, hash: hashOf(f), ops: [], duplicate_groups: 0 });
 	return { applied: 1, hash: hashOf(f), hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
 }
 
@@ -135,7 +135,7 @@ export function applyMutations(path: string, mutations: Mutation[]): ApplyResult
 	}));
 	opLog.unshift(...opsForLog);
 
-	emit("daemon-change", { path, hash: hashOf(f), ops: opsForLog, review: [], duplicate_groups: 0 });
+	emit("daemon-change", { path, hash: hashOf(f), ops: opsForLog, duplicate_groups: 0 });
 	return { applied: mutations.length, hash: hashOf(f), hlc_wall_ms: NOW_MS + hlcCounter, hlc_counter: hlcCounter };
 }
 
