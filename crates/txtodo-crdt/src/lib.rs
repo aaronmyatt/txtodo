@@ -7,13 +7,11 @@
 #![forbid(unsafe_code)]
 
 mod doc;
-mod from_loro;
 mod lww;
 mod notes;
 mod to_loro;
 
-pub use doc::{LoroDocument, is_blank, rebuild_line};
-pub use from_loro::{FromLoroError, Stamp, from_batch};
+pub use doc::{LoroDocument, is_blank};
 pub use lww::{Lww, write_if_newer};
 pub use notes::{NotesDoc, NotesDocError};
 pub use to_loro::{ToLoroError, apply};

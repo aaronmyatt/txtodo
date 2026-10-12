@@ -7,15 +7,14 @@
 //! list API: <https://loro.dev/docs/tutorial/list> · map: <https://loro.dev/docs/tutorial/map>.
 
 use loro::{
-    Container, ContainerID, ContainerTrait, ExportMode, LoroDoc, LoroMap, LoroMovableList,
-    LoroResult, LoroText, LoroValue, ValueOrContainer,
+    Container, ExportMode, LoroDoc, LoroMap, LoroMovableList, LoroResult, LoroText, LoroValue,
+    ValueOrContainer,
 };
 use std::collections::HashMap;
 
 use txtodo_core::{Date, Priority, Ulid};
 use txtodo_model::{Field, FieldValue, FilePath, Op, TaskId};
 
-use crate::from_loro::FromLoroError;
 use crate::lww::Lww;
 use crate::to_loro::{ToLoroError, apply};
 
@@ -85,15 +84,6 @@ impl LoroDocument {
         self.doc.state_frontiers()
     }
 
-    /// The owned diff between two frontiers, for [`crate::from_batch`].
-    pub fn diff(
-        &self,
-        a: &loro::Frontiers,
-        b: &loro::Frontiers,
-    ) -> LoroResult<loro::event::DiffBatch> {
-        self.doc.diff(a, b)
-    }
-
     /// Commits the pending Loro transaction, making its diffs observable.
     pub(crate) fn commit(&self) {
         self.doc.commit();
@@ -144,57 +134,6 @@ impl LoroDocument {
         );
         self.next_blank = self.next_blank.saturating_add(1);
         TaskId::new(Ulid::from_u128(bits))
-    }
-
-    /// Every `files/<path>` root list's path, in root-map key order.
-    pub(crate) fn file_paths(&self) -> Vec<FilePath> {
-        let LoroValue::Map(root) = self.doc.get_deep_value() else {
-            return Vec::new();
-        };
-        root.iter()
-            .filter_map(|(k, v)| {
-                let path = k.strip_prefix(FILES_PREFIX)?;
-                if !matches!(v, LoroValue::List(_)) {
-                    return None;
-                }
-                FilePath::new(path).ok()
-            })
-            .collect()
-    }
-
-    /// The file whose list currently holds `task`, if any.
-    pub(crate) fn file_of_task(&self, task: TaskId) -> Option<FilePath> {
-        self.file_paths()
-            .into_iter()
-            .find(|p| self.index_in(p, task).is_some())
-    }
-
-    /// The file list whose container id is `id`, if any.
-    pub(crate) fn file_of_container(&self, id: &ContainerID) -> Option<FilePath> {
-        self.file_paths()
-            .into_iter()
-            .find(|p| &self.file_list(p).id() == id)
-    }
-
-    /// The task whose nested map or description text has container id `id`, if any.
-    pub(crate) fn task_of_container(&self, id: &ContainerID) -> Option<TaskId> {
-        for key in self.tasks_map().keys() {
-            let Some(task) = parse_task_id(&key) else {
-                continue;
-            };
-            let Some(map) = self.task_map_if_exists(task) else {
-                continue;
-            };
-            if &map.id() == id {
-                return Some(task);
-            }
-            if let Some(text) = self.description_if_exists(task)
-                && &text.id() == id
-            {
-                return Some(task);
-            }
-        }
-        None
     }
 
     /// One past the largest blank sentinel low bits found in a snapshot, so new sentinels never
@@ -260,19 +199,6 @@ pub(crate) fn field_key(field: Field) -> &'static str {
     }
 }
 
-/// The prefix field named by a Loro map key.
-pub(crate) fn field_from_key(key: &str) -> Option<Field> {
-    match key {
-        "completed" => Some(Field::Completed),
-        "completion_date" => Some(Field::CompletionDate),
-        "creation_date" => Some(Field::CreationDate),
-        "priority" => Some(Field::Priority),
-        "deleted" => Some(Field::Deleted),
-        "quirks" => Some(Field::Quirks),
-        _ => None,
-    }
-}
-
 /// Encodes a field value as a plain `LoroValue` (the `v` half of an LWW register).
 pub(crate) fn encode_field_value(fv: FieldValue) -> LoroValue {
     match fv {
@@ -329,63 +255,8 @@ fn position_of(list: &LoroMovableList, needle: &str) -> Option<usize> {
     })
 }
 
-/// Rebuilds a canonical `Insert` line from the task map's description text and prefix fields.
-/// Canonical, not byte-faithful: quirks (tabs, trailing space) are flag bits and are not replayed.
-pub fn rebuild_line(doc: &LoroDocument, task: TaskId) -> Result<String, FromLoroError> {
-    let map = doc
-        .task_map_if_exists(task)
-        .ok_or(FromLoroError::MissingTask(task))?;
-    let description = doc
-        .description_if_exists(task)
-        .map_or(String::new(), |t| t.to_string());
-    let completed = match read_field(&map, Field::Completed)? {
-        Some(FieldValue::Bool(b)) => b,
-        Some(_) => return Err(FromLoroError::Malformed("completed is not a bool".into())),
-        None => false,
-    };
-    let completion_date = read_date(&map, Field::CompletionDate)?;
-    let creation_date = read_date(&map, Field::CreationDate)?;
-    let priority = match read_field(&map, Field::Priority)? {
-        Some(FieldValue::Priority(p)) => p,
-        Some(_) => return Err(FromLoroError::Malformed("priority is not a char".into())),
-        None => None,
-    };
-    let prefix = txtodo_core::Prefix {
-        completed,
-        completion_date: completion_date.and_then(|(y, m, d)| Date::new(y, m, d)),
-        creation_date: creation_date.and_then(|(y, m, d)| Date::new(y, m, d)),
-        priority: priority.and_then(Priority::new),
-    };
-    let has_description = !description.is_empty();
-    Ok(format!(
-        "{}{}",
-        txtodo_core::emit_prefix(&prefix, has_description),
-        description
-    ))
-}
-
-/// Reads a date field back as `Option<(year, month, day)>`.
-fn read_date(map: &LoroMap, field: Field) -> Result<Option<(u16, u8, u8)>, FromLoroError> {
-    match read_field(map, field)? {
-        Some(FieldValue::Date(d)) => Ok(d),
-        Some(_) => Err(FromLoroError::Malformed("date field is not a date".into())),
-        None => Ok(None),
-    }
-}
-
-/// Reads and decodes one LWW register from a task map.
-fn read_field(map: &LoroMap, field: Field) -> Result<Option<FieldValue>, FromLoroError> {
-    let Some(voc) = map.get(field_key(field)) else {
-        return Ok(None);
-    };
-    let value = voc
-        .into_value()
-        .ok()
-        .ok_or_else(|| FromLoroError::Malformed(format!("field {field:?} is not a value")))?;
-    let lww = Lww::decode(&value).ok_or_else(|| {
-        FromLoroError::Malformed(format!("field {field:?} is not an LWW register"))
-    })?;
-    decode_field_value(field, &lww.value)
-        .map(Some)
-        .ok_or_else(|| FromLoroError::Malformed(format!("field {field:?} has a bad value")))
+/// A task field's decoded value; `None` when it is absent or not a well-formed LWW register.
+fn read_field(map: &LoroMap, field: Field) -> Option<FieldValue> {
+    let value = map.get(field_key(field))?.into_value().ok()?;
+    decode_field_value(field, &Lww::decode(&value)?.value)
 }

@@ -46,7 +46,7 @@ impl LoroDocument {
         };
         let deleted = matches!(
             read_field(&map, Field::Deleted),
-            Ok(Some(FieldValue::Bool(true)))
+            Some(FieldValue::Bool(true))
         );
         debug_assert!(
             !super::is_blank(task) || !deleted,
