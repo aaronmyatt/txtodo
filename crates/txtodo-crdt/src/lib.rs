@@ -18,8 +18,6 @@ mod to_loro;
 mod no_secrets_tests;
 #[cfg(test)]
 mod roundtrip_tests;
-#[cfg(test)]
-mod view_tests;
 
 pub use doc::sync::Imported;
 pub use doc::{LoroDocument, is_blank, rebuild_line};

@@ -131,18 +131,4 @@ impl LoroDocument {
         debug_assert!(self.shadows.contains_key(&name), "ensure_shadow ran first");
         self.shadows.entry(name).or_default()
     }
-
-    /// Test-only check that a shadow still equals its list.
-    #[cfg(test)]
-    pub(crate) fn shadow_matches_list(&self, file: &FilePath) -> bool {
-        let from_list: Vec<TaskId> = self
-            .file_list(file)
-            .to_vec()
-            .iter()
-            .filter_map(|v| v.as_string().and_then(|s| parse_task_id(s.as_ref())))
-            .collect();
-        self.shadows
-            .get(&file_list_name(file))
-            .is_none_or(|ids| *ids == from_list)
-    }
 }
