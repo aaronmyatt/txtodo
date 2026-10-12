@@ -59,3 +59,6 @@ that raised one, and it is gone.
   builds `CommitExtras` field by field again so the store line can drop `clear`, then a daemon
   tidy commit goes back to a literal. `pb::ConflictsResponse.flags`/`pb::Change.review` are set
   empty; the proto line deletes those two lines with the fields.
+- crdt (2026-10-13): 5cbcf384, ec0d4fca. `review.rs`/`review_tests.rs` gone. Row 4 of
+  `specs/conflicts.md` and design §4.7 now say "char-level merge, the same on every device; no
+  review flag"; its test is `edits_to_the_same_word_merge` and asserts both sides converge.
