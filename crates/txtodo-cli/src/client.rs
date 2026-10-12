@@ -282,7 +282,7 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
-    /// A document's open needs_review flags (plan M4) and its duplicate-line groups (ADR 0032).
+    /// A document's duplicate-line groups (ADR 0032).
     pub fn conflicts(&mut self, path: &str) -> Result<pb::ConflictsResponse, ClientError> {
         let req = pb::ConflictsRequest {
             path: path.to_owned(),
@@ -291,20 +291,6 @@ impl Daemon {
         let rep = self
             .rt
             .block_on(self.client.list_conflicts(req))
-            .map_err(ClientError::Rpc)?;
-        Ok(rep.into_inner())
-    }
-
-    /// Resolves one flag: writes the chosen side (mine/theirs) or keeps the file (merged), and
-    /// clears the flag — both or neither (daemon `ResolveConflict`).
-    pub fn resolve_conflict(
-        &mut self,
-        mut req: pb::ResolveRequest,
-    ) -> Result<pb::ApplyResponse, ClientError> {
-        req.workspace = self.selector.clone();
-        let rep = self
-            .rt
-            .block_on(self.client.resolve_conflict(req))
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner())
     }

@@ -197,10 +197,10 @@ fn conflicts_without_a_daemon_say_so() {
     // fallback message, rather than a real `txtodod` on this machine's `$PATH` making it succeed.
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
-    // Both subcommands are daemon-only: a flag lives in the store, never in the file.
+    // Every subcommand is daemon-only: the daemon derives the groups from the file it holds.
     for args in [
         &["conflicts"] as &[&str],
-        &["conflicts", "resolve", "1", "mine"],
+        &["conflicts", "keep-newest", "--yes"],
     ] {
         let out = txtodo_no_autostart(dir.path(), args);
         assert!(!out.status.success(), "{args:?} must fail");
@@ -212,7 +212,7 @@ fn conflicts_without_a_daemon_say_so() {
 }
 
 #[test]
-fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
+fn conflicts_list_reports_none_and_resolve_is_gone() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), "").unwrap();
     let _daemon = Daemon::spawn(dir.path());
@@ -232,17 +232,13 @@ fn conflicts_list_reports_none_and_resolve_names_the_missing_flag() {
     let out = txtodo(dir.path(), &["conflicts", "--json"]);
     assert!(out.status.success());
     assert!(stdout(&out).is_empty(), "{}", stdout(&out));
-    // No flag has been raised (no sync has happened), so the daemon refuses the resolve.
+    // Same-word review went with the todo.txt mirror (ADR 0038): `resolve` is a usage error.
     let before = todo_txt(dir.path());
     let out = txtodo(dir.path(), &["conflicts", "resolve", "1", "merged"]);
-    assert!(!out.status.success(), "resolve without a flag must fail");
+    assert!(!out.status.success(), "resolve is gone");
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.contains("no open needs_review flag"), "{err}");
-    assert_eq!(
-        before,
-        todo_txt(dir.path()),
-        "a refused resolve writes nothing"
-    );
+    assert!(err.contains("unrecognized subcommand"), "{err}");
+    assert_eq!(before, todo_txt(dir.path()), "nothing is written");
 }
 
 // --- plan M4 tasks/sync-device-remove: `txtodo device list`/`remove` ---

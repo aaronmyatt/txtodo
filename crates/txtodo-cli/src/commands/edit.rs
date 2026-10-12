@@ -131,8 +131,9 @@ pub fn run_pri(ctx: &Ctx, args: &[String]) -> Result<(), CliError> {
     }
     let mut file = store::read(&ctx.paths.todo)?;
     let mut failed = false;
-    for pair in args.chunks_exact(2) {
-        let (item, priority) = (&pair[0], &pair[1]);
+    // Even length checked above, so the remainder is empty.
+    // Ref: https://doc.rust-lang.org/std/primitive.slice.html#method.as_chunks
+    for [item, priority] in args.as_chunks::<2>().0 {
         let new = match priority.as_bytes() {
             [p] if p.is_ascii_alphabetic() => char::from(p.to_ascii_uppercase()),
             _ => return Err(CliError::Usage(USAGE)),
