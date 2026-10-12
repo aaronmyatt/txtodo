@@ -34,3 +34,10 @@ lines with their tests, so several commits under the 300-line budget.
   1-5, 8, 10 pass on `DocState` in every arrival order. Rows 6-7 fail there even with the edit or
   complete stamped after the delete (checked with `--include-ignored`), so they are ignored with
   the open question as the reason. The spec now points at this file.
+- list modules (2026-10-13): f36f5079..69525279. Tests first (lww, remove_tag, view, no_secrets,
+  roundtrip), then hydrate, resurrect, doc/sync, from_loro (+ rebuild_line), to_loro, the doc
+  module, lww. `from_loro` (609 lines with its cuts), `to_loro` (426) and `doc` (405) went one
+  module per commit, over the 300 budget: each is one file over 300 or a dead module whose
+  piecemeal pruning left only a shell; the messages say so. What is left: `lib.rs` and
+  `notes.rs` (`NotesDoc`, `replay_edits`). Unused now: `txtodo-store`, `tracing`, dev
+  `tracing-subscriber` (removing them rewrites the frozen Cargo.lock: a human line).
