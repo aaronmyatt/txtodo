@@ -1,9 +1,9 @@
-2026-10-13 daemon tests: specs/conflicts.md's rows against DocState (conflict_table_tests.rs), every arrival order; the spec's executable form moves here +m11 @daemon @test @doing by:claude-opus
 2026-10-13 Decide: spec rows 6-7 say delete vs edit resurrects and delete vs complete keeps it completed; DocState keeps both deleted (state_converge_tests). Change the spec or the engine? +m11 @daemon @human
-2026-10-13 crdt: NotesDoc's replay_edits moves into notes.rs, off to_loro +m11 @crdt
+2026-10-13 crdt: NotesDoc's replay_edits moves into notes.rs, off to_loro +m11 @crdt @doing by:claude-opus
 2026-10-13 crdt: drop tests/it conflicts.rs and sim.rs (the Loro list engine's tests) +m11 @crdt
 2026-10-13 crdt: drop the list modules (doc/, from_loro, hydrate, lww, resurrect, to_loro) and their unit tests, a few commits for the diff budget +m11 @crdt
 2026-10-13 justfile: drop the sim recipe (it runs no test once sim.rs goes); frozen path +m11 @human
 2026-10-13 crdt: drop txtodo-store/txtodo-core deps if nothing uses them (rewrites Cargo.lock, frozen) +m11 @crdt @human
 2026-10-13 docs: crdt CLAUDE.md, specs/conflicts.md's executable path, ADR 0038 status +m11 @docs
 2026-10-13 Complete the parent line in ../todo.txt +m11 @crdt
+x 2026-10-13 2026-10-13 daemon tests: specs/conflicts.md's rows against DocState (conflict_table_tests.rs), every arrival order; the spec's executable form moves here +m11 @daemon @test — 90188835; 8 rows pass on DocState, 6-7 ignored (they fail: delete wins), row 9 ignored as before
