@@ -1,5 +1,5 @@
-2026-10-11 Test: listall, list and sub in an unregistered folder register nothing, make no .txtodo/, and change no bytes +m11 @cli @test
-2026-10-11 cli: read-only commands never register; they fail with the fix (txtodo workspace add, or --no-daemon) +m11 @cli
 2026-10-11 Test: registering a folder whose lists carry no id: writes no id: tag into any file +m11 @daemon @test
 2026-10-11 daemon: never stamp id: on register or reconcile (ADR 0019, sidecar only) +m11 @daemon
 2026-10-11 Complete the parent line in ./todo.txt +m11 @cli
+x 2026-10-13 2026-10-11 Test: listall, list and sub in an unregistered folder register nothing, make no .txtodo/, and change no bytes +m11 @cli @test — ed1fea81
+x 2026-10-13 2026-10-11 cli: read-only commands never register; they fail with the fix (txtodo workspace add, or --no-daemon) +m11 @cli — ed1fea81
