@@ -7,7 +7,7 @@ use txtodo_proto::v1 as pb;
 
 use crate::action::Action;
 use crate::keymap::Command;
-use crate::state::{AppState, Resolution};
+use crate::state::AppState;
 use crate::ui::edit::{self, OpenKey};
 use crate::ui::{conflicts, offers};
 
@@ -99,9 +99,6 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::ConflictsOpen | Command::ConflictsClose => state.toggle_conflicts(),
         Command::ConflictsDown => conflicts::move_down(state),
         Command::ConflictsUp => conflicts::move_up(state),
-        Command::ConflictsKeepMine => return resolve(state, Resolution::Mine),
-        Command::ConflictsKeepTheirs => return resolve(state, Resolution::Theirs),
-        Command::ConflictsKeepMerged => return resolve(state, Resolution::Merged),
         Command::ConflictsKeepNewest => return keep_copy(state, conflicts::Keep::Newest),
         Command::ConflictsKeepOldest => return keep_copy(state, conflicts::Keep::Oldest),
         Command::OffersOpen | Command::OffersClose => state.offers.toggle(),
@@ -141,10 +138,6 @@ fn keep_copy(state: &mut AppState, keep: conflicts::Keep) -> Option<Action> {
     let req = conflicts::keep_request(state, keep)?;
     state.shell.pending_toast = Some("Deleted the other copies".to_owned());
     Some(Action::Apply(req))
-}
-
-fn resolve(state: &AppState, pick: Resolution) -> Option<Action> {
-    conflicts::resolve_request(state, pick).map(Action::Resolve)
 }
 
 /// Space / `x`: completes the selected line, or reopens it when it is done. The daemon's

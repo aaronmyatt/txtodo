@@ -101,12 +101,6 @@ commands! {
     ConflictsDown = "conflicts.down", ["j", "Down"], Sheet;
     /// Previous conflict.
     ConflictsUp = "conflicts.up", ["k", "Up"], Sheet;
-    /// Keep mine.
-    ConflictsKeepMine = "conflicts.keep_mine", ["m"], Sheet;
-    /// Keep theirs.
-    ConflictsKeepTheirs = "conflicts.keep_theirs", ["t"], Sheet;
-    /// Keep the merged text.
-    ConflictsKeepMerged = "conflicts.keep_merged", ["M"], Sheet;
     /// Keep the newest copy of a duplicate line, deleting the others.
     ConflictsKeepNewest = "conflicts.keep_newest", ["n"], Sheet;
     /// Keep the oldest copy of a duplicate line, deleting the others.

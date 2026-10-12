@@ -14,7 +14,7 @@ use crate::hit::{Field, HitMap, Target};
 use crate::state::AppState;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, conflict_sheet, detail, field, footer, header, help, list, offers, prompt_bar,
+    banner, detail, duplicate_sheet, field, footer, header, help, list, offers, prompt_bar,
     row_edit, search_panel, settings, subbar, sync, toast, universal, workspace_menu,
 };
 
@@ -59,7 +59,7 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
         search_panel::draw(frame, screen, header_area.bottom(), state, &mut hits);
     }
     if state.conflicts_open {
-        conflict_sheet::draw(frame, frame.area(), state, &mut hits);
+        duplicate_sheet::draw_selected(frame, frame.area(), state, &mut hits);
     }
     if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
         let screen = frame.area();

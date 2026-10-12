@@ -1,7 +1,7 @@
 //! The review sheet for a duplicate group (ADR 0032, task sync-drift duplicate-flags): two or more
-//! lines that read the same, which copies there are, and the two choices. `conflict_sheet.rs`
-//! draws this instead of a flag when the cursor is past the flags. Unlike a flag, a group never
-//! makes the list read-only: editing one copy so they differ also clears it, and the sheet says so.
+//! lines that read the same, which copies there are, and the two choices. `r` opens it; `j`/`k`
+//! walk the groups. A group never makes the list read-only: editing one copy so they differ also
+//! clears it, and the sheet says so. Same-word review (Mine/Theirs) is gone (ADR 0038).
 //! Ref: <https://docs.rs/ratatui/latest/ratatui/widgets/struct.Clear.html>
 
 use ratatui::Frame;
@@ -20,6 +20,15 @@ const BUTTONS: [(&str, Command); 3] = [
     ("o Keep oldest", Command::ConflictsKeepOldest),
     ("Esc Close", Command::ConflictsClose),
 ];
+
+/// Draws the sheet for the group under `state.conflict_cursor`, if any, centred over `screen`.
+/// Nothing under it takes a click.
+pub fn draw_selected(frame: &mut Frame, screen: Rect, state: &AppState, hits: &mut HitMap) {
+    hits.push(screen, Target::Inert);
+    if let Some(group) = crate::ui::conflicts::selected_group(state) {
+        draw(frame, screen, state, group, hits);
+    }
+}
 
 /// Draws the sheet for `group` (the item under `state.conflict_cursor`) centred in `screen`, and
 /// records its buttons.
