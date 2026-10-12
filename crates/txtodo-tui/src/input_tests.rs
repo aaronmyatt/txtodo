@@ -337,23 +337,6 @@ fn today_local_is_iso_calendar_shape() {
 }
 
 #[test]
-fn a_line_under_review_is_read_only_and_says_so() {
-    let mut state = AppState::fixture(); // flags passport, line 2
-    state.cursor = 1;
-    let mut input = Input::default();
-    for c in ['i', 'J', ' '] {
-        assert_eq!(input.on_key(&mut state, key(c)), None, "{c:?}");
-        assert!(state.editing.is_none());
-        assert_eq!(state.last_error.as_deref(), Some(commands::READ_ONLY));
-    }
-    state.cursor = 0;
-    assert!(
-        input.on_key(&mut state, key(' ')).is_some(),
-        "other lines are not"
-    );
-}
-
-#[test]
 fn slash_types_a_query_enter_jumps_and_esc_twice_leaves() {
     let mut state = AppState::fixture();
     let mut input = Input::default();

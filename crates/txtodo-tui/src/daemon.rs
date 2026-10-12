@@ -230,7 +230,7 @@ impl Daemon {
         Ok(self.inner.apply(req).await?.into_inner())
     }
 
-    /// Open `needs_review` flags for `path` (plan M4), for the `r` pane.
+    /// The duplicate groups of `path` (ADR 0032), for the `r` sheet.
     pub async fn list_conflicts(
         &mut self,
         path: &str,
@@ -240,16 +240,6 @@ impl Daemon {
             workspace: self.selector.clone(),
         };
         Ok(self.inner.list_conflicts(req).await?.into_inner())
-    }
-
-    /// Resolves one `needs_review` flag (`ui/conflicts.rs::resolve_request`'s mine/theirs/merged
-    /// pick) — the daemon writes the chosen text back and clears the flag, both or neither.
-    pub async fn resolve(
-        &mut self,
-        mut req: pb::ResolveRequest,
-    ) -> Result<pb::ApplyResponse, DaemonError> {
-        req.workspace = self.selector.clone();
-        Ok(self.inner.resolve_conflict(req).await?.into_inner())
     }
 
     /// Peers and an approximate pending-ops count for the `s` indicator (design §7); polled on a

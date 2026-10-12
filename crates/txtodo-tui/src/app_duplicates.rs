@@ -77,17 +77,6 @@ mod tests {
     }
 
     #[test]
-    fn a_duplicate_line_stays_editable() {
-        let mut state = AppState::from_document("todo.txt", "buy milk\nbuy milk\n");
-        set(&mut state, vec![group(&[1, 2])]);
-        assert!(
-            !crate::commands::under_review(&state, 0),
-            "ADR 0032: never read-only"
-        );
-        assert!(!crate::commands::under_review(&state, 1));
-    }
-
-    #[test]
     fn a_change_is_worth_a_read_when_the_file_has_or_had_groups() {
         let mut state = AppState::fixture();
         let quiet = pb::Change::default();
