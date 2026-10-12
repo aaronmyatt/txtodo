@@ -1,5 +1,4 @@
-2026-10-12 tui: drop the needs_review items and the keep_mine/keep_theirs/merged keys; drop those rows from specs/client-parity.toml in the same commit +m11 @tui @doing by:claude-opus
-2026-10-12 desktop: conflicts sheet shows duplicate groups only; drop ReviewFlag DTO, the resolve command, Mine/Theirs buttons and the e2e bridge's flag fixture +m11 @desktop
+2026-10-12 desktop: conflicts sheet shows duplicate groups only; drop ReviewFlag DTO, the resolve command, Mine/Theirs buttons and the e2e bridge's flag fixture +m11 @desktop @doing by:claude-opus
 2026-10-12 cli: conflicts lists duplicate groups only; drop conflicts resolve and flag_text/flag_json +m11 @cli
 2026-10-12 mcp: todo_conflicts_list returns duplicate groups only; drop todo_conflicts_resolve +m11 @mcp
 2026-10-12 daemon: ListConflicts sends no flags, ResolveConflict returns Unimplemented; drop Change.review, CommitTail.clear and the ReviewRow plumbing +m11 @daemon
@@ -8,3 +7,4 @@
 2026-10-12 proto: drop ResolveConflict, ResolveRequest, Resolution, ReviewFlag; reserve Change.review and ConflictsResponse.flags +m11 @proto @human
 2026-10-12 docs: design doc and client CLAUDE.md files stop describing same-word review; ADR 0038 status +m11 @docs
 2026-10-12 Complete the parent line in ../todo.txt +m11 @daemon
+x 2026-10-12 2026-10-12 tui: drop the needs_review items and the keep_mine/keep_theirs/merged keys; drop those rows from specs/client-parity.toml in the same commit +m11 @tui — 05c590fc, 88cb6dfb, 9b2e6a7b, 294a5f53; conflicts.dismiss_banner is tui na until the desktop line drops the row

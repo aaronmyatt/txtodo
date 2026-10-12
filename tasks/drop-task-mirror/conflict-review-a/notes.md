@@ -30,3 +30,10 @@ that raised one, and it is gone.
   - B: keep `ResolveConflict` in the proto, marked deprecated, the daemon answering
     `Unimplemented` for good. Messages and fields still go.
   - I'd take A: no dead RPC left in the contract, and it is one small commit.
+
+## As built
+- tui (2026-10-12): 05c590fc, 88cb6dfb, 9b2e6a7b, 294a5f53, four commits for the 300-line budget.
+  The `r` sheet is `duplicate_sheet::draw_selected`; `conflict_sheet.rs` is gone. No line is
+  read-only any more (`READ_ONLY`, `under_review` gone). `conflicts.keep_mine/theirs/merged` rows
+  left the manifest; `conflicts.dismiss_banner` stays with `tui = na` until desktop drops its
+  banner's ×. Not run: the TUI's `tests/e2e` (test = false target, needs a real daemon).
