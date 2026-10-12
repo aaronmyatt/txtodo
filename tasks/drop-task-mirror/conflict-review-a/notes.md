@@ -65,3 +65,6 @@ that raised one, and it is gone.
 - store (2026-10-13): 0a568596 (tests), 133e4a9d (`flags.rs` → `mirror.rs`, flag API and
   `CommitExtras::clear` gone), 0da95aff (daemon literal). No migration: `review_flags` and its old
   rows stay, unread, like the old todo.txt `mirrors` rows.
+- docs (2026-10-13): 415bccf0. README command table, design §4.1 text, the trial-run step 4, the desktop
+  README and ADR 0038's status. Left alone: `txtodo-implementation-plan.md` (it is the plan as
+  written) and `crates/txtodo-proto/CLAUDE.md` (still lists `ResolveConflict` until the proto line).
