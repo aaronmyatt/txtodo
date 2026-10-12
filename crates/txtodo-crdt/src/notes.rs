@@ -3,16 +3,14 @@
 //! different, smaller document shape than [`crate::LoroDocument`] rather than a reuse of it (see
 //! that type's module doc: the tasks map/movable list machinery has no meaning for prose).
 //!
-//! Edits replay through [`crate::to_loro::replay_edits`], the same dual-indexed `TextEdit` walk a
-//! task's description uses, so two devices' concurrent edits to different parts of the text merge
-//! character-wise the same way. Loro text API: <https://docs.rs/loro/latest/loro/struct.LoroText.html>.
+//! Edits replay through [`replay_edits`], the dual-indexed `TextEdit` walk, so two devices'
+//! concurrent edits to different parts of the text merge character-wise. Loro text API:
+//! <https://docs.rs/loro/latest/loro/struct.LoroText.html>.
 
 use std::fmt;
 
-use loro::{ExportMode, LoroDoc, LoroText, VersionVector};
+use loro::{ExportMode, LoroDoc, LoroResult, LoroText, VersionVector};
 use txtodo_model::TextEdit;
-
-use crate::to_loro::replay_edits;
 
 /// Root container name for the notes text; the only container this document ever holds.
 const NOTES_TEXT_ROOT: &str = "notes";
@@ -141,6 +139,45 @@ impl Default for NotesDoc {
     fn default() -> NotesDoc {
         NotesDoc::open()
     }
+}
+
+/// Replays a `diff_text`-convention edit stream onto a Loro text.
+///
+/// The stream is dual-indexed (`txtodo_model::TextEdit`): a `Delete`'s `at` counts the *source*,
+/// an `Insert`'s `at` counts the *target*, both in order. Loro holds one evolving string, so each
+/// position is translated through two cursors — an insert before a later delete shifts that delete.
+/// A naive single-cursor replay lands on the wrong characters whenever both kinds appear.
+/// Positions are Unicode code points, matching `LoroText::len_unicode`:
+/// <https://docs.rs/loro/latest/loro/struct.LoroText.html#method.insert>
+pub(crate) fn replay_edits(text: &LoroText, edits: &[txtodo_core::TextEdit]) -> LoroResult<()> {
+    let mut cursor = 0usize; // next unconsumed char of the source text
+    let mut emitted = 0usize; // chars of the target already produced or kept
+    for edit in edits {
+        match edit {
+            txtodo_core::TextEdit::Delete { at, len } => {
+                debug_assert!(
+                    *at >= cursor,
+                    "a delete never moves backwards in the source"
+                );
+                let pos = emitted + (at - cursor);
+                text.delete(pos, *len)?;
+                cursor = at + len;
+                emitted = pos;
+            }
+            txtodo_core::TextEdit::Insert { at, text: s } => {
+                debug_assert!(
+                    *at >= emitted,
+                    "an insert never moves backwards in the target"
+                );
+                let keep = at - emitted;
+                let pos = emitted + keep;
+                text.insert(pos, s)?;
+                cursor += keep;
+                emitted = pos + s.chars().count();
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

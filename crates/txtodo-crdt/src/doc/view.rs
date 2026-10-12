@@ -76,7 +76,7 @@ impl LoroDocument {
         let edits = txtodo_core::diff_text(&current, text);
         debug_assert!(!edits.is_empty(), "differing texts have a non-empty diff");
         // `diff_text` is dual-indexed; `replay_edits` walks it onto the evolving Loro text.
-        crate::to_loro::replay_edits(&t, &edits)?;
+        crate::notes::replay_edits(&t, &edits)?;
         self.commit();
         debug_assert_eq!(t.to_string(), text);
         debug_assert_eq!(self.description(task).as_deref(), Some(text));
