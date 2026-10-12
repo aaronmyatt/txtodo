@@ -99,7 +99,7 @@ fn mirror_snapshot_round_trips_with_its_seq_and_replaces_the_previous_one() {
 }
 
 #[test]
-fn commit_change_with_lands_the_clear_and_the_mirror_with_the_commit() {
+fn commit_change_with_lands_the_clear_and_leaves_the_mirror_row_alone() {
     use txtodo_store::{CommitExtras, Projection};
     let dir = tempfile::tempdir().unwrap();
     let mut store = Store::open(&dir.path().join("oplog.db")).unwrap();
@@ -110,9 +110,10 @@ fn commit_change_with_lands_the_clear_and_the_mirror_with_the_commit() {
         hash: [7; 32],
         written_at_ms: 200,
     };
+    // An old todo.txt mirror row (ADR 0038): a commit neither reads nor rewrites it.
+    store.put_mirror(&todo(), b"old-mirror", Seq(3)).unwrap();
     let extras = CommitExtras {
         clear: Some((task(1), 200)),
-        mirror: Some(b"mirror-at-commit".to_vec()),
         fingerprints: Vec::new(),
         source: None,
     };
@@ -127,7 +128,7 @@ fn commit_change_with_lands_the_clear_and_the_mirror_with_the_commit() {
     );
     assert_eq!(
         store.get_mirror(&todo()).unwrap(),
-        Some((b"mirror-at-commit".to_vec(), Seq(0))),
-        "no ops yet, so the mirror sits at seq 0"
+        Some((b"old-mirror".to_vec(), Seq(3))),
+        "the old row stays as it was"
     );
 }
