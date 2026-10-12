@@ -53,3 +53,9 @@ that raised one, and it is gone.
   first), which it never showed before. `todo_conflicts_resolve` left the tool set and
   `EXPECTED_TOOLS`. An agent fixes a group with `todo_delete`. This changes the tool's output shape:
   an agent prompt that read `mine`/`theirs` gets groups instead.
+- daemon (2026-10-13): ab97c151 (ResolveConflict → Unimplemented, its test), a4fa8b47 (Resolve
+  message, `on_resolve`, `Resolution`, `NoFlag`), ec7a4958 (`Change.review`, `CommitTail`
+  review/clear, `raise_flags`, `conflict_row.rs`; `conflicts()` returns groups). `actor_mirror.rs`
+  builds `CommitExtras` field by field again so the store line can drop `clear`, then a daemon
+  tidy commit goes back to a literal. `pb::ConflictsResponse.flags`/`pb::Change.review` are set
+  empty; the proto line deletes those two lines with the fields.
