@@ -129,8 +129,8 @@ acceptance line from the backlog:
 1. One-way add, then the reverse.
 2. `do 1` on B — the `x ` line and the archive land on A.
 3. Concurrent non-conflicting adds in the same second — both survive.
-4. Real conflict: `replace` the same line on both with B's Wi-Fi off, then reconnect. Expect a
-   `needs_review` flag; `txtodo conflicts` should settle it the same way on both.
+4. Real conflict: `replace` the same line on both with B's Wi-Fi off, then reconnect. Expect the
+   same merged line on both, with no review flag (ADR 0038).
 5. Offline divergence: Wi-Fi off, 5 edits each side, reconnect, converge.
 6. Restart both daemons — no re-sync storm, no divergence.
 7. Nested `ref:`: `txtodo sub 1 add "nested"` on A, the whole tree reaches B.

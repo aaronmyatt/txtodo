@@ -27,8 +27,8 @@
 - **Universal.** Tasks from every workspace: stats, group by priority / due / project / context /
   workspace, chips, show done, due badges, `ref:` progress; complete or reopen in the row's own
   workspace, with Undo; keyboard-first (j/k, Enter, x).
-- **Conflict review.** A banner reports open `needs_review` flags (two devices edited the same
-  word); the review sheet shows a diff and lets you resolve `mine` / `theirs` / `merged`.
+- **Conflict review.** A banner reports lines that appear twice in the file; the review sheet
+  keeps the newest or the oldest copy. Same-word review went with the todo.txt mirror (ADR 0038).
 - **Settings.** General, Appearance (theme and editor prefs with a live preview), Workspaces,
   Shortcuts (generated from `src/lib/keyTable.ts`, the same table `/help` shows), Devices, Tokens
   and Activity, with a sticky section nav and `/settings#<card>` deep links.

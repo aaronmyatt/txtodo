@@ -223,7 +223,7 @@ Doc
 ```
 
 - LWW registers use **hybrid logical clocks** (wall clock + counter + device id), so "last" is meaningful across devices with skewed clocks and ties resolve deterministically.
-- `description` is a text CRDT: two devices editing different words of the same task both win. Editing the *same* word produces a character-level interleave; the reconciler flags it and clients show a one-tap "keep mine / keep theirs / keep merged".
+- `description` is a text CRDT: two devices editing different words of the same task both win. Editing the *same* word produces a character-level interleave, the same on every device; nothing flags it (ADR 0038 dropped the one-tap "keep mine / keep theirs / keep merged" review).
 - Archiving is a move within the same file's list (to the bottom), on top of `completed = true` — never a move between lists.
 - Multiple todo files ("workspaces": `work.txt`, `home.txt`) are just more entries in `files`.
 

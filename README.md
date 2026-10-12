@@ -212,7 +212,7 @@ These need a running `txtodo daemon` for this workspace.
 | `blame ITEM#` | Who last touched each field of a task. |
 | `undo [--steps N]` | Undo the newest N ops (default 1). |
 | `checkout AT [--stdout] [--file FILE]` | Render a document as it was at a local date-time. |
-| `conflicts [list\|resolve]` | Open `needs_review` flags and resolve them. |
+| `conflicts [list\|delete\|keep-newest]` | Lines that appear twice: list them, delete a copy, or keep the newest. |
 | `device [list\|remove ID]` | Devices paired into this workspace's sync group. |
 | `pair [CODE]` | Pair with another device (no CODE starts a handshake; CODE joins it). |
 | `identity migrate [--dry-run]` | Strip `id:` tags from a workspace that still carries them (ADR 0019). |
