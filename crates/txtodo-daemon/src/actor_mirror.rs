@@ -18,15 +18,11 @@ impl FileActor {
         tail: &CommitTail,
         next: &DocState,
     ) -> Result<CommitExtras, ActorError> {
-        // Built field by field until the store drops `CommitExtras::mirror` (ADR 0038): a literal
-        // naming every field breaks when it goes, and `..default()` over all of them is a lint.
-        let mut extras = CommitExtras {
+        Ok(CommitExtras {
             clear: tail.clear,
-            ..CommitExtras::default()
-        };
-        extras.fingerprints = self.fingerprints_for(next);
-        extras.source = tail.source.clone();
-        Ok(extras)
+            fingerprints: self.fingerprints_for(next),
+            source: tail.source.clone(),
+        })
     }
 
     /// Every live task's fingerprint in `next`, for `CommitExtras::fingerprints` — empty outside

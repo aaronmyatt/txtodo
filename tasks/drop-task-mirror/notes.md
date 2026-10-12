@@ -39,3 +39,13 @@ it, and it logs mirror errors in every lab chaos and clock-skew run. Design and 
 - Idle RSS after the removal (tests/e2e/idle_rss.rs, 10k lines, 2026-10-02): 1 629 MB. Before: the
   test's documented ~1.7 GB (not re-measured today). So the mirror was not the cause; the RSS gap
   is elsewhere (adoption or the state).
+
+## As built (2026-10-12, store line)
+- `CommitExtras::mirror` and its write in `land_extras` are gone (9ad4e198), with `last_seq_on`,
+  which only it used. The `mirrors` table, `put_mirror`/`get_mirror` and `MAX_MIRROR_BYTES` stay:
+  `notes_actor.rs` keeps the notes.md mirror there. Old todo.txt rows stay in the table, unread.
+- Three commits, because the fence leases one crate at a time and the field spans two: daemon
+  stops naming the field (d96b5b76), store drops it, daemon goes back to a plain literal.
+- Known gap: `cargo clippy --workspace` fails on `txtodo-cli` with clippy 1.99's new
+  `chunks_exact_to_as_chunks` lint (`commands/edit.rs:134`). It fails on HEAD before this too; not
+  touched here. `cargo nextest` is not installed on this Mac, so the fast gate's test step fails.
