@@ -1070,15 +1070,6 @@ tui = { status = "done", surface = "banner (OSC 52)" }
 deviation = ""
 
 [[action]]
-id = "conflicts.dismiss_banner"
-title = "Hide the conflict banner for now"
-keys = []
-scope = "global"
-desktop = { status = "done", surface = "ConflictBanner" }
-tui = { status = "na", surface = "banner" }
-deviation = "TUI: no flags banner since ADR 0038; the duplicate-lines banner has no dismiss. Desktop's goes with conflict review A."
-
-[[action]]
 id = "detail.up"
 title = "Up one level"
 keys = []

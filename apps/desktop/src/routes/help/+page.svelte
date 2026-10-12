@@ -74,8 +74,8 @@
 				<dd>The name at the top left: switch, add, rename or remove workspaces.</dd>
 				<dt>Conflicts</dt>
 				<dd>
-					A banner appears when two devices changed the same words. Review shows the difference and
-					three choices: keep mine, keep theirs, or keep the merged text.
+					A banner appears when a line is in the file more than once. Review keeps the newest or the
+					oldest copy; or edit one copy so they differ.
 				</dd>
 			</dl>
 		</section>
