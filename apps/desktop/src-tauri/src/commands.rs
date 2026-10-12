@@ -8,8 +8,8 @@
 //! `_inner` doing the real work — `#[instrument]`'s own expansion costs `clippy::cognitive_
 //! complexity` points, so the wrapper stays a one-line delegate and the original body (already
 //! at or near the budget in a few of these) is untouched in `_inner`. `skip_all` on every one:
-//! several of these carry real task/note text as an argument (`apply`'s `mutations`, `resolve`'s
-//! `task`), so nothing about a command's arguments is ever captured in the span — ids, counts and
+//! several of these carry real task/note text as an argument (`apply`'s `mutations`), so
+//! nothing about a command's arguments is ever captured in the span — ids, counts and
 //! outcomes only, never content (CLAUDE.md's logging rule). `#[tracing::instrument]` is listed
 //! *above* `#[tauri::command]` here, matching `txtodo-mcp/src/schema.rs`'s `#[tool]` convention,
 //! though for a different reason: unlike `rmcp`'s `#[tool]` (which rewrites an `async fn` into a
@@ -24,7 +24,6 @@
 
 use crate::dto::{
     ApplyResultDto, ChangeDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto,
-    ResolutionDto, ReviewFlagDto, TaskRefDto,
 };
 use crate::state::AppState;
 use crate::status::DaemonStatus;
@@ -310,65 +309,6 @@ async fn history_inner(
     };
     let resp = client.history(req).await.map_err(|e| e.to_string())?;
     Ok(HistoryDto::from(resp))
-}
-
-/// Resolves one `needs_review` flag; maps to the daemon's `ResolveConflict` RPC.
-#[tracing::instrument(name = "ipc.resolve", skip_all)]
-#[tauri::command]
-pub async fn resolve(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-    task: TaskRefDto,
-    resolution: ResolutionDto,
-) -> Result<ApplyResultDto, String> {
-    resolve_inner(app, state, path, task, resolution).await
-}
-
-async fn resolve_inner(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-    task: TaskRefDto,
-    resolution: ResolutionDto,
-) -> Result<ApplyResultDto, String> {
-    ensure_connected(&app, &state).await?;
-    let mut client = state.client_snapshot().await?;
-    let req = pb::ResolveRequest {
-        path,
-        task: Some(task.into()),
-        resolution: pb::Resolution::from(resolution) as i32,
-        workspace: None,
-        agent: None, // the human on this device
-    };
-    let resp = client.resolve(req).await.map_err(|e| e.to_string())?;
-    Ok(ApplyResultDto::from(resp))
-}
-
-/// Open `needs_review` flags for one workspace-relative document (plan M4): two devices rewrote
-/// the same word.
-#[tracing::instrument(name = "ipc.list_conflicts", skip_all)]
-#[tauri::command]
-pub async fn list_conflicts(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<Vec<ReviewFlagDto>, String> {
-    list_conflicts_inner(app, state, path).await
-}
-
-async fn list_conflicts_inner(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    path: String,
-) -> Result<Vec<ReviewFlagDto>, String> {
-    ensure_connected(&app, &state).await?;
-    let mut client = state.client_snapshot().await?;
-    let resp = client
-        .list_conflicts(&path)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(resp.flags.into_iter().map(ReviewFlagDto::from).collect())
 }
 
 // `ui_log` and its level-fanout helpers moved to `commands_ui_log.rs` (task `desktop-stack-gaps`,

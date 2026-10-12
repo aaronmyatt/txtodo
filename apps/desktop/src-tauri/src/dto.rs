@@ -126,30 +126,6 @@ impl From<pb::OpSummary> for OpSummaryDto {
     }
 }
 
-/// One `needs_review` flag raised by a change (plan M4).
-#[derive(Debug, Clone, Serialize)]
-pub struct ReviewFlagDto {
-    /// ULID text.
-    pub task_id: String,
-    /// 1-based; 0 when the line is no longer in the file.
-    pub line_number: u32,
-    /// This device's description at flag time.
-    pub mine: String,
-    /// The peer's description at flag time.
-    pub theirs: String,
-}
-
-impl From<pb::ReviewFlag> for ReviewFlagDto {
-    fn from(r: pb::ReviewFlag) -> ReviewFlagDto {
-        ReviewFlagDto {
-            task_id: r.task_id,
-            line_number: r.line_number,
-            mine: r.mine,
-            theirs: r.theirs,
-        }
-    }
-}
-
 /// One `Watch` event, forwarded to the frontend as a `daemon-change` Tauri event.
 #[derive(Debug, Clone, Serialize)]
 pub struct ChangeDto {
@@ -159,8 +135,6 @@ pub struct ChangeDto {
     pub hash: String,
     /// Ops this change appended.
     pub ops: Vec<OpSummaryDto>,
-    /// `needs_review` flags this change raised, if any.
-    pub review: Vec<ReviewFlagDto>,
     /// The file's duplicate groups after the change (ADR 0032); 0 from an older daemon.
     pub duplicate_groups: u32,
 }
@@ -171,13 +145,12 @@ impl From<pb::Change> for ChangeDto {
             path: c.path,
             hash: hex(&c.hash),
             ops: c.ops.into_iter().map(OpSummaryDto::from).collect(),
-            review: c.review.into_iter().map(ReviewFlagDto::from).collect(),
             duplicate_groups: c.duplicate_groups,
         }
     }
 }
 
-/// Result of `Apply`/`ResolveConflict`.
+/// Result of `Apply`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApplyResultDto {
     /// Ops appended.
@@ -328,28 +301,6 @@ impl From<MutationDto> for pb::Mutation {
             }),
         };
         pb::Mutation { kind: Some(kind) }
-    }
-}
-
-/// A resolution choice from the frontend; mirrors `pb::Resolution`.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResolutionDto {
-    /// Keeps this device's side.
-    Mine,
-    /// Keeps the peer's side.
-    Theirs,
-    /// Keeps what is already in the file; only clears the flag.
-    Merged,
-}
-
-impl From<ResolutionDto> for pb::Resolution {
-    fn from(r: ResolutionDto) -> pb::Resolution {
-        match r {
-            ResolutionDto::Mine => pb::Resolution::Mine,
-            ResolutionDto::Theirs => pb::Resolution::Theirs,
-            ResolutionDto::Merged => pb::Resolution::Merged,
-        }
     }
 }
 

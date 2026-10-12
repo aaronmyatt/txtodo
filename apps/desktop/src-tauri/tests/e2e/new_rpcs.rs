@@ -68,7 +68,10 @@ async fn list_conflicts_reaches_the_daemon_with_none_open() {
         .list_conflicts("todo.txt")
         .await
         .expect("list_conflicts should reach the daemon");
-    assert!(resp.flags.is_empty(), "a fresh workspace has no conflicts");
+    assert!(
+        resp.duplicates.is_empty(),
+        "a fresh workspace has no duplicates"
+    );
 
     kill(pid);
 }

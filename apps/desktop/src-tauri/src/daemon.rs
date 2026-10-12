@@ -236,16 +236,8 @@ impl DaemonClient {
         Ok(self.inner.history(req).await?.into_inner())
     }
 
-    /// Resolves one `needs_review` flag; maps to the daemon's `ResolveConflict` RPC.
-    pub async fn resolve(
-        &mut self,
-        mut req: pb::ResolveRequest,
-    ) -> Result<pb::ApplyResponse, DaemonError> {
-        req.workspace = self.selector.clone();
-        Ok(self.inner.resolve_conflict(req).await?.into_inner())
-    }
-
-    /// Open `needs_review` flags for `path` (plan M4): two devices rewrote the same word.
+    /// `ListConflicts` for `path`; only its duplicate groups are read (ADR 0032). Same-word review
+    /// went with the todo.txt mirror (ADR 0038).
     pub async fn list_conflicts(
         &mut self,
         path: &str,

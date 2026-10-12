@@ -25,10 +25,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use desktop_lib::config::DesktopConfig;
 use desktop_lib::daemon::{self, DaemonClient, DaemonError};
-use desktop_lib::dto::{
-    ApplyResultDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto, ResolutionDto,
-    ReviewFlagDto, TaskRefDto,
-};
+use desktop_lib::dto::{ApplyResultDto, FileContentsDto, FileInfoDto, HistoryDto, MutationDto};
 use serde::Deserialize;
 use serde_json::Value;
 use std::net::SocketAddr;
@@ -44,10 +41,6 @@ use workspace::dispatch_workspace_cmd;
 #[path = "e2e_bridge/activity.rs"]
 mod activity;
 
-#[path = "e2e_bridge/conflict.rs"]
-mod conflict;
-use conflict::cmd_debug_raise_conflict;
-
 #[path = "e2e_bridge/refdir.rs"]
 mod refdir;
 use refdir::dispatch_notes_cmd;
@@ -59,9 +52,7 @@ mod universal;
 mod default_workspace;
 use default_workspace::{assert_default_agrees, default_workspace_for};
 
-/// The connected client plus the workspace root, so `debug_raise_conflict` can open its own
-/// connection to `.txtodo/oplog.db` alongside the daemon's (same pattern as
-/// `crates/txtodo-daemon/tests/it/grpc.rs::raise_flag`).
+/// The connected client plus the workspace root (`workspace_root` answers with it).
 struct BridgeState {
     client: Mutex<DaemonClient>,
     workspace: PathBuf,
@@ -121,9 +112,8 @@ async fn main() {
         .await
         .unwrap_or_else(|e| panic!("e2e_bridge: wait_until_ready: {e}"));
     // `wait_until_ready` only lists the registry, so nothing has opened this workspace yet. A call
-    // that carries the selector does (it promotes the workspace and waits for its open); without it
-    // `.txtodo/` may not exist when a fixture reaches for the store straight away
-    // (`debug_raise_conflict`). Task default-workspace made this visible: an unselected call now
+    // that carries the selector does (it promotes the workspace and waits for its open), so a test's
+    // first call finds it open. Task default-workspace made this visible: an unselected call now
     // goes to the default workspace instead of opening the sole registered one.
     client
         .list_files()
@@ -214,9 +204,8 @@ fn parse<T: for<'de> Deserialize<'de>>(args: Value) -> Result<T, ApiError> {
 }
 
 /// The handful of commands the six Playwright scenarios need (tasks/desktop-playwright-tests):
-/// `list_files`, `get_file`, `apply`, `history`, `list_conflicts`, `list_duplicates`, `resolve`,
-/// `get_notes`, `edit_notes`, plus the test-only `debug_raise_conflict` (conflict.spec.ts — see that
-/// function's doc comment). `watch`/`daemon_status`/pairing/tokens/activity are unused by those
+/// `list_files`, `get_file`, `apply`, `history`, `list_duplicates`, `get_notes`, `edit_notes`.
+/// `watch`/`daemon_status`/pairing/tokens/activity are unused by those
 /// scenarios and intentionally not wired here — `e2e/shim/event.ts` polls the commands above
 /// instead of using a real `Watch` stream (see that file's module doc for why that's still "real
 /// reconciliation"). Dispatches to one `cmd_*` function per command (kept separate, not inlined,
@@ -236,10 +225,6 @@ async fn invoke(
     State(state): State<Shared>,
     Json(req): Json<InvokeReq>,
 ) -> Result<Response, ApiError> {
-    if req.cmd == "debug_raise_conflict" {
-        let value = cmd_debug_raise_conflict(&state.workspace, req.args)?;
-        return Ok(Json(value).into_response());
-    }
     if req.cmd == "workspace_root" {
         let value = Value::String(state.workspace.display().to_string());
         return Ok(Json(value).into_response());
@@ -279,9 +264,7 @@ async fn invoke_core(state: Shared, req: InvokeReq) -> Result<Response, ApiError
         "get_file" => cmd_get_file(&mut client, req.args).await?,
         "apply" => cmd_apply(&mut client, req.args).await?,
         "history" => cmd_history(&mut client, req.args).await?,
-        "list_conflicts" => cmd_list_conflicts(&mut client, req.args).await?,
         "list_duplicates" => cmd_list_duplicates(&mut client, req.args).await?,
-        "resolve" => cmd_resolve(&mut client, req.args).await?,
         "get_notes" | "edit_notes" | "ref_dir" => {
             dispatch_notes_cmd(&mut client, &req.cmd, req.args).await?
         }
@@ -353,17 +336,6 @@ async fn cmd_history(client: &mut DaemonClient, args: Value) -> Result<Value, Ap
     Ok(serde_json::to_value(HistoryDto::from(resp))?)
 }
 
-async fn cmd_list_conflicts(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
-    #[derive(Deserialize)]
-    struct Req {
-        path: String,
-    }
-    let r: Req = parse(args)?;
-    let resp = client.list_conflicts(&r.path).await?;
-    let dtos: Vec<ReviewFlagDto> = resp.flags.into_iter().map(ReviewFlagDto::from).collect();
-    Ok(serde_json::to_value(dtos)?)
-}
-
 async fn cmd_list_duplicates(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
     #[derive(Deserialize)]
     struct Req {
@@ -374,24 +346,4 @@ async fn cmd_list_duplicates(client: &mut DaemonClient, args: Value) -> Result<V
     Ok(serde_json::to_value(
         desktop_lib::dto_duplicates::groups_of(resp),
     )?)
-}
-
-async fn cmd_resolve(client: &mut DaemonClient, args: Value) -> Result<Value, ApiError> {
-    #[derive(Deserialize)]
-    struct Req {
-        path: String,
-        task: TaskRefDto,
-        resolution: ResolutionDto,
-    }
-    let r: Req = parse(args)?;
-    let resp = client
-        .resolve(pb::ResolveRequest {
-            path: r.path,
-            task: Some(r.task.into()),
-            resolution: pb::Resolution::from(r.resolution) as i32,
-            workspace: None,
-            agent: None,
-        })
-        .await?;
-    Ok(serde_json::to_value(ApplyResultDto::from(resp))?)
 }

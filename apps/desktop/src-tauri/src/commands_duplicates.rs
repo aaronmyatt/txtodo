@@ -1,5 +1,5 @@
-//! `list_duplicates`: the open file's duplicate groups (ADR 0032). A command of its own, not a
-//! wider `list_conflicts` reply, so every existing `list_conflicts` caller keeps its shape.
+//! `list_duplicates`: the open file's duplicate groups (ADR 0032), the only conflicts the desktop
+//! shows. Same-word review (`list_conflicts`' flags) went with the todo.txt mirror (ADR 0038).
 
 use crate::commands::ensure_connected;
 use crate::dto_duplicates::{DuplicateGroupDto, groups_of};

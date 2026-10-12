@@ -53,7 +53,6 @@ mod tests {
     #[test]
     fn a_reply_maps_to_groups_in_order_with_their_copies() {
         let resp = pb::ConflictsResponse {
-            flags: Vec::new(),
             duplicates: vec![pb::DuplicateGroup {
                 tasks: vec![
                     pb::DuplicateTask {
@@ -66,6 +65,7 @@ mod tests {
                     },
                 ],
             }],
+            ..Default::default()
         };
         let groups = groups_of(resp);
         assert_eq!(groups.len(), 1);
