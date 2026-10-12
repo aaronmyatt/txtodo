@@ -71,3 +71,35 @@ fn sub_by_slug_survives_a_line_above_completing_and_reaches_a_nested_list() {
         "{err}"
     );
 }
+
+/// `--dir` naming a ref folder inside a registered workspace works that sub-list, as `sub` does,
+/// instead of the daemon refusing a folder inside another workspace; nothing else is registered.
+#[test]
+fn dir_inside_a_workspace_scopes_to_that_sub_list() {
+    let state = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state.path());
+    let ws = tempfile::tempdir().unwrap();
+    std::fs::write(ws.path().join("todo.txt"), "plan trip ref:trip\n").unwrap();
+    std::fs::create_dir_all(ws.path().join("tasks/trip")).unwrap();
+    std::fs::write(ws.path().join("tasks/trip/todo.txt"), "book hotel\n").unwrap();
+    assert!(
+        daemon
+            .txtodo(ws.path(), &["workspace", "add"])
+            .status
+            .success()
+    );
+    let added = daemon.txtodo(ws.path(), &["--dir", "tasks/trip", "add", "book car"]);
+    assert!(
+        added.status.success(),
+        "{}",
+        String::from_utf8_lossy(&added.stderr)
+    );
+    let trip = std::fs::read_to_string(ws.path().join("tasks/trip/todo.txt")).unwrap();
+    assert!(trip.contains("book car"), "{trip}");
+    let root = std::fs::read_to_string(ws.path().join("todo.txt")).unwrap();
+    assert!(!root.contains("book car"), "{root}");
+    assert!(
+        !ws.path().join("tasks/trip/.txtodo").exists(),
+        "no second workspace"
+    );
+}

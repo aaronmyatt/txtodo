@@ -22,6 +22,7 @@ mod config;
 mod config_root_list;
 mod daemon_ensure;
 mod daemon_mode;
+mod dir_scope;
 mod error;
 mod json;
 #[cfg(test)]
@@ -105,6 +106,15 @@ fn run(cli: &Cli) -> Result<(), CliError> {
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(mut daemon) => {
+            // `--dir` inside a registered workspace runs on it, scoped like `sub`.
+            if let Some(done) = dir_scope::scoped(
+                &cli.command,
+                cli.list.is_some(),
+                &mut daemon,
+                &ctx.paths.dir,
+            )? {
+                return done;
+            }
             // A read in an unregistered folder fails before anything names it by path.
             if register_guard::check(&cli.command, &ctx.paths, &mut daemon)?
                 == register_guard::Guard::Direct
