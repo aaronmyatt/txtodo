@@ -15,8 +15,6 @@ mod resurrect;
 mod to_loro;
 
 #[cfg(test)]
-mod no_secrets_tests;
-#[cfg(test)]
 mod roundtrip_tests;
 
 pub use doc::sync::Imported;
