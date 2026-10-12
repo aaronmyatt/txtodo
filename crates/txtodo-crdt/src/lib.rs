@@ -10,7 +10,6 @@ mod doc;
 mod from_loro;
 mod lww;
 mod notes;
-mod resurrect;
 mod to_loro;
 
 pub use doc::sync::Imported;
