@@ -62,3 +62,6 @@ that raised one, and it is gone.
 - crdt (2026-10-13): 5cbcf384, ec0d4fca. `review.rs`/`review_tests.rs` gone. Row 4 of
   `specs/conflicts.md` and design §4.7 now say "char-level merge, the same on every device; no
   review flag"; its test is `edits_to_the_same_word_merge` and asserts both sides converge.
+- store (2026-10-13): 0a568596 (tests), 133e4a9d (`flags.rs` → `mirror.rs`, flag API and
+  `CommitExtras::clear` gone), 0da95aff (daemon literal). No migration: `review_flags` and its old
+  rows stay, unread, like the old todo.txt `mirrors` rows.
