@@ -4,7 +4,7 @@
 //! `blake3(secret)` is stored, never the secret; `verify_token` is the enforcement primitive a
 //! future request-time agent-auth path calls, nothing on the wire calls it yet (that path is
 //! plan M6's larger MCP server, out of scope for this crate). Revocation follows the crate's
-//! upsert idiom (`clear_flag`'s pattern): `revoked_at` NULL means live, so there is still no bare
+//! upsert idiom (`remove_device`'s pattern): `revoked_at` NULL means live, so there is still no bare
 //! `UPDATE` statement here. No clock in this crate (constitution §3): every timestamp is the
 //! caller's `_ms` argument, mirroring `Hlc::tick(now_ms)` in txtodo-model.
 //! Ref: https://docs.rs/blake3 · https://www.sqlite.org/lang_upsert.html

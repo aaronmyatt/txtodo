@@ -1,7 +1,7 @@
 //! Sidecar identity fingerprints (design §4.1, docs/questions.md Q2): one row per task the last
 //! time its fingerprint was computed, so `crates/txtodo-daemon/src/identity/assign.rs` can
 //! re-match tasks after an external edit instead of reading an `id:` tag. Retiring follows the
-//! crate's upsert idiom (`flags.rs`'s `clear_flag`): a tombstoned row is kept, never deleted, so
+//! crate's upsert idiom (`devices.rs`'s `remove_device`): a tombstoned row is kept, never deleted, so
 //! a late-arriving peer op against a task since split by a delete+insert still finds a row that
 //! explains it. No clock in this crate (constitution §3): every timestamp is the caller's `_ms`
 //! argument.

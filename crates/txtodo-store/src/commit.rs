@@ -4,7 +4,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::flags::clear_flag_on;
 use crate::identity::{retire_live_except_on, upsert_fingerprint_on};
 use crate::ops::{collect, insert_ops};
 use crate::projections::{upsert_meta, upsert_projection};
@@ -13,7 +12,7 @@ use crate::{
     Stored, hex8,
 };
 use rusqlite::{OptionalExtension, params};
-use txtodo_model::{FilePath, Op, TaskId};
+use txtodo_model::{FilePath, Op};
 
 const SELECT_NEWEST: &str =
     "SELECT seq, payload FROM ops WHERE file = ?1 ORDER BY seq DESC LIMIT ?2";
@@ -23,8 +22,6 @@ const SELECT_SNAPSHOT_AT_OR_BEFORE: &str =
 /// What a `commit_change_with` lands besides ops, projection and prev_hash.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CommitExtras {
-    /// Clear this needs_review flag (task, cleared_at_ms) in the same transaction.
-    pub clear: Option<(TaskId, u64)>,
     /// Sidecar identity mode (docs/questions.md Q2): every live task's fingerprint as of this
     /// commit's new projection, upserted alongside it so identity and content never part ways
     /// across a crash. Empty in tagged mode — nothing to track. A non-empty set is the whole live
@@ -35,17 +32,14 @@ pub struct CommitExtras {
     pub source: Option<String>,
 }
 
-/// Lands the flag clear and/or the fingerprints on `tx`; the caller owns the transaction. The
-/// todo.txt Loro mirror snapshot that used to land here is gone (ADR 0038); its old rows stay in
-/// `mirrors`, unread. `notes.md`'s mirror still uses that table, through `put_mirror`.
+/// Lands the fingerprints on `tx`; the caller owns the transaction. The todo.txt Loro mirror
+/// snapshot and the needs_review flag clear that used to land here are gone (ADR 0038); their old
+/// rows stay, unread. `notes.md`'s mirror still uses its table, through `put_mirror`.
 fn land_extras(
     tx: &rusqlite::Connection,
     file: &FilePath,
     extras: &CommitExtras,
 ) -> Result<(), StoreError> {
-    if let Some((task, at_ms)) = extras.clear {
-        clear_flag_on(tx, file, task, at_ms)?;
-    }
     land_fingerprints(tx, file, &extras.fingerprints)?;
     debug_assert!(!file.as_str().is_empty());
     Ok(())
@@ -99,12 +93,10 @@ impl Store {
         self.commit_change_with(ops, projection, prev_hash, &CommitExtras::default())
     }
 
-    /// `commit_change` with the extras in the same transaction: clear one needs_review flag (a
-    /// resolution's write-back and its clear land together or not at all), the sidecar
-    /// fingerprints and the op source. The durability funnel every write
-    /// path lands through (`txtodo-daemon`'s `actor.rs::persist_change` calls this directly). A
-    /// thin span wrapper around `commit_change_with_inner` (`#[instrument]` on the real body
-    /// overflows).
+    /// `commit_change` with the extras in the same transaction: the sidecar fingerprints and the
+    /// op source. The durability funnel every write path lands through (`txtodo-daemon`'s
+    /// `actor.rs::persist_change` calls this directly). A thin span wrapper around
+    /// `commit_change_with_inner` (`#[instrument]` on the real body overflows).
     #[tracing::instrument(skip_all, fields(
         file = %projection.file,
         ops = ops.len(),
@@ -163,13 +155,6 @@ impl Store {
         tx.commit()
             .map_err(StoreError::query("commit commit_change"))?;
         debug_assert!(range.is_none_or(|r| r.first <= r.last));
-        debug_assert!(
-            extras.clear.is_none_or(|(task, _)| {
-                self.open_flags(&projection.file)
-                    .is_ok_and(|f| !f.iter().any(|r| r.task == task))
-            }),
-            "the flag is cleared with the commit"
-        );
         Ok(range)
     }
 
