@@ -1,8 +1,8 @@
 // Duplicate lines (ADR 0032, task sync-drift duplicate-flags): two or more lines of one file that
 // read the same. Pure helpers, no Tauri imports, so they are unit-tested without mocking `invoke`
 // (duplicates.test.ts). The daemon derives the groups (`listDuplicates`); a group is resolved by an
-// ordinary `delete` of the other copies, or by editing one so they differ. Unlike a `needs_review`
-// flag it never makes the buffer read-only.
+// ordinary `delete` of the other copies, or by editing one so they differ. It never makes the
+// buffer read-only.
 import type { DuplicateGroup, Mutation } from "$lib/daemon";
 
 /** Which copy survives. Newest is the safe default (ADR 0032: on a device that re-minted a file,

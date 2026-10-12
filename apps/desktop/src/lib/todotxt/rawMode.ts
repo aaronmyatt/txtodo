@@ -6,17 +6,13 @@
 // Design invariant (design §7 thin clients): even in raw mode the UI never parses or writes
 // todo.txt itself. `computeDelta` below turns a raw-buffer edit into the same intent-level
 // `Mutation`s `$lib/daemon.ts::applyMutations` already sends for the edit popover and the
-// conflict-review sheet's resolutions — the one reconcile path this app can reach from
+// duplicate sheet's keeps — the one reconcile path this app can reach from
 // `apps/desktop` without a daemon/proto change (this slice's scope is `apps/desktop` only; see
 // this task's "As built" note for why a dedicated whole-document external-edit RPC, closer to
 // what `crates/txtodo-core/src/diff.rs`'s `diff_lines` does for a real file-watcher edit, is out
 // of scope here). Submitting per-task mutations rather than one whole-string replace is also
 // *safer*, not just smaller: it only touches the tasks the human actually changed, so it can
-// never clobber an unrelated concurrent change the way a naive whole-file overwrite could — and a
-// genuinely conflicting concurrent edit to the same task still goes through the exact per-task
-// CRDT merge/`needs_review` path the edit popover and `ConflictReviewSheet` already exercise
-// (`ConflictReviewSheet.svelte`'s own `resolve()` doc comment: "the same `Apply(Edit)` path the
-// edit popover uses").
+// never clobber an unrelated concurrent change the way a naive whole-file overwrite could.
 import type { Mutation } from "$lib/daemon";
 
 const ID_TAG = /\bid:(\S+)/;
@@ -140,11 +136,4 @@ export function computeDelta(baseline: string, next: string): Mutation[] {
  * skip even building the delta for the common "nothing changed" case. */
 export function isNoOpSave(baseline: string, next: string): boolean {
 	return baseline === next;
-}
-
-/** Whether raw mode may be entered right now. The document raw mode edits is the *reconciled
- * projection*, so a pending `needs_review` flag means it isn't stable yet — resolve conflicts
- * first, then edit (notes.md "Edge cases & invariants"). */
-export function canEnterRawMode(hasPendingReview: boolean): boolean {
-	return !hasPendingReview;
 }

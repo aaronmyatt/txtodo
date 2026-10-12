@@ -5,7 +5,7 @@
 // project's existing split (vitest.config.ts: "pure-logic unit tests only, no Svelte component
 // runtime").
 import { describe, expect, it } from "vitest";
-import { canEnterRawMode, computeDelta, isNoOpSave } from "../rawMode";
+import { computeDelta, isNoOpSave } from "../rawMode";
 
 const LINE_A = "(A) buy milk id:01ARZ3NDEKTSV4RRFFQ69G5FAV";
 const LINE_B = "call mum id:01ARZ3NDEKTSV4RRFFQ69G5FA2";
@@ -133,15 +133,5 @@ describe("computeDelta — mixed", () => {
 				leave_blank: false
 			}
 		]);
-	});
-});
-
-describe("canEnterRawMode", () => {
-	it("refuses when a needs_review flag is already showing", () => {
-		expect(canEnterRawMode(true)).toBe(false);
-	});
-
-	it("allows when there is nothing pending review", () => {
-		expect(canEnterRawMode(false)).toBe(true);
 	});
 });
