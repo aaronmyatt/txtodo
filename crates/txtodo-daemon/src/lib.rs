@@ -17,7 +17,6 @@ mod bundle_import_error;
 mod bundle_wire;
 pub mod clock;
 mod commit;
-mod conflict_row;
 mod conflicts_grpc;
 mod contents;
 pub mod control_channel;

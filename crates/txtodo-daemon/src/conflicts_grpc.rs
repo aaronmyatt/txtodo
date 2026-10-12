@@ -1,24 +1,27 @@
 //! `ListConflicts` / `ResolveConflict` (plan M7, design §4.7) and the read-only `Lint` RPC (task
 //! `mcp-hygiene-parity`), moved out of `server.rs` for its line budget — the same `impl
-//! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`.
+//! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`. Same-word review
+//! (`needs_review` flags) went with the todo.txt mirror (ADR 0038): `ListConflicts` sends duplicate
+//! groups only, and `ResolveConflict` stays on the wire only until the proto drops it.
 
-use crate::convert::{status_of, to_flag};
+use crate::convert::status_of;
 use crate::duplicates::to_duplicate_group;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
 
 impl TxtodoService {
-    /// The open `needs_review` flags of one document.
+    /// One document's duplicate groups (ADR 0032). `flags` is always empty; old flag rows in the
+    /// store are never read.
     pub(crate) async fn list_conflicts_impl(
         &self,
         r: Request<pb::ConflictsRequest>,
     ) -> Result<Response<pb::ConflictsResponse>, Status> {
         let h = self.actor(&r.get_ref().path)?;
-        let found = h.conflicts().await.map_err(status_of)?;
+        let groups = h.conflicts().await.map_err(status_of)?;
         Ok(Response::new(pb::ConflictsResponse {
-            flags: found.flags.iter().map(to_flag).collect(),
-            duplicates: found.duplicates.iter().map(to_duplicate_group).collect(),
+            flags: Vec::new(),
+            duplicates: groups.iter().map(to_duplicate_group).collect(),
         }))
     }
 

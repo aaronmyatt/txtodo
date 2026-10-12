@@ -12,7 +12,7 @@ use crate::write::WriteError;
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use txtodo_model::{FilePath, Hlc, HlcError, Principal, RefTag, TaskId};
-use txtodo_store::{ReviewRow, StoreError, Stored};
+use txtodo_store::{StoreError, Stored};
 
 /// Mailbox depth per document.
 pub const ACTOR_MAILBOX_CAP: usize = 256;
@@ -42,13 +42,9 @@ pub struct Change {
     pub hash: Hash,
     /// The ops appended, with their seqs.
     pub ops: Vec<Stored>,
-    /// needs_review flags this change raised (an import), if any.
-    pub review: Vec<ReviewRow>,
     /// The file's duplicate groups afterwards (ADR 0032).
     pub duplicate_groups: u32,
 }
-
-pub use crate::conflict_row::{ConflictRow, FileConflicts};
 
 /// Everything the actor can fail with. Client errors (`Mutation`) map to gRPC InvalidArgument /
 /// FailedPrecondition; the rest are Internal.
@@ -195,10 +191,10 @@ pub enum ActorMsg {
         /// Result channel.
         reply: oneshot::Sender<Result<crate::migrate_sidecar::Migrated, ActorError>>,
     },
-    /// The open needs_review flags.
+    /// The file's duplicate groups (ADR 0032).
     Conflicts {
         /// Result channel.
-        reply: oneshot::Sender<Result<FileConflicts, ActorError>>,
+        reply: oneshot::Sender<Result<Vec<crate::duplicates::DuplicateGroup>, ActorError>>,
     },
     /// The op-set and byte hashes a `Digest` compares, `None` while peer ops wait (ADR 0035).
     Digest {
@@ -328,8 +324,8 @@ impl ActorHandle {
             .await?
     }
 
-    /// The open needs_review flags with their current lines.
-    pub async fn conflicts(&self) -> Result<FileConflicts, ActorError> {
+    /// The file's duplicate groups (ADR 0032), derived from the state now.
+    pub async fn conflicts(&self) -> Result<Vec<crate::duplicates::DuplicateGroup>, ActorError> {
         self.ask(|reply| ActorMsg::Conflicts { reply }).await?
     }
 

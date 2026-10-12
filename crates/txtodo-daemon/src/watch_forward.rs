@@ -2,9 +2,8 @@
 //! rule-5 progress attached (plan M5, tasks/proto-tree-progress). Split out of `server.rs` purely
 //! to keep that file within its line budget, same pattern as `progress.rs`/`notes.rs`.
 
-use crate::convert::to_flag;
 use crate::convert::to_summary;
-use crate::handle::{ActorHandle, ConflictRow};
+use crate::handle::ActorHandle;
 use crate::progress::watch_progress_of;
 use crate::server::TxtodoService;
 use tokio::sync::broadcast::error::RecvError;
@@ -53,17 +52,8 @@ pub(crate) async fn forward_changes(
                 path: c.path.to_string(),
                 hash: c.hash.to_vec(),
                 ops: c.ops.iter().map(to_summary).collect(),
-                // Line numbers are not known on the broadcast path; ListConflicts has them.
-                review: c
-                    .review
-                    .iter()
-                    .map(|row| {
-                        to_flag(&ConflictRow {
-                            row: row.clone(),
-                            line_number: 0,
-                        })
-                    })
-                    .collect(),
+                // No flags since ADR 0038; the field goes with the proto.
+                review: Vec::new(),
                 progress: watch_progress_of(&svc, &h).await,
                 duplicate_groups: c.duplicate_groups,
             },
@@ -75,9 +65,10 @@ pub(crate) async fn forward_changes(
                     review: Vec::new(),
                     progress: watch_progress_of(&svc, &h).await,
                     // Missed changes: the count as it is now.
-                    duplicate_groups: h.conflicts().await.map_or(0, |found| {
-                        u32::try_from(found.duplicates.len()).unwrap_or(u32::MAX)
-                    }),
+                    duplicate_groups: h
+                        .conflicts()
+                        .await
+                        .map_or(0, |groups| u32::try_from(groups.len()).unwrap_or(u32::MAX)),
                 },
                 Err(_) => return,
             },

@@ -1,15 +1,15 @@
-//! The actor's commit extras: fingerprints, flags to raise and the change broadcast. Same
-//! `impl FileActor`; split from `actor.rs` for the file budget. The todo.txt Loro mirror this file
-//! used to keep in step is gone (ADR 0038). None of these can fail a client's change: the change is
-//! durable before any of them runs; problems are logged.
+//! The actor's commit extras: fingerprints and the change broadcast. Same `impl FileActor`; split
+//! from `actor.rs` for the file budget. The todo.txt Loro mirror this file used to keep in step,
+//! and the review flags it raised, are gone (ADR 0038). Neither can fail a client's change: the
+//! change is durable before either runs.
 
 use crate::actor::{CommitTail, FileActor};
 use crate::handle::ActorError;
 use crate::identity_fingerprint::fingerprint_of;
 use crate::reconcile::task_of;
 use crate::state::DocState;
-use txtodo_model::{FilePath, IdentityMode};
-use txtodo_store::{CommitExtras, FingerprintRow, ReviewRow};
+use txtodo_model::IdentityMode;
+use txtodo_store::{CommitExtras, FingerprintRow};
 
 impl FileActor {
     /// The store-transaction extras a commit tail asks for.
@@ -18,11 +18,14 @@ impl FileActor {
         tail: &CommitTail,
         next: &DocState,
     ) -> Result<CommitExtras, ActorError> {
-        Ok(CommitExtras {
-            clear: tail.clear,
+        // Built field by field until the store drops `CommitExtras::clear` (ADR 0038), as with
+        // `mirror`: a literal naming every field breaks when it goes.
+        let mut extras = CommitExtras {
             fingerprints: self.fingerprints_for(next),
-            source: tail.source.clone(),
-        })
+            ..CommitExtras::default()
+        };
+        extras.source = tail.source.clone();
+        Ok(extras)
     }
 
     /// Every live task's fingerprint in `next`, for `CommitExtras::fingerprints` — empty outside
@@ -44,25 +47,6 @@ impl FileActor {
                 })
             })
             .collect()
-    }
-
-    /// Stores the flags a change raised; a store failure is logged, the change is already durable.
-    pub(crate) fn raise_flags(&mut self, rows: &[ReviewRow]) {
-        if rows.is_empty() {
-            return;
-        }
-        let path = self.cfg.path.clone();
-        let mut store = self.lock_store();
-        for row in rows {
-            if let Err(e) = store.raise_flag(row) {
-                Self::log_raise_flag_failed(&path, &e);
-            }
-        }
-        debug_assert!(rows.iter().all(|r| r.file == self.cfg.path));
-    }
-
-    fn log_raise_flag_failed(path: &FilePath, e: &txtodo_store::StoreError) {
-        tracing::error!(file = %path, error = %e, "raise_flag_failed");
     }
 
     /// Sends `change` to every `Watch` subscriber; a full mailbox never blocks the commit that

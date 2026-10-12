@@ -1,9 +1,10 @@
-//! The actor's sync-facing messages (plan M4): list the open needs_review flags,
-//! the digest, a peer's ops. Same `impl FileActor`; split from `actor.rs` for the file budget.
-//! The Loro import path that raised flags is gone (ADR 0038), so no new flag is raised.
+//! The actor's sync-facing messages (plan M4): the duplicate groups, the digest, a peer's ops.
+//! Same `impl FileActor`; split from `actor.rs` for the file budget. Same-word review (the
+//! `needs_review` flags and their resolve) went with the Loro import path (ADR 0038).
 
 use crate::actor::FileActor;
-use crate::handle::{ActorError, ActorMsg, ConflictRow, FileConflicts};
+use crate::duplicates::DuplicateGroup;
+use crate::handle::{ActorError, ActorMsg};
 
 impl FileActor {
     /// The sync/conflict-resolution messages — split out of `actor.rs::handle_core` purely to
@@ -51,20 +52,8 @@ impl FileActor {
             })
     }
 
-    /// Open flags with the line each task sits on now (0 when it is no longer in the file).
-    pub(crate) fn on_conflicts(&self) -> Result<FileConflicts, ActorError> {
-        let rows = self.lock_store().open_flags(&self.cfg.path)?;
-        let out: Vec<ConflictRow> = rows
-            .into_iter()
-            .map(|row| ConflictRow {
-                line_number: self.state.index_of(row.task).map_or(0, |i| i + 1),
-                row,
-            })
-            .collect();
-        debug_assert!(out.iter().all(|c| c.row.file == self.cfg.path));
-        Ok(FileConflicts {
-            flags: out,
-            duplicates: crate::duplicates::duplicate_groups(&self.state),
-        })
+    /// The file's duplicate groups (ADR 0032), derived from the state now.
+    pub(crate) fn on_conflicts(&self) -> Result<Vec<DuplicateGroup>, ActorError> {
+        Ok(crate::duplicates::duplicate_groups(&self.state))
     }
 }

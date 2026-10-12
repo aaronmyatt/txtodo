@@ -1,7 +1,7 @@
 //! The gRPC boundary: proto messages are parsed into typed values once, here (constitution §3:
 //! parse, don't validate); ops are rendered into `OpSummary` for log/blame/Watch. Pure.
 
-use crate::handle::{ActorError, ConflictRow};
+use crate::handle::ActorError;
 use crate::mutation::{Mutation, MutationError, TaskRef};
 use crate::refdir::RefDirError;
 use crate::state::TaskCounts;
@@ -246,17 +246,6 @@ pub fn summary_of(kind: &OpKind) -> String {
         OpKind::BlankInsert { after } => format!("blank after {after:?}"),
         OpKind::BlankRemove { after } => format!("remove blank after {after:?}"),
         OpKind::RemoveTag { key, .. } => format!("remove tag {key}:"),
-    }
-}
-
-/// An open flag as the wire sees it.
-pub fn to_flag(c: &ConflictRow) -> pb::ReviewFlag {
-    pb::ReviewFlag {
-        task_id: c.row.task.to_string(),
-        line_number: u32::try_from(c.line_number).unwrap_or(u32::MAX),
-        mine: String::from_utf8_lossy(&c.row.mine).into_owned(),
-        theirs: String::from_utf8_lossy(&c.row.theirs).into_owned(),
-        raised_at_ms: c.row.raised_at_ms,
     }
 }
 
