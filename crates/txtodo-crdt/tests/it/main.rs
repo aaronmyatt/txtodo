@@ -5,4 +5,3 @@
 //! this crate has no `tests/e2e`.
 //! Pattern: https://matklad.github.io/2021/02/27/delete-cargo-integration-tests.html
 
-mod sim;
