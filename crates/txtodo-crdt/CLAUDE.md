@@ -1,46 +1,31 @@
 # txtodo-crdt
 
 ## Purpose
-The Loro merge engine (plan M4, ADR 0002/0013): one `LoroDocument` per workspace with a movable
-list per file and a shared `tasks` map; our `Op`s in, Loro updates between devices, `Op`s out.
-As built 2026-09-12. The review flags (`detect`) went with the daemon's todo.txt mirror (ADR 0038).
+The `notes.md` merge engine (plan M5, ADR 0002): `NotesDoc`, one Loro text per notes file. As
+built 2026-09-12 with a todo.txt list document beside it; that document, its op translation
+(`to_loro`/`from_loro`), the LWW registers, `resurrect` and the review flags went with the
+daemon's todo.txt mirror (ADR 0038, 2026-10-13). `DocState` in `txtodo-daemon` is the todo.txt
+engine.
 
 ## Public interface
-- `LoroDocument::{open, hydrate(ops), fork, at(frontiers), snapshot, from_snapshot, set_peer,
-  version, export_updates(since), import(bytes) -> Imported}`; views `list_ids(file)`,
-  `is_deleted`, `description`, `set_description`, `last_blank_id`; `is_blank(id)`,
-  `rebuild_line(doc, task)` (canonical, not byte-faithful).
-- `apply(doc, &Op)` — `OpKind → Loro`, one commit per op, exhaustive; Insert of a deleted id
-  resurrects it; `BlankRemove` skips tombstones; `RemoveTag` (ADR 0036) deletes the one run of
-  chars `txtodo_model::remove_tag` drops, and reads back out of a diff as a plain `EditText`. `hydrate_file(doc, file, lines, hlc)` — O(n) bulk
-  load of an empty list. `from_batch(doc, diff, stamp, mint)` — Loro diff → `Op`s.
-- `Lww { value, hlc }`, `write_if_newer` (ADR 0013: our HLC arbitrates; an equal stamp lands).
-- `NotesDoc` (plan M5, tasks/crdt-notes-doc): a single root `LoroText`, no tasks map, no movable
-  list — deliberately not a `LoroDocument`, since notes are prose, not task lines. `open`,
-  `hydrate(initial)`, `from_snapshot`, `set_peer`, `content`, `apply_edits` (replays a dual-indexed
-  `TextEdit` stream through `to_loro::replay_edits`, the same walk a description edit uses),
-  `snapshot`, `version_bytes`, `export_updates_since`, `import`. Concurrent edits from two devices
-  merge character-wise through Loro's text CRDT; `txtodo-daemon` derives its own op-log entry from
-  the text before/after an import rather than from a Loro diff (no task list to reconcile).
+- `NotesDoc` (tasks/crdt-notes-doc): a single root `LoroText`, no tasks map, no movable list.
+  `open`, `hydrate(initial)`, `from_snapshot`, `set_peer`, `content`, `apply_edits` (replays a
+  dual-indexed `TextEdit` stream through `replay_edits`), `snapshot`, `version_bytes`,
+  `export_updates_since`, `import`. Concurrent edits from two devices merge character-wise
+  through Loro's text CRDT; `txtodo-daemon` derives its own op-log entry from the text
+  before/after an import (`notes_mirror.rs`).
+- `NotesDocError`.
 
 ## Tests
-- `tests/sim.rs` (plan M4 `crdt-sync-simulator`): N devices fork one ancestor, a seeded PRNG (own
-  splitmix64, `tests/sim/rng.rs` — no `rand` dependency) drives every random choice (clock, ULID
-  entropy, op kind, partition flips), convergence runs through `export_updates`/`import` like the
-  real system. `cargo test` runs 20 fixed seeds; `just sim` runs the full 1000 random-seed sweep
-  (`--release`: ~40s vs. minutes in debug), `TXTODO_SIM_SEED=<n>` reproduces exactly one. Asserts
-  CRDT-level convergence (id order, deleted flags, canonical line text) plus no-loss/no-duplication
-  — not byte-identical files (needs `txtodo-daemon`'s `DocState`, out of scope here; see the file's
-  own doc comment for the full scope decision). No shrinker or 1000-op-mutation meta-test framework
-  yet — a hand-built "diverged device" case proves the assertion itself is wired instead.
+- Unit tests in `notes.rs`: hydrate and edit, snapshot round trip, two devices' concurrent edits
+  merging. The conflict table (`specs/conflicts.md`) runs on `DocState` in
+  `txtodo-daemon/src/conflict_table_tests.rs`.
 
 ## Invariants
-- Untouched lines materialise byte-identical — the host keeps the bytes (`txtodo-daemon`
-  `DocState`); this crate holds fields + text and never claims to re-emit quirks.
-- One id, one list entry: a deleted task is a tombstone (`deleted` register), never removed.
-- Every list mutation goes through the per-file shadow (`doc/shadow.rs`); an import or snapshot
-  load invalidates it. Concurrency is asked of Loro frontiers, never of the `Hlc`.
-- Two devices merge only if their documents share lineage (fork/snapshot at pairing, then
-  updates); replaying our `Op`s into independent documents does not converge.
+- `replay_edits` translates the dual-indexed stream (a `Delete`'s `at` counts the source, an
+  `Insert`'s the target) through two cursors; positions are Unicode code points.
+- Two devices merge only if their documents share lineage (fork/snapshot, then updates).
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
-- May depend only on: txtodo-model, txtodo-store, txtodo-core.
+- May depend only on: txtodo-model, txtodo-store, txtodo-core. Uses txtodo-model and
+  txtodo-core; the txtodo-store dependency is unused since ADR 0038 (dropping it rewrites the
+  frozen Cargo.lock).

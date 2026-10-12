@@ -2,9 +2,9 @@
 
 - Status: accepted 2026-10-02 (the owner chose conflict review A in `tasks/drop-task-mirror/notes.md`)
 - Built 2026-10-02 in the daemon (the mirror, its upkeep, the import/export path); 2026-10-13 the
-  store's mirror write and conflict review A in every client, the daemon, crdt and store. Still to
-  go: the proto's `ResolveConflict`/`ReviewFlag` and the `txtodo-crdt` list code
-  (`tasks/drop-task-mirror`)
+  store's mirror write, conflict review A in every client, the daemon, crdt and store, and the
+  `txtodo-crdt` list code (the conflict table now runs on `DocState`). Still to go: the proto's
+  `ResolveConflict`/`ReviewFlag` (`tasks/drop-task-mirror`)
 - Date: 2026-10-02
 - Deciders: project owner
 
