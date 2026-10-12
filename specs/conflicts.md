@@ -3,7 +3,7 @@
 Source of truth for what two devices editing offline, then syncing, must converge to. Mirrors §4.7
 of `txtodo-design.md`; the two are diffed by `.claude/scripts/check-specs-mirror.sh` (run by
 `just boundaries` and CI). Change both in the same PR. Executable as
-`crates/txtodo-daemon/tests/conflicts.rs`, which has one named test per row below, in row order;
+`crates/txtodo-daemon/src/conflict_table_tests.rs` (on `DocState`), which has one named test per row below, in row order;
 `row_count_matches_this_table` fails if the two ever drift apart in count.
 
 The user-visible guarantee: **txtodo never silently loses something you typed.**
@@ -25,7 +25,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 
 ## Row-to-test mapping
 
-Row order above is fixed and matches `crates/txtodo-daemon/tests/conflicts.rs` top to bottom:
+Row order above is fixed and matches `crates/txtodo-daemon/src/conflict_table_tests.rs` (on `DocState`) top to bottom:
 
 1. `complete_then_complete_is_idempotent`
 2. `complete_and_edit_description_both_apply`

@@ -186,6 +186,8 @@ mod actor_tests;
 #[cfg(test)]
 mod bundle_tests;
 #[cfg(test)]
+mod conflict_table_tests;
+#[cfg(test)]
 mod control_dispatch_tests;
 #[cfg(test)]
 mod control_session_tests;
