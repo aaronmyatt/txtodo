@@ -93,14 +93,20 @@ pub fn run_log(
 pub fn run_blame(ctx: &Ctx, daemon: &mut Daemon, item: &str) -> Result<(), CliError> {
     let as_json = ctx.json;
     let n: usize = item.parse().map_err(|_| CliError::Usage("blame ITEM#"))?;
-    let bytes = daemon.get(&ctx.paths.todo_file)?;
+    let (bytes, ids) = daemon.get_with_ids(&ctx.paths.todo_file)?;
     let file = parse_file(&bytes);
     let line = n
         .checked_sub(1)
         .and_then(|i| file.lines.get(i))
         .ok_or_else(|| CliError::Message(format!("TODO: No task {n}.")))?;
+    // The daemon's id for the line (the only one a Sidecar line has), else the line's own `id:`
+    // tag (an older daemon sends no ids).
     let task_id = match line.parse().map(|l| l.kind) {
-        Some(LineKind::Task(t)) => t.id().map(|u| u.to_string()),
+        Some(LineKind::Task(t)) => ids
+            .get(n - 1)
+            .filter(|id| !id.is_empty())
+            .cloned()
+            .or_else(|| t.id().map(|u| u.to_string())),
         _ => None,
     };
     let Some(task_id) = task_id else {
