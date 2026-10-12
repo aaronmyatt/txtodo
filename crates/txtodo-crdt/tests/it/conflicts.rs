@@ -1,9 +1,8 @@
 //! `specs/conflicts.md` as executable tests (plan M4 `crdt-conflict-table`). One test per row,
 //! in row order, matching the spec's "Row-to-test mapping" section exactly.
 //!
-//! Each row is two devices, offline, one op each, then heal — reusing the same fork/apply/sync
-//! pattern `txtodo-crdt`'s own `review_tests.rs` already uses (that module is crate-private, so
-//! this external test file keeps its own copy against the crate's public API only). Row 9
+//! Each row is two devices, offline, one op each, then heal — the fork/apply/sync pattern, against
+//! the crate's public API only. Row 9
 //! (fingerprint re-identification) is `#[ignore]`d with its own doc comment explaining why it has
 //! no meaningful form as a pure CRDT-merge test; every other row, including 6-7's delete-vs-edit/
 //! delete-vs-complete resolution (`crate::resurrect`), asserts the row's real, built behaviour.
@@ -11,7 +10,7 @@
 // helpers (paired/sync/op/replace/insert/set below).
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use txtodo_crdt::{Imported, LoroDocument, apply, detect, rebuild_line};
+use txtodo_crdt::{Imported, LoroDocument, apply, rebuild_line};
 use txtodo_model::{
     DeviceId, Field, FieldValue, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, TextEdit,
     Ulid, set_field,
@@ -185,16 +184,18 @@ fn edits_to_different_words_both_apply() {
 }
 
 #[test]
-fn edits_to_the_same_word_merge_and_raise_needs_review() {
+fn edits_to_the_same_word_merge() {
+    // No review flag any more (ADR 0038): the char-level merge is the result, the same on both.
     let (mut a, mut b) = paired();
     apply(&mut a, &replace(1, 10, DESC, "ducks", "geese")).unwrap();
     apply(&mut b, &replace(2, 11, DESC, "ducks", "cows")).unwrap();
-    let imported = sync(&b, &mut a);
-    let review = detect(&a, &imported).unwrap();
-    assert_eq!(review.flags.len(), 1, "{review:?}");
-    let tag = format!(" id:{}", Ulid::from_u128(TASK));
-    assert_eq!(review.flags[0].mine, format!("buy geese +farm{tag}"));
-    assert_eq!(review.flags[0].theirs, format!("buy cows +farm{tag}"));
+    converge(&mut a, &mut b);
+    let merged = a.description(task(TASK)).unwrap();
+    assert_eq!(b.description(task(TASK)).unwrap(), merged);
+    assert!(
+        merged.contains(" +farm") && !merged.contains("ducks"),
+        "{merged}"
+    );
 }
 
 /// The design's promise is LWW **by HLC**; Loro's own map merge decides concurrent same-key

@@ -12,7 +12,6 @@ mod hydrate;
 mod lww;
 mod notes;
 mod resurrect;
-mod review;
 mod to_loro;
 
 #[cfg(test)]
@@ -32,5 +31,4 @@ pub use from_loro::{FromLoroError, Stamp, from_batch};
 pub use hydrate::{HydrateLine, hydrate_file};
 pub use lww::{Lww, write_if_newer};
 pub use notes::{NotesDoc, NotesDocError};
-pub use review::{MAX_REVIEW_FLAGS_PER_FILE, Review, ReviewError, ReviewFlag, detect};
 pub use to_loro::{ToLoroError, apply};

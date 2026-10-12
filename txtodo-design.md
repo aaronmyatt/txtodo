@@ -283,7 +283,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | complete | complete | complete (idempotent) |
 | complete | edit description | completed, with the edit |
 | edit word 1 | edit word 5 | both edits |
-| edit word 3 | edit word 3 | char-level merge, flagged for a one-tap review |
+| edit word 3 | edit word 3 | char-level merge, the same on every device; no review flag (ADR 0038) |
 | set `(A)` | set `(B)` | LWW by HLC; the loser is visible in `txtodo log` |
 | delete | edit | edit wins, task resurrected (default; configurable) |
 | delete | complete | completed, not deleted (default; configurable) |

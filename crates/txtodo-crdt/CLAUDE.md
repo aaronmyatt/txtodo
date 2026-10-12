@@ -2,8 +2,8 @@
 
 ## Purpose
 The Loro merge engine (plan M4, ADR 0002/0013): one `LoroDocument` per workspace with a movable
-list per file and a shared `tasks` map; our `Op`s in, Loro updates between devices, `Op`s and
-review flags out. As built 2026-09-12.
+list per file and a shared `tasks` map; our `Op`s in, Loro updates between devices, `Op`s out.
+As built 2026-09-12. The review flags (`detect`) went with the daemon's todo.txt mirror (ADR 0038).
 
 ## Public interface
 - `LoroDocument::{open, hydrate(ops), fork, at(frontiers), snapshot, from_snapshot, set_peer,
@@ -15,8 +15,6 @@ review flags out. As built 2026-09-12.
   chars `txtodo_model::remove_tag` drops, and reads back out of a diff as a plain `EditText`. `hydrate_file(doc, file, lines, hlc)` — O(n) bulk
   load of an empty list. `from_batch(doc, diff, stamp, mint)` — Loro diff → `Op`s.
 - `Lww { value, hlc }`, `write_if_newer` (ADR 0013: our HLC arbitrates; an equal stamp lands).
-- `detect(doc, &Imported) -> Review { flags: Vec<ReviewFlag { task, file, mine, theirs }>,
-  overflowed }`, `MAX_REVIEW_FLAGS_PER_FILE`.
 - `NotesDoc` (plan M5, tasks/crdt-notes-doc): a single root `LoroText`, no tasks map, no movable
   list — deliberately not a `LoroDocument`, since notes are prose, not task lines. `open`,
   `hydrate(initial)`, `from_snapshot`, `set_peer`, `content`, `apply_edits` (replays a dual-indexed

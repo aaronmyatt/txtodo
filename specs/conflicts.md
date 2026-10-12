@@ -15,7 +15,7 @@ The user-visible guarantee: **txtodo never silently loses something you typed.**
 | complete | complete | complete (idempotent) |
 | complete | edit description | completed, with the edit |
 | edit word 1 | edit word 5 | both edits |
-| edit word 3 | edit word 3 | char-level merge, flagged for a one-tap review |
+| edit word 3 | edit word 3 | char-level merge, the same on every device; no review flag (ADR 0038) |
 | set `(A)` | set `(B)` | LWW by HLC; the loser is visible in `txtodo log` |
 | delete | edit | edit wins, task resurrected (default; configurable) |
 | delete | complete | completed, not deleted (default; configurable) |
@@ -30,7 +30,7 @@ Row order above is fixed and matches `crates/txtodo-daemon/tests/conflicts.rs` t
 1. `complete_then_complete_is_idempotent`
 2. `complete_and_edit_description_both_apply`
 3. `edits_to_different_words_both_apply`
-4. `edits_to_the_same_word_merge_and_raise_needs_review`
+4. `edits_to_the_same_word_merge`
 5. `conflicting_priority_is_last_write_wins_by_hlc_loser_visible_in_log`
 6. `delete_vs_edit_resurrects_the_task`
 7. `delete_vs_complete_keeps_it_completed`
