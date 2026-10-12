@@ -215,8 +215,6 @@ commands! {
     AppDismissSkillHint = "app.dismiss_skill_hint", [], Global;
     /// Copy the edit the daemon refused (OSC 52).
     AppCopyRefusedEdit = "app.copy_refused_edit", [], Global;
-    /// Hide the conflict banner until the next flag.
-    ConflictsDismissBanner = "conflicts.dismiss_banner", [], Global;
     /// Undo the change the newest toast reports.
     ToastUndo = "toast.undo", [], Global;
     /// Next workspace in the popup.

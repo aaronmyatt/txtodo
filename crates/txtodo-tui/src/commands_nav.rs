@@ -73,7 +73,6 @@ fn run_banner(state: &mut AppState, command: Command) -> Option<Option<Action>> 
             state.shell.link = Link::Connecting;
         }
         Command::AppDismissSkillHint => state.skill_hint = false,
-        Command::ConflictsDismissBanner => state.shell.conflict_banner_hidden = true,
         Command::AppCopyRefusedEdit => {
             let refused = state.shell.refused.take()?;
             return Some(Some(Action::Copy(refused.text)));

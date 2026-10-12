@@ -25,8 +25,6 @@ pub struct Shell {
     pub link: Link,
     /// The daemon's version and release date (`Health`), when they are not this build's.
     pub daemon_build: Option<(String, String)>,
-    /// The conflict banner is hidden until the next flag arrives.
-    pub conflict_banner_hidden: bool,
     /// The last edit the daemon refused, kept so it can be copied back out.
     pub refused: Option<Refused>,
     /// When the last edit landed: the footer says "saved" for a moment.
@@ -136,7 +134,6 @@ impl Default for Shell {
             menu: WorkspaceMenu::default(),
             link: Link::default(),
             daemon_build: None,
-            conflict_banner_hidden: false,
             refused: None,
             saved_at: None,
             toasts: Vec::new(),

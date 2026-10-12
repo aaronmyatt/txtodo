@@ -53,15 +53,14 @@ desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).
   `universal::group`, `diff_text`), the same code desktop reaches through the wasm build.
 - Every list change is an `Apply` (or `Undo`, `EditNotes`, `RefDir`); this crate never writes a
   todo.txt or notes.md itself. The one file it writes is its own `tui.conf` (`prefs.rs`).
-- A line with a `needs_review` flag is read-only until the flag is resolved (per line; desktop
-  locks its whole buffer).
+- No line is ever read-only for review: same-word review (`needs_review` flags, Keep
+  mine/theirs) went with the todo.txt mirror (ADR 0038); the `r` sheet walks duplicate groups only.
 - `u` and a toast's Undo take back only this session's changes, all of a change's ops
   (`ApplyResponse.applied`), in the workspace the change was made in.
 - Known gaps, from the daemon side: a peer's `last_seen_ms` is set at pairing and not advanced by
   sync, so the sync popup's lag reads as time since pairing (`devices_grpc.rs::sync_status_impl`);
   `UniversalTasks` lists only workspaces the daemon has loaded; no test here drives two real
-  daemons through pairing or raises a real `needs_review` flag (both need crates outside this
-  one's allowed deps).
+  daemons through pairing (that needs crates outside this one's allowed deps).
 - Logs carry ids, counts and hashes — never line text, tokens or payloads.
 - May depend only on: txtodo-core, txtodo-proto, txtodo-telemetry, txtodo-daemon-launch,
   txtodo-workspace-paths (external: ratatui, crossterm, tonic, tokio, hyper-util, tower, jiff —

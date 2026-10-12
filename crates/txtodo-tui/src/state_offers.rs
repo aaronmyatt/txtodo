@@ -1,6 +1,6 @@
 //! The `o` workspace-offers pane's state (task `workspace-offer-cli`): pending offers from paired
 //! peers and the pane's cursor. UI-local mirror of
-//! `pb::PendingWorkspaceOffer`, same idiom as `state::ConflictItem`, so `ui/offers.rs` stays
+//! `pb::PendingWorkspaceOffer`, same idiom as `state::DuplicateGroup`, so `ui/offers.rs` stays
 //! proto-free and fixture-testable. Its own file only for `state.rs`'s line budget.
 
 /// One workspace a paired peer offered this device, not yet accepted or declined.

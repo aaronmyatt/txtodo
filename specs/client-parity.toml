@@ -1075,8 +1075,8 @@ title = "Hide the conflict banner for now"
 keys = []
 scope = "global"
 desktop = { status = "done", surface = "ConflictBanner" }
-tui = { status = "done", surface = "banner" }
-deviation = ""
+tui = { status = "na", surface = "banner" }
+deviation = "TUI: no flags banner since ADR 0038; the duplicate-lines banner has no dismiss. Desktop's goes with conflict review A."
 
 [[action]]
 id = "detail.up"
