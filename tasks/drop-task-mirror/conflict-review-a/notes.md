@@ -48,3 +48,8 @@ that raised one, and it is gone.
   rendering only) deleted. e2e conflicts tests pass against a real txtodod. Fixed the
   `chunks_exact_to_as_chunks` lint in `pri` (it failed this crate's clippy on HEAD).
   README's command table still says `conflicts [list|resolve]`: the docs line.
+- mcp (2026-10-13): 25f89e1b. `todo_conflicts_list` used to return flags only, so
+  it would have gone silent; it now returns duplicate groups (`[{copies: [{id, line}]}]`, oldest
+  first), which it never showed before. `todo_conflicts_resolve` left the tool set and
+  `EXPECTED_TOOLS`. An agent fixes a group with `todo_delete`. This changes the tool's output shape:
+  an agent prompt that read `mine`/`theirs` gets groups instead.

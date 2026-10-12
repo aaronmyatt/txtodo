@@ -1,5 +1,4 @@
-2026-10-12 mcp: todo_conflicts_list returns duplicate groups only; drop todo_conflicts_resolve +m11 @mcp @doing by:claude-opus
-2026-10-12 daemon: ListConflicts sends no flags, ResolveConflict returns Unimplemented; drop Change.review, CommitTail.clear and the ReviewRow plumbing +m11 @daemon
+2026-10-12 daemon: ListConflicts sends no flags, ResolveConflict returns Unimplemented; drop Change.review, CommitTail.clear and the ReviewRow plumbing +m11 @daemon @doing by:claude-opus
 2026-10-12 crdt: drop review.rs (detect); on_import was its only caller +m11 @crdt
 2026-10-12 store: drop raise_flag/open_flags/clear_flag, ReviewRow and CommitExtras::clear; old flag rows stay, unread +m11 @store
 2026-10-12 proto: drop ResolveConflict, ResolveRequest, Resolution, ReviewFlag; reserve Change.review and ConflictsResponse.flags +m11 @proto @human
@@ -10,3 +9,4 @@ x 2026-10-13 2026-10-12 desktop: conflicts sheet shows duplicate groups only; dr
 2026-10-13 desktop e2e: an outside write while the buffer is dirty does not overwrite it (coverage lost with the flag test in inline-edit.spec.ts) +m11 @desktop @test
 2026-10-13 desktop: drop src-tauri's unused txtodo-store/txtodo-model optional deps and the e2e-bridge feature list naming debug_raise_conflict (rewrites Cargo.lock) +m11 @desktop
 x 2026-10-13 2026-10-12 cli: conflicts lists duplicate groups only; drop conflicts resolve and flag_text/flag_json +m11 @cli — 8d26c56e; resolve is now a clap usage error; also fixed the clippy 1.99 lint in pri
+x 2026-10-13 2026-10-12 mcp: todo_conflicts_list returns duplicate groups only; drop todo_conflicts_resolve +m11 @mcp — see notes.md; the tool's output shape changed from flags to groups
