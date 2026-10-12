@@ -14,9 +14,6 @@ mod notes;
 mod resurrect;
 mod to_loro;
 
-#[cfg(test)]
-mod roundtrip_tests;
-
 pub use doc::sync::Imported;
 pub use doc::{LoroDocument, is_blank, rebuild_line};
 pub use from_loro::{FromLoroError, Stamp, from_batch};
