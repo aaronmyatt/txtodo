@@ -4,14 +4,13 @@
 // The real `watch`/`daemon-change` pair is a genuine server-push gRPC stream (`Watch`), forwarded
 // by the Tauri bridge as Tauri events. `e2e_bridge` (apps/desktop/src-tauri/src/bin/e2e_bridge.rs)
 // deliberately doesn't implement that stream — plain request/response HTTP handlers cover the six
-// Playwright scenarios with far less surface. Instead, this module polls `get_file`/
-// `list_conflicts` for whatever paths the app has shown interest in (`./core.ts`'s `watchedPaths`)
-// and synthesizes a `daemon-change` event when something differs. This is still "real
-// reconciliation, not mocks"
-// (the notes' own bar): every byte and every conflict flag it observes came from a real `txtodod`
-// acting on a real file — only the *transport* from daemon to browser is polling instead of a
-// push stream, which is invisible to the component code under test ($lib/daemon.ts's
-// `onDaemonChange` callback looks identical either way).
+// Playwright scenarios with far less surface. Instead, this module polls `get_file` for whatever
+// paths the app has shown interest in (`./core.ts`'s `watchedPaths`) and synthesizes a
+// `daemon-change` event when a hash differs. This is still "real reconciliation, not mocks" (the
+// notes' own bar): every byte it observes came from a real `txtodod` acting on a real file — only
+// the *transport* from daemon to browser is polling instead of a push stream, which is invisible
+// to the component code under test ($lib/daemon.ts's `onDaemonChange` callback looks identical
+// either way).
 import { invoke, watchedPaths } from "./core";
 
 type UnlistenFn = () => void;
@@ -20,12 +19,6 @@ interface EventPayload<T> {
 }
 interface FileContents {
 	hash: string;
-}
-interface ReviewFlag {
-	task_id: string;
-	line_number: number;
-	mine: string;
-	theirs: string;
 }
 
 const POLL_MS = 150;
@@ -57,15 +50,6 @@ async function currentHash(path: string): Promise<string | null> {
 	}
 }
 
-async function currentConflictIds(path: string): Promise<{ ids: Set<string>; flags: ReviewFlag[] }> {
-	try {
-		const flags = await invoke<ReviewFlag[]>("list_conflicts", { path });
-		return { ids: new Set(flags.map((f) => f.task_id)), flags };
-	} catch {
-		return { ids: new Set(), flags: [] };
-	}
-}
-
 /** Mirrors `@tauri-apps/api/event`'s `listen`: https://v2.tauri.app/develop/calling-frontend/ */
 export function listen<T>(event: string, cb: (event: EventPayload<T>) => void): Promise<UnlistenFn> {
 	if (event === "daemon-status") {
@@ -78,7 +62,6 @@ export function listen<T>(event: string, cb: (event: EventPayload<T>) => void): 
 	if (event === "daemon-change") {
 		let stopped = false;
 		const lastHash = new Map<string, string | null>();
-		const lastConflictIds = new Map<string, Set<string>>();
 		// `undefined` until the first poll: the baseline, never a change (same rule as the files).
 		let lastLayout: string | null | undefined;
 
@@ -88,24 +71,19 @@ export function listen<T>(event: string, cb: (event: EventPayload<T>) => void): 
 			// changes (an RPC set, or a hot reload of the file); here it is a layout poll.
 			const layout = await currentLayout();
 			if (lastLayout !== undefined && layout !== lastLayout) {
-				cb({ payload: { path: LAYOUT_CHANGE_PATH, hash: "", ops: [], review: [] } as T });
+				cb({ payload: { path: LAYOUT_CHANGE_PATH, hash: "", ops: [] } as T });
 			}
 			lastLayout = layout;
 			for (const path of watchedPaths) {
-				const [hash, conflicts] = await Promise.all([currentHash(path), currentConflictIds(path)]);
+				const hash = await currentHash(path);
 				const seenBefore = lastHash.has(path);
-				const prevHash = lastHash.get(path);
-				const prevIds = lastConflictIds.get(path) ?? new Set<string>();
-				const newFlags = conflicts.flags.filter((f) => !prevIds.has(f.task_id));
-				const hashChanged = seenBefore && prevHash !== hash;
 
 				// First observation of a path is a baseline, not a change (a real `Watch` resolves
 				// once established; it doesn't fire an initial synthetic event either).
-				if (seenBefore && (hashChanged || newFlags.length > 0)) {
-					cb({ payload: { path, hash: hash ?? "", ops: [], review: newFlags } as T });
+				if (seenBefore && lastHash.get(path) !== hash) {
+					cb({ payload: { path, hash: hash ?? "", ops: [] } as T });
 				}
 				lastHash.set(path, hash);
-				lastConflictIds.set(path, conflicts.ids);
 			}
 			if (!stopped) setTimeout(tick, POLL_MS);
 		};

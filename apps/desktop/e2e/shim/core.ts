@@ -11,7 +11,7 @@
 
 const BRIDGE_URL = (globalThis as { __E2E_BRIDGE_URL__?: string }).__E2E_BRIDGE_URL__ ?? "http://127.0.0.1:4567";
 
-/** Paths any component has shown interest in via `get_file`/`list_conflicts`, this harness's
+/** Paths any component has shown interest in via `get_file`/`list_duplicates`, this harness's
  * stand-in for "the paths a real `Watch` stream would report changes for". The real backend now
  * watches every document with one shared stream (tasks/desktop-concurrent-edit-loss root cause 3)
  * and leaves filtering to each listener's own `onDaemonChange` callback, so `watch()` no longer
@@ -42,7 +42,7 @@ export async function invoke<T>(cmd: string, args: Record<string, unknown> = {})
 		case "watch":
 			return undefined as T; // no-op: see `watchedPaths`' own doc for how paths are tracked now
 		case "get_file":
-		case "list_conflicts": {
+		case "list_duplicates": {
 			const path = args.path as string | undefined;
 			if (path) watchedPaths.add(path);
 			return (await callBridge(cmd, args)) as T;
