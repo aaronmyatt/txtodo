@@ -13,10 +13,9 @@ use loro::{
 use std::collections::HashMap;
 
 use txtodo_core::{Date, Priority, Ulid};
-use txtodo_model::{Field, FieldValue, FilePath, Op, TaskId};
+use txtodo_model::{Field, FieldValue, FilePath, TaskId};
 
 use crate::lww::Lww;
-use crate::to_loro::{ToLoroError, apply};
 
 mod shadow;
 mod view;
@@ -70,15 +69,6 @@ impl LoroDocument {
         Ok(loaded)
     }
 
-    /// Opens an empty document and applies each op through [`apply`], one commit per op.
-    pub fn hydrate(ops: impl Iterator<Item = Op>) -> Result<LoroDocument, ToLoroError> {
-        let mut doc = LoroDocument::open();
-        for op in ops {
-            apply(&mut doc, &op)?;
-        }
-        Ok(doc)
-    }
-
     /// The current state frontiers, for [`LoroDocument::diff`].
     pub fn state_frontiers(&self) -> loro::Frontiers {
         self.doc.state_frontiers()
@@ -123,17 +113,6 @@ impl LoroDocument {
             Some(ValueOrContainer::Container(Container::Text(t))) => Some(t),
             _ => None,
         }
-    }
-
-    /// Mints the next blank sentinel id. Deterministic per re-hydration (see `next_blank`).
-    pub(crate) fn blank_id(&mut self) -> TaskId {
-        let bits = BLANK_PREFIX_MASK | self.next_blank;
-        debug_assert!(
-            self.next_blank < BLANK_PREFIX_MASK,
-            "blank sentinel counter stays below the reserved prefix"
-        );
-        self.next_blank = self.next_blank.saturating_add(1);
-        TaskId::new(Ulid::from_u128(bits))
     }
 
     /// One past the largest blank sentinel low bits found in a snapshot, so new sentinels never
@@ -196,18 +175,6 @@ pub(crate) fn field_key(field: Field) -> &'static str {
         Field::Priority => "priority",
         Field::Deleted => "deleted",
         Field::Quirks => "quirks",
-    }
-}
-
-/// Encodes a field value as a plain `LoroValue` (the `v` half of an LWW register).
-pub(crate) fn encode_field_value(fv: FieldValue) -> LoroValue {
-    match fv {
-        FieldValue::Bool(b) => LoroValue::Bool(b),
-        FieldValue::Date(None) => LoroValue::Null,
-        FieldValue::Date(Some((y, m, d))) => LoroValue::from(format!("{y:04}-{m:02}-{d:02}")),
-        FieldValue::Priority(None) => LoroValue::Null,
-        FieldValue::Priority(Some(c)) => LoroValue::from(c.to_string()),
-        FieldValue::Quirks(bits) => LoroValue::I64(i64::from(bits)),
     }
 }
 

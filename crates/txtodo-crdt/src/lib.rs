@@ -9,9 +9,7 @@
 mod doc;
 mod lww;
 mod notes;
-mod to_loro;
 
 pub use doc::{LoroDocument, is_blank};
 pub use lww::{Lww, write_if_newer};
 pub use notes::{NotesDoc, NotesDocError};
-pub use to_loro::{ToLoroError, apply};
