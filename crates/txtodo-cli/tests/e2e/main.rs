@@ -19,5 +19,6 @@ mod nested_ref_sync;
 mod no_implicit_register;
 mod pairing;
 mod sub_scope;
+mod sub_slug;
 mod workspace;
 mod workspace_offers;

@@ -22,6 +22,7 @@ pub mod list;
 pub mod mcp;
 pub mod pair;
 pub mod refdir;
+pub mod refdir_slug;
 pub mod service;
 pub mod skill;
 pub mod text;

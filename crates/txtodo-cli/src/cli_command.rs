@@ -202,7 +202,8 @@ pub(crate) enum Command {
     /// Runs COMMAND with its directory scoped to a line's `ref:` sub-list (daemon mode, rule 12);
     /// a scoped `todo.sh -d`.
     Sub {
-        /// Line number in todo.txt.
+        /// Line number in todo.txt, or the sub-list's slug path (`trip`, nested `trip/flights`),
+        /// which does not move when a line above completes.
         item: String,
         /// The command (and its own arguments) to run inside that directory.
         #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
