@@ -37,3 +37,10 @@ that raised one, and it is gone.
   read-only any more (`READ_ONLY`, `under_review` gone). `conflicts.keep_mine/theirs/merged` rows
   left the manifest; `conflicts.dismiss_banner` stays with `tui = na` until desktop drops its
   banner's ×. Not run: the TUI's `tests/e2e` (test = false target, needs a real daemon).
+- desktop (2026-10-13): 0e3899a4, 7b79bf62, f36de226, 7e7777cc, cba53aa1, a2181765. TS stops
+  calling the commands before the Rust drops them. The flags store, `DiffView` and `diffText` are
+  gone; `list_conflicts`/`resolve` Tauri commands are gone (`list_duplicates` was already
+  groups-only). The banner's × hid only the flags banner, so it and `conflicts.dismiss_banner`
+  went. Checks: vitest 248, svelte-check 0, e2e tsc, clippy (with e2e-bridge), cargo test 27.
+  Not run: Playwright. Gaps: the lost dirty-buffer e2e case and the unused src-tauri deps (lines
+  added); the wasm `diff_text` export in txtodo-ffi has no desktop caller now.
