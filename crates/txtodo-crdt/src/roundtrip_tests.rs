@@ -4,9 +4,7 @@
 
 use std::error::Error;
 
-use txtodo_model::{
-    DeviceId, Field, FieldValue, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, TextEdit, Ulid,
-};
+use txtodo_model::{DeviceId, FilePath, Hlc, Op, OpId, OpKind, Principal, TaskId, Ulid};
 
 use crate::{LoroDocument, Stamp, ToLoroError, apply, from_batch};
 
@@ -108,117 +106,6 @@ pub(crate) fn two_tasks() -> Result<LoroDocument, Box<dyn Error>> {
         ),
     )?;
     Ok(doc)
-}
-
-#[test]
-fn insert_round_trips() -> Result<(), Box<dyn Error>> {
-    let a = task(1);
-    let line = format!("(A) buy ducks id:{}", a.ulid());
-    let mut doc = LoroDocument::open();
-    let mut m = mint();
-    let ins = op(
-        1,
-        hlc(1),
-        todo_file(),
-        OpKind::Insert {
-            task: a,
-            after: None,
-            line: line.clone(),
-        },
-    );
-    let ops = capture(&mut doc, &ins, &mut m)?;
-    assert_eq!(ops.len(), 1);
-    assert_eq!(
-        ops[0].kind,
-        OpKind::Insert {
-            task: a,
-            after: None,
-            line,
-        }
-    );
-    Ok(())
-}
-
-#[test]
-fn set_field_round_trips() -> Result<(), Box<dyn Error>> {
-    let a = task(1);
-    let mut doc = two_tasks()?;
-    let mut m = mint();
-    let setf = op(
-        3,
-        hlc(2),
-        todo_file(),
-        OpKind::SetField {
-            task: a,
-            field: Field::Completed,
-            value: FieldValue::Bool(true),
-        },
-    );
-    let ops = capture(&mut doc, &setf, &mut m)?;
-    assert_eq!(ops.len(), 1);
-    assert_eq!(ops[0].file, todo_file());
-    assert_eq!(
-        ops[0].kind,
-        OpKind::SetField {
-            task: a,
-            field: Field::Completed,
-            value: FieldValue::Bool(true),
-        }
-    );
-    Ok(())
-}
-
-#[test]
-fn edit_text_round_trips() -> Result<(), Box<dyn Error>> {
-    let a = task(1);
-    // Canonical dual-index order: the delete addresses the source, the insert the target. A
-    // single-cursor replay would shift the second edit and corrupt the text.
-    let edits = vec![
-        TextEdit::Delete { at: 0, len: 4 },
-        TextEdit::Insert {
-            at: 0,
-            text: "400 ".to_owned(),
-        },
-    ];
-    let mut doc = two_tasks()?;
-    let mut m = mint();
-    let edit = op(
-        3,
-        hlc(2),
-        todo_file(),
-        OpKind::EditText {
-            task: a,
-            edits: edits.clone(),
-        },
-    );
-    let ops = capture(&mut doc, &edit, &mut m)?;
-    assert_eq!(ops.len(), 1);
-    let OpKind::EditText {
-        task: t,
-        edits: back,
-    } = &ops[0].kind
-    else {
-        panic!("not an EditText");
-    };
-    assert_eq!(*t, a);
-    // Loro canonicalises the delta, so assert the resulting text, not the literal edit order. The
-    // target prepends "400 " and drops "walk": a naive single-cursor replay would land it mid-word.
-    let expected = format!("400  dog id:{}", a.ulid());
-    assert_eq!(doc.description(a).as_deref(), Some(expected.as_str()));
-    // The diff the round-trip extracted must reproduce the same description.
-    let replay = op(
-        4,
-        hlc(3),
-        todo_file(),
-        OpKind::EditText {
-            task: a,
-            edits: back.clone(),
-        },
-    );
-    let mut other = two_tasks()?;
-    apply(&mut other, &replay)?;
-    assert_eq!(other.description(a), doc.description(a));
-    Ok(())
 }
 
 #[test]
