@@ -1,6 +1,5 @@
-//! `Resolution`/`ConflictRow`: the needs_review resolution shapes `handle.rs`'s `ActorMsg::Resolve`
-//! carries. Split out purely to keep `handle.rs` within its file budget; every user still reaches
-//! these as `crate::handle::{ConflictRow, Resolution}` via that module's re-export.
+//! `FileConflicts`/`ConflictRow`: what `ActorMsg::Conflicts` answers. Split out purely to keep
+//! `handle.rs` within its file budget; users reach these through `crate::handle`'s re-export.
 
 use crate::duplicates::DuplicateGroup;
 use txtodo_store::ReviewRow;
@@ -13,17 +12,6 @@ pub struct FileConflicts {
     pub flags: Vec<ConflictRow>,
     /// Duplicate groups (`duplicates::duplicate_groups`).
     pub duplicates: Vec<DuplicateGroup>,
-}
-
-/// Which side a resolution keeps. Closed set; mirrors the wire enum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Resolution {
-    /// This device's text at flag time.
-    Mine,
-    /// The peer's text at flag time.
-    Theirs,
-    /// What is in the file now; only the flag is cleared.
-    Merged,
 }
 
 /// An open flag with the line its task sits on now (0 when it left the file).
