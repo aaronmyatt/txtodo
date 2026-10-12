@@ -1,6 +1,6 @@
 //! `AppState`: everything the UI widgets render from — lines (with completion/id derived by
 //! [`txtodo_core::tokenize`], never a full parse, per design §7), the vim cursor, the edit draft,
-//! the sync snapshot and the conflict-review flags. Built standalone against hand-built fixtures
+//! the sync snapshot and the duplicate groups. Built standalone against hand-built fixtures
 //! here (recommended build order step 2); `app.rs` (step 4) is the only place that mutates it from
 //! real `Daemon` calls.
 
@@ -14,8 +14,7 @@ use crate::state_universal::UniversalView;
 
 pub use crate::state_nav::{Focus, Nav, Overlay, Screen, SettingsCard};
 pub use crate::state_types::{
-    ConflictItem, DuplicateCopy, DuplicateGroup, EditDraft, EditTarget, LineState, PeerStatus,
-    Resolution, SyncSnapshot,
+    DuplicateCopy, DuplicateGroup, EditDraft, EditTarget, LineState, PeerStatus, SyncSnapshot,
 };
 
 /// Everything the UI renders from. `cursor == lines.len()` means the "Add a line" row is selected.
@@ -33,11 +32,9 @@ pub struct AppState {
     pub editing: Option<EditDraft>,
     /// Whether the conflict-review pane (`r`) is open.
     pub conflicts_open: bool,
-    /// Open `needs_review` flags for `path` (plan M4), surfaced via `Watch`.
-    pub needs_review: Vec<ConflictItem>,
     /// The open file's duplicate groups (ADR 0032), from `ListConflicts`.
     pub duplicates: Vec<DuplicateGroup>,
-    /// Selected item while the sheet is open: `needs_review` first, then `duplicates`.
+    /// Selected group while the sheet is open.
     pub conflict_cursor: usize,
     /// Whether the sync indicator (`s`) is shown.
     pub sync_visible: bool,
@@ -99,7 +96,6 @@ impl AppState {
             cursor: 0,
             editing: None,
             conflicts_open: false,
-            needs_review: Vec::new(),
             duplicates: Vec::new(),
             conflict_cursor: 0,
             sync_visible: false,
@@ -142,12 +138,6 @@ impl AppState {
             pending_ops: 2,
             protocol: 2,
         };
-        state.needs_review = vec![ConflictItem {
-            task_id: "01J9K3H5Z7Q8X2M4N6P8R0T2V4".to_owned(),
-            line_number: 2,
-            mine: "Renew passport +admin".to_owned(),
-            theirs: "Renew passport +admin +urgent".to_owned(),
-        }];
         state
     }
 
@@ -205,9 +195,9 @@ impl AppState {
         self.sync_visible = !self.sync_visible;
     }
 
-    /// Items the review sheet walks: the flags, then the duplicate groups.
+    /// Items the review sheet walks: the duplicate groups.
     pub fn review_len(&self) -> usize {
-        self.needs_review.len() + self.duplicates.len()
+        self.duplicates.len()
     }
 
     /// `r`: toggles the conflict-review pane; resets its cursor on open.
@@ -288,11 +278,10 @@ mod tests {
     }
 
     #[test]
-    fn fixture_seeds_sync_and_conflicts() {
+    fn fixture_seeds_sync() {
         let state = AppState::fixture();
         assert_eq!(state.sync.peers.len(), 1);
         assert_eq!(state.sync.pending_ops, 2);
-        assert_eq!(state.needs_review.len(), 1);
     }
 
     #[test]

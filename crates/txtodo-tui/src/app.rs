@@ -283,7 +283,7 @@ pub fn rebaseline(state: &mut AppState, file: &pb::FileContents) {
     state.cursor = cursor.min(state.row_count() - 1);
 }
 
-/// Follows one `Watch` change: its review flags, then whatever it names. A layout change re-reads
+/// Follows one `Watch` change: whatever it names. A layout change re-reads
 /// the root list and returns the `Watch` stream to swap in when that moved; a change to the open
 /// document (another client, a peer, an editor on disk) re-fetches it, since `Change` carries only
 /// a hash. The TUI's own edits come back here too, a second fetch after `perform`'s: cheap, and one
@@ -297,10 +297,6 @@ pub async fn follow_change(
     let path = change.path.clone();
     let this_document = crate::app_detail::watched_paths(state).contains(&path);
     let groups = path == state.path && crate::app_duplicates::worth_refresh(state, &change);
-    if !change.review.is_empty() {
-        state.shell.conflict_banner_hidden = false;
-    }
-    apply_change(state, change);
     if layout_changed {
         return crate::app_layout::follow_root_list(daemon, state).await;
     }
@@ -311,20 +307,4 @@ pub async fn follow_change(
         crate::app_duplicates::refresh(daemon, state).await;
     }
     Ok(None)
-}
-
-/// One `Watch` change's review flags, appended to the conflict list.
-fn apply_change(state: &mut AppState, change: pb::Change) {
-    for flag in change.review {
-        state.needs_review.push(to_conflict_item(flag));
-    }
-}
-
-fn to_conflict_item(flag: pb::ReviewFlag) -> crate::state::ConflictItem {
-    crate::state::ConflictItem {
-        task_id: flag.task_id,
-        line_number: flag.line_number,
-        mine: flag.mine,
-        theirs: flag.theirs,
-    }
 }

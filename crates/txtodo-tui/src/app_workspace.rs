@@ -105,7 +105,6 @@ pub async fn switch_workspace(
     state.path = fresh.path;
     state.lines = fresh.lines;
     state.cursor = 0;
-    state.needs_review.clear();
     state.workspace_label = Some(workspace_title(&target));
     state.shell.root = target.root.clone();
     state.last_error = None;

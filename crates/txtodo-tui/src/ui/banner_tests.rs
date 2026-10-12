@@ -7,8 +7,11 @@ use ratatui::backend::TestBackend;
 
 #[test]
 fn banners_come_most_urgent_first() {
-    let mut state = AppState::fixture(); // one flagged line
-    assert_eq!(banners(&state)[0].label, "1 line needs review");
+    let mut state = AppState::fixture();
+    state
+        .duplicates
+        .push(crate::state::DuplicateGroup::default());
+    assert_eq!(banners(&state)[0].label, "1 line is in the file twice");
     state.shell.link = Link::Connecting;
     state.shell.refused = Some(Refused {
         error: "line 3 changed".to_owned(),
@@ -21,20 +24,21 @@ fn banners_come_most_urgent_first() {
         labels,
         [
             "daemon: connecting",
-            "1 line needs review",
+            "1 line is in the file twice",
             "Your edit to todo.txt was not saved",
             "txtodod is v0.0.9 \u{b7} 2026-09-01",
             "No agent playbook installed",
         ]
     );
-    state.shell.conflict_banner_hidden = true;
-    assert!(!banners(&state).iter().any(|b| b.label.contains("review")));
 }
 
 #[test]
 fn buttons_sit_at_the_right_edge_and_run_their_commands() {
     let mut state = AppState::fixture();
     state.shell.link = Link::Down;
+    state
+        .duplicates
+        .push(crate::state::DuplicateGroup::default());
     let rows = banners(&state);
     let mut terminal = Terminal::new(TestBackend::new(80, 2)).unwrap_or_else(|e| panic!("{e}"));
     let mut hits = HitMap::default();
@@ -51,14 +55,14 @@ fn buttons_sit_at_the_right_edge_and_run_their_commands() {
     let (first, second) = text.split_at(80);
     assert!(first.starts_with(" daemon: not answering"), "{first}");
     assert!(first.ends_with(" Retry  "), "{first}");
-    assert!(second.contains(" Review   \u{d7}  "), "{second}");
+    assert!(second.ends_with(" Review  "), "{second}");
     assert_eq!(
         hits.at(75, 0),
         Some(Target::Command(Command::AppRetryDaemon))
     );
     assert_eq!(
-        hits.at(78, 1),
-        Some(Target::Command(Command::ConflictsDismissBanner))
+        hits.at(75, 1),
+        Some(Target::Command(Command::ConflictsOpen))
     );
     assert_eq!(hits.at(3, 1), Some(Target::Inert));
 }

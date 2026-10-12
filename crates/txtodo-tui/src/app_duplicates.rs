@@ -64,7 +64,6 @@ mod tests {
     #[test]
     fn the_groups_replace_the_old_ones_and_the_sheet_closes_when_none_are_left() {
         let mut state = AppState::fixture();
-        state.needs_review.clear();
         set(&mut state, vec![group(&[1, 3]), group(&[2, 4])]);
         assert_eq!(state.duplicates.len(), 2);
         state.conflicts_open = true;

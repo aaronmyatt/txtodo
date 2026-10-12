@@ -112,7 +112,6 @@ fn capital_k_skips_a_blank_line_above() {
 #[test]
 fn capital_j_on_the_second_to_last_line_produces_move_to_end() {
     let mut state = AppState::fixture();
-    state.needs_review.clear(); // the fixture flags passport, which would make it read-only
     state.cursor = 1; // passport; past the blank, only the last task (plants) follows it
     let mut input = Input::default();
     let action = input
@@ -163,7 +162,6 @@ fn capital_j_on_the_add_line_row_does_nothing() {
 #[test]
 fn capital_k_moves_before_the_previous_line_and_the_cursor_follows() {
     let mut state = AppState::fixture();
-    state.needs_review.clear(); // the fixture flags passport, which would make it read-only
     state.cursor = 1; // the passport line, which carries an id:
     let mut input = Input::default();
     let action = input

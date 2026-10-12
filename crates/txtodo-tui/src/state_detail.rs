@@ -165,10 +165,7 @@ pub fn swap_in(state: &mut AppState, doc: &mut Doc) {
 pub fn with_sub_list<T>(state: &mut AppState, f: impl FnOnce(&mut AppState) -> T) -> Option<T> {
     let mut doc = std::mem::take(&mut state.detail.top_mut()?.doc);
     swap_in(state, &mut doc);
-    // The review flags belong to the root list; the sub-list's line numbers must not match them.
-    let flags = std::mem::take(&mut state.needs_review);
     let out = f(state);
-    state.needs_review = flags;
     swap_in(state, &mut doc);
     if let Some(level) = state.detail.top_mut() {
         level.doc = doc;

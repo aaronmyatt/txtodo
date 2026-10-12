@@ -160,12 +160,6 @@ mod tests {
     #[test]
     fn a_frame_maps_rows_to_cells_and_an_overlay_covers_them() {
         let mut state = AppState::fixture();
-        assert_eq!(
-            drawn(&state).at(0, 1),
-            Some(Target::Inert),
-            "the conflict banner"
-        );
-        state.needs_review.clear();
         let hits = drawn(&state);
         assert_eq!(hits.at(0, 1), None, "the sub-toolbar");
         assert_eq!(
@@ -214,7 +208,6 @@ mod tests {
     #[test]
     fn the_cursor_marks_the_root_line_editor_and_the_command_line_and_nothing_else() {
         let mut state = AppState::fixture();
-        state.needs_review.clear();
         assert_eq!(cursor(&state), None, "list mode: no cursor");
         state.cursor = 3;
         crate::commands::run(&mut state, crate::keymap::Command::ListEditStart);
