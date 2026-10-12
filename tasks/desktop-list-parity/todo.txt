@@ -1,0 +1,11 @@
+2026-10-13 Decide: which inventory items in notes.md are bugs to fix and which stay (Esc closing the panel, one prompt bar for every list are design calls) +m11 @desktop @human
+2026-10-13 desktop: list-mode keys work in a focused sub-list, not only the root +m11 @desktop
+2026-10-13 desktop: Esc in a sub-list editor leaves the editor (or goes up one level), not the whole panel +m11 @desktop
+2026-10-13 desktop: one way to add to a sub-list; the prompt bar targets the focused list +m11 @desktop
+2026-10-13 desktop: search highlights hits in the sub-list too; the count covers what is shown +m11 @desktop
+2026-10-13 desktop: save status and undo toasts for sub-list edits +m11 @desktop
+2026-10-13 desktop: the panel's duplicates banner names the sub-list shown +m11 @desktop
+2026-10-13 desktop: opening a detail from the root replaces the panel stack, not pushes onto it +m11 @desktop
+2026-10-13 desktop: one scroll area for a sub-list in the panel +m11 @desktop
+2026-10-13 parity: list.* and detail.close rows say what desktop does in a sub-list +m11 @desktop @parity
+2026-10-13 Complete the parent line in ../../todo.txt +m11 @desktop
