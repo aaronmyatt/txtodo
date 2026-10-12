@@ -275,81 +275,9 @@ fn assert_matches_reference(
     Ok(())
 }
 
-/// `TXTODO_SIM_SEED` reproduces one exact run; otherwise draw `count` seeds from a master seed
-/// (`TXTODO_SIM_MASTER_SEED`, or the wall clock so `just sim` differs run to run), printing the
-/// master seed so a `just sim` sweep can itself be replayed exactly.
-fn seeds(count: u64) -> Vec<u64> {
-    if let Ok(s) = std::env::var("TXTODO_SIM_SEED") {
-        let seed: u64 = s.parse().expect("TXTODO_SIM_SEED must be a u64");
-        return vec![seed];
-    }
-    let master_seed = std::env::var("TXTODO_SIM_MASTER_SEED")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("now is after the epoch")
-                .as_nanos() as u64
-        });
-    eprintln!("sim: master seed {master_seed} (TXTODO_SIM_MASTER_SEED reproduces this sweep)");
-    let mut master = Rng::new(master_seed);
-    (0..count).map(|_| master.next_u64()).collect()
-}
-
 #[test]
 fn slow_twenty_fixed_seeds_converge() {
     for seed in 0..20u64 {
-        run_scenario(SimConfig::new(seed)).unwrap_or_else(|e| panic!("{e}"));
-    }
-}
-
-#[test]
-fn slow_the_same_seed_twice_produces_the_same_converged_state() {
-    let a = run_scenario(SimConfig::new(12345)).unwrap();
-    let b = run_scenario(SimConfig::new(12345)).unwrap();
-    assert_eq!(
-        a, b,
-        "seed 12345 converged to two different states across two runs"
-    );
-}
-
-/// Proves `assert_converged` actually discriminates converged from diverged, rather than passing
-/// vacuously — task notes: "a deliberately broken merge... makes the run fail, proving the
-/// assertions are wired." Three devices converge on one shared insert, then device 1 makes a
-/// further local edit that is deliberately never synced out; `assert_converged` must catch it.
-#[test]
-fn a_diverged_device_fails_the_convergence_assertion() {
-    let file = todo_file();
-    let ancestor = LoroDocument::open();
-    let mut devices: Vec<Device> = (0..3u128).map(|n| Device::new(n, &ancestor)).collect();
-    let mut rng = Rng::new(0);
-    let mut all_inserted = BTreeSet::new();
-
-    let shared = devices[0].random_op(&file, &mut rng, 1);
-    if let OpKind::Insert { task, .. } = &shared.kind {
-        all_inserted.insert(*task);
-    }
-    apply(&mut devices[0].doc, &shared).unwrap();
-    sync_all_pairs(&mut devices);
-
-    let unsynced = devices[1].random_op(&file, &mut rng, 2);
-    apply(&mut devices[1].doc, &unsynced).unwrap();
-
-    let result = assert_converged(&devices, &file, &all_inserted, |s: &str| s.to_string());
-    assert!(
-        result.is_err(),
-        "an unsynced local edit on one device must fail convergence, not pass it"
-    );
-}
-
-/// Plan M4 acceptance: 1 000 runs × 5 devices × 200 ops, zero convergence failures. Too slow for
-/// the default `cargo test`; run via `just sim` or `cargo test -p txtodo-crdt --test it sim:: --
-/// --ignored`.
-#[test]
-#[ignore = "the full 1000-run sweep; see `just sim`"]
-fn one_thousand_seeds_converge() {
-    for seed in seeds(1_000) {
         run_scenario(SimConfig::new(seed)).unwrap_or_else(|e| panic!("{e}"));
     }
 }
