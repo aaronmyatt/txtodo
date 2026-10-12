@@ -20,7 +20,6 @@ use crate::lww::Lww;
 use crate::to_loro::{ToLoroError, apply};
 
 mod shadow;
-pub(crate) mod sync;
 mod view;
 
 /// Root map name holding one nested `LoroMap` per task.

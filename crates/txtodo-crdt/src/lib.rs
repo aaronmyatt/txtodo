@@ -12,7 +12,6 @@ mod lww;
 mod notes;
 mod to_loro;
 
-pub use doc::sync::Imported;
 pub use doc::{LoroDocument, is_blank, rebuild_line};
 pub use from_loro::{FromLoroError, Stamp, from_batch};
 pub use lww::{Lww, write_if_newer};
