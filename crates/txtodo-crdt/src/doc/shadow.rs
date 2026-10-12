@@ -91,17 +91,6 @@ impl LoroDocument {
         Ok(())
     }
 
-    /// Appends `task` to the list and the shadow.
-    pub(crate) fn list_push(&mut self, file: &FilePath, task: TaskId) -> LoroResult<()> {
-        self.ensure_shadow(file);
-        self.file_list(file).push(task_id_str(task))?;
-        let shadow = self.shadow_mut(file);
-        shadow.push(task);
-        debug_assert_eq!(shadow.last(), Some(&task));
-        debug_assert!(!shadow.is_empty());
-        Ok(())
-    }
-
     /// Deletes the entry at `idx` from the list and the shadow.
     pub(crate) fn list_delete(&mut self, file: &FilePath, idx: usize) -> LoroResult<()> {
         self.ensure_shadow(file);

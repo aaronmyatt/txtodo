@@ -8,7 +8,6 @@
 
 mod doc;
 mod from_loro;
-mod hydrate;
 mod lww;
 mod notes;
 mod resurrect;
@@ -17,7 +16,6 @@ mod to_loro;
 pub use doc::sync::Imported;
 pub use doc::{LoroDocument, is_blank, rebuild_line};
 pub use from_loro::{FromLoroError, Stamp, from_batch};
-pub use hydrate::{HydrateLine, hydrate_file};
 pub use lww::{Lww, write_if_newer};
 pub use notes::{NotesDoc, NotesDocError};
 pub use to_loro::{ToLoroError, apply};
