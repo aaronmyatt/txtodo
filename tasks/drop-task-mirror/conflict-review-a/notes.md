@@ -44,3 +44,7 @@ that raised one, and it is gone.
   went. Checks: vitest 248, svelte-check 0, e2e tsc, clippy (with e2e-bridge), cargo test 27.
   Not run: Playwright. Gaps: the lost dirty-buffer e2e case and the unused src-tauri deps (lines
   added); the wasm `diff_text` export in txtodo-ffi has no desktop caller now.
+- cli (2026-10-13): 8d26c56e. `conflicts` = list/delete/keep-newest; `conflicts_tests.rs` (flag
+  rendering only) deleted. e2e conflicts tests pass against a real txtodod. Fixed the
+  `chunks_exact_to_as_chunks` lint in `pri` (it failed this crate's clippy on HEAD).
+  README's command table still says `conflicts [list|resolve]`: the docs line.
