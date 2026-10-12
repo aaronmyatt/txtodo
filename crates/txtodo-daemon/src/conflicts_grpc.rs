@@ -2,9 +2,7 @@
 //! `mcp-hygiene-parity`), moved out of `server.rs` for its line budget — the same `impl
 //! TxtodoService` extension pattern as `devices_grpc.rs`/`migrate_grpc.rs`.
 
-use crate::convert::{
-    applied_of, parse_principal, parse_resolution, parse_task_ref, status_of, to_flag,
-};
+use crate::convert::{status_of, to_flag};
 use crate::duplicates::to_duplicate_group;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
@@ -24,22 +22,16 @@ impl TxtodoService {
         }))
     }
 
-    /// Resolves one flag, keeping mine, theirs or the merged text.
+    /// Always `Unimplemented`: there is no flag left to resolve (ADR 0038). A duplicate copy goes
+    /// with an ordinary `Apply` `Delete`.
+    /// Ref: <https://grpc.io/docs/guides/status-codes/>
     pub(crate) async fn resolve_conflict_impl(
         &self,
-        r: Request<pb::ResolveRequest>,
+        _r: Request<pb::ResolveRequest>,
     ) -> Result<Response<pb::ApplyResponse>, Status> {
-        let req = r.into_inner();
-        let h = self.actor(&req.path)?;
-        let task = parse_task_ref(req.task)?;
-        let resolution = parse_resolution(req.resolution)?;
-        // Unset agent = the user on this device; an MCP agent's resolution is attributed to it.
-        let principal = parse_principal(req.agent, self.workspace().device())?;
-        let a = h
-            .resolve(task, resolution, principal)
-            .await
-            .map_err(status_of)?;
-        Ok(Response::new(applied_of(a)))
+        Err(Status::unimplemented(
+            "same-word conflict review was removed (ADR 0038); nothing to resolve",
+        ))
     }
 
     /// `txtodo lint` for one document: `txtodo_core::lint_findings` over the exact bytes the
