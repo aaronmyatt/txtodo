@@ -156,10 +156,14 @@ fn commit_one_file(
 /// them, but no file and no actor. A peer's old log can hold tens of thousands of these.
 fn log_only(ws: &SharedWorkspace, path: &FilePath, ops: &[Op]) -> Result<(), Refusal> {
     let store = read(ws).store().clone();
-    let appended = store
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .append_with_source(ops, Some("sync"));
+    let mut store = store.lock().unwrap_or_else(PoisonError::into_inner);
+    // Under the same lock as the append: another session may have logged them (`held_ops.rs`).
+    let appended = crate::held_ops::drop_held(&store, ops.to_vec()).and_then(|fresh| {
+        if fresh.is_empty() {
+            return Ok(None);
+        }
+        store.append_with_source(&fresh, Some("sync")).map(Some)
+    });
     match appended {
         Ok(_) => log_logged_only(path, ops.len()),
         Err(e) => Err(log_log_only_failed(path, &e)),

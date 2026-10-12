@@ -334,3 +334,29 @@ fn an_op_that_needs_another_devices_insert_waits_for_it() {
         "no repair: the log alone rebuilds the file"
     );
 }
+
+/// Lab lan-to-relay (2026-10-02): a LAN and a relay session with one peer can carry the same run at
+/// once. Each checks the log in `lan_apply::not_yet_stored`, finds nothing, and sends the run to
+/// this actor; the second insert then failed the `UNIQUE` op id and refused the batch. The actor
+/// drops ops the log already holds in its own turn, so the second run lands as a no-op.
+#[tokio::test]
+async fn a_run_the_log_already_holds_lands_again_as_a_no_op() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(dir.path());
+    let clock = Arc::new(FakeClock::new(1_000));
+    let handle = open(dir.path(), &store, &clock).spawn();
+
+    let task = TaskId::new(Ulid::from_u128(43));
+    let run = vec![peer_insert(task, &format!("buy geese id:{task}"), 2)];
+    handle.sync_import_ops(run.clone()).await.unwrap();
+    handle.sync_import_ops(run).await.unwrap();
+
+    let got = handle.get().await.unwrap();
+    assert_eq!(String::from_utf8(got.bytes).unwrap().lines().count(), 1);
+    let held = store
+        .lock()
+        .unwrap()
+        .for_file(&FilePath::new("todo.txt").unwrap(), txtodo_store::Seq(0))
+        .unwrap();
+    assert_eq!(held.len(), 1, "one copy in the log");
+}

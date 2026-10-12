@@ -60,7 +60,12 @@ impl FileActor {
             ops.iter().all(|o| o.file == self.cfg.path),
             "the caller routes by op.file before calling here"
         );
+        let ops = crate::held_ops::drop_held(&self.lock_store(), ops)?;
         if ops.is_empty() {
+            // A run another session landed first: it may have left this file's write owed.
+            if !defer {
+                self.flush_write()?;
+            }
             return Ok(());
         }
         self.observe_peer_stamps(&ops);

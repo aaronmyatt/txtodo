@@ -46,6 +46,7 @@ pub mod handle;
 mod handle_apply;
 mod handle_sync;
 mod health_grpc;
+mod held_ops;
 pub mod history;
 mod id_strip;
 mod identity_assign;
@@ -243,6 +244,8 @@ mod mutation_reopen_tests;
 mod mutation_tests;
 #[cfg(test)]
 mod mutation_tests_lines;
+#[cfg(test)]
+mod notes_actor_dedup_tests;
 #[cfg(test)]
 mod notes_actor_sync_tests;
 #[cfg(test)]

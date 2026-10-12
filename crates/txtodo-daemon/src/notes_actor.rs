@@ -247,6 +247,11 @@ impl NotesActor {
     /// and the batch is acked; only the applied ones reach the Loro mirror. Only a store or disk
     /// failure refuses the batch.
     pub fn import_ops(&mut self, ops: Vec<Op>) -> Result<(), ActorError> {
+        // Under this actor's lock: another session may have landed the same batch (`held_ops.rs`).
+        let ops = crate::held_ops::drop_held(
+            &self.store.lock().unwrap_or_else(PoisonError::into_inner),
+            ops,
+        )?;
         if ops.is_empty() {
             return Ok(());
         }
