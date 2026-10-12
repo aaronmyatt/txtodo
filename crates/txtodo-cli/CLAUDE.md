@@ -107,6 +107,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   command's own output was already printed by then; the error says nothing was written.
 - Mode selection: socket missing or `--no-daemon` → direct; socket present → connect; present but
   refused → error with the fix (`txtodo doctor`, `--no-daemon`). Never a silent fallback.
+- A read never registers a folder (`register_guard.rs`, tasks/cli-no-implicit-register): in a
+  folder no registered workspace covers, a read-only command fails with the fix (`workspace add`,
+  `--no-daemon`), `env` answers directly and `doctor` asks the daemon without naming the folder.
+  Writes still register a fresh folder (task cli-workspace-autoregister).
 - todo.sh parity is a test: `tests/it/todosh_parity.rs` (direct mode). `tests/e2e/daemon_mode.rs` spawns a
   real txtodod (built on demand with cargo — this crate may not depend on the daemon crate).
 - `add` always stamps today's local date; it stamps `id:<ULID>` too only when `Config::id_tags()`

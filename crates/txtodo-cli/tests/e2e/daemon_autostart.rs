@@ -60,8 +60,21 @@ fn log_cold_starts_the_global_daemon_with_no_manual_daemon_start() {
     let state_dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
 
-    // No socket exists anywhere yet, and this test never runs `txtodo daemon start`: `log` (a
-    // NEEDS_DAEMON command, `main.rs::daemon_ensure::needs_daemon`) must still succeed.
+    // No socket exists anywhere yet, and this test never runs `txtodo daemon start`: `workspace
+    // add` (a NEEDS_DAEMON command, `main.rs::daemon_ensure::needs_daemon`) must still succeed,
+    // and `log` then reads through the daemon it started. A read alone in an unregistered folder
+    // refuses instead of registering it (tasks/cli-no-implicit-register).
+    let add = run_txtodo(
+        workspace.path(),
+        state_dir.path(),
+        home.path(),
+        &["workspace", "add"],
+    );
+    assert!(
+        add.status.success(),
+        "{}",
+        String::from_utf8_lossy(&add.stderr)
+    );
     let out = run_txtodo(
         workspace.path(),
         state_dir.path(),
@@ -126,7 +139,8 @@ fn a_command_restarts_a_running_daemon_older_than_this_cli() {
     let home = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let (workspace, state, home) = (workspace.path(), state_dir.path(), home.path());
 
-    let cold = run_txtodo(workspace, state, home, &["log", "-n", "5"]);
+    // A write cold-starts the daemon and registers the folder; a read alone would refuse.
+    let cold = run_txtodo(workspace, state, home, &["workspace", "add"]);
     assert!(
         cold.status.success(),
         "{}",

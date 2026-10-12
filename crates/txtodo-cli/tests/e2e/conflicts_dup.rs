@@ -19,6 +19,13 @@ fn duplicate_lines_are_listed_and_keep_newest_leaves_one_copy() {
     let daemon = GlobalDaemon::spawn(state_dir.path());
     let ws = tempfile::tempdir().unwrap();
     std::fs::write(ws.path().join("todo.txt"), "buy milk\nwalk\nbuy milk\n").unwrap();
+    // A read never registers a folder (tasks/cli-no-implicit-register).
+    assert!(
+        daemon
+            .txtodo(ws.path(), &["workspace", "add"])
+            .status
+            .success()
+    );
 
     let listed = stdout(&daemon.txtodo(ws.path(), &["conflicts"]));
     assert!(

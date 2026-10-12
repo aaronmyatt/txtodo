@@ -102,7 +102,20 @@ fn daemon_checks(ctx: &Ctx) -> DaemonState {
             daemon: None,
         },
         Ok(Mode::Daemon(mut d)) => {
-            let (checks, health) = health_checks(&mut d);
+            // Naming an unregistered folder would register it: ask without one (register_guard.rs).
+            let unregistered = !ctx.paths.default_workspace
+                && !crate::register_guard::registered(&mut d, &ctx.paths.dir).unwrap_or(true);
+            if unregistered {
+                d.selector = None;
+            }
+            let (mut checks, health) = health_checks(&mut d);
+            if unregistered {
+                let detail = format!(
+                    "{} is not a registered workspace; `txtodo workspace add` registers it",
+                    ctx.paths.dir.display()
+                );
+                checks.push(check("workspace", Status::Warn, detail));
+            }
             let (devices, sync) = if health.is_some() {
                 (d.device_list().unwrap_or_default(), d.sync_status().ok())
             } else {

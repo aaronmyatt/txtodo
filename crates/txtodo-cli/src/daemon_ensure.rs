@@ -53,7 +53,12 @@ pub fn ensure_daemon_then_dispatch(
         }
     }
     match client::select(&ctx.paths.dir, false, env) {
-        Ok(client::Mode::Daemon(mut daemon)) => dispatch_daemon(ctx, &mut daemon, command),
+        Ok(client::Mode::Daemon(mut daemon)) => {
+            match crate::register_guard::check(command, &ctx.paths, &mut daemon)? {
+                crate::register_guard::Guard::Daemon => dispatch_daemon(ctx, &mut daemon, command),
+                crate::register_guard::Guard::Direct => dispatch(ctx, command),
+            }
+        }
         _ => dispatch(ctx, command),
     }
 }

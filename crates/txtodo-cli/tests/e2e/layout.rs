@@ -76,6 +76,16 @@ fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 
+/// `workspace add` for `dir`: a read never registers a folder (tasks/cli-no-implicit-register).
+fn register(daemon: &GlobalDaemon, dir: &Path) {
+    let out = txtodo(daemon, dir, &["workspace", "add"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 fn workspace(todo: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("todo.txt"), todo).unwrap();
@@ -89,6 +99,7 @@ fn open_and_sub_resolve_an_existing_ref_dir_in_tasks() {
     let ws = workspace("(A) plan the launch ref:plan\n");
     std::fs::create_dir_all(ws.path().join("tasks/plan")).unwrap();
     std::fs::write(ws.path().join("tasks/plan/todo.txt"), "draft the outline\n").unwrap();
+    register(&daemon, ws.path());
 
     let open = txtodo(&daemon, ws.path(), &["open", "1"]);
     assert!(
@@ -337,6 +348,7 @@ fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
         "plan the launch id:01ARZ3NDEKTSV4RRFFQ69G5FAV\n",
     )
     .unwrap();
+    register(&daemon, ws.path());
     let run = |args: &[&str]| {
         let out = txtodo(&daemon, ws.path(), args);
         assert!(
