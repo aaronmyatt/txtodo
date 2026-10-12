@@ -1,0 +1,2 @@
+2026-10-13 lab: rerun lan-to-relay a few times to see the refusals gone (needs the lab machine) +lab @human
+x 2026-10-13 2026-10-13 daemon: drop held ops in the landing turn (file actor, notes actor, log-only path) +lab @daemon — d20bfd13; both new tests failed with the lab's UNIQUE error before it
