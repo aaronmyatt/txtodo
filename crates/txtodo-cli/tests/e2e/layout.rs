@@ -365,9 +365,10 @@ fn blame_undo_checkout_sub_and_conflicts_follow_a_custom_root_list() {
         "daemon-mode footer names work.txt: {listed}"
     );
     run(&["add", "book the vet"]);
+    // Line 1 carries its id in the text; `blame` on an untagged sidecar line has no id to ask for.
     assert!(
-        !run(&["blame", "2"]).trim().is_empty(),
-        "blame finds line 2 of work.txt"
+        !run(&["blame", "1"]).trim().is_empty(),
+        "blame finds line 1 of work.txt"
     );
     assert!(run(&["undo"]).contains("undid 1 op"));
     let work = std::fs::read_to_string(ws.path().join("work.txt")).unwrap();
