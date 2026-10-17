@@ -1,4 +1,4 @@
-2026-10-11 Can we limit the number of keychain/password prompts to (at most) one? +spike
+2026-10-11 Can we limit the number of keychain/password prompts to (at most) one? +spike @doing by:claude ref:can-we-limit-the-number-of-keychain-pass
 2026-10-11 The +desktop app should always open fullscreen
 (D) 2026-10-03 daemon: one store transaction per sync batch across every file it touches, not one commit per same-file run +m11 @daemon @sync ref:sync-batch-txn — deferred 2026-10-03 (human call): option A of first-sync-speed; B (coalesced file writes) went first; ADR-sized, see tasks/sync-batch-txn/notes.md
 26-09-11 Web PWA with the WASM core in a Web Worker, OPFS storage, WebSocket sync +m10 @web — deferred 2026-09-17 (human call): a whole new app/platform (real design + 12-item sub-backlog already in tasks/web-pwa/, zero code), comparable in size to the desktop effort; human prioritized getting to distribution/brew work instead
