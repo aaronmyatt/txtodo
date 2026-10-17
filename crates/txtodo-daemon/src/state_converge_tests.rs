@@ -54,7 +54,7 @@ pub(crate) fn base(n: u128) -> DocState {
 
 /// The bytes of every arrival order of `ops` on `base`, an op that does not apply skipped; asserts
 /// they are all the same and returns them.
-fn converges_skipping(base: &DocState, ops: &[Op]) -> String {
+pub(crate) fn converges_skipping(base: &DocState, ops: &[Op]) -> String {
     let results: Vec<String> = orders(ops.len())
         .iter()
         .map(|order| {

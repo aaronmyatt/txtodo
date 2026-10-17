@@ -17,6 +17,7 @@
 //! A priority changed on the done line swaps the tag in place ([`TextHistory::swap_pri`]): the
 //! priority is last writer wins (`fields.rs` drops an older one), so the winner's letter is the
 //! one every recorded tag and the base hold, whatever order the completion and the swap arrive in.
+//! A priority cleared on the done line drops them all the same way ([`TextHistory::clear_pri`]).
 
 use txtodo_model::{DeviceId, Hlc, TextEdit, Ulid};
 
@@ -137,6 +138,19 @@ impl TextHistory {
         }
         let text = self.replay(apply);
         (set_pri(&text, letter, false) == text).then_some(text)
+    }
+
+    /// A newer `Priority = None` on the done line: the [`swap_pri`] of "no priority". Every
+    /// recorded tag goes and the base loses its own, and the text is rebuilt. Slotting a removal in
+    /// by stamp would not do: a completion newer than the clear would add its tag back on one
+    /// device and not on the other (lab chaos seed 1072683562, 2026-10-11 16:45). `None` when a
+    /// text edit still adds a tag, which this cannot clear: the caller drops the history then.
+    pub(crate) fn clear_pri(&mut self, apply: ApplyEdits) -> Option<String> {
+        self.base = txtodo_model::remove_tag(&self.base, "pri");
+        self.edits
+            .retain(|(_, change)| !matches!(change, Change::Pri(_)));
+        let text = self.replay(apply);
+        (!has_pri(&text)).then_some(text)
     }
 
     fn record(

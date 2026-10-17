@@ -51,6 +51,12 @@ pub(crate) fn set_field(
         }
         return Ok(());
     }
+    if field == Field::Priority
+        && value == FieldValue::Priority(None)
+        && let Some(description) = done_description(&line)
+    {
+        return clear_done_priority(state, (task, i), (&line, &description), hlc);
+    }
     let new_line = rewrite_prefix(&line, field, value)
         .ok_or(StateError::Unsupported("SetField on this line"))?;
     debug_assert!(
@@ -115,6 +121,38 @@ fn moved_into_pri(
     let letter = moved_priority(new_line)?;
     let add = !crate::text_history::has_pri(&old);
     (crate::text_history::set_pri(&old, letter, add) == new).then_some((old, new, (letter, add)))
+}
+
+/// `Priority = None` on a done line, newer than the field: its priority is its `pri:` tag, and the
+/// clear takes every tag a completion added, in any arrival order (`TextHistory::clear_pri`; lab
+/// chaos seed 1072683562).
+fn clear_done_priority(
+    state: &mut DocState,
+    (task, i): (TaskId, usize),
+    (line, description): (&OwnedLine, &str),
+    hlc: Hlc,
+) -> Result<(), StateError> {
+    let held = state.clear_pri_in_description(task, description);
+    let new_line = with_description(state, task, line, &held)?;
+    state.replace_entry(
+        i,
+        Entry::Task {
+            id: task,
+            line: new_line,
+        },
+    );
+    state.record_field(task, Field::Priority, hlc);
+    Ok(())
+}
+
+/// A done line's description; `None` on an open line or anything else.
+fn done_description(line: &OwnedLine) -> Option<String> {
+    let LineKind::Task(task) = line.parse()?.kind else {
+        return None;
+    };
+    Prefix::of(&task)
+        .completed
+        .then(|| task.description.to_owned())
 }
 
 /// The letter a done line's `pri:` tag holds, `None` on an open line or without one.

@@ -186,6 +186,21 @@ impl DocState {
         }
     }
 
+    /// A newer `Priority = None` on `task`'s done line, whose description is `current` now: the
+    /// description with no `pri:` from any completion (`TextHistory::clear_pri`). `None` when a
+    /// text edit still adds one: then the history is dropped and the tag cut from `current`.
+    pub(crate) fn clear_pri_in_description(&mut self, task: TaskId, current: &str) -> String {
+        let history = self
+            .text_history
+            .entry(task)
+            .or_insert_with(|| TextHistory::new(current.to_owned()));
+        if let Some(text) = history.clear_pri(apply_text_edits) {
+            return text;
+        }
+        self.text_history.remove(&task);
+        txtodo_model::remove_tag(current, "pri")
+    }
+
     /// `task`'s description, which is `current` now, with its first `key:` tag removed by an op
     /// stamped `hlc` (ADR 0036): the description to hold, kept in the history like a text edit.
     pub(crate) fn remove_tag_in_description(
