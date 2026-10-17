@@ -29,6 +29,9 @@ the group key, not per-device keys (`lan_op_signing.rs:6-13`).
 
 ## Decisions (agent picks, 2026-10-17; the human can overturn any)
 
+Accepted as ADR 0042 (`docs/adr/0042-web-pwa-relay-only-peer.md`), with decision 7 changed
+the same day (below).
+
 1. **Real peer, not a thin client.**
    - Thin client: the browser drives the user's daemon over iroh. Cheap, but there is no offline
      use and a daemon must be online for every read.
@@ -52,11 +55,15 @@ the group key, not per-device keys (`lan_op_signing.rs:6-13`).
 6. **One tab owns the data (Web Locks); other tabs say "open in another tab".**
    - Alternative: a leader tab with followers proxied over BroadcastChannel.
    - Picked v1 single owner: an OPFS sync handle is exclusive, so one owner is the honest start.
-7. **Hosting: static files on GitHub Pages.**
-   - Alternative: the planned Kamal droplet (`docs/relay-deployment-plan.md`), which is still
-     `@human` and not up.
-   - Picked Pages: static, HTTPS (which service workers and OPFS need), no server. Turning it on is
-     outward-facing, so it stays a human step.
+7. **Hosting: Cloudflare Workers static assets, on its own `workers.dev` origin.**
+   - First pick was GitHub Pages. Dropped: the site would be `aaronmyatt.github.io/txtodo/`, one
+     origin with the owner's 21 other Pages sites. OPFS and IndexedDB are per origin, so script on
+     any of them could read the lists and unwrap the group key. Pages also sets no response headers.
+   - Alternative: GitHub Pages under a new org (its own origin). Still no headers, so no real CSP
+     and no `frame-ancestors`.
+   - Picked Cloudflare: its own origin, plus a `_headers` file for the CSP. Cloudflare now steers
+     static sites to Workers rather than Pages. The owner makes the account and the API token
+     (a secret), so that one step stays `@human`.
 
 ## Design
 
@@ -131,4 +138,4 @@ service worker: caches the shell + .wasm only, never list data
 - wasm-bindgen-test: https://docs.rs/wasm-bindgen-test
 - Vite modes: https://vite.dev/guide/env-and-mode
 - WebKit 7-day storage cap: https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/
-- GitHub Pages: https://docs.github.com/en/pages
+- Workers static assets headers: https://developers.cloudflare.com/workers/static-assets/headers/

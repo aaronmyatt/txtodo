@@ -1,6 +1,5 @@
 2026-10-17 Spike: iroh 1.2 wasm_browser endpoint in a dedicated Worker does a sealed Hello with a native daemon via the n0 relay; record .wasm size and the ring build needs +m10 @web @spike
 2026-10-17 Spike: txtodo-model, -crdt and the daemon's 30 pure engine modules cargo check for wasm32; list each blocker +m10 @web @spike
-2026-10-17 ADR 0042: the web PWA is a relay-only iroh peer; new crates txtodo-engine and txtodo-web; a store trait (decisions 1-7 in notes.md) +m10 @web @human
 2026-10-17 txtodo-engine: move DocState/apply/mutation/reconcile/text_history and the pure actor-glue half out of txtodo-daemon, no behaviour change, pure tests move too +m10 @web @daemon
 2026-10-17 Store trait over the Store methods the file-actor path uses; SQLite impl in txtodo-store, in-memory impl for engine tests +m10 @web @store
 2026-10-17 txtodo-sync wasm-ready: WorkspaceId into txtodo-model, a default native feature gating iroh-tokio/mdns/keyring/fs, wasm32 cargo check in CI +m10 @web @sync
@@ -12,5 +11,7 @@
 2026-10-17 Test: state_goldens and the converge tests under wasm-bindgen-test give byte-identical text +m10 @web @test
 2026-10-17 Test: Playwright web project: an offline edit survives reload; an SW update keeps OPFS data +m10 @web @test
 2026-10-17 Test: a browser and a daemon converge over the relay; offline edits flush on reconnect with no loss +m10 @web @test
-2026-10-17 Host the static build (GitHub Pages pick, notes.md decision 7); outward-facing, human turns it on +m10 @web @human
+2026-10-17 Owner: create the Cloudflare account and a Workers-only API token, saved as the repo secret CLOUDFLARE_API_TOKEN (an account and a secret: only a human) +m10 @web @human
+2026-10-17 Deploy the web build to Cloudflare Workers static assets: wrangler config, _headers (CSP, frame-ancestors 'none'), a GitHub Action using CLOUDFLARE_API_TOKEN (ADR 0042 point 10) +m10 @web
 2026-10-17 Complete the parent line in ./todo.txt +m10 @web
+x 2026-10-17 2026-10-17 ADR 0042: the web PWA is a relay-only iroh peer; new crates txtodo-engine and txtodo-web; a store trait (decisions 1-7 in notes.md) +m10 @web @human — docs/adr/0042-web-pwa-relay-only-peer.md, accepted 2026-10-17 by the agent; hosting moved from GitHub Pages to Cloudflare (notes.md decision 7); the two spikes can still reopen point 3
