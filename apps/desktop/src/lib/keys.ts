@@ -35,6 +35,8 @@ export const BINDINGS: readonly Binding[] = [
 	{ id: "list.delete", keys: ["d d"], title: "Delete the line", scope: "list" },
 	{ id: "list.move_down", keys: ["J", "Alt-Down"], title: "Move the line down", scope: "list" },
 	{ id: "list.move_up", keys: ["K", "Alt-Up"], title: "Move the line up", scope: "list" },
+	{ id: "list.move_to", keys: ["m"], title: "Move the line to another list", scope: "list" },
+	{ id: "list.copy_to", keys: ["c"], title: "Copy the line to another list", scope: "list" },
 	{ id: "list.undo", keys: ["u"], title: "Undo this session's last change", scope: "list" },
 	{ id: "sync.open", keys: ["s"], title: "Sync details", scope: "list" },
 	{ id: "offers.open", keys: ["o"], title: "Workspace offers from paired devices", scope: "list" },

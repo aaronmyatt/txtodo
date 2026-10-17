@@ -154,6 +154,24 @@ desktop = { status = "done", surface = "FileView (list mode); or drag the line's
 tui = { status = "done", surface = "Tasks; or drag the row" }
 deviation = ""
 
+[[action]]
+id = "list.move_to"
+title = "Move the line to another list"
+keys = ["m"]
+scope = "list"
+desktop = { status = "done", surface = "FileView (list mode) opens the detail's Move to… picker" }
+tui = { status = "planned", surface = "" }
+deviation = ""
+
+[[action]]
+id = "list.copy_to"
+title = "Copy the line to another list"
+keys = ["c"]
+scope = "list"
+desktop = { status = "done", surface = "FileView (list mode) opens the detail's Copy to… picker" }
+tui = { status = "planned", surface = "" }
+deviation = ""
+
 # ==== Editing a line ===============================================================================
 
 [[action]]

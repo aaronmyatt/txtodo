@@ -40,3 +40,11 @@ test("Copy to… adds a new task there without its ref, and the original stays",
 	expect(read(SUB)).not.toContain("ref:");
 	expect(read("todo.txt")).toContain("plan the roadmap ref:q4-roadmap");
 });
+
+// list.move_to / list.copy_to: in list mode, m opens the detail with its Move to… picker focused.
+test("m opens the line's detail with the Move to… picker focused", async ({ page }) => {
+	await page.keyboard.press("j");
+	await page.keyboard.press("m");
+	await expect(page.locator("section.parent")).toContainText("call mum");
+	await expect(page.getByRole("combobox", { name: "Move to another list" })).toBeFocused();
+});

@@ -34,6 +34,7 @@
 	import { localToday } from "./editPopoverLogic";
 	import { copyText, otherLists } from "$lib/todotxt/moveCopy";
 	import { popChange } from "$lib/stores/changes";
+	import { movePicker } from "$lib/stores/movePicker";
 	import { findRefTag, joinPath, refDirFor } from "$lib/todotxt/lineInfo";
 	import { notesLayout, notesMode, subListMode } from "$lib/detailSections";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
@@ -246,6 +247,17 @@
 		}
 	}
 
+	// List mode's `m`/`c` opened this detail to pick a list: focus that picker once it shows.
+	let moveSelect: HTMLSelectElement | undefined = $state();
+	let copySelect: HTMLSelectElement | undefined = $state();
+	$effect(() => {
+		const intent = $movePicker;
+		const select = intent === "move" ? moveSelect : intent === "copy" ? copySelect : undefined;
+		if (!select) return;
+		movePicker.set("");
+		select.focus();
+	});
+
 	/** A `<select>` that acts on pick, then shows its prompt again. */
 	function picked(e: Event, act: (dest: string) => Promise<void>) {
 		const select = e.currentTarget as HTMLSelectElement;
@@ -406,11 +418,11 @@
 		{/if}
 		{#if targets.length > 0 && parentTaskId}
 			<div class="move-copy">
-				<select aria-label="Move to another list" onchange={(e) => picked(e, moveTo)}>
+				<select aria-label="Move to another list" bind:this={moveSelect} onchange={(e) => picked(e, moveTo)}>
 					<option value="">Move to…</option>
 					{#each targets as t (t)}<option value={t}>{t}</option>{/each}
 				</select>
-				<select aria-label="Copy to another list" onchange={(e) => picked(e, copyTo)}>
+				<select aria-label="Copy to another list" bind:this={copySelect} onchange={(e) => picked(e, copyTo)}>
 					<option value="">Copy to…</option>
 					{#each targets as t (t)}<option value={t}>{t}</option>{/each}
 				</select>

@@ -16,6 +16,7 @@
 	import { showToast } from "$lib/stores/toast";
 	import { listBuffer } from "$lib/listCommands";
 	import { clickOnlySelects, docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
+	import { movePicker } from "$lib/stores/movePicker";
 	import { applyChipCore } from "$lib/wasmCore";
 	import { localToday } from "./editPopoverLogic";
 	import { leaveEditor } from "$lib/escape";
@@ -470,6 +471,10 @@
 			return view.focus();
 		}
 		if (id === "detail.open") return requestDetail(current.number);
+		if (id === "list.move_to" || id === "list.copy_to") {
+			movePicker.set(id === "list.move_to" ? "move" : "copy");
+			return requestDetail(current.number);
+		}
 		if (id === "list.undo") return undoNewest();
 		if (dirty) await commit();
 		if (dirty) return; // the buffer was refused: its error is already showing
