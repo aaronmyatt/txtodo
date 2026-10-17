@@ -1,7 +1,7 @@
-2026-10-17 txtodo-store in the browser: install the sahpool OPFS VFS in the Worker; test durability across reloads and the journal_mode=delete path; the daemon stays on WAL +m10 @web @store
-2026-10-17 txtodo-web crate: Worker host with txtodo-store on the OPFS VFS, IdbKeyStore (WebCrypto-wrapped), the iroh wasm endpoint, and the desktop's command set +m10 @web
+2026-10-17 txtodo-store in the browser: install the sahpool OPFS VFS in the Worker; test durability across reloads and the journal_mode=delete path; the daemon stays on WAL +m10 @web @store @doing by:claude
+2026-10-17 txtodo-web crate: the Worker host: txtodo-store on OPFS, documents (replay, apply, Replace, change events), the desktop's file commands as JSON; sync, keys and pairing are the Join line's +m10 @web @doing by:claude
 2026-10-17 apps/desktop --mode web: alias @tauri-apps/api to a Worker shim; hide tray/quick-add/pin/upgrade/folder dialog; optional web field in client-parity.toml for na rows +m10 @web @desktop
-2026-10-17 Join from the browser: scan the desktop's pairing QR (camera.ts) or paste the code, SAS, grant over the relay; then accept workspace offers +m10 @web
+2026-10-17 Sync from the browser: the iroh relay endpoint and an async session loop in txtodo-web, keys in a WebCrypto-wrapped vault, pairing as the joiner (scan the desktop's QR or paste the code, SAS, grant over the relay), then accept workspace offers +m10 @web
 2026-10-17 PWA shell: manifest.webmanifest, service worker caching shell + .wasm only, persist(), update banner, single-tab Web Locks owner, unsynced-op count +m10 @web
 2026-10-17 Test: state_goldens and the converge tests under wasm-bindgen-test give byte-identical text +m10 @web @test
 2026-10-17 Test: Playwright web project: an offline edit survives reload; an SW update keeps OPFS data +m10 @web @test
