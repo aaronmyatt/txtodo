@@ -1,0 +1,392 @@
+//! Task partition-converge: two devices that edit while apart end with the same bytes, whatever
+//! order their ops arrive in (`tasks/partition-converge/notes.md`). Unlike
+//! `state_order_tests::converges`, an op that does not apply is skipped, not the whole order: that
+//! is what sync does with it (`sync_op_skipped`), so a lost line shows up as a difference.
+
+use crate::state::DocState;
+use crate::state_order_tests::{A, B, at, empty, insert, move_after, op, orders, task};
+use txtodo_model::{Field, FieldValue, Hlc, Op, OpKind, TextEdit};
+
+pub fn set_priority(n: u128, letter: char, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::SetField {
+            task: task(n),
+            field: Field::Priority,
+            value: FieldValue::Priority(Some(letter)),
+        },
+    )
+}
+
+pub fn delete(n: u128, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::SetField {
+            task: task(n),
+            field: Field::Deleted,
+            value: FieldValue::Bool(true),
+        },
+    )
+}
+
+pub fn append_text(n: u128, at_char: usize, text: &str, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::EditText {
+            task: task(n),
+            edits: vec![TextEdit::Insert {
+                at: at_char,
+                text: text.to_owned(),
+            }],
+        },
+    )
+}
+
+/// Lines 1..=n, one after another, as both devices held them before they parted.
+pub fn base(n: u128) -> DocState {
+    let mut state = empty();
+    for i in 1..=n {
+        let after = (i > 1).then(|| i - 1);
+        state.apply(&insert(i, after, at(i as u64, 0, A))).unwrap();
+    }
+    state
+}
+
+/// The bytes of every arrival order of `ops` on `base`, an op that does not apply skipped; asserts
+/// they are all the same and returns them.
+pub fn converges_skipping(base: &DocState, ops: &[Op]) -> String {
+    let results: Vec<String> = orders(ops.len())
+        .iter()
+        .map(|order| {
+            let mut state = base.clone();
+            for &i in order {
+                // Skipped, as sync skips it: the state is unchanged on `Err`.
+                let _ = state.apply(&ops[i]);
+            }
+            String::from_utf8(state.to_bytes()).unwrap()
+        })
+        .collect();
+    for r in &results {
+        assert_eq!(r, &results[0], "two arrival orders disagree");
+    }
+    results[0].clone()
+}
+
+#[test]
+fn an_add_after_a_line_another_device_moved_lands_in_one_place() {
+    // A adds 9 under line 1; B completes line 1, and `do` moves it to the bottom.
+    let ops = [
+        insert(9, Some(1), at(100, 0, A)),
+        move_after(1, Some(3), at(100, 0, B)),
+    ];
+    converges_skipping(&base(3), &ops);
+}
+
+#[test]
+fn an_add_after_a_line_another_device_deleted_is_kept_everywhere() {
+    let ops = [insert(9, Some(1), at(100, 0, A)), delete(1, at(100, 0, B))];
+    let bytes = converges_skipping(&base(2), &ops);
+    assert!(bytes.contains("line 9"), "{bytes:?}");
+}
+
+#[test]
+fn two_devices_setting_one_field_agree_on_the_newest() {
+    let ops = [
+        set_priority(1, 'A', at(100, 0, A)),
+        set_priority(1, 'B', at(101, 0, B)),
+    ];
+    assert_eq!(converges_skipping(&base(1), &ops), "(B) line 1\n");
+}
+
+/// ADR 0034: the two splices end in stamp order on both devices.
+#[test]
+fn two_devices_editing_one_description_agree() {
+    let ops = [
+        append_text(1, 6, " a", at(100, 0, A)),
+        append_text(1, 6, " b", at(101, 0, B)),
+    ];
+    converges_skipping(&base(1), &ops);
+}
+
+#[test]
+fn field_stamps_come_back_from_a_replay_and_settle_with_a_commit() {
+    // Rebuilt at open: the state read from disk takes the replay's field stamps.
+    let mut replayed = base(1);
+    replayed
+        .apply(&set_priority(1, 'B', at(101, 0, B)))
+        .unwrap();
+    let mut reopened = base(1);
+    reopened
+        .apply_kind(&set_priority(1, 'B', at(0, 0, A)).kind)
+        .unwrap();
+    reopened.adopt_stamps(&replayed);
+    reopened
+        .apply(&set_priority(1, 'A', at(100, 0, A)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(B) line 1\n", "the older op lost");
+    // A local scratch edit takes its commit's stamp: a peer op older than that loses, newer wins.
+    reopened
+        .apply_kind(&set_priority(1, 'C', at(0, 0, A)).kind)
+        .unwrap();
+    reopened.settle_scratch_stamps(at(200, 0, A));
+    reopened
+        .apply(&set_priority(1, 'D', at(150, 0, B)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(C) line 1\n");
+    reopened
+        .apply(&set_priority(1, 'E', at(250, 0, B)))
+        .unwrap();
+    assert_eq!(reopened.to_bytes(), b"(E) line 1\n");
+}
+
+fn blank_remove(after: u128, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::BlankRemove {
+            after: Some(task(after)),
+        },
+    )
+}
+
+/// Applies `order` of `ops` on `base`, every op required to apply; returns the bytes.
+fn in_order(base: &DocState, ops: &[&Op]) -> String {
+    let mut state = base.clone();
+    for op in ops {
+        state.apply(op).unwrap_or_else(|e| panic!("{op:?}: {e}"));
+    }
+    String::from_utf8(state.to_bytes()).unwrap()
+}
+
+/// ADR 0033: A moves 4 under 1 and adds 9 under it; B moves 4 under 2 at once. B's move is newer
+/// and wins, and 9 stays where A put it, under the spot A's move gave 4, in every order that
+/// keeps A's two ops in sequence (one device's ops always arrive in order).
+#[test]
+fn a_move_that_lost_to_a_newer_one_still_leaves_its_spot() {
+    let m1 = move_after(4, Some(1), at(100, 0, A));
+    let i9 = insert(9, Some(4), at(100, 1, A));
+    let m2 = move_after(4, Some(2), at(101, 0, B));
+    let want = "line 1\nline 9\nline 2\nline 4\nline 3\n";
+    for order in [[&m1, &i9, &m2], [&m1, &m2, &i9], [&m2, &m1, &i9]] {
+        assert_eq!(in_order(&base(4), &order), want);
+    }
+}
+
+/// The late anchor (lab lan-converge seed 435090918): B, unaware of A's older move of 2 to the
+/// top, moves 4 under 2 and adds 9 under 4. Where A's move arrives last, 4 and 9 sit under 2's old
+/// spot until it does; then they follow 2, as on a device that had the move first.
+#[test]
+fn lines_placed_under_a_line_follow_its_older_move_when_it_arrives_late() {
+    let ops = [
+        move_after(2, None, at(100, 0, A)),
+        move_after(4, Some(2), at(101, 0, B)),
+        insert(9, Some(4), at(102, 0, B)),
+    ];
+    assert_eq!(
+        converges_skipping(&base(4), &ops),
+        "line 2\nline 4\nline 9\nline 1\nline 3\n"
+    );
+}
+
+#[test]
+fn a_blank_removed_after_a_deleted_line_is_the_one_its_author_saw() {
+    let mut start = base(1);
+    start
+        .apply(&op(
+            at(5, 0, A),
+            OpKind::BlankInsert {
+                after: Some(task(1)),
+            },
+        ))
+        .unwrap();
+    start.apply(&insert(2, Some(1), at(4, 0, A))).unwrap();
+    assert_eq!(start.to_bytes(), b"line 1\n\nline 2\n");
+    let ops = [delete(1, at(100, 0, A)), blank_remove(1, at(100, 0, B))];
+    assert_eq!(converges_skipping(&start, &ops), "line 2\n");
+}
+
+/// Ghosts come back at open: the state read from disk takes the replay's whole sequence, so an
+/// old op a peer anchored on a line deleted here still lands.
+#[test]
+fn ghosts_come_back_from_a_replay_at_open() {
+    let mut replayed = base(2);
+    replayed.apply(&delete(1, at(100, 0, A))).unwrap();
+    let late = insert(9, Some(1), at(90, 0, B));
+    let mut reopened = empty();
+    reopened.apply(&insert(2, None, at(2, 0, A))).unwrap();
+    assert!(
+        reopened.clone().apply(&late).is_err(),
+        "without ghosts it skips"
+    );
+    reopened.adopt_stamps(&replayed);
+    reopened.apply(&late).unwrap();
+    assert_eq!(reopened.to_bytes(), b"line 9\nline 2\n");
+}
+
+#[test]
+fn past_the_bound_the_oldest_ghosts_go_first() {
+    let mut state = base(4);
+    for (n, wall) in [(1, 300), (2, 100), (3, 200)] {
+        state.apply(&delete(n, at(wall, 0, A))).unwrap();
+    }
+    state.prune_ghosts_to(2);
+    // Ghost 1 (placed first, oldest stamp) went; 2 and 3 still anchor.
+    assert!(
+        state
+            .clone()
+            .apply(&insert(9, Some(1), at(400, 0, B)))
+            .is_err()
+    );
+    state.apply(&insert(9, Some(2), at(400, 0, B))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 9\nline 4\n");
+}
+
+/// A description's edit history comes back at open from the replay, so an edit that arrives late
+/// after a restart lands where it would have without one.
+#[test]
+fn description_history_comes_back_from_a_replay_at_open() {
+    let early = append_text(1, 6, " a", at(100, 0, A));
+    let later = append_text(1, 6, " b", at(101, 0, B));
+    let mut never_closed = base(1);
+    never_closed.apply(&later).unwrap();
+    never_closed.apply(&early).unwrap();
+    let mut reopened = empty();
+    reopened.apply(&insert(1, None, at(1, 0, A))).unwrap();
+    reopened.apply(&later).unwrap();
+    let mut from_disk = empty();
+    from_disk
+        .apply_kind(&insert(1, None, at(0, 0, A)).kind)
+        .unwrap();
+    from_disk
+        .apply_kind(&append_text(1, 6, " b", at(0, 0, A)).kind)
+        .unwrap();
+    from_disk.adopt_stamps(&reopened);
+    from_disk.apply(&early).unwrap();
+    assert_eq!(from_disk.to_bytes(), never_closed.to_bytes());
+    assert_eq!(never_closed.to_bytes(), b"line 1 b a\n");
+}
+
+/// A blank removed after a line, while another device added under that same line: the add lands
+/// between the line and the blank on the adder's side, and the blank still goes everywhere.
+#[test]
+fn a_blank_removed_while_another_device_adds_under_its_line() {
+    let mut start = base(1);
+    start
+        .apply(&op(
+            at(5, 0, A),
+            OpKind::BlankInsert {
+                after: Some(task(1)),
+            },
+        ))
+        .unwrap();
+    for (added, removed) in [
+        (at(100, 0, A), at(101, 0, B)),
+        (at(102, 0, A), at(101, 0, B)),
+    ] {
+        let ops = [insert(9, Some(1), added), blank_remove(1, removed)];
+        assert_eq!(converges_skipping(&start, &ops), "line 1\nline 9\n");
+    }
+}
+
+fn blank_insert(after: u128, hlc: Hlc) -> Op {
+    op(
+        hlc,
+        OpKind::BlankInsert {
+            after: Some(task(after)),
+        },
+    )
+}
+
+/// The bytes of every merge of two devices' ops that keeps each device's own order (sync delivers
+/// one device's ops in order); asserts they are all the same and returns them.
+pub fn converges_interleaved(base: &DocState, a: &[Op], b: &[Op]) -> String {
+    fn merges(a: usize, b: usize) -> Vec<Vec<bool>> {
+        if a == 0 || b == 0 {
+            return vec![vec![a > 0; a + b]];
+        }
+        let firsts = [(true, merges(a - 1, b)), (false, merges(a, b - 1))];
+        let prefixed = firsts.into_iter().flat_map(|(first, rest)| {
+            rest.into_iter()
+                .map(move |m| std::iter::once(first).chain(m).collect())
+        });
+        prefixed.collect()
+    }
+    let results: Vec<String> = merges(a.len(), b.len())
+        .iter()
+        .map(|merge| {
+            let (mut ia, mut ib) = (a.iter(), b.iter());
+            let mut state = base.clone();
+            for &from_a in merge {
+                let next = if from_a { ia.next() } else { ib.next() };
+                let _ = state.apply(next.expect("one op per step"));
+            }
+            String::from_utf8(state.to_bytes()).unwrap()
+        })
+        .collect();
+    for r in &results {
+        assert_eq!(r, &results[0], "two arrival orders disagree");
+    }
+    results[0].clone()
+}
+
+/// The blank half of lab lan-converge seed 435090918: A moves 2 to the top and its blank with it
+/// (adds one under 2, removes the one now under 1); B, unaware, removes the blank under 2. B's
+/// remove follows 2 to its newer spot on every device, so both blanks go.
+#[test]
+fn a_blank_removed_under_a_line_another_device_moved_with_its_blank() {
+    let mut start = base(3);
+    start.apply(&blank_insert(2, at(5, 0, A))).unwrap();
+    assert_eq!(start.to_bytes(), b"line 1\nline 2\n\nline 3\n");
+    let a = [
+        move_after(2, None, at(100, 0, A)),
+        blank_insert(2, at(100, 0, A)),
+        blank_remove(1, at(100, 0, A)),
+    ];
+    let b = [blank_remove(2, at(101, 0, B))];
+    let bytes = converges_interleaved(&start, &a, &b);
+    assert_eq!(bytes, "line 2\nline 1\nline 3\n");
+}
+
+/// Pruning runs after every op, so past the bound it drops a batch, not one ghost per op (that
+/// sorted every ghost on each op: a delete-heavy 10 000-line log took minutes to replay at open).
+#[test]
+fn past_the_bound_a_prune_drops_down_to_the_lower_mark() {
+    let mut state = base(5);
+    for n in 1..=3 {
+        state.apply(&delete(n, at(100 + n as u64, 0, A))).unwrap();
+    }
+    state.prune_ghosts_past(3, 1);
+    state.apply(&delete(4, at(200, 0, A))).unwrap();
+    state.prune_ghosts_past(3, 1);
+    assert!(
+        state
+            .clone()
+            .apply(&insert(9, Some(3), at(300, 0, B)))
+            .is_err(),
+        "ghost 3 went with the batch"
+    );
+    state.apply(&insert(9, Some(4), at(300, 0, B))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 9\nline 5\n");
+}
+
+/// Past the bound an eraser goes with the blank it hides: dropping the blank alone would let the
+/// eraser take the next one.
+#[test]
+fn past_the_bound_an_eraser_goes_with_its_blank() {
+    let mut state = base(1);
+    state.apply(&blank_insert(1, at(5, 0, A))).unwrap();
+    state.apply(&blank_insert(1, at(6, 0, A))).unwrap();
+    state.apply(&blank_remove(1, at(10, 0, A))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 1\n\n");
+    state.prune_ghosts_to(1);
+    assert_eq!(state.to_bytes(), b"line 1\n\n");
+}
+
+/// A peer's edit of a line deleted here applies as a no-op, not an error sync logs as skipped.
+#[test]
+fn an_edit_of_a_line_another_device_deleted_changes_nothing() {
+    let mut state = base(2);
+    state.apply(&delete(1, at(100, 0, A))).unwrap();
+    state.apply(&append_text(1, 6, " b", at(99, 0, B))).unwrap();
+    state.apply(&set_priority(1, 'A', at(99, 1, B))).unwrap();
+    assert_eq!(state.to_bytes(), b"line 2\n");
+}

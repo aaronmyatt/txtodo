@@ -8967,6 +8967,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "txtodo-engine"
+version = "0.0.24"
+dependencies = [
+ "blake3",
+ "jiff",
+ "pathfinding",
+ "proptest",
+ "serde_json",
+ "strsim",
+ "tracing",
+ "txtodo-core",
+ "txtodo-model",
+ "txtodo-store",
+]
+
+[[package]]
 name = "txtodo-ffi"
 version = "0.0.24"
 dependencies = [
