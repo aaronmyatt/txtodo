@@ -1,0 +1,5 @@
+2026-10-17 desktop: a click selects a line in list mode; a click on the current line edits it (list.click_to_edit) +m11 @desktop
+2026-10-17 desktop: Esc in the prompt bar goes back to list mode, not into the buffer +m11 @desktop
+2026-10-17 desktop: Esc lets go of a focused button or link, so list keys work again +m11 @desktop
+2026-10-17 desktop: keyName writes Shift- before a named key, like the TUI +m11 @desktop
+2026-10-17 desktop: Mod-Enter opens the detail in list mode (detail.open) +m11 @desktop

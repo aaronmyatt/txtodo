@@ -1,4 +1,4 @@
-2026-10-12 Fix vim key binding support
+2026-10-12 Fix vim key binding support @doing by:claude ref:fix-vim-key-binding-support
 2026-10-12 Add the ability to "move" or copy a task to another list
 2026-10-12 Dark mode note text editors blinking cursor is hidden, needs a colour contrast
 2026-10-11 Completed tasks without a date/priority should also be greyed out
