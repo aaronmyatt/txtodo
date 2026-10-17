@@ -1,4 +1,4 @@
-2026-10-12 Add the ability to "move" or copy a task to another list
+2026-10-12 Add the ability to "move" or copy a task to another list @doing by:claude ref:add-the-ability-to-move-or-copy-a-task-t
 2026-10-12 Dark mode note text editors blinking cursor is hidden, needs a colour contrast
 2026-10-11 Completed tasks without a date/priority should also be greyed out
 2026-10-11 Can we limit the number of keychain/password prompts to (at most) one? +spike
