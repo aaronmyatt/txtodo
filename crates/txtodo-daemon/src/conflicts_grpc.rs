@@ -5,7 +5,7 @@
 //! fields left the proto.
 
 use crate::convert::status_of;
-use crate::duplicates::to_duplicate_group;
+use crate::duplicates::DuplicateGroup;
 use crate::server::TxtodoService;
 use tonic::{Request, Response, Status};
 use txtodo_proto::v1 as pb;
@@ -40,5 +40,20 @@ impl TxtodoService {
             })
             .collect();
         Ok(Response::new(pb::LintResponse { findings }))
+    }
+}
+
+/// A group on the wire (`ConflictsResponse.duplicates`). Here, not in the engine: the engine has
+/// no proto types (ADR 0042).
+fn to_duplicate_group(group: &DuplicateGroup) -> pb::DuplicateGroup {
+    pb::DuplicateGroup {
+        tasks: group
+            .tasks
+            .iter()
+            .map(|(task, line)| pb::DuplicateTask {
+                task_id: task.to_string(),
+                line_number: u32::try_from(*line).unwrap_or(u32::MAX),
+            })
+            .collect(),
     }
 }

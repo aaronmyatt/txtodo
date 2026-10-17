@@ -1,11 +1,36 @@
 //! `notices.rs`'s tests: what a sync commit shows, and what holds it.
 
 use super::*;
-use crate::state_order_tests::{at, op};
 use std::sync::Mutex as StdMutex;
 use txtodo_core::notice::QUIET_MS;
+use txtodo_model::{DeviceId, Hlc, Op, OpId, TaskId, Ulid};
 use txtodo_model::{Field, FieldValue, FilePath, OpKind};
 use txtodo_store::{Seq, Stored};
+
+// The engine's `state_order_tests` helpers, copied: that module is test-only in another crate now.
+fn task(n: u128) -> TaskId {
+    TaskId::new(Ulid::from_u128(0x100 + n))
+}
+
+fn at(wall: u64, counter: u16, device: u128) -> Hlc {
+    Hlc {
+        wall_ms: wall,
+        counter,
+        device: DeviceId::new(Ulid::from_u128(device)),
+    }
+}
+
+fn op(hlc: Hlc, kind: OpKind) -> Op {
+    Op {
+        id: OpId::new(Ulid::from_u128(
+            u128::from(hlc.wall_ms) << 32 | u128::from(hlc.counter),
+        )),
+        hlc,
+        principal: txtodo_model::Principal::User { device: hlc.device },
+        file: FilePath::new("todo.txt").unwrap_or_else(|e| panic!("path: {e}")),
+        kind,
+    }
+}
 
 #[derive(Default)]
 struct Recorded(StdMutex<Vec<String>>, bool);
@@ -24,7 +49,7 @@ fn completed(source: Option<&str>) -> Change {
     let done = op(
         at(10, 0, 9),
         OpKind::SetField {
-            task: crate::state_order_tests::task(1),
+            task: task(1),
             field: Field::Completed,
             value: FieldValue::Bool(true),
         },

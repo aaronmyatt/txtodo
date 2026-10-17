@@ -94,6 +94,13 @@ multiplex every workspace's traffic — not done by this task).
   directly too, unmodified, specifically so whitebox tests that construct one against a single
   already-open `Workspace` (bypassing the catalog, via `serve::serve` rather than
   `serve::serve_global`) need zero changes.
+- The engine moved out (ADR 0042, 2026-10-17): `state*`, `fields`, `text_history`, `textedit`,
+  `mutation*`, `reconcile`, `reconcile_sidecar`, `identity_*`, `duplicates`, `contents`,
+  `sync_park`, `op_set_hash` and the rest of the pure modules live in `txtodo-engine`, and
+  `lib.rs` re-exports them under the same names, so `crate::state::DocState` still resolves.
+  `sync_ops::apply_leniently`, `expected::Hash` and `actor::hash_of` are re-exports too. Their
+  unit tests went with them; the four test seams come through the engine's `test-support`
+  feature (a dev-dependency here).
 - Module map: `workspace` (registry, device id, discovery) → `actor` + `external` (FileActor:
   open/recover, apply, external change, commit, undo, checkout) ← `handle` (messages, replies) ·
   `state` + `fields` (DocState, every OpKind applied) · `reconcile` + `fastid` (pure diff → ops;
@@ -593,4 +600,4 @@ multiplex every workspace's traffic — not done by this task).
   real bugs found only by actually driving the handshake end to end, not by unit-testing either
   side in isolation — a lesson for anything that touches this file again.
 - May depend only on: txtodo-core, txtodo-query, txtodo-model, txtodo-store, txtodo-crdt,
-  txtodo-sync, txtodo-proto, txtodo-mcp.
+  txtodo-engine, txtodo-sync, txtodo-proto, txtodo-mcp.

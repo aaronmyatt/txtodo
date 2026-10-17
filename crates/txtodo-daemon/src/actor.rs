@@ -22,10 +22,8 @@ pub const SNAPSHOT_EVERY_OPS: i64 = 500;
 /// The workspace's one SQLite store, shared by every actor and the History RPC.
 pub type SharedStore = Arc<Mutex<Store>>;
 
-/// blake3 of a projection.
-pub fn hash_of(bytes: &[u8]) -> Hash {
-    *blake3::hash(bytes).as_bytes()
-}
+/// blake3 of a projection (the engine's, ADR 0042).
+pub use txtodo_engine::hash_of;
 
 /// Where a document lives.
 #[derive(Debug, Clone)]

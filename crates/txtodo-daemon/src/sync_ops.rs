@@ -12,7 +12,7 @@
 use crate::actor::{Commit, CommitTail, FileActor};
 use crate::commit::SYNC_SOURCE;
 use crate::handle::{ActorError, ActorHandle, ActorMsg};
-use crate::state::{DocState, StateError};
+use crate::state::StateError;
 use crate::sync_park::apply_parking;
 use txtodo_model::{Op, OpKind, TaskId};
 
@@ -133,35 +133,8 @@ fn log_stamp_not_merged(file: Option<&txtodo_model::FilePath>, e: &txtodo_model:
     tracing::warn!(file = file.map(|f| f.to_string()), error = %e, "sync_stamp_not_merged");
 }
 
-/// Applies `ops` to `state` one commit (same HLC stamp) at a time; within a commit, an op that
-/// fails is retried after the others, until a round applies nothing new. Returns the ops that
-/// never applied, with why.
-pub(crate) fn apply_leniently<'a>(
-    state: &mut DocState,
-    ops: &'a [Op],
-) -> Vec<(&'a Op, StateError)> {
-    let mut skipped = Vec::new();
-    for group in ops.chunk_by(|a, b| a.hlc == b.hlc) {
-        let mut pending: Vec<&Op> = group.iter().collect();
-        // Bounded: every round but the last applies at least one op.
-        loop {
-            let before = pending.len();
-            let mut failed = Vec::new();
-            for op in pending {
-                if let Err(e) = state.apply(op) {
-                    failed.push((op, e));
-                }
-            }
-            if failed.is_empty() || failed.len() == before {
-                skipped.extend(failed);
-                break;
-            }
-            pending = failed.into_iter().map(|(op, _)| op).collect();
-        }
-    }
-    debug_assert!(skipped.len() <= ops.len());
-    skipped
-}
+/// Moved to the engine (ADR 0042); re-exported for `external`, `log_repair`, `pending_save`.
+pub(crate) use txtodo_engine::apply::apply_leniently;
 
 fn log_skipped(op: &Op, e: &StateError) {
     tracing::warn!(

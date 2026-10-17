@@ -17,9 +17,9 @@ mod bundle_import_error;
 mod bundle_wire;
 pub mod clock;
 mod commit;
-mod conflict_row;
+use txtodo_engine::conflict_row;
 mod conflicts_grpc;
-mod contents;
+use txtodo_engine::contents;
 pub mod control_channel;
 mod control_dispatch;
 mod control_session;
@@ -35,11 +35,10 @@ mod devices_grpc;
 pub mod dir_bridge_guard;
 #[cfg(test)]
 mod dir_bridge_guard_tests;
-pub mod duplicates;
+pub use txtodo_engine::duplicates;
 pub mod expected;
 mod external;
-pub mod fastid;
-mod fields;
+pub use txtodo_engine::fastid;
 pub mod file_carrier;
 pub mod global_service;
 mod global_service_helpers;
@@ -48,10 +47,8 @@ mod handle_apply;
 mod handle_sync;
 mod health_grpc;
 pub mod history;
-mod id_strip;
-mod identity_assign;
-mod identity_fingerprint;
-mod identity_levenshtein;
+use txtodo_engine::id_strip;
+use txtodo_engine::identity_fingerprint;
 mod import;
 mod join_target;
 mod keystore_cache;
@@ -74,17 +71,15 @@ mod layout_rpc;
 pub mod layout_state;
 mod layout_sync;
 mod live_peers;
-pub mod local_date;
+pub use txtodo_engine::local_date;
 mod log_repair;
 mod migrate_grpc;
 pub mod migrate_sidecar;
 mod move_coordinator;
 #[cfg(test)]
 mod move_coordinator_tests;
-pub mod mutation;
-mod mutation_add;
-mod mutation_moves;
-mod mutation_reopen;
+pub use txtodo_engine::mutation;
+use txtodo_engine::mutation_moves;
 mod notes;
 pub mod notes_actor;
 pub mod notes_history;
@@ -92,9 +87,9 @@ pub mod notes_lookup;
 pub mod notes_mirror;
 pub mod notes_registry;
 mod notes_repair;
-pub mod notes_state;
+pub use txtodo_engine::notes_state;
 pub mod notices;
-pub mod op_set_hash;
+pub use txtodo_engine::op_set_hash;
 mod own_vouch;
 mod pairing_adopt;
 mod pairing_group_key;
@@ -112,9 +107,9 @@ mod peer_keys;
 mod pending_save;
 pub mod pidfile;
 mod progress;
-pub mod reconcile;
+pub use txtodo_engine::reconcile;
 mod reconcile_replay;
-pub mod reconcile_sidecar;
+pub use txtodo_engine::reconcile_sidecar;
 #[cfg(test)]
 mod reconcile_skew_tests;
 pub mod refdir;
@@ -134,23 +129,21 @@ pub mod serve;
 pub mod server;
 mod server_actors;
 mod split_files;
-mod stamp_floor;
-pub mod state;
-mod state_error;
+use txtodo_engine::stamp_floor;
+pub use txtodo_engine::state;
 pub mod stats;
 mod stored_ids;
 mod stuck_sync;
 mod sync_commit_gate;
 mod sync_digest;
 mod sync_ops;
-mod sync_park;
+use txtodo_engine::sync_park;
 pub mod telemetry;
-mod text_history;
-pub mod textedit;
+pub use txtodo_engine::textedit;
 mod tokens;
 mod tree;
 pub mod tree_dirty;
-mod unified_diff;
+use txtodo_engine::unified_diff;
 mod universal_grpc;
 pub mod walker;
 mod watch_forward;
@@ -241,12 +234,6 @@ mod log_repair_tests;
 #[cfg(test)]
 mod migrate_sidecar_tests;
 #[cfg(test)]
-mod mutation_reopen_tests;
-#[cfg(test)]
-mod mutation_tests;
-#[cfg(test)]
-mod mutation_tests_lines;
-#[cfg(test)]
 mod notes_actor_sync_tests;
 #[cfg(test)]
 mod notes_actor_tests;
@@ -273,29 +260,11 @@ mod pending_save_tests;
 #[cfg(test)]
 mod reconcile_replay_tests;
 #[cfg(test)]
-mod reconcile_sidecar_tests;
-#[cfg(test)]
-mod reconcile_tests;
-#[cfg(test)]
 mod refdir_tests;
 #[cfg(test)]
 mod remove_tag_tests;
 #[cfg(test)]
 mod security_m8_tests;
-#[cfg(test)]
-mod state_converge_pri_tests;
-#[cfg(test)]
-mod state_converge_tests;
-#[cfg(test)]
-mod state_goldens;
-#[cfg(test)]
-mod state_order_tests;
-#[cfg(test)]
-mod state_reinsert_tests;
-#[cfg(test)]
-mod state_split_group_tests;
-#[cfg(test)]
-mod state_tests;
 #[cfg(test)]
 mod status_details_tests;
 #[cfg(test)]
@@ -308,12 +277,6 @@ mod sync_commit_gate_tests;
 mod sync_digest_tests;
 #[cfg(test)]
 mod sync_ops_tests;
-#[cfg(test)]
-mod sync_park_tests;
-#[cfg(test)]
-mod text_history_converge_tests;
-#[cfg(test)]
-mod unified_diff_tests;
 #[cfg(test)]
 mod universal_grpc_tests;
 #[cfg(test)]
