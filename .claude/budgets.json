@@ -54,6 +54,12 @@
         "txtodo-model",
         "txtodo-store"
       ],
+      "txtodo-web": [
+        "txtodo-core",
+        "txtodo-model",
+        "txtodo-store",
+        "txtodo-engine"
+      ],
       "txtodo-proto": [],
       "txtodo-daemon-launch": [],
       "txtodo-workspace-paths": [],

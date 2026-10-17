@@ -163,7 +163,7 @@ jobs:
       - run: rustup target add wasm32-unknown-unknown
       - run: sudo apt-get update && sudo apt-get install -y clang llvm
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy -p txtodo-core -p txtodo-model -p txtodo-store -p txtodo-engine --target wasm32-unknown-unknown -- -D warnings
+      - run: cargo clippy -p txtodo-core -p txtodo-model -p txtodo-store -p txtodo-engine -p txtodo-web --target wasm32-unknown-unknown -- -D warnings
       - run: cargo clippy -p txtodo-sync --no-default-features --target wasm32-unknown-unknown -- -D warnings
 
   bench:
