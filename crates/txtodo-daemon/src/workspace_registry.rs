@@ -179,8 +179,20 @@ impl WorkspaceRegistry {
     /// writes as outside edits (sync-drift line 3). Rows already in the registry are never
     /// refused or dropped here; they keep loading, and `txtodo doctor` flags them.
     fn refuse_overlap(&self, canonical: &str) -> Result<(), WorkspaceRegistryError> {
+        self.refuse_overlap_but(canonical, None)
+    }
+
+    /// [`Self::refuse_overlap`], leaving out `skip`'s own row (a bind moves that row's root).
+    fn refuse_overlap_but(
+        &self,
+        canonical: &str,
+        skip: Option<WorkspaceId>,
+    ) -> Result<(), WorkspaceRegistryError> {
         let root = Path::new(canonical);
         for row in self.registry.list_active()? {
+            if Some(row.id) == skip {
+                continue;
+            }
             let registered = Path::new(&row.root);
             if let Some(overlap) = txtodo_workspace_paths::root_overlap(root, registered) {
                 return Err(WorkspaceRegistryError::Overlap {
@@ -204,6 +216,20 @@ impl WorkspaceRegistry {
         clock: &dyn Clock,
     ) -> Result<bool, WorkspaceRegistryError> {
         Ok(self.registry.remove(id, clock.now_ms())?)
+    }
+
+    /// Points the active `id` at `root` (a bind, task spike-txtodo-should-merge-remote-workspa):
+    /// the id stays, the root moves. Refused like `add` when `root` overlaps another active
+    /// workspace; the caller removes whatever was registered at `root` itself first. `false` for
+    /// an unknown or removed id. Never touches either folder.
+    pub fn set_root(
+        &mut self,
+        id: WorkspaceId,
+        root: &Path,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        let canonical = canonical_root(root)?;
+        self.refuse_overlap_but(&canonical, Some(id))?;
+        Ok(self.registry.set_root(id, &canonical)?)
     }
 
     /// Records that `id` was just used (task `daemon-early-bind`); `false` for an unknown or removed

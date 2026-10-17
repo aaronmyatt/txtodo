@@ -389,4 +389,11 @@ impl Txtodo for GlobalService {
     ) -> Result<Response<pb::WorkspaceInfo>, Status> {
         crate::workspace_rename::rename(self, r).await
     }
+
+    async fn workspace_bind(
+        &self,
+        r: Request<pb::WorkspaceBindRequest>,
+    ) -> Result<Response<pb::WorkspaceBindResponse>, Status> {
+        crate::workspace_registry_grpc::bind(self, r).await
+    }
 }

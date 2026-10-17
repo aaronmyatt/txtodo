@@ -45,9 +45,8 @@ impl TxtodoService {
     }
 }
 
-// `actor`/`actor_by_path`/`all_actors` live in `server_actors.rs`, `progress_for` in progress.rs,
-// `status_of`/`applied_of` in convert.rs, `forward_changes` in watch_forward.rs — split out for
-// the line budget.
+// Split out for the line budget: `actor`/`actor_by_path`/`all_actors` (server_actors.rs),
+// `progress_for` (progress.rs), `status_of`/`applied_of` (convert.rs), `forward_changes`.
 use crate::convert::{applied_of, preview_of, source_of, status_of};
 use crate::server_actors::no_registry;
 use crate::watch_forward::forward_changes;
@@ -389,6 +388,13 @@ impl Txtodo for TxtodoService {
         &self,
         _r: Request<pb::WorkspaceRenameRequest>,
     ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        Err(no_registry())
+    }
+
+    async fn workspace_bind(
+        &self,
+        _r: Request<pb::WorkspaceBindRequest>,
+    ) -> Result<Response<pb::WorkspaceBindResponse>, Status> {
         Err(no_registry())
     }
 }

@@ -383,6 +383,16 @@ multiplex every workspace's traffic — not done by this task).
   something new. The same registry row reopens the empty folder with a fresh store, which pulls the
   peer's whole log on the next session. `tests/e2e/workspace_rejoin.rs` is the two-daemon proof.
   `workspace_registry_grpc.rs` holds the registry handlers, split from `global_service.rs`.
+- `workspace_bind.rs` (task spike-txtodo-should-merge-remote-workspa, 2026-10-17): `WorkspaceBind`
+  moves a Remote mirror into a folder, for a repo cloned on two devices (each minted its own id).
+  Refused, nothing changed, unless the id is a mirror; for the default's folder, one inside the
+  mirrors' folder, one sharing lists with another workspace, or one on another disk. It holds both
+  load slots, closes the mirror and the workspace registered at the folder, moves the folder's
+  copy aside as a rejoin does, renames the mirror's `.txtodo/` and documents in
+  (`rejoin_backup::move_into`), removes the folder's workspace and points the mirror's row at the
+  folder (`WorkspaceRegistry::set_root`), then opens it there: same store, nothing re-sent. A
+  refusal before the registry changes moves everything back and reopens both where they were.
+  `tests/e2e/workspace_bind.rs` is the two-daemon proof.
 - `workspace_name.rs` + `workspace_rename.rs` (task workspace-vanity-name, 2026-09-26): a
   workspace's shown name, display only. Stored as a top-level `name` line in `txtodo.toml`, which
   already syncs as a text document (`layout_sync.rs`); `WorkspaceInfo.name` is that name, else

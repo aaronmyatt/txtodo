@@ -109,6 +109,23 @@ pub(crate) fn move_aside(plan: &Plan) -> Result<(), String> {
     }
 }
 
+/// [`move_aside`] into a folder that is there already (a bind, `workspace_bind.rs`):
+/// `plan.backup` is that folder, and it holds none of the entries. Same order, guard and
+/// move-back; the folder itself stays even when it ends empty.
+pub(crate) fn move_into(plan: &Plan) -> Result<(), String> {
+    let mut moved = Vec::new();
+    let Err(e) = move_all(plan, &mut moved) else {
+        return Ok(());
+    };
+    let back = move_back(plan, &moved);
+    // `move_back` removes the folder when it ends empty; it was there before, so it stays.
+    let _ = std::fs::create_dir_all(&plan.backup);
+    match back {
+        Ok(()) => Err(format!("{e}; nothing was moved in the end")),
+        Err(stuck) => Err(format!("{e}; and moving back failed: {stuck}")),
+    }
+}
+
 fn move_all(plan: &Plan, moved: &mut Vec<String>) -> Result<(), String> {
     if plan.state {
         move_one(&plan.root, &plan.backup, STATE_DIR)?;

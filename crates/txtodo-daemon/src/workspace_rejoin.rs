@@ -174,7 +174,7 @@ impl WorkspaceCatalog {
     /// Drops `id` from `open` (its `Drop` stops the watcher and unregisters its sync routes, which
     /// ends every live session that carried it) and waits until nothing holds its store: every
     /// actor has stopped and the database is closed. Not open at all is fine.
-    fn close_quietly(&self, id: WorkspaceId) -> Result<(), Status> {
+    pub(crate) fn close_quietly(&self, id: WorkspaceId) -> Result<(), Status> {
         let opened = self
             .open
             .write()
@@ -204,7 +204,7 @@ impl WorkspaceCatalog {
     }
 
     /// `entry` as the registry has it now (`has_state` changes with a fresh store).
-    fn entry_after(&self, entry: WorkspaceEntry) -> WorkspaceEntry {
+    pub(crate) fn entry_after(&self, entry: WorkspaceEntry) -> WorkspaceEntry {
         let registry = self.registry.lock().unwrap_or_else(PoisonError::into_inner);
         registry.get(entry.id).ok().flatten().unwrap_or(entry)
     }

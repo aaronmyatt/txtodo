@@ -158,6 +158,7 @@ mod watch_opt_in;
 pub mod watch_task;
 pub mod watcher;
 pub mod workspace;
+pub mod workspace_bind;
 pub mod workspace_catalog;
 mod workspace_catalog_load;
 mod workspace_catalog_mirror;
@@ -312,6 +313,8 @@ mod text_history_converge_tests;
 mod unified_diff_tests;
 #[cfg(test)]
 mod universal_grpc_tests;
+#[cfg(test)]
+mod workspace_bind_tests;
 #[cfg(test)]
 mod workspace_catalog_load_tests;
 #[cfg(test)]
