@@ -7,6 +7,15 @@ rust-version.workspace = true
 publish.workspace = true
 description = "Sync protocol, transports, pairing, crypto."
 
+[features]
+# `native` (on by default): the OS keystore, mDNS discovery and the tokio-driven LAN/relay links.
+# Off, the crate is the wire, the crypto, pairing and the in-memory/vault keystores only, and builds
+# for wasm32-unknown-unknown (the web peer, ADR 0042; `cargo check -p txtodo-sync
+# --no-default-features --target wasm32-unknown-unknown`).
+# Ref: https://doc.rust-lang.org/cargo/reference/features.html#optional-dependencies
+default = ["native"]
+native = ["dep:keyring", "dep:mdns-sd", "dep:tokio"]
+
 [dependencies]
 txtodo-model.workspace = true
 txtodo-store.workspace = true
@@ -24,7 +33,7 @@ getrandom = "0.3"
 # Service. `async-secret-service` (zbus, pure Rust) instead of `sync-secret-service` (the `dbus`
 # crate's libdbus-sys C binding, which needs a system libdbus-dev + pkg-config CI does not carry);
 # keyring's `Entry` API is synchronous regardless of which backend feature is chosen.
-keyring = { version = "3", features = ["apple-native", "windows-native", "async-secret-service", "crypto-rust"] }
+keyring = { version = "3", features = ["apple-native", "windows-native", "async-secret-service", "crypto-rust"], optional = true }
 # https://docs.rs/argon2 — RFC 9106 KDF for the encrypted-file keystore fallback
 argon2 = "0.5"
 # https://docs.rs/zeroize — `Secret` is wiped on drop; keys never linger in freed memory
@@ -44,16 +53,23 @@ data-encoding = "2"
 iroh = "1"
 # https://docs.rs/mdns-sd — `_txtodo._udp` discovery; no async runtime dependency of its own (runs
 # its own thread), so it does not force tokio on anything that never touches the LAN transport.
-mdns-sd = "0.21"
+mdns-sd = { version = "0.21", optional = true }
 # https://docs.rs/tokio — iroh's endpoint/connection API is async; the daemon already runs tokio,
 # this crate's own transport code needs a runtime handle to drive it.
-tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"], optional = true }
 # https://docs.rs/tracing — structured spans/events for the session/pairing/crypto engine (task
 # logging-sync-crate); this crate never installs a subscriber, only emits — the daemon binary owns
 # init (`txtodo-daemon`'s `logging-daemon-boot`), already vetted the same license family.
 tracing = "0.1"
 
+# On wasm32-unknown-unknown getrandom reads the browser's crypto.getRandomValues.
+# Ref: https://docs.rs/getrandom/0.3.4/getrandom/#webassembly-support
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
 [dev-dependencies]
+# https://docs.rs/tokio — `#[tokio::test]` for the endpoint/relay tests, with or without `native`.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }
 # https://docs.rs/proptest — want(local, remote) requests exactly the missing ops
 proptest = "1"
 # https://docs.rs/tempfile — a real, self-cleaning directory for the file-carrier tests (a shared

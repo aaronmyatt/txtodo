@@ -4,6 +4,12 @@
 Protocol, transports, pairing, crypto. Plan M4/M8.
 
 ## Public interface
+- Feature `native` (default; ADR 0042, task `web-pwa`, 2026-10-17) holds what needs the OS or
+  tokio: `discovery` (mdns-sd), `keystore_os` (keyring), `lan_link`/`dial_order` and `holepunch`
+  (tokio). Without it the crate builds for `wasm32-unknown-unknown` for the web peer; CI's `wasm`
+  job checks it. `endpoint`, `relay` (iroh builds for the browser too, relay-only) and every
+  pure module stay in both builds. `build_relay_endpoint_with_secret_key` is exported for a
+  browser host that binds its own relay endpoint with a stable key.
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
   `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 5; 1 -> 2 by
   task `daemon-workspace-session-multiplex`, 2 -> 3 by ADR 0035, 3 -> 4 by ADR 0036's

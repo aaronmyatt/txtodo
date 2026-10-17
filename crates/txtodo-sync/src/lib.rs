@@ -11,19 +11,25 @@ mod carrier_error;
 mod control;
 mod crypto_error;
 mod device_static;
+// Only `lan_link` orders LAN candidate addresses.
+#[cfg(feature = "native")]
 mod dial_order;
+#[cfg(feature = "native")]
 mod discovery;
 mod eff_wordlist;
 mod endpoint;
 mod frame;
+#[cfg(feature = "native")]
 mod holepunch;
 mod keystore;
 mod keystore_error;
 mod keystore_file;
 mod keystore_memory;
+#[cfg(feature = "native")]
 mod keystore_os;
 mod keystore_resolve;
 mod keystore_vault;
+#[cfg(feature = "native")]
 mod lan_link;
 mod lan_op_signing;
 mod link;
@@ -59,6 +65,7 @@ pub use control::{
 };
 pub use crypto_error::CryptoError;
 pub use device_static::{DEVICE_STATIC_KEY_BYTES, DeviceStaticPublic, DeviceStaticSecret};
+#[cfg(feature = "native")]
 pub use discovery::{
     Announcement, AnnouncementError, BrowseEvents, DEBOUNCE_MS, DiscoveredPeer, Discovery,
     DiscoveryError, Ignored, MAX_BACKOFF_MS, MAX_LAN_PEERS, PeerEvent, PeerTable, SERVICE_TYPE,
@@ -67,14 +74,17 @@ pub use discovery::{
 pub use eff_wordlist::{WORDLIST_LEN, WORDLIST_SHA256, wordlist};
 pub use endpoint::{ALPN, CONTROL_ALPN, PAIRING_ALPN, bind_local_endpoint};
 pub use frame::{Frame, FrameError, HEADER_BYTES, MAGIC, MAX_FRAME_BYTES, PROTOCOL_VERSION};
+#[cfg(feature = "native")]
 pub use holepunch::{HolepunchError, RelayEndpoint};
 pub use keystore::{KeyId, KeyStore, MAX_STORED_EPOCHS, Secret};
 pub use keystore_error::KeyStoreError;
 pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM, FileKeyStore};
 pub use keystore_memory::MemoryKeyStore;
+#[cfg(feature = "native")]
 pub use keystore_os::OsKeyStore;
 pub use keystore_resolve::{KeyStoreMode, ResolvedBackend, resolve};
 pub use keystore_vault::VaultKeyStore;
+#[cfg(feature = "native")]
 pub use lan_link::{IrohLink, LanEndpoint, LanError};
 pub use lan_op_signing::{LAN_OP_SIGN_INFO, derive_group_op_signing_key};
 pub use link::{ChannelLink, Link, LinkError, MAX_QUEUED_FRAMES, channel_link_pair};
@@ -90,7 +100,10 @@ pub use pairing::{MAX_FAILED_SAS_CONFIRMATIONS, PairingSession};
 pub use pairing_error::PairingError;
 pub use pairing_grant::{PairingGrant, PairingGrantError};
 pub use pairing_relay::{InitiatorReply, JoinerHello, PairingRelayError};
-pub use relay::{MAX_RELAY_PEERS, RelayConfig, RelayError, build_endpoint as build_relay_endpoint};
+pub use relay::{
+    MAX_RELAY_PEERS, RelayConfig, RelayError, build_endpoint as build_relay_endpoint,
+    build_endpoint_with_secret_key as build_relay_endpoint_with_secret_key,
+};
 pub use rotation::{
     GRANT_INFO, WrappedGrant, open_grant, plan_rotation, validate_removal, wrap_grant_for,
 };
@@ -118,7 +131,7 @@ mod control_tests;
 mod crypto_error_tests;
 #[cfg(test)]
 mod device_static_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod discovery_tests;
 #[cfg(test)]
 mod eff_wordlist_tests;
@@ -128,7 +141,7 @@ mod endpoint_tests;
 mod frame_tests;
 #[cfg(test)]
 mod hello_wire_tests;
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod holepunch_tests;
 #[cfg(test)]
 mod keystore_file_tests;
