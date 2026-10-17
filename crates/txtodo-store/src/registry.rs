@@ -103,6 +103,7 @@ const SELECT_ACTIVE: &str = "SELECT id, root, added_at, removed_at, last_active_
      WHERE removed_at IS NULL ORDER BY added_at, id LIMIT ?1";
 const TOUCH: &str =
     "UPDATE workspaces SET last_active_ms = ?2 WHERE id = ?1 AND removed_at IS NULL";
+const SET_ROOT: &str = "UPDATE workspaces SET root = ?2 WHERE id = ?1 AND removed_at IS NULL";
 const SELECT_FOR_REMOVE: &str = "SELECT root, added_at FROM workspaces WHERE id = ?1";
 const UPSERT_REMOVE: &str = "INSERT INTO workspaces (id, root, added_at, removed_at) \
      VALUES (?1, ?2, ?3, ?4) \
@@ -222,6 +223,18 @@ impl Registry {
             .conn
             .execute(TOUCH, params![id_blob(id), wall_i64(at_ms)])
             .map_err(StoreError::query("touch workspace"))?;
+        Ok(changed > 0)
+    }
+
+    /// Points the active row `id` at `root` (task spike-txtodo-should-merge-remote-workspa: a
+    /// Remote mirror bound into a folder keeps its id, only its root moves). `false` for an
+    /// unknown or removed id. The unique partial index on active roots refuses a root another
+    /// active row holds, so the caller removes that row first. Never touches either folder.
+    pub fn set_root(&mut self, id: WorkspaceId, root: &str) -> Result<bool, StoreError> {
+        let changed = self
+            .conn
+            .execute(SET_ROOT, params![id_blob(id), root])
+            .map_err(StoreError::query("set workspace root"))?;
         Ok(changed > 0)
     }
 

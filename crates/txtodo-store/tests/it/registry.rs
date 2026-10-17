@@ -221,3 +221,42 @@ fn touch_records_recency_on_an_active_row_only() {
         None
     );
 }
+
+#[test]
+fn set_root_repoints_an_active_row_and_keeps_its_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    registry.insert(&entry(1, "/data/remote/1", 1_000)).unwrap();
+    registry.insert(&entry(2, "/home/a/clone", 1_000)).unwrap();
+
+    // The clone's own row holds the root, so the unique index refuses it until that row goes.
+    let err = registry
+        .set_root(workspace(1), "/home/a/clone")
+        .unwrap_err();
+    assert!(format!("{err}").contains("set workspace root"));
+    registry.remove(workspace(2), 2_000).unwrap();
+
+    assert!(registry.set_root(workspace(1), "/home/a/clone").unwrap());
+    let row = registry.get(workspace(1)).unwrap().unwrap();
+    assert_eq!(
+        (row.root.as_str(), row.added_at_ms),
+        ("/home/a/clone", 1_000)
+    );
+    let found = registry.find_active_by_root("/home/a/clone").unwrap();
+    assert_eq!(found.map(|r| r.id), Some(workspace(1)));
+    assert!(
+        registry
+            .find_active_by_root("/data/remote/1")
+            .unwrap()
+            .is_none()
+    );
+
+    assert!(
+        !registry.set_root(workspace(404), "/x").unwrap(),
+        "unknown id"
+    );
+    assert!(
+        !registry.set_root(workspace(2), "/y").unwrap(),
+        "removed id"
+    );
+}
