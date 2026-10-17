@@ -88,6 +88,7 @@ async fn a_dry_run_batch_with_a_move_is_refused() {
             id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned(),
             before: None,
             after: Some("01ARZ3NDEKTSV4RRFFQ69G5FAW".to_owned()),
+            to_file: None,
         },
     );
     let err = batch(ctx_that_cannot_reach_a_daemon(), ops, true, None)

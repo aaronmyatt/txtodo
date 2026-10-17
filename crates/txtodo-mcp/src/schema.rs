@@ -167,7 +167,7 @@ impl McpServer {
         fields(tool = "todo_move", principal = %self.backend.principal())
     )]
     #[tool(
-        description = "Reorder a task immediately before or after another task in the same file."
+        description = "Reorder a task immediately before or after another task in the same file, or move it to the end of another list with `to_file` (e.g. `tasks/trip/todo.txt`): it keeps its id, notes and sub-list. To copy a task instead, read it with todo_get and todo_add its text with `file` (drop its `ref:` so the notes stay with the original)."
     )]
     pub async fn todo_move(
         &self,

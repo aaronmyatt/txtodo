@@ -104,8 +104,11 @@ pub struct MoveArgs {
     pub id: TaskId,
     /// Reorder before this task id. Exactly one of `before`/`after` is required.
     pub before: Option<TaskId>,
-    /// Reorder after this task id. Exactly one of `before`/`after` is required.
+    /// Reorder after this task id. Exactly one of `before`/`after`/`to_file` is required.
     pub after: Option<TaskId>,
+    /// Move to the end of this other list instead (workspace-relative, e.g.
+    /// `tasks/trip/todo.txt`); the task keeps its id, notes and sub-list.
+    pub to_file: Option<RefPath>,
     /// Which registered workspace this targets; see [`WorkspaceArg`].
     pub workspace: WorkspaceArg,
 }
@@ -117,16 +120,23 @@ pub enum MoveAnchor {
     Before(TaskId),
     /// Immediately after this task.
     After(TaskId),
+    /// At the end of another list (task add-the-ability-to-move-or-copy-a-task-t).
+    ToFile(RefPath),
 }
 
-/// Exactly one of `before`/`after` is required (`todo_move`'s args and `TodoOp::TodoMove` share
-/// this check).
-pub fn move_anchor(before: Option<TaskId>, after: Option<TaskId>) -> Result<MoveAnchor, McpError> {
-    match (before, after) {
-        (Some(b), None) => Ok(MoveAnchor::Before(b)),
-        (None, Some(a)) => Ok(MoveAnchor::After(a)),
+/// Exactly one of `before`/`after`/`to_file` is required (`todo_move`'s args and
+/// `TodoOp::TodoMove` share this check).
+pub fn move_anchor(
+    before: Option<TaskId>,
+    after: Option<TaskId>,
+    to_file: Option<RefPath>,
+) -> Result<MoveAnchor, McpError> {
+    match (before, after, to_file) {
+        (Some(b), None, None) => Ok(MoveAnchor::Before(b)),
+        (None, Some(a), None) => Ok(MoveAnchor::After(a)),
+        (None, None, Some(f)) => Ok(MoveAnchor::ToFile(f)),
         _ => Err(McpError::invalid_params(
-            "todo_move needs exactly one of before/after",
+            "todo_move needs exactly one of before/after/to_file",
         )),
     }
 }
@@ -170,6 +180,8 @@ pub enum TodoOp {
         before: Option<TaskId>,
         /// Reorder after this task id.
         after: Option<TaskId>,
+        /// Move to the end of this other list instead.
+        to_file: Option<RefPath>,
     },
     /// `todo_delete`.
     TodoDelete {

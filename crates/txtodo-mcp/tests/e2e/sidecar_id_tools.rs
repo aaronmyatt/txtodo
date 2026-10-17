@@ -175,3 +175,40 @@ async fn tools_with_no_file_use_the_layouts_root_list() {
     assert!(on_disk.contains("plan the launch"), "{on_disk}");
     assert!(!ws.join("todo.txt").exists(), "no todo.txt was invented");
 }
+
+/// Task add-the-ability-to-move-or-copy-a-task-t: `todo_move` with `to_file` moves a Sidecar task
+/// to the end of another list, and it keeps its id there (an `Add` used to mint a new one), so
+/// `todo_get` by that id finds it in the new list.
+#[tokio::test]
+async fn to_file_moves_a_sidecar_task_to_another_list_under_its_id() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let (_guard, socket, ws) = start_sidecar_daemon(tmp.path()).await;
+    let backend = GrpcMcpBackend::connect_unix(&socket, None)
+        .await
+        .expect("connect to the global socket");
+    let w = || Some(ws.clone());
+    let inbox = "inbox.txt".to_owned();
+    backend
+        .add("sort mail".into(), Some(inbox.clone()), w())
+        .await
+        .expect("add to the other list");
+    let trip = backend
+        .add("plan trip".into(), None, w())
+        .await
+        .expect("add");
+    let id = trip.id.expect("row id");
+
+    let moved = backend
+        .move_task(id.clone(), MoveAnchor::ToFile(inbox.clone()), w())
+        .await
+        .expect("move to another list");
+    assert_eq!(moved.id.as_deref(), Some(id.as_str()), "the same task");
+    assert!(
+        moved.line == 2 && moved.raw.ends_with(" plan trip"),
+        "{moved:?}"
+    );
+    let other = std::fs::read_to_string(Path::new(&ws).join("inbox.txt")).expect("read");
+    assert!(other.ends_with("plan trip\n"), "{other}");
+    let root = std::fs::read_to_string(Path::new(&ws).join("todo.txt")).expect("read");
+    assert!(!root.contains("plan trip"), "{root}");
+}
