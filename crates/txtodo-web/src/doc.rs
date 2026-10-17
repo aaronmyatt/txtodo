@@ -61,19 +61,7 @@ impl Doc {
         if !skipped.is_empty() {
             tracing::warn!(file = %path, skipped = skipped.len(), "web_replay_skipped_ops");
         }
-        let mut hlc = Hlc {
-            wall_ms: 0,
-            counter: 0,
-            device,
-        };
-        let mut floor = None;
-        for op in &ops {
-            if op.hlc.device == device {
-                hlc = hlc.max(op.hlc);
-            } else {
-                hold(&mut floor, op.hlc);
-            }
-        }
+        let (hlc, floor) = clocks_of(&ops, device);
         let hash = hash_of(&state.to_bytes());
         Ok(Doc {
             state,
@@ -252,6 +240,25 @@ struct Planned {
     ops: Vec<Op>,
     next: DocState,
     hlc: Hlc,
+}
+
+/// This device's clock past every one of its own stamps in `ops`, and the newest peer stamp held
+/// (the floor a local edit is stamped past, ADR 0040).
+fn clocks_of(ops: &[Op], device: DeviceId) -> (Hlc, Option<Hlc>) {
+    let mut hlc = Hlc {
+        wall_ms: 0,
+        counter: 0,
+        device,
+    };
+    let mut floor = None;
+    for op in ops {
+        if op.hlc.device == device {
+            hlc = hlc.max(op.hlc);
+        } else {
+            hold(&mut floor, op.hlc);
+        }
+    }
+    (hlc, floor)
 }
 
 /// Every op of `path`, oldest first, a page at a time; refused past [`MAX_OPS_PER_DOC`].
