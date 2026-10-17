@@ -195,7 +195,7 @@ txtodo [--dir DIR] [--sync-dir DIR] [--relay URL] [--json] [--no-id] [-A|--no-ar
 
 | Command | Alias | Description |
 |---|---|---|
-| `list [TERM...]` | `ls` | List tasks matching every TERM (`-term` excludes), sorted. |
+| `list [TERM...]` | `ls` | List open tasks matching every TERM (`-term` excludes), sorted. Done tasks show only when a term asks (`is:done`). |
 | `listall [TERM...]` | `lsa` | List every task in `todo.txt`, done tasks included. |
 | `listpri [PRI\|A-C] [TERM...]` | `lsp` | List tasks with a priority, optionally filtered to one or a range. |
 | `listproj [TERM...]` | `lsprj` | List the `+project` tags of matching tasks. |

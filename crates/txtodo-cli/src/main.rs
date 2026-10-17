@@ -367,7 +367,7 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         }
         Command::Fmt => commands::hygiene::run_fmt(ctx),
         Command::Lint => commands::hygiene::run_lint(ctx),
-        Command::List { terms } => commands::list::list_file(ctx, &ctx.paths.todo, terms),
+        Command::List { terms } => commands::list::list_open(ctx, terms),
         Command::Listall { terms } => commands::list::list_all(ctx, terms),
         Command::Listpri { args } => commands::list::list_pri(ctx, args),
         Command::Listproj { terms } => commands::list::list_words(ctx, '+', terms),

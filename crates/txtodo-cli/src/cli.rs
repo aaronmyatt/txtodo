@@ -104,7 +104,8 @@ pub enum Command {
     Fmt,
     /// Report quirks and file hygiene in todo.txt.
     Lint,
-    /// List tasks matching every TERM (`-term` excludes), sorted.
+    /// List open tasks matching every TERM (`-term` excludes), sorted. Done tasks show only when a
+    /// term asks for them (`is:done`); `listall` shows every line.
     #[command(visible_alias = "ls")]
     List {
         /// Search terms; `-term` excludes.
