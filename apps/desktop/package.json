@@ -19,7 +19,7 @@
     "build:wasm-core": "bash scripts/build-wasm-core.sh",
     "build:web-host": "bash scripts/build-web-host.sh",
     "dev:web": "vite dev --mode web",
-    "build:web": "vite build --mode web"
+    "build:web": "TXTODO_WEB_BUILD=1 vite build --mode web"
   },
   "license": "MIT",
   "dependencies": {

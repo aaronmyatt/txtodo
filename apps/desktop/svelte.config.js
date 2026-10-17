@@ -9,8 +9,12 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 const config = {
   preprocess: vitePreprocess(),
   kit: {
+    // The browser build (`npm run build:web`, ADR 0042) writes to build-web/, so it never
+    // overwrites build/, the folder Tauri packages. https://svelte.dev/docs/kit/adapter-static
     adapter: adapter({
       fallback: "index.html",
+      pages: process.env.TXTODO_WEB_BUILD ? "build-web" : "build",
+      assets: process.env.TXTODO_WEB_BUILD ? "build-web" : "build",
     }),
   },
 };
