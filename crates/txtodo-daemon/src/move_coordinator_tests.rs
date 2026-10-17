@@ -263,9 +263,15 @@ async fn sidecar_a_slug_collision_is_rewritten_on_the_line_the_destination_minte
     std::fs::create_dir_all(root.join("sub/project")).unwrap();
     let (source, dest, task) = sidecar_pair(root).await;
     let layout = txtodo_model::WorkspaceLayout::beside_the_list();
-    move_task_across_files(&source, &dest, task, origin(), (root, &layout))
+    move_task_across_files(&source, &dest, task.clone(), origin(), (root, &layout))
         .await
         .unwrap_or_else(|e| panic!("{e}"));
+    let arrived = dest.get().await.unwrap_or_else(|e| panic!("{e}")).task_ids;
+    assert_eq!(
+        arrived,
+        [task.task_id],
+        "the task keeps its id in the new list"
+    );
     assert_eq!(read(root, "sub/other.txt"), "(A) roadmap ref:project-2\n");
     assert_eq!(read(root, "todo.txt"), "");
     assert!(root.join("sub/project-2").is_dir());

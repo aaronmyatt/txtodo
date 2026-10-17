@@ -82,6 +82,7 @@ mod move_coordinator;
 #[cfg(test)]
 mod move_coordinator_tests;
 pub mod mutation;
+mod mutation_add;
 mod mutation_moves;
 mod mutation_reopen;
 mod notes;

@@ -58,25 +58,19 @@ pub async fn move_task_across_files(
     let task = crate::mutation_moves::with_line_number(&contents, task)?;
     let peeked = crate::mutation_moves::peek_contents(&contents, &task)?;
     let to = dest.path().clone();
-    let held = dest.get().await?.task_ids;
     let moved = origin
         .apply(source, vec![Mutation::Move { task, to }])
         .await?;
-    if let Err(e) = origin
-        .apply(
-            dest,
-            vec![Mutation::Add {
-                line: peeked.line.clone(),
-            }],
-        )
-        .await
-    {
+    // The task arrives under the id it had: Tagged carries it in the text, Sidecar needs `Arrive`.
+    let arrived = peeked.id;
+    let arrive = Mutation::Arrive {
+        line: peeked.line.clone(),
+        task: arrived,
+    };
+    if let Err(e) = origin.apply(dest, vec![arrive]).await {
         let _ = reinsert_at_source(source, &peeked.line, &origin).await;
         return Err(e);
     }
-    // The id the line has at the destination: its own `id:` (Tagged), or the one the destination
-    // minted for it (Sidecar, where the text carries none).
-    let arrived = arrived_id(dest, &held).await.unwrap_or(peeked.id);
     if let Some(slug) = &peeked.ref_slug
         && let Err(e) = relocate_ref_dir(
             source.path(),
@@ -92,19 +86,6 @@ pub async fn move_task_across_files(
         return Err(e);
     }
     Ok(moved)
-}
-
-/// The one task id `dest` holds now that it did not hold in `before`: the line an `Add` just
-/// appended. `None` when that is not exactly one (a sync landed in between), and the caller keeps
-/// the source's id.
-async fn arrived_id(dest: &ActorHandle, before: &[Option<TaskId>]) -> Option<TaskId> {
-    let now = dest.get().await.ok()?.task_ids;
-    let mut new = now
-        .into_iter()
-        .flatten()
-        .filter(|id| !before.contains(&Some(*id)));
-    let first = new.next()?;
-    new.next().is_none().then_some(first)
 }
 
 /// Rollback: puts the line back at the source, appended (its exact original position is not

@@ -3,13 +3,14 @@
 //! client that read the file before someone else changed it gets `Stale`, never the wrong line.
 
 use crate::expected::Hash;
+use crate::mutation_add::{add_ops, task_line};
 pub use crate::mutation_moves::{PeekedLine, peek_line};
 use crate::mutation_moves::{move_before_ops, move_ops, move_to_end_ops};
 use crate::mutation_reopen::reopen_ops;
 use crate::reconcile::change_ops;
 use crate::state::{DocState, Entry, id_of};
 use std::fmt;
-use txtodo_core::{Date, Edit, LineKind, OwnedLine};
+use txtodo_core::{Date, Edit, OwnedLine};
 use txtodo_model::{Field, FieldValue, FilePath, IdentityMode, OpKind, TaskId, set_field};
 
 /// Most mutations one Apply accepts.
@@ -34,6 +35,15 @@ pub enum Mutation {
     Add {
         /// Line text without ending.
         line: String,
+    },
+    /// A cross-file move's arriving half (`move_coordinator.rs`): append `line` as task `task`, the
+    /// id it had in its old list. Never on the wire. Under Sidecar an `Add` mints a new id, so the
+    /// moved task used to lose its history at the move (task add-the-ability-to-move-or-copy-a-task-t).
+    Arrive {
+        /// Line text without ending.
+        line: String,
+        /// The task's id in the list it left.
+        task: TaskId,
     },
     /// Mark done on `today`; a priority becomes `pri:` (core `Edit::complete`).
     Complete {
@@ -243,6 +253,7 @@ pub fn resolve(state: &DocState, task: &TaskRef) -> Result<(usize, TaskId), Muta
 fn mutation_kind(m: &Mutation) -> &'static str {
     match m {
         Mutation::Add { .. } => "add",
+        Mutation::Arrive { .. } => "arrive",
         Mutation::Complete { .. } => "complete",
         Mutation::Edit { .. } => "edit",
         Mutation::Move { .. } => "move",
@@ -280,6 +291,7 @@ fn mutation_ops_inner(
 ) -> Result<Vec<OpKind>, MutationError> {
     match mutation {
         Mutation::Add { line } => add_ops(state, line, mint),
+        Mutation::Arrive { line, task } => add_ops(state, line, &mut || *task),
         Mutation::Complete { task, today } => {
             let (_, id) = resolve(state, task)?;
             let old = state
@@ -328,40 +340,6 @@ fn mutation_ops_inner(
     }
 }
 
-fn add_ops(
-    state: &DocState,
-    line: &str,
-    mint: &mut dyn FnMut() -> TaskId,
-) -> Result<Vec<OpKind>, MutationError> {
-    let owned = task_line(line)?;
-    let (task, owned) = if state.mode() == IdentityMode::Sidecar {
-        (mint(), owned)
-    } else {
-        match id_of(&owned) {
-            Some(id) => (id, owned),
-            None => {
-                let id = mint();
-                let tag = id.ulid().to_string();
-                let edit = Edit::new()
-                    .set_tag("id", &tag)
-                    .map_err(|_| MutationError::NotATask(line.to_owned()))?;
-                (id, txtodo_core::apply(&owned, &edit))
-            }
-        }
-    };
-    let after = state.task_before(state.len());
-    let text = owned.raw().unwrap_or_default().to_owned();
-    debug_assert!(
-        state.mode() != IdentityMode::Tagged || text.contains("id:"),
-        "an added line always carries its id in tagged mode"
-    );
-    Ok(vec![OpKind::Insert {
-        task,
-        after,
-        line: text,
-    }])
-}
-
 fn edit_ops(
     state: &DocState,
     task: &TaskRef,
@@ -384,16 +362,4 @@ fn edit_ops(
         ops.extend(move_to_end_ops(state, task)?);
     }
     Ok(ops)
-}
-
-/// Validates client text into a task line (LF ending; the state re-ends it on insert).
-fn task_line(text: &str) -> Result<OwnedLine, MutationError> {
-    if text.contains('\n') || text.contains('\r') {
-        return Err(MutationError::NotATask(text.to_owned()));
-    }
-    let owned = OwnedLine::from_bytes(text.as_bytes().to_vec(), txtodo_core::LineEnding::default());
-    match owned.parse().map(|l| l.kind) {
-        Some(LineKind::Task(_)) => Ok(owned),
-        _ => Err(MutationError::NotATask(text.to_owned())),
-    }
 }
