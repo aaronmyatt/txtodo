@@ -106,6 +106,14 @@ service Txtodo {
   // refills it from the peer. Refused (FAILED_PRECONDITION, nothing changed) unless a paired
   // device offered this workspace lately, and for the default workspace. Device-level, no selector.
   rpc WorkspaceRejoin(WorkspaceRejoinRequest) returns (WorkspaceRejoinResponse);
+  // Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+  // folder's own copy, and the workspace registered there if any, move aside into a new
+  // time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+  // `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+  // so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+  // a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+  // is on another disk. Device-level, no selector.
+  rpc WorkspaceBind(WorkspaceBindRequest) returns (WorkspaceBindResponse);
   // Sets or clears the name every paired device shows for a workspace (task
   // workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
   // Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
@@ -956,6 +964,29 @@ message WorkspaceRejoinResponse {
   // Paired devices that offered this workspace lately (DeviceId ULID text), newest first. Sync
   // refills the folder from whichever of them it reaches.
   repeated string offering_devices = 4;
+}
+
+// --- bind a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa) ---
+
+message WorkspaceBindRequest {
+  string workspace_id = 1;   // the Remote mirror's WorkspaceId ULID text
+  string root = 2;           // the folder it moves into: absolute, and it must exist
+  bool dry_run = 3;          // only say what would move; change nothing
+}
+
+message WorkspaceBindResponse {
+  // The workspace afterwards: `root` is the folder, `is_remote` false. For a dry run, as it is now.
+  WorkspaceInfo workspace = 1;
+  // The new folder beside `root` that the folder's own copy moved into; empty when nothing had to
+  // move. For a dry run, the name it would have had at that moment.
+  string backup_dir = 2;
+  // What moved out of the folder (or would), relative to it, `/` separators: `.txtodo`,
+  // `txtodo.toml` when present, and every synced document.
+  repeated string moved_aside = 3;
+  // What moved in from the mirror's folder (or would), in the same form.
+  repeated string moved_in = 4;
+  // The workspace registered at `root` before, now un-registered (ULID text); empty when none.
+  string replaced_workspace_id = 5;
 }
 
 // --- vanity name (task workspace-vanity-name) ---

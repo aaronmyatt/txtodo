@@ -1195,6 +1195,38 @@ pub struct WorkspaceRejoinResponse {
     pub offering_devices: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceBindRequest {
+    /// the Remote mirror's WorkspaceId ULID text
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// the folder it moves into: absolute, and it must exist
+    #[prost(string, tag = "2")]
+    pub root: ::prost::alloc::string::String,
+    /// only say what would move; change nothing
+    #[prost(bool, tag = "3")]
+    pub dry_run: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WorkspaceBindResponse {
+    /// The workspace afterwards: `root` is the folder, `is_remote` false. For a dry run, as it is now.
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceInfo>,
+    /// The new folder beside `root` that the folder's own copy moved into; empty when nothing had to
+    /// move. For a dry run, the name it would have had at that moment.
+    #[prost(string, tag = "2")]
+    pub backup_dir: ::prost::alloc::string::String,
+    /// What moved out of the folder (or would), relative to it, `/` separators: `.txtodo`,
+    /// `txtodo.toml` when present, and every synced document.
+    #[prost(string, repeated, tag = "3")]
+    pub moved_aside: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// What moved in from the mirror's folder (or would), in the same form.
+    #[prost(string, repeated, tag = "4")]
+    pub moved_in: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The workspace registered at `root` before, now un-registered (ULID text); empty when none.
+    #[prost(string, tag = "5")]
+    pub replaced_workspace_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceRenameRequest {
     /// WorkspaceId ULID text
     #[prost(string, tag = "1")]
@@ -1974,6 +2006,37 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRejoin"));
             self.inner.unary(req, path, codec).await
         }
+        /// Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+        /// folder's own copy, and the workspace registered there if any, move aside into a new
+        /// time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+        /// `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+        /// so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+        /// a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+        /// is on another disk. Device-level, no selector.
+        pub async fn workspace_bind(
+            &mut self,
+            request: impl tonic::IntoRequest<super::WorkspaceBindRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceBindResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/WorkspaceBind",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceBind"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Sets or clears the name every paired device shows for a workspace (task
         /// workspace-vanity-name): the `name` line of its `txtodo.toml`, written as ops, so it syncs.
         /// Returns the workspace, showing the new name. INVALID_ARGUMENT for a bad name, NOT_FOUND for an
@@ -2614,6 +2677,20 @@ pub mod txtodo_server {
             request: tonic::Request<super::WorkspaceRejoinRequest>,
         ) -> std::result::Result<
             tonic::Response<super::WorkspaceRejoinResponse>,
+            tonic::Status,
+        >;
+        /// Moves a Remote mirror into a folder (task spike-txtodo-should-merge-remote-workspa): the
+        /// folder's own copy, and the workspace registered there if any, move aside into a new
+        /// time-stamped folder beside it as for a rejoin (never deleted, never sent); then the mirror's
+        /// `.txtodo/` and documents move in, and the mirror's id now answers at that folder. Same store,
+        /// so nothing is re-sent. Refused (FAILED_PRECONDITION, nothing changed) unless `workspace_id` is
+        /// a Remote mirror, and for a folder that overlaps another workspace, sits under the data dir, or
+        /// is on another disk. Device-level, no selector.
+        async fn workspace_bind(
+            &self,
+            request: tonic::Request<super::WorkspaceBindRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::WorkspaceBindResponse>,
             tonic::Status,
         >;
         /// Sets or clears the name every paired device shows for a workspace (task
@@ -3781,6 +3858,51 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceRejoinSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/WorkspaceBind" => {
+                    #[allow(non_camel_case_types)]
+                    struct WorkspaceBindSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::WorkspaceBindRequest>
+                    for WorkspaceBindSvc<T> {
+                        type Response = super::WorkspaceBindResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::WorkspaceBindRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::workspace_bind(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = WorkspaceBindSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

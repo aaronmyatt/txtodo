@@ -81,6 +81,12 @@ beside the root, never deleted) and reopens the empty folder under the same id, 
 from a paired peer. `dry_run` changes nothing. The response names the backup folder, what moved,
 and the devices that offered the workspace lately. UNIMPLEMENTED from an older daemon.
 
+`WorkspaceBind` (task spike-txtodo-should-merge-remote-workspa, 2026-10-17): device-level. Moves a
+Remote mirror into a folder: the folder's own copy (and the workspace registered there) moves aside
+as for a rejoin, the mirror's `.txtodo/` and documents move in, and the mirror's id answers at the
+folder. `dry_run` changes nothing. The response names the backup folder, what moved each way, and
+the workspace it replaced. UNIMPLEMENTED from an older daemon.
+
 `WorkspaceInfo.name` (field 12, task workspace-vanity-name, 2026-09-26): the name to show for a
 workspace, display only. The daemon fills it from `name` in the workspace's `txtodo.toml` (which
 syncs, so paired devices agree), else a mirror's offered name, else `default` or the folder name.
