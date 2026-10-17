@@ -1,4 +1,3 @@
-2026-10-12 Dark mode note text editors blinking cursor is hidden, needs a colour contrast
 2026-10-11 Completed tasks without a date/priority should also be greyed out
 2026-10-11 Can we limit the number of keychain/password prompts to (at most) one? +spike
 2026-10-11 The +desktop app should always open fullscreen
@@ -393,3 +392,4 @@ x 2026-10-17 2026-10-12 `txtodo list` should only show incomplete tasks by defau
 x 2026-10-17 2026-10-12 Fix vim key binding support ref:fix-vim-key-binding-support — see tasks/fix-vim-key-binding-support/notes.md; known gap: Esc in an editor still discards an unsaved edit (by design)
 2026-10-17 tui: list.move_to (m) and list.copy_to (c), the desktop's Move to…/Copy to… picker over the workspace's lists +m11 @tui @parity
 x 2026-10-17 2026-10-12 Add the ability to "move" or copy a task to another list ref:add-the-ability-to-move-or-copy-a-task-t — see tasks/add-the-ability-to-move-or-copy-a-task-t/notes.md; known gap: the TUI half is its own line, and a desktop move is not undoable with u
+x 2026-10-17 2026-10-12 Dark mode note text editors blinking cursor is hidden, needs a colour contrast — af77276a; one app.css rule for every focused CodeMirror editor; e2e checks the computed colour; human check left: look at it in the real app on dark
