@@ -1,2 +1,2 @@
-2026-10-17 lab: final checks wait for a same-ops split to clear before reading doctor, bounded +lab
-2026-10-17 daemon: replay the 164520 logs, shrink to the ops whose order puts pri:C on the done line, fix it with a unit test +m11 @daemon @sync
+2026-10-17 daemon: replay the 164520 logs, shrink to the ops whose order puts pri:C on the done line, fix it with a unit test +m11 @daemon @sync @doing by:claude
+x 2026-10-17 2026-10-17 lab: final checks wait for a same-ops split to clear before reading doctor, bounded +lab — 1b3752f5; shellcheck clean; not run by hand: the watcher's next chaos runs exercise it
