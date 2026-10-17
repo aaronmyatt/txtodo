@@ -197,9 +197,9 @@ id = "list.click_to_edit"
 title = "Edit the selected line where you click it"
 keys = []
 scope = "list"
-desktop = { status = "differs", surface = "FileView" }
+desktop = { status = "done", surface = "FileView" }
 tui = { status = "done", surface = "Tasks, detail panel sub-list" }
-deviation = "Desktop's list is a text buffer, so any click puts a caret there; the TUI selects on the first click and edits on a click on the selected line."
+deviation = ""
 
 # ==== Readline keys in every text field (task tui-readline-keys) ===================================
 # Scope `edit` here means any TUI text field: the line editor, parent, notes, prompt bar, search,

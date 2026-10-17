@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { docLines, listMutations, moveTarget, type ListDoc } from "../listMode";
+import { clickOnlySelects, docLines, listMutations, moveTarget, type ListDoc } from "../listMode";
 
 const doc: ListDoc = {
 	lines: docLines("(A) buy milk\ncall mum\nx 2026-10-05 pay rent\n"),
@@ -44,5 +44,25 @@ describe("listMutations", () => {
 			mutations: [{ kind: "delete", task: { line_number: 3, task_id: "T3" }, leave_blank: false }],
 			cursor: 2
 		});
+	});
+});
+
+describe("clickOnlySelects", () => {
+	const click = { button: 0, detail: 1, shiftKey: false, ctrlKey: false, metaKey: false, altKey: false };
+
+	it("selects another line while the list is not focused", () => {
+		expect(clickOnlySelects(click, false, 3, 1)).toBe(true);
+	});
+
+	it("edits the current line, and edits anywhere once focused", () => {
+		expect(clickOnlySelects(click, false, 2, 2)).toBe(false);
+		expect(clickOnlySelects(click, true, 3, 1)).toBe(false);
+	});
+
+	it("leaves a second click, another button or a modifier to the editor", () => {
+		expect(clickOnlySelects({ ...click, detail: 2 }, false, 3, 1)).toBe(false);
+		expect(clickOnlySelects({ ...click, button: 2 }, false, 3, 1)).toBe(false);
+		expect(clickOnlySelects({ ...click, shiftKey: true }, false, 3, 1)).toBe(false);
+		expect(clickOnlySelects({ ...click, metaKey: true }, false, 3, 1)).toBe(false);
 	});
 });

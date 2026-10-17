@@ -109,12 +109,12 @@
 		return () => void off.then((f) => f());
 	});
 
-	/** Esc: back to the buffer (the root list's editor), or simply out of the bar. */
+	/** Esc: out of the bar, with nothing focused, so list mode's keys act on the Tasks list again
+	 * (focusing the buffer here made the next `j` type into it).
+	 * HTMLElement.blur: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/blur */
 	function leave() {
 		if (onEscape) return onEscape();
-		const buffer = document.querySelector<HTMLElement>(".buffer .cm-content");
-		if (buffer) buffer.focus();
-		else (document.activeElement as HTMLElement | null)?.blur();
+		(document.activeElement as HTMLElement | null)?.blur();
 	}
 </script>
 

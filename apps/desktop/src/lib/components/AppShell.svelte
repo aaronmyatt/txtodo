@@ -87,10 +87,19 @@
 		return index > 0 ? `${index}/${hits}` : `${hits}`;
 	});
 
+	/** Esc on a focused button or link lets go of it (a closed menu hands focus back to its
+	 * toggle), so list mode's keys work again. Nothing is stopped: a panel that closes on Esc still
+	 * hears it. https://developer.mozilla.org/en-US/docs/Web/API/Element/matches */
+	function releaseControl() {
+		const el = document.activeElement;
+		if (el instanceof HTMLElement && el.matches("button, a[href], [role='button'], summary")) el.blur();
+	}
+
 	function onKeydown(e: KeyboardEvent) {
 		if (e.defaultPrevented || isTypingTarget(e.target)) return;
 		const name = keyName(e);
 		if (!name) return;
+		if (name === "Esc") releaseControl();
 		// List mode needs the Tasks page with nothing holding the keyboard: a focused button keeps
 		// its own Space and Enter.
 		const listMode = path === "/" && (document.activeElement === null || document.activeElement === document.body);

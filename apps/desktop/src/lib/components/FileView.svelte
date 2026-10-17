@@ -15,7 +15,7 @@
 	import { newestChange, popChange, popIfNewest } from "$lib/stores/changes";
 	import { showToast } from "$lib/stores/toast";
 	import { listBuffer } from "$lib/listCommands";
-	import { docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
+	import { clickOnlySelects, docLines, listMutations, moveTarget } from "$lib/todotxt/listMode";
 	import { applyChipCore } from "$lib/wasmCore";
 	import { localToday } from "./editPopoverLogic";
 	import { leaveEditor } from "$lib/escape";
@@ -221,6 +221,7 @@
 				mouseleave: (_event, editorView) => {
 					clearHover(editorView);
 				},
+				mousedown: handleMouseDown,
 				dblclick: handleDblClick,
 				// Blur commits (same rule tasks/desktop-raw-mode's notes.md stated: "on blur or
 				// Cmd/Ctrl+S the buffer goes through the reconciler"). CM6's `blur` domEventHandler
@@ -259,6 +260,23 @@
 		if (!onDetailRequest) return false;
 		const line = editorView.state.doc.lineAt(editorView.state.selection.main.head);
 		requestDetail(line.number);
+		return true;
+	}
+
+	// list.click_to_edit (`clickOnlySelects`): a click on another line while the list is not
+	// focused only moves the current line there. `preventDefault` keeps the focus where it is, and
+	// a focused button lets go, so the next `j` moves instead of typing. Returning true skips
+	// CodeMirror's own mousedown. https://codemirror.net/docs/ref/#view.EditorView^domEventHandlers
+	function handleMouseDown(event: MouseEvent, editorView: EditorView): boolean {
+		const pos = editorView.posAtCoords({ x: event.clientX, y: event.clientY });
+		if (pos == null) return false;
+		const clicked = editorView.state.doc.lineAt(pos).number;
+		const current = editorView.state.doc.lineAt(editorView.state.selection.main.head).number;
+		if (!clickOnlySelects(event, editorView.hasFocus, clicked, current)) return false;
+		event.preventDefault();
+		const held = document.activeElement;
+		if (held instanceof HTMLElement && held !== document.body) held.blur();
+		placeCursor(clicked);
 		return true;
 	}
 

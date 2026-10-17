@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 import { CHORD_MS, Chords, keyName } from "./keys";
 
-const press = (key: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) =>
-	keyName({ key, ctrlKey: false, metaKey: false, altKey: false, ...mods });
+const press = (key: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) =>
+	keyName({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
 
 describe("keyName", () => {
 	it("names printable keys as themselves and joins modifiers", () => {
@@ -16,6 +16,14 @@ describe("keyName", () => {
 		expect(press("Escape")).toBe("Esc");
 	});
 
+	it("writes Shift- for a named key only, as the TUI does", () => {
+		expect(press(" ", { shiftKey: true })).toBe("Shift-Space");
+		expect(press("Enter", { shiftKey: true })).toBe("Shift-Enter");
+		expect(press("ArrowUp", { altKey: true, shiftKey: true })).toBe("Alt-Shift-Up");
+		expect(press("G", { shiftKey: true })).toBe("G");
+		expect(press("?", { shiftKey: true })).toBe("?");
+	});
+
 	it("tells g g (list) from g t (nav) by the second key", () => {
 		const chords = new Chords();
 		chords.resolve("g", 0);
@@ -26,6 +34,14 @@ describe("keyName", () => {
 });
 
 describe("Chords", () => {
+	it("takes Cmd or Ctrl for a Mod- binding, and a shifted named key as its own key", () => {
+		const chords = new Chords();
+		expect(chords.resolve("Super-Enter", 0)).toEqual({ kind: "command", id: "detail.open" });
+		expect(chords.resolve("Ctrl-Enter", 10)).toEqual({ kind: "command", id: "detail.open" });
+		expect(chords.resolve("Shift-Space", 20)).toEqual({ kind: "none" });
+		expect(chords.resolve("Shift-Enter", 30)).toEqual({ kind: "none" });
+	});
+
 	it("runs a single key at once and waits on the first key of a chord", () => {
 		const chords = new Chords();
 		expect(chords.resolve("/", 0)).toEqual({ kind: "command", id: "search.focus" });

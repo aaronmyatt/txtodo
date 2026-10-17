@@ -82,3 +82,23 @@ export async function listMutations(
 			return null;
 	}
 }
+
+/** The parts of a mousedown `clickOnlySelects` reads (a real `MouseEvent` fits). */
+export interface ClickLike {
+	button: number;
+	detail: number;
+	shiftKey: boolean;
+	ctrlKey: boolean;
+	metaKey: boolean;
+	altKey: boolean;
+}
+
+/** list.click_to_edit, the TUI's rule: with the list not focused, a plain single click on a line
+ * other than the current one only makes it current (list mode stays on, nothing is typed); a click
+ * on the current line, a second click, or a click with a modifier goes to the editor as usual.
+ * MouseEvent.detail is the click count: https://developer.mozilla.org/en-US/docs/Web/API/UIEvent/detail */
+export function clickOnlySelects(e: ClickLike, focused: boolean, clicked: number, current: number): boolean {
+	if (focused || e.button !== 0 || e.detail > 1) return false;
+	if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return false;
+	return clicked !== current;
+}

@@ -34,6 +34,34 @@ test("j/k/G/g g move the current line without taking the keyboard", async ({ pag
 	await expect(page.locator(".buffer .cm-content")).not.toBeFocused();
 });
 
+// list.click_to_edit: the first click on a line selects it and list mode stays on; a click on the
+// current line edits it.
+test("a click selects a line without taking the keyboard; a second click edits it", async ({ page }) => {
+	const before = file();
+	await page.locator(".buffer .cm-line", { hasText: "call mum" }).click();
+	await expect(current(page)).toContainText("call mum");
+	await expect(page.locator(".buffer .cm-content")).not.toBeFocused();
+	await page.keyboard.press("k");
+	await expect(current(page)).toContainText("buy milk");
+	expect(file()).toBe(before);
+
+	await page.locator(".buffer .cm-line", { hasText: "buy milk" }).click();
+	await expect(page.locator(".buffer .cm-content")).toBeFocused();
+});
+
+test("Esc lets go of a focused button, and Esc in the prompt bar goes back to list mode", async ({ page }) => {
+	await page.getByRole("button", { name: "Help" }).or(page.getByRole("link", { name: "Help" })).first().focus();
+	await page.keyboard.press("Escape");
+	await page.keyboard.press("j");
+	await expect(current(page)).toContainText("call mum");
+
+	await page.keyboard.press("n");
+	await page.keyboard.press("Escape");
+	await page.keyboard.press("k");
+	await expect(current(page)).toContainText("buy milk");
+	await expect(page.locator(".buffer .cm-content")).not.toBeFocused();
+});
+
 test("x completes the line, J moves it, d d deletes it", async ({ page }) => {
 	await page.keyboard.press("Shift+J");
 	await expect.poll(file).toMatch(/^call mum @phone\n\(A\) buy milk/);
