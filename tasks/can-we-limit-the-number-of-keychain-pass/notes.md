@@ -52,3 +52,16 @@ no weaker access; most of it (cache, single flight, waiting at startup) is built
   vault. From then on: one prompt per signature change.
 - Not verified on a real Mac here: whether "Always Allow" on the vault survives a self-signed
   reinstall (same open question as before, now for one item instead of four).
+
+## As built (2026-10-17)
+
+- `txtodo-sync` f134dc06: `VaultKeyStore<S>` and `KeyId::Vault` (appended, so the file keystore's
+  postcard indexes hold). `txtodo-daemon` f50aa5e2: `os_key_store` is
+  `Cached(Timeout(Vault(Os)))`. Runbook 1883f925.
+- Tests run on a counting in-memory store (one inner read for every key; an old item moved once
+  and deleted; a refused write leaves memory as the item is; a vault that does not decode is
+  kept). No test touches the real keychain, by this repo's rule.
+- Human check left: install a build with the vault (`just install-daemon`), start it in a
+  terminal, count the prompts (expect one per old item this once), restart, expect none; rebuild
+  ad-hoc (`cargo run`), expect one.
+- Still open: whether "Always Allow" on `device/vault` survives a self-signed reinstall.
