@@ -42,7 +42,7 @@ impl DocState {
 /// field write wins over it. Never stored, never sent. As a `DocState` placement it is the
 /// oldest op, so it lands after every line a real op placed after its anchor (`state_order.rs`);
 /// `DocState::apply_kind` uses `state::scratch_op` instead.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub fn hydration_op(path: &FilePath, kind: txtodo_model::OpKind) -> txtodo_model::Op {
     let zero = txtodo_model::DeviceId::new(Ulid::from_u128(0));
     let op = txtodo_model::Op {

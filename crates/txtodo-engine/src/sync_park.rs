@@ -66,7 +66,7 @@ impl Parked {
     }
 
     /// How many ops wait (a test seam).
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn len(&self) -> usize {
         self.ops.len()
     }

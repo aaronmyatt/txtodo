@@ -23,6 +23,13 @@ pathfinding = "4.16.0"
 # https://docs.rs/strsim — edit distance between a line's old and new text.
 strsim = "0.11.1"
 
+[features]
+# The test seams (`DocState::apply_kind`, `DocState::stamps`, `Parked::len`,
+# `fastid::hydration_op`) for another crate's tests: the daemon turns it on in its
+# dev-dependencies. Never on in a real build.
+# Ref: https://doc.rust-lang.org/cargo/reference/features.html
+test-support = []
+
 [dev-dependencies]
 # https://docs.rs/proptest — property tests of the text-edit and id helpers.
 proptest = "1"

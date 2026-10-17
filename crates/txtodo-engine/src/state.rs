@@ -217,7 +217,7 @@ impl DocState {
     }
 
     /// Test seam: applies a bare `OpKind` as the newest op would land. Tests pin bytes, not clocks.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn apply_kind(&mut self, kind: &OpKind) -> Result<(), StateError> {
         self.apply(&scratch_op(&self.path.clone(), kind.clone()))
     }

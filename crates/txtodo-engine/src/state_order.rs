@@ -280,7 +280,7 @@ impl DocState {
     }
 
     /// Test seam: each shown line's stamp, in file order.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn stamps(&self) -> Vec<Hlc> {
         self.visible.iter().map(|&s| self.stamps[s]).collect()
     }
