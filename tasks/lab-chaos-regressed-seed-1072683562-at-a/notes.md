@@ -22,3 +22,22 @@
 2. Daemon: replay a1's and b1's logs from the 164520 tars (both hold the same ops), shrink to the
    ops whose order changes the bytes, and fix the order-dependence. A throwaway probe in the
    session scratchpad, as for `chaos-replay-order`; the case it finds becomes a unit test.
+
+## As built (2026-10-17)
+
+- Lab 1b3752f5: `final_checks` runs `settle_splits` (up to `SPLIT_SETTLE`, 10 s) before
+  collecting, so a split booked mid-merge that clears on the next digest no longer fails a run.
+- Daemon 9d712484: the probe (both logs replayed in their own order, then shrunk) brought 246 ops
+  down to 3 on one task: `Priority = C`, `Completed = true` (moves C into `pri:C`), then a newer
+  `Priority = None`. Landing after the completion, the clear changed nothing on the done line, so
+  `pri:C` stayed. A newer clear on a done line now drops every `pri:` the text history and its
+  base hold (`TextHistory::clear_pri`, the "none" of `swap_pri`), in any arrival order. Tests:
+  `state_converge_pri_tests.rs` (the clear newer than the completion and between, all orders; a
+  newer letter still wins over an older clear).
+- Sweep: the 969 device logs saved since 2026-10-11, each replayed against its own `todo.txt`,
+  with and without the fix. Same results except two b1 logs, whose replays now match their peers:
+  this report and 20261011-150317 lan-converge (the same bug, `pri:A`). The 28 logs that never
+  replay to their file are all from 2026-10-11 13:24–14:46, before that day's later fixes.
+- The probe is not in git (`probe_chaos_tests.rs`, session scratchpad), as before.
+- Known gaps: the lab change was not run by hand (the watcher's chaos runs exercise it); a text
+  edit that typed its own `pri:` on a done line is still cut, not merged, when a clear lands.
