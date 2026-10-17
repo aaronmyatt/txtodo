@@ -31,6 +31,10 @@ pub enum KeyId {
     /// stage 1) — stable across restarts, unlike the endpoint's previous per-run random mint, so a
     /// peer can dial this device's relay node id durably instead of only during a live handshake.
     RelayIdentity,
+    /// The one item that holds every other key (`keystore_vault.rs`, task
+    /// can-we-limit-the-number-of-keychain-pass): one keychain access list, so one prompt. Last, so
+    /// the postcard index of every older variant is unchanged.
+    Vault,
 }
 
 impl fmt::Display for KeyId {
@@ -40,6 +44,7 @@ impl fmt::Display for KeyId {
             KeyId::DeviceStatic => write!(f, "device-static"),
             KeyId::Group(epoch) => write!(f, "group-epoch-{epoch}"),
             KeyId::RelayIdentity => write!(f, "relay-identity"),
+            KeyId::Vault => write!(f, "vault"),
         }
     }
 }

@@ -23,6 +23,7 @@ mod keystore_file;
 mod keystore_memory;
 mod keystore_os;
 mod keystore_resolve;
+mod keystore_vault;
 mod lan_link;
 mod lan_op_signing;
 mod link;
@@ -73,6 +74,7 @@ pub use keystore_file::{ARGON2_ITERATIONS, ARGON2_MEMORY_KIB, ARGON2_PARALLELISM
 pub use keystore_memory::MemoryKeyStore;
 pub use keystore_os::OsKeyStore;
 pub use keystore_resolve::{KeyStoreMode, ResolvedBackend, resolve};
+pub use keystore_vault::VaultKeyStore;
 pub use lan_link::{IrohLink, LanEndpoint, LanError};
 pub use lan_op_signing::{LAN_OP_SIGN_INFO, derive_group_op_signing_key};
 pub use link::{ChannelLink, Link, LinkError, MAX_QUEUED_FRAMES, channel_link_pair};
