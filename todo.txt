@@ -1,3 +1,8 @@
+2026-10-17 spike: txtodo should merge remote workspaces of the same name with the current directory/repo (same name) ref:spike-txtodo-should-merge-remote-workspa @doing by:claude
+2026-10-12 `txtodo list` should only show incomplete tasks by default
+2026-10-12 Fix vim key binding support
+2026-10-12 Add the ability to "move" or copy a task to another list
+2026-10-12 Dark mode note text editors blinking cursor is hidden, needs a colour contrast
 2026-10-11 Completed tasks without a date/priority should also be greyed out
 2026-10-11 Can we limit the number of keychain/password prompts to (at most) one? +spike
 2026-10-11 The +desktop app should always open fullscreen
