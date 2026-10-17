@@ -1,5 +1,5 @@
-2026-10-17 mcp: todo_move takes to_file to move a task to the end of another list +m11 @mcp @doing by:claude
 2026-10-17 desktop: Move to… and Copy to… in the line's detail, picking from the workspace's lists +m11 @desktop
 2026-10-17 desktop: list-mode m and c open the same picker; manifest rows list.move_to, list.copy_to; @parity line for the TUI +m11 @desktop
 x 2026-10-17 2026-10-17 daemon: a cross-file move finds the arrived line by the id the destination minted (sidecar), so the slug rewrite and the rollback work +m11 @daemon — 490ec4ed; worse than planned: every Sidecar cross-file move failed at the peek ("no line N"), now fixed too
 x 2026-10-17 2026-10-17 cli: mv sends the daemon's Move in daemon mode (ref dir moves too); cp ITEM# DEST [SRC] adds a copy without id: or ref: +m11 @cli — d3fbad37; e2e against a real daemon: mv takes the notes along, cp leaves the original; a copy is dated today when undated
+x 2026-10-17 2026-10-17 mcp: todo_move takes to_file to move a task to the end of another list +m11 @mcp — f458521e; also 600fbefc: the daemon keeps the task's id across lists on Sidecar (Mutation::Arrive), which the MCP row lookup needs
