@@ -18,7 +18,7 @@ use std::sync::Arc;
 use txtodo_sync::{
     DEVICE_STATIC_KEY_BYTES, DeviceSigningKey, DeviceStaticSecret, FileKeyStore, KeyId, KeyStore,
     KeyStoreError, KeyStoreMode, MemoryKeyStore, OsKeyStore, ResolvedBackend, SIGNING_KEY_BYTES,
-    Secret,
+    Secret, VaultKeyStore,
 };
 
 use crate::keystore_cache::CachedKeyStore;
@@ -94,12 +94,13 @@ fn probe_os(scope: &str) -> Result<(), String> {
     bounded("probe", KEYCHAIN_TIMEOUT, move || OsKeyStore::probe(&scope))?
 }
 
-/// The OS backend behind the same bound, so a later read that prompts again (each keychain item
-/// has its own access list) errors out of startup instead of parking it — and read-cached
-/// (`keystore_cache.rs`) so the keychain, and its prompt, is touched once per key per boot.
+/// The OS backend: every key in one vault item (`txtodo_sync::VaultKeyStore`, task
+/// can-we-limit-the-number-of-keychain-pass), so a new code signature costs one prompt, not one
+/// per key. Behind the same bound, so a read that prompts errors out of startup instead of parking
+/// it, and read-cached (`keystore_cache.rs`).
 fn os_key_store(scope: &str) -> Arc<dyn KeyStore + Send + Sync> {
     Arc::new(CachedKeyStore::new(TimeoutKeyStore::new(
-        OsKeyStore::new(scope.to_owned()),
+        VaultKeyStore::new(OsKeyStore::new(scope.to_owned())),
         KEYCHAIN_TIMEOUT,
     )))
 }
