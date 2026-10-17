@@ -110,7 +110,9 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `KeyStoreError`, `MAX_STORED_EPOCHS`. Backends: `MemoryKeyStore` (tests only), `FileKeyStore`
   (`create`/`open`, Argon2id + XChaCha20-Poly1305, params in the file header,
   `ARGON2_MEMORY_KIB`/`ARGON2_ITERATIONS`/`ARGON2_PARALLELISM`), `OsKeyStore` (`keyring` crate,
-  `probe` for reachability). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
+  `probe` for reachability), `VaultKeyStore<S>` (task can-we-limit-the-number-of-keychain-pass:
+  every key in one `KeyId::Vault` item of `S`, read once, old per-key items moved in lazily and
+  deleted; one keychain access list, so one prompt). `resolve(mode, probe_os, make_os, make_file) -> (ResolvedBackend, Box<dyn
   KeyStore>)` implements `key_store = "auto" | "os" | "file"`; `KeyStoreMode`, `ResolvedBackend::name`.
 - Pairing (M4 `sync-pairing`), transport-agnostic — no networking, just the crypto/state machine:
   `wordlist()` (the vendored EFF short list, `WORDLIST_LEN` = 1296, `WORDLIST_SHA256`);
