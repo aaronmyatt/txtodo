@@ -1,4 +1,4 @@
-2026-10-17 Spike: iroh 1.2 wasm_browser endpoint in a dedicated Worker does a sealed Hello with a native daemon via the n0 relay; record .wasm size and the ring build needs +m10 @web @spike
+2026-10-17 Spike: iroh 1.2 wasm_browser endpoint in a dedicated Worker does a sealed Hello with a native daemon via the n0 relay; record .wasm size and the ring build needs +m10 @web @spike @doing by:claude
 2026-10-17 Spike: txtodo-model, -crdt and the daemon's 30 pure engine modules cargo check for wasm32; list each blocker +m10 @web @spike
 2026-10-17 txtodo-engine: move DocState/apply/mutation/reconcile/text_history and the pure actor-glue half out of txtodo-daemon, no behaviour change, pure tests move too +m10 @web @daemon
 2026-10-17 Store trait over the Store methods the file-actor path uses; SQLite impl in txtodo-store, in-memory impl for engine tests +m10 @web @store
