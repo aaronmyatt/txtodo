@@ -7,6 +7,7 @@
 //! Exit status 1 when any check fails. `--verbose` tails the daemon's JSON log when one exists.
 
 use crate::client::{self, Mode, SOCKET_REL};
+use crate::commands::doctor_bind::bind_checks;
 use crate::commands::doctor_clock::{clock_check, config_check};
 use crate::commands::doctor_overlap::{overlap_checks, registered_workspaces};
 use crate::commands::doctor_sync::sync_checks;
@@ -325,6 +326,7 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
         &ctx.paths.dir,
     ));
     checks.extend(overlap_checks(&workspaces));
+    checks.extend(bind_checks(&workspaces));
     checks.push(skill_check());
     checks.extend(super::layout::doctor_checks(
         ctx,

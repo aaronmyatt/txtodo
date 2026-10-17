@@ -30,9 +30,16 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
   already `x` done, which carry `@human` (a decision only a human makes), and which are already
   claimed (`@doing`).
+- Run `txtodo doctor` once. A `bind` warning means this folder holds a list of its own while
+  another device syncs a list of the same name here as a Remote workspace, so you would be working
+  the wrong list. Tell the human and name the fix it prints (`txtodo workspace bind <id>`); it
+  moves this folder's own list aside, so don't run it on your own.
 
 > **Why:** No surprises mid-loop. The agent sees the whole tree first, so it never starts a task
 > that is already claimed, done, or waiting on you.
+
+> **Why:** A clone of a repo on a second device is its own workspace. Without this check the agent
+> works the clone's stale list instead of the one your other device syncs.
 
 ## 2. Flesh out sub-todos and notes
 
