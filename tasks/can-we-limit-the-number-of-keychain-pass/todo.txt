@@ -1,3 +1,3 @@
-2026-10-17 sync: VaultKeyStore keeps every secret in one keychain item, read once; old items move in lazily +m11 @sync
+2026-10-17 sync: VaultKeyStore keeps every secret in one keychain item, read once; old items move in lazily +m11 @sync @doing by:claude
 2026-10-17 daemon: the OS keystore is the vault, under the same timeout and cache +m11 @daemon
 2026-10-17 docs: keychain runbook says one prompt, and how the old items move +m11 @docs
