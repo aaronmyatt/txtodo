@@ -22,7 +22,8 @@ daemon and the browser peer run the same code. Builds for `wasm32-unknown-unknow
 
 ## Invariants
 - Pure: no I/O, no tokio, no gRPC, no `Instant`. The one clock read is `local_date`'s date; the
-  one store read is `op_set_hash`.
+  one store read is `op_set_hash`. In a browser that read goes through jiff's `js` feature (a
+  wasm-only dependency); without it `Zoned::now()` traps there (checked in a Worker, 2026-10-17).
 - Proto conversions stay in the daemon's gRPC layer (`conflicts_grpc.rs` builds the wire duplicate group).
 - Same input ops → same bytes, whatever order they arrive in; the converge tests pin it.
 - May depend only on: txtodo-core, txtodo-model, txtodo-store (external: tracing, blake3, jiff,
