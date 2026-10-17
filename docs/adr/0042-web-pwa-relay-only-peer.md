@@ -3,6 +3,8 @@
 - Status: accepted 2026-10-17 (decided by the agent at the owner's request; plan in
   `tasks/web-pwa/notes.md`). The two spikes at the top of `tasks/web-pwa/todo.txt` can reopen
   point 3: if iroh cannot run in a Worker, a superseding ADR picks the carrier again.
+  Amended the same day after the spikes. iroh did run in a Worker, so point 3 holds. Point 4 now
+  keeps `txtodo-store` instead of adding a store trait.
 - Date: 2026-10-17
 - Deciders: agent, at the owner's request
 
@@ -27,11 +29,10 @@ use with browser storage. Three facts, checked on 2026-10-17:
 3. **Carrier.** An iroh `wasm_browser` endpoint, relay-only, on ALPN `txtodo/sync/1` and protocol 5,
    with messages sealed as today. No new wire format, no daemon change. The `relay/` mailbox is
    not used.
-4. **Store.** A trait over the op-log methods the file path uses:
-   - SQLite stays for the daemon.
-   - In the browser, an OPFS append-only op log plus a snapshot, written through
-     `createSyncAccessHandle` in the Worker.
-   - An in-memory version for tests.
+4. **Store.** `txtodo-store` stays as is. In the browser, rusqlite 0.40 links `sqlite-wasm-rs`
+   (SQLite compiled to wasm), and `sqlite-wasm-vfs`'s `sahpool` VFS keeps the file in OPFS from the
+   Worker. The spike ran `Store::open` unchanged: all migrations applied, and ops persisted across
+   a reload. There is no WAL there (`journal_mode=delete`), which is fine for one connection.
 5. **`txtodo-sync`.** `WorkspaceId` moves to `txtodo-model`. A default `native` feature gates
    iroh's tokio side, mdns-sd, keyring and the fs carriers.
 6. **`txtodo-web`.** A new wasm-bindgen crate hosts the engine, store, keys and endpoint in the
@@ -51,8 +52,9 @@ use with browser storage. Three facts, checked on 2026-10-17:
 - **Our own WebSocket protocol to the `relay/` mailbox.** Its store-and-forward would close the
   "another device must be online" gap. Rejected for now: a new wire format, and the mailbox has no
   auth and no deploy (ADR 0027). Revisit as an additive carrier.
-- **SQLite compiled to wasm with an OPFS VFS.** Rejected: `libsqlite3-sys` 0.38 bundles a WASI
-  build only, so this needs a C toolchain in the wasm build and a second SQLite.
+- **A store trait plus an OPFS append-only log.** This was the first pick, on the belief that
+  SQLite built only for WASI. Dropped once the spike ran the real store in a Worker. It stays the
+  fallback if the VFS fails on Safari or under eviction.
 - **A new `apps/web` UI.** Rejected: a third client to keep at parity.
 - **GitHub Pages.** The project site would be `https://aaronmyatt.github.io/txtodo/`, one origin
   with the owner's 21 other Pages sites. OPFS and IndexedDB are per origin, so script on any of
@@ -67,8 +69,11 @@ use with browser storage. Three facts, checked on 2026-10-17:
   - No wire or relay change.
   - The desktop UI and its Playwright specs are reused.
 - Bad:
-  - Two new crates, a store trait and a sync feature split: a big daemon refactor before any
-    browser code exists.
+  - Two new crates and a sync feature split: a big daemon refactor before any browser code
+    exists.
+  - About 3.5 MB of wasm (about 1.4 MB gzip) before the engine.
+  - The wasm build needs a clang that targets wasm32 for its C parts (ring, SQLite). Apple clang
+    cannot; Homebrew `llvm@21` can.
   - The browser syncs only while another device is online, because the relay forwards and does
     not store.
   - Eviction loses ops that were never synced: storage pressure, or iOS Safari's 7-day cap for
@@ -85,6 +90,7 @@ use with browser storage. Three facts, checked on 2026-10-17:
 ## References
 - iroh 1.2: https://docs.rs/iroh/1.2.0/iroh/
 - OPFS: https://developer.mozilla.org/en-US/docs/Web/API/File_System_API/Origin_private_file_system
+- SQLite in wasm: https://docs.rs/sqlite-wasm-rs · OPFS VFS: https://docs.rs/sqlite-wasm-vfs
 - Same-origin policy (storage is per origin):
   https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy
 - `wrapKey`: https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/wrapKey
