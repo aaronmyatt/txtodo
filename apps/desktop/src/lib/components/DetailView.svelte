@@ -32,6 +32,8 @@
 		type TaskRef
 	} from "$lib/daemon";
 	import { localToday } from "./editPopoverLogic";
+	import { copyText, otherLists } from "$lib/todotxt/moveCopy";
+	import { popChange } from "$lib/stores/changes";
 	import { findRefTag, joinPath, refDirFor } from "$lib/todotxt/lineInfo";
 	import { notesLayout, notesMode, subListMode } from "$lib/detailSections";
 	import { workspaceLayoutStore } from "$lib/stores/workspaces";
@@ -213,6 +215,45 @@
 		parentDirty = false;
 	}
 
+	// Move or copy this task to another list (task add-the-ability-to-move-or-copy-a-task-t).
+	const targets = $derived(otherLists(filesByPath.values(), current.file));
+	let moveCopyNote = $state("");
+
+	/** The daemon's cross-file `Move`: the task keeps its id and its `ref:` folder goes with it.
+	 * The line has left this list, so the view goes back a level. Not on `u`'s stack: an Undo
+	 * there would put back only this list's half. */
+	async function moveTo(dest: string) {
+		if (!dest) return;
+		saveError = "";
+		try {
+			await applyMutations(current.file, [{ kind: "move", task: parentTaskRef, to_path: dest }]);
+			popChange();
+			onNavigateToLevel(steps.length - 1);
+		} catch (e) {
+			saveError = String(e);
+		}
+	}
+
+	/** A new task at the end of `dest`, without this one's `id:` and `ref:`. */
+	async function copyTo(dest: string) {
+		if (!dest) return;
+		saveError = "";
+		try {
+			await applyMutations(dest, [{ kind: "add", line: copyText(parentLine) }]);
+			moveCopyNote = `Copied to ${dest}`;
+		} catch (e) {
+			saveError = String(e);
+		}
+	}
+
+	/** A `<select>` that acts on pick, then shows its prompt again. */
+	function picked(e: Event, act: (dest: string) => Promise<void>) {
+		const select = e.currentTarget as HTMLSelectElement;
+		const dest = select.value;
+		select.value = "";
+		void act(dest);
+	}
+
 	async function markParentDone() {
 		saveError = "";
 		try {
@@ -363,6 +404,19 @@
 				Mark parent done
 			</button>
 		{/if}
+		{#if targets.length > 0 && parentTaskId}
+			<div class="move-copy">
+				<select aria-label="Move to another list" onchange={(e) => picked(e, moveTo)}>
+					<option value="">Move to…</option>
+					{#each targets as t (t)}<option value={t}>{t}</option>{/each}
+				</select>
+				<select aria-label="Copy to another list" onchange={(e) => picked(e, copyTo)}>
+					<option value="">Copy to…</option>
+					{#each targets as t (t)}<option value={t}>{t}</option>{/each}
+				</select>
+				{#if moveCopyNote}<span class="move-copy-note" role="status">{moveCopyNote}</span>{/if}
+			</div>
+		{/if}
 		<button
 			type="button"
 			class="fields-toggle"
@@ -499,6 +553,18 @@
 	.fields-toggle {
 		align-self: flex-start;
 		font-size: 0.85rem;
+	}
+
+	.move-copy {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+	}
+
+	.move-copy-note {
+		opacity: 0.7;
 	}
 
 	/* sqlite `.mode line`: names right-aligned in one column, `=`, the values. */
