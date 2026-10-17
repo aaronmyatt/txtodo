@@ -36,3 +36,22 @@ Move a task, or copy it, from one list to another list in the same workspace (th
   `todo_add` with `file`; the tool text says so. No new tool.
 - Out of scope: another workspace (it would be an `Add` there and a `Delete` here, and nothing
   ties the two); a list that does not exist yet.
+
+## As built (2026-10-17)
+
+- daemon 490ec4ed: a cross-file move peeked the line by its `id:` tag, so on Sidecar every one
+  failed ("no line N"); it reads the actor's id list now, and the slug rewrite and the rollback
+  find the arrived line by id. 600fbefc: the arriving half is `Mutation::Arrive` (internal, never
+  on the wire), so the task keeps its id in the new list on Sidecar too (an `Add` minted a new
+  one, which lost its history). `add_ops` moved to `mutation_add.rs`.
+- cli d3fbad37: `mv` in daemon mode is the daemon's `Move` (it used to fail on the scratch copy);
+  `cp ITEM# DEST [SRC]` in both modes, dated today when undated.
+- mcp f458521e: `todo_move` `to_file`; `todo_batch`'s move too. No `todo_copy`: the tool text says
+  `todo_get` then `todo_add` with `file`.
+- desktop ecd1ddbb, 805a2bed: "Move to…" / "Copy to…" pickers in the detail; `m`/`c` in list mode
+  open the detail with that picker focused. Manifest rows `list.move_to`, `list.copy_to`.
+- Tests: daemon Sidecar unit tests (rewrite, rollback, same id), CLI e2e (`move_copy.rs`), MCP e2e
+  (`sidecar_id_tools.rs`), desktop e2e (`move-copy.spec.ts`).
+- Known gaps: a move is not on the desktop's `u` stack (its Undo would bring back only the
+  source half); the TUI has no move/copy yet (root `@parity` line); no move to another workspace;
+  the destination must be a list the daemon already holds.
