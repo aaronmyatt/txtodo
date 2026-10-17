@@ -55,7 +55,7 @@ receiving side") for this case only: mirrors still land in the data dir; bind is
   5. Registry: remove Y, repoint X to the folder (`Registry::set_root`, new in txtodo-store).
   6. Open X at the folder. Sync carries on under X: same store, same op log, nothing re-sent.
 - Hint: `txtodo doctor` warns when the current folder is a non-Remote workspace whose name equals
-  a Remote workspace's name, and names the bind command. `workspace list` marks it too.
+  a Remote workspace's name, and names the bind command.
 
 ## Known gaps (planned)
 
@@ -64,3 +64,18 @@ receiving side") for this case only: mirrors still land in the data dir; bind is
 - A folder on a different disk from the data dir is refused (rename only, no copy).
 - git and txtodo both carry `todo.txt` in a repo: a `git pull` can still trip over a synced edit.
   Not new; bind makes it reachable on the second Mac.
+
+## As built (2026-10-17)
+
+- store `Registry::set_root` (de4506bc); proto `WorkspaceBind` (f192c4e6); daemon
+  `workspace_bind.rs` + `rejoin_backup::move_into` (0413a798); cli `workspace bind <id> [DIR]
+  [--yes] [--dry-run]` (4856c97a); doctor `bind` row + playbook line (2ab63bda).
+- The doctor row checks every own workspace against every mirror, not only the cwd's: the
+  agent's cwd is not always the workspace root.
+- `workspace list` does not mark the pair: doctor is the one place, and the playbook runs it.
+- Proof: `tests/e2e/workspace_bind.rs`, two daemons. B binds A's mirror into its clone; A's
+  next line reaches the clone, the clone's next line reaches A, no duplicates.
+- Not tested: the CLI command against a real daemon (unit tests cover its text); a rename that
+  fails half way across disks on Windows (no device check there; it moves back).
+- Still open: the other device keeps its mirror of the clone's old id until removed by hand
+  (`done_text` prints the command); not wired into the desktop or TUI (no "use here" button).
