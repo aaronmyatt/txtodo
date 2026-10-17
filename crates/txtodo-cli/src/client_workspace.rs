@@ -141,6 +141,26 @@ impl Daemon {
         Ok(rep.into_inner())
     }
 
+    /// Moves a Remote mirror into the folder `root` (task spike-txtodo-should-merge-remote-workspa);
+    /// `dry_run` only says what would move.
+    pub fn workspace_bind(
+        &mut self,
+        workspace_id: &str,
+        root: &str,
+        dry_run: bool,
+    ) -> Result<pb::WorkspaceBindResponse, ClientError> {
+        let req = pb::WorkspaceBindRequest {
+            workspace_id: workspace_id.to_owned(),
+            root: root.to_owned(),
+            dry_run,
+        };
+        let rep = self
+            .rt
+            .block_on(self.client.workspace_bind(req))
+            .map_err(ClientError::Rpc)?;
+        Ok(rep.into_inner())
+    }
+
     /// Discards a pending offer; `false` when there was no such offer.
     pub fn workspace_decline_offer(
         &mut self,

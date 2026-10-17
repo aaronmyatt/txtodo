@@ -29,5 +29,6 @@ pub mod sub_slug;
 pub mod text;
 pub mod upgrade;
 pub mod workspace;
+pub mod workspace_bind;
 pub mod workspace_offers;
 pub mod workspace_rejoin;

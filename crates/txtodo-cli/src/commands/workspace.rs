@@ -1,8 +1,8 @@
 //! `txtodo workspace add|remove|list` (ADR 0025, task `cli-workspace-commands`): manages the
 //! device-global daemon's workspace registry; `rename` (task workspace-vanity-name) sets the name
-//! every paired device shows. `offers|accept|decline` (task
-//! `workspace-offer-cli`) live in `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in
-//! `workspace_rejoin.rs`; only their clap variants are here. Needs the true global daemon — a legacy
+//! every paired device shows. `offers|accept|decline` (task `workspace-offer-cli`) live in
+//! `workspace_offers.rs`, `rejoin` (task sync-drift line 8) in `workspace_rejoin.rs`, `bind` in
+//! `workspace_bind.rs`; only their clap variants are here. Needs the true global daemon — a legacy
 //! `--dir`-bridge daemon has no registry to answer these with (`Daemon::workspace_add`/etc.
 //! return an `Unimplemented` `ClientError::Rpc` against one, surfaced as a normal error).
 
@@ -84,6 +84,10 @@ pub enum Action {
         #[arg(long)]
         yes: bool,
     },
+    /// Moves a Remote workspace (one a paired device offered) into a folder, for a repo cloned on
+    /// two devices: this folder's own copy moves into a new folder beside it, never deleted or
+    /// sent, and the synced copy moves in. Shows what moves and asks first, unless `--yes`.
+    Bind(super::workspace_bind::Args),
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
     Default,
@@ -118,6 +122,7 @@ pub fn run(
             super::workspace_offers::run_decline(daemon, id, from.as_deref(), as_json)
         }
         Some(Action::Rejoin { id, yes }) => super::workspace_rejoin::run(daemon, id, *yes, as_json),
+        Some(Action::Bind(args)) => super::workspace_bind::run(ctx, daemon, args, as_json),
         Some(Action::Default) => run_default(&Env::from_process().map_err(CliError::Io)?, as_json),
         Some(Action::Layout {
             refs_dir,
