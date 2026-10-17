@@ -26,6 +26,9 @@
 #   desktop   `{ status, surface }` for the desktop app, plus `keys` when its keys differ from
 #             the shared ones (then `status = "differs"`).
 #   tui       The same for the TUI.
+#   web       Optional: the browser build of the desktop app (`vite --mode web`, ADR 0042), only on
+#             rows where it stands apart from `desktop`; absent means "as desktop". Its reason goes
+#             in `deviation` too, after "In the browser:".
 #   deviation One plain line, required whenever either status is `differs` or `na`: what differs
 #             and why. Empty otherwise.
 #
@@ -541,7 +544,8 @@ keys = []
 scope = "global"
 desktop = { status = "na", surface = "" }
 tui = { status = "differs", surface = "command line (:q)", keys = ["Ctrl-c"] }
-deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q or Ctrl-c (raw mode makes Ctrl-c a key)."
+web = { status = "na", surface = "" }
+deviation = "Desktop quits from the OS menu or tray; the TUI quits with :q or Ctrl-c (raw mode makes Ctrl-c a key). In the browser: closing the tab is the browser's."
 
 # ==== Revamp plan (tasks/desktop-ui-revamp/notes.md "Keyboard map", c2 footer hints) ===============
 # Neither client has these yet; the TUI builds them first (tasks/tui-revamp).
@@ -1040,7 +1044,8 @@ keys = ["Super-Shift-Space"]
 scope = "global"
 desktop = { status = "done", surface = "Quick Add window (quick_add.rs)" }
 tui = { status = "na", surface = "" }
-deviation = "An OS-wide hotkey and a floating window need a GUI app; the TUI's prompt bar (prompt.focus) covers adding from inside it."
+web = { status = "na", surface = "" }
+deviation = "An OS-wide hotkey and a floating window need a GUI app; the TUI's prompt bar (prompt.focus) covers adding from inside it. In the browser: no OS-wide hotkey or floating window; the prompt bar adds."
 
 [[action]]
 id = "prompt.chip"
@@ -1067,7 +1072,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "tray" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program has no tray icon."
+web = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon. In the browser: no tray icon."
 
 [[action]]
 id = "tray.quick_add"
@@ -1076,7 +1082,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "tray" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program has no tray icon."
+web = { status = "na", surface = "" }
+deviation = "A terminal program has no tray icon. In the browser: no tray icon."
 
 [[action]]
 id = "app.pin"
@@ -1085,7 +1092,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "PinToggle" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal program does not own its window; the terminal emulator does."
+web = { status = "na", surface = "" }
+deviation = "A terminal program does not own its window; the terminal emulator does. In the browser: the tab's window is not the page's to pin."
 
 [[action]]
 id = "app.theme"
@@ -1103,7 +1111,8 @@ keys = []
 scope = "global"
 desktop = { status = "done", surface = "status banner" }
 tui = { status = "done", surface = "daemon banner" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon; the lists live in the tab's own Worker (ADR 0042)."
 
 [[action]]
 id = "app.dismiss_skill_hint"
@@ -1202,7 +1211,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "done", surface = "Settings > Workspaces" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
 id = "workspace.remove"
@@ -1211,7 +1221,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "done", surface = "Settings > Workspaces (d, twice)" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
 id = "workspace.rename"
@@ -1220,7 +1231,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "WorkspaceSwitcher" }
 tui = { status = "differs", surface = "Settings > Workspaces (the open one)" }
-deviation = "The TUI renames only the open workspace, from a field row that starts at its name; switch to another first."
+web = { status = "na", surface = "" }
+deviation = "The TUI renames only the open workspace, from a field row that starts at its name; switch to another first. In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
 id = "activity.refresh"
@@ -1229,7 +1241,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Activity (ActivityCard)" }
 tui = { status = "done", surface = "Settings > Activity" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no device-wide op log yet."
 
 [[action]]
 id = "universal.filter_context"
@@ -1256,7 +1269,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "pair.scan"
@@ -1265,7 +1279,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices (camera)" }
 tui = { status = "differs", surface = "Settings > Devices" }
-deviation = "A terminal has no camera: the TUI takes the code pasted as text."
+web = { status = "planned", surface = "" }
+deviation = "A terminal has no camera: the TUI takes the code pasted as text. In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "pair.confirm"
@@ -1274,7 +1289,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Devices" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: pairing waits for the web-pwa Sync line."
 
 [[action]]
 id = "devices.list"
@@ -1283,7 +1299,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Devices (DeviceList)" }
 tui = { status = "done", surface = "Settings > Devices" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: devices wait for the web-pwa Sync line."
 
 [[action]]
 id = "devices.revoke"
@@ -1292,7 +1309,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Devices (Remove, behind a confirm)" }
 tui = { status = "done", surface = "Settings > Devices (d, twice)" }
-deviation = ""
+web = { status = "planned", surface = "" }
+deviation = "In the browser: devices wait for the web-pwa Sync line."
 
 [[action]]
 id = "tokens.create"
@@ -1301,7 +1319,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "done", surface = "Settings > Tokens" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon to issue agent tokens."
 
 [[action]]
 id = "tokens.copy"
@@ -1310,7 +1329,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "differs", surface = "Settings > Tokens" }
-deviation = "The TUI copies with OSC 52, a terminal escape some terminals ignore; the secret stays on screen until dismissed."
+web = { status = "na", surface = "" }
+deviation = "The TUI copies with OSC 52, a terminal escape some terminals ignore; the secret stays on screen until dismissed. In the browser: no daemon to issue agent tokens."
 
 [[action]]
 id = "tokens.revoke"
@@ -1319,7 +1339,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Tokens" }
 tui = { status = "done", surface = "Settings > Tokens (d, twice)" }
-deviation = ""
+web = { status = "na", surface = "" }
+deviation = "In the browser: no daemon to issue agent tokens."
 
 # ==== Revamp Settings rows that cannot exist in a terminal =========================================
 
@@ -1330,7 +1351,8 @@ keys = []
 scope = "settings"
 desktop = { status = "done", surface = "Settings > Workspaces (Choose a folder…)" }
 tui = { status = "na", surface = "" }
-deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add)."
+web = { status = "na", surface = "" }
+deviation = "A terminal has no OS folder picker: the TUI adds a workspace by typed path (workspace.add). In the browser: no folders to pick (ADR 0042)."
 
 [[action]]
 id = "appearance.font"

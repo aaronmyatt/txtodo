@@ -13,6 +13,7 @@
 	import DevicesCard from "../../devices/DevicesCard.svelte";
 	import Tokens from "../../devices/Tokens.svelte";
 	import ActivityCard from "$lib/components/settings/ActivityCard.svelte";
+	import { IS_WEB, WEB_HIDDEN_SECTIONS } from "$lib/web/mode";
 
 	/** Each section's card body, by section id. */
 	const BODIES: Record<string, { body: Snippet }> = {
@@ -25,7 +26,9 @@
 		activity: { body: activity }
 	};
 
-	const shown = $derived(SECTIONS.filter((s) => BODIES[s.id] && sectionMatches(s, $searchQuery)));
+	const shown = $derived(
+		SECTIONS.filter((s) => BODIES[s.id] && !(IS_WEB && WEB_HIDDEN_SECTIONS.has(s.id)) && sectionMatches(s, $searchQuery))
+	);
 	$effect(() => settingsHits.set(shown.length));
 
 	let scroller: HTMLElement | undefined = $state();

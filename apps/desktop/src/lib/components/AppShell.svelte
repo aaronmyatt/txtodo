@@ -16,6 +16,7 @@
 	import { requestWorkspaceMenu } from "$lib/workspaceMenu";
 	import { editorStatus, SAVE_LABEL } from "$lib/stores/editorStatus";
 	import PinToggle from "./PinToggle.svelte";
+	import { IS_WEB } from "$lib/web/mode";
 	import PromptBar from "./PromptBar.svelte";
 	import Toasts from "./Toasts.svelte";
 	import SyncIndicator from "./SyncIndicator.svelte";
@@ -154,7 +155,8 @@
 		</nav>
 
 		<div class="actions">
-			<PinToggle />
+			<!-- A browser tab is not the page's to pin (ADR 0042, client-parity app.pin). -->
+			{#if !IS_WEB}<PinToggle />{/if}
 			<ThemeToggle />
 			<a href="/help" class="icon-button" aria-label="Help" title="Help">
 				<Icon name="help" />

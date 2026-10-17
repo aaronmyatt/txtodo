@@ -17,6 +17,7 @@
 	import { pinned, setPinned } from "$lib/stores/pin";
 	import { changeNotices, setChangeNotices } from "$lib/stores/changeNotices";
 	import SettingsRow from "./SettingsRow.svelte";
+	import { IS_WEB } from "$lib/web/mode";
 
 	let status = $state<DaemonStatus>("connecting");
 	let retrying = $state(false);
@@ -67,6 +68,9 @@
 	});
 </script>
 
+<!-- The browser build has no window to pin, no OS notices, no menu bar, no installed release and
+	no daemon (ADR 0042): only the save row is its. -->
+{#if !IS_WEB}
 <SettingsRow label="Pin on top" description="Keep this window above other windows." for="s-pin">
 	<input id="s-pin" type="checkbox" class="d-toggle" checked={$pinned} onchange={(e) => void setPinned(e.currentTarget.checked)} />
 </SettingsRow>
@@ -83,12 +87,14 @@
 >
 	<span class="badge">always on</span>
 </SettingsRow>
+{/if}
 <SettingsRow
 	label="Save when the buffer loses focus"
 	description="Edits save as you go, and again whenever you leave the editor. Nothing waits for a Save button."
 >
 	<span class="badge">always on</span>
 </SettingsRow>
+{#if !IS_WEB}
 <SettingsRow label="Updates" description="Checks GitHub for a newer release, then upgrades this device the way it was installed.">
 	{#if updateNote}
 		<span class="status" role="status">{updateNote}</span>
@@ -105,6 +111,7 @@
 	<span class="status" role="status"><span class="dot {status}"></span>{status}</span>
 	<button type="button" class="retry" disabled={retrying || status === "connecting" || status === "spawning"} onclick={retry}>Retry</button>
 </SettingsRow>
+{/if}
 
 <style>
 	.badge {

@@ -7,6 +7,28 @@ import tailwindcss from "@tailwindcss/vite";
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
 
+const at = (path: string) => fileURLToPath(new URL(path, import.meta.url));
+
+/** The module swaps for `--mode e2e` and `--mode web`; none otherwise. */
+function aliasesFor(mode: string): Record<string, string> {
+  if (mode === "e2e") {
+    return {
+      "@tauri-apps/api/core": at("./e2e/shim/core.ts"),
+      "@tauri-apps/api/event": at("./e2e/shim/event.ts"),
+      "@tauri-apps/api/window": at("./e2e/shim/window.ts"),
+    };
+  }
+  if (mode === "web") {
+    return {
+      "@tauri-apps/api/core": at("./src/lib/web/core.ts"),
+      "@tauri-apps/api/event": at("./src/lib/web/event.ts"),
+      "@tauri-apps/api/window": at("./src/lib/web/window.ts"),
+      "@tauri-apps/plugin-dialog": at("./src/lib/web/dialog.ts"),
+    };
+  }
+  return {};
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   // https://tailwindcss.com/docs/installation/using-vite
@@ -20,18 +42,13 @@ export default defineConfig(({ mode }) => ({
 
   // `vite dev --mode e2e` (apps/desktop/playwright.config.ts's webServer) swaps the real
   // `@tauri-apps/api/*` modules for the test-only HTTP-bridge shims under e2e/shim/ — see that
-  // directory's module docs. Every other mode (plain `npm run dev`, `vitest`, `tauri dev`) is
-  // untouched: this alias only exists when `mode === "e2e"`.
-  resolve:
-    mode === "e2e"
-      ? {
-          alias: {
-            "@tauri-apps/api/core": fileURLToPath(new URL("./e2e/shim/core.ts", import.meta.url)),
-            "@tauri-apps/api/event": fileURLToPath(new URL("./e2e/shim/event.ts", import.meta.url)),
-            "@tauri-apps/api/window": fileURLToPath(new URL("./e2e/shim/window.ts", import.meta.url)),
-          },
-        }
-      : {},
+  // directory's module docs. `--mode web` (ADR 0042, the browser build) swaps them for
+  // src/lib/web/, which talks to txtodo-web in a Worker. Every other mode (plain `npm run dev`,
+  // `vitest`, `tauri dev`) is untouched: these aliases exist only in those two modes.
+  resolve: { alias: aliasesFor(mode) },
+  // The Worker host imports wasm-bindgen output, which locates its .wasm by `import.meta.url`:
+  // that needs an ES module Worker, not the default IIFE. https://vite.dev/config/worker-options
+  worker: { format: "es" },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

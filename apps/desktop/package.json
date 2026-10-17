@@ -16,7 +16,10 @@
     "test:visual:update": "playwright test --project=light --project=dark --update-snapshots",
     "test:perf": "playwright test --project=functional e2e/perf.spec.ts",
     "tauri": "tauri",
-    "build:wasm-core": "bash scripts/build-wasm-core.sh"
+    "build:wasm-core": "bash scripts/build-wasm-core.sh",
+    "build:web-host": "bash scripts/build-web-host.sh",
+    "dev:web": "vite dev --mode web",
+    "build:web": "vite build --mode web"
   },
   "license": "MIT",
   "dependencies": {
