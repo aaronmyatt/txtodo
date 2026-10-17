@@ -111,6 +111,37 @@ rebuilt.
     is fine for the one connection a Worker holds.
   - Cost: 1.05 MB wasm, 0.47 MB gzip.
 
+## As built (2026-10-17)
+
+- **`txtodo-engine`** (42f89a7e, 997eeedb): the daemon's 30 pure modules plus their 158 tests.
+  - The daemon re-exports them under the old names.
+  - `reconcile_against` and `settle` moved in later (f8818a63, a771f1fa), so a whole-text save
+    settles the same way on both hosts.
+  - `test-support` exposes 4 test seams to the daemon's tests.
+  - jiff's `js` feature on wasm32: `local_date` traps in a Worker without it (8ae66616).
+- **`txtodo-sync`**: a default `native` feature (216a8f49). Without it the crate builds for wasm32.
+- **CI**: the `wasm` job clippies core, model, store, engine and web, plus sync without `native`.
+  It is unproven until it runs on a push.
+- **`txtodo-web`** (64a2cdd4): `Host` and `Doc` over the store; a `wasm` binding with the OPFS
+  pool VFS. See its `CLAUDE.md`.
+  - Checked in Chromium: a dedicated Worker kept lines and the device id across reloads, and a
+    fresh context started empty.
+  - Size: 2.9 MB, 1.1 MB gzipped (release profile, not tuned for size).
+  - Rerun:
+    1. Build for wasm32 with `CC_/AR_wasm32_unknown_unknown` set to Homebrew `llvm@21`.
+    2. Run `wasm-bindgen --target web --out-dir <www>/pkg`.
+    3. Serve a page whose module Worker does `await init(); const h = await WebHost.open("/x.db");
+       h.call("apply", ...)`, from `localhost`, through Playwright's chromium.
+- **Dropped from the plan**:
+  - Moving `WorkspaceId`: the store builds for wasm.
+  - Proto on wasm: the host maps the JSON straight to engine types.
+  - A `Clock` port: only `local_date` reads the clock in the engine.
+- **Known gaps**:
+  - Notes, undo and cross-file moves are refused.
+  - History summaries are the op kind tag only.
+  - An inexact `Replace` is refused.
+  - Sync, keys and pairing are the "Sync from the browser" line.
+
 ## Design
 
 ```text
