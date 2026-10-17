@@ -184,7 +184,8 @@ txtodo [--dir DIR] [--sync-dir DIR] [--relay URL] [--json] [--no-id] [-A|--no-ar
 | `do ITEM#...` | | Mark tasks done and archive. |
 | `pri ITEM# PRIORITY...` | `p` | Set task priorities (A-Z), as `ITEM# PRIORITY` pairs. |
 | `depri ITEM#...` | `dp` | Remove a task's priority. |
-| `move ITEM# DEST [SRC]` | `mv` | Move a task to another file in the todo directory. |
+| `move ITEM# DEST [SRC]` | `mv` | Move a task to another list in the todo directory (e.g. `tasks/trip/todo.txt`); through the daemon its `ref:` folder moves too. |
+| `copy ITEM# DEST [SRC]` | `cp` | Copy a task to the end of another list: a new task, without its `id:` and `ref:`. |
 | `archive` | | Move completed lines to the bottom of `todo.txt`, drop blank lines. |
 | `deduplicate` | | Blank every later repeat of an identical line. |
 | `fmt` | | Canonicalise quirks in `todo.txt`. |

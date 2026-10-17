@@ -192,12 +192,10 @@ fn announce_default_workspace(ctx: &Ctx, command: &Command) {
 }
 
 /// The CLI's own sink matrix (root todo.txt `logging-cli`), distinct from `txtodo-mcp`/`txtodod`'s
-/// always-on JSON+stderr pair (`txtodo_telemetry::init` unconditionally builds both): most
-/// invocations are one-shot and short-lived, so writing a rolling JSON log file nobody asked for on
-/// every `txtodo add` would be noise. Default (no `$TXTODO_LOG`): pretty stderr only, `warn`+, so
-/// an ordinary run stays quiet but still surfaces the three converted `commands/edit.rs`
-/// diagnostics. `$TXTODO_LOG` set: the shared JSON-rolling-file + pretty-stderr pair, filtered by
-/// its value, same as every other txtodo binary.
+/// always-on JSON+stderr pair: most invocations are one-shot, so a rolling JSON log nobody asked
+/// for on every `txtodo add` would be noise. Default (no `$TXTODO_LOG`): pretty stderr only,
+/// `warn`+, which still surfaces the three converted `commands/edit.rs` diagnostics.
+/// `$TXTODO_LOG` set: the shared JSON-rolling-file + pretty-stderr pair, filtered by its value.
 ///
 /// Reads `$TXTODO_LOG` directly rather than through `config::Env` (`config.rs`'s module doc: "the
 /// process environment ... never read below main"): this is telemetry bootstrap, not CLI business
@@ -237,6 +235,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Listcon { .. } => "listcon",
         Command::Prepend { .. } => "prepend",
         Command::Move { .. } => "move",
+        Command::Copy { .. } => "copy",
         Command::Pri { .. } => "pri",
         Command::Report => "report",
         Command::Replace { .. } => "replace",
@@ -314,6 +313,12 @@ fn dispatch_daemon_inner(
             commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
         }
         Command::Bundle { action } => bundle::run(daemon, action),
+        Command::Move { item, dest, src } => {
+            commands::move_copy::move_via_daemon(ctx, daemon, item, dest, src.as_deref())
+        }
+        Command::Copy { item, dest, src } => {
+            commands::move_copy::copy_via_daemon(ctx, daemon, item, dest, src.as_deref())
+        }
         // Every todo.sh command, present and future, goes through the scratch adapter by design.
         todo_sh => daemon_mode::run_via_daemon(ctx, daemon, |scratch| dispatch(scratch, todo_sh)),
     }
@@ -356,6 +361,9 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         Command::Deduplicate => commands::fileops::run_dedup(ctx),
         Command::Move { item, dest, src } => {
             commands::fileops::run_move(ctx, item, dest, src.as_deref())
+        }
+        Command::Copy { item, dest, src } => {
+            commands::move_copy::run_copy(ctx, item, dest, src.as_deref())
         }
         Command::Report => commands::fileops::run_report(ctx, &clock::now_local_iso()),
         Command::Del { item, term } => commands::edit::run_del(ctx, item, term.as_deref()),

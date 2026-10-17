@@ -97,3 +97,22 @@ fn json_lists_one_object_per_line_with_fields_and_spans() {
         "[\"+home\",\"+work\"]\n"
     );
 }
+
+#[test]
+fn cp_copies_a_line_to_another_list_without_its_id_or_ref() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("todo.txt"), TODO).unwrap();
+    std::fs::write(dir.path().join("other.txt"), "kept\n").unwrap();
+    let (ok, out) = run(dir.path(), &["cp", "5", "other.txt"]);
+    assert!(ok, "{out}");
+    assert!(out.ends_with("TODO: 5 copied to 2 in OTHER.\n"), "{out}");
+    let other = std::fs::read_to_string(dir.path().join("other.txt")).unwrap();
+    let copy = other.lines().nth(1).unwrap();
+    assert!(
+        copy.starts_with("(A) ") && copy.ends_with(" urgent +work"),
+        "{other}"
+    );
+    let todo = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
+    assert_eq!(todo, TODO, "the original stays");
+    assert!(!run(dir.path(), &["cp", "5", "missing.txt"]).0);
+}

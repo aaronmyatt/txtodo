@@ -149,12 +149,24 @@ pub enum Command {
         #[arg(required = true, num_args = 1..)]
         text: Vec<String>,
     },
-    /// Move a task to another file in the todo directory (its line stays blank).
+    /// Move a task to another list in the todo directory. Through the daemon its `ref:` folder
+    /// moves too; without one, its line stays blank (todo.sh).
     #[command(visible_alias = "mv")]
     Move {
         /// Line number.
         item: String,
-        /// Destination file name.
+        /// Destination file name, relative to the todo directory (e.g. `tasks/trip/todo.txt`).
+        dest: String,
+        /// Source file name (default todo.txt).
+        src: Option<String>,
+    },
+    /// Copy a task to the end of another list: a new task without the `id:` and `ref:` (its notes
+    /// and sub-list stay with the original).
+    #[command(visible_alias = "cp")]
+    Copy {
+        /// Line number.
+        item: String,
+        /// Destination file name, relative to the todo directory.
         dest: String,
         /// Source file name (default todo.txt).
         src: Option<String>,

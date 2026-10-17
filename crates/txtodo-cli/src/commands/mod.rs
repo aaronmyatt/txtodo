@@ -21,6 +21,7 @@ pub mod identity;
 pub mod layout;
 pub mod list;
 pub mod mcp;
+pub mod move_copy;
 pub mod notices;
 pub mod pair;
 pub mod refdir;

@@ -8,7 +8,11 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - Commands and aliases exactly as todo.sh 2.14: `add`/`a`, `addm`, `list`/`ls`, `listall`/`lsa`,
   `listpri`/`lsp`, `listproj`/`lsprj`, `listcon`/`lsc`, `listfile`/`lf`, `do`, `pri`/`p`,
   `depri`/`dp`, `append`/`app`, `prepend`/`prep`, `replace`, `del`/`rm`, `move`/`mv`, `archive`,
-  `deduplicate`, `report`; plus `fmt`, `lint`, `env`.
+  `deduplicate`, `report`; plus `fmt`, `lint`, `env`, and `copy`/`cp` (a new task at the end of
+  another list, without `id:`/`ref:`). `list` shows open tasks only unless a term names `is:done`
+  or `is:open`; `listall` shows every line. In daemon mode `move` and `copy` skip the scratch
+  adapter (it holds one list): `move` is the daemon's cross-file `Move`, which takes the `ref:`
+  folder along, and `copy` an `Add` at DEST (`commands/move_copy.rs`).
 - Daemon-only: `log [--file F] [-n N]`, `blame ITEM#`, `undo [--steps N]`,
   `checkout YYYY-MM-DDTHH:MM[:SS] [--stdout] [--file F]` (fail with the fix in direct mode);
   `doctor [--verbose]` (seven fixed checks — including `keystore` and `transport`, the latter
