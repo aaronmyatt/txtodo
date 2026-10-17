@@ -34,3 +34,15 @@ clients), and there is still no opt-in vim mode (rejected in `tasks/tui-revamp/n
 - `keyName` writes `Shift-` before a named key, after `Alt-`, like the TUI.
 - `detail.open` binds `Mod-Enter` too; `Chords` reads `Super-`/`Ctrl-` as `Mod-`.
 - `list.click_to_edit` flips to desktop "done" in the manifest.
+
+## As built (2026-10-17)
+
+- All five in 2833155b. `listMode.ts::clickOnlySelects` is the rule, `FileView`'s `mousedown`
+  applies it; `AppShell::releaseControl` blurs a focused button or link on Esc without stopping
+  the event; `keys.ts` names `Shift-` and maps `Super-`/`Ctrl-` to `Mod-`.
+- Tests: vitest (`clickOnlySelects`, `keyName` Shift, `Chords` Mod) and two new functional e2e
+  cases in `e2e/list-mode.spec.ts`; `list-mode`, `escape` and `prompt-bar` specs all pass.
+- Human check left: on the real app, click a line, press `j`/`k` (moves, types nothing); click the
+  same line again (caret, editing); Esc; Cmd+Enter (detail opens).
+- Not done: Esc in an editor still discards an unsaved edit (`edit.cancel`, kept on purpose);
+  a drag-select now needs the line selected first (the first click only selects).
