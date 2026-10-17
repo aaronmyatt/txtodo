@@ -121,6 +121,20 @@ pub fn with_line_number(
 /// mutation to send. `MutationError::Stale` on a mismatched id, exactly like [`resolve`]. A
 /// line-0-plus-id `TaskRef` must go through [`with_line_number`] first.
 pub fn peek_line(bytes: &[u8], task: &TaskRef) -> Result<PeekedLine, MutationError> {
+    peek(bytes, &[], task)
+}
+
+/// [`peek_line`] against an actor's `Contents`: the line's id is the actor's own (Sidecar text
+/// carries no `id:`), else the text's. A cross-file move peeks this way (task
+/// add-the-ability-to-move-or-copy-a-task-t): by the text alone it failed on every Sidecar line.
+pub fn peek_contents(
+    contents: &crate::contents::Contents,
+    task: &TaskRef,
+) -> Result<PeekedLine, MutationError> {
+    peek(&contents.bytes, &contents.task_ids, task)
+}
+
+fn peek(bytes: &[u8], ids: &[Option<TaskId>], task: &TaskRef) -> Result<PeekedLine, MutationError> {
     let n = task.line_number;
     let i = n.checked_sub(1).ok_or(MutationError::NoLine(n))?;
     let file = txtodo_core::parse_file(bytes);
@@ -129,7 +143,10 @@ pub fn peek_line(bytes: &[u8], task: &TaskRef) -> Result<PeekedLine, MutationErr
     let LineKind::Task(t) = parsed.kind else {
         return Err(MutationError::Blank(n));
     };
-    let found = t.id().map(TaskId::new).ok_or(MutationError::NoLine(n))?;
+    let by_actor = ids.get(i).copied().flatten();
+    let found = by_actor
+        .or_else(|| t.id().map(TaskId::new))
+        .ok_or(MutationError::NoLine(n))?;
     if let Some(expected) = task.task_id
         && expected != found
     {

@@ -10,7 +10,7 @@
 //! alternative (a shared op keyed by `file` *or* `to_file`) and why this crate did not take it.
 
 use crate::handle::{ActorError, ActorHandle, Applied};
-use crate::mutation::{self, Mutation, TaskRef};
+use crate::mutation::{Mutation, TaskRef};
 use crate::refdir::{move_ref_dir, ref_tag_edit};
 use crate::state::{self, StateError};
 use std::path::{Path, PathBuf};
@@ -56,8 +56,9 @@ pub async fn move_task_across_files(
     // `todo_move` names the task by id alone (line 0): give it its line first, from the actor's
     // own id list (Sidecar) or the text (Tagged).
     let task = crate::mutation_moves::with_line_number(&contents, task)?;
-    let peeked = mutation::peek_line(&contents.bytes, &task)?;
+    let peeked = crate::mutation_moves::peek_contents(&contents, &task)?;
     let to = dest.path().clone();
+    let held = dest.get().await?.task_ids;
     let moved = origin
         .apply(source, vec![Mutation::Move { task, to }])
         .await?;
@@ -73,21 +74,37 @@ pub async fn move_task_across_files(
         let _ = reinsert_at_source(source, &peeked.line, &origin).await;
         return Err(e);
     }
+    // The id the line has at the destination: its own `id:` (Tagged), or the one the destination
+    // minted for it (Sidecar, where the text carries none).
+    let arrived = arrived_id(dest, &held).await.unwrap_or(peeked.id);
     if let Some(slug) = &peeked.ref_slug
         && let Err(e) = relocate_ref_dir(
             source.path(),
             dest,
-            (peeked.id, slug),
+            (arrived, slug),
             (root, layout),
             &origin,
         )
         .await
     {
-        let _ = remove_by_task_id(dest, peeked.id, &origin).await;
+        let _ = remove_by_task_id(dest, arrived, &origin).await;
         let _ = reinsert_at_source(source, &peeked.line, &origin).await;
         return Err(e);
     }
     Ok(moved)
+}
+
+/// The one task id `dest` holds now that it did not hold in `before`: the line an `Add` just
+/// appended. `None` when that is not exactly one (a sync landed in between), and the caller keeps
+/// the source's id.
+async fn arrived_id(dest: &ActorHandle, before: &[Option<TaskId>]) -> Option<TaskId> {
+    let now = dest.get().await.ok()?.task_ids;
+    let mut new = now
+        .into_iter()
+        .flatten()
+        .filter(|id| !before.contains(&Some(*id)));
+    let first = new.next()?;
+    new.next().is_none().then_some(first)
 }
 
 /// Rollback: puts the line back at the source, appended (its exact original position is not
@@ -150,7 +167,7 @@ async fn rewrite_ref_tag(
         task_id: Some(id),
     };
     let contents = dest.get().await?;
-    let peeked = mutation::peek_line(&contents.bytes, &task)?;
+    let peeked = crate::mutation_moves::peek_contents(&contents, &task)?;
     let owned = OwnedLine::from_bytes(peeked.line.into_bytes(), LineEnding::default());
     let new_line = txtodo_core::apply(&owned, &ref_tag_edit(Some(final_slug)));
     let new_line = new_line.raw().unwrap_or_default().to_owned();
@@ -190,13 +207,17 @@ async fn remove_by_task_id(
 }
 
 /// The 1-based line a task currently sits at, read fresh (a `Mutation::Add`'s append position is
-/// not known to the caller ahead of time).
+/// not known to the caller ahead of time): by the actor's own id list, which Sidecar needs, else by
+/// the `id:` tag in the text.
 async fn line_number_of(h: &ActorHandle, id: TaskId) -> Result<usize, ActorError> {
     let contents = h.get().await?;
-    let file = txtodo_core::parse_file(&contents.bytes);
-    file.lines
-        .iter()
-        .position(|l| state::id_of(l) == Some(id))
+    let by_actor = contents.task_ids.iter().position(|t| *t == Some(id));
+    let by_text = || {
+        let file = txtodo_core::parse_file(&contents.bytes);
+        file.lines.iter().position(|l| state::id_of(l) == Some(id))
+    };
+    by_actor
+        .or_else(by_text)
         .map(|i| i + 1)
         .ok_or(ActorError::State(StateError::UnknownTask(id)))
 }

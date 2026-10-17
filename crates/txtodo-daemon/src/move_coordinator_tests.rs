@@ -41,12 +41,22 @@ fn open_at(
     store: &SharedStore,
     clock: &Arc<dyn crate::clock::Clock>,
 ) -> FileActor {
+    open_in(IdentityMode::Tagged, root, rel, store, clock)
+}
+
+fn open_in(
+    identity_mode: IdentityMode,
+    root: &Path,
+    rel: &str,
+    store: &SharedStore,
+    clock: &Arc<dyn crate::clock::Clock>,
+) -> FileActor {
     let cfg = ActorConfig {
         path: FilePath::new(rel).unwrap_or_else(|e| panic!("{e}")),
         disk: root.join(rel),
         device: device(),
         stats: Arc::new(Stats::default()),
-        identity_mode: IdentityMode::Tagged,
+        identity_mode,
         tree_dirty: Arc::new(crate::tree_dirty::TreeDirty::default()),
         layout: crate::layout_state::SharedLayout::default(),
     };
@@ -217,4 +227,77 @@ async fn a_move_records_the_requests_source_on_both_documents() {
         sources.len() >= 2 && sources.values().all(|s| s == "mcp"),
         "every op the move appended names the client: {sources:?}"
     );
+}
+
+/// Sidecar (the default): no `id:` in the text, and the destination mints its own id for the line
+/// that arrives. The source's first line, by the actor's own id list.
+async fn sidecar_pair(
+    root: &Path,
+) -> (
+    crate::handle::ActorHandle,
+    crate::handle::ActorHandle,
+    TaskRef,
+) {
+    let store = shared_store(root);
+    let clock = fake_clock();
+    let source = open_in(IdentityMode::Sidecar, root, "todo.txt", &store, &clock).spawn();
+    let dest = open_in(IdentityMode::Sidecar, root, "sub/other.txt", &store, &clock).spawn();
+    let ids = source
+        .get()
+        .await
+        .unwrap_or_else(|e| panic!("{e}"))
+        .task_ids;
+    let task = TaskRef {
+        line_number: 1,
+        task_id: ids[0],
+    };
+    (source, dest, task)
+}
+
+#[tokio::test]
+async fn sidecar_a_slug_collision_is_rewritten_on_the_line_the_destination_minted() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("todo.txt"), "(A) roadmap ref:project\n").unwrap();
+    std::fs::create_dir(root.join("project")).unwrap();
+    std::fs::create_dir_all(root.join("sub/project")).unwrap();
+    let (source, dest, task) = sidecar_pair(root).await;
+    let layout = txtodo_model::WorkspaceLayout::beside_the_list();
+    move_task_across_files(&source, &dest, task, origin(), (root, &layout))
+        .await
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(read(root, "sub/other.txt"), "(A) roadmap ref:project-2\n");
+    assert_eq!(read(root, "todo.txt"), "");
+    assert!(root.join("sub/project-2").is_dir());
+}
+
+// A ref dir that cannot move (no write permission on the directory itself, which a rename to a
+// new parent needs) fails after the line already landed: the rollback must find that line by the
+// destination's own id, or the task ends up in both lists.
+#[cfg(unix)]
+#[tokio::test]
+async fn sidecar_a_failed_ref_move_takes_the_arrived_line_back_out() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("todo.txt"), "(A) roadmap ref:project\n").unwrap();
+    std::fs::create_dir(root.join("project")).unwrap();
+    std::fs::create_dir(root.join("sub")).unwrap();
+    let (source, dest, task) = sidecar_pair(root).await;
+    let mode = |m| std::fs::Permissions::from_mode(m);
+    std::fs::set_permissions(root.join("project"), mode(0o555)).unwrap();
+    let layout = txtodo_model::WorkspaceLayout::beside_the_list();
+    let result = move_task_across_files(&source, &dest, task, origin(), (root, &layout)).await;
+    std::fs::set_permissions(root.join("project"), mode(0o755)).unwrap();
+    if result.is_ok() {
+        // This filesystem renames a read-only directory anyway (root, or a lenient FS): nothing to
+        // roll back, and nothing this test can show.
+        return;
+    }
+    assert!(
+        !read(root, "sub/other.txt").contains("roadmap"),
+        "taken back out"
+    );
+    assert_eq!(read(root, "todo.txt"), "(A) roadmap ref:project\n");
 }
