@@ -78,6 +78,7 @@ fn run_panes(state: &mut AppState, command: Command) -> Option<Action> {
         Command::AppQuit => return Some(Action::Quit),
         other => {
             let run = crate::commands_nav::run(state, other)
+                .or_else(|| crate::list_picker::run(state, other))
                 .or_else(|| crate::search::run(state, other))
                 .or_else(|| crate::commands_detail::run(state, other))
                 .or_else(|| crate::prompt::run(state, other))

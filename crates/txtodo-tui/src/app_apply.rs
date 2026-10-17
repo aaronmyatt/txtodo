@@ -37,14 +37,16 @@ fn landed(state: &mut AppState, path: &str, ops: u32) {
     state.last_error = None;
     state.shell.refused = None;
     state.shell.saved_at = Some(now);
-    let change = state.shell.record(path, ops);
+    let undoable = !std::mem::take(&mut state.shell.pending_no_undo);
+    let change = undoable.then(|| state.shell.record(path, ops));
     if let Some(message) = state.shell.pending_toast.take() {
-        state.shell.toast(message, Some(change), now);
+        state.shell.toast(message, change, now);
     }
 }
 
 fn refused(state: &mut AppState, error: &str, typed: Option<String>) {
     state.shell.pending_toast = None;
+    state.shell.pending_no_undo = false;
     state.last_error = Some(error.to_owned());
     state.shell.refused = typed.map(|text| Refused {
         error: error.to_owned(),

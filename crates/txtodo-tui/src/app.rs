@@ -206,6 +206,7 @@ fn action_kind(action: &Action) -> &'static str {
         Action::DeclineOffer(_) => "decline_offer",
         Action::SwitchWorkspace(_) => "switch_workspace",
         Action::OpenWorkspaceMenu => "open_workspace_menu",
+        Action::OpenListPicker(_) => "open_list_picker",
         Action::Copy(_) => "copy",
         Action::Undo(..) => "undo",
         Action::OpenDetail(_) => "open_detail",
@@ -250,15 +251,29 @@ async fn perform_screens(
             crate::app_workspace::switch_workspace(daemon, state, &query).await
         }
         Action::OpenWorkspaceMenu => crate::app_workspace::open_menu(daemon, state).await,
+        Action::OpenListPicker(mode) => {
+            crate::app_workspace::open_picker(daemon, state, mode).await
+        }
         Action::OpenDetail(parent) => crate::app_detail::open(daemon, state, parent).await,
         Action::SaveNotes(task, text) => {
             crate::app_detail::save_notes(daemon, state, task, text).await
         }
+        Action::Settings(action) => crate::app_settings::perform(daemon, state, action).await,
+        other => perform_universal(daemon, state, other).await,
+    }
+}
+
+/// The Universal screen's actions, split from `perform_screens` for its complexity budget.
+async fn perform_universal(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    action: Action,
+) -> Result<(), DaemonError> {
+    match action {
         Action::RefreshUniversal => {
             crate::app_universal::refresh(daemon, state).await;
             Ok(())
         }
-        Action::Settings(action) => crate::app_settings::perform(daemon, state, action).await,
         Action::OpenUniversal(task) => crate::app_universal::open(daemon, state, task).await,
         Action::CompleteUniversal(task) => {
             crate::app_universal::complete(daemon, state, task).await

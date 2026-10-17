@@ -84,6 +84,8 @@ pub enum Focus {
 pub enum Overlay {
     /// The `W` workspace popup.
     WorkspaceMenu,
+    /// The `m`/`c` list picker.
+    ListPicker,
     /// The conflict review sheet.
     ConflictSheet,
     /// The new-token dialog.

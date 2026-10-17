@@ -160,7 +160,7 @@ title = "Move the line to another list"
 keys = ["m"]
 scope = "list"
 desktop = { status = "done", surface = "FileView (list mode) opens the detail's Move to… picker" }
-tui = { status = "planned", surface = "" }
+tui = { status = "done", surface = "Tasks; m: the list picker (Move to)" }
 deviation = ""
 
 [[action]]
@@ -169,7 +169,7 @@ title = "Copy the line to another list"
 keys = ["c"]
 scope = "list"
 desktop = { status = "done", surface = "FileView (list mode) opens the detail's Copy to… picker" }
-tui = { status = "planned", surface = "" }
+tui = { status = "done", surface = "Tasks; c: the list picker (Copy to)" }
 deviation = ""
 
 # ==== Editing a line ===============================================================================
@@ -670,6 +670,42 @@ keys = ["Esc", "W"]
 scope = "sheet"
 desktop = { status = "done", surface = "header workspace menu" }
 tui = { status = "done", surface = "W popup" }
+deviation = ""
+
+[[action]]
+id = "list_picker.down"
+title = "Next list in the picker"
+keys = ["j", "Down"]
+scope = "sheet"
+desktop = { status = "differs", surface = "the detail's Move to… / Copy to… select", keys = ["Down"] }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = "The desktop's picker is a native select: its arrow keys, Enter and Esc are the OS's own."
+
+[[action]]
+id = "list_picker.up"
+title = "Previous list in the picker"
+keys = ["k", "Up"]
+scope = "sheet"
+desktop = { status = "differs", surface = "the detail's Move to… / Copy to… select", keys = ["Up"] }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = "The desktop's picker is a native select: its arrow keys, Enter and Esc are the OS's own."
+
+[[action]]
+id = "list_picker.open"
+title = "Move or copy the line to the selected list"
+keys = ["Enter"]
+scope = "sheet"
+desktop = { status = "done", surface = "the detail's Move to… / Copy to… select" }
+tui = { status = "done", surface = "m/c list picker" }
+deviation = ""
+
+[[action]]
+id = "list_picker.close"
+title = "Close the list picker"
+keys = ["Esc"]
+scope = "sheet"
+desktop = { status = "done", surface = "the detail's Move to… / Copy to… select" }
+tui = { status = "done", surface = "m/c list picker" }
 deviation = ""
 
 [[action]]

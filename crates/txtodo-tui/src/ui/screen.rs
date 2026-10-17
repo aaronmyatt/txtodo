@@ -14,8 +14,8 @@ use crate::hit::{Field, HitMap, Target};
 use crate::state::AppState;
 use crate::state_nav::{Focus, Overlay, Screen};
 use crate::ui::{
-    banner, detail, duplicate_sheet, field, footer, header, help, list, offers, prompt_bar,
-    row_edit, search_panel, settings, subbar, sync, toast, universal, workspace_menu,
+    banner, detail, duplicate_sheet, field, footer, header, help, list, list_picker, offers,
+    prompt_bar, row_edit, search_panel, settings, subbar, sync, toast, universal, workspace_menu,
 };
 
 /// Renders one frame: the header, the screen in view, the status line, and whichever overlay (the
@@ -70,6 +70,9 @@ pub fn draw(frame: &mut Frame, state: &AppState) -> HitMap {
             &state.shell.menu,
             &mut hits,
         );
+    }
+    if state.nav.overlay == Some(Overlay::ListPicker) {
+        list_picker::draw(frame, frame.area(), &state.shell.picker, &mut hits);
     }
     if let Some(cmd) = &state.command {
         let caret = state.command_caret.at(cmd);

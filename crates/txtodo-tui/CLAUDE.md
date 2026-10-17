@@ -16,7 +16,9 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   (screen, focus, overlay), `state_shell` (workspace, search text, `W` menu, link, banners,
   toasts, the change stack `u` and Undo use), `state_tasks` (ref badges), `state_detail` (the
   panel's levels; `with_sub_list` swaps a sub-list in so list mode runs on it unchanged),
-  `state_universal`, `state_settings`. `AppState::fixture()` for tests.
+  `state_universal`, `state_settings`. `AppState::fixture()` for tests. `list_picker` (`m`/`c`,
+  task add-the-ability-to-move-or-copy-a-task-t): the popup over the workspace's other lists;
+  Enter sends the daemon's cross-file `Move` (not on `u`'s stack) or an `Add` of the copy.
 - Drawing: `ui::screen::draw` composes header, banners, the screen, the prompt bar, the footer,
   toasts and popups, and returns the `HitMap`. One module per part under `ui/`; `paint` and
   `theme` colour tokens (desktop's palette as RGB, or a 16-colour table by hue).

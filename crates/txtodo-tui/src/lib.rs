@@ -38,6 +38,7 @@ pub mod ui {
     pub mod header;
     pub mod help;
     pub mod list;
+    pub mod list_picker;
     pub mod mark;
     pub mod notes_edit;
     pub mod notes_wrap;
@@ -72,6 +73,7 @@ pub mod fields;
 pub mod input;
 pub mod input_detail;
 pub mod keymap;
+pub mod list_picker;
 pub mod manifest;
 pub mod mouse;
 pub mod mouse_text;

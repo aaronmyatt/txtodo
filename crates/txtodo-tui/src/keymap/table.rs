@@ -51,6 +51,10 @@ commands! {
     ListMoveUp = "list.move_up", ["K", "Alt-Up"], List;
     /// Undo this session's newest change (the daemon's Undo).
     ListUndo = "list.undo", ["u"], List;
+    /// Move the line to another list (the list picker).
+    ListMoveTo = "list.move_to", ["m"], List;
+    /// Copy the line to another list (the list picker).
+    ListCopyTo = "list.copy_to", ["c"], List;
     /// Save the edit.
     EditCommit = "edit.commit", ["Enter"], Edit;
     /// Discard the edit.
@@ -225,4 +229,12 @@ commands! {
     WorkspaceMenuOpen = "workspace_menu.open", ["Enter"], Sheet;
     /// Close the popup.
     WorkspaceMenuClose = "workspace_menu.close", ["Esc", "W"], Sheet;
+    /// Next list in the picker.
+    ListPickerDown = "list_picker.down", ["j", "Down"], Sheet;
+    /// Previous list in the picker.
+    ListPickerUp = "list_picker.up", ["k", "Up"], Sheet;
+    /// Move or copy the line to the selected list.
+    ListPickerOpen = "list_picker.open", ["Enter"], Sheet;
+    /// Close the picker; nothing moves.
+    ListPickerClose = "list_picker.close", ["Esc"], Sheet;
 }

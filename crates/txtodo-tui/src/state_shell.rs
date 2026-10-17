@@ -21,6 +21,11 @@ pub struct Shell {
     pub prompt_typed_at: Option<Instant>,
     /// The `W` popup's rows, filled when it opens.
     pub menu: WorkspaceMenu,
+    /// The `m`/`c` list picker (`list_picker.rs`).
+    pub picker: crate::list_picker::ListPicker,
+    /// The next Apply that lands is not put on `u`'s stack (a move: an Undo would take back only
+    /// the half in this list).
+    pub pending_no_undo: bool,
     /// Whether the daemon's `Watch` stream is up.
     pub link: Link,
     /// The daemon's version and release date (`Health`), when they are not this build's.
@@ -134,6 +139,8 @@ impl Default for Shell {
             prompt: crate::state::EditDraft::new_line(),
             prompt_typed_at: None,
             menu: WorkspaceMenu::default(),
+            picker: crate::list_picker::ListPicker::default(),
+            pending_no_undo: false,
             link: Link::default(),
             daemon_build: None,
             refused: None,

@@ -134,6 +134,17 @@ pub async fn open_menu(daemon: &mut Daemon, state: &mut AppState) -> Result<(), 
     Ok(())
 }
 
+/// `m`/`c`: the open workspace's lists (`ListFiles`), then the list picker over them.
+pub async fn open_picker(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    mode: crate::list_picker::PickMode,
+) -> Result<(), DaemonError> {
+    let files = daemon.list_files().await?.files;
+    crate::list_picker::open(state, mode, &files);
+    Ok(())
+}
+
 /// The popup's rows: each workspace, its open tasks, whether its folder is gone, and whether it is
 /// the one at `root`.
 pub fn menu_items(

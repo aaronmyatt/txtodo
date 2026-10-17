@@ -122,6 +122,9 @@ fn scope_of(state: &AppState) -> (Scope, Option<&'static str>) {
     if state.nav.overlay == Some(Overlay::WorkspaceMenu) {
         return (Scope::Sheet, Some("workspace_menu"));
     }
+    if state.nav.overlay == Some(Overlay::ListPicker) {
+        return (Scope::Sheet, Some("list_picker"));
+    }
     let scope = match state.nav.screen {
         Screen::Tasks => Scope::List,
         Screen::Universal => Scope::Universal,
