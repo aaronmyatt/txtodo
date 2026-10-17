@@ -23,6 +23,7 @@ pub mod mutation_reopen;
 pub mod notes_state;
 pub mod op_set_hash;
 pub mod reconcile;
+pub mod reconcile_replay;
 pub mod reconcile_sidecar;
 pub mod stamp_floor;
 pub mod state;
