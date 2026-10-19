@@ -1,6 +1,6 @@
 //! Plain-Rust halves of the shared-logic wasm exports (task `tui-revamp/shared-core`): what
 //! `wasm.rs` needs beyond shaping `JsValue`s, kept here so it is tested on the host like
-//! `parse_check.rs` and `diff_view.rs`. The logic itself lives in `txtodo-core` (`query`,
+//! `parse_check.rs`. The logic itself lives in `txtodo-core` (`query`,
 //! `strict_hint`, `chips`, `universal`); this module only converts at the JS boundary.
 //!
 //! JS strings index UTF-16 code units; core's carets are byte offsets. The conversions below
