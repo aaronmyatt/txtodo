@@ -16,6 +16,39 @@ use txtodo_model::{Field, FieldValue, FilePath, IdentityMode, OpKind, TaskId, se
 /// Most mutations one Apply accepts.
 pub const MAX_MUTATIONS_PER_APPLY: usize = 10_000;
 
+/// The shape every Apply batch must have, checked before any op is derived: at most
+/// [`MAX_MUTATIONS_PER_APPLY`], a `Replace` alone in its batch, and a `RequireBase` only as the
+/// batch's first mutation. Returns the base hash a caller must still match when the batch leads
+/// with a guard; the caller owns what "still matches" means (the daemon also re-reads the file,
+/// the browser host only compares its in-memory hash).
+pub fn check_batch(mutations: &[Mutation]) -> Result<Option<Hash>, MutationError> {
+    if mutations.len() > MAX_MUTATIONS_PER_APPLY {
+        return Err(MutationError::TooMany(mutations.len()));
+    }
+    let is_guard = |m: &Mutation| matches!(m, Mutation::RequireBase { .. });
+    let base = match mutations {
+        [Mutation::RequireBase { base }, rest @ ..] if !rest.iter().any(is_guard) => Some(*base),
+        _ if mutations.iter().any(is_guard) => {
+            return Err(MutationError::Unsupported(
+                "RequireBase must be the first, and only, guard of its Apply batch",
+            ));
+        }
+        _ => None,
+    };
+    match mutations {
+        [_] if matches!(mutations[0], Mutation::Replace { .. }) => Ok(base),
+        _ if mutations
+            .iter()
+            .any(|m| matches!(m, Mutation::Replace { .. })) =>
+        {
+            Err(MutationError::Unsupported(
+                "Replace must be its own Apply batch",
+            ))
+        }
+        _ => Ok(base),
+    }
+}
+
 /// A line as the client saw it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRef {
