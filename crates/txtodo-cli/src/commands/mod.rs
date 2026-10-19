@@ -24,6 +24,7 @@ pub mod mcp;
 pub mod move_copy;
 pub mod notices;
 pub mod pair;
+mod prompt;
 pub mod refdir;
 pub mod service;
 pub mod skill;

@@ -5,7 +5,6 @@
 //! defaults to no, and a closed stdin is a no. Split out of `workspace.rs` for its file budget.
 
 use std::collections::BTreeMap;
-use std::io::Write;
 
 use crate::client::Daemon;
 use crate::{CliError, json};
@@ -62,17 +61,7 @@ fn confirm(
     plan: &pb::WorkspaceRejoinResponse,
     names: &BTreeMap<String, String>,
 ) -> Result<bool, CliError> {
-    eprint!("{}", prompt_text(plan, names));
-    std::io::stderr().flush().ok();
-    let mut line = String::new();
-    std::io::stdin()
-        .read_line(&mut line)
-        .map_err(CliError::Io)?;
-    Ok(is_yes(&line))
-}
-
-fn is_yes(answer: &str) -> bool {
-    matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+    super::prompt::confirm(&prompt_text(plan, names))
 }
 
 fn prompt_text(plan: &pb::WorkspaceRejoinResponse, names: &BTreeMap<String, String>) -> String {
@@ -89,7 +78,7 @@ fn prompt_text(plan: &pb::WorkspaceRejoinResponse, names: &BTreeMap<String, Stri
     if plan.moved.len() > SHOWN {
         text.push_str(&format!("  … and {} more\n", plan.moved.len() - SHOWN));
     }
-    text.push_str("Continue? [y/N] ");
+    text.push_str("Continue?");
     text
 }
 
@@ -123,6 +112,7 @@ fn done_json(done: &pb::WorkspaceRejoinResponse) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::prompt::is_yes;
 
     fn plan(moved: usize) -> pb::WorkspaceRejoinResponse {
         pb::WorkspaceRejoinResponse {
@@ -155,7 +145,7 @@ mod tests {
         assert!(text.contains("of /home/a/todo and take laptop (01ARZ3NDEKTSV4RRFFQ69G5FAV)'s?"));
         assert!(text.contains("todo.rejoin-backup-2026-09-26T150211Z (nothing is deleted"));
         assert!(text.contains("  doc4/todo.txt\n  … and 2 more\n"), "{text}");
-        assert!(text.ends_with("[y/N] "));
+        assert!(text.ends_with("Continue?"));
         assert!(prompt_text(&plan(1), &BTreeMap::new()).contains("device 01ARZ3ND"));
     }
 
