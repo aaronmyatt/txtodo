@@ -258,28 +258,6 @@
 		font-size: 0.8125rem;
 	}
 
-	.pill {
-		padding: 0.2rem 0.8rem;
-		border: 2px solid var(--color-base-content);
-		border-radius: 999px;
-		background: transparent;
-		color: inherit;
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	.pill:disabled {
-		opacity: 0.45;
-	}
-
-	.pill.solid {
-		border-color: var(--color-primary);
-		background: var(--color-primary);
-		color: var(--color-primary-content);
-	}
-
 	.state-error {
 		margin: 0;
 		color: var(--color-error, #dc2626);

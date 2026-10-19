@@ -168,34 +168,6 @@
 		clip-path: inset(50%);
 	}
 
-	.pill {
-		padding: 0.2rem 0.8rem;
-		border: 2px solid var(--color-base-content);
-		border-radius: 999px;
-		background: transparent;
-		color: inherit;
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	.pill:disabled {
-		opacity: 0.45;
-	}
-
-	.pill.solid {
-		border-color: var(--color-primary);
-		background: var(--color-primary);
-		color: var(--color-primary-content);
-	}
-
-	.pill.danger {
-		border-color: var(--color-error, #dc2626);
-		background: var(--color-error, #dc2626);
-		color: var(--color-error-content, #fff);
-	}
-
 	.state-error {
 		margin: 0;
 		color: var(--color-error, #dc2626);

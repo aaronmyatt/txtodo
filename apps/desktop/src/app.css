@@ -149,6 +149,37 @@ button {
 	font: inherit;
 }
 
+/* The small mono button the device and settings sheets render: plain `.pill`, `.pill.solid` for
+   the primary action, `.pill.danger` for a removal. Six components carried a copy of this block;
+   the AppShell's search count is a different thing and is `.count`, not a pill. */
+.pill {
+	padding: 0.2rem 0.8rem;
+	border: 2px solid var(--color-base-content);
+	border-radius: 999px;
+	background: transparent;
+	color: inherit;
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.pill:disabled {
+	opacity: 0.45;
+}
+
+.pill.solid {
+	border-color: var(--color-primary);
+	background: var(--color-primary);
+	color: var(--color-primary-content);
+}
+
+.pill.danger {
+	border-color: var(--color-error, #dc2626);
+	background: var(--color-error, #dc2626);
+	color: var(--color-error-content, #fff);
+}
+
 /* Banner strips (task desktop-ui-revamp, the c2 mockup's banners): full-width rows under the
    header, small mono text, a pill button at the right. `.tx-strip` is paper with an ink rule
    under it (conflicts, hints, a refused edit); `.tx-strip-inverse` is the inverse tile, for the
