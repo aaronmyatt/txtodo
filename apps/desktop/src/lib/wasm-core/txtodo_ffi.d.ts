@@ -14,13 +14,6 @@ export function apply_chip(raw: string, caret: number, chip: string, today: stri
 export function breakdown_fields(line: string): any;
 
 /**
- * Char-level diff between `a` ("mine") and `b` ("theirs"), for the conflict-review `DiffView`
- * (`tasks/desktop-conflict-review/notes.md`). Returns a JS array of `{ op: "equal" | "insert" |
- * "delete", text: string }` segments, in order; concatenating every segment's `text` reconstructs `b`.
- */
-export function diff_text(a: string, b: string): any;
-
-/**
  * The due bucket's heading for `due` against `today`: `Overdue` `Today` `This week` `Later`
  * `No date` (`txtodo_core::universal::due_bucket`).
  */
@@ -69,7 +62,6 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly apply_chip: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
     readonly breakdown_fields: (a: number, b: number) => any;
-    readonly diff_text: (a: number, b: number, c: number, d: number) => any;
     readonly due_bucket: (a: number, b: number, c: number, d: number) => [number, number];
     readonly due_label: (a: number, b: number, c: number, d: number) => any;
     readonly group_rows: (a: any, b: number, c: number, d: number, e: number, f: any) => any;

@@ -34,23 +34,6 @@ export function breakdown_fields(line) {
 }
 
 /**
- * Char-level diff between `a` ("mine") and `b` ("theirs"), for the conflict-review `DiffView`
- * (`tasks/desktop-conflict-review/notes.md`). Returns a JS array of `{ op: "equal" | "insert" |
- * "delete", text: string }` segments, in order; concatenating every segment's `text` reconstructs `b`.
- * @param {string} a
- * @param {string} b
- * @returns {any}
- */
-export function diff_text(a, b) {
-    const ptr0 = passStringToWasm0(a, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(b, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.diff_text(ptr0, len0, ptr1, len1);
-    return ret;
-}
-
-/**
  * The due bucket's heading for `due` against `today`: `Overdue` `Today` `This week` `Later`
  * `No date` (`txtodo_core::universal::due_bucket`).
  * @param {string | null | undefined} due
