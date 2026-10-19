@@ -1,0 +1,11 @@
+2026-10-17 daemon: SyncStatus leaves parked peers out of pending_ops (devices_grpc.rs pending_ops_since) +m11 @daemon @sync
+2026-10-17 adr: 0043 auto-prune stale peers: thresholds, per-device prune, grant-follows rule, concurrent rotations, config +m11 @sync @adr
+2026-10-17 sync: ops seal under the current group epoch, not the constant 0; retained old epochs still open +m11 @sync @security
+2026-10-17 daemon: deliver rotation grants to kept peers; a receiver drops whoever a grant leaves out; same epoch twice, the lower minter id wins +m11 @daemon @sync
+2026-10-17 daemon: refuse a removed device: out of LAN resync, its incoming Hello refused +m11 @daemon @sync
+2026-10-17 daemon: stale verdict per peer from last_seen and parked; config prune_parked_after, prune_quiet_after +m11 @daemon @sync
+2026-10-17 daemon: prune loop: on the resync tick each device runs remove_device on peers stale by its own last_seen; log peer_pruned +m11 @daemon @sync
+2026-10-17 test: a pruned device re-pairs and catches up on what it missed +m11 @sync @test
+2026-10-17 clients: show pruned rows (device list, doctor, TUI, desktop); a pruned device says "dropped from the group; pair again" +m11 @cli @tui @desktop
+2026-10-17 lab: one of three devices goes away past the threshold, is pruned, then re-pairs +lab @sync
+2026-10-17 two-Mac check: let a device go stale, see it pruned, re-pair it @human
