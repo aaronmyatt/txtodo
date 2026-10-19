@@ -4,7 +4,6 @@
 //! first, so a refusal (not a mirror, a nested folder, another disk) comes before any prompt, then
 //! shows what moves each way and asks. The prompt defaults to no, and a closed stdin is a no.
 
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::client::Daemon;
@@ -85,17 +84,7 @@ fn print_result(r: &pb::WorkspaceBindResponse, root: &str, as_json: bool, dry_ru
 
 /// The prompt, on stderr so `--json` output stays clean; `true` only for `y` or `yes`.
 fn confirm(plan: &pb::WorkspaceBindResponse, root: &str) -> Result<bool, CliError> {
-    eprint!("{}Continue? [y/N] ", plan_text(plan, root));
-    std::io::stderr().flush().ok();
-    let mut line = String::new();
-    std::io::stdin()
-        .read_line(&mut line)
-        .map_err(CliError::Io)?;
-    Ok(is_yes(&line))
-}
-
-fn is_yes(answer: &str) -> bool {
-    matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+    super::prompt::confirm(&format!("{}Continue? ", plan_text(plan, root)))
 }
 
 fn name_of(r: &pb::WorkspaceBindResponse) -> String {
@@ -171,6 +160,7 @@ fn result_json(r: &pb::WorkspaceBindResponse, root: &str, dry_run: bool) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::prompt::is_yes;
 
     fn plan(aside: usize, replaced: &str) -> pb::WorkspaceBindResponse {
         let paths = |n: usize| (0..n).map(|i| format!("doc{i}/todo.txt")).collect();

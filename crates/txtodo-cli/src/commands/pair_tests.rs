@@ -5,6 +5,7 @@
 //! precedent (`commands/conflicts_tests.rs`) keeps these out of `pair.rs` itself.
 
 use super::*;
+use crate::commands::prompt::is_yes;
 
 fn sample_code() -> PairingCode {
     PairingCode {
@@ -160,16 +161,16 @@ fn identity_mode_matches_only_the_same_named_mode() {
 
 #[test]
 fn explicit_yes_requires_y_or_yes_case_insensitive() {
-    assert!(is_explicit_yes("y\n"));
-    assert!(is_explicit_yes("Y"));
-    assert!(is_explicit_yes("yes"));
-    assert!(is_explicit_yes("YES\n"));
-    assert!(is_explicit_yes("  yes  "));
+    assert!(is_yes("y\n"));
+    assert!(is_yes("Y"));
+    assert!(is_yes("yes"));
+    assert!(is_yes("YES\n"));
+    assert!(is_yes("  yes  "));
 }
 
 #[test]
 fn anything_else_including_blank_is_no_never_a_default_yes() {
     for line in ["", "\n", "n", "no", "yeah", "sure", "yy"] {
-        assert!(!is_explicit_yes(line), "{line:?} must not confirm");
+        assert!(!is_yes(line), "{line:?} must not confirm");
     }
 }
