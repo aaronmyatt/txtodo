@@ -44,7 +44,6 @@ const ARGV_SURFACE_FILES: &[&str] = &[
     "crates/txtodo-daemon/src/main.rs",
     "crates/txtodo-cli/src/main.rs",
     "crates/txtodo-cli/src/cli.rs",
-    "crates/txtodo-cli/src/cli_command.rs",
     "crates/txtodo-cli/src/config.rs",
     "apps/desktop/src-tauri/src/config.rs",
 ];
