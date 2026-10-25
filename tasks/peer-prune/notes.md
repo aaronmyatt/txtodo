@@ -109,3 +109,26 @@ Delta, in the order it can land with every step green:
 
 Not decided here, and why it can wait: what a removed device already holds. It keeps every op it
 synced before (rotation covers new ops only), which `device remove` already says.
+
+### Control-session handshake (agent, 2026-10-25), found while designing grant delivery
+
+Delivering a grant by "send it when we see the peer is behind" does not work as the control session
+is written: both sides send their offers the moment the link opens, sealed under their current epoch.
+A peer one epoch behind cannot open the first frame and ends the session before any grant can reach
+it. So the session gets an order, and one more message (`ControlMessage::Epoch { sender, epoch }`,
+tag 5, still protocol 6):
+
+1. The **dialer** sends `Epoch(cur)` first, sealed under `min(cur, what it believes the peer holds)`,
+   the belief being the peer's `devices.key_epoch`. The **acceptor** sends nothing until it has read
+   a frame; it then answers `Epoch(cur)` sealed under `min(cur, the dialer's epoch)`.
+2. On an `Epoch` from a peer: record that it holds that epoch (`key_epoch = max`). If ours is higher,
+   send the grant chain `peer+1..=cur`, each `Grant(k)` sealed under epoch `k-1` (the peer holds that
+   one by then). Then send offers and the own-device list, sealed under our current epoch.
+3. On a `Grant`: apply it (rules in the design above), then answer `Epoch(cur)` as the ack.
+4. `devices.key_epoch` now means *confirmed*: a rotation no longer sets it for the kept peers; only
+   hearing a peer's `Epoch`, pairing, or a grant it acked does. (`device_remove.rs` set it at mint
+   time and said it was not confirmation.)
+5. Per epoch, `meta` keeps `group_epoch_info:<n>` = who minted the key and who the rotation dropped,
+   so a grant can be made again for a peer that comes back later, and the tie-break has a minter.
+
+A removed device is refused at the first frame of a control session as well (its `sender`).
