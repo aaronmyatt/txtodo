@@ -10,6 +10,7 @@ use txtodo_store::NewDevice;
 use super::prune_once;
 use crate::device_identity::DeviceIdentity;
 use crate::group_rotation::is_removed;
+use crate::live_peers::Carrier;
 use crate::peer_keys_dial_tests::identity_in;
 use crate::prune_stale::{DAY_MS, PruneConfig};
 
@@ -88,4 +89,26 @@ fn a_removal_that_fails_leaves_the_peer_and_is_booked_once() {
     );
     round(&identity, &mut failed);
     assert_eq!(failed.len(), 1, "the same peer is not booked twice");
+}
+
+#[test]
+fn a_peer_with_a_session_open_is_heard_now_however_old_its_last_hello() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let identity = identity_in(dir.path(), [7; 32]);
+    register(&identity, 1, NOW - 20 * DAY_MS);
+    let live = identity.live_peers().enter(device(1), Carrier::Lan);
+    round(&identity, &mut BTreeSet::new());
+    assert!(!is_removed(&identity, device(1)), "connected, so not quiet");
+    let seen = identity
+        .store()
+        .lock()
+        .unwrap()
+        .device(device(1))
+        .unwrap()
+        .unwrap()
+        .last_seen_ms;
+    assert_eq!(seen, Some(NOW), "and it counts from now on");
+    drop(live);
+    round(&identity, &mut BTreeSet::new());
+    assert!(!is_removed(&identity, device(1)), "the session just ended");
 }

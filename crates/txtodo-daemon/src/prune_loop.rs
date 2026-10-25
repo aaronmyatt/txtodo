@@ -74,6 +74,7 @@ pub(crate) fn prune_once(
     (now_ms, up_since_ms): (u64, u64),
     failed: &mut BTreeSet<DeviceId>,
 ) {
+    touch_live(identity, now_ms);
     for (peer, why) in stale_peers(identity, cfg, now_ms, up_since_ms) {
         match identity.remove_device(peer, now_ms) {
             Ok(outcome) => log_peer_pruned(peer, why, outcome.rotated_to_epoch),
@@ -81,6 +82,28 @@ pub(crate) fn prune_once(
             Err(_) => {}
         }
     }
+}
+
+/// A peer with a session open now is heard now: `last_seen` is set when its `Hello` opens, and a
+/// session can stay up for days, so without this a peer that is connected but has made no ops would
+/// look quiet and be dropped.
+fn touch_live(identity: &DeviceIdentity, now_ms: u64) {
+    let mut store = identity
+        .store()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let rows = store.list_devices().unwrap_or_default();
+    for row in rows.iter().filter(|r| r.removed_at_ms.is_none()) {
+        if identity.live_peers().is_live(row.device)
+            && let Err(e) = store.touch_last_seen(row.device, now_ms)
+        {
+            log_touch_failed(row.device, &e);
+        }
+    }
+}
+
+fn log_touch_failed(peer: DeviceId, error: &txtodo_store::StoreError) {
+    tracing::debug!(%peer, %error, "prune_touch_last_seen_failed");
 }
 
 fn log_peer_pruned(peer: DeviceId, why: Stale, epoch: u32) {
