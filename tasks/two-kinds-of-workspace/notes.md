@@ -602,3 +602,12 @@ What changed in the plan, and what I chose between.
   limits are unchanged: depth 8, 250k folders, 500 repos, and hidden folders, `node_modules`,
   `target`, `vendor`, `dist`, `build` and a top-level `Library` are not entered. Not done: a TUI
   that stays open, or a window shown again from the tray, does not rescan.
+
+## Verification run (2026-10-25, agent)
+
+- `cargo nextest run --workspace`: 1805 passed (before the automatic git prep). Every crate's `--test e2e`
+  target after it: daemon 64, cli 62, tui 35, mcp 10, daemon-launch 5 passed.
+- `just check-two-kinds` passes on a scratch daemon, including that the daemon set the merge driver itself.
+- Not done: the cost check (daemon RSS and boot time with many repos registered), a real two-Mac pairing
+  by hand, and any look at the desktop switcher and the TUI `W` popup (headings, order). The lab ran
+  `partition-lists` once on Linux containers before the cut; it was not rerun after.
