@@ -86,7 +86,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   merge=union`; commit it), `merge.txtodo.driver` in this clone's config (`txtodo` as found on `PATH`
   when that is this binary, else the running binary, since a Homebrew symlink resolves into a Cellar
   folder an upgrade removes), and `.txtodo/` in `.git/info/exclude` (through `git rev-parse --git-path`,
-  so a linked worktree works). `plan` is pure; the `doctor` row reuses it. `commands/early.rs`
+  so a linked worktree works). `plan` is pure; `txtodo doctor` reuses it (`doctor_git.rs`: one `git` WARN per repo workspace that is
+  a clone with no driver set up, naming `txtodo git setup --dir <root>`; none for a set-up clone, a list, a
+  mirror or a plain folder). `commands/early.rs`
   answers `upgrade`, `merge-driver` and `git` before any path, config or daemon.
 - `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
   (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
