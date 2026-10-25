@@ -221,6 +221,7 @@ fn pairing_status(e: PairingStateError) -> Status {
         | PairingStateError::Session(_) => Status::failed_precondition(e.to_string()),
         PairingStateError::KeyStore(_)
         | PairingStateError::Store(_)
-        | PairingStateError::CorruptGroupKey(_) => Status::internal(e.to_string()),
+        | PairingStateError::CorruptGroupKey(_)
+        | PairingStateError::MissingGroupKey(_) => Status::internal(e.to_string()),
     }
 }

@@ -27,13 +27,19 @@ impl Workspace {
         // a failure below leaves the attempt retryable from scratch instead of stranding an
         // already-committed key with no matching device/group row. See
         // pairing_state.rs::preview_group_key.
-        let (group_key, peer_device, peer_static, own) =
-            self.pairing().preview_group_key(sealed, now_ms)?;
+        let grant = self.pairing().preview_group_key(sealed, now_ms)?;
+        let (peer_device, peer_static, own) = (grant.peer, grant.peer_static, grant.own);
         let mut store = self
             .identity_store()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         store.meta_set(crate::device_identity::GROUP_ID_KEY, &group.0.to_be_bytes())?;
+        // The initiator's current epoch is ours now (task `peer-prune`): after a rotation it is not 0,
+        // and its peers seal under it.
+        store.meta_set(
+            crate::device_identity::GROUP_EPOCH_KEY,
+            &grant.epoch.to_be_bytes(),
+        )?;
         // `own`: both humans said "my own device" (task default-workspace-pairing-consent).
         let new = NewDevice {
             device: peer_device,
@@ -41,15 +47,20 @@ impl Workspace {
             static_public: peer_static.to_bytes(),
             paired_at_ms: now_ms,
             last_known_wall_ms: None,
-            key_epoch: 0,
+            key_epoch: grant.epoch,
         };
         store.register_device_as(&new, own)?;
         drop(store);
         // Point of no return: only now do we commit the key and end the pairing attempt.
-        self.pairing()
-            .commit_group_key(self.key_store().as_ref(), group_key, now_ms)?;
+        self.pairing().commit_group_key(
+            self.key_store().as_ref(),
+            grant.group_key,
+            grant.epoch,
+            now_ms,
+        )?;
         // Clears every parked peer too (`DeviceIdentity::set_group`): the initiator among them.
         self.set_group(group);
+        self.set_group_epoch(grant.epoch);
         Ok(())
     }
 }

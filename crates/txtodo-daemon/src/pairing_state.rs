@@ -17,7 +17,7 @@ use txtodo_sync::{
 
 pub(crate) use crate::pairing_state_error::PairingStateError;
 
-use crate::pairing_group_key::{INITIAL_GROUP_EPOCH, fetch_or_mint_group_key};
+use crate::pairing_group_key::{JoinerGrant, fetch_or_mint_group_key};
 
 /// Which role this daemon is playing in its one active pairing attempt.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -242,6 +242,7 @@ impl PairingRegistry {
         &self,
         key_store: &dyn KeyStore,
         own_static_public: DeviceStaticPublic,
+        epoch: u32,
         now_ms: u64,
     ) -> Result<Option<(Vec<u8>, bool)>, PairingStateError> {
         let mut inner = self.lock();
@@ -257,11 +258,14 @@ impl PairingRegistry {
         if !ready {
             return Ok(None);
         }
-        let group_key = fetch_or_mint_group_key(key_store)?;
+        // The current epoch's key, with the epoch: a rotated group's joiner must not be handed the
+        // old key and told it is the current one.
+        let group_key = fetch_or_mint_group_key(key_store, epoch)?;
         let grant = PairingGrant {
             group_key,
             static_public: own_static_public.to_bytes(),
             own_device: own,
+            epoch,
         };
         let (sealed, cached) = {
             let active = active_mut(&mut inner.active, now_ms)?;
@@ -300,7 +304,7 @@ impl PairingRegistry {
         &self,
         sealed: &[u8],
         now_ms: u64,
-    ) -> Result<([u8; KEY_BYTES], DeviceId, DeviceStaticPublic, bool), PairingStateError> {
+    ) -> Result<JoinerGrant, PairingStateError> {
         let mut inner = self.lock();
         let active = active_mut(&mut inner.active, now_ms)?;
         if active.role != Role::Joiner {
@@ -314,29 +318,29 @@ impl PairingRegistry {
             .session
             .peer_device()
             .ok_or(PairingStateError::NotActive)?;
-        Ok((
-            grant.group_key,
-            peer_device,
-            DeviceStaticPublic::from_bytes(grant.static_public),
-            grant.own_device && active.own_answer,
-        ))
+        Ok(JoinerGrant {
+            group_key: grant.group_key,
+            epoch: grant.epoch,
+            peer: peer_device,
+            peer_static: DeviceStaticPublic::from_bytes(grant.static_public),
+            own: grant.own_device && active.own_answer,
+        })
     }
 
     /// Relay seam, step 2 of 2: commits a group key already validated by
-    /// [`Self::preview_group_key`] — writes it to the keystore and clears `active`. The point of
-    /// no return; only call this once the caller's own durable bookkeeping has already succeeded.
+    /// [`Self::preview_group_key`] — writes it to the keystore at the epoch the grant named, and
+    /// clears `active`. The point of no return; only call this once the caller's own durable
+    /// bookkeeping has already succeeded.
     pub(crate) fn commit_group_key(
         &self,
         key_store: &dyn KeyStore,
         group_key: [u8; KEY_BYTES],
+        epoch: u32,
         now_ms: u64,
     ) -> Result<(), PairingStateError> {
         let mut inner = self.lock();
         active_mut(&mut inner.active, now_ms)?;
-        key_store.put(
-            KeyId::Group(INITIAL_GROUP_EPOCH),
-            &Secret::new(group_key.to_vec()),
-        )?;
+        key_store.put(KeyId::Group(epoch), &Secret::new(group_key.to_vec()))?;
         inner.active = None;
         Ok(())
     }
