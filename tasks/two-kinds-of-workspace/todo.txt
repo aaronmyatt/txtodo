@@ -1,11 +1,35 @@
-2026-10-25 docs: ADR 0043 two kinds of workspace, amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs
-2026-10-25 paths/proto: WorkspaceKind { List, Repo } from the root, WorkspaceInfo.kind additive +m11 @daemon @proto
-2026-10-25 daemon: repo workspaces are never offered and get no relay or LAN route; two-daemon e2e +m11 @daemon @sync
-2026-10-25 daemon: named lists, list_id(name) and ensure_list(name) generalise default_workspace.rs; no-rekey guard for every list id +m11 @daemon
-2026-10-25 clients: txtodo lists new|ls|rename|rm, --list <name>, MCP list param, TUI and desktop switcher +m11 @cli @mcp @tui @desktop
-2026-10-25 daemon: lists route only to own devices (pairing-consent A, own_device flag) +m8 @daemon @security
-2026-10-25 mcp/cli: register a git root on first use; the default fallback is named in the result, not stderr +m11 @mcp @cli
-2026-10-25 daemon: repo discovery, scan_roots table, repo_scan.rs walk, after bind and every 6 h, txtodo repos scan|add|roots +m11 @daemon @cli @store
-2026-10-25 core/cli: txtodo merge-driver 3-way per line, txtodo git setup, doctor hint; proptest no line lost +m11 @core @cli
-2026-10-25 daemon/cli: retire repo mirrors, doctor row and prune --repo-mirrors; deprecate workspace bind +m11 @daemon @cli
-2026-10-25 docs: playbook, AGENTS.md and skill install explain the two kinds; scripts/check-two-kinds.sh +m11 @docs
+2026-10-25 docs: ADR 0043 two kinds of workspace; amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs
+2026-10-25 mcp: a call that fell back to the default says so in the tool result, not on stderr +m11 @mcp
+2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists
+2026-10-25 proto: WorkspaceInfo.kind (additive); ListEnsure, ListRename, ListRemove RPCs +m11 @proto @lists
+2026-10-25 daemon: list-name check and list_id(name) with golden ids pinned; default_workspace.rs generalised +m11 @daemon @lists
+2026-10-25 daemon: ensure_list makes lists/<name>/ and registers it; no-rekey guard for every list id +m11 @daemon @lists
+2026-10-25 daemon: ListEnsure/ListRename/ListRemove handlers; remove is per device and moves the folder aside +m11 @daemon @lists
+2026-10-25 daemon: lists go only to own devices (gate every list id; a foreign peer gets none) +m8 @daemon @security @lists
+2026-10-25 daemon: an own device's list offer makes lists/<name>/, not remote/<id>/; a foreign one is ignored +m11 @daemon @sync @lists
+2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists
+2026-10-25 cli: txtodo lists new|ls|rename|rm|import <dir>, and --list <name> on every command +m11 @cli @lists
+2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists
+2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists
+2026-10-25 desktop: switcher groups Lists and Repos; new, rename, remove; parity rows in the same commit +m11 @desktop @parity @lists
+2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists
+2026-10-25 core: merge3(base, ours, theirs) per line, pure; proptest: no line lost, same lines either way round +m11 @core @git
+2026-10-25 cli: txtodo merge-driver %O %A %B over merge3; a real git merge in a temp repo +m11 @cli @git
+2026-10-25 cli: txtodo git setup (.gitattributes, merge.txtodo.driver, .git/info/exclude), idempotent, --dry-run +m11 @cli @git
+2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git
+2026-10-25 cli: e2e: two clones add and complete lines, git pull, every line kept +m11 @cli @test @git
+2026-10-25 store: scan_roots table in registry.db +m11 @store @scan
+2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan
+2026-10-25 daemon: repo_scan.rs, a pure walk (explicit stack, depth 8, skip list), tested on a temp tree +m11 @daemon @scan
+2026-10-25 daemon: register found repos as Repo (local .txtodo/ exclude first); scan after bind and every 6 h +m11 @daemon @scan
+2026-10-25 cli: txtodo repos [scan|add <dir>|roots add|rm]; doctor shows roots, count and last scan +m11 @cli @scan
+2026-10-25 tests: the two-daemon harness seeds its synced workspace as a list; move the folder-sync e2e files over +m11 @test @cut
+2026-10-25 daemon: repo workspaces are never offered and get no relay, LAN or file route; e2e: a repo never reaches B +m11 @daemon @sync @cut
+2026-10-25 mcp: register a git root on first use (nothing is offered now, so the cwd worry is gone) +m11 @mcp @cut
+2026-10-25 cli: register a git root on first use, same rule as mcp +m11 @cli @cut
+2026-10-25 daemon: retire default_alias, the foreign-default Remote mirror and its skip pass +m8 @daemon @cut
+2026-10-25 daemon: workspace prune with repo_mirrors moves each remote/<id>/ mirror aside, never deletes +m11 @daemon @cut
+2026-10-25 cli: doctor row per repo mirror (lines the clone lacks); prune --repo-mirrors; bind prints a pointer +m11 @cli @cut
+2026-10-25 backlog: close ref:bind-ui in the root list as superseded (bind retires for repos, lists need none) +m11
+2026-10-25 scripts: scripts/check-two-kinds.sh, self-asserting +m11 @test
+2026-10-25 docs: playbook, AGENTS.md block, skill install; web-pwa notes say browser lists, not mirrors; ADR 0043 as built +m11 @docs
