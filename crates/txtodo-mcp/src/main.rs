@@ -278,11 +278,11 @@ fn serve_through_global(dir: &Path, root: PathBuf) -> Target {
 }
 
 /// With neither `--dir` nor `--global`: calls that name no `workspace` mean the folder this server
-/// was started in when it is a workspace *the daemon already knows* (registered by the CLI or the
-/// desktop), else the default workspace (task default-workspace). Never registers the folder
-/// itself (task mcp-cwd-autoregister): naming an unknown path would add it to the registry and
-/// announce its name to every paired peer, so a stray `todo.txt` folder an agent happens to start
-/// in stays private.
+/// was started in when it is a workspace the daemon already knows (registered by the CLI or the
+/// desktop) or a git checkout's root (`serves_here`; the daemon registers it on the first call),
+/// else the default workspace (task default-workspace). A plain `todo.txt` folder that is not
+/// registered stays with the default and a note: only a repo is safe to register by being named,
+/// since a repo is never offered to a peer (ADR 0043).
 ///
 /// Returns the note for the fallback case, or `None` when the folder is the workspace. The note
 /// goes into each tool result that named no `workspace` (task two-kinds-of-workspace): an agent
@@ -296,7 +296,7 @@ async fn aim_at_the_current_workspace(backend: &GrpcMcpBackend) -> Option<String
     let note = match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
         txtodo_workspace_paths::WorkspaceChoice::Here(dir) => {
             let known = backend.list_workspaces().await.unwrap_or_default();
-            if is_registered(&known, &dir) {
+            if txtodo_mcp::serves_here(&known, &dir) {
                 txtodo_mcp::set_default_workspace(dir.display().to_string());
                 return None;
             }
@@ -325,16 +325,6 @@ fn fallback_note_no_workspace(default: &Path) -> String {
         "no workspace here; calls that name no workspace use the default workspace ({})",
         default.display()
     )
-}
-
-/// Whether `dir` is one of `known`'s roots. The registry stores canonicalized roots, so `dir` is
-/// compared both as given and canonicalized (macOS's `/tmp` → `/private/tmp`).
-fn is_registered(known: &[txtodo_mcp::backend::WorkspaceInfo], dir: &Path) -> bool {
-    let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    known
-        .iter()
-        .map(|w| Path::new(&w.root))
-        .any(|root| root == dir || root == canon)
 }
 
 async fn serve_http(server: McpServer) -> Result<(), Box<dyn std::error::Error>> {

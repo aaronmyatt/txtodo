@@ -10,6 +10,7 @@ mod backend_args;
 mod doc;
 pub mod error;
 mod fallback;
+pub use fallback::serves_here;
 pub mod global_socket;
 pub mod grpc_backend;
 mod grpc_batch;

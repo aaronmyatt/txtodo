@@ -20,6 +20,10 @@ A server started in a folder the daemon does not know (or in no workspace) sends
 `workspace` to the default list. `main.rs` builds a note for that (`aim_at_the_current_workspace`),
 `McpServer::with_fallback_note` holds it, and `fallback.rs` appends it to each such result as a last
 text block (task two-kinds-of-workspace). stderr still gets the same words; agent hosts hide that.
+A folder is served as itself, with no note, when the daemon knows it or it is a git checkout's root
+(`fallback.rs::serves_here`): a repo is never offered to a peer (ADR 0043), so naming it, which
+registers it on the first call, tells nobody its name. A plain folder that is not registered still
+falls back with the note (task mcp-cwd-autoregister).
 
 ## The `list` argument
 

@@ -9,12 +9,33 @@
 //! block is unchanged.
 //! Ref: <https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-result>
 
+use std::path::Path;
 use std::sync::Arc;
 
 use rmcp::model::{CallToolResponse, ContentBlock};
 use serde_json::{Map, Value};
 
+use crate::backend::WorkspaceInfo;
 use crate::schema::McpServer;
+
+/// Whether a server started in `dir` serves it, not the default workspace: the daemon already knows
+/// `dir`, or `dir` is a git checkout's root. A repo is carried by git and never offered to a peer
+/// (ADR 0043), so naming it to the daemon, which registers a folder on the first call that names
+/// it, tells nobody its name; that was the worry that kept this server from registering anything
+/// (task mcp-cwd-autoregister). A plain folder still falls back, with a note.
+///
+/// The registry stores canonicalized roots, so `dir` is compared both as given and canonicalized
+/// (macOS's `/tmp` is `/private/tmp`). `Path::exists` is true for a `.git` folder and for the
+/// `.git` file of a linked worktree.
+/// Ref: <https://doc.rust-lang.org/std/path/struct.Path.html#method.exists>
+pub fn serves_here(known: &[WorkspaceInfo], dir: &Path) -> bool {
+    let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let registered = known
+        .iter()
+        .map(|w| Path::new(&w.root))
+        .any(|root| root == dir || root == canon);
+    registered || dir.join(".git").exists()
+}
 
 impl McpServer {
     /// Ends every result of a call that named no `workspace` with `note`, for a server that fell
@@ -70,6 +91,42 @@ mod tests {
 
     fn args(value: Value) -> Map<String, Value> {
         value.as_object().cloned().unwrap_or_default()
+    }
+
+    fn known(root: &Path) -> Vec<WorkspaceInfo> {
+        vec![WorkspaceInfo {
+            id: "01M2CZ00000000000000000A".into(),
+            root: root.display().to_string(),
+            added_at_ms: 0,
+            root_exists: true,
+            has_state: true,
+            name: String::new(),
+            is_list: false,
+        }]
+    }
+
+    #[test]
+    fn a_registered_folder_and_a_git_root_are_served_and_any_other_is_not() {
+        let (plain, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        std::fs::create_dir(repo.path().join(".git")).unwrap();
+        assert!(
+            !serves_here(&[], plain.path()),
+            "a plain unknown folder falls back"
+        );
+        assert!(
+            serves_here(&known(plain.path()), plain.path()),
+            "registered"
+        );
+        assert!(
+            serves_here(&[], repo.path()),
+            "a git root registers on its first call"
+        );
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::write(worktree.path().join(".git"), "gitdir: elsewhere\n").unwrap();
+        assert!(
+            serves_here(&[], worktree.path()),
+            "a linked worktree's .git is a file"
+        );
     }
 
     #[test]
