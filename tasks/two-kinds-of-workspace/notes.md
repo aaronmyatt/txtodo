@@ -243,3 +243,17 @@ What changed in the plan, and what I chose between.
   (the registry stores canonical roots; `/var` is `/private/var` on macOS), and the lists dir need
   not exist yet. `lists_dir_for` follows an isolated daemon's `$TXTODO_SOCKET` like
   `default_workspace_dir_for`. A moved default (`$TXTODO_DEFAULT_WORKSPACE`) is still the List.
+- **proto.** `WorkspaceInfo.kind` (field 13, `WorkspaceKind` enum, UNSPECIFIED from an older
+  daemon) and `ListEnsure`, `ListRename`, `ListRemove`, device-level with no selector. Choices:
+  - `ListEnsure` returns `{ workspace, created }` so `lists new` can say "exists" without a second
+    call; it is create-if-absent, so `--list <name>` stays a lookup and a typo cannot make a list
+    that then syncs to every device.
+  - `ListRename`/`ListRemove` take the list's shown name, else its creation name, and the daemon
+    resolves it. Ordinary commands (`--list work`) resolve client-side from `WorkspaceList`
+    (`kind` + `name` + the root's folder name) rather than a new `WorkspaceSelector` member: a
+    daemon that does not know a new oneof member reads the selector as absent and would write to
+    the sole open workspace, which is the wrong-list bug this task exists to stop.
+  - `ListRemove` has no `execute`/`dry_run`: it moves the folder aside and never deletes.
+  - Known gap: the daemon does not build between this commit and the daemon's list handlers (both
+    `Txtodo` impls need the new methods, same split as `WorkspaceRename`); the next daemon commit
+    starts with the stubs.

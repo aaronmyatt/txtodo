@@ -1091,6 +1091,10 @@ pub struct WorkspaceInfo {
     /// which a client reads as "derive one from `root`".
     #[prost(string, tag = "12")]
     pub name: ::prost::alloc::string::String,
+    /// Which carrier syncs this workspace (task two-kinds-of-workspace). UNSPECIFIED from an older
+    /// daemon, which a client reads as "kind unknown" and shows none.
+    #[prost(enumeration = "WorkspaceKind", tag = "13")]
+    pub kind: i32,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WorkspaceAddRequest {
@@ -1238,6 +1242,44 @@ pub struct WorkspaceRenameRequest {
     pub name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListEnsureRequest {
+    /// The list's name: ASCII `\[a-z0-9_-\]`, 1 to 48 characters, never `default`. The daemon lowercases
+    /// and trims it first. The name is the list's identity on every own device, for good.
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListEnsureResponse {
+    #[prost(message, optional, tag = "1")]
+    pub workspace: ::core::option::Option<WorkspaceInfo>,
+    /// false when the list was already here
+    #[prost(bool, tag = "2")]
+    pub created: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRenameRequest {
+    /// the list's shown name, else the name it was made under
+    #[prost(string, tag = "1")]
+    pub list: ::prost::alloc::string::String,
+    /// same rules as ListEnsureRequest.name
+    #[prost(string, tag = "2")]
+    pub new_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRemoveRequest {
+    /// the list's shown name, else the name it was made under
+    #[prost(string, tag = "1")]
+    pub list: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListRemoveResponse {
+    #[prost(bool, tag = "1")]
+    pub removed: bool,
+    /// where the folder went; empty when `removed` is false
+    #[prost(string, tag = "2")]
+    pub moved_to: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
     /// decimal u128, same encoding pairing_wire.rs's group_id already uses
     #[prost(string, tag = "1")]
@@ -1379,6 +1421,40 @@ impl SkewStatus {
             "SKEW_STATUS_OK" => Some(Self::Ok),
             "SKEW_STATUS_BEHIND" => Some(Self::Behind),
             "SKEW_STATUS_AHEAD" => Some(Self::Ahead),
+            _ => None,
+        }
+    }
+}
+/// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043). Read off the root by the
+/// daemon, never stored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum WorkspaceKind {
+    /// an older daemon: kind unknown, a client shows none
+    Unspecified = 0,
+    /// the default or a folder under `<data dir>/lists/`; txtodo syncs it
+    List = 1,
+    /// every other folder; git syncs it, txtodo never does
+    Repo = 2,
+}
+impl WorkspaceKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "WORKSPACE_KIND_UNSPECIFIED",
+            Self::List => "WORKSPACE_KIND_LIST",
+            Self::Repo => "WORKSPACE_KIND_REPO",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "WORKSPACE_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "WORKSPACE_KIND_LIST" => Some(Self::List),
+            "WORKSPACE_KIND_REPO" => Some(Self::Repo),
             _ => None,
         }
     }
@@ -2063,6 +2139,84 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "WorkspaceRename"));
             self.inner.unary(req, path, codec).await
         }
+        /// Makes the list `name` when this device has none by that name and registers it under the id the
+        /// name gives; a list that is already there is returned unchanged (`created` false).
+        /// INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+        pub async fn list_ensure(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListEnsureRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListEnsureResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListEnsure",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListEnsure"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+        /// INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+        /// list shows or was made under the new name.
+        pub async fn list_rename(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListRename",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListRename"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+        /// deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+        /// default list, NOT_FOUND for an unknown one.
+        pub async fn list_remove(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListRemoveResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/ListRemove",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListRemove"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -2702,6 +2856,33 @@ pub mod txtodo_server {
             &self,
             request: tonic::Request<super::WorkspaceRenameRequest>,
         ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Makes the list `name` when this device has none by that name and registers it under the id the
+        /// name gives; a list that is already there is returned unchanged (`created` false).
+        /// INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+        async fn list_ensure(
+            &self,
+            request: tonic::Request<super::ListEnsureRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListEnsureResponse>,
+            tonic::Status,
+        >;
+        /// Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+        /// INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+        /// list shows or was made under the new name.
+        async fn list_rename(
+            &self,
+            request: tonic::Request<super::ListRenameRequest>,
+        ) -> std::result::Result<tonic::Response<super::WorkspaceInfo>, tonic::Status>;
+        /// Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+        /// deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+        /// default list, NOT_FOUND for an unknown one.
+        async fn list_remove(
+            &self,
+            request: tonic::Request<super::ListRemoveRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListRemoveResponse>,
+            tonic::Status,
+        >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         async fn pair_offer(
             &self,
@@ -3948,6 +4129,135 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = WorkspaceRenameSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListEnsure" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListEnsureSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListEnsureRequest>
+                    for ListEnsureSvc<T> {
+                        type Response = super::ListEnsureResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListEnsureRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_ensure(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListEnsureSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListRename" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListRenameSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListRenameRequest>
+                    for ListRenameSvc<T> {
+                        type Response = super::WorkspaceInfo;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListRenameRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_rename(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListRenameSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/ListRemove" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListRemoveSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ListRemoveRequest>
+                    for ListRemoveSvc<T> {
+                        type Response = super::ListRemoveResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListRemoveRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::list_remove(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListRemoveSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -121,6 +121,24 @@ service Txtodo {
   // Device-level, no selector.
   rpc WorkspaceRename(WorkspaceRenameRequest) returns (WorkspaceInfo);
 
+  // --- named lists (task two-kinds-of-workspace, ADR 0043) ---
+  // Device-level like the registry RPCs above: no selector. A list is a workspace under
+  // `<data dir>/lists/<name>/` whose id comes from its name, so every own device's `work` is the
+  // same list.
+
+  // Makes the list `name` when this device has none by that name and registers it under the id the
+  // name gives; a list that is already there is returned unchanged (`created` false).
+  // INVALID_ARGUMENT for a bad name, ALREADY_EXISTS when that id is a list renamed to another name.
+  rpc ListEnsure(ListEnsureRequest) returns (ListEnsureResponse);
+  // Changes the name a list shows (the `WorkspaceRename` write); its id and folder stay.
+  // INVALID_ARGUMENT for a bad name, NOT_FOUND for an unknown list, ALREADY_EXISTS when another
+  // list shows or was made under the new name.
+  rpc ListRename(ListRenameRequest) returns (WorkspaceInfo);
+  // Un-registers a list on this device and moves its folder into a time-stamped sibling; never
+  // deletes, never tells the other devices, which keep the list. FAILED_PRECONDITION for the
+  // default list, NOT_FOUND for an unknown one.
+  rpc ListRemove(ListRemoveRequest) returns (ListRemoveResponse);
+
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
@@ -848,6 +866,14 @@ message SyncStatusResponse {
 
 // --- workspace registry (ADR 0025, task `cli-workspace-commands`, M11) ---
 
+// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043). Read off the root by the
+// daemon, never stored.
+enum WorkspaceKind {
+  WORKSPACE_KIND_UNSPECIFIED = 0;  // an older daemon: kind unknown, a client shows none
+  WORKSPACE_KIND_LIST = 1;         // the default or a folder under `<data dir>/lists/`; txtodo syncs it
+  WORKSPACE_KIND_REPO = 2;         // every other folder; git syncs it, txtodo never does
+}
+
 // One entry in the device-global workspace registry.
 // How far one registered workspace is through being opened by this daemon (task
 // daemon-early-bind): the daemon binds its socket first and opens workspaces in the background.
@@ -887,6 +913,9 @@ message WorkspaceInfo {
   // `default` for the default workspace, or the root's folder name. Empty from an older daemon,
   // which a client reads as "derive one from `root`".
   string name = 12;
+  // Which carrier syncs this workspace (task two-kinds-of-workspace). UNSPECIFIED from an older
+  // daemon, which a client reads as "kind unknown" and shows none.
+  WorkspaceKind kind = 13;
 }
 
 message WorkspaceAddRequest {
@@ -997,6 +1026,33 @@ message WorkspaceRenameRequest {
   // Trimmed; at most 256 bytes, no control characters. Empty clears it, and the workspace shows
   // its folder name again.
   string name = 2;
+}
+
+// --- named lists (task two-kinds-of-workspace, ADR 0043) ---
+
+message ListEnsureRequest {
+  // The list's name: ASCII `[a-z0-9_-]`, 1 to 48 characters, never `default`. The daemon lowercases
+  // and trims it first. The name is the list's identity on every own device, for good.
+  string name = 1;
+}
+
+message ListEnsureResponse {
+  WorkspaceInfo workspace = 1;
+  bool created = 2;   // false when the list was already here
+}
+
+message ListRenameRequest {
+  string list = 1;       // the list's shown name, else the name it was made under
+  string new_name = 2;   // same rules as ListEnsureRequest.name
+}
+
+message ListRemoveRequest {
+  string list = 1;       // the list's shown name, else the name it was made under
+}
+
+message ListRemoveResponse {
+  bool removed = 1;
+  string moved_to = 2;   // where the folder went; empty when `removed` is false
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---

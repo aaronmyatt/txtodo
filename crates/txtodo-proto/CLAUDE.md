@@ -94,6 +94,13 @@ Empty from an older daemon. `WorkspaceRename(WorkspaceRenameRequest { workspace_
 `WorkspaceInfo`: device-level like `WorkspaceRemove`, sets or clears that `name` line (as ops, so it
 syncs). UNIMPLEMENTED from an older daemon.
 
+`WorkspaceInfo.kind` (field 13, `WorkspaceKind`: list or repo, task two-kinds-of-workspace, ADR 0043):
+which carrier syncs the workspace, read off its root by the daemon and never stored. `ListEnsure`
+(`{ name }` to `{ workspace, created }`), `ListRename` (`{ list, new_name }` to `WorkspaceInfo`) and
+`ListRemove` (`{ list }` to `{ removed, moved_to }`): device-level, no selector, for the named lists
+under `<data dir>/lists/`. A list's id comes from its name, so `ListEnsure` of an existing list
+returns it unchanged. UNSPECIFIED kind / UNIMPLEMENTED from an older daemon.
+
 `ConflictsResponse.duplicates` (field 2) and `Change.duplicate_groups` (field 6), ADR 0032 (task
 sync-drift/duplicate-flags, 2026-10-01): a file's exact-duplicate lines as `DuplicateGroup`s
 (`DuplicateTask`: task id as ULID text and 1-based line number, oldest id first), and how many groups
