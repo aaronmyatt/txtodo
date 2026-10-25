@@ -1,0 +1,11 @@
+2026-10-25 docs: ADR 0043 two kinds of workspace, amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs
+2026-10-25 paths/proto: WorkspaceKind { List, Repo } from the root, WorkspaceInfo.kind additive +m11 @daemon @proto
+2026-10-25 daemon: repo workspaces are never offered and get no relay or LAN route; two-daemon e2e +m11 @daemon @sync
+2026-10-25 daemon: named lists, list_id(name) and ensure_list(name) generalise default_workspace.rs; no-rekey guard for every list id +m11 @daemon
+2026-10-25 clients: txtodo lists new|ls|rename|rm, --list <name>, MCP list param, TUI and desktop switcher +m11 @cli @mcp @tui @desktop
+2026-10-25 daemon: lists route only to own devices (pairing-consent A, own_device flag) +m8 @daemon @security
+2026-10-25 mcp/cli: register a git root on first use; the default fallback is named in the result, not stderr +m11 @mcp @cli
+2026-10-25 daemon: repo discovery, scan_roots table, repo_scan.rs walk, after bind and every 6 h, txtodo repos scan|add|roots +m11 @daemon @cli @store
+2026-10-25 core/cli: txtodo merge-driver 3-way per line, txtodo git setup, doctor hint; proptest no line lost +m11 @core @cli
+2026-10-25 daemon/cli: retire repo mirrors, doctor row and prune --repo-mirrors; deprecate workspace bind +m11 @daemon @cli
+2026-10-25 docs: playbook, AGENTS.md and skill install explain the two kinds; scripts/check-two-kinds.sh +m11 @docs
