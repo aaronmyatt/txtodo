@@ -509,3 +509,11 @@ What changed in the plan, and what I chose between.
   either side reaches the other through `txtodo.toml`. The mirror's offered name path
   (`offered_name`, the "owner's offer carries the name" race) has no test now; it is mirror-only and
   retires with them.
+- **cli pairing test.** `a_paired_joiner_receives_the_initiators_real_file` went: it proved the
+  joiner's folder adopts the initiator's workspace id, and a list never re-keys (nor does a plain
+  folder sync after the cut). `tests/e2e/pairing_lists.rs` is the CLI-level replacement, through the
+  global daemon: `lists new work`, `--list work add`, `txtodo pair` from the default workspace with
+  "yes, yes" on both ends, then B's `lists/work/todo.txt` holds the line and `lists` shows `work`.
+  `GlobalDaemon` gained `spawn_with` (env, for a 1 s redial) and `command` (the `txtodo` Command it
+  already ran, for stdin). The ceremony tests that stay in `pairing.rs` (QR, SAS, refusals) still run
+  on `--dir` daemons: they test the ceremony, not what syncs after it.
