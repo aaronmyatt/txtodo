@@ -192,6 +192,25 @@ impl Registry {
             .transpose()
     }
 
+    /// Whether a row for `root` was removed and no row for it is active: a folder the person took
+    /// off the registry. The repo scan (task two-kinds-of-workspace) leaves such a folder alone, so
+    /// a removal sticks.
+    pub fn root_was_removed(&self, root: &str) -> Result<bool, StoreError> {
+        if self.find_active_by_root(root)?.is_some() {
+            return Ok(false);
+        }
+        let removed = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM workspaces WHERE root = ?1 AND removed_at IS NOT NULL LIMIT 1",
+                params![root],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(StoreError::query("select removed root"))?;
+        Ok(removed.is_some())
+    }
+
     /// One workspace by id, active or removed.
     pub fn get(&self, id: WorkspaceId) -> Result<Option<WorkspaceRow>, StoreError> {
         self.conn

@@ -64,7 +64,8 @@ that entry below.
   actual backstop against two active rows for the same root — the caller is expected to check
   `find_active_by_root` first), `find_active_by_root(root)`, `get(id)`, `list_active()` (≤
   `MAX_WORKSPACES_PER_READ`, oldest-registered first), `remove(id, at_ms)` (idempotent tombstone,
-  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id), `restore(id,
+  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id), `root_was_removed(root)` (a folder taken off the
+  registry, for the repo scan to leave alone), `restore(id,
   at_ms)` (task two-kinds-of-workspace: a removed row comes back under the same id and root, for a
   named list whose id is its name's; `false` for an unknown or active id). `WorkspaceId` is
   Repo-scan state (task two-kinds-of-workspace, `registry_scan.rs`): `scan_roots()` (oldest first, at

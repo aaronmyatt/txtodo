@@ -303,3 +303,25 @@ fn restore_reports_false_for_an_unknown_or_an_active_row() {
         1_000
     );
 }
+
+#[test]
+fn a_root_taken_off_the_registry_reads_as_removed_until_it_is_registered_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut registry = open(dir.path());
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "never seen"
+    );
+    registry.insert(&entry(1, "/home/a/code/x", 1_000)).unwrap();
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "active"
+    );
+    registry.remove(workspace(1), 2_000).unwrap();
+    assert!(registry.root_was_removed("/home/a/code/x").unwrap());
+    registry.insert(&entry(2, "/home/a/code/x", 3_000)).unwrap();
+    assert!(
+        !registry.root_was_removed("/home/a/code/x").unwrap(),
+        "registered again"
+    );
+}
