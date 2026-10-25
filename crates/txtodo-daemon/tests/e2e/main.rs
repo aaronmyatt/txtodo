@@ -10,8 +10,6 @@
 mod support;
 
 mod crash;
-mod default_workspace_foreign;
-mod default_workspace_pairing;
 mod default_workspace_sync;
 mod dir_bridge_refused;
 mod duplicate_groups;
@@ -41,5 +39,6 @@ mod relay_default;
 mod relay_multiplex;
 mod relay_node_id;
 mod single_instance;
+mod two_devices;
 mod workspace_name;
 mod workspace_rejoin;

@@ -5,8 +5,8 @@
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stderr)]
 #![cfg(unix)]
 
-use crate::default_workspace_foreign::{DEADLINE, default_root, list, pair, text};
 use crate::support;
+use crate::two_devices::{DEADLINE, default_root, list, pair, text};
 
 use std::path::Path;
 use std::time::Instant;
