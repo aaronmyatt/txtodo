@@ -1,6 +1,7 @@
 //! `txtodo device list` and `txtodo device remove <id>` (plan M4 tasks/sync-device-remove).
 //! Both need the daemon: devices live in its `devices` table, never in the synced files.
 
+use super::removal;
 use crate::client::Daemon;
 use crate::{CliError, json};
 use clap::Subcommand;
@@ -47,12 +48,15 @@ fn skew_word(status: i32) -> &'static str {
 
 fn device_json(d: &pb::Device) -> String {
     format!(
-        r#"{{"id":{},"name":{},"is_self":{},"own_device":{},"removed":{},"key_epoch":{},"paired_at_ms":{},"last_seen_ms":{},"skew":{}}}"#,
+        r#"{{"id":{},"name":{},"is_self":{},"own_device":{},"removed":{},"removed_reason":{},"removed_by":{},"removed_at_ms":{},"key_epoch":{},"paired_at_ms":{},"last_seen_ms":{},"skew":{}}}"#,
         json::str(&d.id),
         json::str(&d.name),
         d.is_self,
         d.own_device,
         d.removed,
+        json::str(&d.removed_reason),
+        json::str(&d.removed_by),
+        d.removed_at_ms,
         d.key_epoch,
         d.paired_at_ms,
         d.last_seen_ms,
@@ -72,7 +76,11 @@ fn device_text(d: &pb::Device) -> String {
         (false, true) => " (own)",
         (false, false) => " (not own: default kept apart)",
     };
-    let removed = if d.removed { " [removed]" } else { "" };
+    let removed = if d.removed {
+        format!(" [{}, removed_at={}]", removal::why(d), d.removed_at_ms)
+    } else {
+        String::new()
+    };
     let last_seen = if d.last_seen_ms == 0 {
         "never".to_owned()
     } else {
@@ -178,5 +186,34 @@ mod tests {
         assert!(device_text(&peer(true)).contains("(own)"));
         assert!(device_text(&peer(false)).contains("not own"));
         assert!(device_json(&peer(false)).contains(r#""own_device":false"#));
+    }
+
+    /// Task `peer-prune`: a removed row says why, and the JSON carries the same three fields.
+    #[test]
+    fn a_removed_row_says_why_and_the_json_carries_it() {
+        let gone = pb::Device {
+            id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
+            removed: true,
+            removed_reason: "pruned_quiet".into(),
+            removed_by: "01ARZ3NDEKTSV4RRFFQ69G5FAW".into(),
+            removed_at_ms: 1_790_000_000_000,
+            ..pb::Device::default()
+        };
+        let text = device_text(&gone);
+        assert!(text.contains("[pruned: not heard from for too long, removed_at=1790000000000]"));
+        let json = device_json(&gone);
+        assert!(
+            json.contains(r#""removed_reason":"pruned_quiet""#),
+            "{json}"
+        );
+        assert!(
+            json.contains(r#""removed_by":"01ARZ3NDEKTSV4RRFFQ69G5FAW""#),
+            "{json}"
+        );
+        assert!(json.contains(r#""removed_at_ms":1790000000000"#), "{json}");
+        assert!(
+            !device_text(&peer(true)).contains("removed"),
+            "a live row says nothing"
+        );
     }
 }

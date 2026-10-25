@@ -13,6 +13,7 @@ use crate::commands::doctor_clock::{clock_check, config_check};
 use crate::commands::doctor_git::{git_checks, repos_check};
 use crate::commands::doctor_mirrors::mirror_checks;
 use crate::commands::doctor_overlap::{overlap_checks, registered_workspaces};
+use crate::commands::doctor_prune::{dropped_check, pruned_checks};
 use crate::commands::doctor_sync::sync_checks;
 use crate::commands::doctor_transport::{offers_check, transport_check};
 use crate::commands::doctor_version::version_check;
@@ -320,7 +321,9 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     // After the fixed seven, so their order and count stay what scripts already read.
     checks.push(version_check(health.as_ref()));
     checks.push(offers_check(health.as_ref()));
+    checks.extend(dropped_check(health.as_ref()));
     checks.extend(peer_checks(&devices));
+    checks.extend(pruned_checks(&devices));
     let workspaces = registered_workspaces(state.daemon.as_deref_mut());
     checks.extend(sync_checks(state.sync.as_ref(), &devices, &workspaces));
     checks.extend(other_workspace_checks(
