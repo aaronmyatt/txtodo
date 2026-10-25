@@ -131,26 +131,24 @@ async fn a_device_that_is_not_own_gets_no_list() {
     )
     .unwrap();
 
-    // B's human says no: not own. A's default still reaches B, as a Remote mirror under its alias.
+    // B's human says no: not own. A has nothing for it: not the list, and not its default either
+    // (it used to reach a foreign peer as a Remote mirror; a list is private, git is for sharing).
     pair(&mut client_a, true, &mut client_b, false).await;
     let start = Instant::now();
-    loop {
-        let all = list(&mut client_b).await;
-        let mirrored = all.iter().filter(|w| w.is_remote).collect::<Vec<_>>();
-        let mut seen = false;
-        for w in mirrored {
-            seen |= text(&mut client_b, &w.root).await.contains("default of a");
-        }
-        if seen {
-            break;
-        }
+    while !(a.log_tail().contains("lan_shared_session_started")
+        && b.log_tail().contains("lan_shared_session_started"))
+    {
         assert!(start.elapsed() < DEADLINE, "sessions never ran\n{}", logs());
         tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
+    // A few redials (1 s each) after the first session: an offer would be mirrored by now.
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
 
-    // Sessions have run and offers have been made; B holds no list of A's (its own default is one),
-    // and none of the list's text.
+    // B holds no list of A's (its own default is one), no mirror at all, and none of the text.
     for w in list(&mut client_b).await {
+        assert!(!w.is_remote, "{w:?}\n{}", logs());
+        let body = text(&mut client_b, &w.root).await;
+        assert!(!body.contains("default of a"), "{body}\n{}", logs());
         assert!(
             w.is_default || w.kind() != pb::WorkspaceKind::List,
             "{w:?}\n{}",
@@ -172,4 +170,43 @@ async fn a_harness_daemon_serves_its_workspace_as_a_list() {
     let mut daemon = support::Daemon::start("(A) one\n").await;
     let kinds: Vec<_> = daemon.workspaces().await.iter().map(|w| w.kind()).collect();
     assert_eq!(kinds, vec![pb::WorkspaceKind::List]);
+}
+
+/// A folder that is not a list is a repo as far as txtodo goes (git carries it), so it is never
+/// offered and has no route: B holds no copy of it, though a list made beside it reaches B. The list
+/// is the clock: once it has arrived, offers and sessions have run.
+#[tokio::test]
+async fn a_repo_is_never_offered_and_never_reaches_the_other_device() {
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let (a, mut client_a) = MultiWorkspaceDaemon::start_with_args(dir_a, &[]).await;
+    let (b, mut client_b) = MultiWorkspaceDaemon::start_with_args(dir_b, &[]).await;
+    let logs = || format!("--- A ---\n{}\n--- B ---\n{}", a.log_tail(), b.log_tail());
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::write(
+        repo.path().join("todo.txt"),
+        "private to a repo id:01M2CZ0000000000000000000F\n",
+    )
+    .unwrap();
+    let req = pb::WorkspaceAddRequest {
+        root: repo.path().display().to_string(),
+    };
+    let added = client_a.workspace_add(req).await.unwrap().into_inner();
+    assert_eq!(added.kind(), pb::WorkspaceKind::Repo, "{added:?}");
+    let work = make(&mut client_a, "work").await;
+    std::fs::write(
+        Path::new(&work.root).join("todo.txt"),
+        "jotted on a id:01M2CZ0000000000000000000G\n",
+    )
+    .unwrap();
+
+    pair(&mut client_a, true, &mut client_b, true).await;
+    wait_for_list_with(&mut client_b, "work", &["jotted on a"], &logs).await;
+    // A few more redials (1 s each) than the list needed: a repo offer would be mirrored by now.
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+
+    for w in list(&mut client_b).await {
+        assert!(!w.is_remote, "B mirrors nothing: {w:?}\n{}", logs());
+        let body = text(&mut client_b, &w.root).await;
+        assert!(!body.contains("private to a repo"), "{body}\n{}", logs());
+    }
 }

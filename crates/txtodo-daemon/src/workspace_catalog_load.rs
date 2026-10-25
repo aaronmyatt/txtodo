@@ -79,7 +79,8 @@ impl WorkspaceCatalog {
             hook(root);
         }
         let started = Instant::now();
-        let opened = open_workspace_full(root, id, &self.open_args, Arc::clone(&self.clock))
+        let syncs = self.syncs(id, root);
+        let opened = open_workspace_full(root, id, syncs, &self.open_args, Arc::clone(&self.clock))
             .map_err(|e| Status::internal(format!("open {}: {e}", root.display())))?;
         {
             // A `WorkspaceRemove` may have landed while this open ran. `remove_registered` forgets

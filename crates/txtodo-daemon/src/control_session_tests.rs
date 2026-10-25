@@ -15,8 +15,10 @@ use txtodo_sync::{
 };
 
 use crate::clock::FakeClock;
-use crate::control_session::drive_control_session;
+use crate::control_session::{drive_control_session, outbound_offers};
 use crate::device_identity::DeviceIdentity;
+use crate::list_workspace::ListName;
+use crate::workspace_offer_registry::WorkspaceOfferRegistry;
 use crate::workspace_registry::WorkspaceRegistry;
 
 const GROUP_EPOCH: u32 = 0;
@@ -62,8 +64,10 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     let workspace_b_dir = tempfile::tempdir().unwrap();
     let mut registry_b = WorkspaceRegistry::open(&registry_b_dir.path().join("registry.db"))
         .unwrap_or_else(|e| panic!("{e}"));
-    let workspace_b_id = registry_b
-        .add(workspace_b_dir.path(), &clock)
+    // A list: the default and lists are what a device offers (a repo's list is not, ADR 0043).
+    let workspace_b_id = ListName::parse("work").unwrap().id();
+    registry_b
+        .adopt(workspace_b_id, workspace_b_dir.path(), &clock)
         .unwrap_or_else(|e| panic!("{e}"));
     let registry_b = Mutex::new(registry_b);
 
@@ -116,6 +120,28 @@ fn drive_control_session_sends_and_records_offers_for_real() {
     assert_eq!(recorded[0].offering_device, device_a);
     assert_eq!(recorded[0].workspace_id.ulid().to_u128(), offered_workspace);
     assert_eq!(recorded[0].name, "from-a");
+}
+
+/// Only a list is offered (ADR 0043): git carries a repo, so no peer is told it exists, and the
+/// default is on every device already, so a foreign peer is shown nothing.
+#[test]
+fn only_lists_are_offered() {
+    let (state, clock) = (tempfile::tempdir().unwrap(), FakeClock::new(1_000));
+    let mut registry = WorkspaceRegistry::open(&state.path().join("registry.db")).unwrap();
+    let folder = |name: &str| {
+        let dir = state.path().join(name);
+        std::fs::create_dir(&dir).unwrap();
+        dir
+    };
+    let default = crate::default_workspace::default_workspace_id();
+    let list = ListName::parse("work").unwrap().id();
+    registry.add(&folder("repo"), &clock).unwrap();
+    registry.adopt(default, &folder("default"), &clock).unwrap();
+    registry.adopt(list, &folder("work"), &clock).unwrap();
+
+    let offers = outbound_offers(&Mutex::new(registry), &WorkspaceOfferRegistry::new());
+    let ids: Vec<_> = offers.iter().map(|(id, _)| *id).collect();
+    assert_eq!(ids, vec![list], "{offers:?}");
 }
 
 /// Task `control-channel-keystore-visibility`: a group-key read that fails leaves its reason on the

@@ -7,7 +7,7 @@
 use crate::server::SharedWorkspace;
 use crate::workspace_catalog::WorkspaceCatalog;
 use std::path::Path;
-use std::sync::{Arc, PoisonError};
+use std::sync::PoisonError;
 use tonic::Status;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
@@ -91,8 +91,7 @@ impl WorkspaceCatalog {
     /// long before any pairing RPC) — first-registrant-wins means the joiner must give that id up
     /// in favor of the initiator's `offered_id` instead. A no-op returning `current_id` when the
     /// two already match. Never touches `root/.txtodo/` — only the registry row's id, this
-    /// process's `open` map key, `ws`'s own live id, and the device-level relay/file-carrier route
-    /// tables change. Refuses (never silently substitutes) when `offered_id` is already
+    /// process's `open` map key and `ws`'s own live id change. Refuses (never silently substitutes) when `offered_id` is already
     /// actively registered locally under a *different* root — the one collision `adopt` cannot
     /// resolve by itself; the far more common case, `ws`'s own root being self-registered under
     /// its old id, is exactly what this releases first. Also refuses a folder that is not empty
@@ -135,32 +134,11 @@ impl WorkspaceCatalog {
             }
             self.slots.rekey(current_id, offered_id);
         }
+        // No route moves: only a repo reaches here (the default and lists returned above), and a
+        // repo is on no route table (`WorkspaceCatalog::syncs`).
         ws.read()
             .unwrap_or_else(PoisonError::into_inner)
             .set_workspace_id(offered_id);
-        for routes in [
-            self.open_args
-                .device_relay
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::device_relay::DeviceRelay::routes),
-            self.open_args
-                .device_file_carrier
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::file_carrier::DeviceFileCarrier::routes),
-            self.open_args
-                .device_lan
-                .as_ref()
-                .map(Arc::as_ref)
-                .map(crate::device_lan::DeviceLan::routes),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            routes.unregister(current_id);
-            crate::workspace_catalog_open::register_route(ws, offered_id, Some(routes));
-        }
         Ok(offered_id)
     }
 

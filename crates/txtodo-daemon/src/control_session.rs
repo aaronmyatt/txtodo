@@ -146,8 +146,10 @@ fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKey
     None
 }
 
-/// This device's currently-active workspaces, as `(id, display name)` pairs — never used as
-/// identity. The name is the one this device shows (`workspace_name::display_name`, task
+/// This device's lists, as `(id, display name)` pairs — never used as identity. Only lists
+/// (`is_list_id`: a list's id comes from its name) are offered (ADR 0043). A repo is carried by
+/// git, so no peer is told it exists; the default is on every device already, under one id, and a
+/// foreign peer is shown nothing. The name is the one this device shows (`workspace_name::display_name`, task
 /// workspace-vanity-name): the `txtodo.toml` name, else the folder's, else for a mirror what its
 /// own offering device called it (`offers`), so a third device learns the name, not the id.
 pub(crate) fn outbound_offers(
@@ -159,16 +161,13 @@ pub(crate) fn outbound_offers(
         .unwrap_or_else(PoisonError::into_inner)
         .list()
         .unwrap_or_default();
-    let default = crate::default_workspace::default_workspace_id();
     entries
         .into_iter()
+        .filter(|entry| crate::list_workspace::is_list_id(entry.id))
         .map(|entry| {
-            let name = crate::workspace_name::display_name(
-                entry.id,
-                &entry.root,
-                entry.id == default,
-                || offers.offered_name(entry.id),
-            );
+            let name = crate::workspace_name::display_name(entry.id, &entry.root, false, || {
+                offers.offered_name(entry.id)
+            });
             (entry.id, name)
         })
         .collect()
@@ -237,14 +236,6 @@ fn send_all_offers(
     let device = identity.device();
     let now_ms = now_ms();
     for (workspace_id, name) in outbound_offers(registry, identity.workspace_offers()) {
-        // The default goes out under this device's alias (task default-workspace-pairing-consent):
-        // a foreign peer mirrors it as a Remote workspace; an own device skips it, since it merges
-        // that list under the reserved id already.
-        let workspace_id = if workspace_id == crate::default_workspace::default_workspace_id() {
-            crate::default_workspace::default_alias(device)
-        } else {
-            workspace_id
-        };
         let msg = ControlMessage::Offer {
             sender: device,
             workspace_id: workspace_id.ulid().to_u128(),

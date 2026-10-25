@@ -38,6 +38,13 @@ impl WorkspaceCatalog {
             .is_some_and(|lists| root != lists && root.starts_with(lists))
     }
 
+    /// True when txtodo syncs the workspace `id` rooted at `root` between this user's devices: the
+    /// default and every list. A repo is not: git carries it (ADR 0043), so it is never offered
+    /// and has no relay, LAN or file-carrier route.
+    pub(crate) fn syncs(&self, id: WorkspaceId, root: &Path) -> bool {
+        self.registered_default() == Some(id) || self.is_list_root(root)
+    }
+
     /// Makes the list `name` when this device has none, registers it under the id its name gives
     /// and opens it so sync routes it at once; returns its entry and whether it was made now.
     /// A list that is already here comes back unchanged, unless it was renamed: `work` is then

@@ -122,7 +122,8 @@ fn log_workspace_closed() {
     tracing::info!("workspace_closed");
 }
 
-/// Opens `root` under `args`, spawns its watcher and (unless disabled) LAN — the same sequence
+/// Opens `root` under `args`, spawns its watcher and, when `syncs` (the default or a list, never a
+/// repo: ADR 0043), registers its sync routes — the same sequence
 /// `main.rs::run` used to run once, per workspace. Must run inside a tokio runtime (actors and the
 /// background tasks below are all spawned). Relay and file-carrier are no longer spawned here at
 /// all (task `daemon-shared-sync-link` stages 5-6): both are this device's own shared, single
@@ -130,6 +131,7 @@ fn log_workspace_closed() {
 pub fn open_workspace_full(
     root: &Path,
     id: txtodo_store::WorkspaceId,
+    syncs: bool,
     args: &WorkspaceOpenArgs,
     clock: Arc<dyn Clock>,
 ) -> Result<OpenedWorkspace, WorkspaceError> {
@@ -139,30 +141,9 @@ pub fn open_workspace_full(
     // invariant — see `Workspace::set_workspace_id`'s doc).
     ws.set_workspace_id(id);
     let ws: SharedWorkspace = Arc::new(RwLock::new(ws));
-    register_route(
-        &ws,
-        id,
-        args.device_relay
-            .as_ref()
-            .map(Arc::as_ref)
-            .map(DeviceRelay::routes),
-    );
-    register_route(
-        &ws,
-        id,
-        args.device_file_carrier
-            .as_ref()
-            .map(Arc::as_ref)
-            .map(DeviceFileCarrier::routes),
-    );
-    register_route(
-        &ws,
-        id,
-        args.device_lan
-            .as_ref()
-            .map(Arc::as_ref)
-            .map(DeviceLan::routes),
-    );
+    if syncs {
+        register_routes(&ws, id, args);
+    }
     let (watcher, watch_task) =
         watch_task::start(Arc::clone(&ws), Arc::clone(&clock)).map_err(|source| {
             WorkspaceError::Walk(crate::walker::WalkError::Io {
@@ -170,11 +151,13 @@ pub fn open_workspace_full(
                 source: std::io::Error::other(source.to_string()),
             })
         })?;
+    // The relay's status is the device's, whatever this workspace is; only dialing a peer for it is
+    // left to a workspace txtodo syncs (a repo's dial task would die with the repo).
     let relay = relay::start(
         Arc::clone(&ws),
         args.relay_url.clone(),
         args.device_relay.clone(),
-        args.relay_dial_peer,
+        args.relay_dial_peer.filter(|_| syncs),
     );
     // Canonical even when the caller opened it through a symlink (macOS `/var`, `/tmp`): the path
     // lookup canonicalizes what the client sent, and comparing that with a raw root never matched.
@@ -191,6 +174,17 @@ pub fn open_workspace_full(
         watch_task,
         relay,
     })
+}
+
+/// Registers `ws` on the device's three shared sync tables (relay, file carrier, LAN); only for a
+/// workspace txtodo syncs (`WorkspaceCatalog::syncs`), so a repo is on none of them.
+fn register_routes(ws: &SharedWorkspace, id: txtodo_store::WorkspaceId, args: &WorkspaceOpenArgs) {
+    let relay = args.device_relay.as_ref().map(Arc::as_ref);
+    register_route(ws, id, relay.map(DeviceRelay::routes));
+    let carrier = args.device_file_carrier.as_ref().map(Arc::as_ref);
+    register_route(ws, id, carrier.map(DeviceFileCarrier::routes));
+    let lan = args.device_lan.as_ref().map(Arc::as_ref);
+    register_route(ws, id, lan.map(DeviceLan::routes));
 }
 
 /// Registers `ws`'s route on `routes` (either the device's shared relay endpoint's table or its
