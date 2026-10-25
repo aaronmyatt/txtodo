@@ -132,3 +132,54 @@ tag 5, still protocol 6):
    so a grant can be made again for a peer that comes back later, and the tie-break has a minter.
 
 A removed device is refused at the first frame of a control session as well (its `sender`).
+
+## As built (agent, 2026-10-26)
+
+Everything the design asked for is in, bar the two lines only a person can do (the two-Mac check) and
+the lab run's result (see its todo line).
+
+- **Verdict** `prune_stale.rs`: parked and silent `prune_parked_after` (1 day), or silent
+  `prune_quiet_after` (7 days); `0` turns a rule off. Silence counts from the newest of `last_seen`,
+  `paired_at` and `up_since`. **Loop** `prune_loop.rs`, one per device, on the resync tick, running
+  `remove_device_because`. **Config** `prune_config.rs`: env, then the CLI's `config.toml` (flat keys
+  beside `sync_dir`, not the `[sync]` table the ADR first named), then the defaults.
+- **Two safety rules the design did not have**, both found while writing the loop:
+  - `up_since` (`prune_presence.rs`): a device that was off or asleep drops nobody on waking. A tick
+    more than ten minutes after the last (or half the shortest threshold, for the lab) moves it to now;
+    it is saved in `meta`, so a restart after a stop counts too.
+  - A peer with a session open is touched every tick. `last_seen` is set when a `Hello` opens and a
+    session can stay up for days, so a connected peer that made no ops would have been dropped.
+- **Why and who** `removal_why.rs`: `manual`, `pruned_quiet`, `pruned_parked`, `left_out` (dropped by
+  another device and followed), with the device that did it. `DeviceList` carries
+  `removed_reason`/`removed_by`/`removed_at_ms`. Before this a row said only `removed`.
+- **The pruned side** `Health.dropped_from_group`: three `unknown_epoch` opens in a row from anyone, ended
+  by an opened frame, a new epoch or a new group. Not "every peer" as the design said: a dropped device
+  often cannot tell who sent a frame it cannot open, so the count is not per peer.
+- **Decision reversed:** the first cut left a removed device out of the dial set. Then a dropped device
+  with the higher id (the one that does not dial) was never told. A removed device is dialed again, with
+  the growing backoff of any dial that gets no `Hello` back, and its `Hello` is still refused. The relay
+  paths still skip it; a relay device dials the pruner itself, through its control channel.
+- **Clients:** `txtodo device list` (reason, `removed_at`), `doctor` (a `group` FAIL only when dropped,
+  an ok `peer` row per dropped device), TUI Settings › Devices, desktop Settings › Devices (a note per
+  dropped row, a banner). The `peer` row is ok, not warn: a retired device would otherwise warn forever and
+  nothing can acknowledge it. Looks of the TUI and desktop are not checked.
+- **Tests:** unit tests per piece; `tests/e2e/prune_repair.rs` runs two real daemons through freeze,
+  prune, apart, the dropped flag, pairing again and catching up (38 s, left out of the default nextest
+  set). Lab scenario `prune` runs three devices.
+
+Options weighed, and the pick:
+- Prune clock: wall time from `last_seen` alone (rejected: a closed laptop drops everyone on waking) or
+  with `up_since` (taken).
+- Telling a dropped device: have it infer from failures (taken) or a new control message sent under the
+  old epoch (rejected: a message that has to be sealed under a key the dropper is retiring, and a wire
+  change for a case the failures already show).
+- Config: daemon reads `config.toml` itself (taken: it starts from a service with no flags) or the CLI
+  passes it (rejected: nothing threads config to the daemon today, see `key_store`).
+
+Known gaps:
+- A file-carrier-only device has no control channel, so it cannot receive a grant or hear it was dropped.
+- When two devices prune at once the one with the higher id adopts the other's key and keeps its own
+  drops until its clock prunes them again.
+- The keystore keeps the lower-epoch keys of a group a device left. Harmless, unread.
+- A pruned peer is pruned on each device by that device's own clock; pairing with one device brings the
+  data back through it, the others keep it listed as dropped.

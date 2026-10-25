@@ -38,8 +38,8 @@ use crate::device_identity::DeviceIdentity;
 use crate::device_lan::DeviceLan;
 use crate::device_relay::DeviceRelay;
 use crate::lan_peers::{
-    DialState, KnownPeers, SharedDialState, book_dial, known_or, record_dial_outcome,
-    remember_any_sighting, remember_sighting, worth_dialing,
+    DialState, KnownPeers, SharedDialState, book_dial, follow_dial_generation, known_or,
+    record_dial_outcome, remember_any_sighting, remember_sighting, worth_dialing,
 };
 use crate::live_peers::Carrier;
 use crate::peer_keys::SessionEnd;
@@ -242,6 +242,7 @@ fn handle_sighting(
     remember_any_sighting(&ctx.identity, &sighting);
     remember_sighting(known_peers, &sighting, ctx.device, ctx.group);
     let now_ms = ctx.clock.now_ms();
+    follow_dial_generation(dial_state, ctx.identity.live_peers());
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         let peer = known_or(known_peers, peer);
         // A live LAN session already carries every shared workspace (task sync-live-push). One

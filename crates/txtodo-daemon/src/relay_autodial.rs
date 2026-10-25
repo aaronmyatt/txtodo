@@ -18,7 +18,9 @@ use crate::lan::{
     LanCtx, LanTransport, MAX_CONCURRENT_LAN_SESSIONS, dial_and_spawn, resync_interval,
     spawn_driver,
 };
-use crate::lan_peers::{KnownPeers, SharedDialState, peers_to_resync, try_begin_dial};
+use crate::lan_peers::{
+    KnownPeers, SharedDialState, follow_dial_generation, peers_to_resync, try_begin_dial,
+};
 use crate::live_peers::Carrier;
 use crate::peer_keys::SessionEnd;
 use crate::relay_fallback::relay_fallback_dial;
@@ -155,6 +157,7 @@ fn resync_permit(
     peer: DeviceId,
 ) -> Option<tokio::sync::OwnedSemaphorePermit> {
     let now_ms = ctx.clock.now_ms();
+    follow_dial_generation(dial_state, ctx.identity.live_peers());
     if !try_begin_dial(dial_state, peer, now_ms) {
         return log_backing_off(peer);
     }

@@ -7,7 +7,10 @@ use std::sync::{Arc, Mutex};
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_sync::backoff_ms;
 
-use crate::lan_peers::{DialState, SharedDialState, record_dial_outcome, try_begin_dial};
+use crate::lan_peers::{
+    DialState, SharedDialState, follow_dial_generation, record_dial_outcome, try_begin_dial,
+};
+use crate::live_peers::LivePeers;
 
 fn peer() -> DeviceId {
     DeviceId::new(Ulid::from_u128(7))
@@ -125,4 +128,31 @@ fn only_the_dialing_side_remembers_and_only_its_own_group() {
     let lower = DeviceId::new(Ulid::from_u128(1));
     remember_sighting(&known, &sighting(7, 6, &["10.0.0.7:1"]), lower, group);
     assert!(known.lock().unwrap().is_empty());
+}
+
+/// A peer dialed in vain while it was removed is dialed again the moment a pairing says otherwise,
+/// not when a minute of backoff runs out.
+#[test]
+fn a_pairing_or_new_epoch_forgets_the_backoff_of_dials_that_failed() {
+    let (state, live) = (fresh(), LivePeers::default());
+    follow_dial_generation(&state, &live);
+    assert!(try_begin_dial(&state, peer(), 0));
+    for _ in 0..8 {
+        record_dial_outcome(&state, peer(), false);
+    }
+    assert!(
+        !try_begin_dial(&state, peer(), 1_000),
+        "backed off after repeated failures"
+    );
+    follow_dial_generation(&state, &live);
+    assert!(
+        !try_begin_dial(&state, peer(), 1_000),
+        "nothing changed: still backed off"
+    );
+    live.bump_dial_generation();
+    follow_dial_generation(&state, &live);
+    assert!(
+        try_begin_dial(&state, peer(), 1_001),
+        "dialed again at once"
+    );
 }

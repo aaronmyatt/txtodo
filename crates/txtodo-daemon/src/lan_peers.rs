@@ -12,6 +12,7 @@ use txtodo_sync::{
 };
 
 use crate::device_identity::DeviceIdentity;
+use crate::live_peers::LivePeers;
 use crate::peer_keys::SessionEnd;
 
 /// Shared across the run loop and every spawned dial task.
@@ -24,6 +25,8 @@ pub(crate) type KnownPeers = Arc<Mutex<BTreeMap<DeviceId, DiscoveredPeer>>>;
 pub(crate) struct DialState {
     last_attempt_ms: BTreeMap<DeviceId, u64>,
     failures: BTreeMap<DeviceId, u32>,
+    /// The `LivePeers::dial_generation` this was last cleared for.
+    generation: u64,
 }
 
 impl DialState {
@@ -175,6 +178,19 @@ pub(crate) fn worth_dialing(
     }
     dial_state.record_attempt(peer.device, now_ms);
     Some(peer)
+}
+
+/// Forgets every backoff when the dial generation has moved (a pairing, a new epoch): a peer dialed
+/// in vain for a minute because it was removed, or held another key, is dialed again at once when
+/// that is no longer so, not when the backoff, up to a minute, runs out.
+pub(crate) fn follow_dial_generation(dial_state: &SharedDialState, live: &LivePeers) {
+    let now = live.dial_generation();
+    let mut state = dial_state.lock().unwrap_or_else(PoisonError::into_inner);
+    if state.generation != now {
+        state.generation = now;
+        state.last_attempt_ms.clear();
+        state.failures.clear();
+    }
 }
 
 /// The resync tick's gate: `true` (and the attempt booked) when `peer`'s backoff has elapsed,

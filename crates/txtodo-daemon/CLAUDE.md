@@ -444,6 +444,9 @@ multiplex every workspace's traffic — not done by this task).
   A device the group left out learns it from `peer_keys.rs`: 3 `unknown_epoch` opens in a row from anyone, none ended by an
   opened frame, a new epoch or a new group, set `Health.dropped_from_group`. A removed device is still dialed (growing
   backoff, its `Hello` refused) so it hears; the relay paths skip it (a relay device dials the pruner itself).
+  Its failed dials back off to a minute, so a pairing, a new epoch or a new group bumps `LivePeers::dial_generation` and
+  every dial loop forgets its backoff (`lan_peers::follow_dial_generation`): without it a device paired again waited out
+  the minute (found by the e2e, which fails with a long enough apart phase when the reset is off).
   `tests/e2e/prune_repair.rs` is the two-daemon proof: B frozen past A's
   4 s threshold is dropped, edits on both sides stay apart, and pairing again brings every line to both.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`

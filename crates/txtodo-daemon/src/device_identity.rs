@@ -210,6 +210,7 @@ impl DeviceIdentity {
     pub(crate) fn set_group(&self, group: GroupId) {
         *self.group.lock().unwrap_or_else(PoisonError::into_inner) = group;
         self.peer_keys.clear();
+        self.live_peers.bump_dial_generation();
         self.stuck_sync.clear();
         self.split_files.clear_all();
     }
@@ -233,6 +234,7 @@ impl DeviceIdentity {
         );
         if old != new_epoch {
             self.live_peers.bump_own_generation();
+            self.live_peers.bump_dial_generation();
             self.peer_keys.clear_epoch_misses();
         }
     }

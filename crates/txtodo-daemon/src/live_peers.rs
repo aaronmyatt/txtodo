@@ -38,6 +38,9 @@ pub(crate) struct LivePeers {
     /// Moves when the own-device set changes (ADR 0029's amendment, `own_vouch.rs`): a session
     /// greeted under the old set ends so the next one routes the default for the new one.
     own_generation: Arc<std::sync::atomic::AtomicU64>,
+    /// Moves when something a failed dial was waiting on has changed (a pairing, a new epoch): every
+    /// dial loop forgets its backoff against the old state (`lan_peers::follow_dial_generation`).
+    dial_generation: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl LivePeers {
@@ -90,6 +93,19 @@ impl LivePeers {
     pub(crate) fn own_generation(&self) -> u64 {
         self.own_generation
             .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The dial backoff's version; a dial loop compares it with the one it last saw.
+    pub(crate) fn dial_generation(&self) -> u64 {
+        self.dial_generation
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// A pairing or a new epoch changed what a failed dial was failing on: the next tick dials again
+    /// whatever the backoff said.
+    pub(crate) fn bump_dial_generation(&self) {
+        self.dial_generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// The own-device set changed: every live session greets again.
