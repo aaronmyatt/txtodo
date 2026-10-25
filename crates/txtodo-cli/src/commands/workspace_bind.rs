@@ -12,6 +12,11 @@ use crate::config::Env;
 use crate::{CliError, Ctx, json};
 use txtodo_proto::v1 as pb;
 
+/// What `bind` says first (task two-kinds-of-workspace, ADR 0043): it goes after this release.
+const POINTER: &str = "txtodo: `workspace bind` is going. A repo's list now travels with git: run \
+`txtodo git setup` in each clone, and `txtodo workspace prune --repo-mirrors` moves the old \
+Remote mirrors aside (`txtodo doctor` shows what each holds).";
+
 /// How many moved paths the prompt names, each way, before it counts the rest.
 const SHOWN: usize = 5;
 
@@ -32,7 +37,10 @@ pub struct Args {
 }
 
 /// `workspace bind`.
+#[allow(clippy::print_stderr)]
 pub fn run(ctx: &Ctx, daemon: &mut Daemon, args: &Args, as_json: bool) -> Result<(), CliError> {
+    // On stderr, so `--json` output stays parseable.
+    eprintln!("{POINTER}");
     let folder = folder(ctx, args.dir.as_deref())?;
     let root = folder.display().to_string();
     let plan = daemon.workspace_bind(&args.id, &root, true)?;

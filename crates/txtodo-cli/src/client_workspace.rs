@@ -222,6 +222,21 @@ impl Daemon {
         Ok(rep.map_err(ClientError::Rpc)?.into_inner())
     }
 
+    /// Moves the Remote mirror `id` (every one when empty) aside and un-registers it; a dry run
+    /// only reports (task two-kinds-of-workspace).
+    pub fn mirrors_retire(
+        &mut self,
+        id: &str,
+        dry_run: bool,
+    ) -> Result<pb::MirrorsRetireResponse, ClientError> {
+        let req = pb::MirrorsRetireRequest {
+            workspace_id: id.to_owned(),
+            dry_run,
+        };
+        let rep = self.rt.block_on(self.client.mirrors_retire(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
     /// The repo-scan roots and scan (task two-kinds-of-workspace): changes the roots, starts a scan
     /// when asked, and answers the state. All-default reads it.
     pub fn repos(&mut self, req: pb::ReposRequest) -> Result<pb::ReposResponse, ClientError> {

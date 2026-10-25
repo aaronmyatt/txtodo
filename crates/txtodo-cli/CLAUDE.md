@@ -96,6 +96,13 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   Device-level like `workspace`. `Command::is_registry` names the three device-level families
   (`workspace`, `lists`, `repos`) so `main` neither adopts a layout nor announces the default for them.
   `txtodo doctor` gets one `repos` OK row (count, roots, last scan) beside the `git` WARN rows.
+- `workspace prune --repo-mirrors [--yes]` (task two-kinds-of-workspace, `commands/workspace_mirrors.rs`):
+  `MirrorsRetire` for every Remote mirror an older build made (`remote/<id>/`): a dry run listing each and
+  where it would go, and with `--yes` moves its text and store into a `.rejoin-backup-` sibling and
+  un-registers it; nothing is deleted. `txtodo doctor` gets one `mirror` row per mirror
+  (`doctor_mirrors.rs`, replacing the `bind` rows): OK when the same-named clone has every line of the
+  mirror's root `todo.txt`, WARN with the count and the first line it lacks otherwise. `workspace bind`
+  still works this release and says on stderr that it is going.
 - `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
   (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
   txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none

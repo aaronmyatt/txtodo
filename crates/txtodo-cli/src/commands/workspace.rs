@@ -84,9 +84,12 @@ pub enum Action {
         #[arg(long)]
         yes: bool,
     },
-    /// Moves a Remote workspace (one a paired device offered) into a folder, for a repo cloned on
-    /// two devices: this folder's own copy moves into a new folder beside it, never deleted or
-    /// sent, and the synced copy moves in. Shows what moves and asks first, unless `--yes`.
+    /// Retiring: moves a Remote workspace (one an older build mirrored from a paired device) into
+    /// a folder, for a repo cloned on two devices. Nothing is mirrored now: a repo's list travels
+    /// with git (`txtodo git setup`), and `workspace prune --repo-mirrors` moves the old mirrors
+    /// aside. Still works this release: this folder's own copy moves into a new folder beside it,
+    /// never deleted or sent, and the synced copy moves in. Shows what moves and asks first, unless
+    /// `--yes`.
     Bind(super::workspace_bind::Args),
     /// Prints the default workspace's directory (the folder Finder will not show), and whether it
     /// exists yet. Needs no daemon.
@@ -98,6 +101,11 @@ pub enum Action {
         /// Actually remove the dead registrations; omitted is a dry run (list only).
         #[arg(long)]
         yes: bool,
+        /// Instead: move every Remote mirror an older build made aside (never deleted) and
+        /// un-register it. A repo's list travels with git now (`txtodo git setup`); `txtodo
+        /// doctor` shows which mirrors hold a line your clone lacks. Dry run unless `--yes`.
+        #[arg(long)]
+        repo_mirrors: bool,
     },
 }
 
@@ -113,7 +121,10 @@ pub fn run(
         Some(Action::Add { dir }) => run_add(ctx, daemon, dir.as_deref(), as_json),
         Some(Action::Remove { id }) => run_remove(daemon, id, as_json),
         Some(Action::Rename { id, name }) => run_rename(daemon, id, name, as_json),
-        Some(Action::Prune { yes }) => run_prune(daemon, *yes, as_json),
+        Some(Action::Prune { yes, repo_mirrors }) if *repo_mirrors => {
+            super::workspace_mirrors::run(daemon, *yes, as_json)
+        }
+        Some(Action::Prune { yes, .. }) => run_prune(daemon, *yes, as_json),
         Some(Action::Offers) => super::workspace_offers::run_offers(daemon, as_json),
         Some(Action::Accept { id, from }) => {
             super::workspace_offers::run_accept(daemon, id, from.as_deref(), as_json)
