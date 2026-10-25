@@ -561,3 +561,12 @@ What changed in the plan, and what I chose between.
   refuses a garbled code but moves nothing. `PairResult.kept_own_workspace` stays on the wire (no proto
   change for a comment) and is never set; `txtodo pair` no longer prints "arrives as a Remote
   workspace". `join_target::require_empty` stays: mirror, rejoin, bind and list folders still use it.
+- **alias and foreign-default mirror retired.** `lan_session_gate::session_routes(all, peer)` loses
+  its `device` argument: an own peer gets everything, any other peer gets neither the default nor
+  a list. `default_alias`, `own_default_aliases`, `drop_own_alias_mirrors`, `is_this_devices_alias`,
+  `drop_mirror`, `mirror_workspace` (and `is_active`, `mirror_dir`) are deleted. `mirror_pending_offers`
+  now only makes lists; any other offer (an older build's repo, or a default alias) is consumed with a
+  `workspace_offer_ignored_not_a_list` log. `WorkspaceAcceptOffer` accepts a list and refuses the rest,
+  naming `txtodo git setup`. The old unit tests of the plain mirror are replaced by one that offers a
+  plain id and a default-alias id and finds nothing made; the `workspace_offer_grpc` accept test now
+  expects the refusal. `remote_root`/`is_remote_root` stay: bind and `MirrorsRetire` read them.
