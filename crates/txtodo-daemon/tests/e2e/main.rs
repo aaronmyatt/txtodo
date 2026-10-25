@@ -41,6 +41,5 @@ mod relay_default;
 mod relay_multiplex;
 mod relay_node_id;
 mod single_instance;
-mod workspace_bind;
 mod workspace_name;
 mod workspace_rejoin;
