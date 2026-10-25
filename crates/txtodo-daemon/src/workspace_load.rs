@@ -126,14 +126,6 @@ impl LoadSlots {
         self.map().remove(&id);
     }
 
-    /// Moves `current`'s slot to `offered` (pairing adopted another workspace id for the same root).
-    pub fn rekey(&self, current: WorkspaceId, offered: WorkspaceId) {
-        let mut map = self.map();
-        if let Some(slot) = map.remove(&current) {
-            map.insert(offered, slot);
-        }
-    }
-
     /// `id`'s state, if it has a slot.
     pub fn state(&self, id: WorkspaceId) -> Option<LoadState> {
         let slot = self.map().get(&id).cloned()?;
@@ -316,13 +308,11 @@ mod tests {
     }
 
     #[test]
-    fn rekey_and_forget_follow_the_workspace() {
+    fn forget_drops_the_slot() {
         let slots = LoadSlots::default();
         slots.queue(id(1));
-        slots.rekey(id(1), id(2));
-        assert_eq!(slots.state(id(1)), None);
-        assert_eq!(slots.state(id(2)), Some(LoadState::Queued));
-        slots.forget(id(2));
+        assert_eq!(slots.state(id(1)), Some(LoadState::Queued));
+        slots.forget(id(1));
         assert!(slots.snapshot().is_empty());
     }
 }

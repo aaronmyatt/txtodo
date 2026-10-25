@@ -34,30 +34,19 @@ use txtodo_proto::v1::txtodo_server::Txtodo;
 use txtodo_sync::{PairingOffer, SAS_WORD_COUNT};
 
 /// `GlobalService`'s own `PairAccept`, split out for `global_service.rs`'s length budget (the same
-/// pattern `workspace_offer_grpc.rs` already uses): resolves the selector, adopts the initiator's
-/// offered `WorkspaceId` (task `pairing-workspace-identity`) before delegating to the crypto
-/// handshake below, then runs `pair_accept_impl` exactly as `global_service.rs`'s other methods do.
+/// pattern `workspace_offer_grpc.rs` already uses): resolves the selector, then runs
+/// `pair_accept_impl` exactly as `global_service.rs`'s other methods do. The joiner's workspace keeps
+/// its own id (task `two-kinds-of-workspace`, ADR 0043): a list's id is its name's, the default's is
+/// reserved, and a repo is not synced, so there is nothing to agree on.
 pub(crate) async fn pair_accept_with_catalog(
     service: &crate::global_service::GlobalService,
     r: Request<pb::PairAcceptRequest>,
 ) -> Result<Response<pb::PairResult>, Status> {
     let ws = service.resolve(r.get_ref().workspace.as_ref()).await?;
-    let mut kept_own_workspace = false;
-    if let Some(offered_id) = code_workspace_id(&r.get_ref().code).map_err(wire_status)? {
-        let now_id = service
-            .catalog()
-            .adopt_offered_workspace_id(&ws, offered_id)?;
-        // The default keeps its reserved id (task default-workspace-pairing-consent's side note):
-        // say so, since the offered workspace then only arrives later, as a Remote mirror.
-        kept_own_workspace = now_id != offered_id;
-    }
+    // The code must still parse: a garbled one is refused here, as it was.
+    code_workspace_id(&r.get_ref().code).map_err(wire_status)?;
     let span = crate::global_service::rpc_span("pair_accept", &ws);
-    let mut reply = TxtodoService::new(ws)
-        .pair_accept(r)
-        .instrument(span)
-        .await?;
-    reply.get_mut().kept_own_workspace = kept_own_workspace;
-    Ok(reply)
+    TxtodoService::new(ws).pair_accept(r).instrument(span).await
 }
 
 impl TxtodoService {

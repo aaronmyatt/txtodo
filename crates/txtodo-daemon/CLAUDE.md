@@ -388,7 +388,8 @@ multiplex every workspace's traffic — not done by this task).
   rejoin does, un-register; the other devices keep it). `list_rpc.rs`: `ListEnsure`, `ListRename`
   (the `WorkspaceRename` write after the new name is checked), `ListRemove`. `WorkspaceInfo.kind` is
   List for the default and anything in the lists root, Repo for every other folder. Pairing never
-  rekeys a list (`adopt_offered_workspace_id`), as for the default. A removed list made again comes
+  re-keys any workspace (the joiner's re-key, `adopt_offered_workspace_id`, is gone): a list's id is its
+  name's, the default's is reserved, a repo is not synced. `PairResult.kept_own_workspace` is never set now. A removed list made again comes
   back under its id through `WorkspaceRegistry::restore`.
 - Repos (task `two-kinds-of-workspace`, ADR 0043): `repo_scan.rs` is a pure walk under the scan roots for
   a `.git` folder whose top holds a `todo.txt` or `txtodo.toml` (depth 8, 250k folders, 500 repos; hidden,

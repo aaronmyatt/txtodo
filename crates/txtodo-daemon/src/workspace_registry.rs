@@ -118,23 +118,6 @@ impl WorkspaceRegistry {
         self.insert_adopted(id, canonical, clock)
     }
 
-    /// [`Self::adopt`] for a root this device released a moment ago under another id: the pairing
-    /// rekey (`WorkspaceCatalog::rekey_registry`) and its rollback. It is the same folder, not a
-    /// new one, so an overlap it already had is not refused here: a registry from before the
-    /// refusal keeps working, and `txtodo doctor` reports the overlap instead.
-    pub fn adopt_released(
-        &mut self,
-        id: WorkspaceId,
-        root: &Path,
-        clock: &dyn Clock,
-    ) -> Result<(), WorkspaceRegistryError> {
-        let canonical = canonical_root(root)?;
-        if self.adopted_already(id, &canonical)? {
-            return Ok(());
-        }
-        self.insert_adopted(id, canonical, clock)
-    }
-
     /// `adopt`'s collision checks: `Ok(true)` when `id` already names `canonical` (nothing to do),
     /// an error when `id` names another root or `canonical` is active under another id.
     fn adopted_already(

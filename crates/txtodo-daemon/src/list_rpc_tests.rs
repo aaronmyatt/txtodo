@@ -219,22 +219,3 @@ async fn the_default_cannot_be_removed_and_every_listing_says_list_or_repo() {
         "the plain folder is a repo: {kinds:?}"
     );
 }
-
-/// Pairing from inside a list must not rekey it to the initiator's id (the default has the same
-/// guard): a list's id is its name's.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn pairing_never_rekeys_a_list() {
-    let (tmp, svc) = service();
-    let info = ensure(&svc, "work").await.unwrap().workspace.unwrap();
-    let selector = pb::WorkspaceSelector {
-        selector: Some(pb::workspace_selector::Selector::Path(info.root.clone())),
-    };
-    let ws = svc.resolve(Some(&selector)).await.unwrap();
-    let offered = ListName::parse("home").unwrap().id();
-    let kept = svc
-        .catalog()
-        .adopt_offered_workspace_id(&ws, offered)
-        .unwrap();
-    assert_eq!(kept.to_string(), info.workspace_id);
-    drop(tmp);
-}

@@ -88,14 +88,6 @@ impl Drop for OpenedWorkspace {
 }
 
 impl OpenedWorkspace {
-    /// Updates this handle's own bookkeeping id after `WorkspaceCatalog::adopt_offered_workspace_id`
-    /// moves it to a new `open` map key (task `pairing-workspace-identity`) — `Drop`'s route
-    /// unregistration must name the id its routes are actually registered under, not the one this
-    /// workspace happened to open with.
-    pub(crate) fn rekey(&mut self, id: txtodo_store::WorkspaceId) {
-        self.id = id;
-    }
-
     fn drop_inner(&mut self) {
         self.watch_task.abort();
         if let Some(r) = &self.relay {
