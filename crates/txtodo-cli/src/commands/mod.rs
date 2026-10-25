@@ -8,6 +8,7 @@ pub mod device;
 pub mod doctor;
 mod doctor_bind;
 mod doctor_clock;
+mod doctor_git;
 mod doctor_overlap;
 mod doctor_sync;
 mod doctor_transport;

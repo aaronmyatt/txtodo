@@ -412,3 +412,9 @@ What changed in the plan, and what I chose between.
     worktree; and `tests/it/merge_driver_git.rs` runs `txtodo git setup` then a real `git merge`.
   - Known gap: the other clones still have to run it (the driver config is per clone by git's
     design); the doctor line next makes that visible.
+- **cli doctor git row.** `doctor_git.rs`: one WARN `git` row per registered repo workspace that is
+  a clone (`.git` beside it) and has something `txtodo git setup` would still write; it lists what
+  is missing and names `txtodo git setup --dir <root>` (then commit `.gitattributes`). No row for a
+  clone that is set up, a list, a mirror, a plain folder, or when `git` is not on `PATH`. WARN, not
+  FAIL: a clone without the driver still works, git's own merge can conflict and cannot lose a line.
+  `plan_for` was split out of `run` so both ask the same question.

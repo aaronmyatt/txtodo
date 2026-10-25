@@ -130,17 +130,7 @@ pub fn run(action: &Action, dir: Option<&str>) -> Result<(), CliError> {
             start.display()
         ))
     })?;
-    let todo_file = crate::config_root_list::root_list_name(&root).0;
-    let exclude_path = git_path(&root, "info/exclude")?;
-    let current = std::env::current_exe().map_err(CliError::Io)?;
-    let driver = driver_command(&txtodo_path(std::env::var_os("PATH").as_deref(), &current));
-    let plan = plan(
-        &read_or_empty(&root.join(".gitattributes")),
-        &read_or_empty(&exclude_path),
-        git_config_get(&root, "merge.txtodo.driver").as_deref(),
-        &wanted_attributes(&todo_file),
-        &driver,
-    );
+    let (plan, exclude_path) = plan_for(&root)?;
     if plan.is_empty() {
         println!(
             "TODO: {} is already set up for txtodo lists",
@@ -153,6 +143,23 @@ pub fn run(action: &Action, dir: Option<&str>) -> Result<(), CliError> {
     }
     report(&plan, *dry_run);
     Ok(())
+}
+
+/// What the clone at `root` still needs, and where its exclude file is: reads the three places and
+/// compares them with what `setup` would write. `txtodo doctor` asks the same.
+pub fn plan_for(root: &Path) -> Result<(Plan, PathBuf), CliError> {
+    let todo_file = crate::config_root_list::root_list_name(root).0;
+    let exclude_path = git_path(root, "info/exclude")?;
+    let current = std::env::current_exe().map_err(CliError::Io)?;
+    let driver = driver_command(&txtodo_path(std::env::var_os("PATH").as_deref(), &current));
+    let plan = plan(
+        &read_or_empty(&root.join(".gitattributes")),
+        &read_or_empty(&exclude_path),
+        git_config_get(root, "merge.txtodo.driver").as_deref(),
+        &wanted_attributes(&todo_file),
+        &driver,
+    );
+    Ok((plan, exclude_path))
 }
 
 fn report(plan: &Plan, dry_run: bool) {
