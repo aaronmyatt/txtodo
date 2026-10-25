@@ -15,4 +15,5 @@ mod op_source;
 mod oplog;
 mod projections;
 mod registry;
+mod registry_scan;
 mod tokens;

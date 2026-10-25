@@ -130,7 +130,7 @@ fn row_of(raw: RawRow) -> Result<WorkspaceRow, StoreError> {
 /// `oplog.db`. `txtodo-daemon`'s `workspace_registry.rs` decides where that file lives and owns
 /// id minting and the idempotent add/remove/list semantics; this type is only the raw rows.
 pub struct Registry {
-    conn: Connection,
+    pub(crate) conn: Connection,
 }
 
 impl Registry {
@@ -163,6 +163,8 @@ impl Registry {
             REGISTRY_MIGRATIONS.last().map(|m| m.0),
             Some(REGISTRY_SCHEMA_VERSION)
         );
+        crate::registry_scan::create_tables(&conn)
+            .map_err(StoreError::sqlite("create scan tables", path))?;
         Ok(Registry { conn })
     }
 

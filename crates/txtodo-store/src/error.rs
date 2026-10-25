@@ -64,6 +64,10 @@ pub enum StoreError {
     BadRelayNodeId(usize),
     /// One file holds more ops than `for_each_op_id_of_file` reads (`MAX_OP_IDS_PER_FILE`); the file.
     TooManyOpsInFile(String),
+    /// The registry already holds `MAX_SCAN_ROOTS` repo-scan roots (task two-kinds-of-workspace).
+    TooManyScanRoots,
+    /// A repo-scan root that is empty, relative, or over `MAX_SCAN_ROOT_LEN` bytes; the root.
+    BadScanRoot(String),
 }
 
 impl StoreError {
@@ -83,6 +87,26 @@ impl StoreError {
             op,
             path: None,
             source,
+        }
+    }
+}
+
+impl StoreError {
+    /// The two repo-scan-root errors (task two-kinds-of-workspace), split out of `fmt` for its
+    /// line budget.
+    fn fmt_scan_root(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StoreError::BadScanRoot(root) => {
+                write!(
+                    f,
+                    "scan root {root:?} is not an absolute path of a sane length"
+                )
+            }
+            _ => write!(
+                f,
+                "at most {} repo-scan roots; remove one first",
+                crate::MAX_SCAN_ROOTS
+            ),
         }
     }
 }
@@ -144,6 +168,7 @@ impl fmt::Display for StoreError {
                 "{file} holds more than {} ops; its op ids were not all read",
                 crate::MAX_OP_IDS_PER_FILE
             ),
+            StoreError::TooManyScanRoots | StoreError::BadScanRoot(_) => self.fmt_scan_root(f),
         }
     }
 }
@@ -167,7 +192,9 @@ impl std::error::Error for StoreError {
             | StoreError::BadStaticPublic(_)
             | StoreError::BadWorkspaceId(_)
             | StoreError::BadRelayNodeId(_)
-            | StoreError::TooManyOpsInFile(_) => None,
+            | StoreError::TooManyOpsInFile(_)
+            | StoreError::TooManyScanRoots
+            | StoreError::BadScanRoot(_) => None,
         }
     }
 }

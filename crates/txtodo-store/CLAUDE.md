@@ -67,6 +67,12 @@ that entry below.
   the same upsert idiom as `remove_device`; `false` only for a wholly unknown id), `restore(id,
   at_ms)` (task two-kinds-of-workspace: a removed row comes back under the same id and root, for a
   named list whose id is its name's; `false` for an unknown or active id). `WorkspaceId` is
+  Repo-scan state (task two-kinds-of-workspace, `registry_scan.rs`): `scan_roots()` (oldest first, at
+  most `MAX_SCAN_ROOTS`), `add_scan_root(root, at_ms)` / `remove_scan_root(root)` (absolute paths only),
+  `seed_scan_roots(defaults, at_ms)` (gives a registry its default roots once, even after the person
+  removed them all), `last_scan_ms()` / `set_last_scan_ms(at_ms)`. Two tables made with `CREATE TABLE IF
+  NOT EXISTS` at every open, **not** a migration: `user_version` stays 2 so an older build still opens
+  the file. `WorkspaceId` is
   a ULID newtype, minted (never derived from the path) the same way `DeviceId` is — kept in this
   crate rather than promoted to `txtodo-model` for now, since only this crate and `txtodo-daemon`
   need it (`tasks/daemon-workspace-registry/notes.md` has the reasoning). `root` is stored as the

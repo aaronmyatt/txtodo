@@ -426,3 +426,14 @@ What changed in the plan, and what I chose between.
   the end. It stands in the `it` target (no daemon, about a second) rather than `e2e`.
   Not covered: the daemon watching the working tree through the pull (the existing external-edit
   path takes in a rewritten file; a lab or by-hand check on a registered repo would show it).
+- **store scan state.** `Registry::{scan_roots, add_scan_root, remove_scan_root, seed_scan_roots,
+  last_scan_ms, set_last_scan_ms}` (`registry_scan.rs`). Two tables in `registry.db`: `scan_roots`
+  and a small `scan_state` (the seeded flag and the last scan time).
+  - **Not a numbered migration.** The tables are `CREATE TABLE IF NOT EXISTS` at every open, so the
+    registry's `user_version` stays 2 and an older build (the app's bundled daemon, say) keeps opening
+    the file; a bump to 3 would make it refuse the whole registry. A test pins `user_version` at 2.
+    This departs from the notes' "scan_roots table in registry.db" only in how it is made.
+  - Seeding is once-only (`roots_seeded` in `scan_state`): a fresh registry gets `[$HOME]`, and a
+    person who removes every root is not given it back. Empty means scan nothing.
+  - Roots must be absolute (a leading `/` or a drive letter), at most 4 KiB, at most 64 of them.
+    Two new `StoreError`s: `TooManyScanRoots`, `BadScanRoot`.
