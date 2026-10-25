@@ -42,6 +42,36 @@ impl DaemonClient {
         Ok(self.inner.workspace_rename(req).await?.into_inner())
     }
 
+    /// Makes the named list when this device has none (task two-kinds-of-workspace, ADR 0043);
+    /// a list that is already here comes back with `created` false.
+    pub async fn list_ensure(&mut self, name: &str) -> Result<pb::ListEnsureResponse, DaemonError> {
+        let req = pb::ListEnsureRequest {
+            name: name.to_owned(),
+        };
+        Ok(self.inner.list_ensure(req).await?.into_inner())
+    }
+
+    /// Changes the name a list shows; `list` is the name it shows or was made under (its folder).
+    pub async fn list_rename(
+        &mut self,
+        list: &str,
+        new_name: &str,
+    ) -> Result<pb::WorkspaceInfo, DaemonError> {
+        let req = pb::ListRenameRequest {
+            list: list.to_owned(),
+            new_name: new_name.to_owned(),
+        };
+        Ok(self.inner.list_rename(req).await?.into_inner())
+    }
+
+    /// Takes a list off this device: its folder moves aside, never deleted.
+    pub async fn list_remove(&mut self, list: &str) -> Result<pb::ListRemoveResponse, DaemonError> {
+        let req = pb::ListRemoveRequest {
+            list: list.to_owned(),
+        };
+        Ok(self.inner.list_remove(req).await?.into_inner())
+    }
+
     /// Workspaces paired devices have offered and this device has not answered yet.
     pub async fn workspace_pending_offers(
         &mut self,

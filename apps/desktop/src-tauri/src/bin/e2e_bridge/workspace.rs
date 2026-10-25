@@ -55,6 +55,7 @@ pub(crate) async fn dispatch_workspace_cmd(
             let info = client.workspace_rename(&r.id, &r.name).await?;
             Ok(serde_json::to_value(WorkspaceInfoDto::from(info))?)
         }
+        "new_list" | "rename_list" | "remove_list" => dispatch_list_cmd(client, cmd, args).await,
         // Sync, no daemon round trip (`DaemonClient::switch_workspace`'s own signature) — just
         // points this connection's `selector` at `root` for every RPC after this one.
         _ => {
@@ -62,5 +63,37 @@ pub(crate) async fn dispatch_workspace_cmd(
             client.switch_workspace(std::path::Path::new(&r.root));
             Ok(Value::Null)
         }
+    }
+}
+
+/// `new_list`, `rename_list`, `remove_list` (task two-kinds-of-workspace): the named-list calls,
+/// the same bodies as `desktop_lib::commands_workspace`. Split out of `dispatch_workspace_cmd` for
+/// its complexity budget.
+async fn dispatch_list_cmd(
+    client: &mut DaemonClient,
+    cmd: &str,
+    args: Value,
+) -> Result<Value, ApiError> {
+    #[derive(Deserialize)]
+    struct Req {
+        #[serde(default)]
+        list: String,
+        #[serde(default)]
+        name: String,
+    }
+    let r: Req = parse(args)?;
+    match cmd {
+        "new_list" => {
+            let made = client.list_ensure(&r.name).await?;
+            let info = made
+                .workspace
+                .ok_or_else(|| ApiError("no list made".to_owned()))?;
+            Ok(serde_json::to_value(WorkspaceInfoDto::from(info))?)
+        }
+        "rename_list" => {
+            let info = client.list_rename(&r.list, &r.name).await?;
+            Ok(serde_json::to_value(WorkspaceInfoDto::from(info))?)
+        }
+        _ => Ok(Value::String(client.list_remove(&r.list).await?.moved_to)),
     }
 }

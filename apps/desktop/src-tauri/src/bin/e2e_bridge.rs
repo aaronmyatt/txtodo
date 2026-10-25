@@ -255,12 +255,15 @@ async fn invoke(
     invoke_core(state, req).await
 }
 
-const WORKSPACE_CMDS: [&str; 6] = [
+const WORKSPACE_CMDS: [&str; 9] = [
     "list_workspaces",
     "workspace_layout",
     "add_workspace",
     "remove_workspace",
     "rename_workspace",
+    "new_list",
+    "rename_list",
+    "remove_list",
     "switch_workspace",
 ];
 
