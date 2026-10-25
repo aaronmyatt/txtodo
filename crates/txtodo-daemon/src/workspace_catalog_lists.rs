@@ -12,6 +12,7 @@ use std::sync::PoisonError;
 use tonic::Status;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
+use txtodo_workspace_paths::{ListRef, Pick, pick_list};
 
 use crate::list_workspace::ListName;
 use crate::rejoin_backup;
@@ -184,30 +185,30 @@ impl WorkspaceCatalog {
             .collect())
     }
 
-    /// The list `query` means: the one that shows that name, else the one made under it (its
-    /// folder's name). Case does not matter. Two lists that show the same name (two devices
-    /// renamed at once) are refused as ambiguous; the folder name still reaches either.
+    /// The list `query` means (`txtodo_workspace_paths::pick_list`: the one that shows that name,
+    /// else the one made under it). Two lists that show the same name are refused as ambiguous; the
+    /// folder name still reaches either.
     pub(crate) fn find_list(&self, query: &str) -> Result<WorkspaceEntry, Status> {
-        let wanted = query.trim().to_ascii_lowercase();
         let lists = self.lists()?;
-        let shown: Vec<_> = lists
+        let refs: Vec<ListRef<'_>> = lists
             .iter()
-            .filter(|(_, shown)| shown.to_ascii_lowercase() == wanted)
+            .map(|(entry, shown)| ListRef {
+                shown,
+                root: &entry.root,
+            })
             .collect();
-        if let [(entry, _)] = shown.as_slice() {
-            return Ok(entry.clone());
+        match pick_list(&refs, query) {
+            Pick::Found(i) => Ok(lists[i].0.clone()),
+            Pick::Ambiguous(many) => Err(Status::failed_precondition(format!(
+                "{} lists show the name {:?}; name one by the name it was made under",
+                many.len(),
+                query.trim()
+            ))),
+            Pick::NotFound => Err(Status::not_found(format!(
+                "no list named {:?} on this device",
+                query.trim()
+            ))),
         }
-        if shown.len() > 1 {
-            return Err(Status::failed_precondition(format!(
-                "{} lists show the name {wanted:?}; name one by the name it was made under",
-                shown.len()
-            )));
-        }
-        lists
-            .into_iter()
-            .map(|(entry, _)| entry)
-            .find(|e| folder_name(&e.root) == wanted)
-            .ok_or_else(|| Status::not_found(format!("no list named {wanted:?} on this device")))
     }
 
     /// Removes the list `entry` from this device: closes it, moves its documents and `.txtodo/`
@@ -243,13 +244,6 @@ impl WorkspaceCatalog {
         rejoin_backup::move_aside(&plan).map_err(refused)?;
         Ok(plan.backup)
     }
-}
-
-/// A list folder's name, lowercase: the name it was made under.
-fn folder_name(root: &Path) -> String {
-    root.file_name()
-        .map(|n| n.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default()
 }
 
 /// The folder name for a list taken from an offer: its shown name when that is a list name nothing
