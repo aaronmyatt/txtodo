@@ -11,10 +11,14 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   pure module stay in both builds. `build_relay_endpoint_with_secret_key` is exported for a
   browser host that binds its own relay endpoint with a stable key.
 - `Frame { version, body }` — the frozen envelope (`TXTO` · u16 LE version · u32 LE len · body);
-  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 5; 1 -> 2 by
+  `Frame::{new, encode, decode, peek}`, `FrameError`, `PROTOCOL_VERSION` (= 6; 1 -> 2 by
   task `daemon-workspace-session-multiplex`, 2 -> 3 by ADR 0035, 3 -> 4 by ADR 0036's
   `OpKind::RemoveTag`, 4 -> 5 by ADR 0029's amendment: `ControlMessage::OwnDevices { sender,
-  devices }`, tag 3, at most `MAX_OWN_DEVICES`), `MAX_FRAME_BYTES`.
+  devices }`, tag 3, at most `MAX_OWN_DEVICES`; 5 -> 6 by ADR 0044: `ControlMessage::Grant { sender,
+  minter, epoch, ephemeral_public, sealed, left_out }`, tag 4, one rotated group key wrapped to one device
+  (`rotation::wrap_grant_for`), at most `MAX_GRANT_SEALED_BYTES` sealed and `MAX_OWN_DEVICES` left out;
+  `sealed_epoch(sealed)` reads the epoch a sealed batch or control frame names; `PairingGrant.epoch` is the
+  initiator's current epoch, 0 when absent), `MAX_FRAME_BYTES`.
 - `Message::{Hello, Want, Ops, Ack, Greet, Digest}` (append-only variants — `Greet` added stage 2,
   index 4, no bump; `Digest { workspace, files: Vec<FileDigest { path, ops, bytes }> }` index 5,
   ADR 0035, with the 2 -> 3 bump because a v2 peer drops the link on it; cap

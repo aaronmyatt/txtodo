@@ -60,7 +60,7 @@ pub use append_frame::{APPEND_HEADER_BYTES, AppendFrame, MAX_APPEND_FRAME_BYTES}
 pub use carrier::{FileCarrier, MAX_OPS_FILE_BYTES};
 pub use carrier_error::CarrierError;
 pub use control::{
-    ControlMessage, ControlMessageError, ControlSealError, MAX_OWN_DEVICES,
+    ControlMessage, ControlMessageError, ControlSealError, MAX_GRANT_SEALED_BYTES, MAX_OWN_DEVICES,
     MAX_WORKSPACE_NAME_BYTES, open_control, seal_control,
 };
 pub use crypto_error::CryptoError;
