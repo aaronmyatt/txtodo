@@ -64,7 +64,9 @@ that entry below.
   actual backstop against two active rows for the same root — the caller is expected to check
   `find_active_by_root` first), `find_active_by_root(root)`, `get(id)`, `list_active()` (≤
   `MAX_WORKSPACES_PER_READ`, oldest-registered first), `remove(id, at_ms)` (idempotent tombstone,
-  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id). `WorkspaceId` is
+  the same upsert idiom as `remove_device`; `false` only for a wholly unknown id), `restore(id,
+  at_ms)` (task two-kinds-of-workspace: a removed row comes back under the same id and root, for a
+  named list whose id is its name's; `false` for an unknown or active id). `WorkspaceId` is
   a ULID newtype, minted (never derived from the path) the same way `DeviceId` is — kept in this
   crate rather than promoted to `txtodo-model` for now, since only this crate and `txtodo-daemon`
   need it (`tasks/daemon-workspace-registry/notes.md` has the reasoning). `root` is stored as the

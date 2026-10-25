@@ -104,6 +104,8 @@ const SELECT_ACTIVE: &str = "SELECT id, root, added_at, removed_at, last_active_
 const TOUCH: &str =
     "UPDATE workspaces SET last_active_ms = ?2 WHERE id = ?1 AND removed_at IS NULL";
 const SET_ROOT: &str = "UPDATE workspaces SET root = ?2 WHERE id = ?1 AND removed_at IS NULL";
+const RESTORE: &str = "UPDATE workspaces SET removed_at = NULL, added_at = ?2, \
+     last_active_ms = NULL WHERE id = ?1 AND removed_at IS NOT NULL";
 const SELECT_FOR_REMOVE: &str = "SELECT root, added_at FROM workspaces WHERE id = ?1";
 const UPSERT_REMOVE: &str = "INSERT INTO workspaces (id, root, added_at, removed_at) \
      VALUES (?1, ?2, ?3, ?4) \
@@ -235,6 +237,20 @@ impl Registry {
             .conn
             .execute(SET_ROOT, params![id_blob(id), root])
             .map_err(StoreError::query("set workspace root"))?;
+        Ok(changed > 0)
+    }
+
+    /// Brings a removed row back (task two-kinds-of-workspace): clears `removed_at` and stamps
+    /// `added_at` with `at_ms`, keeping the id and the root. A named list's id comes from its name,
+    /// so a list removed on this device and made again must come back under the same id; a fresh
+    /// row cannot, since the id is the primary key. `false` for an unknown id or one that is
+    /// active. The unique partial index on active roots refuses a root another active row holds,
+    /// so the caller checks [`Registry::find_active_by_root`] first.
+    pub fn restore(&mut self, id: WorkspaceId, at_ms: u64) -> Result<bool, StoreError> {
+        let changed = self
+            .conn
+            .execute(RESTORE, params![id_blob(id), wall_i64(at_ms)])
+            .map_err(StoreError::query("restore workspace"))?;
         Ok(changed > 0)
     }
 
