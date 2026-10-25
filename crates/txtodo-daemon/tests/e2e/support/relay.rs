@@ -4,6 +4,7 @@
 //! private fields and `start_in` the same way `mod.rs` itself does (Rust privacy: visible to the
 //! defining module and every descendant).
 
+use super::seed::list_dirs;
 use super::{Daemon, seed_group_id, seed_workspace_id, write_tree};
 use txtodo_proto::v1::{self as pb, workspace_selector::Selector};
 
@@ -18,10 +19,10 @@ pub async fn start_with_seeded_group_args(
     group_id: u128,
     extra_args: &[String],
 ) -> Daemon {
-    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (lists, dir) = list_dirs();
     write_tree(dir.path(), files);
     seed_group_id(dir.path(), group_id);
-    Daemon::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
+    Daemon::start_in(lists, dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
 }
 
 /// `start_with_seeded_group_args`, plus a pre-agreed `workspace_id` (task
@@ -36,11 +37,11 @@ pub async fn start_with_seeded_group_and_workspace_args(
     workspace_id: u128,
     extra_args: &[String],
 ) -> Daemon {
-    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (lists, dir) = list_dirs();
     write_tree(dir.path(), files);
     seed_group_id(dir.path(), group_id);
     seed_workspace_id(dir.path(), workspace_id);
-    Daemon::start_in(dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
+    Daemon::start_in(lists, dir, mode, &[("TXTODO_TEST_HOOKS", "1")], extra_args).await
 }
 
 /// `start_with_seeded_group_and_workspace_args`, plus extra environment variables on the spawned
@@ -55,13 +56,13 @@ pub async fn start_with_seeded_group_and_workspace_args_and_envs(
     extra_envs: &[(&str, &str)],
 ) -> Daemon {
     let (group_id, workspace_id) = ids;
-    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (lists, dir) = list_dirs();
     write_tree(dir.path(), files);
     seed_group_id(dir.path(), group_id);
     seed_workspace_id(dir.path(), workspace_id);
     let mut envs = vec![("TXTODO_TEST_HOOKS", "1")];
     envs.extend_from_slice(extra_envs);
-    Daemon::start_in(dir, mode, &envs, extra_args).await
+    Daemon::start_in(lists, dir, mode, &envs, extra_args).await
 }
 
 /// `relay.rs`'s `bind()` records `"bound as <hex>; awaiting connections"` in

@@ -11,7 +11,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use support::Daemon;
 use support::multi::{
-    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, seed_group_id_at,
+    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, list_dir_in, seed_group_id_at,
     seed_workspace_at,
 };
 use support::relay::{start_with_seeded_group_and_workspace_args, start_with_seeded_group_args};
@@ -153,8 +153,8 @@ async fn two_workspace_setup(
     let registry_dir = tempfile::tempdir().expect("registry tempdir");
     let registry_db = registry_dir.path().join("registry.db");
 
-    let ws1_dir = tempfile::tempdir().expect("ws1 tempdir");
-    let ws2_dir = tempfile::tempdir().expect("ws2 tempdir");
+    let ws1_dir = list_dir_in(registry_dir.path(), "ws1-");
+    let ws2_dir = list_dir_in(registry_dir.path(), "ws2-");
     std::fs::write(
         ws1_dir.path().join("todo.txt"),
         "buy milk id:01M2CZ00000000000000000A\n",

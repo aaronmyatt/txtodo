@@ -11,6 +11,19 @@ use txtodo_proto::v1::{self as pb, workspace_selector::Selector};
 
 pub type MultiClient = Client;
 
+/// A workspace folder that is a list on the global daemon whose state dir is `registry_dir`: that
+/// daemon keeps its lists in `<state dir>/lists/` (`lists_dir_for`), and a folder anywhere else is
+/// a repo, which txtodo does not sync (ADR 0043). Make `registry_dir` first; keep the folder.
+/// Ref: https://docs.rs/tempfile/latest/tempfile/struct.Builder.html#method.tempdir_in
+pub fn list_dir_in(registry_dir: &Path, prefix: &str) -> tempfile::TempDir {
+    let lists = registry_dir.join("lists");
+    std::fs::create_dir_all(&lists).unwrap_or_else(|e| panic!("create lists dir: {e}"));
+    tempfile::Builder::new()
+        .prefix(prefix)
+        .tempdir_in(lists)
+        .unwrap_or_else(|e| panic!("list tempdir: {e}"))
+}
+
 /// A real global-mode `txtodod` holding *two* pre-registered workspaces sharing one `--sync-dir`
 /// — env-isolated, same as `global_socket.rs`'s own `GlobalDaemon`.
 pub struct MultiWorkspaceDaemon {

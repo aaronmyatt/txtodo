@@ -30,8 +30,8 @@ use crate::support;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use support::multi::{
-    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, health_at, seed_group_id_at,
-    seed_workspace_at,
+    MultiClient, MultiWorkspaceDaemon, debug_set_group_key, file_at, health_at, list_dir_in,
+    seed_group_id_at, seed_workspace_at,
 };
 use support::relay::parse_relay_node_id;
 
@@ -61,8 +61,8 @@ fn make_device_dirs(
     ws2_id: u128,
 ) -> (tempfile::TempDir, tempfile::TempDir, tempfile::TempDir) {
     let registry = tempfile::tempdir().expect("registry tempdir");
-    let ws1 = tempfile::tempdir().expect("ws1 tempdir");
-    let ws2 = tempfile::tempdir().expect("ws2 tempdir");
+    let ws1 = list_dir_in(registry.path(), "ws1-");
+    let ws2 = list_dir_in(registry.path(), "ws2-");
     std::fs::write(ws1.path().join("todo.txt"), ws1_seed).expect("seed ws1");
     std::fs::write(ws2.path().join("todo.txt"), ws2_seed).expect("seed ws2");
     let registry_db = registry.path().join("registry.db");

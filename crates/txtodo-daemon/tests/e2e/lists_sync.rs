@@ -164,3 +164,12 @@ async fn a_device_that_is_not_own_gets_no_list() {
         );
     }
 }
+
+/// The harness serves every `Daemon`'s `--dir` as a list, so the two-daemon tests keep syncing once
+/// a plain folder stops syncing (`$TXTODO_LISTS_DIR`, `support::seed::list_dirs`).
+#[tokio::test]
+async fn a_harness_daemon_serves_its_workspace_as_a_list() {
+    let mut daemon = support::Daemon::start("(A) one\n").await;
+    let kinds: Vec<_> = daemon.workspaces().await.iter().map(|w| w.kind()).collect();
+    assert_eq!(kinds, vec![pb::WorkspaceKind::List]);
+}

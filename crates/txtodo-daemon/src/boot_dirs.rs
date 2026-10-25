@@ -11,10 +11,18 @@ use txtodo_daemon::workspace_registry_paths::{self, RegistryEnv};
 use crate::Args;
 
 /// `remote/` and `lists/`: beside the default workspace, or under the bridge's own state dir with
-/// `--dir`.
+/// `--dir`. `$TXTODO_LISTS_DIR` moves the bridge's `lists/` elsewhere, so a test can serve a
+/// `--dir` that is itself a list (`<lists>/<name>`): the bridge's state dir is inside its `--dir`,
+/// so the default place can never hold the `--dir`. It moves a folder and nothing else.
+/// Ref: https://doc.rust-lang.org/std/env/fn.var_os.html
 fn folders(args: &Args, env: &RegistryEnv, state_dir: &Path) -> (PathBuf, PathBuf) {
     match args.dir {
-        Some(_) => (state_dir.join("remote"), state_dir.join("lists")),
+        Some(_) => {
+            let lists = std::env::var_os("TXTODO_LISTS_DIR")
+                .filter(|v| !v.is_empty())
+                .map_or_else(|| state_dir.join("lists"), PathBuf::from);
+            (state_dir.join("remote"), lists)
+        }
         None => (
             workspace_registry_paths::remote_workspaces_dir_for(env),
             workspace_registry_paths::lists_dir_for(env),
