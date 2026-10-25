@@ -1,4 +1,4 @@
-2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists
+2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists @doing by:claude
 2026-10-25 core: merge3(base, ours, theirs) per line, pure; proptest: no line lost, same lines either way round +m11 @core @git
 2026-10-25 cli: txtodo merge-driver %O %A %B over merge3; a real git merge in a temp repo +m11 @cli @git
 2026-10-25 cli: txtodo git setup (.gitattributes, merge.txtodo.driver, .git/info/exclude), idempotent, --dry-run +m11 @cli @git
