@@ -1,5 +1,6 @@
 //! The per-device carriers besides the relay endpoint itself, split out of `main.rs` for its line
-//! budget: the relay control channel, the shared file-carrier and the one LAN transport.
+//! budget: the relay control channel, the shared file-carrier, the one LAN transport and the prune
+//! loop (task `peer-prune`) that drops a peer gone stale.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,6 +27,7 @@ pub(crate) struct Carriers {
     _control: Option<txtodo_daemon::control_channel::ControlChannelTransport>,
     pub(crate) file: Option<Arc<DeviceFileCarrier>>,
     _file_task: Option<txtodo_daemon::file_carrier::FileCarrierTransport>,
+    _prune: Option<txtodo_daemon::prune_loop::PruneTransport>,
     pub(crate) lan: Option<(
         Arc<txtodo_daemon::device_lan::DeviceLan>,
         txtodo_daemon::lan::LanTransport,
@@ -50,6 +52,7 @@ pub(crate) fn start(args: &Args, sync_allowed: bool, deps: Deps) -> Carriers {
             registry_path.clone(),
         ),
         _file_task: file.clone().map(txtodo_daemon::file_carrier::start),
+        _prune: txtodo_daemon::prune_loop::start(Arc::clone(&identity), Arc::clone(&clock)),
         file,
         lan: txtodo_daemon::device_lan::start(
             txtodo_daemon::device_lan::LanMode::from_flags(args.no_lan, sync_allowed),

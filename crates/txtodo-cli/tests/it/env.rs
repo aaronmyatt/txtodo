@@ -249,3 +249,17 @@ fn doctor_reports_where_the_default_workspace_lives() {
     assert!(row.contains(&default.display().to_string()), "{row}");
     assert!(row.contains("not created yet"), "{row}");
 }
+
+#[test]
+fn the_daemons_prune_keys_in_config_are_not_rejected() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let cfg = dir.path().join("config.toml");
+    // `txtodod` reads these (task peer-prune); this crate only has to let them through.
+    std::fs::write(
+        &cfg,
+        "prune_parked_after = \"12h\"\nprune_quiet_after = 0\n",
+    )
+    .expect("write config");
+    let out = stdout(txtodo(dir.path()).env("TXTODO_CONFIG", &cfg).args(["env"]));
+    assert!(line(&out, "config_file").ends_with("config.toml"), "{out}");
+}

@@ -114,7 +114,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   registers the cwd. `rm` moves the folder aside (never deletes; other devices keep the list);
   `import` copies a folder's files (not hidden ones, not its `.txtodo/`) into a new list.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
-  `url_schemes`) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
+  `url_schemes`; `prune_parked_after` and `prune_quiet_after` are the daemon's, ADR 0044, and only parse here) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
   `txtodo/config.toml`; env `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd.
   `identity_mode = "tagged"|"sidecar"` (docs/questions.md Q2) is the name to reach for going
   forward; `id_tags` still works alone for an existing config, but an unset config is `Sidecar`

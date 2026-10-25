@@ -137,6 +137,21 @@ pub struct Config {
     /// `None`). This crate never depends on `txtodo-sync` (`check-boundaries.sh`), so this is a
     /// raw, unvalidated string — the daemon's own `--relay` flag parses and dials it.
     pub relay_url: Option<String>,
+    /// How long a peer that no longer opens under our group key may be silent before `txtodod`
+    /// drops it (task `peer-prune`, ADR 0044): `"1d"`, `"12h"`, `"90m"`, `"30s"`, or `0` to never.
+    /// The CLI does not use it; the daemon reads the same file, so it is only here for
+    /// `deny_unknown_fields` to let it through.
+    pub prune_parked_after: Option<Duration>,
+    /// The same for a peer whose keys match but that is not heard from. The default is a week.
+    pub prune_quiet_after: Option<Duration>,
+}
+
+/// A prune threshold as `config.toml` writes it: a string with a unit, or whole seconds.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Duration {
+    Text(String),
+    Seconds(u64),
 }
 
 /// A config file that exists but cannot be used.

@@ -426,6 +426,18 @@ multiplex every workspace's traffic — not done by this task).
   grant is answered with `Epoch`; a frame from a removed device ends the session. Known gaps: a
   file-carrier-only device has no control channel to receive a grant on; a device that loses the tie-break
   keeps its own drops (they converge when each device's own clock prunes).
+- Pruning (task `peer-prune`, ADR 0044): `prune_loop.rs` is a per-device task (`carriers.rs` starts it) that on
+  each resync tick runs `DeviceIdentity::remove_device` on every peer `prune_stale.rs` calls stale, so the key
+  rotates and the grant goes out in the control channel. Stale is a pure verdict on this device's own `devices`
+  row: parked (`peer_keys`) and silent for `prune_parked_after` (default 1 day), or merely silent for
+  `prune_quiet_after` (default 7 days); `0` is that rule off, both off starts no task. Silence is counted from
+  the newest of `last_seen`, `paired_at` and `up_since` (`prune_presence.rs`: moved to now by a tick more than
+  10 minutes after the last, saved in `meta`, so a laptop that slept or was off for a week drops nobody on waking).
+  `prune_config.rs`: `$TXTODO_PRUNE_PARKED_AFTER`/`$TXTODO_PRUNE_QUIET_AFTER`, else the same keys in the CLI's
+  `config.toml` (the daemon reads that file itself; values are `7d`/`12h`/`90m`/`30s` or integer seconds), else
+  the defaults; an unreadable value is skipped with a `prune_config_value_ignored` warning. Logs `peer_pruned`
+  (peer, why, epoch) and, once per peer, `peer_prune_failed`. Known gap: a peer the rotation cannot be made for
+  stays in place and is retried every tick.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
   moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
   text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),

@@ -25,6 +25,10 @@ delivered, sync data still seals under a constant epoch 0, and a removed device 
    `prune_parked_after`, or **quiet** (keys match, not heard from) for `prune_quiet_after`.
    Agent pick: 1 day parked, 7 days quiet. Config `[sync] prune_parked_after`,
    `prune_quiet_after`; `0` turns that rule off. Never this device itself; the last peer may go.
+   As built: the keys sit at the top of the CLI's `config.toml` beside `sync_dir` (there is no `[sync]`
+   table), the daemon reads that file itself, and `$TXTODO_PRUNE_PARKED_AFTER`/`$TXTODO_PRUNE_QUIET_AFTER`
+   beat it. Silence is counted from when this device last came back from being off or asleep (a tick more
+   than 10 minutes after the last), so a closed laptop drops nobody on waking. Agent pick.
 3. **Every device prunes on its own.** Each keeps its own `devices` table and decides from its own
    `last_seen`. There is no election and no shared list.
 4. **A receiver follows the grant.** The group key is shared, so one device's prune rotates it for
