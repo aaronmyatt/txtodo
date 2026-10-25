@@ -278,3 +278,13 @@ What changed in the plan, and what I chose between.
     `remote/<id>/` mirrors until the "an own device's list offer makes lists/<name>/" line lands. A
     list made on A shows on B as a Remote mirror in the meantime, and that mirror's shown name is
     the offered one.
+- **list sync gate.** `lan_session_gate::session_routes` drops every list route for a peer that is
+  not own, with no alias in its place (a list is private; sharing is git). A list is told from any
+  other workspace by id alone, `list_workspace::is_list_id` (the fixed timestamp field), because
+  the gate has no catalog to ask. Known gaps:
+  - The control channel still offers list names to every peer in the group: the sender does not
+    know who it talks to on an accepted session, and reordering the exchange risks both sides
+    waiting on the other. The receiving side ignores a foreign list offer (next line), so only the
+    name leaks, never content.
+  - The file carrier (`--sync-dir`) has no peer to ask and still carries lists to anyone reading
+    the folder, as it does the default (ADR 0029's known gap). The group key still gates it.

@@ -75,6 +75,14 @@ impl ListName {
     }
 }
 
+/// Whether `id` is a named list's: it carries the fixed timestamp field `ListName::id` gives every
+/// list. No minted workspace id has it (its timestamp is the millisecond it was minted), and the
+/// default's and an alias's differ, so this tells a list from any other workspace by id alone, as
+/// the sync gate (`lan_session_gate.rs`) has no catalog to ask.
+pub(crate) fn is_list_id(id: WorkspaceId) -> bool {
+    id.ulid().to_u128() >> 80 == LIST_ID_TIMESTAMP
+}
+
 /// `con`, `prn`, `aux`, `nul`, `com1`..`com9` and `lpt1`..`lpt9`.
 fn is_device_name(name: &str) -> bool {
     let numbered = |prefix: &str| {

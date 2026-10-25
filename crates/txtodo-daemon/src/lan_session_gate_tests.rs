@@ -1,6 +1,7 @@
 //! The default merges only with an own device (task `default-workspace-pairing-consent`): a
 //! session's route set keeps the reserved id for an own peer and swaps it for this device's alias
-//! for any other peer, known or not.
+//! for any other peer, known or not. A named list goes to an own peer only (task
+//! two-kinds-of-workspace).
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
@@ -12,6 +13,7 @@ use crate::clock::FakeClock;
 use crate::default_workspace::{default_alias, default_workspace_id};
 use crate::device_relay::WorkspaceRoute;
 use crate::lan_session_gate::session_routes;
+use crate::list_workspace::ListName;
 use crate::workspace::Workspace;
 
 fn device(n: u128) -> DeviceId {
@@ -74,4 +76,40 @@ fn an_alias_is_stable_per_device_and_never_the_link_sentinel() {
         0,
         "a non-zero ULID timestamp"
     );
+}
+
+#[tokio::test]
+async fn a_named_list_goes_to_an_own_peer_and_to_nobody_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let ws = Workspace::open_with_default_mode(
+        dir.path(),
+        Arc::new(FakeClock::new(1_000)),
+        IdentityMode::Sidecar,
+    )
+    .unwrap();
+    let me = ws.device();
+    register(&ws, device(2), true);
+    register(&ws, device(3), false);
+    let group = ws.group();
+    let route = WorkspaceRoute {
+        ws: Arc::new(RwLock::new(ws)),
+        device: me,
+        group,
+    };
+    let work = ListName::parse("work").unwrap().id();
+    let all = BTreeMap::from([
+        (default_workspace_id(), route.clone()),
+        (work, route.clone()),
+    ]);
+
+    let own = session_routes(&all, me, device(2));
+    assert!(own.contains_key(&work), "an own device gets the list");
+    assert!(own.contains_key(&default_workspace_id()));
+
+    for peer in [device(3), device(4)] {
+        let apart = session_routes(&all, me, peer);
+        assert!(!apart.contains_key(&work), "{peer}: a list is private");
+        assert_eq!(apart.len(), 1, "{peer}: only the default's alias is left");
+        assert!(apart.contains_key(&default_alias(me)), "{peer}");
+    }
 }
