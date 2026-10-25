@@ -292,7 +292,7 @@ fn serve_through_global(dir: &Path, root: PathBuf) -> Target {
 async fn aim_at_the_current_workspace(backend: &GrpcMcpBackend) -> Option<String> {
     let env = txtodo_workspace_paths::RegistryEnv::from_process().unwrap_or_default();
     let cwd = std::env::current_dir().unwrap_or_default();
-    let default = txtodo_workspace_paths::default_workspace_dir(&env);
+    let default = txtodo_workspace_paths::default_workspace_dir_for(&env);
     let note = match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
         txtodo_workspace_paths::WorkspaceChoice::Here(dir) => {
             let known = backend.list_workspaces().await.unwrap_or_default();
