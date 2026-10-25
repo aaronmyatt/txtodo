@@ -16,7 +16,8 @@ Protocol, transports, pairing, crypto. Plan M4/M8.
   `OpKind::RemoveTag`, 4 -> 5 by ADR 0029's amendment: `ControlMessage::OwnDevices { sender,
   devices }`, tag 3, at most `MAX_OWN_DEVICES`; 5 -> 6 by ADR 0044: `ControlMessage::Grant { sender,
   minter, epoch, ephemeral_public, sealed, left_out }`, tag 4, one rotated group key wrapped to one device
-  (`rotation::wrap_grant_for`), at most `MAX_GRANT_SEALED_BYTES` sealed and `MAX_OWN_DEVICES` left out;
+  (`rotation::wrap_grant_for`), at most `MAX_GRANT_SEALED_BYTES` sealed and `MAX_OWN_DEVICES` left out; `ControlMessage::Epoch { sender, epoch }`, tag 5, the epoch a device is on, said first in a
+  control session and as the ack of a grant;
   `sealed_epoch(sealed)` reads the epoch a sealed batch or control frame names; `PairingGrant.epoch` is the
   initiator's current epoch, 0 when absent), `MAX_FRAME_BYTES`.
 - `Message::{Hello, Want, Ops, Ack, Greet, Digest}` (append-only variants — `Greet` added stage 2,

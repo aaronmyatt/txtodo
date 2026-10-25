@@ -64,6 +64,10 @@ fn every_variant_round_trips_through_encode_decode() {
             devices: vec![device(3), device(4)],
         },
         a_grant(vec![device(5)]),
+        ControlMessage::Epoch {
+            sender: device(6),
+            epoch: 7,
+        },
     ];
     for msg in variants {
         let frame = msg.encode().unwrap();

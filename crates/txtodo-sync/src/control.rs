@@ -128,6 +128,15 @@ pub enum ControlMessage {
         /// The devices the rotation dropped, at most [`MAX_OWN_DEVICES`].
         left_out: Vec<DeviceId>,
     },
+    /// The group-key epoch the sender is on (task `peer-prune`, ADR 0044), the first thing each side
+    /// says in a control session and the acknowledgement of a `Grant`. A device holding a higher
+    /// epoch than the one named sends the grants in between. Appended: tag 5, `PROTOCOL_VERSION` 6.
+    Epoch {
+        /// The announcing device — see `Offer.sender`'s doc.
+        sender: DeviceId,
+        /// Its current epoch.
+        epoch: u32,
+    },
 }
 
 impl ControlMessage {
@@ -292,7 +301,8 @@ impl ControlMessage {
             | ControlMessage::OfferAck { .. }
             | ControlMessage::Decline { .. }
             | ControlMessage::OwnDevices { .. }
-            | ControlMessage::Grant { .. } => Ok(()),
+            | ControlMessage::Grant { .. }
+            | ControlMessage::Epoch { .. } => Ok(()),
         }
     }
 }
