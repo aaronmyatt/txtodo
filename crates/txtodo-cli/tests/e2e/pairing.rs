@@ -26,9 +26,25 @@ struct Daemon {
     child: Child,
 }
 
+/// A lists folder and a workspace folder inside it, for `Daemon::spawn`; keep both.
+fn list_dirs() -> (tempfile::TempDir, tempfile::TempDir) {
+    let lists = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let list = tempfile::Builder::new()
+        .prefix("work-")
+        .tempdir_in(lists.path())
+        .unwrap_or_else(|e| panic!("list tempdir: {e}"));
+    (lists, list)
+}
+
 impl Daemon {
+    /// `dir` is a list: inside a lists folder this daemon is told about (`list_dirs`). Pairing goes
+    /// through a workspace txtodo syncs, and a repo is not one (ADR 0043).
     fn spawn(dir: &Path) -> Daemon {
+        let lists = dir
+            .parent()
+            .unwrap_or_else(|| panic!("{} has a parent", dir.display()));
         let child = Command::new(txtodod_binary())
+            .env("TXTODO_LISTS_DIR", lists)
             .args(["--dir", &dir.to_string_lossy()])
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -211,8 +227,7 @@ pub(crate) fn assert_confirmed(text: &str) {
 struct PairedDevices {
     _a: Daemon,
     _b: Daemon,
-    _dir_a: tempfile::TempDir,
-    _dir_b: tempfile::TempDir,
+    _dirs: [(tempfile::TempDir, tempfile::TempDir); 2],
 }
 
 /// Runs one real `txtodo pair` ceremony between two fresh daemons and asserts every step of it:
@@ -220,8 +235,8 @@ struct PairedDevices {
 /// initiator's own confirm once the joiner has answered. `a_todo` seeds the initiator's todo.txt;
 /// the joiner's starts empty.
 fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
+    let (lists_a, dir_a) = list_dirs();
+    let (lists_b, dir_b) = list_dirs();
     std::fs::write(dir_a.path().join("todo.txt"), a_todo).unwrap();
     std::fs::write(dir_b.path().join("todo.txt"), "").unwrap();
     let a = Daemon::spawn(dir_a.path());
@@ -253,8 +268,7 @@ fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
     PairedDevices {
         _a: a,
         _b: b,
-        _dir_a: dir_a,
-        _dir_b: dir_b,
+        _dirs: [(lists_a, dir_a), (lists_b, dir_b)],
     }
 }
 
@@ -265,8 +279,8 @@ fn two_real_devices_complete_a_real_pairing_ceremony() {
 
 #[test]
 fn joiner_saying_no_aborts_without_confirming_while_the_initiator_still_confirms_its_own_side() {
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
+    let (_lists_a, dir_a) = list_dirs();
+    let (_lists_b, dir_b) = list_dirs();
     std::fs::write(dir_a.path().join("todo.txt"), "").unwrap();
     std::fs::write(dir_b.path().join("todo.txt"), "").unwrap();
     let _a = Daemon::spawn(dir_a.path());
@@ -299,8 +313,8 @@ fn joiner_saying_no_aborts_without_confirming_while_the_initiator_still_confirms
 #[test]
 fn a_detected_identity_mode_mismatch_against_a_non_empty_workspace_is_refused_before_any_network_call()
  {
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
+    let (_lists_a, dir_a) = list_dirs();
+    let (_lists_b, dir_b) = list_dirs();
     std::fs::write(dir_a.path().join("todo.txt"), "").unwrap();
     // B already has a task: nothing empty to safely adopt a foreign mode into (Q6).
     std::fs::write(dir_b.path().join("todo.txt"), "(A) existing task\n").unwrap();
