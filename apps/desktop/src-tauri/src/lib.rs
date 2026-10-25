@@ -152,6 +152,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         commands_tokens::token_create,
         commands_tokens::token_list,
         commands_devices::device_list,
+        commands_devices::group_status,
         commands_offers::workspace_offers,
         commands_offers::accept_offer,
         commands_offers::decline_offer,

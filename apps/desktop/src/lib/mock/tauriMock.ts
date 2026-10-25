@@ -101,6 +101,8 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			return mockAnswerOffer(args ?? {}) as unknown as T;
 		case "device_list":
 			return mockDevices() as T;
+		case "group_status":
+			return { dropped_from_group: false } as T;
 		case "device_remove":
 			return mockDeviceRemove(args ?? {}) as unknown as T;
 		case "token_list":

@@ -254,6 +254,17 @@ impl DaemonClient {
             .into_inner();
         Ok((health.offers_problem, health.offers_problem_age_ms))
     }
+
+    /// Whether the group left this device out (`Health.dropped_from_group`, task `peer-prune`).
+    /// Selector-less `Health`: it is device-level.
+    pub async fn dropped_from_group(&mut self) -> Result<bool, DaemonError> {
+        let health = self
+            .inner
+            .health(pb::HealthRequest { workspace: None })
+            .await?
+            .into_inner();
+        Ok(health.dropped_from_group)
+    }
 }
 
 impl DaemonClient {

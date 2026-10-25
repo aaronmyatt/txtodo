@@ -39,6 +39,7 @@ const LOCAL: Record<string, (args: Record<string, unknown>) => unknown> = {
 	offers_problem: () => ({ problem: "", age_ms: 0 }),
 	workspace_offers: () => [],
 	device_list: () => [],
+	group_status: () => ({ dropped_from_group: false }),
 	token_list: () => [],
 	// The window and app plumbing a browser tab does not have: accepted and ignored.
 	ui_log: () => undefined,
