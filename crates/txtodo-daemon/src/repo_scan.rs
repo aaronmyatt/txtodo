@@ -38,12 +38,20 @@ pub(crate) struct Scanned {
     pub truncated: bool,
 }
 
-/// Walks under every root in `roots`, never into a folder in `skip` (the daemon's own data, say).
+/// Walks under every root in `roots`, never into a folder in `skip` (the daemon's own data, and the
+/// folders macOS asks permission for) unless that root is at or inside the folder.
 /// A root that is gone or unreadable is skipped. `Library` directly under a root is skipped too:
 /// on macOS it is the application data of the person's home folder.
 pub(crate) fn scan(roots: &[PathBuf], skip: &[PathBuf]) -> Scanned {
     let mut out = Scanned::default();
     for root in roots {
+        // A folder to skip does not apply to a root at or inside it: the person linked that one on
+        // purpose (a macOS-gated `~/Documents`, say), so it is walked, below it as well.
+        let skip_here: Vec<PathBuf> = skip
+            .iter()
+            .filter(|s| !root.starts_with(s))
+            .cloned()
+            .collect();
         let mut stack = vec![(root.clone(), 0usize)];
         while let Some((dir, depth)) = stack.pop() {
             if out.dirs >= MAX_DIRS || out.repos.len() >= MAX_FOUND {
@@ -55,7 +63,7 @@ pub(crate) fn scan(roots: &[PathBuf], skip: &[PathBuf]) -> Scanned {
                 out.repos.push(dir.clone());
             }
             if depth < MAX_DEPTH {
-                push_children(&dir, depth, skip, &mut stack);
+                push_children(&dir, depth, &skip_here, &mut stack);
             }
         }
     }

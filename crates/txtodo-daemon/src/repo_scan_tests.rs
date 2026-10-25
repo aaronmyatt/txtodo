@@ -28,6 +28,34 @@ fn found(root: &Path, skip: &[PathBuf]) -> Vec<String> {
 }
 
 #[test]
+fn a_folder_the_person_linked_is_walked_though_its_name_is_skipped_from_above() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    clone_with(home, "code/a", "todo.txt");
+    clone_with(home, "Documents/work/b", "todo.txt");
+    let documents = home.join("Documents");
+
+    // From the home folder, the gated folder is not entered.
+    assert_eq!(found(home, std::slice::from_ref(&documents)), ["code/a"]);
+
+    // Linked as a root of its own, it is walked, and so is a root inside it.
+    let linked = scan(
+        &[home.to_path_buf(), documents.clone()],
+        std::slice::from_ref(&documents),
+    );
+    let rel = |p: &PathBuf| p.strip_prefix(home).unwrap().to_string_lossy().into_owned();
+    assert_eq!(
+        linked.repos.iter().map(rel).collect::<Vec<_>>(),
+        ["code/a", "Documents/work/b"]
+    );
+    let inside = scan(&[documents.join("work")], &[documents]);
+    assert_eq!(
+        inside.repos.iter().map(rel).collect::<Vec<_>>(),
+        ["Documents/work/b"]
+    );
+}
+
+#[test]
 fn a_clone_with_a_todo_txt_or_a_txtodo_toml_is_found_and_one_without_a_list_is_not() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

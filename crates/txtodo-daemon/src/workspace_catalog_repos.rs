@@ -176,13 +176,16 @@ impl WorkspaceCatalog {
         Ok(report)
     }
 
-    /// The daemon's own folders, which a scan never enters: the data dir the lists and mirrors sit in.
+    /// The folders a scan does not enter on its own: the daemon's own data dir (the lists and mirrors
+    /// sit in it), and on macOS the home folder's gated folders (`Documents` and the rest), which
+    /// raise a system permission prompt when read. A scan root at or inside one still walks it: the
+    /// person linked it (`txtodo repos roots add ~/Documents`).
     fn scan_skips(&self) -> Vec<PathBuf> {
         let of = |root: Option<&PathBuf>| root.and_then(|r| r.parent()).map(Path::to_path_buf);
-        [of(self.lists_root.get()), of(self.remote_root.get())]
+        let own = [of(self.lists_root.get()), of(self.remote_root.get())]
             .into_iter()
-            .flatten()
-            .collect()
+            .flatten();
+        own.chain(gated_home_folders()).collect()
     }
 
     /// Registers one repo the scan found: `true` when it is new. A folder the person removed stays
@@ -221,6 +224,17 @@ impl WorkspaceCatalog {
             }
         });
     }
+}
+
+/// The folders macOS asks permission for, under this user's home folder (canonical, like the scan
+/// roots); none off macOS or with no home known.
+fn gated_home_folders() -> Vec<PathBuf> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    let Some(home) = home.map(PathBuf::from) else {
+        return Vec::new();
+    };
+    let home = home.canonicalize().unwrap_or(home);
+    txtodo_workspace_paths::protected_home_folders(&home)
 }
 
 /// `repo_git::prepare` for a registered repo; a refusal is logged and the scan goes on.
