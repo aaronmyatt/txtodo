@@ -382,3 +382,10 @@ What changed in the plan, and what I chose between.
     lost, the user prunes); the same task completed on two days gives two done lines.
   - Proptests: the lines do not depend on which side is ours; no added line is lost and none is
     invented; an unchanged side hands the other file back exactly.
+- **lab partition-lists.** `scripts/lab/scenarios/partition-lists.sh` sets `WS` to the list's folder
+  after the first step, so the lab's own convergence, no-loss and doctor checks look at the list.
+  Run on 2026-10-25 against the working tree (`LAB_NO_TASK=1 scripts/lab/lab.sh start
+  partition-lists`, run 20261025-184118, seed 1040902651, image `txtodo-lab:src-b9df59ae931a`): pass
+  in 13 s. Both containers ended with all 30 added lines in `work`, each once, after both made
+  `work` while b1 was unplugged; `scratch` made on a1 reached b1 unasked; each device lists exactly
+  one `work`. One attempt, one seed: not a flake count.

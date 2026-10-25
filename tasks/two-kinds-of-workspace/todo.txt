@@ -1,4 +1,3 @@
-2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists @doing by:claude
 2026-10-25 cli: txtodo merge-driver %O %A %B over merge3; a real git merge in a temp repo +m11 @cli @git
 2026-10-25 cli: txtodo git setup (.gitattributes, merge.txtodo.driver, .git/info/exclude), idempotent, --dry-run +m11 @cli @git
 2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git
@@ -33,3 +32,4 @@ x 2026-10-25 2026-10-25 mcp: list param on the tools; lists new|rename|rm|import
 x 2026-10-25 2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists — W popup and Settings > Workspaces tag list/repo and list lists first; New list row, d d and rename route through ListEnsure/ListRemove/ListRename; manifest workspace.new_list; known gap: rename still only the open workspace
 x 2026-10-25 2026-10-25 desktop: switcher groups Lists and Repos; new, rename, remove; parity rows in the same commit +m11 @desktop @parity @lists — menu groups Lists and Repos, New list field, list rename and remove through the list RPCs (also in Settings > Workspaces); manifest workspace.new_list done; known gaps: no kind badge in Settings (golden), headings not looked at by eye
 x 2026-10-25 2026-10-25 core: merge3(base, ours, theirs) per line, pure; proptest: no line lost, same lines either way round +m11 @core @git — merge3(base, ours, theirs): per-line multiset merge, order follows ours; proptests for symmetry of the lines, no line lost, unchanged side exact; known limits in notes
+x 2026-10-25 2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists — scenarios/partition-lists.sh passed on Linux containers (run 20261025-184118): both made work apart, 30 lines each once, a new list arrived unasked; one seed only
