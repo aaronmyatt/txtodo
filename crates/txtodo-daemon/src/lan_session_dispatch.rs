@@ -44,7 +44,6 @@ struct SharedCtx<'a> {
     live_peers: LivePeers,
     /// `live_peers.own_generation()` when the session started (ADR 0029's amendment).
     own_at: u64,
-    device: DeviceId,
     /// What this connection runs over.
     carrier: Carrier,
 }
@@ -121,7 +120,7 @@ fn greet_for_peer(
     conn: &mut Conn,
     peer: DeviceId,
 ) -> bool {
-    conn.routes = crate::lan_session_gate::session_routes(&shared.routes, shared.device, peer);
+    conn.routes = crate::lan_session_gate::session_routes(&shared.routes, peer);
     open_every_route(&mut conn.session, &conn.routes);
     let ids: Vec<WorkspaceId> = conn.routes.keys().copied().collect();
     ids.into_iter()
@@ -314,7 +313,6 @@ fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSi
 /// read from any routed workspace's keystore.
 fn build_shared_ctx(
     routes: &WorkspaceRoutes,
-    device: DeviceId,
     group: GroupId,
     carrier: Carrier,
 ) -> Option<SharedCtx<'_>> {
@@ -341,7 +339,6 @@ fn build_shared_ctx(
         routes: all,
         live_peers,
         own_at,
-        device,
         carrier,
     })
 }
@@ -361,7 +358,7 @@ pub(crate) fn drive_shared_session(
     group: GroupId,
     carrier: Carrier,
 ) -> SessionEnd {
-    let Some(shared) = build_shared_ctx(routes, device, group, carrier) else {
+    let Some(shared) = build_shared_ctx(routes, group, carrier) else {
         return SessionEnd::NoHello;
     };
     // Deliberately at `info`, not `debug`: this is the one line proving stage 2's actual point —

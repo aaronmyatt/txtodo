@@ -354,30 +354,30 @@ multiplex every workspace's traffic — not done by this task).
 - Own-device consent (task `default-workspace-pairing-consent`, 2026-09-24): `PairConfirmSas`
   carries the human's "is this your own device?" answer; it rides `JoinerHello`/`PairingGrant` and
   each side registers the peer with `own = mine && theirs` (`register_device_as`). A sync session
-  sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the reserved
-  default for an own peer and swaps it for this device's `default_alias` otherwise (unknown peers
-  too). Control sessions offer the default under that alias; `workspace_catalog_mirror.rs` skips an
-  own device's alias, whichever peer relays it (a peer re-offers its mirrors), and mirrors any
-  other as a Remote workspace. `PairResult.kept_own_workspace`
-  says when a joiner kept its default. `tests/e2e/default_workspace_foreign.rs` is the two-daemon proof.
+  sends its `Greet`s only after the peer's link `Hello`; `lan_session_gate.rs` keeps the default and
+  every list for an own peer and carries neither to any other (unknown peers too). Until task
+  `two-kinds-of-workspace` (ADR 0043) the default reached a foreign peer under a derived alias, as a
+  Remote mirror; the alias, that mirror and its skip pass are gone. `tests/e2e/lists_sync.rs`
+  (`a_device_that_is_not_own_gets_no_list`) is the two-daemon proof.
   Own carries across one shared device (ADR 0029's 2026-10-02 amendment, `own_vouch.rs`): in each
   control session a device sends `ControlMessage::OwnDevices` (its direct own devices) once, to the
   first sender that is direct own, and takes one only from a direct own sender
-  (`IdentityStore::set_own_vouches`). `is_own_device` counts those, so the gate and the alias skip
-  treat a vouched device as own; the mirror pass drops a Remote mirror of a now-own alias; a change
-  bumps `LivePeers::own_generation`, which ends live sync sessions so they greet again.
+  (`IdentityStore::set_own_vouches`). `is_own_device` counts those, so the gate and the list
+  offers treat a vouched device as own; a change bumps `LivePeers::own_generation`, which ends live sync sessions so they greet again.
   Known gap: the file carrier is not gated (it has no peer to ask about).
 - Offers problem (task `control-channel-keystore-visibility`, 2026-09-24): each control session
   records its group-key read on the device's `LanStatus` (`offers_problem`: a keystore failure or a
   corrupt key, with its time; a clean read clears it). `Health.offers_problem(_age_ms)` and
   `WorkspacePendingOffersResponse.offers_problem(_age_ms)` carry it, so an empty offer list can say
   "blocked" instead of "nothing offered".
-- `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24): every workspace a
-  paired device offers is mirrored on its own at `<state dir>/remote/<workspace-id>/`, opened, and
-  flagged `WorkspaceInfo.is_remote` (derived from the root, no registry column). An id the registry
-  ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
-  `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
-  the same day, a LAN control session too.
+- `workspace_catalog_mirror.rs` (task `remote-workspace-mirror`, 2026-09-24; cut down by task
+  `two-kinds-of-workspace`): the offer pass. Only a list is offered (`control_session.rs::outbound_offers`
+  keeps `is_list_id` ids) and only an own device's offer makes one (`mirror_offered_list`); every other
+  offer, from an older build, is consumed and ignored. An id the registry ever held (active or removed)
+  is never made again; a declined offer is ignored until restart. `WorkspaceAcceptOffer` accepts a
+  list and refuses anything else. `remote/<id>/` mirrors an older build made still show as
+  `WorkspaceInfo.is_remote` (derived from the root) until `MirrorsRetire` moves them aside. Offers
+  travel the relay control channel and a LAN control session.
 - Named lists (task `two-kinds-of-workspace`, ADR 0043): `list_workspace.rs`'s `ListName` (ASCII
   `[a-z0-9_-]`, 1 to 48, never `default` or a Windows device name) and its `id()`, `blake3("txtodo-list:"
   + name)` under a fixed past timestamp field (golden ids pinned in `list_workspace_tests.rs`: the

@@ -17,11 +17,11 @@ impl WorkspaceCatalog {
         self.open_args.identity.workspace_offers().list()
     }
 
-    /// `WorkspaceAcceptOffer` RPC: mirrors the pending offer's workspace now, the same way the
-    /// mirror task would on its own (task `remote-workspace-mirror`: always under
-    /// `<remote root>/<workspace-id>/`, never a directory the caller picks). Consumes the pending
-    /// offer whether mirroring succeeds or fails — a human who explicitly acted on an offer should
-    /// never see it silently reappear as still-pending.
+    /// `WorkspaceAcceptOffer` RPC: makes the pending offer's list now, the same way the mirror task
+    /// would on its own. Only a list can be accepted (ADR 0043): a repo is carried by git, and an
+    /// older build's default alias is no longer mirrored. Consumes the pending offer whether making
+    /// it succeeds or fails — a human who explicitly acted on an offer should never see it silently
+    /// reappear as still-pending.
     pub fn accept_offer(
         &self,
         offering_device: DeviceId,
@@ -42,7 +42,10 @@ impl WorkspaceCatalog {
                 Status::failed_precondition("only your own devices can offer you a list")
             });
         }
-        self.mirror_workspace(workspace_id)
+        Err(Status::failed_precondition(
+            "only a list is offered between devices now; a repo's list travels with its git \
+             repository (`txtodo git setup`)",
+        ))
     }
 
     /// `WorkspaceDeclineOffer` RPC: discards a pending offer without adopting it. `false` when no
