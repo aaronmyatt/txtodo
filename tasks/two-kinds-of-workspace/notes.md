@@ -228,3 +228,12 @@ What changed in the plan, and what I chose between.
   - Folder that stops syncing: `lists import` copy (picked) vs re-key in place.
   - Merge: plain text-keyed three-way (picked) vs engine replay (later).
   - Tests: move the harness to lists (picked) vs a hidden daemon flag.
+
+## As built
+
+- **mcp fallback note.** A call that names no `workspace` on a server that fell back to the default
+  now ends with a second text block saying so (`fallback.rs`, `McpServer::with_fallback_note`;
+  `call_tool` is overridden because `#[tool_handler]` skips a method that is already defined). It
+  covers the whole tool set in one place. Not done: the `--global` and `--dir` targets add no note,
+  since they never fall back. The text still names `txtodo workspace add`; the git-root
+  auto-register line changes it.

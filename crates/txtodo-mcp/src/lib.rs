@@ -9,6 +9,7 @@ pub mod backend;
 mod backend_args;
 mod doc;
 pub mod error;
+mod fallback;
 pub mod global_socket;
 pub mod grpc_backend;
 mod grpc_batch;

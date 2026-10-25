@@ -14,6 +14,13 @@ Tools per design §6.3, resources §6.4, `token` module.
   `txtodo_daemon_launch::ensure_daemon` before dialing the socket (task daemon-always-available);
   `grpc_backend.rs`/`global_socket.rs` stay pure and still don't import that crate.
 
+## Fallback note
+
+A server started in a folder the daemon does not know (or in no workspace) sends calls that name no
+`workspace` to the default list. `main.rs` builds a note for that (`aim_at_the_current_workspace`),
+`McpServer::with_fallback_note` holds it, and `fallback.rs` appends it to each such result as a last
+text block (task two-kinds-of-workspace). stderr still gets the same words; agent hosts hide that.
+
 ## Task ids
 
 A task's id comes from the daemon, not from the line: `GetFile` answers one id per line

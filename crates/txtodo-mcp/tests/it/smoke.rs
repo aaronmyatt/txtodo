@@ -18,7 +18,7 @@ use txtodo_mcp::schema::McpServer;
 /// `notes.md` "As built" section for the full root-cause writeup. Dependency-free equivalent of
 /// `serial_test`, scoped to this file. `tokio::sync::Mutex`, not `std`'s: every holder keeps it
 /// locked across real `.await` points, which `clippy::await_holding_lock` refuses for a std guard.
-static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(crate) static SERIAL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// Every §6.3 tool plus `todo_notes_get`/`todo_notes_set` — the exact-match set mcp-server-tools
 /// notes.md's acceptance criteria names.

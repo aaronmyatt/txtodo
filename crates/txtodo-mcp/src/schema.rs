@@ -18,11 +18,13 @@
 use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
+use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolResult, GetPromptRequestParams, GetPromptResponse, ListPromptsResult,
-    ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams,
-    ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities, ServerInfo,
+    CallToolRequestParams, CallToolResponse, CallToolResult, GetPromptRequestParams,
+    GetPromptResponse, ListPromptsResult, ListResourceTemplatesResult, ListResourcesResult,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities,
+    ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, ServerHandler, tool, tool_handler, tool_router};
@@ -32,7 +34,7 @@ use crate::backend::{
     HistoryArgs, IdArgs, LintArgs, ListArgs, McpBackend, MoveArgs, NotesGetArgs, NotesSetArgs,
     RawArgs, SearchArgs,
 };
-use crate::{prompts, resources, tools_read, tools_write};
+use crate::{fallback, prompts, resources, tools_read, tools_write};
 
 /// The one MCP server object both transports (`transport.rs`) serve. Schemas here, backed by
 /// whichever [`McpBackend`] the caller built — in practice always
@@ -42,6 +44,8 @@ use crate::{prompts, resources, tools_read, tools_write};
 pub struct McpServer {
     backend: Arc<dyn McpBackend>,
     tool_router: ToolRouter<McpServer>,
+    /// Appended to a result whose call named no `workspace` (`fallback.rs`).
+    pub(crate) fallback_note: Option<Arc<str>>,
 }
 
 impl McpServer {
@@ -50,6 +54,7 @@ impl McpServer {
         McpServer {
             backend,
             tool_router: Self::tool_router(),
+            fallback_note: None,
         }
     }
 }
@@ -323,6 +328,23 @@ impl ServerHandler for McpServer {
                 .enable_prompts()
                 .build(),
         )
+    }
+
+    /// What `#[tool_handler]` writes for `call_tool` (it skips a method defined here), plus the
+    /// fallback note (`fallback.rs`).
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let named = fallback::names_workspace(request.arguments.as_ref());
+        let call = ToolCallContext::new(self, request, context);
+        let response = self.tool_router.call(call).await?;
+        Ok(fallback::add_note(
+            response,
+            self.fallback_note.as_deref(),
+            named,
+        ))
     }
 
     async fn list_resources(

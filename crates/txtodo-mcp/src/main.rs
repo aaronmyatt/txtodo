@@ -161,8 +161,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     // outlive every `tracing::` call below — held for `run`'s whole body, dropped only on return.
     let _log_guard = txtodo_telemetry::init("txtodo-mcp", &log_dir)?;
     let agent = args.token.clone().map(|t| (t, "mcp".to_owned()));
-    let backend = connect(&target, &socket, agent).await?;
-    let server = McpServer::new(backend);
+    let (backend, fallback_note) = connect(&target, &socket, agent).await?;
+    let server = McpServer::new(backend).with_fallback_note(fallback_note);
     match args.mode {
         Mode::Stdio => transport::serve_stdio(server).await?,
         Mode::Http => serve_http(server).await?,
@@ -171,19 +171,23 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Starts the daemon if needed, connects, aims an `Auto` server at its folder, and starts the
-/// version check. Split out of `run` for the complexity budget.
+/// version check. Split out of `run` for the complexity budget. The second value is the note a
+/// call that fell back to the default workspace carries in its result (see
+/// [`aim_at_the_current_workspace`]); `None` when the server has a workspace of its own.
 async fn connect(
     target: &Target,
     socket: &Path,
     agent: Option<(String, String)>,
-) -> Result<Arc<GrpcMcpBackend>, Box<dyn std::error::Error>> {
+) -> Result<(Arc<GrpcMcpBackend>, Option<String>), Box<dyn std::error::Error>> {
     ensure_daemon_for_target(target, socket).await;
     let backend = Arc::new(GrpcMcpBackend::connect_unix(socket, agent).await?);
-    if matches!(target, Target::Auto) {
-        aim_at_the_current_workspace(&backend).await;
-    }
+    let note = if matches!(target, Target::Auto) {
+        aim_at_the_current_workspace(&backend).await
+    } else {
+        None
+    };
     tokio::spawn(watch_daemon_version(Arc::clone(&backend)));
-    Ok(backend)
+    Ok((backend, note))
 }
 
 /// How often a running server re-asks the daemon's version (task mcp-version-drift).
@@ -275,35 +279,52 @@ fn serve_through_global(dir: &Path, root: PathBuf) -> Target {
 
 /// With neither `--dir` nor `--global`: calls that name no `workspace` mean the folder this server
 /// was started in when it is a workspace *the daemon already knows* (registered by the CLI or the
-/// desktop), else the default workspace (task default-workspace) — and stderr says which. Never
-/// registers the folder itself (task mcp-cwd-autoregister): naming an unknown path would add it
-/// to the registry and announce its name to every paired peer, so a stray `todo.txt` folder an
-/// agent happens to start in stays private. stdout is the MCP protocol, so it is never used here.
+/// desktop), else the default workspace (task default-workspace). Never registers the folder
+/// itself (task mcp-cwd-autoregister): naming an unknown path would add it to the registry and
+/// announce its name to every paired peer, so a stray `todo.txt` folder an agent happens to start
+/// in stays private.
+///
+/// Returns the note for the fallback case, or `None` when the folder is the workspace. The note
+/// goes into each tool result that named no `workspace` (task two-kinds-of-workspace): an agent
+/// host shows the model the result but hides this server's stderr, which is where the same words
+/// also go. stdout is the MCP protocol, so it is never used here.
 #[allow(clippy::print_stderr)]
-async fn aim_at_the_current_workspace(backend: &GrpcMcpBackend) {
+async fn aim_at_the_current_workspace(backend: &GrpcMcpBackend) -> Option<String> {
     let env = txtodo_workspace_paths::RegistryEnv::from_process().unwrap_or_default();
     let cwd = std::env::current_dir().unwrap_or_default();
-    match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
+    let default = txtodo_workspace_paths::default_workspace_dir(&env);
+    let note = match txtodo_workspace_paths::choose_workspace(&env, &cwd) {
         txtodo_workspace_paths::WorkspaceChoice::Here(dir) => {
             let known = backend.list_workspaces().await.unwrap_or_default();
             if is_registered(&known, &dir) {
                 txtodo_mcp::set_default_workspace(dir.display().to_string());
-            } else {
-                eprintln!(
-                    "txtodo-mcp: {} is a workspace the daemon does not know; using the default \
-                     workspace instead. To serve it, register it first: txtodo workspace add {}",
-                    dir.display(),
-                    dir.display()
-                );
+                return None;
             }
+            fallback_note_unregistered(&dir, &default)
         }
-        txtodo_workspace_paths::WorkspaceChoice::Default(dir) => {
-            eprintln!(
-                "txtodo-mcp: no workspace here, using the default workspace ({})",
-                dir.display()
-            );
-        }
-    }
+        txtodo_workspace_paths::WorkspaceChoice::Default(_) => fallback_note_no_workspace(&default),
+    };
+    eprintln!("txtodo-mcp: {note}");
+    Some(note)
+}
+
+/// The folder holds a todo list the daemon does not know.
+fn fallback_note_unregistered(dir: &Path, default: &Path) -> String {
+    format!(
+        "{} is a workspace the daemon does not know; calls that name no workspace use the default \
+         workspace ({}) instead. To serve the folder, register it first: txtodo workspace add {}",
+        dir.display(),
+        default.display(),
+        dir.display()
+    )
+}
+
+/// The folder is no workspace at all.
+fn fallback_note_no_workspace(default: &Path) -> String {
+    format!(
+        "no workspace here; calls that name no workspace use the default workspace ({})",
+        default.display()
+    )
 }
 
 /// Whether `dir` is one of `known`'s roots. The registry stores canonicalized roots, so `dir` is
