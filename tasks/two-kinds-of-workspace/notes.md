@@ -367,3 +367,18 @@ What changed in the plan, and what I chose between.
   - Manifest `workspace.new_list`: desktop done, TUI done.
   - Not checked by eye: this session never opened the app. The functional Playwright specs for the
     menu cover it with DOM assertions; how the Lists/Repos headings look is for a human to see.
+- **core merge3.** `txtodo_core::merge3(base, ours, theirs)` (`merge3.rs`), pure, `no_std` + `alloc`.
+  Per distinct line the result holds `base - max(deleted by either side) + max(added by either
+  side)` copies. That is the whole rule set: additions on either side stand, a completion (the open
+  line leaves, a new `x …` line arrives) leaves the done line only, two different edits of one line
+  both stay, edit beats delete, and the same change on both sides is one line.
+  - **Correction to the Design section.** It said the result must not depend on which side is
+    ours, so two clones end with the same file. Order cannot be both that and "follow ours": a side
+    that archived (reordered) its file would have the reorder undone by a base-order merge. The
+    result now follows `ours`; only the set of lines is symmetric (a proptest checks it). Two clones
+    that merge each other independently can differ in order, not in content.
+  - Known limits, by design: no identity, so two edits of one line are two lines; a line completed
+    on one side and edited on the other leaves the done line and the edited open one (nothing is
+    lost, the user prunes); the same task completed on two days gives two done lines.
+  - Proptests: the lines do not depend on which side is ours; no added line is lost and none is
+    invented; an unchanged side hands the other file back exactly.
