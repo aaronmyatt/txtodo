@@ -80,6 +80,14 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   driver for a repo's todo lists (`%O %A %B`). Merges three ways with `txtodo_core::merge3` and writes
   the result over OURS; exit 0 merged, 1 left it to git (a file that is not UTF-8). Handled before any
   path, config or daemon, like `upgrade`. `tests/it/merge_driver_git.rs` runs a real `git merge` through it.
+- `git setup [--dry-run]` (task two-kinds-of-workspace, `commands/git_setup.rs`): makes the clone at or
+  above `--dir`/cwd merge todo lists line by line. Each only if missing, so a second run changes
+  nothing: `.gitattributes` (`todo.txt merge=txtodo`, the `txtodo.toml` root list too, `done.txt
+  merge=union`; commit it), `merge.txtodo.driver` in this clone's config (`txtodo` as found on `PATH`
+  when that is this binary, else the running binary, since a Homebrew symlink resolves into a Cellar
+  folder an upgrade removes), and `.txtodo/` in `.git/info/exclude` (through `git rev-parse --git-path`,
+  so a linked worktree works). `plan` is pure; the `doctor` row reuses it. `commands/early.rs`
+  answers `upgrade`, `merge-driver` and `git` before any path, config or daemon.
 - `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
   (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
   txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none

@@ -397,3 +397,18 @@ What changed in the plan, and what I chose between.
   line and add at the end, git's own merge conflicts (a control test shows it), and through the
   driver the merge finishes with every line, none of the old one, no markers. It skips when `git`
   is not installed.
+- **cli git setup.** `txtodo git setup [--dry-run]` (`commands/git_setup.rs`). The clone is the
+  nearest folder at or above `--dir`/cwd holding `.git`. `plan` is pure (so the doctor row reuses
+  it); `apply` appends to `.gitattributes` under a header comment, appends `.txtodo/` to the
+  exclude file that `git rev-parse --git-path info/exclude` names (so a linked worktree writes the
+  main clone's), and sets the driver with `git config --local`.
+  - The driver path is `txtodo` as found on `PATH` when that file is this binary, else the running
+    binary (a dev build). Quoted for the shell only when it needs it.
+  - `.gitattributes` also names the root list when `txtodo.toml` gives another (`work.txt`).
+  - A new `commands/early.rs` answers `upgrade`, `merge-driver` and `git` before paths, config and
+    daemon; it also freed lines in `main.rs`, which sat at its 400-line limit.
+  - Tests: pure plan and quoting; a real temp clone: three things written, second run a no-op, dry
+    run writes nothing and keeps existing attributes, a folder with no clone is refused, a linked
+    worktree; and `tests/it/merge_driver_git.rs` runs `txtodo git setup` then a real `git merge`.
+  - Known gap: the other clones still have to run it (the driver config is per clone by git's
+    design); the doctor line next makes that visible.

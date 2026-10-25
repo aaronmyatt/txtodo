@@ -13,7 +13,11 @@ fn git(dir: &Path, args: &[&str]) -> Output {
     Command::new("git")
         .args(args)
         .current_dir(dir)
-        // Nothing from the machine's own git setup: no global config, no signing, no hooks.
+        // Nothing from the machine's own git setup: no global config, no signing, no hooks, and
+        // none of what git exports to a hook when this runs from a pre-commit one.
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
         .env("GIT_AUTHOR_NAME", "t")
@@ -102,4 +106,53 @@ fn without_the_driver_the_same_merge_stops_on_a_conflict() {
     commit_list(repo, "call mum +family\nbuy milk\nfrom main\n", "main");
     let merge = git(repo, &["merge", "other", "-m", "merge other"]);
     assert!(!merge.status.success(), "git's own merge conflicts here");
+}
+
+#[test]
+fn txtodo_git_setup_is_all_a_clone_needs_for_the_merge() {
+    if Command::new("git").arg("--version").output().is_err() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    ok(repo, &["init", "-q", "-b", "main"]);
+    let setup = Command::new(env!("CARGO_BIN_EXE_txtodo"))
+        .args(["git", "setup"])
+        .current_dir(repo)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(
+        setup.status.success(),
+        "{}",
+        String::from_utf8_lossy(&setup.stderr)
+    );
+    ok(repo, &["add", ".gitattributes"]);
+    commit_list(repo, "call mum\nbuy milk\n", "base");
+
+    ok(repo, &["checkout", "-q", "-b", "other"]);
+    commit_list(repo, "call mum @phone\nbuy milk\nfrom other\n", "other");
+    ok(repo, &["checkout", "-q", "main"]);
+    commit_list(repo, "call mum +family\nbuy milk\nfrom main\n", "main");
+
+    let merge = git(repo, &["merge", "other", "-m", "merge other"]);
+    assert!(
+        merge.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&merge.stdout),
+        String::from_utf8_lossy(&merge.stderr)
+    );
+    let merged = std::fs::read_to_string(repo.join("todo.txt")).unwrap();
+    for want in [
+        "call mum +family",
+        "call mum @phone",
+        "from main",
+        "from other",
+    ] {
+        assert!(
+            merged.lines().any(|l| l == want),
+            "{want:?} missing from {merged}"
+        );
+    }
 }

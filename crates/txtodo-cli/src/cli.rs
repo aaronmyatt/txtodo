@@ -338,6 +338,12 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Git helpers for a repo's todo lists (task two-kinds-of-workspace): `setup` makes this clone
+    /// merge todo lists line by line.
+    Git {
+        #[command(subcommand)]
+        action: commands::git_setup::Action,
+    },
     /// The git merge driver for todo lists (task two-kinds-of-workspace): merges the file git calls
     /// `%A` with `%B`, three ways against `%O`, line by line and without losing a line, and writes
     /// the result into `%A`. `txtodo git setup` installs it; it is not meant to be typed.

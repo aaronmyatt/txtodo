@@ -65,13 +65,9 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> Result<(), CliError> {
-    // About this binary, not a workspace: before any path or config is resolved.
-    if let Command::Upgrade { check } = &cli.command {
-        return commands::upgrade::run(*check, cli.json);
-    }
-    // A merge git asked for, on three files: no workspace, no config, no daemon.
-    if let Command::MergeDriver { base, ours, theirs } = &cli.command {
-        return commands::merge_driver::run(base, ours, theirs);
+    // About this binary or a clone given by hand, not a workspace: before any path or config.
+    if let Some(done) = commands::early::run(cli) {
+        return done;
     }
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
@@ -255,6 +251,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Skill { .. } => "skill",
         Command::Upgrade { .. } => "upgrade",
         Command::MergeDriver { .. } => "merge-driver",
+        Command::Git { .. } => "git",
         Command::Notices { .. } => "notices",
         Command::Prune { .. } => "prune",
     }
@@ -342,6 +339,7 @@ fn dispatch_inner(ctx: &Ctx, command: &Command) -> Result<(), CliError> {
         | Command::Skill { .. }
         | Command::Upgrade { .. }
         | Command::MergeDriver { .. }
+        | Command::Git { .. }
         | Command::Notices { .. } => unreachable!("handled before mode selection"),
         c if daemon_ensure::needs_daemon(c) => Err(needs_daemon_err()),
         Command::Add { text } => commands::add::run(ctx, &text.join(" "), false),
