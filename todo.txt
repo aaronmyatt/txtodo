@@ -1,4 +1,4 @@
-(A) 2026-10-25 two kinds of workspace: named lists sync by txtodo, repo lists by git +m11 @daemon @sync ref:two-kinds-of-workspace
+(A) 2026-10-25 two kinds of workspace: named lists sync by txtodo, repo lists by git +m11 @daemon @sync ref:two-kinds-of-workspace @doing by:claude
 (D) 2026-10-03 daemon: one store transaction per sync batch across every file it touches, not one commit per same-file run +m11 @daemon @sync ref:sync-batch-txn — deferred 2026-10-03 (human call): option A of first-sync-speed; B (coalesced file writes) went first; ADR-sized, see tasks/sync-batch-txn/notes.md
 2026-09-11 Web PWA: a relay-only sync peer in the browser (wasm engine in a Worker, OPFS) +m10 @web ref:web-pwa — deferred 2026-09-17 (human call); replanned 2026-10-17, see tasks/web-pwa/notes.md
 x 2026-09-11 WASM component plugin host with the design §9 hooks +m10 @plugins @human — needs a wasm runtime dependency (Cargo.toml is frozen) and an ADR for which runtime and which design §9 hooks come first — parked 2026-09-20: no dependency and no ADR until revived; to revive, pick a runtime and write the ADR first ref:wasm-component-plugin-host-with-the-desi

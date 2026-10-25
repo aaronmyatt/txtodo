@@ -1,4 +1,3 @@
-2026-10-25 docs: ADR 0043 two kinds of workspace; amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs
 2026-10-25 mcp: a call that fell back to the default says so in the tool result, not on stderr +m11 @mcp
 2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists
 2026-10-25 proto: WorkspaceInfo.kind (additive); ListEnsure, ListRename, ListRemove RPCs +m11 @proto @lists
@@ -33,3 +32,4 @@
 2026-10-25 backlog: close ref:bind-ui in the root list as superseded (bind retires for repos, lists need none) +m11
 2026-10-25 scripts: scripts/check-two-kinds.sh, self-asserting +m11 @test
 2026-10-25 docs: playbook, AGENTS.md block, skill install; web-pwa notes say browser lists, not mirrors; ADR 0043 as built +m11 @docs
+x 2026-10-25 2026-10-25 docs: ADR 0043 two kinds of workspace; amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs — docs/adr/0043-two-kinds-of-workspace.md, accepted; 0029 gets an amendment pointer
