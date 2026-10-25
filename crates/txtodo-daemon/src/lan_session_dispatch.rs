@@ -10,14 +10,12 @@ use std::sync::Arc;
 use tokio::runtime::Handle;
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{
-    DeviceSigningKey, GroupId, GroupKey, GroupKeys, Link, Session, derive_group_op_signing_key,
-    peek_workspace,
-};
+use txtodo_sync::{DeviceSigningKey, GroupId, GroupKeys, Link, Session, peek_workspace};
 
 use crate::clock::SystemClock;
 use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
-use crate::lan_session::{fetch_group_key, read, read_heads, single_epoch_keys};
+use crate::group_epoch::EpochKey;
+use crate::lan_session::{fetch_group_key, read, read_heads, retained_keys};
 use crate::lan_session_live::{Live, POLL, PushCtx};
 use crate::lan_session_shared::{
     LINK_WORKSPACE, MAX_MESSAGES_PER_SESSION, SessionCtx, handle_link_hello,
@@ -35,7 +33,9 @@ struct SharedCtx<'a> {
     generation: u64,
     rt: Handle,
     group: GroupId,
-    key: GroupKey,
+    /// What this session seals under: the device's current epoch when it started.
+    key: EpochKey,
+    /// Every epoch up to it that the device holds: what incoming frames open under.
     keys: GroupKeys,
     signing_key: DeviceSigningKey,
     /// Every workspace open on this device when the session started; the session itself carries
@@ -92,7 +92,7 @@ fn dispatch_link_frame(
     shared: &SharedCtx<'_>,
     conn: &mut Conn,
 ) -> Option<()> {
-    let msg = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)
+    let (msg, _) = open_and_decode_logged(frame, shared.group, LINK_WORKSPACE, &shared.keys)
         .map_err(|kind| conn.refused = Some(kind))
         .ok()?;
     let now_ms = any_route_now_ms(&shared.routes);
@@ -141,7 +141,7 @@ fn dispatch_workspace_frame(
         log_unrouted_workspace_skipped(workspace);
         return Some(());
     };
-    let msg = open_and_decode_logged(frame, shared.group, workspace, &shared.keys).ok()?;
+    let (msg, epoch) = open_and_decode_logged(frame, shared.group, workspace, &shared.keys).ok()?;
     conn.live.observe(workspace, &msg);
     let ctx = SessionCtx {
         ws: &route.ws,
@@ -149,7 +149,9 @@ fn dispatch_workspace_frame(
         group: shared.group,
         workspace,
         key: &shared.key,
-        signing_key: &shared.signing_key,
+        // The batch was signed with the key of the epoch it was sealed under (it opened, so the
+        // table holds it).
+        verify_key: crate::group_epoch::verify_key(&shared.keys, epoch)?,
     };
     handle_workspace_message(link, &ctx, &mut conn.session, msg).then_some(())
 }
@@ -301,10 +303,10 @@ fn log_no_group_key() {
 /// keystore holds the (necessarily shared, ADR 0021) group key, or the epoch table it builds
 /// refuses it. Split out purely to keep `build_shared_ctx` under this workspace's cognitive-
 /// complexity budget (`clippy.toml`).
-fn group_crypto(first: &WorkspaceRoute) -> Option<(GroupKey, GroupKeys, DeviceSigningKey)> {
+fn group_crypto(first: &WorkspaceRoute) -> Option<(EpochKey, GroupKeys, DeviceSigningKey)> {
     let key = fetch_group_key(&first.ws)?;
-    let keys = single_epoch_keys(key.clone())?;
-    let signing_key = derive_group_op_signing_key(&key);
+    let keys = retained_keys(&first.ws, key.epoch)?;
+    let signing_key = key.signing_key();
     Some((key, keys, signing_key))
 }
 

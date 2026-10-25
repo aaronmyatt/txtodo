@@ -31,8 +31,10 @@ use std::time::{Duration, Instant};
 use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    DeviceSigningKey, GroupId, GroupKey, Heads, Link, MAX_OPS_PER_BATCH, Message, OriginRange, want,
+    DeviceSigningKey, GroupId, Heads, Link, MAX_OPS_PER_BATCH, Message, OriginRange, want,
 };
+
+use crate::group_epoch::EpochKey;
 
 use crate::clock::Clock;
 use crate::device_relay::WorkspaceRoute;
@@ -64,7 +66,7 @@ pub(crate) const WINDOW_BATCHES: u64 = 2;
 /// The group crypto and routing a push needs, borrowed from the dispatch loop's own context.
 pub(crate) struct PushCtx<'a> {
     pub(crate) group: GroupId,
-    pub(crate) key: &'a GroupKey,
+    pub(crate) key: &'a EpochKey,
     pub(crate) signing_key: &'a DeviceSigningKey,
     pub(crate) routes: &'a BTreeMap<WorkspaceId, WorkspaceRoute>,
 }

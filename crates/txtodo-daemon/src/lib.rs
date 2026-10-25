@@ -35,6 +35,7 @@ mod devices_grpc;
 pub mod dir_bridge_guard;
 #[cfg(test)]
 mod dir_bridge_guard_tests;
+mod group_epoch;
 mod list_rpc;
 mod list_workspace;
 mod mirrors_retire;

@@ -10,7 +10,7 @@ use std::sync::{Mutex, PoisonError};
 
 use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, KeyId, Link};
+use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, Link};
 
 use crate::device_identity::DeviceIdentity;
 use crate::peer_keys::PeerSignal;
@@ -42,7 +42,7 @@ pub(crate) fn drive_control_session(
         return PeerSignal::Silent;
     };
     let epoch = identity.group_epoch();
-    let Some(keys) = single_epoch_keys(epoch, key.clone()) else {
+    let Some(keys) = crate::group_epoch::retained(identity.key_store().as_ref(), epoch) else {
         return PeerSignal::Silent;
     };
     let ctx = SealCtx {
@@ -88,27 +88,31 @@ fn read_until_closed(
     }
 }
 
-/// The three ways this can fail (keystore error, no key stored yet, corrupt length) used to
+/// The current epoch's group key. A keystore error, no key stored yet and a corrupt length used to
 /// collapse into one flat `control_channel_session_skipped_no_group_key` debug event at the call
 /// site — each now logs its own specific reason here instead, at the source. `Err` carries what a
 /// human should hear about (task control-channel-keystore-visibility); `Ok(None)` is "not paired
 /// yet", which is no problem.
 fn fetch_group_key(identity: &DeviceIdentity) -> Result<Option<GroupKey>, String> {
-    let stored = match identity
-        .key_store()
-        .get(KeyId::Group(identity.group_epoch()))
-    {
-        Ok(v) => v,
-        Err(e) => return Err(log_group_key_keystore_err(&e)),
-    };
-    let Some(bytes) = stored else {
-        return Ok(log_group_key_missing());
-    };
-    let raw = bytes.expose();
-    match raw.try_into() {
-        Ok(array) => Ok(Some(GroupKey::from_bytes(array))),
-        Err(_) => Err(log_group_key_corrupt(raw.len())),
+    let fetched = crate::group_epoch::fetch(identity.key_store().as_ref(), identity.group_epoch());
+    log_group_key_read(&fetched);
+    fetched
+}
+
+fn log_group_key_read(fetched: &Result<Option<GroupKey>, String>) {
+    match fetched {
+        Err(why) => log_group_key_unreadable(why),
+        Ok(None) => log_group_key_missing(),
+        Ok(Some(_)) => {}
     }
+}
+
+fn log_group_key_unreadable(why: &str) {
+    tracing::warn!(why, "control_channel_group_key_unreadable");
+}
+
+fn log_group_key_missing() {
+    tracing::debug!("control_channel_group_key_missing");
 }
 
 /// Puts the group-key read's outcome on the device's `LanStatus`, where `Health` and
@@ -116,34 +120,6 @@ fn fetch_group_key(identity: &DeviceIdentity) -> Result<Option<GroupKey>, String
 fn record_offers_outcome(identity: &DeviceIdentity, key: &Result<Option<GroupKey>, String>) {
     let problem = key.as_ref().err().map(|why| (why.clone(), now_ms()));
     identity.lan_status().set_offers_problem(problem);
-}
-
-fn log_group_key_keystore_err(e: &txtodo_sync::KeyStoreError) -> String {
-    tracing::warn!(error = %e, "control_channel_group_key_keystore_error");
-    format!("the keystore could not read the group key: {e}")
-}
-
-fn log_group_key_missing() -> Option<GroupKey> {
-    tracing::debug!("control_channel_group_key_missing");
-    None
-}
-
-fn log_group_key_corrupt(len: usize) -> String {
-    tracing::warn!(len, "control_channel_group_key_corrupt_length");
-    format!("the stored group key is {len} bytes, not 32")
-}
-
-fn single_epoch_keys(epoch: u32, key: GroupKey) -> Option<GroupKeys> {
-    let mut keys = GroupKeys::new();
-    match keys.insert(epoch, key) {
-        Ok(()) => Some(keys),
-        Err(e) => log_group_keys_insert_failed(&e),
-    }
-}
-
-fn log_group_keys_insert_failed(e: &txtodo_sync::CryptoError) -> Option<GroupKeys> {
-    tracing::warn!(error = %e, "control_channel_group_keys_insert_failed");
-    None
 }
 
 /// This device's lists, as `(id, display name)` pairs — never used as identity. Only lists

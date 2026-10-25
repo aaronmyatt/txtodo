@@ -28,9 +28,7 @@ fn ops_or_refuse(
     // An empty map when `msg` is not actually `Ops` is fine: `on_ops` checks the variant before
     // it ever consults `device_keys` and reports "unexpected message" instead.
     let device_keys = match msg {
-        Message::Ops { ops, .. } => {
-            crate::lan_apply::device_keys_for(ops, ctx.signing_key.public_key())
-        }
+        Message::Ops { ops, .. } => crate::lan_apply::device_keys_for(ops, ctx.verify_key),
         _ => std::collections::BTreeMap::new(),
     };
     // What another session already committed counts as held here too (lab chaos 1072683562): the

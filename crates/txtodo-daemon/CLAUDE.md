@@ -405,6 +405,14 @@ multiplex every workspace's traffic — not done by this task).
   `done.txt merge=union` in `.git/info/attributes`, `[merge "txtodo"] driver = txtodo merge-driver %O %A %B` in
   `.git/config`, each only if missing, nothing tracked written); every scan readies the registered repos
   again. `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
+- `group_epoch.rs` (task `peer-prune`, ADR 0044): the group key as the epochs a device holds it. `EpochKey`
+  is a key with its epoch; `fetch(store, epoch)` reads one, `retained(store, current)` every epoch up to the
+  current one that the keystore holds (the newest 16), `verify_key(keys, epoch)` the key a batch sealed under
+  that epoch was signed with. Live sessions, the file carrier and the control channel seal under the
+  device's current epoch (`Workspace::group_epoch`) and open under any retained one, verifying a batch with
+  the key of the epoch its frame names (`txtodo_sync::sealed_epoch`). `DeviceIdentity::set_group_epoch`
+  bumps the live-peers generation, so a rotation ends live sessions and they reseal. At epoch 0, as every
+  device is today, nothing on the wire changed.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
   moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
   text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),

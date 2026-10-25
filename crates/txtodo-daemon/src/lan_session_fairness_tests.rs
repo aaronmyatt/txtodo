@@ -10,8 +10,7 @@ use std::time::Duration;
 use txtodo_model::IdentityMode;
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{
-    Frame, GroupKey, Heads, Link, LinkError, Message, OriginRange, derive_group_op_signing_key,
-    peek_workspace, want,
+    Frame, GroupKey, Heads, Link, LinkError, Message, OriginRange, peek_workspace, want,
 };
 
 use crate::device_relay::WorkspaceRoute;
@@ -80,7 +79,7 @@ struct Fixture {
     big_id: WorkspaceId,
     small_id: WorkspaceId,
     group: txtodo_sync::GroupId,
-    key: GroupKey,
+    key: crate::group_epoch::EpochKey,
     routes: BTreeMap<WorkspaceId, WorkspaceRoute>,
     _dirs: (tempfile::TempDir, tempfile::TempDir),
 }
@@ -108,7 +107,10 @@ fn fixture() -> Fixture {
         small_id: id(&small),
         big,
         group,
-        key: GroupKey::from_bytes([7u8; 32]),
+        key: crate::group_epoch::EpochKey {
+            epoch: 0,
+            key: GroupKey::from_bytes([7u8; 32]),
+        },
         routes,
         _dirs: dirs,
     }
@@ -118,7 +120,7 @@ fn fixture() -> Fixture {
 async fn slow_a_big_transfer_and_a_small_one_take_turns_and_the_window_holds() {
     let f = fixture();
     let (big_id, small_id) = (f.big_id, f.small_id);
-    let signing_key = derive_group_op_signing_key(&f.key);
+    let signing_key = f.key.signing_key();
     let ctx = PushCtx {
         group: f.group,
         key: &f.key,

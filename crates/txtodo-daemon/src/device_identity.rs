@@ -213,12 +213,19 @@ impl DeviceIdentity {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }
-    /// Updates only the in-memory epoch; the caller (`device_remove.rs`) persists first.
+    /// Updates only the in-memory epoch; the caller (`device_remove.rs`) persists first. A change
+    /// ends every live sync session, so each reconnects and seals under the new epoch.
     pub(crate) fn set_group_epoch(&self, new_epoch: u32) {
-        *self
-            .group_epoch
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = new_epoch;
+        let old = std::mem::replace(
+            &mut *self
+                .group_epoch
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner),
+            new_epoch,
+        );
+        if old != new_epoch {
+            self.live_peers.bump_own_generation();
+        }
     }
     /// This daemon's in-flight pairing bookkeeping — one attempt at a time, for the whole device,
     /// not per workspace (`pairing_grpc.rs`).

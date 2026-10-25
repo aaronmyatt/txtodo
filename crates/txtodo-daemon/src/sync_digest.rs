@@ -17,7 +17,9 @@ use std::time::Duration;
 use tokio::runtime::Handle;
 use txtodo_model::{DeviceId, FilePath};
 use txtodo_store::WorkspaceId;
-use txtodo_sync::{FileDigest, GroupId, GroupKey, Link, MAX_DIGEST_FILES, Message};
+use txtodo_sync::{FileDigest, GroupId, Link, MAX_DIGEST_FILES, Message};
+
+use crate::group_epoch::EpochKey;
 
 use crate::device_relay::WorkspaceRoute;
 use crate::expected::{Hash, hex8};
@@ -144,7 +146,7 @@ fn compare_one(ctx: &SessionCtx<'_>, peer: DeviceId, theirs: &FileDigest) -> Opt
 pub(crate) struct DigestCtx<'a> {
     pub(crate) rt: &'a Handle,
     pub(crate) group: GroupId,
-    pub(crate) key: &'a GroupKey,
+    pub(crate) key: &'a EpochKey,
     pub(crate) routes: &'a BTreeMap<WorkspaceId, WorkspaceRoute>,
 }
 
