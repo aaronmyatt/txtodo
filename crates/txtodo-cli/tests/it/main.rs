@@ -7,6 +7,7 @@
 mod add;
 mod archive;
 mod env;
+mod git_two_clones;
 mod hygiene;
 mod list;
 mod merge_driver_git;

@@ -418,3 +418,11 @@ What changed in the plan, and what I chose between.
   clone that is set up, a list, a mirror, a plain folder, or when `git` is not on `PATH`. WARN, not
   FAIL: a clone without the driver still works, git's own merge can conflict and cannot lose a line.
   `plan_for` was split out of `run` so both ask the same question.
+- **cli two-clones test.** `tests/it/git_two_clones.rs`: a bare remote, clones `a` and `b`, each with
+  `txtodo git setup`, working their lists with the real CLI in direct-file mode (`--no-daemon`, so
+  no daemon). A completes `alpha` and adds two; B completes `bravo` and adds one; B `git pull`s
+  (a true merge, the driver settles it), pushes, A pulls. Every added line is there, `alpha` and
+  `bravo` each exist once, as done, none open, no conflict markers, and the two files are equal at
+  the end. It stands in the `it` target (no daemon, about a second) rather than `e2e`.
+  Not covered: the daemon watching the working tree through the pull (the existing external-edit
+  path takes in a rewritten file; a lab or by-hand check on a registered repo would show it).
