@@ -105,11 +105,12 @@ impl WorkspaceCatalog {
         if current_id == offered_id {
             return Ok(current_id);
         }
-        // The default keeps its reserved id (task default-workspace): pairing carries it like any
-        // other workspace, and an initiator's other workspace reaches this device through the
-        // ordinary offer, beside the default, never in place of it.
-        if self.registered_default() == Some(current_id) {
-            tracing::info!(offered = %offered_id, "pairing_kept_default_workspace_id");
+        // The default keeps its reserved id (task default-workspace) and a named list the id its
+        // name gives (task two-kinds-of-workspace): pairing carries them like any other workspace,
+        // and an initiator's other workspace reaches this device through the ordinary offer,
+        // beside them, never in place of them.
+        if self.registered_default() == Some(current_id) || self.is_list_root(&root) {
+            tracing::info!(offered = %offered_id, "pairing_kept_own_workspace_id");
             return Ok(current_id);
         }
         // Checked before anything changes, so a refusal leaves the registry and the pairing

@@ -35,6 +35,8 @@ mod devices_grpc;
 pub mod dir_bridge_guard;
 #[cfg(test)]
 mod dir_bridge_guard_tests;
+mod list_rpc;
+mod list_workspace;
 pub use txtodo_engine::duplicates;
 pub mod expected;
 mod external;
@@ -154,6 +156,7 @@ pub mod watcher;
 pub mod workspace;
 pub mod workspace_bind;
 pub mod workspace_catalog;
+mod workspace_catalog_lists;
 mod workspace_catalog_load;
 mod workspace_catalog_mirror;
 mod workspace_catalog_offers;
@@ -229,6 +232,10 @@ mod layout_file_tests;
 mod layout_refs_tests;
 #[cfg(test)]
 mod layout_reload_tests;
+#[cfg(test)]
+mod list_rpc_tests;
+#[cfg(test)]
+mod list_workspace_tests;
 #[cfg(test)]
 mod log_repair_tests;
 #[cfg(test)]

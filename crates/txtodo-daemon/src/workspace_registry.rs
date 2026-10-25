@@ -218,6 +218,18 @@ impl WorkspaceRegistry {
         Ok(self.registry.remove(id, clock.now_ms())?)
     }
 
+    /// Brings a removed `id` back at its old root (task two-kinds-of-workspace): a named list
+    /// removed here and made again, whose id is its name's and so cannot be minted afresh.
+    /// `false` for an unknown or active id. The caller has checked no other active row holds the
+    /// root ([`txtodo_store::Registry::restore`]).
+    pub fn restore(
+        &mut self,
+        id: WorkspaceId,
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.restore(id, clock.now_ms())?)
+    }
+
     /// Points the active `id` at `root` (a bind, task spike-txtodo-should-merge-remote-workspa):
     /// the id stays, the root moves. Refused like `add` when `root` overlaps another active
     /// workspace; the caller removes whatever was registered at `root` itself first. `false` for

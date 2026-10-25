@@ -6,6 +6,7 @@
 #![allow(clippy::print_stderr)] // the binary's only human output path (plan §0)
 #![allow(clippy::print_stdout)] // --version's own output path (must be stdout, not stderr)
 
+mod boot_dirs;
 mod boot_log;
 mod carriers;
 mod identity_setup;
@@ -258,15 +259,6 @@ fn refuse_global_owned(env: &RegistryEnv, dir: &Path) -> Result<(), Box<dyn std:
     .into())
 }
 
-/// Where offered workspaces are mirrored (task remote-workspace-mirror): `remote/` beside the
-/// default, or under the bridge's own state dir with `--dir`.
-fn mirror_dir(args: &Args, env: &RegistryEnv, state_dir: &Path) -> PathBuf {
-    match args.dir {
-        Some(_) => state_dir.join("remote"),
-        None => workspace_registry_paths::remote_workspaces_dir_for(env),
-    }
-}
-
 /// The user's default workspace: created on first run, and queued first by the caller. A failure is
 /// logged and never fatal: every other workspace still opens.
 fn register_default_workspace(catalog: &WorkspaceCatalog, env: &RegistryEnv) {
@@ -385,7 +377,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     );
     open.device_lan = carriers.lan.as_ref().map(|(lan, _task)| Arc::clone(lan));
     let catalog = Arc::new(WorkspaceCatalog::new(registry, open, clock));
-    catalog.start_offer_mirror(&mirror_dir(&args, &env, &state_dir));
+    boot_dirs::start(&catalog, &args, &env, &state_dir);
 
     let queued = open_or_queue(&args, &catalog, &env)?;
     drop(_boot);

@@ -11,8 +11,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 use txtodo_model::Principal;
-use txtodo_proto::v1::txtodo_server::Txtodo;
-use txtodo_proto::v1::{self as pb};
+use txtodo_proto::v1::{self as pb, txtodo_server::Txtodo};
 
 /// Concurrent RPCs per connection.
 pub const MAX_INFLIGHT_RPCS: usize = 64;
@@ -26,27 +25,7 @@ pub struct TxtodoService {
     pub(crate) ws: SharedWorkspace,
 }
 
-impl TxtodoService {
-    /// Wraps a workspace.
-    pub fn new(ws: SharedWorkspace) -> TxtodoService {
-        TxtodoService { ws }
-    }
-
-    // pub(crate): sibling modules (pairing_grpc, tokens, activity, progress) read the workspace.
-    pub(crate) fn workspace(&self) -> std::sync::RwLockReadGuard<'_, Workspace> {
-        self.ws
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    /// The raw `SharedWorkspace`, for a spawned task (`pairing_lan::spawn_joiner`).
-    pub(crate) fn shared_workspace(&self) -> SharedWorkspace {
-        Arc::clone(&self.ws)
-    }
-}
-
-// Split out for the line budget: `actor`/`actor_by_path`/`all_actors` (server_actors.rs),
-// `progress_for` (progress.rs), `status_of`/`applied_of` (convert.rs), `forward_changes`.
+// Split out for the line budget: `new`, `workspace`, `actor*` (server_actors.rs), `progress_for`.
 use crate::convert::{applied_of, preview_of, source_of, status_of};
 use crate::server_actors::no_registry;
 use crate::watch_forward::forward_changes;
@@ -395,6 +374,27 @@ impl Txtodo for TxtodoService {
         &self,
         _r: Request<pb::WorkspaceBindRequest>,
     ) -> Result<Response<pb::WorkspaceBindResponse>, Status> {
+        Err(no_registry())
+    }
+
+    async fn list_ensure(
+        &self,
+        _r: Request<pb::ListEnsureRequest>,
+    ) -> Result<Response<pb::ListEnsureResponse>, Status> {
+        Err(no_registry())
+    }
+
+    async fn list_rename(
+        &self,
+        _r: Request<pb::ListRenameRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        Err(no_registry())
+    }
+
+    async fn list_remove(
+        &self,
+        _r: Request<pb::ListRemoveRequest>,
+    ) -> Result<Response<pb::ListRemoveResponse>, Status> {
         Err(no_registry())
     }
 }

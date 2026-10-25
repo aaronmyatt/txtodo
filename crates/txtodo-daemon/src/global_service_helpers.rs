@@ -1,14 +1,14 @@
 //! Free functions `global_service.rs`'s dispatch impl uses, split out purely for that file's line
 //! budget (same pattern `workspace_error.rs`/`workspace_mint.rs` use out of `workspace.rs`).
 
-use std::sync::PoisonError;
+use std::sync::{Arc, PoisonError};
 
-use crate::server::SharedWorkspace;
+use crate::server::{SharedWorkspace, TxtodoService};
 use crate::workspace_catalog::WorkspaceCatalog;
 use crate::workspace_catalog_load::LoadTotals;
 use crate::workspace_load::LoadState;
 use crate::workspace_registry::WorkspaceEntry;
-use tonic::Status;
+use tonic::{Request, Status};
 use txtodo_model::{Ulid, WorkspaceLayout};
 use txtodo_proto::v1::{self as pb};
 use txtodo_store::WorkspaceId;
@@ -28,9 +28,17 @@ pub(crate) fn workspace_info(
     let name = crate::workspace_name::display_name(entry.id, &entry.root, is_default, || {
         offers.offered_name(entry.id)
     });
+    // Task two-kinds-of-workspace: the default and any folder in the lists root is a list that
+    // txtodo syncs; every other folder is a repo, which git syncs.
+    let kind = if is_default || catalog.is_list_root(&entry.root) {
+        pb::WorkspaceKind::List
+    } else {
+        pb::WorkspaceKind::Repo
+    };
     pb::WorkspaceInfo {
         is_remote,
         name,
+        kind: kind as i32,
         ..to_workspace_info(entry, state, &layout)
     }
 }
@@ -172,3 +180,33 @@ has_workspace!(
     pb::UndoRequest,
     pb::WatchRequest
 );
+
+impl crate::global_service::GlobalService {
+    /// `resolve`, then the per-call `TxtodoService` and `rpc` span every scoped handler needs.
+    pub(crate) async fn scoped<T: HasWorkspace>(
+        &self,
+        method: &'static str,
+        r: &Request<T>,
+    ) -> Result<(TxtodoService, tracing::Span), Status> {
+        let ws = self.resolve(r.get_ref().workspace()).await?;
+        let span = rpc_span(method, &ws);
+        Ok((TxtodoService::new(ws), span))
+    }
+
+    /// `WorkspaceCatalog::resolve` for an async handler. An open workspace answers at once; anything
+    /// else may block on an open, so it runs on the blocking pool (task `daemon-early-bind`).
+    /// <https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html>
+    pub(crate) async fn resolve(
+        &self,
+        selector: Option<&pb::WorkspaceSelector>,
+    ) -> Result<crate::server::SharedWorkspace, Status> {
+        if let Some(ready) = self.catalog.resolve_without_waiting(selector) {
+            return ready;
+        }
+        let catalog = Arc::clone(&self.catalog);
+        let selector = selector.cloned();
+        tokio::task::spawn_blocking(move || catalog.resolve(selector.as_ref()))
+            .await
+            .map_err(|e| Status::internal(format!("resolve task failed: {e}")))?
+    }
+}

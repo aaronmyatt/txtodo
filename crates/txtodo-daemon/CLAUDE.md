@@ -378,6 +378,18 @@ multiplex every workspace's traffic — not done by this task).
   ever held (active or removed) is never mirrored; a declined offer is ignored until restart.
   `WorkspaceAcceptOffer` ignores `local_dir`. Offers travel the relay control channel and, since
   the same day, a LAN control session too.
+- Named lists (task `two-kinds-of-workspace`, ADR 0043): `list_workspace.rs`'s `ListName` (ASCII
+  `[a-z0-9_-]`, 1 to 48, never `default` or a Windows device name) and its `id()`, `blake3("txtodo-list:"
+  + name)` under a fixed past timestamp field (golden ids pinned in `list_workspace_tests.rs`: the
+  derivation is permanent). `workspace_catalog_lists.rs`: `set_lists_root` (`boot_dirs.rs` sets it
+  beside `remote/`), `is_list_root`, `ensure_list` (make `lists/<name>/`, register under the name's
+  id, open it; `ALREADY_EXISTS` for a list renamed away from that name or another list showing it),
+  `find_list` (shown name, else the name it was made under), `remove_list` (close, move aside as a
+  rejoin does, un-register; the other devices keep it). `list_rpc.rs`: `ListEnsure`, `ListRename`
+  (the `WorkspaceRename` write after the new name is checked), `ListRemove`. `WorkspaceInfo.kind` is
+  List for the default and anything in the lists root, Repo for every other folder. Pairing never
+  rekeys a list (`adopt_offered_workspace_id`), as for the default. A removed list made again comes
+  back under its id through `WorkspaceRegistry::restore`.
 - `workspace_rejoin.rs` + `rejoin_backup.rs` (task sync-drift line 8, 2026-09-26): `WorkspaceRejoin`
   drops this device's copy of one workspace and takes a paired peer's. Refused, nothing changed,
   for the default, a missing root, a root overlapping another registered one, or when no paired

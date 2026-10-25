@@ -3,6 +3,7 @@
 //! `WorkspaceCatalog`, then delegates to a `TxtodoService` built fresh for that workspace (which
 //! still implements `Txtodo` itself, for whitebox tests via `serve::serve`), in an
 //! `rpc{method,workspace}` span (`rpc_span`): this is the one place that sees every RPC.
+//! `scoped` and `resolve` are in `global_service_helpers.rs`, split out for the line budget.
 
 use crate::server::TxtodoService;
 use crate::workspace_catalog::WorkspaceCatalog;
@@ -14,13 +15,13 @@ use txtodo_proto::v1::{self as pb};
 
 // Re-exported: `pairing_grpc.rs` and the other split-out handlers reach them by these paths.
 pub(crate) use crate::global_service_helpers::{
-    HasWorkspace, parse_workspace_id, rpc_span, totals_only, with_totals, workspace_info,
+    parse_workspace_id, rpc_span, totals_only, with_totals, workspace_info,
 };
 
 /// The service actually bound to the one global socket. `Clone` is a cheap `Arc` clone.
 #[derive(Clone)]
 pub struct GlobalService {
-    catalog: Arc<WorkspaceCatalog>,
+    pub(crate) catalog: Arc<WorkspaceCatalog>,
 }
 
 impl GlobalService {
@@ -31,34 +32,6 @@ impl GlobalService {
     /// For the handlers split into their own files (`workspace_offer_grpc.rs`, `universal_grpc.rs`).
     pub(crate) fn catalog(&self) -> &Arc<WorkspaceCatalog> {
         &self.catalog
-    }
-
-    /// `resolve`, then the per-call `TxtodoService` and `rpc` span every scoped handler needs.
-    async fn scoped<T: HasWorkspace>(
-        &self,
-        method: &'static str,
-        r: &Request<T>,
-    ) -> Result<(TxtodoService, tracing::Span), Status> {
-        let ws = self.resolve(r.get_ref().workspace()).await?;
-        let span = rpc_span(method, &ws);
-        Ok((TxtodoService::new(ws), span))
-    }
-
-    /// `WorkspaceCatalog::resolve` for an async handler. An open workspace answers at once; anything
-    /// else may block on an open, so it runs on the blocking pool (task `daemon-early-bind`).
-    /// <https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html>
-    pub(crate) async fn resolve(
-        &self,
-        selector: Option<&pb::WorkspaceSelector>,
-    ) -> Result<crate::server::SharedWorkspace, Status> {
-        if let Some(ready) = self.catalog.resolve_without_waiting(selector) {
-            return ready;
-        }
-        let catalog = Arc::clone(&self.catalog);
-        let selector = selector.cloned();
-        tokio::task::spawn_blocking(move || catalog.resolve(selector.as_ref()))
-            .await
-            .map_err(|e| Status::internal(format!("resolve task failed: {e}")))?
     }
 }
 
@@ -395,5 +368,26 @@ impl Txtodo for GlobalService {
         r: Request<pb::WorkspaceBindRequest>,
     ) -> Result<Response<pb::WorkspaceBindResponse>, Status> {
         crate::workspace_registry_grpc::bind(self, r).await
+    }
+
+    async fn list_ensure(
+        &self,
+        r: Request<pb::ListEnsureRequest>,
+    ) -> Result<Response<pb::ListEnsureResponse>, Status> {
+        crate::list_rpc::ensure(self, r).await
+    }
+
+    async fn list_rename(
+        &self,
+        r: Request<pb::ListRenameRequest>,
+    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
+        crate::list_rpc::rename(self, r).await
+    }
+
+    async fn list_remove(
+        &self,
+        r: Request<pb::ListRemoveRequest>,
+    ) -> Result<Response<pb::ListRemoveResponse>, Status> {
+        crate::list_rpc::remove(self, r).await
     }
 }

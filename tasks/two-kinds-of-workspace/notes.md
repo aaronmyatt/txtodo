@@ -257,3 +257,24 @@ What changed in the plan, and what I chose between.
   - Known gap: the daemon does not build between this commit and the daemon's list handlers (both
     `Txtodo` impls need the new methods, same split as `WorkspaceRename`); the next daemon commit
     starts with the stubs.
+- **daemon lists (lines 5 to 7, one commit).** `list_workspace.rs` (`ListName`, `id()`),
+  `workspace_catalog_lists.rs` (`ensure_list`, `find_list`, `remove_list`), `list_rpc.rs` (the three
+  handlers), `boot_dirs.rs` (sets `lists/` beside `remote/`), `kind` on `WorkspaceInfo`, and the
+  no-rekey guard widened to list roots. Landed as one commit because each piece is dead code
+  until the next uses it, and clippy runs with `-D warnings`.
+  - Golden ids: `work` 01K88NT001XV65VHTNCYP6PE6F, `home` 01K88NT0015SHKXH8JFCPTKBMD,
+    `a-b_c9` 01K88NT001NFC98TAGX7K9P9Q9 (all start `01K88NT001`, the fixed timestamp field).
+  - A list removed here and made again needed `Registry::restore` in `txtodo-store` (separate
+    commit): the registry tombstones a removed row, and `adopt` treats that row as "already
+    adopted" and leaves it removed. The same quirk would have kept a rolled-back pairing rekey
+    removed; left alone, noted here.
+  - `lists new X` is refused (`ALREADY_EXISTS`) when another list already shows `X`, not only when
+    `X`'s own id was renamed away, so two lists never show one name through this path. Two devices
+    renaming at once can still produce two lists with one shown name; `find_list` then refuses as
+    ambiguous and the creation name reaches either.
+  - To keep the file-length gate, `GlobalService::scoped/resolve` moved to
+    `global_service_helpers.rs` and `TxtodoService::new/workspace` to `server_actors.rs`.
+  - Known gap: lists reach other devices only through the existing offer path, which still creates
+    `remote/<id>/` mirrors until the "an own device's list offer makes lists/<name>/" line lands. A
+    list made on A shows on B as a Remote mirror in the meantime, and that mirror's shown name is
+    the offered one.
