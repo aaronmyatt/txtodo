@@ -75,6 +75,11 @@ pub(crate) fn prune_once(
     (now_ms, up_since_ms): (u64, u64),
     failed: &mut BTreeSet<DeviceId>,
 ) {
+    // A device the group left out hears nothing it can open, so every peer reads as quiet. Judging
+    // them would only mint a key of its own that nobody else holds (found by the lab).
+    if identity.peer_keys().dropped_from_group() {
+        return;
+    }
     touch_live(identity, now_ms);
     for (peer, why) in stale_peers(identity, cfg, now_ms, up_since_ms) {
         match identity.remove_device_because(peer, now_ms, why.into()) {

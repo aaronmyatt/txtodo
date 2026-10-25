@@ -121,3 +121,30 @@ fn a_peer_with_a_session_open_is_heard_now_however_old_its_last_hello() {
     round(&identity, &mut BTreeSet::new());
     assert!(!is_removed(&identity, device(1)), "the session just ended");
 }
+
+#[test]
+fn a_device_the_group_left_out_prunes_nobody() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let identity = identity_in(dir.path(), [7; 32]);
+    register(&identity, 1, NOW - 20 * DAY_MS);
+    for _ in 0..crate::peer_keys::DROPPED_AFTER {
+        identity.peer_keys().book(
+            Some(device(1)),
+            crate::peer_keys::PeerSignal::OpenFailed(crate::peer_keys::UNKNOWN_EPOCH),
+            "sync",
+        );
+    }
+    assert!(identity.peer_keys().dropped_from_group());
+    round(&identity, &mut BTreeSet::new());
+    assert!(
+        !is_removed(&identity, device(1)),
+        "silence is not the peer's fault here"
+    );
+    assert_eq!(identity.group_epoch(), 0);
+    identity.peer_keys().clear_epoch_misses();
+    round(&identity, &mut BTreeSet::new());
+    assert!(
+        is_removed(&identity, device(1)),
+        "heard again, judged again"
+    );
+}

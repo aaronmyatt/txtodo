@@ -434,6 +434,8 @@ multiplex every workspace's traffic — not done by this task).
   the newest of `last_seen`, `paired_at` and `up_since` (`prune_presence.rs`: moved to now by a tick more than
   10 minutes after the last, or than half the shortest threshold when that is less (the lab's 25 s), saved in `meta`, so a laptop that slept or was off for a week drops nobody on waking).
   A peer with a session open is touched each tick (`last_seen` is otherwise set only at its `Hello`).
+  A device that is `dropped_from_group` prunes nobody: it hears nothing it can open, so every peer reads as quiet
+  (the lab saw one wake, prune its old peers and mint a key of its own that nobody else held).
   `prune_config.rs`: `$TXTODO_PRUNE_PARKED_AFTER`/`$TXTODO_PRUNE_QUIET_AFTER`, else the same keys in the CLI's
   `config.toml` (the daemon reads that file itself; values are `7d`/`12h`/`90m`/`30s` or integer seconds), else
   the defaults; an unreadable value is skipped with a `prune_config_value_ignored` warning. Logs `peer_pruned`

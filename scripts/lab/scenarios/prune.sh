@@ -26,7 +26,10 @@ on_new_epoch() {
 
 # knows_it_was_dropped <device>: doctor's `group` row is a FAIL (Health.dropped_from_group).
 knows_it_was_dropped() {
-  tx "$1" --json doctor | jq -e '.[] | select(.name == "group" and .status == "FAIL")' >/dev/null
+  local rows
+  # doctor exits 1 on a FAIL, which is the row sought: read its output before `pipefail` sees it.
+  rows=$(tx "$1" --json doctor || true)
+  jq -e '.[] | select(.name == "group" and .status == "FAIL")' <<<"$rows" >/dev/null
 }
 
 scenario_main() {
