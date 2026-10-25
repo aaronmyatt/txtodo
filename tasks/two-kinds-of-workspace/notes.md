@@ -288,3 +288,14 @@ What changed in the plan, and what I chose between.
     name leaks, never content.
   - The file carrier (`--sync-dir`) has no peer to ask and still carries lists to anyone reading
     the folder, as it does the default (ADR 0029's known gap). The group key still gates it.
+- **list offers.** `WorkspaceCatalog::mirror_offered_list` (`workspace_catalog_lists.rs`): an offer
+  whose id is a list id (`is_list_id`) from an own device makes a folder in the lists root,
+  registers it under the offered id and opens it; from any other device it is ignored (debug log,
+  consumed). The offer carries the shown name, not the name the list was made under, and the
+  receiver cannot recover that from the id's hash. So the folder is named after the shown name when
+  that is a free list name, else after the id in lowercase; the id carries the identity either way.
+  Effects: on a device that received a renamed list, the "made under" name that `find_list` falls
+  back to is the shown name at the time, and `lists new <old name>` still refuses by id. Manual
+  `accept_offer` of a list goes through the same path and refuses a foreign one
+  (`FAILED_PRECONDITION`). The existing skip rule still holds: a list removed here is not made
+  again by the next offer (only `lists new` brings it back).

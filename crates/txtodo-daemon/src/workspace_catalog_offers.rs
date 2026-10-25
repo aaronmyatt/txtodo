@@ -35,10 +35,15 @@ impl WorkspaceCatalog {
             .identity
             .workspace_offers()
             .take(offering_device, workspace_id);
-        if offer.is_none() {
+        let Some(offer) = offer else {
             return Err(Status::not_found(format!(
                 "no pending offer for workspace {workspace_id} from device {offering_device}"
             )));
+        };
+        if crate::list_workspace::is_list_id(workspace_id) {
+            return self.mirror_offered_list(&offer)?.ok_or_else(|| {
+                Status::failed_precondition("only your own devices can offer you a list")
+            });
         }
         self.mirror_workspace(workspace_id)
     }

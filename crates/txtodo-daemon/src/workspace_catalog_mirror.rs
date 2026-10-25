@@ -18,7 +18,9 @@ use std::sync::{Arc, PoisonError};
 use tonic::Status;
 use txtodo_store::WorkspaceId;
 
+use crate::list_workspace::is_list_id;
 use crate::workspace_catalog::WorkspaceCatalog;
+use crate::workspace_offer_registry::PendingOffer;
 use crate::workspace_registry::WorkspaceEntry;
 
 impl WorkspaceCatalog {
@@ -49,16 +51,17 @@ impl WorkspaceCatalog {
             if !own_aliases.contains(&offer.workspace_id)
                 && !self.is_this_devices_alias(offer.workspace_id)
             {
-                mirrored += usize::from(self.mirror_offered(offer.workspace_id));
+                mirrored += usize::from(self.mirror_offered(&offer));
             }
             offers.take(offer.offering_device, offer.workspace_id);
         }
         mirrored
     }
 
-    /// One offer of [`Self::mirror_pending_offers`]: `true` when it made a new mirror.
-    fn mirror_offered(&self, id: WorkspaceId) -> bool {
-        match self.try_mirror_offered(id) {
+    /// One offer of [`Self::mirror_pending_offers`]: `true` when it made a new mirror (or list).
+    fn mirror_offered(&self, offer: &PendingOffer) -> bool {
+        let id = offer.workspace_id;
+        match self.try_mirror_offered(offer) {
             Ok(true) => log_mirrored(id),
             Ok(false) => false,
             Err(e) => log_mirror_failed(id, &e),
@@ -120,9 +123,15 @@ impl WorkspaceCatalog {
         id == crate::default_workspace::default_alias(self.open_args.identity.device())
     }
 
-    fn try_mirror_offered(&self, id: WorkspaceId) -> Result<bool, Status> {
+    fn try_mirror_offered(&self, offer: &PendingOffer) -> Result<bool, Status> {
+        let id = offer.workspace_id;
         if self.ever_registered(id)? {
             return Ok(false);
+        }
+        // A named list is made as a list, and only for an own device (task
+        // two-kinds-of-workspace); any other workspace is a Remote mirror.
+        if is_list_id(id) {
+            return Ok(self.mirror_offered_list(offer)?.is_some());
         }
         self.mirror_workspace(id)?;
         Ok(true)

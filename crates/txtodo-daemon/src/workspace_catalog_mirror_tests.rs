@@ -14,13 +14,13 @@ use crate::workspace_catalog::{OpenArgs, WorkspaceCatalog};
 use crate::workspace_offer_registry::PendingOffer;
 use crate::workspace_registry::WorkspaceRegistry;
 
-struct Fixture {
+pub(crate) struct Fixture {
     _dirs: tempfile::TempDir,
-    identity: Arc<DeviceIdentity>,
-    catalog: WorkspaceCatalog,
+    pub(crate) identity: Arc<DeviceIdentity>,
+    pub(crate) catalog: WorkspaceCatalog,
 }
 
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     let dirs = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let identity = Arc::new(
         DeviceIdentity::open_in_memory(dirs.path(), &FakeClock::new(1_000))
@@ -253,7 +253,7 @@ fn this_devices_own_default_alias_offered_back_is_not_mirrored() {
     assert!(f.identity.workspace_offers().list().is_empty(), "consumed");
 }
 
-fn register(f: &Fixture, peer: DeviceId, own: bool) {
+pub(crate) fn register(f: &Fixture, peer: DeviceId, own: bool) {
     let new = txtodo_store::NewDevice {
         device: peer,
         name: String::new(),

@@ -10,12 +10,14 @@ use std::path::{Path, PathBuf};
 use std::sync::PoisonError;
 
 use tonic::Status;
+use txtodo_model::DeviceId;
 use txtodo_store::WorkspaceId;
 
 use crate::list_workspace::ListName;
 use crate::rejoin_backup;
 use crate::workspace_catalog::WorkspaceCatalog;
 use crate::workspace_catalog_mirror::create_list_dir;
+use crate::workspace_offer_registry::PendingOffer;
 use crate::workspace_registry::WorkspaceEntry;
 
 impl WorkspaceCatalog {
@@ -66,18 +68,71 @@ impl WorkspaceCatalog {
                 "a list already shows the name {shown:?}; pick another, or rename that one"
             )));
         }
-        create_list_dir(&dir)
-            .map_err(|e| Status::internal(format!("create {}: {e}", dir.display())))?;
-        crate::join_target::require_empty(
+        let what = format!("cannot make list {}", name.as_str());
+        let entry = self.make_list_at(
+            id,
             &dir,
-            &format!("cannot make list {}", name.as_str()),
+            &what,
             "Move that folder away, then make the list again.",
         )?;
-        let entry = self.adopt_list(id, &dir)?;
+        Ok((entry, true))
+    }
+
+    /// Makes the list a peer offered, when the peer is one of this user's own devices: a folder in
+    /// the lists root, registered under the offered id and opened, so sync fills it. `None` for any
+    /// other peer (a list is private to the user's own devices). The folder is named after the
+    /// offered shown name when that is a free list name, else after the id: the receiver cannot
+    /// recover the name a renamed list was made under, and does not need it, since the id carries
+    /// the identity. Blocks, like [`Self::ensure_list`].
+    pub(crate) fn mirror_offered_list(
+        &self,
+        offer: &PendingOffer,
+    ) -> Result<Option<WorkspaceEntry>, Status> {
+        let id = offer.workspace_id;
+        if !self.is_own_device(offer.offering_device) {
+            log_list_offer_ignored(id, offer.offering_device);
+            return Ok(None);
+        }
+        let lists = self
+            .lists_root
+            .get()
+            .ok_or_else(|| Status::failed_precondition("this daemon has no folder for lists"))?;
+        let dir = lists.join(offered_folder(&offer.name, id, lists));
+        let what = format!("cannot take the list {id}");
+        let again = "Move that folder away; the device's next offer makes it again.";
+        self.make_list_at(id, &dir, &what, again).map(Some)
+    }
+
+    /// Makes `dir` (an empty `todo.txt` in it), refuses it when text is already there, registers it
+    /// under `id` and opens it so sync routes it at once. A failed open is logged, not returned: the
+    /// list stays registered and the next start's loader opens it.
+    fn make_list_at(
+        &self,
+        id: WorkspaceId,
+        dir: &Path,
+        what: &str,
+        instead: &str,
+    ) -> Result<WorkspaceEntry, Status> {
+        create_list_dir(dir)
+            .map_err(|e| Status::internal(format!("create {}: {e}", dir.display())))?;
+        crate::join_target::require_empty(dir, what, instead)?;
+        let entry = self.adopt_list(id, dir)?;
         if let Err(e) = self.ensure_open(id, &entry.root) {
             tracing::warn!(workspace_id = %id, error = %e, "list_open_failed");
         }
-        Ok((entry, true))
+        Ok(entry)
+    }
+
+    /// Whether `device` is one of this user's own: a direct own pairing, or one a direct own
+    /// device vouched for (ADR 0029's 2026-10-02 amendment).
+    pub(crate) fn is_own_device(&self, device: DeviceId) -> bool {
+        self.open_args
+            .identity
+            .store()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_own_device(device)
+            .unwrap_or(false)
     }
 
     /// The registry row for `id` when it is active.
@@ -195,4 +250,18 @@ fn folder_name(root: &Path) -> String {
     root.file_name()
         .map(|n| n.to_string_lossy().to_ascii_lowercase())
         .unwrap_or_default()
+}
+
+/// The folder name for a list taken from an offer: its shown name when that is a list name nothing
+/// in the lists root uses yet, else the id in lowercase (always a safe, unique folder name).
+fn offered_folder(shown: &str, id: WorkspaceId, lists: &Path) -> String {
+    ListName::parse(shown)
+        .ok()
+        .map(|name| name.as_str().to_owned())
+        .filter(|name| !lists.join(name).exists())
+        .unwrap_or_else(|| id.to_string().to_ascii_lowercase())
+}
+
+fn log_list_offer_ignored(id: WorkspaceId, device: DeviceId) {
+    tracing::debug!(workspace_id = %id, %device, "list_offer_ignored_not_own");
 }

@@ -233,6 +233,8 @@ mod layout_refs_tests;
 #[cfg(test)]
 mod layout_reload_tests;
 #[cfg(test)]
+mod list_offer_tests;
+#[cfg(test)]
 mod list_rpc_tests;
 #[cfg(test)]
 mod list_workspace_tests;
