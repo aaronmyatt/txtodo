@@ -230,6 +230,12 @@ repoint-service:
 check-relay-id-keychain timeout="180":
     scripts/check-relay-id-keychain.sh --timeout-s {{timeout}}
 
+# By-hand check (task two-kinds-of-workspace, ADR 0043): on a scratch daemon that never touches your
+# real data, a list line lands in the lists folder and a repo's change shows in `git diff`.
+# Check the two kinds of workspace (prints ok or the first failure)
+check-two-kinds:
+    scripts/check-two-kinds.sh
+
 # Desktop visual goldens (tasks/desktop-visual-regression): the light and dark Playwright projects
 # against the browser mock, which starts its own dev server. `goldens-check` compares without
 # writing; `goldens-update` rewrites the PNGs (review them before committing: `goldens-review`).
