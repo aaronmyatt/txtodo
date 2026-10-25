@@ -1,4 +1,4 @@
-2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan
+2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan @doing by:claude
 2026-10-25 daemon: repo_scan.rs, a pure walk (explicit stack, depth 8, skip list), tested on a temp tree +m11 @daemon @scan
 2026-10-25 daemon: register found repos as Repo (local .txtodo/ exclude first); scan after bind and every 6 h +m11 @daemon @scan
 2026-10-25 cli: txtodo repos [scan|add <dir>|roots add|rm]; doctor shows roots, count and last scan +m11 @cli @scan
