@@ -1,4 +1,4 @@
-2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists
+2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists @doing by:claude
 2026-10-25 cli: txtodo lists new|ls|rename|rm|import <dir>, and --list <name> on every command +m11 @cli @lists
 2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists
 2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists
