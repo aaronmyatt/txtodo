@@ -1,4 +1,4 @@
-2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists
+2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists @doing by:claude
 2026-10-25 proto: WorkspaceInfo.kind (additive); ListEnsure, ListRename, ListRemove RPCs +m11 @proto @lists
 2026-10-25 daemon: list-name check and list_id(name) with golden ids pinned; default_workspace.rs generalised +m11 @daemon @lists
 2026-10-25 daemon: ensure_list makes lists/<name>/ and registers it; no-rekey guard for every list id +m11 @daemon @lists
