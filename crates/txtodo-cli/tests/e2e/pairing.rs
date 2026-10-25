@@ -9,10 +9,7 @@
 //! sides' explicit confirmation, a declined SAS never confirming, and the identity_mode mismatch
 //! refusal (docs/questions.md Q6) never even reaching the network.
 //!
-//! [`a_paired_joiner_receives_the_initiators_real_file`] asserts the other half: the joiner then
-//! actually receives the initiator's file content over the LAN. That required
-//! `tasks/pairing-workspace-identity/` — the initiator's real `WorkspaceId` now rides the pairing
-//! code, and the joiner adopts it, so both sides route post-pairing sync messages to the same id.
+//! What a paired device then receives is `pairing_lists.rs`'s: the other device's list, unasked.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -25,10 +22,6 @@ use std::time::{Duration, Instant};
 use support::txtodod_binary;
 
 const SOCKET_WAIT: Duration = Duration::from_secs(20);
-/// Generous: real mDNS discovery plus the pairing relay's retry burst (`pairing_lan.rs::
-/// RETRY_INTERVAL`) takes a few seconds (`lan_loopback_converge.rs`), and a CI runner can be slow.
-const PAIR_CONVERGE_WAIT: Duration = Duration::from_secs(30);
-
 struct Daemon {
     child: Child,
 }
@@ -117,7 +110,7 @@ fn spawn_pair_offer(
 /// Reads lines from a still-running `txtodo pair`'s stdout until the code line (the one right
 /// after the "...other device):" marker) appears, and returns everything read so far plus the
 /// code itself — the process keeps running past this point (see `spawn_pair_offer`'s doc).
-fn read_until_code(reader: &mut BufReader<ChildStdout>) -> (String, String) {
+pub(crate) fn read_until_code(reader: &mut BufReader<ChildStdout>) -> (String, String) {
     let mut seen = String::new();
     let mut line = String::new();
     loop {
@@ -139,7 +132,10 @@ fn read_until_code(reader: &mut BufReader<ChildStdout>) -> (String, String) {
 }
 
 /// Reads the rest of a `txtodo pair` child's stdout until it exits, and waits for it.
-fn finish_pair_offer(mut child: Child, mut reader: BufReader<ChildStdout>) -> (bool, String) {
+pub(crate) fn finish_pair_offer(
+    mut child: Child,
+    mut reader: BufReader<ChildStdout>,
+) -> (bool, String) {
     let mut rest = String::new();
     reader
         .read_to_string(&mut rest)
@@ -158,25 +154,6 @@ fn stderr(o: &Output) -> String {
 
 fn missing_config(dir: &Path) -> PathBuf {
     dir.join("none.toml")
-}
-
-/// Polls `path`'s bytes against `want` until they match, or [`PAIR_CONVERGE_WAIT`] elapses.
-fn wait_for_file_convergence(path: &Path, want: &[u8]) {
-    let start = Instant::now();
-    loop {
-        if std::fs::read(path).ok().as_deref() == Some(want) {
-            return;
-        }
-        assert!(
-            start.elapsed() < PAIR_CONVERGE_WAIT,
-            "{} did not converge to the initiator's content within {PAIR_CONVERGE_WAIT:?}: got {:?}",
-            path.display(),
-            std::fs::read(path)
-                .ok()
-                .map(|b| String::from_utf8_lossy(&b).into_owned()),
-        );
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 /// The compact code's nine fields, in the exact order `commands::pair::PairingCode` declares them
@@ -224,7 +201,7 @@ fn assert_offer_preamble(seen: &str, code: &str) {
 
 /// Asserts both sides confirmed for real once a handshake completes — same wording, one side
 /// prints "Paired." (the joiner, once the group key lands) and the other does not.
-fn assert_confirmed(text: &str) {
+pub(crate) fn assert_confirmed(text: &str) {
     assert!(text.contains("Six words"), "{text}");
     assert!(text.contains("Confirmed on this device."), "{text}");
 }
@@ -235,7 +212,7 @@ struct PairedDevices {
     _a: Daemon,
     _b: Daemon,
     _dir_a: tempfile::TempDir,
-    dir_b: tempfile::TempDir,
+    _dir_b: tempfile::TempDir,
 }
 
 /// Runs one real `txtodo pair` ceremony between two fresh daemons and asserts every step of it:
@@ -277,36 +254,13 @@ fn pair_two_real_devices(a_todo: &str) -> PairedDevices {
         _a: a,
         _b: b,
         _dir_a: dir_a,
-        dir_b,
+        _dir_b: dir_b,
     }
 }
 
 #[test]
 fn two_real_devices_complete_a_real_pairing_ceremony() {
     let _paired = pair_two_real_devices("(A) buy milk id:01M2CZ00000000000000000A\n");
-}
-
-/// This is the only test in the repo that pairs two *genuinely independent* daemons (every other
-/// real-daemon pairing test — `txtodo-daemon`'s `pairing_lan.rs`, `pairing_relay.rs`,
-/// `relay_multiplex.rs` — pre-seeds both sides with the same `WorkspaceId` via
-/// `Daemon::start_with_workspace_id`/`seed_workspace_at`) and then asks whether sync actually
-/// converges. It was quarantined 2026-09-16 (`tasks/pairing-workspace-identity/`) because `txtodo
-/// pair` agreed a group id/key but never a workspace id, so `lan_session_dispatch.rs` dropped
-/// every post-pairing sync message as unrouted. Fixed by carrying the initiator's real
-/// `WorkspaceId` on the pairing code (`PairOfferResponse.workspace_id`) and having the joiner
-/// adopt it (`WorkspaceCatalog::adopt_offered_workspace_id`, first-registrant-wins) on
-/// `PairAccept` — this test is that fix's acceptance bar.
-#[test]
-fn a_paired_joiner_receives_the_initiators_real_file() {
-    let todo_content = "(A) buy milk id:01M2CZ00000000000000000A\n";
-    let paired = pair_two_real_devices(todo_content);
-    // The real acceptance bar: B's own disk file now holds A's real content, delivered over the
-    // real LAN transport (lan.rs's existing group-keyed sync engine) once pairing adopted a shared
-    // group id and key — not merely B's own pre-existing (empty) file.
-    wait_for_file_convergence(
-        &paired.dir_b.path().join("todo.txt"),
-        todo_content.as_bytes(),
-    );
 }
 
 #[test]
