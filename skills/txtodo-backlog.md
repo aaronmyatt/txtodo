@@ -23,8 +23,9 @@ other clone's lines, and never commit `.txtodo/`.
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
   already `x` done, which carry `@human` (a decision only a human makes), and which are already
   claimed (`@doing`).
-- Run `txtodo doctor` once. A `git` warning means this clone has no merge driver yet: tell the
-  human and name the fix, `txtodo git setup` (it only writes git config and `.gitattributes`). A
+- Run `txtodo doctor` once. txtodo readies each repo clone for git on its own (the daemon writes
+  inside `.git`); a `git` warning means it has not, say the daemon was not running: tell the human
+  and name the fix, `txtodo git setup` (it only writes git config and `.gitattributes`). A
   `mirror` warning means an older build's Remote mirror holds lines this clone lacks: tell the
   human and name the fix it prints. Don't run `txtodo workspace prune --repo-mirrors` on your own;
   it moves folders aside.

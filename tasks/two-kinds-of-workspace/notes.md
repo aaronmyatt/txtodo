@@ -581,3 +581,24 @@ What changed in the plan, and what I chose between.
   prints a pointer on stderr (so `--json` stays clean); it goes with the next. Sub-lists are not
   compared. `tests/e2e/mirrors.rs` registers a clone and a mirror (a folder in the daemon's `remote/`
   with a `txtodo.toml` name) and drives doctor, the dry run and `--yes`.
+- **git setup is automatic (owner's request, after the first cut).** The daemon readies every repo it
+  finds or registers (`repo_git.rs`), by editing files inside the clone's own `.git`, no `git` run:
+  `.txtodo/` in `info/exclude`; `todo.txt merge=txtodo` (and the root list's name, and `done.txt
+  merge=union`) in **`info/attributes`**; `[merge "txtodo"] driver = txtodo merge-driver %O %A %B`
+  in `config`. Each only if missing, so a scan re-applies them to repos registered before this.
+  Options and what I picked:
+  - Attributes in the tracked `.gitattributes` (what `txtodo git setup` writes; the person must commit
+    it) vs `.git/info/attributes` (**picked**): automatic means no uncommitted change appears in
+    someone's working tree. The cost is that it is per clone, not shared, which is fine because each
+    clone's own daemon writes it. `txtodo git setup` stays for a team that commits the file; `doctor`
+    and `git setup` read both places and treat the bare `txtodo` driver as set.
+  - Driver as an absolute path (what `git setup` writes, kept from going stale by using the PATH
+    entry) vs the bare `txtodo` (**picked** for the daemon, which does not know the CLI's path):
+    git runs it through the person's shell, so it needs `txtodo` on that `PATH`; if not, git reports a
+    failed merge driver and leaves the merge to the person, losing nothing. Known gap.
+  - A clone git holds `config.lock` on is skipped until the next scan.
+  Triggers: the first scan runs 5 s after the daemon starts (was 45), every 6 h, on `txtodo repos
+  scan`, and on every TUI start and desktop connect (`Repos { scan: true }`, no wait). The walk's
+  limits are unchanged: depth 8, 250k folders, 500 repos, and hidden folders, `node_modules`,
+  `target`, `vendor`, `dist`, `build` and a top-level `Library` are not entered. Not done: a TUI
+  that stays open, or a window shown again from the tray, does not rescan.

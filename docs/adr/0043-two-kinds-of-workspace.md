@@ -112,6 +112,13 @@ What shipped, and where it differs from the text above. The per-line record is
   follows ours, not "the same either way round" as first thought. The driver is
   `txtodo merge-driver`; `txtodo git setup` writes `.gitattributes`, the clone's `merge.txtodo.driver`
   and `.txtodo/` in `.git/info/exclude`; `doctor` has a `git` row per clone without it.
+- **Decision 7, automated (owner's request).** The person runs no git step. The daemon readies every
+  repo it finds or registers by editing files inside the clone's own `.git`: `.txtodo/` in
+  `info/exclude`, the list attributes in `info/attributes` (not the tracked `.gitattributes`, so no
+  uncommitted change appears in a working tree) and the merge driver in `config`, as the plain
+  command `txtodo merge-driver`, found on `PATH` when git runs it. `txtodo git setup` stays for a team
+  that wants `.gitattributes` committed. The scan runs 5 s after the daemon starts, every 6 hours, on
+  `txtodo repos scan`, and when the TUI starts or the desktop connects.
 - **Decision 8.** The scan only registers (it opens nothing), never re-registers a folder the person
   removed, and seeds `[$HOME]` as the one default root only when no environment variable moved the
   daemon's socket or registry. Roots and the last scan time live in two tables of `registry.db` made

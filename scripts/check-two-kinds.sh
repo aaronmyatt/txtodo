@@ -7,7 +7,8 @@
 #      `<data dir>/lists/scratch/todo.txt` (txtodo syncs a list between your own devices);
 #   2. a repo: in a fresh git repo holding a `todo.txt`, `txtodo add` registers the repo, the line
 #      shows up in `git diff todo.txt` (git syncs a repo, so a commit carries it), and `.txtodo/` is
-#      kept out of `git status` (the daemon wrote it to the clone's `.git/info/exclude`).
+#      kept out of `git status` (the daemon wrote it to the clone's `.git/info/exclude`), and the
+#      daemon set up the merge driver and the list attributes inside `.git` with no `git setup`.
 #
 # What it does not do: pair two devices (the e2e tests and `scripts/lab` do), or drive MCP (the mcp
 # crate's tests do; the CLI and MCP register a git root by the same rule).
@@ -82,6 +83,12 @@ if git -C "$REPO" status --porcelain | grep -q '\.txtodo'; then
     fail ".txtodo/ shows in git status (the clone's exclude was not written)"
 fi
 grep -qx '\.txtodo/' "$REPO/.git/info/exclude" || fail ".txtodo/ is not in .git/info/exclude"
+# The daemon readied the clone itself: no `txtodo git setup` was run.
+[ "$(git -C "$REPO" config --get merge.txtodo.driver)" = "txtodo merge-driver %O %A %B" ] ||
+    fail "merge.txtodo.driver was not set by the daemon"
+git -C "$REPO" check-attr merge -- todo.txt | grep -q 'merge: txtodo' ||
+    fail "git does not apply the txtodo merge driver to todo.txt"
+[ ! -e "$REPO/.gitattributes" ] || fail "the daemon wrote a tracked .gitattributes"
 txtodo workspace list | grep -q "$(basename "$REPO")" || fail "the repo is not a registered workspace"
 
 echo "check-two-kinds: ok -- a list lives in the lists folder, a repo's change is a git diff"
