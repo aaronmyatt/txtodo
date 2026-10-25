@@ -135,8 +135,8 @@ A removed device is refused at the first frame of a control session as well (its
 
 ## As built (agent, 2026-10-26)
 
-Everything the design asked for is in, bar the two lines only a person can do (the two-Mac check) and
-the lab run's result (see its todo line).
+Everything the design asked for is in, bar the one line only a person can do (the two-Mac check). The
+lab scenario `prune` passes (three devices, a1 the hub).
 
 - **Verdict** `prune_stale.rs`: parked and silent `prune_parked_after` (1 day), or silent
   `prune_quiet_after` (7 days); `0` turns a rule off. Silence counts from the newest of `last_seen`,
@@ -163,6 +163,15 @@ the lab run's result (see its todo line).
   an ok `peer` row per dropped device), TUI Settings › Devices, desktop Settings › Devices (a note per
   dropped row, a banner). The `peer` row is ok, not warn: a retired device would otherwise warn forever and
   nothing can acknowledge it. Looks of the TUI and desktop are not checked.
+- **Found by running it, not by reading it** (the two-daemon e2e and the lab each found something the
+  unit tests did not):
+  - Dial backoff against a removed device grows to a minute and nothing reset it, so a device paired
+    again waited that out (`LivePeers::dial_generation`: a pairing, a new group or a new epoch makes every
+    dial loop forget its backoff; the e2e fails with a long apart phase when this is off).
+  - A dropped device woke, heard nothing it could open, read every peer as quiet and pruned them, minting
+    a key of its own that nobody else held. A device that is `dropped_from_group` now prunes nobody.
+  - A dropped device is dialed only now and then, so it may see one or two `unknown_epoch` opens, not three:
+    a run of any length that has lasted two resync rounds counts as a drop too.
 - **Tests:** unit tests per piece; `tests/e2e/prune_repair.rs` runs two real daemons through freeze,
   prune, apart, the dropped flag, pairing again and catching up (38 s, left out of the default nextest
   set). Lab scenario `prune` runs three devices.
@@ -181,5 +190,24 @@ Known gaps:
 - When two devices prune at once the one with the higher id adopts the other's key and keeps its own
   drops until its clock prunes them again.
 - The keystore keeps the lower-epoch keys of a group a device left. Harmless, unread.
-- A pruned peer is pruned on each device by that device's own clock; pairing with one device brings the
-  data back through it, the others keep it listed as dropped.
+- A pruned peer is pruned on each device by that device's own clock. Pairing with one device brings the
+  data back through it (the lab: b1 pairs with a1 only, a2 gets b1's edits through a1), but a device that
+  had paired with it directly keeps it listed as dropped until it pairs again. A device that never paired
+  with it (a2 in the lab) has no row to mark; it just follows the new key.
+- A device that follows a grant still opens frames sealed under the old epoch from a device it knows no
+  row for, and does not refuse one the grant left out (its `left_out` list is not consulted at the
+  `Hello`). The dropped device cannot open the answer, so nothing syncs, but it is a door left ajar.
+
+## The two-Mac check (for the human, last open line)
+
+Needs this build on both Macs (the installed `txtodod` predates it; protocol 6 refuses an older one).
+1. On Mac A, set a short threshold so you do not wait a week: put `prune_quiet_after = "2m"` in
+   `~/.config/txtodo/config.toml` (or run `txtodod` with `TXTODO_PRUNE_QUIET_AFTER=2m`) and restart A's
+   daemon. Pair A and B if they are not paired.
+2. Shut Mac B's lid, or stop its daemon, for over 2 minutes, plus a minute for A's session to end.
+3. On A: `txtodo device list` shows B as `[pruned: not heard from for too long, removed_at=...]`. Add a
+   line on A.
+4. Wake B and add a line there. `txtodo doctor` on B has a `group FAIL dropped from the group`; the TUI
+   (Settings › Devices) and the desktop app show the same. Neither line reaches the other Mac.
+5. `txtodo pair` on A, `txtodo pair <code>` on B. Both lines should then be on both Macs.
+6. Take the threshold line out of the config again.
