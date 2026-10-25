@@ -1,5 +1,5 @@
-2026-10-25 daemon: repo_scan.rs, a pure walk (explicit stack, depth 8, skip list), tested on a temp tree +m11 @daemon @scan
-2026-10-25 daemon: register found repos as Repo (local .txtodo/ exclude first); scan after bind and every 6 h +m11 @daemon @scan
+2026-10-25 daemon: repo_scan.rs, a pure walk (explicit stack, depth 8, skip list), tested on a temp tree +m11 @daemon @scan @doing by:claude
+2026-10-25 daemon: register found repos as Repo (local .txtodo/ exclude first); scan after bind and every 6 h +m11 @daemon @scan @doing by:claude
 2026-10-25 cli: txtodo repos [scan|add <dir>|roots add|rm]; doctor shows roots, count and last scan +m11 @cli @scan
 2026-10-25 tests: the two-daemon harness seeds its synced workspace as a list; move the folder-sync e2e files over +m11 @test @cut
 2026-10-25 daemon: repo workspaces are never offered and get no relay, LAN or file route; e2e: a repo never reaches B +m11 @daemon @sync @cut
