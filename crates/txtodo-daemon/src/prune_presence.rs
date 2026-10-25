@@ -6,8 +6,21 @@
 
 use txtodo_store::IdentityStore;
 
+use crate::prune_stale::PruneConfig;
+
 /// A gap between two ticks longer than this means the device was away. The tick is seconds apart.
 pub(crate) const AWAY_GAP_MS: u64 = 10 * 60_000;
+
+/// The gap that counts as away under `cfg`: [`AWAY_GAP_MS`], or half the shortest threshold when
+/// that is shorter, so a device paused for longer than that never judges its peers on silence from
+/// while it was paused. The defaults (a day, a week) leave it at ten minutes.
+pub(crate) fn away_gap_ms(cfg: &PruneConfig) -> u64 {
+    [cfg.parked_after_ms, cfg.quiet_after_ms]
+        .into_iter()
+        .filter(|ms| *ms > 0)
+        .map(|ms| ms / 2)
+        .fold(AWAY_GAP_MS, u64::min)
+}
 
 /// The tick time is written at most this often: a restart is judged against it, to within a minute.
 const SAVE_EVERY_MS: u64 = 60_000;
@@ -39,8 +52,8 @@ impl Presence {
 
     /// One tick at `now_ms`: the time this device came back, which is now after an away gap. What
     /// has to be written (the new `up_since`, or a tick time not saved for a minute) goes to `store`.
-    pub(crate) fn tick(&mut self, store: &mut IdentityStore, now_ms: u64) -> u64 {
-        let away = now_ms.saturating_sub(self.last_tick_ms) > AWAY_GAP_MS;
+    pub(crate) fn tick(&mut self, store: &mut IdentityStore, now_ms: u64, away_gap_ms: u64) -> u64 {
+        let away = now_ms.saturating_sub(self.last_tick_ms) > away_gap_ms;
         if away {
             self.up_since_ms = now_ms;
             save(store, UP_SINCE_KEY, now_ms);

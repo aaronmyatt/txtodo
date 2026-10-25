@@ -432,7 +432,7 @@ multiplex every workspace's traffic — not done by this task).
   row: parked (`peer_keys`) and silent for `prune_parked_after` (default 1 day), or merely silent for
   `prune_quiet_after` (default 7 days); `0` is that rule off, both off starts no task. Silence is counted from
   the newest of `last_seen`, `paired_at` and `up_since` (`prune_presence.rs`: moved to now by a tick more than
-  10 minutes after the last, saved in `meta`, so a laptop that slept or was off for a week drops nobody on waking).
+  10 minutes after the last, or than half the shortest threshold when that is less (the lab's 25 s), saved in `meta`, so a laptop that slept or was off for a week drops nobody on waking).
   A peer with a session open is touched each tick (`last_seen` is otherwise set only at its `Hello`).
   `prune_config.rs`: `$TXTODO_PRUNE_PARKED_AFTER`/`$TXTODO_PRUNE_QUIET_AFTER`, else the same keys in the CLI's
   `config.toml` (the daemon reads that file itself; values are `7d`/`12h`/`90m`/`30s` or integer seconds), else

@@ -47,6 +47,7 @@ async fn run(identity: Arc<DeviceIdentity>, clock: Arc<dyn Clock>, cfg: PruneCon
             .unwrap_or_else(PoisonError::into_inner);
         Presence::load(&store)
     };
+    let away_gap_ms = crate::prune_presence::away_gap_ms(&cfg);
     let mut failed = BTreeSet::new();
     // The first tick fires at once; `Presence::tick` has already moved `up_since` to now when this
     // device was away, so no peer is judged on silence from before that.
@@ -60,7 +61,7 @@ async fn run(identity: Arc<DeviceIdentity>, clock: Arc<dyn Clock>, cfg: PruneCon
                 .store()
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
-            presence.tick(&mut store, now_ms)
+            presence.tick(&mut store, now_ms, away_gap_ms)
         };
         prune_once(&identity, &cfg, (now_ms, up_since_ms), &mut failed);
     }
