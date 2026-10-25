@@ -85,3 +85,26 @@ fn a_write_still_registers_the_folder() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("call mum"));
 }
+
+/// A git checkout's root that holds a list registers on its first read (ADR 0043: a repo is never
+/// offered to a peer, and the daemon keeps `.txtodo/` out of the clone's git).
+#[test]
+fn reading_a_git_root_with_a_list_registers_it_and_keeps_it_out_of_git() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git/info")).unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "water the fern\n").unwrap();
+
+    let out = daemon.txtodo(dir.path(), &["listall"]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{err}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("water the fern"));
+
+    let list = daemon.txtodo(state_dir.path(), &["workspace", "list"]);
+    let listed = String::from_utf8_lossy(&list.stdout);
+    let here = std::fs::canonicalize(dir.path()).unwrap();
+    assert!(listed.contains(&here.display().to_string()), "{listed}");
+    let exclude = std::fs::read_to_string(dir.path().join(".git/info/exclude")).unwrap();
+    assert!(exclude.lines().any(|l| l == ".txtodo/"), "{exclude}");
+}

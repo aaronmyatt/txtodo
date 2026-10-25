@@ -156,7 +156,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - A read-only command (list*, lint, env, log, blame, checkout, open, `conflicts`, `prune` without
   `--yes`, `sub … <one of those>`) never registers a folder: against the global daemon, in a
   folder no registered workspace holds, it fails naming `txtodo workspace add` and `--no-daemon`
-  (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers.
+  (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers, and so does a
+  read in a git checkout's root that holds a list (`is_repo_root`, task two-kinds-of-workspace: a repo is never
+  offered to a peer, and sidecar identity stamps nothing).
 - `sub ITEM CMD…`: ITEM is a root line number, or a `ref:` slug path (`trip`, `trip/flights`)
   resolved list by list through `RefDir` (`commands/sub_slug.rs`, task cli-sub-by-slug). A
   `--dir` strictly inside a registered workspace re-runs as `--dir <root> --sublist <dir>/todo.txt`

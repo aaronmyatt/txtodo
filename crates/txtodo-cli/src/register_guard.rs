@@ -1,4 +1,6 @@
-//! A command that only reads never registers a folder (task cli-no-implicit-register). The global
+//! A command that only reads never registers a folder (task cli-no-implicit-register), except a git
+//! checkout's root that holds a list: a repo is never offered to a peer and sidecar identity stamps
+//! nothing, so the first read there registers it like the first write (ADR 0043). The global
 //! daemon opens and registers any folder a request names, and on register it walked the lists and
 //! could stamp `id:` into every line; so `txtodo listall` in an old checkout once rewrote ~120
 //! files. Now a read-only command run where no registered workspace is checks first, and fails
@@ -63,6 +65,14 @@ pub fn is_read_only(command: &Command) -> bool {
     }
 }
 
+/// `dir` is a git checkout's root that holds a list (`.git` is a folder in a clone and a file in a
+/// linked worktree, and `Path::exists` is true for both). Such a folder registers on its first use,
+/// read or write.
+/// Ref: <https://doc.rust-lang.org/std/path/struct.Path.html#method.exists>
+pub fn is_repo_root(dir: &Path) -> bool {
+    dir.join(".git").exists() && txtodo_workspace_paths::is_workspace_dir(dir)
+}
+
 /// `dir`, or one of its ancestors, is a registered root.
 pub fn is_inside(dir: &Path, roots: &[PathBuf]) -> bool {
     roots.iter().any(|root| dir.starts_with(root))
@@ -89,7 +99,7 @@ pub fn scoped_list(here: &Path, root: &Path) -> Option<String> {
 
 /// Against the global daemon (`selector` set): a `dir` strictly inside a registered workspace is
 /// `Scoped` to it (unless a `--sublist` already scopes the run); a read-only `command` in a folder no
-/// registered workspace holds is refused with the fix. A per-folder daemon serves its one
+/// registered workspace holds, and that is no git root with a list, is refused with the fix. A per-folder daemon serves its one
 /// workspace; an older daemon without `WorkspaceList` is let through, as before.
 pub fn check(
     daemon: &mut Daemon,
@@ -117,7 +127,7 @@ pub fn check(
             return Ok(Some(Scoped { root, list }));
         }
     }
-    if !is_read_only(command) || is_inside(&here, &roots) {
+    if !is_read_only(command) || is_inside(&here, &roots) || is_repo_root(&here) {
         return Ok(None);
     }
     Err(CliError::Message(format!(
@@ -204,6 +214,31 @@ mod tests {
             "the root itself is not scoped"
         );
         assert_eq!(scoped_list(Path::new("/w/other"), root), None);
+    }
+
+    #[test]
+    fn only_a_git_root_that_holds_a_list_registers_on_a_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let folder = |name: &str, git: bool, list: bool| {
+            let dir = tmp.path().join(name);
+            std::fs::create_dir(&dir).unwrap();
+            if git {
+                std::fs::create_dir(dir.join(".git")).unwrap();
+            }
+            if list {
+                std::fs::write(dir.join("todo.txt"), "").unwrap();
+            }
+            dir
+        };
+        assert!(is_repo_root(&folder("repo", true, true)));
+        assert!(!is_repo_root(&folder("plain", false, true)), "no git");
+        assert!(!is_repo_root(&folder("bare", true, false)), "no list");
+        let worktree = folder("worktree", false, true);
+        std::fs::write(worktree.join(".git"), "gitdir: elsewhere\n").unwrap();
+        assert!(
+            is_repo_root(&worktree),
+            "a linked worktree's .git is a file"
+        );
     }
 
     #[test]
