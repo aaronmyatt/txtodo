@@ -89,3 +89,38 @@ git already carries a repo's files. Syncing them a second way gives two truths.
 - **A `notify` watch on `$HOME` to find repos.** Too heavy on FSEvents and inotify limits.
 - **A hidden daemon flag so tests keep syncing plain folders.** It keeps the code this ADR retires
   alive for tests only. The test harness seeds a list instead.
+
+## As built (2026-10-25)
+What shipped, and where it differs from the text above. The per-line record is
+`tasks/two-kinds-of-workspace/notes.md`.
+- **Decision 3 went further than written.** The default is no longer offered either: it only ever
+  went out under an alias for a foreign peer to mirror, and an own device skips it. A foreign peer's
+  sync session now carries neither the default nor a list; `default_alias`, the foreign-default
+  Remote mirror and its skip pass are deleted. Only a list is offered, by id shape.
+- **Decision 5.** A workspace registers relay, LAN and file-carrier routes only if it is the default
+  or inside the lists folder (`WorkspaceCatalog::syncs`). An offer that is not a list, from an older
+  build, is consumed and ignored. Pairing no longer re-keys a joiner's folder to the initiator's id
+  (that code is deleted). `MirrorsRetire` (one RPC) moves each old `remote/<id>/` mirror into a
+  `.rejoin-backup-` sibling and un-registers it; `workspace prune --repo-mirrors` drives it, and
+  `doctor` has a `mirror` row per mirror. `workspace bind` still works this release and says on stderr
+  that it is going.
+- **Decision 6.** A read or a write in a git root that holds a list registers it (CLI
+  `register_guard::is_repo_root`; MCP `serves_here`). A plain unregistered folder still refuses a read
+  and falls back to the default with a note.
+- **Decision 7.** `merge3` keeps, per distinct line, the base copies less what either side deleted
+  plus what either side added, so the *set* of lines is the same whichever side is ours. The *order*
+  follows ours, not "the same either way round" as first thought. The driver is
+  `txtodo merge-driver`; `txtodo git setup` writes `.gitattributes`, the clone's `merge.txtodo.driver`
+  and `.txtodo/` in `.git/info/exclude`; `doctor` has a `git` row per clone without it.
+- **Decision 8.** The scan only registers (it opens nothing), never re-registers a folder the person
+  removed, and seeds `[$HOME]` as the one default root only when no environment variable moved the
+  daemon's socket or registry. Roots and the last scan time live in two tables of `registry.db` made
+  `IF NOT EXISTS`, so the schema version did not move. `txtodo repos` lists, scans and edits roots.
+  The cost check (RSS and boot time with many repos registered) has not been done.
+- **Tests.** The two-daemon harness serves each test workspace as a list (`$TXTODO_LISTS_DIR` for the
+  `--dir` bridge, `list_dir_in` in global mode); no hidden daemon flag was added. Removed with the
+  behaviour they proved: the foreign-default and joiner-gains-a-folder e2e tests, and the bind e2e.
+- **Known gaps.** The file carrier is still ungated. A list's name still rides offers to a foreign
+  peer in the group (it has no route there). Mirrors an older build made stay registered until
+  `prune --repo-mirrors`. Only a repo's root `todo.txt` is compared by `doctor`. A tagged-identity
+  daemon would still stamp `id:` into a repo list on its first read.

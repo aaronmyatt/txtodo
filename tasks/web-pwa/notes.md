@@ -172,8 +172,11 @@ service worker: caches the shell + .wasm only, never list data
   `web` field, for `na` rows only (tray, quick-add, pin on top, upgrade, folder dialog). A missing
   field means "same as desktop". `keys.parity.test.ts` checks that `na` rows are hidden in a web
   build.
-- **Workspaces:** there are no folders. A browser workspace is a Remote mirror, accepted through
-  the existing workspace offers (ADR 0021: one group, many workspaces, one link).
+- **Workspaces:** there are no folders. A browser workspace is a list (ADR 0043): a list made on a
+  paired device reaches the browser with no accept, over the existing group and link (ADR 0021: one
+  group, many workspaces, one link), and a list made in the browser is the same list by name. It
+  gets lists only, never a repo: a repo travels with git, and the daemon offers nothing else. The
+  Remote mirror this note first named is retired (2026-10-25).
 
 ## Risks
 

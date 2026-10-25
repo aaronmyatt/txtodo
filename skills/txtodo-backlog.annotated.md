@@ -30,10 +30,11 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
   already `x` done, which carry `@human` (a decision only a human makes), and which are already
   claimed (`@doing`).
-- Run `txtodo doctor` once. A `bind` warning means this folder holds a list of its own while
-  another device syncs a list of the same name here as a Remote workspace, so you would be working
-  the wrong list. Tell the human and name the fix it prints (`txtodo workspace bind <id>`); it
-  moves this folder's own list aside, so don't run it on your own.
+- Run `txtodo doctor` once. A `git` warning means this clone has no merge driver yet: tell the
+  human and name the fix, `txtodo git setup` (it only writes git config and `.gitattributes`). A
+  `mirror` warning means an older build's Remote mirror holds lines this clone lacks: tell the
+  human and name the fix it prints. Don't run `txtodo workspace prune --repo-mirrors` on your own;
+  it moves folders aside.
 
 > **Why:** No surprises mid-loop. The agent sees the whole tree first, so it never starts a task
 > that is already claimed, done, or waiting on you.

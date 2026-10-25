@@ -9,6 +9,12 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
 `todo_batch`, `todo_history`, `todo_raw`, `todo_notes_get`, `todo_notes_set`) or the equivalent
 `txtodo` CLI commands — never by hand-editing the files while a daemon owns them.
 
+Where the backlog lives decides how it syncs. A **list** (the default workspace, or a named one
+under txtodo's own lists folder) syncs between the user's own devices, and txtodo does nothing
+for anyone else. A **repo** (a git checkout holding a `todo.txt`) is never synced by txtodo: git
+carries it, so commit `todo.txt` and `tasks/` like any file, expect `git pull` to bring in the
+other clone's lines, and never commit `.txtodo/`.
+
 ## 1. Read the backlog
 
 - `todo_list` the root `todo.txt` in full before touching anything. Every `todo.txt` under the
@@ -17,10 +23,11 @@ Work it through the txtodo MCP tools (`todo_list`, `todo_search`, `todo_get`, `t
 - Build a mental (or scratch) map of: which top-level lines have a `ref:` sub-backlog, which are
   already `x` done, which carry `@human` (a decision only a human makes), and which are already
   claimed (`@doing`).
-- Run `txtodo doctor` once. A `bind` warning means this folder holds a list of its own while
-  another device syncs a list of the same name here as a Remote workspace, so you would be working
-  the wrong list. Tell the human and name the fix it prints (`txtodo workspace bind <id>`); it
-  moves this folder's own list aside, so don't run it on your own.
+- Run `txtodo doctor` once. A `git` warning means this clone has no merge driver yet: tell the
+  human and name the fix, `txtodo git setup` (it only writes git config and `.gitattributes`). A
+  `mirror` warning means an older build's Remote mirror holds lines this clone lacks: tell the
+  human and name the fix it prints. Don't run `txtodo workspace prune --repo-mirrors` on your own;
+  it moves folders aside.
 
 ## 2. Flesh out sub-todos and notes
 
