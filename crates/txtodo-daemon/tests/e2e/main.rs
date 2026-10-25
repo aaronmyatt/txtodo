@@ -32,6 +32,7 @@ mod migrate_identity;
 mod nested_ref_sync;
 mod pairing_lan;
 mod pairing_relay;
+mod prune_repair;
 mod ready_log_ordering;
 mod relay_auto_dial;
 mod relay_converge;
