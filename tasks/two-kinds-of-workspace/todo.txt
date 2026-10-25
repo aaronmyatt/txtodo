@@ -1,4 +1,4 @@
-2026-10-25 cli: txtodo merge-driver %O %A %B over merge3; a real git merge in a temp repo +m11 @cli @git
+2026-10-25 cli: txtodo merge-driver %O %A %B over merge3; a real git merge in a temp repo +m11 @cli @git @doing by:claude
 2026-10-25 cli: txtodo git setup (.gitattributes, merge.txtodo.driver, .git/info/exclude), idempotent, --dry-run +m11 @cli @git
 2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git
 2026-10-25 cli: e2e: two clones add and complete lines, git pull, every line kept +m11 @cli @test @git
