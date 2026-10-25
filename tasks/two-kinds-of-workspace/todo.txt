@@ -1,4 +1,4 @@
-2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git
+2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git @doing by:claude
 2026-10-25 cli: e2e: two clones add and complete lines, git pull, every line kept +m11 @cli @test @git
 2026-10-25 store: scan_roots table in registry.db +m11 @store @scan
 2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan
