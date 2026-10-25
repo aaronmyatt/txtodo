@@ -37,3 +37,11 @@ Remote one, and offer "use the synced list here" in one confirmed step.
 ## Open questions
 
 - None that block. Folder picker for non-matching names is deferred, not decided against.
+
+## Closed 2026-10-25 (agent)
+
+Superseded by ADR 0043 (`tasks/two-kinds-of-workspace`). Repos no longer sync through txtodo, so no
+Remote mirror is made for a repo cloned on two devices and there is nothing to bind; lists share an
+id by name and need no bind. `workspace bind` prints a pointer this release and goes the next. The
+TUI/desktop hint and confirm this task asked for are not built, on purpose. `txtodo doctor` has a
+`mirror` row for an older build's mirrors, and `workspace prune --repo-mirrors` retires them.
