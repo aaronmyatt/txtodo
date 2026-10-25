@@ -198,7 +198,20 @@ fn devices(state: &AppState) -> Vec<SRow> {
         "Scan a code",
         "A terminal has no camera: paste the code.",
     ));
+    if state.settings.dropped_from_group {
+        out.push(info(
+            "Dropped from the group",
+            "the other devices no longer share their key with this one: pair again, here or on one of them",
+        ));
+    }
     for d in &state.settings.devices {
+        if !d.dropped.is_empty() {
+            out.push(info(
+                &d.name,
+                format!("{}; pair again to bring it back", d.dropped),
+            ));
+            continue;
+        }
         let seen = if d.is_self {
             "this device".to_owned()
         } else if d.last_seen_ms == 0 {

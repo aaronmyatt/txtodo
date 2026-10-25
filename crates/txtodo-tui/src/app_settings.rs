@@ -162,14 +162,7 @@ pub async fn refresh(daemon: &mut Daemon, state: &mut AppState) -> Result<(), Da
             })
             .collect();
     }
-    if let Ok(list) = daemon.device_list().await {
-        state.settings.devices = list
-            .devices
-            .into_iter()
-            .filter(|d| !d.removed)
-            .map(device)
-            .collect();
-    }
+    refresh_devices(daemon, state).await;
     if let Ok(list) = daemon.token_list().await {
         state.settings.tokens = list.tokens.into_iter().map(token).collect();
     }
@@ -182,12 +175,41 @@ pub async fn refresh(daemon: &mut Daemon, state: &mut AppState) -> Result<(), Da
     Ok(())
 }
 
+/// The devices card: paired devices, the ones the group dropped, and whether this device was
+/// dropped. Each read that fails keeps what the card had.
+async fn refresh_devices(daemon: &mut Daemon, state: &mut AppState) {
+    if let Ok(list) = daemon.device_list().await {
+        state.settings.devices = list
+            .devices
+            .into_iter()
+            .filter(|d| !d.removed || dropped_reason(&d.removed_reason).is_some())
+            .map(device)
+            .collect();
+    }
+    if let Ok(health) = daemon.health().await {
+        state.settings.dropped_from_group = health.dropped_from_group;
+    }
+}
+
+/// What the group dropping a device reads as; `None` for any other removal (by hand, unknown or a
+/// word this build does not know), which Settings does not list.
+fn dropped_reason(reason: &str) -> Option<&'static str> {
+    match reason {
+        "pruned_quiet" => Some("pruned: not heard from for too long"),
+        "pruned_parked" => Some("pruned: its keys did not match for too long"),
+        "left_out" => Some("dropped by another device"),
+        _ => None,
+    }
+}
+
 fn device(d: pb::Device) -> DeviceRow {
+    let dropped = d.removed.then(|| dropped_reason(&d.removed_reason));
     DeviceRow {
         id: d.id,
         name: d.name,
         is_self: d.is_self,
         last_seen_ms: d.last_seen_ms,
+        dropped: dropped.flatten().unwrap_or_default().to_owned(),
     }
 }
 

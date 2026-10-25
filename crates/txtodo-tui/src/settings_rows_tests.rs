@@ -140,3 +140,38 @@ fn lists_come_first_with_their_kind_and_a_new_list_row_follows_them() {
     assert!(new_list.is_some_and(|n| rows[n].field), "a field row");
     assert!(new_list < add, "New list sits above Add a workspace");
 }
+
+#[test]
+fn a_dropped_device_and_a_dropped_self_each_say_so() {
+    use crate::state_settings::DeviceRow;
+    let mut state = AppState::fixture();
+    state.settings.devices = vec![
+        DeviceRow {
+            id: "01A".to_owned(),
+            name: "laptop".to_owned(),
+            dropped: "pruned: not heard from for too long".to_owned(),
+            ..DeviceRow::default()
+        },
+        DeviceRow {
+            id: "01B".to_owned(),
+            name: "phone".to_owned(),
+            last_seen_ms: 1,
+            ..DeviceRow::default()
+        },
+    ];
+    let before = rows(SettingsCard::Devices, &state);
+    assert!(before.iter().all(|r| r.label != "Dropped from the group"));
+    let laptop = before.iter().find(|r| r.label == "laptop").expect("a row");
+    assert!(laptop.value.contains("pruned") && laptop.value.contains("pair again"));
+    assert!(laptop.remove.is_none(), "already gone: nothing to revoke");
+    let phone = before.iter().find(|r| r.label == "phone").expect("a row");
+    assert_eq!(phone.remove, Some(Act::RevokeDevice("01B".to_owned())));
+
+    state.settings.dropped_from_group = true;
+    let after = rows(SettingsCard::Devices, &state);
+    let banner = after
+        .iter()
+        .find(|r| r.label == "Dropped from the group")
+        .expect("a banner row");
+    assert!(banner.value.contains("pair again"));
+}

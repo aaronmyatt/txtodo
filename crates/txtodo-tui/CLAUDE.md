@@ -43,6 +43,10 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   the other devices keep it) and renaming the open one is `ListRename`, found by the folder name it
   was made under; any other workspace keeps `WorkspaceRemove` / `WorkspaceRename`. Manifest
   `workspace.new_list`.
+- Pruning (task `peer-prune`, ADR 0044): Settings › Devices lists a device the group dropped (pruned, or dropped
+  by another device) as an info row with why, no revoke, and a `Dropped from the group` banner row while
+  `Health.dropped_from_group` is set (`DeviceRow.dropped`, `SettingsView.dropped_from_group`, `app_settings.rs`).
+  A device removed by hand stays hidden, as before.
 
 ## Parity
 `specs/client-parity.toml` is the one list of user-facing actions and where this client and the
