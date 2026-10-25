@@ -210,7 +210,15 @@ impl TxtodoService {
                     .collect(),
             })
             .collect();
-        let pending_ops = pending_ops_since(self, &active_peers)?;
+        // A parked peer holds no key we share (`peer_keys.rs`), so no sync reaches it until it pairs
+        // again; counting it held the number at everything made since it was last seen (3930 and
+        // growing, on 2026-10-17). It stays in `peers`, marked parked.
+        let reachable: Vec<DeviceRow> = active_peers
+            .iter()
+            .filter(|r| !keys.is_parked(r.device))
+            .cloned()
+            .collect();
+        let pending_ops = pending_ops_since(self, &reachable)?;
         Ok(Response::new(pb::SyncStatusResponse {
             peers,
             pending_ops,
