@@ -517,3 +517,30 @@ What changed in the plan, and what I chose between.
   `GlobalDaemon` gained `spawn_with` (env, for a 1 s redial) and `command` (the `txtodo` Command it
   already ran, for stdin). The ceremony tests that stay in `pairing.rs` (QR, SAS, refusals) still run
   on `--dir` daemons: they test the ceremony, not what syncs after it.
+- **the cut: repos leave sync.** Three places, one test each.
+  - **Offers** (`control_session.rs::outbound_offers`): only a list is offered, by id shape
+    (`is_list_id`: the control session has no catalog to ask). That also stops offering the
+    **default**, which I had not planned to touch here: it was only ever offered under an alias for a
+    foreign peer to mirror, and an own device skips it. A mirror of a repo-kind folder gets no route
+    now, so the alias mirror would have arrived empty. So the foreign default is gone with this line
+    (the retire line is left with the receiving side and the alias helpers).
+  - **Routes** (`workspace_catalog_open.rs`): `open_workspace_full` takes `syncs`, from
+    `WorkspaceCatalog::syncs` (the default, or inside the lists root). Only then does it register on
+    the relay, file-carrier and LAN tables. `relay::start` still runs for every workspace, because
+    it sets the device's relay status (`Health.relay_url`, "bound as …"), and a device whose open
+    workspaces are all repos should still say so; its dial task is only started for a syncing one,
+    since the task would die with a repo.
+  - **Pairing** (`adopt_offered_workspace_id`): the loop that moved a rekeyed workspace's routes is
+    gone. Only a repo reaches the rekey now (the default and lists return first), and a repo has
+    none. The rekey itself (a joiner's empty folder taking the initiator's id) is now meaningless and
+    is its own deletion line.
+  - Tests: `control_session_tests::only_lists_are_offered`; `lists_sync::a_repo_is_never_offered_and_
+    never_reaches_the_other_device` (a plain folder added on A, a list beside it as the clock: once
+    the list is on B, four more redials, and B holds no mirror and none of the repo's text);
+    `a_device_that_is_not_own_gets_no_list` now expects nothing at all for a foreign device, with
+    "a session started on both logs" as its clock. Removed with the behaviour they proved:
+    `default_workspace_foreign` (foreign default as a Remote mirror), `default_workspace_pairing`
+    (a joiner gaining an offered folder as a mirror), `workspace_bind` e2e. `two_devices.rs` is what
+    is left of the first: the pairing helpers `lists_sync` uses.
+  - Known gaps: nothing gates the file carrier for a foreign peer (carried over); the lists' names
+    still ride offers to a foreign peer in the group (they have no route there).
