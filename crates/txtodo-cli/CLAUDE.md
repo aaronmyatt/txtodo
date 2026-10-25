@@ -98,6 +98,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   Device-level like `workspace`. `Command::is_registry` names the three device-level families
   (`workspace`, `lists`, `repos`) so `main` neither adopts a layout nor announces the default for them.
   `txtodo doctor` gets one `repos` OK row (count, roots, last scan) beside the `git` WARN rows.
+  On macOS `repos`, `repos roots` and that row also say which of `~/Desktop`, `~/Documents`, `~/Downloads`,
+  `~/Movies`, `~/Music`, `~/Pictures` the scan leaves alone (macOS asks permission to read them) and how to scan
+  one: `repos roots add ~/Documents` (`repos.rs::skipped_note`).
 - `workspace prune --repo-mirrors [--yes]` (task two-kinds-of-workspace, `commands/workspace_mirrors.rs`):
   `MirrorsRetire` for every Remote mirror an older build made (`remote/<id>/`): a dry run listing each and
   where it would go, and with `--yes` moves its text and store into a `.rejoin-backup-` sibling and

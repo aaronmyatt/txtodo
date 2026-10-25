@@ -95,6 +95,9 @@ fn run_ls(daemon: &mut Daemon, as_json: bool) -> Result<(), CliError> {
             repos.len(),
             summary(&scan, now_ms())
         );
+        if let Some(note) = skipped_note(&scan.roots) {
+            println!("TODO: {note}");
+        }
     }
     Ok(())
 }
@@ -163,6 +166,9 @@ fn run_roots(
     if got.roots.is_empty() && !as_json {
         println!("TODO: no scan roots; the daemon looks for no repos");
     }
+    if let (false, Some(note)) = (as_json, skipped_note(&got.roots)) {
+        println!("TODO: {note}");
+    }
     Ok(())
 }
 
@@ -210,6 +216,38 @@ pub fn summary(scan: &pb::ReposResponse, now_ms: u64) -> String {
     format!("{roots}; {last}")
 }
 
+/// What a scan leaves alone on macOS, for `repos`, `repos roots` and `doctor`: the home folder's
+/// gated folders that a root walks past (the home folder is one) and none links. Reading one raises
+/// a system permission prompt, so the daemon skips them until a root is at or inside one. `None`
+/// when nothing is left alone (not macOS, no root above them, or all linked).
+pub fn skipped_note(roots: &[String]) -> Option<String> {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from)?;
+    let home = home.canonicalize().unwrap_or(home);
+    note_for(
+        &txtodo_workspace_paths::protected_home_folders(&home),
+        roots,
+    )
+}
+
+fn note_for(gated: &[std::path::PathBuf], roots: &[String]) -> Option<String> {
+    let roots: Vec<&std::path::Path> = roots.iter().map(std::path::Path::new).collect();
+    let skipped: Vec<String> = gated
+        .iter()
+        .filter(|g| roots.iter().any(|r| g.starts_with(r) && *g != r))
+        .filter(|g| !roots.iter().any(|r| r.starts_with(g)))
+        .filter_map(|g| g.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .collect();
+    if skipped.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "the scan leaves {} alone: macOS asks before a program reads them. \
+         `txtodo repos roots add ~/{}` scans one (macOS then asks once)",
+        skipped.join(", "),
+        skipped[0]
+    ))
+}
+
 /// `just now`, `5 min ago`, `3 h ago`, `2 d ago`.
 fn ago(ms: u64) -> String {
     let secs = ms / 1000;
@@ -241,6 +279,38 @@ mod tests {
         assert_eq!(s, "scanning 1 root(s): /home/a; last scan 3 h ago");
         assert!(summary(&scan(&[], 0, false), 5).contains("no scan roots; never scanned yet"));
         assert!(summary(&scan(&["/x", "/y"], 0, true), 5).contains("a scan is running"));
+    }
+
+    #[test]
+    fn the_note_names_the_gated_folders_a_root_walks_past_and_none_links() {
+        use std::path::PathBuf;
+        let gated: Vec<PathBuf> = ["Desktop", "Documents", "Downloads"]
+            .iter()
+            .map(|n| PathBuf::from("/Users/a").join(n))
+            .collect();
+        let home = vec!["/Users/a".to_owned()];
+        let note = note_for(&gated, &home).unwrap();
+        assert!(
+            note.contains("leaves Desktop, Documents, Downloads alone"),
+            "{note}"
+        );
+        assert!(
+            note.contains("macOS asks") && note.contains("roots add ~/Desktop"),
+            "{note}"
+        );
+
+        // One linked as a root, or a root inside it: no longer left alone.
+        let linked = vec!["/Users/a".to_owned(), "/Users/a/Documents".to_owned()];
+        let note = note_for(&gated, &linked).unwrap();
+        assert!(note.contains("leaves Desktop, Downloads alone"), "{note}");
+        let inside = vec!["/Users/a".to_owned(), "/Users/a/Documents/code".to_owned()];
+        let note = note_for(&gated, &inside).unwrap();
+        assert!(note.contains("leaves Desktop, Downloads alone"), "{note}");
+
+        // A root that walks past none of them, no roots at all, or nothing gated: nothing to say.
+        assert!(note_for(&gated, &["/Users/a/Development".to_owned()]).is_none());
+        assert!(note_for(&gated, &[]).is_none());
+        assert!(note_for(&[], &home).is_none());
     }
 
     #[test]

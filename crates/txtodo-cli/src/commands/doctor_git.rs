@@ -39,10 +39,12 @@ pub(super) fn repos_check(
         .filter(|w| w.kind() == pb::WorkspaceKind::Repo && !w.is_remote)
         .count();
     let when = super::repos::summary(&scan, super::repos::now_ms());
+    let skipped =
+        super::repos::skipped_note(&scan.roots).map_or_else(String::new, |n| format!("; {n}"));
     Some(check(
         "repos",
         Status::Ok,
-        format!("{count} repo workspace(s); {when}"),
+        format!("{count} repo workspace(s); {when}{skipped}"),
     ))
 }
 
