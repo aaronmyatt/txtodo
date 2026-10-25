@@ -54,7 +54,7 @@ mod workspace_session;
 
 pub use aead::{
     AAD_BYTES, GroupKey, GroupKeys, KEY_BYTES, MAX_RETAINED_KEY_EPOCHS, NONCE_BYTES,
-    SEALED_HEADER_BYTES, SealFor, TAG_BYTES, open, peek_workspace, seal,
+    SEALED_HEADER_BYTES, SealFor, TAG_BYTES, open, peek_workspace, seal, sealed_epoch,
 };
 pub use append_frame::{APPEND_HEADER_BYTES, AppendFrame, MAX_APPEND_FRAME_BYTES};
 pub use carrier::{FileCarrier, MAX_OPS_FILE_BYTES};

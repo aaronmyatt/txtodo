@@ -3,7 +3,7 @@
 
 use crate::aead::{
     GroupKey, GroupKeys, MAX_RETAINED_KEY_EPOCHS, SEALED_HEADER_BYTES, SealFor, open,
-    peek_workspace, seal,
+    peek_workspace, seal, sealed_epoch,
 };
 use crate::crypto_error::CryptoError;
 use crate::frame::PROTOCOL_VERSION;
@@ -275,4 +275,16 @@ fn a_group_key_debug_never_prints_key_material() {
     let k = key(0xAB);
     assert_eq!(format!("{k:?}"), "GroupKey(<redacted>)");
     assert!(!format!("{k:?}").contains("ab"));
+}
+
+#[test]
+fn the_sealed_epoch_is_read_from_the_clear_header_and_short_input_has_none() {
+    let group = GroupId(7);
+    let ws = workspace(9);
+    for epoch in [0u32, 1, 41] {
+        let sealed = seal(PROTOCOL_VERSION, for_(group, epoch, ws), &key(5), b"hello").unwrap();
+        assert_eq!(sealed_epoch(&sealed), Some(epoch));
+    }
+    assert_eq!(sealed_epoch(&[0u8; SEALED_HEADER_BYTES - 1]), None);
+    assert_eq!(sealed_epoch(&[]), None);
 }

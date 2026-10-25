@@ -193,6 +193,16 @@ fn seal_inner(
     Ok(out)
 }
 
+/// The epoch a sealed batch's clear header names, read without opening it: a receiver that holds
+/// several epochs (a rotation, task `peer-prune`) needs it to pick the key to verify a batch's
+/// signatures with, and to learn what epoch the sender is on. `None` when `sealed` is shorter than
+/// the header. It is not authenticated until [`open`] succeeds.
+pub fn sealed_epoch(sealed: &[u8]) -> Option<u32> {
+    let epoch = sealed.get(18..22)?;
+    (sealed.len() >= SEALED_HEADER_BYTES)
+        .then(|| u32::from_le_bytes([epoch[0], epoch[1], epoch[2], epoch[3]]))
+}
+
 /// Opens a sealed batch whose header must match `version`, `group` and `workspace`, using `keys`
 /// to find the epoch's key. Every mismatch is its own typed error; the ciphertext is never
 /// touched on a header failure. Wrapper/inner split, same reason as `seal`.
