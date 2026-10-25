@@ -179,9 +179,43 @@ pub struct Refused {
     pub text: String,
 }
 
+/// Which carrier syncs a workspace (task two-kinds-of-workspace, ADR 0043).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WsKind {
+    /// An older daemon: the kind is not known, so none is shown.
+    #[default]
+    Unknown,
+    /// txtodo syncs it between the user's own devices (the default is one).
+    List,
+    /// git syncs it; txtodo does not.
+    Repo,
+}
+
+impl WsKind {
+    /// The kind of a listed workspace.
+    pub fn of(w: &txtodo_proto::v1::WorkspaceInfo) -> WsKind {
+        match w.kind() {
+            txtodo_proto::v1::WorkspaceKind::List => WsKind::List,
+            txtodo_proto::v1::WorkspaceKind::Repo => WsKind::Repo,
+            txtodo_proto::v1::WorkspaceKind::Unspecified => WsKind::Unknown,
+        }
+    }
+
+    /// `list`, `repo`, or nothing for an unknown kind.
+    pub fn label(self) -> &'static str {
+        match self {
+            WsKind::Unknown => "",
+            WsKind::List => "list",
+            WsKind::Repo => "repo",
+        }
+    }
+}
+
 /// One workspace in the `W` popup.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MenuItem {
+    /// Which carrier syncs it.
+    pub kind: WsKind,
     /// `WorkspaceInfo.workspace_id`: what a switch names.
     pub id: String,
     /// The folder name, or `default` for the default workspace.
@@ -206,7 +240,9 @@ pub struct WorkspaceMenu {
 
 impl WorkspaceMenu {
     /// Fills the popup, the cursor on the open workspace.
-    pub fn fill(&mut self, items: Vec<MenuItem>) {
+    pub fn fill(&mut self, mut items: Vec<MenuItem>) {
+        // Lists first (the default among them), repos after; the daemon's order within each.
+        items.sort_by_key(|i| i.kind == WsKind::Repo);
         self.cursor = items.iter().position(|i| i.current).unwrap_or(0);
         self.items = items;
     }

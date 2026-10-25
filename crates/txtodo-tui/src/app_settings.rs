@@ -41,22 +41,10 @@ pub async fn perform(
             .workspace_add(&path)
             .await
             .map(|w| format!("Added {}", w.root)),
-        SettingsAction::RemoveWorkspace(id) => daemon
-            .workspace_remove(&id)
-            .await
-            .map(|_| "Removed from the list (files untouched)".to_owned()),
+        SettingsAction::NewList(name) => new_list(daemon, name).await,
+        SettingsAction::RemoveWorkspace(id) => remove_workspace(daemon, state, &id).await,
         SettingsAction::RenameWorkspace { id, name } => {
-            daemon.workspace_rename(&id, &name).await.map(|w| {
-                // The header names the open workspace; a rename of it shows there at once.
-                if w.root == state.shell.root {
-                    state.workspace_label = Some(crate::app_workspace::workspace_title(&w));
-                }
-                if name.is_empty() {
-                    format!("Name cleared: {} again", w.name)
-                } else {
-                    format!("Renamed to {}", w.name)
-                }
-            })
+            rename_workspace(daemon, state, &id, &name).await
         }
         SettingsAction::PairAccept(code) => return pair_accept(daemon, state, &code).await,
         SettingsAction::PairOffer => return pair_offer(daemon, state).await,
@@ -82,6 +70,72 @@ pub async fn perform(
     refresh(daemon, state).await
 }
 
+/// The folder name of the list `id` in Settings (the name it was made under), or `None` when `id`
+/// is not a list: what `ListRename` and `ListRemove` take, since a shown name need not be unique.
+fn list_folder(state: &AppState, id: &str) -> Option<String> {
+    let row = state.settings.workspaces.iter().find(|w| w.id == id)?;
+    if row.kind != crate::state_shell::WsKind::List {
+        return None;
+    }
+    let root = std::path::Path::new(&row.root);
+    root.file_name().map(|n| n.to_string_lossy().into_owned())
+}
+
+/// Makes the list `name`; the message says whether it was new.
+async fn new_list(daemon: &mut Daemon, name: String) -> Result<String, DaemonError> {
+    let made = daemon.list_ensure(&name).await?;
+    let shown = made.workspace.map_or(name, |w| w.name);
+    Ok(if made.created {
+        format!("Made the list {shown}")
+    } else {
+        format!("The list {shown} is already here")
+    })
+}
+
+/// Removes workspace `id`: a list moves its folder aside and stays on the other devices; any other
+/// workspace is only forgotten, its files untouched.
+async fn remove_workspace(
+    daemon: &mut Daemon,
+    state: &AppState,
+    id: &str,
+) -> Result<String, DaemonError> {
+    match list_folder(state, id) {
+        Some(folder) => {
+            let gone = daemon.list_remove(&folder).await?;
+            Ok(format!(
+                "Off this device; its folder is now {}",
+                gone.moved_to
+            ))
+        }
+        None => {
+            daemon.workspace_remove(id).await?;
+            Ok("Removed from the list (files untouched)".to_owned())
+        }
+    }
+}
+
+/// Renames workspace `id`: a list through `ListRename` (the name is checked as a list name and
+/// found free), any other through `WorkspaceRename`. The header shows a rename of the open one.
+async fn rename_workspace(
+    daemon: &mut Daemon,
+    state: &mut AppState,
+    id: &str,
+    name: &str,
+) -> Result<String, DaemonError> {
+    let renamed = match list_folder(state, id) {
+        Some(folder) => daemon.list_rename(&folder, name).await?,
+        None => daemon.workspace_rename(id, name).await?,
+    };
+    if renamed.root == state.shell.root {
+        state.workspace_label = Some(crate::app_workspace::workspace_title(&renamed));
+    }
+    Ok(if name.is_empty() {
+        format!("Name cleared: {} again", renamed.name)
+    } else {
+        format!("Renamed to {}", renamed.name)
+    })
+}
+
 /// Reads everything the cards list. Each read that fails keeps what the card had.
 pub async fn refresh(daemon: &mut Daemon, state: &mut AppState) -> Result<(), DaemonError> {
     if let Ok(listed) = daemon.workspace_list().await {
@@ -96,6 +150,7 @@ pub async fn refresh(daemon: &mut Daemon, state: &mut AppState) -> Result<(), Da
             .iter()
             .zip(items)
             .map(|(w, item)| WsRow {
+                kind: item.kind,
                 id: item.id,
                 name: item.name,
                 listed_name: w.name.clone(),

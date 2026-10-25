@@ -1,6 +1,7 @@
 //! The `W` workspace popup (task `tui-revamp/tui-shell`, c2 header dropdown): one row per
 //! workspace with its open count, the open one marked, a missing folder said so, and a last
-//! "Manage workspaces" row that goes to Settings › Workspaces. It hangs under the header's
+//! "Manage workspaces" row that goes to Settings › Workspaces. Lists come first, repos after, each
+//! tagged with its kind. It hangs under the header's
 //! workspace name; a click outside it closes it.
 //! Ref: <https://docs.rs/ratatui/latest/ratatui/widgets/struct.Clear.html>
 
@@ -64,11 +65,15 @@ fn row(item: &MenuItem) -> Line<'static> {
     } else {
         Style::new()
     };
+    let kind = match item.kind.label() {
+        "" => String::new(),
+        label => format!(" \u{b7} {label}"),
+    };
     Line::from(vec![
         Span::raw(mark),
         Span::styled(item.name.clone(), name_style),
         Span::styled(
-            format!("  {detail}"),
+            format!("  {detail}{kind}"),
             Style::new().add_modifier(Modifier::DIM),
         ),
     ])
@@ -79,6 +84,46 @@ mod tests {
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+
+    #[test]
+    fn rows_name_their_kind_and_lists_come_first() {
+        use crate::state_shell::WsKind;
+        let item = |name: &str, kind| MenuItem {
+            name: name.to_owned(),
+            kind,
+            open: Some(1),
+            ..MenuItem::default()
+        };
+        let mut menu = WorkspaceMenu::default();
+        menu.fill(vec![
+            item("txtodo", WsKind::Repo),
+            item("work", WsKind::List),
+            item("old", WsKind::Unknown),
+        ]);
+        let names: Vec<&str> = menu.items.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["work", "old", "txtodo"], "lists first, in order");
+        let text: String = row(&menu.items[0])
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert!(text.contains("work  1 open \u{b7} list"), "{text}");
+        let text: String = row(&menu.items[1])
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert!(
+            !text.contains('\u{b7}'),
+            "an unknown kind says nothing: {text}"
+        );
+        let text: String = row(&menu.items[2])
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect();
+        assert!(text.ends_with("\u{b7} repo"), "{text}");
+    }
 
     #[test]
     fn rows_are_clickable_and_the_rest_of_the_screen_closes_it() {

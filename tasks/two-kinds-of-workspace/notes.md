@@ -337,3 +337,18 @@ What changed in the plan, and what I chose between.
     `lists`, and `CLAUDE.md` says why.
   - `backend::WorkspaceInfo` gained `is_list` (from `WorkspaceInfo.kind`); false from an older
     daemon, so an older daemon has no lists to name.
+- **tui lists.** The `W` popup and Settings › Workspaces show each workspace's kind (`list` or
+  `repo`, nothing from an older daemon) and put lists first. Choices:
+  - No new global keys. This TUI does workspace management as rows in Settings › Workspaces, so
+    "keys for new, rename, remove" became: a `New list` field row (`ListEnsure`), `d d` on a list
+    row (`ListRemove`: folder moved aside, other devices keep it) and the existing rename field
+    (`ListRename` for a list). Both route by `WsKind::List`; a repo or a mirror keeps the old calls.
+    A list is addressed by the folder name it was made under, not its shown name, since a shown
+    name need not be unique.
+  - Sorting happens in `WorkspaceMenu::fill` and in the Settings rows, not in `menu_items`, because
+    `refresh` zips the daemon's list with those items by position.
+  - Manifest: new row `workspace.new_list` (TUI done; desktop planned, web na). The desktop line in
+    this task is its `@parity` backlog line.
+  - Known gaps: renaming still reaches only the open workspace (existing deviation); a list's
+    rename field starts from the shown name and an empty value is refused by the daemon (a list
+    needs a name); no repo-vs-list grouping header, only the tag and the order.

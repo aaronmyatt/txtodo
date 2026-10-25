@@ -23,4 +23,5 @@ mod settings_screen;
 mod sync_status;
 mod toast_undo;
 mod universal_screen;
+mod workspace_lists;
 mod workspace_switch;

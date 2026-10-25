@@ -36,6 +36,14 @@ screen's as-built notes are in `tasks/tui-revamp/*/notes.md`.
   `TXTODO_TEST_KEYSTORE_MEMORY=1 TXTODO_NO_AUTOSTART=1 cargo nextest run -p txtodo-tui
   --test e2e`.
 
+- Named lists (task two-kinds-of-workspace, ADR 0043): `state_shell::WsKind` (list, repo, or unknown
+  from an older daemon) rides on `MenuItem` and `WsRow` from `WorkspaceInfo.kind`. The `W` popup and
+  Settings › Workspaces put lists first and tag each row `list` or `repo`. Settings › Workspaces has a
+  `New list` field row (`ListEnsure`); removing a list there is `ListRemove` (its folder moves aside,
+  the other devices keep it) and renaming the open one is `ListRename`, found by the folder name it
+  was made under; any other workspace keeps `WorkspaceRemove` / `WorkspaceRename`. Manifest
+  `workspace.new_list`.
+
 ## Parity
 `specs/client-parity.toml` is the one list of user-facing actions and where this client and the
 desktop app each stand on them (ADR 0031, `tasks/tui-revamp/parity-manifest`).

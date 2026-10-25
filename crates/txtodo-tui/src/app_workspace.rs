@@ -155,6 +155,7 @@ pub fn menu_items(
     workspaces
         .iter()
         .map(|w| MenuItem {
+            kind: crate::state_shell::WsKind::of(w),
             id: w.workspace_id.clone(),
             name: workspace_title(w),
             open: (w.load_state == pb::WorkspaceLoadState::Ready as i32).then(|| {

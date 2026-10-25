@@ -25,6 +25,14 @@ async fn act(daemon: &mut Daemon, state: &mut AppState, action: Option<Action>) 
     }
 }
 
+/// The index of the Workspaces row with this label, wherever the rows around it put it.
+fn row_labelled(state: &AppState, label: &str) -> usize {
+    let rows = txtodo_tui::settings_rows::rows(SettingsCard::Workspaces, state);
+    rows.iter()
+        .position(|r| r.label == label)
+        .unwrap_or_else(|| panic!("no row {label}"))
+}
+
 fn typed(state: &mut AppState, text: &str) -> Option<Action> {
     for c in text.chars() {
         on_text_key(state, KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
@@ -46,7 +54,7 @@ async fn workspaces_and_tokens_round_trip() {
     let refresh = commands::run(&mut state, Command::NavSettings);
     act(&mut daemon, &mut state, refresh).await;
     let before = state.settings.workspaces.len();
-    state.settings.row = before; // Add a workspace
+    state.settings.row = row_labelled(&state, "Add a workspace");
     commands::run(&mut state, Command::SettingsActivate);
     let add = typed(&mut state, &other_root.display().to_string());
     act(&mut daemon, &mut state, add).await;

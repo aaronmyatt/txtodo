@@ -18,7 +18,9 @@ pub enum SettingsAction {
     Refresh,
     /// Register the folder at this path.
     AddWorkspace(String),
-    /// Unregister this workspace.
+    /// Make the list with this name (task two-kinds-of-workspace).
+    NewList(String),
+    /// Unregister this workspace; a list moves its folder aside instead.
     RemoveWorkspace(String),
     /// Set the name every paired device shows for this workspace; empty clears it.
     RenameWorkspace {
@@ -127,6 +129,7 @@ fn activate(state: &mut AppState, row: SRow) -> Option<Action> {
         }
         return Some(Action::Settings(match act {
             Act::AddWorkspace => SettingsAction::AddWorkspace(text),
+            Act::NewList => SettingsAction::NewList(text),
             Act::PairCode => SettingsAction::PairAccept(text),
             _ => SettingsAction::CreateToken(text),
         }));

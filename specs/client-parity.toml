@@ -1225,6 +1225,16 @@ web = { status = "na", surface = "" }
 deviation = "In the browser: one workspace and no folders (ADR 0042)."
 
 [[action]]
+id = "workspace.new_list"
+title = "Make a named list that syncs between your own devices"
+keys = []
+scope = "settings"
+desktop = { status = "planned", surface = "WorkspaceSwitcher" }
+tui = { status = "done", surface = "Settings > Workspaces (New list)" }
+web = { status = "na", surface = "" }
+deviation = "In the browser: the list arrives from a device that made it (ADR 0042 and 0043); a browser peer makes none."
+
+[[action]]
 id = "workspace.rename"
 title = "Rename a workspace: the name every paired device shows"
 keys = []

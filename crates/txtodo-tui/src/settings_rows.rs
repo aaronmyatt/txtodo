@@ -9,6 +9,8 @@ use crate::state_settings::Pairing;
 use crate::state_shell::Link;
 use crate::theme::ThemeMode;
 
+mod workspaces;
+
 /// What a row does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Act {
@@ -22,10 +24,12 @@ pub enum Act {
     LengthHint,
     /// Switch to this workspace.
     OpenWorkspace(String),
-    /// Unregister this workspace (files untouched).
+    /// Unregister this workspace (files untouched); a list moves its folder aside instead.
     RemoveWorkspace(String),
     /// Register the typed folder.
     AddWorkspace,
+    /// Make a list named as typed.
+    NewList,
     /// Give this workspace the typed name, which every paired device shows.
     RenameWorkspace(String),
     /// Accept the typed pairing code.
@@ -114,7 +118,7 @@ pub fn rows(card: SettingsCard, state: &AppState) -> Vec<SRow> {
     match card {
         SettingsCard::General => general(state),
         SettingsCard::Appearance => appearance(state),
-        SettingsCard::Workspaces => workspaces(state),
+        SettingsCard::Workspaces => workspaces::rows(state),
         SettingsCard::Shortcuts => crate::manifest::shortcut_rows(),
         SettingsCard::Devices => devices(state),
         SettingsCard::Tokens => tokens(state),
@@ -174,52 +178,6 @@ fn appearance(state: &AppState) -> Vec<SRow> {
         not_here("Text size", "The terminal sets the text size."),
         not_here("Line height", "The terminal sets the line height."),
     ]
-}
-
-fn workspaces(state: &AppState) -> Vec<SRow> {
-    let mut out: Vec<SRow> = state
-        .settings
-        .workspaces
-        .iter()
-        .map(|w| {
-            let mut label = w.name.clone();
-            if w.current {
-                label.push_str(" \u{b7} current");
-            }
-            let count = match (w.missing, w.open) {
-                (true, _) => "missing".to_owned(),
-                (false, Some(n)) => format!("{n} open"),
-                (false, None) => "not loaded".to_owned(),
-            };
-            let removable = !w.current && !w.is_default;
-            SRow {
-                label,
-                value: format!("{} \u{b7} {count}", w.root),
-                act: Some(Act::OpenWorkspace(w.id.clone())),
-                remove: removable.then(|| Act::RemoveWorkspace(w.id.clone())),
-                ..SRow::default()
-            }
-        })
-        .collect();
-    // The open one only: the header names it, and the field starts from its name. Another
-    // workspace is renamed from there (manifest `workspace.rename`).
-    if let Some(w) = state.settings.workspaces.iter().find(|w| w.current) {
-        out.push(field(
-            "Rename the open one",
-            "the name every paired device shows; empty clears it",
-            Act::RenameWorkspace(w.id.clone()),
-        ));
-    }
-    out.push(field(
-        "Add a workspace",
-        "type a folder path, Enter adds it",
-        Act::AddWorkspace,
-    ));
-    out.push(not_here(
-        "Folder picker",
-        "A terminal has no folder picker: type the path.",
-    ));
-    out
 }
 
 fn devices(state: &AppState) -> Vec<SRow> {

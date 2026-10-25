@@ -30,6 +30,8 @@ impl Default for Prefs {
 /// A registered workspace, as Settings › Workspaces lists it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WsRow {
+    /// Which carrier syncs it.
+    pub kind: crate::state_shell::WsKind,
     /// Its id.
     pub id: String,
     /// Its name (folder, or `default workspace`).

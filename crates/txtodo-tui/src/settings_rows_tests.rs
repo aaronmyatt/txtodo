@@ -113,3 +113,30 @@ fn devices_offer_a_code_and_show_it_while_it_lasts() {
         offering[3].value
     );
 }
+
+#[test]
+fn lists_come_first_with_their_kind_and_a_new_list_row_follows_them() {
+    use crate::state_shell::WsKind;
+    let mut state = AppState::fixture();
+    let ws = |id: &str, name: &str, kind| WsRow {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        kind,
+        ..WsRow::default()
+    };
+    state.settings.workspaces = vec![
+        ws("01R", "txtodo", WsKind::Repo),
+        ws("01W", "work", WsKind::List),
+        ws("01U", "old", WsKind::Unknown),
+    ];
+    let rows = rows(SettingsCard::Workspaces, &state);
+    let labels: Vec<&str> = rows.iter().take(3).map(|r| r.label.as_str()).collect();
+    assert_eq!(labels, ["work", "old", "txtodo"]);
+    assert!(rows[0].value.ends_with("\u{b7} list"), "{}", rows[0].value);
+    assert!(!rows[1].value.contains("list") && !rows[1].value.contains("repo"));
+    assert!(rows[2].value.ends_with("\u{b7} repo"), "{}", rows[2].value);
+    let new_list = rows.iter().position(|r| r.act == Some(Act::NewList));
+    let add = rows.iter().position(|r| r.act == Some(Act::AddWorkspace));
+    assert!(new_list.is_some_and(|n| rows[n].field), "a field row");
+    assert!(new_list < add, "New list sits above Add a workspace");
+}
