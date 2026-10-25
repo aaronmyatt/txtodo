@@ -76,6 +76,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   else the name it was made under), and conflicts with `--dir` and `--no-daemon`. The hidden flag
   that scopes a run to a sub-list file is `--sublist` (it was `--list` until named lists took the
   name).
+- `merge-driver BASE OURS THEIRS` (task two-kinds-of-workspace, `commands/merge_driver.rs`): git's merge
+  driver for a repo's todo lists (`%O %A %B`). Merges three ways with `txtodo_core::merge3` and writes
+  the result over OURS; exit 0 merged, 1 left it to git (a file that is not UTF-8). Handled before any
+  path, config or daemon, like `upgrade`. `tests/it/merge_driver_git.rs` runs a real `git merge` through it.
 - `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
   (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
   txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none

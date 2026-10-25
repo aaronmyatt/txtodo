@@ -338,6 +338,18 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// The git merge driver for todo lists (task two-kinds-of-workspace): merges the file git calls
+    /// `%A` with `%B`, three ways against `%O`, line by line and without losing a line, and writes
+    /// the result into `%A`. `txtodo git setup` installs it; it is not meant to be typed.
+    #[command(name = "merge-driver")]
+    MergeDriver {
+        /// The common ancestor (git's `%O`).
+        base: String,
+        /// Our version (git's `%A`); the merge is written here.
+        ours: String,
+        /// Their version (git's `%B`).
+        theirs: String,
+    },
     /// Lists `ref:` directories no line points to; deletes them only with `--yes` (daemon mode,
     /// rule 10).
     Prune {

@@ -9,6 +9,7 @@ mod archive;
 mod env;
 mod hygiene;
 mod list;
+mod merge_driver_git;
 mod sentinel_no_secrets;
 mod socket_paths;
 mod todosh_parity;

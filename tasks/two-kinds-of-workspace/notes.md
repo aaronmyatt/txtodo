@@ -389,3 +389,11 @@ What changed in the plan, and what I chose between.
   in 13 s. Both containers ended with all 30 added lines in `work`, each once, after both made
   `work` while b1 was unplugged; `scratch` made on a1 reached b1 unasked; each device lists exactly
   one `work`. One attempt, one seed: not a flake count.
+- **cli merge-driver.** `txtodo merge-driver BASE OURS THEIRS` (`commands/merge_driver.rs`) reads the
+  three files, runs `merge3`, writes the result over OURS. A missing ancestor is an empty one; a
+  file that is not UTF-8 is refused with exit 1, which git reads as a conflict to settle by hand, so
+  a binary-looking file is never half-merged. Handled in `run()` before paths, config and daemon.
+  `tests/it/merge_driver_git.rs` is the "real git merge in a temp repo": both branches edit one
+  line and add at the end, git's own merge conflicts (a control test shows it), and through the
+  driver the merge finishes with every line, none of the old one, no markers. It skips when `git`
+  is not installed.

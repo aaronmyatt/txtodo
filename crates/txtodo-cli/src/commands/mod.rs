@@ -23,6 +23,7 @@ pub mod list;
 pub mod lists;
 mod lists_import;
 pub mod mcp;
+pub mod merge_driver;
 pub mod move_copy;
 pub mod notices;
 pub mod pair;
