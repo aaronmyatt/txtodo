@@ -570,3 +570,14 @@ What changed in the plan, and what I chose between.
   naming `txtodo git setup`. The old unit tests of the plain mirror are replaced by one that offers a
   plain id and a default-alias id and finds nothing made; the `workspace_offer_grpc` accept test now
   expects the refusal. `remote_root`/`is_remote_root` stay: bind and `MirrorsRetire` read them.
+- **mirrors: daemon retire and cli.** `MirrorsRetire` (`mirrors_retire.rs`) holds the mirror's load slot,
+  `close_quietly`, moves the text and `.txtodo/` into `<id>.rejoin-backup-<UTC>` with rejoin's own
+  `move_aside`, removes the emptied folder, un-registers (a tombstone, so an old peer's offer cannot
+  make it again) and settles the slot. A failed move reopens the mirror where it was. CLI:
+  `workspace prune --repo-mirrors [--yes]` (dry by default); `doctor` has one `mirror` row per
+  mirror with its folder present, replacing the `bind` rows: OK when the same-named clone has every
+  line of the mirror's root `todo.txt` (by exact text), WARN with the count and first missing line
+  otherwise, or when there is no clone of that name. `workspace bind` keeps working this release and
+  prints a pointer on stderr (so `--json` stays clean); it goes with the next. Sub-lists are not
+  compared. `tests/e2e/mirrors.rs` registers a clone and a mirror (a folder in the daemon's `remote/`
+  with a `txtodo.toml` name) and drives doctor, the dry run and `--yes`.
