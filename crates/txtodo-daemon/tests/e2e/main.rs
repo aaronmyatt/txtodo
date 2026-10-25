@@ -28,6 +28,7 @@ mod lan_sync_bench;
 mod layout_sync;
 mod layout_todo_file;
 mod layout_toml;
+mod lists_sync;
 mod logging_flow_sequence;
 mod migrate_identity;
 mod nested_ref_sync;

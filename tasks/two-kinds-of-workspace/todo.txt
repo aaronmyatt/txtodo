@@ -1,4 +1,3 @@
-2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists @doing by:claude
 2026-10-25 cli: txtodo lists new|ls|rename|rm|import <dir>, and --list <name> on every command +m11 @cli @lists
 2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists
 2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists
@@ -33,3 +32,4 @@ x 2026-10-25 2026-10-25 daemon: ensure_list makes lists/<name>/ and registers it
 x 2026-10-25 2026-10-25 daemon: ListEnsure/ListRename/ListRemove handlers; remove is per device and moves the folder aside +m11 @daemon @lists — ListName/list_id, ensure_list, find_list, remove_list and the three RPCs; see tasks/two-kinds-of-workspace/notes.md (daemon lists)
 x 2026-10-25 2026-10-25 daemon: lists go only to own devices (gate every list id; a foreign peer gets none) +m8 @daemon @security @lists — session_routes drops every list for a non-own peer (is_list_id); known gaps: list names still ride offers to any peer in the group, and the file carrier is not gated
 x 2026-10-25 2026-10-25 daemon: an own device's list offer makes lists/<name>/, not remote/<id>/; a foreign one is ignored +m11 @daemon @sync @lists — mirror_offered_list; an own device's offer makes lists/<name>/ under the offered id, a foreign one is ignored; known gap: a renamed list's folder on the receiver is named after its shown name (or its id), not the name it was made under
+x 2026-10-25 2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists — tests/e2e/lists_sync.rs: both-make-work converges to one list, a new list arrives unasked as a List, a not-own device gets none; LAN pair only

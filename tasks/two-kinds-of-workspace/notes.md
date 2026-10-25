@@ -299,3 +299,9 @@ What changed in the plan, and what I chose between.
   `accept_offer` of a list goes through the same path and refuses a foreign one
   (`FAILED_PRECONDITION`). The existing skip rule still holds: a list removed here is not made
   again by the next offer (only `lists new` brings it back).
+- **lists e2e.** `tests/e2e/lists_sync.rs`, two real global-mode daemons paired over LAN
+  (`--profile ci`, about 6 s each). Proven end to end: both make `work` before they meet and end
+  with one list holding both devices' lines once each; a list made on A after pairing reaches B
+  under `lists/` as a List, not a Remote mirror, with no accept; with B marked not own, B gets A's
+  default as an alias mirror (so sessions and offers ran) and no list, none of its text. Not run
+  here: a relay-only pair, or three devices.

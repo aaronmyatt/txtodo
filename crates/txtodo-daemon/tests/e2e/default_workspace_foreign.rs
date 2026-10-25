@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use support::multi::{MultiClient, MultiWorkspaceDaemon, file_at};
 use txtodo_proto::v1 as pb;
 
-const DEADLINE: Duration = Duration::from_secs(60);
+pub(crate) const DEADLINE: Duration = Duration::from_secs(60);
 
 fn code(r: &pb::PairOfferResponse) -> String {
     serde_json::json!({
@@ -27,7 +27,7 @@ fn code(r: &pb::PairOfferResponse) -> String {
 }
 
 /// `a` offers, `b` joins; each confirms with its own answer to "is this your own device?".
-async fn pair(a: &mut MultiClient, a_own: bool, b: &mut MultiClient, b_own: bool) {
+pub(crate) async fn pair(a: &mut MultiClient, a_own: bool, b: &mut MultiClient, b_own: bool) {
     let offer = a
         .pair_offer(pb::PairOfferRequest { workspace: None })
         .await
@@ -58,7 +58,7 @@ async fn pair(a: &mut MultiClient, a_own: bool, b: &mut MultiClient, b_own: bool
     }
 }
 
-async fn list(client: &mut MultiClient) -> Vec<pb::WorkspaceInfo> {
+pub(crate) async fn list(client: &mut MultiClient) -> Vec<pb::WorkspaceInfo> {
     let req = pb::WorkspaceListRequest {};
     client
         .workspace_list(req)
@@ -68,12 +68,12 @@ async fn list(client: &mut MultiClient) -> Vec<pb::WorkspaceInfo> {
         .workspaces
 }
 
-async fn text(client: &mut MultiClient, root: &str) -> String {
+pub(crate) async fn text(client: &mut MultiClient, root: &str) -> String {
     String::from_utf8(file_at(client, Path::new(root)).await).unwrap()
 }
 
 /// Waits for a Remote mirror on `client` that holds `needle`; returns its root.
-async fn wait_for_remote_with(
+pub(crate) async fn wait_for_remote_with(
     client: &mut MultiClient,
     needle: &str,
     log: &dyn Fn() -> String,
@@ -94,7 +94,7 @@ async fn wait_for_remote_with(
     }
 }
 
-async fn default_root(client: &mut MultiClient) -> String {
+pub(crate) async fn default_root(client: &mut MultiClient) -> String {
     list(client)
         .await
         .into_iter()
