@@ -1,7 +1,6 @@
-//! Task workspace-vanity-name, two real daemons over LAN: B's mirror of A's workspace shows A's
-//! name for it, not the id its folder is named by. First the folder name A offers; then, once A
-//! renames the workspace, the new name, which reaches B's copy of `txtodo.toml`. A rename of B's
-//! mirror travels back to A the same way.
+//! Task workspace-vanity-name, two real daemons over LAN: B's copy of A's list shows A's name for
+//! it. First the name A made it under; then, once A renames the list, the new name, which reaches
+//! B's copy of `txtodo.toml`. A rename on B travels back to A the same way.
 #![allow(clippy::expect_used, clippy::unwrap_used, clippy::print_stderr)]
 #![cfg(unix)]
 
@@ -9,7 +8,7 @@ use crate::support;
 
 use std::path::Path;
 use std::time::{Duration, Instant};
-use support::multi::{MultiClient, MultiWorkspaceDaemon, file_at};
+use support::multi::{MultiClient, MultiWorkspaceDaemon};
 use txtodo_proto::v1 as pb;
 
 const DEADLINE: Duration = Duration::from_secs(90);
@@ -118,37 +117,48 @@ async fn wait_file_has(root: &str, needle: &str, log: &dyn Fn() -> String) -> St
     }
 }
 
-/// A's workspace in a folder named `plants`, registered and open.
-async fn plants(client: &mut MultiClient, work: &Path) -> pb::WorkspaceInfo {
-    let root = work.join("plants");
-    std::fs::create_dir(&root).unwrap();
-    std::fs::write(root.join("todo.txt"), "water the fern\n").unwrap();
-    let req = pb::WorkspaceAddRequest {
-        root: root.display().to_string(),
+/// A's list `plants`, made and open, with a line in it.
+async fn plants(client: &mut MultiClient) -> pb::WorkspaceInfo {
+    let req = pb::ListEnsureRequest {
+        name: "plants".into(),
     };
-    let w = client.workspace_add(req).await.unwrap().into_inner();
-    file_at(client, Path::new(&w.root)).await;
+    let w = client.list_ensure(req).await.unwrap().into_inner();
+    let w = w.workspace.unwrap();
+    let line = pb::Mutation {
+        kind: Some(pb::mutation::Kind::Add(pb::Add {
+            line: "water the fern".into(),
+        })),
+    };
+    let sel = pb::WorkspaceSelector {
+        selector: Some(pb::workspace_selector::Selector::Path(w.root.clone())),
+    };
+    let req = pb::ApplyRequest {
+        path: "todo.txt".into(),
+        mutations: vec![line],
+        workspace: Some(sel),
+        ..pb::ApplyRequest::default()
+    };
+    client.apply(req).await.unwrap();
     w
 }
 
 #[tokio::test]
 async fn a_name_set_on_one_device_shows_on_the_other() {
-    let (dir_a, dir_b, work) = (
-        tempfile::tempdir().unwrap(),
-        tempfile::tempdir().unwrap(),
-        tempfile::tempdir().unwrap(),
-    );
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let (a, mut client_a) = MultiWorkspaceDaemon::start_with_args(dir_a, &[]).await;
     let (b, mut client_b) = MultiWorkspaceDaemon::start_with_args(dir_b, &[]).await;
     let logs = || format!("--- A ---\n{}\n--- B ---\n{}", a.log_tail(), b.log_tail());
-    let w = plants(&mut client_a, work.path()).await;
-    assert_eq!(w.name, "plants", "A shows the folder's name");
+    let w = plants(&mut client_a).await;
+    assert_eq!(w.name, "plants", "A shows the name it made the list under");
     pair(&mut client_a, &mut client_b).await;
 
-    // B's mirror sits in a folder named by the id, and shows what A offers it as.
+    // B's copy is a list of its own, made under the name A shows, and shows it too.
     let mirror = wait_named(&mut client_b, &w.workspace_id, "plants", &logs).await;
-    assert!(mirror.is_remote, "{mirror:?}");
-    assert!(mirror.root.ends_with(&w.workspace_id), "{mirror:?}");
+    assert_eq!(mirror.kind(), pb::WorkspaceKind::List, "{mirror:?}");
+    assert!(
+        !mirror.is_remote && mirror.root.ends_with("plants"),
+        "{mirror:?}"
+    );
 
     let renamed = rename(&mut client_a, &w.workspace_id, "House plants").await;
     assert_eq!(renamed.name, "House plants");
@@ -160,7 +170,7 @@ async fn a_name_set_on_one_device_shows_on_the_other() {
         "B's file has one name line:\n{text}"
     );
 
-    // And back: B names its mirror, and A shows that name for its own folder.
+    // And back: B names its copy, and A shows that name for its own list.
     rename(&mut client_b, &w.workspace_id, "Plants \u{1f33f}").await;
     wait_named(&mut client_a, &w.workspace_id, "Plants \u{1f33f}", &logs).await;
     let text = layout_file(&w.root);

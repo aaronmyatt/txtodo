@@ -104,19 +104,20 @@ async fn wait_text(
     }
 }
 
-/// The Remote mirror on `client` whose list holds `needle`.
-async fn remote_with(client: &mut MultiClient, needle: &str, log: &dyn Fn() -> String) -> String {
+/// The list on `client` (not its default) whose `todo.txt` holds `needle`.
+async fn list_with(client: &mut MultiClient, needle: &str, log: &dyn Fn() -> String) -> String {
     let start = Instant::now();
     loop {
         let listed = client.workspace_list(pb::WorkspaceListRequest {}).await;
         for w in listed.unwrap().into_inner().workspaces {
-            if w.is_remote && text(client, &w.root).await.contains(needle) {
+            let own = w.is_default || w.kind() != pb::WorkspaceKind::List;
+            if !own && text(client, &w.root).await.contains(needle) {
                 return w.root;
             }
         }
         assert!(
             start.elapsed() < DEADLINE,
-            "no mirror with {needle}\n{}",
+            "no list with {needle}\n{}",
             log()
         );
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -153,19 +154,20 @@ async fn rejoin(b: &mut MultiClient, id: &str, dry_run: bool) -> pb::WorkspaceRe
     b.workspace_rejoin(req).await.unwrap().into_inner()
 }
 
-/// A's workspace: two lines, and a plain file where B's `blocked/` folder would go.
-async fn a_workspace(a: &mut MultiClient, dir: &Path) -> pb::WorkspaceInfo {
+/// A's list `work`: two lines, and a plain file where B's `blocked/` folder would go.
+async fn a_workspace(a: &mut MultiClient) -> pb::WorkspaceInfo {
+    let req = pb::ListEnsureRequest {
+        name: "work".into(),
+    };
+    let info = a.list_ensure(req).await.unwrap().into_inner();
+    let info = info.workspace.unwrap();
+    add(a, &info.root, "todo.txt", "(A) first from a").await;
+    add(a, &info.root, "todo.txt", "(B) second from a").await;
     std::fs::write(
-        dir.join("todo.txt"),
-        "(A) first from a\n(B) second from a\n",
+        Path::new(&info.root).join("blocked"),
+        "a file, not a folder\n",
     )
     .unwrap();
-    std::fs::write(dir.join("blocked"), "a file, not a folder\n").unwrap();
-    let req = pb::WorkspaceAddRequest {
-        root: dir.display().to_string(),
-    };
-    let info = a.workspace_add(req).await.unwrap().into_inner();
-    text(a, &info.root).await;
     info
 }
 
@@ -211,17 +213,13 @@ fn only_as_lines(text: &str) -> bool {
 
 #[tokio::test]
 async fn a_rejoin_drops_bs_copy_into_a_backup_and_takes_as() {
-    let (dir_a, dir_b, work) = (
-        tempfile::tempdir().unwrap(),
-        tempfile::tempdir().unwrap(),
-        tempfile::tempdir().unwrap(),
-    );
+    let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let (a, mut client_a) = MultiWorkspaceDaemon::start_with_args(dir_a, &[]).await;
     let (b, mut client_b) = MultiWorkspaceDaemon::start_with_args(dir_b, &[]).await;
     let logs = || format!("--- A ---\n{}\n--- B ---\n{}", a.log_tail(), b.log_tail());
-    let w = a_workspace(&mut client_a, work.path()).await;
+    let w = a_workspace(&mut client_a).await;
     pair(&mut client_a, &mut client_b).await;
-    let root_b = remote_with(&mut client_b, "second from a", &logs).await;
+    let root_b = list_with(&mut client_b, "second from a", &logs).await;
     let mut t = Two {
         a: client_a,
         b: client_b,
