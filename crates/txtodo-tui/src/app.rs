@@ -140,6 +140,8 @@ pub async fn run_in(
         state.shell.daemon_build =
             crate::buildinfo::other_build(&health.version, &health.release_date);
     }
+    // Every open looks for new repos in the background; best effort, an older daemon has no scan.
+    let _ = daemon.repos_scan().await;
     state.skill_hint = crate::skill_hint::needed(crate::skill_hint::home_dir().as_deref());
     state.settings.prefs = crate::prefs::load();
     state.settings.socket = global_socket_path().display().to_string();

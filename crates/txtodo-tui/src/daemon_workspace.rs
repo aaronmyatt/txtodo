@@ -49,6 +49,17 @@ impl Daemon {
         Ok(self.inner.workspace_list(req).await?.into_inner())
     }
 
+    /// Asks the daemon to scan for git clones holding a todo list now (task two-kinds-of-workspace).
+    /// The scan runs in the background, so this returns at once; the daemon readies and registers
+    /// what it finds. An older daemon answers `UNIMPLEMENTED`.
+    pub async fn repos_scan(&mut self) -> Result<pb::ReposResponse, DaemonError> {
+        let req = pb::ReposRequest {
+            scan: true,
+            ..pb::ReposRequest::default()
+        };
+        Ok(self.inner.repos(req).await?.into_inner())
+    }
+
     /// Registers `root` (the daemon canonicalizes it) and opens it.
     pub async fn workspace_add(&mut self, root: &str) -> Result<pb::WorkspaceInfo, DaemonError> {
         let req = pb::WorkspaceAddRequest {

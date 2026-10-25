@@ -97,3 +97,18 @@ async fn tokens_and_devices_answer() {
         .await
         .unwrap_or_else(|e| panic!("device_list: {e}"));
 }
+
+/// Opening the TUI asks the daemon to scan for repos in the background (task two-kinds-of-workspace):
+/// the call returns at once with the scan state. A test daemon seeds no root, so it finds nothing.
+#[tokio::test]
+async fn a_repo_scan_request_returns_at_once_with_the_scan_state() {
+    let (_real, mut daemon) = support::RealDaemon::start(TODO).await;
+    let state = daemon
+        .repos_scan()
+        .await
+        .unwrap_or_else(|e| panic!("repos_scan: {e}"));
+    assert!(
+        state.roots.is_empty(),
+        "an isolated daemon seeds no scan root: {state:?}"
+    );
+}
