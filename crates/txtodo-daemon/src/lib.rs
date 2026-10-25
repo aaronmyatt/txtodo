@@ -37,6 +37,7 @@ pub mod dir_bridge_guard;
 mod dir_bridge_guard_tests;
 mod list_rpc;
 mod list_workspace;
+mod mirrors_retire;
 mod repo_exclude;
 mod repo_scan;
 mod repos_rpc;
@@ -246,6 +247,8 @@ mod list_workspace_tests;
 mod log_repair_tests;
 #[cfg(test)]
 mod migrate_sidecar_tests;
+#[cfg(test)]
+mod mirrors_retire_tests;
 #[cfg(test)]
 mod notes_actor_sync_tests;
 #[cfg(test)]

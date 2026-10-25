@@ -395,5 +395,5 @@ impl Txtodo for GlobalService {
     async fn repos(&self, r: Request<pb::ReposRequest>) -> Result<Response<pb::ReposResponse>, Status> { crate::repos_rpc::repos(self, r).await }
 
     #[rustfmt::skip]
-    async fn mirrors_retire(&self, _r: Request<pb::MirrorsRetireRequest>) -> Result<Response<pb::MirrorsRetireResponse>, Status> { Err(Status::unimplemented("retiring mirrors is the next daemon commit")) }
+    async fn mirrors_retire(&self, r: Request<pb::MirrorsRetireRequest>) -> Result<Response<pb::MirrorsRetireResponse>, Status> { crate::mirrors_retire::mirrors_retire(self, r).await }
 }

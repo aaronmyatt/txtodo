@@ -400,6 +400,11 @@ multiplex every workspace's traffic — not done by this task).
   `[$HOME]` as the default root only when no env var moved the socket or registry, so a test never walks
   the real home. `WorkspaceRegistry::add` writes `.txtodo/` into a new clone's own `info/exclude`
   (`repo_exclude.rs`, with no `git` run). `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
+- `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
+  moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
+  text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),
+  under the held load slot (`close_quietly`, then the registry removal). The emptied folder goes if it
+  ends empty. A removed id is never mirrored again. A dry run only reports; a refusal reopens the mirror.
 - `workspace_rejoin.rs` + `rejoin_backup.rs` (task sync-drift line 8, 2026-09-26): `WorkspaceRejoin`
   drops this device's copy of one workspace and takes a paired peer's. Refused, nothing changed,
   for the default, a missing root, a root overlapping another registered one, or when no paired
