@@ -611,3 +611,16 @@ What changed in the plan, and what I chose between.
 - Not done: the cost check (daemon RSS and boot time with many repos registered), a real two-Mac pairing
   by hand, and any look at the desktop switcher and the TUI `W` popup (headings, order). The lab ran
   `partition-lists` once on Linux containers before the cut; it was not rerun after.
+- **macOS permission prompts (owner's request).** Reading `~/Desktop`, `~/Documents`, `~/Downloads` and
+  friends from a program that was not given access raises a system prompt, so a scan of `$HOME` would have
+  raised one per folder. macOS has no call that says a folder is gated without reading it, so there is a
+  list of names (`txtodo-workspace-paths::protected_home_folders`: Desktop, Documents, Downloads, Movies,
+  Music, Pictures; none off macOS). Options: skip them unless linked (**picked**), or try and skip on a
+  denied read. The second still raises the prompt, which is the thing to avoid. `repo_scan::scan`
+  drops a skip folder for any root at or inside it, so `txtodo repos roots add ~/Documents` (or a folder
+  in it) walks it, and the person then answers the prompt once, knowing why. `repos`, `repos roots` and
+  the doctor `repos` row name what is left alone and how to link it. Not covered: a repo already
+  registered inside one of those folders (by `workspace add`, say) is opened by the loader at start and
+  watched, and raises the prompt then; that was the person's choice. `~/Library` (iCloud Drive,
+  CloudStorage) was already skipped, and hidden folders are never entered. Not seen on a real Mac: I
+  could not watch for a prompt, so check with a fresh daemon start and no prompt on Documents.

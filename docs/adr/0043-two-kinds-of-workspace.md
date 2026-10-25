@@ -122,7 +122,9 @@ What shipped, and where it differs from the text above. The per-line record is
 - **Decision 8.** The scan only registers (it opens nothing), never re-registers a folder the person
   removed, and seeds `[$HOME]` as the one default root only when no environment variable moved the
   daemon's socket or registry. Roots and the last scan time live in two tables of `registry.db` made
-  `IF NOT EXISTS`, so the schema version did not move. `txtodo repos` lists, scans and edits roots.
+  `IF NOT EXISTS`, so the schema version did not move. `txtodo repos` lists, scans and edits roots. On macOS it never enters the home folder's gated folders (`Desktop`,
+  `Documents`, `Downloads`, `Movies`, `Music`, `Pictures`: reading one raises a system permission prompt)
+  unless a scan root is at or inside one, which the person linked with `txtodo repos roots add`.
   The cost check (RSS and boot time with many repos registered) has not been done.
 - **Tests.** The two-daemon harness serves each test workspace as a list (`$TXTODO_LISTS_DIR` for the
   `--dir` bridge, `list_dir_in` in global mode); no hidden daemon flag was added. Removed with the
