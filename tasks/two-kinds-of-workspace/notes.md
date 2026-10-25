@@ -474,3 +474,13 @@ What changed in the plan, and what I chose between.
     parent of `lists/` and `remote/`) is recognised even when the root was written through a symlink.
   - To fit `server.rs` and `global_service.rs` under the 400-line cap, the new trait methods (and
     the earlier list ones in `server.rs`) are one `#[rustfmt::skip]` line each.
+- **cli repos.** `txtodo repos [ls]|scan [--background]|add DIR|roots [add|rm DIR]`
+  (`commands/repos.rs`) over the `Repos` RPC, and a `repos` OK row in `doctor` (count of repo
+  workspaces, scan roots, last scan; `doctor_git.rs`). `scan` waits and prints `found N, registered
+  M new`. `add DIR` refuses a folder with no `.git` (pointing at `workspace add`) and otherwise is
+  `WorkspaceAdd`, which also writes the clone's `.txtodo/` exclude. `roots rm` accepts a folder that no
+  longer exists (a root can outlive its folder). `tests/e2e/repos.rs`: a real daemon with no seeded
+  root scans nothing until a root is added; then a clone is found, registered, listed, doctor warns
+  `txtodo git setup --dir …`, `git setup` clears it, and the root comes off.
+  - `Command::is_registry` replaced two copies of the `Workspace | Lists` match in `main.rs`, which
+    sat at its 400-line cap.

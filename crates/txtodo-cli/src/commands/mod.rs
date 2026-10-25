@@ -31,6 +31,7 @@ pub mod move_copy;
 pub mod notices;
 pub mod pair;
 pub mod refdir;
+pub mod repos;
 pub mod service;
 pub mod skill;
 pub mod sub_slug;

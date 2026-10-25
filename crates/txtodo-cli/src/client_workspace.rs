@@ -221,4 +221,11 @@ impl Daemon {
         let rep = self.rt.block_on(self.client.list_remove(req));
         Ok(rep.map_err(ClientError::Rpc)?.into_inner())
     }
+
+    /// The repo-scan roots and scan (task two-kinds-of-workspace): changes the roots, starts a scan
+    /// when asked, and answers the state. All-default reads it.
+    pub fn repos(&mut self, req: pb::ReposRequest) -> Result<pb::ReposResponse, ClientError> {
+        let rep = self.rt.block_on(self.client.repos(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
 }

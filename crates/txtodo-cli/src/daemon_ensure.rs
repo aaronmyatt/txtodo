@@ -27,6 +27,7 @@ pub fn needs_daemon(command: &Command) -> bool {
             | Command::Device { .. }
             | Command::Workspace { .. }
             | Command::Lists { .. }
+            | Command::Repos { .. }
             | Command::Bundle { .. }
     )
 }

@@ -3,12 +3,14 @@
 //! merge can stop on a conflict between two edits of one list; with it the lists merge line by line
 //! and no line is lost. The driver is set per clone (git never shares config), so every clone on
 //! every machine needs `txtodo git setup` once. A WARN, never a FAIL: a clone without it still
-//! works, and one set up gets no row.
+//! works, and one set up gets no row. Beside them one OK `repos` row says how many repo workspaces
+//! there are, where the daemon looks for more and when it last did.
 
 use std::path::Path;
 
 use super::doctor::{Check, Status, check};
 use super::git_setup::{Plan, plan_for};
+use crate::client::Daemon;
 use txtodo_proto::v1 as pb;
 
 /// One WARN row per repo workspace that is a git clone and still needs `txtodo git setup`. Mirrors
@@ -23,6 +25,25 @@ pub(super) fn git_checks(workspaces: &[pb::WorkspaceInfo]) -> Vec<Check> {
         .filter(|(_, plan)| !plan.is_empty())
         .map(|(w, plan)| git_row(&w.root, &plan))
         .collect()
+}
+
+/// The `repos` row: the repo workspaces among `workspaces` and the daemon's scan state. `None` from
+/// a daemon too old for the `Repos` RPC (or one that refuses it).
+pub(super) fn repos_check(
+    daemon: Option<&mut Daemon>,
+    workspaces: &[pb::WorkspaceInfo],
+) -> Option<Check> {
+    let scan = daemon?.repos(pb::ReposRequest::default()).ok()?;
+    let count = workspaces
+        .iter()
+        .filter(|w| w.kind() == pb::WorkspaceKind::Repo && !w.is_remote)
+        .count();
+    let when = super::repos::summary(&scan, super::repos::now_ms());
+    Some(check(
+        "repos",
+        Status::Ok,
+        format!("{count} repo workspace(s); {when}"),
+    ))
 }
 
 fn git_row(root: &str, plan: &Plan) -> Check {

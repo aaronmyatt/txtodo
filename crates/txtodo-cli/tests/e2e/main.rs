@@ -20,6 +20,7 @@ mod move_copy;
 mod nested_ref_sync;
 mod no_implicit_register;
 mod pairing;
+mod repos;
 mod sub_scope;
 mod workspace;
 mod workspace_offers;

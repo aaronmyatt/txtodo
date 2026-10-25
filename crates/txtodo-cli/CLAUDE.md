@@ -90,6 +90,12 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   a clone with no driver set up, naming `txtodo git setup --dir <root>`; none for a set-up clone, a list, a
   mirror or a plain folder). `commands/early.rs`
   answers `upgrade`, `merge-driver` and `git` before any path, config or daemon.
+- `repos [ls]`, `repos scan [--background]`, `repos add DIR`, `repos roots [add|rm DIR]` (task
+  two-kinds-of-workspace, `commands/repos.rs`): the git clones with a todo list the daemon knows, and
+  the folders it scans for more (`Repos` RPC; `add` is `WorkspaceAdd` after checking for a `.git`).
+  Device-level like `workspace`. `Command::is_registry` names the three device-level families
+  (`workspace`, `lists`, `repos`) so `main` neither adopts a layout nor announces the default for them.
+  `txtodo doctor` gets one `repos` OK row (count, roots, last scan) beside the `git` WARN rows.
 - `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
   (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
   txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none

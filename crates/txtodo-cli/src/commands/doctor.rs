@@ -10,7 +10,7 @@
 use crate::client::{self, Mode, SOCKET_REL};
 use crate::commands::doctor_bind::bind_checks;
 use crate::commands::doctor_clock::{clock_check, config_check};
-use crate::commands::doctor_git::git_checks;
+use crate::commands::doctor_git::{git_checks, repos_check};
 use crate::commands::doctor_overlap::{overlap_checks, registered_workspaces};
 use crate::commands::doctor_sync::sync_checks;
 use crate::commands::doctor_transport::{offers_check, transport_check};
@@ -330,6 +330,7 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.extend(overlap_checks(&workspaces));
     checks.extend(bind_checks(&workspaces));
     checks.extend(git_checks(&workspaces));
+    checks.extend(repos_check(state.daemon.as_deref_mut(), &workspaces));
     checks.push(skill_check());
     checks.extend(super::layout::doctor_checks(
         ctx,

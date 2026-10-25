@@ -141,11 +141,7 @@ fn run_with_daemon(
     // (`workspace list` from any folder registered it; `accept --dir x` tried to register `x`,
     // which the global `--dir` also received). A `--sublist` (from `sub`) already names the
     // document; the layout only knows the root.
-    let registry_command = matches!(
-        cli.command,
-        Command::Workspace { .. } | Command::Lists { .. }
-    );
-    if !registry_command && cli.sublist.is_none() {
+    if !cli.command.is_registry() && cli.sublist.is_none() {
         commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
     }
     dispatch_daemon(&ctx, &mut daemon, &cli.command)
@@ -157,14 +153,13 @@ fn run_with_daemon(
 /// machine where no daemon has run yet. Commands about the daemon or workspaces themselves skip it.
 fn announce_default_workspace(ctx: &Ctx, command: &Command) {
     if !ctx.paths.default_workspace
+        || command.is_registry()
         || matches!(
             command,
             Command::Doctor { .. }
                 | Command::Daemon { .. }
                 | Command::Skill { .. }
                 | Command::Notices { .. }
-                | Command::Workspace { .. }
-                | Command::Lists { .. }
         )
     {
         return;
@@ -248,6 +243,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Bundle { .. } => "bundle",
         Command::Workspace { .. } => "workspace",
         Command::Lists { .. } => "lists",
+        Command::Repos { .. } => "repos",
         Command::Skill { .. } => "skill",
         Command::Upgrade { .. } => "upgrade",
         Command::MergeDriver { .. } => "merge-driver",
@@ -307,6 +303,7 @@ fn dispatch_daemon_inner(
             commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
         }
         Command::Lists { action } => commands::lists::run(daemon, action.as_ref(), ctx.json),
+        Command::Repos { action } => commands::repos::run(daemon, action.as_ref(), ctx.json),
         Command::Bundle { action } => bundle::run(daemon, action),
         Command::Move { item, dest, src } => {
             commands::move_copy::move_via_daemon(ctx, daemon, item, dest, src.as_deref())

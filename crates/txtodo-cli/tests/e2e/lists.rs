@@ -33,14 +33,14 @@ fn wait_for(file: &Path, needle: &str) -> String {
 }
 
 /// A daemon, the folder every call runs from (no workspace), and its state dir.
-struct Fixture {
-    state: tempfile::TempDir,
+pub(crate) struct Fixture {
+    pub(crate) state: tempfile::TempDir,
     nowhere: tempfile::TempDir,
     daemon: GlobalDaemon,
 }
 
 impl Fixture {
-    fn new() -> Fixture {
+    pub(crate) fn new() -> Fixture {
         let state = tempfile::tempdir().unwrap();
         let daemon = GlobalDaemon::spawn(state.path());
         Fixture {
@@ -50,7 +50,7 @@ impl Fixture {
         }
     }
 
-    fn run(&self, args: &[&str]) -> Output {
+    pub(crate) fn run(&self, args: &[&str]) -> Output {
         txtodo(&self.daemon, self.nowhere.path(), args)
     }
 

@@ -338,6 +338,13 @@ pub enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// The git clones with a todo list that txtodo knows (task two-kinds-of-workspace): `ls`
+    /// (default), `scan` to look for more now, `add DIR`, `roots` to see or change the folders it
+    /// scans. Git syncs a repo's list; txtodo only keeps the daemon watching it.
+    Repos {
+        #[command(subcommand)]
+        action: Option<commands::repos::Action>,
+    },
     /// Git helpers for a repo's todo lists (task two-kinds-of-workspace): `setup` makes this clone
     /// merge todo lists line by line.
     Git {
@@ -366,4 +373,16 @@ pub enum Command {
         #[arg(long)]
         yes: bool,
     },
+}
+
+impl Command {
+    /// Whether this is about the daemon's registry of workspaces, not about a folder's document:
+    /// asking its layout, or announcing the default workspace, would register or create the
+    /// resolved `--dir`/cwd as a side effect.
+    pub fn is_registry(&self) -> bool {
+        matches!(
+            self,
+            Command::Workspace { .. } | Command::Lists { .. } | Command::Repos { .. }
+        )
+    }
 }
