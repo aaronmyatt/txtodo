@@ -69,15 +69,17 @@ pub(crate) enum SessionEnd {
 }
 
 impl SessionEnd {
-    /// From what the session saw: the peer its accepted `Hello` named, else the other protocol it
-    /// spoke, else why the `Hello` did not open.
+    /// From what the session saw: why the peer was refused, else the peer its accepted `Hello`
+    /// named, else the other protocol it spoke, else why the `Hello` did not open.
     pub(crate) fn of(
         peer: Option<DeviceId>,
         refused: Option<&'static str>,
         other_protocol: Option<u16>,
     ) -> SessionEnd {
         match (peer, other_protocol, refused) {
-            (Some(peer), _, _) => SessionEnd::Greeted(peer),
+            // A `Hello` that opened and was then refused (a removed device, `greet_for_peer`).
+            (Some(_), _, Some(kind)) => SessionEnd::Refused(kind),
+            (Some(peer), _, None) => SessionEnd::Greeted(peer),
             (None, Some(protocol), _) => SessionEnd::OtherProtocol(protocol),
             (None, None, Some(kind)) => SessionEnd::Refused(kind),
             (None, None, None) => SessionEnd::NoHello,

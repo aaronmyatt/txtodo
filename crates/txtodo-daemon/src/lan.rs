@@ -244,6 +244,10 @@ fn handle_sighting(
     let now_ms = ctx.clock.now_ms();
     if let Some(peer) = worth_dialing(sighting, table, dial_state, now_ms, ctx.device) {
         let peer = known_or(known_peers, peer);
+        // A device this one removed is not dialed, though mDNS still shows it.
+        if crate::group_rotation::is_removed(&ctx.identity, peer.device) {
+            return true;
+        }
         // A live LAN session already carries every shared workspace (task sync-live-push). One
         // live only over the relay is dialed anyway: the LAN session supersedes it.
         if ctx

@@ -73,6 +73,7 @@ mod lan_session;
 mod lan_session_dispatch;
 mod lan_session_gate;
 mod lan_session_live;
+mod lan_session_log;
 mod lan_session_ops;
 mod lan_session_shared;
 pub mod lan_status;

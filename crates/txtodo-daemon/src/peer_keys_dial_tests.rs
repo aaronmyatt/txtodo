@@ -70,6 +70,43 @@ async fn a_hello_sealed_for_another_group_ends_the_session_refused() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_valid_hello_from_a_removed_device_ends_the_session_refused() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let (ws, device, group, _) = make_workspace(dir.path(), [7; 32]);
+    {
+        let guard = crate::lan_session::read(&ws);
+        let mut store = guard
+            .identity_store()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let new = NewDevice {
+            device: peer_device(),
+            name: String::new(),
+            static_public: [0; txtodo_store::DEVICE_STATIC_KEY_BYTES],
+            paired_at_ms: 1,
+            last_known_wall_ms: None,
+            key_epoch: 0,
+        };
+        store
+            .register_device_as(&new, true)
+            .unwrap_or_else(|e| panic!("register: {e}"));
+        store
+            .remove_device(peer_device(), 2)
+            .unwrap_or_else(|e| panic!("remove: {e}"));
+    }
+    let (mut peer_link, mut b_link) = channel_link_pair();
+    let driver = tokio::task::spawn_blocking(move || {
+        drive_session_end(&mut b_link, (ws, device, group), Carrier::Lan)
+    });
+    assert!(peer_link.recv().is_ok(), "our own Hello goes out first");
+    let hello = hello_frame(group, &GroupKey::from_bytes([7; 32]));
+    assert!(peer_link.send(hello).is_ok());
+    let end = driver.await.unwrap_or_else(|e| panic!("driver: {e}"));
+    assert_eq!(end, SessionEnd::Refused("removed_peer"));
+    assert!(!end.greeted());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_session_whose_peer_never_sends_its_hello_is_not_greeted() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let (ws, device, group, _) = make_workspace(dir.path(), [7; 32]);
@@ -247,4 +284,25 @@ fn the_lan_fallback_dials_the_recorded_relay_node_id_or_nothing() {
     assert_eq!(peer_relay_node(&identity, without), None, "none recorded");
     assert_eq!(peer_relay_node(&identity, removed), None, "removed");
     assert_eq!(peer_relay_node(&identity, high_peer(4)), None, "unknown");
+}
+
+#[test]
+fn a_removed_device_is_out_of_the_resync_set_though_it_is_still_sighted() {
+    let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
+    let identity = identity_in(dir.path(), [7; 32]);
+    let (gone, kept) = (high_peer(1), high_peer(2));
+    for device in [gone, kept] {
+        register(&identity, device);
+    }
+    let known = known(&[gone, kept]);
+    let mut before = resync_set(&known, &identity);
+    before.sort();
+    assert_eq!(before, vec![kept, gone]);
+    identity
+        .store()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove_device(gone, 2)
+        .unwrap_or_else(|e| panic!("remove: {e}"));
+    assert_eq!(resync_set(&known, &identity), vec![kept]);
 }

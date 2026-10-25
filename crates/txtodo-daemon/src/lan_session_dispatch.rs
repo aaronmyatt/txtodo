@@ -17,6 +17,11 @@ use crate::device_relay::{WorkspaceRoute, WorkspaceRoutes};
 use crate::group_epoch::EpochKey;
 use crate::lan_session::{fetch_group_key, read, read_heads, retained_keys};
 use crate::lan_session_live::{Live, POLL, PushCtx};
+use crate::lan_session_log::{
+    log_frame_too_short_to_peek, log_no_group_key, log_no_routed_workspace,
+    log_own_devices_changed, log_removed_peer_refused, log_routes_changed,
+    log_unrouted_workspace_skipped,
+};
 use crate::lan_session_shared::{
     LINK_WORKSPACE, MAX_MESSAGES_PER_SESSION, SessionCtx, handle_link_hello,
     handle_workspace_message, open_and_decode_logged, send_message,
@@ -46,6 +51,8 @@ struct SharedCtx<'a> {
     own_at: u64,
     /// What this connection runs over.
     carrier: Carrier,
+    /// The device-wide identity, to refuse a peer this device removed.
+    identity: Arc<crate::device_identity::DeviceIdentity>,
 }
 
 /// The per-connection state every frame updates: the protocol `Session`, the push/liveness
@@ -74,14 +81,6 @@ fn any_route_now_ms(routes: &BTreeMap<WorkspaceId, WorkspaceRoute>) -> u64 {
         .next()
         .map(|route| read(&route.ws).clock().now_ms())
         .unwrap_or(0)
-}
-
-fn log_frame_too_short_to_peek() {
-    tracing::debug!("lan_session_frame_too_short_to_peek");
-}
-
-fn log_unrouted_workspace_skipped(workspace: WorkspaceId) {
-    tracing::debug!(%workspace, "lan_session_unrouted_workspace_message_skipped");
 }
 
 /// The link-level `Hello` branch of [`dispatch_frame`] — split out purely to keep that
@@ -120,6 +119,10 @@ fn greet_for_peer(
     conn: &mut Conn,
     peer: DeviceId,
 ) -> bool {
+    if crate::group_rotation::is_removed(&shared.identity, peer) {
+        conn.refused = Some("removed_peer");
+        return log_removed_peer_refused(peer);
+    }
     conn.routes = crate::lan_session_gate::session_routes(&shared.routes, peer);
     open_every_route(&mut conn.session, &conn.routes);
     let ids: Vec<WorkspaceId> = conn.routes.keys().copied().collect();
@@ -238,18 +241,6 @@ fn run_shared_message_loop(link: &mut dyn Link, shared: &SharedCtx<'_>, conn: &m
     tracing::warn!(cap = MAX_TURNS_PER_SESSION, "lan_session_turn_cap_reached");
 }
 
-/// A workspace opened or closed since this session greeted its set: end it, and the reconnect
-/// greets the new set (task `sync-live-push`).
-fn log_own_devices_changed() -> Option<()> {
-    tracing::info!("lan_session_own_devices_changed");
-    None
-}
-
-fn log_routes_changed() -> Option<()> {
-    tracing::debug!("lan_session_routes_changed_reconnecting");
-    None
-}
-
 /// Turns one connection runs before it is closed and redialed: at least a few hours at one
 /// [`POLL`] each, and never fewer than the old per-session message cap.
 const MAX_TURNS_PER_SESSION: usize = MAX_MESSAGES_PER_SESSION * 3;
@@ -291,14 +282,6 @@ fn open_every_route(session: &mut Session, routes: &BTreeMap<WorkspaceId, Worksp
     }
 }
 
-fn log_no_routed_workspace() {
-    tracing::debug!("lan_session_skipped_no_routed_workspace");
-}
-
-fn log_no_group_key() {
-    tracing::debug!("lan_session_skipped_no_group_key");
-}
-
 /// The crypto-material half of [`build_shared_ctx`] — `None` (logged) when no routed workspace's
 /// keystore holds the (necessarily shared, ADR 0021) group key, or the epoch table it builds
 /// refuses it. Split out purely to keep `build_shared_ctx` under this workspace's cognitive-
@@ -329,6 +312,7 @@ fn build_shared_ctx(
         return None;
     };
     let live_peers = read(&first.ws).live_peers().clone();
+    let identity = Arc::clone(read(&first.ws).identity());
     let own_at = live_peers.own_generation();
     Some(SharedCtx {
         table: routes,
@@ -342,6 +326,7 @@ fn build_shared_ctx(
         live_peers,
         own_at,
         carrier,
+        identity,
     })
 }
 
