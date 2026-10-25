@@ -437,3 +437,14 @@ What changed in the plan, and what I chose between.
     person who removes every root is not given it back. Empty means scan nothing.
   - Roots must be absolute (a leading `/` or a drive letter), at most 4 KiB, at most 64 of them.
     Two new `StoreError`s: `TooManyScanRoots`, `BadScanRoot`.
+- **proto repos.** Two RPCs, `Repos` and `MirrorsRetire`, not the four the todo line named.
+  - `Repos { add_roots, remove_roots, scan, wait }` answers `{ roots, last_scan_ms, running, found,
+    registered }`: one RPC for the whole scan family (list, add, remove, scan now), and all-empty
+    reads. Fewer methods also matters here: `server.rs` and `global_service.rs` sit at their
+    400-line limit and every RPC costs each of them a 6-line method.
+  - `WorkspacePrune.repo_mirrors` named a RPC that does not exist (`workspace prune` is CLI-side over
+    `WorkspaceList` and `WorkspaceRemove`), and a mirror must be moved aside by the daemon (close,
+    move, un-register). So it is a new `MirrorsRetire { workspace_id, dry_run }` returning the
+    `RetiredMirror`s. The `workspace prune --repo-mirrors` CLI flag, when it comes, calls it. The
+    later todo lines were reworded to match.
+  - As with the list RPCs, the daemon does not build between this commit and its handlers.

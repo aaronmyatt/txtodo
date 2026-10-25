@@ -101,6 +101,12 @@ which carrier syncs the workspace, read off its root by the daemon and never sto
 under `<data dir>/lists/`. A list's id comes from its name, so `ListEnsure` of an existing list
 returns it unchanged. UNSPECIFIED kind / UNIMPLEMENTED from an older daemon.
 
+`Repos` (`{ add_roots, remove_roots, scan, wait }` to `{ roots, last_scan_ms, running, found, registered }`)
+and `MirrorsRetire` (`{ workspace_id, dry_run }` to the `RetiredMirror`s) (task two-kinds-of-workspace, ADR
+0043): device-level. `Repos` edits the folders the daemon scans for git clones that hold a todo list and
+starts a scan; one RPC for the family keeps the daemon's two `Txtodo` impls short. `MirrorsRetire` moves
+a Remote mirror aside (never deletes) and un-registers it. UNIMPLEMENTED from an older daemon.
+
 `ConflictsResponse.duplicates` (field 2) and `Change.duplicate_groups` (field 6), ADR 0032 (task
 sync-drift/duplicate-flags, 2026-10-01): a file's exact-duplicate lines as `DuplicateGroup`s
 (`DuplicateTask`: task id as ULID text and 1-based line number, oldest id first), and how many groups

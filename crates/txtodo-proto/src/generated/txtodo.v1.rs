@@ -1280,6 +1280,65 @@ pub struct ListRemoveResponse {
     pub moved_to: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReposRequest {
+    /// absolute folders to scan under
+    #[prost(string, repeated, tag = "1")]
+    pub add_roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(string, repeated, tag = "2")]
+    pub remove_roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// start a scan now
+    #[prost(bool, tag = "3")]
+    pub scan: bool,
+    /// with `scan`: answer when it has finished
+    #[prost(bool, tag = "4")]
+    pub wait: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReposResponse {
+    /// the scan roots after any change
+    #[prost(string, repeated, tag = "1")]
+    pub roots: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// when the last scan finished; 0 for never
+    #[prost(uint64, tag = "2")]
+    pub last_scan_ms: u64,
+    /// a scan is going now
+    #[prost(bool, tag = "3")]
+    pub running: bool,
+    /// repos the last finished scan found
+    #[prost(uint32, tag = "4")]
+    pub found: u32,
+    /// of those, how many it registered that were new
+    #[prost(uint32, tag = "5")]
+    pub registered: u32,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MirrorsRetireRequest {
+    /// one mirror, or empty for every Remote mirror
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub dry_run: bool,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RetiredMirror {
+    #[prost(string, tag = "1")]
+    pub workspace_id: ::prost::alloc::string::String,
+    /// the mirror's folder
+    #[prost(string, tag = "2")]
+    pub root: ::prost::alloc::string::String,
+    /// where it went (or would go, on a dry run)
+    #[prost(string, tag = "3")]
+    pub moved_to: ::prost::alloc::string::String,
+    /// the name it showed
+    #[prost(string, tag = "4")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MirrorsRetireResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub mirrors: ::prost::alloc::vec::Vec<RetiredMirror>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DebugSetGroupKeyRequest {
     /// decimal u128, same encoding pairing_wire.rs's group_id already uses
     #[prost(string, tag = "1")]
@@ -2217,6 +2276,55 @@ pub mod txtodo_client {
                 .insert(GrpcMethod::new("txtodo.v1.Txtodo", "ListRemove"));
             self.inner.unary(req, path, codec).await
         }
+        /// The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+        /// change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+        /// starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+        /// and when the last scan finished come back.
+        pub async fn repos(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ReposRequest>,
+        ) -> std::result::Result<tonic::Response<super::ReposResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static("/txtodo.v1.Txtodo/Repos");
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new("txtodo.v1.Txtodo", "Repos"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+        /// of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+        /// mirror still being filled by a peer is the same as any other: its copy moves.
+        pub async fn mirrors_retire(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MirrorsRetireRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MirrorsRetireResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/txtodo.v1.Txtodo/MirrorsRetire",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("txtodo.v1.Txtodo", "MirrorsRetire"));
+            self.inner.unary(req, path, codec).await
+        }
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
         pub async fn pair_offer(
             &mut self,
@@ -2881,6 +2989,24 @@ pub mod txtodo_server {
             request: tonic::Request<super::ListRemoveRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListRemoveResponse>,
+            tonic::Status,
+        >;
+        /// The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+        /// change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+        /// starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+        /// and when the last scan finished come back.
+        async fn repos(
+            &self,
+            request: tonic::Request<super::ReposRequest>,
+        ) -> std::result::Result<tonic::Response<super::ReposResponse>, tonic::Status>;
+        /// Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+        /// of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+        /// mirror still being filled by a peer is the same as any other: its copy moves.
+        async fn mirrors_retire(
+            &self,
+            request: tonic::Request<super::MirrorsRetireRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::MirrorsRetireResponse>,
             tonic::Status,
         >;
         /// Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
@@ -4258,6 +4384,94 @@ pub mod txtodo_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListRemoveSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/Repos" => {
+                    #[allow(non_camel_case_types)]
+                    struct ReposSvc<T: Txtodo>(pub Arc<T>);
+                    impl<T: Txtodo> tonic::server::UnaryService<super::ReposRequest>
+                    for ReposSvc<T> {
+                        type Response = super::ReposResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ReposRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::repos(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ReposSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/txtodo.v1.Txtodo/MirrorsRetire" => {
+                    #[allow(non_camel_case_types)]
+                    struct MirrorsRetireSvc<T: Txtodo>(pub Arc<T>);
+                    impl<
+                        T: Txtodo,
+                    > tonic::server::UnaryService<super::MirrorsRetireRequest>
+                    for MirrorsRetireSvc<T> {
+                        type Response = super::MirrorsRetireResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::MirrorsRetireRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as Txtodo>::mirrors_retire(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = MirrorsRetireSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -1,4 +1,3 @@
-2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan @doing by:claude
 2026-10-25 daemon: repo_scan.rs, a pure walk (explicit stack, depth 8, skip list), tested on a temp tree +m11 @daemon @scan
 2026-10-25 daemon: register found repos as Repo (local .txtodo/ exclude first); scan after bind and every 6 h +m11 @daemon @scan
 2026-10-25 cli: txtodo repos [scan|add <dir>|roots add|rm]; doctor shows roots, count and last scan +m11 @cli @scan
@@ -7,8 +6,8 @@
 2026-10-25 mcp: register a git root on first use (nothing is offered now, so the cwd worry is gone) +m11 @mcp @cut
 2026-10-25 cli: register a git root on first use, same rule as mcp +m11 @cli @cut
 2026-10-25 daemon: retire default_alias, the foreign-default Remote mirror and its skip pass +m8 @daemon @cut
-2026-10-25 daemon: workspace prune with repo_mirrors moves each remote/<id>/ mirror aside, never deletes +m11 @daemon @cut
-2026-10-25 cli: doctor row per repo mirror (lines the clone lacks); prune --repo-mirrors; bind prints a pointer +m11 @cli @cut
+2026-10-25 daemon: MirrorsRetire moves each remote/<id>/ mirror aside and un-registers it, never deletes +m11 @daemon @cut
+2026-10-25 cli: doctor row per repo mirror (lines the clone lacks); workspace prune --repo-mirrors (MirrorsRetire); bind prints a pointer +m11 @cli @cut
 2026-10-25 backlog: close ref:bind-ui in the root list as superseded (bind retires for repos, lists need none) +m11
 2026-10-25 scripts: scripts/check-two-kinds.sh, self-asserting +m11 @test
 2026-10-25 docs: playbook, AGENTS.md block, skill install; web-pwa notes say browser lists, not mirrors; ADR 0043 as built +m11 @docs
@@ -33,3 +32,4 @@ x 2026-10-25 2026-10-25 cli: txtodo git setup (.gitattributes, merge.txtodo.driv
 x 2026-10-25 2026-10-25 cli: doctor row suggests git setup in a repo workspace that has no driver +m11 @cli @git — doctor_git.rs: a git WARN per repo clone with no merge driver, naming txtodo git setup --dir; none once set up
 x 2026-10-25 2026-10-25 cli: e2e: two clones add and complete lines, git pull, every line kept +m11 @cli @test @git — tests/it/git_two_clones.rs: real remote, two clones with git setup, adds and completes on both, git pull merges through the driver, every line kept and both clones end equal; the daemon watching the pull is not covered
 x 2026-10-25 2026-10-25 store: scan_roots table in registry.db +m11 @store @scan — scan_roots and scan_state tables made IF NOT EXISTS so user_version stays 2; seed once, add, remove, last scan time
+x 2026-10-25 2026-10-25 proto: ReposScan and ReposRoots (list, add, rm) RPCs; WorkspacePrune.repo_mirrors flag (additive) +m11 @proto @scan — Repos (roots + scan) and MirrorsRetire RPCs, additive; the daemon does not build until its handlers land

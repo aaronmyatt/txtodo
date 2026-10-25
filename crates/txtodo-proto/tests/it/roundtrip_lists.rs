@@ -6,7 +6,8 @@
 use prost::Message;
 use txtodo_proto::v1::{
     ListEnsureRequest, ListEnsureResponse, ListRemoveRequest, ListRemoveResponse,
-    ListRenameRequest, WorkspaceInfo, WorkspaceKind,
+    ListRenameRequest, MirrorsRetireRequest, MirrorsRetireResponse, ReposRequest, ReposResponse,
+    RetiredMirror, WorkspaceInfo, WorkspaceKind,
 };
 
 fn round_trip<M: Message + Default + PartialEq + std::fmt::Debug>(m: &M) {
@@ -64,4 +65,33 @@ fn the_kind_names_a_list_and_a_repo() {
         let back = WorkspaceInfo::decode(info.encode_to_vec().as_slice()).unwrap();
         assert_eq!(back.kind(), kind);
     }
+}
+
+#[test]
+fn the_repos_and_mirror_messages_round_trip() {
+    round_trip(&ReposRequest {
+        add_roots: vec!["/home/a/code".into()],
+        remove_roots: vec!["/home/a".into()],
+        scan: true,
+        wait: true,
+    });
+    round_trip(&ReposResponse {
+        roots: vec!["/home/a/code".into()],
+        last_scan_ms: 1_700_000_000_000,
+        running: false,
+        found: 12,
+        registered: 3,
+    });
+    round_trip(&MirrorsRetireRequest {
+        workspace_id: "01M4MJ4YSYDGEBJWYB3F85B3DP".into(),
+        dry_run: true,
+    });
+    round_trip(&MirrorsRetireResponse {
+        mirrors: vec![RetiredMirror {
+            workspace_id: "01M4MJ4YSYDGEBJWYB3F85B3DP".into(),
+            root: "/d/remote/01M4MJ4YSYDGEBJWYB3F85B3DP".into(),
+            moved_to: "/d/remote/01M4MJ4YSYDGEBJWYB3F85B3DP.rejoin-backup-2026".into(),
+            name: "givens".into(),
+        }],
+    });
 }

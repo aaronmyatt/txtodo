@@ -139,6 +139,19 @@ service Txtodo {
   // default list, NOT_FOUND for an unknown one.
   rpc ListRemove(ListRemoveRequest) returns (ListRemoveResponse);
 
+  // --- repos (task two-kinds-of-workspace, ADR 0043) ---
+  // A repo is a git clone holding a todo list; git syncs it, txtodo never does. Device-level.
+
+  // The folders the daemon scans for repos, and the scan itself. `add_roots` and `remove_roots`
+  // change the roots first (INVALID_ARGUMENT for a root that is not an absolute path); `scan` then
+  // starts a scan of them now, in the background unless `wait`. All empty reads the state. The roots
+  // and when the last scan finished come back.
+  rpc Repos(ReposRequest) returns (ReposResponse);
+  // Moves each Remote mirror of a workspace that is now a repo aside, into a time-stamped sibling
+  // of its folder (never deleted, never sent), and un-registers it. `dry_run` changes nothing. A
+  // mirror still being filled by a peer is the same as any other: its copy moves.
+  rpc MirrorsRetire(MirrorsRetireRequest) returns (MirrorsRetireResponse);
+
   // Starts a pairing handshake on this device and returns the QR payload (plan M4, design §4).
   rpc PairOffer(PairOfferRequest) returns (PairOfferResponse);
   // Accepts a peer's scanned PairOffer and begins the X25519 handshake; returns the 6-word SAS.
@@ -1053,6 +1066,39 @@ message ListRemoveRequest {
 message ListRemoveResponse {
   bool removed = 1;
   string moved_to = 2;   // where the folder went; empty when `removed` is false
+}
+
+// --- repos (task two-kinds-of-workspace, ADR 0043) ---
+
+message ReposRequest {
+  repeated string add_roots = 1;      // absolute folders to scan under
+  repeated string remove_roots = 2;
+  bool scan = 3;                      // start a scan now
+  bool wait = 4;                      // with `scan`: answer when it has finished
+}
+
+message ReposResponse {
+  repeated string roots = 1;          // the scan roots after any change
+  uint64 last_scan_ms = 2;            // when the last scan finished; 0 for never
+  bool running = 3;                   // a scan is going now
+  uint32 found = 4;                   // repos the last finished scan found
+  uint32 registered = 5;              // of those, how many it registered that were new
+}
+
+message MirrorsRetireRequest {
+  string workspace_id = 1;            // one mirror, or empty for every Remote mirror
+  bool dry_run = 2;
+}
+
+message RetiredMirror {
+  string workspace_id = 1;
+  string root = 2;                    // the mirror's folder
+  string moved_to = 3;                // where it went (or would go, on a dry run)
+  string name = 4;                    // the name it showed
+}
+
+message MirrorsRetireResponse {
+  repeated RetiredMirror mirrors = 1;
 }
 
 // --- test-only LAN sync seam (plan M4 `sync-lan-transport`) ---
