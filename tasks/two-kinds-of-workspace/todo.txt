@@ -1,4 +1,4 @@
-2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists
+2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists @doing by:claude
 2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists
 2026-10-25 desktop: switcher groups Lists and Repos; new, rename, remove; parity rows in the same commit +m11 @desktop @parity @lists
 2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists
