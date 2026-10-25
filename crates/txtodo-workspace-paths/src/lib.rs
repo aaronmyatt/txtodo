@@ -31,6 +31,8 @@ use std::path::{Path, PathBuf};
 
 mod kind;
 pub use kind::{WorkspaceKind, lists_dir_for, workspace_kind};
+mod list_pick;
+pub use list_pick::{ListRef, Pick, pick_list};
 mod walk_scope;
 pub use walk_scope::{RootOverlap, SKIPPED_DIR_NAMES, is_skipped_dir, root_overlap, walks_into};
 
