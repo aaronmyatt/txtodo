@@ -80,6 +80,15 @@ fn only_what_is_missing_is_planned() {
     assert_eq!(stale.attributes, ["done.txt merge=union"]);
     assert!(!stale.exclude, "`.txtodo` without the slash counts");
     assert!(stale.driver.is_some());
+    // The plain `txtodo` the daemon writes works as well, and is kept.
+    let bare = plan(
+        "",
+        ".txtodo/",
+        Some("txtodo merge-driver %O %A %B"),
+        &[],
+        "/opt/homebrew/bin/txtodo merge-driver %O %A %B",
+    );
+    assert!(bare.driver.is_none(), "{bare:?}");
 }
 
 #[test]

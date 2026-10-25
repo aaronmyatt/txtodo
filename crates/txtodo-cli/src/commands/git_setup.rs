@@ -11,6 +11,11 @@
 //! - `.txtodo/` in `.git/info/exclude`: the daemon's op log would otherwise sit untracked beside the
 //!   list, one `git add -A` from being committed. Local to the clone, changes nothing tracked.
 //!
+//! The daemon does all of this on its own for every repo it finds or registers (`repo_git.rs`), but
+//! writes the attributes to `.git/info/attributes` (per clone, not tracked) and the driver as plain
+//! `txtodo`. This command stays for a team that wants `.gitattributes` committed, and both
+//! places, and that driver, count as set up here and in `doctor`.
+//!
 //! A clone that never ran this gets git's own merge: it can conflict, it cannot lose a line.
 //! Ref: <https://git-scm.com/docs/gitattributes#_defining_a_custom_merge_driver>,
 //! <https://git-scm.com/docs/git-rev-parse#Documentation/git-rev-parse.txt---git-pathltpathgt>
@@ -82,7 +87,10 @@ pub fn plan(
             .cloned()
             .collect(),
         exclude: !(has(exclude, ".txtodo/") || has(exclude, ".txtodo")),
-        driver: (driver_now != Some(driver)).then(|| driver.to_owned()),
+        // The daemon sets the bare name, found on `PATH` when git runs it; that works, so it stays.
+        driver: (driver_now != Some(driver)
+            && driver_now != Some(&driver_command(Path::new("txtodo"))))
+        .then(|| driver.to_owned()),
     }
 }
 
@@ -152,8 +160,14 @@ pub fn plan_for(root: &Path) -> Result<(Plan, PathBuf), CliError> {
     let exclude_path = git_path(root, "info/exclude")?;
     let current = std::env::current_exe().map_err(CliError::Io)?;
     let driver = driver_command(&txtodo_path(std::env::var_os("PATH").as_deref(), &current));
+    // Git reads the committed file and the clone's own `info/attributes` alike.
+    let attributes = format!(
+        "{}\n{}",
+        read_or_empty(&root.join(".gitattributes")),
+        read_or_empty(&git_path(root, "info/attributes")?)
+    );
     let plan = plan(
-        &read_or_empty(&root.join(".gitattributes")),
+        &attributes,
         &read_or_empty(&exclude_path),
         git_config_get(root, "merge.txtodo.driver").as_deref(),
         &wanted_attributes(&todo_file),

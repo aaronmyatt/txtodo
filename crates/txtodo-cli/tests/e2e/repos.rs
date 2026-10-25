@@ -1,7 +1,8 @@
 //! `txtodo repos` and the doctor rows end to end (task `two-kinds-of-workspace`, ADR 0043): a real
 //! `txtodod` in true global mode, hermetic via `$TXTODO_SOCKET` (so it seeds no `$HOME` root and
 //! scans nothing on its own). A scan root is added, a clone with a todo list is found and
-//! registered, `doctor` warns that the clone has no merge driver, and `git setup` clears it.
+//! registered and readied for git by the daemon itself (no `git setup`), `doctor` warns only for a
+//! clone whose setup was undone, and `git setup` clears it.
 // Integration tests are tests: clippy.toml allows unwrap/expect in #[test] fns but not in their helpers.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
@@ -30,6 +31,19 @@ fn clone_at(home: &Path, rel: &str) -> std::path::PathBuf {
     assert!(init.status.success());
     std::fs::write(dir.join("todo.txt"), "a task\n").unwrap();
     dir.canonicalize().unwrap()
+}
+
+/// `git <args>` in the clone, with git's own environment scrubbed.
+fn git(repo: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(repo)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_owned()
 }
 
 /// `txtodo git setup` in the clone, with git's own environment scrubbed.
@@ -107,7 +121,7 @@ fn a_scan_root_comes_off_and_none_left_means_the_daemon_looks_nowhere() {
 }
 
 #[test]
-fn doctor_counts_the_repos_and_asks_for_git_setup_until_it_is_run() {
+fn a_clone_is_readied_by_the_daemon_and_doctor_asks_for_setup_only_if_it_is_undone() {
     if Command::new("git").arg("--version").output().is_err() {
         return;
     }
@@ -117,19 +131,31 @@ fn doctor_counts_the_repos_and_asks_for_git_setup_until_it_is_run() {
     let added = f.run(&["repos", "add", repo.to_str().unwrap()]);
     assert!(added.status.success(), "{}", stderr(&added));
 
+    // Registering readied it: git reads the driver and the attribute the daemon wrote.
+    assert_eq!(
+        git(&repo, &["config", "--get", "merge.txtodo.driver"]),
+        "txtodo merge-driver %O %A %B"
+    );
+    let attr = git(&repo, &["check-attr", "merge", "--", "tasks/x/todo.txt"]);
+    assert!(attr.ends_with("merge: txtodo"), "{attr}");
     let doctor = stdout(&f.run(&["doctor"]));
     assert!(
         doctor.contains("repos") && doctor.contains("1 repo workspace(s)"),
         "{doctor}"
     );
-    assert!(doctor.contains("txtodo git setup --dir"), "{doctor}");
-
-    git_setup(&repo);
-    let doctor = stdout(&f.run(&["doctor"]));
     assert!(
         !doctor.contains("txtodo git setup --dir"),
-        "set up: no warning\n{doctor}"
+        "no step left\n{doctor}"
     );
+
+    // An undone setup (an older clone, say) is asked for, and `git setup` clears it.
+    git(&repo, &["config", "--unset", "merge.txtodo.driver"]);
+    std::fs::remove_file(repo.join(".git/info/attributes")).unwrap();
+    let doctor = stdout(&f.run(&["doctor"]));
+    assert!(doctor.contains("txtodo git setup --dir"), "{doctor}");
+    git_setup(&repo);
+    let doctor = stdout(&f.run(&["doctor"]));
+    assert!(!doctor.contains("txtodo git setup --dir"), "{doctor}");
 }
 
 #[test]

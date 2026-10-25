@@ -80,7 +80,9 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   driver for a repo's todo lists (`%O %A %B`). Merges three ways with `txtodo_core::merge3` and writes
   the result over OURS; exit 0 merged, 1 left it to git (a file that is not UTF-8). Handled before any
   path, config or daemon, like `upgrade`. `tests/it/merge_driver_git.rs` runs a real `git merge` through it.
-- `git setup [--dry-run]` (task two-kinds-of-workspace, `commands/git_setup.rs`): makes the clone at or
+- `git setup [--dry-run]` (task two-kinds-of-workspace, `commands/git_setup.rs`; the daemon now does the
+  same for every repo it finds or registers, writing `.git/info/attributes` and a bare `txtodo` driver, and both
+  count as set up here and in `doctor`, so this is for a team that wants `.gitattributes` committed): makes the clone at or
   above `--dir`/cwd merge todo lists line by line. Each only if missing, so a second run changes
   nothing: `.gitattributes` (`todo.txt merge=txtodo`, the `txtodo.toml` root list too, `done.txt
   merge=union`; commit it), `merge.txtodo.driver` in this clone's config (`txtodo` as found on `PATH`
