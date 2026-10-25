@@ -1,4 +1,3 @@
-2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists @doing by:claude
 2026-10-25 proto: WorkspaceInfo.kind (additive); ListEnsure, ListRename, ListRemove RPCs +m11 @proto @lists
 2026-10-25 daemon: list-name check and list_id(name) with golden ids pinned; default_workspace.rs generalised +m11 @daemon @lists
 2026-10-25 daemon: ensure_list makes lists/<name>/ and registers it; no-rekey guard for every list id +m11 @daemon @lists
@@ -33,3 +32,4 @@
 2026-10-25 docs: playbook, AGENTS.md block, skill install; web-pwa notes say browser lists, not mirrors; ADR 0043 as built +m11 @docs
 x 2026-10-25 2026-10-25 docs: ADR 0043 two kinds of workspace; amends 0029, reverses the repo half of remote-mirror and bind +m11 @docs — docs/adr/0043-two-kinds-of-workspace.md, accepted; 0029 gets an amendment pointer
 x 2026-10-25 2026-10-25 mcp: a call that fell back to the default says so in the tool result, not on stderr +m11 @mcp — a call that names no workspace on a fallen-back server ends with a note block (fallback.rs); known gap: the text still says to run txtodo workspace add until git roots register themselves
+x 2026-10-25 2026-10-25 paths: WorkspaceKind { List, Repo } from the root; lists_dir beside default/ +m11 @daemon @lists — workspace_kind(env, root) reads the kind off the folder (kind.rs); known gap: nothing calls it yet, the proto line carries it to clients

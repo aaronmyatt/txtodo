@@ -237,3 +237,9 @@ What changed in the plan, and what I chose between.
   covers the whole tool set in one place. Not done: the `--global` and `--dir` targets add no note,
   since they never fall back. The text still names `txtodo workspace add`; the git-root
   auto-register line changes it.
+- **paths kind.** `txtodo-workspace-paths::{WorkspaceKind, lists_dir_for, workspace_kind}`
+  (`kind.rs`). The kind is read off the root, never stored: the default folder or anything inside
+  `lists/` is a List, every other folder is a Repo. Roots are compared as given and canonical
+  (the registry stores canonical roots; `/var` is `/private/var` on macOS), and the lists dir need
+  not exist yet. `lists_dir_for` follows an isolated daemon's `$TXTODO_SOCKET` like
+  `default_workspace_dir_for`. A moved default (`$TXTODO_DEFAULT_WORKSPACE`) is still the List.

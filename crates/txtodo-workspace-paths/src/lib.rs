@@ -29,6 +29,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+mod kind;
+pub use kind::{WorkspaceKind, lists_dir_for, workspace_kind};
 mod walk_scope;
 pub use walk_scope::{RootOverlap, SKIPPED_DIR_NAMES, is_skipped_dir, root_overlap, walks_into};
 
