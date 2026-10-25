@@ -484,3 +484,20 @@ What changed in the plan, and what I chose between.
   `txtodo git setup --dir …`, `git setup` clears it, and the root comes off.
   - `Command::is_registry` replaced two copies of the `Workspace | Lists` match in `main.rs`, which
     sat at its 400-line cap.
+- **daemon e2e harness.** Every `support::Daemon` now serves its `--dir` as a list, so the two-daemon
+  tests keep syncing once a plain folder stops. The `--dir` bridge keeps its state dir inside the
+  `--dir`, so its default `lists/` can never hold the `--dir`; `$TXTODO_LISTS_DIR` (read in
+  `boot_dirs.rs`, bridge only) moves that folder. `seed.rs::list_dirs` makes a lists folder and a
+  `work-*` folder inside it; `Daemon` keeps both alive. Global-mode tests use
+  `multi::list_dir_in(registry_dir, prefix)`, which makes the folder in `<registry dir>/lists/` (where
+  `lists_dir_for` already puts it). Seeded ids stay arbitrary, not name-derived: the gates that matter
+  to these tests key on the folder (`is_list_root`), and `lists_sync.rs` covers the name-derived path.
+  - The seeded constructors moved to `support/starts.rs` because `support/mod.rs` was at the cap.
+  - Not moved, on purpose, because each tests the repo-mirror path the cut removes, and a list is
+    not a mirror: `workspace_rejoin`, `workspace_name` (own line, rewrite on `ListEnsure`) and
+    `workspace_bind` (goes with bind).
+  - The cli's `pairing.rs` converge test cannot just swap its folders: it relies on the joiner's
+    folder adopting the initiator's id (`adopt_offered_workspace_id`), and a list keeps its own id.
+    It becomes "pair, then A's list arrives on B" (own line).
+  - Whole daemon e2e suite on the list-backed harness: 66 passed before the multi-workspace edits;
+    the four `file_carrier_converge`/`relay_multiplex` tests rerun green after.
