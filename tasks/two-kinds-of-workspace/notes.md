@@ -501,3 +501,11 @@ What changed in the plan, and what I chose between.
     It becomes "pair, then A's list arrives on B" (own line).
   - Whole daemon e2e suite on the list-backed harness: 66 passed before the multi-workspace edits;
     the four `file_carrier_converge`/`relay_multiplex` tests rerun green after.
+- **rejoin and name tests on lists.** `workspace_rejoin.rs`: A makes `work` with `ListEnsure`, adds its
+  two lines through `Apply`, and B finds the list it was offered (`list_with`, a List that is not the
+  default); the rest (dry run, backup beside the root, refilled from A, B's next edit reaches A) is
+  unchanged and passed first time, so rejoin needs nothing for lists. `workspace_name.rs`: the list
+  `plants` shows on B under the same name in a folder called `plants` (not the id), and a rename on
+  either side reaches the other through `txtodo.toml`. The mirror's offered name path
+  (`offered_name`, the "owner's offer carries the name" race) has no test now; it is mirror-only and
+  retires with them.
