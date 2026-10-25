@@ -13,6 +13,7 @@ use crate::group_rotation::is_removed;
 use crate::live_peers::Carrier;
 use crate::peer_keys_dial_tests::identity_in;
 use crate::prune_stale::{DAY_MS, PruneConfig};
+use crate::removal_why::{self, Removal, Why};
 
 const NOW: u64 = 30 * DAY_MS;
 
@@ -47,6 +48,14 @@ fn a_stale_peer_is_removed_and_the_key_rotates_for_the_one_that_stays() {
     register(&identity, 2, NOW - 1_000);
     round(&identity, &mut BTreeSet::new());
     assert!(is_removed(&identity, device(1)), "silent for 8 days");
+    let why = removal_why::read(&identity.store().lock().unwrap(), device(1));
+    assert_eq!(
+        why,
+        Some(Removal {
+            why: Why::PrunedQuiet,
+            by: identity.device()
+        })
+    );
     assert!(!is_removed(&identity, device(2)), "heard a second ago");
     assert_eq!(identity.group_epoch(), 1, "one rotation, for the kept peer");
 }

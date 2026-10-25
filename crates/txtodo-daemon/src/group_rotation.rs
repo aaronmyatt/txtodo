@@ -13,6 +13,7 @@
 //! Ref: `docs/adr/0044-auto-prune-stale-peers.md`.
 
 use txtodo_model::DeviceId;
+use txtodo_store::IdentityStore;
 use txtodo_sync::{
     ControlMessage, DeviceStaticPublic, KeyId, MAX_RETAINED_KEY_EPOCHS, Secret, wrap_grant_for,
 };
@@ -20,6 +21,7 @@ use txtodo_sync::{
 use crate::device_identity::DeviceIdentity;
 use crate::epoch_info::{self, EpochInfo};
 use crate::group_epoch;
+use crate::removal_why::{self, Removal, Why};
 
 /// One grant to send, and the epoch its frame is sealed under.
 pub(crate) struct OutGrant {
@@ -181,12 +183,25 @@ fn adopt(
             .iter()
             .filter(|d| **d != identity.device() && **d != sender)
         {
-            let _ = store.remove_device(*dropped, now_ms);
+            drop_followed(&mut store, *dropped, minter, now_ms);
         }
         let _ = store.set_device_key_epoch(sender, epoch);
     }
     identity.set_group_epoch(epoch);
     Ok(())
+}
+
+/// Tombstones a device the grant left out and records that `minter` dropped it. A row already
+/// removed keeps the reason it was removed for.
+fn drop_followed(store: &mut IdentityStore, dropped: DeviceId, minter: DeviceId, now_ms: u64) {
+    let active = matches!(store.device(dropped), Ok(Some(row)) if row.removed_at_ms.is_none());
+    if active && matches!(store.remove_device(dropped, now_ms), Ok(true)) {
+        let removal = Removal {
+            why: Why::LeftOut,
+            by: minter,
+        };
+        let _ = removal_why::write(store, dropped, removal);
+    }
 }
 
 /// Records that `peer` holds `epoch` (it said so, or it acknowledged a grant), never lowering what

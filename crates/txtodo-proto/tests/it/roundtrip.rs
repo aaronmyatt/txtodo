@@ -199,13 +199,16 @@ fn device_messages_round_trip() {
         id: "01ARZ3NDEKTSV4RRFFQ69G5FAV".into(),
         name: "laptop".into(),
         is_self: false,
-        removed: false,
+        removed: true,
         key_epoch: 2,
         paired_at_ms: 1_000,
         last_seen_ms: 2_000,
         skew_status: SkewStatus::Behind as i32,
         skew_ms: 400_000,
         own_device: true,
+        removed_reason: "pruned_quiet".into(),
+        removed_by: "01ARZ3NDEKTSV4RRFFQ69G5FAW".into(),
+        removed_at_ms: 3_000,
     });
     round_trip(&DeviceListResponse {
         devices: vec![Device::default()],

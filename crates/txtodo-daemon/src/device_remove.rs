@@ -28,6 +28,7 @@ use txtodo_sync::{
 
 use crate::device_identity::DeviceIdentity;
 use crate::epoch_info::{self, EpochInfo};
+use crate::removal_why::{self, Removal, Why};
 use crate::workspace::Workspace;
 
 /// What `txtodo device remove` did.
@@ -102,14 +103,25 @@ impl Workspace {
 }
 
 impl DeviceIdentity {
-    /// Removes `target` and rotates the group key to whatever devices remain (plan M4
-    /// `tasks/sync-device-remove`). Idempotent — removing an already-removed device rotates
-    /// nothing and says so — and guarded before any crypto runs via `validate_removal`, reused
-    /// unchanged from `txtodo-sync` (never self, never the last device in the group).
+    /// Removes `target` by hand: [`DeviceIdentity::remove_device_because`] for [`Why::Manual`].
     pub(crate) fn remove_device(
         &self,
         target: DeviceId,
         now_ms: u64,
+    ) -> Result<RemovalOutcome, RemoveDeviceError> {
+        self.remove_device_because(target, now_ms, Why::Manual)
+    }
+
+    /// Removes `target` and rotates the group key to whatever devices remain (plan M4
+    /// `tasks/sync-device-remove`), recording `why` beside the tombstone (`removal_why.rs`).
+    /// Idempotent — removing an already-removed device rotates nothing and says so — and guarded
+    /// before any crypto runs via `validate_removal`, reused unchanged from `txtodo-sync` (never
+    /// self, never the last device in the group).
+    pub(crate) fn remove_device_because(
+        &self,
+        target: DeviceId,
+        now_ms: u64,
+        why: Why,
     ) -> Result<RemovalOutcome, RemoveDeviceError> {
         // The identity store's Mutex is not reentrant, and `advance_group_epoch` below takes it
         // too — so every lock here is scoped to a block, never held across that call (a prior
@@ -171,6 +183,8 @@ impl DeviceIdentity {
             };
             epoch_info::write(&mut store, new_epoch, &info)?;
             store.remove_device(target, now_ms)?;
+            let by = self.device();
+            removal_why::write(&mut store, target, Removal { why, by })?;
         }
         self.set_group_epoch(new_epoch);
 

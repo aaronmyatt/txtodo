@@ -438,7 +438,10 @@ multiplex every workspace's traffic — not done by this task).
   `config.toml` (the daemon reads that file itself; values are `7d`/`12h`/`90m`/`30s` or integer seconds), else
   the defaults; an unreadable value is skipped with a `prune_config_value_ignored` warning. Logs `peer_pruned`
   (peer, why, epoch) and, once per peer, `peer_prune_failed`. Known gap: a peer the rotation cannot be made for
-  stays in place and is retried every tick. `tests/e2e/prune_repair.rs` is the two-daemon proof: B frozen past A's
+  stays in place and is retried every tick. `removal_why.rs` keeps why and by whom a row was removed (`meta`
+  `removed_why:<id>`; `manual`, `pruned_quiet`, `pruned_parked`, `left_out` for one dropped by following a grant) and
+  `DeviceList` sends it as `removed_reason`/`removed_by`/`removed_at_ms`; a row removed before it reads "".
+  `tests/e2e/prune_repair.rs` is the two-daemon proof: B frozen past A's
   4 s threshold is dropped, edits on both sides stay apart, and pairing again brings every line to both.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
   moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting

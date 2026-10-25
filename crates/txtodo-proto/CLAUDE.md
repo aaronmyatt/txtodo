@@ -11,7 +11,7 @@ Protobuf definitions and generated gRPC types.
 this — `PairResult.sas` empty means "still waiting" — to learn a joiner's `PairAccept` has reached
 it over the real LAN transport and show a real SAS, without the RPC itself ever blocking),
 `TokenCreate`, `TokenList`, `TokenRevoke`, `OpLogStream` (plan M7),
-`DeviceList`, `DeviceRemove` (plan M4 tasks/sync-device-remove),
+`DeviceList` (a removed row carries `removed_reason`, `removed_by`, `removed_at_ms`; task `peer-prune`), `DeviceRemove` (plan M4 tasks/sync-device-remove),
 `DebugSetGroupKey` (plan M4 `sync-lan-transport`, TEST-ONLY — refused unless the daemon was
 started with `TXTODO_TEST_HOOKS=1`).
 `UniversalTasks` (task `tui-revamp/universal-rpc`, 2026-09-25): device-level (no selector), every

@@ -247,3 +247,49 @@ async fn a_peer_on_another_protocol_is_named_beside_ours() {
         (split_ws.to_string().as_str(), "todo.txt", 4_000)
     );
 }
+
+/// Task `peer-prune`: a removed row says why, by whom and when; a live one carries none of it.
+#[tokio::test]
+async fn a_removed_row_in_the_device_list_says_why_by_whom_and_when() {
+    let dir = tempfile::tempdir().unwrap();
+    touch(&dir.path().join("todo.txt"), "one\n");
+    let clock = Arc::new(FakeClock::new(1_000));
+    let ws = Workspace::open(dir.path(), clock as Arc<dyn Clock>).unwrap_or_else(|e| panic!("{e}"));
+    register_peer(&ws, 1, 500);
+    register_peer(&ws, 2, 500);
+    ws.remove_device(device(1), 2_000).unwrap();
+    let me = ws.device().ulid().to_string();
+    let svc = TxtodoService::new(Arc::new(RwLock::new(ws)));
+
+    let devices = svc
+        .device_list_impl(Request::new(pb::DeviceListRequest { workspace: None }))
+        .await
+        .unwrap()
+        .into_inner()
+        .devices;
+    let gone = devices
+        .iter()
+        .find(|d| d.id == device(1).ulid().to_string());
+    let gone = gone.expect("the removed row is listed");
+    assert!(gone.removed);
+    assert_eq!(
+        (
+            gone.removed_reason.as_str(),
+            gone.removed_by.as_str(),
+            gone.removed_at_ms
+        ),
+        ("manual", me.as_str(), 2_000)
+    );
+    let kept = devices
+        .iter()
+        .find(|d| d.id == device(2).ulid().to_string());
+    let kept = kept.expect("the kept row is listed");
+    assert_eq!(
+        (
+            kept.removed_reason.as_str(),
+            kept.removed_by.as_str(),
+            kept.removed_at_ms
+        ),
+        ("", "", 0)
+    );
+}

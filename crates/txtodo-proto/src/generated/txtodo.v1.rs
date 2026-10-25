@@ -800,6 +800,17 @@ pub struct Device {
     /// before the question existed count as own. False from an older daemon.
     #[prost(bool, tag = "10")]
     pub own_device: bool,
+    /// Set on a removed row (task peer-prune, ADR 0044). "" when unknown (removed before the daemon
+    /// recorded it, or an older daemon); else "manual", "pruned_quiet", "pruned_parked" (this device
+    /// dropped it for being silent) or "left_out" (another device dropped it and this one followed).
+    #[prost(string, tag = "11")]
+    pub removed_reason: ::prost::alloc::string::String,
+    /// ULID text of the device that removed it; "" when unknown
+    #[prost(string, tag = "12")]
+    pub removed_by: ::prost::alloc::string::String,
+    /// 0 = not removed
+    #[prost(uint64, tag = "13")]
+    pub removed_at_ms: u64,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceListRequest {

@@ -259,3 +259,43 @@ fn what_a_peer_is_known_to_hold_only_goes_up() {
     assert_eq!(believed_epoch(&a.id, ghost(9)), None);
     assert!(!is_removed(&a.id, b.id.device()));
 }
+
+#[test]
+fn a_removal_remembers_why_and_by_whom_and_a_followed_one_names_the_minter() {
+    use crate::removal_why::{self, Removal, Why};
+    let (a, b) = a_rotates_the_ghost_out();
+    let read = |dev: &Dev, peer| removal_why::read(&dev.id.store().lock().unwrap(), peer);
+    assert_eq!(
+        read(&a, ghost(1)),
+        Some(Removal {
+            why: Why::Manual,
+            by: a.id.device()
+        })
+    );
+    let grant = grants_for(&a.id, b.id.device(), 0).remove(0).message;
+    apply_grant(&b.id, &grant, 3_000);
+    assert_eq!(
+        read(&b, ghost(1)),
+        Some(Removal {
+            why: Why::LeftOut,
+            by: a.id.device()
+        })
+    );
+}
+
+#[test]
+fn following_a_grant_keeps_the_reason_a_row_was_already_removed_for() {
+    use crate::removal_why::{self, Removal, Why};
+    let (a, b) = a_rotates_the_ghost_out();
+    b.id.remove_device(ghost(1), 2_500).unwrap();
+    let grant = grants_for(&a.id, b.id.device(), 0).remove(0).message;
+    apply_grant(&b.id, &grant, 3_000);
+    let kept = removal_why::read(&b.id.store().lock().unwrap(), ghost(1));
+    assert_eq!(
+        kept,
+        Some(Removal {
+            why: Why::Manual,
+            by: b.id.device()
+        })
+    );
+}

@@ -76,7 +76,7 @@ pub(crate) fn prune_once(
 ) {
     touch_live(identity, now_ms);
     for (peer, why) in stale_peers(identity, cfg, now_ms, up_since_ms) {
-        match identity.remove_device(peer, now_ms) {
+        match identity.remove_device_because(peer, now_ms, why.into()) {
             Ok(outcome) => log_peer_pruned(peer, why, outcome.rotated_to_epoch),
             Err(e) if failed.insert(peer) => log_prune_failed(peer, why, &e),
             Err(_) => {}

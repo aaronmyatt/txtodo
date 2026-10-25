@@ -735,6 +735,12 @@ message Device {
   // default-workspace-pairing-consent), so the default workspace merges with it. Devices paired
   // before the question existed count as own. False from an older daemon.
   bool own_device = 10;
+  // Set on a removed row (task peer-prune, ADR 0044). "" when unknown (removed before the daemon
+  // recorded it, or an older daemon); else "manual", "pruned_quiet", "pruned_parked" (this device
+  // dropped it for being silent) or "left_out" (another device dropped it and this one followed).
+  string removed_reason = 11;
+  string removed_by = 12;        // ULID text of the device that removed it; "" when unknown
+  uint64 removed_at_ms = 13;     // 0 = not removed
 }
 
 message DeviceListRequest {
