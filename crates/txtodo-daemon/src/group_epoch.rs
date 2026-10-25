@@ -10,7 +10,7 @@
 //! current one.
 
 use txtodo_sync::{
-    DevicePublicKey, DeviceSigningKey, GroupKey, GroupKeys, KeyId, KeyStore,
+    DevicePublicKey, DeviceSigningKey, GroupKey, GroupKeys, KEY_BYTES, KeyId, KeyStore,
     MAX_RETAINED_KEY_EPOCHS, derive_group_op_signing_key,
 };
 
@@ -30,9 +30,13 @@ impl EpochKey {
     }
 }
 
-/// `epoch`'s key from `store`: `Ok(None)` when none is stored, `Err` (what a human should hear)
-/// when the keystore fails or the stored bytes are not a key.
-pub(crate) fn fetch(store: &dyn KeyStore, epoch: u32) -> Result<Option<GroupKey>, String> {
+/// `epoch`'s key bytes from `store`, for a caller that wraps them to someone (`group_rotation.rs`).
+/// `Ok(None)` when none is stored, `Err` (what a human should hear) when the keystore fails or the
+/// stored bytes are not a key.
+pub(crate) fn fetch_raw(
+    store: &dyn KeyStore,
+    epoch: u32,
+) -> Result<Option<[u8; KEY_BYTES]>, String> {
     let stored = store
         .get(KeyId::Group(epoch))
         .map_err(|e| format!("the keystore could not read the group key: {e}"))?;
@@ -43,7 +47,12 @@ pub(crate) fn fetch(store: &dyn KeyStore, epoch: u32) -> Result<Option<GroupKey>
     let array = raw
         .try_into()
         .map_err(|_| format!("the stored group key is {} bytes, not 32", raw.len()))?;
-    Ok(Some(GroupKey::from_bytes(array)))
+    Ok(Some(array))
+}
+
+/// [`fetch_raw`] as a [`GroupKey`].
+pub(crate) fn fetch(store: &dyn KeyStore, epoch: u32) -> Result<Option<GroupKey>, String> {
+    Ok(fetch_raw(store, epoch)?.map(GroupKey::from_bytes))
 }
 
 /// Every epoch up to `current` that `store` holds, the newest [`MAX_RETAINED_KEY_EPOCHS`] of them.

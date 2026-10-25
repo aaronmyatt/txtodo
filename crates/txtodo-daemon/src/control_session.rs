@@ -12,6 +12,7 @@ use txtodo_model::{DeviceId, Ulid};
 use txtodo_store::WorkspaceId;
 use txtodo_sync::{ControlMessage, ControlSealError, GroupId, GroupKey, GroupKeys, Link};
 
+use crate::control_flow::Control;
 use crate::device_identity::DeviceIdentity;
 use crate::peer_keys::PeerSignal;
 use crate::workspace_offer_registry::{
@@ -21,71 +22,37 @@ use crate::workspace_registry::WorkspaceRegistry;
 
 /// Which group/epoch/key to seal under, bundled so `send_all_offers` stays under the
 /// arg-count budget — the same reason `txtodo_sync::sealed_ops::SealContext` exists.
-struct SealCtx<'a> {
-    group: GroupId,
-    epoch: u32,
-    key: &'a GroupKey,
+pub(crate) struct SealCtx<'a> {
+    pub(crate) group: GroupId,
+    pub(crate) epoch: u32,
+    pub(crate) key: &'a GroupKey,
 }
 
 /// One full exchange over an established connection. Runs on the caller's own thread, which must
 /// be a blocking one (`Link::send`/`recv` block, same invariant `lan_session.rs` documents).
-/// Returns what the peer's frames showed about its key, for `peer_keys.rs` (task sync-drift
-/// line 5).
+/// `dialed` is the peer this session dialed, `None` when it accepted: the dialer speaks first
+/// (`control_flow.rs`). Returns what the peer's frames showed about its key, for `peer_keys.rs`
+/// (task sync-drift line 5).
 pub(crate) fn drive_control_session(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
+    dialed: Option<DeviceId>,
 ) -> PeerSignal {
     let key = fetch_group_key(identity);
     record_offers_outcome(identity, &key);
-    let Some(key) = key.ok().flatten() else {
+    if key.ok().flatten().is_none() {
         return PeerSignal::Silent;
-    };
+    }
     let epoch = identity.group_epoch();
     let Some(keys) = crate::group_epoch::retained(identity.key_store().as_ref(), epoch) else {
         return PeerSignal::Silent;
     };
-    let ctx = SealCtx {
-        group: identity.group(),
-        epoch,
-        key: &key,
-    };
-
-    if !send_all_offers(link, identity, registry, &ctx) {
+    let mut control = Control::new(link, identity, registry, keys, dialed);
+    if !control.start() {
         return PeerSignal::Silent;
     }
-    read_until_closed(link, identity, &ctx, &keys)
-}
-
-/// Handles every message the peer sends until the link closes (`Opened` if any came) or one does
-/// not open (`OpenFailed`, which ends the session as before).
-fn read_until_closed(
-    link: &mut dyn Link,
-    identity: &DeviceIdentity,
-    ctx: &SealCtx<'_>,
-    keys: &GroupKeys,
-) -> PeerSignal {
-    let mut seen = PeerSignal::Silent;
-    let mut vouched = false;
-    loop {
-        match recv_control(link, ctx.group, keys) {
-            Ok(msg) => {
-                seen = PeerSignal::Opened;
-                // Once per session, to the first sender that is a direct own device: the list of
-                // ours (ADR 0029's amendment). An accepted session learns its peer only here.
-                if !vouched {
-                    vouched = true;
-                    let peer = crate::own_vouch::sender_of(&msg);
-                    if let Some(own) = crate::own_vouch::own_devices_for(identity, peer) {
-                        let _ = send_control(link, ctx, own);
-                    }
-                }
-                handle_one_message(identity, msg);
-            }
-            Err(PeerSignal::Silent) => return seen,
-            Err(failed) => return failed,
-        }
-    }
+    control.run()
 }
 
 /// The current epoch's group key. A keystore error, no key stored yet and a corrupt length used to
@@ -149,7 +116,7 @@ pub(crate) fn outbound_offers(
         .collect()
 }
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -173,7 +140,7 @@ fn log_seal_failed(e: &txtodo_sync::ControlSealError) {
 
 /// `Err(Silent)` once the link is closed or idle, `Err(OpenFailed(kind))` for a frame that did not
 /// open (logged here at debug; the once-per-peer warning is `peer_keys.rs`'s).
-fn recv_control(
+pub(crate) fn recv_control(
     link: &mut dyn Link,
     group: GroupId,
     keys: &GroupKeys,
@@ -203,7 +170,7 @@ fn control_error_kind(e: &ControlSealError) -> &'static str {
 
 /// Sends this device's every currently-active workspace as a fresh `Offer`. Returns `false` the
 /// moment the link fails, so the caller stops instead of trying the rest.
-fn send_all_offers(
+pub(crate) fn send_all_offers(
     link: &mut dyn Link,
     identity: &DeviceIdentity,
     registry: &Mutex<WorkspaceRegistry>,
@@ -225,7 +192,7 @@ fn send_all_offers(
     true
 }
 
-fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
+pub(crate) fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
     match msg {
         ControlMessage::Offer {
             sender,
@@ -239,6 +206,8 @@ fn handle_one_message(identity: &DeviceIdentity, msg: ControlMessage) {
         ControlMessage::OwnDevices { sender, devices } => {
             crate::own_vouch::record_own_devices(identity, sender, &devices);
         }
+        // Handled by the session itself (`control_flow.rs`), which holds the keys they move.
+        ControlMessage::Grant { .. } | ControlMessage::Epoch { .. } => {}
     }
 }
 

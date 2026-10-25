@@ -10,14 +10,12 @@
 //! device" step yet (`sync-lan-transport`'s live sessions are separate, later work), so store-then-
 //! tombstone is the only sequencing this daemon can enforce today.
 //!
-//! **Known gap, flagged for the human**: [`plan_rotation`] is called for real and does mint one
-//! [`WrappedGrant`] per remaining device, proving the crypto this task reuses actually integrates —
-//! but nothing persists or delivers those bytes anywhere. "A device offline during rotation comes
-//! back and finds its grant" (the task's own acceptance criterion) needs either a live transport
-//! session (`sync-lan-transport`, out of scope here) or a new pending-grants store this task did not
-//! add (out of scope: the brief asked for the `devices` table, not a second one). Each remaining
-//! device's `key_epoch` column is still advanced, recording what this device believes it has minted
-//! a grant for — not confirmation of delivery.
+//! The grants [`plan_rotation`] mints are not stored: the new key is in the keystore, and a grant is
+//! made again, with `group_rotation.rs::grants_for`, whenever a peer turns out to be behind (task
+//! `peer-prune`, ADR 0044). What a rotation records is who made the key and whom it dropped
+//! (`epoch_info.rs`), so that grant can name them. A kept peer's `key_epoch` is **not** advanced
+//! here: it means the newest epoch the peer is known to hold, and it only learns the new one when
+//! it reads the grant and says so.
 
 use std::collections::BTreeMap;
 
@@ -28,6 +26,8 @@ use txtodo_sync::{
     WrappedGrant, plan_rotation, validate_removal,
 };
 
+use crate::device_identity::DeviceIdentity;
+use crate::epoch_info::{self, EpochInfo};
 use crate::workspace::Workspace;
 
 /// What `txtodo device remove` did.
@@ -91,6 +91,17 @@ impl From<RotationError> for RemoveDeviceError {
 }
 
 impl Workspace {
+    /// Removes `target` and rotates the group key (see [`DeviceIdentity::remove_device`]).
+    pub(crate) fn remove_device(
+        &self,
+        target: DeviceId,
+        now_ms: u64,
+    ) -> Result<RemovalOutcome, RemoveDeviceError> {
+        self.identity().remove_device(target, now_ms)
+    }
+}
+
+impl DeviceIdentity {
     /// Removes `target` and rotates the group key to whatever devices remain (plan M4
     /// `tasks/sync-device-remove`). Idempotent — removing an already-removed device rotates
     /// nothing and says so — and guarded before any crypto runs via `validate_removal`, reused
@@ -105,7 +116,7 @@ impl Workspace {
         // version held it for the whole function and deadlocked on the second lock attempt).
         let (active_peers, row) = {
             let store = self
-                .identity_store()
+                .store()
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let active_peers: Vec<_> = store
@@ -147,17 +158,19 @@ impl Workspace {
             .put(KeyId::Group(new_epoch), &Secret::new(new_key.to_vec()))?;
         {
             let mut store = self
-                .identity_store()
+                .store()
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             store.meta_set(
                 crate::device_identity::GROUP_EPOCH_KEY,
                 &new_epoch.to_be_bytes(),
             )?;
+            let info = EpochInfo {
+                minter: self.device(),
+                left_out: vec![target],
+            };
+            epoch_info::write(&mut store, new_epoch, &info)?;
             store.remove_device(target, now_ms)?;
-            for device in remaining.keys() {
-                store.set_device_key_epoch(*device, new_epoch)?;
-            }
         }
         self.set_group_epoch(new_epoch);
 

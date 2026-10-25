@@ -22,6 +22,7 @@ mod conflicts_grpc;
 use txtodo_engine::contents;
 pub mod control_channel;
 mod control_dispatch;
+mod control_flow;
 mod control_session;
 pub mod convert;
 pub mod debounce;
@@ -35,7 +36,9 @@ mod devices_grpc;
 pub mod dir_bridge_guard;
 #[cfg(test)]
 mod dir_bridge_guard_tests;
+mod epoch_info;
 mod group_epoch;
+mod group_rotation;
 mod list_rpc;
 mod list_workspace;
 mod mirrors_retire;
@@ -195,6 +198,8 @@ mod actor_tests;
 mod bundle_tests;
 #[cfg(test)]
 mod control_dispatch_tests;
+#[cfg(test)]
+mod control_flow_tests;
 #[cfg(test)]
 mod control_session_tests;
 #[cfg(test)]

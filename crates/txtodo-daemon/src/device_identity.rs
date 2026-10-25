@@ -169,6 +169,14 @@ impl DeviceIdentity {
     pub fn device_static_public(&self) -> DeviceStaticPublic {
         self.device_static.public_key()
     }
+    /// Opens a rotation grant a peer wrapped to this device's long-term key (task `peer-prune`); the
+    /// secret never leaves this type.
+    pub(crate) fn open_grant(
+        &self,
+        grant: &txtodo_sync::WrappedGrant,
+    ) -> Result<[u8; txtodo_sync::KEY_BYTES], txtodo_sync::RotationError> {
+        txtodo_sync::open_grant(grant, &self.device_static)
+    }
     /// This device's persisted relay-transport identity seed (task
     /// `daemon-workspace-identity-agreement` stage 1), stable across restarts. Opaque bytes: only
     /// `txtodo_sync::holepunch::RelayEndpoint::bind_with_secret_key` turns this into a real `iroh`

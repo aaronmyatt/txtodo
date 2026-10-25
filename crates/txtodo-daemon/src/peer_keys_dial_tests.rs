@@ -113,7 +113,7 @@ fn a_control_frame_sealed_for_another_group_is_reported() {
     let frame = seal_control(&offer, other, 0, &GroupKey::from_bytes([9; 32]))
         .unwrap_or_else(|e| panic!("seal: {e}"));
     assert!(peer_link.send(frame).is_ok());
-    let seen = drive_control_session(&mut link, &identity, &registry);
+    let seen = drive_control_session(&mut link, &identity, &registry, None);
     assert_eq!(seen, PeerSignal::OpenFailed(WRONG_GROUP));
 }
 

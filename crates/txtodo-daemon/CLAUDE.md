@@ -413,6 +413,19 @@ multiplex every workspace's traffic — not done by this task).
   the key of the epoch its frame names (`txtodo_sync::sealed_epoch`). `DeviceIdentity::set_group_epoch`
   bumps the live-peers generation, so a rotation ends live sessions and they reseal. At epoch 0, as every
   device is today, nothing on the wire changed.
+- Rotation (task `peer-prune`, ADR 0044). `device_remove.rs`: `DeviceIdentity::remove_device` (the
+  `Workspace` method delegates) makes the next epoch's key, records who made it and whom it dropped
+  (`epoch_info.rs`, `meta` `group_epoch_info:<n>`), tombstones the target, and moves the epoch, which ends
+  live sync sessions. It no longer advances a kept peer's `key_epoch`: that is the newest epoch the peer is
+  known to hold, set when the peer says so. `group_rotation.rs`: `grants_for(identity, peer, peer_epoch)`
+  makes the grant chain again from the keystore (no store of grants), each sealed under the epoch before;
+  a device the rotation dropped gets none. `apply_grant` opens a grant with this device's long-term key,
+  files the key, moves the epoch, drops the devices it leaves out, and settles two keys for one epoch (the
+  lower minter id wins). `control_flow.rs` is the order of a control session: the dialer says `Epoch` first,
+  the acceptor answers, a device ahead sends the grants, then both send offers under the current epoch; a
+  grant is answered with `Epoch`; a frame from a removed device ends the session. Known gaps: a
+  file-carrier-only device has no control channel to receive a grant on; a device that loses the tie-break
+  keeps its own drops (they converge when each device's own clock prunes).
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
   moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
   text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),
