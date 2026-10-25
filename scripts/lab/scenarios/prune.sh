@@ -1,7 +1,8 @@
 # scripts/lab/scenarios/prune.sh — sourced by scripts/lab/lib/run.sh.
-# Three devices; b1 goes away (lid shut) past the quiet threshold, a1 and a2 drop it and rotate the
-# group key (ADR 0044), b1 wakes and learns it was dropped, then pairs with a1 again and every
-# device ends with every line, the ones b1 made while dropped included.
+# Three devices, a1 the hub (a2 and b1 each paired with a1 only). b1 goes away (lid shut) past the
+# quiet threshold; a1 drops it and rotates the group key (ADR 0044) and a2 follows. b1 wakes and
+# learns it was dropped, then pairs with a1 again and every device ends with every line, the ones b1
+# made while dropped included.
 TOPOLOGY=lan
 DEVICES=(a1 b1 a2)
 PROFILE=three
@@ -14,6 +15,13 @@ dropped_on() {
   local n
   n=$(tx "$1" --json device list | jq -s '[.[] | select(.removed)] | length') || return 1
   [ "${n:-0}" -ge 1 ]
+}
+
+# on_new_epoch <device>: it holds the group key a1 made when it dropped b1 (a2 never paired with b1,
+# so it has no row to mark; its row for a1 says the epoch a1 is known to hold).
+on_new_epoch() {
+  tx "$1" --json device list |
+    jq -se '[.[] | select((.removed | not) and .key_epoch >= 1)] | length > 0' >/dev/null
 }
 
 # knows_it_was_dropped <device>: doctor's `group` row is a FAIL (Health.dropped_from_group).
@@ -33,11 +41,11 @@ scenario_main() {
     fail "prune: a1 did not drop the sleeping b1 within 150s"
     return 0
   fi
-  if ! wait_for 90 dropped_on a2; then
-    fail "prune: a2 did not drop the sleeping b1 within 90s"
+  if ! wait_for 90 on_new_epoch a2; then
+    fail "prune: a2 did not follow a1's new group key within 90s"
     return 0
   fi
-  log "prune: a1 and a2 dropped b1"
+  log "prune: a1 dropped b1 and a2 follows its key"
 
   # a1 and a2 carry on under the new key; b1 wakes and edits on its own.
   workload 2 6 a1 a2
