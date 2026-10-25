@@ -4,7 +4,8 @@
 use txtodo_model::{DeviceId, Ulid};
 
 use crate::peer_keys::{
-    MAX_TRACKED_PEERS, Noted, PARK_AFTER, PeerKeys, PeerSignal, SessionEnd, WRONG_GROUP,
+    DROPPED_AFTER, MAX_TRACKED_PEERS, Noted, PARK_AFTER, PeerKeys, PeerSignal, SessionEnd,
+    UNKNOWN_EPOCH, WRONG_GROUP,
 };
 
 fn peer(n: u128) -> DeviceId {
@@ -148,4 +149,50 @@ fn only_a_greeted_session_is_a_successful_dial() {
     assert!(SessionEnd::Greeted(peer(1)).greeted());
     assert!(!SessionEnd::Refused(WRONG_GROUP).greeted());
     assert!(!SessionEnd::NoHello.greeted());
+}
+
+fn unknown_epoch(keys: &PeerKeys, from: Option<DeviceId>, times: u32) {
+    for _ in 0..times {
+        keys.book(from, PeerSignal::OpenFailed(UNKNOWN_EPOCH), "sync");
+    }
+}
+
+/// Task `peer-prune`, ADR 0044: a device the group left out sees only frames it holds no key for.
+#[test]
+fn unknown_epoch_opens_in_a_row_from_anyone_mean_dropped_from_the_group() {
+    let keys = PeerKeys::default();
+    unknown_epoch(&keys, Some(peer(1)), DROPPED_AFTER - 1);
+    assert!(!keys.dropped_from_group(), "one short of the limit");
+    unknown_epoch(&keys, None, 1);
+    assert!(
+        keys.dropped_from_group(),
+        "an unnamed incoming peer counts too"
+    );
+}
+
+#[test]
+fn a_frame_that_opens_the_epoch_or_the_group_moving_ends_the_run() {
+    let keys = PeerKeys::default();
+    unknown_epoch(&keys, Some(peer(1)), DROPPED_AFTER);
+    keys.book(Some(peer(2)), PeerSignal::Opened, "control");
+    assert!(!keys.dropped_from_group(), "a peer opened: not dropped");
+
+    unknown_epoch(&keys, Some(peer(1)), DROPPED_AFTER);
+    keys.clear_epoch_misses();
+    assert!(!keys.dropped_from_group(), "the epoch moved");
+
+    unknown_epoch(&keys, Some(peer(1)), DROPPED_AFTER);
+    keys.clear();
+    assert!(!keys.dropped_from_group(), "the group changed");
+}
+
+#[test]
+fn other_failures_neither_count_nor_end_the_run() {
+    let keys = PeerKeys::default();
+    unknown_epoch(&keys, Some(peer(1)), DROPPED_AFTER - 1);
+    wrong_group(&keys, peer(2), 1);
+    keys.book(Some(peer(1)), PeerSignal::Silent, "sync");
+    assert!(!keys.dropped_from_group());
+    unknown_epoch(&keys, Some(peer(1)), 1);
+    assert!(keys.dropped_from_group(), "the earlier run was kept");
 }

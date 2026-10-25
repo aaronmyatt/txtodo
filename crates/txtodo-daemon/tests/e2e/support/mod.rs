@@ -55,6 +55,29 @@ pub struct Daemon {
     client: Client,
     writes_baseline: u64,
     seq_baseline: i64,
+    /// What the daemon wrote to stderr so far, read by a thread: the JSON file log is buffered and
+    /// lags, and an unread pipe fills and stalls a chatty daemon.
+    stderr: std::sync::Arc<std::sync::Mutex<String>>,
+}
+
+/// Copies `child`'s stderr into the returned buffer until the process ends.
+fn drain_stderr(child: &mut Child) -> std::sync::Arc<std::sync::Mutex<String>> {
+    use std::io::BufRead;
+    let buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(pipe) = child.stderr.take() {
+        let sink = std::sync::Arc::clone(&buffer);
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(pipe).lines().map_while(Result::ok) {
+                let mut text = sink.lock().unwrap_or_else(|e| e.into_inner());
+                // Bounded: a debug-level daemon can write a great deal.
+                if text.len() < 4_000_000 {
+                    text.push_str(&line);
+                    text.push('\n');
+                }
+            }
+        });
+    }
+    buffer
 }
 
 /// Dials the socket; a daemon that has bound but not yet accepted answers a few hundred ms later,
@@ -132,7 +155,7 @@ impl Daemon {
         if !extra_args.iter().any(|a| a == "--relay") {
             args.push("--no-relay".into());
         }
-        let child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_txtodod"))
             .args(&args)
             .args(extra_args)
             // Production redials every 15 s (`lan.rs::RESYNC_INTERVAL`); deadlines here assume 1 s.
@@ -143,6 +166,7 @@ impl Daemon {
             .stderr(Stdio::piped())
             .spawn()
             .unwrap_or_else(|e| panic!("spawn txtodod: {e}"));
+        let stderr = drain_stderr(&mut child);
         let socket = dir.path().join(".txtodo").join("txtodod.sock");
         let start = Instant::now();
         while !socket.exists() {
@@ -157,6 +181,7 @@ impl Daemon {
             client,
             writes_baseline: 0,
             seq_baseline: 0,
+            stderr,
         };
         d.settle().await;
         let health = d.health().await;
@@ -214,6 +239,8 @@ impl Daemon {
             out.push_str(&format!("--- {} ---\n", entry.path().display()));
             out.push_str(&std::fs::read_to_string(entry.path()).unwrap_or_default());
         }
+        out.push_str("--- stderr ---\n");
+        out.push_str(&self.stderr.lock().unwrap_or_else(|e| e.into_inner()));
         out
     }
 

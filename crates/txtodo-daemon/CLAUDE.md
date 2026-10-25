@@ -441,6 +441,9 @@ multiplex every workspace's traffic — not done by this task).
   stays in place and is retried every tick. `removal_why.rs` keeps why and by whom a row was removed (`meta`
   `removed_why:<id>`; `manual`, `pruned_quiet`, `pruned_parked`, `left_out` for one dropped by following a grant) and
   `DeviceList` sends it as `removed_reason`/`removed_by`/`removed_at_ms`; a row removed before it reads "".
+  A device the group left out learns it from `peer_keys.rs`: 3 `unknown_epoch` opens in a row from anyone, none ended by an
+  opened frame, a new epoch or a new group, set `Health.dropped_from_group`. A removed device is still dialed (growing
+  backoff, its `Hello` refused) so it hears; the relay paths skip it (a relay device dials the pruner itself).
   `tests/e2e/prune_repair.rs` is the two-daemon proof: B frozen past A's
   4 s threshold is dropped, edits on both sides stay apart, and pairing again brings every line to both.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`

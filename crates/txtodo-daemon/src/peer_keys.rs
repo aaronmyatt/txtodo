@@ -19,6 +19,7 @@
 //! `Hello` opens, so the failures of incoming sessions share one `unknown` peer.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use txtodo_model::DeviceId;
@@ -37,6 +38,16 @@ pub(crate) const MAX_TRACKED_PEERS: usize = 256;
 /// The kind of an open failure for a frame sealed under another group's key
 /// (`CryptoError::WrongGroup`, named in `lan_session_shared.rs`'s `crypto_error_kind`).
 pub(crate) const WRONG_GROUP: &str = "wrong_group";
+
+/// The kind of an open failure for a frame sealed under an epoch this device holds no key for
+/// (`CryptoError::UnknownEpoch`): a peer ahead of us whose grant has not reached us, or, if it never
+/// does, a group this device was dropped from.
+pub(crate) const UNKNOWN_EPOCH: &str = "unknown_epoch";
+
+/// `unknown_epoch` opens in a row, from anyone, after which this device calls itself dropped from
+/// the group (ADR 0044). A grant normally arrives in the control session of the same resync tick, so
+/// the run is one or two long when a peer is merely ahead.
+pub(crate) const DROPPED_AFTER: u32 = 3;
 
 /// The kind logged for a peer on another sync protocol.
 pub(crate) const OTHER_PROTOCOL: &str = "other_protocol";
@@ -134,6 +145,9 @@ pub(crate) struct Noted {
 #[derive(Clone, Default)]
 pub(crate) struct PeerKeys {
     peers: Arc<Mutex<BTreeMap<Option<DeviceId>, PeerKey>>>,
+    /// `unknown_epoch` opens in a row from any peer, ended by any frame opening, a new epoch or a
+    /// new group: not per peer, since a device dropped from the group often cannot tell who sent it.
+    epoch_misses: Arc<AtomicU32>,
 }
 
 impl PeerKeys {
@@ -143,6 +157,7 @@ impl PeerKeys {
         match signal {
             PeerSignal::Silent => {}
             PeerSignal::Opened => {
+                self.clear_epoch_misses();
                 if let Some(peer) = peer {
                     self.forget(peer, "opened");
                     self.set_other_protocol(peer, None);
@@ -156,6 +171,7 @@ impl PeerKeys {
                 }
             }
             PeerSignal::OpenFailed(kind) => {
+                self.note_epoch_miss(kind);
                 let noted = self.note_failure(peer, kind);
                 log_open_failed(peer, kind, channel, noted.first);
                 if noted.parked_now {
@@ -251,11 +267,42 @@ impl PeerKeys {
     /// Our group changed: nothing seen under the old one says anything about the new one.
     pub(crate) fn clear(&self) {
         self.lock().clear();
+        self.clear_epoch_misses();
+    }
+
+    /// Counts an open failure when it is `unknown_epoch`; logs once as the run reaches
+    /// [`DROPPED_AFTER`].
+    fn note_epoch_miss(&self, kind: &'static str) {
+        if kind != UNKNOWN_EPOCH {
+            return;
+        }
+        let run = self
+            .epoch_misses
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        if run == DROPPED_AFTER {
+            log_dropped_from_group();
+        }
+    }
+
+    /// Ends the run of `unknown_epoch` opens: a frame opened, or the epoch or group moved.
+    pub(crate) fn clear_epoch_misses(&self) {
+        self.epoch_misses.store(0, Ordering::Relaxed);
+    }
+
+    /// Whether every session lately showed only frames this device holds no key for: it was left
+    /// out of the group and has to pair again.
+    pub(crate) fn dropped_from_group(&self) -> bool {
+        self.epoch_misses.load(Ordering::Relaxed) >= DROPPED_AFTER
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<Option<DeviceId>, PeerKey>> {
         self.peers.lock().unwrap_or_else(PoisonError::into_inner)
     }
+}
+
+fn log_dropped_from_group() {
+    tracing::warn!(after = DROPPED_AFTER, "dropped_from_group");
 }
 
 fn peer_name(peer: Option<DeviceId>) -> String {

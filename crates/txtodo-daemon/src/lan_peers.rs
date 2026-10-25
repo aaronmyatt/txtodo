@@ -135,8 +135,10 @@ pub(crate) fn known_or(known_peers: &KnownPeers, peer: DiscoveredPeer) -> Discov
 /// `relay_autodial::resync_and_dial` calls this each tick and then gates each one through
 /// [`try_begin_dial`], so a peer whose last dial failed is left alone until its backoff elapses.
 /// A parked peer (no shared key, `peer_keys.rs`) is left out: known peers are never pruned, so a
-/// peer that joined another group would otherwise be dialed forever. So is a removed one
-/// (`group_rotation::is_removed`): it may still hold an old key and answer.
+/// peer that joined another group would otherwise be dialed forever. A removed one is still dialed,
+/// with the growing backoff of any dial that gets no `Hello` back: it cannot open ours, which is how
+/// it learns it was dropped (`PeerKeys::dropped_from_group`). Its own `Hello`, if it sent one, is
+/// refused (`lan_session_dispatch::greet_for_peer`), so nothing syncs.
 pub(crate) fn peers_to_resync(
     known_peers: &KnownPeers,
     identity: &DeviceIdentity,
@@ -146,11 +148,7 @@ pub(crate) fn peers_to_resync(
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .values()
-        .filter(|p| {
-            device < p.device
-                && !keys.is_parked(p.device)
-                && !crate::group_rotation::is_removed(identity, p.device)
-        })
+        .filter(|p| device < p.device && !keys.is_parked(p.device))
         .cloned()
         .collect()
 }

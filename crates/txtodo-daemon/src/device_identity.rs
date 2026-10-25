@@ -233,6 +233,7 @@ impl DeviceIdentity {
         );
         if old != new_epoch {
             self.live_peers.bump_own_generation();
+            self.peer_keys.clear_epoch_misses();
         }
     }
     /// This daemon's in-flight pairing bookkeeping — one attempt at a time, for the whole device,

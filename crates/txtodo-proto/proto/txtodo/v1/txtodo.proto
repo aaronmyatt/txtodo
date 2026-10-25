@@ -513,6 +513,10 @@ message HealthResponse {
   string offers_problem = 22;
   // How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
   uint64 offers_problem_age_ms = 23;
+  // Every session lately showed only frames sealed under a group key this device does not hold: it
+  // was dropped from the group (another device pruned or removed it) and has to pair again (task
+  // peer-prune, ADR 0044). Clears when a frame opens, the epoch moves, or it pairs. Device-level.
+  bool dropped_from_group = 24;
 }
 
 // --- notes.md (plan M5, design §7) ---

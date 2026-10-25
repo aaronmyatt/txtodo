@@ -491,6 +491,11 @@ pub struct HealthResponse {
     /// How long ago `offers_problem` was seen, milliseconds; 0 when it is empty.
     #[prost(uint64, tag = "23")]
     pub offers_problem_age_ms: u64,
+    /// Every session lately showed only frames sealed under a group key this device does not hold: it
+    /// was dropped from the group (another device pruned or removed it) and has to pair again (task
+    /// peer-prune, ADR 0044). Clears when a frame opens, the epoch moves, or it pairs. Device-level.
+    #[prost(bool, tag = "24")]
+    pub dropped_from_group: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NotesDoc {

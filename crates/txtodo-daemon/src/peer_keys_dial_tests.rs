@@ -287,22 +287,17 @@ fn the_lan_fallback_dials_the_recorded_relay_node_id_or_nothing() {
 }
 
 #[test]
-fn a_removed_device_is_out_of_the_resync_set_though_it_is_still_sighted() {
+fn a_removed_device_is_still_dialed_so_it_hears_it_was_dropped() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("tempdir: {e}"));
     let identity = identity_in(dir.path(), [7; 32]);
-    let (gone, kept) = (high_peer(1), high_peer(2));
-    for device in [gone, kept] {
-        register(&identity, device);
-    }
-    let known = known(&[gone, kept]);
-    let mut before = resync_set(&known, &identity);
-    before.sort();
-    assert_eq!(before, vec![kept, gone]);
+    let gone = high_peer(1);
+    register(&identity, gone);
+    let known = known(&[gone]);
     identity
         .store()
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .remove_device(gone, 2)
         .unwrap_or_else(|e| panic!("remove: {e}"));
-    assert_eq!(resync_set(&known, &identity), vec![kept]);
+    assert_eq!(resync_set(&known, &identity), vec![gone]);
 }

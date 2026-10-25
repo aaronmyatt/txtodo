@@ -70,6 +70,20 @@ async fn peer_removed(a: &mut Daemon) -> bool {
         .any(|d| !d.is_self && d.removed)
 }
 
+/// Polls `Health.dropped_from_group` until it reads `want`.
+async fn wait_for_dropped_flag(d: &mut Daemon, other: &Daemon, want: bool) {
+    let start = Instant::now();
+    while d.health().await.dropped_from_group != want {
+        assert!(
+            start.elapsed() < CONVERGE_DEADLINE,
+            "dropped_from_group never became {want}\n--- log ---\n{}\n--- other's log ---\n{}",
+            d.log_tail(),
+            other.log_tail()
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
 #[tokio::test]
 async fn a_pruned_device_pairs_again_and_catches_up() {
     let workspace_id = rand_u128();
@@ -123,8 +137,12 @@ async fn a_pruned_device_pairs_again_and_catches_up() {
         "B got A's line: {got_b:?}"
     );
 
+    // B can tell: only frames it holds no key for have reached it.
+    wait_for_dropped_flag(&mut b, &a, true).await;
+
     a.pair_with(&mut b).await;
     wait_for_lines(&mut a, &mut b, &[A_FIRST, A_WHILE_APART, B_WHILE_APART]).await;
+    wait_for_dropped_flag(&mut b, &a, false).await;
     let devices = a.device_list().await;
     let peer = devices.iter().find(|d| !d.is_self).expect("B is A's peer");
     assert!(
