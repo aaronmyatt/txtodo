@@ -21,6 +21,7 @@ mod grpc_move;
 mod grpc_notes;
 mod grpc_read;
 mod grpc_write;
+mod list_param;
 mod parse;
 mod prompts;
 mod resources;

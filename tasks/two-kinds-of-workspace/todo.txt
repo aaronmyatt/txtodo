@@ -1,4 +1,3 @@
-2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists @doing by:claude
 2026-10-25 tui: list switcher shows kind, keys for new, rename, remove; client-parity rows in the same commit +m11 @tui @parity @lists
 2026-10-25 desktop: switcher groups Lists and Repos; new, rename, remove; parity rows in the same commit +m11 @desktop @parity @lists
 2026-10-25 lab: partition-lists scenario: both devices make work while apart, edit, reconnect +m11 @test @lists
@@ -33,3 +32,4 @@ x 2026-10-25 2026-10-25 daemon: lists go only to own devices (gate every list id
 x 2026-10-25 2026-10-25 daemon: an own device's list offer makes lists/<name>/, not remote/<id>/; a foreign one is ignored +m11 @daemon @sync @lists — mirror_offered_list; an own device's offer makes lists/<name>/ under the offered id, a foreign one is ignored; known gap: a renamed list's folder on the receiver is named after its shown name (or its id), not the name it was made under
 x 2026-10-25 2026-10-25 daemon: e2e: both make work and converge; a list reaches B with no accept; a foreign peer gets none +m11 @daemon @test @lists — tests/e2e/lists_sync.rs: both-make-work converges to one list, a new list arrives unasked as a List, a not-own device gets none; LAN pair only
 x 2026-10-25 2026-10-25 cli: txtodo lists new|ls|rename|rm|import <dir>, and --list <name> on every command +m11 @cli @lists — lists new|ls|rename|rm|import and --list NAME (the old hidden --list is --sublist); known gaps: import is a plain copy of todo.txt layouts only, no completion for list names
+x 2026-10-25 2026-10-25 mcp: list param on the tools; lists new|rename|rm|import join the never-mirrored allow-list +m11 @mcp @lists — every workspace-taking tool also takes list, resolved in call_tool with the shared pick_list; lists new|rename|rm|import stay out of the tool set; known gap: no tool lists the lists, a refusal names them

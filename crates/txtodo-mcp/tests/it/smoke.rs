@@ -62,6 +62,7 @@ const NEVER_MIRRORED: &[&str] = &[
     "daemon",
     "relay",
     "skill",
+    "lists",
 ];
 
 type ConnectedClient = rmcp::service::RunningService<rmcp::RoleClient, ()>;

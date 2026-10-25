@@ -324,3 +324,16 @@ What changed in the plan, and what I chose between.
   - Known gaps: `import` is a plain copy, so a failure part way leaves a half-filled new list (the
     message says so); import does not read a custom `todo_file` layout, only `todo.txt`; no shell
     completion for list names.
+- **mcp list argument.** Every tool that takes `workspace` also takes `list` (`list_param.rs`).
+  - Not 15 new struct fields: `call_tool` rewrites a `list` argument to the list's `workspace` id
+    before any tool runs (asking the daemon for the workspaces, then `pick_list`), and
+    `McpServer::new` adds the `list` property to each tool's published schema so agents see it.
+    `fallback.rs`'s note logic moved into the same path (`list_param::call`), after the rewrite, so a
+    call that named a list gets no fallback note.
+  - A name that is no list (a repo included), or a list beside a `workspace`, is `invalid_params`.
+    The refusal names the lists there are, so an agent can retry; there is no tool to list them,
+    and that is on purpose (`todo_list_workspaces` is not in the allow-list).
+  - `lists new|rename|rm|import` stay out of the tool set: `NEVER_MIRRORED` in `smoke.rs` gained
+    `lists`, and `CLAUDE.md` says why.
+  - `backend::WorkspaceInfo` gained `is_list` (from `WorkspaceInfo.kind`); false from an older
+    daemon, so an older daemon has no lists to name.

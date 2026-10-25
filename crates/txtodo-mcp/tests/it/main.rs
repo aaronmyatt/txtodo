@@ -8,5 +8,6 @@ mod fake_backend;
 mod fallback_note;
 mod http_guard;
 mod http_loopback_bind;
+mod list_arg;
 mod smoke;
 mod version;

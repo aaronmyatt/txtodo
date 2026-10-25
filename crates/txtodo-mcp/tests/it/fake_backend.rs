@@ -17,6 +17,10 @@ use txtodo_mcp::error::McpError;
 #[derive(Default)]
 pub struct FakeBackend {
     pub calls: Mutex<Vec<&'static str>>,
+    /// The `workspace` the last `list` call carried, to see what a `list` argument became.
+    pub last_list_workspace: Mutex<Option<String>>,
+    /// What `list_workspaces` answers instead of its one canned workspace, when set.
+    pub workspaces: Mutex<Option<Vec<WorkspaceInfo>>>,
 }
 
 impl FakeBackend {
@@ -30,8 +34,12 @@ impl FakeBackend {
 
 #[async_trait::async_trait]
 impl McpBackend for FakeBackend {
-    async fn list(&self, _args: ListArgs) -> Result<Vec<TaskRow>, McpError> {
+    async fn list(&self, args: ListArgs) -> Result<Vec<TaskRow>, McpError> {
         self.record("list");
+        *self
+            .last_list_workspace
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = args.workspace;
         Ok(vec![TaskRow {
             id: Some("01J".to_owned()),
             line: 1,
@@ -185,6 +193,14 @@ impl McpBackend for FakeBackend {
     }
     async fn list_workspaces(&self) -> Result<Vec<WorkspaceInfo>, McpError> {
         self.record("list_workspaces");
+        let canned = self
+            .workspaces
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(workspaces) = canned {
+            return Ok(workspaces);
+        }
         Ok(vec![WorkspaceInfo {
             id: "01J0000000000000000000ABC".to_owned(),
             root: "/workspace".to_owned(),
@@ -192,6 +208,7 @@ impl McpBackend for FakeBackend {
             root_exists: true,
             has_state: true,
             name: "workspace".to_owned(),
+            is_list: false,
         }])
     }
     fn principal(&self) -> String {

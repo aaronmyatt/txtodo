@@ -159,6 +159,12 @@ pub struct WorkspaceInfo {
     /// Display only, never a `workspace` arg. Empty from a daemon older than the field.
     #[serde(default)]
     pub name: String,
+    /// Whether txtodo syncs it between the user's own devices as a named list (task
+    /// two-kinds-of-workspace): the default or a folder in the lists root. `false` for every
+    /// other folder (a repo, which git syncs) and from a daemon older than the field. Only a
+    /// workspace with this set answers to a tool's `list` argument.
+    #[serde(default)]
+    pub is_list: bool,
 }
 
 /// The seam every MCP tool/resource/prompt calls through (mcp-server-tools notes.md). Schemas

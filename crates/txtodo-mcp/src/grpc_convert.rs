@@ -95,12 +95,14 @@ fn is_ulid(s: &str) -> bool {
 
 /// `pb::WorkspaceInfo` into the model's [`WorkspaceInfo`] (`WorkspaceList` RPC).
 pub fn workspace_info(w: pb::WorkspaceInfo) -> WorkspaceInfo {
+    let is_list = w.kind() == pb::WorkspaceKind::List;
     WorkspaceInfo {
         id: w.workspace_id,
         root: w.root,
         added_at_ms: w.added_at_ms,
         root_exists: w.root_exists,
         has_state: w.has_state,
+        is_list,
         name: w.name,
     }
 }
