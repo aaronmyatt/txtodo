@@ -159,12 +159,6 @@ fn run_join(ctx: &Ctx, daemon: &mut Daemon, code: &str) -> Result<(), CliError> 
     let parsed: PairingCode = parse_code(code)?;
     refuse_on_identity_mismatch(ctx, daemon, &parsed.identity_mode)?;
     let result = daemon.pair_accept(code.to_owned())?;
-    if result.kept_own_workspace {
-        println!(
-            "Your default list stays as it is. The other device's workspace arrives separately, \
-             as a Remote workspace (`txtodo workspace list`)."
-        );
-    }
     println!("Six words from the initiator's device — compare them by eye:");
     println!();
     println!("  {}", result.sas);
