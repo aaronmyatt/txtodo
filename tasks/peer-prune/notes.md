@@ -57,3 +57,55 @@
 
 - Its frames fail on every peer, so it parks them all. It says "dropped from the group; pair
   again", not just offline. Decided 2026-10-18 (human).
+
+## Protocol design (agent, 2026-10-25), after reading the code
+
+What the code does today, which the plan above did not spell out:
+
+- The crypto parts exist and are epoch-aware: `seal`/`open` carry the epoch in the clear header and
+  `GroupKeys` retains up to 16, `wrap_grant_for`/`open_grant`/`plan_rotation` wrap one key to one
+  device's X25519 key. The daemon never uses them past epoch 0: `lan_session.rs`
+  (`GROUP_EPOCH`, `fetch_group_key`, `single_epoch_keys`), `lan_session_shared.rs::send_message`,
+  `file_carrier.rs` all take epoch 0; only the control channel already seals under
+  `identity.group_epoch()` and opens only that one epoch (`control_session.rs`).
+- **Pairing hands out epoch 0 forever.** `pairing_group_key.rs` reads `KeyId::Group(0)`, and the
+  joiner stores what it is given at epoch 0 (`pairing_state.rs::commit_group_key`). After a rotation
+  a re-paired device would get the *old* key (which a pruned device may still hold) and file it as
+  the current one. So re-pairing a pruned device cannot work, and would be unsafe, until the grant
+  carries the epoch. Added below as its own line.
+
+Delta, in the order it can land with every step green:
+
+1. **Epoch helpers (daemon).** `current key`: `KeyId::Group(identity.group_epoch())`. `retained
+   keys`: epochs `cur-15..=cur` that the keystore holds, so a frame sealed before a rotation still
+   opens. Sync sessions, the file carrier and the control channel seal under the current epoch and
+   open under any retained one. With no rotation (epoch 0) nothing changes on the wire.
+2. **Pairing carries the epoch.** `PairingGrant` gains the epoch; the initiator hands over the
+   current key; the joiner stores it at that epoch and sets its own `group_key_epoch`. Older epochs
+   are not sent: each hop seals under the sender's current epoch, so a new device needs only the
+   current one.
+3. **`ControlMessage::Grant`** (tag 4, `PROTOCOL_VERSION` 6): `{ sender, minter, epoch, wrapped
+   (the `WrappedGrant`), left_out: devices the rotation dropped }`. And `control_epoch(frame)`, the
+   epoch a control frame was sealed under, read from the clear header.
+4. **Delivery needs no store.** The group key is in the keystore; a grant is `wrap_grant_for(key,
+   epoch, peer_static_public)` and can be made again whenever it is needed. In a control session,
+   the epoch a peer's first frame was sealed under *is* the epoch it holds. If it is below ours the
+   sender sends the chain `peer+1..=cur`, each grant sealed under the epoch before it (the peer
+   holds that one; the pruned device cannot read a grant anyway, it is wrapped to someone else's
+   key). The receiver opens it with its static secret, stores the key at that epoch, advances its
+   epoch, and drops every device in `left_out` ("dropped by <sender>"). Each device is told the
+   same set, so they converge without a shared table.
+5. **Same epoch twice.** Two devices that each prune mint an epoch N+1 key. A device records who
+   minted the key it holds at each epoch; on a grant for an epoch it already holds with a
+   different minter, the lower minter id wins and the other adopts it. The loser's own prunes are
+   re-derived on its next tick (the peer is still stale, so it prunes again, to N+2).
+6. **A removed device is refused** in the three places a peer is let in: LAN/relay resync skips it,
+   the link `Hello` is refused, and a control session ignores its offers.
+7. **Stale verdict and the prune loop** (lines below) call the same `Workspace::remove_device`.
+8. **The pruned side.** Frames from a peer sealed under an epoch above ours that no grant has
+   reached us for fail as `unknown_epoch`. Several in a row from every peer mean we were left out:
+   "dropped from the group; pair again". (`wrong_group`, the parking signal, is a different group
+   id and does not fire here.)
+
+Not decided here, and why it can wait: what a removed device already holds. It keeps every op it
+synced before (rotation covers new ops only), which `device remove` already says.
