@@ -19,6 +19,17 @@ impl DaemonClient {
         Ok(self.inner.workspace_add(req).await?.into_inner())
     }
 
+    /// Asks the daemon to scan for git clones holding a todo list now (task two-kinds-of-workspace,
+    /// ADR 0043). The scan runs in the background, so this returns at once; the daemon registers and
+    /// readies what it finds. An older daemon answers `UNIMPLEMENTED`.
+    pub async fn repos_scan(&mut self) -> Result<pb::ReposResponse, DaemonError> {
+        let req = pb::ReposRequest {
+            scan: true,
+            ..pb::ReposRequest::default()
+        };
+        Ok(self.inner.repos(req).await?.into_inner())
+    }
+
     /// Un-registers a workspace id; never touches `root/.txtodo/` on disk.
     pub async fn workspace_remove(&mut self, id: &str) -> Result<bool, DaemonError> {
         let req = pb::WorkspaceRemoveRequest {

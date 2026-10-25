@@ -183,9 +183,20 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = commands_connect::connect_and_store(&handle, &state).await {
             log_startup_connect_failed(&e);
             commands::set_status(&handle, &state, status::DaemonStatus::Dead).await;
+            return;
         }
+        ask_for_repo_scan(&state).await;
     });
     Ok(())
+}
+
+/// Every open looks for new git repos holding a todo list (task two-kinds-of-workspace): the daemon
+/// scans in the background and registers and readies what it finds. Best effort; an older daemon
+/// has no scan and the app goes on.
+async fn ask_for_repo_scan(state: &AppState) {
+    if let Ok(mut client) = state.client_snapshot().await {
+        let _ = client.repos_scan().await;
+    }
 }
 
 /// The startup daemon-connect attempt (`.setup()`, above) used to discard its `Result` entirely

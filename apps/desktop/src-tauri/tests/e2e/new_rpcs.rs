@@ -194,6 +194,21 @@ async fn get_notes_and_edit_notes_lazily_create_the_ref_dir_through_the_bridge()
 }
 
 #[tokio::test]
+async fn repos_scan_reaches_the_daemon_and_returns_at_once() {
+    let dir = temp_workspace();
+    let (mut client, pid, _state) = connected_client(dir.path()).await;
+
+    let state = client
+        .repos_scan()
+        .await
+        .expect("repos_scan should reach the daemon");
+    // An isolated daemon seeds no scan root, so a scan has nothing to walk.
+    assert!(state.roots.is_empty(), "{state:?}");
+
+    kill(pid);
+}
+
+#[tokio::test]
 async fn pair_offer_reaches_the_daemon_with_the_five_documented_fields() {
     let dir = temp_workspace();
     let (mut client, pid, _state) = connected_client(dir.path()).await;
