@@ -554,3 +554,10 @@ What changed in the plan, and what I chose between.
   sidecar identity stamps nothing, and the exclude keeps `.txtodo/` out of git, so a git root is
   safe. Known gap: a tagged-identity daemon would still stamp ids on that first read; tagged is
   opt-in and unchanged. A repo with no list at all is still not registered by a read or by MCP.
+- **the joiner re-key is gone.** `adopt_offered_workspace_id` (a joiner's empty folder taking the
+  initiator's id), `rekey_registry`, `LoadSlots::rekey`, `OpenedWorkspace::rekey` and
+  `WorkspaceRegistry::adopt_released` are deleted with their tests. After the cut nothing could use
+  them: the default and lists return early, and a repo is not synced. `pair_accept_with_catalog` still
+  refuses a garbled code but moves nothing. `PairResult.kept_own_workspace` stays on the wire (no proto
+  change for a comment) and is never set; `txtodo pair` no longer prints "arrives as a Remote
+  workspace". `join_target::require_empty` stays: mirror, rejoin, bind and list folders still use it.
