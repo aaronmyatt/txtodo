@@ -544,3 +544,13 @@ What changed in the plan, and what I chose between.
     is left of the first: the pairing helpers `lists_sync` uses.
   - Known gaps: nothing gates the file carrier for a foreign peer (carried over); the lists' names
     still ride offers to a foreign peer in the group (they have no route there).
+- **mcp and cli: a git root registers on first use.** MCP's `fallback.rs::serves_here`: a folder the
+  daemon knows, or a git checkout's root, is served as itself with no note; the daemon registers it
+  on the first call that names it (a path selector registers). A plain `todo.txt` folder that is not
+  registered still falls back with the note: a stray folder is not worth a registry row, and the
+  existing stray-folder e2e still holds. CLI's `register_guard.rs::is_repo_root`: a read in a git
+  root that holds a list registers it like a write; any other unregistered folder still refuses a
+  read. The refusal was written for the 2026-10-11 rewrite of ~120 files by an id-stamping register;
+  sidecar identity stamps nothing, and the exclude keeps `.txtodo/` out of git, so a git root is
+  safe. Known gap: a tagged-identity daemon would still stamp ids on that first read; tagged is
+  opt-in and unchanged. A repo with no list at all is still not registered by a read or by MCP.
