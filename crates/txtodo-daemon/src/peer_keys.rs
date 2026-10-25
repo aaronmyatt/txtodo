@@ -21,6 +21,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{Duration, Instant};
 
 use txtodo_model::DeviceId;
 
@@ -148,6 +149,16 @@ pub(crate) struct PeerKeys {
     /// `unknown_epoch` opens in a row from any peer, ended by any frame opening, a new epoch or a
     /// new group: not per peer, since a device dropped from the group often cannot tell who sent it.
     epoch_misses: Arc<AtomicU32>,
+    /// When the current run of `unknown_epoch` opens began: a run of any length that has lasted
+    /// [`dropped_window`] without a grant, an opened frame or a new epoch is a drop too, since a
+    /// dropped device is dialed only now and then and may see just one or two.
+    first_miss: Arc<Mutex<Option<Instant>>>,
+}
+
+/// How long a run of `unknown_epoch` opens may last before it counts as dropped: a grant comes in
+/// the control session of the same resync round, so two rounds without one is long enough.
+pub(crate) fn dropped_window() -> Duration {
+    (crate::lan::resync_interval() * 2).max(Duration::from_secs(5))
 }
 
 impl PeerKeys {
@@ -280,6 +291,10 @@ impl PeerKeys {
             .epoch_misses
             .fetch_add(1, Ordering::Relaxed)
             .saturating_add(1);
+        self.first_miss
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get_or_insert_with(Instant::now);
         if run == DROPPED_AFTER {
             log_dropped_from_group();
         }
@@ -288,12 +303,30 @@ impl PeerKeys {
     /// Ends the run of `unknown_epoch` opens: a frame opened, or the epoch or group moved.
     pub(crate) fn clear_epoch_misses(&self) {
         self.epoch_misses.store(0, Ordering::Relaxed);
+        *self
+            .first_miss
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = None;
     }
 
     /// Whether every session lately showed only frames this device holds no key for: it was left
     /// out of the group and has to pair again.
     pub(crate) fn dropped_from_group(&self) -> bool {
-        self.epoch_misses.load(Ordering::Relaxed) >= DROPPED_AFTER
+        self.dropped_within(dropped_window())
+    }
+
+    /// [`PeerKeys::dropped_from_group`] with the window given: [`DROPPED_AFTER`] misses in a row, or
+    /// any run that began `window` ago.
+    pub(crate) fn dropped_within(&self, window: Duration) -> bool {
+        let run = self.epoch_misses.load(Ordering::Relaxed);
+        if run >= DROPPED_AFTER {
+            return true;
+        }
+        let first = *self
+            .first_miss
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        run > 0 && first.is_some_and(|at| at.elapsed() >= window)
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, BTreeMap<Option<DeviceId>, PeerKey>> {

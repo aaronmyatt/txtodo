@@ -443,7 +443,8 @@ multiplex every workspace's traffic — not done by this task).
   stays in place and is retried every tick. `removal_why.rs` keeps why and by whom a row was removed (`meta`
   `removed_why:<id>`; `manual`, `pruned_quiet`, `pruned_parked`, `left_out` for one dropped by following a grant) and
   `DeviceList` sends it as `removed_reason`/`removed_by`/`removed_at_ms`; a row removed before it reads "".
-  A device the group left out learns it from `peer_keys.rs`: 3 `unknown_epoch` opens in a row from anyone, none ended by an
+  A device the group left out learns it from `peer_keys.rs`: 3 `unknown_epoch` opens in a row from anyone, or a run of
+  one or more that has lasted two resync rounds (5 s at least; a dropped device is dialed only now and then), none ended by an
   opened frame, a new epoch or a new group, set `Health.dropped_from_group`. A removed device is still dialed (growing
   backoff, its `Hello` refused) so it hears; the relay paths skip it (a relay device dials the pruner itself).
   Its failed dials back off to a minute, so a pairing, a new epoch or a new group bumps `LivePeers::dial_generation` and

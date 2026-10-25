@@ -196,3 +196,30 @@ fn other_failures_neither_count_nor_end_the_run() {
     unknown_epoch(&keys, Some(peer(1)), 1);
     assert!(keys.dropped_from_group(), "the earlier run was kept");
 }
+
+/// A dropped device is dialed only now and then, so it may see one or two such opens: a run that has
+/// lasted the window, with no grant, frame or new epoch to end it, is a drop too.
+#[test]
+fn a_short_run_that_outlasts_the_window_is_dropped_too() {
+    use std::time::Duration;
+    let keys = PeerKeys::default();
+    assert!(!keys.dropped_within(Duration::ZERO), "no miss, no drop");
+    unknown_epoch(&keys, Some(peer(1)), 1);
+    assert!(
+        !keys.dropped_within(Duration::from_secs(3_600)),
+        "too soon to say"
+    );
+    assert!(
+        keys.dropped_within(Duration::ZERO),
+        "one miss that has lasted the window"
+    );
+    assert!(
+        !keys.dropped_from_group(),
+        "the real window is seconds, not zero"
+    );
+    keys.clear_epoch_misses();
+    assert!(
+        !keys.dropped_within(Duration::ZERO),
+        "ended by a frame, an epoch or a group"
+    );
+}
