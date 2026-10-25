@@ -396,10 +396,13 @@ multiplex every workspace's traffic — not done by this task).
   `node_modules`, `target`, `vendor`, `dist`, `build` and a top-level `Library` never entered, no symlink
   followed; a `.git` file, a worktree or submodule, is left to a first touch). `workspace_catalog_repos.rs`
   runs it: `run_scan` registers the new ones (never opens them, never brings back one the person removed),
-  records the time, and `start_repo_scan` schedules it 45 s after start and every 6 h. `boot_dirs.rs` seeds
+  records the time, and `start_repo_scan` schedules it 5 s after start and every 6 h (a client's `Repos { scan }` on open runs one too). `boot_dirs.rs` seeds
   `[$HOME]` as the default root only when no env var moved the socket or registry, so a test never walks
   the real home. `WorkspaceRegistry::add` writes `.txtodo/` into a new clone's own `info/exclude`
-  (`repo_exclude.rs`, with no `git` run). `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
+  (`repo_exclude.rs`, with no `git` run) and readies it for git (`repo_git.rs`: `todo.txt merge=txtodo` and
+  `done.txt merge=union` in `.git/info/attributes`, `[merge "txtodo"] driver = txtodo merge-driver %O %A %B` in
+  `.git/config`, each only if missing, nothing tracked written); every scan readies the registered repos
+  again. `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
 - `mirrors_retire.rs` (task `two-kinds-of-workspace`, ADR 0043): `MirrorsRetire { workspace_id, dry_run }`
   moves each Remote mirror an older build made (`remote/<id>/`) aside and un-registers it, never deleting
   text. The same move a rejoin makes (`rejoin_backup::move_aside` into `<id>.rejoin-backup-<UTC time>`),

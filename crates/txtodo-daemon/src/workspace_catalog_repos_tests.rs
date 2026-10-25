@@ -54,11 +54,46 @@ async fn a_scan_registers_the_clones_it_finds_and_keeps_txtodo_out_of_their_git(
         let exclude = std::fs::read_to_string(repo.join(".git/info/exclude")).unwrap();
         assert!(exclude.lines().any(|l| l == ".txtodo/"), "{exclude}");
         assert!(!repo.join(".txtodo").exists(), "registering opens nothing");
+        assert_readied_for_git(repo);
     }
     assert!(
         catalog.try_begin_scan().is_some(),
         "the guard was dropped: free again"
     );
+}
+
+/// The lists merge line by line and the merge driver is set, in the clone's own `.git`.
+fn assert_readied_for_git(repo: &Path) {
+    let attributes = std::fs::read_to_string(repo.join(".git/info/attributes")).unwrap();
+    assert!(attributes.contains("todo.txt merge=txtodo"), "{attributes}");
+    let config = std::fs::read_to_string(repo.join(".git/config")).unwrap();
+    assert!(
+        config.contains("driver = txtodo merge-driver %O %A %B"),
+        "{config}"
+    );
+    assert!(
+        !repo.join(".gitattributes").exists(),
+        "nothing tracked is written"
+    );
+}
+
+/// A repo registered before this was automatic (or one whose setup was undone) is readied again by
+/// the next scan, with nothing else about it changing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_scan_readies_a_repo_that_was_registered_before_and_lacks_the_setup() {
+    let (_state, catalog) = catalog_with(&[], |_| {});
+    let home = tempfile::tempdir().unwrap();
+    let repo = clone_at(home.path(), "a");
+    catalog
+        .edit_scan_roots(&[home.path().display().to_string()], &[])
+        .unwrap();
+    catalog.run_scan(catalog.try_begin_scan().unwrap()).unwrap();
+    std::fs::remove_file(repo.join(".git/config")).unwrap();
+    std::fs::remove_file(repo.join(".git/info/attributes")).unwrap();
+
+    let again = catalog.run_scan(catalog.try_begin_scan().unwrap()).unwrap();
+    assert_eq!(again.registered, 0, "already registered");
+    assert_readied_for_git(&repo);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

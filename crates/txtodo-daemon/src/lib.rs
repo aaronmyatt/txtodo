@@ -39,6 +39,7 @@ mod list_rpc;
 mod list_workspace;
 mod mirrors_retire;
 mod repo_exclude;
+mod repo_git;
 mod repo_scan;
 mod repos_rpc;
 pub use txtodo_engine::duplicates;

@@ -347,12 +347,12 @@ fn entry_of(row: WorkspaceRow) -> WorkspaceEntry {
     }
 }
 
-/// A new workspace that is a git clone gets `.txtodo/` in its own `info/exclude` before the daemon
-/// first opens it (task two-kinds-of-workspace, `repo_exclude.rs`), so the op log it drops there is
-/// never one `git add -A` from a commit. Best effort: a refusal is logged, never a failure to
-/// register. A folder with no `.git` (every list and mirror) is untouched.
+/// A new workspace that is a git clone is readied before the daemon first opens it (task
+/// two-kinds-of-workspace, `repo_git.rs`): `.txtodo/` excluded, the lists set to merge line by line,
+/// the merge driver in its config. Best effort: a refusal is logged, never a failure to register. A
+/// folder with no `.git` (every list and mirror) is untouched.
 fn keep_txtodo_out_of_git(root: &str) {
-    if let Err(e) = crate::repo_exclude::exclude_txtodo(Path::new(root)) {
-        tracing::warn!(root, error = %e, "repo_exclude_failed");
+    if let Err(e) = crate::repo_git::prepare(Path::new(root)) {
+        tracing::warn!(root, error = %e, "repo_git_prepare_failed");
     }
 }

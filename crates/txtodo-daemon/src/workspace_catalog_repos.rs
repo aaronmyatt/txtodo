@@ -6,7 +6,9 @@
 //! workspaces the person used, and a first use opens one at once. A folder taken off the registry
 //! by hand stays off (`root_was_removed`); a nested clone the registry refuses for overlapping its
 //! parent is logged and skipped. Registering also writes `.txtodo/` into the clone's own
-//! `info/exclude` (`WorkspaceRegistry::add`).
+//! `info/exclude` (`WorkspaceRegistry::add`). Every repo the scan finds is also readied for git: its
+//! lists set to merge line by line and the merge driver in its config (`repo_git.rs`), the new ones
+//! at registration and the registered ones again on each scan, so the person runs nothing.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -20,8 +22,8 @@ use crate::repo_scan;
 use crate::workspace_catalog::WorkspaceCatalog;
 
 /// How long after the daemon starts the first scan waits, so the socket is bound and the loader has
-/// opened the workspaces in use before a walk of the home folder competes with it.
-pub const FIRST_SCAN_AFTER: Duration = Duration::from_secs(45);
+/// begun opening the workspaces in use before a walk of the home folder competes with it.
+pub const FIRST_SCAN_AFTER: Duration = Duration::from_secs(5);
 
 /// Between scheduled scans.
 pub const SCAN_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -151,7 +153,11 @@ impl WorkspaceCatalog {
         };
         for repo in &scanned.repos {
             let root = repo.canonicalize().unwrap_or_else(|_| repo.clone());
-            if !active.contains(&root) && self.register_found(&root) {
+            if active.contains(&root) {
+                // Registered before: ready it again, in case it was before this was automatic or
+                // someone undid it. Only `add` does this for a repo that is new.
+                ready_clone(&root);
+            } else if self.register_found(&root) {
                 report.registered += 1;
             }
         }
@@ -215,6 +221,24 @@ impl WorkspaceCatalog {
             }
         });
     }
+}
+
+/// `repo_git::prepare` for a registered repo; a refusal is logged and the scan goes on.
+fn ready_clone(root: &Path) {
+    match crate::repo_git::prepare(root) {
+        Ok(done) => log_prepared(root, done),
+        Err(e) => log_prepare_failed(root, &e),
+    }
+}
+
+fn log_prepared(root: &Path, done: crate::repo_git::Prepared) {
+    if done.any() {
+        tracing::info!(root = %root.display(), ?done, "repo_git_prepared");
+    }
+}
+
+fn log_prepare_failed(root: &Path, e: &std::io::Error) {
+    tracing::warn!(root = %root.display(), error = %e, "repo_git_prepare_failed");
 }
 
 fn log_scanned(scanned: &repo_scan::Scanned, report: ScanReport) {

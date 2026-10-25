@@ -11,11 +11,13 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// Where git reads the exclude file of the clone at `root`, or `None` when `root` has no `.git`.
-pub(crate) fn info_exclude(root: &Path) -> Option<PathBuf> {
+/// The git folder the clone at `root` shares its `config` and `info/` with, or `None` when `root` has
+/// no `.git`: `.git` itself in a clone, and for a linked worktree the common folder its `commondir`
+/// names.
+pub(crate) fn git_common_dir(root: &Path) -> Option<PathBuf> {
     let git = root.join(".git");
     if git.is_dir() {
-        return Some(git.join("info").join("exclude"));
+        return Some(git);
     }
     let text = std::fs::read_to_string(&git).ok()?;
     let gitdir = PathBuf::from(text.strip_prefix("gitdir:")?.trim());
@@ -24,9 +26,15 @@ pub(crate) fn info_exclude(root: &Path) -> Option<PathBuf> {
     } else {
         root.join(gitdir)
     };
-    let common = std::fs::read_to_string(gitdir.join("commondir"))
-        .map_or(gitdir.clone(), |rel| gitdir.join(rel.trim()));
-    Some(common.join("info").join("exclude"))
+    Some(
+        std::fs::read_to_string(gitdir.join("commondir"))
+            .map_or(gitdir.clone(), |rel| gitdir.join(rel.trim())),
+    )
+}
+
+/// Where git reads the exclude file of the clone at `root`, or `None` when `root` has no `.git`.
+pub(crate) fn info_exclude(root: &Path) -> Option<PathBuf> {
+    git_common_dir(root).map(|dir| dir.join("info").join("exclude"))
 }
 
 /// Adds `.txtodo/` to the exclude file of the clone at `root` unless it is there already; `true`
