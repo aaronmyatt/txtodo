@@ -133,7 +133,7 @@ fn log_mode_selected(mode: &'static str, reason: &'static str) {
 
 impl Daemon {
     #[cfg(unix)]
-    fn connect(
+    pub(crate) fn connect(
         socket: PathBuf,
         selector: Option<pb::WorkspaceSelector>,
     ) -> Result<Daemon, ClientError> {
@@ -169,7 +169,7 @@ impl Daemon {
 
     /// Windows has no unix-domain sockets, so only direct-file mode exists there.
     #[cfg(not(unix))]
-    fn connect(
+    pub(crate) fn connect(
         socket: PathBuf,
         _selector: Option<pb::WorkspaceSelector>,
     ) -> Result<Daemon, ClientError> {

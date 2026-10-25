@@ -88,7 +88,7 @@ pub fn scoped_list(here: &Path, root: &Path) -> Option<String> {
 }
 
 /// Against the global daemon (`selector` set): a `dir` strictly inside a registered workspace is
-/// `Scoped` to it (unless a `--list` already scopes the run); a read-only `command` in a folder no
+/// `Scoped` to it (unless a `--sublist` already scopes the run); a read-only `command` in a folder no
 /// registered workspace holds is refused with the fix. A per-folder daemon serves its one
 /// workspace; an older daemon without `WorkspaceList` is let through, as before.
 pub fn check(
@@ -128,7 +128,7 @@ pub fn check(
     )))
 }
 
-/// Runs this command again as `--dir <root> --list <list>`, the rest of the arguments as given
+/// Runs this command again as `--dir <root> --sublist <list>`, the rest of the arguments as given
 /// but the original `--dir`. The child prints its own output and errors.
 pub fn rerun_scoped(scoped: &Scoped) -> Result<(), CliError> {
     let mut rest = Vec::new();
@@ -144,7 +144,7 @@ pub fn rerun_scoped(scoped: &Scoped) -> Result<(), CliError> {
     let status = std::process::Command::new(exe)
         .arg("--dir")
         .arg(&scoped.root)
-        .arg("--list")
+        .arg("--sublist")
         .arg(&scoped.list)
         .args(rest)
         .status()

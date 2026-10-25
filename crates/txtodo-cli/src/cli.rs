@@ -37,12 +37,17 @@ pub struct Cli {
     /// Ignore a running daemon and edit the files directly (M2 behaviour).
     #[arg(long, global = true)]
     pub no_daemon: bool,
+    /// Run the command on this named list (see `txtodo lists`) instead of the workspace here:
+    /// the name it shows, or the name it was made under. Asks the daemon where the list lives.
+    #[arg(long, global = true, value_name = "NAME", conflicts_with = "dir")]
+    pub list: Option<String>,
     /// A list inside the workspace, relative to its root, to run the command on instead of the
     /// root list. `sub` passes it, so a sub-list is worked as one more list of its workspace,
     /// never registered as a workspace of its own (sync-drift line 3). Hidden: `sub ITEM#` is
-    /// the way to name one. Ref: <https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide>
+    /// the way to name one. Was `--list` before named lists took that name (task
+    /// two-kinds-of-workspace). Ref: <https://docs.rs/clap/latest/clap/struct.Arg.html#method.hide>
     #[arg(long, global = true, value_name = "FILE", hide = true)]
-    pub list: Option<String>,
+    pub sublist: Option<String>,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -308,6 +313,12 @@ pub enum Command {
     Workspace {
         #[command(subcommand)]
         action: Option<commands::workspace::Action>,
+    },
+    /// Named lists that txtodo syncs between your own devices: `new NAME`, `ls` (default),
+    /// `rename LIST NEW`, `rm LIST`, `import DIR [NAME]`. Work on one with `--list NAME`.
+    Lists {
+        #[command(subcommand)]
+        action: Option<commands::lists::Action>,
     },
     /// The agent playbook for working this backlog: a Claude Code Skill under the user's global
     /// `~/.claude/skills`, and a marked section in this project's `AGENTS.md` (cross-agent).

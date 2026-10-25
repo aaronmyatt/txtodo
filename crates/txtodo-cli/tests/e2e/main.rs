@@ -15,6 +15,7 @@ mod daemon_archive;
 mod daemon_autostart;
 mod daemon_mode;
 mod layout;
+mod lists;
 mod move_copy;
 mod nested_ref_sync;
 mod no_implicit_register;

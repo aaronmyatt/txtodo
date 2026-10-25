@@ -305,3 +305,22 @@ What changed in the plan, and what I chose between.
   under `lists/` as a List, not a Remote mirror, with no accept; with B marked not own, B gets A's
   default as an alias mirror (so sessions and offers ran) and no list, none of its text. Not run
   here: a relay-only pair, or three devices.
+- **cli lists.** `txtodo lists [ls]|new|rename|rm|import` and `--list NAME` (`commands/lists.rs`,
+  `lists_import.rs`; client calls in `client_workspace.rs`). Choices:
+  - The CLI already had a hidden global `--list FILE` (the sub-list `sub` passes). It is now
+    `--sublist`; `--list` is the named list. `sub`, the register guard and the docs were updated.
+    Nothing outside this crate used the old spelling.
+  - `--list NAME` is `--dir <that list's folder>`: the CLI asks the global daemon (starting it if
+    down) via `WorkspaceList` and applies the shared `txtodo_workspace_paths::pick_list` rule, then
+    carries on exactly as `--dir` would. It conflicts with `--dir`, and refuses `--no-daemon`
+    (a list's folder is only known to the daemon). Cost: one extra local RPC per `--list` call.
+  - `pick_list` is one function in the paths crate, used by the daemon's `find_list` and the CLI
+    (MCP next), so the rule cannot drift.
+  - `lists rm` has no confirm prompt: it moves the folder aside and prints where, never deletes,
+    and the other devices keep the list.
+  - `lists import DIR [NAME]` copies files, skips hidden entries and symlinks, and refuses an
+    existing list or a folder with no `todo.txt`. If the folder had a `txtodo.toml` the list is
+    renamed to its own name afterwards, so an old `name =` line does not show.
+  - Known gaps: `import` is a plain copy, so a failure part way leaves a half-filled new list (the
+    message says so); import does not read a custom `todo_file` layout, only `todo.txt`; no shell
+    completion for list names.

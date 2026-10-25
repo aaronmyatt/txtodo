@@ -69,7 +69,18 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
 - `notices on|off|status` (ADR 0041, `commands/notices.rs`): `off` leaves `notices-off` beside the
   daemon's socket, `on` removes it; the daemon checks it whenever a notice is due.
 - Line numbers are the ids: 1-based over every line, blanks included.
-- Global flags: `--dir DIR`, `--sync-dir DIR`, `--json`, `--no-id`, `-A/--no-archive`, `--no-daemon`.
+- Global flags: `--dir DIR`, `--list NAME`, `--sync-dir DIR`, `--json`, `--no-id`,
+  `-A/--no-archive`, `--no-daemon`. `--list NAME` (task two-kinds-of-workspace, `commands/lists.rs`)
+  is `--dir <that list's folder>`: it asks the global daemon (started if down) for the list the name
+  means, by the rule every client shares (`txtodo_workspace_paths::pick_list`: what a list shows,
+  else the name it was made under), and conflicts with `--dir` and `--no-daemon`. The hidden flag
+  that scopes a run to a sub-list file is `--sublist` (it was `--list` until named lists took the
+  name).
+- `lists [ls]`, `lists new NAME`, `lists rename LIST NEW`, `lists rm LIST`, `lists import DIR [NAME]`
+  (task two-kinds-of-workspace, ADR 0043, `commands/lists.rs`, `lists_import.rs`): the named lists
+  txtodo syncs between your own devices. Device-level like `workspace`: none names a folder, so none
+  registers the cwd. `rm` moves the folder aside (never deletes; other devices keep the list);
+  `import` copies a folder's files (not hidden ones, not its `.txtodo/`) into a new list.
 - Config `config.toml` (`todo_dir`, `id_tags`, `identity_mode`, `key_store`, `sync_dir`,
   `url_schemes`) at `$TXTODO_CONFIG`, else `$XDG_CONFIG_HOME|%APPDATA%|~/.config` +
   `txtodo/config.toml`; env `TXTODO_TODO_DIR`. Precedence: `--dir` > env > config > cwd.
@@ -128,7 +139,7 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers.
 - `sub ITEM CMD…`: ITEM is a root line number, or a `ref:` slug path (`trip`, `trip/flights`)
   resolved list by list through `RefDir` (`commands/sub_slug.rs`, task cli-sub-by-slug). A
-  `--dir` strictly inside a registered workspace re-runs as `--dir <root> --list <dir>/todo.txt`
+  `--dir` strictly inside a registered workspace re-runs as `--dir <root> --sublist <dir>/todo.txt`
   (`register_guard::rerun_scoped`) instead of the daemon refusing it.
 - todo.sh parity is a test: `tests/it/todosh_parity.rs` (direct mode). `tests/e2e/daemon_mode.rs` spawns a
   real txtodod (built on demand with cargo — this crate may not depend on the daemon crate).

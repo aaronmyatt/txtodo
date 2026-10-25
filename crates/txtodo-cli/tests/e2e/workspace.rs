@@ -17,13 +17,13 @@ const SOCKET_WAIT: Duration = Duration::from_secs(20);
 
 /// A real `txtodod` in true global mode (`--dir` omitted), hermetic via `$TXTODO_SOCKET`/
 /// `$TXTODO_REGISTRY_DB` so it never touches this machine's real `$XDG_DATA_HOME/txtodo/`.
-struct GlobalDaemon {
+pub(crate) struct GlobalDaemon {
     child: Child,
     socket: PathBuf,
 }
 
 impl GlobalDaemon {
-    fn spawn(state_dir: &Path) -> GlobalDaemon {
+    pub(crate) fn spawn(state_dir: &Path) -> GlobalDaemon {
         let socket = state_dir.join("txtodod.sock");
         let child = Command::new(txtodod_binary())
             .env("TXTODO_SOCKET", &socket)
@@ -56,7 +56,7 @@ impl Drop for GlobalDaemon {
 
 /// Runs `txtodo` against `daemon`'s socket, from `dir` — which must have no `.txtodo/txtodod.sock`
 /// of its own, so `client::select` has nothing to fall back to except the global daemon.
-fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
+pub(crate) fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
     assert!(
         !dir.join(".txtodo").join("txtodod.sock").exists(),
         "this harness only proves the global-daemon path"
@@ -74,7 +74,7 @@ fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
         .unwrap_or_else(|e| panic!("txtodo: {e}"))
 }
 
-fn stdout(o: &Output) -> String {
+pub(crate) fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
 }
 

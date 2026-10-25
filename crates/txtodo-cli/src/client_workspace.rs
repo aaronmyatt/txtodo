@@ -177,4 +177,48 @@ impl Daemon {
             .map_err(ClientError::Rpc)?;
         Ok(rep.into_inner().declined)
     }
+
+    /// The device-global daemon, with no workspace selected: for the commands that are about the
+    /// registry, not a document (`--list NAME` asks it where a list lives). `None` when its socket
+    /// is not there.
+    pub fn global(env: &crate::config::Env) -> Result<Option<Daemon>, ClientError> {
+        let socket = crate::config::global_socket_path(env);
+        if !socket.exists() {
+            return Ok(None);
+        }
+        Daemon::connect(socket, None).map(Some)
+    }
+
+    /// Makes the named list when this device has none (task two-kinds-of-workspace); a list that
+    /// is already here comes back with `created` false.
+    pub fn list_ensure(&mut self, name: &str) -> Result<pb::ListEnsureResponse, ClientError> {
+        let req = pb::ListEnsureRequest {
+            name: name.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_ensure(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// Changes the name a list shows; its id and folder stay.
+    pub fn list_rename(
+        &mut self,
+        list: &str,
+        new_name: &str,
+    ) -> Result<pb::WorkspaceInfo, ClientError> {
+        let req = pb::ListRenameRequest {
+            list: list.to_owned(),
+            new_name: new_name.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_rename(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
+
+    /// Removes a list from this device: its folder moves aside, never deleted.
+    pub fn list_remove(&mut self, list: &str) -> Result<pb::ListRemoveResponse, ClientError> {
+        let req = pb::ListRemoveRequest {
+            list: list.to_owned(),
+        };
+        let rep = self.rt.block_on(self.client.list_remove(req));
+        Ok(rep.map_err(ClientError::Rpc)?.into_inner())
+    }
 }

@@ -75,7 +75,7 @@ fn edit_in_editor(current: &[u8]) -> Result<String, CliError> {
 
 /// `sub ITEM# COMMAND...`: re-execs this same binary on the line's `ref:` sub-list (rule 12) — a
 /// scoped `todo.sh -d <ref>/todo.cfg`. The child keeps this workspace's `--dir` and names the
-/// sub-list with the hidden `--list`: every `todo.txt` under the root is one of its lists (rule
+/// sub-list with the hidden `--sublist`: every `todo.txt` under the root is one of its lists (rule
 /// 11). It used to get `--dir <ref dir>`, which made the daemon register the ref dir as a
 /// workspace of its own, and two stores then tracked one file (sync-drift line 3). Requires an
 /// existing `ref:` tag (typed error otherwise); a dangling one (rule 9) is healed first, same as
@@ -91,7 +91,7 @@ pub fn run_sub(ctx: &Ctx, daemon: &mut Daemon, item: &str, cmd: &[String]) -> Re
     let status = std::process::Command::new(exe)
         .arg("--dir")
         .arg(&ctx.paths.dir)
-        .arg("--list")
+        .arg("--sublist")
         .arg(&list)
         .args(cmd)
         .status()

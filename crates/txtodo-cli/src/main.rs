@@ -72,8 +72,14 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     let env = Env::from_process().map_err(CliError::Io)?;
     let config_file = config::config_path(&env);
     let config = Config::load(&config_file).map_err(CliError::Config)?;
-    let paths = resolve_paths(cli, &env, &config, config_file)?;
-    let mut ctx = Ctx {
+    // `--list NAME` is `--dir <that list's folder>`, asked of the daemon (task
+    // two-kinds-of-workspace).
+    let list_dir = (cli.list.as_deref())
+        .map(|name| commands::lists::dir_of(&env, name, cli.no_daemon))
+        .transpose()?;
+    let paths =
+        config_root_list::resolve_paths(cli, list_dir.as_deref(), &env, &config, config_file)?;
+    let ctx = Ctx {
         ids: config.id_tags() && !cli.no_id,
         auto_archive: !cli.no_archive,
         today: clock::today_local(),
@@ -110,55 +116,39 @@ fn run(cli: &Cli) -> Result<(), CliError> {
             daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
-        client::Mode::Daemon(mut daemon) => {
-            // Before any request names this folder: a read-only command never registers it.
-            if let Some(scoped) = register_guard::check(
-                &mut daemon,
-                &ctx.paths.dir,
-                &cli.command,
-                cli.list.is_some(),
-            )? {
-                return register_guard::rerun_scoped(&scoped);
-            }
-            // `workspace …` is about the registry, not a document: asking the layout here would
-            // make the daemon open and register the resolved `--dir`/cwd as a side effect
-            // (`workspace list` from any folder registered it; `accept --dir x` tried to
-            // register `x`, which the global `--dir` also received).
-            // A `--list` (from `sub`) already names the document; the layout only knows the root.
-            if !matches!(cli.command, Command::Workspace { .. }) && cli.list.is_none() {
-                commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
-            }
-            dispatch_daemon(&ctx, &mut daemon, &cli.command)
-        }
+        client::Mode::Daemon(daemon) => run_with_daemon(ctx, cli, daemon),
     }
 }
 
-/// Every path this run uses: `config::resolve`'s, then a `--list` (what `sub` passes) in place of
-/// the root list, inside the same workspace.
-fn resolve_paths(
+/// Daemon mode, past the checks that need only the paths: scope or refuse the folder, adopt the
+/// workspace's layout, then dispatch.
+fn run_with_daemon(
+    mut ctx: Ctx,
     cli: &Cli,
-    env: &Env,
-    config: &Config,
-    config_file: std::path::PathBuf,
-) -> Result<Paths, CliError> {
-    let mut paths = config::resolve(
-        env,
-        config::ResolveFlags {
-            dir: cli.dir.as_deref(),
-            sync_dir: cli.sync_dir.as_deref(),
-            relay: cli.relay.as_deref(),
-        },
-        config,
-        config_file,
-    );
-    if let Some(list) = cli.list.as_deref() {
-        config_root_list::scope_to_list(&mut paths, list)?;
+    mut daemon: Box<client::Daemon>,
+) -> Result<(), CliError> {
+    // Before any request names this folder: a read-only command never registers it.
+    if let Some(scoped) = register_guard::check(
+        &mut daemon,
+        &ctx.paths.dir,
+        &cli.command,
+        cli.sublist.is_some(),
+    )? {
+        return register_guard::rerun_scoped(&scoped);
     }
-    debug_assert!(
-        paths.todo.ends_with(&paths.todo_file),
-        "resolve names the todo file"
+    // `workspace …` and `lists …` are about the registry, not a document: asking the layout here
+    // would make the daemon open and register the resolved `--dir`/cwd as a side effect
+    // (`workspace list` from any folder registered it; `accept --dir x` tried to register `x`,
+    // which the global `--dir` also received). A `--sublist` (from `sub`) already names the
+    // document; the layout only knows the root.
+    let registry_command = matches!(
+        cli.command,
+        Command::Workspace { .. } | Command::Lists { .. }
     );
-    Ok(paths)
+    if !registry_command && cli.sublist.is_none() {
+        commands::layout::adopt_root_list(&mut ctx.paths, &mut daemon)?;
+    }
+    dispatch_daemon(&ctx, &mut daemon, &cli.command)
 }
 
 /// Says which workspace a command is about to use when it fell back to the default one (task
@@ -174,6 +164,7 @@ fn announce_default_workspace(ctx: &Ctx, command: &Command) {
                 | Command::Skill { .. }
                 | Command::Notices { .. }
                 | Command::Workspace { .. }
+                | Command::Lists { .. }
         )
     {
         return;
@@ -256,6 +247,7 @@ fn command_name(command: &Command) -> &'static str {
         Command::Sub { .. } => "sub",
         Command::Bundle { .. } => "bundle",
         Command::Workspace { .. } => "workspace",
+        Command::Lists { .. } => "lists",
         Command::Skill { .. } => "skill",
         Command::Upgrade { .. } => "upgrade",
         Command::Notices { .. } => "notices",
@@ -312,6 +304,7 @@ fn dispatch_daemon_inner(
         Command::Workspace { action } => {
             commands::workspace::run(ctx, daemon, action.as_ref(), ctx.json)
         }
+        Command::Lists { action } => commands::lists::run(daemon, action.as_ref(), ctx.json),
         Command::Bundle { action } => bundle::run(daemon, action),
         Command::Move { item, dest, src } => {
             commands::move_copy::move_via_daemon(ctx, daemon, item, dest, src.as_deref())

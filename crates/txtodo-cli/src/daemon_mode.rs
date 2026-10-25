@@ -47,7 +47,7 @@ pub fn run_via_daemon(
 ) -> Result<(), CliError> {
     let scratch = tempfile::tempdir().map_err(CliError::Io)?;
     let listed: Vec<String> = daemon.list_files()?.into_iter().map(|f| f.path).collect();
-    // One document: the workspace's root list, or the sub-list `--list` named (`sub`), under its
+    // One document: the workspace's root list, or the sub-list `--sublist` named (`sub`), under its
     // own name for the daemon.
     let doc = ctx.paths.todo_file.clone();
     let known = listed.contains(&doc);
