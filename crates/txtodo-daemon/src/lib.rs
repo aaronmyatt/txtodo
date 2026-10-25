@@ -37,6 +37,9 @@ pub mod dir_bridge_guard;
 mod dir_bridge_guard_tests;
 mod list_rpc;
 mod list_workspace;
+mod repo_exclude;
+mod repo_scan;
+mod repos_rpc;
 pub use txtodo_engine::duplicates;
 pub mod expected;
 mod external;
@@ -161,6 +164,7 @@ mod workspace_catalog_load;
 mod workspace_catalog_mirror;
 mod workspace_catalog_offers;
 mod workspace_catalog_open;
+pub mod workspace_catalog_repos;
 mod workspace_discover;
 mod workspace_error;
 pub mod workspace_load;
@@ -294,6 +298,8 @@ mod workspace_bind_tests;
 mod workspace_catalog_load_tests;
 #[cfg(test)]
 mod workspace_catalog_mirror_tests;
+#[cfg(test)]
+mod workspace_catalog_repos_tests;
 #[cfg(test)]
 mod workspace_catalog_state_tests;
 #[cfg(test)]

@@ -111,8 +111,9 @@ same day (see "Review 2026-10-25" at the end for what moved and why).
      `target`, `vendor`, `dist`, `.cache` and the data dir. Those extra names are the scan's own
      list, not an edit to the shared constant.
    - Nested repos: on a find, record it and keep going down (skip only `.git`). Each nested repo is
-     its own workspace; submodules too. The nearest `.git` still sets the root
-     (`workspace_root_from`, unchanged).
+     its own workspace. The nearest `.git` still sets the root (`workspace_root_from`, unchanged).
+     (A submodule has a `.git` *file*, so like a worktree it is a first-touch find, not a scan find;
+     the sentence here once said otherwise.)
    - Runs once in the background after the socket binds (`daemon-early-bind`), then every 6 h, and
      on `txtodo repos scan`.
    - Rejected: a `notify` watch on `$HOME`. Too heavy on FSEvents and inotify limits.
@@ -448,3 +449,28 @@ What changed in the plan, and what I chose between.
     `RetiredMirror`s. The `workspace prune --repo-mirrors` CLI flag, when it comes, calls it. The
     later todo lines were reworded to match.
   - As with the list RPCs, the daemon does not build between this commit and its handlers.
+- **daemon repo scan.** `repo_scan.rs` (pure walk), `workspace_catalog_repos.rs` (register, schedule,
+  report), `repos_rpc.rs` (the `Repos` RPC), `repo_exclude.rs`, and the `Repos` handler plus a
+  `MirrorsRetire` stub that keep the daemon building after the proto commit. Landed as one commit:
+  each piece is dead code without the next.
+  - **A scan only registers.** Nothing is opened, so thirty clones cost thirty registry rows and no
+    watchers. The loader opens them at the next start after the workspaces in use, and a first use
+    opens one at once. This answers the notes' open cost question for now: the number is not
+    measured, because nothing is loaded; if open-on-start proves heavy, the loader can skip
+    repos until used.
+  - **Never walks a test's home.** `[$HOME]` is seeded as the default root only when neither
+    `TXTODO_SOCKET` nor `TXTODO_REGISTRY_DB` is set. Every test and harness sets them, so an
+    isolated daemon has no roots and its scheduled pass does nothing. Seeding is once-only
+    (`seed_scan_roots`); a person who removes every root is not given `$HOME` back.
+  - **A removal sticks.** `root_was_removed` (new in the store, its own commit) stops the scan
+    re-registering a clone the person took off. A nested clone is its own workspace: the walker
+    already leaves nested checkouts to themselves, so the registry reports no overlap (a test pins
+    this; my first guess was wrong).
+  - **`.txtodo/` goes in the clone's own `info/exclude`** from `WorkspaceRegistry::add`, for every
+    new registration of a git folder (scan, `workspace add`, first touch), without running `git`
+    (the daemon's `PATH` may lack it): `.git` folder, or `gitdir:` file then `commondir`.
+    Lists and mirrors have no `.git`, so they are untouched.
+  - Scan roots are canonicalised before the walk, so the daemon's own data folder (skipped by its
+    parent of `lists/` and `remote/`) is recognised even when the root was written through a symlink.
+  - To fit `server.rs` and `global_service.rs` under the 400-line cap, the new trait methods (and
+    the earlier list ones in `server.rs`) are one `#[rustfmt::skip]` line each.

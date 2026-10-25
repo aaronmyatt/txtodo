@@ -80,6 +80,7 @@ impl WorkspaceRegistry {
             return Ok(existing.id);
         }
         self.refuse_overlap(&canonical)?;
+        keep_txtodo_out_of_git(&canonical);
         let id = WorkspaceId::new(clock.new_ulid());
         self.registry.insert(&NewWorkspaceEntry {
             id,
@@ -230,6 +231,51 @@ impl WorkspaceRegistry {
         Ok(self.registry.restore(id, clock.now_ms())?)
     }
 
+    /// The folders scanned for repos (task two-kinds-of-workspace), oldest first.
+    pub fn scan_roots(&self) -> Result<Vec<String>, WorkspaceRegistryError> {
+        Ok(self.registry.scan_roots()?)
+    }
+
+    /// Adds a scan root (an absolute path); `false` when it was there.
+    pub fn add_scan_root(
+        &mut self,
+        root: &str,
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.add_scan_root(root, clock.now_ms())?)
+    }
+
+    /// Removes a scan root; `false` when it was not there.
+    pub fn remove_scan_root(&mut self, root: &str) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.remove_scan_root(root)?)
+    }
+
+    /// Gives a registry that never had scan roots its defaults, once.
+    pub fn seed_scan_roots(
+        &mut self,
+        defaults: &[String],
+        clock: &dyn Clock,
+    ) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self.registry.seed_scan_roots(defaults, clock.now_ms())?)
+    }
+
+    /// When the last scan finished, if one did.
+    pub fn last_scan_ms(&self) -> Result<Option<u64>, WorkspaceRegistryError> {
+        Ok(self.registry.last_scan_ms()?)
+    }
+
+    /// Records that a scan finished now.
+    pub fn record_scan(&mut self, clock: &dyn Clock) -> Result<(), WorkspaceRegistryError> {
+        Ok(self.registry.set_last_scan_ms(clock.now_ms())?)
+    }
+
+    /// Whether `root` was taken off the registry and is not registered now.
+    pub fn root_was_removed(&self, root: &Path) -> Result<bool, WorkspaceRegistryError> {
+        Ok(self
+            .registry
+            .root_was_removed(&root.display().to_string())?)
+    }
+
     /// Points the active `id` at `root` (a bind, task spike-txtodo-should-merge-remote-workspa):
     /// the id stays, the root moves. Refused like `add` when `root` overlaps another active
     /// workspace; the caller removes whatever was registered at `root` itself first. `false` for
@@ -315,5 +361,15 @@ fn entry_of(row: WorkspaceRow) -> WorkspaceEntry {
         root_exists,
         has_state,
         last_active_ms: row.last_active_ms,
+    }
+}
+
+/// A new workspace that is a git clone gets `.txtodo/` in its own `info/exclude` before the daemon
+/// first opens it (task two-kinds-of-workspace, `repo_exclude.rs`), so the op log it drops there is
+/// never one `git add -A` from a commit. Best effort: a refusal is logged, never a failure to
+/// register. A folder with no `.git` (every list and mirror) is untouched.
+fn keep_txtodo_out_of_git(root: &str) {
+    if let Err(e) = crate::repo_exclude::exclude_txtodo(Path::new(root)) {
+        tracing::warn!(root, error = %e, "repo_exclude_failed");
     }
 }

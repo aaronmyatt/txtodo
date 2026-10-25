@@ -390,6 +390,15 @@ multiplex every workspace's traffic — not done by this task).
   List for the default and anything in the lists root, Repo for every other folder. Pairing never
   rekeys a list (`adopt_offered_workspace_id`), as for the default. A removed list made again comes
   back under its id through `WorkspaceRegistry::restore`.
+- Repos (task `two-kinds-of-workspace`, ADR 0043): `repo_scan.rs` is a pure walk under the scan roots for
+  a `.git` folder whose top holds a `todo.txt` or `txtodo.toml` (depth 8, 250k folders, 500 repos; hidden,
+  `node_modules`, `target`, `vendor`, `dist`, `build` and a top-level `Library` never entered, no symlink
+  followed; a `.git` file, a worktree or submodule, is left to a first touch). `workspace_catalog_repos.rs`
+  runs it: `run_scan` registers the new ones (never opens them, never brings back one the person removed),
+  records the time, and `start_repo_scan` schedules it 45 s after start and every 6 h. `boot_dirs.rs` seeds
+  `[$HOME]` as the default root only when no env var moved the socket or registry, so a test never walks
+  the real home. `WorkspaceRegistry::add` writes `.txtodo/` into a new clone's own `info/exclude`
+  (`repo_exclude.rs`, with no `git` run). `repos_rpc.rs`: the `Repos` RPC edits the roots and starts a scan.
 - `workspace_rejoin.rs` + `rejoin_backup.rs` (task sync-drift line 8, 2026-09-26): `WorkspaceRejoin`
   drops this device's copy of one workspace and takes a paired peer's. Refused, nothing changed,
   for the default, a missing root, a root overlapping another registered one, or when no paired

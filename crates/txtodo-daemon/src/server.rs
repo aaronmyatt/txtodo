@@ -377,24 +377,18 @@ impl Txtodo for TxtodoService {
         Err(no_registry())
     }
 
-    async fn list_ensure(
-        &self,
-        _r: Request<pb::ListEnsureRequest>,
-    ) -> Result<Response<pb::ListEnsureResponse>, Status> {
-        Err(no_registry())
-    }
+    #[rustfmt::skip]
+    async fn list_ensure(&self, _r: Request<pb::ListEnsureRequest>) -> Result<Response<pb::ListEnsureResponse>, Status> { Err(no_registry()) }
 
-    async fn list_rename(
-        &self,
-        _r: Request<pb::ListRenameRequest>,
-    ) -> Result<Response<pb::WorkspaceInfo>, Status> {
-        Err(no_registry())
-    }
+    #[rustfmt::skip]
+    async fn list_rename(&self, _r: Request<pb::ListRenameRequest>) -> Result<Response<pb::WorkspaceInfo>, Status> { Err(no_registry()) }
 
-    async fn list_remove(
-        &self,
-        _r: Request<pb::ListRemoveRequest>,
-    ) -> Result<Response<pb::ListRemoveResponse>, Status> {
-        Err(no_registry())
-    }
+    #[rustfmt::skip]
+    async fn list_remove(&self, _r: Request<pb::ListRemoveRequest>) -> Result<Response<pb::ListRemoveResponse>, Status> { Err(no_registry()) }
+
+    #[rustfmt::skip]
+    async fn repos(&self, _r: Request<pb::ReposRequest>) -> Result<Response<pb::ReposResponse>, Status> { Err(no_registry()) }
+
+    #[rustfmt::skip]
+    async fn mirrors_retire(&self, _r: Request<pb::MirrorsRetireRequest>) -> Result<Response<pb::MirrorsRetireResponse>, Status> { Err(no_registry()) }
 }

@@ -390,4 +390,10 @@ impl Txtodo for GlobalService {
     ) -> Result<Response<pb::ListRemoveResponse>, Status> {
         crate::list_rpc::remove(self, r).await
     }
+
+    #[rustfmt::skip]
+    async fn repos(&self, r: Request<pb::ReposRequest>) -> Result<Response<pb::ReposResponse>, Status> { crate::repos_rpc::repos(self, r).await }
+
+    #[rustfmt::skip]
+    async fn mirrors_retire(&self, _r: Request<pb::MirrorsRetireRequest>) -> Result<Response<pb::MirrorsRetireResponse>, Status> { Err(Status::unimplemented("retiring mirrors is the next daemon commit")) }
 }
