@@ -159,6 +159,32 @@ export async function mockInvoke<T>(cmd: string, args?: Record<string, unknown>)
 			ws.name = name || (ws.root.split("/").filter(Boolean).pop() ?? "");
 			return { ...ws } as T;
 		}
+		// Named lists (task two-kinds-of-workspace): the mock keeps them in the same array, under a
+		// fake lists folder. Like the real daemon, a list answers to what it shows or its folder.
+		case "new_list": {
+			const name = (args?.name as string).trim().toLowerCase();
+			const root = `/mock/lists/${name}`;
+			let ws = workspaces.find((w) => w.root === root);
+			if (!ws) {
+				ws = { id: fakeUlid(), root, added_at_ms: NOW_MS, root_exists: true, has_state: false, load_state: "ready", load_error: "", name, kind: "list" };
+				workspaces.push(ws);
+			}
+			return { ...ws } as T;
+		}
+		case "rename_list": {
+			const query = (args?.list as string).trim().toLowerCase();
+			const ws = workspaces.find((w) => w.kind === "list" && (w.name === query || w.root.endsWith(`/${query}`)));
+			if (!ws) throw new Error(`no list named ${query}`);
+			ws.name = (args?.name as string).trim().toLowerCase();
+			return { ...ws } as T;
+		}
+		case "remove_list": {
+			const query = (args?.list as string).trim().toLowerCase();
+			const idx = workspaces.findIndex((w) => w.kind === "list" && (w.name === query || w.root.endsWith(`/${query}`)));
+			if (idx < 0) throw new Error(`no list named ${query}`);
+			const [gone] = workspaces.splice(idx, 1);
+			return `${gone.root}.removed` as T;
+		}
 		case "switch_workspace":
 			setCurrentWorkspaceRoot(args?.root as string);
 			return undefined as T;

@@ -327,6 +327,9 @@ export interface WorkspaceInfo {
 	is_remote?: boolean;
 	/** The name every paired device shows for it (task workspace-vanity-name); empty from an older daemon. */
 	name?: string;
+	/** Which carrier syncs it (task two-kinds-of-workspace): a "list" txtodo syncs between your own
+	 * devices (the default is one), a "repo" git syncs. Empty from an older daemon. */
+	kind?: "list" | "repo" | "";
 }
 
 /** The current workspace's layout (task workspace-layout). Mirrors `WorkspaceLayoutDto`. */
@@ -366,6 +369,26 @@ export function removeWorkspace(id: string, root: string): Promise<boolean> {
  * daemon trims it and refuses one over 256 bytes or with control characters. */
 export function renameWorkspace(id: string, name: string): Promise<WorkspaceInfo> {
 	return invoke("rename_workspace", { id, name });
+}
+
+/** Makes the list `name` (task two-kinds-of-workspace) when this device has none; a list that is
+ * already here comes back as it is. 1 to 48 of a-z, 0-9, `-` and `_`; the daemon folds the case.
+ * Does not switch to it. */
+export function newList(name: string): Promise<WorkspaceInfo> {
+	return invoke("new_list", { name });
+}
+
+/** Changes the name a list shows; `list` is the name it shows or was made under (its folder's).
+ * Its id and folder stay. The daemon checks the new name as a list name and finds it free. */
+export function renameList(list: string, name: string): Promise<WorkspaceInfo> {
+	return invoke("rename_list", { list, name });
+}
+
+/** Takes a list off this device: its folder moves aside, never deleted, and the other devices keep
+ * the list. Refused for the current workspace, like `removeWorkspace`. Resolves to where the
+ * folder went. */
+export function removeList(list: string, root: string): Promise<string> {
+	return invoke("remove_list", { list, root });
 }
 
 /** Points every future daemon call at `root` instead — no reconnect. Callers must also re-fetch

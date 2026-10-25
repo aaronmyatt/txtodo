@@ -352,3 +352,18 @@ What changed in the plan, and what I chose between.
   - Known gaps: renaming still reaches only the open workspace (existing deviation); a list's
     rename field starts from the shown name and an empty value is refused by the daemon (a list
     needs a name); no repo-vs-list grouping header, only the tag and the order.
+- **desktop lists.** The header workspace menu groups its rows under Lists and Repos
+  (`workspaceGroups.ts`, pure and unit-tested; no kinds from an older daemon means no grouping, as
+  before), has a `New list` field, and routes a list's rename and remove through `ListRename` and
+  `ListRemove`; Settings › Workspaces routes a list's remove the same way, with its own confirm text.
+  Rust side: `WorkspaceInfoDto.kind`, `new_list`/`rename_list`/`remove_list` Tauri commands, the
+  `e2e_bridge` arms and the dev mock's answers (a vitest checks the mock answers every command).
+  - A list is addressed by its folder name (`folderOf(root)`), as in the TUI.
+  - The menu's new-list input is labelled `New list name`, not `Name for …`: the existing rename test
+    finds its input by that prefix.
+  - Settings › Workspaces gets no kind badge. The visual goldens (`settings-workspaces-*`) would
+    change, and re-baselining goldens is a human's call (`playwright.config.ts`); say so if you want
+    the badge. The open menu is in no golden.
+  - Manifest `workspace.new_list`: desktop done, TUI done.
+  - Not checked by eye: this session never opened the app. The functional Playwright specs for the
+    menu cover it with DOM assertions; how the Lists/Repos headings look is for a human to see.

@@ -4,9 +4,10 @@
 	// and says the files stay on disk: it only unregisters the folder.
 	import { goto } from "$app/navigation";
 	import { onMount } from "svelte";
-	import { addWorkspace, listWorkspaces, removeWorkspace, switchWorkspace, workspaceRoot, type WorkspaceInfo } from "$lib/daemon";
+	import { addWorkspace, listWorkspaces, removeList, removeWorkspace, switchWorkspace, workspaceRoot, type WorkspaceInfo } from "$lib/daemon";
 	import { currentWorkspaceRoot } from "$lib/stores/workspaces";
 	import { workspaceLabel } from "$lib/universal/rows";
+	import { folderOf } from "$lib/workspaceGroups";
 	// The native folder picker: https://v2.tauri.app/plugin/dialog/#open-a-file-selector-dialog
 	import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
@@ -55,7 +56,9 @@
 
 	function remove(ws: WorkspaceInfo) {
 		confirming = null;
-		void run(() => removeWorkspace(ws.id, ws.root));
+		// A list (task two-kinds-of-workspace) moves its folder aside and stays on your other
+		// devices; any other workspace is only forgotten, its files untouched.
+		void run(() => (ws.kind === "list" ? removeList(folderOf(ws.root), ws.root) : removeWorkspace(ws.id, ws.root)));
 	}
 
 	/** Choose a folder with the OS picker and add it straight away. */
@@ -99,7 +102,7 @@
 			</div>
 			{#if confirming === ws.id}
 				<span class="confirm" role="alert">
-					Files stay on disk.
+					{ws.kind === "list" ? "Its folder moves aside; your other devices keep the list." : "Files stay on disk."}
 					<button type="button" class="pill danger" disabled={busy} onclick={() => remove(ws)}>Remove</button>
 					<button type="button" class="pill" onclick={() => (confirming = null)}>Cancel</button>
 				</span>

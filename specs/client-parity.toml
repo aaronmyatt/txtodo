@@ -1229,7 +1229,7 @@ id = "workspace.new_list"
 title = "Make a named list that syncs between your own devices"
 keys = []
 scope = "settings"
-desktop = { status = "planned", surface = "WorkspaceSwitcher" }
+desktop = { status = "done", surface = "WorkspaceSwitcher (New list)" }
 tui = { status = "done", surface = "Settings > Workspaces (New list)" }
 web = { status = "na", surface = "" }
 deviation = "In the browser: the list arrives from a device that made it (ADR 0042 and 0043); a browser peer makes none."

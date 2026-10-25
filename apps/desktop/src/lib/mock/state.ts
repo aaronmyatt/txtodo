@@ -124,6 +124,8 @@ export interface StoredWorkspace {
 	load_error: string;
 	/** The shared name once renamed (task workspace-vanity-name); unset reads as the folder's. */
 	name?: string;
+	/** Which carrier syncs it (task two-kinds-of-workspace); unset reads as an older daemon's. */
+	kind?: "list" | "repo" | "";
 }
 
 export const workspaces: StoredWorkspace[] = [
