@@ -64,7 +64,7 @@ impl FileActor {
         // and relay) can both pass `lan_apply.rs`'s held check with one op before either commits,
         // and the second insert then failed the `UNIQUE` op id and refused its whole run (lab
         // lan-to-relay flake, 2026-10-02).
-        let ops = self.not_yet_held(ops)?;
+        let ops = crate::held_ops::drop_held(&self.lock_store(), ops)?;
         if ops.is_empty() {
             // A run another session landed first: it may have left this file's write owed.
             if !defer {
@@ -95,18 +95,6 @@ impl FileActor {
         })?;
         self.parked = parked;
         Ok(())
-    }
-
-    /// `ops` without those the log already holds by id; the first copy stays (append-only).
-    fn not_yet_held(&self, ops: Vec<Op>) -> Result<Vec<Op>, ActorError> {
-        let store = self.lock_store();
-        let mut fresh = Vec::with_capacity(ops.len());
-        for op in ops {
-            if store.op_by_id(op.id)?.is_none() {
-                fresh.push(op);
-            }
-        }
-        Ok(fresh)
     }
 
     /// HLC receive rule for the batch's newest stamp (`Hlc::merge`), so this device's next op

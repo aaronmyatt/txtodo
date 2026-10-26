@@ -8,7 +8,7 @@ use txtodo_model::Principal;
 
 /// Lab lan-to-relay (2026-10-02): two sessions with one peer can deliver the same batch, each
 /// having checked the log before either landed. The second lands as a no-op, not a `UNIQUE` op id
-/// refusal (`sync_ops_tests::a_run_the_log_already_holds_lands_again_as_a_no_op` for todo.txt).
+/// refusal (`sync_ops_tests::a_run_repeating_an_op_already_held_skips_it` for todo.txt).
 #[test]
 fn a_batch_the_log_already_holds_imports_again_as_a_no_op() {
     let dir = tempfile::tempdir().unwrap_or_else(|e| panic!("{e}"));
