@@ -14,6 +14,7 @@ mod doctor_prune;
 mod doctor_sync;
 mod doctor_transport;
 mod doctor_version;
+mod doctor_workspaces;
 pub mod early;
 pub mod edit;
 pub mod env;

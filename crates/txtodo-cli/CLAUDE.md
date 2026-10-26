@@ -172,7 +172,10 @@ txtodod when `<dir>/.txtodo/txtodod.sock` exists (M3, as built 2026-09-12).
   folder no registered workspace holds, it fails naming `txtodo workspace add` and `--no-daemon`
   (`register_guard.rs`, task cli-no-implicit-register). A command that writes still registers, and so does a
   read in a git checkout's root that holds a list (`is_repo_root`, task two-kinds-of-workspace: a repo is never
-  offered to a peer, and sidecar identity stamps nothing).
+  offered to a peer, and sidecar identity stamps nothing) — unless it already has a `.txtodo/`, which an older
+  build may have left Tagged (the daemon keeps a stored mode, and Tagged stamps `id:` into every line).
+  `doctor` never registers either: in such a folder it asks without a selector and adds a `workspace` WARN
+  (`register_guard::unselect_unregistered`).
 - `sub ITEM CMD…`: ITEM is a root line number, or a `ref:` slug path (`trip`, `trip/flights`)
   resolved list by list through `RefDir` (`commands/sub_slug.rs`, task cli-sub-by-slug). A
   `--dir` strictly inside a registered workspace re-runs as `--dir <root> --sublist <dir>/todo.txt`

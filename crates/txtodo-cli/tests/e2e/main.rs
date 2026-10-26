@@ -24,6 +24,5 @@ mod pairing;
 mod pairing_lists;
 mod repos;
 mod sub_scope;
-mod sub_slug;
 mod workspace;
 mod workspace_offers;

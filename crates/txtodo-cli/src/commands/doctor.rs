@@ -17,6 +17,7 @@ use crate::commands::doctor_prune::{dropped_check, pruned_checks};
 use crate::commands::doctor_sync::sync_checks;
 use crate::commands::doctor_transport::{offers_check, transport_check};
 use crate::commands::doctor_version::version_check;
+use crate::commands::doctor_workspaces::other_workspace_checks;
 use crate::{CliError, Ctx, json};
 use std::path::Path;
 use txtodo_proto::v1 as pb;
@@ -76,6 +77,8 @@ struct DaemonState {
     /// Where each peer's sync is stuck, and which are parked (task sync-drift line 7).
     sync: Option<pb::SyncStatusResponse>,
     daemon: Option<Box<client::Daemon>>,
+    /// The `workspace` WARN for a folder no workspace holds (`register_guard::unselect_unregistered`).
+    unregistered: Option<Check>,
 }
 
 /// The daemon side: socket reachability and, through Health, the watcher; when connected, also
@@ -97,6 +100,7 @@ fn daemon_checks(ctx: &Ctx) -> DaemonState {
                 devices: Vec::new(),
                 sync: None,
                 daemon: None,
+                unregistered: None,
             }
         }
         Err(e) => DaemonState {
@@ -105,8 +109,10 @@ fn daemon_checks(ctx: &Ctx) -> DaemonState {
             devices: Vec::new(),
             sync: None,
             daemon: None,
+            unregistered: None,
         },
         Ok(Mode::Daemon(mut d)) => {
+            let unregistered = crate::register_guard::unselect_unregistered(&mut d, &ctx.paths);
             let (checks, health) = health_checks(&mut d);
             let (devices, sync) = if health.is_some() {
                 (d.device_list().unwrap_or_default(), d.sync_status().ok())
@@ -119,6 +125,7 @@ fn daemon_checks(ctx: &Ctx) -> DaemonState {
                 devices,
                 sync,
                 daemon: Some(d),
+                unregistered: unregistered.map(|d| check("workspace", Status::Warn, d)),
             }
         }
     }
@@ -272,40 +279,6 @@ fn peer_checks(devices: &[pb::Device]) -> Vec<Check> {
         .collect()
 }
 
-/// One line per *other* registered workspace (ADR 0025, task `cli-doctor-multi-workspace`) — the
-/// seven fixed checks above already cover the current one in full depth, so this stays a cheap
-/// per-entry `Health` probe, not a second full battery of checks. Best-effort: a legacy
-/// `--dir`-bridge daemon has no registry, so an empty `workspaces`
-/// (`doctor_overlap::registered_workspaces`) just means there is nothing more to report, not a
-/// doctor failure — `run`'s existing seven checks already told the human that story if it matters.
-fn other_workspace_checks(
-    daemon: Option<&mut client::Daemon>,
-    workspaces: &[pb::WorkspaceInfo],
-    current: &Path,
-) -> Vec<Check> {
-    let Some(daemon) = daemon else {
-        return Vec::new();
-    };
-    let current = current
-        .canonicalize()
-        .unwrap_or_else(|_| current.to_owned());
-    workspaces
-        .iter()
-        .filter(|w| Path::new(&w.root) != current)
-        .map(|w| {
-            let label = format!("{}  {}", w.workspace_id, w.root);
-            match daemon.health_for_id(&w.workspace_id) {
-                Ok(h) => check(
-                    "workspace",
-                    Status::Ok,
-                    format!("{label}: {} document(s)", h.documents),
-                ),
-                Err(e) => check("workspace", Status::Warn, format!("{label}: {e}")),
-            }
-        })
-        .collect()
-}
-
 /// Runs every check, prints the report, exits 1 on any failure.
 pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     let mut state = daemon_checks(ctx);
@@ -319,6 +292,7 @@ pub fn run(ctx: &Ctx, verbose: bool) -> Result<(), CliError> {
     checks.push(transport_check(health.as_ref()));
     debug_assert_eq!(checks.len(), 7, "seven fixed checks in a fixed order");
     // After the fixed seven, so their order and count stay what scripts already read.
+    checks.extend(state.unregistered.take());
     checks.push(version_check(health.as_ref()));
     checks.push(offers_check(health.as_ref()));
     checks.extend(dropped_check(health.as_ref()));

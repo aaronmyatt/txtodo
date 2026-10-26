@@ -65,12 +65,36 @@ pub fn is_read_only(command: &Command) -> bool {
     }
 }
 
-/// `dir` is a git checkout's root that holds a list (`.git` is a folder in a clone and a file in a
-/// linked worktree, and `Path::exists` is true for both). Such a folder registers on its first use,
-/// read or write.
+/// `dir` is a git checkout's root that holds a list and no `.txtodo/` yet (`.git` is a folder in a
+/// clone and a file in a linked worktree, and `Path::exists` is true for both). Such a folder
+/// registers on its first use, read or write. A `.txtodo/` an older build left may say Tagged, and
+/// the daemon keeps a stored identity mode: registering it on a read stamped `id:` into every line
+/// of this repo's backlog (2026-10-26), so that clone is refused like any unregistered folder.
 /// Ref: <https://doc.rust-lang.org/std/path/struct.Path.html#method.exists>
 pub fn is_repo_root(dir: &Path) -> bool {
-    dir.join(".git").exists() && txtodo_workspace_paths::is_workspace_dir(dir)
+    dir.join(".git").exists()
+        && !dir.join(".txtodo").exists()
+        && txtodo_workspace_paths::is_workspace_dir(dir)
+}
+
+/// For `doctor`, which is no read-only command but must not register either: when `paths.dir` is
+/// in no registered workspace, drops the daemon's selector (naming the folder would register it)
+/// and returns the warning to show. A per-folder daemon, the default workspace, or a daemon
+/// without `WorkspaceList` is left as it is.
+pub fn unselect_unregistered(daemon: &mut Daemon, paths: &crate::config::Paths) -> Option<String> {
+    if daemon.selector.is_none() || paths.default_workspace {
+        return None;
+    }
+    let roots = daemon.workspace_list().ok()?;
+    let here = std::fs::canonicalize(&paths.dir).unwrap_or_else(|_| paths.dir.clone());
+    if roots.iter().any(|w| here.starts_with(Path::new(&w.root))) {
+        return None;
+    }
+    daemon.selector = None;
+    Some(format!(
+        "{} is not a registered workspace; `txtodo workspace add` registers it",
+        paths.dir.display()
+    ))
 }
 
 /// `dir`, or one of its ancestors, is a registered root.
@@ -233,6 +257,12 @@ mod tests {
         assert!(is_repo_root(&folder("repo", true, true)));
         assert!(!is_repo_root(&folder("plain", false, true)), "no git");
         assert!(!is_repo_root(&folder("bare", true, false)), "no list");
+        let old = folder("old", true, true);
+        std::fs::create_dir(old.join(".txtodo")).unwrap();
+        assert!(
+            !is_repo_root(&old),
+            "an older build's .txtodo/ may be Tagged"
+        );
         let worktree = folder("worktree", false, true);
         std::fs::write(worktree.join(".git"), "gitdir: elsewhere\n").unwrap();
         assert!(

@@ -52,8 +52,6 @@ impl Drop for GlobalDaemon {
     }
 }
 
-/// Runs `txtodo` against `daemon`'s socket, from `dir` — which must have no `.txtodo/txtodod.sock`
-/// of its own, so `client::select` has nothing to fall back to except the global daemon.
 /// Registers `dir`: a read never registers a folder (task cli-no-implicit-register).
 fn register(daemon: &GlobalDaemon, dir: &Path) {
     let root = dir.display().to_string();
@@ -65,6 +63,8 @@ fn register(daemon: &GlobalDaemon, dir: &Path) {
     );
 }
 
+/// Runs `txtodo` against `daemon`'s socket, from `dir` — which must have no `.txtodo/txtodod.sock`
+/// of its own, so `client::select` has nothing to fall back to except the global daemon.
 fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
     assert!(
         !dir.join(".txtodo").join("txtodod.sock").exists(),
@@ -85,16 +85,6 @@ fn txtodo(daemon: &GlobalDaemon, dir: &Path, args: &[&str]) -> Output {
 
 fn stdout(o: &Output) -> String {
     String::from_utf8_lossy(&o.stdout).into_owned()
-}
-
-/// `workspace add` for `dir`: a read never registers a folder (tasks/cli-no-implicit-register).
-fn register(daemon: &GlobalDaemon, dir: &Path) {
-    let out = txtodo(daemon, dir, &["workspace", "add"]);
-    assert!(
-        out.status.success(),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
 }
 
 fn workspace(todo: &str) -> tempfile::TempDir {

@@ -56,6 +56,11 @@ fn reading_an_unregistered_folder_registers_nothing() {
         assert!(err.contains("txtodo workspace add"), "{args:?}: {err}");
         assert!(err.contains("--no-daemon"), "{args:?}: {err}");
     }
+    // `doctor` is no read, but asks without naming the folder and warns instead of registering it.
+    let doctor = daemon.txtodo(dir.path(), &["doctor"]);
+    let report = String::from_utf8_lossy(&doctor.stdout);
+    let err = String::from_utf8_lossy(&doctor.stderr);
+    assert!(report.contains("txtodo workspace add"), "{report}{err}");
 
     assert!(!dir.path().join(".txtodo").exists(), "no .txtodo/ made");
     assert_eq!(snapshot(dir.path()), before, "no byte changed");
@@ -107,4 +112,23 @@ fn reading_a_git_root_with_a_list_registers_it_and_keeps_it_out_of_git() {
     assert!(listed.contains(&here.display().to_string()), "{listed}");
     let exclude = std::fs::read_to_string(dir.path().join(".git/info/exclude")).unwrap();
     assert!(exclude.lines().any(|l| l == ".txtodo/"), "{exclude}");
+}
+
+/// A clone an older build already opened keeps that build's identity mode, maybe Tagged, which
+/// stamps `id:` into every line on register (this repo's own backlog, 2026-10-26): a read refuses.
+#[test]
+fn reading_a_git_root_an_older_build_opened_registers_nothing() {
+    let state_dir = tempfile::tempdir().unwrap();
+    let daemon = GlobalDaemon::spawn(state_dir.path());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git/info")).unwrap();
+    std::fs::create_dir_all(dir.path().join(".txtodo")).unwrap();
+    std::fs::write(dir.path().join("todo.txt"), "water the fern\n").unwrap();
+
+    let out = daemon.txtodo(dir.path(), &["listall"]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(!out.status.success(), "must refuse");
+    assert!(err.contains("txtodo workspace add"), "{err}");
+    let todo = std::fs::read_to_string(dir.path().join("todo.txt")).unwrap();
+    assert_eq!(todo, "water the fern\n", "no byte changed");
 }
