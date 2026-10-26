@@ -108,8 +108,8 @@ mod tests {
     #[test]
     fn the_pane_walks_the_groups() {
         let mut state = AppState::fixture();
-        with_group(&mut state);
-        with_group(&mut state);
+        with_group(&mut state, 1);
+        with_group(&mut state, 10);
         move_up(&mut state);
         assert_eq!(state.conflict_cursor, 0);
         move_down(&mut state);
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn keeping_a_copy_deletes_the_others_by_task_id() {
         let mut state = AppState::fixture();
-        with_group(&mut state);
+        with_group(&mut state, 1);
         let newest = keep_request(&state, Keep::Newest).unwrap();
         assert_eq!(
             deleted_ids(&newest),
