@@ -44,14 +44,20 @@ pub fn ensure_daemon_then_dispatch(
     ctx: &Ctx,
     command: &Command,
     env: &Env,
+    has_list: bool,
 ) -> Result<(), CliError> {
     start_global(env);
     match client::select(&ctx.paths.dir, false, env) {
         Ok(client::Mode::Daemon(mut daemon)) => {
-            match crate::register_guard::check(command, &ctx.paths, &mut daemon)? {
-                crate::register_guard::Guard::Daemon => dispatch_daemon(ctx, &mut daemon, command),
-                crate::register_guard::Guard::Direct => dispatch(ctx, command),
+            // Same guard `run_with_daemon` applies on the direct path: scope or refuse the
+            // folder before any request names it (register_guard.rs, ADR 0043). `check`
+            // answers `Some(Scoped)` to re-run against the workspace's list there.
+            if let Some(scoped) =
+                crate::register_guard::check(&mut daemon, &ctx.paths.dir, command, has_list)?
+            {
+                return crate::register_guard::rerun_scoped(&scoped);
             }
+            dispatch_daemon(ctx, &mut daemon, command)
         }
         _ => dispatch(ctx, command),
     }

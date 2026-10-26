@@ -22,7 +22,6 @@ mod config;
 mod config_root_list;
 mod daemon_ensure;
 mod daemon_mode;
-mod dir_scope;
 mod error;
 mod json;
 mod logo;
@@ -114,7 +113,12 @@ fn run(cli: &Cli) -> Result<(), CliError> {
     }
     match client::select(&ctx.paths.dir, cli.no_daemon, &env)? {
         client::Mode::Direct if daemon_ensure::needs_daemon(&cli.command) && !cli.no_daemon => {
-            daemon_ensure::ensure_daemon_then_dispatch(&ctx, &cli.command, &env)
+            daemon_ensure::ensure_daemon_then_dispatch(
+                &ctx,
+                &cli.command,
+                &env,
+                cli.sublist.is_some(),
+            )
         }
         client::Mode::Direct => dispatch(&ctx, &cli.command),
         client::Mode::Daemon(daemon) => run_with_daemon(ctx, cli, daemon),
