@@ -375,3 +375,15 @@ and `tokens.rs` are now under `crates/txtodo-daemon/tests/it/`; `relay_converge.
 
 2026-10-02 · `fast-gate`: path moves only. txtodo-mcp's `smoke.rs`, `http_guard.rs` and
 `http_loopback_bind.rs` named above are now under `crates/txtodo-mcp/tests/it/`. Same tests.
+
+---
+2026-10-26 · `cargo deny` had been red on `main` since 2026-10-19. New RustSec advisories, fixed with
+`cargo update -p ctutils -p rustls -p rustls-webpki -p webpki-roots -p webpki-root-certs -p tokio`
+(ctutils 0.4.6, rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots and webpki-root-certs 1.0.11,
+tokio 1.54.1: RUSTSEC-2026-0346/0347/0348/0349/0381/0382/0383/0385/0386). One exception granted, the
+three IDs named individually in `advisories.ignore`:
+
+- **RUSTSEC-2026-0370 (zvariant), -0371 (zbus_names), -0372 (zvariant_derive)** — unmaintained, their
+  macros moved into zbus 6; no safe upgrade. Transitive via the desktop app's `tauri-plugin-notification`
+  (notify-rust) and `tauri-plugin-opener`. No known vulnerability. Revisit when those plugins move to
+  zbus 6.
