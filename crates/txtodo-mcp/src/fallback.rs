@@ -22,7 +22,9 @@ use crate::schema::McpServer;
 /// `dir`, or `dir` is a git checkout's root. A repo is carried by git and never offered to a peer
 /// (ADR 0043), so naming it to the daemon, which registers a folder on the first call that names
 /// it, tells nobody its name; that was the worry that kept this server from registering anything
-/// (task mcp-cwd-autoregister). A plain folder still falls back, with a note.
+/// (task mcp-cwd-autoregister). A plain folder still falls back, with a note, and so does an
+/// unregistered checkout that already has a `.txtodo/`: an older build may have left it Tagged, the
+/// daemon keeps a stored mode, and Tagged stamps `id:` into every line on register (2026-10-26).
 ///
 /// The registry stores canonicalized roots, so `dir` is compared both as given and canonicalized
 /// (macOS's `/tmp` is `/private/tmp`). `Path::exists` is true for a `.git` folder and for the
@@ -34,7 +36,7 @@ pub fn serves_here(known: &[WorkspaceInfo], dir: &Path) -> bool {
         .iter()
         .map(|w| Path::new(&w.root))
         .any(|root| root == dir || root == canon);
-    registered || dir.join(".git").exists()
+    registered || (dir.join(".git").exists() && !dir.join(".txtodo").exists())
 }
 
 impl McpServer {
@@ -120,6 +122,13 @@ mod tests {
         assert!(
             serves_here(&[], repo.path()),
             "a git root registers on its first call"
+        );
+        let old = tempfile::tempdir().unwrap();
+        std::fs::create_dir(old.path().join(".git")).unwrap();
+        std::fs::create_dir(old.path().join(".txtodo")).unwrap();
+        assert!(
+            !serves_here(&[], old.path()),
+            "an older build's .txtodo/ may be Tagged"
         );
         let worktree = tempfile::tempdir().unwrap();
         std::fs::write(worktree.path().join(".git"), "gitdir: elsewhere\n").unwrap();

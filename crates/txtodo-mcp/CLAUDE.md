@@ -23,7 +23,8 @@ text block (task two-kinds-of-workspace). stderr still gets the same words; agen
 A folder is served as itself, with no note, when the daemon knows it or it is a git checkout's root
 (`fallback.rs::serves_here`): a repo is never offered to a peer (ADR 0043), so naming it, which
 registers it on the first call, tells nobody its name. A plain folder that is not registered still
-falls back with the note (task mcp-cwd-autoregister).
+falls back with the note (task mcp-cwd-autoregister), and so does an unregistered checkout with a
+`.txtodo/` already in it: an older build may have left it Tagged, which stamps `id:` on register.
 
 ## The `list` argument
 
