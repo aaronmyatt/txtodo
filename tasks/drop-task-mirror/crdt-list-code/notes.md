@@ -30,7 +30,7 @@ lines with their tests, so several commits under the 300-line budget.
   - I'd take A unless resurrecting is a promise users rely on: it is what every device does today.
 
 ## As built
-- conflict table (2026-10-13): 90188835, `crates/txtodo-daemon/src/conflict_table_tests.rs`. Rows
+- conflict table (2026-10-13): 90188835, `crates/txtodo-engine/src/conflict_table_tests.rs (moved 2026-10-26, 239065b6)`. Rows
   1-5, 8, 10 pass on `DocState` in every arrival order. Rows 6-7 fail there even with the edit or
   complete stamped after the delete (checked with `--include-ignored`), so they are ignored with
   the open question as the reason. The spec now points at this file.

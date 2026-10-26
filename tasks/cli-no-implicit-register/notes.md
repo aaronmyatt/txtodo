@@ -39,3 +39,29 @@ with no registration and no `.txtodo/` (checked 2026-10-11).
   three e2e tests that read before writing now register first.
 - Known gaps: the lab's scenarios not re-run by hand (a scenario that reads first in a fresh
   folder now fails until it registers); `txtodo env` in an unregistered folder now refuses too.
+
+## From the other device's build (restored 2026-10-26)
+The 2026-10-26 merge kept the remote side of this file; these lines are the local side's. Their
+commit hashes are on the local side (`85756893^1`); HEAD runs the remote side's equivalents.
+
+### As built (2026-10-13)
+- ed1fea81: `register_guard.rs`. A read (list*, listfile, log, blame, checkout, lint, open,
+  `conflicts [list]`, `sub` with a reading subcommand) checks `WorkspaceList` (no selector, so it
+  registers nothing) and in a folder no registered workspace covers fails with the fix. `env`
+  answers directly there; `doctor` drops the selector and warns. Writes still register.
+  e2e `no_implicit_register.rs`: list/listall/sub/doctor in an unregistered folder register
+  nothing, make no `.txtodo/`, change no byte. Five e2e tests that read before registering now
+  run `workspace add` first.
+- d983043e: the daemon mints the default identity mode (Sidecar) for every new workspace; it no
+  longer turns Tagged because a file carries an `id:`. `id:` text already there stays until
+  `identity migrate`. `--identity-mode tagged` still works (the migration tests use it).
+  Test: `workspace_migrate_tests::a_new_workspace_is_sidecar_and_writes_no_id_tag_into_any_list`.
+- 8781dab2 (found on the way): CLI `blame` read the id from the line's text, so under Sidecar it
+  found nothing on any untagged line. It now asks with `GetFile`'s per-line task id.
+- Gaps: a read in a folder *inside* a registered workspace (`--dir tasks/x`) passes the guard and
+  meets the daemon's existing handling (cli-sub-by-slug line 2). Tagged mode itself is still in
+  the code (ADR 0019's full removal is not done).
+- 2026-10-26 merge cleanup (0e9df6b6, f6c23b30): `doctor` registers nothing again, and a read (CLI or
+  MCP) in a git root that already has a `.txtodo/` is refused: an older build's store said Tagged and
+  registering this repo stamped `id:` into all 277 lists. Known gap: `txtodo identity migrate` also
+  strips a prose `id:<word>,` it takes for the line's own tag (restored by hand on one line).
