@@ -5,7 +5,7 @@
 use txtodo_core::parse_file;
 use txtodo_engine::apply::apply_leniently;
 use txtodo_engine::contents::Contents;
-use txtodo_engine::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
+use txtodo_engine::mutation::{Mutation, MutationError, check_batch, mutation_ops};
 use txtodo_engine::reconcile_replay::{reconcile_against, settle};
 use txtodo_engine::stamp_floor::{hold, past_floor};
 use txtodo_engine::state::DocState;
@@ -91,46 +91,25 @@ impl Doc {
         }
     }
 
-    /// Applies one batch as one commit, the daemon's rules: at most `MAX_MUTATIONS_PER_APPLY`; a
-    /// `Replace` is its own batch; a `RequireBase` only leads one. Nothing changes on an error.
+    /// Applies one batch as one commit under the engine's `check_batch` rules: at most
+    /// `MAX_MUTATIONS_PER_APPLY`; a `Replace` is its own batch; a `RequireBase` only leads one.
+    /// Nothing changes on an error.
     pub fn apply(
         &mut self,
         store: &mut Store,
         mutations: &[Mutation],
         by: &By,
     ) -> Result<Applied, WebError> {
-        if mutations.len() > MAX_MUTATIONS_PER_APPLY {
-            return Err(MutationError::TooMany(mutations.len()).into());
-        }
         match mutations {
             [Mutation::Replace { base, contents }] => self.replace(store, *base, contents, by),
-            _ if mutations
-                .iter()
-                .any(|m| matches!(m, Mutation::Replace { .. })) =>
-            {
-                Err(MutationError::Unsupported("Replace must be its own Apply batch").into())
-            }
             _ => {
-                self.guard(mutations)?;
+                if let Some(base) = check_batch(mutations)? {
+                    self.check_base(base)?;
+                }
                 let hlc = self.tick(by.now)?;
                 let planned = self.plan(mutations, by, hlc)?;
                 self.commit(store, planned, by.now)
             }
-        }
-    }
-
-    /// A leading `RequireBase` must name the current hash; anywhere else it is refused.
-    fn guard(&self, mutations: &[Mutation]) -> Result<(), WebError> {
-        let is_guard = |m: &Mutation| matches!(m, Mutation::RequireBase { .. });
-        match mutations {
-            [Mutation::RequireBase { base }, rest @ ..] if !rest.iter().any(is_guard) => {
-                self.check_base(*base)
-            }
-            _ if mutations.iter().any(is_guard) => Err(MutationError::Unsupported(
-                "RequireBase must be the first, and only, guard of its Apply batch",
-            )
-            .into()),
-            _ => Ok(()),
         }
     }
 

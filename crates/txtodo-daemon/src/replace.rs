@@ -15,8 +15,8 @@ use crate::write::read_or_empty;
 use txtodo_model::Principal;
 
 impl FileActor {
-    /// The batch's `Replace`, run: `None` when the batch holds none (the normal path), an error
-    /// when it shares the batch with another mutation (a `Replace` is all-or-nothing on its own).
+    /// The batch's `Replace`, run: `None` when the batch holds none (the normal path). A
+    /// `Replace` that shares its batch with another mutation was refused by `check_batch`.
     pub(crate) fn replace_batch(
         &mut self,
         mutations: &[Mutation],
@@ -27,39 +27,15 @@ impl FileActor {
             [Mutation::Replace { base, contents }] => {
                 Some(self.on_replace(*base, contents, principal, source))
             }
-            _ if mutations
-                .iter()
-                .any(|m| matches!(m, Mutation::Replace { .. })) =>
-            {
-                Some(Err(MutationError::Unsupported(
-                    "Replace must be its own Apply batch",
-                )
-                .into()))
-            }
+            // The engine's `check_batch` already refused a `Replace` that shared its batch.
             _ => None,
-        }
-    }
-
-    /// A leading `RequireBase`, checked before anything is derived. Anywhere else, or twice, it
-    /// would be silently unguarded (`mutation_ops` treats it as a no-op), so that is refused.
-    pub(crate) fn guard_batch(&self, mutations: &[Mutation]) -> Result<(), ActorError> {
-        let is_guard = |m: &Mutation| matches!(m, Mutation::RequireBase { .. });
-        match mutations {
-            [Mutation::RequireBase { base }, rest @ ..] if !rest.iter().any(is_guard) => {
-                self.check_base(*base)
-            }
-            _ if mutations.iter().any(is_guard) => Err(MutationError::Unsupported(
-                "RequireBase must be the first, and only, guard of its Apply batch",
-            )
-            .into()),
-            _ => Ok(()),
         }
     }
 
     /// `base` must still be the document's hash, and the file must still be our own last write: an
     /// editor save the watcher has not delivered yet is in neither `self.hash` nor `base`, and
     /// writing over it would lose it.
-    fn check_base(&self, base: Hash) -> Result<(), ActorError> {
+    pub(crate) fn check_base(&self, base: Hash) -> Result<(), ActorError> {
         let on_disk = read_or_empty(&self.cfg.disk)?;
         if base != self.hash || hash_of(&on_disk) != self.hash {
             return Err(MutationError::StaleBase.into());

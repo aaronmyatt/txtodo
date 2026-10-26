@@ -5,7 +5,7 @@
 
 use crate::actor::{Commit, CommitTail, FileActor, hash_of};
 use crate::handle::{ActorError, ActorMsg, Applied, Preview};
-use crate::mutation::{MAX_MUTATIONS_PER_APPLY, Mutation, MutationError, mutation_ops};
+use crate::mutation::{Mutation, MutationError, mutation_ops};
 use crate::state::DocState;
 use crate::unified_diff::unified_diff;
 use std::sync::Arc;
@@ -112,12 +112,13 @@ impl FileActor {
         })
     }
 
-    /// The size limit and a leading `RequireBase`, checked before anything is derived.
+    /// The engine's batch shape, then a leading `RequireBase` also checked against the file on
+    /// disk, before anything is derived.
     fn check_batch(&self, mutations: &[Mutation]) -> Result<(), ActorError> {
-        if mutations.len() > MAX_MUTATIONS_PER_APPLY {
-            return Err(MutationError::TooMany(mutations.len()).into());
+        if let Some(base) = crate::mutation::check_batch(mutations)? {
+            self.check_base(base)?;
         }
-        self.guard_batch(mutations)
+        Ok(())
     }
 
     /// Turns `mutations` into stamped ops against a copy of the state. Later mutations see the
