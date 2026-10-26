@@ -34,6 +34,8 @@ pub mod textedit;
 pub mod unified_diff;
 
 #[cfg(test)]
+mod conflict_table_tests;
+#[cfg(test)]
 mod mutation_reopen_tests;
 #[cfg(test)]
 mod mutation_tests;

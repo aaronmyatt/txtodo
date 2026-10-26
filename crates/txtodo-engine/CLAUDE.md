@@ -18,7 +18,8 @@ daemon and the browser peer run the same code. Builds for `wasm32-unknown-unknow
   `stamp_floor` (ADR 0040), `local_date` (ADR 0011), `unified_diff`, `notes_state`, `textedit`,
   `fastid`, `id_strip`, `conflict_row`. `Hash` and `hash_of` (blake3 of a document's bytes).
 - Tests: unit tests per module plus the converge suites (`state_converge*`, `state_order_tests`'s
-  exhaustive orders, `text_history_converge_tests`, `state_goldens`' exact bytes).
+  exhaustive orders, `text_history_converge_tests`, `state_goldens`' exact bytes), and
+  `conflict_table_tests`: `specs/conflicts.md`, one test per row in row order.
 
 ## Invariants
 - Pure: no I/O, no tokio, no gRPC, no `Instant`. The one clock read is `local_date`'s date; the
