@@ -69,10 +69,9 @@ pub(crate) async fn forward_changes(
                     ops: Vec::new(),
                     progress: watch_progress_of(&svc, &h).await,
                     // Missed changes: the count as it is now.
-                    duplicate_groups: h
-                        .conflicts()
-                        .await
-                        .map_or(0, |groups| u32::try_from(groups.len()).unwrap_or(u32::MAX)),
+                    duplicate_groups: h.conflicts().await.map_or(0, |found| {
+                        u32::try_from(found.duplicates.len()).unwrap_or(u32::MAX)
+                    }),
                 },
                 Err(_) => return,
             },

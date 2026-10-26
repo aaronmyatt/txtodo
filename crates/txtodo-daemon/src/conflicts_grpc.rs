@@ -17,7 +17,7 @@ impl TxtodoService {
         r: Request<pb::ConflictsRequest>,
     ) -> Result<Response<pb::ConflictsResponse>, Status> {
         let h = self.actor(&r.get_ref().path)?;
-        let groups = h.conflicts().await.map_err(status_of)?;
+        let found = h.conflicts().await.map_err(status_of)?;
         Ok(Response::new(pb::ConflictsResponse {
             duplicates: found.duplicates.iter().map(to_duplicate_group).collect(),
         }))

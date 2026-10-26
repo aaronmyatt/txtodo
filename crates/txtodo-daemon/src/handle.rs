@@ -199,7 +199,7 @@ pub enum ActorMsg {
     /// The document's duplicate lines (ADR 0032).
     Conflicts {
         /// Result channel.
-        reply: oneshot::Sender<Result<Vec<crate::duplicates::DuplicateGroup>, ActorError>>,
+        reply: oneshot::Sender<Result<FileConflicts, ActorError>>,
     },
     /// The op-set and byte hashes a `Digest` compares, `None` while peer ops wait (ADR 0035).
     Digest {

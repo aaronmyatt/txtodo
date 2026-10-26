@@ -48,9 +48,12 @@ impl EpochInfo {
         if bytes.len() < 16 || !bytes.len().is_multiple_of(16) {
             return None;
         }
-        let mut chunks = bytes.chunks_exact(16);
-        let minter = id_of(chunks.next()?)?;
-        let left_out = chunks.filter_map(id_of).collect();
+        // `as_chunks` (Rust 1.88+) splits exact 16-byte chunks from the remainder in one call;
+        // the length check above guarantees the remainder is a multiple of 16, so it is empty.
+        // Ref: https://doc.rust-lang.org/std/primitive.slice.html#method.as_chunks
+        let (chunks, _) = bytes.as_chunks::<16>();
+        let minter = id_of(chunks.first()?)?;
+        let left_out = chunks[1..].iter().filter_map(|c| id_of(c)).collect();
         Some(EpochInfo { minter, left_out })
     }
 }
