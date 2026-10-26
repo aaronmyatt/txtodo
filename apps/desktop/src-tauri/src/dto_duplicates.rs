@@ -65,7 +65,6 @@ mod tests {
                     },
                 ],
             }],
-            ..Default::default()
         };
         let groups = groups_of(resp);
         assert_eq!(groups.len(), 1);
